@@ -1,0 +1,18 @@
+{
+  "name": "A inventory — 디지털 옷장 & 쇼핑 판독",
+  "short_name": "A inventory",
+  "description": "내 옷장 기반 오프라인 쇼핑 구매 판단 및 내일 날씨 스타일링 추천",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F4",
+  "theme_color": "#FAF8F4",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
