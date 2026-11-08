@@ -1,4 +1,3 @@
-import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,9 +11,66 @@ export const DB_PATH = path.join(DATA_DIR, 'ainventory.db');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
+async function createDatabase(dbPath) {
+  if (!process.env.FORCE_SQLJS) {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      const nativeDb = new DatabaseSync(dbPath);
+      nativeDb.exec('PRAGMA journal_mode = WAL;');
+      nativeDb.exec('PRAGMA foreign_keys = ON;');
+      return nativeDb;
+    } catch {
+      // Fall through to pure-WASM sql.js for Node < 22.5
+    }
+  }
+
+  const initSqlJs = (await import('sql.js')).default;
+  const SQL = await initSqlJs();
+  const initialBuf = fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined;
+  const wasmDb = initialBuf ? new SQL.Database(initialBuf) : new SQL.Database();
+  const persist = () => {
+    fs.writeFileSync(dbPath, Buffer.from(wasmDb.export()));
+  };
+
+  return {
+    exec(sql) {
+      wasmDb.exec(sql);
+      persist();
+    },
+    prepare(sql) {
+      return {
+        get(...params) {
+          const stmt = wasmDb.prepare(sql);
+          try {
+            stmt.bind(params);
+            return stmt.step() ? stmt.getAsObject() : undefined;
+          } finally {
+            stmt.free();
+          }
+        },
+        all(...params) {
+          const stmt = wasmDb.prepare(sql);
+          const rows = [];
+          try {
+            stmt.bind(params);
+            while (stmt.step()) rows.push(stmt.getAsObject());
+            return rows;
+          } finally {
+            stmt.free();
+          }
+        },
+        run(...params) {
+          wasmDb.run(sql, params);
+          const lastId = wasmDb.exec('SELECT last_insert_rowid()')[0]?.values?.[0]?.[0] ?? 0;
+          persist();
+          return { lastInsertRowid: Number(lastId) };
+        },
+      };
+    },
+  };
+}
+
+const db = await createDatabase(DB_PATH);
 
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
