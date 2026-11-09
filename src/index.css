@@ -1302,8 +1302,686 @@ img {
 }
 
 /* ===========================
-   RESPONSIVE BREAKPOINTS
+   CYBERPUNK 2077 INVENTORY SCREEN (Exact Match to image_2.png)
    =========================== */
+.cp77-inventory-screen {
+  position: relative;
+  background: radial-gradient(ellipse at 50% 8%, #3c121b 0%, #240c13 38%, #0e0a12 76%, #07060b 100%);
+  border: 1px solid rgba(255, 87, 80, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 20px 26px 24px;
+  color: #e6f4ff;
+  box-shadow: 0 22px 54px rgba(7, 6, 11, 0.55), inset 0 1px 0 rgba(255, 87, 80, 0.25);
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+.cp77-edge-code {
+  position: absolute;
+  top: 92px;
+  font-family: monospace;
+  font-size: 0.56rem;
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  color: rgba(255, 87, 80, 0.35);
+  pointer-events: none;
+  user-select: none;
+}
+
+.cp77-edge-code.left {
+  left: 7px;
+}
+
+.cp77-edge-code.right {
+  right: 7px;
+  text-align: right;
+}
+
+/* Top Bar: Level, Street Cred, Navigation Tabs, Weight & Eurodollar */
+.cp77-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 87, 80, 0.28);
+}
+
+.cp77-top-stats {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.cp77-level-block {
+  min-width: 96px;
+}
+
+.cp77-level-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: #2de2e6;
+  margin-bottom: 4px;
+}
+
+.cp77-level-row strong {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 12px rgba(45, 226, 230, 0.45);
+}
+
+.cp77-level-row span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cp77-cyan-progress {
+  height: 3px;
+  background: rgba(45, 226, 230, 0.18);
+  position: relative;
+}
+
+.cp77-cyan-progress > div {
+  height: 100%;
+  background: #2de2e6;
+  box-shadow: 0 0 8px #2de2e6;
+}
+
+.cp77-top-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cp77-key-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(45, 226, 230, 0.65);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #2de2e6;
+  background: rgba(10, 20, 30, 0.6);
+}
+
+.cp77-top-tab {
+  position: relative;
+  padding: 6px 12px 9px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ff5750;
+  letter-spacing: 0.02em;
+  border-bottom: 2px solid rgba(255, 87, 80, 0.4);
+  transition: all 0.18s ease;
+}
+
+.cp77-top-tab:hover {
+  color: #2de2e6;
+  border-bottom-color: #2de2e6;
+}
+
+.cp77-top-tab.active {
+  color: #2de2e6;
+  border-bottom: 2px solid #2de2e6;
+  background: linear-gradient(180deg, rgba(45, 226, 230, 0) 0%, rgba(45, 226, 230, 0.2) 100%);
+  text-shadow: 0 0 10px rgba(45, 226, 230, 0.55);
+}
+
+.cp77-top-resources {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  font-size: 0.96rem;
+  font-weight: 750;
+  color: #ff5750;
+}
+
+.cp77-money-pill em {
+  font-style: normal;
+  color: #fcee0a;
+  font-weight: 800;
+  margin-right: 3px;
+}
+
+/* Main 3-Column Stage Grid */
+.cp77-main-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(280px, 1fr) 290px;
+  gap: 22px;
+  align-items: center;
+}
+
+.cp77-col-left,
+.cp77-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cp77-section-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #ff5750;
+  letter-spacing: 0.03em;
+  margin-bottom: 7px;
+  text-shadow: 0 0 8px rgba(255, 87, 80, 0.25);
+}
+
+/* Left Top: 3 Wide Weapon-Style Cards (주력 코디) */
+.cp77-weapon-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp77-weapon-card {
+  position: relative;
+  height: 82px;
+  width: 100%;
+  background: linear-gradient(135deg, rgba(14, 24, 38, 0.92) 0%, rgba(9, 14, 24, 0.96) 100%);
+  border: 1px solid rgba(45, 226, 230, 0.45);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  padding: 6px 12px 6px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #e6f4ff;
+  text-align: left;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.cp77-weapon-card:hover,
+.cp77-weapon-card.active {
+  transform: translateX(2px);
+  border-color: #2de2e6;
+  box-shadow: 0 0 18px rgba(45, 226, 230, 0.32);
+  background: linear-gradient(135deg, rgba(20, 36, 56, 0.96) 0%, rgba(12, 20, 34, 0.98) 100%);
+}
+
+/* Left Vertical Rarity Bar on All Slots */
+.cp77-rarity-strip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: var(--rarity-color, #00b8ff);
+  box-shadow: 0 0 10px var(--rarity-color, #00b8ff);
+}
+
+.cp77-socket-dots {
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+
+.cp77-socket-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(45, 226, 230, 0.7);
+  background: transparent;
+}
+
+.cp77-socket-dots .dot.filled {
+  background: #2de2e6;
+  box-shadow: 0 0 5px #2de2e6;
+}
+
+.cp77-weapon-visual {
+  position: absolute;
+  inset: 4px 28px 22px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.cp77-empty-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(45, 226, 230, 0.42);
+  letter-spacing: 0.06em;
+}
+
+.cp77-weapon-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 2;
+  margin-top: auto;
+}
+
+.cp77-weapon-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: #2de2e6;
+}
+
+.cp77-weapon-stat small {
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.cp77-weapon-stat strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.cp77-weapon-name {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: #d7f7fa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.cp77-hanger-chip {
+  color: #2de2e6;
+  opacity: 0.85;
+  display: inline-flex;
+}
+
+/* Square Slots (사이버웨어, 퀵 액세스, 머리, 상체, 하체) */
+.cp77-cyberware-row,
+.cp77-quick-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cp77-square-slot {
+  position: relative;
+  aspect-ratio: 1 / 1.06;
+  background: linear-gradient(145deg, rgba(13, 23, 36, 0.92) 0%, rgba(8, 13, 22, 0.96) 100%);
+  border: 1px solid rgba(45, 226, 230, 0.45);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  padding: 6px 6px 20px 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #e6f4ff;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+}
+
+.cp77-square-slot:hover,
+.cp77-square-slot.active {
+  transform: translateY(-2px);
+  border-color: #2de2e6;
+  box-shadow: 0 0 16px rgba(45, 226, 230, 0.35);
+}
+
+.cp77-square-img-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.cp77-square-placeholder {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(45, 226, 230, 0.48);
+  text-align: center;
+  line-height: 1.25;
+}
+
+.cp77-slot-caption {
+  position: absolute;
+  bottom: 3px;
+  left: 28px;
+  right: 5px;
+  font-size: 0.62rem;
+  font-weight: 650;
+  color: rgba(230, 244, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.cp77-corner-hanger {
+  position: absolute;
+  bottom: 4px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px;
+  border: 1px solid rgba(45, 226, 230, 0.65);
+  border-radius: 2px;
+  color: #2de2e6;
+  background: rgba(8, 16, 26, 0.88);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.cp77-quick-num {
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #2de2e6;
+  padding: 0 2px;
+}
+
+.cp77-cyberware-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.cp77-cyberware-body strong {
+  font-size: 0.72rem;
+  color: #2de2e6;
+}
+
+.cp77-cyberware-body small {
+  font-size: 0.62rem;
+  color: rgba(230, 244, 255, 0.72);
+}
+
+.cp77-skin-orb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid #2de2e6;
+  margin-bottom: 2px;
+}
+
+/* Center Column: Frameless Full-Body 3D Character */
+.cp77-col-center {
+  position: relative;
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cp77-character-canvas {
+  width: 100%;
+  height: 540px;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.cp77-character-canvas:active {
+  cursor: grabbing;
+}
+
+.cp77-character-controls {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.cp77-angle-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(9, 12, 20, 0.82);
+  border: 1px solid rgba(45, 226, 230, 0.35);
+  backdrop-filter: blur(6px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cp77-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(230, 244, 255, 0.82);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cp77-mini-btn:hover,
+.cp77-mini-btn.active {
+  background: rgba(45, 226, 230, 0.2);
+  color: #2de2e6;
+}
+
+.cp77-mini-btn.accent {
+  color: #fcee0a;
+  border: 1px solid rgba(252, 238, 10, 0.45);
+}
+
+.cp77-status-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid #2de2e6;
+  border-left: 4px solid #ff5750;
+  padding: 12px 14px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  z-index: 8;
+}
+
+.cp77-status-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fcee0a;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.cp77-status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(45, 226, 230, 0.15);
+}
+
+.cp77-status-row:last-child {
+  border-bottom: none;
+}
+
+.cp77-status-row span {
+  color: rgba(230, 244, 255, 0.7);
+}
+
+.cp77-status-row strong {
+  color: #2de2e6;
+}
+
+/* Right Column: 머리 / 상체 / 하체 / 복장 / 관련 항목 */
+.cp77-equip-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.cp77-slot-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp77-suit-switch {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #2de2e6;
+  padding: 2px 6px;
+  border: 1px solid rgba(45, 226, 230, 0.35);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.cp77-tall-suit-slot {
+  position: relative;
+  width: 100%;
+  height: calc(100% - 29px);
+  min-height: 188px;
+  background: linear-gradient(155deg, rgba(13, 24, 38, 0.92) 0%, rgba(8, 13, 22, 0.96) 100%);
+  border: 1px solid rgba(45, 226, 230, 0.45);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  padding: 10px 10px 24px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #e6f4ff;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cp77-tall-suit-slot:hover,
+.cp77-tall-suit-slot.active {
+  transform: translateY(-2px);
+  border-color: #2de2e6;
+  box-shadow: 0 0 18px rgba(45, 226, 230, 0.35);
+}
+
+.cp77-tall-suit-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(45, 226, 230, 0.65);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.cp77-suit-silhouette {
+  width: 58px;
+  height: 122px;
+}
+
+.cp77-tall-suit-img {
+  width: 100%;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bottom Right: 관련 항목 (3 Angled Cyberpunk Buttons) */
+.cp77-related-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cp77-related-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  background: rgba(16, 18, 28, 0.85);
+  border: 1px solid rgba(255, 87, 80, 0.48);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  color: #2de2e6;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: left;
+  transition: all 0.16s ease;
+}
+
+.cp77-related-btn:hover {
+  background: rgba(45, 226, 230, 0.14);
+  border-color: #2de2e6;
+  box-shadow: 0 0 14px rgba(45, 226, 230, 0.25);
+}
+
+.cp77-diamond-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #2de2e6;
+  transform: rotate(45deg);
+  font-size: 0.65rem;
+  color: #2de2e6;
+  flex-shrink: 0;
+}
+
+.cp77-protocol-foot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: rgba(255, 87, 80, 0.55);
+  letter-spacing: 0.06em;
+}
+
+.cp77-esc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #2de2e6;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cp77-esc-btn em {
+  font-style: normal;
+  padding: 1px 5px;
+  border: 1px solid #2de2e6;
+  border-radius: 3px;
+  font-size: 0.64rem;
+}
+
+/* ===========================
+   COMPREHENSIVE RESPONSIVE SYSTEM (Desktop / Tablet / Mobile)
+   =========================== */
+@media (max-width: 1180px) {
+  .main-workspace {
+    padding: 28px 24px 72px;
+  }
+
+  .cp77-topbar {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cp77-top-stats,
+  .cp77-top-resources {
+    justify-content: space-between;
+  }
+
+  .cp77-main-grid {
+    grid-template-columns: 240px minmax(240px, 1fr) 250px;
+    gap: 14px;
+  }
+}
+
 @media (max-width: 980px) {
   .auth-screen {
     grid-template-columns: 1fr;
@@ -1313,6 +1991,19 @@ img {
     padding: 32px 24px;
     border-right: none;
     border-bottom: 1px solid var(--border-hairline);
+  }
+
+  .auth-showcase {
+    max-width: 100%;
+    margin: 22px 0;
+  }
+
+  .auth-form-pane {
+    padding: 32px 20px 48px;
+  }
+
+  .auth-card {
+    max-width: 460px;
   }
 
   .sidebar {
@@ -1380,7 +2071,7 @@ img {
   }
 
   .main-workspace {
-    padding: 22px 16px calc(var(--mobile-nav-h) + 32px);
+    padding: 20px 16px calc(var(--mobile-nav-h) + 32px);
   }
 
   .weather-editorial-banner {
@@ -1394,6 +2085,23 @@ img {
     border-bottom: 1px solid var(--border-hairline);
     padding-right: 0;
     padding-bottom: 14px;
+  }
+
+  /* Responsive Cyberpunk 2077 Inventory on Tablet/Mobile:
+     Show 3D Character first, then Left & Right Equipment columns side-by-side */
+  .cp77-main-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .cp77-col-center {
+    grid-column: 1 / -1;
+    order: -1;
+    min-height: 440px;
+  }
+
+  .cp77-character-canvas {
+    height: 440px;
   }
 
   .shopping-layout,
@@ -1413,3 +2121,59 @@ img {
     text-align: center;
   }
 }
+
+@media (max-width: 640px) {
+  .auth-preview-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .auth-pillars {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .auth-card {
+    padding: 26px 20px;
+  }
+
+  .cp77-inventory-screen {
+    padding: 16px 14px 20px;
+  }
+
+  .cp77-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cp77-col-center {
+    min-height: 390px;
+  }
+
+  .cp77-character-canvas {
+    height: 390px;
+  }
+
+  .cp77-top-tabs {
+    gap: 4px;
+  }
+
+  .cp77-top-tab {
+    padding: 5px 8px 7px;
+    font-size: 0.74rem;
+  }
+
+  .summary-strip,
+  .verdict-metrics,
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .wardrobe-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .recs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -15,6 +15,7 @@ import {
   formatKRW,
 } from '../utils/api.js';
 import { processUploadedImage } from '../utils/imageTools.js';
+import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 const STORE_SAMPLES = [
   {
@@ -76,7 +77,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
 
   const loadHistory = async () => {
     try {
-      const data = await apiFetch(`/shopping/history?closet=${closetOwner}`);
+      const data = await apiFetch(`/shopping/history?closet=${encodeURIComponent(closetOwner)}`);
       setHistory(data.history || []);
     } catch {
       // ignore
@@ -228,7 +229,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
       loadHistory();
       if (addToCloset) {
         onClosetUpdated?.();
-        showToast('새 옷이 내 디지털 옷장에 바로 등록되었습니다!');
+        showToast('새 옷이 내 디지털 옷장에 스튜디오 팩샷으로 등록되었습니다!');
       } else {
         showToast(`구매 보류 완료! ${formatKRW(price)} 충동구매 방어 기록에 반영되었습니다.`);
       }
@@ -246,9 +247,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
         <div>
           <h1>오프라인 쇼핑 구매 판독기</h1>
           <p className="page-subtitle">
-            매장에서 마음에 드는 옷을 촬영하면, 현재 선택된{' '}
-            <strong>{closetOwner === 'husband' ? '남편(어드민) 옷장' : '와이프 옷장'}</strong>과 비교해
-            구매 판단을 지지해드립니다.
+            매장에서 마음에 드는 옷을 촬영하면, 현재 선택된 옷장의 11부위 보유 의류와 비교해 구매 판단을 지지해드립니다.
           </p>
         </div>
       </header>
@@ -266,7 +265,14 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                   className={`sample-preset-btn ${selectedPreset === s.key ? 'active' : ''}`}
                   onClick={() => applySample(s)}
                 >
-                  <img src={s.image_url} alt={s.label} />
+                  <StudioGarmentImage
+                    src={s.image_url}
+                    category={s.category}
+                    subcategory={s.subcategory}
+                    alt={s.label}
+                    allowStorePhoto={true}
+                    style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 5, marginBottom: 5 }}
+                  />
                   <span>{s.sublabel}</span>
                 </button>
               ))}
@@ -280,7 +286,15 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
             tabIndex={0}
           >
             {previewUrl ? (
-              <img src={previewUrl} alt="촬영된 의류 미리보기" />
+              <StudioGarmentImage
+                src={previewUrl}
+                category={category}
+                subcategory={subcategory}
+                colorHex={colorHex}
+                alt="촬영된 의류 미리보기"
+                allowStorePhoto={true}
+                style={{ width: '100%', maxHeight: 280, borderRadius: 8 }}
+              />
             ) : (
               <div>
                 <Camera size={28} />
@@ -351,7 +365,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
           <div className="form-grid-2">
             <div className="field-group">
               <label className="field-label" htmlFor="shopping-category">
-                카테고리
+                카테고리 (11부위)
               </label>
               <select
                 id="shopping-category"
@@ -499,7 +513,10 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                     ).map((item) => (
                       <div key={item.id} className="similar-card">
                         <div className="similar-card-img">
-                          <img src={item.image_url} alt={item.name} />
+                          <StudioGarmentImage
+                            item={item}
+                            style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
+                          />
                           <span className="similarity-pill">유사도 {item.similarity}%</span>
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>
@@ -536,12 +553,23 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                         </span>
                         <div className="outfit-collage" style={{ marginBottom: 0 }}>
                           <div className="collage-piece">
-                            <img src={previewUrl} alt="새 옷 후보" />
+                            <StudioGarmentImage
+                              src={previewUrl}
+                              category={category}
+                              subcategory={subcategory}
+                              colorHex={colorHex}
+                              alt="새 옷 후보"
+                              allowStorePhoto={true}
+                              style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
+                            />
                             <span>[새 옷] {colorName}</span>
                           </div>
                           {combo.existingItems.map((ex) => (
                             <div key={ex.id} className="collage-piece">
-                              <img src={ex.image_url} alt={ex.name} />
+                              <StudioGarmentImage
+                                item={ex}
+                                style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
+                              />
                               <span>{ex.name}</span>
                             </div>
                           ))}
@@ -558,7 +586,11 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                   <div>
                     {history.slice(0, 5).map((h) => (
                       <div key={h.id} className="cpw-row">
-                        <img src={h.image_url} alt={h.candidate_name} />
+                        <StudioGarmentImage
+                          item={h}
+                          allowStorePhoto={true}
+                          style={{ width: 48, height: 62, borderRadius: 6, flexShrink: 0 }}
+                        />
                         <div style={{ flex: 1 }}>
                           <strong style={{ fontSize: '0.9rem' }}>{h.candidate_name}</strong>
                           <div style={{ fontSize: '0.79rem', color: 'var(--ink-secondary)' }}>

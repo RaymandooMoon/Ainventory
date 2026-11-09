@@ -2,31 +2,53 @@ import { useEffect, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  Layers,
   Lock,
   Shuffle,
   Trash2,
   Unlock,
 } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
+import OutfitInspectorModal from './OutfitInspectorModal.jsx';
+import StudioGarmentImage from './StudioGarmentImage.jsx';
+import VirtualMannequin from './VirtualMannequin.jsx';
 
-export default function OutfitStudioView({ activeCloset, refreshKey, showToast }) {
-  const closetOwner = activeCloset === 'all' ? 'husband' : activeCloset;
+export default function OutfitStudioView({ user, activeCloset, refreshKey, showToast }) {
+  const closetOwner = activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
   const [garments, setGarments] = useState([]);
   const [outfits, setOutfits] = useState([]);
 
   const [includeOuter, setIncludeOuter] = useState(true);
-  const [indices, setIndices] = useState({ outer: 0, top: 0, bottom: 0, shoes: 0 });
-  const [locked, setLocked] = useState({ outer: false, top: false, bottom: false, shoes: false });
+  const [indices, setIndices] = useState({
+    headwear: 0,
+    neckwear: 0,
+    outer: 0,
+    top: 0,
+    bottom: 0,
+    gloves: 0,
+    underwear: 0,
+    socks: 0,
+    shoes: 0,
+    accessory: 0,
+  });
+  const [locked, setLocked] = useState({
+    outer: false,
+    top: false,
+    bottom: false,
+    shoes: false,
+  });
 
   const [title, setTitle] = useState('');
   const [occasion, setOccasion] = useState('출근룩');
   const [memo, setMemo] = useState('');
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorSlot, setInspectorSlot] = useState('outer');
 
   const loadStudioData = async () => {
     try {
       const [gRes, oRes] = await Promise.all([
-        apiFetch(`/garments?closet=${closetOwner}`),
-        apiFetch(`/outfits?closet=${closetOwner}`),
+        apiFetch(`/garments?closet=${encodeURIComponent(closetOwner)}`),
+        apiFetch(`/outfits?closet=${encodeURIComponent(closetOwner)}`),
       ]);
       setGarments((gRes.garments || []).filter((g) => g.status === 'active'));
       setOutfits(oRes.outfits || []);
@@ -41,25 +63,31 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
   }, [closetOwner, refreshKey]);
 
   const pools = {
+    headwear: garments.filter((g) => g.category === 'headwear'),
+    neckwear: garments.filter((g) => g.category === 'neckwear'),
     outer: garments.filter((g) => g.category === 'outer'),
     top: garments.filter((g) => g.category === 'top'),
     bottom: garments.filter((g) => g.category === 'bottom'),
+    gloves: garments.filter((g) => g.category === 'gloves'),
+    underwear: garments.filter((g) => g.category === 'underwear'),
+    socks: garments.filter((g) => g.category === 'socks'),
     shoes: garments.filter((g) => g.category === 'shoes'),
+    accessory: garments.filter((g) => g.category === 'accessory' || g.category === 'bag'),
   };
 
   const stepSlot = (slot, delta) => {
-    const len = pools[slot].length;
+    const len = (pools[slot] || []).length;
     if (len === 0) return;
     setIndices((prev) => ({
       ...prev,
-      [slot]: (prev[slot] + delta + len) % len,
+      [slot]: ((prev[slot] || 0) + delta + len) % len,
     }));
   };
 
   const handleShuffle = () => {
     setIndices((prev) => {
       const next = { ...prev };
-      ['outer', 'top', 'bottom', 'shoes'].forEach((slot) => {
+      Object.keys(pools).forEach((slot) => {
         const len = pools[slot].length;
         if (!locked[slot] && len > 1) {
           let rand = Math.floor(Math.random() * len);
@@ -71,15 +99,40 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
     });
   };
 
-  const pickedItems = [
-    includeOuter && pools.outer[indices.outer % Math.max(1, pools.outer.length)],
-    pools.top[indices.top % Math.max(1, pools.top.length)],
-    pools.bottom[indices.bottom % Math.max(1, pools.bottom.length)],
-    pools.shoes[indices.shoes % Math.max(1, pools.shoes.length)],
-  ].filter(Boolean);
+  const getSlotItem = (slotKey) => {
+    const list = pools[slotKey] || [];
+    if (list.length === 0) return null;
+    if (slotKey === 'outer' && !includeOuter) return null;
+    return list[(indices[slotKey] || 0) % list.length];
+  };
+
+  const loadoutBySlot = {
+    headwear: getSlotItem('headwear'),
+    neckwear: getSlotItem('neckwear'),
+    outer: getSlotItem('outer'),
+    top: getSlotItem('top'),
+    bottom: getSlotItem('bottom'),
+    gloves: getSlotItem('gloves'),
+    underwear: getSlotItem('underwear'),
+    socks: getSlotItem('socks'),
+    shoes: getSlotItem('shoes'),
+    accessory: getSlotItem('accessory'),
+  };
+
+  const pickedItems = Object.values(loadoutBySlot).filter(Boolean);
+
+  const handleConfirmSwap = (slotKey, newItem) => {
+    if (!newItem) return;
+    const list = pools[slotKey] || [];
+    const foundIdx = list.findIndex((g) => g.id === newItem.id);
+    if (foundIdx >= 0) {
+      setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
+      showToast(`'${newItem.name}' 아이템으로 교체되었습니다.`);
+    }
+  };
 
   const handleSaveLook = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (pickedItems.length < 2) {
       showToast('최소 2개 이상의 아이템이 필요합니다.');
       return;
@@ -89,7 +142,7 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
         method: 'POST',
         body: JSON.stringify({
           closet_owner: closetOwner,
-          title: title.trim() || `${occasion} 코디 조합`,
+          title: title.trim() || `${occasion} 3D 코디 조합`,
           occasion,
           season: '사계절',
           item_ids: pickedItems.map((i) => i.id),
@@ -116,8 +169,7 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
   };
 
   const renderSlotRow = (slotKey, slotLabel) => {
-    const list = pools[slotKey];
-    const current = list[indices[slotKey] % Math.max(1, list.length)];
+    const current = getSlotItem(slotKey);
     if (!current) {
       return (
         <div key={slotKey} className="slot-row">
@@ -128,7 +180,10 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
 
     return (
       <div key={slotKey} className="slot-row">
-        <img src={current.image_url} alt={current.name} />
+        <StudioGarmentImage
+          item={current}
+          style={{ width: 58, height: 74, borderRadius: 8 }}
+        />
         <div>
           <span style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
             {slotLabel} · {current.color_name}
@@ -175,12 +230,39 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
     <div>
       <header className="page-header">
         <div>
-          <h1>코디 스튜디오 & 룩북</h1>
+          <h1>코디 스튜디오 &amp; 3D Dress Me 룩북</h1>
           <p className="page-subtitle">
-            웨어링(Whering) 스타일의 슬롯 매칭 보드입니다. 입을 옷 하나를 잠금(Lock)한 뒤 나머지를 셔플해 새로운 조합을 발견하세요.
+            원하는 부위를 잠금(Lock)한 뒤 셔플하거나, 3D 마네킹 인벤토리에서 직접 11부위를 교체해 나만의 룩북을 완성하세요.
           </p>
         </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            setInspectorSlot('outer');
+            setInspectorOpen(true);
+          }}
+        >
+          <Layers size={16} /> 11부위 전체 코디 인스펙터 열기
+        </button>
       </header>
+
+      <div style={{ marginBottom: 26 }}>
+        <VirtualMannequin
+          userProfile={user}
+          loadoutBySlot={loadoutBySlot}
+          items={pickedItems}
+          title="DRESS ME STUDIO // 3D LIVE PREVIEW"
+          onOpenInspector={(slotKey) => {
+            setInspectorSlot(slotKey || 'outer');
+            setInspectorOpen(true);
+          }}
+          onSelectSlot={(slotKey) => {
+            setInspectorSlot(slotKey);
+            setInspectorOpen(true);
+          }}
+        />
+      </div>
 
       <div className="studio-split">
         <section className="slot-machine-card">
@@ -192,7 +274,7 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
               marginBottom: 14,
             }}
           >
-            <h3 style={{ fontSize: '1.05rem' }}>Dress Me 조합 보드</h3>
+            <h3 style={{ fontSize: '1.05rem' }}>Dress Me 셔플 컨트롤러</h3>
             <label style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 6 }}>
               <input
                 type="checkbox"
@@ -284,7 +366,10 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
                   <div className="outfit-collage">
                     {o.items.map((item) => (
                       <div key={item.id} className="collage-piece">
-                        <img src={item.image_url} alt={item.name} />
+                        <StudioGarmentImage
+                          item={item}
+                          style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
+                        />
                         <span>{item.name}</span>
                       </div>
                     ))}
@@ -306,6 +391,17 @@ export default function OutfitStudioView({ activeCloset, refreshKey, showToast }
           </div>
         </section>
       </div>
+
+      <OutfitInspectorModal
+        open={inspectorOpen}
+        initialSlot={inspectorSlot}
+        loadoutBySlot={loadoutBySlot}
+        closetGarments={garments}
+        personalColor={user?.personalColor || 'autumn_warm'}
+        onConfirmSwap={handleConfirmSwap}
+        onSaveOutfit={() => handleSaveLook()}
+        onClose={() => setInspectorOpen(false)}
+      />
     </div>
   );
 }

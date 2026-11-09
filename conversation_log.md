@@ -1,0 +1,75 @@
+# A inventory — Conversation & Implementation Log (`conversation_log.md`)
+
+## 2026-11-09 — 통합 구현 완료 (다른 PC 작업분 `[1] 2~11` + 미완료 `[2] a~h` + Cyberpunk 2077 PBR 3D 인벤토리)
+
+### 1. 사용자 요구사항 및 아키텍처 결정 요약
+- **기존 PC 미푸시 작업분(`[1] 2~11`) 및 잔여 TODO(`[2] a~h`) 전량 반영**
+- **게임 인벤토리 × 디지털 옷장 결합**:
+  - 전체 앱은 밝은 아틀리에(Atelier) 감성을 유지하되, **마네킹 및 11부위 착용 스테이지**는 **사이버펑크 2077(Cyberpunk 2077) 장비창 HUD 스타일**로 구축
+  - **Three.js / WebGL PBR 3D 엔진(`Mannequin3DWebGLEngine`)** 도입:
+    - `MeshPhysicalMaterial` 기반 서브서피스 스킨 셰이딩(퍼스널컬러 바디 반영), 클리어코트/광택/절차적 패브릭 노멀·범프맵(니트·울·개버딘·패딩·데님·실크·가죽) 실시간 표현
+    - 상단 토글로 **조각상 마네킹 헤드(얼굴 없는 마네킹)** ↔ **캐릭터 아바타 헤드(게임 캐릭터 스타일)** 즉시 전환
+    - 11부위 슬롯 클릭 시 해당 부위로 **3D 카메라 자동 줌 포커스**, 드래그 360° 회전, 레이캐스트 클릭/호버 부위 인식
+    - 아이템 등급 자동 산출 배지(`ICONIC` / `LEGENDARY` / `EPIC` / `RARE` / `COMMON`), 실시간 로드아웃 RPG 스탯 게이지(`방한 방어력 THERMAL`, `방수 실드 HYDRO SHIELD`, `포멀 지수 FORMALITY`, `퍼스널컬러 싱크로율`), 장착 스캔라인 연출
+
+---
+
+### 2. 세부 구현 내역
+
+1. **한/영 멀티랭귀지 (`[1] 2`)**
+   - `src/utils/i18n.js`: 한국어(`ko`)/영어(`en`) 사전 및 로컬 스토리지 상태 관리
+   - `src/components/LoginView.jsx`, `src/App.jsx`: 로그인/회원가입/이메일 인증 화면, 데스크톱 사이드바, 모바일 상단바에 `KO / EN` 즉시 전환 토글 적용
+
+2. **이메일 인증 회원가입 및 해시 검증 로그인 (`[1] 3`)**
+   - `server/api.js`, `server/db.js`, `src/components/LoginView.jsx`
+   - `POST /api/auth/register` → `/?verify_token=...` 인증 링크 발행
+   - `GET /api/auth/verify-info`, `POST /api/auth/verify-email` → 인증 시 `verified_at` 타임스탬프 + SHA-256 `verification_hash` 저장
+   - `POST /api/auth/login` → `verified_at` 및 `verification_hash`가 존재하는 계정만 로그인 허용
+
+3. **사용자별 기본 옷장 분리 (`[1] 4`)**
+   - 회원가입 시 옷장 선택 UI 제거, `closet_<username>` 전용 키 자동 생성
+   - 최초 로그인 시 옷장 이름 설정 모달(`POST /api/auth/closet-setup`, `users.closet_name`) 표시
+
+4. **7체형 + 스리사이즈/머리둘레/체지방 + 퍼스널 컬러 진단 모달 (`[1] 5, 8, 9`, `[2] a, b, e`)**
+   - `src/utils/bodyAnthropometrics.js`: 7체형(`ectomorph_thin`, `skinny_fat`, `standard_balanced`, `upper_developed`, `lower_developed`, `muscular_athletic`, `plus_curvy`), `recommendBodyShapeFromMetrics`, `resolveAnatomicalProfile`(미입력 시 성별·나이·키·몸무게·체형 기반 디폴트 자동 산출)
+   - `src/components/ProfilePersonalColorModal.jsx`:
+     - **Step 1**: 10단계 연령대, 성별, 키/몸무게, 7체형 미니 3D 마네킹 카드 선택, BMI/체지방 기반 추천 체형 버튼, 체지방률·가슴·허리·엉덩이·머리둘레 입력(디폴트 placeholder + 비우기 버튼), 실시간 3D 미리보기
+     - **Step 2**: D65 자연광 안내, 4가지 조명 보정(`auto_d65`, `studio_cool_fix`, `indoor_warm_fix`, `raw_original`) 및 변경 확인 팝업 + `0~100%` 재분석 애니메이션, 상/하/좌/우 20색 언더톤 유사도, 신뢰도 산식 공개(`40/25/20/15`), 4개 피부 부위(이마/좌볼/우볼/콧대·턱) 참조 핀
+   - `src/utils/faceLandmarkEngine.js`, `src/components/PortraitCropAndPinEditorModal.jsx`: 얼굴 방향 무관 인식, 전신샷 2단계 헤드 줌 재탐색, 회전/크롭 및 4개 핀 드래그 직접 조정, 인식 부정확 시 안내 팝업
+
+5. **연령별 통계 옷장 및 실사 스튜디오 팩샷 마이그레이션 (`[1] 6, 11`, `[2] a, f`, `[3]`)**
+   - `server/wardrobeStatsAndGenerator.js`: WRAP UK, Hot or Cool Institute, KOFOTI/한국의류학회 기반 10연령대 × 11부위 × 4계절 벤치마크(`wardrobe_statistics_benchmarks`) 시드 및 통계 수량만큼 의류 자동 생성
+   - `public/seed/studio-*.jpg|png` (30종 스튜디오 팩샷 생성 완료, 기존 시드 포함 전 부위 실사 팩샷 확보)
+   - `server/db.js`: `initDb()`에서 `garments.image_url`이 `data:image/svg+xml%` 이거나 `/seed/store-terracotta-cardigan.jpg` 인 행을 `getStudioSeedImageForGarment(category, subcategory)` 결과로 자동 UPDATE
+   - `src/components/StudioGarmentImage.jsx`: `WeatherStylingView`, `OutfitInspectorModal`, `WardrobeView`, `OutfitStudioView`, `AnalyticsCalendarView`, `ShoppingCheckView` 전 화면에 적용
+
+6. **사이버펑크 2077 3D 인벤토리 마네킹 + 코디 인스펙터 + 월간 착용 캘린더 (`[1] 7, 10`, `[2] c, d`)**
+   - `src/utils/mannequin3DRenderer.js` & `src/components/VirtualMannequin.jsx`: Three.js WebGL PBR 3D 마네킹 + 좌우 11슬롯 장비창 + 카메라 부위 포커스 + RPG 스탯 게이지
+   - `src/components/OutfitInspectorModal.jsx`: 머리→발 11부위 한 화면 인스펙터 및 `"다른 아이템으로 변경하시겠습니까?"` 확인 팝업 후 교체/확정
+   - `src/components/AnalyticsCalendarView.jsx`: 월간 착용 캘린더, Google Calendar 일정 등록 링크, `.ics` 내보내기
+
+---
+
+## 2026-11-09 — 오리지널 로그인 화면 복원 + 사이버펑크 2077 인벤토리(`image_2.png`) 정밀 재설계 + 전 화면 반응형 고도화
+
+1. **최초 에디토리얼 로그인 화면 복원 ([src/components/LoginView.jsx](file:///home/antigravity/RaymandooMoon/Ainventory/src/components/LoginView.jsx))**
+   - 최초 커밋의 좌측 에디토리얼 쇼케이스(`auth-editorial`, `auth-showcase`, 4종 실사 팩샷 스트립 `/seed/beige-trench.jpg`, `/seed/navy-knit.jpg`, `/seed/charcoal-slacks.jpg`, `/seed/white-sneakers.jpg`, `auth-pillars`)와 우측 `auth-card`(`어드민 (남편)` / `테스터 (와이프)` 빠른 입장 버튼) 레이아웃 및 타이포그래피를 그대로 복원하고, 한/영 토글 및 이메일 인증 가입 흐름을 자연스럽게 통합했습니다.
+
+2. **첨부 레퍼런스(`image_2.png`) 기반 사이버펑크 2077 인벤토리 재설계 ([src/components/VirtualMannequin.jsx](file:///home/antigravity/RaymandooMoon/Ainventory/src/components/VirtualMannequin.jsx), [src/index.css](file:///home/antigravity/RaymandooMoon/Ainventory/src/index.css))**
+   - **배경 및 분위기**: 상단 크림슨 레드(`#3c121b`)에서 하단 옵시디언 블랙(`#07060b`)으로 떨어지는 다크 비네팅 배경과 좌우 가장자리 바이너리 텔레메트리(`0111 1001...`) 적용.
+   - **상단 헤더 바 (`cp77-topbar`)**:
+     - 좌측: 시안(`#2de2e6`) `27 레벨` 및 `스타일 평판` 수치 + 시안 프로그레스 바
+     - 중앙: `[1]` `사이버웨어` | **`인벤토리`**(활성 시안 언더라인 글로우) | `캐릭터` | `코디북` | `일지` `[3]`
+     - 우측: 코랄 레드(`#ff5750`) 보유 용량(`BAG`) 및 골드(`€$`) 총 코디 가치 표시
+   - **좌측 컬럼 (`cp77-col-left`)**:
+     - **`주력 코디` (무기 슬롯 스타일 가로형 와이드 카드 3단)**: 좌측 수직 등급 컬러 바(퍼플·시안·골드), 상단 소켓 도트(`● ● ○`), 중앙 실사 의류 이미지, 하단 시안 스코어(`= 96`, `|| 606`) 및 아이템명
+     - **`사이버웨어` (정사각 3슬롯)**: 7체형/3사이즈 파츠, 퍼스널컬러 D65 코어, 방한·방수 실드 코어
+     - **`퀵 액세스` (정사각 3슬롯)**: 좌하단 시안 번호 배지(`1`, `2`, `3`)가 포함된 이너웨어·양말·장갑 슬롯
+   - **중앙 컬럼 (`cp77-col-center`)**:
+     - 박스 테두리 없이 다크 크림슨-옵시디언 배경 위에 자연스럽게 서 있는 전신 3D 캐릭터/마네킹 뷰포트(360° 드래그 회전, 아바타/마네킹 헤드 전환, 부위별 포커스)
+   - **우측 컬럼 (`cp77-col-right`)**:
+     - **`머리`(2슬롯) + `상체`(2슬롯)** 및 **`하체`(2슬롯) + `복장`(세로 2단 높이의 롱 슬롯 + 전신 수트 실루엣 워터마크 + `1 [옷걸이]` 아이콘)**
+     - **`관련 항목` (우하단 3단 사선 버튼)**: 시안 다이아몬드 아이콘(`◇`)이 결합된 `배낭`, `제작`, `스테이터스` 버튼 및 `NEURONET PROTOCOL` / `ESC` 푸터
+
+3. **전 화면 반응형 설계 ([src/index.css](file:///home/antigravity/RaymandooMoon/Ainventory/src/index.css))**
+   - `1180px`, `980px`(태블릿: 3D 캐릭터 상단 중앙 배치 후 좌·우 장비 슬롯 2열 병렬 배치), `640px`(모바일: 1열 스택 및 터치 최적화) 브레이크포인트 완비.

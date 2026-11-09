@@ -5,9 +5,11 @@ import {
   COLOR_PALETTE,
   SUBCATEGORIES_BY_CAT,
   apiFetch,
+  computeItemTier,
   formatKRW,
 } from '../utils/api.js';
 import { processUploadedImage } from '../utils/imageTools.js';
+import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated, showToast }) {
   const [category, setCategory] = useState('all');
@@ -141,7 +143,6 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
           water_resistant: formWaterResistant,
           notes: formNotes,
           image_data: formImageData || undefined,
-          image_url: formImageData ? undefined : '/seed/white-shirt.jpg',
         }),
       });
       setModalOpen(false);
@@ -161,9 +162,9 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
     <div>
       <header className="page-header">
         <div>
-          <h1>디지털 옷장 ({garments.length}벌)</h1>
+          <h1>디지털 옷장 ({garments.length}벌 · 11부위 스튜디오 팩샷)</h1>
           <p className="page-subtitle">
-            에이클로젯 · 겟워드롭 · 웨어링의 핵심인 카테고리/컬러 분류, 세탁 상태 관리, 1회 착용당 비용(CPW)을 한눈에 관리하세요.
+            머리(헤드웨어)부터 발끝(슈즈·삭스·이너웨어)까지 11개 장착 부위별 스튜디오 팩샷과 아이템 등급(Tier), CPW를 관리하세요.
           </p>
         </div>
 
@@ -219,90 +220,97 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
         </div>
       ) : (
         <div className="wardrobe-grid">
-          {garments.map((g) => (
-            <article key={g.id} className="garment-card">
-              <div className="garment-img-wrap">
-                <img src={g.image_url} alt={g.name} loading="lazy" />
-                <div className="garment-top-badges">
-                  <span className="owner-pill">
-                    {g.closet_owner === 'husband'
-                      ? '남편 옷장'
-                      : g.closet_owner === 'wife'
-                        ? '와이프 옷장'
-                        : '공용'}
-                  </span>
+          {garments.map((g) => {
+            const tierInfo = computeItemTier(g);
+            return (
+              <article key={g.id} className="garment-card">
+                <div className="garment-img-wrap">
+                  <StudioGarmentImage
+                    item={g}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                  <div className="garment-top-badges">
+                    <span
+                      className="owner-pill"
+                      style={{
+                        borderLeft: `3px solid ${tierInfo.color}`,
+                      }}
+                    >
+                      {tierInfo.tier} · {g.category.toUpperCase()}
+                    </span>
 
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {g.status === 'laundry' && <span className="status-pill laundry">세탁중</span>}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {g.status === 'laundry' && <span className="status-pill laundry">세탁중</span>}
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ width: 30, height: 30, borderRadius: '50%' }}
+                        aria-label="즐겨찾기"
+                        onClick={() => handleToggleFavorite(g)}
+                      >
+                        <Heart
+                          size={14}
+                          fill={g.is_favorite ? '#A2422A' : 'none'}
+                          color={g.is_favorite ? '#A2422A' : 'currentColor'}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="garment-body">
+                  <span className="garment-brand">{g.brand || 'Personal Archive'}</span>
+                  <h3 className="garment-title">{g.name}</h3>
+
+                  <div className="garment-meta">
+                    <span
+                      className="color-dot"
+                      style={{ width: 13, height: 13, backgroundColor: g.color_hex }}
+                    />
+                    <span>{g.color_name}</span>
+                    <span>·</span>
+                    <span>
+                      {g.min_temp}°~{g.max_temp}°C
+                    </span>
+                    {g.water_resistant && <span>· 발수</span>}
+                  </div>
+
+                  <div className="garment-stats-bar">
+                    <div>
+                      <strong>{g.wear_count}회</strong> 착용 · CPW{' '}
+                      <strong>{formatKRW(g.cpw)}</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                     <button
                       type="button"
-                      className="icon-btn"
-                      style={{ width: 30, height: 30, borderRadius: '50%' }}
-                      aria-label="즐겨찾기"
-                      onClick={() => handleToggleFavorite(g)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                      onClick={() => handleWearIncrement(g)}
                     >
-                      <Heart
-                        size={14}
-                        fill={g.is_favorite ? '#A2422A' : 'none'}
-                        color={g.is_favorite ? '#A2422A' : 'currentColor'}
-                      />
+                      +1 착용
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleToggleLaundry(g)}
+                    >
+                      {g.status === 'laundry' ? '세탁완료' : '세탁중'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      aria-label="삭제"
+                      onClick={() => handleDelete(g)}
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div className="garment-body">
-                <span className="garment-brand">{g.brand || 'Personal Archive'}</span>
-                <h3 className="garment-title">{g.name}</h3>
-
-                <div className="garment-meta">
-                  <span
-                    className="color-dot"
-                    style={{ width: 13, height: 13, backgroundColor: g.color_hex }}
-                  />
-                  <span>{g.color_name}</span>
-                  <span>·</span>
-                  <span>
-                    {g.min_temp}°~{g.max_temp}°C
-                  </span>
-                  {g.water_resistant && <span>· 발수</span>}
-                </div>
-
-                <div className="garment-stats-bar">
-                  <div>
-                    <strong>{g.wear_count}회</strong> 착용 · CPW{' '}
-                    <strong>{formatKRW(g.cpw)}</strong>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    style={{ flex: 1 }}
-                    onClick={() => handleWearIncrement(g)}
-                  >
-                    +1 착용
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => handleToggleLaundry(g)}
-                  >
-                    {g.status === 'laundry' ? '세탁완료' : '세탁중'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    aria-label="삭제"
-                    onClick={() => handleDelete(g)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
 
@@ -310,7 +318,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
         <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>새 옷 등록하기</h2>
+              <h2>새 옷 등록하기 (11부위 지원)</h2>
               <button type="button" className="icon-btn" onClick={() => setModalOpen(false)}>
                 <X size={18} />
               </button>
@@ -327,7 +335,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
                 ) : (
                   <div>
                     <Upload size={24} style={{ margin: '0 auto 6px' }} />
-                    <strong>옷 사진 촬영 또는 파일 선택</strong>
+                    <strong>옷 사진 촬영 또는 파일 선택 (미선택 시 부위별 실사 팩샷 자동 배정)</strong>
                     <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', marginTop: 4 }}>
                       업로드 시 대표 색상을 자동으로 감지합니다
                     </div>
@@ -344,16 +352,12 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
 
               <div className="form-grid-2">
                 <div className="field-group">
-                  <label className="field-label">누구의 옷장인가요?</label>
-                  <select
-                    className="select-input"
+                  <label className="field-label">옷장 키</label>
+                  <input
+                    className="text-input"
                     value={formOwner}
                     onChange={(e) => setFormOwner(e.target.value)}
-                  >
-                    <option value="husband">남편(어드민) 옷장</option>
-                    <option value="wife">와이프 옷장</option>
-                    <option value="shared">부부 공용 아이템</option>
-                  </select>
+                  />
                 </div>
 
                 <div className="field-group">
@@ -380,7 +384,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
 
               <div className="form-grid-2">
                 <div className="field-group">
-                  <label className="field-label">카테고리</label>
+                  <label className="field-label">착용 부위 (11개 슬롯)</label>
                   <select
                     className="select-input"
                     value={formCategory}

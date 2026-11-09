@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  generateStatisticalWardrobeForUser,
+  getStudioSeedImageForGarment,
+  seedWardrobeBenchmarks,
+} from './wardrobeStatsAndGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -84,15 +89,42 @@ export function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
 }
 
+export function computeVerificationHash(username, email, verifiedAt) {
+  return crypto
+    .createHash('sha256')
+    .update(`ainventory-verify:${username}:${email || ''}:${verifiedAt}`)
+    .digest('hex');
+}
+
 export function initDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
+      email TEXT DEFAULT NULL,
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'member',
       default_closet TEXT NOT NULL DEFAULT 'husband',
+      closet_name TEXT DEFAULT NULL,
+      verification_token TEXT DEFAULT NULL,
+      verified_at TEXT DEFAULT NULL,
+      verification_hash TEXT DEFAULT NULL,
+      age_group TEXT DEFAULT NULL,
+      age INTEGER DEFAULT NULL,
+      height_cm REAL DEFAULT NULL,
+      weight_kg REAL DEFAULT NULL,
+      gender TEXT DEFAULT NULL,
+      personal_color TEXT DEFAULT NULL,
+      skin_tone_hex TEXT DEFAULT NULL,
+      skin_undertone_lab TEXT DEFAULT NULL,
+      profile_completed INTEGER NOT NULL DEFAULT 0,
+      body_shape TEXT DEFAULT NULL,
+      body_fat_pct REAL DEFAULT NULL,
+      chest_cm REAL DEFAULT NULL,
+      waist_cm REAL DEFAULT NULL,
+      hip_cm REAL DEFAULT NULL,
+      head_cm REAL DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -171,7 +203,56 @@ export function initDb() {
     );
   `);
 
+  const alterStatements = [
+    'ALTER TABLE users ADD COLUMN email TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN closet_name TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN verification_token TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN verified_at TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN verification_hash TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN age_group TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN age INTEGER DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN height_cm REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN weight_kg REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN gender TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN personal_color TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN skin_tone_hex TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN skin_undertone_lab TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN profile_completed INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN body_shape TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN body_fat_pct REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN chest_cm REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN waist_cm REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN hip_cm REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN head_cm REAL DEFAULT NULL',
+  ];
+
+  for (const stmt of alterStatements) {
+    try {
+      db.exec(stmt);
+    } catch {
+      // Column already exists
+    }
+  }
+
+  seedWardrobeBenchmarks(db);
   seedIfEmpty();
+
+  // One-time migration: replace any SVG or store-terracotta-cardigan.jpg garment images with studio packshots
+  try {
+    const legacyGarments = db
+      .prepare(
+        "SELECT id, category, subcategory FROM garments WHERE image_url LIKE 'data:image/svg+xml%' OR image_url = '/seed/store-terracotta-cardigan.jpg'"
+      )
+      .all();
+    if (legacyGarments.length > 0) {
+      const updateImg = db.prepare('UPDATE garments SET image_url = ? WHERE id = ?');
+      for (const g of legacyGarments) {
+        updateImg.run(getStudioSeedImageForGarment(g.category, g.subcategory), g.id);
+      }
+    }
+  } catch {
+    // ignore migration error
+  }
 }
 
 export function seedIfEmpty(forceReset = false) {
@@ -184,27 +265,179 @@ export function seedIfEmpty(forceReset = false) {
     `);
   }
 
-  const userCount = db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
-  if (userCount === 0) {
-    const insertUser = db.prepare(`
-      INSERT INTO users (username, password_hash, display_name, role, default_closet)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    insertUser.run('admin', hashPassword('admin'), '어드민 (남편)', 'admin', 'husband');
-    insertUser.run('wife', hashPassword('wife1234'), '와이프', 'member', 'wife');
-  } else {
-    // Ensure admin/admin always exists as requested
-    const adminUser = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
-    if (!adminUser) {
+  const nowIso = new Date().toISOString();
+  const ensureDefaultUser = ({
+    username,
+    password,
+    displayName,
+    role,
+    defaultCloset,
+    closetName,
+    email,
+    ageGroup,
+    age,
+    heightCm,
+    weightKg,
+    gender,
+    personalColor,
+    skinToneHex,
+    bodyShape,
+    bodyFatPct,
+    chestCm,
+    waistCm,
+    hipCm,
+    headCm,
+  }) => {
+    const existing = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const vHash = computeVerificationHash(username, email, nowIso);
+    if (!existing) {
       db.prepare(`
-        INSERT INTO users (username, password_hash, display_name, role, default_closet)
-        VALUES (?, ?, ?, ?, ?)
-      `).run('admin', hashPassword('admin'), '어드민 (남편)', 'admin', 'husband');
+        INSERT INTO users (
+          username, email, password_hash, display_name, role, default_closet, closet_name,
+          verified_at, verification_hash, age_group, age, height_cm, weight_kg, gender,
+          personal_color, skin_tone_hex, profile_completed,
+          body_shape, body_fat_pct, chest_cm, waist_cm, hip_cm, head_cm
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+      `).run(
+        username,
+        email,
+        hashPassword(password),
+        displayName,
+        role,
+        defaultCloset,
+        closetName,
+        nowIso,
+        vHash,
+        ageGroup,
+        age,
+        heightCm,
+        weightKg,
+        gender,
+        personalColor,
+        skinToneHex,
+        bodyShape,
+        bodyFatPct,
+        chestCm,
+        waistCm,
+        hipCm,
+        headCm
+      );
+    } else if (!existing.verified_at || !existing.verification_hash) {
+      db.prepare(`
+        UPDATE users
+        SET email = COALESCE(email, ?),
+            closet_name = COALESCE(closet_name, ?),
+            verified_at = COALESCE(verified_at, ?),
+            verification_hash = COALESCE(verification_hash, ?),
+            age_group = COALESCE(age_group, ?),
+            age = COALESCE(age, ?),
+            height_cm = COALESCE(height_cm, ?),
+            weight_kg = COALESCE(weight_kg, ?),
+            gender = COALESCE(gender, ?),
+            personal_color = COALESCE(personal_color, ?),
+            skin_tone_hex = COALESCE(skin_tone_hex, ?),
+            profile_completed = CASE WHEN profile_completed = 0 THEN 1 ELSE profile_completed END,
+            body_shape = COALESCE(body_shape, ?),
+            body_fat_pct = COALESCE(body_fat_pct, ?),
+            chest_cm = COALESCE(chest_cm, ?),
+            waist_cm = COALESCE(waist_cm, ?),
+            hip_cm = COALESCE(hip_cm, ?),
+            head_cm = COALESCE(head_cm, ?)
+        WHERE id = ?
+      `).run(
+        email,
+        closetName,
+        nowIso,
+        vHash,
+        ageGroup,
+        age,
+        heightCm,
+        weightKg,
+        gender,
+        personalColor,
+        skinToneHex,
+        bodyShape,
+        bodyFatPct,
+        chestCm,
+        waistCm,
+        hipCm,
+        headCm,
+        existing.id
+      );
     }
-  }
+  };
+
+  ensureDefaultUser({
+    username: 'admin',
+    password: 'admin',
+    displayName: '어드민 (남편)',
+    role: 'admin',
+    defaultCloset: 'husband',
+    closetName: '남편의 사이버 아틀리에',
+    email: 'admin@ainventory.kr',
+    ageGroup: '30s',
+    age: 34,
+    heightCm: 178,
+    weightKg: 73,
+    gender: 'male',
+    personalColor: 'autumn_warm',
+    skinToneHex: '#DEC2A7',
+    bodyShape: 'upper_developed',
+    bodyFatPct: 14.8,
+    chestCm: 102,
+    waistCm: 79,
+    hipCm: 96,
+    headCm: 57.5,
+  });
+
+  ensureDefaultUser({
+    username: 'wife',
+    password: 'wife1234',
+    displayName: '와이프',
+    role: 'member',
+    defaultCloset: 'wife',
+    closetName: '와이프의 시그니처 옷장',
+    email: 'wife@ainventory.kr',
+    ageGroup: '30s',
+    age: 32,
+    heightCm: 165,
+    weightKg: 53,
+    gender: 'female',
+    personalColor: 'spring_warm',
+    skinToneHex: '#ECD3BE',
+    bodyShape: 'standard_balanced',
+    bodyFatPct: 21.5,
+    chestCm: 86,
+    waistCm: 65,
+    hipCm: 92,
+    headCm: 54.8,
+  });
 
   const garmentCount = db.prepare('SELECT COUNT(*) as cnt FROM garments').get().cnt;
-  if (garmentCount > 0) return;
+  if (garmentCount > 0) {
+    // Ensure all 11 wear slots exist for husband and wife so 3D inventory is fully populated
+    const husbandSlots = db
+      .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'husband'")
+      .get().c;
+    if (husbandSlots < 8) {
+      generateStatisticalWardrobeForUser(db, 'husband', {
+        age_group: '30s',
+        gender: 'male',
+        personal_color: 'autumn_warm',
+      });
+    }
+    const wifeSlots = db
+      .prepare("SELECT COUNT(DISTINCT category) as c FROM garments WHERE closet_owner = 'wife'")
+      .get().c;
+    if (wifeSlots < 8) {
+      generateStatisticalWardrobeForUser(db, 'wife', {
+        age_group: '30s',
+        gender: 'female',
+        personal_color: 'spring_warm',
+      });
+    }
+    return;
+  }
 
   const insertGarment = db.prepare(`
     INSERT INTO garments (
@@ -222,7 +455,7 @@ export function seedIfEmpty(forceReset = false) {
   };
 
   const seedGarments = [
-    // 남편 옷장 (husband)
+    // 남편 옷장 (husband) core signature items
     [
       'husband', '발수 코튼 싱글 맥 트렌치코트', 'outer', 'trench', '베이지', '#C4B193',
       JSON.stringify(['봄', '가을']), 7, 18, 1, 'smart',
@@ -284,7 +517,7 @@ export function seedIfEmpty(forceReset = false) {
       '비 오는 날이나 포멀 출근룩에 든든한 가죽 로퍼'
     ],
 
-    // 와이프 옷장 (wife)
+    // 와이프 옷장 (wife) core signature items
     [
       'wife', '경량 올리브 퀼팅 라이너 자켓', 'outer', 'jacket', '카키/올리브', '#7D836D',
       JSON.stringify(['봄', '가을']), 6, 18, 1, 'casual',
@@ -320,12 +553,24 @@ export function seedIfEmpty(forceReset = false) {
       JSON.stringify(['봄', '여름', '가을', '겨울']), 0, 32, 0, 'casual',
       'VEJA', 210000, 22, fmtDate(3), 'active', 1, '/seed/white-sneakers.jpg',
       '어디에나 잘 어울리는 데일리 스니커즈'
-    ]
+    ],
   ];
 
   for (const g of seedGarments) {
     insertGarment.run(...g);
   }
+
+  // Also populate all 11 wear slots for husband and wife based on age/personal color benchmarks
+  generateStatisticalWardrobeForUser(db, 'husband', {
+    age_group: '30s',
+    gender: 'male',
+    personal_color: 'autumn_warm',
+  });
+  generateStatisticalWardrobeForUser(db, 'wife', {
+    age_group: '30s',
+    gender: 'female',
+    personal_color: 'spring_warm',
+  });
 
   // Seed initial outfits for husband & wife
   const insertOutfit = db.prepare(`
