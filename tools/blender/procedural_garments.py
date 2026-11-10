@@ -291,11 +291,17 @@ def extend_coat(coords):
     out = coords.copy()
     z = out[:, 2]
     # jacket trunk vertices (exclude sleeves which have |x| > 0.22)
-    trunk = (z < 1.06) & (np.abs(out[:, 0]) < 0.23)
-    t = np.clip((1.06 - z[trunk]) / 0.22, 0.0, 1.0)
-    out[trunk, 2] = z[trunk] - (t ** 1.15) * 0.34
+    trunk = (z < 1.10) & (np.abs(out[:, 0]) < 0.23)
+    t = np.clip((1.10 - z[trunk]) / 0.28, 0.0, 1.0)
+    out[trunk, 2] = z[trunk] - (t ** 1.12) * 0.32
     # subtle A-line flare so the coat clears the hips and trousers cleanly
-    flare = 1.0 + (t ** 1.1) * 0.14
-    out[trunk, 0] *= flare
-    out[trunk, 1] *= flare
+    flare_x = 1.0 + (t ** 1.05) * 0.18
+    flare_y = 1.0 + (t ** 1.05) * 0.16
+    out[trunk, 0] *= flare_x
+    out[trunk, 1] *= flare_y
+    # Fill in the lumbar concavity on the back (+Y) so the coat hangs smoothly over the glutes
+    y_tr = out[trunk, 1]
+    back_factor = np.clip(y_tr / 0.08, 0.0, 1.0)
+    glute_arch = np.sin(np.clip(t * 1.15, 0.0, 1.0) * math.pi)
+    out[trunk, 1] += back_factor * (0.038 * glute_arch + 0.032 * t)
     return out

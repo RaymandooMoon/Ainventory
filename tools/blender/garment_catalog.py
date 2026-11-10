@@ -45,20 +45,20 @@ GARMENTS = {
         "slot": "outer", "subs": ["blazer", "cardigan"],
         "src": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
         "keep_parts": lambda p: p["n"] > 3000 or p["n"] <= 100,
-        "label": "Tailored wool blazer", "fabric": "wool", "offset": 0.006, "cull_body": False,
+        "label": "Tailored wool blazer", "fabric": "wool", "offset": 0.006, "cull_body": True,
     },
     "outer_coat": {
         "slot": "outer", "subs": ["coat", "trench"],
         "src": "toigo_male_double-breasted_suit/toigo_male_double-breasted_suit.mhclo",
         "keep_parts": lambda p: (1500 < p["n"] < 1710 and p["xspan"] > 0.8) or p["n"] <= 100,
         "post": "extend_coat",
-        "label": "Double-breasted coat / trench", "fabric": "wool", "offset": 0.007, "cull_body": False,
+        "label": "Double-breasted coat / trench", "fabric": "wool", "offset": 0.007, "cull_body": True,
     },
     "outer_jacket": {
         "slot": "outer", "subs": ["jacket", "padding"],
         "src": "male_casualsuit05/male_casualsuit05.mhclo",
         "keep_parts": lambda p: p["n"] > 1500 or p["n"] < 300,
-        "label": "Quilted / utility jacket", "fabric": "padding", "offset": 0.007, "cull_body": False,
+        "label": "Quilted / utility jacket", "fabric": "padding", "offset": 0.007, "cull_body": True,
     },
 
     # 4. top

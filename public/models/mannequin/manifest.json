@@ -191,7 +191,7 @@
       "fabric": "wool",
       "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
       "vertexCount": 5033,
-      "cullBody": false
+      "cullBody": true
     },
     "outer_coat": {
       "slot": "outer",
@@ -209,7 +209,7 @@
       "fabric": "wool",
       "source": "toigo_male_double-breasted_suit/toigo_male_double-breasted_suit.mhclo",
       "vertexCount": 2536,
-      "cullBody": false
+      "cullBody": true
     },
     "outer_jacket": {
       "slot": "outer",
@@ -227,7 +227,7 @@
       "fabric": "padding",
       "source": "male_casualsuit05/male_casualsuit05.mhclo",
       "vertexCount": 1936,
-      "cullBody": false
+      "cullBody": true
     },
     "top_knit": {
       "slot": "top",

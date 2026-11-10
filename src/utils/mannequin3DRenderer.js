@@ -219,13 +219,12 @@ function extractFirstMesh(gltf) {
 
 function readMeterCoord(geom, i) {
   const pos = geom.attributes.position;
-  const normScale = pos.normalized ? 1 / 32767 : 1;
   const s = geom.userData.nodeScale || { x: 1, y: 1, z: 1 };
   const t = geom.userData.nodePosition || { x: 0, y: 0, z: 0 };
   return [
-    pos.getX(i) * normScale * s.x + t.x,
-    pos.getY(i) * normScale * s.y + t.y,
-    pos.getZ(i) * normScale * s.z + t.z,
+    pos.getX(i) * s.x + t.x,
+    pos.getY(i) * s.y + t.y,
+    pos.getZ(i) * s.z + t.z,
   ];
 }
 
@@ -233,6 +232,8 @@ function applyNodeTransform(mesh, tpl) {
   mesh.position.copy(tpl.position);
   mesh.scale.copy(tpl.scale);
   mesh.quaternion.copy(tpl.quaternion);
+  mesh.geometry.userData.nodePosition = tpl.position.clone();
+  mesh.geometry.userData.nodeScale = tpl.scale.clone();
 }
 
 function loadBodyTemplate() {
@@ -470,6 +471,38 @@ function maskSocksUnderLongPants(sockMesh, hasLongPants) {
     }
   }
   applyTriangleMask(sockMesh, hide);
+}
+
+function maskBottomUnderOuterAndTop(bottomMesh, outerGid, hasTop) {
+  const geom = bottomMesh.geometry;
+  const full = geom.userData.fullIndexArray;
+  if (!full || !geom.index) return;
+
+  let cutoffY = null;
+  if (outerGid === 'outer_coat') {
+    cutoffY = 0.57;
+  } else if (outerGid === 'outer_blazer') {
+    cutoffY = 0.80;
+  } else if (outerGid === 'outer_jacket') {
+    cutoffY = 0.83;
+  } else if (hasTop) {
+    cutoffY = 0.90;
+  }
+
+  if (cutoffY === null) {
+    applyTriangleMask(bottomMesh, null);
+    return;
+  }
+
+  const pos = geom.attributes.position;
+  const hide = new Uint8Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const [, y] = readMeterCoord(geom, i);
+    if (y > cutoffY) {
+      hide[i] = 1;
+    }
+  }
+  applyTriangleMask(bottomMesh, hide);
 }
 
 // -----------------------------------------------------------------------------
@@ -1022,7 +1055,9 @@ export class Mannequin3DWebGLEngine {
       if (this.disposed || seq !== this.updateSeq) return;
 
       const active = loadedList.filter(Boolean);
-      const hasOuter = active.some((d) => d.slotKey === 'outer');
+      const outerEntry = active.find((d) => d.slotKey === 'outer') || null;
+      const hasOuter = Boolean(outerEntry);
+      const hasTopActive = active.some((d) => d.slotKey === 'top');
       const hasLongPants = active.some(
         (d) => d.slotKey === 'bottom' && (d.gid === 'bottom_slacks' || d.gid === 'bottom_denim')
       );
@@ -1043,6 +1078,8 @@ export class Mannequin3DWebGLEngine {
 
         if (slotKey === 'top') {
           maskInnerTopUnderOuter(mesh, hasOuter);
+        } else if (slotKey === 'bottom') {
+          maskBottomUnderOuterAndTop(mesh, outerEntry?.gid || null, hasTopActive);
         } else if (slotKey === 'socks') {
           maskSocksUnderLongPants(mesh, hasLongPants);
         } else {
