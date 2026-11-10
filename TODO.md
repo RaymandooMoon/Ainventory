@@ -22,8 +22,10 @@
 - [x] **e. `src/components/ProfilePersonalColorModal.jsx`** — 체지방률 + BMI·체지방 기반 추천 체형, 7종 체형 카드(`Mannequin3DBodyPreview`), 스리사이즈·머리둘레(디폴트 placeholder + 비우기), 실시간 3D 프리뷰, 저장 시 치수 6종 전송
 - [x] **f.** 전 화면 의류 썸네일 `<StudioGarmentImage item={item} />` 적용 (`WeatherStylingView`, `OutfitInspectorModal`, `WardrobeView`, `OutfitStudioView`, `AnalyticsCalendarView`, `ShoppingCheckView`)
 - [x] **g ~ h.** `npm run build` 통과 + 브라우저 검증 + `conversation_log.md` 업데이트
+- [x] **i. 실사 인체 3D 마네킹 & 29종 3D 의류 피팅 파이프라인 (`tools/blender/*`, `public/models/mannequin/*`, `src/utils/mannequin3DRenderer.js`)** — Blender 4.2 LTS + MakeHuman/MPFB2(CC0) 기반 무안면(TPS + Tutte 위상 릴랙세이션) 13,380 버텍스 인체 메쉬 + 29개 모프 타깃 + 11부위 29종 3D 의류 MHCLO 피팅 + Meshopt GLB 압축(5.8 MB) + Three.js `GLTFLoader`/`MeshoptDecoder`/`RoomEnvironment` PBR 스킨·패브릭 셰이더 및 실시간 바디/레이어 컬링
+- [x] **j. `@mediapipe/tasks-vision` 478-랜드마크 런타임 도입 (`src/utils/faceLandmarkEngine.js`, `public/mediapipe/*`)** — 로컬 WASM + `face_landmarker.task` 기반 478개 3D 얼굴 랜드마크 검출(1단계 정면 + 2단계 전신샷 상단 헤드 줌 재탐색 + YCbCr 피부 클러스터 자동 폴백)
 
 ## Open / follow-up
 
-- [ ] `@mediapipe/tasks-vision` 실제 478-랜드마크 런타임 도입 여부 결정 (현재 `faceLandmarkEngine.js`는 `/mediapipe/` 번들이 있을 때만 쓰는 선택적 훅 + 대체 방식)
-- [ ] 번들 크기(~970 kB) — Three.js / 3D 스테이지 `dynamic import()` 코드 스플리팅 검토
+- [ ] 번들 크기 — Three.js / 3D 스테이지 `dynamic import()` 코드 스플리팅 검토
+

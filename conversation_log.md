@@ -99,3 +99,27 @@
      - WebGL 버퍼 크기를 캔버스 실제 CSS 크기에 맞춰 반응형 구간에서 마네킹이 늘어나던 문제 수정
   6. **프로필 모달 (`[2] e`)** — 7종 체형 카드와 실시간 프리뷰를 `Mannequin3DBodyPreview`로 교체, 다크 패널을 아틀리에 톤으로 변경, 프리뷰 바디 톤에 선택된 퍼스널컬러 반영
   7. **`TODO.md` 복원** (명세 원문 + a~h 체크리스트 + 후속 과제), `npm run build` 통과, 헤드리스 브라우저(SwiftShader WebGL)로 화면 검증
+
+---
+
+## 2026-11-10 — 실사 인체 3D 마네킹 & 29종 의류 GLB 파이프라인(Blender + MPFB2) + `@mediapipe/tasks-vision` 478-랜드마크 통합
+
+- **User**:
+  - `git push`는 아직 하지 말 것.
+  - 3D 마네킹 품질을 단순 도형 조합이 아닌 게임(언리얼5/유니티) 수준의 실사 인체 모델링 및 실제 의류 착장 핏으로 고도화 요청.
+  - 마네킹 작업 완료 후 `@mediapipe/tasks-vision`(478개 얼굴 포인트 인식) 작업 진행 요청.
+- **Assistant**:
+  1. **Blender 4.2 LTS + MakeHuman/MPFB2(`v2.0.18`) + CC0 의류 에셋 빌드 파이프라인 구축 (`tools/blender/`)**:
+     - [tools/blender/build_mannequin.py](file:///home/antigravity/RaymandooMoon/Ainventory/tools/blender/build_mannequin.py): MakeHuman 13,380 버텍스 인체 베이스 메쉬에서 눈·코·입 내부 파우치 디스크(2,414 버텍스)를 분리하고, 이마·관자놀이·볼·턱 외곽 앵커 기반 **Thin-Plate Spline(TPS) 곡면 보간 + Tutte 평면 위상 릴랙세이션**을 적용해 주름·구멍 없이 매끄러운 **무안면(Faceless) 스컬프팅 헤드** 구현.
+     - **29개 인체 모프 타깃(`shape keys`) 생성**: `gender_female`, `gender_male`, `weight_up/down`, `muscle_up/down`, `age_old`, `bust_up/down`, `shoulder_up/down`, `chest_up/down`, `waist_up/down`, `belly_up/down`, `hips_up/down`, `thigh_up/down`, `calf_up/down`, `arm_up/down`, `neck_up/down`, `head_up/down`.
+     - **11부위 29종 3D 의류 피팅 ([tools/blender/garment_catalog.py](file:///home/antigravity/RaymandooMoon/Ainventory/tools/blender/garment_catalog.py), [tools/blender/procedural_garments.py](file:///home/antigravity/RaymandooMoon/Ainventory/tools/blender/procedural_garments.py))**: MakeHuman `.mhclo` 바인딩 수식(`GarmentFit`) 및 최근접 3-버텍스 바인딩(`NearestFit`)을 벡터화하여 29개 모프 상태 전체에 대해 의류가 인체와 함께 실시간 변형되도록 익스포트.
+     - **Meshopt 고압축 (`public/models/mannequin/`)**: `gltf-transform meshopt --level high`로 `body.glb`(652 KB) 및 29종 의류 GLB(총 5.8 MB) 압축, CC0 무잡티 뉴트럴 스킨 알베도(`public/textures/mannequin/skin_albedo.jpg`) 및 패브릭 노멀맵 생성.
+  2. **Three.js GLB PBR 렌더링 엔진 전면 교체 ([src/utils/mannequin3DRenderer.js](file:///home/antigravity/RaymandooMoon/Ainventory/src/utils/mannequin3DRenderer.js))**:
+     - `GLTFLoader` + `MeshoptDecoder` + `RoomEnvironment` PMREM 스튜디오 IBL 적용.
+     - 퍼스널컬러/피부톤 HEX와 스킨 알베도·서브서피스 시인을 결합한 `createSkinMaterial`, 원단별(울·캐시미어·니트·개버딘·데님·실크·풀그레인 레더·구스다운) 노멀/범프맵을 결합한 `createGarmentMaterial` 구현.
+     - 3D 공간 해시 기반 실시간 바디 표면 컬링(`computeCoveredVertices`) + 아우터 착용 시 이너 상의 소매 마스킹(`maskInnerTopUnderOuter`) + 롱 팬츠 착용 시 양말 상단 마스킹(`maskSocksUnderLongPants`)으로 의류 간 관통(Poke-through) 완벽 제거.
+     - 공유 오프스크린 WebGL 렌더러를 통해 프로필 모달의 7종 체형 미니 카드 및 실시간 프리뷰(`Mannequin3DBodyPreview`)에서도 동일한 실사 3D 메쉬와 모프 타깃을 렌더링.
+  3. **`@mediapipe/tasks-vision` 478-랜드마크 얼굴 인식 통합 ([src/utils/faceLandmarkEngine.js](file:///home/antigravity/RaymandooMoon/Ainventory/src/utils/faceLandmarkEngine.js), `public/mediapipe/`)**:
+     - `@mediapipe/tasks-vision` 패키지 및 로컬 WASM 런타임(`public/mediapipe/wasm/*`), `face_landmarker.task`(`public/mediapipe/face_landmarker.task`) 내장.
+     - 1단계 전체 프레임 478-랜드마크 검출 + 2단계 전신샷 상단 헤드 줌 재탐색 + 이마·좌볼·우볼·콧대/턱 해부학 랜드마크 인덱스 기반 4핀 자동 배치 및 YCbCr 폴백 통합.
+
