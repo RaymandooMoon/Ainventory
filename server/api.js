@@ -19,11 +19,13 @@ import {
 } from './engine.js';
 import {
   AGE_GROUPS,
+  BODY_SHAPE_OPTIONS,
   WEAR_SLOTS,
   computeBodyMetrics,
   generateStatisticalWardrobeForUser,
   getStudioSeedImageForGarment,
   normalizeAgeGroupKey,
+  normalizeBodyShapeKey,
 } from './wardrobeStatsAndGenerator.js';
 
 initDb();
@@ -69,8 +71,16 @@ function parseGarmentRow(row) {
   };
 }
 
+const PERSONAL_COLOR_LABELS = {
+  spring_warm: { nameKo: '봄 웜톤', nameEn: 'Spring Warm' },
+  summer_cool: { nameKo: '여름 쿨톤', nameEn: 'Summer Cool' },
+  autumn_warm: { nameKo: '가을 웜톤', nameEn: 'Autumn Warm' },
+  winter_cool: { nameKo: '겨울 쿨톤', nameEn: 'Winter Cool' },
+};
+
 export function formatUserPayload(u) {
   if (!u) return null;
+  const pcProfile = PERSONAL_COLOR_LABELS[u.personal_color] || null;
   let skinUndertoneLab = null;
   if (u.skin_undertone_lab) {
     try {
@@ -103,7 +113,13 @@ export function formatUserPayload(u) {
     skinToneHex: u.skin_tone_hex || null,
     skinUndertoneLab,
     profileCompleted: Boolean(u.profile_completed),
-    bodyShape: u.body_shape || null,
+    bodyShape: resolvedBody.bodyShape,
+    bodyShapeCustom: Boolean(normalizeBodyShapeKey(u.body_shape)),
+    bodyShapeLabelKo: resolvedBody.bodyLabelKo,
+    bodyShapeLabelEn: resolvedBody.bodyLabelEn,
+    bodyShapeShortKo: resolvedBody.bodyShortKo,
+    personalColorLabelKo: pcProfile ? pcProfile.nameKo : null,
+    personalColorLabelEn: pcProfile ? pcProfile.nameEn : null,
     bodyFatPct: u.body_fat_pct !== null && u.body_fat_pct !== undefined ? Number(u.body_fat_pct) : null,
     chestCm: u.chest_cm !== null && u.chest_cm !== undefined ? Number(u.chest_cm) : null,
     waistCm: u.waist_cm !== null && u.waist_cm !== undefined ? Number(u.waist_cm) : null,
@@ -374,7 +390,7 @@ export function createApiRouter() {
 
     // 6 Anthropometric fields (null / '' resets to default NULL so resolvedBody uses defaults)
     const rawBodyShape = body.body_shape ?? body.bodyShape;
-    const bodyShape = rawBodyShape && String(rawBodyShape).trim() ? String(rawBodyShape).trim() : null;
+    const bodyShape = normalizeBodyShapeKey(rawBodyShape);
     const bodyFatPct = parseOptNum(body.body_fat_pct ?? body.bodyFatPct, 4, 55);
     const chestCm = parseOptNum(body.chest_cm ?? body.chestCm, 60, 150);
     const waistCm = parseOptNum(body.waist_cm ?? body.waistCm, 48, 145);
@@ -453,6 +469,21 @@ export function createApiRouter() {
       ageGroups: AGE_GROUPS,
       wearSlots: WEAR_SLOTS,
       benchmarks: rows,
+    });
+  });
+
+  // 7 body-shape catalog (labels only; morph rigs stay client-side)
+  router.get('/body-shapes', (req, res) => {
+    res.json({
+      bodyShapes: BODY_SHAPE_OPTIONS.map(({ key, labelKo, labelEn, shortKo, badge, summaryKo }) => ({
+        key,
+        labelKo,
+        labelEn,
+        shortKo,
+        badge,
+        summaryKo,
+      })),
+      current: req.user.bodyShape || null,
     });
   });
 

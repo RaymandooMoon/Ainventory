@@ -3,7 +3,7 @@
  * Shared between Client (3D Mannequin & Profile Modal) and Server (Engine & API)
  */
 
-export const BODY_SHAPES = [
+export const BODY_SHAPE_OPTIONS = [
   {
     key: 'ectomorph_thin',
     labelKo: '슬림 · 깡마른 체형',
@@ -160,9 +160,39 @@ export const BODY_SHAPES = [
   },
 ];
 
-export const BODY_SHAPE_MAP = Object.fromEntries(BODY_SHAPES.map((b) => [b.key, b]));
+export const BODY_SHAPE_MAP = Object.fromEntries(BODY_SHAPE_OPTIONS.map((b) => [b.key, b]));
 
-export function recommendBodyShapeFromMetrics({
+// Legacy `body_type` (fit preference) values and loose aliases → 7 body shape keys
+const BODY_SHAPE_ALIASES = {
+  slim: 'ectomorph_thin',
+  thin: 'ectomorph_thin',
+  ectomorph: 'ectomorph_thin',
+  regular: 'standard_balanced',
+  standard: 'standard_balanced',
+  balanced: 'standard_balanced',
+  athletic: 'muscular_athletic',
+  muscular: 'muscular_athletic',
+  mesomorph: 'muscular_athletic',
+  relaxed: 'plus_curvy',
+  plus: 'plus_curvy',
+  curvy: 'plus_curvy',
+  inverted_triangle: 'upper_developed',
+  pear: 'lower_developed',
+};
+
+/**
+ * Normalize any stored/user-provided body shape value to one of the 7 keys.
+ * Returns null when the value is empty/unknown (→ automatic default mode).
+ */
+export function normalizeBodyShapeKey(raw) {
+  if (raw === null || raw === undefined) return null;
+  const key = String(raw).trim().toLowerCase();
+  if (!key) return null;
+  if (BODY_SHAPE_MAP[key]) return key;
+  return BODY_SHAPE_ALIASES[key] || null;
+}
+
+export function suggestBodyShapeFromMetrics({
   heightCm = 172,
   weightKg = 66,
   gender = 'unspecified',
@@ -229,8 +259,10 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
   );
 
   const bmi = Number((weightKg / ((heightCm / 100) ** 2)).toFixed(1));
-  const rawShape = rawProfile.body_shape ?? rawProfile.bodyShape;
-  const recommendedShape = recommendBodyShapeFromMetrics({
+  const rawShape = normalizeBodyShapeKey(
+    rawProfile.body_shape ?? rawProfile.bodyShape ?? rawProfile.body_type ?? rawProfile.bodyType
+  );
+  const recommendedShape = suggestBodyShapeFromMetrics({
     heightCm,
     weightKg,
     gender,
@@ -378,3 +410,7 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
 export function getBodyShapeStylingAdvice(bodyShapeKey) {
   return (BODY_SHAPE_MAP[bodyShapeKey] || BODY_SHAPE_MAP.standard_balanced).stylingAdviceKo;
 }
+
+// Backward-compatible aliases (pre-handoff names used by earlier builds)
+export const BODY_SHAPES = BODY_SHAPE_OPTIONS;
+export const recommendBodyShapeFromMetrics = suggestBodyShapeFromMetrics;

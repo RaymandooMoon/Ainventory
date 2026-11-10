@@ -1,4 +1,10 @@
-import { resolveAnatomicalProfile } from '../src/utils/bodyAnthropometrics.js';
+import {
+  BODY_SHAPE_OPTIONS,
+  normalizeBodyShapeKey,
+  resolveAnatomicalProfile,
+} from '../src/utils/bodyAnthropometrics.js';
+
+export { BODY_SHAPE_OPTIONS, normalizeBodyShapeKey };
 
 export const AGE_GROUPS = [
   { key: 'under_10', labelKo: '10대 미만 (0~9세)', labelEn: 'Under 10 (0–9)', scale: 0.65 },
@@ -218,6 +224,18 @@ export function computeBodyMetrics(profile = {}) {
     defaults: resolved.defaults,
     sources: resolved.sources,
     morph: resolved.morph,
+    // Handoff-spec field names (HANDOFF_SPEC §3 b/c)
+    bodyLabelKo: resolved.shapeLabelKo,
+    bodyLabelEn: resolved.shapeLabelEn,
+    bodyShortKo: resolved.shapeShortKo,
+    resolvedMeasurements: {
+      chestCm: resolved.chestCm,
+      waistCm: resolved.waistCm,
+      hipCm: resolved.hipCm,
+      headCm: resolved.headCm,
+      bodyFatPct: resolved.bodyFatPct,
+      sources: resolved.sources,
+    },
   };
 }
 

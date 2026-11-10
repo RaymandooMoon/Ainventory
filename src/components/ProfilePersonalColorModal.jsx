@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
 import {
-  BODY_SHAPES,
-  recommendBodyShapeFromMetrics,
+  BODY_SHAPE_OPTIONS,
+  suggestBodyShapeFromMetrics,
   resolveAnatomicalProfile,
 } from '../utils/bodyAnthropometrics.js';
 import {
@@ -20,8 +20,8 @@ import {
   PERSONAL_COLOR_DETAILS,
   analyzePersonalColorFromImage,
 } from '../utils/imageTools.js';
-import { render3DMannequinScene } from '../utils/mannequin3DRenderer.js';
 import PortraitCropAndPinEditorModal from './PortraitCropAndPinEditorModal.jsx';
+import { Mannequin3DBodyPreview } from './VirtualMannequin.jsx';
 
 const AGE_GROUP_OPTIONS = [
   { value: 'unspecified', label: '입력하지 않음 (기본 30대 통계 적용)' },
@@ -68,31 +68,6 @@ function createSampleFaceDataUrl(tone = 'warm_spring') {
   return c.toDataURL('image/jpeg', 0.92);
 }
 
-function MiniBodyShapeCanvas({ shapeKey, gender, skinToneHex }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    render3DMannequinScene(ref.current, {
-      profile: {
-        gender: gender === 'unspecified' ? 'male' : gender,
-        body_shape: shapeKey,
-        skin_tone_hex: skinToneHex || '#E2C6AE',
-      },
-      compact: true,
-      rotationDeg: 18,
-    });
-  }, [shapeKey, gender, skinToneHex]);
-
-  return (
-    <canvas
-      ref={ref}
-      width={110}
-      height={156}
-      style={{ width: 78, height: 110, display: 'block', margin: '0 auto' }}
-    />
-  );
-}
-
 export default function ProfilePersonalColorModal({
   open,
   user,
@@ -101,7 +76,6 @@ export default function ProfilePersonalColorModal({
   allowDismiss = true,
 }) {
   const fileInputRef = useRef(null);
-  const livePreviewCanvasRef = useRef(null);
 
   const [step, setStep] = useState(1); // 1: Body & 7-Shape & 3-Sizes, 2: Personal Color Evidence
   const [ageGroup, setAgeGroup] = useState(user?.ageGroup || '30s');
@@ -117,7 +91,7 @@ export default function ProfilePersonalColorModal({
   const [waistCm, setWaistCm] = useState(user?.waistCm ?? '');
   const [hipCm, setHipCm] = useState(user?.hipCm ?? '');
   const [headCm, setHeadCm] = useState(user?.headCm ?? '');
-  const [previewRotDeg, setPreviewRotDeg] = useState(18);
+  const [previewRotDeg, setPreviewRotDeg] = useState(-16);
   const [regenerateWardrobe, setRegenerateWardrobe] = useState(false);
 
   // Step 2: Personal Color & Evidence State
@@ -154,41 +128,24 @@ export default function ProfilePersonalColorModal({
     [gender, heightCm, weightKg, bodyShape, bodyFatPct, chestCm, waistCm, hipCm, headCm]
   );
 
-  // Update Step 1 live 3D mannequin preview canvas
-  useEffect(() => {
-    if (!open || !livePreviewCanvasRef.current) return;
-    render3DMannequinScene(livePreviewCanvasRef.current, {
-      profile: {
-        gender,
-        height_cm: heightCm,
-        weight_kg: weightKg,
-        body_shape: bodyShape,
-        body_fat_pct: bodyFatPct,
-        chest_cm: chestCm,
-        waist_cm: waistCm,
-        hip_cm: hipCm,
-        head_cm: headCm,
-        skin_tone_hex: pcResult?.skinToneHex || user?.skinToneHex || '#E2C6AE',
-      },
-      rotationDeg: previewRotDeg,
-      darkHud: true,
-    });
-  }, [
-    open,
-    step,
-    gender,
-    heightCm,
-    weightKg,
-    bodyShape,
-    bodyFatPct,
-    chestCm,
-    waistCm,
-    hipCm,
-    headCm,
-    previewRotDeg,
-    pcResult,
-    user,
-  ]);
+  // Live faceless 3D mannequin profile (body tone follows the personal color / detected skin)
+  const previewSkinHex = pcResult?.skinToneHex || user?.skinToneHex || null;
+  const livePreviewProfile = useMemo(
+    () => ({
+      gender,
+      height_cm: heightCm,
+      weight_kg: weightKg,
+      body_shape: bodyShape,
+      body_fat_pct: bodyFatPct,
+      chest_cm: chestCm,
+      waist_cm: waistCm,
+      hip_cm: hipCm,
+      head_cm: headCm,
+      personal_color: selectedPersonalColor,
+      skin_tone_hex: previewSkinHex,
+    }),
+    [gender, heightCm, weightKg, bodyShape, bodyFatPct, chestCm, waistCm, hipCm, headCm, selectedPersonalColor, previewSkinHex]
+  );
 
   const executePersonalColorAnalysis = async (
     imgUrl,
@@ -221,7 +178,7 @@ export default function ProfilePersonalColorModal({
   if (!open) return null;
 
   const handleRecommendBodyShape = () => {
-    const rec = recommendBodyShapeFromMetrics({
+    const rec = suggestBodyShapeFromMetrics({
       heightCm,
       weightKg,
       gender,
@@ -473,7 +430,7 @@ export default function ProfilePersonalColorModal({
                       gap: 8,
                     }}
                   >
-                    {BODY_SHAPES.map((b) => {
+                    {BODY_SHAPE_OPTIONS.map((b) => {
                       const active = bodyShape === b.key;
                       const isRec = resolvedAnat.recommendedShape === b.key;
                       return (
@@ -510,10 +467,20 @@ export default function ProfilePersonalColorModal({
                               추천
                             </span>
                           )}
-                          <MiniBodyShapeCanvas
-                            shapeKey={b.key}
-                            gender={gender}
-                            skinToneHex={pcResult?.skinToneHex || user?.skinToneHex}
+                          <Mannequin3DBodyPreview
+                            user={{
+                              gender: gender === 'unspecified' ? 'unisex' : gender,
+                              height_cm: heightCm,
+                              weight_kg: weightKg,
+                              body_shape: b.key,
+                              personal_color: selectedPersonalColor,
+                              skin_tone_hex: previewSkinHex,
+                            }}
+                            poseYawDeg={-16}
+                            width={110}
+                            height={156}
+                            displayWidth={78}
+                            displayHeight={110}
                           />
                           <strong style={{ display: 'block', fontSize: '0.8rem', marginTop: 4 }}>
                             {b.shortKo}
@@ -639,38 +606,34 @@ export default function ProfilePersonalColorModal({
                 </div>
               </div>
 
-              {/* Right Column: Real-Time 3D Silhouette Preview */}
-              <div
-                style={{
-                  background: '#0f1622',
-                  color: '#f4f6fa',
-                  borderRadius: 16,
-                  padding: 16,
-                  border: '1px solid rgba(0, 229, 255, 0.35)',
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700, marginBottom: 4 }}>
-                  LIVE 3D ANTHRO PREVIEW
-                </div>
-                <strong style={{ fontSize: '0.95rem', display: 'block', marginBottom: 8 }}>
+              {/* Right Column: Real-Time Faceless 3D Mannequin Preview */}
+              <div className="atl-live-preview">
+                <span className="atl-eyebrow">Live 3D Preview</span>
+                <strong style={{ fontSize: '0.95rem', display: 'block', margin: '2px 0 8px' }}>
                   {resolvedAnat.shapeLabelKo}
                 </strong>
-                <canvas
-                  ref={livePreviewCanvasRef}
+                <Mannequin3DBodyPreview
+                  user={livePreviewProfile}
+                  poseYawDeg={previewRotDeg}
                   width={230}
                   height={310}
-                  style={{ width: '100%', height: 270, display: 'block', margin: '0 auto' }}
+                  displayWidth="100%"
+                  displayHeight={270}
+                  style={{ objectFit: 'contain' }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
-                  {[0, 35, 90].map((deg) => (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[
+                    { deg: 0, label: '정면' },
+                    { deg: -16, label: '3/4 입체' },
+                    { deg: 90, label: '측면(복부)' },
+                  ].map((p) => (
                     <button
-                      key={deg}
+                      key={p.deg}
                       type="button"
-                      className="cyber-angle-btn"
-                      onClick={() => setPreviewRotDeg(deg)}
+                      className={`atl-chip ${previewRotDeg === p.deg ? 'active' : ''}`}
+                      onClick={() => setPreviewRotDeg(p.deg)}
                     >
-                      {deg === 0 ? '정면' : deg === 35 ? '쿼터뷰' : '측면(복부)'}
+                      {p.label}
                     </button>
                   ))}
                 </div>
@@ -678,7 +641,7 @@ export default function ProfilePersonalColorModal({
                   style={{
                     marginTop: 10,
                     fontSize: '0.75rem',
-                    color: '#b8c4d4',
+                    color: 'var(--ink-secondary)',
                     textAlign: 'left',
                     lineHeight: 1.5,
                   }}
@@ -690,7 +653,7 @@ export default function ProfilePersonalColorModal({
                   <div>
                     • 머리둘레: <strong>{resolvedAnat.headCm}cm ({resolvedAnat.headToBodyRatio}등신)</strong>
                   </div>
-                  <div style={{ marginTop: 6, color: '#e2e8f0' }}>{resolvedAnat.stylingAdviceKo}</div>
+                  <div style={{ marginTop: 6, color: 'var(--ink-primary)' }}>{resolvedAnat.stylingAdviceKo}</div>
                 </div>
               </div>
             </div>

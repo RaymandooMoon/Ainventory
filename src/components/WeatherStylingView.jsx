@@ -286,7 +286,7 @@ export default function WeatherStylingView({
         ))}
       </div>
 
-      {/* Cyberpunk 2077 3D Character Inventory Stage */}
+      {/* 3D Fitting Studio (faceless personal-color mannequin) */}
       {!loading && activeRec && (
         <div style={{ marginBottom: 28 }}>
           <div
@@ -326,7 +326,7 @@ export default function WeatherStylingView({
             loadoutBySlot={mergedLoadout}
             items={activeRec.items}
             weather={w}
-            title={`CP2077 LOADOUT // ${activeRec.title}`}
+            title={`${activeRec.title} 코디`}
             onOpenBodySetup={() => onOpenProfileModal?.()}
             onOpenInspector={(slotKey) => {
               setInspectorSlot(slotKey || 'outer');

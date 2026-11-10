@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { resolveAnatomicalProfile } from './bodyAnthropometrics.js';
 
 export const SLOT_CAMERA_TARGETS = {
-  all: { y: 0.98, dist: 2.85, fov: 36, labelKo: '전신 풀샷 (Full Body)' },
+  all: { y: 0.92, dist: 3.3, fov: 36, labelKo: '전신 풀샷 (Full Body)' },
   headwear: { y: 1.66, dist: 1.15, fov: 30, labelKo: '헤드웨어 줌 (Head)' },
   neckwear: { y: 1.48, dist: 1.25, fov: 32, labelKo: '네크웨어 줌 (Neck)' },
   outer: { y: 1.22, dist: 1.68, fov: 34, labelKo: '아우터 줌 (Outer)' },
@@ -170,7 +170,7 @@ function createLimbGeometry(yTop, yBottom, rTop, rMid, rBot, xTop, xBot, zTop = 
 }
 
 /**
- * High-End Three.js WebGL PBR Mannequin & Cyberpunk 2077 Character Renderer
+ * High-End Three.js WebGL PBR Mannequin Renderer (atelier studio lighting, faceless by default)
  */
 export class Mannequin3DWebGLEngine {
   constructor(canvas) {
@@ -206,8 +206,8 @@ export class Mannequin3DWebGLEngine {
     this.parallaxX = 0;
     this.parallaxY = 0;
     this.focusSlot = 'all';
-    this.camTargetY = 0.98;
-    this.camDist = 2.85;
+    this.camTargetY = 0.92;
+    this.camDist = 3.3;
     this.scanProgress = 1.0;
 
     this._setupLightsAndPedestal();
@@ -215,75 +215,77 @@ export class Mannequin3DWebGLEngine {
   }
 
   _setupLightsAndPedestal() {
-    const hemi = new THREE.HemisphereLight(0xf6f4ef, 0x1a2232, 0.92);
+    // Atelier studio: bright ivory sky light + warm floor bounce
+    const hemi = new THREE.HemisphereLight(0xfbf8f2, 0xd9cfc0, 1.05);
     this.scene.add(hemi);
 
     // Key studio softbox light
-    const keyLight = new THREE.DirectionalLight(0xfffaf2, 2.1);
+    const keyLight = new THREE.DirectionalLight(0xfffaf2, 2.0);
     keyLight.position.set(1.8, 2.9, 2.5);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.radius = 6;
     this.scene.add(keyLight);
 
-    // Cyberpunk cyan rim light (left back)
-    const cyanRim = new THREE.PointLight(0x00e5ff, 2.4, 5.5);
-    cyanRim.position.set(-1.6, 1.65, -1.25);
-    this.scene.add(cyanRim);
+    // Soft neutral rim lights (left/right back) to separate silhouette from the ivory backdrop
+    const coolRim = new THREE.PointLight(0xe8eef6, 1.35, 5.5);
+    coolRim.position.set(-1.6, 1.65, -1.25);
+    this.scene.add(coolRim);
 
-    // Cyberpunk warm gold/magenta fill rim light (right back)
-    const warmRim = new THREE.PointLight(0xffb800, 1.85, 5.5);
+    const warmRim = new THREE.PointLight(0xf3dcc0, 1.15, 5.5);
     warmRim.position.set(1.65, 1.15, -1.35);
     this.scene.add(warmRim);
 
-    // Soft front fill light for facial / collar detail
-    const frontFill = new THREE.DirectionalLight(0xeef4ff, 0.72);
+    // Soft front fill light for collar / fabric detail
+    const frontFill = new THREE.DirectionalLight(0xf6f2ea, 0.8);
     frontFill.position.set(-0.6, 1.4, 2.4);
     this.scene.add(frontFill);
 
-    // Cyberpunk 2077 Holographic Studio Pedestal
+    // Studio pedestal (pale travertine disk + hairline espresso rings)
     const baseDisk = new THREE.Mesh(
       new THREE.CylinderGeometry(0.58, 0.64, 0.04, 48),
       new THREE.MeshPhysicalMaterial({
-        color: 0x0f1520,
-        metalness: 0.75,
-        roughness: 0.22,
-        clearcoat: 0.8,
+        color: 0xebe4d8,
+        metalness: 0.0,
+        roughness: 0.62,
+        clearcoat: 0.25,
+        clearcoatRoughness: 0.5,
       })
     );
     baseDisk.position.y = -0.02;
     baseDisk.receiveShadow = true;
     this.pedestalGroup.add(baseDisk);
 
-    const neonRingOuter = new THREE.Mesh(
-      new THREE.RingGeometry(0.54, 0.575, 64),
+    const ringOuter = new THREE.Mesh(
+      new THREE.RingGeometry(0.555, 0.565, 64),
       new THREE.MeshBasicMaterial({
-        color: 0x00e5ff,
+        color: 0x1c1917,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.22,
       })
     );
-    neonRingOuter.rotation.x = -Math.PI / 2;
-    neonRingOuter.position.y = 0.002;
-    this.pedestalGroup.add(neonRingOuter);
+    ringOuter.rotation.x = -Math.PI / 2;
+    ringOuter.position.y = 0.002;
+    this.pedestalGroup.add(ringOuter);
 
-    const neonRingInner = new THREE.Mesh(
-      new THREE.RingGeometry(0.41, 0.425, 64),
+    const ringInner = new THREE.Mesh(
+      new THREE.RingGeometry(0.415, 0.421, 64),
       new THREE.MeshBasicMaterial({
-        color: 0xffb800,
+        color: 0xc8b294,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.6,
       })
     );
-    neonRingInner.rotation.x = -Math.PI / 2;
-    neonRingInner.position.y = 0.003;
-    this.pedestalGroup.add(neonRingInner);
+    ringInner.rotation.x = -Math.PI / 2;
+    ringInner.position.y = 0.003;
+    this.pedestalGroup.add(ringInner);
 
-    // Subtle holographic scan ring that sweeps vertically on item equip
-    const scanRingGeom = new THREE.RingGeometry(0.32, 0.46, 48);
+    // Subtle sand-tone fitting ring that sweeps vertically on item equip
+    const scanRingGeom = new THREE.RingGeometry(0.34, 0.4, 48);
     this.scanRingMat = new THREE.MeshBasicMaterial({
-      color: 0x00e5ff,
+      color: 0xc8b294,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.0,
@@ -327,9 +329,12 @@ export class Mannequin3DWebGLEngine {
     hoveredSlot = null,
   } = {}) {
     // Clear previous character meshes
+    // (dispose GPU buffers too — the scene is rebuilt on every hover/selection change)
     while (this.characterGroup.children.length > 0) {
       const child = this.characterGroup.children[0];
       this.characterGroup.remove(child);
+      child.geometry?.dispose?.();
+      child.material?.dispose?.();
     }
     this.interactiveMeshes = [];
 
@@ -371,7 +376,7 @@ export class Mannequin3DWebGLEngine {
 
       const baseColor = new THREE.Color(hex);
       const emissiveColor = isHighlighted
-        ? baseColor.clone().lerp(new THREE.Color('#00e5ff'), 0.45)
+        ? baseColor.clone().lerp(new THREE.Color('#f3e6cf'), 0.5)
         : new THREE.Color('#000000');
 
       return new THREE.MeshPhysicalMaterial({
@@ -384,7 +389,7 @@ export class Mannequin3DWebGLEngine {
         bumpMap: bump,
         bumpScale: spec.bumpScale,
         emissive: emissiveColor,
-        emissiveIntensity: isHighlighted ? 0.28 : 0.0,
+        emissiveIntensity: isHighlighted ? 0.22 : 0.0,
       });
     };
 
@@ -429,7 +434,7 @@ export class Mannequin3DWebGLEngine {
 
     // Jaw / Chin contour
     const jawGeom = new THREE.ConeGeometry(0.078 * hdS, 0.11 * hdS, 28);
-    jawGeom.rotation.x = Math.PI;
+    jawGeom.rotateX(Math.PI);
     jawGeom.scale(0.88, 1.0, 0.85);
     addPart(jawGeom, skinMat, 'headwear', [0, headY - 0.055 * hdS, 0.022 * hdS]);
 
@@ -726,7 +731,7 @@ export class Mannequin3DWebGLEngine {
         addPart(tieGeom, neckMat, 'neckwear', [0, 1.29, chR * bellyZ + 0.018]);
       } else {
         const torus = new THREE.TorusGeometry(0.084 * m.shoulderScale, 0.028, 18, 36);
-        torus.rotation.x = Math.PI / 2 + 0.12;
+        torus.rotateX(Math.PI / 2 + 0.12);
         torus.scale(1.05, 0.92, 1.0);
         addPart(torus, neckMat, 'neckwear', [0, 1.48, 0.015]);
 
@@ -889,6 +894,13 @@ export function render3DMannequinScene(canvas, options = {}) {
     const bgGrad = ctx.createRadialGradient(width * 0.5, height * 0.45, 10, width * 0.5, height * 0.5, width * 0.65);
     bgGrad.addColorStop(0, 'rgba(0, 229, 255, 0.14)');
     bgGrad.addColorStop(1, 'rgba(10, 15, 24, 0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+  } else {
+    // Atelier studio spotlight
+    const bgGrad = ctx.createRadialGradient(width * 0.5, height * 0.42, 6, width * 0.5, height * 0.5, width * 0.7);
+    bgGrad.addColorStop(0, 'rgba(200, 178, 148, 0.18)');
+    bgGrad.addColorStop(1, 'rgba(250, 248, 244, 0)');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
   }

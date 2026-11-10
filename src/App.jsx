@@ -513,16 +513,17 @@ export default function App() {
       {/* Styling Profile + 7 Body Shapes + Personal Color Modal */}
       {showProfileModal && !needsClosetSetup && (
         <ProfilePersonalColorModal
+          open={showProfileModal}
           user={user}
           lang={lang}
           onClose={() => setShowProfileModal(false)}
-          onSaved={(updatedUser, seededStats) => {
+          onCompleted={(updatedUser, generatedWardrobe) => {
             setUser(updatedUser);
             setShowProfileModal(false);
             bumpRefresh();
-            if (seededStats?.inserted > 0) {
+            if (generatedWardrobe?.createdCount > 0) {
               showToast(
-                `프로필 저장 및 통계 기반 ${seededStats.inserted}벌 의류가 자동 생성되었습니다.`,
+                `프로필 저장 및 통계 기반 ${generatedWardrobe.createdCount}벌 의류가 자동 생성되었습니다.`,
               );
             } else {
               showToast('7체형 · 3사이즈 · 퍼스널컬러 프로필이 업데이트되었습니다.');

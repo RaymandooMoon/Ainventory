@@ -73,3 +73,29 @@
 
 3. **전 화면 반응형 설계 ([src/index.css](file:///home/antigravity/RaymandooMoon/Ainventory/src/index.css))**
    - `1180px`, `980px`(태블릿: 3D 캐릭터 상단 중앙 배치 후 좌·우 장비 슬롯 2열 병렬 배치), `640px`(모바일: 1열 스택 및 터치 최적화) 브레이크포인트 완비.
+---
+
+## 2026-11-10 — PC1 핸드오프 명세(`HANDOFF_SPEC.md`) 대조 보완 + 3D 피팅 스튜디오 아틀리에 톤 전환
+
+- **User**: PC1에서 PUSH 못 했던 개발 명세(`FULL_PROJECT_SOURCE_BACKUP.md` / `HANDOFF_SPEC.md`)를 반영해 달라. 방향은 상의해서 정할 것.
+- **결정 사항 (사용자 선택)**:
+  1. 현재 `main`(`b48c786`)을 기준으로 두고, 명세와 다른 부분만 보완 (전달된 메시지가 잘려 `### FILE:` 소스 블록은 포함되지 않음)
+  2. Three.js 엔진은 유지하고, 3D 마네킹 화면은 앱 전체와 같은 밝은 아틀리에/스튜디오 톤으로 변경 (사이버펑크 HUD 제거)
+  3. `TODO.md` 복원 및 함수·상수 이름을 명세와 맞추기 (`Mannequin3DBodyPreview` export 포함)
+- **Assistant**:
+  1. **명세 이름 정렬** — `src/utils/bodyAnthropometrics.js`: `BODY_SHAPE_OPTIONS`, `suggestBodyShapeFromMetrics`, `normalizeBodyShapeKey`(레거시 `body_type` 값 매핑) 추가, 기존 `BODY_SHAPES` / `recommendBodyShapeFromMetrics`는 호환용 별칭으로 유지
+  2. **서버 (`[2] b, c`)** — `server/wardrobeStatsAndGenerator.js`: `BODY_SHAPE_OPTIONS`, `normalizeBodyShapeKey` 재export, `computeBodyMetrics`에 `bodyLabelKo/En`, `bodyShortKo`, `resolvedMeasurements` 추가 (→ 날씨 추천 `stylingProfile`에도 자동 포함) / `server/api.js`: `formatUserPayload`에 `bodyShapeLabelKo/En`, `bodyShapeShortKo`, `bodyShapeCustom`, `personalColorLabelKo/En` 추가, `profile-setup`에서 체형 키 정규화, `GET /api/body-shapes` 추가
+  3. **3D 피팅 스튜디오 (`[2] d`)** — `src/components/VirtualMannequin.jsx` 전면 재작성:
+     - 아틀리에 톤 3단 레이아웃(좌: 머리·목/상체/손, 중앙: 3D 스테이지, 우: 하체·전신/발/액세서리), 머리→발 번호(`01~11`) 슬롯 카드 + 실사 팩샷 + 원단 소재 표기
+     - 상단 배지: 퍼스널컬러 바디 톤 · 7대 체형 · `가슴 · 허리 · 힙 · 두위` (커스텀 n/4 / 디폴트)
+     - 각도 프리셋 `좌측면 -28°` / `3/4 입체 -14°` / `정면 0°` / `우측면 +24°`, 드래그 회전, 호버 콜아웃, 의류 클릭 → `onSelectSlot` + `onItemClick`
+     - 기본 헤드를 **무안면 마네킹**으로 변경(아바타 헤드 토글은 유지)
+     - `export function Mannequin3DBodyPreview({ user, poseYawDeg = -16 })` 경량 2D-투영 프리뷰 추가
+  4. **3D 엔진 (`src/utils/mannequin3DRenderer.js`)** — 네온 시안/골드 림라이트·페디스털을 아이보리 소프트박스 조명 + 트래버틴 페디스털로 교체, 씬 재생성 시 geometry/material `dispose()`로 GPU 메모리 누수 방지
+  5. **버그 수정 (기존 `main`에서 3D 스테이지가 렌더되지 않던 원인)**:
+     - `BufferGeometry`에 존재하지 않는 `.rotation.x` 대입(`jawGeom`, 넥웨어 `torus`) → `rotateX()`로 교체 (페이지 로드 시 `TypeError`로 날씨 코디 화면 전체가 멈춤)
+     - `VirtualMannequin`이 엔진에 없는 메서드(`setTargetYaw`, `focusOnSlot`, `setMouseParallax`, `pickSlotAtClientPos`)를 호출 → 실제 메서드(`setRotationDeg`, `setFocusSlot`, `setParallax`, `hitTestClientPoint`)로 연결
+     - `WeatherStylingView`가 넘기는 `onOpenBodySetup` / `onOpenInspector`를 컴포넌트가 받지 않던 문제 수정
+     - WebGL 버퍼 크기를 캔버스 실제 CSS 크기에 맞춰 반응형 구간에서 마네킹이 늘어나던 문제 수정
+  6. **프로필 모달 (`[2] e`)** — 7종 체형 카드와 실시간 프리뷰를 `Mannequin3DBodyPreview`로 교체, 다크 패널을 아틀리에 톤으로 변경, 프리뷰 바디 톤에 선택된 퍼스널컬러 반영
+  7. **`TODO.md` 복원** (명세 원문 + a~h 체크리스트 + 후속 과제), `npm run build` 통과, 헤드리스 브라우저(SwiftShader WebGL)로 화면 검증

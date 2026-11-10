@@ -252,7 +252,7 @@ export default function OutfitStudioView({ user, activeCloset, refreshKey, showT
           userProfile={user}
           loadoutBySlot={loadoutBySlot}
           items={pickedItems}
-          title="DRESS ME STUDIO // 3D LIVE PREVIEW"
+          title="Dress Me · 3D 라이브 피팅"
           onOpenInspector={(slotKey) => {
             setInspectorSlot(slotKey || 'outer');
             setInspectorOpen(true);
