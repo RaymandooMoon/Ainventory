@@ -110,13 +110,17 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'heels', label: '힐 · 펌프스' },
   ],
   accessory: [
-    { value: 'bag', label: '가방 · 토트백' },
+    { value: 'briefcase', label: '서류가방 · 브리프케이스' },
+    { value: 'tote', label: '토트백 · 쇼퍼백' },
+    { value: 'bag', label: '크로스백 · 숄더백' },
     { value: 'watch', label: '시계 · 워치' },
     { value: 'belt', label: '레더 벨트' },
     { value: 'glasses', label: '아이웨어 · 안경' },
   ],
   bag: [
-    { value: 'bag', label: '가방 · 토트백' },
+    { value: 'briefcase', label: '서류가방 · 브리프케이스' },
+    { value: 'tote', label: '토트백 · 쇼퍼백' },
+    { value: 'bag', label: '크로스백 · 숄더백' },
   ],
 };
 

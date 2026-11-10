@@ -12,9 +12,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(ROOT_DIR, 'data');
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+export const OUTBOX_DIR = path.join(DATA_DIR, 'outbox');
 export const DB_PATH = path.join(DATA_DIR, 'ainventory.db');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+fs.mkdirSync(OUTBOX_DIR, { recursive: true });
 
 async function createDatabase(dbPath) {
   if (!process.env.FORCE_SQLJS) {
@@ -108,6 +110,7 @@ export function initDb() {
       default_closet TEXT NOT NULL DEFAULT 'husband',
       closet_name TEXT DEFAULT NULL,
       verification_token TEXT DEFAULT NULL,
+      verification_code TEXT DEFAULT NULL,
       verified_at TEXT DEFAULT NULL,
       verification_hash TEXT DEFAULT NULL,
       age_group TEXT DEFAULT NULL,
@@ -207,6 +210,7 @@ export function initDb() {
     'ALTER TABLE users ADD COLUMN email TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN closet_name TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN verification_token TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN verification_code TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN verified_at TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN verification_hash TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN age_group TEXT DEFAULT NULL',
@@ -236,6 +240,84 @@ export function initDb() {
 
   seedWardrobeBenchmarks(db);
   seedIfEmpty();
+
+  // Ensure signature 3D Jiggle Physics items (Briefcase, Shopper Tote, Fringed Muffler) exist even on migrated DBs
+  try {
+    const ensureSignatureItem = (owner, subcat, rowArgs) => {
+      const found = db
+        .prepare('SELECT id FROM garments WHERE closet_owner = ? AND subcategory = ? LIMIT 1')
+        .get(owner, subcat);
+      if (!found) {
+        db.prepare(`
+          INSERT INTO garments (
+            closet_owner, name, category, subcategory, color_name, color_hex,
+            seasons, min_temp, max_temp, water_resistant, formality,
+            brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?)
+        `).run(...rowArgs);
+      }
+    };
+    const todayStr = new Date().toISOString().slice(0, 10);
+    ensureSignatureItem('husband', 'briefcase', [
+      'husband',
+      '이탈리안 풀그레인 레더 서류가방',
+      'accessory',
+      'briefcase',
+      '브라운',
+      '#5C3A24',
+      JSON.stringify(['봄', '여름', '가을', '겨울']),
+      -10,
+      35,
+      1,
+      'formal',
+      'Valextra 무드',
+      490000,
+      15,
+      todayStr,
+      '/seed/studio-briefcase.jpg',
+      '왼손 그립 소켓 진자 물리(Pendulum Physics)가 적용된 비스포크 브리프케이스',
+    ]);
+    ensureSignatureItem('wife', 'tote', [
+      'wife',
+      '페블 레더 쇼퍼 토트백',
+      'accessory',
+      'tote',
+      '카멜',
+      '#A87948',
+      JSON.stringify(['봄', '여름', '가을', '겨울']),
+      -10,
+      35,
+      1,
+      'smart',
+      'Polène 무드',
+      420000,
+      18,
+      todayStr,
+      '/seed/studio-tote.jpg',
+      '보행 리듬에 따라 경쾌하게 흔들리는 쇼퍼 토트백',
+    ]);
+    ensureSignatureItem('husband', 'scarf', [
+      'husband',
+      '퓨어 캐시미어 프린지 머플러',
+      'neckwear',
+      'scarf',
+      '카멜',
+      '#B58E63',
+      JSON.stringify(['가을', '겨울']),
+      -12,
+      11,
+      0,
+      'smart',
+      'Johnstons of Elgin 무드',
+      240000,
+      9,
+      todayStr,
+      '/seed/studio-muffler.jpg',
+      '소프트 클로스 지글 피직스가 적용된 캐시미어 머플러',
+    ]);
+  } catch {
+    // ignore migration error
+  }
 
   // One-time migration: replace any SVG or store-terracotta-cardigan.jpg garment images with studio packshots
   try {

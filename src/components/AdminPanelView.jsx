@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, Server, ShieldCheck, UserPlus } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
+import { KpiMetricStrip, PageHeader } from './common/AppUI.jsx';
 
 export default function AdminPanelView({ onClosetUpdated, showToast }) {
   const [overview, setOverview] = useState(null);
@@ -61,47 +62,47 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>어드민 & 맥미니 M2 서버 콘솔</h1>
-          <p className="page-subtitle">
-            부부 테스터 계정 관리, SQLite 데이터베이스 현황, 그리고 향후 Mac mini M2 홈서버 이전을 위한 운영 패널입니다.
-          </p>
-        </div>
-
-        <button type="button" className="btn btn-secondary" onClick={handleResetDemo}>
-          <RefreshCw size={15} /> 샘플 옷장 데이터 초기화
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="ADMIN & HOME SERVER CONSOLE"
+        title="어드민 & 맥미니 M2 서버 콘솔"
+        subtitle="부부 테스터 계정 관리, SQLite 데이터베이스 현황, 그리고 향후 App Store / Play Store 및 Mac mini M2 운영 패널입니다."
+        actions={
+          <button type="button" className="btn btn-secondary" onClick={handleResetDemo}>
+            <RefreshCw size={15} /> 샘플 옷장 데이터 초기화
+          </button>
+        }
+      />
 
       {overview && (
         <>
-          <section className="summary-strip">
-            <div className="stat-tile">
-              <span>남편 옷장 / 와이프 옷장</span>
-              <strong>
-                {overview.counts.husbandGarments}벌 / {overview.counts.wifeGarments}벌
-              </strong>
-              <small>부부 멀티 프로필 분리 저장</small>
-            </div>
-            <div className="stat-tile">
-              <span>저장된 코디 & OOTD</span>
-              <strong>
-                {overview.counts.outfits}개 / {overview.counts.wearLogs}건
-              </strong>
-              <small>코디 북 및 캘린더 기록</small>
-            </div>
-            <div className="stat-tile">
-              <span>쇼핑 판독 누적</span>
-              <strong>{overview.counts.shoppingChecks}건</strong>
-              <small>오프라인 매장 비교 이력</small>
-            </div>
-            <div className="stat-tile">
-              <span>SQLite DB 용량</span>
-              <strong>{overview.system.dbSizeKb} KB</strong>
-              <small>Node {overview.system.nodeVersion} 내장 SQLite</small>
-            </div>
-          </section>
+          <KpiMetricStrip
+            items={[
+              {
+                key: 'closets',
+                label: '남편 옷장 / 와이프 옷장',
+                value: `${overview.counts.husbandGarments}벌 / ${overview.counts.wifeGarments}벌`,
+                sub: '부부 멀티 프로필 분리 저장',
+              },
+              {
+                key: 'outfits',
+                label: '저장된 코디 & OOTD',
+                value: `${overview.counts.outfits}개 / ${overview.counts.wearLogs}건`,
+                sub: '코디 북 및 캘린더 기록',
+              },
+              {
+                key: 'checks',
+                label: '쇼핑 판독 누적',
+                value: `${overview.counts.shoppingChecks}건`,
+                sub: '오프라인 매장 비교 이력',
+              },
+              {
+                key: 'db',
+                label: 'SQLite DB 용량',
+                value: `${overview.system.dbSizeKb} KB`,
+                sub: `Node ${overview.system.nodeVersion} 내장 SQLite`,
+              },
+            ]}
+          />
 
           <section className="two-col-panels">
             <div className="section-card">

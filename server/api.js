@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import db, {
   DB_PATH,
+  OUTBOX_DIR,
   UPLOADS_DIR,
   computeVerificationHash,
   hashPassword,
@@ -177,23 +178,59 @@ export function createApiRouter() {
     res.json({ ok: true, service: 'A inventory API', timestamp: new Date().toISOString() });
   });
 
-  // 1. Email-verified registration (creates closet_<username>, issues verify_token link)
+  const writeVerificationOutboxHtml = ({
+    username,
+    email,
+    displayName,
+    verifyToken,
+    verificationCode,
+    verifyUrl,
+  }) => {
+    const outboxFile = `${username}-verify.html`;
+    const html = `<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>[A inventory] 이메일 회원가입 인증 안내</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#F4F1EA; padding:32px; color:#1C1917;">
+  <div style="max-width:520px; margin:0 auto; background:#FFFFFF; border:1px solid #E2DDD3; border-radius:14px; padding:28px;">
+    <p style="font-size:12px; letter-spacing:0.14em; color:#78716C; margin:0 0 8px;">A INVENTORY · WARDROBE ATELIER</p>
+    <h1 style="font-size:20px; margin:0 0 12px;">${displayName}님, 이메일 인증을 완료해 주세요</h1>
+    <p style="font-size:14px; line-height:1.6; color:#44403C;">아래 6자리 인증번호를 회원가입 화면에 입력하거나, 인증 버튼을 클릭하면 전용 디지털 옷장이 즉시 활성화됩니다.</p>
+    <div style="margin:20px 0; padding:16px; background:#F4F1EA; border-radius:10px; text-align:center;">
+      <span style="display:block; font-size:12px; color:#78716C; margin-bottom:4px;">6자리 인증코드</span>
+      <strong style="font-size:28px; letter-spacing:0.28em; color:#1C1917;">${verificationCode}</strong>
+    </div>
+    <p style="font-size:13px; color:#57534E;">인증 링크: <a href="${verifyUrl}">${verifyUrl}</a></p>
+    <hr style="border:none; border-top:1px solid #E7E5E4; margin:20px 0;" />
+    <small style="color:#78716C;">계정: @${username} (${email}) · Token: ${verifyToken.slice(0, 12)}...</small>
+  </div>
+</body>
+</html>`;
+    try {
+      fs.writeFileSync(path.join(OUTBOX_DIR, outboxFile), html, 'utf8');
+    } catch {
+      // ignore outbox write error
+    }
+    return `/data/outbox/${outboxFile}`;
+  };
+
+  // 1. Email-verified registration (creates closet_<username>, issues 6-digit OTP + verify_token link + outbox HTML)
   router.post('/auth/register', (req, res) => {
     const {
       username = '',
       email = '',
       password = '',
       display_name = '',
+      displayName = '',
     } = req.body || {};
 
     const cleanUsername = String(username).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
     const cleanEmail = String(email).trim().toLowerCase();
-    const cleanDisplayName = String(display_name || cleanUsername).trim();
+    const cleanDisplayName = String(display_name || displayName || cleanUsername).trim();
 
     if (!cleanUsername || cleanUsername.length < 2) {
       return res.status(400).json({ error: '아이디는 영문/숫자 2자 이상으로 입력해주세요.' });
     }
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ error: '유효한 이메일 주소를 입력해주세요.' });
     }
     if (!password || String(password).length < 4) {
@@ -204,33 +241,113 @@ export function createApiRouter() {
     if (exists) {
       return res.status(409).json({ error: '이미 사용 중인 아이디입니다.' });
     }
+    const emailExists = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(cleanEmail);
+    if (emailExists) {
+      return res.status(409).json({ error: '이미 가입된 이메일 주소입니다.' });
+    }
 
     const closetKey = `closet_${cleanUsername}`;
     const verifyToken = crypto.randomBytes(24).toString('hex');
+    const verificationCode = String(crypto.randomInt(100000, 1000000));
 
     db.prepare(`
       INSERT INTO users (
         username, email, password_hash, display_name, role, default_closet,
-        closet_name, verification_token, verified_at, verification_hash, profile_completed
-      ) VALUES (?, ?, ?, ?, 'member', ?, NULL, ?, NULL, NULL, 0)
+        closet_name, verification_token, verification_code, verified_at, verification_hash, profile_completed
+      ) VALUES (?, ?, ?, ?, 'member', ?, NULL, ?, ?, NULL, NULL, 0)
     `).run(
       cleanUsername,
       cleanEmail,
       hashPassword(String(password)),
       cleanDisplayName,
       closetKey,
-      verifyToken
+      verifyToken,
+      verificationCode
     );
 
     const verifyUrl = `/?verify_token=${verifyToken}`;
+    const outboxPath = writeVerificationOutboxHtml({
+      username: cleanUsername,
+      email: cleanEmail,
+      displayName: cleanDisplayName,
+      verifyToken,
+      verificationCode,
+      verifyUrl,
+    });
+
     res.status(201).json({
       ok: true,
       username: cleanUsername,
       email: cleanEmail,
+      displayName: cleanDisplayName,
       defaultCloset: closetKey,
       verificationToken: verifyToken,
+      verificationCode,
       verifyUrl,
-      message: '회원가입이 접수되었습니다. 발급된 이메일 인증 링크를 통해 인증을 완료해주세요.',
+      user: {
+        username: cleanUsername,
+        email: cleanEmail,
+        displayName: cleanDisplayName,
+        defaultCloset: closetKey,
+      },
+      verification: {
+        token: verifyToken,
+        code: verificationCode,
+        verifyUrl,
+        outboxPath,
+      },
+      message: '회원가입이 접수되었습니다. 이메일로 발송된 6자리 인증코드 또는 인증 링크로 인증을 완료해주세요.',
+    });
+  });
+
+  // 1b. Resend email verification code & token
+  router.post('/auth/resend-verification', (req, res) => {
+    const identifier = String(req.body?.identifier || req.body?.email || req.body?.username || '')
+      .trim()
+      .toLowerCase();
+    if (!identifier) {
+      return res.status(400).json({ error: '아이디 또는 이메일을 입력해주세요.' });
+    }
+    const user = db
+      .prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?')
+      .get(identifier, identifier);
+    if (!user) {
+      return res.status(404).json({ error: '해당 계정을 찾을 수 없습니다.' });
+    }
+    if (user.verified_at && user.verification_hash) {
+      return res.status(400).json({ error: '이미 이메일 인증이 완료된 계정입니다.' });
+    }
+
+    const verifyToken = crypto.randomBytes(24).toString('hex');
+    const verificationCode = String(crypto.randomInt(100000, 1000000));
+    db.prepare('UPDATE users SET verification_token = ?, verification_code = ? WHERE id = ?').run(
+      verifyToken,
+      verificationCode,
+      user.id
+    );
+    const verifyUrl = `/?verify_token=${verifyToken}`;
+    const outboxPath = writeVerificationOutboxHtml({
+      username: user.username,
+      email: user.email,
+      displayName: user.display_name,
+      verifyToken,
+      verificationCode,
+      verifyUrl,
+    });
+
+    res.json({
+      ok: true,
+      user: {
+        username: user.username,
+        email: user.email,
+        displayName: user.display_name,
+      },
+      verification: {
+        token: verifyToken,
+        code: verificationCode,
+        verifyUrl,
+        outboxPath,
+      },
     });
   });
 
@@ -244,26 +361,48 @@ export function createApiRouter() {
     if (!user) {
       return res.status(404).json({ error: '유효하지 않거나 만료된 이메일 인증 링크입니다.' });
     }
+    const alreadyVerified = Boolean(user.verified_at && user.verification_hash);
     res.json({
       ok: true,
       username: user.username,
       email: user.email,
       displayName: user.display_name,
-      alreadyVerified: Boolean(user.verified_at && user.verification_hash),
+      alreadyVerified,
       verifiedAt: user.verified_at,
       verificationHash: user.verification_hash,
+      account: {
+        username: user.username,
+        email: user.email,
+        display_name: user.display_name,
+        alreadyVerified,
+      },
     });
   });
 
-  // 3. Complete email verification (saves verified_at + SHA-256 verification_hash)
+  // 3. Complete email verification by token OR 6-digit OTP code (saves verified_at + SHA-256 verification_hash)
   router.post('/auth/verify-email', (req, res) => {
     const token = String(req.body?.token || '').trim();
-    if (!token) {
-      return res.status(400).json({ error: '인증 토큰이 필요합니다.' });
-    }
-    const user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
-    if (!user) {
-      return res.status(404).json({ error: '유효하지 않은 인증 토큰입니다.' });
+    const code = String(req.body?.code || '').trim();
+    const identifier = String(req.body?.identifier || req.body?.email || req.body?.username || '')
+      .trim()
+      .toLowerCase();
+    const issueSession = Boolean(req.body?.issueSession);
+
+    let user = null;
+    if (code && identifier) {
+      user = db
+        .prepare('SELECT * FROM users WHERE (lower(username) = ? OR lower(email) = ?) AND verification_code = ?')
+        .get(identifier, identifier, code);
+      if (!user) {
+        return res.status(400).json({ error: '인증코드 6자리가 일치하지 않습니다. 다시 확인해주세요.' });
+      }
+    } else if (token) {
+      user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
+      if (!user) {
+        return res.status(404).json({ error: '유효하지 않은 이메일 인증 토큰입니다.' });
+      }
+    } else {
+      return res.status(400).json({ error: '6자리 인증코드 또는 인증 토큰이 필요합니다.' });
     }
 
     const verifiedAt = user.verified_at || new Date().toISOString();
@@ -276,28 +415,51 @@ export function createApiRouter() {
       WHERE id = ?
     `).run(verifiedAt, verificationHash, user.id);
 
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    let sessionToken = null;
+    if (issueSession && updatedUser) {
+      sessionToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(
+        sessionToken,
+        updatedUser.id,
+        expires
+      );
+      res.setHeader(
+        'Set-Cookie',
+        `ainventory_token=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
+      );
+    }
+
     res.json({
       ok: true,
-      username: user.username,
-      email: user.email,
-      displayName: user.display_name,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      displayName: updatedUser.display_name,
       verifiedAt,
       verificationHash,
+      sessionToken,
+      user: sessionToken ? formatUserPayload(updatedUser) : undefined,
     });
   });
 
-  // 4. Login (requires verified_at and verification_hash)
+  // 4. Login by username OR email (requires verified_at and verification_hash)
   router.post('/auth/login', (req, res) => {
     const { username = '', password = '' } = req.body || {};
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(String(username).trim());
+    const idClean = String(username).trim();
+    const user = db
+      .prepare('SELECT * FROM users WHERE username = ? OR lower(email) = lower(?)')
+      .get(idClean, idClean);
     if (!user || !verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+      return res.status(401).json({ error: '아이디(이메일) 또는 비밀번호가 올바르지 않습니다.' });
     }
 
     if (!user.verified_at || !user.verification_hash) {
       return res.status(403).json({
         error: '이메일 인증이 완료되지 않은 계정입니다. 먼저 이메일 인증을 완료해주세요.',
         code: 'EMAIL_NOT_VERIFIED',
+        username: user.username,
+        email: user.email,
         verificationToken: user.verification_token,
         verifyUrl: user.verification_token ? `/?verify_token=${user.verification_token}` : null,
       });

@@ -88,6 +88,8 @@ export const STUDIO_SEED_MAP = {
   boots: '/seed/studio-boots.jpg',
   heels: '/seed/studio-heels.jpg',
   // accessory
+  briefcase: '/seed/studio-briefcase.jpg',
+  tote: '/seed/studio-tote.jpg',
   bag: '/seed/studio-bag.jpg',
   watch: '/seed/studio-watch.jpg',
   belt: '/seed/studio-belt.jpg',

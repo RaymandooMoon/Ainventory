@@ -130,6 +130,7 @@ export default function ProfilePersonalColorModal({
 
   // Step 2: Personal Color & Camera / Photo State
   const [portraitDataUrl, setPortraitDataUrl] = useState('');
+  const [rawPortraitSourceUrl, setRawPortraitSourceUrl] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraFacing, setCameraFacing] = useState('user'); // 'user' | 'environment'
   const [cameraError, setCameraError] = useState('');
@@ -416,41 +417,45 @@ export default function ProfilePersonalColorModal({
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
+      setRawPortraitSourceUrl(dataUrl);
       setPortraitDataUrl(dataUrl);
       setCustomPins(null);
       setRotationDeg(0);
       setCropRect(null);
-      executePersonalColorAnalysis(dataUrl, lightingMode, null, 0, null);
+      // Launch Photo Crop Editor immediately so full-body or selfie shots can be cropped first!
+      setPinEditorOpen(true);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  // Capture selfie frame from live <video> or start camera if not active
+  // Capture full camera frame from live <video> and launch Photo Crop Editor right away!
   const handleCameraShutterDiagnose = () => {
     if (cameraActive && videoRef.current && videoRef.current.videoWidth > 0) {
       const vw = videoRef.current.videoWidth;
       const vh = videoRef.current.videoHeight;
-      const side = Math.min(vw, vh);
-      const sx = Math.floor((vw - side) / 2);
-      const sy = Math.floor((vh - side) / 2);
+      const scale = Math.min(1, 960 / Math.max(vw, vh));
+      const cw = Math.max(240, Math.round(vw * scale));
+      const ch = Math.max(240, Math.round(vh * scale));
 
       const c = document.createElement('canvas');
-      c.width = 480;
-      c.height = 480;
+      c.width = cw;
+      c.height = ch;
       const ctx = c.getContext('2d');
       if (cameraFacing === 'user') {
-        ctx.translate(480, 0);
+        ctx.translate(cw, 0);
         ctx.scale(-1, 1);
       }
-      ctx.drawImage(videoRef.current, sx, sy, side, side, 0, 0, 480, 480);
+      ctx.drawImage(videoRef.current, 0, 0, vw, vh, 0, 0, cw, ch);
       const capturedUrl = c.toDataURL('image/jpeg', 0.92);
       stopCameraStream();
+      setRawPortraitSourceUrl(capturedUrl);
       setPortraitDataUrl(capturedUrl);
       setCustomPins(null);
       setRotationDeg(0);
       setCropRect(null);
-      executePersonalColorAnalysis(capturedUrl, lightingMode, null, 0, null);
+      // Immediately launch Photo Crop Editor after snapping camera photo!
+      setPinEditorOpen(true);
     } else if (!cameraActive && portraitDataUrl) {
       // Re-run diagnosis with progress bar on current portrait or start camera
       setReanalyzingPct(20);
@@ -1819,23 +1824,18 @@ export default function ProfilePersonalColorModal({
 
         <PortraitCropAndPinEditorModal
           open={pinEditorOpen}
-          imageSource={portraitDataUrl}
+          imageSource={rawPortraitSourceUrl || portraitDataUrl}
+          initialStage="crop"
           initialPins={pcResult?.pins}
-          initialRotation={rotationDeg}
           onClose={() => setPinEditorOpen(false)}
-          onApply={({ pins, rotationDeg: nextRot, cropRect: nextCrop, processedDataUrl }) => {
+          onApply={({ croppedDataUrl, pins, rotationDeg: nextRot, cropRect: nextCrop }) => {
+            const finalImg = croppedDataUrl || portraitDataUrl;
             setCustomPins(pins);
-            setRotationDeg(nextRot);
-            setCropRect(nextCrop);
-            if (processedDataUrl) setPortraitDataUrl(processedDataUrl);
+            setRotationDeg(nextRot || 0);
+            setCropRect(nextCrop || null);
+            if (finalImg) setPortraitDataUrl(finalImg);
             setPinEditorOpen(false);
-            executePersonalColorAnalysis(
-              processedDataUrl || portraitDataUrl,
-              lightingMode,
-              pins,
-              nextRot,
-              nextCrop
-            );
+            executePersonalColorAnalysis(finalImg, lightingMode, pins, nextRot || 0, nextCrop || null);
           }}
         />
       </div>

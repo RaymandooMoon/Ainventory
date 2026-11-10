@@ -10,6 +10,7 @@ import {
   Wind,
 } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
+import { HorizontalChipRail, PageHeader } from './common/AppUI.jsx';
 import OutfitInspectorModal from './OutfitInspectorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import VirtualMannequin from './VirtualMannequin.jsx';
@@ -62,7 +63,7 @@ export default function WeatherStylingView({
 
   const activeRec = data?.recommendations?.[selectedRecIdx] || data?.recommendations?.[0] || null;
 
-  // Merge active recommendation's 11-slot loadout with user's interactive swaps
+  // Merge active recommendation's 11-slot loadout with user's interactive swaps & explicit null unequips
   const mergedLoadout = {
     ...(activeRec?.loadoutBySlot || {}),
     ...customSlotOverrides,
@@ -71,12 +72,12 @@ export default function WeatherStylingView({
   const handleConfirmSwap = (slotKey, newItem) => {
     setCustomSlotOverrides((prev) => ({
       ...prev,
-      [slotKey]: newItem,
+      [slotKey]: newItem || null,
     }));
     if (newItem) {
-      showToast(`'${newItem.name}' 아이템이 3D 마네킹 [${slotKey}] 슬롯에 장착되었습니다.`);
+      showToast(`'${newItem.name}' 아이템이 3D 마네킹 [${slotKey}] 부위에 장착되었습니다.`);
     } else {
-      showToast(`[${slotKey}] 슬롯 장착이 해제되었습니다.`);
+      showToast(`[${slotKey}] 부위 의류를 벗었습니다 (장착 해제).`);
     }
   };
 
@@ -132,38 +133,40 @@ export default function WeatherStylingView({
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>내일의 날씨 · 체형 · 퍼스널컬러 3D 스타일링</h1>
-          <p className="page-subtitle">
+      <PageHeader
+        eyebrow="AI DAILY OUTFIT · ACLOSET & WHERING STANDARD"
+        title="내일의 날씨 · 체형 · 퍼스널컬러 3D 스타일링"
+        subtitle={
+          <>
             기온·강수 예보와{' '}
             <strong>
               {sp?.personalColorLabel || '퍼스널컬러'} · {sp?.shapeLabelKo || '7체형'} (
               {sp?.chestCm}-{sp?.waistCm}-{sp?.hipCm}cm)
             </strong>
-            을 결합해 11부위 3D 인벤토리 코디를 제안합니다.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            id="open-profile-pc-modal-btn"
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => onOpenProfileModal?.()}
-          >
-            <UserCheck size={16} /> 7체형 · 3사이즈 · 퍼스널컬러 재설정
-          </button>
-          <button
-            id="goto-shopping-cta"
-            type="button"
-            className="btn btn-primary"
-            onClick={onNavigateShopping}
-          >
-            오프라인 매장 쇼핑 판독하기
-          </button>
-        </div>
-      </header>
+            을 결합해 11부위 실사 3D 인벤토리 코디와 날씨 맞춤 모션을 제안합니다.
+          </>
+        }
+        actions={
+          <>
+            <button
+              id="open-profile-pc-modal-btn"
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => onOpenProfileModal?.()}
+            >
+              <UserCheck size={16} /> 체형 · 퍼스널컬러 측정
+            </button>
+            <button
+              id="goto-shopping-cta"
+              type="button"
+              className="btn btn-primary"
+              onClick={onNavigateShopping}
+            >
+              매장 쇼핑 판독기
+            </button>
+          </>
+        }
+      />
 
       {/* Styling Profile & Personal Color Summary Ribbon */}
       {sp && (
@@ -272,7 +275,7 @@ export default function WeatherStylingView({
         </section>
       )}
 
-      <div className="scenario-bar" aria-label="날씨 시나리오 전환">
+      <HorizontalChipRail ariaLabel="날씨 시나리오 전환" className="scenario-bar">
         {(data?.scenarios || []).map((sc) => (
           <button
             key={sc.key}
@@ -284,9 +287,9 @@ export default function WeatherStylingView({
             {sc.label}
           </button>
         ))}
-      </div>
+      </HorizontalChipRail>
 
-      {/* 3D Fitting Studio (faceless personal-color mannequin) */}
+      {/* 3D Fitting Studio (faceless personal-color mannequin + live motion & unequip/swap dock) */}
       {!loading && activeRec && (
         <div style={{ marginBottom: 28 }}>
           <div
@@ -299,7 +302,7 @@ export default function WeatherStylingView({
               flexWrap: 'wrap',
             }}
           >
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <HorizontalChipRail ariaLabel="날씨 추천 코디 선택">
               {(data?.recommendations || []).map((rec, idx) => (
                 <button
                   key={rec.id}
@@ -315,25 +318,22 @@ export default function WeatherStylingView({
                   {rec.badge} (적합도 {rec.suitabilityScore}%)
                 </button>
               ))}
-            </div>
+            </HorizontalChipRail>
             <span style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)' }}>
-              슬롯 또는 3D 마네킹 부위를 클릭하면 카메라가 줌인되며 다른 의류로 교체할 수 있습니다
+              부위 카드의 × 버튼으로 즉시 벗거나, 클릭 시 해당 부위로 줌인되어 실시간 교체할 수 있습니다
             </span>
           </div>
 
           <VirtualMannequin
             userProfile={{ ...(sp || {}), ...(user || {}) }}
             loadoutBySlot={mergedLoadout}
-            items={activeRec.items}
+            closetGarments={closetGarments}
             weather={w}
             title={`${activeRec.title} 코디`}
+            onSwapSlotItem={handleConfirmSwap}
             onOpenBodySetup={(stepNum) => onOpenProfileModal?.(stepNum)}
             onOpenInspector={(slotKey) => {
               setInspectorSlot(slotKey || 'outer');
-              setInspectorOpen(true);
-            }}
-            onSelectSlot={(slotKey) => {
-              setInspectorSlot(slotKey);
               setInspectorOpen(true);
             }}
           />

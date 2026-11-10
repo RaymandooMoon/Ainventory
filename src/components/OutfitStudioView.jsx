@@ -7,11 +7,24 @@ import {
   Shuffle,
   Trash2,
   Unlock,
+  X,
 } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
+import { PageHeader } from './common/AppUI.jsx';
 import OutfitInspectorModal from './OutfitInspectorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import VirtualMannequin from './VirtualMannequin.jsx';
+
+const DRESS_ME_SLOTS = [
+  { key: 'headwear', label: '모자' },
+  { key: 'neckwear', label: '머플러·타이' },
+  { key: 'outer', label: '아우터' },
+  { key: 'top', label: '상의' },
+  { key: 'bottom', label: '하의' },
+  { key: 'gloves', label: '장갑' },
+  { key: 'shoes', label: '신발' },
+  { key: 'accessory', label: '가방·액세서리' },
+];
 
 export default function OutfitStudioView({
   user,
@@ -24,7 +37,6 @@ export default function OutfitStudioView({
   const [garments, setGarments] = useState([]);
   const [outfits, setOutfits] = useState([]);
 
-  const [includeOuter, setIncludeOuter] = useState(true);
   const [indices, setIndices] = useState({
     headwear: 0,
     neckwear: 0,
@@ -36,6 +48,11 @@ export default function OutfitStudioView({
     socks: 0,
     shoes: 0,
     accessory: 0,
+  });
+  // Tracks explicitly unequipped slots (e.g. taking off gloves, outer, headwear)
+  const [unequipped, setUnequipped] = useState({
+    headwear: true,
+    gloves: false,
   });
   const [locked, setLocked] = useState({
     outer: false,
@@ -74,6 +91,7 @@ export default function OutfitStudioView({
     outer: garments.filter((g) => g.category === 'outer'),
     top: garments.filter((g) => g.category === 'top'),
     bottom: garments.filter((g) => g.category === 'bottom'),
+    dress: garments.filter((g) => g.category === 'dress'),
     gloves: garments.filter((g) => g.category === 'gloves'),
     underwear: garments.filter((g) => g.category === 'underwear'),
     socks: garments.filter((g) => g.category === 'socks'),
@@ -84,6 +102,7 @@ export default function OutfitStudioView({
   const stepSlot = (slot, delta) => {
     const len = (pools[slot] || []).length;
     if (len === 0) return;
+    setUnequipped((prev) => ({ ...prev, [slot]: false }));
     setIndices((prev) => ({
       ...prev,
       [slot]: ((prev[slot] || 0) + delta + len) % len,
@@ -95,7 +114,7 @@ export default function OutfitStudioView({
       const next = { ...prev };
       Object.keys(pools).forEach((slot) => {
         const len = pools[slot].length;
-        if (!locked[slot] && len > 1) {
+        if (!locked[slot] && !unequipped[slot] && len > 1) {
           let rand = Math.floor(Math.random() * len);
           if (rand === prev[slot]) rand = (rand + 1) % len;
           next[slot] = rand;
@@ -106,9 +125,9 @@ export default function OutfitStudioView({
   };
 
   const getSlotItem = (slotKey) => {
+    if (unequipped[slotKey]) return null;
     const list = pools[slotKey] || [];
     if (list.length === 0) return null;
-    if (slotKey === 'outer' && !includeOuter) return null;
     return list[(indices[slotKey] || 0) % list.length];
   };
 
@@ -118,6 +137,7 @@ export default function OutfitStudioView({
     outer: getSlotItem('outer'),
     top: getSlotItem('top'),
     bottom: getSlotItem('bottom'),
+    dress: unequipped.dress !== false ? null : getSlotItem('dress'),
     gloves: getSlotItem('gloves'),
     underwear: getSlotItem('underwear'),
     socks: getSlotItem('socks'),
@@ -127,14 +147,20 @@ export default function OutfitStudioView({
 
   const pickedItems = Object.values(loadoutBySlot).filter(Boolean);
 
+  // Supports both equipping a specific item AND unequipping (`newItem === null`)!
   const handleConfirmSwap = (slotKey, newItem) => {
-    if (!newItem) return;
+    if (!newItem) {
+      setUnequipped((prev) => ({ ...prev, [slotKey]: true }));
+      showToast(`[${slotKey}] 부위 의류를 벗었습니다.`);
+      return;
+    }
     const list = pools[slotKey] || [];
     const foundIdx = list.findIndex((g) => g.id === newItem.id);
+    setUnequipped((prev) => ({ ...prev, [slotKey]: false }));
     if (foundIdx >= 0) {
       setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
-      showToast(`'${newItem.name}' 아이템으로 교체되었습니다.`);
     }
+    showToast(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
   };
 
   const handleSaveLook = async (e) => {
@@ -175,29 +201,45 @@ export default function OutfitStudioView({
   };
 
   const renderSlotRow = (slotKey, slotLabel) => {
+    const list = pools[slotKey] || [];
     const current = getSlotItem(slotKey);
-    if (!current) {
+
+    if (list.length === 0) {
       return (
         <div key={slotKey} className="slot-row">
-          <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>{slotLabel} 없음</div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>{slotLabel} 보유 아이템 없음</div>
+        </div>
+      );
+    }
+
+    if (!current) {
+      return (
+        <div key={slotKey} className="slot-row" style={{ gridTemplateColumns: '1fr auto' }}>
+          <div style={{ fontSize: '0.84rem', color: 'var(--ink-secondary)' }}>
+            <strong>{slotLabel}</strong> · 현재 미착용 (벗은 상태)
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setUnequipped((prev) => ({ ...prev, [slotKey]: false }))}
+          >
+            다시 입히기
+          </button>
         </div>
       );
     }
 
     return (
       <div key={slotKey} className="slot-row">
-        <StudioGarmentImage
-          item={current}
-          style={{ width: 58, height: 74, borderRadius: 8 }}
-        />
+        <StudioGarmentImage item={current} style={{ width: 56, height: 72, borderRadius: 8 }} />
         <div>
-          <span style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
+          <span style={{ fontSize: '0.73rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
             {slotLabel} · {current.color_name}
           </span>
-          <strong style={{ display: 'block', fontSize: '0.92rem', margin: '2px 0' }}>
+          <strong style={{ display: 'block', fontSize: '0.90rem', margin: '2px 0' }}>
             {current.name}
           </strong>
-          <span style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)' }}>
+          <span style={{ fontSize: '0.76rem', color: 'var(--ink-secondary)' }}>
             {current.brand || '내 옷장'} · 착용 {current.wear_count}회
           </span>
         </div>
@@ -227,6 +269,15 @@ export default function OutfitStudioView({
           >
             {locked[slotKey] ? <Lock size={14} /> : <Unlock size={14} />}
           </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`${slotLabel} 벗기`}
+            title={`${slotLabel} 벗기`}
+            onClick={() => handleConfirmSwap(slotKey, null)}
+          >
+            <X size={14} />
+          </button>
         </div>
       </div>
     );
@@ -234,38 +285,34 @@ export default function OutfitStudioView({
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>코디 스튜디오 &amp; 3D Dress Me 룩북</h1>
-          <p className="page-subtitle">
-            원하는 부위를 잠금(Lock)한 뒤 셔플하거나, 3D 마네킹 인벤토리에서 직접 11부위를 교체해 나만의 룩북을 완성하세요.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => {
-            setInspectorSlot('outer');
-            setInspectorOpen(true);
-          }}
-        >
-          <Layers size={16} /> 11부위 전체 코디 인스펙터 열기
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="WHERING DRESS ME · 3D LIVE STYLING"
+        title="코디 스튜디오 & 3D Dress Me 룩북"
+        subtitle="부위별 잠금(Lock)·셔플·원클릭 벗기와 실시간 3D 모션/지글 피직스를 확인하며 나만의 룩북을 완성하세요."
+        actions={
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setInspectorSlot('outer');
+              setInspectorOpen(true);
+            }}
+          >
+            <Layers size={16} /> 11부위 전체 코디 인스펙터
+          </button>
+        }
+      />
 
       <div style={{ marginBottom: 26 }}>
         <VirtualMannequin
           userProfile={user}
           loadoutBySlot={loadoutBySlot}
-          items={pickedItems}
+          closetGarments={garments}
           title="Dress Me · 3D 라이브 피팅"
           onOpenBodySetup={(stepNum) => onOpenProfileModal?.(stepNum)}
+          onSwapSlotItem={handleConfirmSwap}
           onOpenInspector={(slotKey) => {
             setInspectorSlot(slotKey || 'outer');
-            setInspectorOpen(true);
-          }}
-          onSelectSlot={(slotKey) => {
-            setInspectorSlot(slotKey);
             setInspectorOpen(true);
           }}
         />
@@ -279,35 +326,27 @@ export default function OutfitStudioView({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: 14,
+              gap: 8,
+              flexWrap: 'wrap',
             }}
           >
-            <h3 style={{ fontSize: '1.05rem' }}>Dress Me 셔플 컨트롤러</h3>
-            <label style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={includeOuter}
-                onChange={(e) => setIncludeOuter(e.target.checked)}
-              />
-              아우터 포함
-            </label>
+            <h3 style={{ fontSize: '1.05rem' }}>Dress Me 8대 핵심 슬롯 컨트롤러</h3>
+            <button
+              id="dress-me-shuffle-btn"
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleShuffle}
+            >
+              <Shuffle size={14} /> 잠금 제외 랜덤 셔플
+            </button>
           </div>
 
-          {includeOuter && renderSlotRow('outer', '아우터')}
-          {renderSlotRow('top', '상의')}
-          {renderSlotRow('bottom', '하의')}
-          {renderSlotRow('shoes', '신발')}
+          {DRESS_ME_SLOTS.map((s) => renderSlotRow(s.key, s.label))}
 
-          <button
-            id="dress-me-shuffle-btn"
-            type="button"
-            className="btn btn-secondary btn-full"
-            style={{ margin: '8px 0 18px' }}
-            onClick={handleShuffle}
+          <form
+            onSubmit={handleSaveLook}
+            style={{ borderTop: '1px solid var(--border-hairline)', paddingTop: 16, marginTop: 14 }}
           >
-            <Shuffle size={16} /> 잠기지 않은 슬롯 랜덤 매칭 (Shuffle)
-          </button>
-
-          <form onSubmit={handleSaveLook} style={{ borderTop: '1px solid var(--border-hairline)', paddingTop: 16 }}>
             <div className="form-grid-2">
               <div className="field-group">
                 <label className="field-label">코디 제목</label>
@@ -338,7 +377,7 @@ export default function OutfitStudioView({
               <label className="field-label">스타일링 메모</label>
               <input
                 className="text-input"
-                placeholder="예: 소매 롤업해서 시계 포인트 주기"
+                placeholder="예: 서류가방 + 트렌치 매칭"
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
               />

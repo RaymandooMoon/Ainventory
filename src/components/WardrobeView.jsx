@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Heart, Plus, Search, Shirt, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, Crop, Heart, Plus, Search, Shirt, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import {
   CATEGORIES,
   COLOR_PALETTE,
@@ -8,7 +8,15 @@ import {
   computeItemTier,
   formatKRW,
 } from '../utils/api.js';
-import { processUploadedImage } from '../utils/imageTools.js';
+import { infer3DRegistrationSpec } from '../utils/garment3DPhysicsSpecs.js';
+import { inferFabricMaterialSpec } from '../utils/mannequin3DRenderer.js';
+import {
+  EmptyStateBox,
+  HorizontalChipRail,
+  KpiMetricStrip,
+  PageHeader,
+} from './common/AppUI.jsx';
+import SmartPhotoCropEditorModal from './SmartPhotoCropEditorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated, showToast }) {
@@ -18,8 +26,15 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Add Garment Form State
+  // Add Garment + Camera + Immediate Photo Crop Editor State
   const fileRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [liveCamOpen, setLiveCamOpen] = useState(false);
+  const [rawUploadSource, setRawUploadSource] = useState('');
+  const [cropEditorOpen, setCropEditorOpen] = useState(false);
+
   const [formOwner, setFormOwner] = useState(activeCloset === 'all' ? 'husband' : activeCloset);
   const [formName, setFormName] = useState('');
   const [formCategory, setFormCategory] = useState('top');
@@ -33,6 +48,19 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
   const [formWaterResistant, setFormWaterResistant] = useState(false);
   const [formNotes, setFormNotes] = useState('');
   const [formImageData, setFormImageData] = useState('');
+
+  const stopLiveCam = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setLiveCamOpen(false);
+  };
+
+  useEffect(() => {
+    if (!modalOpen) stopLiveCam();
+    return () => stopLiveCam();
+  }, [modalOpen]);
 
   const loadGarments = async () => {
     setLoading(true);
@@ -55,6 +83,57 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
     loadGarments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCloset, category, query, refreshKey]);
+
+  // GetWardrobe & Acloset KPI Analytics
+  const kpiItems = useMemo(() => {
+    if (!garments.length) return [];
+    const totalVal = garments.reduce((s, g) => s + (Number(g.price) || 0), 0);
+    const totalWears = garments.reduce((s, g) => s + (Number(g.wear_count) || 0), 0);
+    const avgCpw = totalWears > 0 ? Math.round(totalVal / totalWears) : 0;
+    const wornCount = garments.filter((g) => Number(g.wear_count) > 0).length;
+    const utilRate = Math.round((wornCount / garments.length) * 100);
+    const laundryCount = garments.filter((g) => g.status === 'laundry').length;
+    return [
+      { key: 'count', label: '보유 아카이브', value: `${garments.length}점`, sub: `세탁중 ${laundryCount}점` },
+      { key: 'val', label: '옷장 자산 총액', value: formatKRW(totalVal), sub: 'GetWardrobe 가치 지표' },
+      { key: 'cpw', label: '평균 1회 착용단가 (CPW)', value: formatKRW(avgCpw), sub: `누적 착용 ${totalWears}회` },
+      { key: 'util', label: '옷장 실활용률', value: `${utilRate}%`, sub: `${wornCount}/${garments.length}점 활성 착용` },
+    ];
+  }, [garments]);
+
+  // Live 3D Archetype & Jiggle Physics Preview for whatever item user is registering!
+  const live3DSpec = useMemo(
+    () =>
+      infer3DRegistrationSpec({
+        name: formName,
+        category: formCategory,
+        subcategory: formSub,
+      }),
+    [formName, formCategory, formSub]
+  );
+  const liveFabricSpec = useMemo(
+    () =>
+      inferFabricMaterialSpec({
+        name: formName,
+        category: live3DSpec.category,
+        subcategory: live3DSpec.subcategory,
+      }),
+    [formName, live3DSpec]
+  );
+
+  // Auto-sync category/subcategory when user types clear item keywords (e.g. "서류가방", "캐시미어 머플러")
+  const handleNameChange = (val) => {
+    setFormName(val);
+    const inferred = infer3DRegistrationSpec({ name: val, category: '', subcategory: '' });
+    if (inferred && val.trim().length >= 2) {
+      if (
+        /서류가방|브리프케이스|토트|쇼퍼|머플러|목도리|넥타이|트렌치|코트|스커트|장갑|시계|벨트|안경/i.test(val)
+      ) {
+        setFormCategory(inferred.category);
+        setFormSub(inferred.subcategory);
+      }
+    }
+  };
 
   const handleToggleFavorite = async (g) => {
     try {
@@ -110,18 +189,56 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
     }
   };
 
-  const handleModalImage = async (e) => {
+  // Workflow Reorder (Req 4): Uploading a file or taking a photo IMMEDIATELY opens SmartPhotoCropEditorModal!
+  const handleModalImage = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      const processed = await processUploadedImage(file);
-      setFormImageData(processed.dataUrl);
-      setFormColorName(processed.matchedColor.name);
-      setFormColorHex(processed.detectedHex);
-      showToast(`사진에서 '${processed.matchedColor.name}' 색상이 자동 감지되었습니다.`);
-    } catch (err) {
-      showToast(err.message);
+    stopLiveCam();
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRawUploadSource(reader.result);
+      setCropEditorOpen(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const startLiveCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
     }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setLiveCamOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch {
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const snapLiveCameraFrame = () => {
+    if (!videoRef.current || !videoRef.current.videoWidth) return;
+    const vw = videoRef.current.videoWidth;
+    const vh = videoRef.current.videoHeight;
+    const c = document.createElement('canvas');
+    c.width = vw;
+    c.height = vh;
+    c.getContext('2d').drawImage(videoRef.current, 0, 0, vw, vh);
+    const dataUrl = c.toDataURL('image/jpeg', 0.92);
+    stopLiveCam();
+    setRawUploadSource(dataUrl);
+    // Immediately open Photo Crop Editor right after taking photo!
+    setCropEditorOpen(true);
   };
 
   const handleCreateGarment = async (e) => {
@@ -150,9 +267,10 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
       setFormBrand('');
       setFormNotes('');
       setFormImageData('');
+      setRawUploadSource('');
       loadGarments();
       onClosetUpdated?.();
-      showToast('새 옷이 옷장에 등록되었습니다.');
+      showToast('새 옷이 3D 아키텍처 매핑과 함께 옷장에 등록되었습니다.');
     } catch (err) {
       showToast(err.message || '등록에 실패했습니다.');
     }
@@ -160,29 +278,29 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>디지털 옷장 ({garments.length}벌 · 11부위 스튜디오 팩샷)</h1>
-          <p className="page-subtitle">
-            머리(헤드웨어)부터 발끝(슈즈·삭스·이너웨어)까지 11개 장착 부위별 스튜디오 팩샷과 아이템 등급(Tier), CPW를 관리하세요.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="ACLOSET STUDIO PACKSHOT · GETWARDROBE CPW ANALYTICS"
+        title={`디지털 옷장 (${garments.length}벌 · 11부위 실사 팩샷)`}
+        subtitle="전신샷 크롭 에디터, 스튜디오 배경 정돈, CPW(1회 착용단가)와 3D 지글 피직스 자동 매핑을 지원합니다."
+        actions={
+          <button
+            id="open-add-garment-btn"
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setFormOwner(activeCloset === 'all' ? 'husband' : activeCloset);
+              setModalOpen(true);
+            }}
+          >
+            <Plus size={17} /> 새 옷 · 액세서리 등록
+          </button>
+        }
+      />
 
-        <button
-          id="open-add-garment-btn"
-          type="button"
-          className="btn btn-primary"
-          onClick={() => {
-            setFormOwner(activeCloset === 'all' ? 'husband' : activeCloset);
-            setModalOpen(true);
-          }}
-        >
-          <Plus size={17} /> 새 옷 등록하기
-        </button>
-      </header>
+      <KpiMetricStrip items={kpiItems} />
 
       <div className="toolbar-row">
-        <div className="filter-chips">
+        <HorizontalChipRail ariaLabel="카테고리 필터" className="wardrobe-cat-rail">
           {CATEGORIES.map((c) => (
             <button
               key={c.value}
@@ -194,7 +312,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
               {c.label}
             </button>
           ))}
-        </div>
+        </HorizontalChipRail>
 
         <div className="search-box">
           <Search size={16} />
@@ -211,24 +329,20 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
       {loading ? (
         <div className="section-card">옷장을 불러오는 중입니다...</div>
       ) : garments.length === 0 ? (
-        <div className="section-card" style={{ textAlign: 'center', padding: 48 }}>
-          <Shirt size={32} style={{ margin: '0 auto 10px', color: 'var(--ink-muted)' }} />
-          <h3>조건에 맞는 아이템이 없습니다</h3>
-          <p style={{ color: 'var(--ink-secondary)', marginTop: 6 }}>
-            다른 카테고리를 선택하거나 새 옷을 등록해보세요.
-          </p>
-        </div>
+        <EmptyStateBox
+          icon={<Shirt size={30} />}
+          title="조건에 맞는 아이템이 없습니다"
+          description="다른 카테고리를 선택하거나 새 옷·가방·액세서리를 등록해보세요."
+        />
       ) : (
         <div className="wardrobe-grid">
           {garments.map((g) => {
             const tierInfo = computeItemTier(g);
+            const phys = infer3DRegistrationSpec(g);
             return (
               <article key={g.id} className="garment-card">
                 <div className="garment-img-wrap">
-                  <StudioGarmentImage
-                    item={g}
-                    style={{ width: '100%', height: '100%' }}
-                  />
+                  <StudioGarmentImage item={g} style={{ width: '100%', height: '100%' }} />
                   <div className="garment-top-badges">
                     <span
                       className="owner-pill"
@@ -244,7 +358,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
                       <button
                         type="button"
                         className="icon-btn"
-                        style={{ width: 30, height: 30, borderRadius: '50%' }}
+                        style={{ width: 32, height: 32, borderRadius: '50%' }}
                         aria-label="즐겨찾기"
                         onClick={() => handleToggleFavorite(g)}
                       >
@@ -272,7 +386,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
                     <span>
                       {g.min_temp}°~{g.max_temp}°C
                     </span>
-                    {g.water_resistant && <span>· 발수</span>}
+                    {phys.physicsKey !== 'rigid_fitted' && <span>· 3D피직스</span>}
                   </div>
 
                   <div className="garment-stats-bar">
@@ -315,40 +429,143 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
       )}
 
       {modalOpen && (
-        <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop ui-sheet-backdrop" onClick={() => setModalOpen(false)}>
+          <div className="modal-box ui-sheet-box" onClick={(e) => e.stopPropagation()}>
+            <div className="ui-sheet-drag-handle" aria-hidden="true" />
             <div className="modal-header">
-              <h2>새 옷 등록하기 (11부위 지원)</h2>
+              <div>
+                <span className="rec-tag" style={{ marginBottom: 4, display: 'inline-block' }}>
+                  SMART CROP + 3D PHYSICS ARCHETYPE
+                </span>
+                <h2>새 옷 · 액세서리 등록 (11부위)</h2>
+              </div>
               <button type="button" className="icon-btn" onClick={() => setModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleCreateGarment}>
-              <div
-                className="photo-dropzone"
-                style={{ minHeight: 170 }}
-                onClick={() => fileRef.current?.click()}
-              >
-                {formImageData ? (
-                  <img src={formImageData} alt="새 옷 미리보기" style={{ maxHeight: 200 }} />
-                ) : (
-                  <div>
-                    <Upload size={24} style={{ margin: '0 auto 6px' }} />
-                    <strong>옷 사진 촬영 또는 파일 선택 (미선택 시 부위별 실사 팩샷 자동 배정)</strong>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', marginTop: 4 }}>
-                      업로드 시 대표 색상을 자동으로 감지합니다
-                    </div>
+              {liveCamOpen ? (
+                <div
+                  style={{
+                    background: '#141820',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 14,
+                    textAlign: 'center',
+                  }}
+                >
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    style={{ width: '100%', maxHeight: 280, borderRadius: 8, objectFit: 'cover' }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={stopLiveCam}>
+                      취소
+                    </button>
+                    <button
+                      id="wardrobe-snap-camera-btn"
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={snapLiveCameraFrame}
+                    >
+                      <Camera size={15} /> 촬영 후 바로 포토에디터 실행
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 14 }}>
+                  <div
+                    className="photo-dropzone"
+                    style={{ minHeight: 165, marginBottom: 8 }}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {formImageData ? (
+                      <img
+                        src={formImageData}
+                        alt="크롭된 새 옷 미리보기"
+                        style={{ maxHeight: 200, borderRadius: 8 }}
+                      />
+                    ) : (
+                      <div>
+                        <Upload size={24} style={{ margin: '0 auto 6px' }} />
+                        <strong>전신샷 · 의류 사진 업로드 (업로드 즉시 포토에디터 크롭 실행)</strong>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', marginTop: 4 }}>
+                          전신 사진에서도 원하는 옷·가방 부위만 자연스럽게 크롭할 수 있습니다
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                      onClick={startLiveCamera}
+                    >
+                      <Camera size={14} /> 카메라 촬영 → 포토에디터
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Upload size={14} /> 전신샷 · 앨범 선택 → 포토에디터
+                    </button>
+                    {(rawUploadSource || formImageData) && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setCropEditorOpen(true)}
+                      >
+                        <Crop size={14} /> 다시 크롭
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <input
                 ref={fileRef}
+                id="wardrobe-upload-input"
                 type="file"
                 accept="image/*"
                 style={{ display: 'none' }}
                 onChange={handleModalImage}
               />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={handleModalImage}
+              />
+
+              {/* Live 3D Modeling & Jiggle Physics Registration Preview */}
+              <div
+                style={{
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-hairline)',
+                  borderRadius: 10,
+                  padding: '10px 14px',
+                  marginBottom: 14,
+                  fontSize: '0.81rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <Sparkles size={14} />
+                  <strong>3D 모델링 · 지글 피직스 자동 매핑:</strong>
+                  <span className="rec-tag">{live3DSpec.preset.labelKo}</span>
+                </div>
+                <div style={{ color: 'var(--ink-secondary)' }}>
+                  재질 PBR: <strong>{liveFabricSpec.labelKo}</strong> · {live3DSpec.preset.descriptionKo}
+                </div>
+              </div>
 
               <div className="form-grid-2">
                 <div className="field-group">
@@ -364,7 +581,7 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
                   <label className="field-label">브랜드</label>
                   <input
                     className="text-input"
-                    placeholder="예: COS, ARKET, 무신사 스탠다드"
+                    placeholder="예: COS, ARKET, TUMI"
                     value={formBrand}
                     onChange={(e) => setFormBrand(e.target.value)}
                   />
@@ -372,12 +589,12 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
               </div>
 
               <div className="field-group">
-                <label className="field-label">아이템 이름 *</label>
+                <label className="field-label">아이템 이름 * (예: 가죽 서류가방, 캐시미어 머플러)</label>
                 <input
                   className="text-input"
-                  placeholder="예: 메리노 울 브이넥 니트"
+                  placeholder="예: 이탈리안 레더 서류가방 / 캐시미어 프린지 머플러"
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => handleNameChange(e.target.value)}
                   required
                 />
               </div>
@@ -503,6 +720,21 @@ export default function WardrobeView({ activeCloset, refreshKey, onClosetUpdated
           </div>
         </div>
       )}
+
+      <SmartPhotoCropEditorModal
+        open={cropEditorOpen}
+        imageSource={rawUploadSource || formImageData}
+        mode="garment"
+        title="새 옷 · 전신샷 부위 크롭 & 스튜디오 배경 에디터"
+        onClose={() => setCropEditorOpen(false)}
+        onApply={(cropped) => {
+          setFormImageData(cropped.dataUrl);
+          setFormColorName(cropped.matchedColor.name);
+          setFormColorHex(cropped.detectedHex);
+          setCropEditorOpen(false);
+          showToast(`포토에디터 크롭 완료! '${cropped.matchedColor.name}' 색상이 자동 추출되었습니다.`);
+        }}
+      />
     </div>
   );
 }

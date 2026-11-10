@@ -1,644 +1,908 @@
 {
-  "version": 1,
-  "generatedAt": "2026-11-10T14:06:02Z",
-  "units": "meters",
-  "upAxis": "Y",
-  "license": "CC0 (MakeHuman base mesh, targets and community clothes)",
-  "body": {
-    "file": "body.glb",
-    "height": 1.6153857006237016,
-    "vertexCount": 13380
-  },
-  "morphs": [
-    "gender_female",
-    "gender_male",
-    "weight_up",
-    "weight_down",
-    "muscle_up",
-    "muscle_down",
-    "age_old",
-    "bust_up",
-    "bust_down",
-    "shoulder_up",
-    "shoulder_down",
-    "chest_up",
-    "chest_down",
-    "waist_up",
-    "waist_down",
-    "belly_up",
-    "belly_down",
-    "hips_up",
-    "hips_down",
-    "thigh_up",
-    "thigh_down",
-    "calf_up",
-    "calf_down",
-    "arm_up",
-    "arm_down",
-    "neck_up",
-    "neck_down",
-    "head_up",
-    "head_down"
+ "version": 2,
+ "generatedAt": "2026-11-10T17:25:36Z",
+ "units": "meters",
+ "upAxis": "Y",
+ "license": "CC0 (MakeHuman base mesh, targets and community clothes)",
+ "body": {
+  "file": "body.glb",
+  "height": 1.6153857006237016,
+  "vertexCount": 13380
+ },
+ "joints": {
+  "pelvis": [
+   0.0,
+   0.85587,
+   0.01035
   ],
-  "morphEffects": {
-    "gender_female": -0.0737,
-    "gender_male": 0.1044,
-    "weight_up": 0.0722,
-    "weight_down": -0.0427,
-    "muscle_up": -0.03,
-    "muscle_down": 0.1202,
-    "age_old": 0.0853,
-    "bust_up": 0.1365,
-    "bust_down": -0.0982,
-    "shoulder_up": 0.0535,
-    "shoulder_down": -0.0288,
-    "chest_up": 0.1969,
-    "chest_down": -0.1561,
-    "waist_up": 0.1695,
-    "waist_down": -0.1639,
-    "belly_up": 2.1829,
-    "belly_down": 1.9781,
-    "hips_up": 0.1773,
-    "hips_down": -0.0884,
-    "thigh_up": 0.0023,
-    "thigh_down": 0.0092,
-    "calf_up": 0.0045,
-    "calf_down": -0.0001,
-    "arm_up": 0.0017,
-    "arm_down": -0.0008,
-    "neck_up": 0.1356,
-    "neck_down": -0.1382,
-    "head_up": 0.2502,
-    "head_down": -0.1899
+  "spine1": [
+   0.0,
+   1.20144,
+   -0.0198
+  ],
+  "spine2": [
+   0.0,
+   1.06274,
+   -0.01122
+  ],
+  "spine3": [
+   0.0,
+   0.99292,
+   -0.01313
+  ],
+  "neck": [
+   0.0,
+   1.37318,
+   0.00355
+  ],
+  "head": [
+   0.0,
+   1.47308,
+   0.04419
+  ],
+  "clavicleL": [
+   0.02242,
+   1.3031,
+   0.01831
+  ],
+  "clavicleR": [
+   -0.02242,
+   1.3031,
+   0.01831
+  ],
+  "shoulderL": [
+   0.17445,
+   1.28018,
+   0.01769
+  ],
+  "shoulderR": [
+   -0.17445,
+   1.28018,
+   0.01769
+  ],
+  "elbowL": [
+   0.33041,
+   1.10507,
+   0.01836
+  ],
+  "elbowR": [
+   -0.33041,
+   1.10507,
+   0.01836
+  ],
+  "handL": [
+   0.44875,
+   0.9842,
+   0.17602
+  ],
+  "handR": [
+   -0.44875,
+   0.9842,
+   0.17602
+  ],
+  "handTipL": [
+   0.4702,
+   0.95455,
+   0.19101
+  ],
+  "handTipR": [
+   -0.4702,
+   0.95455,
+   0.19101
+  ],
+  "hipL": [
+   0.09725,
+   0.84776,
+   0.00276
+  ],
+  "hipR": [
+   -0.09725,
+   0.84776,
+   0.00276
+  ],
+  "kneeL": [
+   0.13651,
+   0.46747,
+   0.035
+  ],
+  "kneeR": [
+   -0.13651,
+   0.46747,
+   0.035
+  ],
+  "ankleL": [
+   0.1714,
+   0.06617,
+   0.0197
+  ],
+  "ankleR": [
+   -0.1714,
+   0.06617,
+   0.0197
+  ],
+  "footL": [
+   0.17644,
+   0.00854,
+   0.13105
+  ],
+  "footR": [
+   -0.17644,
+   0.00854,
+   0.13105
+  ]
+ },
+ "morphs": [
+  "gender_female",
+  "gender_male",
+  "weight_up",
+  "weight_down",
+  "muscle_up",
+  "muscle_down",
+  "age_old",
+  "bust_up",
+  "bust_down",
+  "shoulder_up",
+  "shoulder_down",
+  "chest_up",
+  "chest_down",
+  "waist_up",
+  "waist_down",
+  "belly_up",
+  "belly_down",
+  "hips_up",
+  "hips_down",
+  "thigh_up",
+  "thigh_down",
+  "calf_up",
+  "calf_down",
+  "arm_up",
+  "arm_down",
+  "neck_up",
+  "neck_down",
+  "head_up",
+  "head_down"
+ ],
+ "morphEffects": {
+  "gender_female": -0.0737,
+  "gender_male": 0.1044,
+  "weight_up": 0.0722,
+  "weight_down": -0.0427,
+  "muscle_up": -0.03,
+  "muscle_down": 0.1202,
+  "age_old": 0.0853,
+  "bust_up": 0.1365,
+  "bust_down": -0.0982,
+  "shoulder_up": 0.0535,
+  "shoulder_down": -0.0288,
+  "chest_up": 0.1969,
+  "chest_down": -0.1561,
+  "waist_up": 0.1695,
+  "waist_down": -0.1639,
+  "belly_up": 2.1829,
+  "belly_down": 1.9781,
+  "hips_up": 0.1773,
+  "hips_down": -0.0884,
+  "thigh_up": 0.0023,
+  "thigh_down": 0.0092,
+  "calf_up": 0.0045,
+  "calf_down": -0.0001,
+  "arm_up": 0.0017,
+  "arm_down": -0.0008,
+  "neck_up": 0.1356,
+  "neck_down": -0.1382,
+  "head_up": 0.2502,
+  "head_down": -0.1899
+ },
+ "garments": {
+  "headwear_beanie": {
+   "slot": "headwear",
+   "subcategories": [
+    "beanie"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/headwear_beanie.glb",
+   "label": "Knit beanie / cloche",
+   "fabric": "knit",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "aethelraed_unraed_cloche_hat/aethelraed_unraed_cloche_hat.mhclo",
+   "vertexCount": 441
   },
-  "garments": {
-    "headwear_beanie": {
-      "slot": "headwear",
-      "subcategories": [
-        "beanie"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/headwear_beanie.glb",
-      "label": "Knit beanie / cloche",
-      "fabric": "knit",
-      "source": "aethelraed_unraed_cloche_hat/aethelraed_unraed_cloche_hat.mhclo",
-      "vertexCount": 441,
-      "cullBody": false
-    },
-    "headwear_cap": {
-      "slot": "headwear",
-      "subcategories": [
-        "cap"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/headwear_cap.glb",
-      "label": "Baseball cap",
-      "fabric": "cotton",
-      "source": "toigo_maga_hat/toigo_maga_hat.mhclo",
-      "vertexCount": 3102,
-      "cullBody": false
-    },
-    "headwear_beret": {
-      "slot": "headwear",
-      "subcategories": [
-        "beret"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/headwear_beret.glb",
-      "label": "Beret / newsboy cap",
-      "fabric": "wool",
-      "source": "jujube_newsboy_cap/jujube_newsboy_cap.mhclo",
-      "vertexCount": 517,
-      "cullBody": false
-    },
-    "headwear_fedora": {
-      "slot": "headwear",
-      "subcategories": [
-        "bucket_hat"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/headwear_fedora.glb",
-      "label": "Fedora / bucket hat",
-      "fabric": "wool",
-      "source": "fedora01/fedora01.mhclo",
-      "vertexCount": 634,
-      "cullBody": false
-    },
-    "neckwear_scarf": {
-      "slot": "neckwear",
-      "subcategories": [
-        "scarf",
-        "muffler"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/neckwear_scarf.glb",
-      "label": "Cashmere / knit muffler",
-      "fabric": "wool",
-      "source": "procedural:scarf",
-      "vertexCount": 1368,
-      "cullBody": false
-    },
-    "neckwear_tie": {
-      "slot": "neckwear",
-      "subcategories": [
-        "necktie"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/neckwear_tie.glb",
-      "label": "Silk necktie",
-      "fabric": "silk",
-      "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
-      "vertexCount": 675,
-      "cullBody": false
-    },
-    "outer_blazer": {
-      "slot": "outer",
-      "subcategories": [
-        "blazer",
-        "cardigan"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/outer_blazer.glb",
-      "label": "Tailored wool blazer",
-      "fabric": "wool",
-      "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
-      "vertexCount": 5033,
-      "cullBody": true
-    },
-    "outer_coat": {
-      "slot": "outer",
-      "subcategories": [
-        "coat",
-        "trench"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/outer_coat.glb",
-      "label": "Double-breasted coat / trench",
-      "fabric": "wool",
-      "source": "toigo_male_double-breasted_suit/toigo_male_double-breasted_suit.mhclo",
-      "vertexCount": 2536,
-      "cullBody": true
-    },
-    "outer_jacket": {
-      "slot": "outer",
-      "subcategories": [
-        "jacket",
-        "padding"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/outer_jacket.glb",
-      "label": "Quilted / utility jacket",
-      "fabric": "padding",
-      "source": "male_casualsuit05/male_casualsuit05.mhclo",
-      "vertexCount": 1936,
-      "cullBody": true
-    },
-    "top_knit": {
-      "slot": "top",
-      "subcategories": [
-        "knit"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/top_knit.glb",
-      "label": "Merino crewneck knit",
-      "fabric": "knit",
-      "source": "toigo_fisherman_sweater/toigo_fisherman_sweater.mhclo",
-      "vertexCount": 2126,
-      "cullBody": true
-    },
-    "top_shirt": {
-      "slot": "top",
-      "subcategories": [
-        "shirt",
-        "blouse"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/top_shirt.glb",
-      "label": "Oxford / silk shirt",
-      "fabric": "cotton",
-      "source": "male_casualsuit03/male_casualsuit03.mhclo",
-      "vertexCount": 1613,
-      "cullBody": true
-    },
-    "top_tshirt": {
-      "slot": "top",
-      "subcategories": [
-        "tshirt"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/top_tshirt.glb",
-      "label": "Supima cotton T-shirt",
-      "fabric": "cotton",
-      "source": "toigo_basic_tucked_t-shirt/toigo_basic_tucked_t-shirt.mhclo",
-      "vertexCount": 1391,
-      "cullBody": true
-    },
-    "top_sweatshirt": {
-      "slot": "top",
-      "subcategories": [
-        "sweatshirt"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/top_sweatshirt.glb",
-      "label": "French terry sweatshirt",
-      "fabric": "cotton",
-      "source": "male_casualsuit02/male_casualsuit02.mhclo",
-      "vertexCount": 1250,
-      "cullBody": true
-    },
-    "top_cardigan": {
-      "slot": "top",
-      "subcategories": [
-        "cardigan"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/top_cardigan.glb",
-      "label": "Collared knit / polo",
-      "fabric": "knit",
-      "source": "namuhekam_male_polo_shirt/namuhekam_male_polo_shirt.mhclo",
-      "vertexCount": 2189,
-      "cullBody": true
-    },
-    "bottom_slacks": {
-      "slot": "bottom",
-      "subcategories": [
-        "slacks"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/bottom_slacks.glb",
-      "label": "Wide wool slacks",
-      "fabric": "wool",
-      "source": "toigo_wool_pants/toigo_wool_pants.mhclo",
-      "vertexCount": 1372,
-      "cullBody": true
-    },
-    "bottom_denim": {
-      "slot": "bottom",
-      "subcategories": [
-        "denim",
-        "chinos"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/bottom_denim.glb",
-      "label": "Straight denim / chinos",
-      "fabric": "denim",
-      "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
-      "vertexCount": 2053,
-      "cullBody": true
-    },
-    "bottom_skirt": {
-      "slot": "bottom",
-      "subcategories": [
-        "skirt"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/bottom_skirt.glb",
-      "label": "Pleated full skirt",
-      "fabric": "cotton",
-      "source": "toigo_long_full_skirt/toigo_long_full_skirt.mhclo",
-      "vertexCount": 2992,
-      "cullBody": true
-    },
-    "bottom_shorts": {
-      "slot": "bottom",
-      "subcategories": [
-        "shorts"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/bottom_shorts.glb",
-      "label": "Tailored shorts",
-      "fabric": "denim",
-      "source": "cortu_jeans_shorts/cortu_jeans_shorts.mhclo",
-      "vertexCount": 285,
-      "cullBody": true
-    },
-    "dress_shift": {
-      "slot": "dress",
-      "subcategories": [
-        "dress"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/dress_shift.glb",
-      "label": "Belted midi dress",
-      "fabric": "cotton",
-      "source": "toigo_shift_dress/toigo_shift_dress.mhclo",
-      "vertexCount": 6892,
-      "cullBody": true
-    },
-    "dress_onepiece": {
-      "slot": "dress",
-      "subcategories": [
-        "onepiece"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/dress_onepiece.glb",
-      "label": "Knit long one-piece",
-      "fabric": "knit",
-      "source": "toigo_halter_dress_midi/toigo_halter_dress_midi.mhclo",
-      "vertexCount": 2655,
-      "cullBody": true
-    },
-    "gloves_short": {
-      "slot": "gloves",
-      "subcategories": [
-        "gloves",
-        "leather_gloves"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/gloves_short.glb",
-      "label": "Nappa leather / wool gloves",
-      "fabric": "leather",
-      "source": "toigo_gloves_short/toigo_gloves_short.mhclo",
-      "vertexCount": 2294,
-      "cullBody": true
-    },
-    "underwear_top": {
-      "slot": "underwear",
-      "subcategories": [
-        "inner_top"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/underwear_top.glb",
-      "label": "Seamless thermal inner top",
-      "fabric": "cotton",
-      "source": "female_sportsuit01/female_sportsuit01.mhclo",
-      "vertexCount": 911,
-      "cullBody": false
-    },
-    "underwear_briefs": {
-      "slot": "underwear",
-      "subcategories": [
-        "underwear"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/underwear_briefs.glb",
-      "label": "Cotton briefs",
-      "fabric": "cotton",
-      "source": "procedural:briefs",
-      "vertexCount": 411,
-      "cullBody": false
-    },
-    "socks_crew": {
-      "slot": "socks",
-      "subcategories": [
-        "crew_socks"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/socks_crew.glb",
-      "label": "Merino rib crew socks",
-      "fabric": "knit",
-      "source": "joepal_crude_high_socks/joepal_crude_high_socks.mhclo",
-      "vertexCount": 360,
-      "cullBody": false
-    },
-    "socks_ankle": {
-      "slot": "socks",
-      "subcategories": [
-        "socks"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/socks_ankle.glb",
-      "label": "Daily ankle socks",
-      "fabric": "knit",
-      "source": "joepal_crude_low_socks/joepal_crude_low_socks.mhclo",
-      "vertexCount": 260,
-      "cullBody": false
-    },
-    "shoes_sneakers": {
-      "slot": "shoes",
-      "subcategories": [
-        "sneakers"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/shoes_sneakers.glb",
-      "label": "Minimal court sneakers",
-      "fabric": "leather",
-      "source": "shoes05/shoes05.mhclo",
-      "vertexCount": 1306,
-      "cullBody": true
-    },
-    "shoes_loafers": {
-      "slot": "shoes",
-      "subcategories": [
-        "loafers"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/shoes_loafers.glb",
-      "label": "Goodyear-welt penny loafers",
-      "fabric": "leather",
-      "source": "shoes01/shoes01.mhclo",
-      "vertexCount": 1434,
-      "cullBody": true
-    },
-    "shoes_boots": {
-      "slot": "shoes",
-      "subcategories": [
-        "boots"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/shoes_boots.glb",
-      "label": "Chelsea ankle boots",
-      "fabric": "leather",
-      "source": "toigo_ankle_boots_male/toigo_ankle_boots_male.mhclo",
-      "vertexCount": 2084,
-      "cullBody": true
-    },
-    "shoes_heels": {
-      "slot": "shoes",
-      "subcategories": [
-        "heels"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/shoes_heels.glb",
-      "label": "Sculpted heels",
-      "fabric": "leather",
-      "source": "toigo_ankle_boots_female/toigo_ankle_boots_female.mhclo",
-      "vertexCount": 2084,
-      "cullBody": true
-    },
-    "accessory_bag": {
-      "slot": "accessory",
-      "subcategories": [
-        "bag"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/accessory_bag.glb",
-      "label": "Leather crossbody & tote bag",
-      "fabric": "leather",
-      "source": "procedural:bag",
-      "vertexCount": 408,
-      "cullBody": false
-    },
-    "accessory_belt": {
-      "slot": "accessory",
-      "subcategories": [
-        "belt"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/accessory_belt.glb",
-      "label": "Calfskin belt",
-      "fabric": "leather",
-      "source": "procedural:belt",
-      "vertexCount": 248,
-      "cullBody": false
-    },
-    "accessory_watch": {
-      "slot": "accessory",
-      "subcategories": [
-        "watch"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/accessory_watch.glb",
-      "label": "Dress watch",
-      "fabric": "leather",
-      "source": "procedural:watch",
-      "vertexCount": 288,
-      "cullBody": false
-    },
-    "accessory_glasses": {
-      "slot": "accessory",
-      "subcategories": [
-        "glasses"
-      ],
-      "genders": [
-        "female",
-        "male",
-        "unspecified"
-      ],
-      "file": "garments/accessory_glasses.glb",
-      "label": "Acetate eyewear",
-      "fabric": "leather",
-      "source": "procedural:glasses",
-      "vertexCount": 304,
-      "cullBody": false
-    }
+  "headwear_cap": {
+   "slot": "headwear",
+   "subcategories": [
+    "cap"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/headwear_cap.glb",
+   "label": "Baseball cap",
+   "fabric": "cotton",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_maga_hat/toigo_maga_hat.mhclo",
+   "vertexCount": 3102
+  },
+  "headwear_beret": {
+   "slot": "headwear",
+   "subcategories": [
+    "beret"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/headwear_beret.glb",
+   "label": "Beret / newsboy cap",
+   "fabric": "wool",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "jujube_newsboy_cap/jujube_newsboy_cap.mhclo",
+   "vertexCount": 517
+  },
+  "headwear_fedora": {
+   "slot": "headwear",
+   "subcategories": [
+    "bucket_hat"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/headwear_fedora.glb",
+   "label": "Fedora / bucket hat",
+   "fabric": "wool",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "fedora01/fedora01.mhclo",
+   "vertexCount": 634
+  },
+  "neckwear_scarf": {
+   "slot": "neckwear",
+   "subcategories": [
+    "scarf",
+    "muffler"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/neckwear_scarf.glb",
+   "label": "Cashmere fringed muffler",
+   "fabric": "wool",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "soft_jiggle_muffler",
+   "noMorphs": false,
+   "source": "procedural:scarf",
+   "vertexCount": 2368
+  },
+  "neckwear_tie": {
+   "slot": "neckwear",
+   "subcategories": [
+    "necktie"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/neckwear_tie.glb",
+   "label": "Silk necktie",
+   "fabric": "silk",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "soft_jiggle_tie",
+   "noMorphs": false,
+   "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
+   "vertexCount": 675
+  },
+  "outer_blazer": {
+   "slot": "outer",
+   "subcategories": [
+    "blazer",
+    "cardigan"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/outer_blazer.glb",
+   "label": "Tailored wool blazer",
+   "fabric": "wool",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
+   "vertexCount": 5033
+  },
+  "outer_coat": {
+   "slot": "outer",
+   "subcategories": [
+    "coat",
+    "trench"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/outer_coat.glb",
+   "label": "Double-breasted coat / trench",
+   "fabric": "wool",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "hem_sway_coat",
+   "noMorphs": false,
+   "source": "toigo_male_double-breasted_suit/toigo_male_double-breasted_suit.mhclo",
+   "vertexCount": 2536
+  },
+  "outer_jacket": {
+   "slot": "outer",
+   "subcategories": [
+    "jacket",
+    "padding"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/outer_jacket.glb",
+   "label": "Quilted / utility jacket",
+   "fabric": "padding",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "male_casualsuit05/male_casualsuit05.mhclo",
+   "vertexCount": 1936
+  },
+  "top_knit": {
+   "slot": "top",
+   "subcategories": [
+    "knit"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/top_knit.glb",
+   "label": "Merino crewneck knit",
+   "fabric": "knit",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_fisherman_sweater/toigo_fisherman_sweater.mhclo",
+   "vertexCount": 2126
+  },
+  "top_shirt": {
+   "slot": "top",
+   "subcategories": [
+    "shirt",
+    "blouse"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/top_shirt.glb",
+   "label": "Oxford / silk shirt",
+   "fabric": "cotton",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "male_casualsuit03/male_casualsuit03.mhclo",
+   "vertexCount": 1613
+  },
+  "top_tshirt": {
+   "slot": "top",
+   "subcategories": [
+    "tshirt"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/top_tshirt.glb",
+   "label": "Supima cotton T-shirt",
+   "fabric": "cotton",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_basic_tucked_t-shirt/toigo_basic_tucked_t-shirt.mhclo",
+   "vertexCount": 1391
+  },
+  "top_sweatshirt": {
+   "slot": "top",
+   "subcategories": [
+    "sweatshirt",
+    "hoodie"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/top_sweatshirt.glb",
+   "label": "French terry sweatshirt",
+   "fabric": "cotton",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "male_casualsuit02/male_casualsuit02.mhclo",
+   "vertexCount": 1250
+  },
+  "top_cardigan": {
+   "slot": "top",
+   "subcategories": [
+    "cardigan"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/top_cardigan.glb",
+   "label": "Collared knit / polo",
+   "fabric": "knit",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "namuhekam_male_polo_shirt/namuhekam_male_polo_shirt.mhclo",
+   "vertexCount": 2189
+  },
+  "bottom_slacks": {
+   "slot": "bottom",
+   "subcategories": [
+    "slacks"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/bottom_slacks.glb",
+   "label": "Wide wool slacks",
+   "fabric": "wool",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_wool_pants/toigo_wool_pants.mhclo",
+   "vertexCount": 1372
+  },
+  "bottom_denim": {
+   "slot": "bottom",
+   "subcategories": [
+    "denim",
+    "chinos",
+    "jogger"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/bottom_denim.glb",
+   "label": "Straight denim / chinos",
+   "fabric": "denim",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
+   "vertexCount": 2053
+  },
+  "bottom_skirt": {
+   "slot": "bottom",
+   "subcategories": [
+    "skirt"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/bottom_skirt.glb",
+   "label": "Pleated full skirt",
+   "fabric": "cotton",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "hem_sway_skirt",
+   "noMorphs": false,
+   "source": "toigo_long_full_skirt/toigo_long_full_skirt.mhclo",
+   "vertexCount": 2992
+  },
+  "bottom_shorts": {
+   "slot": "bottom",
+   "subcategories": [
+    "shorts"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/bottom_shorts.glb",
+   "label": "Tailored shorts",
+   "fabric": "denim",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "cortu_jeans_shorts/cortu_jeans_shorts.mhclo",
+   "vertexCount": 285
+  },
+  "dress_shift": {
+   "slot": "dress",
+   "subcategories": [
+    "dress"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/dress_shift.glb",
+   "label": "Belted midi dress",
+   "fabric": "cotton",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "hem_sway_skirt",
+   "noMorphs": false,
+   "source": "toigo_shift_dress/toigo_shift_dress.mhclo",
+   "vertexCount": 6892
+  },
+  "dress_onepiece": {
+   "slot": "dress",
+   "subcategories": [
+    "onepiece"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/dress_onepiece.glb",
+   "label": "Knit long one-piece",
+   "fabric": "knit",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "hem_sway_skirt",
+   "noMorphs": false,
+   "source": "toigo_halter_dress_midi/toigo_halter_dress_midi.mhclo",
+   "vertexCount": 2655
+  },
+  "gloves_short": {
+   "slot": "gloves",
+   "subcategories": [
+    "gloves",
+    "leather_gloves",
+    "knit_gloves"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/gloves_short.glb",
+   "label": "Nappa leather / wool gloves",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_gloves_short/toigo_gloves_short.mhclo",
+   "vertexCount": 2294
+  },
+  "underwear_top": {
+   "slot": "underwear",
+   "subcategories": [
+    "inner_top"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/underwear_top.glb",
+   "label": "Seamless thermal inner top",
+   "fabric": "cotton",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "female_sportsuit01/female_sportsuit01.mhclo",
+   "vertexCount": 911
+  },
+  "underwear_briefs": {
+   "slot": "underwear",
+   "subcategories": [
+    "underwear"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/underwear_briefs.glb",
+   "label": "Cotton briefs",
+   "fabric": "cotton",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "procedural:briefs",
+   "vertexCount": 411
+  },
+  "socks_crew": {
+   "slot": "socks",
+   "subcategories": [
+    "crew_socks"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/socks_crew.glb",
+   "label": "Merino rib crew socks",
+   "fabric": "knit",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "joepal_crude_high_socks/joepal_crude_high_socks.mhclo",
+   "vertexCount": 360
+  },
+  "socks_ankle": {
+   "slot": "socks",
+   "subcategories": [
+    "socks"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/socks_ankle.glb",
+   "label": "Daily ankle socks",
+   "fabric": "knit",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "joepal_crude_low_socks/joepal_crude_low_socks.mhclo",
+   "vertexCount": 260
+  },
+  "shoes_sneakers": {
+   "slot": "shoes",
+   "subcategories": [
+    "sneakers"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/shoes_sneakers.glb",
+   "label": "Minimal court sneakers",
+   "fabric": "leather",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "shoes05/shoes05.mhclo",
+   "vertexCount": 1306
+  },
+  "shoes_loafers": {
+   "slot": "shoes",
+   "subcategories": [
+    "loafers"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/shoes_loafers.glb",
+   "label": "Goodyear-welt penny loafers",
+   "fabric": "leather",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "shoes01/shoes01.mhclo",
+   "vertexCount": 1434
+  },
+  "shoes_boots": {
+   "slot": "shoes",
+   "subcategories": [
+    "boots"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/shoes_boots.glb",
+   "label": "Chelsea ankle boots",
+   "fabric": "leather",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_ankle_boots_male/toigo_ankle_boots_male.mhclo",
+   "vertexCount": 2084
+  },
+  "shoes_heels": {
+   "slot": "shoes",
+   "subcategories": [
+    "heels"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/shoes_heels.glb",
+   "label": "Sculpted heels",
+   "fabric": "leather",
+   "cullBody": true,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "toigo_ankle_boots_female/toigo_ankle_boots_female.mhclo",
+   "vertexCount": 2084
+  },
+  "accessory_bag": {
+   "slot": "accessory",
+   "subcategories": [
+    "bag"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_bag.glb",
+   "label": "Structured saddle crossbody bag",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "pendulum_crossbody",
+   "noMorphs": false,
+   "source": "procedural:bag",
+   "vertexCount": 592
+  },
+  "accessory_briefcase": {
+   "slot": "accessory",
+   "subcategories": [
+    "briefcase"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_briefcase.glb",
+   "label": "Executive leather briefcase",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "hand_l",
+   "physics": "pendulum_briefcase",
+   "noMorphs": true,
+   "source": "procedural:briefcase",
+   "vertexCount": 904
+  },
+  "accessory_tote": {
+   "slot": "accessory",
+   "subcategories": [
+    "tote"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_tote.glb",
+   "label": "Structured leather shopper tote",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "hand_l",
+   "physics": "pendulum_tote",
+   "noMorphs": true,
+   "source": "procedural:tote",
+   "vertexCount": 960
+  },
+  "accessory_belt": {
+   "slot": "accessory",
+   "subcategories": [
+    "belt"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_belt.glb",
+   "label": "Calfskin belt with silver buckle",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "procedural:belt",
+   "vertexCount": 404
+  },
+  "accessory_watch": {
+   "slot": "accessory",
+   "subcategories": [
+    "watch"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_watch.glb",
+   "label": "Minimalist steel dress watch",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "procedural:watch",
+   "vertexCount": 396
+  },
+  "accessory_glasses": {
+   "slot": "accessory",
+   "subcategories": [
+    "glasses"
+   ],
+   "genders": [
+    "female",
+    "male",
+    "unspecified"
+   ],
+   "file": "garments/accessory_glasses.glb",
+   "label": "Acetate optical eyewear",
+   "fabric": "leather",
+   "cullBody": false,
+   "mount": "body",
+   "physics": "rigid_fitted",
+   "noMorphs": false,
+   "source": "procedural:glasses",
+   "vertexCount": 536
   }
+ }
 }

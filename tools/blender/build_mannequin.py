@@ -493,7 +493,47 @@ def compute_covered_body_verts(body_base, obj, g_base, slot):
     return [int(i) for i in idx[covered]]
 
 
-def export_glb(obj, path):
+JOINT_MAP = {
+    "pelvis": "joint-pelvis",
+    "spine1": "joint-spine-1",
+    "spine2": "joint-spine-2",
+    "spine3": "joint-spine-3",
+    "neck": "joint-neck",
+    "head": "joint-head",
+    "clavicleL": "joint-l-clavicle",
+    "clavicleR": "joint-r-clavicle",
+    "shoulderL": "joint-l-shoulder",
+    "shoulderR": "joint-r-shoulder",
+    "elbowL": "joint-l-elbow",
+    "elbowR": "joint-r-elbow",
+    "handL": "joint-l-hand",
+    "handR": "joint-r-hand",
+    "handTipL": "joint-l-hand-2",
+    "handTipR": "joint-r-hand-2",
+    "hipL": "joint-l-upper-leg",
+    "hipR": "joint-r-upper-leg",
+    "kneeL": "joint-l-knee",
+    "kneeR": "joint-r-knee",
+    "ankleL": "joint-l-ankle",
+    "ankleR": "joint-r-ankle",
+    "footL": "joint-l-foot-1",
+    "footR": "joint-r-foot-1",
+}
+
+
+def extract_threejs_joints(basemesh, coords):
+    joints = {}
+    for key, vg_name in JOINT_MAP.items():
+        if vg_name in basemesh.vertex_groups:
+            idx = group_vertices(basemesh, vg_name)
+            if len(idx) > 0:
+                p = coords[idx].mean(axis=0)
+                # Blender (x, y, z) with export_yup=True -> Three.js (x, z, -y)
+                joints[key] = [round(float(p[0]), 5), round(float(p[2]), 5), round(float(-p[1]), 5)]
+    return joints
+
+
+def export_glb(obj, path, use_morph=True):
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -501,8 +541,10 @@ def export_glb(obj, path):
     bpy.ops.export_scene.gltf(
         filepath=path, export_format="GLB", use_selection=True,
         export_apply=False, export_texcoords=True, export_normals=True,
-        export_tangents=False, export_materials="PLACEHOLDER", export_morph=True,
-        export_morph_normal=True, export_morph_tangent=False, export_yup=True,
+        export_tangents=False, export_materials="PLACEHOLDER",
+        export_vertex_color="ACTIVE",
+        export_morph=bool(use_morph),
+        export_morph_normal=bool(use_morph), export_morph_tangent=False, export_yup=True,
         export_skins=False, export_animations=False, export_extras=False,
     )
 
@@ -556,20 +598,29 @@ def main():
         morph_H[k] = morph_H[k] + shift
     print("[build] states evaluated in %.1fs" % (time.time() - t0))
 
+    manifest_path = os.path.join(ARGS.out, "manifest.json")
+    prev_garments = {}
+    if ARGS.only and os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r") as fp_prev:
+                prev_garments = json.load(fp_prev).get("garments", {})
+        except Exception:
+            prev_garments = {}
+
     manifest = {
-        "version": 1,
+        "version": 2,
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "units": "meters",
         "upAxis": "Y",
         "license": "CC0 (MakeHuman base mesh, targets and community clothes)",
         "body": {"file": "body.glb"},
+        "joints": extract_threejs_joints(basemesh, base_H),
         "morphs": [m[0] for m in MORPHS],
         "morphEffects": {},
-        "garments": {},
+        "garments": dict(prev_garments),
     }
 
     # --- body
-    full_body_idx = body_idx
     body_idx = body_idx[~interior_body]
     body = build_body_object(basemesh, body_idx)
     body_base = base_H[body_idx]
@@ -582,10 +633,9 @@ def main():
     z = body_base[:, 2]
     manifest["body"]["height"] = float(z.max() - z.min())
     manifest["body"]["vertexCount"] = int(len(body_idx))
-    export_glb(body, os.path.join(ARGS.out, "body.glb"))
-    print("[build] body exported, height %.3f m" % manifest["body"]["height"])
-
-    body_index_of = {int(old): new for new, old in enumerate(body_idx)}
+    if not ARGS.only:
+        export_glb(body, os.path.join(ARGS.out, "body.glb"), use_morph=True)
+        print("[build] body exported, height %.3f m" % manifest["body"]["height"])
 
     # --- garments
     only = set(filter(None, ARGS.only.split(",")))
@@ -593,12 +643,12 @@ def main():
         for gid, spec in GARMENTS.items():
             if only and gid not in only:
                 continue
-            mh = None
+            no_morphs = bool(spec.get("no_morphs", False))
             if "procedural" in spec:
                 obj, fit = build_procedural(spec["procedural"], base_H, body_idx, fc, basemesh)
                 obj.name = "garment_" + gid
                 g_base = fit.fit(base_H)
-                g_states = {k: fit.fit(v) for k, v in morph_H.items()}
+                g_states = {} if no_morphs else {k: fit.fit(v) for k, v in morph_H.items()}
             else:
                 path = os.path.join(ARGS.assets, "clothes", spec["src"])
                 if not os.path.exists(path):
@@ -615,7 +665,7 @@ def main():
                     poly.use_smooth = True
                 fit = GarmentFit(mh, scale_factor)
                 g_base = fit.fit(base_H)
-                g_states = {k: fit.fit(v) for k, v in morph_H.items()}
+                g_states = {} if no_morphs else {k: fit.fit(v) for k, v in morph_H.items()}
                 set_coords(obj, g_base)
                 kept = keep_loose_parts(obj, spec.get("keep_parts"))
                 if kept is not None:
@@ -629,9 +679,12 @@ def main():
                 vn = mesh_vertex_normals(obj, g_base)
                 g_base = g_base + vn * offset
                 g_states = {k: v + vn * offset for k, v in g_states.items()}
-            add_shape_keys(obj, g_base, g_states)
+            if no_morphs:
+                set_coords(obj, g_base)
+            else:
+                add_shape_keys(obj, g_base, g_states)
             out_rel = "garments/%s.glb" % gid
-            export_glb(obj, os.path.join(ARGS.out, out_rel))
+            export_glb(obj, os.path.join(ARGS.out, out_rel), use_morph=not no_morphs)
             cull_body = bool(spec.get("cull_body", True))
             manifest["garments"][gid] = {
                 "slot": spec["slot"],
@@ -641,12 +694,17 @@ def main():
                 "label": spec.get("label", gid),
                 "fabric": spec.get("fabric", "cotton"),
                 "cullBody": cull_body,
+                "mount": spec.get("mount", "body"),
+                "physics": spec.get("physics", "rigid_fitted"),
+                "noMorphs": no_morphs,
                 "source": spec.get("src", "procedural:" + spec.get("procedural", "")),
                 "vertexCount": len(obj.data.vertices),
             }
-            print("[build] garment %-20s %5d verts, cullBody=%s" % (gid, len(obj.data.vertices), cull_body))
+            print("[build] garment %-20s %5d verts, cullBody=%s, mount=%s, physics=%s" % (
+                gid, len(obj.data.vertices), cull_body, spec.get("mount", "body"), spec.get("physics", "rigid_fitted")
+            ))
 
-    with open(os.path.join(ARGS.out, "manifest.json"), "w") as fp:
+    with open(manifest_path, "w") as fp:
         json.dump(manifest, fp, indent=1)
     if ARGS.blend:
         bpy.ops.wm.save_as_mainfile(filepath=ARGS.blend)

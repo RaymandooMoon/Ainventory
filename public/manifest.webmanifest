@@ -1,12 +1,15 @@
 {
-  "name": "A inventory — 디지털 옷장 & 쇼핑 판독",
+  "id": "/",
+  "name": "A inventory — 3D 스마트 옷장 & 쇼핑 판독 아틀리에",
   "short_name": "A inventory",
-  "description": "내 옷장 기반 오프라인 쇼핑 구매 판단 및 내일 날씨 스타일링 추천",
+  "description": "에이클로젯 · 겟워드롭 · 웨어링 벤치마크 기반 실사 3D 피팅 마네킹, 퍼스널컬러 진단, 매장 중복 판독기",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#FAF8F4",
-  "theme_color": "#FAF8F4",
+  "background_color": "#F4F1EA",
+  "theme_color": "#F4F1EA",
   "orientation": "portrait-primary",
+  "categories": ["lifestyle", "shopping", "utilities"],
   "icons": [
     {
       "src": "/icon.svg",

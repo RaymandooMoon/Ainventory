@@ -6,9 +6,9 @@ import {
   Download,
   ExternalLink,
   Trash2,
-  X,
 } from 'lucide-react';
 import { apiFetch, formatKRW } from '../utils/api.js';
+import { KpiMetricStrip, PageHeader, ResponsiveSheetModal } from './common/AppUI.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 function buildGoogleCalendarUrl(log) {
@@ -171,61 +171,65 @@ export default function AnalyticsCalendarView({
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>월간 착용 캘린더 &amp; CPW 리포트</h1>
-          <p className="page-subtitle">
-            월간 착용 캘린더, Google Calendar 일정 연동, .ics 내보내기 및 1회 착용당 비용(CPW) 인사이트를 제공합니다.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            id="export-ics-btn"
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              downloadLogsAsIcs(logs);
-              showToast('착용 캘린더(.ics) 파일이 다운로드되었습니다.');
-            }}
-          >
-            <Download size={16} /> .ics 캘린더 내보내기
-          </button>
-          <button
-            id="open-ootd-log-btn"
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setLogModalOpen(true)}
-          >
-            <CalendarPlus size={17} /> 오늘 입은 옷 기록
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="OOTD CALENDAR & CPW REPORT · WHERING & GETWARDROBE STANDARD"
+        title="월간 착용 캘린더 & CPW 리포트"
+        subtitle="월간 착용 캘린더, Google Calendar 일정 연동, .ics 내보내기 및 1회 착용당 비용(CPW) 인사이트를 제공합니다."
+        actions={
+          <>
+            <button
+              id="export-ics-btn"
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                downloadLogsAsIcs(logs);
+                showToast('착용 캘린더(.ics) 파일이 다운로드되었습니다.');
+              }}
+            >
+              <Download size={16} /> .ics 캘린더 내보내기
+            </button>
+            <button
+              id="open-ootd-log-btn"
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setLogModalOpen(true)}
+            >
+              <CalendarPlus size={17} /> 오늘 입은 옷 기록
+            </button>
+          </>
+        }
+      />
 
       {analytics && (
         <>
-          <section className="summary-strip">
-            <div className="stat-tile">
-              <span>옷장 총 가치</span>
-              <strong>{formatKRW(analytics.totalValue)}</strong>
-              <small>총 {analytics.totalItems}벌 등록됨</small>
-            </div>
-            <div className="stat-tile">
-              <span>평균 1회 착용당 비용 (CPW)</span>
-              <strong>{formatKRW(analytics.avgCpw)}</strong>
-              <small>누적 {analytics.totalWears}회 착용</small>
-            </div>
-            <div className="stat-tile">
-              <span>옷장 실사용률</span>
-              <strong>{analytics.utilizationRate}%</strong>
-              <small>3회 이상 착용된 활성 비율</small>
-            </div>
-            <div className="stat-tile">
-              <span>충동구매 방어 절약액</span>
-              <strong>{formatKRW(analytics.savedMoney)}</strong>
-              <small>오프라인 판독 후 {analytics.passedCount}건 패스</small>
-            </div>
-          </section>
+          <KpiMetricStrip
+            items={[
+              {
+                key: 'totalValue',
+                label: '옷장 총 가치',
+                value: formatKRW(analytics.totalValue),
+                sub: `총 ${analytics.totalItems}벌 등록됨`,
+              },
+              {
+                key: 'avgCpw',
+                label: '평균 1회 착용당 비용 (CPW)',
+                value: formatKRW(analytics.avgCpw),
+                sub: `누적 ${analytics.totalWears}회 착용`,
+              },
+              {
+                key: 'utilizationRate',
+                label: '옷장 실사용률',
+                value: `${analytics.utilizationRate}%`,
+                sub: '3회 이상 착용된 활성 비율',
+              },
+              {
+                key: 'savedMoney',
+                label: '충동구매 방어 절약액',
+                value: formatKRW(analytics.savedMoney),
+                sub: `오프라인 판독 후 ${analytics.passedCount}건 패스`,
+              },
+            ]}
+          />
 
           {/* Monthly Wear Calendar Grid */}
           <section className="section-card" style={{ marginBottom: 24 }}>
@@ -519,93 +523,88 @@ export default function AnalyticsCalendarView({
         )}
       </section>
 
-      {logModalOpen && (
-        <div className="modal-backdrop" onClick={() => setLogModalOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>착용 기록 (OOTD) 추가</h2>
-              <button type="button" className="icon-btn" onClick={() => setLogModalOpen(false)}>
-                <X size={18} />
-              </button>
+      <ResponsiveSheetModal
+        open={logModalOpen}
+        onClose={() => setLogModalOpen(false)}
+        eyebrow="OOTD WEAR LOG"
+        title="착용 기록 (OOTD) 추가"
+        maxWidth={680}
+      >
+        <form onSubmit={handleCreateLog}>
+          <div className="form-grid-2">
+            <div className="field-group">
+              <label className="field-label">착용 날짜</label>
+              <input
+                type="date"
+                className="text-input"
+                value={wornDate}
+                onChange={(e) => setWornDate(e.target.value)}
+                required
+              />
             </div>
-
-            <form onSubmit={handleCreateLog}>
-              <div className="form-grid-2">
-                <div className="field-group">
-                  <label className="field-label">착용 날짜</label>
-                  <input
-                    type="date"
-                    className="text-input"
-                    value={wornDate}
-                    onChange={(e) => setWornDate(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">메모</label>
-                  <input
-                    className="text-input"
-                    placeholder="예: 결혼식 하객룩, 성수동 데이트"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="field-group">
-                <label className="field-label">
-                  착용한 아이템 선택 ({selectedIds.length}벌 선택됨)
-                </label>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-                    gap: 8,
-                    maxHeight: 280,
-                    overflowY: 'auto',
-                    padding: 4,
-                  }}
-                >
-                  {garments.map((g) => {
-                    const checked = selectedIds.includes(g.id);
-                    return (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => toggleItemSelection(g.id)}
-                        style={{
-                          padding: 8,
-                          borderRadius: 'var(--radius-sm)',
-                          border: checked
-                            ? '2px solid var(--ink-primary)'
-                            : '1px solid var(--border-hairline)',
-                          background: checked ? 'var(--bg-subtle)' : 'var(--bg-canvas)',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <StudioGarmentImage
-                          item={g}
-                          style={{
-                            width: '100%',
-                            aspectRatio: '3 / 4',
-                            borderRadius: 4,
-                            marginBottom: 4,
-                          }}
-                        />
-                        <span style={{ fontSize: '0.74rem', display: 'block' }}>{g.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <button type="submit" className="btn btn-primary btn-full">
-                캘린더에 기록하기
-              </button>
-            </form>
+            <div className="field-group">
+              <label className="field-label">메모</label>
+              <input
+                className="text-input"
+                placeholder="예: 결혼식 하객룩, 성수동 데이트"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="field-group">
+            <label className="field-label">
+              착용한 아이템 선택 ({selectedIds.length}벌 선택됨)
+            </label>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
+                gap: 8,
+                maxHeight: 280,
+                overflowY: 'auto',
+                padding: 4,
+              }}
+            >
+              {garments.map((g) => {
+                const checked = selectedIds.includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggleItemSelection(g.id)}
+                    style={{
+                      padding: 8,
+                      borderRadius: 'var(--radius-sm)',
+                      border: checked
+                        ? '2px solid var(--ink-primary)'
+                        : '1px solid var(--border-hairline)',
+                      background: checked ? 'var(--bg-subtle)' : 'var(--bg-canvas)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <StudioGarmentImage
+                      item={g}
+                      style={{
+                        width: '100%',
+                        aspectRatio: '3 / 4',
+                        borderRadius: 4,
+                        marginBottom: 4,
+                      }}
+                    />
+                    <span style={{ fontSize: '0.74rem', display: 'block' }}>{g.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button type="submit" className="btn btn-primary btn-full">
+            캘린더에 기록하기
+          </button>
+        </form>
+      </ResponsiveSheetModal>
     </div>
   );
 }

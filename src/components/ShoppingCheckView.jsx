@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Camera,
   CheckCircle2,
+  Crop,
   HelpCircle,
   Sparkles,
   Upload,
+  X,
 } from 'lucide-react';
 import {
   CATEGORIES,
@@ -14,7 +16,9 @@ import {
   apiFetch,
   formatKRW,
 } from '../utils/api.js';
-import { processUploadedImage } from '../utils/imageTools.js';
+import { infer3DRegistrationSpec } from '../utils/garment3DPhysicsSpecs.js';
+import { PageHeader } from './common/AppUI.jsx';
+import SmartPhotoCropEditorModal from './SmartPhotoCropEditorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 const STORE_SAMPLES = [
@@ -28,7 +32,7 @@ const STORE_SAMPLES = [
     color_name: '네이비',
     color_hex: '#1D273B',
     price: 89000,
-    image_url: '/seed/store-navy-sweater.jpg',
+    image_url: '/seed/navy-knit.jpg',
   },
   {
     key: 'terracotta_cardigan',
@@ -40,13 +44,13 @@ const STORE_SAMPLES = [
     color_name: '테라코타',
     color_hex: '#A64B2A',
     price: 148000,
-    image_url: '/seed/store-terracotta-cardigan.jpg',
+    image_url: '/seed/studio-cardigan.png',
   },
   {
     key: 'olive_jacket',
     label: '매장 샘플 3 · 올리브 자켓',
     sublabel: '빈틈 아이템 + 커플팁',
-    candidate_name: '매장 촬영 · 세이지 올리브 퀼팅 자켓',
+    candidate_name: '매장 촬영 · 세이지 올리브 필드 자켓',
     category: 'outer',
     subcategory: 'jacket',
     color_name: '카키/올리브',
@@ -59,6 +63,9 @@ const STORE_SAMPLES = [
 export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showToast }) {
   const closetOwner = activeCloset === 'all' ? 'husband' : activeCloset;
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   const [selectedPreset, setSelectedPreset] = useState('navy_sweater');
   const [candidateName, setCandidateName] = useState(STORE_SAMPLES[0].candidate_name);
@@ -70,10 +77,37 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   const [previewUrl, setPreviewUrl] = useState(STORE_SAMPLES[0].image_url);
   const [imageData, setImageData] = useState(null);
 
+  // Live Camera + Immediate Photo Crop Editor (Req 4)
+  const [liveCamOpen, setLiveCamOpen] = useState(false);
+  const [rawUploadSource, setRawUploadSource] = useState('');
+  const [cropEditorOpen, setCropEditorOpen] = useState(false);
+
   const [result, setResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [decisionDone, setDecisionDone] = useState('');
   const [history, setHistory] = useState([]);
+
+  const stopLiveCam = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setLiveCamOpen(false);
+  };
+
+  useEffect(() => {
+    return () => stopLiveCam();
+  }, []);
+
+  const live3DSpec = useMemo(
+    () =>
+      infer3DRegistrationSpec({
+        name: candidateName,
+        category,
+        subcategory,
+      }),
+    [candidateName, category, subcategory]
+  );
 
   const loadHistory = async () => {
     try {
@@ -134,6 +168,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   }, [closetOwner]);
 
   const applySample = (sample) => {
+    stopLiveCam();
     setSelectedPreset(sample.key);
     setCandidateName(sample.candidate_name);
     setCategory(sample.category);
@@ -160,36 +195,93 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
     );
   };
 
-  const handleFileChange = async (e) => {
+  // Workflow Reorder (Req 4): Uploading any photo or snapping a camera frame opens Photo Crop Editor FIRST!
+  const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      const processed = await processUploadedImage(file);
-      setSelectedPreset('custom');
-      setPreviewUrl(processed.dataUrl);
-      setImageData(processed.dataUrl);
-      setColorName(processed.matchedColor.name);
-      setColorHex(processed.detectedHex);
-      const autoName = `오프라인 촬영 · ${processed.matchedColor.name} 아이템`;
-      setCandidateName(autoName);
-      showToast(`사진에서 '${processed.matchedColor.name}' 컬러를 자동 추출했습니다.`);
+    stopLiveCam();
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRawUploadSource(reader.result);
+      setCropEditorOpen(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
-      await runAnalysis(
-        {
-          closet_owner: closetOwner,
-          candidate_name: autoName,
-          category,
-          subcategory,
-          color_name: processed.matchedColor.name,
-          color_hex: processed.detectedHex,
-          price: Number(price) || 0,
-          image_data: processed.dataUrl,
-          save_history: true,
-        },
-        true
-      );
-    } catch (err) {
-      showToast(err.message || '사진 처리에 실패했습니다.');
+  const startLiveCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setLiveCamOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch {
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const snapLiveCameraFrame = () => {
+    if (!videoRef.current || !videoRef.current.videoWidth) return;
+    const vw = videoRef.current.videoWidth;
+    const vh = videoRef.current.videoHeight;
+    const c = document.createElement('canvas');
+    c.width = vw;
+    c.height = vh;
+    c.getContext('2d').drawImage(videoRef.current, 0, 0, vw, vh);
+    const dataUrl = c.toDataURL('image/jpeg', 0.92);
+    stopLiveCam();
+    setRawUploadSource(dataUrl);
+    setCropEditorOpen(true);
+  };
+
+  const handleCroppedPhotoApply = async (cropped) => {
+    setCropEditorOpen(false);
+    setSelectedPreset('custom');
+    setPreviewUrl(cropped.dataUrl);
+    setImageData(cropped.dataUrl);
+    setColorName(cropped.matchedColor.name);
+    setColorHex(cropped.detectedHex);
+    const autoName = `오프라인 촬영 · ${cropped.matchedColor.name} 아이템`;
+    setCandidateName(autoName);
+    showToast(`크롭 및 '${cropped.matchedColor.name}' 색상 자동 추출 완료!`);
+
+    await runAnalysis(
+      {
+        closet_owner: closetOwner,
+        candidate_name: autoName,
+        category,
+        subcategory,
+        color_name: cropped.matchedColor.name,
+        color_hex: cropped.detectedHex,
+        price: Number(price) || 0,
+        image_data: cropped.dataUrl,
+        save_history: true,
+      },
+      true
+    );
+  };
+
+  const handleCandidateNameChange = (val) => {
+    setCandidateName(val);
+    const inferred = infer3DRegistrationSpec({ name: val, category: '', subcategory: '' });
+    if (
+      inferred &&
+      /서류가방|브리프케이스|토트|쇼퍼|머플러|목도리|넥타이|트렌치|코트|스커트|장갑|시계|벨트|안경/i.test(val)
+    ) {
+      setCategory(inferred.category);
+      setSubcategory(inferred.subcategory);
     }
   };
 
@@ -229,7 +321,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
       loadHistory();
       if (addToCloset) {
         onClosetUpdated?.();
-        showToast('새 옷이 내 디지털 옷장에 스튜디오 팩샷으로 등록되었습니다!');
+        showToast('새 옷이 내 디지털 옷장 및 3D 마네킹 아카이브에 등록되었습니다!');
       } else {
         showToast(`구매 보류 완료! ${formatKRW(price)} 충동구매 방어 기록에 반영되었습니다.`);
       }
@@ -243,14 +335,11 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
 
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <h1>오프라인 쇼핑 구매 판독기</h1>
-          <p className="page-subtitle">
-            매장에서 마음에 드는 옷을 촬영하면, 현재 선택된 옷장의 11부위 보유 의류와 비교해 구매 판단을 지지해드립니다.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="STORE DUPLICATE & CPW CHECK · GETWARDROBE STANDARD"
+        title="오프라인 쇼핑 구매 판독기"
+        subtitle="매장에서 촬영하거나 전신 피팅샷을 올리면 즉시 포토 크롭 에디터가 실행되며, 보유 옷장과 유사도·활용도를 비교 판독합니다."
+      />
 
       <div className="shopping-layout">
         <section className="capture-panel">
@@ -269,8 +358,8 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                     src={s.image_url}
                     category={s.category}
                     subcategory={s.subcategory}
+                    colorHex={s.color_hex}
                     alt={s.label}
-                    allowStorePhoto={true}
                     style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 5, marginBottom: 5 }}
                   />
                   <span>{s.sublabel}</span>
@@ -279,33 +368,71 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
             </div>
           </div>
 
-          <div
-            className="photo-dropzone"
-            onClick={() => fileInputRef.current?.click()}
-            role="button"
-            tabIndex={0}
-          >
-            {previewUrl ? (
-              <StudioGarmentImage
-                src={previewUrl}
-                category={category}
-                subcategory={subcategory}
-                colorHex={colorHex}
-                alt="촬영된 의류 미리보기"
-                allowStorePhoto={true}
-                style={{ width: '100%', maxHeight: 280, borderRadius: 8 }}
+          {liveCamOpen ? (
+            <div
+              style={{
+                borderRadius: 12,
+                overflow: 'hidden',
+                border: '1px solid var(--border-strong)',
+                background: '#111',
+                marginBottom: 12,
+              }}
+            >
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
               />
-            ) : (
-              <div>
-                <Camera size={28} />
-                <p>매장에서 옷 사진 찍기 또는 업로드</p>
+              <div style={{ display: 'flex', gap: 8, padding: 10, background: 'var(--bg-elevated)' }}>
+                <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={snapLiveCameraFrame}>
+                  <Camera size={15} /> 촬영 후 바로 포토 에디터 열기
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={stopLiveCam}>
+                  <X size={15} /> 닫기
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              className="photo-dropzone"
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+            >
+              {previewUrl ? (
+                <StudioGarmentImage
+                  src={previewUrl}
+                  category={category}
+                  subcategory={subcategory}
+                  colorHex={colorHex}
+                  alt="촬영된 의류 미리보기"
+                  allowStorePhoto={Boolean(imageData)}
+                  style={{ width: '100%', maxHeight: 280, borderRadius: 8 }}
+                />
+              ) : (
+                <div>
+                  <Camera size={28} />
+                  <p>매장 피팅샷 · 제품 사진 업로드 후 크롭하기</p>
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* Gallery / Full-Body File Input */}
           <input
             ref={fileInputRef}
             id="shopping-photo-input"
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          {/* Native Mobile Camera Fallback Input */}
+          <input
+            ref={cameraInputRef}
+            id="shopping-camera-input"
             type="file"
             accept="image/*"
             capture="environment"
@@ -313,22 +440,45 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
             onChange={handleFileChange}
           />
 
-          <button
-            id="trigger-camera-upload-btn"
-            type="button"
-            className="btn btn-secondary btn-full"
-            style={{ marginBottom: 16 }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={16} /> 내 스마트폰 카메라 · 앨범 사진 불러오기
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <button
+              id="trigger-live-camera-btn"
+              type="button"
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={startLiveCamera}
+            >
+              <Camera size={15} /> 카메라 촬영 → 크롭
+            </button>
+            <button
+              id="trigger-camera-upload-btn"
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1 }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={15} /> 전신샷 · 앨범 업로드
+            </button>
+            {(rawUploadSource || imageData) && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (!rawUploadSource && imageData) setRawUploadSource(imageData);
+                  setCropEditorOpen(true);
+                }}
+              >
+                <Crop size={14} /> 다시 크롭
+              </button>
+            )}
+          </div>
 
           <div className="color-detected-row">
             <span className="color-dot" style={{ backgroundColor: colorHex }} />
             <div style={{ flex: 1 }}>
               <strong style={{ fontSize: '0.84rem' }}>감지된 색상 · {colorName}</strong>
               <div style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>
-                사진 중앙 영역에서 자동 추출 (직접 변경 가능)
+                크롭 영역 중심에서 자동 추출 (직접 변경 가능)
               </div>
             </div>
             <select
@@ -352,13 +502,13 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
 
           <div className="field-group">
             <label className="field-label" htmlFor="shopping-item-name">
-              촬영 아이템 메모
+              촬영 아이템 메모 (예: 가죽 서류가방, 캐시미어 머플러)
             </label>
             <input
               id="shopping-item-name"
               className="text-input"
               value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value)}
+              onChange={(e) => handleCandidateNameChange(e.target.value)}
             />
           </div>
 
@@ -403,6 +553,23 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* 3D Registration & Jiggle Physics Preview Banner */}
+          <div
+            style={{
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-subtle)',
+              border: '1px solid var(--border-hairline)',
+              marginBottom: 12,
+              fontSize: '0.78rem',
+            }}
+          >
+            <strong style={{ display: 'block', color: 'var(--ink-primary)' }}>
+              구매 시 3D 물리 등록 규격: {live3DSpec.preset.labelKo}
+            </strong>
+            <span style={{ color: 'var(--ink-secondary)' }}>{live3DSpec.preset.descriptionKo}</span>
           </div>
 
           <div className="field-group">
@@ -559,7 +726,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                               subcategory={subcategory}
                               colorHex={colorHex}
                               alt="새 옷 후보"
-                              allowStorePhoto={true}
+                              allowStorePhoto={Boolean(imageData)}
                               style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
                             />
                             <span>[새 옷] {colorName}</span>
@@ -618,6 +785,15 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
           )}
         </section>
       </div>
+
+      <SmartPhotoCropEditorModal
+        open={cropEditorOpen}
+        imageSource={rawUploadSource}
+        mode="garment"
+        title="매장 촬영 · 전신 피팅샷 크롭 & 스튜디오 에디터"
+        onApply={handleCroppedPhotoApply}
+        onClose={() => setCropEditorOpen(false)}
+      />
     </div>
   );
 }

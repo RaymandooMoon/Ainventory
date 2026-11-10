@@ -1,7 +1,7 @@
 """
 Garment catalog: maps A inventory's 11 wardrobe slots and all subcategories to CC0 MakeHuman
 community clothes (https://static.makehumancommunity.org/assets/assetpacks.html) or to
-procedural meshes fitted to the MakeHuman base mesh in `build_mannequin.py`.
+high-detail procedural meshes fitted to the MakeHuman base mesh in `build_mannequin.py`.
 """
 
 GARMENTS = {
@@ -31,12 +31,14 @@ GARMENTS = {
     "neckwear_scarf": {
         "slot": "neckwear", "subs": ["scarf", "muffler"],
         "procedural": "scarf",
-        "label": "Cashmere / knit muffler", "fabric": "wool", "offset": 0.0, "cull_body": False,
+        "physics": "soft_jiggle_muffler",
+        "label": "Cashmere fringed muffler", "fabric": "wool", "offset": 0.0, "cull_body": False,
     },
     "neckwear_tie": {
         "slot": "neckwear", "subs": ["necktie"],
         "src": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
         "keep_parts": lambda p: 600 <= p["n"] <= 700,
+        "physics": "soft_jiggle_tie",
         "label": "Silk necktie", "fabric": "silk", "offset": 0.006, "cull_body": False,
     },
 
@@ -52,6 +54,7 @@ GARMENTS = {
         "src": "toigo_male_double-breasted_suit/toigo_male_double-breasted_suit.mhclo",
         "keep_parts": lambda p: (1500 < p["n"] < 1710 and p["xspan"] > 0.8) or p["n"] <= 100,
         "post": "extend_coat",
+        "physics": "hem_sway_coat",
         "label": "Double-breasted coat / trench", "fabric": "wool", "offset": 0.007, "cull_body": True,
     },
     "outer_jacket": {
@@ -79,7 +82,7 @@ GARMENTS = {
         "label": "Supima cotton T-shirt", "fabric": "cotton", "offset": 0.002,
     },
     "top_sweatshirt": {
-        "slot": "top", "subs": ["sweatshirt"],
+        "slot": "top", "subs": ["sweatshirt", "hoodie"],
         "src": "male_casualsuit02/male_casualsuit02.mhclo",
         "keep_parts": lambda p: p["n"] > 1000,
         "label": "French terry sweatshirt", "fabric": "cotton", "offset": 0.0025,
@@ -97,7 +100,7 @@ GARMENTS = {
         "label": "Wide wool slacks", "fabric": "wool", "offset": 0.0025,
     },
     "bottom_denim": {
-        "slot": "bottom", "subs": ["denim", "chinos"],
+        "slot": "bottom", "subs": ["denim", "chinos", "jogger"],
         "src": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
         "keep_parts": lambda p: 1900 < p["n"] < 2200,
         "label": "Straight denim / chinos", "fabric": "denim", "offset": 0.0025,
@@ -105,6 +108,7 @@ GARMENTS = {
     "bottom_skirt": {
         "slot": "bottom", "subs": ["skirt"],
         "src": "toigo_long_full_skirt/toigo_long_full_skirt.mhclo",
+        "physics": "hem_sway_skirt",
         "label": "Pleated full skirt", "fabric": "cotton", "offset": 0.002,
     },
     "bottom_shorts": {
@@ -117,19 +121,22 @@ GARMENTS = {
     "dress_shift": {
         "slot": "dress", "subs": ["dress"],
         "src": "toigo_shift_dress/toigo_shift_dress.mhclo",
+        "physics": "hem_sway_skirt",
         "label": "Belted midi dress", "fabric": "cotton", "offset": 0.0025,
     },
     "dress_onepiece": {
         "slot": "dress", "subs": ["onepiece"],
         "src": "toigo_halter_dress_midi/toigo_halter_dress_midi.mhclo",
+        "physics": "hem_sway_skirt",
         "label": "Knit long one-piece", "fabric": "knit", "offset": 0.0025,
     },
 
     # 7. gloves
     "gloves_short": {
-        "slot": "gloves", "subs": ["gloves", "leather_gloves"],
+        "slot": "gloves", "subs": ["gloves", "leather_gloves", "knit_gloves"],
         "src": "toigo_gloves_short/toigo_gloves_short.mhclo",
-        "label": "Nappa leather / wool gloves", "fabric": "leather", "offset": 0.0015,
+        "label": "Nappa leather / wool gloves", "fabric": "leather", "offset": 0.0022,
+        "cull_body": False,
     },
 
     # 8. underwear
@@ -157,7 +164,7 @@ GARMENTS = {
         "label": "Daily ankle socks", "fabric": "knit", "offset": 0.001, "cull_body": False,
     },
 
-    # 10. shoes (strip built-in socks component n==144)
+    # 10. shoes
     "shoes_sneakers": {
         "slot": "shoes", "subs": ["sneakers"],
         "src": "shoes05/shoes05.mhclo",
@@ -181,25 +188,42 @@ GARMENTS = {
         "label": "Sculpted heels", "fabric": "leather", "offset": 0.001,
     },
 
-    # 11. accessory
+    # 11. accessory & handheld bags (with multi-material PBR zones + pendulum jiggle physics!)
     "accessory_bag": {
         "slot": "accessory", "subs": ["bag"],
         "procedural": "bag",
-        "label": "Leather crossbody & tote bag", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "physics": "pendulum_crossbody",
+        "label": "Structured saddle crossbody bag", "fabric": "leather", "offset": 0.0, "cull_body": False,
+    },
+    "accessory_briefcase": {
+        "slot": "accessory", "subs": ["briefcase"],
+        "procedural": "briefcase",
+        "mount": "hand_l",
+        "physics": "pendulum_briefcase",
+        "no_morphs": True,
+        "label": "Executive leather briefcase", "fabric": "leather", "offset": 0.0, "cull_body": False,
+    },
+    "accessory_tote": {
+        "slot": "accessory", "subs": ["tote"],
+        "procedural": "tote",
+        "mount": "hand_l",
+        "physics": "pendulum_tote",
+        "no_morphs": True,
+        "label": "Structured leather shopper tote", "fabric": "leather", "offset": 0.0, "cull_body": False,
     },
     "accessory_belt": {
         "slot": "accessory", "subs": ["belt"],
         "procedural": "belt",
-        "label": "Calfskin belt", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "label": "Calfskin belt with silver buckle", "fabric": "leather", "offset": 0.0, "cull_body": False,
     },
     "accessory_watch": {
         "slot": "accessory", "subs": ["watch"],
         "procedural": "watch",
-        "label": "Dress watch", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "label": "Minimalist steel dress watch", "fabric": "leather", "offset": 0.0, "cull_body": False,
     },
     "accessory_glasses": {
         "slot": "accessory", "subs": ["glasses"],
         "procedural": "glasses",
-        "label": "Acetate eyewear", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "label": "Acetate optical eyewear", "fabric": "leather", "offset": 0.0, "cull_body": False,
     },
 }

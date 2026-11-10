@@ -2453,4 +2453,663 @@ img {
   }
 }
 
+/* ==========================================================================
+   APP STORE / PLAY STORE RESPONSIVE STANDARDS & SHARED UI (`AppUI.jsx`)
+   Benchmark: Acloset · GetWardrobe · Whering
+   ========================================================================== */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ui-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.ui-page-header-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.ui-page-header-copy .atl-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ui-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Touch-scrollable Horizontal Chip Rail */
+.ui-chip-rail {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ui-chip-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.ui-chip-rail > * {
+  flex: 0 0 auto;
+}
+
+/* GetWardrobe & Acloset KPI Metric Strip */
+.ui-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.ui-kpi-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: 15px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: var(--shadow-soft);
+  min-width: 0;
+}
+
+.ui-kpi-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.ui-kpi-value {
+  font-size: 1.32rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-kpi-sub {
+  font-size: 0.73rem;
+  color: var(--ink-secondary);
+}
+
+/* Responsive Sheet Modal (Desktop Dialog -> Native Mobile Bottom Sheet) */
+.ui-sheet-drag-handle {
+  display: none;
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-medium);
+  margin: 0 auto 12px;
+}
+
+.ui-sheet-body {
+  max-height: 76dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ui-sheet-footer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.ui-empty-state {
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 40px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.ui-empty-state p {
+  font-size: 0.86rem;
+  color: var(--ink-secondary);
+  max-width: 420px;
+}
+
+/* ==========================================================================
+   3D MANNEQUIN MOTION BAR, 1-TAP UNEQUIP & INLINE QUICK-SWAP DOCK
+   ========================================================================== */
+.atl-slot-card {
+  position: relative;
+  padding-right: 34px;
+}
+
+.atl-slot-unequip-btn {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-canvas);
+  color: var(--ink-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  z-index: 2;
+}
+
+.atl-slot-unequip-btn:hover {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+  color: var(--ink-inverse);
+}
+
+/* Mobile Horizontal 11-Slot Touch Rail (shown < 1024px) */
+.atl-mobile-slot-rail {
+  display: none;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.atl-mobile-slot-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.atl-mobile-slot-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  min-height: 36px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-surface);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.atl-mobile-slot-pill.active {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+  color: var(--ink-inverse);
+}
+
+.atl-pill-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: rgba(28, 25, 23, 0.12);
+  font-size: 0.74rem;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.atl-mobile-slot-pill.active .atl-pill-x {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+/* Live 3D Motion Mode Selector Bar inside Stage */
+.atl-motion-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.atl-motion-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.atl-motion-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-hairline);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(8px);
+  font-size: 0.71rem;
+  font-weight: 620;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.atl-motion-chip:hover {
+  border-color: var(--border-medium);
+  color: var(--ink-primary);
+}
+
+.atl-motion-chip.active {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+  color: var(--ink-inverse);
+}
+
+/* Shift stage callout & hint below the motion bar + make unequip button interactive */
+.atl-stage-callout {
+  top: 46px;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.atl-stage-hint {
+  top: 48px;
+}
+
+.atl-callout-unequip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+
+.atl-callout-unequip:hover {
+  background: var(--ink-primary);
+  color: var(--ink-inverse);
+}
+
+/* Inline Whering-Style Quick-Swap & Unequip Dock */
+.atl-quick-dock {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-medium);
+}
+
+.atl-quick-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.atl-quick-dock-rail {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.atl-dock-item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-hairline);
+  background: var(--bg-surface);
+  text-align: left;
+  min-width: 170px;
+  max-width: 230px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.atl-dock-item:hover {
+  border-color: var(--border-medium);
+}
+
+.atl-dock-item.selected {
+  border-color: var(--ink-primary);
+  box-shadow: 0 0 0 1px var(--ink-primary);
+  background: var(--bg-subtle);
+}
+
+.atl-dock-item.unequip-card {
+  min-width: 122px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px 12px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--ink-secondary);
+}
+
+.atl-dock-unequip-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px dashed var(--border-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.atl-dock-item-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.atl-dock-item-meta strong {
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.atl-dock-item-meta small {
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+}
+
+/* ==========================================================================
+   INTERACTIVE 8-HANDLE SMART PHOTO CROP & STUDIO CUTOUT EDITOR
+   ========================================================================== */
+.crop-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.crop-stage-outer {
+  background: #121318;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.crop-stage-inner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.crop-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.crop-selection-box {
+  position: absolute;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.62);
+  cursor: move;
+  touch-action: none;
+}
+
+.crop-grid-line {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.36);
+  pointer-events: none;
+}
+
+.crop-grid-line.v1 {
+  top: 0;
+  bottom: 0;
+  left: 33.333%;
+  width: 1px;
+}
+
+.crop-grid-line.v2 {
+  top: 0;
+  bottom: 0;
+  left: 66.666%;
+  width: 1px;
+}
+
+.crop-grid-line.h1 {
+  left: 0;
+  right: 0;
+  top: 33.333%;
+  height: 1px;
+}
+
+.crop-grid-line.h2 {
+  left: 0;
+  right: 0;
+  top: 66.666%;
+  height: 1px;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #ffffff;
+  border: 2px solid #1c1917;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+}
+
+.crop-handle.handle-nw {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
+}
+
+.crop-handle.handle-ne {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+
+.crop-handle.handle-sw {
+  bottom: -10px;
+  left: -10px;
+  cursor: nesw-resize;
+}
+
+.crop-handle.handle-se {
+  bottom: -10px;
+  right: -10px;
+  cursor: nwse-resize;
+}
+
+.crop-handle.handle-n {
+  top: -9px;
+  left: calc(50% - 10px);
+  cursor: ns-resize;
+}
+
+.crop-handle.handle-s {
+  bottom: -9px;
+  left: calc(50% - 10px);
+  cursor: ns-resize;
+}
+
+.crop-handle.handle-e {
+  right: -9px;
+  top: calc(50% - 10px);
+  cursor: ew-resize;
+}
+
+.crop-handle.handle-w {
+  left: -9px;
+  top: calc(50% - 10px);
+  cursor: ew-resize;
+}
+
+.crop-controls-panel {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+}
+
+.crop-sliders-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.crop-slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.crop-slider-item input[type='range'] {
+  width: 100%;
+  accent-color: var(--ink-primary);
+}
+
+/* ==========================================================================
+   MOBILE & TABLET BREAKPOINT REFINEMENTS (iOS / Android Store Standard)
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .atl-mobile-slot-rail {
+    display: flex;
+  }
+
+  .ui-kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .mobile-topbar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+
+  .main-workspace {
+    padding: 16px 14px calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px) + 28px);
+  }
+
+  /* Prevent iOS Safari input auto-zoom by keeping form controls >= 16px */
+  .text-input,
+  .select-input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .ui-sheet-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .ui-sheet-box {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 92dvh;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+  }
+
+  .ui-sheet-drag-handle {
+    display: block;
+  }
+
+  .atl-badge-hide-xs {
+    display: none;
+  }
+
+  .crop-sliders-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ui-page-header-actions {
+    width: 100%;
+  }
+
+  .ui-page-header-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .atl-col-desktop {
+    display: none;
+  }
+
+  .atl-stage {
+    min-height: 420px;
+  }
+
+  .atl-stage-canvas {
+    height: 420px;
+  }
+}
+
+
 
