@@ -322,7 +322,7 @@ export function seedIfEmpty(forceReset = false) {
         hipCm,
         headCm
       );
-    } else if (!existing.verified_at || !existing.verification_hash) {
+    } else if (!existing.verified_at || !existing.verification_hash || !existing.profile_completed || !existing.personal_color) {
       db.prepare(`
         UPDATE users
         SET email = COALESCE(email, ?),
@@ -336,7 +336,7 @@ export function seedIfEmpty(forceReset = false) {
             gender = COALESCE(gender, ?),
             personal_color = COALESCE(personal_color, ?),
             skin_tone_hex = COALESCE(skin_tone_hex, ?),
-            profile_completed = CASE WHEN profile_completed = 0 THEN 1 ELSE profile_completed END,
+            profile_completed = 1,
             body_shape = COALESCE(body_shape, ?),
             body_fat_pct = COALESCE(body_fat_pct, ?),
             chest_cm = COALESCE(chest_cm, ?),

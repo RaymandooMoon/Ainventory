@@ -20,17 +20,28 @@ export const SLOT_CAMERA_TARGETS = {
 };
 
 const PERSONAL_COLOR_DEFAULT_SKIN = {
-  spring_warm: '#EED4BE',
+  spring_warm: '#F2CFB6',
+  spring_light: '#F6C2B2',
+  spring_bright: '#F4AA92',
   summer_cool: '#EBD3CE',
+  summer_light: '#D8E3F0',
+  summer_mute: '#D7CEDE',
   autumn_warm: '#DFC1A6',
+  autumn_mute: '#DEC2A8',
+  autumn_deep: '#C99679',
   winter_cool: '#E5CCC8',
+  winter_bright: '#D8C8E8',
+  winter_deep: '#BFAEC8',
 };
 
 export function resolveSkinHex(profile = {}) {
+  if (profile.mannequinModelColorHex || profile.personal_color_swatch_hex) {
+    return profile.mannequinModelColorHex || profile.personal_color_swatch_hex;
+  }
   if (profile.skinToneHex || profile.skin_tone_hex) {
     return profile.skinToneHex || profile.skin_tone_hex;
   }
-  const pc = profile.personalColor || profile.personal_color || 'autumn_warm';
+  const pc = profile.personalColorSubtype || profile.personalColor || profile.personal_color || 'autumn_warm';
   return PERSONAL_COLOR_DEFAULT_SKIN[pc] || '#E4C8B0';
 }
 
@@ -91,7 +102,7 @@ const garmentTemplateCache = new Map();
 const garmentPromiseCache = new Map();
 const externalTexCache = new Map();
 const bumpTextureCache = new Map();
-const previewListeners = new Set();
+const previewListeners = new Map();
 
 function getGLTFLoader() {
   if (!gltfLoaderInstance) {
@@ -718,20 +729,18 @@ export function resolveGarmentIdForItem(slotKey, item) {
 
 function createSkinMaterial(skinHex) {
   const baseColor = new THREE.Color(skinHex);
-  const skinAlbedo = loadCachedTexture(`${TEXTURE_BASE}/skin_albedo.jpg`, { srgb: true });
   const skinBump = getProceduralFabricBumpMap('skin');
   return new THREE.MeshPhysicalMaterial({
     color: baseColor,
-    map: skinAlbedo,
-    roughness: 0.46,
+    roughness: 0.44,
     metalness: 0.01,
-    clearcoat: 0.08,
-    clearcoatRoughness: 0.52,
+    clearcoat: 0.10,
+    clearcoatRoughness: 0.48,
     sheen: 0.42,
-    sheenRoughness: 0.65,
-    sheenColor: baseColor.clone().lerp(new THREE.Color('#ffdad0'), 0.42),
+    sheenRoughness: 0.62,
+    sheenColor: baseColor.clone().lerp(new THREE.Color('#fff5f0'), 0.38),
     bumpMap: skinBump,
-    bumpScale: 0.0025,
+    bumpScale: 0.0022,
   });
 }
 
@@ -1164,7 +1173,9 @@ export class Mannequin3DWebGLEngine {
 let sharedPreviewEngine = null;
 
 function notifyPreviewListeners() {
-  for (const fn of previewListeners) {
+  const callbacks = [...previewListeners.values()];
+  previewListeners.clear();
+  for (const fn of callbacks) {
     try {
       fn();
     } catch {
@@ -1238,15 +1249,19 @@ export function render3DMannequinScene(canvas, options = {}) {
   } = options;
 
   // Kick off background loading of body.glb + briefs if not yet loaded, and re-render when ready
-  if (!bodyTemplateMesh || !garmentTemplateCache.has('underwear_briefs')) {
-    const rerender = () => {
-      previewListeners.delete(rerender);
+  if (
+    !bodyTemplateMesh ||
+    !garmentTemplateCache.has('underwear_briefs') ||
+    !garmentTemplateCache.has('underwear_top')
+  ) {
+    previewListeners.set(canvas, () => {
       render3DMannequinScene(canvas, options);
-    };
-    previewListeners.add(rerender);
+    });
     loadBodyTemplate().catch(() => {});
     loadGarmentTemplate('underwear_briefs').catch(() => {});
     loadGarmentTemplate('underwear_top').catch(() => {});
+  } else {
+    previewListeners.delete(canvas);
   }
 
   ctx.clearRect(0, 0, width, height);
@@ -1307,10 +1322,17 @@ export function render3DMannequinScene(canvas, options = {}) {
     const { anat, weights } = computeMorphTargetWeights(profile);
     const skinHex = resolveSkinHex(profile);
     eng.bodyMesh.material.color.set(skinHex);
+    eng.bodyMesh.material.sheenColor.set(skinHex).lerp(new THREE.Color('#fff5f0'), 0.38);
     applyMorphsToMesh(eng.bodyMesh, weights);
-    if (eng.briefsMesh) applyMorphsToMesh(eng.briefsMesh, weights);
+
+    const briefsHex = profile.mannequinBriefsColorHex || '#2c2623';
+    if (eng.briefsMesh) {
+      eng.briefsMesh.material.color.set(briefsHex);
+      applyMorphsToMesh(eng.briefsMesh, weights);
+    }
     if (eng.topMesh) {
       eng.topMesh.visible = anat.gender === 'female';
+      eng.topMesh.material.color.set(briefsHex);
       applyMorphsToMesh(eng.topMesh, weights);
     }
 

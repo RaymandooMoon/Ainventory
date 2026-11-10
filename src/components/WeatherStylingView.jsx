@@ -322,12 +322,12 @@ export default function WeatherStylingView({
           </div>
 
           <VirtualMannequin
-            userProfile={sp || user}
+            userProfile={{ ...(sp || {}), ...(user || {}) }}
             loadoutBySlot={mergedLoadout}
             items={activeRec.items}
             weather={w}
             title={`${activeRec.title} 코디`}
-            onOpenBodySetup={() => onOpenProfileModal?.()}
+            onOpenBodySetup={(stepNum) => onOpenProfileModal?.(stepNum)}
             onOpenInspector={(slotKey) => {
               setInspectorSlot(slotKey || 'outer');
               setInspectorOpen(true);

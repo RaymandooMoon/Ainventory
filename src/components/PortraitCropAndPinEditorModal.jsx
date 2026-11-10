@@ -188,14 +188,7 @@ export default function PortraitCropAndPinEditorModal({
         </div>
 
         {/* Interactive Image & Draggable 4 Skin Pins */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 240px',
-            gap: 16,
-            alignItems: 'start',
-          }}
-        >
+        <div className="pcm-pin-editor-grid">
           <div
             ref={containerRef}
             onPointerMove={handlePointerMove}

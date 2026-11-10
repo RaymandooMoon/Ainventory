@@ -34,6 +34,12 @@ export default function App() {
   const [closetSetupInput, setClosetSetupInput] = useState('');
   const [savingClosetName, setSavingClosetName] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileInitialStep, setProfileInitialStep] = useState(1);
+
+  const openProfileModal = (stepNum = 1) => {
+    setProfileInitialStep(typeof stepNum === 'number' ? stepNum : 1);
+    setShowProfileModal(true);
+  };
 
   const showToast = (msg) => {
     setToast(msg);
@@ -281,10 +287,11 @@ export default function App() {
 
         <div style={{ marginBottom: 12 }}>
           <button
+            id="sidebar-open-profile-btn"
             type="button"
             className="btn btn-secondary btn-full btn-sm"
             style={{ justifyContent: 'flex-start', gap: 8 }}
-            onClick={() => setShowProfileModal(true)}
+            onClick={() => openProfileModal(1)}
           >
             <Sparkles size={14} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -347,10 +354,11 @@ export default function App() {
           </select>
 
           <button
+            id="mobile-open-profile-btn"
             type="button"
             className="icon-btn"
             aria-label="퍼스널컬러 및 체형 설정"
-            onClick={() => setShowProfileModal(true)}
+            onClick={() => openProfileModal(1)}
           >
             <Sparkles size={15} />
           </button>
@@ -384,7 +392,7 @@ export default function App() {
             user={user}
             lang={lang}
             onNavigateShopping={() => setActiveTab('shopping')}
-            onOpenProfileModal={() => setShowProfileModal(true)}
+            onOpenProfileModal={openProfileModal}
             onClosetUpdated={bumpRefresh}
             showToast={showToast}
           />
@@ -413,6 +421,7 @@ export default function App() {
             user={user}
             lang={lang}
             refreshKey={refreshKey}
+            onOpenProfileModal={openProfileModal}
             showToast={showToast}
           />
         )}
@@ -515,8 +524,12 @@ export default function App() {
         <ProfilePersonalColorModal
           open={showProfileModal}
           user={user}
+          initialStep={profileInitialStep}
           lang={lang}
           onClose={() => setShowProfileModal(false)}
+          onLiveUpdateUser={(partialUser) =>
+            setUser((prev) => (prev ? { ...prev, ...partialUser } : prev))
+          }
           onCompleted={(updatedUser, generatedWardrobe) => {
             setUser(updatedUser);
             setShowProfileModal(false);
@@ -526,7 +539,7 @@ export default function App() {
                 `프로필 저장 및 통계 기반 ${generatedWardrobe.createdCount}벌 의류가 자동 생성되었습니다.`,
               );
             } else {
-              showToast('7체형 · 3사이즈 · 퍼스널컬러 프로필이 업데이트되었습니다.');
+              showToast('7체형 · 3사이즈 · 퍼스널컬러 · 3D 모델링 컬러가 업데이트되었습니다.');
             }
           }}
         />

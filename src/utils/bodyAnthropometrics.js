@@ -324,9 +324,18 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
   const bodyFatPct = userBodyFat ?? defaultBodyFatPct;
 
   // Compute final 3D morph multipliers combining shape preset + exact 3-size / head overrides
-  const chestOverrideRatio = Math.max(0.76, Math.min(1.34, chestCm / defaultChestCm));
-  const waistOverrideRatio = Math.max(0.74, Math.min(1.42, waistCm / defaultWaistCm));
-  const hipOverrideRatio = Math.max(0.76, Math.min(1.36, hipCm / defaultHipCm));
+  const chestOverrideRatio =
+    userChest !== null
+      ? Math.max(0.76, Math.min(1.34, 0.55 + 0.45 * (chestCm / Math.max(60, baseChest))))
+      : 1.0;
+  const waistOverrideRatio =
+    userWaist !== null
+      ? Math.max(0.74, Math.min(1.42, 0.55 + 0.45 * (waistCm / Math.max(48, baseWaist))))
+      : 1.0;
+  const hipOverrideRatio =
+    userHip !== null
+      ? Math.max(0.76, Math.min(1.36, 0.55 + 0.45 * (hipCm / Math.max(65, baseHip))))
+      : 1.0;
   const headOverrideRatio = Math.max(0.86, Math.min(1.18, headCm / defaultHeadCm));
   const bfDelta = bodyFatPct - defaultBodyFatPct;
 

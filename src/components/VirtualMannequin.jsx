@@ -402,18 +402,30 @@ export default function VirtualMannequin({
         </div>
 
         <div className="atl-body-badges">
-          <button type="button" className="atl-badge" onClick={() => openProfile?.()} title="퍼스널컬러 바디 톤">
+          <button
+            id="open-personal-color-camera-badge"
+            type="button"
+            className="atl-badge"
+            onClick={() => openProfile?.(2)}
+            title="카메라 촬영 · 사진 업로드로 퍼스널컬러 측정 및 3D 모델링 컬러 변경"
+          >
             <span className="atl-tone-swatch" style={{ background: bodyToneHex }} />
-            {personalColorLabel} 바디
+            {personalColorLabel} 바디 · 퍼스널컬러 측정
           </button>
-          <button type="button" className="atl-badge" onClick={() => openProfile?.()} title="7대 체형">
+          <button
+            id="open-body-shape-badge"
+            type="button"
+            className="atl-badge"
+            onClick={() => openProfile?.(1)}
+            title="7대 체형 선택"
+          >
             <User size={13} />
             {anatomical.shapeShortKo}
           </button>
           <button
             type="button"
             className="atl-badge"
-            onClick={() => openProfile?.()}
+            onClick={() => openProfile?.(1)}
             title="스리사이즈 · 머리둘레 (미입력 항목은 체형 기준 디폴트)"
           >
             <Ruler size={13} />
@@ -432,7 +444,7 @@ export default function VirtualMannequin({
             코디 총액 <strong>{formatKRW(loadoutStats.totalValue)}</strong>
           </span>
           {openProfile && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => openProfile()}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => openProfile(1)}>
               <SlidersHorizontal size={13} /> 체형 · 퍼스널컬러
             </button>
           )}

@@ -13,7 +13,13 @@ import OutfitInspectorModal from './OutfitInspectorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import VirtualMannequin from './VirtualMannequin.jsx';
 
-export default function OutfitStudioView({ user, activeCloset, refreshKey, showToast }) {
+export default function OutfitStudioView({
+  user,
+  activeCloset,
+  refreshKey,
+  onOpenProfileModal,
+  showToast,
+}) {
   const closetOwner = activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
   const [garments, setGarments] = useState([]);
   const [outfits, setOutfits] = useState([]);
@@ -253,6 +259,7 @@ export default function OutfitStudioView({ user, activeCloset, refreshKey, showT
           loadoutBySlot={loadoutBySlot}
           items={pickedItems}
           title="Dress Me · 3D 라이브 피팅"
+          onOpenBodySetup={(stepNum) => onOpenProfileModal?.(stepNum)}
           onOpenInspector={(slotKey) => {
             setInspectorSlot(slotKey || 'outer');
             setInspectorOpen(true);
