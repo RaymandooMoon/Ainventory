@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Camera,
@@ -17,7 +17,12 @@ import {
   formatKRW,
 } from '../utils/api.js';
 import { infer3DRegistrationSpec } from '../utils/garment3DPhysicsSpecs.js';
-import { PageHeader, ResponsiveSheetModal } from './common/AppUI.jsx';
+import { hasAcknowledgedCameraNotice } from '../utils/nativeBridge.js';
+import {
+  PageHeader,
+  PermissionNoticeModal,
+  ResponsiveSheetModal,
+} from './common/AppUI.jsx';
 import SmartPhotoCropEditorModal from './SmartPhotoCropEditorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
@@ -66,6 +71,8 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   const cameraInputRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const mountedRef = useRef(true);
+  const camReqIdRef = useRef(0);
 
   const [selectedPreset, setSelectedPreset] = useState('navy_sweater');
   const [candidateName, setCandidateName] = useState(STORE_SAMPLES[0].candidate_name);
@@ -77,8 +84,9 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   const [previewUrl, setPreviewUrl] = useState(STORE_SAMPLES[0].image_url);
   const [imageData, setImageData] = useState(null);
 
-  // Live Camera + Immediate Photo Crop Editor (Req 4)
+  // Live Camera + Permission Notice + Immediate Photo Crop Editor (Req 4 & Req 10.c)
   const [liveCamOpen, setLiveCamOpen] = useState(false);
+  const [pendingPickerMode, setPendingPickerMode] = useState(null); // null | 'camera' | 'gallery'
   const [rawUploadSource, setRawUploadSource] = useState('');
   const [cropEditorOpen, setCropEditorOpen] = useState(false);
 
@@ -88,17 +96,25 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   const [history, setHistory] = useState([]);
   const [detailSheet, setDetailSheet] = useState(null); // null | 'pairing' | 'history'
 
-  const stopLiveCam = () => {
+  const stopLiveCam = useCallback(() => {
+    camReqIdRef.current += 1;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setLiveCamOpen(false);
-  };
+  }, []);
 
   useEffect(() => {
-    return () => stopLiveCam();
-  }, []);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopLiveCam();
+    };
+  }, [stopLiveCam]);
 
   const live3DSpec = useMemo(
     () =>
@@ -113,7 +129,9 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   const loadHistory = async () => {
     try {
       const data = await apiFetch(`/shopping/history?closet=${encodeURIComponent(closetOwner)}`);
-      setHistory(data.history || []);
+      if (mountedRef.current) {
+        setHistory(data.history || []);
+      }
     } catch {
       // ignore
     }
@@ -139,12 +157,16 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
         method: 'POST',
         body: JSON.stringify(body),
       });
-      setResult(res);
+      if (mountedRef.current) {
+        setResult(res);
+      }
       if (saveHistory) loadHistory();
     } catch (err) {
       showToast?.(err.message || '판독 중 오류가 발생했습니다.');
     } finally {
-      setAnalyzing(false);
+      if (mountedRef.current) {
+        setAnalyzing(false);
+      }
     }
   };
 
@@ -202,6 +224,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
     stopLiveCam();
     const reader = new FileReader();
     reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
       setRawUploadSource(reader.result);
       setCropEditorOpen(true);
     };
@@ -210,6 +233,9 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
   };
 
   const startLiveCamera = async () => {
+    stopLiveCam();
+    const reqId = ++camReqIdRef.current;
+
     if (!navigator.mediaDevices?.getUserMedia) {
       cameraInputRef.current?.click();
       return;
@@ -219,16 +245,38 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
         video: { facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } },
         audio: false,
       });
+      if (!mountedRef.current || reqId !== camReqIdRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       setLiveCamOpen(true);
       requestAnimationFrame(() => {
+        if (!mountedRef.current || streamRef.current !== stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(() => {});
         }
       });
     } catch {
-      cameraInputRef.current?.click();
+      if (mountedRef.current) {
+        cameraInputRef.current?.click();
+      }
+    }
+  };
+
+  const requestShoppingPicker = (mode) => {
+    if (!hasAcknowledgedCameraNotice()) {
+      setPendingPickerMode(mode);
+      return;
+    }
+    if (mode === 'camera') {
+      startLiveCamera();
+    } else {
+      fileInputRef.current?.click();
     }
   };
 
@@ -239,7 +287,12 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
     const c = document.createElement('canvas');
     c.width = vw;
     c.height = vh;
-    c.getContext('2d').drawImage(videoRef.current, 0, 0, vw, vh);
+    const ctx = c.getContext('2d');
+    if (!ctx) {
+      showToast?.('카메라 프레임을 캡처할 수 없습니다.');
+      return;
+    }
+    ctx.drawImage(videoRef.current, 0, 0, vw, vh);
     const dataUrl = c.toDataURL('image/jpeg', 0.92);
     stopLiveCam();
     setRawUploadSource(dataUrl);
@@ -248,14 +301,18 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
 
   const handleCroppedPhotoApply = async (cropped) => {
     setCropEditorOpen(false);
+    if (!cropped?.dataUrl) return;
+    const matchedName = cropped?.matchedColor?.name || colorName;
+    const detectedHex = cropped?.detectedHex || cropped?.matchedColor?.hex || colorHex;
+
     setSelectedPreset('custom');
     setPreviewUrl(cropped.dataUrl);
     setImageData(cropped.dataUrl);
-    setColorName(cropped.matchedColor.name);
-    setColorHex(cropped.detectedHex);
-    const autoName = `오프라인 촬영 · ${cropped.matchedColor.name} 아이템`;
+    setColorName(matchedName);
+    setColorHex(detectedHex);
+    const autoName = `오프라인 촬영 · ${matchedName} 아이템`;
     setCandidateName(autoName);
-    showToast?.(`크롭 및 '${cropped.matchedColor.name}' 색상 자동 추출 완료`);
+    showToast?.(`크롭 및 '${matchedName}' 색상 자동 추출 완료`);
 
     await runAnalysis(
       {
@@ -263,8 +320,8 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
         candidate_name: autoName,
         category,
         subcategory,
-        color_name: cropped.matchedColor.name,
-        color_hex: cropped.detectedHex,
+        color_name: matchedName,
+        color_hex: detectedHex,
         price: Number(price) || 0,
         image_data: cropped.dataUrl,
         save_history: true,
@@ -343,6 +400,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
             <button
               type="button"
               className="btn btn-secondary btn-sm tabular-nums"
+              style={{ minHeight: 44 }}
               onClick={() => setDetailSheet('history')}
             >
               히스토리 ({history.length})
@@ -413,9 +471,16 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
           ) : (
             <div
               className="photo-dropzone"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => requestShoppingPicker('gallery')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  requestShoppingPicker('gallery');
+                }
+              }}
               role="button"
               tabIndex={0}
+              aria-label="매장 피팅샷 또는 제품 사진 업로드"
             >
               {previewUrl ? (
                 <StudioGarmentImage
@@ -464,7 +529,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
               type="button"
               className="btn btn-primary"
               style={{ flex: 1 }}
-              onClick={startLiveCamera}
+              onClick={() => requestShoppingPicker('camera')}
             >
               <Camera size={15} /> 카메라 촬영
             </button>
@@ -473,7 +538,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
               type="button"
               className="btn btn-secondary"
               style={{ flex: 1 }}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => requestShoppingPicker('gallery')}
             >
               <Upload size={15} /> 앨범 업로드
             </button>
@@ -481,6 +546,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
+                style={{ minHeight: 44 }}
                 onClick={() => {
                   if (!rawUploadSource && imageData) setRawUploadSource(imageData);
                   setCropEditorOpen(true);
@@ -502,7 +568,8 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
             <select
               id="shopping-color-select"
               className="select-input"
-              style={{ width: 'auto', padding: '8px 16px' }}
+              aria-label="감지된 색상 선택"
+              style={{ width: 'auto', padding: '8px 16px', minHeight: 44 }}
               value={colorName}
               onChange={(e) => {
                 const found = COLOR_PALETTE.find((c) => c.name === e.target.value);
@@ -675,6 +742,7 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm tabular-nums"
+                      style={{ minHeight: 44 }}
                       onClick={() => setDetailSheet('pairing')}
                     >
                       매칭 시뮬레이션 ({analysis.pairingOutfits.length})
@@ -830,6 +898,21 @@ export default function ShoppingCheckView({ activeCloset, onClosetUpdated, showT
           ))}
         </div>
       </ResponsiveSheetModal>
+
+      <PermissionNoticeModal
+        open={Boolean(pendingPickerMode)}
+        mode={pendingPickerMode === 'camera' ? 'camera' : 'gallery'}
+        onClose={() => setPendingPickerMode(null)}
+        onConfirm={() => {
+          const mode = pendingPickerMode;
+          setPendingPickerMode(null);
+          if (mode === 'camera') {
+            startLiveCamera();
+          } else {
+            fileInputRef.current?.click();
+          }
+        }}
+      />
 
       <SmartPhotoCropEditorModal
         open={cropEditorOpen}

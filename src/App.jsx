@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BarChart3,
   Camera,
@@ -11,20 +11,14 @@ import {
   Sparkles,
   Sun,
 } from 'lucide-react';
-import AccountSettingsSheet from './components/AccountSettingsSheet.jsx';
-import AdminPanelView from './components/AdminPanelView.jsx';
-import AnalyticsCalendarView from './components/AnalyticsCalendarView.jsx';
 import LoginView from './components/LoginView.jsx';
-import OutfitStudioView from './components/OutfitStudioView.jsx';
-import ProfilePersonalColorModal from './components/ProfilePersonalColorModal.jsx';
-import ShoppingCheckView from './components/ShoppingCheckView.jsx';
-import WardrobeView from './components/WardrobeView.jsx';
 import WeatherStylingView from './components/WeatherStylingView.jsx';
 import {
   SampleImportSheet,
   SkeletonShimmer,
   StatusCapsule,
 } from './components/common/AppUI.jsx';
+import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
 import {
   apiFetch,
   getStoredToken,
@@ -32,14 +26,50 @@ import {
   setStoredToken,
 } from './utils/api.js';
 import { getStoredLang, setStoredLang, tr } from './utils/i18n.js';
-import {
+import * as nativeBridgeMod from './utils/nativeBridge.js';
+import * as offlineSyncMod from './utils/offlineSync.js';
+
+const {
   applyThemePreference,
   emitStatusCapsule,
   getStoredThemePreference,
   initNativeBackBridge,
   pushBackHandler,
   triggerHaptic,
-} from './utils/nativeBridge.js';
+} = nativeBridgeMod;
+
+const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
+const ShoppingCheckView = lazy(() => import('./components/ShoppingCheckView.jsx'));
+const OutfitStudioView = lazy(() => import('./components/OutfitStudioView.jsx'));
+const AnalyticsCalendarView = lazy(() => import('./components/AnalyticsCalendarView.jsx'));
+const AdminPanelView = lazy(() => import('./components/AdminPanelView.jsx'));
+const ProfilePersonalColorModal = lazy(() => import('./components/ProfilePersonalColorModal.jsx'));
+const AccountSettingsSheet = lazy(() => import('./components/AccountSettingsSheet.jsx'));
+
+function computeEffectiveTheme(pref) {
+  if (pref === 'dark' || pref === 'light') return pref;
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+function ViewLoadingFallback() {
+  return (
+    <div
+      style={{
+        padding: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+      }}
+      aria-busy="true"
+    >
+      <SkeletonShimmer height={32} width={180} radius={12} />
+      <SkeletonShimmer height={260} width="100%" radius={20} />
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -49,6 +79,9 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lang, setLang] = useState(getStoredLang());
   const [themePref, setThemePref] = useState(getStoredThemePreference());
+  const [effectiveTheme, setEffectiveTheme] = useState(() =>
+    computeEffectiveTheme(getStoredThemePreference())
+  );
 
   const [closetSetupInput, setClosetSetupInput] = useState('');
   const [savingClosetName, setSavingClosetName] = useState(false);
@@ -57,17 +90,80 @@ export default function App() {
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showSampleImport, setShowSampleImport] = useState(false);
 
-  // Initialize Apple HIG theme & Capacitor Android hardware back-button bridge
+  const bumpRefresh = () => setRefreshKey((k) => k + 1);
+
+  // Initialize Apple HIG theme, reactive color-scheme listeners & Capacitor Android back-button bridge
   useEffect(() => {
-    applyThemePreference(getStoredThemePreference());
+    const initialResolved = applyThemePreference(getStoredThemePreference());
+    if (initialResolved === 'dark' || initialResolved === 'light') {
+      setEffectiveTheme(initialResolved);
+    }
     initNativeBackBridge();
+
+    const unsubBridgeTheme = nativeBridgeMod.subscribeThemeChange?.((nextEffective) => {
+      if (nextEffective === 'dark' || nextEffective === 'light') {
+        setEffectiveTheme(nextEffective);
+      }
+    });
+
+    const mql =
+      typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(prefers-color-scheme: dark)')
+        : null;
+    const handleMqlChange = () => {
+      const currentPref = getStoredThemePreference();
+      if (currentPref === 'system') {
+        const nextResolved = applyThemePreference('system');
+        setEffectiveTheme(nextResolved === 'dark' ? 'dark' : 'light');
+      }
+    };
+    if (mql?.addEventListener) {
+      mql.addEventListener('change', handleMqlChange);
+    }
+
+    const observer =
+      typeof MutationObserver !== 'undefined'
+        ? new MutationObserver(() => {
+            const attr = document.documentElement.getAttribute('data-theme');
+            if (attr === 'dark' || attr === 'light') {
+              setEffectiveTheme(attr);
+            }
+          })
+        : null;
+    observer?.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
+    return () => {
+      if (typeof unsubBridgeTheme === 'function') unsubBridgeTheme();
+      if (mql?.removeEventListener) mql.removeEventListener('change', handleMqlChange);
+      observer?.disconnect();
+    };
+  }, []);
+
+  // Refresh closet views automatically when offline mutation queue flushes upon reconnect
+  useEffect(() => {
+    const unsubSync = offlineSyncMod.subscribeOfflineSync?.((state) => {
+      if (state?.flushed > 0) {
+        bumpRefresh();
+      }
+    });
+    return () => {
+      if (typeof unsubSync === 'function') unsubSync();
+    };
   }, []);
 
   // Sync 3D WebGL active attribute so CSS Vibrancy never exceeds 1 concurrent blur layer (Req 14.b)
   useEffect(() => {
-    const is3D = Boolean(user) && (activeTab === 'weather' || activeTab === 'studio');
-    document.documentElement.setAttribute('data-3d-active', is3D ? 'true' : 'false');
-  }, [user, activeTab]);
+    const is3D =
+      Boolean(user) &&
+      (activeTab === 'weather' || activeTab === 'studio' || showProfileModal);
+    document.documentElement.setAttribute(
+      CARBON_DOM_CONTRACT.attrData3DActive,
+      is3D ? 'true' : 'false'
+    );
+  }, [user, activeTab, showProfileModal]);
 
   // Push non-default tab onto Android back stack so back button returns to 3D Studio first
   useEffect(() => {
@@ -93,10 +189,10 @@ export default function App() {
   };
 
   const handleQuickToggleTheme = () => {
-    const currentResolved = document.documentElement.getAttribute('data-theme') || 'light';
-    const next = currentResolved === 'dark' ? 'light' : 'dark';
+    const next = effectiveTheme === 'dark' ? 'light' : 'dark';
     setThemePref(next);
-    applyThemePreference(next);
+    const resolved = applyThemePreference(next);
+    setEffectiveTheme(resolved === 'dark' ? 'dark' : 'light');
     triggerHaptic('selection');
   };
 
@@ -118,8 +214,10 @@ export default function App() {
         const data = await apiFetch('/auth/me');
         setUser(data.user);
         setActiveCloset(data.user.defaultCloset || 'husband');
-      } catch {
-        setStoredToken('');
+      } catch (err) {
+        if (err?.status === 401 || err?.status === 403) {
+          setStoredToken('');
+        }
       } finally {
         setBooting(false);
       }
@@ -190,14 +288,17 @@ export default function App() {
         // ignore network error on logout
       }
     }
+    try {
+      await offlineSyncMod.clearUserSessionOfflineCache?.();
+    } catch {
+      // ignore IndexedDB cache clear error
+    }
     setSampleDemoMode(false);
     setStoredToken('');
     setUser(null);
     setShowProfileModal(false);
     setShowAccountSettings(false);
   };
-
-  const bumpRefresh = () => setRefreshKey((k) => k + 1);
 
   if (booting) {
     return (
@@ -229,6 +330,7 @@ export default function App() {
           lang={lang}
           onChangeLang={handleChangeLang}
           themePref={themePref}
+          effectiveTheme={effectiveTheme}
           onToggleTheme={handleQuickToggleTheme}
         />
       </>
@@ -254,6 +356,7 @@ export default function App() {
   }
 
   const needsClosetSetup = !user.isSampleDemo && !user.closetName;
+  const studioPaused = showProfileModal || showAccountSettings || showSampleImport || needsClosetSetup;
 
   const selectTab = (tabId) => {
     triggerHaptic('selection');
@@ -287,16 +390,14 @@ export default function App() {
               aria-label="테마 전환"
               title="라이트 / 다크 전환"
             >
-              {document.documentElement.getAttribute('data-theme') === 'dark' ? (
-                <Sun size={15} />
-              ) : (
-                <Moon size={15} />
-              )}
+              {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <button
               type="button"
               className="icon-btn"
               style={{ width: 'auto', padding: '0 8px', fontWeight: 600 }}
+              aria-label="언어 전환"
+              title="한국어 / English"
               onClick={() => handleChangeLang(lang === 'ko' ? 'en' : 'ko')}
             >
               <Globe size={13} />
@@ -426,15 +527,11 @@ export default function App() {
             aria-label="테마 전환"
             onClick={handleQuickToggleTheme}
           >
-            {document.documentElement.getAttribute('data-theme') === 'dark' ? (
-              <Sun size={15} />
-            ) : (
-              <Moon size={15} />
-            )}
+            {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
 
           <button
-            id="mobile-open-account-settings-btn"
+            id={CARBON_DOM_CONTRACT.mobileOpenAccountSettingsId}
             type="button"
             className="icon-btn"
             aria-label="계정 및 개인정보 설정"
@@ -457,6 +554,7 @@ export default function App() {
             user={user}
             lang={lang}
             refreshKey={refreshKey}
+            paused={studioPaused}
             onNavigateShopping={() => selectTab('shopping')}
             onNavigateWardrobe={() => selectTab('wardrobe')}
             onOpenProfileModal={openProfileModal}
@@ -468,50 +566,53 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'shopping' && (
-          <ShoppingCheckView
-            activeCloset={activeCloset}
-            onClosetUpdated={bumpRefresh}
-            showToast={showToast}
-          />
-        )}
+        <Suspense fallback={<ViewLoadingFallback />}>
+          {activeTab === 'shopping' && (
+            <ShoppingCheckView
+              activeCloset={activeCloset}
+              onClosetUpdated={bumpRefresh}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'wardrobe' && (
-          <WardrobeView
-            activeCloset={activeCloset}
-            user={user}
-            refreshKey={refreshKey}
-            onOpenSampleImport={() => setShowSampleImport(true)}
-            onClosetUpdated={bumpRefresh}
-            showToast={showToast}
-          />
-        )}
+          {activeTab === 'wardrobe' && (
+            <WardrobeView
+              activeCloset={activeCloset}
+              user={user}
+              refreshKey={refreshKey}
+              onOpenSampleImport={() => setShowSampleImport(true)}
+              onClosetUpdated={bumpRefresh}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'studio' && (
-          <OutfitStudioView
-            activeCloset={activeCloset}
-            user={user}
-            lang={lang}
-            refreshKey={refreshKey}
-            onOpenProfileModal={openProfileModal}
-            onClosetUpdated={bumpRefresh}
-            showToast={showToast}
-          />
-        )}
+          {activeTab === 'studio' && (
+            <OutfitStudioView
+              activeCloset={activeCloset}
+              user={user}
+              lang={lang}
+              refreshKey={refreshKey}
+              paused={studioPaused}
+              onOpenProfileModal={openProfileModal}
+              onClosetUpdated={bumpRefresh}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'analytics' && (
-          <AnalyticsCalendarView
-            activeCloset={activeCloset}
-            user={user}
-            refreshKey={refreshKey}
-            onClosetUpdated={bumpRefresh}
-            showToast={showToast}
-          />
-        )}
+          {activeTab === 'analytics' && (
+            <AnalyticsCalendarView
+              activeCloset={activeCloset}
+              user={user}
+              refreshKey={refreshKey}
+              onClosetUpdated={bumpRefresh}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'admin' && user.role === 'admin' && (
-          <AdminPanelView onClosetUpdated={bumpRefresh} showToast={showToast} />
-        )}
+          {activeTab === 'admin' && user.role === 'admin' && (
+            <AdminPanelView onClosetUpdated={bumpRefresh} showToast={showToast} />
+          )}
+        </Suspense>
       </main>
 
       {/* Mobile Floating Vibrancy Bottom Navigation (Req 14.a) */}
@@ -572,11 +673,14 @@ export default function App() {
       {needsClosetSetup && (
         <div className="modal-backdrop ui-sheet-backdrop" style={{ zIndex: 130 }}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="closet-setup-title"
             data-sheet-panel="true"
             className="modal-box ui-sheet-box"
             style={{ maxWidth: 420 }}
           >
-            <h3 className="hig-headline" style={{ marginBottom: 8 }}>
+            <h3 id="closet-setup-title" className="hig-headline" style={{ marginBottom: 8 }}>
               {tr(lang, 'closetSetupTitle')}
             </h3>
             <p className="hig-caption" style={{ marginBottom: 16 }}>
@@ -584,8 +688,11 @@ export default function App() {
             </p>
             <form onSubmit={handleSaveClosetName}>
               <div className="field-group">
-                <label className="field-label">{tr(lang, 'closetNameLabel')}</label>
+                <label className="field-label" htmlFor="closet-setup-name-input">
+                  {tr(lang, 'closetNameLabel')}
+                </label>
                 <input
+                  id="closet-setup-name-input"
                   className="text-input"
                   placeholder={tr(lang, 'closetNamePlaceholder')}
                   value={closetSetupInput}
@@ -606,22 +713,31 @@ export default function App() {
       )}
 
       {/* Account Settings & Immediate Permanent Account Deletion Sheet */}
-      <AccountSettingsSheet
-        open={showAccountSettings}
-        onClose={() => setShowAccountSettings(false)}
-        user={user}
-        lang={lang}
-        onChangeLang={handleChangeLang}
-        onOpenSampleImport={() => setShowSampleImport(true)}
-        onOpenProfileModal={openProfileModal}
-        onLogout={handleLogout}
-        onAccountDeleted={() => {
-          setShowAccountSettings(false);
-          setSampleDemoMode(false);
-          setStoredToken('');
-          setUser(null);
-        }}
-      />
+      {showAccountSettings && (
+        <Suspense fallback={null}>
+          <AccountSettingsSheet
+            open={showAccountSettings}
+            onClose={() => setShowAccountSettings(false)}
+            user={user}
+            lang={lang}
+            onChangeLang={handleChangeLang}
+            onOpenSampleImport={() => setShowSampleImport(true)}
+            onOpenProfileModal={openProfileModal}
+            onLogout={handleLogout}
+            onAccountDeleted={async () => {
+              try {
+                await offlineSyncMod.purgeAllLocalUserData?.();
+              } catch {
+                // ignore IndexedDB purge error
+              }
+              setShowAccountSettings(false);
+              setSampleDemoMode(false);
+              setStoredToken('');
+              setUser(null);
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Selective Sample Closet Import Sheet */}
       <SampleImportSheet
@@ -636,26 +752,28 @@ export default function App() {
 
       {/* Styling Profile + 7 Body Shapes + Personal Color Modal */}
       {showProfileModal && !needsClosetSetup && (
-        <ProfilePersonalColorModal
-          open={showProfileModal}
-          user={user}
-          initialStep={profileInitialStep}
-          lang={lang}
-          onClose={() => setShowProfileModal(false)}
-          onLiveUpdateUser={(partialUser) =>
-            setUser((prev) => (prev ? { ...prev, ...partialUser } : prev))
-          }
-          onCompleted={(updatedUser, generatedWardrobe) => {
-            setUser(updatedUser);
-            setShowProfileModal(false);
-            bumpRefresh();
-            if (generatedWardrobe?.createdCount > 0) {
-              showToast(`프로필 저장 · ${generatedWardrobe.createdCount}벌 의류 생성 완료`);
-            } else {
-              showToast('체형 · 퍼스널컬러 · 3D 모델링 업데이트 완료');
+        <Suspense fallback={null}>
+          <ProfilePersonalColorModal
+            open={showProfileModal}
+            user={user}
+            initialStep={profileInitialStep}
+            lang={lang}
+            onClose={() => setShowProfileModal(false)}
+            onLiveUpdateUser={(partialUser) =>
+              setUser((prev) => (prev ? { ...prev, ...partialUser } : prev))
             }
-          }}
-        />
+            onCompleted={(updatedUser, generatedWardrobe) => {
+              setUser(updatedUser);
+              setShowProfileModal(false);
+              bumpRefresh();
+              if (generatedWardrobe?.createdCount > 0) {
+                showToast(`프로필 저장 · ${generatedWardrobe.createdCount}벌 의류 생성 완료`);
+              } else {
+                showToast('체형 · 퍼스널컬러 · 3D 모델링 업데이트 완료');
+              }
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

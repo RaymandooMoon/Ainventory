@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarPlus, Check, MapPin, Navigation, Plus, Sparkles, Wind } from 'lucide-react';
+import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { CITY_COORDS, apiFetch } from '../utils/api.js';
 import { triggerHaptic } from '../utils/nativeBridge.js';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
@@ -15,6 +16,7 @@ export default function WeatherStylingView({
   activeCloset,
   user,
   refreshKey = 0,
+  paused = false,
   onNavigateWardrobe,
   onOpenProfileModal,
   onOpenAccountSettings,
@@ -74,6 +76,7 @@ export default function WeatherStylingView({
       showToast?.('현재 기기에서 위치 정보를 사용할 수 없습니다');
       return;
     }
+    showToast?.('현재 위치 기상 조회를 위해 기기 위치 권한을 요청합니다');
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -92,6 +95,18 @@ export default function WeatherStylingView({
       { timeout: 6000 }
     );
   };
+
+  const handleOpenWeatherSheet = useCallback(() => {
+    setWeatherSheetOpen(true);
+  }, []);
+
+  const handleSlotSwap = useCallback((slotKey, newItem) => {
+    setSlotOverrides((prev) => ({ ...prev, [slotKey]: newItem }));
+  }, []);
+
+  const handleUnequipSlot = useCallback((slotKey) => {
+    setSlotOverrides((prev) => ({ ...prev, [slotKey]: null }));
+  }, []);
 
   const recs = useMemo(() => data?.recommendations || [], [data]);
   const baseRec = recs[selectedIdx] || recs[0] || null;
@@ -186,7 +201,7 @@ export default function WeatherStylingView({
 
   if (loading && !data) {
     return (
-      <div className="hig-studio-screen" style={{ padding: 24 }}>
+      <div className={CARBON_DOM_CONTRACT.studioScreenClass} style={{ padding: 24 }}>
         <SkeletonShimmer
           height={36}
           width={160}
@@ -203,7 +218,7 @@ export default function WeatherStylingView({
 
   const emptyClosetCard = isClosetEmpty ? (
     <div
-      id="studio-empty-closet-card"
+      id={CARBON_DOM_CONTRACT.studioEmptyClosetCardId}
       className="hig-fade-in"
       style={{
         position: 'absolute',
@@ -252,21 +267,18 @@ export default function WeatherStylingView({
     <>
       <VirtualMannequin
         immersiveStudio
+        paused={paused || weatherSheetOpen}
         outfit={activeOutfit}
         allGarments={closetGarments}
         personalColor={data?.stylingProfile?.personalColor || user?.personalColor || 'autumn_warm'}
         userProfile={user}
         weather={normalizedWeather}
-        onOpenWeatherSheet={() => setWeatherSheetOpen(true)}
+        onOpenWeatherSheet={handleOpenWeatherSheet}
         onOpenProfileModal={onOpenProfileModal}
         onOpenAccountSettings={onOpenAccountSettings}
         onSaveOutfitLog={activeOutfit?.items?.length ? handleLogCurrentOutfit : null}
-        onSlotSwap={(slotKey, newItem) =>
-          setSlotOverrides((prev) => ({ ...prev, [slotKey]: newItem }))
-        }
-        onUnequipSlot={(slotKey) =>
-          setSlotOverrides((prev) => ({ ...prev, [slotKey]: null }))
-        }
+        onSlotSwap={handleSlotSwap}
+        onUnequipSlot={handleUnequipSlot}
         emptyClosetOverlay={emptyClosetCard}
       />
 
@@ -382,8 +394,10 @@ export default function WeatherStylingView({
               {recs.map((rec, idx) => {
                 const isSelected = idx === selectedIdx;
                 return (
-                  <div
+                  <button
                     key={rec.id || idx}
+                    type="button"
+                    aria-pressed={isSelected}
                     onClick={() => {
                       triggerHaptic('selection');
                       setSelectedIdx(idx);
@@ -391,6 +405,9 @@ export default function WeatherStylingView({
                       setWeatherSheetOpen(false);
                     }}
                     style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 'none',
                       background: isSelected ? 'var(--bg-subtle)' : 'var(--bg-surface)',
                       borderRadius: 16,
                       padding: 16,
@@ -436,7 +453,7 @@ export default function WeatherStylingView({
                       {isSelected ? <Check size={14} /> : null}
                       <span>{isSelected ? '적용됨' : '입히기'}</span>
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>

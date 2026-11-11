@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Camera,
   Check,
@@ -20,6 +20,7 @@ import {
   resolveAnatomicalProfile,
   suggestBodyShapeFromMetrics,
 } from '../utils/bodyAnthropometrics.js';
+import * as faceLandmarkMod from '../utils/faceLandmarkEngine.js';
 import {
   LIGHTING_MODES,
   PCCS_12_TONES,
@@ -28,8 +29,11 @@ import {
   PERSONAL_COLOR_SUBTYPES,
   analyzePersonalColorFromImage,
 } from '../utils/imageTools.js';
-import { analyzeFaceSkinOnDevice } from '../utils/faceLandmarkerLocal.js';
-import { hasBiometricConsent } from '../utils/nativeBridge.js';
+import {
+  emitStatusCapsule,
+  hasBiometricConsent,
+  pushBackHandler,
+} from '../utils/nativeBridge.js';
 import PortraitCropAndPinEditorModal from './PortraitCropAndPinEditorModal.jsx';
 import { Mannequin3DBodyPreview } from './VirtualMannequin.jsx';
 import { BiometricConsentModal } from './common/AppUI.jsx';
@@ -48,12 +52,13 @@ const AGE_GROUP_OPTIONS = [
   { value: '90s_plus', label: '90대 이상 (90세+)' },
 ];
 
-// Generate a synthetic portrait data URL for quick 1-click personal color testing
+// Generate a synthetic portrait data URL for quick 1-click personal color testing (pure 2D canvas, zero WASM)
 function createSampleFaceDataUrl(tone = 'spring_warm') {
   const c = document.createElement('canvas');
   c.width = 320;
   c.height = 320;
   const ctx = c.getContext('2d');
+  if (!ctx) return '';
   ctx.fillStyle = '#EAE6DF';
   ctx.fillRect(0, 0, 320, 320);
 
@@ -91,7 +96,7 @@ function createSampleFaceDataUrl(tone = 'spring_warm') {
   ctx.fill();
 
   // Eyes & Brows
-  ctx.fillStyle = '#2B2523';
+  ctx.fillStyle = '#1D1D1F';
   ctx.beginPath();
   ctx.arc(128, 148, 6, 0, Math.PI * 2);
   ctx.arc(192, 148, 6, 0, Math.PI * 2);
@@ -113,6 +118,11 @@ export default function ProfilePersonalColorModal({
   const mobileCameraInputRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const openRef = useRef(open);
+  const mountedRef = useRef(true);
+  const streamReqIdRef = useRef(0);
+
+  openRef.current = open;
 
   const [step, setStep] = useState(initialStep || 1);
   const [ageGroup, setAgeGroup] = useState(user?.ageGroup || '30s');
@@ -157,11 +167,18 @@ export default function ProfilePersonalColorModal({
   const [selectedPccsToneKey, setSelectedPccsToneKey] = useState('light');
   const [chartToneFamily, setChartToneFamily] = useState('WARM TONE');
 
-  // 3D Mannequin Color Mode: 'personal_color' (tints 3D mannequin with measured personal color) | 'skin_tone' (natural skin hex)
+  // 3D Mannequin Color Mode: 'personal_color' | 'skin_tone'
   const [mannequinColorMode, setMannequinColorMode] = useState('personal_color');
   const [customMannequinHex, setCustomMannequinHex] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [pendingBiometricAction, setPendingBiometricAction] = useState(null); // 'camera' | 'upload' | null
+  const [pendingBiometricAction, setPendingBiometricAction] = useState(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (open && initialStep) {
@@ -169,25 +186,57 @@ export default function ProfilePersonalColorModal({
     }
   }, [open, initialStep]);
 
-  // Stop camera stream on modal close or unmount
-  const stopCameraStream = () => {
+  // Stop camera stream cleanly and invalidate any in-flight getUserMedia promise
+  const stopCameraStream = useCallback(() => {
+    streamReqIdRef.current += 1;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setCameraActive(false);
-  };
+  }, []);
 
+  // Dispose camera tracks & WASM FaceLandmarker on modal close or unmount
   useEffect(() => {
     if (!open) {
       stopCameraStream();
+      faceLandmarkMod.disposeFaceLandmarker?.();
     }
-    return () => stopCameraStream();
-  }, [open]);
+    return () => {
+      stopCameraStream();
+      faceLandmarkMod.disposeFaceLandmarker?.();
+    };
+  }, [open, stopCameraStream]);
+
+  // Hardware back stack & Escape dismissal when top-level modal is open
+  useEffect(() => {
+    if (!open || !allowDismiss || pinEditorOpen || Boolean(pendingBiometricAction)) {
+      return undefined;
+    }
+    const popBack = pushBackHandler(() => {
+      onClose?.();
+      return true;
+    });
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      popBack();
+    };
+  }, [open, allowDismiss, pinEditorOpen, pendingBiometricAction, onClose]);
 
   const startCameraStream = async (facing = cameraFacing) => {
     setCameraError('');
     stopCameraStream();
+    const reqId = ++streamReqIdRef.current;
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraError(
@@ -206,16 +255,25 @@ export default function ProfilePersonalColorModal({
         },
         audio: false,
       });
+      if (!mountedRef.current || !openRef.current || reqId !== streamReqIdRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       setCameraFacing(facing);
       setCameraActive(true);
       requestAnimationFrame(() => {
+        if (!mountedRef.current || !openRef.current || streamRef.current !== stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(() => {});
         }
       });
     } catch {
+      if (!mountedRef.current || !openRef.current) return;
       setCameraError(
         '카메라 권한이 거부되었거나 사용할 수 없어 사진 촬영/선택 창으로 연결합니다.'
       );
@@ -244,9 +302,9 @@ export default function ProfilePersonalColorModal({
 
   const activeBriefsColorHex = useMemo(() => {
     if (mannequinColorMode === 'personal_color') {
-      return activeSubType.mannequinBriefsColorHex || '#2c2623';
+      return activeSubType.mannequinBriefsColorHex || '#1D1D1F';
     }
-    return '#2c2623';
+    return '#1D1D1F';
   }, [mannequinColorMode, activeSubType]);
 
   // Resolved anatomical profile with live defaults vs user overrides
@@ -266,7 +324,7 @@ export default function ProfilePersonalColorModal({
     [gender, heightCm, weightKg, bodyShape, bodyFatPct, chestCm, waistCm, hipCm, headCm]
   );
 
-  // Live faceless 3D mannequin profile (body tone + briefs follow the personal color / detected skin)
+  // Live faceless 3D mannequin profile
   const livePreviewProfile = useMemo(
     () => ({
       gender,
@@ -343,18 +401,6 @@ export default function ProfilePersonalColorModal({
     activeBriefsColorHex,
   ]);
 
-  const requestBiometricCapture = (actionType) => {
-    if (!hasBiometricConsent()) {
-      setPendingBiometricAction(actionType);
-      return;
-    }
-    if (actionType === 'camera') {
-      startCameraStream('user');
-    } else if (actionType === 'upload') {
-      fileInputRef.current?.click();
-    }
-  };
-
   const executePersonalColorAnalysis = async (
     imgUrl,
     mode = lightingMode,
@@ -363,64 +409,81 @@ export default function ProfilePersonalColorModal({
     crop = cropRect
   ) => {
     if (!imgUrl) return;
-    let resolvedPins = pins;
-    if (!resolvedPins && hasBiometricConsent()) {
-      try {
-        const imgEl = await new Promise((resolve, reject) => {
-          const el = new Image();
-          el.crossOrigin = 'anonymous';
-          el.onload = () => resolve(el);
-          el.onerror = reject;
-          el.src = imgUrl;
-        });
-        const localLandmark = await analyzeFaceSkinOnDevice(imgEl);
-        if (localLandmark?.usedWasm && localLandmark.pins) {
-          resolvedPins = [
-            { id: 'forehead', labelKo: '이마', ...localLandmark.pins.forehead },
-            { id: 'left_cheek', labelKo: '왼쪽 볼', ...localLandmark.pins.cheekL },
-            { id: 'right_cheek', labelKo: '오른쪽 볼', ...localLandmark.pins.cheekR },
-            { id: 'chin', labelKo: '턱', ...localLandmark.pins.chin },
-          ];
-        }
-      } catch {
-        // Fallback to local ROI pins inside analyzePersonalColorFromImage
-      }
+    if (!hasBiometricConsent()) {
+      setPendingBiometricAction({
+        type: 'analyze',
+        imgUrl,
+        mode,
+        pins,
+        rot,
+        crop,
+      });
+      return;
     }
 
-    const res = await analyzePersonalColorFromImage(imgUrl, {
-      lightingMode: mode,
-      customPins: resolvedPins,
-      rotationDeg: rot,
-      cropRect: crop,
-    });
-    setPcResult(res);
-    setSelectedPersonalColor(res.personalColor);
-    if (res.subTypeKey) {
-      setSelectedSubTypeKey(res.subTypeKey);
+    try {
+      let resolvedPins = Array.isArray(pins) && pins.length === 4 ? pins : null;
+      if (!resolvedPins) {
+        try {
+          const landmarkRes = await faceLandmarkMod.detectFaceAndSkinPins(imgUrl, {
+            rotationDeg: rot,
+            cropRect: crop,
+          });
+          if (Array.isArray(landmarkRes?.pins) && landmarkRes.pins.length === 4) {
+            resolvedPins = landmarkRes.pins;
+          }
+        } catch {
+          resolvedPins = faceLandmarkMod.DEFAULT_SKIN_PINS || null;
+        }
+      }
+
+      const res = await analyzePersonalColorFromImage(imgUrl, {
+        lightingMode: mode,
+        customPins: resolvedPins,
+        rotationDeg: rot,
+        cropRect: crop,
+      });
+      if (!mountedRef.current || !openRef.current) return;
+      setPcResult(res);
+      if (res?.personalColor) {
+        setSelectedPersonalColor(res.personalColor);
+      }
+      if (res?.subTypeKey) {
+        setSelectedSubTypeKey(res.subTypeKey);
+      }
+      if (res?.pccsToneKey) {
+        setSelectedPccsToneKey(res.pccsToneKey);
+      }
+      if (res?.toneFamily) {
+        setChartToneFamily(res.toneFamily);
+      }
+      setCustomMannequinHex(null);
+      setMannequinColorMode('personal_color');
+    } catch (err) {
+      emitStatusCapsule(err?.message || '퍼스널컬러 측정 중 오류가 발생했습니다');
     }
-    if (res.pccsToneKey) {
-      setSelectedPccsToneKey(res.pccsToneKey);
-    }
-    if (res.toneFamily) {
-      setChartToneFamily(res.toneFamily);
-    }
-    setCustomMannequinHex(null);
-    setMannequinColorMode('personal_color');
   };
 
-  // Initialize default sample portrait analysis on first open
+  // Initialize default synthetic portrait image on open WITHOUT booting WASM before biometric consent
   useEffect(() => {
     if (open && !portraitDataUrl) {
       const sampleUrl = createSampleFaceDataUrl(user?.personalColor || 'spring_warm');
-      setPortraitDataUrl(sampleUrl);
-      executePersonalColorAnalysis(sampleUrl, lightingMode, null, 0, null);
+      if (sampleUrl) {
+        setPortraitDataUrl(sampleUrl);
+      }
+    }
+  }, [open, portraitDataUrl, user?.personalColor]);
+
+  // Only auto-analyze when user is on Step 2 AND has already granted explicit biometric consent
+  useEffect(() => {
+    if (open && step === 2 && portraitDataUrl && !pcResult && hasBiometricConsent()) {
+      executePersonalColorAnalysis(portraitDataUrl, lightingMode, null, 0, null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, step, portraitDataUrl]);
 
   if (!open) return null;
 
-  // Selecting one of the 7 body shapes resets stale manual 3-size overrides so the 3D silhouette & 3-sizes update immediately
   const handleSelectBodyShape = (nextShapeKey) => {
     setBodyShape(nextShapeKey);
     setBodyFatPct('');
@@ -456,21 +519,21 @@ export default function ProfilePersonalColorModal({
     stopCameraStream();
     const reader = new FileReader();
     reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
       const dataUrl = reader.result;
       setRawPortraitSourceUrl(dataUrl);
       setPortraitDataUrl(dataUrl);
       setCustomPins(null);
       setRotationDeg(0);
       setCropRect(null);
-      // Launch Photo Crop Editor immediately so full-body or selfie shots can be cropped first!
       setPinEditorOpen(true);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  // Capture full camera frame from live <video> and launch Photo Crop Editor right away!
-  const handleCameraShutterDiagnose = () => {
+  // Capture full camera frame from live <video> or diagnose existing portrait (called after consent check)
+  const performShutterOrDiagnose = () => {
     if (cameraActive && videoRef.current && videoRef.current.videoWidth > 0) {
       const vw = videoRef.current.videoWidth;
       const vh = videoRef.current.videoHeight;
@@ -482,6 +545,10 @@ export default function ProfilePersonalColorModal({
       c.width = cw;
       c.height = ch;
       const ctx = c.getContext('2d');
+      if (!ctx) {
+        emitStatusCapsule('카메라 캔버스를 초기화할 수 없습니다');
+        return;
+      }
       if (cameraFacing === 'user') {
         ctx.translate(cw, 0);
         ctx.scale(-1, 1);
@@ -494,20 +561,69 @@ export default function ProfilePersonalColorModal({
       setCustomPins(null);
       setRotationDeg(0);
       setCropRect(null);
-      // Immediately launch Photo Crop Editor after snapping camera photo!
       setPinEditorOpen(true);
     } else if (!cameraActive && portraitDataUrl) {
-      // Re-run diagnosis with progress bar on current portrait or start camera
       setReanalyzingPct(20);
-      setTimeout(() => setReanalyzingPct(65), 90);
       setTimeout(() => {
+        if (mountedRef.current) setReanalyzingPct(65);
+      }, 90);
+      setTimeout(() => {
+        if (!mountedRef.current) return;
         setReanalyzingPct(100);
-        executePersonalColorAnalysis(portraitDataUrl, lightingMode, customPins, rotationDeg, cropRect);
-        setTimeout(() => setReanalyzingPct(null), 220);
+        executePersonalColorAnalysis(
+          portraitDataUrl,
+          lightingMode,
+          customPins,
+          rotationDeg,
+          cropRect
+        ).finally(() => {
+          setTimeout(() => {
+            if (mountedRef.current) setReanalyzingPct(null);
+          }, 220);
+        });
       }, 180);
     } else {
       startCameraStream('user');
     }
+  };
+
+  const runConsentedBiometricAction = (actionSpec) => {
+    if (!actionSpec) return;
+    const actionType = typeof actionSpec === 'string' ? actionSpec : actionSpec.type;
+    if (actionType === 'camera') {
+      startCameraStream('user');
+    } else if (actionType === 'flip') {
+      handleFlipCamera();
+    } else if (actionType === 'upload') {
+      fileInputRef.current?.click();
+    } else if (actionType === 'shutter') {
+      performShutterOrDiagnose();
+    } else if (actionType === 'pin_editor') {
+      setPinEditorOpen(true);
+    } else if (actionType === 'sample' && typeof actionSpec === 'object' && actionSpec.sampleKey) {
+      stopCameraStream();
+      const url = createSampleFaceDataUrl(actionSpec.sampleKey);
+      if (url) {
+        setPortraitDataUrl(url);
+        executePersonalColorAnalysis(url, lightingMode, null, 0, null);
+      }
+    } else if (actionType === 'analyze' && typeof actionSpec === 'object') {
+      executePersonalColorAnalysis(
+        actionSpec.imgUrl,
+        actionSpec.mode,
+        actionSpec.pins,
+        actionSpec.rot,
+        actionSpec.crop
+      );
+    }
+  };
+
+  const requestBiometricCapture = (actionSpec) => {
+    if (!hasBiometricConsent()) {
+      setPendingBiometricAction(actionSpec);
+      return;
+    }
+    runConsentedBiometricAction(actionSpec);
   };
 
   const handleSelectSubType = (subKey) => {
@@ -538,12 +654,26 @@ export default function ProfilePersonalColorModal({
     setPendingLightingMode(null);
     if (!targetMode) return;
 
+    if (!hasBiometricConsent()) {
+      setLightingMode(targetMode);
+      setPendingBiometricAction({
+        type: 'analyze',
+        imgUrl: portraitDataUrl,
+        mode: targetMode,
+        pins: customPins,
+        rot: rotationDeg,
+        crop: cropRect,
+      });
+      return;
+    }
+
     setReanalyzingPct(0);
     let current = 0;
     const interval = setInterval(() => {
       current += 25;
       if (current >= 100) {
         clearInterval(interval);
+        if (!mountedRef.current) return;
         setReanalyzingPct(100);
         setLightingMode(targetMode);
         executePersonalColorAnalysis(
@@ -553,9 +683,11 @@ export default function ProfilePersonalColorModal({
           rotationDeg,
           cropRect
         ).finally(() => {
-          setTimeout(() => setReanalyzingPct(null), 240);
+          setTimeout(() => {
+            if (mountedRef.current) setReanalyzingPct(null);
+          }, 240);
         });
-      } else {
+      } else if (mountedRef.current) {
         setReanalyzingPct(current);
       }
     }, 65);
@@ -602,14 +734,19 @@ export default function ProfilePersonalColorModal({
         mannequinBriefsColorHex: activeBriefsColorHex,
       };
       onCompleted?.(enrichedUser, res.generatedWardrobe);
+    } catch (err) {
+      emitStatusCapsule(err?.message || '프로필 저장 중 오류가 발생했습니다');
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   };
 
   return (
     <div className="modal-backdrop" onClick={() => allowDismiss && onClose?.()}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pcm-modal-title"
         className="pcm-modal-box"
         data-sheet-panel="true"
         onClick={(e) => e.stopPropagation()}
@@ -623,7 +760,7 @@ export default function ProfilePersonalColorModal({
             >
               STEP {step} OF 2 · 3D MANNEQUIN &amp; PERSONAL COLOR STUDIO
             </span>
-            <h2 className="hig-headline">
+            <h2 id="pcm-modal-title" className="hig-headline">
               {step === 1
                 ? 'Step 1. 7대 체형 · 스리사이즈 · 3D 마네킹 실루엣 설정'
                 : 'Step 2. 실시간 카메라/사진 퍼스널컬러 측정 · PCCS 톤 맵'}
@@ -790,7 +927,6 @@ export default function ProfilePersonalColorModal({
                 />
                 실측 피부 언더톤 ({pcResult?.skinToneHex || user?.skinToneHex || '#E6C6AE'})
               </button>
-              {/* Quick Subtype Swatches to test 3D modeling color change immediately */}
               {Object.values(PERSONAL_COLOR_SUBTYPES).map((st) => (
                 <button
                   key={st.key}
@@ -834,7 +970,9 @@ export default function ProfilePersonalColorModal({
               <div>
                 <div className="form-grid-2">
                   <div className="field-group">
-                    <label className="field-label">연령대 (10단계 통계 벤치마크 기준)</label>
+                    <label className="field-label" htmlFor="profile-age-group">
+                      연령대 (10단계 통계 벤치마크 기준)
+                    </label>
                     <select
                       id="profile-age-group"
                       className="select-input tabular-nums"
@@ -850,7 +988,9 @@ export default function ProfilePersonalColorModal({
                   </div>
 
                   <div className="field-group">
-                    <label className="field-label">성별 (체형 및 3사이즈 디폴트 기준)</label>
+                    <label className="field-label" htmlFor="profile-gender">
+                      성별 (체형 및 3사이즈 디폴트 기준)
+                    </label>
                     <select
                       id="profile-gender"
                       className="select-input"
@@ -866,7 +1006,9 @@ export default function ProfilePersonalColorModal({
 
                 <div className="pcm-metrics-3col">
                   <div className="field-group">
-                    <label className="field-label">만 나이 (선택)</label>
+                    <label className="field-label" htmlFor="profile-age-input">
+                      만 나이 (선택)
+                    </label>
                     <input
                       id="profile-age-input"
                       type="number"
@@ -877,7 +1019,9 @@ export default function ProfilePersonalColorModal({
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">키 (cm)</label>
+                    <label className="field-label" htmlFor="profile-height-input">
+                      키 (cm)
+                    </label>
                     <input
                       id="profile-height-input"
                       type="number"
@@ -888,7 +1032,9 @@ export default function ProfilePersonalColorModal({
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">몸무게 (kg)</label>
+                    <label className="field-label" htmlFor="profile-weight-input">
+                      몸무게 (kg)
+                    </label>
                     <input
                       id="profile-weight-input"
                       type="number"
@@ -1041,7 +1187,9 @@ export default function ProfilePersonalColorModal({
 
                   <div className="pcm-5size-grid">
                     <div>
-                      <label className="field-label">체지방률 (%)</label>
+                      <label className="field-label" htmlFor="input-body-fat">
+                        체지방률 (%)
+                      </label>
                       <input
                         id="input-body-fat"
                         type="number"
@@ -1053,7 +1201,9 @@ export default function ProfilePersonalColorModal({
                       />
                     </div>
                     <div>
-                      <label className="field-label">가슴둘레 (cm)</label>
+                      <label className="field-label" htmlFor="input-chest-cm">
+                        가슴둘레 (cm)
+                      </label>
                       <input
                         id="input-chest-cm"
                         type="number"
@@ -1065,7 +1215,9 @@ export default function ProfilePersonalColorModal({
                       />
                     </div>
                     <div>
-                      <label className="field-label">허리둘레 (cm)</label>
+                      <label className="field-label" htmlFor="input-waist-cm">
+                        허리둘레 (cm)
+                      </label>
                       <input
                         id="input-waist-cm"
                         type="number"
@@ -1077,7 +1229,9 @@ export default function ProfilePersonalColorModal({
                       />
                     </div>
                     <div>
-                      <label className="field-label">엉덩이둘레 (cm)</label>
+                      <label className="field-label" htmlFor="input-hip-cm">
+                        엉덩이둘레 (cm)
+                      </label>
                       <input
                         id="input-hip-cm"
                         type="number"
@@ -1089,7 +1243,9 @@ export default function ProfilePersonalColorModal({
                       />
                     </div>
                     <div>
-                      <label className="field-label">머리둘레 (cm)</label>
+                      <label className="field-label" htmlFor="input-head-cm">
+                        머리둘레 (cm)
+                      </label>
                       <input
                         id="input-head-cm"
                         type="number"
@@ -1139,7 +1295,7 @@ export default function ProfilePersonalColorModal({
           </div>
         ) : (
           /* ===================================================================
-             STEP 2: CAMERA SELFIE / PHOTO UPLOAD + PCCS 12-TONE CHART & SUBTYPES (image_3.png)
+             STEP 2: CAMERA SELFIE / PHOTO UPLOAD + PCCS 12-TONE CHART & SUBTYPES
              =================================================================== */
           <div>
             {/* Hidden file inputs for gallery upload & mobile direct selfie camera */}
@@ -1185,7 +1341,7 @@ export default function ProfilePersonalColorModal({
               </div>
             )}
 
-            {/* Main Personal Color App Split View (Left: Camera Viewfinder, Right: PCCS 12-Tone Chart & Subtype Bubbles) */}
+            {/* Main Personal Color App Split View */}
             <div className="pcm-pc-app-grid">
               {/* LEFT: Camera Selfie Viewfinder & Photo Upload */}
               <div className="pcm-camera-card">
@@ -1209,6 +1365,7 @@ export default function ProfilePersonalColorModal({
                       }
                       className="hig-caption"
                       style={{
+                        minHeight: 44,
                         padding: '8px 12px',
                         borderRadius: 999,
                         fontWeight: 700,
@@ -1228,6 +1385,7 @@ export default function ProfilePersonalColorModal({
                       onClick={() => requestBiometricCapture('upload')}
                       className="hig-caption"
                       style={{
+                        minHeight: 44,
                         padding: '8px 12px',
                         borderRadius: 999,
                         fontWeight: 700,
@@ -1245,10 +1403,11 @@ export default function ProfilePersonalColorModal({
                   <button
                     id="open-pin-editor-btn"
                     type="button"
-                    onClick={() => setPinEditorOpen(true)}
+                    onClick={() => requestBiometricCapture('pin_editor')}
                     className="hig-caption tabular-nums"
                     style={{
-                      padding: '4px 8px',
+                      minHeight: 44,
+                      padding: '4px 10px',
                       borderRadius: 999,
                       background: 'rgba(255,255,255,0.12)',
                       color: '#F5F5F7',
@@ -1274,10 +1433,12 @@ export default function ProfilePersonalColorModal({
                       }}
                     />
                   ) : (
-                    <img
-                      src={pcResult?.processedDataUrl || portraitDataUrl}
-                      alt="퍼스널컬러 진단 얼굴"
-                    />
+                    (pcResult?.processedDataUrl || portraitDataUrl) && (
+                      <img
+                        src={pcResult?.processedDataUrl || portraitDataUrl}
+                        alt="퍼스널컬러 진단 얼굴"
+                      />
+                    )
                   )}
 
                   {/* Monochrome 4-Corner Guide Brackets */}
@@ -1320,17 +1481,20 @@ export default function ProfilePersonalColorModal({
                   <div className="pcm-camera-prompt-pill tabular-nums">
                     {cameraActive
                       ? '지금, 진단 버튼을 눌러주세요'
-                      : `진단 완료: ${activeSubType.labelKo} · 신뢰도 ${pcResult?.confidence ?? 92}%`}
+                      : pcResult
+                        ? `진단 완료: ${activeSubType.labelKo} · 신뢰도 ${pcResult.confidence ?? 92}%`
+                        : '중앙 진단 버튼을 눌러 온디바이스 피부톤 분석을 시작하세요'}
                   </div>
                 </div>
 
-                {/* Bottom Shutter Bar */}
+                {/* Bottom Shutter Bar — ALL 3 buttons gated by biometric consent */}
                 <div className="pcm-camera-bottom-bar">
                   <button
                     type="button"
                     className="pcm-cam-side-btn"
+                    aria-label="앨범에서 내 사진 업로드"
                     title="앨범에서 내 사진 업로드"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => requestBiometricCapture('upload')}
                   >
                     <Upload size={19} />
                   </button>
@@ -1339,8 +1503,17 @@ export default function ProfilePersonalColorModal({
                     id="camera-shutter-diagnose-btn"
                     type="button"
                     className="pcm-cam-shutter-btn"
-                    title={cameraActive ? '사진 촬영 및 퍼스널컬러 측정' : '퍼스널컬러 즉시 측정 / 카메라 촬영'}
-                    onClick={handleCameraShutterDiagnose}
+                    aria-label={
+                      cameraActive
+                        ? '사진 촬영 및 퍼스널컬러 측정'
+                        : '퍼스널컬러 즉시 측정'
+                    }
+                    title={
+                      cameraActive
+                        ? '사진 촬영 및 퍼스널컬러 측정'
+                        : '퍼스널컬러 즉시 측정 / 카메라 촬영'
+                    }
+                    onClick={() => requestBiometricCapture('shutter')}
                   >
                     <ScanFace size={28} />
                   </button>
@@ -1348,8 +1521,9 @@ export default function ProfilePersonalColorModal({
                   <button
                     type="button"
                     className="pcm-cam-side-btn"
+                    aria-label={cameraActive ? '전면 및 후면 카메라 전환' : '실시간 카메라 켜기'}
                     title={cameraActive ? '전면/후면 카메라 전환' : '실시간 카메라 켜기'}
-                    onClick={() => (cameraActive ? handleFlipCamera() : startCameraStream('user'))}
+                    onClick={() => requestBiometricCapture(cameraActive ? 'flip' : 'camera')}
                   >
                     <RefreshCw size={19} />
                   </button>
@@ -1376,14 +1550,12 @@ export default function ProfilePersonalColorModal({
                         key={s.k}
                         id={`sample-face-${s.k}`}
                         type="button"
-                        onClick={() => {
-                          stopCameraStream();
-                          const url = createSampleFaceDataUrl(s.k);
-                          setPortraitDataUrl(url);
-                          executePersonalColorAnalysis(url, lightingMode, null, 0, null);
-                        }}
+                        onClick={() =>
+                          requestBiometricCapture({ type: 'sample', sampleKey: s.k })
+                        }
                         className="hig-caption"
                         style={{
+                          minHeight: 44,
                           padding: '8px 4px',
                           borderRadius: 8,
                           fontWeight: 600,
@@ -1401,7 +1573,6 @@ export default function ProfilePersonalColorModal({
 
               {/* RIGHT: PCCS 12-Tone Map & Subtype Bubble Diagram */}
               <div className="pcm-pccs-panel">
-                {/* 1) PCCS 12-Tone Chart (WARM TONE / COOL TONE) */}
                 <div>
                   <div
                     style={{
@@ -1431,7 +1602,6 @@ export default function ProfilePersonalColorModal({
                   </div>
 
                   <div className="pcm-pccs-chart-wrap">
-                    {/* Left Grayscale Value Bar (White N8.5 .. N2.5 Black) */}
                     <div className="pcm-grayscale-col tabular-nums">
                       {PCCS_GRAYSCALE_BAR.map((g) => (
                         <div
@@ -1447,12 +1617,10 @@ export default function ProfilePersonalColorModal({
                       ))}
                     </div>
 
-                    {/* Vertical Brightness Axis */}
                     <div className="pcm-axis-y">
                       <span>Brightness →</span>
                     </div>
 
-                    {/* 12 PCCS Tone Hue Wheels */}
                     <div className="pcm-pccs-canvas-area">
                       {PCCS_12_TONES.map((tone) => {
                         const isMatched = activeSubType.pccsTones.includes(tone.key);
@@ -1482,10 +1650,10 @@ export default function ProfilePersonalColorModal({
                               alignItems: 'center',
                               justifyContent: 'center',
                               opacity: isMatched || isSelected ? 1 : 0.72,
-                              transition: 'transform 0.24s var(--spring-ease), opacity 0.24s var(--spring-ease)',
+                              transition:
+                                'transform 0.24s var(--spring-ease), opacity 0.24s var(--spring-ease)',
                             }}
                           >
-                            {/* 12 Hue Dots arranged in a circle */}
                             {tone.dots.map((dotHex, i) => {
                               const angle = (i / tone.dots.length) * Math.PI * 2 - Math.PI / 2;
                               const r = 21;
@@ -1528,7 +1696,7 @@ export default function ProfilePersonalColorModal({
                   </div>
                 </div>
 
-                {/* 2) Subtype Bubble Diagram */}
+                {/* Subtype Bubble Diagram */}
                 <div
                   style={{
                     background: 'var(--bg-canvas)',
@@ -1542,7 +1710,6 @@ export default function ProfilePersonalColorModal({
                   </h4>
 
                   <div className="pcm-subtype-bubbles-stage">
-                    {/* Left Secondary Subtype Bubble */}
                     {activeSubType.secondarySubtypes?.[0] && (
                       <button
                         type="button"
@@ -1554,7 +1721,6 @@ export default function ProfilePersonalColorModal({
                       </button>
                     )}
 
-                    {/* Center Primary Subtype Bubble on Pedestal */}
                     <div className="pcm-subtype-bubble-main-wrap">
                       <button
                         type="button"
@@ -1570,7 +1736,6 @@ export default function ProfilePersonalColorModal({
                       <div className="pcm-subtype-pedestal" />
                     </div>
 
-                    {/* Right Secondary Subtype Bubble */}
                     {activeSubType.secondarySubtypes?.[1] && (
                       <button
                         type="button"
@@ -1628,7 +1793,10 @@ export default function ProfilePersonalColorModal({
                       <strong className="hig-caption" style={{ display: 'block' }}>{m.labelKo}</strong>
                       <span
                         className="hig-caption"
-                        style={{ color: isActiveMode ? 'var(--accent-mono-ink)' : 'var(--ink-secondary)', opacity: isActiveMode ? 0.85 : 1 }}
+                        style={{
+                          color: isActiveMode ? 'var(--accent-mono-ink)' : 'var(--ink-secondary)',
+                          opacity: isActiveMode ? 0.85 : 1,
+                        }}
                       >
                         {m.descKo}
                       </span>
@@ -1713,9 +1881,8 @@ export default function ProfilePersonalColorModal({
             )}
 
             {/* CIE L*a*b* 4-Pin & 20-Color Directional Drape Evidence */}
-            {pcResult && (
+            {pcResult?.lab && (
               <div className="pcm-evidence-grid">
-                {/* Confidence Formula & 4 Pins */}
                 <div
                   className="hig-caption tabular-nums"
                   style={{
@@ -1735,8 +1902,9 @@ export default function ProfilePersonalColorModal({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                     {(pcResult.pins || []).map((pin, idx) => (
-                      <div
+                      <button
                         key={pin.id}
+                        type="button"
                         onClick={() => setHighlightedPinId(pin.id)}
                         style={{
                           display: 'flex',
@@ -1755,25 +1923,28 @@ export default function ProfilePersonalColorModal({
                           />
                           <strong>P{idx + 1} {pin.labelKo}</strong>
                         </span>
-                        <span style={{ color: 'var(--ink-muted)' }}>
-                          L*{pin.lab.L} b*{pin.lab.b}
-                        </span>
-                      </div>
+                        {pin.lab && (
+                          <span style={{ color: 'var(--ink-muted)' }}>
+                            L*{pin.lab.L} b*{pin.lab.b}
+                          </span>
+                        )}
+                      </button>
                     ))}
                   </div>
 
-                  <div style={{ color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
-                    <div>• {pcResult.confidenceBreakdown.formulaText}</div>
-                    <div>
-                      • 균일도 {pcResult.confidenceBreakdown.uniformity40}점 · 분리도{' '}
-                      {pcResult.confidenceBreakdown.separation25}점 · 채도{' '}
-                      {pcResult.confidenceBreakdown.chroma20}점 · 광원{' '}
-                      {pcResult.confidenceBreakdown.lighting15}점
+                  {pcResult.confidenceBreakdown && (
+                    <div style={{ color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
+                      <div>• {pcResult.confidenceBreakdown.formulaText}</div>
+                      <div>
+                        • 균일도 {pcResult.confidenceBreakdown.uniformity40}점 · 분리도{' '}
+                        {pcResult.confidenceBreakdown.separation25}점 · 채도{' '}
+                        {pcResult.confidenceBreakdown.chroma20}점 · 광원{' '}
+                        {pcResult.confidenceBreakdown.lighting15}점
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Directional 20-Color Undertone Similarity */}
                 <div
                   className="tabular-nums"
                   style={{
@@ -1800,7 +1971,7 @@ export default function ProfilePersonalColorModal({
                           <strong style={{ color: 'var(--ink-primary)' }}>{group.avgSimilarity}%</strong>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
-                          {group.swatches.map((sw) => (
+                          {(group.swatches || []).map((sw) => (
                             <button
                               key={sw.name}
                               type="button"
@@ -1875,11 +2046,7 @@ export default function ProfilePersonalColorModal({
           onConfirm={() => {
             const action = pendingBiometricAction;
             setPendingBiometricAction(null);
-            if (action === 'camera') {
-              startCameraStream('user');
-            } else if (action === 'upload') {
-              fileInputRef.current?.click();
-            }
+            runConsentedBiometricAction(action);
           }}
         />
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Server, ShieldCheck, UserPlus } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
 import { KpiMetricStrip, PageHeader } from './common/AppUI.jsx';
@@ -12,19 +12,18 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
 
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async () => {
     try {
       const data = await apiFetch('/admin/overview');
       setOverview(data);
     } catch (err) {
       showToast?.(err.message || '어드민 정보를 불러오지 못했습니다.');
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     loadOverview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadOverview]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -122,7 +121,7 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                 key: 'db',
                 label: 'SQLite DB 용량',
                 value: `${overview.system.dbSizeKb} KB`,
-                sub: `Node ${overview.system.nodeVersion} 내장 SQLite`,
+                sub: `Node ${overview.system.nodeVersion} · ${overview.system?.sqliteDriver || 'SQLite'}`,
               },
             ]}
           />
@@ -162,8 +161,9 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                 </h4>
                 <div className="form-grid-2">
                   <div className="field-group">
-                    <label className="field-label">아이디</label>
+                    <label className="field-label" htmlFor="admin-new-username">아이디</label>
                     <input
+                      id="admin-new-username"
                       className="text-input"
                       placeholder="예: wife2"
                       value={newUsername}
@@ -172,8 +172,9 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">비밀번호</label>
+                    <label className="field-label" htmlFor="admin-new-password">비밀번호</label>
                     <input
+                      id="admin-new-password"
                       className="text-input"
                       type="password"
                       placeholder="비밀번호"
@@ -185,8 +186,9 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                 </div>
                 <div className="form-grid-2">
                   <div className="field-group">
-                    <label className="field-label">표시 이름</label>
+                    <label className="field-label" htmlFor="admin-new-displayname">표시 이름</label>
                     <input
+                      id="admin-new-displayname"
                       className="text-input"
                       placeholder="예: 와이프"
                       value={newDisplayName}
@@ -195,8 +197,9 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">기본 옷장</label>
+                    <label className="field-label" htmlFor="admin-new-closet">기본 옷장</label>
                     <select
+                      id="admin-new-closet"
                       className="select-input"
                       value={newCloset}
                       onChange={(e) => setNewCloset(e.target.value)}
@@ -229,7 +232,7 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
                     2단계 (베타 완성 시): 집 Mac mini M2 배포 & 로컬 AI 연동
                   </strong>
                   <br />
-                  본 프로젝트는 네이티브 C++ 빌드 의존성이 없는 Node 내장 <code>node:sqlite</code> 기반이라 여러 PC에서 Git으로 이어 개발한 뒤 맥미니 M2에서 <code>git pull &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; npm start</code>만으로 즉시 구동됩니다. 외부 접속은 <strong>Tailscale</strong>(부부 스마트폰 전용 무료 VPN) 또는 <strong>Cloudflare Tunnel</strong>을 연결하면 포트포워딩 없이 안전하게 HTTPS 접속이 가능합니다. 또한 M2 칩의 Neural Engine을 활용해 무료 로컬 누끼 제거(<code>rembg</code>)와 CLIP 이미지 임베딩 모델을 붙이기에 최적입니다.
+                  본 프로젝트는 로컬 SQLite 드라이버(<code>{overview.system?.sqliteDriver || 'SQLite'}</code>) 기반이라 여러 PC에서 Git으로 이어 개발한 뒤 맥미니 M2에서 <code>git pull &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; npm start</code>만으로 즉시 구동됩니다. 외부 접속은 <strong>Tailscale</strong>(부부 스마트폰 전용 무료 VPN) 또는 <strong>Cloudflare Tunnel</strong>을 연결하면 포트포워딩 없이 안전하게 HTTPS 접속이 가능합니다. 또한 M2 칩의 Neural Engine을 활용해 무료 로컬 누끼 제거(<code>rembg</code>)와 CLIP 이미지 임베딩 모델을 붙이기에 최적입니다.
                 </p>
                 <p>
                   <strong style={{ color: 'var(--ink-primary)' }}>
