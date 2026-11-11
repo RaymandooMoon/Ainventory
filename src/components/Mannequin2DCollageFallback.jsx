@@ -1,15 +1,5 @@
+import { WEAR_SLOTS_11 } from '../shared/garmentTaxonomy.js';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-
-const COLLAGE_SLOTS = [
-  { key: 'headwear', label: '헤드웨어' },
-  { key: 'neckwear', label: '넥웨어' },
-  { key: 'outer', label: '아우터' },
-  { key: 'top', label: '상의' },
-  { key: 'bottom', label: '하의' },
-  { key: 'shoes', label: '슈즈' },
-  { key: 'accessory', label: '가방·액세서리' },
-  { key: 'gloves', label: '장갑' },
-];
 
 /**
  * Lightweight 2D Editorial Outfit Collage Fallback Viewer (Req 9.c)
@@ -21,8 +11,9 @@ export default function Mannequin2DCollageFallback({
   onSelectSlot,
   onRestore3D,
 }) {
-  const equippedEntries = COLLAGE_SLOTS.map((slot) => ({
-    ...slot,
+  const equippedEntries = WEAR_SLOTS_11.map((slot) => ({
+    key: slot.key,
+    label: slot.shortKo || slot.labelKo,
     item: loadoutBySlot[slot.key] || null,
   })).filter((entry) => entry.item);
 

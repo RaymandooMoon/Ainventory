@@ -1,4 +1,9 @@
-import { COLOR_PALETTE } from './api.js';
+import {
+  matchClosestPaletteColor,
+  rgbToCieLab,
+  rgbToHex,
+} from '../shared/colorMath.js';
+import { resolveManifestSlotAndGlb } from '../shared/garmentTaxonomy.js';
 import { GARMENT_3D_PHYSICS_PRESETS } from './garment3DPhysicsSpecs.js';
 
 /**
@@ -31,15 +36,17 @@ export const MANIFEST_SLOT_MAP = {
   coat: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
   blazer: { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'drape_wind_garment' },
   jacket: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' },
-  padding: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
+  padding: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' },
   cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'drape_wind_garment' },
   knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'drape_wind_garment' },
   shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
   blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
   tshirt: { slotKey: 'top', baseGlb: 'top_tshirt', physicsPreset: 'drape_wind_garment' },
   sweatshirt: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'drape_wind_garment' },
+  hoodie: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'drape_wind_garment' },
   slacks: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
   chinos: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
+  jogger: { slotKey: 'bottom', baseGlb: 'bottom_denim', physicsPreset: 'rigid_fitted' },
   denim: { slotKey: 'bottom', baseGlb: 'bottom_denim', physicsPreset: 'rigid_fitted' },
   skirt: { slotKey: 'bottom', baseGlb: 'bottom_skirt', physicsPreset: 'hem_sway_skirt' },
   shorts: { slotKey: 'bottom', baseGlb: 'bottom_shorts', physicsPreset: 'drape_wind_garment' },
@@ -63,195 +70,237 @@ export const MANIFEST_SLOT_MAP = {
   glasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
 };
 
-function loadImageElement(src) {
+function resolveDrawableSource(imageSource) {
+  if (typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) {
+    return Promise.resolve({
+      drawable: imageSource,
+      width: imageSource.width || 512,
+      height: imageSource.height || 512,
+    });
+  }
+  if (typeof HTMLImageElement !== 'undefined' && imageSource instanceof HTMLImageElement) {
+    return Promise.resolve({
+      drawable: imageSource,
+      width: imageSource.naturalWidth || imageSource.width || 512,
+      height: imageSource.naturalHeight || imageSource.height || 512,
+    });
+  }
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
+    img.onload = () =>
+      resolve({
+        drawable: img,
+        width: img.naturalWidth || img.width || 512,
+        height: img.naturalHeight || img.height || 512,
+      });
     img.onerror = reject;
-    img.src = src;
+    img.src = imageSource;
   });
-}
-
-function rgbToLab(r, g, b) {
-  let rn = r / 255;
-  let gn = g / 255;
-  let bn = b / 255;
-  rn = rn > 0.04045 ? ((rn + 0.055) / 1.055) ** 2.4 : rn / 12.92;
-  gn = gn > 0.04045 ? ((gn + 0.055) / 1.055) ** 2.4 : gn / 12.92;
-  bn = bn > 0.04045 ? ((bn + 0.055) / 1.055) ** 2.4 : bn / 12.92;
-  const x = (rn * 0.4124 + gn * 0.3576 + bn * 0.1805) / 0.95047;
-  const y = rn * 0.2126 + gn * 0.7152 + bn * 0.0722;
-  const z = (rn * 0.0193 + gn * 0.1192 + bn * 0.9505) / 1.08883;
-  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  const fx = f(x);
-  const fy = f(y);
-  const fz = f(z);
-  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
-}
-
-function hexToRgb(hex) {
-  const clean = String(hex || '#1D1D1F').replace('#', '').trim();
-  const num = parseInt(clean.padEnd(6, '0').slice(0, 6), 16);
-  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
 
 /**
  * Requirement 6.a: Automatic Background Removal (Alpha Cutout) + WebP Normalization
+ * Accepts a URL/DataURL string, HTMLImageElement, or HTMLCanvasElement directly.
  */
 export async function removeBackgroundAndEncodeWebP(
   imageSource,
-  { maxDim = 860, quality = 0.86 } = {}
+  { maxDim = 860, quality = 0.86, withMetadata = false, hints = {} } = {}
 ) {
-  const img = await loadImageElement(imageSource);
-  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
-  const w = Math.max(64, Math.round((img.naturalWidth || 512) * scale));
-  const h = Math.max(64, Math.round((img.naturalHeight || 512) * scale));
+  const { drawable, width: srcW, height: srcH } = await resolveDrawableSource(imageSource);
+  const scale = Math.min(1, maxDim / Math.max(srcW || 1, srcH || 1));
+  const w = Math.max(64, Math.round((srcW || 512) * scale));
+  const h = Math.max(64, Math.round((srcH || 512) * scale));
 
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0, w, h);
 
-  const imgData = ctx.getImageData(0, 0, w, h);
-  const d = imgData.data;
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(drawable, 0, 0, w, h);
 
-  // 1. Estimate background Lab color from perimeter corners & edges
-  const samples = [];
-  const stepX = Math.max(2, Math.floor(w / 24));
-  const stepY = Math.max(2, Math.floor(h / 24));
-  for (let x = 0; x < w; x += stepX) {
-    const iTop = x * 4;
-    const iBot = ((h - 1) * w + x) * 4;
-    if (d[iTop + 3] > 200) samples.push(rgbToLab(d[iTop], d[iTop + 1], d[iTop + 2]));
-    if (d[iBot + 3] > 200) samples.push(rgbToLab(d[iBot], d[iBot + 1], d[iBot + 2]));
-  }
-  for (let y = 0; y < h; y += stepY) {
-    const iL = (y * w) * 4;
-    const iR = (y * w + (w - 1)) * 4;
-    if (d[iL + 3] > 200) samples.push(rgbToLab(d[iL], d[iL + 1], d[iL + 2]));
-    if (d[iR + 3] > 200) samples.push(rgbToLab(d[iR], d[iR + 1], d[iR + 2]));
-  }
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
 
-  let bgL = 95;
-  let bgA = 0;
-  let bgB = 1;
-  if (samples.length > 0) {
-    samples.sort((a, b) => a[0] - b[0]);
-    const mid = samples[Math.floor(samples.length * 0.6)];
-    [bgL, bgA, bgB] = mid;
-  }
-
-  // 2. Perimeter flood-fill background segmentation (preserves bright interior garment highlights!)
-  const total = w * h;
-  const visited = new Uint8Array(total);
-  const isBg = new Uint8Array(total);
-  const queue = new Int32Array(total);
-  let qHead = 0;
-  let qTail = 0;
-
-  const colorDistToBg = (idx) => {
-    const p = idx * 4;
-    const [L, a, b] = rgbToLab(d[p], d[p + 1], d[p + 2]);
-    return Math.hypot((L - bgL) * 0.9, a - bgA, b - bgB);
-  };
-
-  const BG_TOLERANCE = 18.5;
-  const enqueueIfBorderBg = (idx) => {
-    if (visited[idx]) return;
-    visited[idx] = 1;
-    if (d[idx * 4 + 3] < 20 || colorDistToBg(idx) <= BG_TOLERANCE) {
-      isBg[idx] = 1;
-      queue[qTail++] = idx;
+    // 1. Estimate background Lab color from perimeter corners & edges (LUT-accelerated)
+    const samples = [];
+    const stepX = Math.max(2, Math.floor(w / 24));
+    const stepY = Math.max(2, Math.floor(h / 24));
+    for (let x = 0; x < w; x += stepX) {
+      const iTop = x * 4;
+      const iBot = ((h - 1) * w + x) * 4;
+      if (d[iTop + 3] > 200) samples.push(rgbToCieLab(d[iTop], d[iTop + 1], d[iTop + 2]));
+      if (d[iBot + 3] > 200) samples.push(rgbToCieLab(d[iBot], d[iBot + 1], d[iBot + 2]));
     }
-  };
+    for (let y = 0; y < h; y += stepY) {
+      const iL = y * w * 4;
+      const iR = (y * w + (w - 1)) * 4;
+      if (d[iL + 3] > 200) samples.push(rgbToCieLab(d[iL], d[iL + 1], d[iL + 2]));
+      if (d[iR + 3] > 200) samples.push(rgbToCieLab(d[iR], d[iR + 1], d[iR + 2]));
+    }
 
-  for (let x = 0; x < w; x++) {
-    enqueueIfBorderBg(x);
-    enqueueIfBorderBg((h - 1) * w + x);
-  }
-  for (let y = 0; y < h; y++) {
-    enqueueIfBorderBg(y * w);
-    enqueueIfBorderBg(y * w + (w - 1));
-  }
+    let bgL = 95;
+    let bgA = 0;
+    let bgB = 1;
+    if (samples.length > 0) {
+      samples.sort((a, b) => a.L - b.L);
+      const mid = samples[Math.floor(samples.length * 0.6)];
+      bgL = mid.L;
+      bgA = mid.a;
+      bgB = mid.b;
+    }
 
-  while (qHead < qTail) {
-    const curr = queue[qHead++];
-    const cx = curr % w;
-    const cy = (curr - cx) / w;
-    const neighbors = [];
-    if (cx > 0) neighbors.push(curr - 1);
-    if (cx < w - 1) neighbors.push(curr + 1);
-    if (cy > 0) neighbors.push(curr - w);
-    if (cy < h - 1) neighbors.push(curr + w);
+    // 2. Perimeter flood-fill background segmentation (preserves bright interior garment highlights!)
+    const total = w * h;
+    const visited = new Uint8Array(total);
+    const isBg = new Uint8Array(total);
+    const queue = new Int32Array(total);
+    let qHead = 0;
+    let qTail = 0;
 
-    for (let k = 0; k < neighbors.length; k++) {
-      const nb = neighbors[k];
-      if (visited[nb]) continue;
-      visited[nb] = 1;
-      if (colorDistToBg(nb) <= BG_TOLERANCE) {
-        isBg[nb] = 1;
-        queue[qTail++] = nb;
+    const colorDistToBg = (idx) => {
+      const p = idx * 4;
+      const lab = rgbToCieLab(d[p], d[p + 1], d[p + 2]);
+      return Math.hypot((lab.L - bgL) * 0.9, lab.a - bgA, lab.b - bgB);
+    };
+
+    const BG_TOLERANCE = 18.5;
+    const enqueueIfBorderBg = (idx) => {
+      if (visited[idx]) return;
+      visited[idx] = 1;
+      if (d[idx * 4 + 3] < 20 || colorDistToBg(idx) <= BG_TOLERANCE) {
+        isBg[idx] = 1;
+        queue[qTail++] = idx;
       }
+    };
+
+    for (let x = 0; x < w; x++) {
+      enqueueIfBorderBg(x);
+      enqueueIfBorderBg((h - 1) * w + x);
     }
-  }
-
-  // Guard: ensure at least 8% foreground remains so ultra-low-contrast white-on-white items aren't erased
-  let fgCount = 0;
-  for (let i = 0; i < total; i++) {
-    if (!isBg[i]) fgCount++;
-  }
-  const applyMask = fgCount > total * 0.06 && fgCount < total * 0.985;
-
-  if (applyMask) {
     for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = y * w + x;
-        if (isBg[idx]) {
-          d[idx * 4 + 3] = 0;
-        } else {
-          // Soft 1px anti-aliased edge feathering adjacent to transparent background
-          let adjBg = 0;
-          if (x > 0 && isBg[idx - 1]) adjBg++;
-          if (x < w - 1 && isBg[idx + 1]) adjBg++;
-          if (y > 0 && isBg[idx - w]) adjBg++;
-          if (y < h - 1 && isBg[idx + w]) adjBg++;
-          if (adjBg > 0) {
-            d[idx * 4 + 3] = Math.round(d[idx * 4 + 3] * (1 - adjBg * 0.14));
+      enqueueIfBorderBg(y * w);
+      enqueueIfBorderBg(y * w + (w - 1));
+    }
+
+    while (qHead < qTail) {
+      const curr = queue[qHead++];
+      const cx = curr % w;
+      const cy = (curr - cx) / w;
+
+      if (cx > 0) {
+        const nb = curr - 1;
+        if (!visited[nb]) {
+          visited[nb] = 1;
+          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+            isBg[nb] = 1;
+            queue[qTail++] = nb;
+          }
+        }
+      }
+      if (cx < w - 1) {
+        const nb = curr + 1;
+        if (!visited[nb]) {
+          visited[nb] = 1;
+          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+            isBg[nb] = 1;
+            queue[qTail++] = nb;
+          }
+        }
+      }
+      if (cy > 0) {
+        const nb = curr - w;
+        if (!visited[nb]) {
+          visited[nb] = 1;
+          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+            isBg[nb] = 1;
+            queue[qTail++] = nb;
+          }
+        }
+      }
+      if (cy < h - 1) {
+        const nb = curr + w;
+        if (!visited[nb]) {
+          visited[nb] = 1;
+          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+            isBg[nb] = 1;
+            queue[qTail++] = nb;
           }
         }
       }
     }
-    ctx.putImageData(imgData, 0, 0);
-  }
 
-  let webpDataUrl = canvas.toDataURL('image/webp', quality);
-  if (!webpDataUrl.startsWith('data:image/webp')) {
-    webpDataUrl = canvas.toDataURL('image/png');
-  }
+    // Guard: ensure at least 6% foreground remains so ultra-low-contrast white-on-white items aren't erased
+    let fgCount = 0;
+    for (let i = 0; i < total; i++) {
+      if (!isBg[i]) fgCount++;
+    }
+    const applyMask = fgCount > total * 0.06 && fgCount < total * 0.985;
 
-  return {
-    webpDataUrl,
-    width: w,
-    height: h,
-    cutoutApplied: applyMask,
-    format: webpDataUrl.startsWith('data:image/webp') ? 'webp' : 'png',
-  };
+    if (applyMask) {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          if (isBg[idx]) {
+            d[idx * 4 + 3] = 0;
+          } else {
+            // Soft 1px anti-aliased edge feathering adjacent to transparent background
+            let adjBg = 0;
+            if (x > 0 && isBg[idx - 1]) adjBg++;
+            if (x < w - 1 && isBg[idx + 1]) adjBg++;
+            if (y > 0 && isBg[idx - w]) adjBg++;
+            if (y < h - 1 && isBg[idx + w]) adjBg++;
+            if (adjBg > 0) {
+              d[idx * 4 + 3] = Math.round(d[idx * 4 + 3] * (1 - adjBg * 0.14));
+            }
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    let webpDataUrl = canvas.toDataURL('image/webp', quality);
+    if (!webpDataUrl.startsWith('data:image/webp')) {
+      webpDataUrl = canvas.toDataURL('image/png');
+    }
+
+    const aiMetadata = withMetadata ? await extractGarmentAIMetadata(canvas, hints) : undefined;
+
+    return {
+      webpDataUrl,
+      width: w,
+      height: h,
+      cutoutApplied: applyMask,
+      format: webpDataUrl.startsWith('data:image/webp') ? 'webp' : 'png',
+      ...(withMetadata ? { aiMetadata } : {}),
+    };
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }
 
 /**
  * Requirement 6.b: Automatic AI Vision Extraction of Category, Color, Seasonality, Fabric & 3D Slot
+ * Accepts a URL/DataURL string, HTMLImageElement, or HTMLCanvasElement directly.
  */
 export async function extractGarmentAIMetadata(imageSource, hints = {}) {
-  const img = await loadImageElement(imageSource);
+  const { drawable, width: srcW, height: srcH } = await resolveDrawableSource(imageSource);
   const sampleSize = 128;
   const canvas = document.createElement('canvas');
   canvas.width = sampleSize;
   canvas.height = sampleSize;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
-  const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
+
+  let data;
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(drawable, 0, 0, sampleSize, sampleSize);
+    data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 
   let minX = sampleSize;
   let maxX = 0;
@@ -274,7 +323,9 @@ export async function extractGarmentAIMetadata(imageSource, hints = {}) {
       const b = data[idx + 2];
 
       // Treat transparent OR near-white perimeter pixels as background
-      const isFg = a > 120 && !(a === 255 && r > 243 && g > 241 && b > 236 && (x < 8 || x > 119 || y < 8 || y > 119));
+      const isFg =
+        a > 120 &&
+        !(a === 255 && r > 243 && g > 241 && b > 236 && (x < 8 || x > 119 || y < 8 || y > 119));
       if (!isFg) continue;
 
       if (x < minX) minX = x;
@@ -315,23 +366,11 @@ export async function extractGarmentAIMetadata(imageSource, hints = {}) {
   const avgG = count > 0 ? Math.round(sumG / count) : 45;
   const avgB = count > 0 ? Math.round(sumB / count) : 48;
 
-  // Nearest palette color in CIELAB
-  const targetLab = rgbToLab(avgR, avgG, avgB);
-  let bestColor = COLOR_PALETTE[0];
-  let minDelta = Infinity;
-  for (const c of COLOR_PALETTE) {
-    const [cr, cg, cb] = hexToRgb(c.hex);
-    const lab = rgbToLab(cr, cg, cb);
-    const dE = Math.hypot(targetLab[0] - lab[0], targetLab[1] - lab[1], targetLab[2] - lab[2]);
-    if (dE < minDelta) {
-      minDelta = dE;
-      bestColor = c;
-    }
-  }
+  // Nearest palette color in CIELAB via shared LUT helper
+  const bestColor = matchClosestPaletteColor({ r: avgR, g: avgG, b: avgB });
 
   const realAspect =
-    ((maxY - minY + 1) * (img.naturalHeight || 1)) /
-    Math.max(1, (maxX - minX + 1) * (img.naturalWidth || 1));
+    ((maxY - minY + 1) * (srcH || 1)) / Math.max(1, (maxX - minX + 1) * (srcW || 1));
   const microContrast = count > 0 ? highFreqSum / count : 10;
   const specRatio = count > 0 ? specularCount / count : 0;
   const isIndigoTone = avgB > avgR + 16 && avgB > avgG + 8;
@@ -423,7 +462,12 @@ export async function extractGarmentAIMetadata(imageSource, hints = {}) {
     max_temp = 30;
   }
 
-  const manifestMapping = MANIFEST_SLOT_MAP[subcategory] || MANIFEST_SLOT_MAP.knit;
+  const manifestMapping =
+    (category === 'outer' && subcategory === 'cardigan'
+      ? { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'drape_wind_garment' }
+      : MANIFEST_SLOT_MAP[subcategory]) ||
+    resolveManifestSlotAndGlb(category, subcategory) ||
+    MANIFEST_SLOT_MAP.knit;
   const physicsSpec =
     GARMENT_3D_PHYSICS_PRESETS[manifestMapping.physicsPreset] ||
     GARMENT_3D_PHYSICS_PRESETS.rigid_fitted;
@@ -461,7 +505,7 @@ export async function extractGarmentAIMetadata(imageSource, hints = {}) {
     subcategory,
     color_name: bestColor.name,
     color_hex: bestColor.hex,
-    sampled_hex: `#${[avgR, avgG, avgB].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase()}`,
+    sampled_hex: rgbToHex(avgR, avgG, avgB),
     fabric,
     fabricLabelKo: fabricSpec.labelKo,
     seasons,

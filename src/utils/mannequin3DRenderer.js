@@ -63,6 +63,8 @@ export function resolveSkinHex(profile = {}) {
 const EXPLICIT_FABRIC_PRESETS = {
   padding: { type: 'padding', labelKo: '구스다운 퀼팅 나일론', roughness: 0.38, metalness: 0.06, sheen: 0.35, clearcoat: 0.18, bumpScale: 0.024 },
   leather: { type: 'leather', labelKo: '이탈리안 풀그레인 레더', roughness: 0.30, metalness: 0.08, sheen: 0.24, clearcoat: 0.44, bumpScale: 0.011 },
+  metal: { type: 'metal', labelKo: '스테인리스 스틸 · 브러시드 메탈', roughness: 0.22, metalness: 0.88, sheen: 0.08, clearcoat: 0.62, bumpScale: 0.004 },
+  acetate: { type: 'acetate', labelKo: '폴리시드 아세테이트 아이웨어', roughness: 0.18, metalness: 0.04, sheen: 0.14, clearcoat: 0.86, bumpScale: 0.003 },
   gabardine: { type: 'gabardine', labelKo: '발수 코튼 개버딘 트윌', roughness: 0.50, metalness: 0.03, sheen: 0.44, clearcoat: 0.10, bumpScale: 0.014 },
   denim: { type: 'denim', labelKo: '셀비지 인디고 데님 트윌', roughness: 0.76, metalness: 0.02, sheen: 0.25, clearcoat: 0.0, bumpScale: 0.020 },
   silk: { type: 'silk', labelKo: '실크 크레이프 드레이프', roughness: 0.28, metalness: 0.05, sheen: 0.85, clearcoat: 0.16, bumpScale: 0.006 },
@@ -80,6 +82,12 @@ export function inferFabricMaterialSpec(item = {}) {
   const cat = String(item.category || '').toLowerCase();
   const name = String(item.name || '');
 
+  if (sub === 'watch' || name.includes('시계') || name.includes('워치')) {
+    return EXPLICIT_FABRIC_PRESETS.metal;
+  }
+  if (sub === 'glasses' || name.includes('안경') || name.includes('아이웨어') || name.includes('선글라스')) {
+    return EXPLICIT_FABRIC_PRESETS.acetate;
+  }
   if (sub === 'padding' || name.includes('패딩') || name.includes('다운') || name.includes('퀼팅')) {
     return EXPLICIT_FABRIC_PRESETS.padding;
   }
@@ -93,8 +101,6 @@ export function inferFabricMaterialSpec(item = {}) {
     sub === 'tote' ||
     sub === 'bag' ||
     sub === 'belt' ||
-    sub === 'watch' ||
-    sub === 'glasses' ||
     name.includes('레더') ||
     name.includes('가죽') ||
     name.includes('서류가방') ||
@@ -594,6 +600,14 @@ function attachHumanoidSkinAttributes(geom, jointsMap = {}, gid = '', spec = {})
       if (y > 0.48 && y < 0.64) {
         jBoneA = BONE.JIGGLE_HEM_UPPER;
         jWeightA = smoothstep(0.64, 0.52, y) * 0.12;
+      }
+    } else if (physicsKey === 'drape_wind_garment') {
+      if (y < 0.885 && torsoCoreMask > 0.02) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.885, 0.78, y) * torsoCoreMask * 0.15;
+      } else if (y > 0.98 && y < 1.24 && z > 0.082 && torsoCoreMask > 0.05) {
+        jBoneA = BONE.JIGGLE_LAPEL;
+        jWeightA = smoothstep(0.082, 0.14, z) * torsoCoreMask * 0.15;
       }
     }
 
@@ -1622,12 +1636,12 @@ export function resolveGarmentIdForItem(slotKey, item) {
 
 function createSkinMaterial(skinHex, isSoftware = false) {
   const baseColor = new THREE.Color(skinHex);
-  const skinBumpEntry = acquireFabricBumpMap('skin');
   if (isSoftware) {
     const mat = new THREE.MeshLambertMaterial({ color: baseColor });
-    mat.userData.refTextureEntries = skinBumpEntry ? [skinBumpEntry] : [];
+    mat.userData.refTextureEntries = [];
     return mat;
   }
+  const skinBumpEntry = acquireFabricBumpMap('skin');
   const mat = new THREE.MeshPhysicalMaterial({
     color: baseColor,
     roughness: 0.40,
@@ -1647,7 +1661,8 @@ function createSkinMaterial(skinHex, isSoftware = false) {
 /**
  * Requirement 6.c: Hybrid 3D Texture + PBR Synthesis
  * Composites cropped WebP cutout photo over base garment UV carrier while preserving
- * fabric PBR normalMap, bumpMap, roughness & metalness — avoiding heavy runtime mesh generation.
+ * fabric PBR normalMap, bumpMap, roughness & metalness — cached in `externalTexCache`
+ * with ref-counted disposal and immediate scratch `<canvas>` release.
  */
 function attachDynamicCroppedGarmentTexture(primaryMat, item, baseHex) {
   if (typeof document === 'undefined' || !item) return;
@@ -1658,37 +1673,107 @@ function attachDynamicCroppedGarmentTexture(primaryMat, item, baseHex) {
     imgUrl.startsWith('data:image/');
   if (!isCustomCutout) return;
 
+  const fillHex = baseHex || '#2E3540';
+  const cacheKey = `cutout:${imgUrl}|${fillHex}`;
+  primaryMat.userData.refTextureEntries = primaryMat.userData.refTextureEntries || [];
+
+  let entry = externalTexCache.get(cacheKey);
+  if (entry) {
+    entry.refCount += 1;
+    primaryMat.userData.refTextureEntries.push(entry);
+    if (entry.ready && entry.tex) {
+      primaryMat.map = entry.tex;
+      primaryMat.color.set('#ffffff');
+      primaryMat.needsUpdate = true;
+    } else if (Array.isArray(entry.waiters)) {
+      entry.waiters.push((tex) => {
+        if (!primaryMat.userData.isDisposed && tex) {
+          primaryMat.map = tex;
+          primaryMat.color.set('#ffffff');
+          primaryMat.needsUpdate = true;
+        }
+      });
+    }
+    return;
+  }
+
+  entry = {
+    tex: null,
+    refCount: 1,
+    ready: false,
+    waiters: [],
+    cacheKey,
+    mapRef: externalTexCache,
+  };
+  externalTexCache.set(cacheKey, entry);
+  primaryMat.userData.refTextureEntries.push(entry);
+
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    if (primaryMat.userData.isDisposed) return;
+    if (entry.refCount <= 0) {
+      externalTexCache.delete(cacheKey);
+      return;
+    }
     const size = 256;
     const c = document.createElement('canvas');
     c.width = size;
     c.height = size;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = baseHex || '#2E3540';
-    ctx.fillRect(0, 0, size, size);
+    let pixelBytes;
+    try {
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = fillHex;
+      ctx.fillRect(0, 0, size, size);
 
-    // Draw cutout texture softly blended into UV torso/limb islands
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.drawImage(img, size * 0.12, size * 0.10, size * 0.76, size * 0.80);
-    ctx.restore();
+      // Draw cutout texture softly blended into UV torso/limb islands
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(img, size * 0.12, size * 0.10, size * 0.76, size * 0.80);
+      ctx.restore();
+      pixelBytes = new Uint8Array(ctx.getImageData(0, 0, size, size).data);
+    } finally {
+      c.width = 0;
+      c.height = 0;
+    }
 
-    const dynTex = new THREE.CanvasTexture(c);
+    const dynTex = new THREE.DataTexture(pixelBytes, size, size, THREE.RGBAFormat);
     dynTex.flipY = false;
     dynTex.colorSpace = THREE.SRGBColorSpace;
+    dynTex.minFilter = THREE.LinearFilter;
+    dynTex.magFilter = THREE.LinearFilter;
+    dynTex.generateMipmaps = false;
+    dynTex.needsUpdate = true;
 
-    if (primaryMat.userData.isDisposed) {
+    if (entry.refCount <= 0) {
       dynTex.dispose();
+      externalTexCache.delete(cacheKey);
       return;
     }
-    primaryMat.userData.ownedTextures = [dynTex];
-    primaryMat.map = dynTex;
-    primaryMat.color.set('#ffffff');
-    primaryMat.needsUpdate = true;
+
+    entry.tex = dynTex;
+    entry.ready = true;
+
+    if (!primaryMat.userData.isDisposed) {
+      primaryMat.map = dynTex;
+      primaryMat.color.set('#ffffff');
+      primaryMat.needsUpdate = true;
+    }
+    const waiters = entry.waiters || [];
+    entry.waiters = [];
+    for (const fn of waiters) {
+      try {
+        fn(dynTex);
+      } catch {
+        // Ignore waiter errors
+      }
+    }
     notifyPreviewListeners();
+  };
+  img.onerror = () => {
+    entry.waiters = [];
+    if (entry.refCount <= 0) {
+      externalTexCache.delete(cacheKey);
+    }
   };
   img.src = imgUrl;
 }
@@ -1704,7 +1789,7 @@ function createGarmentMaterial(
   const hex = item?.color_hex || '#2E3540';
   const spec = inferFabricMaterialSpec(item || { category: slotKey });
   const refEntries = [];
-  const bumpEntry = acquireFabricBumpMap(spec.type);
+  const bumpEntry = isSoftware ? null : acquireFabricBumpMap(spec.type);
   if (bumpEntry) refEntries.push(bumpEntry);
 
   const baseColor = new THREE.Color(hex);
@@ -2016,11 +2101,13 @@ let cachedIsSoftwareWebGL = null;
 function detectSoftwareWebGL() {
   if (cachedIsSoftwareWebGL !== null) return cachedIsSoftwareWebGL;
   if (typeof document === 'undefined') return false;
+  let probe = null;
+  let gl = null;
   try {
-    const probe = document.createElement('canvas');
+    probe = document.createElement('canvas');
     probe.width = 1;
     probe.height = 1;
-    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
+    gl = probe.getContext('webgl2') || probe.getContext('webgl');
     if (!gl) {
       cachedIsSoftwareWebGL = true;
       return true;
@@ -2036,6 +2123,16 @@ function detectSoftwareWebGL() {
   } catch {
     cachedIsSoftwareWebGL = false;
     return false;
+  } finally {
+    try {
+      gl?.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+    } catch {
+      // ignore context release errors
+    }
+    if (probe) {
+      probe.width = 0;
+      probe.height = 0;
+    }
   }
 }
 
@@ -2053,6 +2150,13 @@ export class Mannequin3DWebGLEngine {
     this.onContextStatusChange = options.onContextStatusChange || null;
     this.isPreviewOnly = Boolean(options.previewOnly);
     this.isSoftwareRenderer = detectSoftwareWebGL();
+    this._paused = Boolean(options.paused);
+    this._contextRestoreTimer = null;
+    this._customRestoreDelayMs = null;
+    this.equippedDbGarmentIds = [];
+    this._envRenderTarget = null;
+    this.envMap = null;
+    this.rafId = 0;
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
     this.renderer = new THREE.WebGLRenderer({
@@ -2095,9 +2199,16 @@ export class Mannequin3DWebGLEngine {
       e.preventDefault();
       this.isContextLost = true;
       this.onContextStatusChange?.({ lost: true, recoveryCount: this.recoveryCount });
+      if (this._contextRestoreTimer) {
+        clearTimeout(this._contextRestoreTimer);
+        this._contextRestoreTimer = null;
+      }
+      const delayMs = this._customRestoreDelayMs ?? 150;
+      this._customRestoreDelayMs = null;
       // Auto-recover synthetic WEBGL_lose_context invocations as well as OS GPU resets
       if (this._loseContextExt) {
-        setTimeout(() => {
+        this._contextRestoreTimer = setTimeout(() => {
+          this._contextRestoreTimer = null;
           if (this.isContextLost && !this.disposed) {
             try {
               this._loseContextExt.restoreContext();
@@ -2105,7 +2216,7 @@ export class Mannequin3DWebGLEngine {
               // Already restored by caller or browser
             }
           }
-        }, 150);
+        }, delayMs);
       }
     };
 
@@ -2123,8 +2234,16 @@ export class Mannequin3DWebGLEngine {
       });
     };
 
+    this._handleVisibilityChange = () => {
+      if (this.disposed) return;
+      this._syncLoopRunState();
+    };
+
     this.canvas.addEventListener('webglcontextlost', this._handleContextLost, false);
     this.canvas.addEventListener('webglcontextrestored', this._handleContextRestored, false);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._handleVisibilityChange, false);
+    }
 
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 30);
     this.camera.position.set(0, 1.00, 3.62);
@@ -2220,7 +2339,10 @@ export class Mannequin3DWebGLEngine {
     this._setupLightsAndPedestal();
     if (typeof document !== 'undefined') {
       this.setDarkTheme(document.documentElement.dataset.theme === 'dark');
-      if (document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid') {
+      if (
+        !this.isPreviewOnly &&
+        document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid'
+      ) {
         document.documentElement.setAttribute('data-vibrancy-fallback', 'blur');
       }
     }
@@ -2240,19 +2362,74 @@ export class Mannequin3DWebGLEngine {
       this._resizeObserver.observe(this.canvas);
     }
 
-    if (!options.previewOnly) {
+    if (!this.isPreviewOnly) {
       this.canvas.__mannequinEngine = this;
       if (typeof window !== 'undefined') {
+        window.__MANNEQUIN_3D_ENGINE__ = this;
         window.__ainventory3DEngine = this;
       }
     }
 
-    this._startLoop();
+    this._syncLoopRunState();
     this._initAssets();
   }
 
   markDirty() {
     this._sceneDirty = true;
+  }
+
+  simulateContextLoss({ autoRestoreMs = 280 } = {}) {
+    if (this.disposed) return false;
+    if (!this._loseContextExt) {
+      try {
+        this._loseContextExt =
+          this.renderer?.getContext?.()?.getExtension?.('WEBGL_lose_context') || null;
+      } catch {
+        this._loseContextExt = null;
+      }
+    }
+    if (!this._loseContextExt) return false;
+    this._customRestoreDelayMs = Math.max(16, Number(autoRestoreMs) || 280);
+    try {
+      this._loseContextExt.loseContext();
+      return true;
+    } catch {
+      this._customRestoreDelayMs = null;
+      return false;
+    }
+  }
+
+  resetFpsWindow() {
+    this._frameMsSamples = [];
+    this.avgFps = 60;
+    this.lastRawNowMs = performance.now();
+  }
+
+  setPaused(paused = false) {
+    const next = Boolean(paused);
+    if (this._paused === next) return;
+    this._paused = next;
+    this._syncLoopRunState();
+  }
+
+  _syncLoopRunState() {
+    if (this.disposed) return;
+    const shouldPause =
+      this._paused || (typeof document !== 'undefined' && document.hidden === true);
+    if (shouldPause) {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = 0;
+      }
+      return;
+    }
+    if (!this.rafId) {
+      const nowMs = performance.now();
+      this.lastRawNowMs = nowMs;
+      this.lastFrameTime = nowMs * 0.001;
+      this._sceneDirty = true;
+      this._startLoop();
+    }
   }
 
   setSimulatedLowFps(degraded = true) {
@@ -2266,7 +2443,9 @@ export class Mannequin3DWebGLEngine {
       this.avgFps = 60;
       this.lastRawNowMs = performance.now();
     }
-    setVibrancySolidFallback(next);
+    if (!this.isPreviewOnly) {
+      setVibrancySolidFallback(next);
+    }
     this._sceneDirty = true;
     return this._vibrancyDegraded;
   }
@@ -2274,10 +2453,13 @@ export class Mannequin3DWebGLEngine {
   _rebuildEnvironmentMap() {
     if (this.isSoftwareRenderer) return;
     try {
-      this.envMap?.dispose?.();
+      this._envRenderTarget?.dispose?.();
+      this._envRenderTarget = null;
+      this.envMap = null;
       const pmrem = new THREE.PMREMGenerator(this.renderer);
       const envScene = new RoomEnvironment();
-      this.envMap = pmrem.fromScene(envScene, 0.04).texture;
+      this._envRenderTarget = pmrem.fromScene(envScene, 0.04);
+      this.envMap = this._envRenderTarget.texture;
       this.scene.environment = this.envMap;
       this.scene.environmentIntensity = 0.56;
       envScene.dispose?.();
@@ -2304,6 +2486,7 @@ export class Mannequin3DWebGLEngine {
         mesh.userData.isBody = true;
         this.bodyMesh = mesh;
         this.characterGroup.add(mesh);
+        this.lastRawNowMs = performance.now();
         this._sceneDirty = true;
         this.updateScene(this.lastState);
       })
@@ -2488,7 +2671,7 @@ export class Mannequin3DWebGLEngine {
 
   getTelemetry() {
     const sp = this.lastSprings;
-    return {
+    const telemetry = {
       frameCount: this.frameCount,
       avgFps: Math.round(this.avgFps * 10) / 10,
       geometries: this.renderer?.info?.memory?.geometries ?? 0,
@@ -2501,6 +2684,7 @@ export class Mannequin3DWebGLEngine {
       effectiveMotion: this._resolveEffectiveMotion(),
       windSpeedKmh: Number(this.weatherInfo?.windSpeed) || 11,
       activeGarmentIds: [...this.garmentMeshes.keys()],
+      equippedDbGarmentIds: [...(this.equippedDbGarmentIds || [])],
       isSoftwareRenderer: this.isSoftwareRenderer,
       vibrancyDegraded: Boolean(this._vibrancyDegraded),
       jiggle: sp
@@ -2524,6 +2708,10 @@ export class Mannequin3DWebGLEngine {
           }
         : null,
     };
+    if (!this.isPreviewOnly && typeof window !== 'undefined') {
+      window.__MANNEQUIN_3D_TELEMETRY__ = telemetry;
+    }
+    return telemetry;
   }
 
   _disposeGarmentInstance(gid) {
@@ -2535,12 +2723,13 @@ export class Mannequin3DWebGLEngine {
     this.garmentMeshes.delete(gid);
   }
 
-  _getOrCreateGarmentInstance(tpl, gid) {
+  _getOrCreateGarmentInstance(tpl, gid, createMaterialFn = null, matKey = '') {
     if (this.garmentMeshes.has(gid)) {
       return this.garmentMeshes.get(gid);
     }
     const spec = tpl.userData.spec || {};
     const isHandSocket = spec.mount === 'hand_l' || spec.mount === 'hand_r';
+    const hasMultiZones = Boolean(tpl.userData.hasMultiZones);
     const geom = cloneRuntimeGeometryWithoutMorphs(tpl.geometry);
     geom.userData.fullIndexArray = tpl.geometry.userData.fullIndexArray?.slice();
     if (tpl.geometry.userData.zoneGroups) {
@@ -2551,16 +2740,18 @@ export class Mannequin3DWebGLEngine {
       }
     }
 
-    const placeholderMat = this.isSoftwareRenderer
-      ? new THREE.MeshLambertMaterial()
-      : new THREE.MeshPhysicalMaterial();
+    const initialMat = createMaterialFn
+      ? createMaterialFn(hasMultiZones)
+      : this.isSoftwareRenderer
+        ? new THREE.MeshLambertMaterial()
+        : new THREE.MeshPhysicalMaterial();
     let mesh;
     if (isHandSocket) {
-      mesh = new THREE.Mesh(geom, placeholderMat);
+      mesh = new THREE.Mesh(geom, initialMat);
       applyNodeTransform(mesh, tpl);
       this.leftHandSocket.add(mesh);
     } else {
-      mesh = new THREE.SkinnedMesh(geom, placeholderMat);
+      mesh = new THREE.SkinnedMesh(geom, initialMat);
       applyNodeTransform(mesh, tpl);
       mesh.bind(this.skeleton, new THREE.Matrix4());
       this.characterGroup.add(mesh);
@@ -2572,7 +2763,8 @@ export class Mannequin3DWebGLEngine {
     mesh.userData.templateRef = tpl;
     mesh.userData.gid = gid;
     mesh.userData.spec = spec;
-    mesh.userData.hasMultiZones = Boolean(tpl.userData.hasMultiZones);
+    mesh.userData.hasMultiZones = hasMultiZones;
+    mesh.userData.materialKey = createMaterialFn ? matKey : '';
     mesh.userData.coveredBodyVerts = tpl.userData.coveredBodyVerts;
     this.garmentMeshes.set(gid, mesh);
     return mesh;
@@ -2655,6 +2847,9 @@ export class Mannequin3DWebGLEngine {
 
       const active = loadedList.filter(Boolean);
       const activeGids = new Set(active.map((d) => d.gid));
+      this.equippedDbGarmentIds = active
+        .map((d) => Number(d.item?.id))
+        .filter((n) => Number.isFinite(n) && n > 0);
 
       // Requirement 9.b: Strictly dispose unequipped / swapped-out garment Geometry, Material & Textures
       for (const existingGid of [...this.garmentMeshes.keys()]) {
@@ -2698,21 +2893,47 @@ export class Mannequin3DWebGLEngine {
       const rebakedBodyAccessories = [];
 
       for (const { slotKey, item, gid, tpl } of active) {
-        const mesh = this._getOrCreateGarmentInstance(tpl, gid);
+        const isHighlighted = Boolean(slotKey && (slotKey === selectedSlot || slotKey === hoveredSlot));
+        const hex = String(item?.color_hex || '#2E3540').toUpperCase();
+        const matSpec = inferFabricMaterialSpec(item || { category: slotKey });
+        const imgUrl = String(item?.image_url || '');
+        const isCustomCutout =
+          imgUrl.startsWith('data:image/') ||
+          imgUrl.startsWith('blob:') ||
+          Boolean(item?.custom_texture);
+        const matKey = `${gid}|${slotKey}|${hex}|${matSpec.type}|${isHighlighted ? 1 : 0}|${isCustomCutout ? imgUrl : ''}|${this.isSoftwareRenderer ? 1 : 0}`;
+
+        const mesh = this._getOrCreateGarmentInstance(
+          tpl,
+          gid,
+          (hasMultiZones) =>
+            createGarmentMaterial(
+              item,
+              gid,
+              slotKey,
+              isHighlighted,
+              hasMultiZones,
+              this.isSoftwareRenderer
+            ),
+          matKey
+        );
         mesh.visible = true;
         mesh.userData.slot = slotKey;
-        const isHighlighted = Boolean(slotKey && (slotKey === selectedSlot || slotKey === hoveredSlot));
 
-        const prevMat = mesh.material;
-        mesh.material = createGarmentMaterial(
-          item,
-          gid,
-          slotKey,
-          isHighlighted,
-          mesh.userData.hasMultiZones,
-          this.isSoftwareRenderer
-        );
-        disposeMaterialOrArray(prevMat);
+        if (mesh.userData.materialKey !== matKey) {
+          const prevMat = mesh.material;
+          mesh.material = createGarmentMaterial(
+            item,
+            gid,
+            slotKey,
+            isHighlighted,
+            mesh.userData.hasMultiZones,
+            this.isSoftwareRenderer
+          );
+          mesh.userData.materialKey = matKey;
+          disposeMaterialOrArray(prevMat);
+        }
+
         const isLayerConformedAcc = gid === 'accessory_bag' || gid === 'accessory_belt';
         const didRebake = applyMorphsToMesh(mesh, weights, isLayerConformedAcc ? layerShellKey : '');
         if (['outer', 'top', 'dress', 'bottom'].includes(slotKey)) {
@@ -3135,22 +3356,31 @@ export class Mannequin3DWebGLEngine {
 
   _startLoop() {
     const animate = () => {
-      if (this.disposed) return;
+      if (
+        this.disposed ||
+        this._paused ||
+        (typeof document !== 'undefined' && document.hidden === true)
+      ) {
+        this.rafId = 0;
+        return;
+      }
       this.rafId = requestAnimationFrame(animate);
 
       const nowMs = performance.now();
       const rawDeltaMs = nowMs - this.lastRawNowMs;
       this.lastRawNowMs = nowMs;
 
-      if (!this._simulatedLowFps && rawDeltaMs > 1 && rawDeltaMs < 250) {
-        this._frameMsSamples.push(rawDeltaMs);
+      const isHidden = typeof document !== 'undefined' && document.hidden === true;
+      if (!this._simulatedLowFps && !isHidden && rawDeltaMs > 1 && this.frameCount >= 2) {
+        const clampedDeltaMs = Math.min(1000, rawDeltaMs);
+        this._frameMsSamples.push(clampedDeltaMs);
         if (this._frameMsSamples.length > 40) this._frameMsSamples.shift();
         const meanMs =
           this._frameMsSamples.reduce((acc, v) => acc + v, 0) / this._frameMsSamples.length;
         this.avgFps = Math.min(120, 1000 / Math.max(1, meanMs));
 
         // Requirement 14.b: Auto-degrade Vibrancy backdrop-filter to solid surface on FPS drop
-        if (this._frameMsSamples.length >= 25) {
+        if (!this.isPreviewOnly && this._frameMsSamples.length >= 25) {
           if (!this._vibrancyDegraded && this.avgFps < 46) {
             this._vibrancyDegraded = true;
             setVibrancySolidFallback(true);
@@ -3189,16 +3419,19 @@ export class Mannequin3DWebGLEngine {
       const mode = this._resolveEffectiveMotion();
       let targetSpec = SLOT_CAMERA_TARGETS[this.focusSlot] || SLOT_CAMERA_TARGETS.all;
       if (this.focusSlot === 'all' && mode === 'umbrella') {
-        targetSpec = { x: 0.0, y: 1.08, dist: 4.18 };
+        targetSpec = { x: 0.0, y: 1.08, dist: 4.18, fov: 35 };
       } else if (this.focusSlot === 'accessory') {
         if (this.activeAccessorySub === 'accessory_glasses') {
-          targetSpec = { x: 0.0, y: 1.54, dist: 1.06 };
+          targetSpec = { x: 0.0, y: 1.54, dist: 1.06, fov: 30 };
         } else if (this.activeAccessorySub === 'accessory_watch') {
-          targetSpec = { x: 0.0, y: 1.07, dist: 1.42 };
+          targetSpec = { x: 0.0, y: 1.07, dist: 1.42, fov: 30 };
         } else if (this.activeAccessorySub === 'accessory_bag') {
-          targetSpec = { x: 0.06, y: 0.96, dist: 1.86 };
-        } else if (this.activeAccessorySub === 'accessory_briefcase' || this.activeAccessorySub === 'accessory_tote') {
-          targetSpec = { x: 0.12, y: 0.72, dist: 1.88 };
+          targetSpec = { x: 0.06, y: 0.96, dist: 1.86, fov: 33 };
+        } else if (
+          this.activeAccessorySub === 'accessory_briefcase' ||
+          this.activeAccessorySub === 'accessory_tote'
+        ) {
+          targetSpec = { x: 0.12, y: 0.72, dist: 1.88, fov: 33 };
         }
       }
 
@@ -3207,10 +3440,14 @@ export class Mannequin3DWebGLEngine {
       const dxCam = tx - this.camTargetX;
       const dyCam = targetSpec.y - this.camTargetY;
       const ddCam = targetSpec.dist - this.camDist;
-      const isCamSettling =
+      const targetFov = targetSpec.fov ?? 35;
+      const dFov = targetFov - this.camera.fov;
+      const isFovSettling = Math.abs(dFov) > 0.05;
+      const isPosSettling =
         Math.abs(dxCam) > 0.0018 || Math.abs(dyCam) > 0.0018 || Math.abs(ddCam) > 0.0018;
+      const isCamSettling = isPosSettling || isFovSettling;
 
-      if (isCamSettling) {
+      if (isPosSettling) {
         this.camTargetX += dxCam * camLerp;
         this.camTargetY += dyCam * camLerp;
         this.camDist += ddCam * camLerp;
@@ -3225,11 +3462,27 @@ export class Mannequin3DWebGLEngine {
         this._sceneDirty = true;
       }
 
-      this.camera.position.set(this.camTargetX + this.parallaxX * 0.08, this.camTargetY + 0.04, this.camDist);
+      if (isFovSettling) {
+        this.camera.fov += dFov * camLerp;
+        this.camera.updateProjectionMatrix();
+      } else if (this.camera.fov !== targetFov) {
+        this.camera.fov = targetFov;
+        this.camera.updateProjectionMatrix();
+        this._sceneDirty = true;
+      }
+
+      this.camera.position.set(
+        this.camTargetX + this.parallaxX * 0.08,
+        this.camTargetY + 0.04,
+        this.camDist
+      );
       this.camera.lookAt(this.camTargetX, this.camTargetY - 0.02, 0);
 
       if (this.scanProgress < 1.0) {
-        this.scanProgress = Math.min(1.0, this.scanProgress + (this.isSoftwareRenderer ? 0.12 : 0.028));
+        this.scanProgress = Math.min(
+          1.0,
+          this.scanProgress + (this.isSoftwareRenderer ? 0.12 : 0.028)
+        );
         this.scanRingMesh.position.y = 1.82 - this.scanProgress * 1.78;
         this.scanRingMat.opacity = Math.sin(this.scanProgress * Math.PI) * 0.55;
       } else if (this.scanRingMat.opacity !== 0.0) {
@@ -3266,18 +3519,33 @@ export class Mannequin3DWebGLEngine {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     activeEngineInstances.delete(this);
-    if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+    }
+    if (this._contextRestoreTimer) {
+      clearTimeout(this._contextRestoreTimer);
+      this._contextRestoreTimer = null;
+    }
     this._resizeObserver?.disconnect?.();
     this.canvas?.removeEventListener?.('webglcontextlost', this._handleContextLost, false);
     this.canvas?.removeEventListener?.('webglcontextrestored', this._handleContextRestored, false);
+    if (typeof document !== 'undefined' && this._handleVisibilityChange) {
+      document.removeEventListener('visibilitychange', this._handleVisibilityChange, false);
+    }
 
     for (const gid of [...this.garmentMeshes.keys()]) {
       this._disposeGarmentInstance(gid);
     }
-    this.bodyMesh?.geometry?.dispose?.();
-    disposeMaterialOrArray(this.bodyMesh?.material);
+    if (this.bodyMesh) {
+      this.bodyMesh.parent?.remove(this.bodyMesh);
+      this.bodyMesh.geometry?.dispose?.();
+      disposeMaterialOrArray(this.bodyMesh.material);
+      this.bodyMesh = null;
+    }
 
     const disposeSubtree = (root) => {
       root?.traverse?.((obj) => {
@@ -3291,15 +3559,29 @@ export class Mannequin3DWebGLEngine {
     disposeSubtree(this.windStreaks);
     disposeSubtree(this.scanRingMesh);
 
-    this.envMap?.dispose?.();
-    this.renderer.renderLists?.dispose?.();
-    this.renderer.dispose();
+    this._envRenderTarget?.dispose?.();
+    this._envRenderTarget = null;
+    this.envMap = null;
+    this.skeleton?.dispose?.();
+    this.renderer?.renderLists?.dispose?.();
+    this.renderer?.dispose?.();
+    try {
+      this.renderer?.forceContextLoss?.();
+    } catch {
+      // ignore context loss errors on teardown
+    }
 
     if (this.canvas?.__mannequinEngine === this) {
       delete this.canvas.__mannequinEngine;
     }
-    if (typeof window !== 'undefined' && window.__ainventory3DEngine === this) {
-      delete window.__ainventory3DEngine;
+    if (typeof window !== 'undefined') {
+      if (window.__MANNEQUIN_3D_ENGINE__ === this) {
+        delete window.__MANNEQUIN_3D_ENGINE__;
+        delete window.__MANNEQUIN_3D_TELEMETRY__;
+      }
+      if (window.__ainventory3DEngine === this) {
+        delete window.__ainventory3DEngine;
+      }
     }
   }
 }
@@ -3309,13 +3591,23 @@ export class Mannequin3DWebGLEngine {
 // -----------------------------------------------------------------------------
 let sharedPreviewEngine = null;
 
+function pruneDisconnectedPreviewListeners() {
+  for (const canvasKey of [...previewListeners.keys()]) {
+    if (canvasKey && canvasKey.isConnected === false) {
+      previewListeners.delete(canvasKey);
+    }
+  }
+}
+
 function notifyPreviewListeners() {
   for (const eng of activeEngineInstances) {
     eng.markDirty?.();
   }
-  const callbacks = [...previewListeners.values()];
+  pruneDisconnectedPreviewListeners();
+  const entries = [...previewListeners.entries()];
   previewListeners.clear();
-  for (const fn of callbacks) {
+  for (const [canvasKey, fn] of entries) {
+    if (canvasKey && canvasKey.isConnected === false) continue;
     try {
       fn();
     } catch {
@@ -3328,17 +3620,19 @@ function getSharedPreviewEngine() {
   if (sharedPreviewEngine) return sharedPreviewEngine;
   if (typeof document === 'undefined') return null;
   try {
+    const isSoftware = detectSoftwareWebGL();
     const offCanvas = document.createElement('canvas');
     offCanvas.width = 360;
     offCanvas.height = 500;
     const renderer = new THREE.WebGLRenderer({
       canvas: offCanvas,
-      antialias: true,
+      antialias: !isSoftware,
       alpha: true,
+      stencil: false,
       preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(1);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = isSoftware ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
 
     const scene = new THREE.Scene();
@@ -3372,20 +3666,67 @@ function getSharedPreviewEngine() {
     group.add(rig.rootBone);
     rig.rootBone.updateMatrixWorld(true);
 
-    sharedPreviewEngine = {
+    const eng = {
       offCanvas,
       renderer,
       scene,
       camera,
+      pedestal,
       group,
       skeleton: rig.skeleton,
+      isSoftware,
+      isContextLost: false,
       bodyMesh: null,
       briefsMesh: null,
       topMesh: null,
+      onContextLost: null,
+      onContextRestored: null,
     };
+
+    eng.onContextLost = (e) => {
+      e.preventDefault();
+      eng.isContextLost = true;
+    };
+    eng.onContextRestored = () => {
+      eng.isContextLost = false;
+      notifyPreviewListeners();
+    };
+    offCanvas.addEventListener('webglcontextlost', eng.onContextLost, false);
+    offCanvas.addEventListener('webglcontextrestored', eng.onContextRestored, false);
+
+    sharedPreviewEngine = eng;
     return sharedPreviewEngine;
   } catch {
     return null;
+  }
+}
+
+export function disposeSharedPreviewEngine() {
+  previewListeners.clear();
+  if (!sharedPreviewEngine) return;
+  const eng = sharedPreviewEngine;
+  sharedPreviewEngine = null;
+
+  eng.offCanvas?.removeEventListener?.('webglcontextlost', eng.onContextLost, false);
+  eng.offCanvas?.removeEventListener?.('webglcontextrestored', eng.onContextRestored, false);
+
+  for (const mesh of [eng.bodyMesh, eng.briefsMesh, eng.topMesh, eng.pedestal]) {
+    if (!mesh) continue;
+    mesh.parent?.remove(mesh);
+    mesh.geometry?.dispose?.();
+    disposeMaterialOrArray(mesh.material);
+  }
+  eng.skeleton?.dispose?.();
+  eng.renderer?.renderLists?.dispose?.();
+  eng.renderer?.dispose?.();
+  try {
+    eng.renderer?.forceContextLoss?.();
+  } catch {
+    // ignore context release errors
+  }
+  if (eng.offCanvas) {
+    eng.offCanvas.width = 0;
+    eng.offCanvas.height = 0;
   }
 }
 
@@ -3393,6 +3734,8 @@ export function render3DMannequinScene(canvas, options = {}) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+
+  pruneDisconnectedPreviewListeners();
 
   const width = canvas.width || 240;
   const height = canvas.height || 340;
@@ -3403,14 +3746,22 @@ export function render3DMannequinScene(canvas, options = {}) {
     darkHud = false,
   } = options;
 
+  const isDarkTheme =
+    Boolean(darkHud) ||
+    (typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme') === 'dark');
+
   if (
     !bodyTemplateMesh ||
     !garmentTemplateCache.has('underwear_briefs') ||
     !garmentTemplateCache.has('underwear_top')
   ) {
-    previewListeners.set(canvas, () => {
-      render3DMannequinScene(canvas, options);
-    });
+    if (canvas.isConnected !== false) {
+      previewListeners.set(canvas, () => {
+        if (canvas.isConnected === false) return;
+        render3DMannequinScene(canvas, options);
+      });
+    }
     loadBodyTemplate().catch(() => {});
     loadGarmentTemplate('underwear_briefs').catch(() => {});
     loadGarmentTemplate('underwear_top').catch(() => {});
@@ -3429,7 +3780,7 @@ export function render3DMannequinScene(canvas, options = {}) {
       height * 0.48,
       Math.max(width, height) * 0.65
     );
-    if (darkHud) {
+    if (isDarkTheme) {
       bgGrad.addColorStop(0, 'rgba(28, 28, 30, 0.56)');
       bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
     } else {
@@ -3441,51 +3792,62 @@ export function render3DMannequinScene(canvas, options = {}) {
   }
 
   const eng = bodyTemplateMesh ? getSharedPreviewEngine() : null;
-  if (eng && bodyTemplateMesh) {
+  if (eng && !eng.isContextLost && bodyTemplateMesh) {
+    if (eng.pedestal?.material?.color) {
+      eng.pedestal.material.color.set(isDarkTheme ? 0x2c2c2e : 0xf2f2f5);
+    }
+
     if (!eng.bodyMesh) {
-      const geom = bodyTemplateMesh.geometry.clone();
-      eng.bodyMesh = new THREE.SkinnedMesh(geom, createSkinMaterial(resolveSkinHex(profile)));
+      const geom = cloneRuntimeGeometryWithoutMorphs(bodyTemplateMesh.geometry);
+      eng.bodyMesh = new THREE.SkinnedMesh(
+        geom,
+        createSkinMaterial(resolveSkinHex(profile), eng.isSoftware)
+      );
       applyNodeTransform(eng.bodyMesh, bodyTemplateMesh);
       eng.bodyMesh.bind(eng.skeleton, new THREE.Matrix4());
       eng.bodyMesh.frustumCulled = false;
-      eng.bodyMesh.morphTargetDictionary = { ...bodyTemplateMesh.morphTargetDictionary };
-      eng.bodyMesh.morphTargetInfluences = [...bodyTemplateMesh.morphTargetInfluences];
+      eng.bodyMesh.userData.templateRef = bodyTemplateMesh;
       eng.group.add(eng.bodyMesh);
     }
     if (!eng.briefsMesh && garmentTemplateCache.has('underwear_briefs')) {
       const tpl = garmentTemplateCache.get('underwear_briefs');
-      eng.briefsMesh = new THREE.SkinnedMesh(
-        tpl.geometry.clone(),
-        new THREE.MeshPhysicalMaterial({ color: 0x2c2623, roughness: 0.68, sheen: 0.3 })
-      );
+      const briefsGeom = cloneRuntimeGeometryWithoutMorphs(tpl.geometry);
+      const briefsMat = eng.isSoftware
+        ? new THREE.MeshLambertMaterial({ color: 0x1d1d1f })
+        : new THREE.MeshPhysicalMaterial({ color: 0x1d1d1f, roughness: 0.68, sheen: 0.3 });
+      eng.briefsMesh = new THREE.SkinnedMesh(briefsGeom, briefsMat);
       applyNodeTransform(eng.briefsMesh, tpl);
       eng.briefsMesh.bind(eng.skeleton, new THREE.Matrix4());
       eng.briefsMesh.frustumCulled = false;
-      eng.briefsMesh.morphTargetDictionary = { ...tpl.morphTargetDictionary };
-      eng.briefsMesh.morphTargetInfluences = [...tpl.morphTargetInfluences];
+      eng.briefsMesh.userData.templateRef = tpl;
       eng.group.add(eng.briefsMesh);
     }
     if (!eng.topMesh && garmentTemplateCache.has('underwear_top')) {
       const tpl = garmentTemplateCache.get('underwear_top');
-      eng.topMesh = new THREE.SkinnedMesh(
-        tpl.geometry.clone(),
-        new THREE.MeshPhysicalMaterial({ color: 0x2c2623, roughness: 0.68, sheen: 0.3 })
-      );
+      const topGeom = cloneRuntimeGeometryWithoutMorphs(tpl.geometry);
+      const topMat = eng.isSoftware
+        ? new THREE.MeshLambertMaterial({ color: 0x1d1d1f })
+        : new THREE.MeshPhysicalMaterial({ color: 0x1d1d1f, roughness: 0.68, sheen: 0.3 });
+      eng.topMesh = new THREE.SkinnedMesh(topGeom, topMat);
       applyNodeTransform(eng.topMesh, tpl);
       eng.topMesh.bind(eng.skeleton, new THREE.Matrix4());
       eng.topMesh.frustumCulled = false;
-      eng.topMesh.morphTargetDictionary = { ...tpl.morphTargetDictionary };
-      eng.topMesh.morphTargetInfluences = [...tpl.morphTargetInfluences];
+      eng.topMesh.userData.templateRef = tpl;
       eng.group.add(eng.topMesh);
     }
 
     const { anat, weights } = computeMorphTargetWeights(profile);
     const skinHex = resolveSkinHex(profile);
     eng.bodyMesh.material.color.set(skinHex);
-    eng.bodyMesh.material.sheenColor.set(skinHex).lerp(new THREE.Color('#fff5f0'), 0.38);
+    eng.bodyMesh.material.sheenColor?.set(skinHex)?.lerp(new THREE.Color('#fff5f0'), 0.38);
     applyMorphsToMesh(eng.bodyMesh, weights);
 
-    const briefsHex = profile.mannequinBriefsColorHex || '#2c2623';
+    const defaultBriefsHex = isDarkTheme ? '#2C2C2E' : '#1D1D1F';
+    const rawBriefsHex = profile.mannequinBriefsColorHex;
+    const briefsHex =
+      !rawBriefsHex || String(rawBriefsHex).toLowerCase() === '#2c2623'
+        ? defaultBriefsHex
+        : rawBriefsHex;
     if (eng.briefsMesh) {
       eng.briefsMesh.material.color.set(briefsHex);
       applyMorphsToMesh(eng.briefsMesh, weights);

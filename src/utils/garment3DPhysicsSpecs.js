@@ -16,6 +16,8 @@ export const FABRIC_WIND_SENSITIVITY = {
   denim: 0.44,
   leather: 0.42,
   padding: 0.34,
+  acetate: 0.15,
+  metal: 0.15,
 };
 
 export function resolveFabricWindSensitivity(itemOrFabric = '') {
@@ -28,6 +30,8 @@ export function resolveFabricWindSensitivity(itemOrFabric = '') {
   }
   const sub = typeof itemOrFabric === 'object' ? String(itemOrFabric?.subcategory || '').toLowerCase() : '';
   const name = typeof itemOrFabric === 'object' ? String(itemOrFabric?.name || '') : '';
+  if (sub === 'watch') return FABRIC_WIND_SENSITIVITY.metal;
+  if (sub === 'glasses') return FABRIC_WIND_SENSITIVITY.acetate;
   if (sub === 'blouse' || sub === 'necktie' || /실크|새틴|쉬폰/.test(name)) return FABRIC_WIND_SENSITIVITY.silk;
   if (sub === 'scarf' || sub === 'muffler' || /캐시미어|머플러|스카프/.test(name)) return 1.18;
   if (sub === 'trench' || /트렌치|개버딘/.test(name)) return FABRIC_WIND_SENSITIVITY.gabardine;
@@ -211,7 +215,10 @@ const KEYWORD_SUBCATEGORY_RULES = [
   { re: /머플러|목도리|스카프|숄|muffler|scarf/i, category: 'neckwear', subcategory: 'scarf', physics: 'soft_jiggle_muffler' },
   { re: /넥타이|타이|tie/i, category: 'neckwear', subcategory: 'necktie', physics: 'soft_jiggle_tie' },
   { re: /트렌치|코트|오버코트|맥코트|trench|coat/i, category: 'outer', subcategory: 'coat', physics: 'hem_sway_coat' },
-  { re: /블레이저|자켓|점퍼|가디건|셔츠|블라우스|blazer|jacket|cardigan|shirt|blouse/i, category: 'outer', subcategory: 'blazer', physics: 'drape_wind_garment' },
+  { re: /블레이저|blazer/i, category: 'outer', subcategory: 'blazer', physics: 'drape_wind_garment' },
+  { re: /자켓|점퍼|집업|jacket/i, category: 'outer', subcategory: 'jacket', physics: 'drape_wind_garment' },
+  { re: /가디건|cardigan/i, category: 'top', subcategory: 'cardigan', physics: 'drape_wind_garment' },
+  { re: /셔츠|블라우스|shirt|blouse/i, category: 'top', subcategory: 'shirt', physics: 'drape_wind_garment' },
   { re: /스커트|치마|플리츠|skirt/i, category: 'bottom', subcategory: 'skirt', physics: 'hem_sway_skirt' },
   { re: /원피스|드레스|dress|onepiece/i, category: 'dress', subcategory: 'dress', physics: 'hem_sway_skirt' },
   { re: /장갑|글러브|glove/i, category: 'gloves', subcategory: 'leather_gloves', physics: 'rigid_fitted' },
@@ -254,7 +261,9 @@ export function infer3DRegistrationSpec(item = {}) {
   else if (subcategory === 'necktie') physicsKey = 'soft_jiggle_tie';
   else if (subcategory === 'coat' || subcategory === 'trench') physicsKey = 'hem_sway_coat';
   else if (subcategory === 'skirt' || category === 'dress') physicsKey = 'hem_sway_skirt';
-  else if (['blazer', 'jacket', 'cardigan', 'shirt', 'blouse', 'slacks'].includes(subcategory)) {
+  else if (
+    ['blazer', 'jacket', 'cardigan', 'shirt', 'blouse', 'knit', 'tshirt', 'sweatshirt', 'hoodie', 'slacks', 'shorts'].includes(subcategory)
+  ) {
     physicsKey = 'drape_wind_garment';
   }
 
