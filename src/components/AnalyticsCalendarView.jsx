@@ -10,7 +10,8 @@ import {
   Trash2,
   TrendingDown,
 } from 'lucide-react';
-import { CATEGORIES, apiFetch, formatKRW } from '../utils/api.js';
+import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import { CATEGORIES, apiFetch, formatKRW, getStoredToken } from '../utils/api.js';
 import { triggerHaptic } from '../utils/nativeBridge.js';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import {
@@ -20,6 +21,32 @@ import {
 } from './common/AppUI.jsx';
 
 const CATEGORY_LABEL_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
+
+function buildFallbackIcsContent(logs, outfits) {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//A inventory//OOTD Calendar//KO',
+    'CALSCALE:GREGORIAN',
+  ];
+  for (const entry of logs) {
+    const rawDate = String(entry.worn_date || '').replace(/-/g, '');
+    if (rawDate.length !== 8) continue;
+    const matchedOutfit = outfits.find((o) => Number(o.id) === Number(entry.outfit_id));
+    const title = matchedOutfit?.title || entry.outfit?.name || '데일리 코디';
+    const statusPrefix = entry.status === 'planned' ? '[예약] ' : '[OOTD] ';
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:ainventory-${entry.id}@ainventory.local`,
+      `DTSTART;VALUE=DATE:${rawDate}`,
+      `SUMMARY:${statusPrefix}${title}`,
+      entry.note ? `DESCRIPTION:${String(entry.note).replace(/\r?\n/g, ' ')}` : 'DESCRIPTION:A inventory OOTD',
+      'END:VEVENT'
+    );
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
 
 /**
  * Apple HIG Bento Insights, CPW Dashboard, OOTD Calendar & Trip Packing List View (Reqs 7.a, 7.c, 12.d, 13.a-c)
@@ -38,8 +65,9 @@ export default function AnalyticsCalendarView({
   const [outfits, setOutfits] = useState([]);
   const [packingLists, setPackingLists] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exportingIcs, setExportingIcs] = useState(false);
 
-  // Active Drill-Down Sheet: null | 'cpw' | 'dormant' | 'balance' | 'calendar' | 'packing'
+  // Active Drill-Down Sheet: null | 'cpw' | 'utilization' | 'calendar' | 'packing'
   const [activeSheet, setActiveSheet] = useState(null);
 
   // Calendar Form State
@@ -92,6 +120,49 @@ export default function AnalyticsCalendarView({
   useEffect(() => {
     loadAll();
   }, [loadAll, refreshKey]);
+
+  const handleExportIcs = async () => {
+    setExportingIcs(true);
+    try {
+      let icsText = '';
+      const token = getStoredToken();
+      if (!user?.isSampleDemo && token) {
+        try {
+          const res = await fetch(
+            `/api/calendar/ics?closet=${encodeURIComponent(activeCloset)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          if (res.ok) {
+            icsText = await res.text();
+          }
+        } catch {
+          // Fallback to local ICS synthesis when offline
+        }
+      }
+      if (!icsText) {
+        icsText = buildFallbackIcsContent(logs, outfits);
+      }
+      const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'ainventory-ootd.ics';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      triggerHaptic('light');
+      showToast?.('OOTD 캘린더(.ics) 파일을 내보냈습니다');
+    } catch (err) {
+      showToast?.(err?.message || '.ics 파일 내보내기에 실패했습니다');
+    } finally {
+      setExportingIcs(false);
+    }
+  };
 
   const handleAddCalendarEntry = async (e) => {
     e.preventDefault();
@@ -173,9 +244,11 @@ export default function AnalyticsCalendarView({
   };
 
   const handleTogglePackingItem = async (listObj, itemIdx) => {
-    const nextItems = (listObj.items || []).map((it, idx) =>
-      idx === itemIdx ? { ...it, packed: !it.packed, checked: !(it.packed || it.checked) } : it
-    );
+    const nextItems = (listObj.items || []).map((it, idx) => {
+      if (idx !== itemIdx) return it;
+      const nextChecked = !(it.checked ?? it.packed ?? false);
+      return { ...it, checked: nextChecked, packed: undefined };
+    });
     triggerHaptic('selection');
     setPackingLists((prev) =>
       prev.map((pl) => (pl.id === listObj.id ? { ...pl, items: nextItems } : pl))
@@ -248,6 +321,7 @@ export default function AnalyticsCalendarView({
             id="open-ootd-calendar-sheet-btn"
             type="button"
             className="btn btn-secondary btn-sm tabular-nums"
+            style={{ minHeight: 44 }}
             onClick={() => openSheet('calendar')}
           >
             <Calendar size={14} />
@@ -260,9 +334,9 @@ export default function AnalyticsCalendarView({
       <div className="hig-bento-grid">
         {/* Bento 1: Average CPW */}
         <button
-          id="bento-cpw-card"
+          id={CARBON_DOM_CONTRACT.bentoCpwCardId}
           type="button"
-          className="hig-bento-card"
+          className={CARBON_DOM_CONTRACT.bentoCardClass}
           onClick={() => openSheet('cpw')}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
@@ -279,9 +353,9 @@ export default function AnalyticsCalendarView({
 
         {/* Bento 2: Closet Utilization, Dormant Alert & Balance (#bento-utilization-card) */}
         <button
-          id="bento-utilization-card"
+          id={CARBON_DOM_CONTRACT.bentoUtilizationCardId}
           type="button"
-          className="hig-bento-card"
+          className={CARBON_DOM_CONTRACT.bentoCardClass}
           onClick={() => openSheet('utilization')}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
@@ -301,9 +375,9 @@ export default function AnalyticsCalendarView({
 
         {/* Bento 3: Trip Packing Checklists (#bento-packing-card) */}
         <button
-          id="bento-packing-card"
+          id={CARBON_DOM_CONTRACT.bentoPackingCardId}
           type="button"
-          className="hig-bento-card"
+          className={CARBON_DOM_CONTRACT.bentoCardClass}
           onClick={() => openSheet('packing')}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
@@ -434,7 +508,7 @@ export default function AnalyticsCalendarView({
 
       {/* Sheet 2: Utilization, Dormant Garments & Wardrobe Balance Drill-Down */}
       <ResponsiveSheetModal
-        open={activeSheet === 'utilization' || activeSheet === 'dormant' || activeSheet === 'balance'}
+        open={activeSheet === 'utilization'}
         onClose={() => setActiveSheet(null)}
         eyebrow="UTILIZATION & BALANCE"
         title="옷장 가동률 · 미착용 및 편중도"
@@ -489,11 +563,16 @@ export default function AnalyticsCalendarView({
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
+                    style={{ minHeight: 44 }}
                     onClick={async () => {
-                      await apiFetch(`/garments/${item.id}/wear`, { method: 'POST' });
-                      await loadAll();
-                      onClosetUpdated?.();
-                      showToast?.('오늘 착용으로 전환되었습니다');
+                      try {
+                        await apiFetch(`/garments/${item.id}/wear`, { method: 'POST' });
+                        await loadAll();
+                        onClosetUpdated?.();
+                        showToast?.('오늘 착용으로 전환되었습니다');
+                      } catch (err) {
+                        showToast?.(err?.message || '착용 기록 반영에 실패했습니다');
+                      }
                     }}
                   >
                     착용 +1
@@ -593,7 +672,7 @@ export default function AnalyticsCalendarView({
         </div>
       </ResponsiveSheetModal>
 
-      {/* Sheet 4: OOTD Outfit Calendar & Future Schedule Reservation (Req 7.a) */}
+      {/* Sheet 3: OOTD Outfit Calendar & Future Schedule Reservation (Req 7.a) */}
       <ResponsiveSheetModal
         open={activeSheet === 'calendar'}
         onClose={() => setActiveSheet(null)}
@@ -617,6 +696,7 @@ export default function AnalyticsCalendarView({
               <input
                 id="calendar-date-input"
                 type="date"
+                aria-label="착용 또는 예약 날짜"
                 className="text-input tabular-nums"
                 style={{ background: 'var(--bg-canvas)' }}
                 value={logForm.worn_date}
@@ -631,6 +711,7 @@ export default function AnalyticsCalendarView({
               />
               <select
                 className="select-input"
+                aria-label="일정 상태 선택"
                 style={{ background: 'var(--bg-canvas)' }}
                 value={logForm.status}
                 onChange={(e) => setLogForm((prev) => ({ ...prev, status: e.target.value }))}
@@ -642,6 +723,7 @@ export default function AnalyticsCalendarView({
 
             <select
               className="select-input"
+              aria-label="룩북 코디 선택"
               style={{ background: 'var(--bg-canvas)' }}
               value={logForm.outfit_id}
               onChange={(e) => setLogForm((prev) => ({ ...prev, outfit_id: e.target.value }))}
@@ -656,23 +738,36 @@ export default function AnalyticsCalendarView({
 
             <input
               className="text-input"
+              aria-label="일정 메모"
               style={{ background: 'var(--bg-canvas)' }}
               placeholder="일정 메모 (예: 출장 미팅, 주말 브런치)"
               value={logForm.note}
               onChange={(e) => setLogForm((prev) => ({ ...prev, note: e.target.value }))}
             />
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <a
-                href={`/api/calendar/ics?closet=${encodeURIComponent(activeCloset)}`}
-                download="ainventory-ootd.ics"
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <button
+                id="export-calendar-ics-btn"
+                type="button"
                 className="btn btn-secondary btn-sm"
+                style={{ minHeight: 44 }}
+                disabled={exportingIcs}
+                onClick={handleExportIcs}
               >
-                <Download size={14} /> .ics 내보내기
-              </a>
-              <button id="save-calendar-entry-btn" type="submit" className="btn btn-primary btn-sm">
+                <Download size={14} /> {exportingIcs ? '내보내는 중...' : '.ics 내보내기'}
+              </button>
+              <button
+                id="save-calendar-entry-btn"
+                type="submit"
+                className="btn btn-primary btn-sm"
+                style={{ minHeight: 44 }}
+              >
                 <Plus size={14} />
-                <span>{logForm.status === 'planned' || logForm.worn_date > todayStr ? '일정 코디 예약' : '착용 기록 추가'}</span>
+                <span>
+                  {logForm.status === 'planned' || logForm.worn_date > todayStr
+                    ? '일정 코디 예약'
+                    : '착용 기록 추가'}
+                </span>
               </button>
             </div>
           </form>
@@ -698,38 +793,39 @@ export default function AnalyticsCalendarView({
                       <span className="tabular-nums">{entry.worn_date}</span> ·{' '}
                       {matchedOutfit?.title || entry.outfit?.name || '데일리 코디'}
                     </div>
-                  <div className="hig-caption">
-                    {entry.status === 'planned' ? '예약됨' : '착용 완료'}
-                    {entry.note ? ` · ${entry.note}` : ''}
+                    <div className="hig-caption">
+                      {entry.status === 'planned' ? '예약됨' : '착용 완료'}
+                      {entry.note ? ` · ${entry.note}` : ''}
+                    </div>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {entry.status === 'planned' && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {entry.status === 'planned' && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ minHeight: 44 }}
+                        onClick={() => handleMarkPlannedAsWorn(entry.id)}
+                      >
+                        <Check size={13} /> 착용 완료
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleMarkPlannedAsWorn(entry.id)}
+                      className="icon-btn"
+                      aria-label="기록 삭제"
+                      onClick={() => handleDeleteCalendarEntry(entry.id)}
                     >
-                      <Check size={13} /> 착용 완료
+                      <Trash2 size={14} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="기록 삭제"
-                    onClick={() => handleDeleteCalendarEntry(entry.id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  </div>
                 </div>
-              </div>
               );
             })}
           </div>
         </div>
       </ResponsiveSheetModal>
 
-      {/* Sheet 5: Trip Packing Checklist Generator (Req 7.a) */}
+      {/* Sheet 4: Trip Packing Checklist Generator (Req 7.a) */}
       <ResponsiveSheetModal
         open={activeSheet === 'packing'}
         onClose={() => setActiveSheet(null)}
@@ -751,8 +847,9 @@ export default function AnalyticsCalendarView({
           >
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <input
-                id="packing-title-input"
+                id={CARBON_DOM_CONTRACT.packingTitleInputId}
                 className="text-input"
+                aria-label="여행 제목"
                 style={{ background: 'var(--bg-canvas)' }}
                 placeholder="여행 제목"
                 value={tripForm.title}
@@ -760,8 +857,9 @@ export default function AnalyticsCalendarView({
                 required
               />
               <input
-                id="packing-dest-input"
+                id={CARBON_DOM_CONTRACT.packingDestInputId}
                 className="text-input"
+                aria-label="목적지"
                 style={{ background: 'var(--bg-canvas)' }}
                 placeholder="목적지 (예: 도쿄, 제주)"
                 value={tripForm.destination}
@@ -773,6 +871,7 @@ export default function AnalyticsCalendarView({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               <input
                 type="date"
+                aria-label="출발일"
                 className="text-input tabular-nums"
                 style={{ background: 'var(--bg-canvas)' }}
                 value={tripForm.start_date}
@@ -780,6 +879,7 @@ export default function AnalyticsCalendarView({
               />
               <input
                 type="date"
+                aria-label="도착일"
                 className="text-input tabular-nums"
                 style={{ background: 'var(--bg-canvas)' }}
                 value={tripForm.end_date}
@@ -787,6 +887,7 @@ export default function AnalyticsCalendarView({
               />
               <select
                 className="select-input"
+                aria-label="여행지 기후"
                 style={{ background: 'var(--bg-canvas)' }}
                 value={tripForm.climate}
                 onChange={(e) => setTripForm((prev) => ({ ...prev, climate: e.target.value }))}
@@ -799,11 +900,11 @@ export default function AnalyticsCalendarView({
             </div>
 
             <button
-              id="create-packing-list-btn"
+              id={CARBON_DOM_CONTRACT.createPackingListBtnId}
               type="submit"
               className="btn btn-primary btn-sm"
               disabled={creatingTrip}
-              style={{ alignSelf: 'flex-end' }}
+              style={{ alignSelf: 'flex-end', minHeight: 44 }}
             >
               <Plus size={14} /> {creatingTrip ? '구성 중...' : '패킹 체크리스트 자동 생성'}
             </button>
@@ -811,7 +912,7 @@ export default function AnalyticsCalendarView({
 
           {packingLists.map((pl) => {
             const items = pl.items || [];
-            const checkedCount = items.filter((i) => i.packed || i.checked).length;
+            const checkedCount = items.filter((i) => Boolean(i.checked ?? i.packed)).length;
             return (
               <div
                 key={pl.id}
@@ -846,16 +947,18 @@ export default function AnalyticsCalendarView({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {items.map((it, idx) => {
-                    const isChecked = Boolean(it.packed || it.checked);
+                    const isChecked = Boolean(it.checked ?? it.packed);
                     return (
                       <button
                         key={`${pl.id}-${idx}`}
                         type="button"
+                        aria-pressed={isChecked}
                         onClick={() => handleTogglePackingItem(pl, idx)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
+                          minHeight: 44,
                           padding: '10px 12px',
                           borderRadius: 12,
                           background: 'var(--bg-canvas)',
@@ -869,7 +972,7 @@ export default function AnalyticsCalendarView({
                             opacity: isChecked ? 0.55 : 1,
                           }}
                         >
-                          {it.label || it.name}
+                          {it.name || it.label}
                         </span>
                         <span className="hig-caption tabular-nums">
                           {isChecked ? '완료 ✓' : `x${it.qty || 1}`}

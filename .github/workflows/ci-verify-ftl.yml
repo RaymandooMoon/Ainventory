@@ -10,6 +10,15 @@ on:
       - '**/*.md'
       - 'docs/**'
       - 'LICENSE'
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
   workflow_dispatch: {}
 
 concurrency:
@@ -18,11 +27,10 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   web-verify:
-    name: Web Lint, Typecheck & Build
+    name: Web Lint, Typecheck, Build & E2E
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,24 +42,27 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install, lint, typecheck, and build web bundle
+      - name: Install, lint, typecheck, build, and run Playwright E2E
         shell: bash
         run: |
           set -euo pipefail
-          set -o pipefail
           : > /tmp/web-verify.log
 
-          echo "=== [1/4] npm ci ===" | tee -a /tmp/web-verify.log
+          echo "=== [1/5] npm ci ===" | tee -a /tmp/web-verify.log
           npm ci 2>&1 | tee -a /tmp/web-verify.log
 
-          echo "=== [2/4] npx oxlint src server ===" | tee -a /tmp/web-verify.log
-          npx oxlint src server 2>&1 | tee -a /tmp/web-verify.log
+          echo "=== [2/5] npx oxlint src server tests ===" | tee -a /tmp/web-verify.log
+          npx oxlint src server tests 2>&1 | tee -a /tmp/web-verify.log
 
-          echo "=== [3/4] npx tsc --noEmit ===" | tee -a /tmp/web-verify.log
+          echo "=== [3/5] npx tsc --noEmit ===" | tee -a /tmp/web-verify.log
           npx tsc --noEmit 2>&1 | tee -a /tmp/web-verify.log
 
-          echo "=== [4/4] npm run build ===" | tee -a /tmp/web-verify.log
+          echo "=== [4/5] npm run build ===" | tee -a /tmp/web-verify.log
           npm run build 2>&1 | tee -a /tmp/web-verify.log
+
+          echo "=== [5/5] Playwright Chromium E2E ===" | tee -a /tmp/web-verify.log
+          npx playwright install --with-deps chromium 2>&1 | tee -a /tmp/web-verify.log
+          npm run test:e2e 2>&1 | tee -a /tmp/web-verify.log
 
       - name: Upload web-dist artifact
         if: success()
@@ -96,9 +107,13 @@ jobs:
           retention-days: 7
 
   firebase-test-lab:
-    name: Android Debug APK & Firebase Test Lab Robo
+    name: Android Unit Tests, Debug APK & Firebase Test Lab Robo
     needs: web-verify
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -125,7 +140,7 @@ jobs:
           name: web-dist
           path: dist
 
-      - name: Sync Capacitor Android & build debug APK
+      - name: Sync Capacitor Android, run JVM unit tests & build debug APK
         shell: bash
         run: |
           set -euo pipefail
@@ -134,16 +149,19 @@ jobs:
           chmod +x android/gradlew
           (
             cd android
-            ./gradlew assembleDebug --no-daemon
+            ./gradlew testDebugUnitTest assembleDebug --no-daemon
           )
           test -f android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Validate required GCP OIDC repository variables
         shell: bash
         env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           SA_EMAIL: ${{ vars.GCP_SERVICE_ACCOUNT }}
           RESULTS_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
+          FTL_MODEL: ${{ vars.FTL_DEVICE_MODEL || 'shiba' }}
+          FTL_VERSION: ${{ vars.FTL_OS_VERSION || '34' }}
         run: |
           set -euo pipefail
           missing=()
@@ -161,6 +179,23 @@ jobs:
             exit 1
           fi
 
+          if [[ -n "${GCP_PROJECT_ID}" && ! "${GCP_PROJECT_ID}" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+            echo "::error::Invalid GCP_PROJECT_ID format."
+            exit 1
+          fi
+          if [[ ! "${RESULTS_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$ ]]; then
+            echo "::error::Invalid FTL_RESULTS_BUCKET format."
+            exit 1
+          fi
+          if [[ ! "${FTL_MODEL}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]]; then
+            echo "::error::Invalid FTL_DEVICE_MODEL format."
+            exit 1
+          fi
+          if [[ ! "${FTL_VERSION}" =~ ^[0-9]{2,3}$ ]]; then
+            echo "::error::Invalid FTL_OS_VERSION format."
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud via Keyless OIDC
         uses: google-github-actions/auth@v2
         with:
@@ -172,15 +207,37 @@ jobs:
 
       - name: Run Firebase Test Lab Android Robo test
         shell: bash
+        env:
+          FTL_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
+          FTL_MODEL: ${{ vars.FTL_DEVICE_MODEL || 'shiba' }}
+          FTL_VERSION: ${{ vars.FTL_OS_VERSION || '34' }}
+          FTL_RESULTS_DIR: ftl-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
+          if [[ ! "${FTL_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$ ]]; then
+            echo "::error::Invalid FTL_RESULTS_BUCKET format."
+            exit 1
+          fi
+          if [[ ! "${FTL_MODEL}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]]; then
+            echo "::error::Invalid FTL_DEVICE_MODEL format."
+            exit 1
+          fi
+          if [[ ! "${FTL_VERSION}" =~ ^[0-9]{2,3}$ ]]; then
+            echo "::error::Invalid FTL_OS_VERSION format."
+            exit 1
+          fi
+          if [[ ! "${FTL_RESULTS_DIR}" =~ ^ftl-[0-9]+-[0-9]+$ ]]; then
+            echo "::error::Invalid FTL_RESULTS_DIR format."
+            exit 1
+          fi
+
           gcloud firebase test android run \
             --type=robo \
             --app=android/app/build/outputs/apk/debug/app-debug.apk \
-            --device="model=${{ vars.FTL_DEVICE_MODEL || 'shiba' }},version=${{ vars.FTL_OS_VERSION || '34' }},locale=ko,orientation=portrait" \
+            --device="model=${FTL_MODEL},version=${FTL_VERSION},locale=ko,orientation=portrait" \
             --timeout=5m \
-            --results-bucket="gs://${{ vars.FTL_RESULTS_BUCKET }}" \
-            --results-dir="ftl-${{ github.run_id }}-${{ github.run_attempt }}"
+            --results-bucket="gs://${FTL_BUCKET}" \
+            --results-dir="${FTL_RESULTS_DIR}"
 
       - name: Collect Firebase Test Lab Logcat crash & graphics diagnostics
         if: failure()
@@ -201,7 +258,7 @@ jobs:
           mkdir -p "${CRASH_DIR}"
 
           downloaded_files=()
-          if [[ -n "${FTL_BUCKET}" ]] && command -v gcloud >/dev/null 2>&1; then
+          if [[ "${FTL_BUCKET}" =~ ^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$ ]] && command -v gcloud >/dev/null 2>&1; then
             mapfile -t logcat_uris < <(
               gcloud storage ls "${GCS_RESULTS_URI}/**" 2>/dev/null \
                 | grep -Ei '(^|/)[^/]*logcat[^/]*$|\.log$' || true

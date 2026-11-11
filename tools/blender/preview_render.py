@@ -25,13 +25,64 @@ for o in scene.objects:
 def mat(name, color, rough=0.5, sss=0.0):
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     m.use_nodes = True
-    b = m.node_tree.nodes.get("Principled BSDF")
+    nt = m.node_tree
+    nodes = nt.nodes
+    links = nt.links
+    b = nodes.get("Principled BSDF")
     b.inputs["Base Color"].default_value = (*color, 1)
     b.inputs["Roughness"].default_value = rough
     if sss:
         b.inputs["Subsurface Weight"].default_value = sss
         b.inputs["Subsurface Radius"].default_value = (1.0, 0.35, 0.2)
         b.inputs["Subsurface Scale"].default_value = 0.01
+    else:
+        # Wire COLOR_0 vertex attribute so multi-zone procedural accessories
+        # render metallic hardware (R=1,G=0,B=0), watch dial (R=0,G=1,B=0),
+        # and optical glass (R=0,G=0,B=1) distinctly from primary garment cloth.
+        attr = nodes.new("ShaderNodeAttribute")
+        attr.attribute_name = "COLOR_0"
+        sep = nodes.new("ShaderNodeSeparateColor")
+        links.new(attr.outputs["Color"], sep.inputs["Color"])
+
+        # Zone masks: metal = R*(1-G), dial = G*(1-R), glass = B*(1-R)
+        inv_g = nodes.new("ShaderNodeMath"); inv_g.operation = "SUBTRACT"; inv_g.inputs[0].default_value = 1.0
+        links.new(sep.outputs["Green"], inv_g.inputs[1])
+        metal_m = nodes.new("ShaderNodeMath"); metal_m.operation = "MULTIPLY"; metal_m.use_clamp = True
+        links.new(sep.outputs["Red"], metal_m.inputs[0])
+        links.new(inv_g.outputs[0], metal_m.inputs[1])
+
+        inv_r = nodes.new("ShaderNodeMath"); inv_r.operation = "SUBTRACT"; inv_r.inputs[0].default_value = 1.0
+        links.new(sep.outputs["Red"], inv_r.inputs[1])
+        dial_m = nodes.new("ShaderNodeMath"); dial_m.operation = "MULTIPLY"; dial_m.use_clamp = True
+        links.new(sep.outputs["Green"], dial_m.inputs[0])
+        links.new(inv_r.outputs[0], dial_m.inputs[1])
+
+        glass_m = nodes.new("ShaderNodeMath"); glass_m.operation = "MULTIPLY"; glass_m.use_clamp = True
+        links.new(sep.outputs["Blue"], glass_m.inputs[0])
+        links.new(inv_r.outputs[0], glass_m.inputs[1])
+
+        mix_metal = nodes.new("ShaderNodeMix")
+        mix_metal.data_type = "RGBA"
+        mix_metal.inputs["A"].default_value = (*color, 1.0)
+        mix_metal.inputs["B"].default_value = (0.86, 0.87, 0.89, 1.0)
+        links.new(metal_m.outputs[0], mix_metal.inputs["Factor"])
+
+        mix_dial = nodes.new("ShaderNodeMix")
+        mix_dial.data_type = "RGBA"
+        mix_dial.inputs["B"].default_value = (0.96, 0.96, 0.97, 1.0)
+        links.new(dial_m.outputs[0], mix_dial.inputs["Factor"])
+        links.new(mix_metal.outputs["Result"], mix_dial.inputs["A"])
+
+        mix_glass = nodes.new("ShaderNodeMix")
+        mix_glass.data_type = "RGBA"
+        mix_glass.inputs["B"].default_value = (0.88, 0.92, 0.95, 1.0)
+        links.new(glass_m.outputs[0], mix_glass.inputs["Factor"])
+        links.new(mix_dial.outputs["Result"], mix_glass.inputs["A"])
+
+        links.new(mix_glass.outputs["Result"], b.inputs["Base Color"])
+        links.new(metal_m.outputs[0], b.inputs["Metallic"])
+        if "Transmission Weight" in b.inputs:
+            links.new(glass_m.outputs[0], b.inputs["Transmission Weight"])
     return m
 
 skin = mat("skin", (0.80, 0.62, 0.52), 0.45, 0.3)

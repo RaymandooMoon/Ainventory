@@ -47,6 +47,7 @@ GARMENTS = {
         "slot": "outer", "subs": ["blazer", "cardigan"],
         "src": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
         "keep_parts": lambda p: p["n"] > 3000 or p["n"] <= 100,
+        "physics": "drape_wind_garment",
         "label": "Tailored wool blazer", "fabric": "wool", "offset": 0.006, "cull_body": True,
     },
     "outer_coat": {
@@ -61,6 +62,7 @@ GARMENTS = {
         "slot": "outer", "subs": ["jacket", "padding"],
         "src": "male_casualsuit05/male_casualsuit05.mhclo",
         "keep_parts": lambda p: p["n"] > 1500 or p["n"] < 300,
+        "physics": "drape_wind_garment",
         "label": "Quilted / utility jacket", "fabric": "padding", "offset": 0.007, "cull_body": True,
     },
 
@@ -68,28 +70,33 @@ GARMENTS = {
     "top_knit": {
         "slot": "top", "subs": ["knit"],
         "src": "toigo_fisherman_sweater/toigo_fisherman_sweater.mhclo",
+        "physics": "drape_wind_garment",
         "label": "Merino crewneck knit", "fabric": "knit", "offset": 0.002,
     },
     "top_shirt": {
         "slot": "top", "subs": ["shirt", "blouse"],
         "src": "male_casualsuit03/male_casualsuit03.mhclo",
         "keep_parts": lambda p: p["n"] > 1200,
+        "physics": "drape_wind_garment",
         "label": "Oxford / silk shirt", "fabric": "cotton", "offset": 0.002,
     },
     "top_tshirt": {
         "slot": "top", "subs": ["tshirt"],
         "src": "toigo_basic_tucked_t-shirt/toigo_basic_tucked_t-shirt.mhclo",
+        "physics": "drape_wind_garment",
         "label": "Supima cotton T-shirt", "fabric": "cotton", "offset": 0.002,
     },
     "top_sweatshirt": {
         "slot": "top", "subs": ["sweatshirt", "hoodie"],
         "src": "male_casualsuit02/male_casualsuit02.mhclo",
         "keep_parts": lambda p: p["n"] > 1000,
+        "physics": "drape_wind_garment",
         "label": "French terry sweatshirt", "fabric": "cotton", "offset": 0.0025,
     },
     "top_cardigan": {
         "slot": "top", "subs": ["cardigan"],
         "src": "namuhekam_male_polo_shirt/namuhekam_male_polo_shirt.mhclo",
+        "physics": "drape_wind_garment",
         "label": "Collared knit / polo", "fabric": "knit", "offset": 0.002,
     },
 
@@ -97,6 +104,7 @@ GARMENTS = {
     "bottom_slacks": {
         "slot": "bottom", "subs": ["slacks"],
         "src": "toigo_wool_pants/toigo_wool_pants.mhclo",
+        "physics": "drape_wind_garment",
         "label": "Wide wool slacks", "fabric": "wool", "offset": 0.0025,
     },
     "bottom_denim": {
@@ -114,6 +122,7 @@ GARMENTS = {
     "bottom_shorts": {
         "slot": "bottom", "subs": ["shorts"],
         "src": "cortu_jeans_shorts/cortu_jeans_shorts.mhclo",
+        "physics": "drape_wind_garment",
         "label": "Tailored shorts", "fabric": "denim", "offset": 0.002,
     },
 
@@ -219,11 +228,11 @@ GARMENTS = {
     "accessory_watch": {
         "slot": "accessory", "subs": ["watch"],
         "procedural": "watch",
-        "label": "Minimalist steel dress watch", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "label": "Minimalist steel dress watch", "fabric": "metal", "offset": 0.0, "cull_body": False,
     },
     "accessory_glasses": {
         "slot": "accessory", "subs": ["glasses"],
         "procedural": "glasses",
-        "label": "Acetate optical eyewear", "fabric": "leather", "offset": 0.0, "cull_body": False,
+        "label": "Acetate optical eyewear", "fabric": "acetate", "offset": 0.0, "cull_body": False,
     },
 }

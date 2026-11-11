@@ -1,175 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-
-export const STUDIO_SEED_BY_SUBCATEGORY = {
-  // outer
-  trench: '/seed/beige-trench.jpg',
-  blazer: '/seed/black-blazer.jpg',
-  jacket: '/seed/olive-jacket.jpg',
-  coat: '/seed/studio-coat.jpg',
-  padding: '/seed/studio-padding.jpg',
-  cardigan: '/seed/studio-cardigan.png',
-  // top
-  knit: '/seed/cream-knit.jpg',
-  shirt: '/seed/white-shirt.jpg',
-  blouse: '/seed/studio-blouse.jpg',
-  tshirt: '/seed/studio-tshirt.jpg',
-  sweatshirt: '/seed/studio-hoodie.jpg',
-  hoodie: '/seed/studio-hoodie.jpg',
-  // bottom
-  slacks: '/seed/charcoal-slacks.jpg',
-  denim: '/seed/indigo-denim.jpg',
-  chinos: '/seed/studio-chinos.jpg',
-  skirt: '/seed/studio-skirt.jpg',
-  shorts: '/seed/studio-shorts.jpg',
-  jogger: '/seed/studio-jogger.jpg',
-  // dress
-  dress: '/seed/studio-dress.jpg',
-  onepiece: '/seed/studio-onepiece.jpg',
-  jumpsuit: '/seed/studio-onepiece.jpg',
-  // headwear
-  beanie: '/seed/studio-beanie.jpg',
-  cap: '/seed/studio-cap.jpg',
-  beret: '/seed/studio-beret.jpg',
-  bucket_hat: '/seed/studio-cap.jpg',
-  hat: '/seed/studio-beret.jpg',
-  // neckwear
-  scarf: '/seed/studio-scarf.jpg',
-  muffler: '/seed/studio-muffler.jpg',
-  necktie: '/seed/studio-necktie.jpg',
-  choker: '/seed/studio-scarf.jpg',
-  // gloves
-  gloves: '/seed/studio-gloves.jpg',
-  knit_gloves: '/seed/studio-gloves.jpg',
-  leather_gloves: '/seed/studio-leather-gloves.jpg',
-  // underwear
-  underwear: '/seed/studio-underwear.jpg',
-  inner_top: '/seed/studio-inner-top.jpg',
-  camisole: '/seed/studio-inner-top.jpg',
-  // socks
-  socks: '/seed/studio-socks.jpg',
-  crew_socks: '/seed/studio-crew-socks.jpg',
-  ankle_socks: '/seed/studio-socks.jpg',
-  dress_socks: '/seed/studio-crew-socks.jpg',
-  // shoes
-  sneakers: '/seed/white-sneakers.jpg',
-  loafers: '/seed/black-loafers.jpg',
-  boots: '/seed/studio-boots.jpg',
-  heels: '/seed/studio-heels.jpg',
-  sandals: '/seed/white-sneakers.jpg',
-  // accessory / bag
-  briefcase: '/seed/studio-briefcase.jpg',
-  tote: '/seed/studio-tote.jpg',
-  bag: '/seed/studio-bag.jpg',
-  watch: '/seed/studio-watch.jpg',
-  belt: '/seed/studio-belt.jpg',
-  glasses: '/seed/studio-glasses.jpg',
-  jewelry: '/seed/studio-watch.jpg',
-  accessory: '/seed/studio-bag.jpg',
-};
-
-export const STUDIO_SEED_BY_CATEGORY = {
-  headwear: '/seed/studio-beanie.jpg',
-  neckwear: '/seed/studio-scarf.jpg',
-  outer: '/seed/beige-trench.jpg',
-  top: '/seed/cream-knit.jpg',
-  bottom: '/seed/charcoal-slacks.jpg',
-  dress: '/seed/studio-dress.jpg',
-  gloves: '/seed/studio-gloves.jpg',
-  underwear: '/seed/studio-underwear.jpg',
-  socks: '/seed/studio-socks.jpg',
-  shoes: '/seed/white-sneakers.jpg',
-  accessory: '/seed/studio-bag.jpg',
-  bag: '/seed/studio-bag.jpg',
-};
-
-export function resolveStudioSeedUrl(itemOrUrl, category = 'top', subcategory = 'knit') {
-  const rawUrl = typeof itemOrUrl === 'string' ? itemOrUrl : itemOrUrl?.image_url || '';
-  const name = (typeof itemOrUrl === 'object' && itemOrUrl?.name) || '';
-  const cat = (typeof itemOrUrl === 'object' && itemOrUrl?.category) || category || 'top';
-  let sub = (typeof itemOrUrl === 'object' && itemOrUrl?.subcategory) || subcategory || 'knit';
-
-  if (sub === 'bag' && name) {
-    if (/서류가방|브리프케이스|briefcase/i.test(name)) sub = 'briefcase';
-    else if (/토트|쇼퍼|tote/i.test(name)) sub = 'tote';
-  }
-
-  const isUnknownSeed =
-    rawUrl.startsWith('/seed/') &&
-    !NATIVE_SEED_HEX[rawUrl] &&
-    rawUrl !== '/seed/studio-cardigan.png' &&
-    rawUrl !== '/seed/store-navy-sweater.jpg' &&
-    rawUrl !== '/seed/store-terracotta-cardigan.jpg';
-
-  if (
-    !rawUrl ||
-    rawUrl.startsWith('data:image/svg+xml') ||
-    rawUrl === '/seed/store-terracotta-cardigan.jpg' ||
-    isUnknownSeed ||
-    (rawUrl === '/seed/studio-bag.jpg' && (sub === 'briefcase' || sub === 'tote'))
-  ) {
-    return STUDIO_SEED_BY_SUBCATEGORY[sub] || STUDIO_SEED_BY_CATEGORY[cat] || '/seed/cream-knit.jpg';
-  }
-  return rawUrl;
-}
-
-// Natural base color of studio packshot photos so matching items stay 100% raw photographic
-const NATIVE_SEED_HEX = {
-  '/seed/beige-trench.jpg': '#C4B193',
-  '/seed/black-blazer.jpg': '#1E1F22',
-  '/seed/black-loafers.jpg': '#1A1A1C',
-  '/seed/charcoal-slacks.jpg': '#35383E',
-  '/seed/cream-knit.jpg': '#DDD3C2',
-  '/seed/indigo-denim.jpg': '#284064',
-  '/seed/navy-knit.jpg': '#1C2538',
-  '/seed/olive-jacket.jpg': '#7D836D',
-  '/seed/white-shirt.jpg': '#F2F1EC',
-  '/seed/white-sneakers.jpg': '#EAE7E1',
-  '/seed/studio-coat.jpg': '#BA9163',
-  '/seed/studio-padding.jpg': '#DCD8CE',
-  '/seed/studio-hoodie.jpg': '#BEBDB8',
-  '/seed/studio-tshirt.jpg': '#EFECE6',
-  '/seed/studio-blouse.jpg': '#ECE5DA',
-  '/seed/studio-skirt.jpg': '#C6B79F',
-  '/seed/studio-dress.jpg': '#C9BA9E',
-  '/seed/studio-onepiece.jpg': '#C9BA9E',
-  '/seed/studio-chinos.jpg': '#C2B194',
-  '/seed/studio-jogger.jpg': '#C2B194',
-  '/seed/studio-shorts.jpg': '#CFC6B6',
-  '/seed/studio-beanie.jpg': '#B8B1A6',
-  '/seed/studio-cap.jpg': '#CBC2B2',
-  '/seed/studio-beret.jpg': '#353433',
-  '/seed/studio-scarf.jpg': '#CBBBA4',
-  '/seed/studio-muffler.jpg': '#CBBBA4',
-  '/seed/studio-necktie.jpg': '#233149',
-  '/seed/studio-leather-gloves.jpg': '#242120',
-  '/seed/studio-gloves.jpg': '#A99F91',
-  '/seed/studio-crew-socks.jpg': '#CFC9BE',
-  '/seed/studio-socks.jpg': '#EAE7E1',
-  '/seed/studio-inner-top.jpg': '#EBE8E1',
-  '/seed/studio-underwear.jpg': '#DAD6CE',
-  '/seed/studio-boots.jpg': '#211E1D',
-  '/seed/studio-heels.jpg': '#CCB89E',
-  '/seed/studio-briefcase.jpg': '#5A3A27',
-  '/seed/studio-tote.jpg': '#C3AE93',
-  '/seed/studio-bag.jpg': '#9C6B43',
-  '/seed/studio-watch.jpg': '#4A3528',
-  '/seed/studio-belt.jpg': '#362720',
-  '/seed/studio-glasses.jpg': '#4A3222',
-};
-
-function parseHexRgb(hex) {
-  const clean = String(hex || '#CCCCCC').replace('#', '').trim();
-  const full =
-    clean.length === 3
-      ? clean
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : clean.padEnd(6, '0').slice(0, 6);
-  const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return { r: 204, g: 204, b: 204 };
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
+import { memo, useEffect, useMemo, useState } from 'react';
+import { hexToRgb } from '../shared/colorMath.js';
+import {
+  NATIVE_SEED_HEX,
+  STUDIO_SEED_BY_CATEGORY,
+  STUDIO_SEED_BY_SUBCATEGORY,
+  resolveStudioSeedUrl,
+} from '../shared/garmentTaxonomy.js';
 
 function rgbDist(a, b) {
   return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -180,18 +16,52 @@ function smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// Cached garment-only studio packshot alpha-cutout & optional recolorizer (outputs transparent WebP)
+const MAX_TINTED_LRU_ENTRIES = 64;
 const TINTED_URL_CACHE = new Map();
 const PENDING_TINTS = new Map();
 
-function runBorderFloodFill(d, w, h, bgR, bgG, bgB, distLimit) {
+function readLruCachedUrl(key) {
+  if (!TINTED_URL_CACHE.has(key)) return null;
+  const val = TINTED_URL_CACHE.get(key);
+  TINTED_URL_CACHE.delete(key);
+  TINTED_URL_CACHE.set(key, val);
+  return val;
+}
+
+function writeLruCachedUrl(key, url) {
+  if (TINTED_URL_CACHE.has(key)) {
+    TINTED_URL_CACHE.delete(key);
+  }
+  while (TINTED_URL_CACHE.size >= MAX_TINTED_LRU_ENTRIES) {
+    const oldestEntry = TINTED_URL_CACHE.entries().next().value;
+    if (!oldestEntry) break;
+    const [oldKey, oldUrl] = oldestEntry;
+    TINTED_URL_CACHE.delete(oldKey);
+    if (typeof oldUrl === 'string' && oldUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(oldUrl);
+      } catch {
+        // ignore URL revocation errors
+      }
+    }
+  }
+  TINTED_URL_CACHE.set(key, url);
+}
+
+function runBorderFloodFill(d, w, h, bgR, bgG, bgB, profile) {
+  const { distLimit, stepLimit, shadowLumDrop, chromaLimit } = profile;
   const nPx = w * h;
   const bgMask = new Uint8Array(nPx);
   const queue = new Int32Array(nPx);
   let head = 0;
   let tail = 0;
 
-  const trySeed = (p) => {
+  const bgLum = Math.max(1, 0.299 * bgR + 0.587 * bgG + 0.114 * bgB);
+  const bgRn = bgR / bgLum;
+  const bgGn = bgG / bgLum;
+  const bgBn = bgB / bgLum;
+
+  const tryAccept = (p, fromP) => {
     if (bgMask[p]) return;
     const i = p * 4;
     if (d[i + 3] < 16) {
@@ -199,39 +69,174 @@ function runBorderFloodFill(d, w, h, bgR, bgG, bgB, distLimit) {
       queue[tail++] = p;
       return;
     }
-    const dist = Math.hypot(d[i] - bgR, d[i + 1] - bgG, d[i + 2] - bgB);
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+
+    if (fromP >= 0) {
+      const fi = fromP * 4;
+      const stepDist = Math.hypot(r - d[fi], g - d[fi + 1], b - d[fi + 2]);
+      if (stepDist > stepLimit) return;
+    }
+
+    const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
     if (dist <= distLimit) {
       bgMask[p] = 1;
       queue[tail++] = p;
+      return;
+    }
+
+    if (shadowLumDrop > 0) {
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (lum >= bgLum - shadowLumDrop && lum <= bgLum + 14 && lum > 30) {
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        if (sat <= 26) {
+          const chromaDist = Math.hypot(r / lum - bgRn, g / lum - bgGn, b / lum - bgBn);
+          if (chromaDist <= chromaLimit) {
+            bgMask[p] = 1;
+            queue[tail++] = p;
+          }
+        }
+      }
     }
   };
 
   for (let x = 0; x < w; x++) {
-    trySeed(x);
-    trySeed((h - 1) * w + x);
+    tryAccept(x, -1);
+    tryAccept((h - 1) * w + x, -1);
   }
   for (let y = 1; y < h - 1; y++) {
-    trySeed(y * w);
-    trySeed(y * w + (w - 1));
+    tryAccept(y * w, -1);
+    tryAccept(y * w + (w - 1), -1);
   }
 
   while (head < tail) {
     const p = queue[head++];
     const x = p % w;
     const y = (p - x) / w;
-    if (x > 0) trySeed(p - 1);
-    if (x < w - 1) trySeed(p + 1);
-    if (y > 0) trySeed(p - w);
-    if (y < h - 1) trySeed(p + w);
+    if (x > 0) tryAccept(p - 1, p);
+    if (x < w - 1) tryAccept(p + 1, p);
+    if (y > 0) tryAccept(p - w, p);
+    if (y < h - 1) tryAccept(p + w, p);
   }
 
-  return { bgMask, bgCount: tail };
+  // Measure central garment core invasion to protect white/ivory garments on bright studio paper
+  const x0 = Math.floor(w * 0.35);
+  const x1 = Math.ceil(w * 0.65);
+  const y0 = Math.floor(h * 0.3);
+  const y1 = Math.ceil(h * 0.7);
+  let coreTotal = 0;
+  let coreBg = 0;
+  for (let y = y0; y < y1; y++) {
+    const row = y * w;
+    for (let x = x0; x < x1; x++) {
+      coreTotal++;
+      if (bgMask[row + x]) coreBg++;
+    }
+  }
+  const coreBgRatio = coreTotal > 0 ? coreBg / coreTotal : 0;
+
+  return { bgMask, bgCount: tail, coreBgRatio };
+}
+
+function pruneForegroundSpeckles(bgMask, w, h, minIslandPx = 64) {
+  const nPx = w * h;
+  const visited = new Uint8Array(nPx);
+  const stack = new Int32Array(nPx);
+  const component = new Int32Array(nPx);
+  let removed = 0;
+
+  for (let start = 0; start < nPx; start++) {
+    if (bgMask[start] || visited[start]) continue;
+    let sp = 0;
+    let compLen = 0;
+    visited[start] = 1;
+    stack[sp++] = start;
+
+    while (sp > 0) {
+      const p = stack[--sp];
+      component[compLen++] = p;
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x > 0) {
+        const n = p - 1;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (x < w - 1) {
+        const n = p + 1;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (y > 0) {
+        const n = p - w;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (y < h - 1) {
+        const n = p + w;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+    }
+
+    if (compLen < minIslandPx) {
+      for (let k = 0; k < compLen; k++) {
+        bgMask[component[k]] = 1;
+      }
+      removed += compLen;
+    }
+  }
+  return removed;
+}
+
+const CUTOUT_PROFILES = [
+  { distLimit: 24, stepLimit: 11.5, shadowLumDrop: 62, chromaLimit: 0.056 },
+  { distLimit: 14, stepLimit: 6.2, shadowLumDrop: 20, chromaLimit: 0.026 },
+  { distLimit: 9, stepLimit: 4.2, shadowLumDrop: 8, chromaLimit: 0.015 },
+  { distLimit: 5.5, stepLimit: 2.8, shadowLumDrop: 0, chromaLimit: 0 },
+];
+
+function encodeCanvasObjectUrl(canvas) {
+  return new Promise((resolve) => {
+    if (typeof canvas.toBlob !== 'function' || typeof URL === 'undefined' || !URL.createObjectURL) {
+      const dataUrl = canvas.toDataURL('image/webp', 0.9);
+      canvas.width = 0;
+      canvas.height = 0;
+      resolve(dataUrl);
+      return;
+    }
+    canvas.toBlob(
+      (blob) => {
+        let outUrl = '';
+        if (blob) {
+          outUrl = URL.createObjectURL(blob);
+        } else {
+          outUrl = canvas.toDataURL('image/webp', 0.9);
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(outUrl);
+      },
+      'image/webp',
+      0.9
+    );
+  });
 }
 
 function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
   const key = `${srcUrl}|${shouldTint ? (targetHex || '').toUpperCase() : 'RAW_CUTOUT'}`;
-  if (TINTED_URL_CACHE.has(key)) {
-    return Promise.resolve(TINTED_URL_CACHE.get(key));
+  const cached = readLruCachedUrl(key);
+  if (cached) {
+    return Promise.resolve(cached);
   }
   if (PENDING_TINTS.has(key)) {
     return PENDING_TINTS.get(key);
@@ -244,13 +249,17 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
     }
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => {
+    img.onload = async () => {
+      let canvas = null;
       try {
         const maxSide = 360;
-        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        const scale = Math.min(
+          1,
+          maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)
+        );
         const w = Math.max(64, Math.round((img.naturalWidth || 300) * scale));
         const h = Math.max(64, Math.round((img.naturalHeight || 400) * scale));
-        const canvas = document.createElement('canvas');
+        canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -258,14 +267,18 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
 
-        // Sample 4 corner blocks to measure exact studio paper background RGB
+        // Sample corner & edge blocks to measure studio paper background RGB
         let bgR = 0;
         let bgG = 0;
         let bgB = 0;
         let bgSampleCount = 0;
         const samplePts = [
-          [2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3],
-          [Math.floor(w * 0.5), 2], [Math.floor(w * 0.5), h - 3],
+          [2, 2],
+          [w - 3, 2],
+          [2, h - 3],
+          [w - 3, h - 3],
+          [Math.floor(w * 0.5), 2],
+          [Math.floor(w * 0.5), h - 3],
         ];
         for (const [sx, sy] of samplePts) {
           const idx = (sy * w + sx) * 4;
@@ -279,22 +292,38 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         bgB /= bgSampleCount;
 
         const nPx = w * h;
-        let { bgMask, bgCount } = runBorderFloodFill(d, w, h, bgR, bgG, bgB, 20);
-        // Safety guard for ivory/white garments: tighten border flood threshold if flood leaked inside garment
-        if (bgCount > nPx * 0.88) {
-          ({ bgMask, bgCount } = runBorderFloodFill(d, w, h, bgR, bgG, bgB, 10));
-        }
-        const applyAlphaCutout = bgCount > nPx * 0.04 && bgCount < nPx * 0.94;
+        const nativeHex = NATIVE_SEED_HEX[srcUrl];
+        const nativeRgb = nativeHex ? hexToRgb(nativeHex) : null;
+        const nativeLum = nativeRgb
+          ? 0.299 * nativeRgb.r + 0.587 * nativeRgb.g + 0.114 * nativeRgb.b
+          : 120;
+        const startProfileIdx = nativeLum > 208 ? 1 : 0;
 
-        // Pass 1: compute foreground weights and transparent studio background alpha
+        let chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[startProfileIdx]);
+        for (let pi = startProfileIdx + 1; pi < CUTOUT_PROFILES.length; pi++) {
+          if (chosen.bgCount <= nPx * 0.84 && chosen.coreBgRatio <= 0.16) break;
+          chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[pi]);
+        }
+
+        const bgMask = chosen.bgMask;
+        let bgCount = chosen.bgCount;
+        const applyAlphaCutout =
+          bgCount > nPx * 0.04 && bgCount < nPx * 0.92 && chosen.coreBgRatio <= 0.28;
+        if (applyAlphaCutout) {
+          bgCount += pruneForegroundSpeckles(bgMask, w, h, 72);
+        }
+
+        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+
+        // Pass 1: compute foreground weights, transparent studio background alpha & edge color decontamination
         let fgLumSum = 0;
         let fgWeightSum = 0;
         const masks = new Float32Array(nPx);
         for (let p = 0; p < nPx; p++) {
           const i = p * 4;
-          const r = d[i];
-          const g = d[i + 1];
-          const b = d[i + 2];
+          let r = d[i];
+          let g = d[i + 1];
+          let b = d[i + 2];
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
           if (applyAlphaCutout && bgMask[p]) {
@@ -308,19 +337,30 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
           if (applyAlphaCutout) {
             const x = p % w;
             const y = (p - x) / w;
-            const touchesBg =
-              (x > 0 && bgMask[p - 1]) ||
-              (x < w - 1 && bgMask[p + 1]) ||
-              (y > 0 && bgMask[p - w]) ||
-              (y < h - 1 && bgMask[p + w]);
-            if (touchesBg) {
-              edgeAlpha = smoothstep(8, 28, distBg);
+            let bgNeighbors = 0;
+            if (x > 0 && bgMask[p - 1]) bgNeighbors++;
+            if (x < w - 1 && bgMask[p + 1]) bgNeighbors++;
+            if (y > 0 && bgMask[p - w]) bgNeighbors++;
+            if (y < h - 1 && bgMask[p + w]) bgNeighbors++;
+            if (bgNeighbors > 0) {
+              const featherLow = nativeLum > 208 ? 4 : 14;
+              const featherHigh = nativeLum > 208 ? 18 : 44;
+              edgeAlpha = smoothstep(featherLow, featherHigh, distBg);
               d[i + 3] = Math.round(d[i + 3] * edgeAlpha);
+              // Decontaminate studio paper fringe on semi-transparent boundary pixels
+              if (edgeAlpha > 0.08 && edgeAlpha < 0.94 && nativeLum <= 208) {
+                const invA = 1 / Math.max(0.28, edgeAlpha);
+                r = Math.max(0, Math.min(255, Math.round((r - bgR * (1 - edgeAlpha)) * invA)));
+                g = Math.max(0, Math.min(255, Math.round((g - bgG * (1 - edgeAlpha)) * invA)));
+                b = Math.max(0, Math.min(255, Math.round((b - bgB * (1 - edgeAlpha)) * invA)));
+                d[i] = r;
+                d[i + 1] = g;
+                d[i + 2] = b;
+              }
             }
           }
 
           const sat = Math.max(r, g, b) - Math.min(r, g, b);
-          const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
           const isPaperOrSoftShadow = sat < 14 && lum > bgLum - 32 && distBg < 36;
           const m = isPaperOrSoftShadow ? 0 : smoothstep(16, 42, distBg) * edgeAlpha;
           masks[p] = m;
@@ -333,7 +373,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         // Pass 2: optional re-shade of garment pixels, preserving grain, seams, folds & metallic glints
         if (shouldTint && targetHex && fgWeightSum >= 40) {
           const meanFgLum = Math.max(42, Math.min(215, fgLumSum / fgWeightSum));
-          const tgt = parseHexRgb(targetHex);
+          const tgt = hexToRgb(targetHex);
           const tgtLum = 0.299 * tgt.r + 0.587 * tgt.g + 0.114 * tgt.b;
 
           for (let p = 0; p < nPx; p++) {
@@ -346,9 +386,13 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
             const sat = Math.max(r, g, b) - Math.min(r, g, b);
 
-            const metalSpecularProtect = sat < 18 && lum > 205 ? smoothstep(205, 242, lum) * 0.75 : 0;
+            const metalSpecularProtect =
+              sat < 18 && lum > 205 ? smoothstep(205, 242, lum) * 0.75 : 0;
             const blend = m * (1 - metalSpecularProtect) * 0.88;
-            const shadeRatio = Math.pow(Math.max(0.08, lum / meanFgLum), tgtLum < 55 ? 0.85 : 0.95);
+            const shadeRatio = Math.pow(
+              Math.max(0.08, lum / meanFgLum),
+              tgtLum < 55 ? 0.85 : 0.95
+            );
             const specLift = Math.max(0, (lum - meanFgLum * 1.18) * 0.32);
 
             const nr = Math.min(255, Math.max(0, tgt.r * shadeRatio + specLift));
@@ -362,14 +406,14 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         }
 
         ctx.putImageData(imgData, 0, 0);
-        const outUrl = canvas.toDataURL('image/webp', 0.92);
-        if (TINTED_URL_CACHE.size > 160) {
-          const oldest = TINTED_URL_CACHE.keys().next().value;
-          TINTED_URL_CACHE.delete(oldest);
-        }
-        TINTED_URL_CACHE.set(key, outUrl);
+        const outUrl = await encodeCanvasObjectUrl(canvas);
+        writeLruCachedUrl(key, outUrl);
         resolve(outUrl);
       } catch {
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
         resolve(srcUrl);
       } finally {
         PENDING_TINTS.delete(key);
@@ -386,7 +430,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
   return job;
 }
 
-export default function StudioGarmentImage({
+const StudioGarmentImage = memo(function StudioGarmentImage({
   item,
   src,
   colorHex,
@@ -408,7 +452,12 @@ export default function StudioGarmentImage({
     STUDIO_SEED_BY_SUBCATEGORY[sub] || STUDIO_SEED_BY_CATEGORY[cat] || '/seed/cream-knit.jpg';
 
   const resolvedSrc = useMemo(() => {
-    if (allowStorePhoto && rawSrc && !rawSrc.startsWith('data:image/svg+xml')) {
+    if (
+      allowStorePhoto &&
+      rawSrc &&
+      !rawSrc.startsWith('data:image/svg+xml') &&
+      rawSrc !== '/seed/store-terracotta-cardigan.jpg'
+    ) {
       return rawSrc;
     }
     return resolveStudioSeedUrl(
@@ -434,7 +483,7 @@ export default function StudioGarmentImage({
     if (!targetHex || !isProcessableSeed) return false;
     const nativeHex = NATIVE_SEED_HEX[resolvedSrc];
     if (nativeHex) {
-      if (rgbDist(parseHexRgb(targetHex), parseHexRgb(nativeHex)) < 40) {
+      if (rgbDist(hexToRgb(targetHex), hexToRgb(nativeHex)) < 40) {
         return false;
       }
     }
@@ -443,38 +492,34 @@ export default function StudioGarmentImage({
 
   const cacheKey = `${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
 
-  const [displaySrc, setDisplaySrc] = useState(() => {
-    if (!isProcessableSeed) return resolvedSrc;
-    return TINTED_URL_CACHE.get(cacheKey) || resolvedSrc;
-  });
+  const [asyncTinted, setAsyncTinted] = useState(null);
+  const [failedKey, setFailedKey] = useState(null);
 
   useEffect(() => {
+    if (!isProcessableSeed || TINTED_URL_CACHE.has(cacheKey)) {
+      return undefined;
+    }
     let cancelled = false;
-    if (!isProcessableSeed) {
-      setDisplaySrc(resolvedSrc);
-      return () => {
-        cancelled = true;
-      };
-    }
-    const cached = TINTED_URL_CACHE.get(cacheKey);
-    if (cached) {
-      setDisplaySrc(cached);
-      return () => {
-        cancelled = true;
-      };
-    }
-    setDisplaySrc(resolvedSrc);
     getGarmentTintedPackshot(resolvedSrc, targetHex, shouldTintSeed).then((cutoutUrl) => {
-      if (!cancelled) setDisplaySrc(cutoutUrl);
+      if (!cancelled) {
+        setAsyncTinted({ key: cacheKey, url: cutoutUrl });
+      }
     });
     return () => {
       cancelled = true;
     };
   }, [resolvedSrc, targetHex, shouldTintSeed, isProcessableSeed, cacheKey]);
 
+  const cachedUrl = isProcessableSeed ? readLruCachedUrl(cacheKey) : null;
+  const computedSrc = !isProcessableSeed
+    ? resolvedSrc
+    : cachedUrl || (asyncTinted?.key === cacheKey ? asyncTinted.url : resolvedSrc);
+  const displaySrc = failedKey === cacheKey ? fallbackSeedSrc : computedSrc;
+
   const [loadedSrc, setLoadedSrc] = useState(null);
   const isReady =
-    loadedSrc === displaySrc || Boolean(displaySrc && displaySrc.startsWith('data:'));
+    loadedSrc === displaySrc ||
+    Boolean(displaySrc && (displaySrc.startsWith('data:') || displaySrc.startsWith('blob:')));
 
   return (
     <div
@@ -506,10 +551,11 @@ export default function StudioGarmentImage({
         src={displaySrc}
         alt={label}
         loading="lazy"
+        decoding="async"
         onLoad={() => setLoadedSrc(displaySrc)}
         onError={() => {
           if (displaySrc !== fallbackSeedSrc) {
-            setDisplaySrc(fallbackSeedSrc);
+            setFailedKey(cacheKey);
           } else {
             setLoadedSrc(displaySrc);
           }
@@ -526,4 +572,6 @@ export default function StudioGarmentImage({
       />
     </div>
   );
-}
+});
+
+export default StudioGarmentImage;

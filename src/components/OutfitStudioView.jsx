@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bookmark,
   ChevronLeft,
@@ -37,6 +37,7 @@ export default function OutfitStudioView({
   user,
   activeCloset,
   refreshKey,
+  paused = false,
   onOpenProfileModal,
   onClosetUpdated,
   showToast,
@@ -76,7 +77,7 @@ export default function OutfitStudioView({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorSlot, setInspectorSlot] = useState('outer');
 
-  const loadStudioData = async () => {
+  const loadStudioData = useCallback(async () => {
     try {
       const [gRes, oRes] = await Promise.all([
         apiFetch(`/garments?closet=${encodeURIComponent(closetOwner)}`),
@@ -87,39 +88,44 @@ export default function OutfitStudioView({
     } catch (err) {
       showToast?.(err.message || '코디 데이터를 불러오지 못했습니다.');
     }
-  };
+  }, [closetOwner, showToast]);
 
   useEffect(() => {
     loadStudioData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closetOwner, refreshKey]);
+  }, [loadStudioData, refreshKey]);
 
-  const pools = {
-    headwear: garments.filter((g) => g.category === 'headwear'),
-    neckwear: garments.filter((g) => g.category === 'neckwear'),
-    outer: garments.filter((g) => g.category === 'outer'),
-    top: garments.filter((g) => g.category === 'top'),
-    bottom: garments.filter((g) => g.category === 'bottom'),
-    dress: garments.filter((g) => g.category === 'dress'),
-    gloves: garments.filter((g) => g.category === 'gloves'),
-    underwear: garments.filter((g) => g.category === 'underwear'),
-    socks: garments.filter((g) => g.category === 'socks'),
-    shoes: garments.filter((g) => g.category === 'shoes'),
-    accessory: garments.filter((g) => g.category === 'accessory' || g.category === 'bag'),
-  };
+  const pools = useMemo(
+    () => ({
+      headwear: garments.filter((g) => g.category === 'headwear'),
+      neckwear: garments.filter((g) => g.category === 'neckwear'),
+      outer: garments.filter((g) => g.category === 'outer'),
+      top: garments.filter((g) => g.category === 'top'),
+      bottom: garments.filter((g) => g.category === 'bottom'),
+      dress: garments.filter((g) => g.category === 'dress'),
+      gloves: garments.filter((g) => g.category === 'gloves'),
+      underwear: garments.filter((g) => g.category === 'underwear'),
+      socks: garments.filter((g) => g.category === 'socks'),
+      shoes: garments.filter((g) => g.category === 'shoes'),
+      accessory: garments.filter((g) => g.category === 'accessory' || g.category === 'bag'),
+    }),
+    [garments]
+  );
 
-  const stepSlot = (slot, delta) => {
-    const len = (pools[slot] || []).length;
-    if (len === 0) return;
-    triggerHaptic('selection');
-    setUnequipped((prev) => ({ ...prev, [slot]: false }));
-    setIndices((prev) => ({
-      ...prev,
-      [slot]: ((prev[slot] || 0) + delta + len) % len,
-    }));
-  };
+  const stepSlot = useCallback(
+    (slot, delta) => {
+      const len = (pools[slot] || []).length;
+      if (len === 0) return;
+      triggerHaptic('selection');
+      setUnequipped((prev) => ({ ...prev, [slot]: false }));
+      setIndices((prev) => ({
+        ...prev,
+        [slot]: ((prev[slot] || 0) + delta + len) % len,
+      }));
+    },
+    [pools]
+  );
 
-  const handleShuffle = () => {
+  const handleShuffle = useCallback(() => {
     triggerHaptic('medium');
     setIndices((prev) => {
       const next = { ...prev };
@@ -133,45 +139,61 @@ export default function OutfitStudioView({
       });
       return next;
     });
-  };
+  }, [locked, pools, unequipped]);
 
-  const getSlotItem = (slotKey) => {
-    if (unequipped[slotKey]) return null;
-    const list = pools[slotKey] || [];
-    if (list.length === 0) return null;
-    return list[(indices[slotKey] || 0) % list.length];
-  };
+  const loadoutBySlot = useMemo(() => {
+    const pick = (slotKey) => {
+      if (unequipped[slotKey]) return null;
+      const list = pools[slotKey] || [];
+      if (list.length === 0) return null;
+      return list[(indices[slotKey] || 0) % list.length];
+    };
+    return {
+      headwear: pick('headwear'),
+      neckwear: pick('neckwear'),
+      outer: pick('outer'),
+      top: pick('top'),
+      bottom: pick('bottom'),
+      dress: unequipped.dress !== false ? null : pick('dress'),
+      gloves: pick('gloves'),
+      underwear: pick('underwear'),
+      socks: pick('socks'),
+      shoes: pick('shoes'),
+      accessory: pick('accessory'),
+    };
+  }, [indices, pools, unequipped]);
 
-  const loadoutBySlot = {
-    headwear: getSlotItem('headwear'),
-    neckwear: getSlotItem('neckwear'),
-    outer: getSlotItem('outer'),
-    top: getSlotItem('top'),
-    bottom: getSlotItem('bottom'),
-    dress: unequipped.dress !== false ? null : getSlotItem('dress'),
-    gloves: getSlotItem('gloves'),
-    underwear: getSlotItem('underwear'),
-    socks: getSlotItem('socks'),
-    shoes: getSlotItem('shoes'),
-    accessory: getSlotItem('accessory'),
-  };
+  const pickedItems = useMemo(
+    () => Object.values(loadoutBySlot).filter(Boolean),
+    [loadoutBySlot]
+  );
 
-  const pickedItems = Object.values(loadoutBySlot).filter(Boolean);
+  const handleConfirmSwap = useCallback(
+    (slotKey, newItem) => {
+      if (!newItem) {
+        setUnequipped((prev) => ({ ...prev, [slotKey]: true }));
+        showToast?.(`[${slotKey}] 부위 의류를 벗었습니다.`);
+        return;
+      }
+      const list = pools[slotKey] || [];
+      const foundIdx = list.findIndex((g) => g.id === newItem.id);
+      setUnequipped((prev) => ({ ...prev, [slotKey]: false }));
+      if (foundIdx >= 0) {
+        setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
+      }
+      showToast?.(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
+    },
+    [pools, showToast]
+  );
 
-  const handleConfirmSwap = (slotKey, newItem) => {
-    if (!newItem) {
-      setUnequipped((prev) => ({ ...prev, [slotKey]: true }));
-      showToast?.(`[${slotKey}] 부위 의류를 벗었습니다.`);
-      return;
-    }
-    const list = pools[slotKey] || [];
-    const foundIdx = list.findIndex((g) => g.id === newItem.id);
-    setUnequipped((prev) => ({ ...prev, [slotKey]: false }));
-    if (foundIdx >= 0) {
-      setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
-    }
-    showToast?.(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
-  };
+  const handleUnequipSlot = useCallback(
+    (slotKey) => handleConfirmSwap(slotKey, null),
+    [handleConfirmSwap]
+  );
+
+  const handleOpenWeatherSheet = useCallback(() => {
+    setDressMeSheetOpen(true);
+  }, []);
 
   const handleSaveLook = async (e) => {
     e?.preventDefault?.();
@@ -216,7 +238,7 @@ export default function OutfitStudioView({
 
   const renderSlotRow = (slotKey, slotLabel) => {
     const list = pools[slotKey] || [];
-    const current = getSlotItem(slotKey);
+    const current = loadoutBySlot[slotKey] || null;
 
     if (list.length === 0) {
       return (
@@ -359,14 +381,15 @@ export default function OutfitStudioView({
     <>
       <VirtualMannequin
         immersiveStudio
+        paused={paused || dressMeSheetOpen || lookbookSheetOpen || inspectorOpen}
         userProfile={user}
         loadoutBySlot={loadoutBySlot}
         allGarments={garments}
         capsuleLabel={`코디 스튜디오 · 장착 ${pickedItems.length}점 · 룩북 ${outfits.length}`}
-        onOpenWeatherSheet={() => setDressMeSheetOpen(true)}
-        onOpenProfileModal={(stepNum) => onOpenProfileModal?.(stepNum)}
+        onOpenWeatherSheet={handleOpenWeatherSheet}
+        onOpenProfileModal={onOpenProfileModal}
         onSlotSwap={handleConfirmSwap}
-        onUnequipSlot={(slotKey) => handleConfirmSwap(slotKey, null)}
+        onUnequipSlot={handleUnequipSlot}
         onSaveOutfitLog={pickedItems.length >= 2 ? () => handleSaveLook() : null}
         extraFloatingActions={floatingStudioControls}
       />
@@ -406,8 +429,9 @@ export default function OutfitStudioView({
           >
             <div className="form-grid-2">
               <div className="field-group" style={{ marginBottom: 0 }}>
-                <label className="field-label">코디 제목</label>
+                <label className="field-label" htmlFor="studio-look-title">코디 제목</label>
                 <input
+                  id="studio-look-title"
                   className="text-input"
                   style={{ background: 'var(--bg-canvas)' }}
                   placeholder="예: 금요일 세미 캐주얼"
@@ -416,8 +440,9 @@ export default function OutfitStudioView({
                 />
               </div>
               <div className="field-group" style={{ marginBottom: 0 }}>
-                <label className="field-label">상황 태그</label>
+                <label className="field-label" htmlFor="studio-look-occasion">상황 태그</label>
                 <select
+                  id="studio-look-occasion"
                   className="select-input"
                   style={{ background: 'var(--bg-canvas)' }}
                   value={occasion}
@@ -433,8 +458,9 @@ export default function OutfitStudioView({
             </div>
 
             <div className="field-group" style={{ marginBottom: 0 }}>
-              <label className="field-label">스타일링 메모</label>
+              <label className="field-label" htmlFor="studio-look-memo">스타일링 메모</label>
               <input
+                id="studio-look-memo"
                 className="text-input"
                 style={{ background: 'var(--bg-canvas)' }}
                 placeholder="예: 서류가방 + 트렌치 매칭"

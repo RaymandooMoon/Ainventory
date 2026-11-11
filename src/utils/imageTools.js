@@ -1,141 +1,229 @@
-import { COLOR_PALETTE } from './api.js';
-import { DEFAULT_SKIN_PINS, detectFaceAndSkinPins } from './faceLandmarkEngine.js';
+import {
+  hexToRgb,
+  matchClosestPaletteColor,
+  rgbToCieLab as computeCieLab,
+  rgbToHex,
+} from '../shared/colorMath.js';
+import { removeBackgroundAndEncodeWebP } from './aiGarmentPipeline.js';
+import { DEFAULT_SKIN_PINS, detectFaceAndSkinPins } from './faceLandmarkEngine.ts';
 
-export function hexToRgb(hex) {
-  const clean = String(hex || '#CCCCCC').replace('#', '').trim();
-  const full =
-    clean.length === 3
-      ? clean
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : clean.padEnd(6, '0').slice(0, 6);
-  const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return { r: 204, g: 185, b: 168 };
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
+export { hexToRgb, rgbToHex };
 
-export function rgbToHex(r, g, b) {
-  return (
-    '#' +
-    [r, g, b]
-      .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
-      .join('')
-  );
-}
-
-export function rgbToCieLab({ r, g, b }) {
-  let rn = r / 255;
-  let gn = g / 255;
-  let bn = b / 255;
-
-  rn = rn > 0.04045 ? ((rn + 0.055) / 1.055) ** 2.4 : rn / 12.92;
-  gn = gn > 0.04045 ? ((gn + 0.055) / 1.055) ** 2.4 : gn / 12.92;
-  bn = bn > 0.04045 ? ((bn + 0.055) / 1.055) ** 2.4 : bn / 12.92;
-
-  const x = (rn * 0.4124 + gn * 0.3576 + bn * 0.1805) / 0.95047;
-  const y = (rn * 0.2126 + gn * 0.7152 + bn * 0.0722) / 1.0;
-  const z = (rn * 0.0193 + gn * 0.1192 + bn * 0.9505) / 1.08883;
-
-  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  const fx = f(x);
-  const fy = f(y);
-  const fz = f(z);
-
+export function rgbToCieLab(rOrObj, g = 0, b = 0) {
+  const rVal = typeof rOrObj === 'object' && rOrObj !== null ? rOrObj.r : rOrObj;
+  const gVal = typeof rOrObj === 'object' && rOrObj !== null ? rOrObj.g : g;
+  const bVal = typeof rOrObj === 'object' && rOrObj !== null ? rOrObj.b : b;
+  const raw = computeCieLab(rVal, gVal, bVal);
   return {
-    L: Number((116 * fy - 16).toFixed(2)),
-    a: Number((500 * (fx - fy)).toFixed(2)),
-    b: Number((200 * (fy - fz)).toFixed(2)),
+    L: Number(raw.L.toFixed(2)),
+    a: Number(raw.a.toFixed(2)),
+    b: Number(raw.b.toFixed(2)),
   };
 }
 
 export function findClosestPaletteColor(hex) {
-  const target = hexToRgb(hex);
-  let best = COLOR_PALETTE[0];
-  let bestDist = Infinity;
-
-  for (const entry of COLOR_PALETTE) {
-    const c = hexToRgb(entry.hex);
-    const dr = target.r - c.r;
-    const dg = target.g - c.g;
-    const db = target.b - c.b;
-    const dist = Math.sqrt(2 * dr * dr + 4 * dg * dg + 3 * db * db);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = entry;
-    }
-  }
-  return best;
+  return matchClosestPaletteColor(hex);
 }
 
-export function processUploadedImage(file) {
+function clampVal(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function loadDrawableSource(imageSource) {
+  if (typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement) {
+    return Promise.resolve({
+      drawable: imageSource,
+      width: imageSource.width || 640,
+      height: imageSource.height || 640,
+    });
+  }
+  if (typeof HTMLImageElement !== 'undefined' && imageSource instanceof HTMLImageElement) {
+    return Promise.resolve({
+      drawable: imageSource,
+      width: imageSource.naturalWidth || imageSource.width || 640,
+      height: imageSource.naturalHeight || imageSource.height || 640,
+    });
+  }
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('이미지를 읽을 수 없습니다.'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('이미지 디코딩에 실패했습니다.'));
-      img.onload = () => {
-        const maxEdge = 1000;
-        let { width, height } = img;
-        if (width > maxEdge || height > maxEdge) {
-          if (width >= height) {
-            height = Math.round((height * maxEdge) / width);
-            width = maxEdge;
-          } else {
-            width = Math.round((width * maxEdge) / height);
-            height = maxEdge;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const sx = Math.floor(width * 0.27);
-        const sy = Math.floor(height * 0.24);
-        const sw = Math.max(1, Math.floor(width * 0.46));
-        const sh = Math.max(1, Math.floor(height * 0.52));
-        const { data } = ctx.getImageData(sx, sy, sw, sh);
-
-        let rSum = 0;
-        let gSum = 0;
-        let bSum = 0;
-        let count = 0;
-
-        for (let i = 0; i < data.length; i += 16) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const a = data[i + 3];
-          if (a < 180) continue;
-          if (r > 238 && g > 235 && b > 228) continue;
-          rSum += r;
-          gSum += g;
-          bSum += b;
-          count += 1;
-        }
-
-        let detectedHex = '#F2F1EC';
-        if (count > 20) {
-          detectedHex = rgbToHex(rSum / count, gSum / count, bSum / count);
-        }
-
-        const matchedColor = findClosestPaletteColor(detectedHex);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
-
-        resolve({
-          dataUrl,
-          detectedHex,
-          matchedColor,
-        });
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+    const el = new Image();
+    el.crossOrigin = 'anonymous';
+    el.onload = () =>
+      resolve({
+        drawable: el,
+        width: el.naturalWidth || el.width || 640,
+        height: el.naturalHeight || el.height || 640,
+      });
+    el.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'));
+    el.src = imageSource;
   });
+}
+
+/**
+ * Renders rotated/flipped/brightened source image, crops exact normalized `cropBox`,
+ * optionally runs single-pass transparent alpha studio cutout + AI metadata extraction
+ * directly on `outCanvas` (without painting opaque #F5F5F7 or re-decoding PNG/WebP),
+ * and frees temporary canvas backing stores immediately.
+ */
+export async function renderCroppedImageOutput(
+  imageSource,
+  {
+    rotation90 = 0,
+    straightenDeg = 0,
+    flipH = false,
+    brightness = 100,
+    studioCutout = false,
+    cropBox = { x: 0.08, y: 0.06, w: 0.84, h: 0.88 },
+    maxOutputSide = 760,
+  } = {}
+) {
+  const { drawable, width: srcW, height: srcH } = await loadDrawableSource(imageSource);
+
+  const rad90 = ((rotation90 % 360) * Math.PI) / 180;
+  const swapWH = Math.abs(rotation90 % 180) === 90;
+  const stageScale = Math.min(1, 1280 / Math.max(srcW, srcH));
+  const baseW = Math.round((swapWH ? srcH : srcW) * stageScale);
+  const baseH = Math.round((swapWH ? srcW : srcH) * stageScale);
+
+  const stageCanvas = document.createElement('canvas');
+  stageCanvas.width = Math.max(64, baseW);
+  stageCanvas.height = Math.max(64, baseH);
+
+  const outCanvas = document.createElement('canvas');
+
+  try {
+    const sCtx = stageCanvas.getContext('2d');
+    if (!studioCutout) {
+      sCtx.fillStyle = '#F5F5F7';
+      sCtx.fillRect(0, 0, stageCanvas.width, stageCanvas.height);
+    }
+
+    sCtx.save();
+    if (brightness !== 100) {
+      sCtx.filter = `brightness(${brightness}%)`;
+    }
+    sCtx.translate(stageCanvas.width / 2, stageCanvas.height / 2);
+    if (flipH) sCtx.scale(-1, 1);
+    sCtx.rotate(rad90 + (straightenDeg * Math.PI) / 180);
+    const drawW = Math.round(srcW * stageScale);
+    const drawH = Math.round(srcH * stageScale);
+    sCtx.drawImage(drawable, -drawW / 2, -drawH / 2, drawW, drawH);
+    sCtx.restore();
+
+    const sx = Math.round(clampVal(cropBox.x, 0, 0.95) * stageCanvas.width);
+    const sy = Math.round(clampVal(cropBox.y, 0, 0.95) * stageCanvas.height);
+    const sw = Math.max(32, Math.round(clampVal(cropBox.w, 0.05, 1 - cropBox.x) * stageCanvas.width));
+    const sh = Math.max(32, Math.round(clampVal(cropBox.h, 0.05, 1 - cropBox.y) * stageCanvas.height));
+
+    const outScale = Math.min(1, maxOutputSide / Math.max(sw, sh));
+    const outW = Math.max(64, Math.round(sw * outScale));
+    const outH = Math.max(64, Math.round(sh * outScale));
+
+    outCanvas.width = outW;
+    outCanvas.height = outH;
+    const oCtx = outCanvas.getContext('2d', { willReadFrequently: true });
+    oCtx.drawImage(stageCanvas, sx, sy, sw, sh, 0, 0, outW, outH);
+
+    // Free stageCanvas backing store immediately after cropping
+    stageCanvas.width = 0;
+    stageCanvas.height = 0;
+
+    if (studioCutout) {
+      const cutoutRes = await removeBackgroundAndEncodeWebP(outCanvas, {
+        maxDim: maxOutputSide,
+        quality: 0.86,
+        withMetadata: true,
+      });
+      const aiMeta = cutoutRes.aiMetadata;
+      return {
+        dataUrl: cutoutRes.webpDataUrl,
+        format: cutoutRes.format,
+        cutoutApplied: cutoutRes.cutoutApplied,
+        detectedHex: aiMeta?.sampled_hex || '#1D1D1F',
+        matchedColor: {
+          name: aiMeta?.color_name || '블랙',
+          hex: aiMeta?.color_hex || '#1D1D1F',
+        },
+        aiMetadata: aiMeta,
+        width: cutoutRes.width,
+        height: cutoutRes.height,
+      };
+    }
+
+    const imgData = oCtx.getImageData(0, 0, outW, outH);
+    const d = imgData.data;
+
+    const borderSamples = [
+      [2, 2],
+      [outW - 3, 2],
+      [2, outH - 3],
+      [outW - 3, outH - 3],
+      [Math.floor(outW / 2), 2],
+      [2, Math.floor(outH / 2)],
+      [outW - 3, Math.floor(outH / 2)],
+    ];
+    let bgR = 0;
+    let bgG = 0;
+    let bgB = 0;
+    for (const [bx, by] of borderSamples) {
+      const bi = (clampVal(by, 0, outH - 1) * outW + clampVal(bx, 0, outW - 1)) * 4;
+      bgR += d[bi];
+      bgG += d[bi + 1];
+      bgB += d[bi + 2];
+    }
+    bgR /= borderSamples.length;
+    bgG /= borderSamples.length;
+    bgB /= borderSamples.length;
+
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let cnt = 0;
+    const x0 = Math.floor(outW * 0.24);
+    const x1 = Math.ceil(outW * 0.76);
+    const y0 = Math.floor(outH * 0.22);
+    const y1 = Math.ceil(outH * 0.78);
+    for (let y = y0; y < y1; y += 2) {
+      for (let x = x0; x < x1; x += 2) {
+        const i = (y * outW + x) * 4;
+        const distBg = Math.hypot(d[i] - bgR, d[i + 1] - bgG, d[i + 2] - bgB);
+        if (distBg > 20) {
+          sumR += d[i];
+          sumG += d[i + 1];
+          sumB += d[i + 2];
+          cnt++;
+        }
+      }
+    }
+    if (cnt < 20) {
+      const ci = (Math.floor(outH / 2) * outW + Math.floor(outW / 2)) * 4;
+      sumR = d[ci];
+      sumG = d[ci + 1];
+      sumB = d[ci + 2];
+      cnt = 1;
+    }
+    const avgR = Math.round(sumR / cnt);
+    const avgG = Math.round(sumG / cnt);
+    const avgB = Math.round(sumB / cnt);
+    const detectedHex = rgbToHex(avgR, avgG, avgB);
+    const matchedColor = matchClosestPaletteColor({ r: avgR, g: avgG, b: avgB });
+    const dataUrl = outCanvas.toDataURL('image/webp', 0.88);
+
+    return {
+      dataUrl,
+      format: dataUrl.startsWith('data:image/webp') ? 'webp' : 'png',
+      cutoutApplied: false,
+      detectedHex,
+      matchedColor,
+      aiMetadata: null,
+      width: outW,
+      height: outH,
+    };
+  } finally {
+    stageCanvas.width = 0;
+    stageCanvas.height = 0;
+    outCanvas.width = 0;
+    outCanvas.height = 0;
+  }
 }
 
 // ============================================================================
@@ -601,223 +689,270 @@ export async function analyzePersonalColorFromImage(imageSource, options = {}) {
     cropRect = null,
   } = options;
 
-  const landmarkRes = await detectFaceAndSkinPins(imageSource, { rotationDeg, cropRect });
-  const activePins = customPins && customPins.length === 4 ? customPins : landmarkRes.pins || DEFAULT_SKIN_PINS;
+  const hasCustomPins = Array.isArray(customPins) && customPins.length > 0;
+  const landmarkRes = hasCustomPins
+    ? {
+        detected: true,
+        isLowConfidence: false,
+        confidence: 96,
+        engine: 'custom_pins',
+        detectionStage: 'custom_pins',
+        landmarkCount: 478,
+        orientationDeg: rotationDeg || 0,
+        faceBox: { x: 0.25, y: 0.15, w: 0.5, h: 0.65 },
+        pins: customPins,
+        meshPoints: [],
+      }
+    : await detectFaceAndSkinPins(imageSource, { rotationDeg, cropRect });
+
+  const activePins =
+    hasCustomPins
+      ? customPins
+      : landmarkRes.pins && landmarkRes.pins.length > 0
+        ? landmarkRes.pins
+        : DEFAULT_SKIN_PINS;
   const modeInfo = LIGHTING_MODES.find((m) => m.key === lightingMode) || LIGHTING_MODES[0];
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const W = 360;
-      const H = 360;
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, W, H);
-      const { data } = ctx.getImageData(0, 0, W, H);
+  const sourceForSampling = landmarkRes.processedDataUrl || imageSource;
+  const { drawable, width: srcW, height: srcH } = await loadDrawableSource(sourceForSampling);
 
-      // Compute scene white balance gains if auto_d65 is active
-      let gainR = modeInfo.gains.r;
-      let gainG = modeInfo.gains.g;
-      let gainB = modeInfo.gains.b;
+  const W = 360;
+  const H = 360;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
 
-      if (modeInfo.gains.autoGreyWorld) {
-        let sr = 0;
-        let sg = 0;
-        let sb = 0;
-        let cnt = 0;
-        for (let i = 0; i < data.length; i += 32) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          if (r > 25 && r < 245 && g > 25 && g < 245 && b > 25 && b < 245) {
-            sr += r;
-            sg += g;
-            sb += b;
-            cnt += 1;
-          }
-        }
-        if (cnt > 20) {
-          const avgR = sr / cnt;
-          const avgG = sg / cnt;
-          const avgB = sb / cnt;
-          const lum = (avgR + avgG + avgB) / 3;
-          // Gentle D65 daylight normalization (clamped to preserve natural skin chrominance)
-          gainR = Math.max(0.88, Math.min(1.12, 0.65 + 0.35 * (lum / Math.max(1, avgR))));
-          gainG = Math.max(0.92, Math.min(1.08, 0.70 + 0.30 * (lum / Math.max(1, avgG))));
-          gainB = Math.max(0.88, Math.min(1.12, 0.65 + 0.35 * (lum / Math.max(1, avgB))));
-        }
-      }
-
-      // Sample 4 anatomical skin pins
-      const pinSamples = activePins.map((pin) => {
-        const px = Math.max(8, Math.min(W - 9, Math.round(pin.x * W)));
-        const py = Math.max(8, Math.min(H - 9, Math.round(pin.y * H)));
-        const radius = 11;
-
-        let rSum = 0;
-        let gSum = 0;
-        let bSum = 0;
-        let c = 0;
-
-        for (let dy = -radius; dy <= radius; dy++) {
-          for (let dx = -radius; dx <= radius; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            const r = Math.min(255, Math.max(0, data[idx] * gainR));
-            const g = Math.min(255, Math.max(0, data[idx + 1] * gainG));
-            const b = Math.min(255, Math.max(0, data[idx + 2] * gainB));
-            rSum += r;
-            gSum += g;
-            bSum += b;
-            c += 1;
-          }
-        }
-
-        const rAvg = Math.round(rSum / Math.max(1, c));
-        const gAvg = Math.round(gSum / Math.max(1, c));
-        const bAvg = Math.round(bSum / Math.max(1, c));
-        const hex = rgbToHex(rAvg, gAvg, bAvg);
-        const lab = rgbToCieLab({ r: rAvg, g: gAvg, b: bAvg });
-
-        return {
-          ...pin,
-          rgb: { r: rAvg, g: gAvg, b: bAvg },
-          hex,
-          lab,
-        };
-      });
-
-      // Weighted average across the 4 skin regions (forehead 25%, leftCheek 30%, rightCheek 30%, noseChin 15%)
-      const weights = [0.25, 0.30, 0.30, 0.15];
-      let L = 0;
-      let a = 0;
-      let b = 0;
-      let rMean = 0;
-      let gMean = 0;
-      let bMean = 0;
-
-      pinSamples.forEach((s, idx) => {
-        const w = weights[idx] ?? 0.25;
-        L += s.lab.L * w;
-        a += s.lab.a * w;
-        b += s.lab.b * w;
-        rMean += s.rgb.r * w;
-        gMean += s.rgb.g * w;
-        bMean += s.rgb.b * w;
-      });
-
-      L = Number(L.toFixed(2));
-      a = Number(a.toFixed(2));
-      b = Number(b.toFixed(2));
-      const skinToneHex = rgbToHex(rMean, gMean, bMean);
-
-      // ITA° (Individual Typology Angle) & Warm/Cool Undertone Index
-      const itaDeg = Number(((Math.atan2(L - 50, Math.max(0.5, b)) * 180) / Math.PI).toFixed(1));
-      const warmthIndex = Number((b - a * 0.42).toFixed(2));
-      const chromaVal = Number(Math.hypot(a, b).toFixed(2));
-      const isWarm = warmthIndex >= 8.5;
-      const isBright = L >= 65.5;
-
-      let seasonKey = 'autumn_warm';
-      if (isWarm && isBright) seasonKey = 'spring_warm';
-      else if (!isWarm && isBright) seasonKey = 'summer_cool';
-      else if (isWarm && !isBright) seasonKey = 'autumn_warm';
-      else seasonKey = 'winter_cool';
-
-      // Determine 8-Season Subtype & PCCS Tone Position
-      let subTypeKey = 'spring_light';
-      if (seasonKey === 'spring_warm') {
-        subTypeKey = chromaVal >= 21.5 && L < 74.5 ? 'spring_bright' : 'spring_light';
-      } else if (seasonKey === 'summer_cool') {
-        subTypeKey = L >= 70.5 && chromaVal < 19.5 ? 'summer_light' : 'summer_mute';
-      } else if (seasonKey === 'autumn_warm') {
-        subTypeKey = L >= 62.0 ? 'autumn_mute' : 'autumn_deep';
-      } else {
-        subTypeKey = chromaVal >= 17.5 || L >= 61.5 ? 'winter_bright' : 'winter_deep';
-      }
-      const subType = PERSONAL_COLOR_SUBTYPES[subTypeKey] || PERSONAL_COLOR_SUBTYPES.spring_light;
-      const pccsToneKey = subType.pccsTones[0];
-
-      // Compute 20-color directional undertone similarity (상/하/좌/우 각 5색)
-      const computeSwatchSimilarity = (targetLab) => {
-        const dL = (L - targetLab.L) * 0.55;
-        const da = (a - targetLab.a) * 1.15;
-        const db = (b - targetLab.b) * 1.35;
-        const dist = Math.sqrt(dL * dL + da * da + db * db);
-        return Math.max(48, Math.min(99, Math.round(99 - dist * 1.65)));
-      };
-
-      const directional20 = {};
-      for (const [dirKey, group] of Object.entries(DIRECTIONAL_20_DRAPE_COLORS)) {
-        const scoredSwatches = group.swatches.map((sw) => ({
-          ...sw,
-          similarity: computeSwatchSimilarity(sw.targetLab),
-        }));
-        const avgSim = Math.round(
-          scoredSwatches.reduce((acc, s) => acc + s.similarity, 0) / scoredSwatches.length
+  let data;
+  let processedDataUrl;
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!landmarkRes.processedDataUrl && (rotationDeg || cropRect)) {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(((rotationDeg || 0) * Math.PI) / 180);
+      if (cropRect) {
+        ctx.drawImage(
+          drawable,
+          cropRect.x * srcW,
+          cropRect.y * srcH,
+          cropRect.w * srcW,
+          cropRect.h * srcH,
+          -W / 2,
+          -H / 2,
+          W,
+          H
         );
-        directional20[dirKey] = {
-          ...group,
-          avgSimilarity: avgSim,
-          swatches: scoredSwatches,
-        };
+      } else {
+        ctx.drawImage(drawable, -W / 2, -H / 2, W, H);
       }
+      ctx.restore();
+    } else {
+      ctx.drawImage(drawable, 0, 0, W, H);
+    }
+    data = ctx.getImageData(0, 0, W, H).data;
+    processedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 
-      // Confidence (%) Formula Disclosure: 40% Region Uniformity + 25% Undertone Separation + 20% Chroma Clarity + 15% D65 Lighting Fit
-      const bValues = pinSamples.map((p) => p.lab.b);
-      const bSpread = Math.max(...bValues) - Math.min(...bValues);
-      const uniformityScore = Math.max(55, Math.min(99, Math.round(98 - bSpread * 2.2)));
-      const separationScore = Math.max(
-        58,
-        Math.min(99, Math.round(68 + Math.min(12, Math.abs(warmthIndex - 11.8)) * 2.6))
-      );
-      const chromaScore = Math.max(60, Math.min(98, Math.round(64 + Math.min(28, chromaVal) * 1.2)));
-      const lightingFitScore =
-        lightingMode === 'auto_d65' ? 95 : lightingMode === 'raw_original' ? 78 : 90;
+  // Compute scene white balance gains if auto_d65 is active
+  let gainR = modeInfo.gains.r;
+  let gainG = modeInfo.gains.g;
+  let gainB = modeInfo.gains.b;
 
-      const totalConfidence = Math.round(
-        uniformityScore * 0.4 +
-          separationScore * 0.25 +
-          chromaScore * 0.2 +
-          lightingFitScore * 0.15
-      );
+  if (modeInfo.gains.autoGreyWorld) {
+    let sr = 0;
+    let sg = 0;
+    let sb = 0;
+    let cnt = 0;
+    for (let i = 0; i < data.length; i += 32) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      if (r > 25 && r < 245 && g > 25 && g < 245 && b > 25 && b < 245) {
+        sr += r;
+        sg += g;
+        sb += b;
+        cnt += 1;
+      }
+    }
+    if (cnt > 20) {
+      const avgR = sr / cnt;
+      const avgG = sg / cnt;
+      const avgB = sb / cnt;
+      const lum = (avgR + avgG + avgB) / 3;
+      // Gentle D65 daylight normalization (clamped to preserve natural skin chrominance)
+      gainR = Math.max(0.88, Math.min(1.12, 0.65 + 0.35 * (lum / Math.max(1, avgR))));
+      gainG = Math.max(0.92, Math.min(1.08, 0.70 + 0.30 * (lum / Math.max(1, avgG))));
+      gainB = Math.max(0.88, Math.min(1.12, 0.65 + 0.35 * (lum / Math.max(1, avgB))));
+    }
+  }
 
-      const detail = PERSONAL_COLOR_DETAILS[seasonKey];
+  // Sample 4 anatomical skin pins
+  const pinSamples = activePins.map((pin) => {
+    const px = Math.max(8, Math.min(W - 9, Math.round(pin.x * W)));
+    const py = Math.max(8, Math.min(H - 9, Math.round(pin.y * H)));
+    const radius = 11;
 
-      resolve({
-        personalColor: seasonKey,
-        subTypeKey,
-        subType,
-        pccsToneKey,
-        matchedPccsTones: subType.pccsTones,
-        toneFamily: subType.toneFamily,
-        mannequinModelColorHex: subType.mannequinModelColorHex,
-        mannequinBriefsColorHex: subType.mannequinBriefsColorHex,
-        labelKo: detail.labelKo,
-        labelEn: detail.labelEn,
-        summaryKo: detail.summaryKo,
-        bestColors: detail.bestColors,
-        skinToneHex,
-        lightingMode,
-        lightingLabelKo: modeInfo.labelKo,
-        lab: { L, a, b, itaDeg, warmthIndex, chroma: chromaVal },
-        pins: pinSamples,
-        directional20,
-        confidence: totalConfidence,
-        confidenceBreakdown: {
-          formulaText: '신뢰도(%) = 부위간 균일도(40%) + 언더톤 분리도(25%) + 채도 명확도(20%) + D65 광원 적합도(15%)',
-          uniformity40: uniformityScore,
-          separation25: separationScore,
-          chroma20: chromaScore,
-          lighting15: lightingFitScore,
-          total: totalConfidence,
-        },
-        landmarkDetection: landmarkRes,
-        processedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
-      });
+    let rSum = 0;
+    let gSum = 0;
+    let bSum = 0;
+    let c = 0;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const idx = ((py + dy) * W + (px + dx)) * 4;
+        const r = Math.min(255, Math.max(0, data[idx] * gainR));
+        const g = Math.min(255, Math.max(0, data[idx + 1] * gainG));
+        const b = Math.min(255, Math.max(0, data[idx + 2] * gainB));
+        rSum += r;
+        gSum += g;
+        bSum += b;
+        c += 1;
+      }
+    }
+
+    const rAvg = Math.round(rSum / Math.max(1, c));
+    const gAvg = Math.round(gSum / Math.max(1, c));
+    const bAvg = Math.round(bSum / Math.max(1, c));
+    const hex = rgbToHex(rAvg, gAvg, bAvg);
+    const lab = rgbToCieLab(rAvg, gAvg, bAvg);
+
+    return {
+      ...pin,
+      rgb: { r: rAvg, g: gAvg, b: bAvg },
+      hex,
+      lab,
     };
-    img.src = landmarkRes.processedDataUrl || (typeof imageSource === 'string' ? imageSource : '');
   });
+
+  // Weighted average across the 4 skin regions (forehead 25%, leftCheek 30%, rightCheek 30%, noseChin 15%)
+  const weights = [0.25, 0.30, 0.30, 0.15];
+  let L = 0;
+  let a = 0;
+  let b = 0;
+  let rMean = 0;
+  let gMean = 0;
+  let bMean = 0;
+
+  pinSamples.forEach((s, idx) => {
+    const w = weights[idx] ?? 0.25;
+    L += s.lab.L * w;
+    a += s.lab.a * w;
+    b += s.lab.b * w;
+    rMean += s.rgb.r * w;
+    gMean += s.rgb.g * w;
+    bMean += s.rgb.b * w;
+  });
+
+  L = Number(L.toFixed(2));
+  a = Number(a.toFixed(2));
+  b = Number(b.toFixed(2));
+  const skinToneHex = rgbToHex(rMean, gMean, bMean);
+
+  // ITA° (Individual Typology Angle) & Warm/Cool Undertone Index
+  const itaDeg = Number(((Math.atan2(L - 50, Math.max(0.5, b)) * 180) / Math.PI).toFixed(1));
+  const warmthIndex = Number((b - a * 0.42).toFixed(2));
+  const chromaVal = Number(Math.hypot(a, b).toFixed(2));
+  const isWarm = warmthIndex >= 8.5;
+  const isBright = L >= 65.5;
+
+  let seasonKey = 'autumn_warm';
+  if (isWarm && isBright) seasonKey = 'spring_warm';
+  else if (!isWarm && isBright) seasonKey = 'summer_cool';
+  else if (isWarm && !isBright) seasonKey = 'autumn_warm';
+  else seasonKey = 'winter_cool';
+
+  // Determine 8-Season Subtype & PCCS Tone Position
+  let subTypeKey = 'spring_light';
+  if (seasonKey === 'spring_warm') {
+    subTypeKey = chromaVal >= 21.5 && L < 74.5 ? 'spring_bright' : 'spring_light';
+  } else if (seasonKey === 'summer_cool') {
+    subTypeKey = L >= 70.5 && chromaVal < 19.5 ? 'summer_light' : 'summer_mute';
+  } else if (seasonKey === 'autumn_warm') {
+    subTypeKey = L >= 62.0 ? 'autumn_mute' : 'autumn_deep';
+  } else {
+    subTypeKey = chromaVal >= 17.5 || L >= 61.5 ? 'winter_bright' : 'winter_deep';
+  }
+  const subType = PERSONAL_COLOR_SUBTYPES[subTypeKey] || PERSONAL_COLOR_SUBTYPES.spring_light;
+  const pccsToneKey = subType.pccsTones[0];
+
+  // Compute 20-color directional undertone similarity (상/하/좌/우 각 5색)
+  const computeSwatchSimilarity = (targetLab) => {
+    const dL = (L - targetLab.L) * 0.55;
+    const da = (a - targetLab.a) * 1.15;
+    const db = (b - targetLab.b) * 1.35;
+    const dist = Math.sqrt(dL * dL + da * da + db * db);
+    return Math.max(48, Math.min(99, Math.round(99 - dist * 1.65)));
+  };
+
+  const directional20 = {};
+  for (const [dirKey, group] of Object.entries(DIRECTIONAL_20_DRAPE_COLORS)) {
+    const scoredSwatches = group.swatches.map((sw) => ({
+      ...sw,
+      similarity: computeSwatchSimilarity(sw.targetLab),
+    }));
+    const avgSim = Math.round(
+      scoredSwatches.reduce((acc, s) => acc + s.similarity, 0) / scoredSwatches.length
+    );
+    directional20[dirKey] = {
+      ...group,
+      avgSimilarity: avgSim,
+      swatches: scoredSwatches,
+    };
+  }
+
+  // Confidence (%) Formula Disclosure: 40% Region Uniformity + 25% Undertone Separation + 20% Chroma Clarity + 15% D65 Lighting Fit
+  const bValues = pinSamples.map((p) => p.lab.b);
+  const bSpread = Math.max(...bValues) - Math.min(...bValues);
+  const uniformityScore = Math.max(55, Math.min(99, Math.round(98 - bSpread * 2.2)));
+  const separationScore = Math.max(
+    58,
+    Math.min(99, Math.round(68 + Math.min(12, Math.abs(warmthIndex - 11.8)) * 2.6))
+  );
+  const chromaScore = Math.max(60, Math.min(98, Math.round(64 + Math.min(28, chromaVal) * 1.2)));
+  const lightingFitScore =
+    lightingMode === 'auto_d65' ? 95 : lightingMode === 'raw_original' ? 78 : 90;
+
+  const totalConfidence = Math.round(
+    uniformityScore * 0.4 +
+      separationScore * 0.25 +
+      chromaScore * 0.2 +
+      lightingFitScore * 0.15
+  );
+
+  const detail = PERSONAL_COLOR_DETAILS[seasonKey];
+
+  return {
+    personalColor: seasonKey,
+    subTypeKey,
+    subType,
+    pccsToneKey,
+    matchedPccsTones: subType.pccsTones,
+    toneFamily: subType.toneFamily,
+    mannequinModelColorHex: subType.mannequinModelColorHex,
+    mannequinBriefsColorHex: subType.mannequinBriefsColorHex,
+    labelKo: detail.labelKo,
+    labelEn: detail.labelEn,
+    summaryKo: detail.summaryKo,
+    bestColors: detail.bestColors,
+    skinToneHex,
+    lightingMode,
+    lightingLabelKo: modeInfo.labelKo,
+    lab: { L, a, b, itaDeg, warmthIndex, chroma: chromaVal },
+    pins: pinSamples,
+    directional20,
+    confidence: totalConfidence,
+    confidenceBreakdown: {
+      formulaText: '신뢰도(%) = 부위간 균일도(40%) + 언더톤 분리도(25%) + 채도 명확도(20%) + D65 광원 적합도(15%)',
+      uniformity40: uniformityScore,
+      separation25: separationScore,
+      chroma20: chromaScore,
+      lighting15: lightingFitScore,
+      total: totalConfidence,
+    },
+    landmarkDetection: landmarkRes,
+    processedDataUrl,
+  };
 }

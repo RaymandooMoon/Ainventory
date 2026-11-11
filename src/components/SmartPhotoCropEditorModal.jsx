@@ -10,11 +10,7 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { COLOR_PALETTE } from '../utils/api.js';
-import {
-  extractGarmentAIMetadata,
-  removeBackgroundAndEncodeWebP,
-} from '../utils/aiGarmentPipeline.js';
+import { renderCroppedImageOutput } from '../utils/imageTools.js';
 
 const ASPECT_OPTIONS = [
   { key: 'free', label: '자유 비율', ratio: null },
@@ -35,263 +31,49 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function parseHexRgb(hex) {
-  const clean = String(hex || '#1D273B').replace('#', '');
-  const n = parseInt(clean.padEnd(6, '0').slice(0, 6), 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-function matchClosestPaletteColor(r, g, b) {
-  let best = COLOR_PALETTE[0];
-  let minD = Infinity;
-  for (const item of COLOR_PALETTE) {
-    const c = parseHexRgb(item.hex);
-    const d = Math.hypot(r - c.r, g - c.g, b - c.b);
-    if (d < minD) {
-      minD = d;
-      best = item;
-    }
-  }
-  return best;
-}
-
-/**
- * Renders rotated/flipped/brightened source image, crops exact normalized `cropBox`,
- * optionally cleans studio background (`studioCutout`), and extracts dominant garment color.
- */
-export async function renderCroppedImageOutput(
-  imageSource,
-  {
-    rotation90 = 0,
-    straightenDeg = 0,
-    flipH = false,
-    brightness = 100,
-    studioCutout = false,
-    cropBox = { x: 0.08, y: 0.06, w: 0.84, h: 0.88 },
-    maxOutputSide = 760,
-  } = {}
-) {
-  const img = await new Promise((resolve, reject) => {
-    const el = new Image();
-    el.crossOrigin = 'anonymous';
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'));
-    el.src = imageSource;
-  });
-
-  // 1. Render transformed full stage onto intermediate canvas
-  const rad90 = ((rotation90 % 360) * Math.PI) / 180;
-  const swapWH = Math.abs(rotation90 % 180) === 90;
-  const srcW = img.naturalWidth || img.width || 640;
-  const srcH = img.naturalHeight || img.height || 640;
-  const stageScale = Math.min(1, 1280 / Math.max(srcW, srcH));
-  const baseW = Math.round((swapWH ? srcH : srcW) * stageScale);
-  const baseH = Math.round((swapWH ? srcW : srcH) * stageScale);
-
-  const stageCanvas = document.createElement('canvas');
-  stageCanvas.width = Math.max(64, baseW);
-  stageCanvas.height = Math.max(64, baseH);
-  const sCtx = stageCanvas.getContext('2d', { willReadFrequently: true });
-  sCtx.fillStyle = '#F5F5F7';
-  sCtx.fillRect(0, 0, stageCanvas.width, stageCanvas.height);
-
-  sCtx.save();
-  if (brightness !== 100) {
-    sCtx.filter = `brightness(${brightness}%)`;
-  }
-  sCtx.translate(stageCanvas.width / 2, stageCanvas.height / 2);
-  if (flipH) sCtx.scale(-1, 1);
-  sCtx.rotate(rad90 + (straightenDeg * Math.PI) / 180);
-  const drawW = Math.round(srcW * stageScale);
-  const drawH = Math.round(srcH * stageScale);
-  sCtx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-  sCtx.restore();
-
-  // 2. Crop exact user box
-  const sx = Math.round(clamp(cropBox.x, 0, 0.95) * stageCanvas.width);
-  const sy = Math.round(clamp(cropBox.y, 0, 0.95) * stageCanvas.height);
-  const sw = Math.max(32, Math.round(clamp(cropBox.w, 0.05, 1 - cropBox.x) * stageCanvas.width));
-  const sh = Math.max(32, Math.round(clamp(cropBox.h, 0.05, 1 - cropBox.y) * stageCanvas.height));
-
-  const outScale = Math.min(1, maxOutputSide / Math.max(sw, sh));
-  const outW = Math.max(64, Math.round(sw * outScale));
-  const outH = Math.max(64, Math.round(sh * outScale));
-
-  const outCanvas = document.createElement('canvas');
-  outCanvas.width = outW;
-  outCanvas.height = outH;
-  const oCtx = outCanvas.getContext('2d', { willReadFrequently: true });
-  oCtx.drawImage(stageCanvas, sx, sy, sw, sh, 0, 0, outW, outH);
-
-  const imgData = oCtx.getImageData(0, 0, outW, outH);
-  const d = imgData.data;
-
-  // Estimate border background color from 4 corners + edge midpoints
-  const borderSamples = [
-    [2, 2],
-    [outW - 3, 2],
-    [2, outH - 3],
-    [outW - 3, outH - 3],
-    [Math.floor(outW / 2), 2],
-    [2, Math.floor(outH / 2)],
-    [outW - 3, Math.floor(outH / 2)],
-  ];
-  let bgR = 0;
-  let bgG = 0;
-  let bgB = 0;
-  for (const [bx, by] of borderSamples) {
-    const bi = (clamp(by, 0, outH - 1) * outW + clamp(bx, 0, outW - 1)) * 4;
-    bgR += d[bi];
-    bgG += d[bi + 1];
-    bgB += d[bi + 2];
-  }
-  bgR /= borderSamples.length;
-  bgG /= borderSamples.length;
-  bgB /= borderSamples.length;
-
-  // Optional 1-click Neutral Monochrome Studio Paper Background Cleanup (#F5F5F7)
-  if (studioCutout) {
-    const studioRGB = [245, 245, 247];
-    for (let y = 0; y < outH; y++) {
-      for (let x = 0; x < outW; x++) {
-        const i = (y * outW + x) * 4;
-        const distBg = Math.hypot(d[i] - bgR, d[i + 1] - bgG, d[i + 2] - bgB);
-        // Stronger cleanup near borders, gentle near center so garment core is preserved
-        const nx = (x / outW - 0.5) * 2;
-        const ny = (y / outH - 0.5) * 2;
-        const edgeBias = Math.hypot(nx, ny);
-        const threshold = edgeBias > 0.72 ? 42 : 26;
-        if (distBg < threshold) {
-          const alpha = clamp((threshold - distBg) / 18, 0, 1);
-          d[i] = Math.round(d[i] * (1 - alpha) + studioRGB[0] * alpha);
-          d[i + 1] = Math.round(d[i + 1] * (1 - alpha) + studioRGB[1] * alpha);
-          d[i + 2] = Math.round(d[i + 2] * (1 - alpha) + studioRGB[2] * alpha);
-        }
-      }
-    }
-    oCtx.putImageData(imgData, 0, 0);
-  }
-
-  // Dominant center-garment color extraction
-  let sumR = 0;
-  let sumG = 0;
-  let sumB = 0;
-  let cnt = 0;
-  const x0 = Math.floor(outW * 0.24);
-  const x1 = Math.ceil(outW * 0.76);
-  const y0 = Math.floor(outH * 0.22);
-  const y1 = Math.ceil(outH * 0.78);
-  for (let y = y0; y < y1; y += 2) {
-    for (let x = x0; x < x1; x += 2) {
-      const i = (y * outW + x) * 4;
-      const distBg = Math.hypot(d[i] - bgR, d[i + 1] - bgG, d[i + 2] - bgB);
-      if (distBg > 20) {
-        sumR += d[i];
-        sumG += d[i + 1];
-        sumB += d[i + 2];
-        cnt++;
-      }
-    }
-  }
-  if (cnt < 20) {
-    const ci = (Math.floor(outH / 2) * outW + Math.floor(outW / 2)) * 4;
-    sumR = d[ci];
-    sumG = d[ci + 1];
-    sumB = d[ci + 2];
-    cnt = 1;
-  }
-  const avgR = Math.round(sumR / cnt);
-  const avgG = Math.round(sumG / cnt);
-  const avgB = Math.round(sumB / cnt);
-  const detectedHex = `#${[avgR, avgG, avgB]
-    .map((v) => clamp(v, 0, 255).toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()}`;
-  const matchedColor = matchClosestPaletteColor(avgR, avgG, avgB);
-
-  const rawCroppedPng = outCanvas.toDataURL('image/png');
-  if (studioCutout) {
-    const cutoutRes = await removeBackgroundAndEncodeWebP(rawCroppedPng, {
-      maxDim: maxOutputSide,
-      quality: 0.86,
-    });
-    const aiMeta = await extractGarmentAIMetadata(cutoutRes.webpDataUrl);
-    return {
-      dataUrl: cutoutRes.webpDataUrl,
-      format: cutoutRes.format,
-      cutoutApplied: cutoutRes.cutoutApplied,
-      detectedHex: aiMeta.sampled_hex || detectedHex,
-      matchedColor: {
-        name: aiMeta.color_name || matchedColor.name,
-        hex: aiMeta.color_hex || matchedColor.hex,
-      },
-      aiMetadata: aiMeta,
-      width: cutoutRes.width,
-      height: cutoutRes.height,
-    };
-  }
-
-  return {
-    dataUrl: outCanvas.toDataURL('image/webp', 0.88),
-    format: 'webp',
-    cutoutApplied: false,
-    detectedHex,
-    matchedColor,
-    aiMetadata: null,
-    width: outW,
-    height: outH,
-  };
-}
-
-/**
- * Interactive 8-Handle Photo Crop & Studio Cutout Editor Modal
- * Automatically opens right after uploading a full-body/item photo OR snapping a camera shot.
- */
-export default function SmartPhotoCropEditorModal({
-  open,
-  imageSource,
-  mode = 'garment', // 'garment' | 'portrait'
-  title = '전신샷 · 촬영 사진 크롭 & 스튜디오 에디터',
-  onApply,
-  onClose,
-}) {
+function SmartPhotoCropEditorContent({ imageSource, title, onApply, onClose }) {
   const stageRef = useRef(null);
   const previewCanvasRef = useRef(null);
   const dragRef = useRef(null);
 
-  const [aspectKey, setAspectKey] = useState(mode === 'portrait' ? '1:1' : '3:4');
+  const [aspectKey, setAspectKey] = useState('3:4');
   const [rotation90, setRotation90] = useState(0);
   const [straightenDeg, setStraightenDeg] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [brightness, setBrightness] = useState(100);
-  const [studioCutout, setStudioCutout] = useState(mode === 'garment');
-  const [cropBox, setCropBox] = useState(
-    mode === 'portrait'
-      ? { x: 0.22, y: 0.06, w: 0.56, h: 0.56 }
-      : { x: 0.12, y: 0.08, w: 0.76, h: 0.84 }
-  );
+  const [studioCutout, setStudioCutout] = useState(true);
+  const [cropBox, setCropBox] = useState({ x: 0.12, y: 0.08, w: 0.76, h: 0.84 });
   const [stageDims, setStageDims] = useState({ w: 360, h: 460 });
   const [processing, setProcessing] = useState(false);
 
-  // Reset cleanly whenever a new photo is loaded
+  // Escape key closes modal cleanly
   useEffect(() => {
-    if (!open || !imageSource) return;
-    setRotation90(0);
-    setStraightenDeg(0);
-    setFlipH(false);
-    setBrightness(100);
-    setStudioCutout(mode === 'garment');
-    setAspectKey(mode === 'portrait' ? '1:1' : '3:4');
-    setCropBox(
-      mode === 'portrait'
-        ? { x: 0.22, y: 0.06, w: 0.56, h: 0.56 }
-        : { x: 0.12, y: 0.08, w: 0.76, h: 0.84 }
-    );
-  }, [open, imageSource, mode]);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
-  // Draw live transformed photo into preview canvas so user sees exact rotation/flip/brightness
+  // Release backing store on unmount
   useEffect(() => {
-    if (!open || !imageSource) return;
+    const canvasEl = previewCanvasRef.current;
+    return () => {
+      if (canvasEl) {
+        canvasEl.width = 0;
+        canvasEl.height = 0;
+      }
+    };
+  }, []);
+
+  // Draw live transformed photo into preview canvas
+  useEffect(() => {
+    if (!imageSource) return undefined;
     let cancelled = false;
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -311,15 +93,15 @@ export default function SmartPhotoCropEditorModal({
       canvas.width = cw;
       canvas.height = ch;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#18181b';
+      ctx.fillStyle = '#1C1C1E';
       ctx.fillRect(0, 0, cw, ch);
       ctx.save();
       if (brightness !== 100) ctx.filter = `brightness(${brightness}%)`;
       ctx.translate(cw / 2, ch / 2);
       if (flipH) ctx.scale(-1, 1);
       ctx.rotate(((rotation90 + straightenDeg) * Math.PI) / 180);
-      const dw = (swap ? ch : cw);
-      const dh = (swap ? cw : ch);
+      const dw = swap ? ch : cw;
+      const dh = swap ? cw : ch;
       ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
       ctx.restore();
     };
@@ -327,9 +109,7 @@ export default function SmartPhotoCropEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [open, imageSource, rotation90, straightenDeg, flipH, brightness]);
-
-  if (!open || !imageSource) return null;
+  }, [imageSource, rotation90, straightenDeg, flipH, brightness]);
 
   const getClientXY = (e) => {
     const t = e.touches?.[0] || e.changedTouches?.[0];
@@ -390,7 +170,6 @@ export default function SmartPhotoCropEditorModal({
 
     const aspectObj = ASPECT_OPTIONS.find((a) => a.key === aspectKey);
     if (aspectObj?.ratio && stageDims.w > 0 && stageDims.h > 0) {
-      // Convert pixel aspect ratio to normalized stage ratio
       const normRatio = (aspectObj.ratio * stageDims.h) / stageDims.w;
       nh = clamp(nw / normRatio, minSize, 1 - ny);
       nw = clamp(nh * normRatio, minSize, 1 - nx);
@@ -448,6 +227,9 @@ export default function SmartPhotoCropEditorModal({
       onTouchEnd={endDrag}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || '사진 크롭 에디터'}
         className="modal-box ui-sheet-box photo-crop-modal"
         data-sheet-panel="true"
         style={{ maxWidth: 780, width: '95vw', padding: 24 }}
@@ -521,7 +303,6 @@ export default function SmartPhotoCropEditorModal({
           >
             <canvas ref={previewCanvasRef} className="crop-preview-canvas" />
 
-            {/* Interactive Crop Box */}
             <div
               className="crop-selection-box"
               style={{
@@ -564,15 +345,13 @@ export default function SmartPhotoCropEditorModal({
               </button>
             ))}
 
-            {mode === 'garment' && (
-              <button
-                type="button"
-                className={`chip ${studioCutout ? 'active' : ''}`}
-                onClick={() => setStudioCutout((v) => !v)}
-              >
-                <Sparkles size={12} /> 스튜디오 배경 정돈 {studioCutout ? 'ON' : 'OFF'}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`chip ${studioCutout ? 'active' : ''}`}
+              onClick={() => setStudioCutout((v) => !v)}
+            >
+              <Sparkles size={12} /> 스튜디오 배경 정돈 {studioCutout ? 'ON' : 'OFF'}
+            </button>
           </div>
 
           <div className="crop-sliders-grid">
@@ -636,5 +415,28 @@ export default function SmartPhotoCropEditorModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Interactive 8-Handle Photo Crop & Studio Cutout Editor Modal
+ * Automatically opens right after uploading a full-body/item photo OR snapping a camera shot.
+ */
+export default function SmartPhotoCropEditorModal({
+  open,
+  imageSource,
+  title = '전신샷 · 촬영 사진 크롭 & 스튜디오 에디터',
+  onApply,
+  onClose,
+}) {
+  if (!open || !imageSource) return null;
+  return (
+    <SmartPhotoCropEditorContent
+      key={imageSource}
+      imageSource={imageSource}
+      title={title}
+      onApply={onApply}
+      onClose={onClose}
+    />
   );
 }

@@ -5,7 +5,7 @@ Builds a faceless, game-quality human mannequin from the CC0 MakeHuman base mesh
 CC0 MakeHuman community clothes, bakes every body-shape control as a glTF morph target
 (on the body AND on each fitted garment, so garments follow the body in real time) and
 exports compressed-ready GLB files + a manifest consumed by
-`src/utils/mannequinGLEngine.js`.
+`src/utils/mannequin3DRenderer.js`.
 
 Usage (from repo root):
   blender -b --python tools/blender/build_mannequin.py -- \
@@ -544,7 +544,7 @@ def export_glb(obj, path, use_morph=True):
         export_tangents=False, export_materials="PLACEHOLDER",
         export_vertex_color="ACTIVE",
         export_morph=bool(use_morph),
-        export_morph_normal=bool(use_morph), export_morph_tangent=False, export_yup=True,
+        export_morph_normal=False, export_morph_tangent=False, export_yup=True,
         export_skins=False, export_animations=False, export_extras=False,
     )
 

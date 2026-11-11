@@ -1,11 +1,17 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import {
+  CARBON_DOM_CONTRACT,
+  CARBON_HIG_TOKENS,
+  type Carbon3DTelemetry,
+  type Mannequin3DEngineHandle,
+} from '../../src/contracts/carbonDesignContract.ts';
 
 /**
  * 3D Studio Touch Isolation, Vibrancy Blur Cap & Fallback, WebGL Context Recovery,
  * Zero Memory Leak & >= 50 FPS Quantitative Telemetry Suite (Requirement 15b)
  */
 
-async function readDrawerExpanded(page) {
+async function readDrawerExpanded(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const drawer = document.querySelector('#studio-wardrobe-drawer');
     const handle = document.querySelector('#studio-drawer-handle');
@@ -19,11 +25,13 @@ async function readDrawerExpanded(page) {
   });
 }
 
-async function countVisibleBlurLayers(page) {
+async function countVisibleBlurLayers(page: Page): Promise<number> {
   return page.evaluate(() => {
     let count = 0;
     for (const el of document.querySelectorAll('*')) {
-      const style = getComputedStyle(el);
+      const style = getComputedStyle(el) as CSSStyleDeclaration & {
+        webkitBackdropFilter?: string;
+      };
       if (
         style.display === 'none' ||
         style.visibility === 'hidden' ||
@@ -49,21 +57,25 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
   }) => {
     await page.goto('/');
 
-    const sampleBtn = page.locator('#enter-sample-demo-btn');
+    const sampleBtn = page.locator(`#${CARBON_DOM_CONTRACT.sampleDemoButtonId}`);
     await expect(sampleBtn).toBeVisible();
     await sampleBtn.click();
 
-    const canvas = page.locator('#studio-3d-canvas');
+    const canvas = page.locator(`#${CARBON_DOM_CONTRACT.studioCanvasId}`);
     await expect(canvas).toBeVisible();
-    await expect(page.locator('html')).toHaveAttribute('data-3d-active', 'true');
+    await expect(page.locator('html')).toHaveAttribute(
+      CARBON_DOM_CONTRACT.attrData3DActive,
+      'true'
+    );
 
     // Wait for Three.js WebGL engine & initial garments to finish loading
     await page.waitForFunction(
       () => {
+        const canvasEl = document.querySelector('#studio-3d-canvas') as HTMLCanvasElement | null;
         const eng =
           window.__MANNEQUIN_3D_ENGINE__ ||
           window.__ainventory3DEngine ||
-          document.querySelector('#studio-3d-canvas')?.__mannequinEngine;
+          canvasEl?.__mannequinEngine;
         if (eng && !window.__MANNEQUIN_3D_ENGINE__) {
           window.__MANNEQUIN_3D_ENGINE__ = eng;
         }
@@ -79,12 +91,15 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     // -------------------------------------------------------------------------
     expect(await readDrawerExpanded(page)).toBe('false');
 
-    const yawBeforeCanvasDrag = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().currentYawDeg
-    );
+    const yawBeforeCanvasDrag = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry().currentYawDeg;
+    });
 
     const canvasBox = await canvas.boundingBox();
     expect(canvasBox).not.toBeNull();
+    if (!canvasBox) throw new Error('Canvas bounding box missing');
     const cx = canvasBox.x + canvasBox.width * 0.5;
     const cy = canvasBox.y + canvasBox.height * 0.42;
 
@@ -96,27 +111,36 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     // Wait for smooth yaw damping to settle onto targetYawDeg
     await page.waitForFunction(
       () => {
-        const t = window.__MANNEQUIN_3D_ENGINE__.getTelemetry();
+        const eng = window.__MANNEQUIN_3D_ENGINE__;
+        if (!eng) return false;
+        const t = eng.getTelemetry();
         return Math.abs(t.targetYawDeg - t.currentYawDeg) < 0.05;
       },
       null,
       { timeout: 5000 }
     );
 
-    const yawAfterCanvasDrag = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().currentYawDeg
-    );
+    const yawAfterCanvasDrag = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry().currentYawDeg;
+    });
     const deltaYaw = yawAfterCanvasDrag - yawBeforeCanvasDrag;
     expect(Math.abs(deltaYaw)).toBeGreaterThan(8);
     expect(await readDrawerExpanded(page)).toBe('false');
 
     // Vertical swipe UP on #studio-drawer-handle -> opens drawer, 0-deg yaw leak (< 0.5 deg)
-    const beforeDrawerSwipeYaw = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().currentYawDeg
-    );
+    const beforeDrawerSwipeYaw = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry().currentYawDeg;
+    });
 
-    const closedHandleBox = await page.locator('#studio-drawer-handle').boundingBox();
+    const closedHandleBox = await page
+      .locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`)
+      .boundingBox();
     expect(closedHandleBox).not.toBeNull();
+    if (!closedHandleBox) throw new Error('Closed handle bounding box missing');
     const hx = closedHandleBox.x + closedHandleBox.width / 2;
     const hy = closedHandleBox.y + closedHandleBox.height / 2;
 
@@ -126,14 +150,19 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     await page.mouse.up();
 
     await expect.poll(() => readDrawerExpanded(page)).toBe('true');
-    const afterOpenYaw = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().currentYawDeg
-    );
+    const afterOpenYaw = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry().currentYawDeg;
+    });
     expect(Math.abs(afterOpenYaw - beforeDrawerSwipeYaw)).toBeLessThan(0.5);
 
     // Vertical swipe DOWN on #studio-drawer-handle -> closes drawer, 0-deg yaw leak (< 0.5 deg)
-    const openHandleBox = await page.locator('#studio-drawer-handle').boundingBox();
+    const openHandleBox = await page
+      .locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`)
+      .boundingBox();
     expect(openHandleBox).not.toBeNull();
+    if (!openHandleBox) throw new Error('Open handle bounding box missing');
     const ohx = openHandleBox.x + openHandleBox.width / 2;
     const ohy = openHandleBox.y + openHandleBox.height / 2;
 
@@ -143,17 +172,22 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     await page.mouse.up();
 
     await expect.poll(() => readDrawerExpanded(page)).toBe('false');
-    const afterCloseYaw = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().currentYawDeg
-    );
+    const afterCloseYaw = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry().currentYawDeg;
+    });
     expect(Math.abs(afterCloseYaw - beforeDrawerSwipeYaw)).toBeLessThan(0.5);
 
     // -------------------------------------------------------------------------
     // 2. Vibrancy Blur Cap (<= 1 layer) & Low-FPS Solid Fallback
     // -------------------------------------------------------------------------
-    await expect(page.locator('html')).toHaveAttribute('data-3d-active', 'true');
+    await expect(page.locator('html')).toHaveAttribute(
+      CARBON_DOM_CONTRACT.attrData3DActive,
+      'true'
+    );
     const initialBlurLayerCount = await countVisibleBlurLayers(page);
-    expect(initialBlurLayerCount).toBeLessThanOrEqual(1);
+    expect(initialBlurLayerCount).toBeLessThanOrEqual(CARBON_HIG_TOKENS.maxConcurrent3DBlurLayers);
 
     const hasSimulatedLowFpsFn = await page.evaluate(
       () => typeof window.__MANNEQUIN_3D_ENGINE__?.setSimulatedLowFps === 'function'
@@ -162,6 +196,7 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     if (hasSimulatedLowFpsFn) {
       const degradedState = await page.evaluate(() => {
         const eng = window.__MANNEQUIN_3D_ENGINE__;
+        if (!eng) throw new Error('3D engine not initialized');
         eng.setSimulatedLowFps(true);
         return {
           fallbackAttr: document.documentElement.getAttribute('data-vibrancy-fallback'),
@@ -174,6 +209,7 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
 
       const restoredState = await page.evaluate(() => {
         const eng = window.__MANNEQUIN_3D_ENGINE__;
+        if (!eng) throw new Error('3D engine not initialized');
         eng.setSimulatedLowFps(false);
         return {
           fallbackAttr: document.documentElement.getAttribute('data-vibrancy-fallback'),
@@ -182,12 +218,14 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
       });
       expect(restoredState.fallbackAttr).not.toBe('solid');
       expect(restoredState.vibrancyDegraded).toBe(false);
-      expect(await countVisibleBlurLayers(page)).toBeLessThanOrEqual(1);
+      expect(await countVisibleBlurLayers(page)).toBeLessThanOrEqual(
+        CARBON_HIG_TOKENS.maxConcurrent3DBlurLayers
+      );
     } else {
       // Fallback verification via engine's rolling frame-time degradation loop (< 45 FPS -> solid)
       await page.evaluate(() => {
         const eng = window.__MANNEQUIN_3D_ENGINE__;
-        eng._frameMsSamples = Array(32).fill(36);
+        if (eng) eng._frameMsSamples = Array<number>(32).fill(36);
       });
       await page.waitForFunction(
         () => document.documentElement.getAttribute('data-vibrancy-fallback') === 'solid',
@@ -198,29 +236,36 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
 
       await page.evaluate(() => {
         const eng = window.__MANNEQUIN_3D_ENGINE__;
-        eng._frameMsSamples = Array(32).fill(15);
+        if (eng) eng._frameMsSamples = Array<number>(32).fill(15);
       });
       await page.waitForFunction(
         () => document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid',
         null,
         { timeout: 3000 }
       );
-      expect(await countVisibleBlurLayers(page)).toBeLessThanOrEqual(1);
+      expect(await countVisibleBlurLayers(page)).toBeLessThanOrEqual(
+        CARBON_HIG_TOKENS.maxConcurrent3DBlurLayers
+      );
     }
 
     // -------------------------------------------------------------------------
     // 3. Forced `WEBGL_lose_context` Auto-Recovery
     // -------------------------------------------------------------------------
     await page.evaluate(() => {
-      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      type InternalEngine = Mannequin3DEngineHandle & {
+        _loseContextExt?: WEBGL_lose_context | null;
+        renderer?: { getContext: () => WebGLRenderingContext };
+      };
+      const eng = window.__MANNEQUIN_3D_ENGINE__ as InternalEngine | undefined;
+      if (!eng) throw new Error('3D engine not initialized');
       if (typeof eng.simulateContextLoss === 'function') {
         eng.simulateContextLoss({ autoRestoreMs: 280 });
         return;
       }
       const ext =
-        eng._loseContextExt || eng.renderer.getContext().getExtension('WEBGL_lose_context');
+        eng._loseContextExt || eng.renderer?.getContext().getExtension('WEBGL_lose_context');
       eng._loseContextExt = ext;
-      ext.loseContext();
+      ext?.loseContext();
     });
 
     await page.waitForFunction(
@@ -232,27 +277,31 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
       { timeout: 8000 }
     );
 
-    const postRestoreTelemetry = await page.evaluate(() =>
-      window.__MANNEQUIN_3D_ENGINE__.getTelemetry()
-    );
+    const postRestoreTelemetry: Carbon3DTelemetry = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry();
+    });
     expect(postRestoreTelemetry.isContextLost).toBe(false);
     expect(postRestoreTelemetry.recoveryCount).toBeGreaterThanOrEqual(1);
 
-    await page.evaluate(() => window.__MANNEQUIN_3D_ENGINE__.markDirty?.());
+    await page.evaluate(() => window.__MANNEQUIN_3D_ENGINE__?.markDirty?.());
     await page.waitForTimeout(300);
 
-    const advancingTelemetry = await page.evaluate(() =>
-      window.__MANNEQUIN_3D_ENGINE__.getTelemetry()
-    );
+    const advancingTelemetry: Carbon3DTelemetry = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry();
+    });
     expect(advancingTelemetry.frameCount).toBeGreaterThan(postRestoreTelemetry.frameCount);
 
     // -------------------------------------------------------------------------
     // 4. Three.js Memory Leak Absence across 12 Garment Swaps & >= 50 Steady FPS
     // -------------------------------------------------------------------------
-    await page.locator('#studio-drawer-handle').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`).click();
     await expect.poll(() => readDrawerExpanded(page)).toBe('true');
 
-    const swapCategories = ['outer', 'top', 'bottom', 'shoes', 'accessory', 'neckwear'];
+    const swapCategories = ['outer', 'top', 'bottom', 'shoes', 'accessory', 'neckwear'] as const;
 
     // Warm up category template cache once so baseline captures active multi-slot steady state
     for (const slot of swapCategories) {
@@ -267,7 +316,11 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     }
     await page.waitForTimeout(400);
 
-    const baseline = await page.evaluate(() => window.__MANNEQUIN_3D_ENGINE__.getTelemetry());
+    const baseline: Carbon3DTelemetry = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry();
+    });
 
     // Execute >= 12 consecutive garment equip / unequip swaps across categories in the drawer
     let swapOps = 0;
@@ -288,7 +341,7 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
           swapOps += 1;
         }
 
-        const unequipBtn = page.locator('#drawer-unequip-slot-btn');
+        const unequipBtn = page.locator(`#${CARBON_DOM_CONTRACT.drawerUnequipSlotBtnId}`);
         if (await unequipBtn.isVisible().catch(() => false)) {
           await unequipBtn.click();
           swapOps += 1;
@@ -302,13 +355,14 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     expect(swapOps).toBeGreaterThanOrEqual(12);
 
     // Allow final async garment GLB/material disposal pass & camera settle to complete
-    await page.locator('#studio-drawer-handle').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`).click();
     await expect.poll(() => readDrawerExpanded(page)).toBe('false');
     await page.waitForTimeout(450);
 
     // Reset FPS sampling window and measure steady-state FPS
     await page.evaluate(() => {
       const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) return;
       if (typeof eng.resetFpsWindow === 'function') {
         eng.resetFpsWindow();
       }
@@ -317,10 +371,14 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Te
     });
     await page.waitForTimeout(900);
 
-    const after = await page.evaluate(() => window.__MANNEQUIN_3D_ENGINE__.getTelemetry());
+    const after: Carbon3DTelemetry = await page.evaluate(() => {
+      const eng = window.__MANNEQUIN_3D_ENGINE__;
+      if (!eng) throw new Error('3D engine not initialized');
+      return eng.getTelemetry();
+    });
 
     expect(after.geometries).toBeLessThanOrEqual(baseline.geometries + 2);
     expect(after.textures).toBeLessThanOrEqual(baseline.textures + 2);
-    expect(after.avgFps).toBeGreaterThanOrEqual(50);
+    expect(after.avgFps).toBeGreaterThanOrEqual(CARBON_HIG_TOKENS.minSteadyFps);
   });
 });

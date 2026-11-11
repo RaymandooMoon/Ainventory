@@ -1,14 +1,50 @@
+import {
+  COLOR_PALETTE,
+  colorSimilarityScore,
+  deltaE76,
+  hexToRgb,
+  rgbToCieLab,
+} from '../src/shared/colorMath.js';
+import {
+  CITY_COORDS as SHARED_CITY_COORDS,
+  STUDIO_SEED_BY_SUBCATEGORY,
+  WEAR_SLOTS_11,
+  getPersonalColorLabels,
+  getStudioSeedImageForGarment,
+  resolveMacroPersonalColor,
+  resolveManifestSlotAndGlb,
+} from '../src/shared/garmentTaxonomy.js';
 import { computeBodyMetrics } from './wardrobeStatsAndGenerator.js';
 
-const CITY_COORDS = {
-  seoul: { name: '서울', lat: 37.5665, lon: 126.9780 },
+export {
+  COLOR_PALETTE,
+  STUDIO_SEED_BY_SUBCATEGORY,
+  WEAR_SLOTS_11,
+  colorSimilarityScore,
+  getStudioSeedImageForGarment,
+  resolveManifestSlotAndGlb,
+};
+
+const CITY_MAP = {
+  ...Object.fromEntries(SHARED_CITY_COORDS.map((c) => [c.key, { name: c.name, lat: c.lat, lon: c.lon }])),
   bundang: { name: '성남 · 분당', lat: 37.3827, lon: 127.1189 },
-  incheon: { name: '인천 · 송도', lat: 37.3886, lon: 126.6430 },
+  incheon: { name: '인천 · 송도', lat: 37.3886, lon: 126.643 },
   daejeon: { name: '대전', lat: 36.3504, lon: 127.3845 },
   daegu: { name: '대구', lat: 35.8714, lon: 128.6014 },
-  busan: { name: '부산', lat: 35.1796, lon: 129.0756 },
-  jeju: { name: '제주', lat: 33.4996, lon: 126.5312 },
 };
+
+const ORDERED_CITY_KEYS = [
+  'seoul',
+  'bundang',
+  'incheon',
+  'daejeon',
+  'daegu',
+  'busan',
+  'jeju',
+  'tokyo',
+  'newyork',
+  'paris',
+];
 
 const WEATHER_SCENARIOS = {
   crisp_autumn: {
@@ -19,6 +55,7 @@ const WEATHER_SCENARIOS = {
     tempMax: 16,
     precipProb: 10,
     windSpeed: 11,
+    humidity: 48,
     isSimulated: true,
   },
   windy_gale: {
@@ -29,6 +66,7 @@ const WEATHER_SCENARIOS = {
     tempMax: 15,
     precipProb: 15,
     windSpeed: 32,
+    humidity: 52,
     isSimulated: true,
   },
   rainy_cool: {
@@ -39,6 +77,7 @@ const WEATHER_SCENARIOS = {
     tempMax: 13,
     precipProb: 80,
     windSpeed: 19,
+    humidity: 82,
     isSimulated: true,
   },
   warm_spring: {
@@ -49,6 +88,7 @@ const WEATHER_SCENARIOS = {
     tempMax: 24,
     precipProb: 15,
     windSpeed: 9,
+    humidity: 54,
     isSimulated: true,
   },
   winter_cold: {
@@ -59,6 +99,7 @@ const WEATHER_SCENARIOS = {
     tempMax: 4,
     precipProb: 10,
     windSpeed: 26,
+    humidity: 36,
     isSimulated: true,
   },
 };
@@ -87,58 +128,16 @@ const PERSONAL_COLOR_INFO = {
 };
 
 const weatherCache = new Map();
+const WEATHER_CACHE_MAX = 120;
 
-function hexToRgb(hex) {
-  const clean = (hex || '#888888').replace('#', '').trim();
-  const full = clean.length === 3
-    ? clean.split('').map((c) => c + c).join('')
-    : clean.padEnd(6, '0').slice(0, 6);
-  const num = parseInt(full, 16);
-  if (Number.isNaN(num)) return { r: 128, g: 128, b: 128 };
-  return {
-    r: (num >> 16) & 255,
-    g: (num >> 8) & 255,
-    b: num & 255,
-  };
-}
+function computeColorSimilarityRatio(hexA, hexB, nameA = '', nameB = '') {
+  const rgbA = hexToRgb(hexA);
+  const rgbB = hexToRgb(hexB);
+  const de = deltaE76(rgbToCieLab(rgbA.r, rgbA.g, rgbA.b), rgbToCieLab(rgbB.r, rgbB.g, rgbB.b));
+  let ratio = Math.max(colorSimilarityScore(hexA, hexB) / 100, Math.max(0, 1 - de / 48));
 
-function rgbToLab({ r, g, b }) {
-  let rn = r / 255;
-  let gn = g / 255;
-  let bn = b / 255;
-
-  rn = rn > 0.04045 ? ((rn + 0.055) / 1.055) ** 2.4 : rn / 12.92;
-  gn = gn > 0.04045 ? ((gn + 0.055) / 1.055) ** 2.4 : gn / 12.92;
-  bn = bn > 0.04045 ? ((bn + 0.055) / 1.055) ** 2.4 : bn / 12.92;
-
-  let x = (rn * 0.4124 + gn * 0.3576 + bn * 0.1805) / 0.95047;
-  let y = (rn * 0.2126 + gn * 0.7152 + bn * 0.0722) / 1.00000;
-  let z = (rn * 0.0193 + gn * 0.1192 + bn * 0.9505) / 1.08883;
-
-  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  const fx = f(x);
-  const fy = f(y);
-  const fz = f(z);
-
-  return {
-    L: 116 * fy - 16,
-    a: 500 * (fx - fy),
-    b: 200 * (fy - fz),
-  };
-}
-
-export function colorSimilarityScore(hexA, hexB, nameA = '', nameB = '') {
-  const labA = rgbToLab(hexToRgb(hexA));
-  const labB = rgbToLab(hexToRgb(hexB));
-  const deltaE = Math.sqrt(
-    (labA.L - labB.L) ** 2 +
-    (labA.a - labB.a) ** 2 +
-    (labA.b - labB.b) ** 2
-  );
-
-  let ratio = Math.max(0, 1 - deltaE / 48);
-  const normA = nameA.trim();
-  const normB = nameB.trim();
+  const normA = String(nameA || '').trim();
+  const normB = String(nameB || '').trim();
   if (normA && normB && normA === normB) {
     ratio = Math.max(ratio, 0.88);
   } else if (
@@ -194,26 +193,33 @@ export function analyzeShoppingCandidate(candidate, closetGarments, partnerGarme
 
   const sameCategoryItems = closetGarments.filter((g) => g.category === category);
 
-  const scored = sameCategoryItems.map((item) => {
-    let subScore = 14;
-    if (item.subcategory === subcategory) {
-      subScore = 45;
-    } else if ((RELATED_SUBCATEGORIES[subcategory] || []).includes(item.subcategory)) {
-      subScore = 28;
-    }
+  const scored = sameCategoryItems
+    .map((item) => {
+      let subScore = 14;
+      if (item.subcategory === subcategory) {
+        subScore = 45;
+      } else if ((RELATED_SUBCATEGORIES[subcategory] || []).includes(item.subcategory)) {
+        subScore = 28;
+      }
 
-    const cRatio = colorSimilarityScore(color_hex, item.color_hex, color_name, item.color_name);
-    const colorPoints = Math.round(cRatio * 53);
-    const similarity = Math.min(98, subScore + colorPoints);
+      const cRatio = computeColorSimilarityRatio(
+        color_hex,
+        item.color_hex,
+        color_name,
+        item.color_name
+      );
+      const colorPoints = Math.round(cRatio * 53);
+      const similarity = Math.min(98, subScore + colorPoints);
 
-    const cpw = item.wear_count > 0 ? Math.round(item.price / item.wear_count) : item.price;
+      const cpw = item.wear_count > 0 ? Math.round(item.price / item.wear_count) : item.price;
 
-    return {
-      ...item,
-      similarity,
-      cpw,
-    };
-  }).sort((a, b) => b.similarity - a.similarity);
+      return {
+        ...item,
+        similarity,
+        cpw,
+      };
+    })
+    .sort((a, b) => b.similarity - a.similarity);
 
   const similarItems = scored.filter((i) => i.similarity >= 68);
   const nearDuplicates = scored.filter((i) => i.similarity >= 83);
@@ -229,9 +235,10 @@ export function analyzeShoppingCandidate(candidate, closetGarments, partnerGarme
     verdict = 'skip';
     confidenceLabel = '중복 구매 주의 · 보유 아이템 활용 권장';
     headline = `내 옷장에 비슷한 옷이 ${similarItems.length}벌 있습니다`;
-    const sleepingText = unwornSimilar.length > 0
-      ? ` 특히 보유 중인 '${unwornSimilar[0].name}'은(는) 착용 횟수가 ${unwornSimilar[0].wear_count}회뿐이라, 새 옷 구매 대신 기존 옷을 먼저 꺼내 입으시는 걸 추천합니다.`
-      : ` '${similarItems[0].name}'(유사도 ${similarItems[0].similarity}%)과 색감·카테고리가 크게 겹쳐 구매 보류를 지지합니다.`;
+    const sleepingText =
+      unwornSimilar.length > 0
+        ? ` 특히 보유 중인 '${unwornSimilar[0].name}'은(는) 착용 횟수가 ${unwornSimilar[0].wear_count}회뿐이라, 새 옷 구매 대신 기존 옷을 먼저 꺼내 입으시는 걸 추천합니다.`
+        : ` '${similarItems[0].name}'(유사도 ${similarItems[0].similarity}%)과 색감·카테고리가 크게 겹쳐 구매 보류를 지지합니다.`;
     summary = `촬영하신 ${color_name} 톤 ${getCategoryLabel(category)} 아이템은 이미 옷장에 충분한 대안이 있습니다.${sleepingText}`;
   } else if (nearDuplicates.length === 1 || similarItems.length === 1) {
     const match = similarItems[0];
@@ -249,7 +256,7 @@ export function analyzeShoppingCandidate(candidate, closetGarments, partnerGarme
   } else {
     verdict = 'buy';
     confidenceLabel = '옷장 빈틈 채우기 · 구매 적극 지지';
-    headline = `내 옷장에 비슷한 옷이 없습니다. 사셔도 좋습니다!`;
+    headline = '내 옷장에 비슷한 옷이 없습니다. 사셔도 좋습니다!';
     summary = `현재 옷장에 ${color_name} 계열의 ${getSubcategoryLabel(subcategory)} 아이템이 0벌입니다. 중복 걱정 없이 옷장 스펙트럼을 넓혀주는 현명한 소비입니다.`;
   }
 
@@ -261,7 +268,7 @@ export function analyzeShoppingCandidate(candidate, closetGarments, partnerGarme
 
   let partnerInsight = null;
   const partnerColorMatch = partnerGarments.find(
-    (pg) => colorSimilarityScore(color_hex, pg.color_hex, color_name, pg.color_name) >= 0.76
+    (pg) => computeColorSimilarityRatio(color_hex, pg.color_hex, color_name, pg.color_name) >= 0.76
   );
   if (partnerColorMatch) {
     partnerInsight = `배우자 옷장의 '${partnerColorMatch.name}'(${partnerColorMatch.color_name})과 톤온톤 커플 시밀러룩 연출도 가능한 컬러입니다.`;
@@ -331,7 +338,12 @@ function buildCandidatePairings(candidate, closetItems) {
       if (!combos.some((c) => c.key === key)) {
         combos.push({
           key,
-          label: i === 0 ? '즉시 활용 데일리 조합' : i === 1 ? '출근 · 스마트 매칭' : '주말 캐주얼 매칭',
+          label:
+            i === 0
+              ? '즉시 활용 데일리 조합'
+              : i === 1
+                ? '출근 · 스마트 매칭'
+                : '주말 캐주얼 매칭',
           existingItems: items,
         });
       }
@@ -376,23 +388,26 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
   const hasCustom =
     customCoords &&
     Number.isFinite(Number(customCoords.lat)) &&
-    Number.isFinite(Number(customCoords.lon));
+    Number.isFinite(Number(customCoords.lon)) &&
+    Math.abs(Number(customCoords.lat)) <= 90 &&
+    Math.abs(Number(customCoords.lon)) <= 180;
+  const safeCityKey = Object.hasOwn(CITY_MAP, cityKey) ? cityKey : 'seoul';
   const city = hasCustom
     ? {
-        name: customCoords.label || '현재 위치',
+        name: String(customCoords.label || '현재 위치').slice(0, 48),
         lat: Number(customCoords.lat),
         lon: Number(customCoords.lon),
       }
-    : CITY_COORDS[cityKey] || CITY_COORDS.seoul;
+    : CITY_MAP[safeCityKey] || CITY_MAP.seoul;
 
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().slice(0, 10);
 
-  if (scenario && scenario !== 'live' && WEATHER_SCENARIOS[scenario]) {
+  if (scenario && scenario !== 'live' && Object.hasOwn(WEATHER_SCENARIOS, scenario)) {
     const preset = WEATHER_SCENARIOS[scenario];
     return {
-      cityKey: hasCustom ? 'gps' : cityKey,
+      cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
       date: tomorrowStr,
       ...preset,
@@ -405,7 +420,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     };
   }
 
-  const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : cityKey}:${tomorrowStr}`;
+  const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : safeCityKey}:${tomorrowStr}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < 20 * 60 * 1000) {
     return cached.data;
@@ -422,7 +437,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
     const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
     const data = {
-      cityKey: hasCustom ? 'gps' : cityKey,
+      cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
       date: json.daily.time[idx] || tomorrowStr,
       condition,
@@ -431,14 +446,19 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       tempMax: Math.round(json.daily.temperature_2m_max[idx]),
       precipProb,
       windSpeed,
+      humidity: precipProb >= 50 ? 78 : 50,
       isSimulated: false,
       recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
     };
+    if (weatherCache.size >= WEATHER_CACHE_MAX) {
+      const oldestKey = weatherCache.keys().next().value;
+      if (oldestKey !== undefined) weatherCache.delete(oldestKey);
+    }
     weatherCache.set(cacheKey, { fetchedAt: Date.now(), data });
     return data;
   } catch {
     return {
-      cityKey: hasCustom ? 'gps' : cityKey,
+      cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
       date: tomorrowStr,
       condition: '대체로 맑음',
@@ -447,6 +467,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       tempMax: 16,
       precipProb: 15,
       windSpeed: 11,
+      humidity: 50,
       isSimulated: false,
       fallbackUsed: true,
       recommendedMotion: 'idle',
@@ -455,11 +476,12 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
 }
 
 function personalColorMatchBonus(itemHex, personalColorKey) {
-  const pc = PERSONAL_COLOR_INFO[personalColorKey];
+  const macroKey = resolveMacroPersonalColor(personalColorKey);
+  const pc = PERSONAL_COLOR_INFO[macroKey];
   if (!pc || !itemHex) return 0;
   let best = 0;
   for (const targetHex of pc.bestHexes) {
-    const sim = colorSimilarityScore(itemHex, targetHex);
+    const sim = computeColorSimilarityRatio(itemHex, targetHex);
     if (sim > best) best = sim;
   }
   return Math.round(best * 18);
@@ -478,13 +500,20 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
 
   const bodyMetrics = computeBodyMetrics(userProfile || {});
   const personalColorKey = userProfile?.personal_color || userProfile?.personalColor || 'autumn_warm';
-  const pcInfo = PERSONAL_COLOR_INFO[personalColorKey] || PERSONAL_COLOR_INFO.autumn_warm;
+  const macroPersonalColor = resolveMacroPersonalColor(personalColorKey);
+  const pcLabels = getPersonalColorLabels(personalColorKey);
+  const pcInfo = PERSONAL_COLOR_INFO[macroPersonalColor] || PERSONAL_COLOR_INFO.autumn_warm;
+  const pcDisplayLabel =
+    pcLabels.ko && pcLabels.en ? `${pcLabels.ko} (${pcLabels.en})` : pcInfo.labelKo;
 
   const wornYesterdayIds = new Set();
   if (recentLogs.length > 0) {
     try {
-      const latestIds = JSON.parse(recentLogs[0].item_ids || '[]');
-      latestIds.forEach((id) => wornYesterdayIds.add(id));
+      const rawIds = recentLogs[0]?.item_ids;
+      const latestIds = Array.isArray(rawIds) ? rawIds : JSON.parse(rawIds || '[]');
+      if (Array.isArray(latestIds)) {
+        latestIds.forEach((id) => wornYesterdayIds.add(Number(id)));
+      }
     } catch {
       // ignore parse errors
     }
@@ -527,7 +556,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       score += 10;
     }
 
-    // Personal color harmony boost
+    // Personal color harmony boost (supports 12-subtype -> 4-season macro resolver)
     score += personalColorMatchBonus(item.color_hex, personalColorKey);
 
     if (wornYesterdayIds.has(item.id)) {
@@ -595,8 +624,14 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     const chosenTop = pickBest('top', idx);
     const chosenBottom = pickBest('bottom', idx);
     const chosenShoes = pickBest('shoes', isRainy ? 0 : idx);
-    const chosenHeadwear = (needWarmAcc || idx === 2 || weather.tempMax >= 23) ? pickBest('headwear', idx) : pickBest('headwear', idx);
-    const chosenNeckwear = (needWarmAcc || theme.formality === 'formal') ? pickBest('neckwear', idx) : pickBest('neckwear', idx);
+    const chosenHeadwear =
+      needWarmAcc || idx === 2 || weather.tempMax >= 23
+        ? pickBest('headwear', idx)
+        : pickBest('headwear', idx);
+    const chosenNeckwear =
+      needWarmAcc || theme.formality === 'formal'
+        ? pickBest('neckwear', idx)
+        : pickBest('neckwear', idx);
     const chosenGloves = needWarmAcc ? pickBest('gloves', idx) : pickBest('gloves', idx);
     const chosenUnderwear = pickBest('underwear', idx);
     const chosenSocks = pickBest('socks', idx);
@@ -654,7 +689,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       }
 
       reasons.push(
-        `[${pcInfo.labelKo} · ${bodyMetrics.shapeShortKo}(${bodyMetrics.chestCm}-${bodyMetrics.waistCm}-${bodyMetrics.hipCm}cm)] ${bodyMetrics.stylingAdvice}`
+        `[${pcDisplayLabel} · ${bodyMetrics.shapeShortKo}(${bodyMetrics.chestCm}-${bodyMetrics.waistCm}-${bodyMetrics.hipCm}cm)] ${bodyMetrics.stylingAdvice}`
       );
 
       const pcSync = Math.min(
@@ -696,19 +731,27 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     weather: {
       ...weather,
       avgTemp,
+      tempC: avgTemp,
       diurnalSwing,
       isRainy,
+      isRaining: isRainy,
       isWindy,
+      humidity: weather.humidity ?? (isRainy ? 78 : 50),
+      summary: weatherTip,
       weatherTip,
     },
     stylingProfile: {
       personalColor: personalColorKey,
-      personalColorLabel: pcInfo.labelKo,
+      personalColorMacro: macroPersonalColor,
+      personalColorLabel: pcDisplayLabel,
       personalColorAdvice: pcInfo.adviceKo,
       skinToneHex: userProfile?.skin_tone_hex || userProfile?.skinToneHex || '#E2C6AE',
       ...bodyMetrics,
     },
-    cities: Object.entries(CITY_COORDS).map(([key, val]) => ({ key, name: val.name })),
+    cities: ORDERED_CITY_KEYS.filter((k) => CITY_MAP[k]).map((key) => ({
+      key,
+      name: CITY_MAP[key].name,
+    })),
     scenarios: [
       { key: 'live', label: '실시간 내일 예보' },
       ...Object.entries(WEATHER_SCENARIOS).map(([key, val]) => ({ key, label: val.label })),
@@ -718,21 +761,10 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
 }
 
 export function getCategoryLabel(cat) {
-  const map = {
-    headwear: '모자 · 헤드웨어',
-    neckwear: '목도리 · 스카프 · 타이',
-    outer: '아우터',
-    top: '상의',
-    bottom: '하의',
-    dress: '원피스',
-    gloves: '장갑',
-    underwear: '언더웨어 · 이너',
-    socks: '양말',
-    shoes: '신발',
-    accessory: '가방 · 액세서리',
-    bag: '가방 · 액세서리',
-  };
-  return map[cat] || cat;
+  const slot = WEAR_SLOTS_11.find((s) => s.key === cat);
+  if (slot) return slot.shortKo || slot.labelKo;
+  if (cat === 'bag') return '가방 · 액세서리';
+  return cat;
 }
 
 export function getSubcategoryLabel(sub) {
@@ -782,75 +814,6 @@ export function getSubcategoryLabel(sub) {
   return map[sub] || sub;
 }
 
-const MANIFEST_GLB_BY_SUB = {
-  beanie: { slotKey: 'headwear', baseGlb: 'headwear_beanie', physicsPreset: 'rigid_fitted' },
-  cap: { slotKey: 'headwear', baseGlb: 'headwear_cap', physicsPreset: 'rigid_fitted' },
-  beret: { slotKey: 'headwear', baseGlb: 'headwear_beret', physicsPreset: 'rigid_fitted' },
-  bucket_hat: { slotKey: 'headwear', baseGlb: 'headwear_fedora', physicsPreset: 'rigid_fitted' },
-  scarf: { slotKey: 'neckwear', baseGlb: 'neckwear_scarf', physicsPreset: 'soft_jiggle_muffler' },
-  muffler: { slotKey: 'neckwear', baseGlb: 'neckwear_scarf', physicsPreset: 'soft_jiggle_muffler' },
-  necktie: { slotKey: 'neckwear', baseGlb: 'neckwear_tie', physicsPreset: 'soft_jiggle_tie' },
-  trench: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
-  coat: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
-  blazer: { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'drape_wind_garment' },
-  jacket: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' },
-  padding: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
-  cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'drape_wind_garment' },
-  knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'drape_wind_garment' },
-  shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
-  blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
-  tshirt: { slotKey: 'top', baseGlb: 'top_tshirt', physicsPreset: 'drape_wind_garment' },
-  sweatshirt: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'drape_wind_garment' },
-  slacks: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
-  chinos: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
-  denim: { slotKey: 'bottom', baseGlb: 'bottom_denim', physicsPreset: 'rigid_fitted' },
-  skirt: { slotKey: 'bottom', baseGlb: 'bottom_skirt', physicsPreset: 'hem_sway_skirt' },
-  shorts: { slotKey: 'bottom', baseGlb: 'bottom_shorts', physicsPreset: 'drape_wind_garment' },
-  dress: { slotKey: 'dress', baseGlb: 'dress_shift', physicsPreset: 'hem_sway_skirt' },
-  onepiece: { slotKey: 'dress', baseGlb: 'dress_onepiece', physicsPreset: 'hem_sway_skirt' },
-  gloves: { slotKey: 'gloves', baseGlb: 'gloves_short', physicsPreset: 'rigid_fitted' },
-  leather_gloves: { slotKey: 'gloves', baseGlb: 'gloves_short', physicsPreset: 'rigid_fitted' },
-  inner_top: { slotKey: 'underwear', baseGlb: 'underwear_top', physicsPreset: 'rigid_fitted' },
-  underwear: { slotKey: 'underwear', baseGlb: 'underwear_briefs', physicsPreset: 'rigid_fitted' },
-  crew_socks: { slotKey: 'socks', baseGlb: 'socks_crew', physicsPreset: 'rigid_fitted' },
-  socks: { slotKey: 'socks', baseGlb: 'socks_ankle', physicsPreset: 'rigid_fitted' },
-  sneakers: { slotKey: 'shoes', baseGlb: 'shoes_sneakers', physicsPreset: 'rigid_fitted' },
-  loafers: { slotKey: 'shoes', baseGlb: 'shoes_loafers', physicsPreset: 'rigid_fitted' },
-  boots: { slotKey: 'shoes', baseGlb: 'shoes_boots', physicsPreset: 'rigid_fitted' },
-  heels: { slotKey: 'shoes', baseGlb: 'shoes_heels', physicsPreset: 'rigid_fitted' },
-  briefcase: { slotKey: 'accessory', baseGlb: 'accessory_briefcase', physicsPreset: 'pendulum_briefcase' },
-  tote: { slotKey: 'accessory', baseGlb: 'accessory_tote', physicsPreset: 'pendulum_tote' },
-  bag: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_crossbody' },
-  watch: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
-  belt: { slotKey: 'accessory', baseGlb: 'accessory_belt', physicsPreset: 'rigid_fitted' },
-  glasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
-};
-
-export function resolveManifestSlotAndGlb(category = 'top', subcategory = 'knit') {
-  const cleanCat = String(category || 'top').toLowerCase();
-  const cleanSub = String(subcategory || '').toLowerCase();
-  if (MANIFEST_GLB_BY_SUB[cleanSub]) {
-    if (cleanCat === 'outer' && cleanSub === 'cardigan') {
-      return { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' };
-    }
-    return MANIFEST_GLB_BY_SUB[cleanSub];
-  }
-  const fallbackByCat = {
-    headwear: MANIFEST_GLB_BY_SUB.cap,
-    neckwear: MANIFEST_GLB_BY_SUB.scarf,
-    outer: MANIFEST_GLB_BY_SUB.coat,
-    top: MANIFEST_GLB_BY_SUB.knit,
-    bottom: MANIFEST_GLB_BY_SUB.slacks,
-    dress: MANIFEST_GLB_BY_SUB.dress,
-    gloves: MANIFEST_GLB_BY_SUB.gloves,
-    underwear: MANIFEST_GLB_BY_SUB.inner_top,
-    socks: MANIFEST_GLB_BY_SUB.crew_socks,
-    shoes: MANIFEST_GLB_BY_SUB.sneakers,
-    accessory: MANIFEST_GLB_BY_SUB.bag,
-  };
-  return fallbackByCat[cleanCat] || MANIFEST_GLB_BY_SUB.knit;
-}
-
 export function buildTripPackingList({
   destination = '도쿄',
   startDate,
@@ -862,15 +825,20 @@ export function buildTripPackingList({
   const e = endDate ? new Date(endDate) : new Date(Date.now() + 2 * 86400000);
   const days = Math.max(1, Math.min(21, Math.round((e - s) / 86400000) + 1));
 
-  const targetTemp = climate === 'cold' ? 3 : climate === 'warm' ? 25 : climate === 'rainy' ? 13 : 16;
+  const targetTemp =
+    climate === 'cold' ? 3 : climate === 'warm' ? 25 : climate === 'rainy' ? 13 : 16;
   const active = garments.filter((g) => g.status === 'active');
 
   const pickByCat = (cat, limit) => {
     return [...active]
       .filter((g) => g.category === cat)
       .sort((a, b) => {
-        const fitA = Math.abs(((a.min_temp + a.max_temp) / 2) - targetTemp) - (climate === 'rainy' && a.water_resistant ? 8 : 0);
-        const fitB = Math.abs(((b.min_temp + b.max_temp) / 2) - targetTemp) - (climate === 'rainy' && b.water_resistant ? 8 : 0);
+        const fitA =
+          Math.abs((a.min_temp + a.max_temp) / 2 - targetTemp) -
+          (climate === 'rainy' && a.water_resistant ? 8 : 0);
+        const fitB =
+          Math.abs((b.min_temp + b.max_temp) / 2 - targetTemp) -
+          (climate === 'rainy' && b.water_resistant ? 8 : 0);
         return fitA - fitB;
       })
       .slice(0, limit);
@@ -934,4 +902,3 @@ export function buildTripPackingList({
 
   return { days, items };
 }
-
