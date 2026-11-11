@@ -1,44 +1,60 @@
 # A inventory
 
-저장되어 있는 내 옷장을 기반으로 **오프라인 쇼핑 시 중복 구매 여부를 판독해 의사결정을 지지**하고, **내일의 날씨 예보에 맞춰 이미 보유한 옷으로 최적의 스타일링을 추천**하는 스마트 디지털 옷장 아틀리에입니다.
+플레이스토어 · 앱스토어 출시 규격 및 **Apple HIG(Human Interface Guidelines)** 무채색 미니멀 디자인 시스템을 적용한 3D 디지털 옷장 · AI 스타일링 · 오프라인 쇼핑 중복 판독 아틀리에입니다.
 
-## 주요 기능 (v0.1 초안)
+## 핵심 기능 요약
 
-1. **오프라인 쇼핑 구매 판독기 (`쇼핑 판독기`)**
-   - 오프라인 매장에서 새 옷 사진을 촬영·업로드하면 사진 중앙 영역에서 대표 색상을 자동 추출하고, CIELAB 지각 색차($\Delta E$) 및 카테고리·세부 실루엣 기반으로 내 옷장 속 유사 아이템 개수를 판독합니다.
-   - `구매 적극 추천` / `신중 비교` / `중복 구매 주의` 3단계 의사결정 배지와 함께 보유 아이템과의 즉시 매칭 시뮬레이션 및 충동구매 방어 절약 금액을 기록합니다.
-2. **내일의 날씨 맞춤 스타일링 (`내일 날씨 코디`)**
-   - 실시간 기상 예보(Open-Meteo API 연동) 및 날씨 시나리오 시뮬레이터를 통해 기온·일교차·강수 확률·전날 착용 이력을 반영한 3가지 맞춤 코디를 제안합니다.
-3. **3대 레퍼런스 서비스(Acloset · GetWardrobe · Whering) 공통 핵심 기능**
-   - **디지털 옷장**: 부부 멀티 옷장 분리(`남편 옷장` / `와이프 옷장` / `공용`), 카테고리·컬러·적정 기온·생활 발수 여부·세탁중 상태 관리
-   - **코디 스튜디오 (Dress Me)**: 특정 아이템을 잠금(Lock)하고 나머지를 랜덤 매칭하는 슬롯 보드 및 룩북 저장
-   - **착용 캘린더 & CPW 리포트**: 날짜별 OOTD 착용 기록, 1회 착용당 비용(CPW) 랭킹, 서랍 속 잠자는 옷 알림, 컬러 분포 분석
-4. **어드민 & 맥미니 M2 서버 콘솔 (`어드민 · 맥미니 서버`)**
-   - 테스터 계정 발급·관리 및 SQLite 현황 확인
+1. **Apple HIG 무채색 미니멀 3D 스튜디오 & 경량 물리 엔진**
+   - 라이트(`#FFFFFF` · `#F5F5F7`) / OLED 다크(`#000000` · `#1C1C1E`) 무경계 8pt 그리드 디자인 및 고정폭 수치(`tabular-nums`) 적용
+   - 21-Bone 스켈레탈 모션(`idle`, `walk`, `wave`, 날씨 연동 `umbrella`, 장갑 인스펙션 `pose_hands`), 28종 체형 모프 타겟, PCCS 12톤 퍼스널컬러 마네킹 동기화
+   - 머플러·스카프·서류가방·토트백·코트·스커트 본 기반 경량 `SpringBone` 물리 및 `webglcontextlost` 자동 복구 + 2D 콜라주 폴백 뷰어
+2. **AI 의류 등록 파이프라인 (포토 크롭 → 자동 누끼 · WebP 압축 · 11슬롯 매핑)**
+   - 사진 촬영·업로드 직후 8-핸들 스마트 크롭 에디터 자동 실행, 에지 알파 매팅 배경 제거 및 `image/webp` 압축 정규화
+   - 대분류·소분류, 주요 색상, 계절감, 원단(`cotton`, `denim`, `knit`, `leather`, `wool`, `silk`, `padding`) 자동 추론 및 베이스 3D GLB + PBR 노멀/러프니스 동적 합성
+3. **벤치마크(Acloset · GetWardrobe · Whering) 리텐션 & 오프라인 우선 동기화**
+   - 날짜별 OOTD 착용 기록(`worn`) · 미래 코디 예약(`planned`, `.ics` 내보내기) · 여행 기간/목적지별 짐싸기 체크리스트
+   - 애플 피트니스 스타일 벤토 인사이트 카드(1회 착용 비용 `CPW`, 미착용 방치 알림, 색상·카테고리 편중도 리포트)
+   - 비로그인 **샘플 옷장 체험 모드** 분리 및 로그인 사용자용 빈 옷장 온보딩 + **IndexedDB 오프라인 우선(Offline-first)** 동기화
+4. **모바일 스토어 심사 · 보안 가드레일 & Capacitor 패키징**
+   - **Sign in with Apple**, 이메일 6자리 OTP 인증(60초 재발송 쿨다운 · 시도 횟수 Rate Limit), 계정 설정 내 **회원 탈퇴 및 개인 데이터 즉시 영구 파기**
+   - 카메라·갤러리 사전 권한 안내 모달 및 안면 피부톤(`FaceLandmarker` WASM 지연 로딩) 로컬 처리 사전 동의
+   - Capacitor 정식 설정(`com.ainventory.app`, `android/` 네이티브 프로젝트 포함)
 
-## 기본 로그인 계정
+---
 
-| 구분 | 아이디 | 비밀번호 | 기본 연결 옷장 |
-| --- | --- | --- | --- |
-| 어드민 (남편) | `admin` | `admin` | 남편 옷장 |
-| 테스터 (와이프) | `wife` | `wife1234` | 와이프 옷장 |
+## 다른 컴퓨터(Mac / Windows / Linux)에서 바로 열기 & 실행
 
-## 개발 환경 실행 (여러 PC에서 Antigravity + Git 작업 시)
-
-Node.js 22.5+ (권장 Node 24 LTS, 네이티브 빌드 불필요한 `node:sqlite` 내장 사용)
+**권장 환경**: Node.js 20.19+ 또는 Node.js 22 / 24 LTS (`sql.js` 순수 WASM SQLite 내장으로 별도 네이티브 DB 빌드 불필요)
 
 ```bash
+git clone https://github.com/RaymandooMoon/Ainventory.git
+# 이미 클론되어 있다면:
+# git pull origin main
+
+cd Ainventory
 npm install
 npm run dev
 ```
 
-## 집 Mac mini M2 홈서버 프로덕션 실행 (베타 배포 시)
+- 실행 후 브라우저에서 로컬 개발 서버(`http://localhost:5173`)로 접속하면 프론트엔드와 내장 API 서버(`/api/*`)가 함께 동작합니다.
+- 초기 진입 화면에서 **샘플 옷장 체험 모드**로 즉시 테스트하거나, 이메일 OTP(로컬 개발 시 `data/outbox/` 및 화면 안내로 확인 가능) / Apple 로그인 / 기본 데모 계정(`admin` / `admin`, `wife` / `wife1234`)을 사용할 수 있습니다.
+
+## 주요 명령어
 
 ```bash
-git pull origin main
-npm install
+# 개발 서버 실행 (Vite + Express API 통합)
+npm run dev
+
+# 프로덕션 빌드 및 정적/API 서버 단독 실행
 npm run build
 PORT=3000 npm start
-```
 
-외부 모바일 접속은 **Tailscale** 또는 **Cloudflare Tunnel** 연결 후 아이폰 Safari / 안드로이드 Chrome에서 **"홈 화면에 추가(PWA)"** 로 설치하면 네이티브 앱처럼 전체 화면 및 카메라 촬영 기능을 사용할 수 있습니다.
+# 코드 정적 분석 (oxlint)
+npm run lint
+
+# Capacitor Android 웹 에셋 빌드 및 네이티브 동기화
+npm run cap:sync
+
+# 무인 모바일 E2E 검증 스위트 (최초 1회 브라우저 설치 시: npx playwright install chromium)
+npm run test:e2e
+```
