@@ -104,6 +104,13 @@ export default function App() {
     const checkSession = async () => {
       try {
         setSampleDemoMode(false);
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('login') === '1') {
+          setStoredToken('');
+          window.history.replaceState({}, '', window.location.pathname);
+          setBooting(false);
+          return;
+        }
         if (!getStoredToken()) {
           setBooting(false);
           return;

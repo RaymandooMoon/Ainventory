@@ -15,6 +15,7 @@ app.get('/{*splat}', (_req, res) => {
   res.sendFile(path.join(distDir, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[A inventory] Server listening on http://0.0.0.0:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`[A inventory] Server listening on http://localhost:${PORT}`);
 });
+server.keepAliveTimeout = 65000;
