@@ -99,12 +99,12 @@ export class SpringBoneSystem {
     this.handBagSpring = new SpringBoneConstraint({
       name: 'handSocketBag',
       stiffness: 26.0,
-      damping: 4.6,
-      minRx: -0.36,
-      maxRx: 0.36,
-      minRz: 0.03,
-      maxRz: 0.32,
-      restRollRad: 0.11,
+      damping: 4.8,
+      minRx: -0.32,
+      maxRx: 0.32,
+      minRz: 0.015,
+      maxRz: 0.26,
+      restRollRad: 0.065,
     });
   }
 

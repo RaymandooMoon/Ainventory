@@ -103,6 +103,19 @@ def _finalize_bmesh(name, bm):
     return obj, co.reshape(-1, 3).astype(np.float64)
 
 
+def _torso_body_indices(base_H, body_idx):
+    """Return subset of `body_idx` strictly on the trunk/pelvis/shoulders (excluding arms & hands)."""
+    pts = base_H[body_idx]
+    ax = np.abs(pts[:, 0])
+    y = pts[:, 1]   # Blender -Y is front (+Z in Three.js), +Y is back (-Z in Three.js)
+    z = pts[:, 2]   # Blender +Z is vertical up (+Y in Three.js)
+    low = (z >= 0.64) & (z < 1.16) & (ax < 0.205) & (y > -0.165)
+    mid = (z >= 1.16) & (z < 1.32) & (ax < 0.174)
+    top = (z >= 1.32) & (z <= 1.41) & (ax < 0.168)
+    mask = low | mid | top
+    return body_idx[mask]
+
+
 def _body_slice_ring(B, z0, dz=0.018, n_angles=48, pad=0.008):
     m = np.abs(B[:, 2] - z0) < dz
     pts = B[m]
@@ -117,6 +130,7 @@ def _body_slice_ring(B, z0, dz=0.018, n_angles=48, pad=0.008):
         r += pad
         out[i] = [r * math.cos(th), r * math.sin(th), z0]
     return out
+
 
 
 def _add_grid_tube(bm, rings, closed=True, rgba=None, cap_ends=False):
@@ -403,54 +417,223 @@ def build_procedural(kind, base_H, body_idx, fc, basemesh):
         return obj, RigidOriginFit(co)
 
     if kind == "bag":
-        # Structured saddle crossbody bag beside the left hip + curved flap + silver buckle + strap
-        hip_ring = _body_slice_ring(B, 0.86, dz=0.02, n_angles=36, pad=0.022)
-        x_hip = hip_ring[:, 0].max() + 0.048
-        z_bag = 0.80
+        # Structured luxury saddle crossbody bag flush on left hip + D-rings + body-contouring strap
+        torso_idx = _torso_body_indices(base_H, body_idx)
+        B_torso = base_H[torso_idx]
+
+        hip_pts = B_torso[(B_torso[:, 2] > 0.78) & (B_torso[:, 2] < 0.89) & (np.abs(B_torso[:, 1]) < 0.07)]
+        x_hip_skin = float(np.percentile(hip_pts[:, 0], 92)) if len(hip_pts) else 0.165
+        x_inner_base = x_hip_skin - 0.002
+
+        z_bot = 0.748
+        z_top = 0.906
+        z_bag = 0.5 * (z_bot + z_top)
+        y_center = 0.010  # Centered on side hip while clearing forward-hanging left palm
+
+        # 1. Sculpted saddle pouch with natural inward top lean hugging waist/hip taper
         bag_rings = []
-        for kz, z in enumerate(np.linspace(z_bag - 0.095, z_bag + 0.095, 9)):
-            u = (kz - 4) / 4.0
-            # Saddle curve: softly rounded bottom, crisp top
-            s_y = 1.0 - (0.18 * u * u if u < 0 else 0.04 * u * u)
-            w, d = 0.042 * (1.0 - 0.08 * u * u), 0.118 * s_y
-            th = np.linspace(0, 2 * math.pi, 28, endpoint=False)
-            rx = x_hip + w * np.sign(np.cos(th)) * (np.abs(np.cos(th)) ** 0.58)
-            ry = -0.012 + d * np.sign(np.sin(th)) * (np.abs(np.sin(th)) ** 0.58)
+        n_z = 11
+        th = np.linspace(0, 2 * math.pi, 32, endpoint=False)
+        for kz, z in enumerate(np.linspace(z_bot, z_top, n_z)):
+            v_norm = kz / (n_z - 1)           # 0 at bottom -> 1 at top
+            u = (kz - (n_z - 1) * 0.5) / ((n_z - 1) * 0.5)  # -1 .. +1
+            if u < 0.0:
+                s_y = math.sqrt(max(0.22, 1.0 - 0.74 * (u * u)))
+            else:
+                s_y = 1.0 - 0.04 * (u * u)
+            w = 0.029 * (1.0 - 0.16 * v_norm)  # 5.8cm gusset at base -> 4.9cm at top
+            d = 0.094 * s_y                    # 18.8cm front-to-back saddle width
+            x_c = (x_inner_base + w) - 0.016 * v_norm
+            rx = x_c + w * np.sign(np.cos(th)) * (np.abs(np.cos(th)) ** 0.62)
+            ry = y_center + d * np.sign(np.sin(th)) * (np.abs(np.sin(th)) ** 0.58)
             bag_rings.append(np.column_stack([rx, ry, np.full_like(th, z)]))
         _add_grid_tube(bm, bag_rings, closed=True, rgba=zone_primary(0.97), cap_ends=True)
 
-        # Outer flap & gleaming silver clasp hardware on +X side
-        _add_box(bm, (x_hip + 0.006, -0.012, z_bag + 0.038), (0.088, 0.215, 0.105), zone_primary(1.0), bevel_segments=2, bevel_width=0.010)
-        _add_box(bm, (x_hip + 0.052, -0.012, z_bag - 0.008), (0.010, 0.034, 0.034), ZONE_METAL, bevel_segments=1, bevel_width=0.003)
+        # 2. Curved exterior saddle flap + center leather tab + brushed palladium magnetic clasp
+        flap_rings = []
+        z_flap_bot = z_bag - 0.018
+        z_flap_top = z_top + 0.003
+        for kz, z in enumerate(np.linspace(z_flap_bot, z_flap_top, 8)):
+            v_f = kz / 7.0
+            u_f = 1.0 - v_f
+            s_y = math.sqrt(max(0.28, 1.0 - 0.68 * (u_f * u_f)))
+            d_f = 0.089 * s_y
+            z_ratio = np.clip((z - z_bot) / (z_top - z_bot), 0.0, 1.0)
+            w_pouch = 0.029 * (1.0 - 0.16 * z_ratio)
+            x_c = (x_inner_base + w_pouch) - 0.016 * z_ratio
+            x_outer = x_c + w_pouch + 0.0025
+            rx = x_outer + 0.0032 * np.cos(th)
+            ry = y_center + d_f * np.sin(th)
+            flap_rings.append(np.column_stack([rx, ry, np.full_like(th, z)]))
+        _add_grid_tube(bm, flap_rings, closed=True, rgba=zone_primary(1.0), cap_ends=True)
 
-        # Crossbody strap + metallic shoulder buckle
-        sh_ring = _body_slice_ring(B, 1.34, dz=0.02, n_angles=36, pad=0.018)
-        x_sh = sh_ring[:, 0].min() * 0.52
-        strap_pts = []
-        for t in np.linspace(0, 2 * math.pi, 52, endpoint=False):
-            u = 0.5 * (1 - math.cos(t))
-            x = x_hip * (1 - u) + x_sh * u
-            z = (z_bag + 0.09) * (1 - u) + 1.365 * u
-            ring = _body_slice_ring(B, z, dz=0.025, n_angles=36, pad=0.016)
-            idx = np.argmin((ring[:, 0] - x) ** 2 + (ring[:, 1] - (0.09 * math.sin(t))) ** 2)
-            p = ring[idx].copy()
-            p[0] = x
-            strap_pts.append(p)
-        strap_pts = np.array(strap_pts)
-        r1 = strap_pts + np.array([-0.012, -0.0025, 0])
-        r2 = strap_pts + np.array([0.012, -0.0025, 0])
-        r3 = strap_pts + np.array([0.012, 0.0030, 0])
-        r4 = strap_pts + np.array([-0.012, 0.0030, 0])
-        _add_grid_tube(bm, [r1, r2, r3, r4, r1], closed=True, rgba=zone_primary(0.93))
+        w_mid = 0.029 * (1.0 - 0.08)
+        x_clasp = (x_inner_base + w_mid) - 0.006 + w_mid
+        _add_box(bm, (x_clasp + 0.002, y_center, z_flap_bot + 0.014), (0.007, 0.026, 0.040), zone_primary(0.91), bevel_segments=1, bevel_width=0.002)
+        _add_box(bm, (x_clasp + 0.005, y_center, z_flap_bot - 0.002), (0.009, 0.030, 0.028), ZONE_METAL, bevel_segments=1, bevel_width=0.0025)
+
+        # 3. Front & back leather gusset tabs + brushed silver D-rings tucked along tension line
+        w_top = 0.029 * 0.84
+        x_top_c = (x_inner_base + w_top) - 0.016 - 0.005
+        y_d_front = y_center - 0.062
+        y_d_back = y_center + 0.062
+        for yd in (y_d_front, y_d_back):
+            _add_box(bm, (x_top_c, yd, z_top + 0.002), (0.010, 0.018, 0.020), zone_primary(0.90), bevel_segments=1, bevel_width=0.002)
+            _add_box(bm, (x_top_c, yd, z_top + 0.012), (0.007, 0.022, 0.011), ZONE_METAL, bevel_segments=1, bevel_width=0.002)
+
+        # 4. Taut geodesic torso-hugging crossbody strap (front D-ring -> right clavicle -> back D-ring)
+        x_sh = -0.128  # Outside scarf collar (-0.118) and inside right arm joint (-0.174)
+        sh_pts = B_torso[(B_torso[:, 0] > -0.144) & (B_torso[:, 0] < -0.112) & (B_torso[:, 2] > 1.25)]
+        z_sh_peak = (float(np.percentile(sh_pts[:, 2], 98)) if len(sh_pts) else 1.351) + 0.009
+        y_sh_mid = (float(np.median(sh_pts[:, 1])) if len(sh_pts) else 0.010) - 0.004
+
+        p_start = np.array([x_top_c - 0.002, y_d_front, z_top + 0.013])
+        p_sh = np.array([x_sh, y_sh_mid, z_sh_peak])
+        p_end = np.array([x_top_c - 0.002, y_d_back, z_top + 0.013])
+
+        def _query_torso_surface_y(xq, zq, is_front):
+            for x_win in (0.020, 0.036):
+                sel = (np.abs(B_torso[:, 0] - xq) < x_win) & (np.abs(B_torso[:, 2] - zq) < 0.030)
+                if is_front:
+                    sel &= B_torso[:, 1] < 0.035
+                    if np.any(sel):
+                        return float(np.percentile(B_torso[sel, 1], 6)) - 0.009
+                else:
+                    sel &= B_torso[:, 1] > -0.035
+                    if np.any(sel):
+                        return float(np.percentile(B_torso[sel, 1], 94)) + 0.009
+            return -0.115 if is_front else 0.088
+
+        def _query_shoulder_top_z(xq, yq):
+            sel = (np.abs(B_torso[:, 0] - xq) < 0.026) & (np.abs(B_torso[:, 1] - yq) < 0.026) & (B_torso[:, 2] > 1.22)
+            if np.any(sel):
+                return float(np.percentile(B_torso[sel, 2], 96)) + 0.008
+            return 0.0
+
+        n_half = 34
+        # Precompute mid-torso tangent anchor at u_tan = 0.36 so lower strap runs taut & straight from D-rings
+        u_tan = 0.36
+        ease_tan = u_tan * u_tan * (3.0 - 2.0 * u_tan)
+        x_tan_f = p_start[0] * (1.0 - ease_tan) + p_sh[0] * ease_tan
+        z_tan_f = p_start[2] * (1.0 - u_tan) + p_sh[2] * (u_tan ** 0.92)
+        y_tan_f = _query_torso_surface_y(x_tan_f, z_tan_f, is_front=True)
+
+        v_tan = 1.0 - u_tan
+        ease_vtan = v_tan * v_tan * (3.0 - 2.0 * v_tan)
+        x_tan_b = p_sh[0] * (1.0 - ease_vtan) + p_end[0] * ease_vtan
+        z_tan_b = p_sh[2] * ((1.0 - v_tan) ** 0.92) + p_end[2] * v_tan
+        y_tan_b = _query_torso_surface_y(x_tan_b, z_tan_b, is_front=False)
+
+        curve_pts = []
+        # Front diagonal path: p_start -> p_sh
+        for k in range(n_half + 1):
+            u = k / float(n_half)
+            ease = u * u * (3.0 - 2.0 * u)
+            xq = p_start[0] * (1.0 - ease) + p_sh[0] * ease
+            zq = p_start[2] * (1.0 - u) + p_sh[2] * (u ** 0.92)
+            y_surf = _query_torso_surface_y(xq, zq, is_front=True)
+            if u < u_tan:
+                t_c = u / u_tan
+                y_chord = p_start[1] * (1.0 - t_c) + y_tan_f * t_c
+                yq = min(y_chord, y_surf) if u > 0.14 else y_chord
+            else:
+                yq = y_surf
+            w_sh = max(0.0, (u - 0.82) / 0.18)
+            yq = yq * (1.0 - w_sh * w_sh) + p_sh[1] * (w_sh * w_sh)
+            if u > 0.72:
+                zq = max(zq, _query_shoulder_top_z(xq, yq))
+            curve_pts.append([xq, yq, zq])
+
+        # Back diagonal path: p_sh -> p_end
+        for k in range(1, n_half + 1):
+            v = k / float(n_half)
+            ease = v * v * (3.0 - 2.0 * v)
+            xq = p_sh[0] * (1.0 - ease) + p_end[0] * ease
+            zq = p_sh[2] * ((1.0 - v) ** 0.92) + p_end[2] * v
+            y_surf = _query_torso_surface_y(xq, zq, is_front=False)
+            if v > v_tan:
+                t_c = (v - v_tan) / (1.0 - v_tan)
+                y_chord = y_tan_b * (1.0 - t_c) + p_end[1] * t_c
+                yq = max(y_chord, y_surf) if v < 0.86 else y_chord
+            else:
+                yq = y_surf
+            w_sh = max(0.0, 1.0 - v / 0.18)
+            yq = yq * (1.0 - w_sh * w_sh) + p_sh[1] * (w_sh * w_sh)
+            if v < 0.28:
+                zq = max(zq, _query_shoulder_top_z(xq, yq))
+            curve_pts.append([xq, yq, zq])
+
+        curve_pts = np.array(curve_pts, dtype=np.float64)
+        # Smooth interior curve points while enforcing strict non-penetration against B_torso
+        for _ in range(3):
+            sm = curve_pts.copy()
+            sm[1:-1] = 0.25 * curve_pts[:-2] + 0.50 * curve_pts[1:-1] + 0.25 * curve_pts[2:]
+            for idx_p in range(3, len(sm) - 3):
+                px, py, pz = sm[idx_p]
+                near = B_torso[(np.abs(B_torso[:, 0] - px) < 0.022) & (np.abs(B_torso[:, 2] - pz) < 0.024)]
+                if len(near):
+                    d_vec = np.array([px, py, pz]) - near
+                    dists = np.linalg.norm(d_vec, axis=1)
+                    k_min = int(np.argmin(dists))
+                    if dists[k_min] < 0.008:
+                        out_dir = np.array([px * 0.75, py, max(0.0, pz - 1.25) * 1.4])
+                        nrm_len = np.linalg.norm(out_dir)
+                        if nrm_len > 1e-6:
+                            sm[idx_p] += (out_dir / nrm_len) * (0.0085 - dists[k_min])
+            curve_pts = sm
+
+        # Build surface-aligned 8-point beveled leather ribbon cross-section along curve_pts
+        cs_angles = np.linspace(0, 2 * math.pi, 8, endpoint=False)
+        cs_u = 0.0105 * np.sign(np.cos(cs_angles)) * (np.abs(np.cos(cs_angles)) ** 0.55)
+        cs_v = 0.0020 * np.sign(np.sin(cs_angles)) * (np.abs(np.sin(cs_angles)) ** 0.55)
+
+        strap_rings = []
+        buckle_frame = None
+        for i in range(len(curve_pts)):
+            p = curve_pts[i]
+            tang = curve_pts[min(len(curve_pts) - 1, i + 1)] - curve_pts[max(0, i - 1)]
+            tang /= max(np.linalg.norm(tang), 1e-8)
+            # Outward torso normal: points away from spine (0, 0, z) and upward over clavicle top
+            up_shoulder = smoothstep_scalar = max(0.0, min(1.0, (p[2] - 1.24) / 0.12))
+            n_out = np.array([p[0] * 0.75, p[1] * 1.15, up_shoulder * 1.35])
+            if np.linalg.norm(n_out) < 1e-6:
+                n_out = np.array([0.0, -1.0, 0.0])
+            n_out /= np.linalg.norm(n_out)
+            b_lat = np.cross(tang, n_out)
+            if np.linalg.norm(b_lat) < 1e-6:
+                b_lat = np.array([1.0, 0.0, 0.0])
+            b_lat /= np.linalg.norm(b_lat)
+            n_orth = np.cross(b_lat, tang)
+            n_orth /= max(np.linalg.norm(n_orth), 1e-8)
+            ring = p + cs_u[:, None] * b_lat + cs_v[:, None] * n_orth
+            strap_rings.append(ring)
+            if i == 21:
+                buckle_frame = (p.copy(), tang.copy(), b_lat.copy(), n_orth.copy())
+
+        _add_grid_tube(bm, strap_rings, closed=True, rgba=zone_primary(0.93), cap_ends=True)
+
+        # 5. Brushed silver adjustment buckle on front chest strap
+        if buckle_frame is not None:
+            bp, bt, bb, bn = buckle_frame
+            b_rings = []
+            b_u = 0.0135 * np.sign(np.cos(cs_angles)) * (np.abs(np.cos(cs_angles)) ** 0.45)
+            b_v = 0.0036 * np.sign(np.sin(cs_angles)) * (np.abs(np.sin(cs_angles)) ** 0.45)
+            for ds in (-0.009, 0.009):
+                b_rings.append(bp + ds * bt + b_u[:, None] * bb + b_v[:, None] * bn)
+            _add_grid_tube(bm, b_rings, closed=True, rgba=ZONE_METAL, cap_ends=True)
+
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
         obj, co = _finalize_bmesh("garment_accessory_bag", bm)
-        return obj, NearestFit(co, base_H, body_idx)
+        return obj, NearestFit(co, base_H, torso_idx)
 
     if kind == "belt":
+        torso_idx = _torso_body_indices(base_H, body_idx)
+        B_torso = base_H[torso_idx]
         z_waist = 0.995
-        r_in_bot = _body_slice_ring(B, z_waist - 0.016, dz=0.018, n_angles=52, pad=0.004)
-        r_out_bot = _body_slice_ring(B, z_waist - 0.016, dz=0.018, n_angles=52, pad=0.010)
-        r_out_top = _body_slice_ring(B, z_waist + 0.016, dz=0.018, n_angles=52, pad=0.010)
-        r_in_top = _body_slice_ring(B, z_waist + 0.016, dz=0.018, n_angles=52, pad=0.004)
+        r_in_bot = _body_slice_ring(B_torso, z_waist - 0.016, dz=0.018, n_angles=52, pad=0.004)
+        r_out_bot = _body_slice_ring(B_torso, z_waist - 0.016, dz=0.018, n_angles=52, pad=0.010)
+        r_out_top = _body_slice_ring(B_torso, z_waist + 0.016, dz=0.018, n_angles=52, pad=0.010)
+        r_in_top = _body_slice_ring(B_torso, z_waist + 0.016, dz=0.018, n_angles=52, pad=0.004)
         _add_grid_tube(bm, [r_in_bot, r_out_bot, r_out_top, r_in_top, r_in_bot], closed=True, rgba=zone_primary(0.96))
 
         # Brushed silver rectangular frame buckle + prong + leather keeper loop at front (-Y)
@@ -465,8 +648,9 @@ def build_procedural(kind, base_H, body_idx, fc, basemesh):
         # Leather keeper loop
         _add_box(bm, (0.042, y_front + 0.002, z_waist), (0.011, 0.012, 0.036), zone_primary(0.90), bevel_segments=1, bevel_width=0.002)
 
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
         obj, co = _finalize_bmesh("garment_accessory_belt", bm)
-        return obj, NearestFit(co, base_H, body_idx)
+        return obj, NearestFit(co, base_H, torso_idx)
 
     if kind == "watch":
         hand = fc.joint(base_H, "joint-l-hand")

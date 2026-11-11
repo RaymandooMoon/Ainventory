@@ -315,6 +315,70 @@ function attachHumanoidSkinAttributes(geom, jointsMap = {}, gid = '', spec = {})
     return;
   }
 
+  // Waist belt binds strictly to PELVIS + SPINE3 (never arms/hands)
+  if (gid === 'accessory_belt') {
+    for (let i = 0; i < n; i++) {
+      const [, y] = readMeterCoord(geom, i);
+      const wSpine = smoothstep(0.97, 1.02, y) * 0.45;
+      skinIndex[i * 4] = BONE.PELVIS;
+      skinWeight[i * 4] = 1.0 - wSpine;
+      skinIndex[i * 4 + 1] = BONE.SPINE3;
+      skinWeight[i * 4 + 1] = wSpine;
+    }
+    geom.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
+    geom.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeight, 4));
+    return;
+  }
+
+  // Crossbody saddle bag: rigid hip-mounted pouch + C1-welded torso spine strap (zero arm/hand pull!)
+  if (gid === 'accessory_bag') {
+    for (let i = 0; i < n; i++) {
+      const [x, y] = readMeterCoord(geom, i);
+      const isPouch = y <= 0.918 && x > 0.145;
+      if (isPouch) {
+        skinIndex[i * 4] = BONE.PELVIS;
+        skinWeight[i * 4] = 0.80;
+        skinIndex[i * 4 + 1] = BONE.JIGGLE_HEM;
+        skinWeight[i * 4 + 1] = 0.20;
+        continue;
+      }
+
+      const wJiggle = 0.20 * smoothstep(1.00, 0.918, y) * smoothstep(0.08, 0.155, x);
+      const remain = 1.0 - wJiggle;
+      let b0 = BONE.PELVIS;
+      let b1 = BONE.SPINE3;
+      let tBlend = 0.0;
+      if (y <= 0.94) {
+        b0 = BONE.PELVIS;
+        b1 = BONE.SPINE3;
+        tBlend = 0.0;
+      } else if (y <= 1.04) {
+        b0 = BONE.PELVIS;
+        b1 = BONE.SPINE3;
+        tBlend = smoothstep(0.94, 1.04, y);
+      } else if (y <= 1.16) {
+        b0 = BONE.SPINE3;
+        b1 = BONE.SPINE2;
+        tBlend = smoothstep(1.04, 1.16, y);
+      } else {
+        b0 = BONE.SPINE2;
+        b1 = BONE.SPINE1;
+        tBlend = smoothstep(1.16, 1.28, y);
+      }
+      skinIndex[i * 4] = b0;
+      skinWeight[i * 4] = remain * (1.0 - tBlend);
+      skinIndex[i * 4 + 1] = b1;
+      skinWeight[i * 4 + 1] = remain * tBlend;
+      if (wJiggle > 0.001) {
+        skinIndex[i * 4 + 2] = BONE.JIGGLE_HEM;
+        skinWeight[i * 4 + 2] = wJiggle;
+      }
+    }
+    geom.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
+    geom.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeight, 4));
+    return;
+  }
+
   const capsules = [
     { bone: BONE.HEAD, a: j.head, b: [0, 1.62, 0.02], r: 0.095, filter: (x, y) => y > 1.38 && Math.abs(x) < 0.16 },
     { bone: BONE.NECK, a: [0, 1.30, 0.0], b: j.head, r: 0.062, filter: (x, y) => y > 1.24 && y < 1.50 && Math.abs(x) < 0.14 },
@@ -1105,17 +1169,17 @@ function cloneRuntimeGeometryWithoutMorphs(tplGeom) {
   return geom;
 }
 
-function applyMorphsToMesh(mesh, weights) {
+function applyMorphsToMesh(mesh, weights, extraCacheKey = '') {
   const tpl = mesh?.userData?.templateRef;
   if (tpl?.geometry) {
-    const weightsKey = JSON.stringify(weights || {});
-    if (mesh.userData.bakedWeightsKey === weightsKey) return;
+    const weightsKey = `${JSON.stringify(weights || {})}|${extraCacheKey}`;
+    if (mesh.userData.bakedWeightsKey === weightsKey) return false;
     mesh.userData.bakedWeightsKey = weightsKey;
 
     const tplGeom = tpl.geometry;
     const basePos = tplGeom.attributes.position;
     const targetPos = mesh.geometry.attributes.position;
-    if (!basePos || !targetPos) return;
+    if (!basePos || !targetPos) return false;
 
     const count = basePos.count;
     const dst = targetPos.array;
@@ -1153,12 +1217,12 @@ function applyMorphsToMesh(mesh, weights) {
       }
     }
     targetPos.needsUpdate = true;
-    return;
+    return true;
   }
 
   const dict = mesh.morphTargetDictionary;
   const inf = mesh.morphTargetInfluences;
-  if (!dict || !inf) return;
+  if (!dict || !inf) return false;
   for (let i = 0; i < inf.length; i++) inf[i] = 0;
   for (const [name, val] of Object.entries(weights)) {
     const idx = dict[name];
@@ -1166,7 +1230,203 @@ function applyMorphsToMesh(mesh, weights) {
       inf[idx] = val;
     }
   }
+  return true;
 }
+
+/**
+ * Dynamically conforms body-mounted leather accessories (`accessory_bag`, `accessory_belt`)
+ * to the outermost equipped torso/hip garment layer (`outer_coat`, `outer_blazer`, `outer_jacket`,
+ * `top_*`, `dress_*`, `bottom_*`) so straps never bury inside winter coats and pouches never float.
+ */
+function conformAccessoryToGarmentLayers(accMesh, gid, bodyMesh, shellMeshes = []) {
+  if (!accMesh?.geometry?.attributes?.position || !bodyMesh?.geometry?.attributes?.position) return;
+  if (!shellMeshes.length) return;
+
+  const accPos = accMesh.geometry.attributes.position;
+  const accArr = accPos.array;
+  const accCount = accPos.count;
+  const bodyPos = bodyMesh.geometry.attributes.position;
+
+  if (gid === 'accessory_belt') {
+    let maxBodyR = 0;
+    for (let i = 0; i < bodyPos.count; i++) {
+      const bx = bodyPos.getX(i);
+      const by = bodyPos.getY(i);
+      const bz = bodyPos.getZ(i);
+      if (by >= 0.96 && by <= 1.03 && Math.abs(bx) < 0.21 && bz < 0.165) {
+        const r = Math.hypot(bx, bz);
+        if (r > maxBodyR) maxBodyR = r;
+      }
+    }
+    let maxShellR = maxBodyR;
+    for (const sm of shellMeshes) {
+      const sp = sm.geometry?.attributes?.position;
+      if (!sp) continue;
+      for (let i = 0; i < sp.count; i++) {
+        const sx = sp.getX(i);
+        const sy = sp.getY(i);
+        const sz = sp.getZ(i);
+        if (sy >= 0.96 && sy <= 1.03 && Math.abs(sx) < 0.22 && sz < 0.195) {
+          const r = Math.hypot(sx, sz);
+          if (r > maxShellR) maxShellR = r;
+        }
+      }
+    }
+    const extraR = Math.max(0, Math.min(0.042, maxShellR - maxBodyR));
+    if (extraR > 0.001) {
+      for (let i = 0; i < accCount; i++) {
+        const o = i * 3;
+        const x = accArr[o];
+        const z = accArr[o + 2];
+        const r = Math.hypot(x, z);
+        if (r > 1e-4) {
+          const scale = (r + extraR) / r;
+          accArr[o] = x * scale;
+          accArr[o + 2] = z * scale;
+        }
+      }
+      accPos.needsUpdate = true;
+    }
+    return;
+  }
+
+  if (gid !== 'accessory_bag') return;
+
+  // 1. Measure left-hip lateral garment contact surface strictly at the saddle bag's mid-hip patch
+  let bagInnerMinX = Infinity;
+  for (let i = 0; i < accCount; i++) {
+    const x = accArr[i * 3];
+    const y = accArr[i * 3 + 1];
+    if (y >= 0.78 && y <= 0.87 && x > 0.13 && x < bagInnerMinX) {
+      bagInnerMinX = x;
+    }
+  }
+  let maxHipShellX = 0;
+  for (const sm of shellMeshes) {
+    const sp = sm.geometry?.attributes?.position;
+    if (!sp) continue;
+    for (let i = 0; i < sp.count; i++) {
+      const sx = sp.getX(i);
+      const sy = sp.getY(i);
+      const sz = sp.getZ(i);
+      if (sy >= 0.78 && sy <= 0.88 && sx > 0.05 && sx < 0.22 && sz >= -0.055 && sz <= 0.045) {
+        if (sx > maxHipShellX) maxHipShellX = sx;
+      }
+    }
+  }
+  const pouchShiftX =
+    bagInnerMinX < Infinity && maxHipShellX > 0
+      ? Math.max(-0.008, Math.min(0.036, maxHipShellX - 0.003 - bagInnerMinX))
+      : 0;
+
+  // 2. Measure smooth 8-band front/back torso garment thickness along diagonal strap corridor
+  const BANDS = 8;
+  const yMin = 0.90;
+  const yMax = 1.36;
+  const bandSpan = (yMax - yMin) / BANDS;
+  const bodyFrontZ = new Float32Array(BANDS);
+  const bodyBackZ = new Float32Array(BANDS);
+  const shellFrontZ = new Float32Array(BANDS);
+  const shellBackZ = new Float32Array(BANDS);
+
+  const strapCenterXAtY = (y) => {
+    const u = Math.max(0, Math.min(1, (y - 0.91) / 0.44));
+    return 0.168 * (1 - u) + -0.128 * u;
+  };
+
+  let bodyShoulderMaxY = 1.351;
+  for (let i = 0; i < bodyPos.count; i++) {
+    const bx = bodyPos.getX(i);
+    const by = bodyPos.getY(i);
+    const bz = bodyPos.getZ(i);
+    if (bx > -0.145 && bx < -0.108 && by > 1.25 && by < 1.41) {
+      if (by > bodyShoulderMaxY) bodyShoulderMaxY = by;
+    }
+    if (by < yMin || by >= yMax) continue;
+    const xLim = by < 1.16 ? 0.195 : 0.175;
+    if (Math.abs(bx) > xLim || bz > 0.165) continue;
+    if (Math.abs(bx - strapCenterXAtY(by)) > 0.056) continue;
+    const b = Math.min(BANDS - 1, Math.floor((by - yMin) / bandSpan));
+    if (bz > bodyFrontZ[b]) bodyFrontZ[b] = bz;
+    if (-bz > bodyBackZ[b]) bodyBackZ[b] = -bz;
+  }
+
+  for (let b = 0; b < BANDS; b++) {
+    shellFrontZ[b] = bodyFrontZ[b];
+    shellBackZ[b] = bodyBackZ[b];
+  }
+
+  let shellShoulderMaxY = bodyShoulderMaxY;
+  for (const sm of shellMeshes) {
+    const sp = sm.geometry?.attributes?.position;
+    if (!sp) continue;
+    for (let i = 0; i < sp.count; i++) {
+      const sx = sp.getX(i);
+      const sy = sp.getY(i);
+      const sz = sp.getZ(i);
+      if (sx > -0.148 && sx < -0.106 && sy > 1.25 && sy < 1.42) {
+        if (sy > shellShoulderMaxY) shellShoulderMaxY = sy;
+      }
+      if (sy < yMin || sy >= yMax) continue;
+      const xLim = sy < 1.18 ? 0.215 : 0.205;
+      if (Math.abs(sx) > xLim || Math.abs(sz) > 0.215) continue;
+      if (Math.abs(sx - strapCenterXAtY(sy)) > 0.060) continue;
+      const b = Math.min(BANDS - 1, Math.floor((sy - yMin) / bandSpan));
+      if (sz > shellFrontZ[b]) shellFrontZ[b] = sz;
+      if (-sz > shellBackZ[b]) shellBackZ[b] = -sz;
+    }
+  }
+
+  const rawFrontDelta = new Float32Array(BANDS);
+  const rawBackDelta = new Float32Array(BANDS);
+  for (let b = 0; b < BANDS; b++) {
+    rawFrontDelta[b] = Math.max(0, Math.min(0.052, shellFrontZ[b] - bodyFrontZ[b] - 0.002));
+    rawBackDelta[b] = Math.max(0, Math.min(0.054, shellBackZ[b] - bodyBackZ[b] - 0.002));
+  }
+  const frontDelta = new Float32Array(BANDS);
+  const backDelta = new Float32Array(BANDS);
+  for (let b = 0; b < BANDS; b++) {
+    const b0 = Math.max(0, b - 1);
+    const b2 = Math.min(BANDS - 1, b + 1);
+    frontDelta[b] = 0.25 * rawFrontDelta[b0] + 0.5 * rawFrontDelta[b] + 0.25 * rawFrontDelta[b2];
+    backDelta[b] = 0.25 * rawBackDelta[b0] + 0.5 * rawBackDelta[b] + 0.25 * rawBackDelta[b2];
+  }
+  const shoulderDeltaY = Math.max(0, Math.min(0.024, shellShoulderMaxY - bodyShoulderMaxY + 0.002));
+
+  const sampleBand = (arr, y) => {
+    const f = Math.max(0, Math.min(BANDS - 1, (y - yMin) / bandSpan - 0.5));
+    const i0 = Math.floor(f);
+    const i1 = Math.min(BANDS - 1, i0 + 1);
+    const t = f - i0;
+    return arr[i0] * (1 - t) + arr[i1] * t;
+  };
+
+  for (let i = 0; i < accCount; i++) {
+    const o = i * 3;
+    const bx = accArr[o];
+    const by = accArr[o + 1];
+    const bz = accArr[o + 2];
+
+    const isPouch = by <= 0.919 && bx > 0.130;
+    if (isPouch) {
+      accArr[o] = bx + pouchShiftX;
+      continue;
+    }
+
+    const dRingWeld = smoothstep(0.99, 0.919, by) * smoothstep(0.07, 0.145, bx);
+    const shBlend = smoothstep(1.25, 1.33, by) * smoothstep(-0.05, -0.11, bx);
+    const sideHipBlend = smoothstep(1.08, 0.919, by) * smoothstep(0.01, 0.14, bx);
+    const axialTorsoMask = smoothstep(0.975, 1.085, by) * (1.0 - dRingWeld);
+    const frontMask = smoothstep(0.005, 0.042, bz) * axialTorsoMask;
+    const backMask = smoothstep(0.005, 0.042, -bz) * axialTorsoMask;
+
+    accArr[o] = bx + pouchShiftX * Math.max(dRingWeld, sideHipBlend * 0.92);
+    accArr[o + 1] = by + shoulderDeltaY * shBlend;
+    accArr[o + 2] = bz + sampleBand(frontDelta, by) * frontMask - sampleBand(backDelta, by) * backMask;
+  }
+  accPos.needsUpdate = true;
+}
+
 
 export function resolveGarmentIdForItem(slotKey, item) {
   if (!item) return null;
@@ -1729,6 +1989,16 @@ export class Mannequin3DWebGLEngine {
     this.bones = rig.bones;
     this.characterGroup.add(rig.rootBone);
 
+    // Anatomical palm/finger grip anchors parented directly to wrist bones so
+    // handheld props (briefcase, tote, umbrella) track true palm center across every pose
+    this.leftPalmGripAnchor = new THREE.Object3D();
+    this.leftPalmGripAnchor.position.set(0.036, -0.074, 0.070);
+    this.bones[BONE.HAND_L].add(this.leftPalmGripAnchor);
+
+    this.rightPalmGripAnchor = new THREE.Object3D();
+    this.rightPalmGripAnchor.position.set(-0.036, -0.068, 0.070);
+    this.bones[BONE.HAND_R].add(this.rightPalmGripAnchor);
+
     this.leftHandSocket = new THREE.Group();
     this.characterGroup.add(this.leftHandSocket);
 
@@ -2198,6 +2468,13 @@ export class Mannequin3DWebGLEngine {
       let combinedBodyMask = null;
 
       this.interactiveMeshes = [this.bodyMesh];
+      const layerShellKey = active
+        .filter((d) => ['outer', 'top', 'dress', 'bottom'].includes(d.slotKey))
+        .map((d) => d.gid)
+        .sort()
+        .join(',');
+      const shellMeshes = [];
+      const rebakedBodyAccessories = [];
 
       for (const { slotKey, item, gid, tpl } of active) {
         const mesh = this._getOrCreateGarmentInstance(tpl, gid);
@@ -2215,7 +2492,14 @@ export class Mannequin3DWebGLEngine {
           this.isSoftwareRenderer
         );
         disposeMaterialOrArray(prevMat);
-        applyMorphsToMesh(mesh, weights);
+        const isLayerConformedAcc = gid === 'accessory_bag' || gid === 'accessory_belt';
+        const didRebake = applyMorphsToMesh(mesh, weights, isLayerConformedAcc ? layerShellKey : '');
+        if (['outer', 'top', 'dress', 'bottom'].includes(slotKey)) {
+          shellMeshes.push(mesh);
+        }
+        if (isLayerConformedAcc && didRebake) {
+          rebakedBodyAccessories.push({ mesh, gid });
+        }
 
         if (gid === 'accessory_briefcase') {
           this.springBones.handBagSpring.configure(GARMENT_3D_PHYSICS_PRESETS.pendulum_briefcase);
@@ -2241,6 +2525,10 @@ export class Mannequin3DWebGLEngine {
           }
         }
         this.interactiveMeshes.push(mesh);
+      }
+
+      for (const { mesh: accMesh, gid: accGid } of rebakedBodyAccessories) {
+        conformAccessoryToGarmentLayers(accMesh, accGid, this.bodyMesh, shellMeshes);
       }
 
       applyTriangleMask(this.bodyMesh, combinedBodyMask);
@@ -2401,6 +2689,24 @@ export class Mannequin3DWebGLEngine {
       elRZ = THREE.MathUtils.lerp(elRZ, 0.28, wHands);
     }
 
+    // 5b. Bag-aware left-arm clearance & natural carrying posture
+    if (wHands < 0.5) {
+      const freeArm = 1.0 - wHands;
+      if (this.activeAccessorySub === 'accessory_bag') {
+        // Subtle lateral clearance so the gloved left hand never brushes the hip saddle bag
+        shLZ += 0.065 * freeArm;
+        shLX -= 0.04 * freeArm;
+      } else if (
+        this.activeAccessorySub === 'accessory_briefcase' ||
+        this.activeAccessorySub === 'accessory_tote'
+      ) {
+        // Relaxed vertical bag-carrying arm so handle hangs naturally from the side palm
+        shLX = THREE.MathUtils.lerp(shLX, -0.03 + sway * 0.01, 0.72 * freeArm);
+        elLX = THREE.MathUtils.lerp(elLX, -0.05, 0.78 * freeArm);
+        shLZ += 0.035 * freeArm;
+      }
+    }
+
     b[BONE.PELVIS].position.y = pelvisY;
     b[BONE.PELVIS].rotation.set(0, pelvisYRot, pelvisZRot);
     b[BONE.SPINE3].rotation.set(spine1X * 0.4, -pelvisYRot * 0.35, spine2Z * 0.5);
@@ -2428,17 +2734,19 @@ export class Mannequin3DWebGLEngine {
     this.characterGroup.updateMatrixWorld(true);
     this._invCharMat.copy(this.characterGroup.matrixWorld).invert();
 
-    // 6. Compute Hand Acceleration + Step Lightweight `SpringBoneSystem` (Req 6.d)
-    this._tmpVecA.setFromMatrixPosition(b[BONE.HAND_L].matrixWorld).applyMatrix4(this._invCharMat);
-    const handLocalL = this._tmpVecA;
-    this.leftHandSocket.position.set(handLocalL.x + 0.028, handLocalL.y - 0.028, handLocalL.z + 0.006);
+    // 6. Compute Palm Grip Anchor + Step Lightweight `SpringBoneSystem` (Req 6.d)
+    this._tmpVecA
+      .setFromMatrixPosition(this.leftPalmGripAnchor.matrixWorld)
+      .applyMatrix4(this._invCharMat);
+    const palmLocalL = this._tmpVecA;
+    this.leftHandSocket.position.set(palmLocalL.x - 0.006, palmLocalL.y, palmLocalL.z);
 
     const invDt = 1.0 / Math.max(0.008, dt);
-    const vx = (handLocalL.x - this.bagSpringState.prevHandPos.x) * invDt;
-    const vz = (handLocalL.z - this.bagSpringState.prevHandPos.z) * invDt;
+    const vx = (palmLocalL.x - this.bagSpringState.prevHandPos.x) * invDt;
+    const vz = (palmLocalL.z - this.bagSpringState.prevHandPos.z) * invDt;
     const ax = Math.max(-8, Math.min(8, (vx - this.bagSpringState.prevHandVel.x) * invDt));
     const az = Math.max(-8, Math.min(8, (vz - this.bagSpringState.prevHandVel.z) * invDt));
-    this.bagSpringState.prevHandPos.copy(handLocalL);
+    this.bagSpringState.prevHandPos.copy(palmLocalL);
     this.bagSpringState.prevHandVel.set(vx, 0, vz);
 
     const springs = this.springBones.update({
@@ -2461,8 +2769,10 @@ export class Mannequin3DWebGLEngine {
     this.umbrellaProp.visible = showUmbrella;
     this.rainStreaks.visible = showUmbrella;
     if (showUmbrella) {
-      this._tmpVecB.setFromMatrixPosition(b[BONE.HAND_R].matrixWorld).applyMatrix4(this._invCharMat);
-      this.rightHandSocket.position.set(this._tmpVecB.x + 0.015, this._tmpVecB.y - 0.012, this._tmpVecB.z + 0.022);
+      this._tmpVecB
+        .setFromMatrixPosition(this.rightPalmGripAnchor.matrixWorld)
+        .applyMatrix4(this._invCharMat);
+      this.rightHandSocket.position.set(this._tmpVecB.x + 0.008, this._tmpVecB.y + 0.012, this._tmpVecB.z);
       this.rightHandSocket.rotation.set(-0.28 + Math.sin(t * 1.4) * 0.015, 0, -0.24);
 
       const seeds = this.rainStreaks.userData.seeds;
@@ -2539,6 +2849,8 @@ export class Mannequin3DWebGLEngine {
           targetSpec = { x: 0.0, y: 1.54, dist: 1.06 };
         } else if (this.activeAccessorySub === 'accessory_watch') {
           targetSpec = { x: 0.0, y: 1.07, dist: 1.42 };
+        } else if (this.activeAccessorySub === 'accessory_bag') {
+          targetSpec = { x: 0.06, y: 0.96, dist: 1.86 };
         } else if (this.activeAccessorySub === 'accessory_briefcase' || this.activeAccessorySub === 'accessory_tote') {
           targetSpec = { x: 0.12, y: 0.72, dist: 1.88 };
         }

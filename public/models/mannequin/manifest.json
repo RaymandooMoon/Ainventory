@@ -1,6 +1,6 @@
 {
  "version": 2,
- "generatedAt": "2026-11-10T17:25:36Z",
+ "generatedAt": "2026-11-11T04:11:14Z",
  "units": "meters",
  "upAxis": "Y",
  "license": "CC0 (MakeHuman base mesh, targets and community clothes)",
@@ -802,7 +802,7 @@
    "physics": "pendulum_crossbody",
    "noMorphs": false,
    "source": "procedural:bag",
-   "vertexCount": 592
+   "vertexCount": 1320
   },
   "accessory_briefcase": {
    "slot": "accessory",
