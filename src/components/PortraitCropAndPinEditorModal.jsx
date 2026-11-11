@@ -287,16 +287,17 @@ export default function PortraitCropAndPinEditorModal({
     >
       <div
         className="modal-box ui-sheet-box"
-        style={{ maxWidth: 780, width: '95vw', padding: '20px 22px' }}
+        data-sheet-panel="true"
+        style={{ maxWidth: 780, width: '95vw', padding: 24 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="ui-sheet-drag-handle" aria-hidden="true" />
-        <div className="modal-header" style={{ marginBottom: 12 }}>
+        <div className="modal-header" style={{ marginBottom: 16 }}>
           <div>
-            <span className="rec-tag" style={{ marginBottom: 4, display: 'inline-block' }}>
+            <span className="rec-tag tabular-nums" style={{ marginBottom: 4, display: 'inline-block' }}>
               {stage === 'crop' ? 'STEP 1/2 · SMART PORTRAIT CROP' : 'STEP 2/2 · 478 LANDMARK & 4-PIN'}
             </span>
-            <h2>
+            <h2 className="hig-headline">
               {stage === 'crop'
                 ? '전신샷 · 셀피 크롭 & 방향 보정 에디터'
                 : '얼굴 4대 피부 참조 핀 정밀 확인'}
@@ -331,17 +332,17 @@ export default function PortraitCropAndPinEditorModal({
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm tabular-nums"
                   onClick={() => setRotation90((r) => (r - 90 + 360) % 360)}
                 >
                   <RotateCcw size={14} /> -90°
                 </button>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm tabular-nums"
                   onClick={() => setRotation90((r) => (r + 90) % 360)}
                 >
                   <RotateCw size={14} /> +90°
@@ -393,7 +394,9 @@ export default function PortraitCropAndPinEditorModal({
             <div className="crop-controls-panel">
               <div className="crop-sliders-grid">
                 <label className="crop-slider-item">
-                  <span>수평 기울기 보정 ({straightenDeg > 0 ? `+${straightenDeg}` : straightenDeg}°)</span>
+                  <span className="tabular-nums">
+                    수평 기울기 보정 ({straightenDeg > 0 ? `+${straightenDeg}` : straightenDeg}°)
+                  </span>
                   <input
                     type="range"
                     min="-20"
@@ -404,7 +407,7 @@ export default function PortraitCropAndPinEditorModal({
                   />
                 </label>
                 <label className="crop-slider-item">
-                  <span>
+                  <span className="tabular-nums">
                     <Sun size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                     조명 밝기 보정 ({brightness}%)
                   </span>
@@ -425,13 +428,13 @@ export default function PortraitCropAndPinEditorModal({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                gap: 10,
-                marginTop: 14,
+                gap: 8,
+                marginTop: 16,
                 flexWrap: 'wrap',
               }}
             >
-              <span style={{ fontSize: '0.80rem', color: 'var(--ink-secondary)' }}>
-                전신샷을 올렸다면 얼굴이 잘 보이도록 크롭 박스를 맞춘 뒤 다음 단계로 이동하세요.
+              <span className="hig-caption">
+                얼굴이 잘 보이도록 크롭 박스를 맞춘 뒤 다음 단계로 이동하세요.
               </span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
@@ -460,19 +463,18 @@ export default function PortraitCropAndPinEditorModal({
             {lowConfPopup && (
               <div
                 style={{
-                  background: 'var(--verdict-consider-bg)',
-                  color: 'var(--verdict-consider-ink)',
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  marginBottom: 12,
+                  background: 'var(--bg-surface)',
+                  color: 'var(--ink-primary)',
+                  padding: '8px 16px',
+                  borderRadius: 12,
+                  marginBottom: 16,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 12,
-                  fontSize: '0.82rem',
+                  gap: 16,
                 }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="hig-caption tabular-nums" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <AlertTriangle size={16} />
                   얼굴 자동 인식 신뢰도가 낮아({detectionInfo?.confidence ?? 48}%) 4개 피부 핀 위치를 직접 드래그해 맞출 수 있습니다.
                 </span>
@@ -489,9 +491,9 @@ export default function PortraitCropAndPinEditorModal({
                   position: 'relative',
                   width: '100%',
                   aspectRatio: '1 / 1',
-                  maxHeight: 380,
-                  background: '#141820',
-                  borderRadius: 12,
+                  maxHeight: 384,
+                  background: '#000000',
+                  borderRadius: 16,
                   overflow: 'hidden',
                   userSelect: 'none',
                   touchAction: 'none',
@@ -513,7 +515,7 @@ export default function PortraitCropAndPinEditorModal({
                       width: 4,
                       height: 4,
                       borderRadius: '50%',
-                      background: 'rgba(0, 229, 255, 0.58)',
+                      background: 'rgba(255, 255, 255, 0.72)',
                       transform: 'translate(-50%, -50%)',
                       pointerEvents: 'none',
                     }}
@@ -526,6 +528,7 @@ export default function PortraitCropAndPinEditorModal({
                     role="slider"
                     aria-label={pin.labelKo}
                     tabIndex={0}
+                    className="tabular-nums"
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       setDraggingPinId(pin.id);
@@ -539,19 +542,17 @@ export default function PortraitCropAndPinEditorModal({
                       left: `${pin.x * 100}%`,
                       top: `${pin.y * 100}%`,
                       transform: 'translate(-50%, -50%)',
-                      width: 30,
-                      height: 30,
+                      width: 32,
+                      height: 32,
                       borderRadius: '50%',
-                      background: draggingPinId === pin.id ? '#1c1917' : 'rgba(28, 25, 23, 0.88)',
-                      border: '2px solid #ffffff',
-                      color: '#fff',
-                      fontSize: '0.72rem',
-                      fontWeight: 800,
+                      background: draggingPinId === pin.id ? '#000000' : 'rgba(29, 29, 31, 0.92)',
+                      color: '#FFFFFF',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'grab',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.38)',
                     }}
                   >
                     {idx + 1}
@@ -559,15 +560,15 @@ export default function PortraitCropAndPinEditorModal({
                 ))}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <Crosshair size={16} />
-                    <strong style={{ fontSize: '0.92rem' }}>
+                    <strong className="hig-headline tabular-nums">
                       4대 피부 샘플링 좌표 ({detectionInfo?.engine === 'mediapipe_478' ? '478 랜드마크' : '스마트 감지'})
                     </strong>
                   </div>
-                  <p style={{ fontSize: '0.80rem', color: 'var(--ink-secondary)', marginBottom: 12 }}>
+                  <p className="hig-caption" style={{ marginBottom: 16 }}>
                     머리카락·안경테·그늘을 피해 이마·양볼·콧등 피부 위에 1~4번 핀이 놓였는지 확인하세요.
                   </p>
 
@@ -576,19 +577,17 @@ export default function PortraitCropAndPinEditorModal({
                       <div
                         key={pin.id}
                         style={{
-                          padding: '8px 11px',
-                          borderRadius: 8,
-                          border: '1px solid var(--border-hairline)',
-                          background: 'var(--bg-subtle)',
+                          padding: '8px 16px',
+                          borderRadius: 12,
+                          background: 'var(--bg-surface)',
                           display: 'flex',
                           justifyContent: 'space-between',
-                          fontSize: '0.81rem',
                         }}
                       >
-                        <strong>
+                        <strong className="hig-body tabular-nums">
                           {idx + 1}. {pin.labelKo}
                         </strong>
-                        <span style={{ color: 'var(--ink-muted)' }}>
+                        <span className="hig-caption tabular-nums">
                           ({Math.round(pin.x * 100)}%, {Math.round(pin.y * 100)}%)
                         </span>
                       </div>

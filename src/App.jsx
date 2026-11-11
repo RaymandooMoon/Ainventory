@@ -261,7 +261,7 @@ export default function App() {
   };
 
   return (
-    <div className={`app-shell ${activeTab === 'weather' ? 'is-studio-tab' : ''}`}>
+    <div className={`app-shell ${activeTab === 'weather' || activeTab === 'studio' ? 'is-studio-tab' : ''}`}>
       <StatusCapsule />
 
       {/* Desktop Monochrome Sidebar */}
@@ -271,15 +271,15 @@ export default function App() {
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <div>
-            <div className="hig-headline" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+            <div className="hig-headline" style={{ fontWeight: 700 }}>
               A inventory
             </div>
-            <div className="hig-caption" style={{ marginTop: 2 }}>
+            <div className="hig-caption" style={{ marginTop: 4 }}>
               {user.isSampleDemo ? '샘플 옷장 체험 모드' : tr(lang, 'brandSubtitle')}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
               className="icon-btn"
@@ -296,7 +296,7 @@ export default function App() {
             <button
               type="button"
               className="icon-btn"
-              style={{ width: 'auto', padding: '0 8px', fontSize: '0.72rem', fontWeight: 600 }}
+              style={{ width: 'auto', padding: '0 8px', fontWeight: 600 }}
               onClick={() => handleChangeLang(lang === 'ko' ? 'en' : 'ko')}
             >
               <Globe size={13} />
@@ -403,18 +403,17 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Mobile Top Header (Hidden automatically on 3D Studio tab for 85%+ clear viewport) */}
+      {/* Mobile Top Header (Hidden automatically on 3D Studio tabs for 85%+ clear viewport) */}
       <header className="mobile-topbar">
         <div className="hig-headline" style={{ fontWeight: 700 }}>
           A inventory
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {user.isSampleDemo && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              style={{ padding: '6px 10px', fontSize: '0.74rem' }}
               onClick={handleLogout}
             >
               로그인
@@ -447,7 +446,11 @@ export default function App() {
       </header>
 
       {/* Main Content Workspace */}
-      <main className={`main-workspace ${activeTab === 'weather' ? 'is-studio-mode' : ''}`}>
+      <main
+        className={`main-workspace ${
+          activeTab === 'weather' || activeTab === 'studio' ? 'is-studio-mode' : ''
+        }`}
+      >
         {activeTab === 'weather' && (
           <WeatherStylingView
             activeCloset={activeCloset}
@@ -491,6 +494,7 @@ export default function App() {
             lang={lang}
             refreshKey={refreshKey}
             onOpenProfileModal={openProfileModal}
+            onClosetUpdated={bumpRefresh}
             showToast={showToast}
           />
         )}
@@ -511,7 +515,10 @@ export default function App() {
       </main>
 
       {/* Mobile Floating Vibrancy Bottom Navigation (Req 14.a) */}
-      <nav className="mobile-bottom-nav hig-vibrancy-bar" aria-label="모바일 하단 메뉴">
+      <nav
+        className="mobile-bottom-nav hig-floating-nav hig-vibrancy-bar"
+        aria-label="모바일 하단 메뉴"
+      >
         <button
           id="mobile-tab-weather"
           type="button"
@@ -564,7 +571,11 @@ export default function App() {
       {/* First-Login Closet Name Setup Modal */}
       {needsClosetSetup && (
         <div className="modal-backdrop ui-sheet-backdrop" style={{ zIndex: 130 }}>
-          <div className="modal-box ui-sheet-box" style={{ maxWidth: 420 }}>
+          <div
+            data-sheet-panel="true"
+            className="modal-box ui-sheet-box"
+            style={{ maxWidth: 420 }}
+          >
             <h3 className="hig-headline" style={{ marginBottom: 8 }}>
               {tr(lang, 'closetSetupTitle')}
             </h3>

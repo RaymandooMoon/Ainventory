@@ -33,7 +33,7 @@ export default function Mannequin2DCollageFallback({
       style={{
         width: '100%',
         height: '100%',
-        padding: '64px 20px 76px',
+        padding: '64px 16px 80px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -60,7 +60,7 @@ export default function Mannequin2DCollageFallback({
           width: 'min(460px, 92vw)',
           display: 'grid',
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          gap: 12,
+          gap: 8,
         }}
       >
         {equippedEntries.length === 0 ? (
@@ -83,20 +83,18 @@ export default function Mannequin2DCollageFallback({
               onClick={() => onSelectSlot?.(key)}
               style={{
                 background: 'var(--bg-surface)',
-                borderRadius: 20,
-                padding: 12,
+                borderRadius: 16,
+                padding: 16,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 6,
+                gap: 8,
               }}
             >
-              <div style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden' }}>
                 <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%' }} />
               </div>
-              <span className="hig-caption" style={{ fontSize: '0.7rem' }}>
-                {label}
-              </span>
+              <span className="hig-caption">{label}</span>
             </button>
           ))
         )}

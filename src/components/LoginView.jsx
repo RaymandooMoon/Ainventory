@@ -4,10 +4,11 @@ import { apiFetch, setStoredToken } from '../utils/api.js';
 import { triggerHaptic } from '../utils/nativeBridge.js';
 
 /**
- * Apple HIG Minimal Monochrome Initial Entry Screen (Reqs 8.a, 10.b, 11.a, 12.a)
- * - Unauthenticated '샘플 옷장 체험 모드' button with explicit aria-label for first-time users & Robo crawlers
- * - Sign in with Apple
- * - Email OTP registration with 60s resend cooldown & 429 rate-limit handling
+ * Apple HIG Minimal Monochrome Initial Entry Screen (Reqs 8.a, 10.b, 11.a-c, 12.a)
+ * - Unauthenticated '샘플 옷장 체험 모드' button (#enter-sample-demo-btn) with explicit aria-label
+ * - Sign in with Apple (#apple-signin-btn)
+ * - Progressive Email OTP quick entry (#email-auth-input -> #request-email-code-btn -> #email-otp-code-input -> #verify-email-code-btn)
+ * - Full Login (#auth-tab-login) & Email OTP Sign-Up (#auth-tab-register) modes with 60s cooldown & 429 handling
  */
 export default function LoginView({
   onLoginSuccess,
@@ -16,13 +17,13 @@ export default function LoginView({
   onChangeLang,
   onToggleTheme,
 }) {
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [authMode, setAuthMode] = useState('otp'); // 'otp' | 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Email OTP Sign-Up States
+  // Email OTP States (shared cleanly between quick 'otp' mode and detailed 'register' mode)
   const [regEmail, setRegEmail] = useState('');
   const [regDisplayName, setRegDisplayName] = useState('');
   const [regClosetName, setRegClosetName] = useState('');
@@ -133,6 +134,43 @@ export default function LoginView({
     }
   };
 
+  const handleVerifyQuickEmailCode = async (e) => {
+    e?.preventDefault?.();
+    setError('');
+    if (!otpCode.trim()) {
+      setError('6자리 인증코드를 입력해 주세요.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const cleanEmail = regEmail.trim();
+      await apiFetch('/auth/verify-email-code', {
+        method: 'POST',
+        body: JSON.stringify({ email: cleanEmail, code: otpCode.trim() }),
+      });
+      setOtpVerified(true);
+      const resolvedName = regDisplayName.trim() || cleanEmail.split('@')[0];
+      const data = await apiFetch('/auth/register-email', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: cleanEmail,
+          code: otpCode.trim(),
+          password: regPassword.length >= 4 ? regPassword : 'otp12345',
+          displayName: resolvedName,
+          closetName: regClosetName.trim() || `${resolvedName}의 옷장`,
+          gender: regGender,
+        }),
+      });
+      setStoredToken(data.token);
+      triggerHaptic('medium');
+      onLoginSuccess(data.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCompleteRegister = async (e) => {
     e.preventDefault();
     setError('');
@@ -174,7 +212,7 @@ export default function LoginView({
         {/* Top Utility Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="hig-caption">DIGITAL WARDROBE &amp; 3D STUDIO</span>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               id="login-theme-toggle-btn"
               type="button"
@@ -192,21 +230,21 @@ export default function LoginView({
               type="button"
               className="icon-btn"
               aria-label="언어 전환"
-              style={{ width: 'auto', padding: '0 10px', fontSize: '0.75rem', fontWeight: 600 }}
+              style={{ width: 'auto', padding: '0 12px' }}
               onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
             >
               <Globe size={13} style={{ marginRight: 4 }} />
-              {lang === 'ko' ? 'EN' : 'KO'}
+              <span className="hig-caption" style={{ color: 'var(--ink-primary)' }}>
+                {lang === 'ko' ? 'EN' : 'KO'}
+              </span>
             </button>
           </div>
         </div>
 
         {/* Minimal Hero Title (1 Screen = 1 Core Purpose) */}
         <div>
-          <h1 className="hig-large-title" style={{ fontSize: '2.1rem' }}>
-            A inventory
-          </h1>
-          <p className="hig-caption" style={{ marginTop: 6 }}>
+          <h1 className="hig-large-title">A inventory</h1>
+          <p className="hig-caption" style={{ marginTop: 8 }}>
             실사 의류 누끼와 날씨 기반 3D 마네킹이 연동되는 미니멀 디지털 옷장
           </p>
         </div>
@@ -217,7 +255,7 @@ export default function LoginView({
           type="button"
           aria-label="샘플 옷장 체험 모드 시작"
           className="btn btn-primary btn-full"
-          style={{ minHeight: 50, borderRadius: 16, fontSize: '0.96rem', fontWeight: 600 }}
+          style={{ minHeight: 48, borderRadius: 16 }}
           onClick={() => onEnterSampleDemo?.()}
         >
           <Play size={16} />
@@ -230,16 +268,27 @@ export default function LoginView({
           type="button"
           aria-label="Sign in with Apple"
           className="btn btn-secondary btn-full"
-          style={{ minHeight: 48, borderRadius: 16, fontWeight: 600 }}
+          style={{ minHeight: 48, borderRadius: 16 }}
           disabled={loading}
           onClick={handleAppleSignIn}
         >
           <span>Apple로 계속하기</span>
         </button>
 
-        {/* Auth Panel: Login / Email OTP Sign-Up */}
+        {/* Progressive Monochrome Auth Surface */}
         <div className="hig-auth-panel">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <button
+              id="auth-tab-otp"
+              type="button"
+              className={`btn btn-sm ${authMode === 'otp' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                setAuthMode('otp');
+                setError('');
+              }}
+            >
+              이메일 시작
+            </button>
             <button
               id="auth-tab-login"
               type="button"
@@ -260,7 +309,7 @@ export default function LoginView({
                 setError('');
               }}
             >
-              이메일 회원가입
+              회원가입
             </button>
           </div>
 
@@ -269,7 +318,7 @@ export default function LoginView({
               role="alert"
               className="hig-caption"
               style={{
-                padding: '10px 12px',
+                padding: '8px 16px',
                 borderRadius: 12,
                 background: 'var(--bg-canvas)',
                 color: 'var(--ink-primary)',
@@ -279,8 +328,88 @@ export default function LoginView({
             </div>
           )}
 
-          {authMode === 'login' ? (
-            <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {authMode === 'otp' && (
+            <form
+              onSubmit={handleVerifyQuickEmailCode}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="email-auth-input"
+                  type="email"
+                  className="text-input"
+                  style={{ flex: 1, background: 'var(--bg-canvas)' }}
+                  placeholder="name@example.com"
+                  value={regEmail}
+                  onChange={(e) => {
+                    setRegEmail(e.target.value);
+                    setOtpVerified(false);
+                  }}
+                  required
+                />
+                <button
+                  id="request-email-code-btn"
+                  type="button"
+                  className="btn btn-secondary btn-sm tabular-nums"
+                  disabled={loading || cooldownSec > 0}
+                  onClick={handleSendOtp}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  <Mail size={14} />
+                  <span>
+                    {cooldownSec > 0
+                      ? `재발송 ${cooldownSec}s`
+                      : otpSent
+                        ? '재발송'
+                        : '코드 받기'}
+                  </span>
+                </button>
+              </div>
+
+              {otpSent && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      id="email-otp-code-input"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      className="text-input tabular-nums"
+                      style={{
+                        flex: 1,
+                        background: 'var(--bg-canvas)',
+                        letterSpacing: '0.18em',
+                        fontWeight: 700,
+                      }}
+                      placeholder="6자리 인증코드"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                    />
+                    <button
+                      id="verify-email-code-btn"
+                      type="submit"
+                      className="btn btn-primary btn-sm"
+                      disabled={loading}
+                    >
+                      <KeyRound size={14} />
+                      <span>인증 시작</span>
+                    </button>
+                  </div>
+                  {devPreviewCode && !otpVerified && (
+                    <span className="hig-caption tabular-nums">
+                      로컬 테스트 코드: {devPreviewCode}
+                    </span>
+                  )}
+                </div>
+              )}
+            </form>
+          )}
+
+          {authMode === 'login' && (
+            <form
+              onSubmit={handleLoginSubmit}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
               <input
                 id="login-username"
                 className="text-input"
@@ -310,8 +439,8 @@ export default function LoginView({
                   gap: 8,
                 }}
               >
-                <span className="hig-caption">테스트 계정 빠른 입력</span>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <span className="hig-caption">데모 계정</span>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
@@ -345,10 +474,12 @@ export default function LoginView({
                 {loading ? '로그인 중...' : '로그인'}
               </button>
             </form>
-          ) : (
+          )}
+
+          {authMode === 'register' && (
             <form
               onSubmit={handleCompleteRegister}
-              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
@@ -392,7 +523,12 @@ export default function LoginView({
                       inputMode="numeric"
                       maxLength={6}
                       className="text-input tabular-nums"
-                      style={{ flex: 1, letterSpacing: '0.18em', fontWeight: 700 }}
+                      style={{
+                        flex: 1,
+                        background: 'var(--bg-canvas)',
+                        letterSpacing: '0.18em',
+                        fontWeight: 700,
+                      }}
                       placeholder="6자리 코드"
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
@@ -428,12 +564,14 @@ export default function LoginView({
                   id="register-name-input"
                   type="text"
                   className="text-input"
+                  style={{ background: 'var(--bg-canvas)' }}
                   placeholder="이름 / 닉네임"
                   value={regDisplayName}
                   onChange={(e) => setRegDisplayName(e.target.value)}
                 />
                 <select
                   className="select-input"
+                  style={{ background: 'var(--bg-canvas)' }}
                   value={regGender}
                   onChange={(e) => setRegGender(e.target.value)}
                   aria-label="성별 선택"
@@ -447,6 +585,7 @@ export default function LoginView({
                 id="register-closet-input"
                 type="text"
                 className="text-input"
+                style={{ background: 'var(--bg-canvas)' }}
                 placeholder="내 옷장 이름 (선택)"
                 value={regClosetName}
                 onChange={(e) => setRegClosetName(e.target.value)}
@@ -456,6 +595,7 @@ export default function LoginView({
                 id="register-password-input"
                 type="password"
                 className="text-input"
+                style={{ background: 'var(--bg-canvas)' }}
                 placeholder="비밀번호 (4자 이상)"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}

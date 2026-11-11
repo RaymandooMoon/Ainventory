@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
+  Bookmark,
   ChevronLeft,
   ChevronRight,
-  Layers,
   Lock,
+  Maximize2,
   Shuffle,
   Trash2,
   Unlock,
   X,
 } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
-import { PageHeader } from './common/AppUI.jsx';
+import { triggerHaptic } from '../utils/nativeBridge.js';
+import { ResponsiveSheetModal } from './common/AppUI.jsx';
 import OutfitInspectorModal from './OutfitInspectorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import VirtualMannequin from './VirtualMannequin.jsx';
@@ -26,11 +28,17 @@ const DRESS_ME_SLOTS = [
   { key: 'accessory', label: '가방·액세서리' },
 ];
 
+/**
+ * Apple HIG Full-Bleed 3D Outfit Studio & Dress Me Lookbook (Reqs 11, 12.b, 13)
+ * - 85%+ clear 3D mannequin viewport with swipe-up wardrobe drawer
+ * - Dress Me slot lock/shuffle & Saved Lookbooks stowed into spring BottomSheets
+ */
 export default function OutfitStudioView({
   user,
   activeCloset,
   refreshKey,
   onOpenProfileModal,
+  onClosetUpdated,
   showToast,
 }) {
   const closetOwner = activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
@@ -49,7 +57,6 @@ export default function OutfitStudioView({
     shoes: 0,
     accessory: 0,
   });
-  // Tracks explicitly unequipped slots (e.g. taking off gloves, outer, headwear)
   const [unequipped, setUnequipped] = useState({
     headwear: true,
     gloves: false,
@@ -64,6 +71,8 @@ export default function OutfitStudioView({
   const [title, setTitle] = useState('');
   const [occasion, setOccasion] = useState('출근룩');
   const [memo, setMemo] = useState('');
+  const [dressMeSheetOpen, setDressMeSheetOpen] = useState(false);
+  const [lookbookSheetOpen, setLookbookSheetOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorSlot, setInspectorSlot] = useState('outer');
 
@@ -76,7 +85,7 @@ export default function OutfitStudioView({
       setGarments((gRes.garments || []).filter((g) => g.status === 'active'));
       setOutfits(oRes.outfits || []);
     } catch (err) {
-      showToast(err.message || '코디 데이터를 불러오지 못했습니다.');
+      showToast?.(err.message || '코디 데이터를 불러오지 못했습니다.');
     }
   };
 
@@ -102,6 +111,7 @@ export default function OutfitStudioView({
   const stepSlot = (slot, delta) => {
     const len = (pools[slot] || []).length;
     if (len === 0) return;
+    triggerHaptic('selection');
     setUnequipped((prev) => ({ ...prev, [slot]: false }));
     setIndices((prev) => ({
       ...prev,
@@ -110,6 +120,7 @@ export default function OutfitStudioView({
   };
 
   const handleShuffle = () => {
+    triggerHaptic('medium');
     setIndices((prev) => {
       const next = { ...prev };
       Object.keys(pools).forEach((slot) => {
@@ -147,11 +158,10 @@ export default function OutfitStudioView({
 
   const pickedItems = Object.values(loadoutBySlot).filter(Boolean);
 
-  // Supports both equipping a specific item AND unequipping (`newItem === null`)!
   const handleConfirmSwap = (slotKey, newItem) => {
     if (!newItem) {
       setUnequipped((prev) => ({ ...prev, [slotKey]: true }));
-      showToast(`[${slotKey}] 부위 의류를 벗었습니다.`);
+      showToast?.(`[${slotKey}] 부위 의류를 벗었습니다.`);
       return;
     }
     const list = pools[slotKey] || [];
@@ -160,13 +170,13 @@ export default function OutfitStudioView({
     if (foundIdx >= 0) {
       setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
     }
-    showToast(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
+    showToast?.(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
   };
 
   const handleSaveLook = async (e) => {
     e?.preventDefault?.();
     if (pickedItems.length < 2) {
-      showToast('최소 2개 이상의 아이템이 필요합니다.');
+      showToast?.('최소 2개 이상의 아이템이 필요합니다.');
       return;
     }
     try {
@@ -184,19 +194,23 @@ export default function OutfitStudioView({
       setTitle('');
       setMemo('');
       loadStudioData();
-      showToast('룩북에 새 코디가 저장되었습니다.');
+      onClosetUpdated?.();
+      setDressMeSheetOpen(false);
+      showToast?.('룩북에 새 코디가 저장되었습니다.');
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
   };
 
   const handleDeleteOutfit = async (id) => {
     try {
       await apiFetch(`/outfits/${id}`, { method: 'DELETE' });
+      triggerHaptic('light');
       loadStudioData();
-      showToast('코디가 삭제되었습니다.');
+      onClosetUpdated?.();
+      showToast?.('코디가 삭제되었습니다.');
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
   };
 
@@ -206,8 +220,8 @@ export default function OutfitStudioView({
 
     if (list.length === 0) {
       return (
-        <div key={slotKey} className="slot-row">
-          <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>{slotLabel} 보유 아이템 없음</div>
+        <div key={slotKey} className="slot-row" style={{ gridTemplateColumns: '1fr' }}>
+          <span className="hig-caption">{slotLabel} 보유 아이템 없음</span>
         </div>
       );
     }
@@ -215,15 +229,15 @@ export default function OutfitStudioView({
     if (!current) {
       return (
         <div key={slotKey} className="slot-row" style={{ gridTemplateColumns: '1fr auto' }}>
-          <div style={{ fontSize: '0.84rem', color: 'var(--ink-secondary)' }}>
-            <strong>{slotLabel}</strong> · 현재 미착용 (벗은 상태)
-          </div>
+          <span className="hig-body">
+            <strong>{slotLabel}</strong> · 미착용
+          </span>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setUnequipped((prev) => ({ ...prev, [slotKey]: false }))}
           >
-            다시 입히기
+            입히기
           </button>
         </div>
       );
@@ -232,14 +246,14 @@ export default function OutfitStudioView({
     return (
       <div key={slotKey} className="slot-row">
         <StudioGarmentImage item={current} style={{ width: 56, height: 72, borderRadius: 8 }} />
-        <div>
-          <span style={{ fontSize: '0.73rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
+        <div style={{ minWidth: 0 }}>
+          <span className="hig-caption">
             {slotLabel} · {current.color_name}
           </span>
-          <strong style={{ display: 'block', fontSize: '0.90rem', margin: '2px 0' }}>
+          <div className="hig-body" style={{ fontWeight: 600, marginTop: 4 }}>
             {current.name}
-          </strong>
-          <span style={{ fontSize: '0.76rem', color: 'var(--ink-secondary)' }}>
+          </div>
+          <span className="hig-caption tabular-nums">
             {current.brand || '내 옷장'} · 착용 {current.wear_count}회
           </span>
         </div>
@@ -265,7 +279,10 @@ export default function OutfitStudioView({
             className={`icon-btn ${locked[slotKey] ? 'locked' : ''}`}
             aria-label="고정 잠금"
             title={locked[slotKey] ? '잠금 해제' : '이 아이템 고정'}
-            onClick={() => setLocked((p) => ({ ...p, [slotKey]: !p[slotKey] }))}
+            onClick={() => {
+              triggerHaptic('selection');
+              setLocked((p) => ({ ...p, [slotKey]: !p[slotKey] }));
+            }}
           >
             {locked[slotKey] ? <Lock size={14} /> : <Unlock size={14} />}
           </button>
@@ -283,84 +300,126 @@ export default function OutfitStudioView({
     );
   };
 
+  const floatingStudioControls = (
+    <>
+      <button
+        id="dress-me-shuffle-btn"
+        type="button"
+        className="hig-float-icon-btn"
+        aria-label="잠금 제외 랜덤 셔플"
+        title="잠금 제외 랜덤 셔플"
+        onClick={handleShuffle}
+      >
+        <Shuffle size={16} />
+      </button>
+      <button
+        id="studio-open-dressme-sheet-btn"
+        type="button"
+        className="hig-float-icon-btn"
+        aria-label="Dress Me 슬롯 잠금 및 코디 저장"
+        title="Dress Me 슬롯 잠금 및 코디 저장"
+        onClick={() => {
+          triggerHaptic('selection');
+          setDressMeSheetOpen(true);
+        }}
+      >
+        <Lock size={16} />
+      </button>
+      <button
+        id="studio-open-lookbook-sheet-btn"
+        type="button"
+        className="hig-float-icon-btn"
+        aria-label="저장된 룩북 보기"
+        title="저장된 룩북 보기"
+        onClick={() => {
+          triggerHaptic('selection');
+          setLookbookSheetOpen(true);
+        }}
+      >
+        <Bookmark size={16} />
+      </button>
+      <button
+        id="studio-open-inspector-btn"
+        type="button"
+        className="hig-float-icon-btn"
+        aria-label="11부위 전체 코디 인스펙터"
+        title="11부위 전체 코디 인스펙터"
+        onClick={() => {
+          triggerHaptic('selection');
+          setInspectorSlot('outer');
+          setInspectorOpen(true);
+        }}
+      >
+        <Maximize2 size={15} />
+      </button>
+    </>
+  );
+
   return (
-    <div>
-      <PageHeader
-        eyebrow="WHERING DRESS ME · 3D LIVE STYLING"
-        title="코디 스튜디오 & 3D Dress Me 룩북"
-        subtitle="부위별 잠금(Lock)·셔플·원클릭 벗기와 실시간 3D 모션/지글 피직스를 확인하며 나만의 룩북을 완성하세요."
+    <>
+      <VirtualMannequin
+        immersiveStudio
+        userProfile={user}
+        loadoutBySlot={loadoutBySlot}
+        allGarments={garments}
+        capsuleLabel={`코디 스튜디오 · 장착 ${pickedItems.length}점 · 룩북 ${outfits.length}`}
+        onOpenWeatherSheet={() => setDressMeSheetOpen(true)}
+        onOpenProfileModal={(stepNum) => onOpenProfileModal?.(stepNum)}
+        onSlotSwap={handleConfirmSwap}
+        onUnequipSlot={(slotKey) => handleConfirmSwap(slotKey, null)}
+        onSaveOutfitLog={pickedItems.length >= 2 ? () => handleSaveLook() : null}
+        extraFloatingActions={floatingStudioControls}
+      />
+
+      {/* Dress Me 8-Slot Lock & Lookbook Save Bottom Sheet */}
+      <ResponsiveSheetModal
+        id="studio-dressme-sheet"
+        open={dressMeSheetOpen}
+        onClose={() => setDressMeSheetOpen(false)}
+        eyebrow="DRESS ME · SLOT CONTROLLER"
+        title="슬롯 잠금 & 룩북 저장"
         actions={
           <button
             type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setInspectorSlot('outer');
-              setInspectorOpen(true);
-            }}
+            className="btn btn-secondary btn-sm"
+            onClick={handleShuffle}
           >
-            <Layers size={16} /> 11부위 전체 코디 인스펙터
+            <Shuffle size={14} /> 셔플
           </button>
         }
-      />
-
-      <div style={{ marginBottom: 26 }}>
-        <VirtualMannequin
-          userProfile={user}
-          loadoutBySlot={loadoutBySlot}
-          closetGarments={garments}
-          title="Dress Me · 3D 라이브 피팅"
-          onOpenBodySetup={(stepNum) => onOpenProfileModal?.(stepNum)}
-          onSwapSlotItem={handleConfirmSwap}
-          onOpenInspector={(slotKey) => {
-            setInspectorSlot(slotKey || 'outer');
-            setInspectorOpen(true);
-          }}
-        />
-      </div>
-
-      <div className="studio-split">
-        <section className="slot-machine-card">
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 14,
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <h3 style={{ fontSize: '1.05rem' }}>Dress Me 8대 핵심 슬롯 컨트롤러</h3>
-            <button
-              id="dress-me-shuffle-btn"
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleShuffle}
-            >
-              <Shuffle size={14} /> 잠금 제외 랜덤 셔플
-            </button>
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {DRESS_ME_SLOTS.map((s) => renderSlotRow(s.key, s.label))}
           </div>
-
-          {DRESS_ME_SLOTS.map((s) => renderSlotRow(s.key, s.label))}
 
           <form
             onSubmit={handleSaveLook}
-            style={{ borderTop: '1px solid var(--border-hairline)', paddingTop: 16, marginTop: 14 }}
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 16,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+            }}
           >
             <div className="form-grid-2">
-              <div className="field-group">
+              <div className="field-group" style={{ marginBottom: 0 }}>
                 <label className="field-label">코디 제목</label>
                 <input
                   className="text-input"
+                  style={{ background: 'var(--bg-canvas)' }}
                   placeholder="예: 금요일 세미 캐주얼"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-              <div className="field-group">
+              <div className="field-group" style={{ marginBottom: 0 }}>
                 <label className="field-label">상황 태그</label>
                 <select
                   className="select-input"
+                  style={{ background: 'var(--bg-canvas)' }}
                   value={occasion}
                   onChange={(e) => setOccasion(e.target.value)}
                 >
@@ -373,10 +432,11 @@ export default function OutfitStudioView({
               </div>
             </div>
 
-            <div className="field-group">
+            <div className="field-group" style={{ marginBottom: 0 }}>
               <label className="field-label">스타일링 메모</label>
               <input
                 className="text-input"
+                style={{ background: 'var(--bg-canvas)' }}
                 placeholder="예: 서류가방 + 트렌치 매칭"
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
@@ -387,56 +447,72 @@ export default function OutfitStudioView({
               현재 조합을 룩북에 저장
             </button>
           </form>
-        </section>
+        </div>
+      </ResponsiveSheetModal>
 
-        <section>
-          <h3 style={{ marginBottom: 14, fontSize: '1.08rem' }}>
-            저장된 코디 룩북 ({outfits.length}개)
-          </h3>
-
-          <div className="recs-grid">
+      {/* Saved Outfits Lookbook Bottom Sheet */}
+      <ResponsiveSheetModal
+        id="studio-lookbook-sheet"
+        open={lookbookSheetOpen}
+        onClose={() => setLookbookSheetOpen(false)}
+        eyebrow="SAVED LOOKBOOK"
+        title={`저장된 코디 룩북 (${outfits.length})`}
+      >
+        {outfits.length === 0 ? (
+          <p className="hig-caption">저장된 코디 조합이 없습니다.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {outfits.map((o) => (
-              <article key={o.id} className="rec-card">
-                <div>
-                  <div className="rec-card-top">
-                    <span className="rec-tag">{o.occasion}</span>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleDeleteOutfit(o.id)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <h3>{o.title}</h3>
-                  <div className="outfit-collage">
-                    {o.items.map((item) => (
-                      <div key={item.id} className="collage-piece">
-                        <StudioGarmentImage
-                          item={item}
-                          style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 6 }}
-                        />
-                        <span>{item.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {o.memo && <p className="rec-rationale">{o.memo}</p>}
-                </div>
+              <article
+                key={o.id}
+                style={{
+                  background: 'var(--bg-surface)',
+                  borderRadius: 16,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
                 <div
                   style={{
-                    fontSize: '0.78rem',
-                    color: 'var(--ink-muted)',
-                    paddingTop: 10,
-                    borderTop: '1px solid var(--border-hairline)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
                   }}
                 >
-                  누적 착용 {o.wear_count}회 {o.last_worn_date ? `· 최근 ${o.last_worn_date}` : ''}
+                  <span className="hig-caption">{o.occasion}</span>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="코디 삭제"
+                    onClick={() => handleDeleteOutfit(o.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
+                <div className="hig-headline">{o.title}</div>
+                <div className="outfit-collage">
+                  {(o.items || []).map((item) => (
+                    <div key={item.id} className="collage-piece">
+                      <StudioGarmentImage
+                        item={item}
+                        style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 8 }}
+                      />
+                      <span className="hig-caption">{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+                {o.memo && <p className="hig-caption">{o.memo}</p>}
+                <span className="hig-caption tabular-nums">
+                  누적 착용 {o.wear_count}회{o.last_worn_date ? ` · 최근 ${o.last_worn_date}` : ''}
+                </span>
               </article>
             ))}
           </div>
-        </section>
-      </div>
+        )}
+      </ResponsiveSheetModal>
 
       <OutfitInspectorModal
         open={inspectorOpen}
@@ -448,6 +524,6 @@ export default function OutfitStudioView({
         onSaveOutfit={() => handleSaveLook()}
         onClose={() => setInspectorOpen(false)}
       />
-    </div>
+    </>
   );
 }
