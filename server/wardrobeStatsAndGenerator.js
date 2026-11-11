@@ -3,8 +3,24 @@ import {
   normalizeBodyShapeKey,
   resolveAnatomicalProfile,
 } from '../src/utils/bodyAnthropometrics.js';
+import {
+  FOUR_SEASONS,
+  STUDIO_SEED_BY_SUBCATEGORY,
+  WEAR_SLOTS_11,
+  getPersonalColorLabels,
+  getStudioSeedImageForGarment,
+  resolveMacroPersonalColor,
+  resolveManifestSlotAndGlb,
+} from '../src/shared/garmentTaxonomy.js';
 
-export { BODY_SHAPE_OPTIONS, normalizeBodyShapeKey };
+export {
+  BODY_SHAPE_OPTIONS,
+  FOUR_SEASONS,
+  STUDIO_SEED_BY_SUBCATEGORY as STUDIO_SEED_MAP,
+  WEAR_SLOTS_11 as WEAR_SLOTS,
+  getStudioSeedImageForGarment,
+  normalizeBodyShapeKey,
+};
 
 export const AGE_GROUPS = [
   { key: 'under_10', labelKo: '10대 미만 (0~9세)', labelEn: 'Under 10 (0–9)', scale: 0.65 },
@@ -18,107 +34,6 @@ export const AGE_GROUPS = [
   { key: '80s', labelKo: '80대 (80~89세)', labelEn: '80s (80–89)', scale: 0.72 },
   { key: '90s_plus', labelKo: '90대 이상 (90세+)', labelEn: '90+ (90 & above)', scale: 0.65 },
 ];
-
-export const WEAR_SLOTS = [
-  { key: 'headwear', labelKo: '모자 · 헤드웨어', labelEn: 'Headwear', order: 1 },
-  { key: 'neckwear', labelKo: '목도리 · 스카프 · 타이', labelEn: 'Neckwear', order: 2 },
-  { key: 'outer', labelKo: '아우터 · 코트 · 자켓', labelEn: 'Outerwear', order: 3 },
-  { key: 'top', labelKo: '상의 · 니트 · 셔츠', labelEn: 'Tops', order: 4 },
-  { key: 'bottom', labelKo: '하의 · 팬츠 · 스커트', labelEn: 'Bottoms', order: 5 },
-  { key: 'dress', labelKo: '원피스 · 점프수트', labelEn: 'Dress / One-Piece', order: 6 },
-  { key: 'gloves', labelKo: '장갑 · 핸드웨어', labelEn: 'Gloves', order: 7 },
-  { key: 'underwear', labelKo: '언더웨어 · 이너웨어', labelEn: 'Underwear / Inner', order: 8 },
-  { key: 'socks', labelKo: '양말 · 레그웨어', labelEn: 'Socks / Legwear', order: 9 },
-  { key: 'shoes', labelKo: '신발 · 풋웨어', labelEn: 'Footwear', order: 10 },
-  { key: 'accessory', labelKo: '가방 · 시계 · 액세서리', labelEn: 'Accessories', order: 11 },
-];
-
-export const FOUR_SEASONS = ['봄', '여름', '가을', '겨울'];
-
-export const STUDIO_SEED_MAP = {
-  // outer
-  trench: '/seed/beige-trench.jpg',
-  blazer: '/seed/black-blazer.jpg',
-  jacket: '/seed/olive-jacket.jpg',
-  coat: '/seed/studio-coat.jpg',
-  padding: '/seed/studio-padding.jpg',
-  cardigan: '/seed/studio-cardigan.png',
-  // top
-  knit: '/seed/cream-knit.jpg',
-  shirt: '/seed/white-shirt.jpg',
-  blouse: '/seed/studio-blouse.jpg',
-  tshirt: '/seed/studio-tshirt.jpg',
-  sweatshirt: '/seed/studio-hoodie.jpg',
-  hoodie: '/seed/studio-hoodie.jpg',
-  // bottom
-  slacks: '/seed/charcoal-slacks.jpg',
-  denim: '/seed/indigo-denim.jpg',
-  chinos: '/seed/studio-chinos.jpg',
-  skirt: '/seed/studio-skirt.jpg',
-  shorts: '/seed/studio-shorts.jpg',
-  jogger: '/seed/studio-jogger.jpg',
-  // dress
-  dress: '/seed/studio-dress.jpg',
-  onepiece: '/seed/studio-onepiece.jpg',
-  jumpsuit: '/seed/studio-onepiece.jpg',
-  // headwear
-  beanie: '/seed/studio-beanie.jpg',
-  cap: '/seed/studio-cap.jpg',
-  beret: '/seed/studio-beret.jpg',
-  bucket_hat: '/seed/studio-cap.jpg',
-  // neckwear
-  scarf: '/seed/studio-scarf.jpg',
-  muffler: '/seed/studio-muffler.jpg',
-  necktie: '/seed/studio-necktie.jpg',
-  // gloves
-  gloves: '/seed/studio-gloves.jpg',
-  knit_gloves: '/seed/studio-gloves.jpg',
-  leather_gloves: '/seed/studio-leather-gloves.jpg',
-  // underwear
-  underwear: '/seed/studio-underwear.jpg',
-  inner_top: '/seed/studio-inner-top.jpg',
-  camisole: '/seed/studio-inner-top.jpg',
-  // socks
-  socks: '/seed/studio-socks.jpg',
-  crew_socks: '/seed/studio-crew-socks.jpg',
-  ankle_socks: '/seed/studio-socks.jpg',
-  // shoes
-  sneakers: '/seed/white-sneakers.jpg',
-  loafers: '/seed/black-loafers.jpg',
-  boots: '/seed/studio-boots.jpg',
-  heels: '/seed/studio-heels.jpg',
-  // accessory
-  briefcase: '/seed/studio-briefcase.jpg',
-  tote: '/seed/studio-tote.jpg',
-  bag: '/seed/studio-bag.jpg',
-  watch: '/seed/studio-watch.jpg',
-  belt: '/seed/studio-belt.jpg',
-  glasses: '/seed/studio-glasses.jpg',
-  accessory: '/seed/studio-bag.jpg',
-};
-
-const CATEGORY_DEFAULT_SEED = {
-  headwear: '/seed/studio-beanie.jpg',
-  neckwear: '/seed/studio-scarf.jpg',
-  outer: '/seed/beige-trench.jpg',
-  top: '/seed/cream-knit.jpg',
-  bottom: '/seed/charcoal-slacks.jpg',
-  dress: '/seed/studio-dress.jpg',
-  gloves: '/seed/studio-gloves.jpg',
-  underwear: '/seed/studio-underwear.jpg',
-  socks: '/seed/studio-socks.jpg',
-  shoes: '/seed/white-sneakers.jpg',
-  accessory: '/seed/studio-bag.jpg',
-  bag: '/seed/studio-bag.jpg',
-};
-
-export function getStudioSeedImageForGarment(category = 'top', subcategory = 'knit') {
-  const subKey = String(subcategory || '').toLowerCase().trim();
-  const catKey = String(category || 'top').toLowerCase().trim();
-  if (STUDIO_SEED_MAP[subKey]) return STUDIO_SEED_MAP[subKey];
-  if (CATEGORY_DEFAULT_SEED[catKey]) return CATEGORY_DEFAULT_SEED[catKey];
-  return '/seed/cream-knit.jpg';
-}
 
 export function normalizeAgeGroupKey(ageGroup, age) {
   if (ageGroup && AGE_GROUPS.some((g) => g.key === ageGroup)) return ageGroup;
@@ -159,7 +74,7 @@ export function buildWardrobeBenchmarksMatrix() {
     'WRAP UK (Valuing Our Clothes) · Hot or Cool Institute (1.5°C Wardrobe) · KOFOTI/한국의류학회 연령별 보유 통계';
 
   for (const ag of AGE_GROUPS) {
-    for (const slot of WEAR_SLOTS) {
+    for (const slot of WEAR_SLOTS_11) {
       for (const season of FOUR_SEASONS) {
         const base = BASE_SEASON_COUNTS[slot.key]?.[season] ?? 1;
         const scaled = base === 0 ? 0 : Math.max(1, Math.round(base * ag.scale));
@@ -278,62 +193,62 @@ const PERSONAL_COLOR_SWATCHES = {
 
 const SLOT_ITEM_TEMPLATES = {
   headwear: [
-    { subcategory: 'beanie', nameKo: '캐시미어 골지 비니', brand: 'COS', price: 69000, minTemp: -8, maxTemp: 10, formality: 'casual', water: 0 },
-    { subcategory: 'cap', nameKo: '코튼 트윌 볼캡', brand: 'ARKET', price: 49000, minTemp: 8, maxTemp: 32, formality: 'casual', water: 1 },
-    { subcategory: 'beret', nameKo: '메리노 울 프렌치 베레모', brand: 'MHL', price: 89000, minTemp: 2, maxTemp: 18, formality: 'smart', water: 0 },
+    { subcategory: 'beanie', fabric: 'knit', nameKo: '캐시미어 골지 비니', brand: 'COS', price: 69000, minTemp: -8, maxTemp: 10, formality: 'casual', water: 0 },
+    { subcategory: 'cap', fabric: 'cotton', nameKo: '코튼 트윌 볼캡', brand: 'ARKET', price: 49000, minTemp: 8, maxTemp: 32, formality: 'casual', water: 1 },
+    { subcategory: 'beret', fabric: 'wool', nameKo: '메리노 울 프렌치 베레모', brand: 'MHL', price: 89000, minTemp: 2, maxTemp: 18, formality: 'smart', water: 0 },
   ],
   neckwear: [
-    { subcategory: 'scarf', nameKo: '퓨어 캐시미어 프린지 머플러', brand: 'TOTEME', price: 240000, minTemp: -10, maxTemp: 9, formality: 'smart', water: 0 },
-    { subcategory: 'muffler', nameKo: '울 니트 쁘띠 스카프', brand: 'COS', price: 85000, minTemp: 0, maxTemp: 14, formality: 'casual', water: 0 },
-    { subcategory: 'necktie', nameKo: '실크 자카드 클래식 타이', brand: 'DRAKES', price: 195000, minTemp: 5, maxTemp: 25, formality: 'formal', water: 0 },
+    { subcategory: 'scarf', fabric: 'wool', nameKo: '퓨어 캐시미어 프린지 머플러', brand: 'TOTEME', price: 240000, minTemp: -10, maxTemp: 9, formality: 'smart', water: 0 },
+    { subcategory: 'muffler', fabric: 'knit', nameKo: '울 니트 쁘띠 스카프', brand: 'COS', price: 85000, minTemp: 0, maxTemp: 14, formality: 'casual', water: 0 },
+    { subcategory: 'necktie', fabric: 'silk', nameKo: '실크 자카드 클래식 타이', brand: 'DRAKES', price: 195000, minTemp: 5, maxTemp: 25, formality: 'formal', water: 0 },
   ],
   outer: [
-    { subcategory: 'trench', nameKo: '발수 개버딘 싱글 트렌치코트', brand: 'ARKET', price: 290000, minTemp: 7, maxTemp: 18, formality: 'smart', water: 1 },
-    { subcategory: 'blazer', nameKo: '테일러드 버진 울 블레이저', brand: 'COS', price: 350000, minTemp: 6, maxTemp: 19, formality: 'formal', water: 0 },
-    { subcategory: 'coat', nameKo: '더블 페이스 캐시미어 핸드메이드 코트', brand: 'SYSTEM', price: 480000, minTemp: -6, maxTemp: 9, formality: 'formal', water: 0 },
-    { subcategory: 'padding', nameKo: '구스다운 경량 스탠드넥 패딩', brand: 'DESCENTE', price: 320000, minTemp: -12, maxTemp: 5, formality: 'casual', water: 1 },
-    { subcategory: 'cardigan', nameKo: '메리노 울 V넥 버튼 가디건', brand: 'AMI', price: 210000, minTemp: 9, maxTemp: 20, formality: 'smart', water: 0 },
-    { subcategory: 'jacket', nameKo: '경량 퀼팅 유틸리티 자켓', brand: 'BARBOUR', price: 265000, minTemp: 6, maxTemp: 17, formality: 'casual', water: 1 },
+    { subcategory: 'trench', fabric: 'gabardine', nameKo: '발수 개버딘 싱글 트렌치코트', brand: 'ARKET', price: 290000, minTemp: 7, maxTemp: 18, formality: 'smart', water: 1 },
+    { subcategory: 'blazer', fabric: 'wool', nameKo: '테일러드 버진 울 블레이저', brand: 'COS', price: 350000, minTemp: 6, maxTemp: 19, formality: 'formal', water: 0 },
+    { subcategory: 'coat', fabric: 'wool', nameKo: '더블 페이스 캐시미어 핸드메이드 코트', brand: 'SYSTEM', price: 480000, minTemp: -6, maxTemp: 9, formality: 'formal', water: 0 },
+    { subcategory: 'padding', fabric: 'nylon', nameKo: '구스다운 경량 스탠드넥 패딩', brand: 'DESCENTE', price: 320000, minTemp: -12, maxTemp: 5, formality: 'casual', water: 1 },
+    { subcategory: 'cardigan', fabric: 'knit', nameKo: '메리노 울 V넥 버튼 가디건', brand: 'AMI', price: 210000, minTemp: 9, maxTemp: 20, formality: 'smart', water: 0 },
+    { subcategory: 'jacket', fabric: 'nylon', nameKo: '경량 퀼팅 유틸리티 자켓', brand: 'BARBOUR', price: 265000, minTemp: 6, maxTemp: 17, formality: 'casual', water: 1 },
   ],
   top: [
-    { subcategory: 'knit', nameKo: '파인 메리노 울 크루넥 니트', brand: 'COS', price: 135000, minTemp: 4, maxTemp: 18, formality: 'smart', water: 0 },
-    { subcategory: 'shirt', nameKo: '크리스프 포플린 옥스포드 셔츠', brand: 'POLO', price: 189000, minTemp: 9, maxTemp: 25, formality: 'smart', water: 0 },
-    { subcategory: 'tshirt', nameKo: '헤비웨이트 수피마 코튼 티셔츠', brand: 'ARKET', price: 45000, minTemp: 17, maxTemp: 33, formality: 'casual', water: 0 },
-    { subcategory: 'sweatshirt', nameKo: '프렌치 테리 세미오버 후드 스웨트', brand: 'A.P.C.', price: 168000, minTemp: 7, maxTemp: 19, formality: 'casual', water: 0 },
-    { subcategory: 'blouse', nameKo: '실크 크레이프 드레이프 셔츠', brand: 'THEORY', price: 245000, minTemp: 12, maxTemp: 26, formality: 'formal', water: 0 },
+    { subcategory: 'knit', fabric: 'knit', nameKo: '파인 메리노 울 크루넥 니트', brand: 'COS', price: 135000, minTemp: 4, maxTemp: 18, formality: 'smart', water: 0 },
+    { subcategory: 'shirt', fabric: 'cotton', nameKo: '크리스프 포플린 옥스포드 셔츠', brand: 'POLO', price: 189000, minTemp: 9, maxTemp: 25, formality: 'smart', water: 0 },
+    { subcategory: 'tshirt', fabric: 'cotton', nameKo: '헤비웨이트 수피마 코튼 티셔츠', brand: 'ARKET', price: 45000, minTemp: 17, maxTemp: 33, formality: 'casual', water: 0 },
+    { subcategory: 'sweatshirt', fabric: 'cotton', nameKo: '프렌치 테리 세미오버 후드 스웨트', brand: 'A.P.C.', price: 168000, minTemp: 7, maxTemp: 19, formality: 'casual', water: 0 },
+    { subcategory: 'blouse', fabric: 'silk', nameKo: '실크 크레이프 드레이프 셔츠', brand: 'THEORY', price: 245000, minTemp: 12, maxTemp: 26, formality: 'formal', water: 0 },
   ],
   bottom: [
-    { subcategory: 'slacks', nameKo: '울 블렌드 원턱 와이드 슬랙스', brand: 'COS', price: 175000, minTemp: 2, maxTemp: 23, formality: 'smart', water: 0 },
-    { subcategory: 'denim', nameKo: '셀비지 스트레이트 데님 팬츠', brand: 'LEVIS', price: 159000, minTemp: 2, maxTemp: 26, formality: 'casual', water: 1 },
-    { subcategory: 'chinos', nameKo: '코튼 트윌 테이퍼드 치노 팬츠', brand: 'BEAMS', price: 138000, minTemp: 8, maxTemp: 25, formality: 'smart', water: 0 },
-    { subcategory: 'shorts', nameKo: '버뮤다 플리츠 하프 팬츠', brand: 'ARKET', price: 95000, minTemp: 21, maxTemp: 34, formality: 'casual', water: 0 },
+    { subcategory: 'slacks', fabric: 'wool', nameKo: '울 블렌드 원턱 와이드 슬랙스', brand: 'COS', price: 175000, minTemp: 2, maxTemp: 23, formality: 'smart', water: 0 },
+    { subcategory: 'denim', fabric: 'denim', nameKo: '셀비지 스트레이트 데님 팬츠', brand: 'LEVIS', price: 159000, minTemp: 2, maxTemp: 26, formality: 'casual', water: 1 },
+    { subcategory: 'chinos', fabric: 'cotton', nameKo: '코튼 트윌 테이퍼드 치노 팬츠', brand: 'BEAMS', price: 138000, minTemp: 8, maxTemp: 25, formality: 'smart', water: 0 },
+    { subcategory: 'shorts', fabric: 'cotton', nameKo: '버뮤다 플리츠 하프 팬츠', brand: 'ARKET', price: 95000, minTemp: 21, maxTemp: 34, formality: 'casual', water: 0 },
   ],
   dress: [
-    { subcategory: 'dress', nameKo: '벨티드 미디 셔츠 원피스', brand: 'COS', price: 195000, minTemp: 13, maxTemp: 26, formality: 'smart', water: 0 },
-    { subcategory: 'onepiece', nameKo: '메리노 니트 롱 원피스', brand: 'TOTEME', price: 280000, minTemp: 4, maxTemp: 17, formality: 'formal', water: 0 },
+    { subcategory: 'dress', fabric: 'cotton', nameKo: '벨티드 미디 셔츠 원피스', brand: 'COS', price: 195000, minTemp: 13, maxTemp: 26, formality: 'smart', water: 0 },
+    { subcategory: 'onepiece', fabric: 'knit', nameKo: '메리노 니트 롱 원피스', brand: 'TOTEME', price: 280000, minTemp: 4, maxTemp: 17, formality: 'formal', water: 0 },
   ],
   gloves: [
-    { subcategory: 'leather_gloves', nameKo: '나파 레더 캐시미어 라이닝 장갑', brand: 'DENTS', price: 145000, minTemp: -12, maxTemp: 5, formality: 'formal', water: 1 },
-    { subcategory: 'gloves', nameKo: '터치스크린 울 니트 글러브', brand: 'ARKET', price: 49000, minTemp: -10, maxTemp: 7, formality: 'casual', water: 0 },
+    { subcategory: 'leather_gloves', fabric: 'leather', nameKo: '나파 레더 캐시미어 라이닝 장갑', brand: 'DENTS', price: 145000, minTemp: -12, maxTemp: 5, formality: 'formal', water: 1 },
+    { subcategory: 'gloves', fabric: 'knit', nameKo: '터치스크린 울 니트 글러브', brand: 'ARKET', price: 49000, minTemp: -10, maxTemp: 7, formality: 'casual', water: 0 },
   ],
   underwear: [
-    { subcategory: 'inner_top', nameKo: '심리스 립 모달 발열 이너탑', brand: 'UNIQLO', price: 29900, minTemp: -12, maxTemp: 14, formality: 'casual', water: 0 },
-    { subcategory: 'underwear', nameKo: '브리즈 수피마 코튼 에어 이너웨어', brand: 'CALVIN KLEIN', price: 48000, minTemp: 5, maxTemp: 34, formality: 'casual', water: 0 },
+    { subcategory: 'inner_top', fabric: 'cotton', nameKo: '심리스 립 모달 발열 이너탑', brand: 'UNIQLO', price: 29900, minTemp: -12, maxTemp: 14, formality: 'casual', water: 0 },
+    { subcategory: 'underwear', fabric: 'cotton', nameKo: '브리즈 수피마 코튼 에어 이너웨어', brand: 'CALVIN KLEIN', price: 48000, minTemp: 5, maxTemp: 34, formality: 'casual', water: 0 },
   ],
   socks: [
-    { subcategory: 'crew_socks', nameKo: '메리노 울 골지 크루 삭스', brand: 'FALKE', price: 28000, minTemp: -8, maxTemp: 18, formality: 'smart', water: 0 },
-    { subcategory: 'socks', nameKo: '코마 코튼 데일리 앵클 삭스', brand: 'ARKET', price: 19000, minTemp: 8, maxTemp: 32, formality: 'casual', water: 0 },
+    { subcategory: 'crew_socks', fabric: 'wool', nameKo: '메리노 울 골지 크루 삭스', brand: 'FALKE', price: 28000, minTemp: -8, maxTemp: 18, formality: 'smart', water: 0 },
+    { subcategory: 'socks', fabric: 'cotton', nameKo: '코마 코튼 데일리 앵클 삭스', brand: 'ARKET', price: 19000, minTemp: 8, maxTemp: 32, formality: 'casual', water: 0 },
   ],
   shoes: [
-    { subcategory: 'sneakers', nameKo: '미니멀 풀그레인 레더 코트 스니커즈', brand: 'COMMON PROJECTS', price: 268000, minTemp: 0, maxTemp: 32, formality: 'casual', water: 0 },
-    { subcategory: 'loafers', nameKo: '클래식 굿이어웰트 페니 로퍼', brand: 'BERWICK', price: 318000, minTemp: 0, maxTemp: 28, formality: 'formal', water: 1 },
-    { subcategory: 'boots', nameKo: '발수 스무스 레더 첼시 부츠', brand: 'CAMPER', price: 289000, minTemp: -8, maxTemp: 16, formality: 'smart', water: 1 },
+    { subcategory: 'sneakers', fabric: 'leather', nameKo: '미니멀 풀그레인 레더 코트 스니커즈', brand: 'COMMON PROJECTS', price: 268000, minTemp: 0, maxTemp: 32, formality: 'casual', water: 0 },
+    { subcategory: 'loafers', fabric: 'leather', nameKo: '클래식 굿이어웰트 페니 로퍼', brand: 'BERWICK', price: 318000, minTemp: 0, maxTemp: 28, formality: 'formal', water: 1 },
+    { subcategory: 'boots', fabric: 'leather', nameKo: '발수 스무스 레더 첼시 부츠', brand: 'CAMPER', price: 289000, minTemp: -8, maxTemp: 16, formality: 'smart', water: 1 },
   ],
   accessory: [
-    { subcategory: 'bag', nameKo: '미니멀 레더 크로스 & 토트백', brand: 'LEMAIRE', price: 420000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
-    { subcategory: 'watch', nameKo: '스틸 케이스 레더 스트랩 드레스 워치', brand: 'NOMOS', price: 380000, minTemp: -10, maxTemp: 35, formality: 'formal', water: 1 },
-    { subcategory: 'belt', nameKo: '이탈리안 카프스킨 실버 버클 벨트', brand: 'OUR LEGACY', price: 145000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
-    { subcategory: 'glasses', nameKo: '아세테이트 아틀리에 아이웨어', brand: 'GENTLE MONSTER', price: 260000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
+    { subcategory: 'bag', fabric: 'leather', nameKo: '미니멀 레더 크로스 & 토트백', brand: 'LEMAIRE', price: 420000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
+    { subcategory: 'watch', fabric: 'leather', nameKo: '스틸 케이스 레더 스트랩 드레스 워치', brand: 'NOMOS', price: 380000, minTemp: -10, maxTemp: 35, formality: 'formal', water: 1 },
+    { subcategory: 'belt', fabric: 'leather', nameKo: '이탈리안 카프스킨 실버 버클 벨트', brand: 'OUR LEGACY', price: 145000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
+    { subcategory: 'glasses', fabric: 'acetate', nameKo: '아세테이트 아틀리에 아이웨어', brand: 'GENTLE MONSTER', price: 260000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
   ],
 };
 
@@ -342,9 +257,11 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
 
   const ageGroup = normalizeAgeGroupKey(userProfile.age_group || userProfile.ageGroup, userProfile.age);
   const personalColor = userProfile.personal_color || userProfile.personalColor || 'autumn_warm';
+  const macroPersonalColor = resolveMacroPersonalColor(personalColor);
+  const pcLabels = getPersonalColorLabels(personalColor);
   const gender = userProfile.gender || 'unspecified';
 
-  const palette = PERSONAL_COLOR_SWATCHES[personalColor] || PERSONAL_COLOR_SWATCHES.autumn_warm;
+  const palette = PERSONAL_COLOR_SWATCHES[macroPersonalColor] || PERSONAL_COLOR_SWATCHES.autumn_warm;
   const benchmarks = db
     .prepare('SELECT * FROM wardrobe_statistics_benchmarks WHERE age_group = ?')
     .all(ageGroup);
@@ -353,8 +270,9 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
     INSERT INTO garments (
       closet_owner, name, category, subcategory, color_name, color_hex,
       seasons, min_temp, max_temp, water_resistant, formality,
-      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, 0)
   `);
 
   const today = new Date();
@@ -374,7 +292,7 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
     bySlot.get(b.body_part).push(b);
   }
 
-  for (const slot of WEAR_SLOTS) {
+  for (const slot of WEAR_SLOTS_11) {
     const slotKey = slot.key;
     if (slotKey === 'dress' && gender === 'male') {
       continue;
@@ -398,8 +316,9 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
           : [primarySeason];
 
       const imageUrl = getStudioSeedImageForGarment(slotKey, tpl.subcategory);
-      const wearCount = (i * 3 + createdCount) % 14 + 1;
-      const daysAgo = (i * 4 + 2) % 28 + 1;
+      const manifestSpec = resolveManifestSlotAndGlb(slotKey, tpl.subcategory);
+      const wearCount = ((i * 3 + createdCount) % 14) + 1;
+      const daysAgo = ((i * 4 + 2) % 28) + 1;
       const isFav = i === 0 ? 1 : 0;
 
       insertGarment.run(
@@ -420,7 +339,11 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
         fmtDate(daysAgo),
         isFav,
         imageUrl,
-        `${ageGroup} 연령대 통계 벤치마크(${primarySeason}) & ${personalColor} 퍼스널컬러 맞춤 큐레이션`
+        `${ageGroup} 연령대 통계 벤치마크(${primarySeason}) & ${pcLabels.ko || personalColor} 퍼스널컬러 맞춤 큐레이션`,
+        tpl.fabric || 'cotton',
+        manifestSpec.slotKey,
+        manifestSpec.baseGlb,
+        manifestSpec.physicsPreset
       );
       createdCount += 1;
     }
@@ -430,6 +353,7 @@ export function generateStatisticalWardrobeForUser(db, closetOwner, userProfile 
     closetOwner,
     ageGroup,
     personalColor,
+    macroPersonalColor,
     createdCount,
   };
 }

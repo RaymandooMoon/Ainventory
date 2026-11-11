@@ -238,8 +238,9 @@ if [[ -z "${GCP_PROJECT_ID}" ]] && command -v gcloud >/dev/null 2>&1; then
   fi
 fi
 
-if [[ -z "${GCP_PROJECT_ID}" ]]; then
-  log_err "Could not determine GCP_PROJECT_ID. Pass --project <ID> or set GCP_PROJECT_ID."
+PROJECT_ID_RE='^[a-z][a-z0-9-]{4,28}[a-z0-9]$'
+if [[ -z "${GCP_PROJECT_ID}" || ! "${GCP_PROJECT_ID}" =~ ${PROJECT_ID_RE} ]]; then
+  log_err "Invalid or missing GCP_PROJECT_ID '${GCP_PROJECT_ID}' (expected 6-30 lowercase letters, digits, or hyphens). Pass --project <ID> or set GCP_PROJECT_ID."
   exit 1
 fi
 
@@ -264,15 +265,30 @@ if [[ -z "${GITHUB_REPO}" || ! "${GITHUB_REPO}" =~ ${REPO_RE} ]]; then
 fi
 
 GCP_SA_NAME="${CLI_SA_NAME:-${GCP_SA_NAME:-github-ftl-ci}}"
+SA_NAME_RE='^[a-z][a-z0-9-]{4,28}[a-z0-9]$'
+if [[ ! "${GCP_SA_NAME}" =~ ${SA_NAME_RE} ]]; then
+  log_err "Invalid Service Account short name '${GCP_SA_NAME}'."
+  exit 1
+fi
 SA_EMAIL="${GCP_SA_NAME}@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
 
 FTL_RESULTS_BUCKET="${CLI_FTL_RESULTS_BUCKET:-${FTL_RESULTS_BUCKET:-${GCP_PROJECT_ID}-ainventory-ftl-logs}}"
 FTL_RESULTS_BUCKET="${FTL_RESULTS_BUCKET#gs://}"
 FTL_RESULTS_BUCKET="${FTL_RESULTS_BUCKET%/}"
+BUCKET_RE='^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$'
+if [[ ! "${FTL_RESULTS_BUCKET}" =~ ${BUCKET_RE} ]]; then
+  log_err "Invalid GCS bucket name '${FTL_RESULTS_BUCKET}'."
+  exit 1
+fi
 
 GCP_BUCKET_LOCATION="${CLI_BUCKET_LOCATION:-${GCP_BUCKET_LOCATION:-us-central1}}"
 GCP_WIF_POOL_NAME="${CLI_WIF_POOL_NAME:-${GCP_WIF_POOL_NAME:-github-actions-pool}}"
 GCP_WIF_PROVIDER_NAME="${CLI_WIF_PROVIDER_NAME:-${GCP_WIF_PROVIDER_NAME:-github-oidc}}"
+WIF_ID_RE='^[a-z0-9-]{4,32}$'
+if [[ ! "${GCP_WIF_POOL_NAME}" =~ ${WIF_ID_RE} || ! "${GCP_WIF_PROVIDER_NAME}" =~ ${WIF_ID_RE} ]]; then
+  log_err "Invalid WIF pool or provider ID (must be 4-32 lowercase alphanumeric/hyphen chars)."
+  exit 1
+fi
 
 log_info "Mode:                $([[ "${DRY_RUN}" == "true" ]] && echo "DRY-RUN (no changes applied)" || echo "LIVE")"
 log_info "GCP_PROJECT_ID:      ${GCP_PROJECT_ID}"
@@ -364,10 +380,11 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     --public-access-prevention
 else
   if gcloud storage buckets describe "gs://${FTL_RESULTS_BUCKET}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-    log_info "GCS bucket gs://${FTL_RESULTS_BUCKET} already exists (ensuring uniform access)."
+    log_info "GCS bucket gs://${FTL_RESULTS_BUCKET} already exists (ensuring uniform access & public access prevention)."
     gcloud storage buckets update "gs://${FTL_RESULTS_BUCKET}" \
       --project="${GCP_PROJECT_ID}" \
-      --uniform-bucket-level-access >/dev/null
+      --uniform-bucket-level-access \
+      --public-access-prevention >/dev/null
   else
     log_info "Creating GCS bucket gs://${FTL_RESULTS_BUCKET}..."
     gcloud storage buckets create "gs://${FTL_RESULTS_BUCKET}" \
@@ -418,8 +435,8 @@ fi
 log_step "5/7 Configuring repo-bound Workload Identity Pool & OIDC Provider"
 
 OIDC_ISSUER_URI="https://token.actions.githubusercontent.com"
-OIDC_ATTRIBUTE_MAPPING="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner"
-OIDC_ATTRIBUTE_CONDITION="assertion.repository == '${GITHUB_REPO}'"
+OIDC_ATTRIBUTE_MAPPING="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner,attribute.ref=assertion.ref"
+OIDC_ATTRIBUTE_CONDITION="assertion.repository == '${GITHUB_REPO}' && (assertion.ref == 'refs/heads/main' || assertion.ref == 'refs/heads/master' || assertion.ref == 'refs/heads/develop')"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
   run_cmd gcloud iam workload-identity-pools create "${GCP_WIF_POOL_NAME}" \
@@ -601,7 +618,9 @@ elif [[ "${DRY_RUN}" == "true" ]]; then
 else
   models_json="$(gcloud firebase test android models list --project="${GCP_PROJECT_ID}" --format=json 2>/dev/null || true)"
   if [[ -n "${models_json}" ]] && command -v python3 >/dev/null 2>&1; then
-    read -r discovered_model discovered_os < <(printf '%s' "${models_json}" | select_physical_android_device)
+    discovered_model=""
+    discovered_os=""
+    read -r discovered_model discovered_os < <(printf '%s' "${models_json}" | select_physical_android_device) || true
     FTL_DEVICE_MODEL="${FTL_DEVICE_MODEL:-${discovered_model:-shiba}}"
     FTL_OS_VERSION="${FTL_OS_VERSION:-${discovered_os:-34}}"
   else
@@ -610,6 +629,17 @@ else
     FTL_OS_VERSION="${FTL_OS_VERSION:-34}"
   fi
   log_info "Selected PHYSICAL Android target: model=${FTL_DEVICE_MODEL}, version=${FTL_OS_VERSION}"
+fi
+
+DEVICE_MODEL_RE='^[A-Za-z0-9_.-]{1,64}$'
+OS_VERSION_RE='^[0-9]{2,3}$'
+if [[ ! "${FTL_DEVICE_MODEL}" =~ ${DEVICE_MODEL_RE} ]]; then
+  log_err "Invalid FTL_DEVICE_MODEL '${FTL_DEVICE_MODEL}'."
+  exit 1
+fi
+if [[ ! "${FTL_OS_VERSION}" =~ ${OS_VERSION_RE} ]]; then
+  log_err "Invalid FTL_OS_VERSION '${FTL_OS_VERSION}'."
+  exit 1
 fi
 
 # ------------------------------------------------------------------------------
