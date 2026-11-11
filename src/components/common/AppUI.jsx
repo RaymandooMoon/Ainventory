@@ -83,28 +83,37 @@ export function ResponsiveSheetModal({
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(0);
+  const dragYRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
   const headingId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return undefined;
     const popBack = pushBackHandler(() => {
-      onClose?.();
+      onCloseRef.current?.();
       return true;
     });
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       popBack();
+      dragYRef.current = 0;
+      isDraggingRef.current = false;
       setDragY(0);
       setIsDragging(false);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -112,34 +121,38 @@ export function ResponsiveSheetModal({
     e.stopPropagation();
     const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
     startYRef.current = clientY;
+    dragYRef.current = 0;
+    isDraggingRef.current = true;
     setIsDragging(true);
   };
 
   const handleDragMove = (e) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     e.stopPropagation();
     const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
     const delta = Math.max(0, clientY - startYRef.current);
+    dragYRef.current = delta;
     setDragY(delta);
   };
 
   const handleDragEnd = (e) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     e?.stopPropagation?.();
+    const finalDelta = dragYRef.current;
+    isDraggingRef.current = false;
+    dragYRef.current = 0;
     setIsDragging(false);
-    if (dragY > 80) {
+    setDragY(0);
+    if (finalDelta > 80) {
       triggerHaptic('selection');
-      setDragY(0);
-      onClose?.();
-    } else {
-      setDragY(0);
+      onCloseRef.current?.();
     }
   };
 
   return (
     <div
       className="modal-backdrop ui-sheet-backdrop"
-      onClick={onClose}
+      onClick={() => onCloseRef.current?.()}
       onPointerMove={handleDragMove}
       onPointerUp={handleDragEnd}
       onPointerCancel={handleDragEnd}
@@ -192,7 +205,7 @@ export function ResponsiveSheetModal({
               <button
                 type="button"
                 className="icon-btn"
-                onClick={onClose}
+                onClick={() => onCloseRef.current?.()}
                 aria-label="닫기"
               >
                 <X size={18} />

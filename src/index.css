@@ -2114,7 +2114,7 @@ html[data-vibrancy-fallback='solid'] .hig-vibrancy-capsule {
 }
 
 .hig-fade-in {
-  animation: higFadeInSmooth 0.36s var(--spring-ease) both;
+  animation: higFadeInSmooth 0.36s var(--spring-ease);
 }
 
 @keyframes higFadeInSmooth {
@@ -2124,7 +2124,7 @@ html[data-vibrancy-fallback='solid'] .hig-vibrancy-capsule {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 

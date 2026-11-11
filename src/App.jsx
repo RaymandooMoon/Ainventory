@@ -531,7 +531,7 @@ export default function App() {
           </button>
 
           <button
-            id={CARBON_DOM_CONTRACT.mobileOpenAccountSettingsId}
+            id={CARBON_DOM_CONTRACT.mobileOpenAccountSettingsBtnId}
             type="button"
             className="icon-btn"
             aria-label="계정 및 개인정보 설정"

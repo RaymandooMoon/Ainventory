@@ -27,6 +27,7 @@ export function setStoredLang(lang: string): LangCode {
 }
 
 const KO_DICT = {
+  brandTitle: 'A inventory',
   brandSub: 'Minimal Digital Wardrobe & 3D Studio',
   brandSubtitle: '디지털 옷장 · 3D 스튜디오',
   navWeather: '내일 날씨 코디',
@@ -80,6 +81,7 @@ const KO_DICT = {
 export type I18nKey = keyof typeof KO_DICT;
 
 const EN_DICT: Record<I18nKey, string> = {
+  brandTitle: 'A inventory',
   brandSub: 'Minimal Digital Wardrobe & 3D Studio',
   brandSubtitle: 'Digital Wardrobe · 3D Studio',
   navWeather: 'Tomorrow Weather Look',
