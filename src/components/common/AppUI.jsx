@@ -1,81 +1,173 @@
-import { X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, Check, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { apiFetch, formatKRW } from '../../utils/api.js';
+import {
+  acknowledgeCameraNotice,
+  pushBackHandler,
+  setBiometricConsent,
+  subscribeStatusCapsule,
+  triggerHaptic,
+} from '../../utils/nativeBridge.js';
 
-/**
- * Shared App-Store / Play-Store Responsive UI Standard Library (`AppUI.jsx`)
- * Benchmark synthesis of Acloset (studio packshot & weather daily card),
- * GetWardrobe (CPW & asset value analytics), and Whering (1-tap Dress Me rail & bottom sheets).
- */
-
-export function PageHeader({ eyebrow, title, subtitle, actions, className = '' }) {
+export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
-    <header className={`ui-page-header page-header ${className}`.trim()}>
-      <div className="ui-page-header-copy">
-        {eyebrow && <span className="atl-eyebrow">{eyebrow}</span>}
-        <h1>{title}</h1>
-        {subtitle && <p className="page-subtitle">{subtitle}</p>}
+    <header className="ui-page-header" style={{ marginBottom: 16 }}>
+      <div className="ui-page-header-text">
+        {eyebrow && <div className="hig-caption" style={{ marginBottom: 4 }}>{eyebrow}</div>}
+        <h1 className="hig-large-title">{title}</h1>
+        {subtitle && <p className="hig-caption" style={{ marginTop: 4 }}>{subtitle}</p>}
       </div>
       {actions && <div className="ui-page-header-actions">{actions}</div>}
     </header>
   );
 }
 
-export function HorizontalChipRail({ ariaLabel, children, className = '' }) {
+export function HorizontalChipRail({ items = [], activeKey, onSelect, ariaLabel = '필터 선택' }) {
   return (
-    <div className={`ui-chip-rail ${className}`.trim()} role="tablist" aria-label={ariaLabel}>
-      {children}
+    <div className="ui-chip-rail" role="tablist" aria-label={ariaLabel}>
+      {items.map((item) => {
+        const active = activeKey === item.key;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            className={`chip ${active ? 'active' : ''}`}
+            onClick={() => {
+              triggerHaptic('selection');
+              onSelect?.(item.key);
+            }}
+          >
+            {item.icon ? <span className="ui-chip-icon">{item.icon}</span> : null}
+            <span>{item.label}</span>
+            {item.count !== undefined && (
+              <span className="ui-chip-count tabular-nums">{item.count}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-export function KpiMetricStrip({ items = [], className = '' }) {
-  if (!items.length) return null;
+export function KpiMetricStrip({ items = [] }) {
   return (
-    <section className={`ui-kpi-strip ${className}`.trim()} aria-label="핵심 옷장 지표">
-      {items.map((it) => (
-        <article key={it.key || it.label} className="ui-kpi-card">
-          <span className="ui-kpi-label">{it.label}</span>
-          <strong className="ui-kpi-value">{it.value}</strong>
-          {it.sub && <small className="ui-kpi-sub">{it.sub}</small>}
-        </article>
+    <div className="ui-kpi-strip">
+      {items.map((m) => (
+        <div key={m.label} className="ui-kpi-card">
+          <span className="ui-kpi-label">{m.label}</span>
+          <strong className="ui-kpi-value tabular-nums">{m.value}</strong>
+          {m.sub && <small className="ui-kpi-sub tabular-nums">{m.sub}</small>}
+        </div>
       ))}
-    </section>
+    </div>
   );
 }
 
+/**
+ * Spring Physics Bottom Sheet / Modal with Drag-to-Dismiss & Hardware Back Stack (Reqs 9.a, 13.a)
+ */
 export function ResponsiveSheetModal({
   open,
   onClose,
-  eyebrow,
   title,
-  maxWidth = 760,
+  eyebrow,
+  maxWidth = 720,
   children,
   footer,
 }) {
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startYRef = useRef(0);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setDragY(0);
+    setIsDragging(false);
+    const popBack = pushBackHandler(() => {
+      onClose?.();
+      return true;
+    });
+    return () => popBack();
+  }, [open, onClose]);
+
   if (!open) return null;
+
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+    startYRef.current = clientY;
+    setIsDragging(true);
+  };
+
+  const handleDragMove = (e) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+    const delta = Math.max(0, clientY - startYRef.current);
+    setDragY(delta);
+  };
+
+  const handleDragEnd = (e) => {
+    if (!isDragging) return;
+    e?.stopPropagation?.();
+    setIsDragging(false);
+    if (dragY > 84) {
+      triggerHaptic('selection');
+      setDragY(0);
+      onClose?.();
+    } else {
+      setDragY(0);
+    }
+  };
+
   return (
-    <div className="modal-backdrop ui-sheet-backdrop" onClick={onClose}>
+    <div
+      className="modal-backdrop ui-sheet-backdrop"
+      onClick={onClose}
+      onPointerMove={handleDragMove}
+      onPointerUp={handleDragEnd}
+      onPointerCancel={handleDragEnd}
+    >
       <div
         className="modal-box ui-sheet-box"
-        style={{ maxWidth, width: '95vw' }}
+        style={{
+          maxWidth,
+          transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+          transition: isDragging ? 'none' : 'transform 0.42s var(--spring-ease)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="ui-sheet-drag-handle" aria-hidden="true" />
-        <div className="modal-header ui-sheet-header">
-          <div>
-            {eyebrow && (
-              <span className="rec-tag" style={{ marginBottom: 4, display: 'inline-block' }}>
-                {eyebrow}
-              </span>
-            )}
-            <h2>{title}</h2>
-          </div>
-          {onClose && (
-            <button type="button" className="icon-btn" onClick={onClose} aria-label="닫기">
+        <div
+          className="ui-sheet-drag-zone"
+          onPointerDown={handleDragStart}
+          aria-label="드래그하여 닫기"
+        >
+          <div className="ui-sheet-drag-handle" aria-hidden="true" />
+        </div>
+
+        {(title || eyebrow) && (
+          <div className="modal-header" style={{ marginBottom: 16 }}>
+            <div>
+              {eyebrow && (
+                <span className="hig-caption" style={{ display: 'block', marginBottom: 2 }}>
+                  {eyebrow}
+                </span>
+              )}
+              {title && <h2 className="hig-headline">{title}</h2>}
+            </div>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={onClose}
+              aria-label="닫기"
+            >
               <X size={18} />
             </button>
-          )}
-        </div>
-        <div className="ui-sheet-body">{children}</div>
+          </div>
+        )}
+        <div className="ui-sheet-content">{children}</div>
         {footer && <div className="ui-sheet-footer">{footer}</div>}
       </div>
     </div>
@@ -84,11 +176,447 @@ export function ResponsiveSheetModal({
 
 export function EmptyStateBox({ icon, title, description, action }) {
   return (
-    <div className="ui-empty-state">
-      {icon && <div className="ui-empty-icon">{icon}</div>}
-      <strong>{title}</strong>
-      {description && <p>{description}</p>}
-      {action && <div style={{ marginTop: 12 }}>{action}</div>}
+    <div
+      className="ui-empty-box hig-fade-in"
+      style={{
+        background: 'var(--bg-surface)',
+        borderRadius: 24,
+        padding: '40px 24px',
+        textAlign: 'center',
+      }}
+    >
+      {icon && <div className="ui-empty-icon" style={{ marginBottom: 12 }}>{icon}</div>}
+      <h3 className="hig-headline" style={{ marginBottom: 8 }}>{title}</h3>
+      {description && (
+        <p className="hig-caption" style={{ maxWidth: 380, margin: '0 auto 16px' }}>
+          {description}
+        </p>
+      )}
+      {action && <div className="ui-empty-action">{action}</div>}
     </div>
+  );
+}
+
+/**
+ * Dynamic Island Minimal Top Status Capsule (Req 13.b, 14.a)
+ */
+export function StatusCapsule() {
+  const [payload, setPayload] = useState(null);
+
+  useEffect(() => {
+    let timer = null;
+    const unsub = subscribeStatusCapsule((next) => {
+      setPayload(next);
+      if (timer) clearTimeout(timer);
+      if (next?.message) {
+        timer = setTimeout(() => setPayload(null), next.durationMs || 2400);
+      }
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+    };
+  }, []);
+
+  if (!payload?.message) return null;
+
+  return (
+    <div className="hig-status-capsule-wrap" role="status" aria-live="polite">
+      <div className="hig-status-capsule hig-vibrancy-capsule">
+        <Check size={13} strokeWidth={2.5} />
+        <span>{payload.message}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton Shimmer Placeholders (Req 13.c — Replaces Spinning Loaders)
+ */
+export function SkeletonShimmer({ height = 140, width = '100%', radius = 16, style = {} }) {
+  return (
+    <div
+      className="hig-skeleton"
+      aria-hidden="true"
+      style={{ height, width, borderRadius: radius, ...style }}
+    />
+  );
+}
+
+export function SkeletonWardrobeGrid({ count = 6 }) {
+  return (
+    <div className="hig-cutout-grid" aria-label="옷장 로딩 중">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div
+          key={idx}
+          className="hig-skeleton"
+          style={{ aspectRatio: '3 / 4', borderRadius: 16 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonBentoGrid({ count = 3 }) {
+  return (
+    <div className="hig-bento-grid" aria-label="인사이트 로딩 중">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div key={idx} className="hig-skeleton" style={{ height: 156, borderRadius: 24 }} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Button with Silent Icon Morphing + Micro-Haptics (Req 13.b)
+ */
+export function MorphActionButton({
+  icon,
+  label,
+  morphedLabel = '완료',
+  className = 'btn btn-secondary btn-sm',
+  onClick,
+  disabled = false,
+  id,
+}) {
+  const [morphed, setMorphed] = useState(false);
+
+  const handlePress = async (e) => {
+    if (disabled) return;
+    triggerHaptic('light');
+    await onClick?.(e);
+    setMorphed(true);
+    setTimeout(() => setMorphed(false), 1100);
+  };
+
+  return (
+    <button
+      id={id}
+      type="button"
+      className={className}
+      disabled={disabled}
+      onClick={handlePress}
+    >
+      {morphed ? <Check size={14} strokeWidth={2.5} /> : icon}
+      <span>{morphed ? morphedLabel : label}</span>
+    </button>
+  );
+}
+
+/**
+ * Pre-Permission Rationale Modal for Camera / Photo Library (Req 10.c)
+ */
+export function PermissionNoticeModal({ open, mode = 'camera', onConfirm, onClose }) {
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      eyebrow="PRIVACY & PERMISSION"
+      title={mode === 'camera' ? '카메라 및 사진 접근 안내' : '사진 보관함 접근 안내'}
+      maxWidth={440}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: 16,
+            borderRadius: 16,
+            background: 'var(--bg-surface)',
+          }}
+        >
+          <Camera size={22} />
+          <p className="hig-body" style={{ fontSize: '0.88rem' }}>
+            선택하거나 촬영한 사진은 의류 배경 제거(WebP 누끼) 및 옷장 등록 용도로만 사용되며,
+            동의 없이 외부 제3자에게 공유되지 않습니다.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            취소
+          </button>
+          <button
+            id="confirm-camera-permission-btn"
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              acknowledgeCameraNotice();
+              triggerHaptic('light');
+              onConfirm?.();
+            }}
+          >
+            확인 및 계속하기
+          </button>
+        </div>
+      </div>
+    </ResponsiveSheetModal>
+  );
+}
+
+/**
+ * Explicit Local Biometric Processing Notice & Consent Modal (Req 10.c)
+ */
+export function BiometricConsentModal({ open, onConfirm, onClose }) {
+  const [checked, setChecked] = useState(true);
+
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      eyebrow="ON-DEVICE FACE PRIVACY"
+      title="온디바이스 얼굴 피부톤 분석 동의"
+      maxWidth={460}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            padding: 16,
+            borderRadius: 16,
+            background: 'var(--bg-surface)',
+          }}
+        >
+          <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div className="hig-body" style={{ fontSize: '0.86rem' }}>
+            <strong>100% 기기 내부 메모리 처리 (서버 미전송)</strong>
+            <p className="hig-caption" style={{ marginTop: 6 }}>
+              얼굴 랜드마크(이마·양볼·턱) 및 피부 명도·언더톤 추출은 브라우저 내부 온디바이스
+              WASM 엔진에서만 수행된 뒤 즉시 메모리에서 파기됩니다. 원본 얼굴 사진은 외부 서버로
+              업로드되지 않습니다.
+            </p>
+          </div>
+        </div>
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: '0.86rem',
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            id="biometric-consent-checkbox"
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+          />
+          <span>기기 내 로컬 얼굴 색상 분석 처리 안내를 확인했으며 동의합니다.</span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            취소
+          </button>
+          <button
+            id="confirm-biometric-consent-btn"
+            type="button"
+            className="btn btn-primary"
+            disabled={!checked}
+            onClick={() => {
+              setBiometricConsent(true);
+              triggerHaptic('light');
+              onConfirm?.();
+            }}
+          >
+            동의 후 분석 시작
+          </button>
+        </div>
+      </div>
+    </ResponsiveSheetModal>
+  );
+}
+
+/**
+ * Selective Sample Closet Import Sheet for Logged-in Users (Req 8.a)
+ */
+export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
+  const [samples, setSamples] = useState([]);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    apiFetch('/sample-catalog')
+      .then((res) => {
+        if (!active) return;
+        const list = res.samples || [];
+        setSamples(list);
+        setSelectedKeys(list.slice(0, 5).map((item) => item.key || item.sampleKey));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  const toggleKey = (key) => {
+    triggerHaptic('selection');
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleImport = async () => {
+    if (selectedKeys.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await apiFetch('/garments/import-samples', {
+        method: 'POST',
+        body: JSON.stringify({
+          sample_keys: selectedKeys,
+          closet_owner: targetOwner,
+        }),
+      });
+      triggerHaptic('medium');
+      onImported?.(res.count ?? res.importedCount ?? selectedKeys.length);
+      onClose?.();
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      eyebrow="SAMPLE CAPSULE IMPORT"
+      title="샘플 아이템 선택 가져오기"
+      maxWidth={680}
+    >
+      {loading ? (
+        <SkeletonWardrobeGrid count={6} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="hig-caption">
+              원하는 아이템만 내 옷장으로 선택 복제할 수 있습니다 ({selectedKeys.length}개 선택됨)
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() =>
+                setSelectedKeys(
+                  selectedKeys.length === samples.length
+                    ? []
+                    : samples.map((s) => s.key || s.sampleKey)
+                )
+              }
+            >
+              {selectedKeys.length === samples.length ? '전체 해제' : '전체 선택'}
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
+              gap: 12,
+              maxHeight: '52dvh',
+              overflowY: 'auto',
+            }}
+          >
+            {samples.map((item) => {
+              const itemKey = item.key || item.sampleKey;
+              const checked = selectedKeys.includes(itemKey);
+              return (
+                <button
+                  key={itemKey}
+                  type="button"
+                  onClick={() => toggleKey(itemKey)}
+                  style={{
+                    background: checked ? 'var(--bg-subtle)' : 'var(--bg-surface)',
+                    borderRadius: 16,
+                    padding: 12,
+                    textAlign: 'left',
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    style={{
+                      aspectRatio: '1 / 1',
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      marginBottom: 8,
+                      background: 'var(--bg-canvas)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <img
+                      src={item.image_url}
+                      alt={item.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                  <div
+                    className="hig-caption"
+                    style={{
+                      color: 'var(--ink-primary)',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {item.name}
+                  </div>
+                  <div className="hig-caption tabular-nums">{formatKRW(item.price)}</div>
+                  {checked && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        background: 'var(--accent-mono)',
+                        color: 'var(--ink-inverse)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Check size={13} strokeWidth={2.6} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              취소
+            </button>
+            <button
+              id="confirm-import-samples-btn"
+              type="button"
+              className="btn btn-primary"
+              disabled={importing || selectedKeys.length === 0}
+              onClick={handleImport}
+            >
+              <Sparkles size={15} />
+              <span>
+                {importing ? '가져오는 중...' : `${selectedKeys.length}개 아이템 내 옷장에 담기`}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+    </ResponsiveSheetModal>
   );
 }

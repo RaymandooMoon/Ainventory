@@ -1,797 +1,765 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Footprints,
+  Check,
+  CloudRain,
   Hand,
   Layers,
+  Play,
   RotateCcw,
-  Ruler,
   SlidersHorizontal,
   Sparkles,
   Umbrella,
-  User,
-  UserCheck,
-  Wind,
   X,
 } from 'lucide-react';
-import { formatKRW } from '../utils/api.js';
-import { resolveAnatomicalProfile } from '../utils/bodyAnthropometrics.js';
-import { infer3DRegistrationSpec } from '../utils/garment3DPhysicsSpecs.js';
-import {
-  MOTION_PRESETS,
-  Mannequin3DWebGLEngine,
-  inferFabricMaterialSpec,
-  render3DMannequinScene,
-  resolveSkinHex,
-} from '../utils/mannequin3DRenderer.js';
+import { Mannequin3DWebGLEngine } from '../utils/mannequin3DRenderer.js';
+import { pushBackHandler, triggerHaptic } from '../utils/nativeBridge.js';
+import Mannequin2DCollageFallback from './Mannequin2DCollageFallback.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
-// 11 wear slots in head → foot dressing order (code numbers are used by OutfitInspectorModal)
 export const LEFT_HUD_SLOTS = [
-  { key: 'headwear', code: 'SLT-01 // HEAD', no: '01', labelKo: '모자 · 헤드웨어', shortKo: '모자' },
-  { key: 'neckwear', code: 'SLT-02 // NECK', no: '02', labelKo: '목도리 · 스카프', shortKo: '목도리' },
-  { key: 'outer', code: 'SLT-03 // OUTER', no: '03', labelKo: '아우터 · 코트', shortKo: '아우터' },
-  { key: 'top', code: 'SLT-04 // TOP', no: '04', labelKo: '상의 · 니트/셔츠', shortKo: '상의' },
-  { key: 'underwear', code: 'SLT-05 // INNER', no: '05', labelKo: '언더웨어 · 이너탑', shortKo: '이너' },
+  { key: 'headwear', no: '01', label: '모자 · 헤드웨어', group: 'HEAD & NECK' },
+  { key: 'neckwear', no: '02', label: '머플러 · 넥타이', group: 'HEAD & NECK' },
+  { key: 'outer', no: '03', label: '아우터 · 코트', group: 'UPPERLAYERS' },
+  { key: 'top', no: '04', label: '상의 · 니트/셔츠', group: 'UPPERLAYERS' },
+  { key: 'gloves', no: '05', label: '장갑 · 핸드웨어', group: 'HANDS' },
+  { key: 'accessory', no: '06', label: '가방 · 서류가방', group: 'CARRY & ACC' },
 ];
 
 export const RIGHT_HUD_SLOTS = [
-  { key: 'dress', code: 'SLT-06 // SUIT', no: '06', labelKo: '원피스 · 올인원', shortKo: '원피스' },
-  { key: 'gloves', code: 'SLT-07 // HAND', no: '07', labelKo: '장갑 · 핸드웨어', shortKo: '장갑' },
-  { key: 'bottom', code: 'SLT-08 // LEGS', no: '08', labelKo: '하의 · 팬츠/스커트', shortKo: '하의' },
-  { key: 'socks', code: 'SLT-09 // SOCKS', no: '09', labelKo: '양말 · 삭스', shortKo: '양말' },
-  { key: 'shoes', code: 'SLT-10 // FEET', no: '10', labelKo: '신발 · 풋웨어', shortKo: '신발' },
-  { key: 'accessory', code: 'SLT-11 // GEAR', no: '11', labelKo: '가방 · 액세서리', shortKo: '가방·소품' },
+  { key: 'dress', no: '07', label: '원피스 · 셋업', group: 'FULL SILHOUETTE' },
+  { key: 'bottom', no: '08', label: '하의 · 팬츠/스커트', group: 'LOWERWARE' },
+  { key: 'underwear', no: '09', label: '언더웨어 · 이너', group: 'INNER BASE' },
+  { key: 'socks', no: '10', label: '양말 · 레그웨어', group: 'FEET & LEGS' },
+  { key: 'shoes', no: '11', label: '신발 · 구두/부츠', group: 'FEET & LEGS' },
 ];
 
-export const ALL_11_SLOTS = [...LEFT_HUD_SLOTS, ...RIGHT_HUD_SLOTS].sort((a, b) => {
-  const numA = parseInt(a.code.slice(4, 6), 10);
-  const numB = parseInt(b.code.slice(4, 6), 10);
-  return numA - numB;
-});
+export const ALL_11_SLOTS = [...LEFT_HUD_SLOTS, ...RIGHT_HUD_SLOTS];
 
-const SLOT_BY_KEY = Object.fromEntries(ALL_11_SLOTS.map((s) => [s.key, s]));
-
-const LEFT_GROUPS = [
-  { titleKo: '머리 · 목', keys: ['headwear', 'neckwear'] },
-  { titleKo: '상체', keys: ['outer', 'top', 'underwear'] },
-  { titleKo: '손', keys: ['gloves'] },
+const MOTION_CYCLE = [
+  { key: 'auto', label: '자동 모션' },
+  { key: 'idle', label: '자연 호흡' },
+  { key: 'walk', label: '워킹' },
+  { key: 'wave', label: '인사' },
+  { key: 'umbrella', label: '우산' },
 ];
-const RIGHT_GROUPS = [
-  { titleKo: '하체 · 전신', keys: ['bottom', 'dress'] },
-  { titleKo: '발', keys: ['socks', 'shoes'] },
-  { titleKo: '액세서리 · 백', keys: ['accessory'] },
-];
-
-const ANGLE_PRESETS = [
-  { deg: -28, labelKo: '좌측 -28°' },
-  { deg: -14, labelKo: '3/4 -14°' },
-  { deg: 0, labelKo: '정면 0°' },
-  { deg: 24, labelKo: '우측 +24°' },
-];
-
-const PERSONAL_COLOR_LABEL_KO = {
-  spring_warm: '봄 웜톤',
-  summer_cool: '여름 쿨톤',
-  autumn_warm: '가을 웜톤',
-  winter_cool: '겨울 쿨톤',
-};
-
-function resolvePersonalColorLabel(profile = {}) {
-  const key = profile.personalColor || profile.personal_color;
-  return (
-    profile.personalColorLabelKo ||
-    PERSONAL_COLOR_LABEL_KO[key] ||
-    profile.personalColorLabel ||
-    '퍼스널컬러 미진단'
-  );
-}
-
-function formatMeasurementsLine(anat) {
-  return `가슴 ${anat.chestCm} · 허리 ${anat.waistCm} · 힙 ${anat.hipCm} · 두위 ${anat.headCm}cm`;
-}
-
-function countCustomMeasurements(anat) {
-  const src = anat.sources || {};
-  return ['chestCm', 'waistCm', 'hipCm', 'headCm'].filter((k) => src[k] === 'user').length;
-}
-
-function motionIconForKey(key) {
-  if (key === 'walk') return <Footprints size={12} />;
-  if (key === 'wave') return <Hand size={12} />;
-  if (key === 'umbrella') return <Umbrella size={12} />;
-  if (key === 'idle') return <Wind size={12} />;
-  return <Sparkles size={12} />;
-}
 
 /**
- * Lightweight faceless body-shape preview (used by 7 body-shape cards & live modal preview).
+ * Lightweight 3D WebGL preview used inside the Profile & Personal Color calibration modal
  */
-export function Mannequin3DBodyPreview({
-  user = {},
-  poseYawDeg = -16,
-  loadout = {},
-  width = 110,
-  height = 156,
-  displayWidth,
-  displayHeight,
-  className = '',
-  style,
-}) {
-  const ref = useRef(null);
-  const profileKey = JSON.stringify(user || {});
-  const loadoutKey = JSON.stringify(
-    Object.fromEntries(Object.entries(loadout || {}).map(([k, v]) => [k, v?.color_hex || null]))
-  );
+export function Mannequin3DBodyPreview({ profile = {}, rotDeg = -16, height = 270 }) {
+  const canvasRef = useRef(null);
+  const engineRef = useRef(null);
 
   useEffect(() => {
-    if (!ref.current) return;
-    render3DMannequinScene(ref.current, {
-      profile: user || {},
-      loadout: loadout || {},
-      rotationDeg: poseYawDeg,
-      compact: height < 220,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileKey, loadoutKey, poseYawDeg, width, height]);
+    if (!canvasRef.current) return undefined;
+    let engine = null;
+    try {
+      engine = new Mannequin3DWebGLEngine(canvasRef.current, { previewOnly: true });
+      engine.setDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+      engineRef.current = engine;
+    } catch {
+      engineRef.current = null;
+    }
+    return () => {
+      engine?.dispose();
+      engineRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.setYaw(rotDeg, true);
+    eng.setMotionMode('idle');
+    eng.updateScene({ profile, loadoutBySlot: {} });
+  }, [profile, rotDeg]);
 
   return (
     <canvas
-      ref={ref}
-      width={width}
-      height={height}
-      className={`atl-body-preview ${className}`}
+      ref={canvasRef}
+      className="atl-body-preview"
       style={{
-        width: displayWidth ?? Math.round(width * 0.72),
-        height: displayHeight ?? Math.round(height * 0.72),
-        ...style,
+        width: Math.round(height * 0.72),
+        height,
+        cursor: 'grab',
+        touchAction: 'none',
       }}
-      aria-label="무안면 3D 체형 프리뷰"
     />
   );
 }
 
+/**
+ * Apple HIG 3D Mannequin Viewport + Collapsible Swipe-Up Wardrobe Drawer (Reqs 6.c-d, 7.b, 9.b-c, 12.b, 13.a, 15.b)
+ */
 export default function VirtualMannequin({
-  userProfile = {},
-  loadoutBySlot = {},
-  items = [],
+  outfit,
+  loadoutBySlot: propLoadoutBySlot = null,
+  allGarments = [],
   closetGarments = [],
+  personalColor = 'autumn_warm',
+  userProfile = null,
   weather = null,
-  title = '3D 피팅 스튜디오',
-  onSelectSlot,
-  onSwapSlotItem,
-  onItemClick,
+  immersiveStudio = false,
+  compact = false,
+  onOpenWeatherSheet,
   onOpenProfileModal,
   onOpenBodySetup,
-  onOpenInspector,
-  compact = false,
+  onOpenAccountSettings,
+  onSaveOutfitLog,
+  onSlotSwap,
+  onSwapSlotItem,
+  onUnequipSlot,
+  emptyClosetOverlay = null,
 }) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
-  const dragStateRef = useRef({ dragging: false, startX: 0, startYaw: 0, moved: false });
+  const canvasDragRef = useRef({ active: false, startX: 0, lastX: 0, moved: false });
+  const drawerDragRef = useRef({ active: false, startY: 0, moved: false, deltaY: 0 });
 
-  const [headMode, setHeadMode] = useState('mannequin');
-  const [selectedSlot, setSelectedSlot] = useState('all');
-  const [hoveredSlot, setHoveredSlot] = useState(null);
-  const [rotationDeg, setRotationDeg] = useState(-14);
+  const [focusedSlot, setFocusedSlot] = useState(null);
+  const [activeDrawerSlot, setActiveDrawerSlot] = useState('outer');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerDragOffset, setDrawerDragOffset] = useState(0);
   const [motionMode, setMotionMode] = useState('auto');
-  const [webglReady, setWebglReady] = useState(false);
+  const [fallback2DMode, setFallback2DMode] = useState(false);
+  const [contextLost, setContextLost] = useState(false);
+  const [savedCheck, setSavedCheck] = useState(false);
 
-  const openProfile = onOpenProfileModal || onOpenBodySetup;
+  const effectiveGarments = allGarments?.length ? allGarments : closetGarments;
+  const effectiveOpenProfile = onOpenProfileModal || onOpenBodySetup;
+  const effectiveSlotSwap = onSlotSwap || onSwapSlotItem;
+  const effectiveUnequipSlot =
+    onUnequipSlot || (onSwapSlotItem ? (slotKey) => onSwapSlotItem(slotKey, null) : null);
 
-  // IMPORTANT FIX (Bug 2.b): Respect explicit `null` unequipped slots in `loadoutBySlot`!
-  // Never overwrite `map[cat]` from `items` when `cat in loadoutBySlot`.
-  const resolvedLoadout = useMemo(() => {
-    const map = { ...loadoutBySlot };
+  // Hardware back closes expanded drawer first
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    return pushBackHandler(() => {
+      setDrawerOpen(false);
+      return true;
+    });
+  }, [drawerOpen]);
+
+  // Normalize outfit items or direct loadoutBySlot into 11 distinct body slots
+  const loadoutBySlot = useMemo(() => {
+    if (propLoadoutBySlot && typeof propLoadoutBySlot === 'object') {
+      return {
+        headwear: propLoadoutBySlot.headwear || null,
+        neckwear: propLoadoutBySlot.neckwear || null,
+        outer: propLoadoutBySlot.outer || null,
+        top: propLoadoutBySlot.top || null,
+        dress: propLoadoutBySlot.dress || null,
+        bottom: propLoadoutBySlot.bottom || null,
+        gloves: propLoadoutBySlot.gloves || null,
+        underwear: propLoadoutBySlot.underwear || null,
+        socks: propLoadoutBySlot.socks || null,
+        shoes: propLoadoutBySlot.shoes || null,
+        accessory: propLoadoutBySlot.accessory || null,
+      };
+    }
+    const items = outfit?.items || [];
+    const byCat = {};
     for (const item of items) {
       if (!item) continue;
-      const cat = item.category === 'bag' ? 'accessory' : item.category;
-      if (cat && !(cat in loadoutBySlot) && !map[cat]) {
-        map[cat] = item;
+      const cat = item.slot_key || item.category;
+      if (cat && !byCat[cat]) {
+        byCat[cat] = item;
+      }
+      if (item.category === 'bag' && !byCat.accessory) {
+        byCat.accessory = item;
       }
     }
-    return map;
-  }, [loadoutBySlot, items]);
+    return {
+      headwear: byCat.headwear || null,
+      neckwear: byCat.neckwear || null,
+      outer: byCat.outer || null,
+      top: byCat.top || null,
+      dress: byCat.dress || null,
+      bottom: byCat.bottom || null,
+      gloves: byCat.gloves || null,
+      underwear: byCat.underwear || null,
+      socks: byCat.socks || null,
+      shoes: byCat.shoes || null,
+      accessory: byCat.accessory || null,
+    };
+  }, [outfit, propLoadoutBySlot]);
 
-  const anatomical = useMemo(() => resolveAnatomicalProfile(userProfile || {}), [userProfile]);
-  const bodyToneHex = resolveSkinHex(userProfile || {});
-  const personalColorLabel = resolvePersonalColorLabel(userProfile || {});
-  const customMeasureCount = countCustomMeasurements(anatomical);
-
-  const isRainyWeather = Boolean(
-    weather &&
-      (weather.isRainy ||
-        Number(weather.precipProb) >= 50 ||
-        /비|소나기|우천|눈|폭우|rain|shower|snow/i.test(String(weather.condition || '')))
+  const equippedCount = useMemo(
+    () => ALL_11_SLOTS.filter((s) => Boolean(loadoutBySlot[s.key])).length,
+    [loadoutBySlot]
   );
 
-  // Candidate closet garments for the currently selected slot (Whering-style inline live swap!)
-  const slotCandidates = useMemo(() => {
-    if (!selectedSlot || selectedSlot === 'all') return [];
-    const pool = (closetGarments || []).filter((g) => {
-      if (g.status && g.status !== 'active') return false;
-      if (selectedSlot === 'accessory') return g.category === 'accessory' || g.category === 'bag';
-      return g.category === selectedSlot;
-    });
-    const cur = resolvedLoadout[selectedSlot];
-    if (cur && !pool.some((p) => p.id === cur.id)) {
-      return [cur, ...pool];
-    }
-    return pool;
-  }, [closetGarments, selectedSlot, resolvedLoadout]);
+  const profilePayload = useMemo(
+    () => ({
+      gender: userProfile?.gender || 'male',
+      height_cm: userProfile?.heightCm || 175,
+      weight_kg: userProfile?.weightKg || 68,
+      body_shape: userProfile?.bodyShape || 'standard_balanced',
+      body_fat_pct: userProfile?.bodyFatPct ?? null,
+      chest_cm: userProfile?.chestCm ?? null,
+      waist_cm: userProfile?.waistCm ?? null,
+      hip_cm: userProfile?.hipCm ?? null,
+      head_cm: userProfile?.headCm ?? null,
+      skin_tone_hex: userProfile?.skinToneHex || null,
+      mannequinModelColorHex: userProfile?.mannequinModelColorHex || null,
+      mannequinBriefsColorHex: userProfile?.mannequinBriefsColorHex || null,
+      personal_color: userProfile?.personalColor || personalColor || 'autumn_warm',
+    }),
+    [userProfile, personalColor]
+  );
 
-  const loadoutStats = useMemo(() => {
-    const equippedList = Object.values(resolvedLoadout).filter(Boolean);
-    if (equippedList.length === 0) {
-      return { warmth: 0, waterproof: 0, formality: 0, colorHarmony: 0, totalValue: 0, equippedCount: 0 };
-    }
-
-    let thermalSum = 0;
-    let waterCount = 0;
-    let formalPoints = 0;
-    let totalValue = 0;
-
-    for (const item of equippedList) {
-      const minTempVal = Number.isFinite(Number(item.min_temp)) ? Number(item.min_temp) : 10;
-      const span = Math.max(0, 22 - minTempVal);
-      thermalSum += Math.min(24, span * 1.1);
-      if (item.water_resistant) waterCount += 1;
-      if (item.formality === 'formal') formalPoints += 95;
-      else if (item.formality === 'smart') formalPoints += 78;
-      else formalPoints += 56;
-      totalValue += Number(item.price) || 0;
-    }
-
-    return {
-      warmth: Math.min(99, Math.max(32, Math.round(28 + thermalSum))),
-      waterproof: Math.min(
-        99,
-        Math.max(20, Math.round(25 + waterCount * 24 + (resolvedLoadout.outer?.water_resistant ? 22 : 0)))
-      ),
-      formality: Math.min(99, Math.round(formalPoints / equippedList.length)),
-      colorHarmony: Math.min(99, Math.max(82, 86 + (equippedList.length % 12))),
-      totalValue,
-      equippedCount: equippedList.length,
-    };
-  }, [resolvedLoadout]);
-
+  // Mount Three.js WebGL Engine & observe Light/Dark theme + context loss
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return undefined;
-
-    let engine;
+    if (fallback2DMode || !canvasRef.current) return undefined;
+    let engine = null;
     try {
-      engine = new Mannequin3DWebGLEngine(canvas);
+      engine = new Mannequin3DWebGLEngine(canvasRef.current, {
+        exposeDebugGlobal: true,
+        onContextStatusChange: ({ lost, status }) => {
+          setContextLost(Boolean(lost ?? status === 'lost'));
+        },
+      });
+      engine.setDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+      engineRef.current = engine;
     } catch {
-      setWebglReady(false);
-      return undefined;
+      setFallback2DMode(true);
     }
-    engineRef.current = engine;
-    engine.setRotationDeg(rotationDeg);
-    engine.setMotionMode(motionMode);
-    engine.setWeatherInfo(weather);
-    setWebglReady(true);
 
-    const handleResize = () => {
-      const rect = canvas.getBoundingClientRect();
-      engine.resize(Math.max(260, rect.width), Math.max(300, rect.height || (compact ? 420 : 540)));
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
+    const observer = new MutationObserver(() => {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      engineRef.current?.setDarkTheme(dark);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      engine.dispose();
+      observer.disconnect();
+      engine?.dispose();
       engineRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compact]);
+  }, [fallback2DMode]);
 
+  // Sync profile + 11-slot garments
   useEffect(() => {
-    if (engineRef.current && webglReady) {
-      engineRef.current.updateScene({
-        profile: userProfile || {},
-        loadout: resolvedLoadout,
-        headMode,
-        selectedSlot: selectedSlot === 'all' ? null : selectedSlot,
-        hoveredSlot,
-        motionMode,
-        weather,
-      });
-    } else if (canvasRef.current && !webglReady) {
-      render3DMannequinScene(canvasRef.current, {
-        profile: userProfile || {},
-        loadout: resolvedLoadout,
-        rotationDeg,
-      });
-    }
-  }, [userProfile, resolvedLoadout, headMode, selectedSlot, hoveredSlot, motionMode, weather, webglReady, rotationDeg]);
+    engineRef.current?.updateScene({ profile: profilePayload, loadoutBySlot });
+  }, [profilePayload, loadoutBySlot]);
 
+  // Sync focused zoom slot
   useEffect(() => {
+    engineRef.current?.setFocusedSlot(focusedSlot || null);
+  }, [focusedSlot]);
+
+  // Sync live weather & motion mode (Req 7.b — rainy/snowy triggers umbrella motion automatically)
+  useEffect(() => {
+    engineRef.current?.setWeatherState(weather);
     engineRef.current?.setMotionMode(motionMode);
-  }, [motionMode]);
+  }, [weather, motionMode]);
 
-  useEffect(() => {
-    engineRef.current?.setWeatherInfo(weather);
-  }, [weather]);
-
-  useEffect(() => {
-    engineRef.current?.triggerEquipScanPulse();
-  }, [resolvedLoadout, webglReady]);
-
-  const focusSlot = (slotKey) => {
-    engineRef.current?.setFocusSlot(slotKey);
+  // Strict Canvas-Only Rotation Gesture (Zero interference with Bottom Drawer Swipe — Req 15.b)
+  const onCanvasPointerDown = (e) => {
+    if (e.target !== canvasRef.current) return;
+    canvasDragRef.current = { active: true, startX: e.clientX, lastX: e.clientX, moved: false };
+    canvasRef.current?.setPointerCapture?.(e.pointerId);
   };
 
-  const handleSlotClick = (slotKey) => {
-    const nextSlot = selectedSlot === slotKey ? 'all' : slotKey;
-    setSelectedSlot(nextSlot);
-    focusSlot(nextSlot);
-    if (nextSlot === 'gloves') {
-      setRotationDeg(0);
-      engineRef.current?.setRotationDeg(0);
+  const onCanvasPointerMove = (e) => {
+    if (!canvasDragRef.current.active) return;
+    const dx = e.clientX - canvasDragRef.current.lastX;
+    if (Math.abs(e.clientX - canvasDragRef.current.startX) > 4) {
+      canvasDragRef.current.moved = true;
     }
-    const item = resolvedLoadout[slotKey] || null;
-    onSelectSlot?.(nextSlot === 'all' ? null : slotKey, item);
-    if (item) onItemClick?.(item, slotKey);
-  };
-
-  const handleQuickUnequip = (e, slotKey) => {
-    e?.stopPropagation?.();
-    setSelectedSlot(slotKey);
-    focusSlot(slotKey);
-    if (slotKey === 'gloves') {
-      setRotationDeg(0);
-      engineRef.current?.setRotationDeg(0);
+    canvasDragRef.current.lastX = e.clientX;
+    if (engineRef.current) {
+      const next = engineRef.current.targetYawDeg + dx * 0.58;
+      engineRef.current.setYaw(next, false);
     }
-    onSwapSlotItem?.(slotKey, null);
   };
 
-  const handleQuickEquip = (slotKey, newItem) => {
-    setSelectedSlot(slotKey);
-    focusSlot(slotKey);
-    if (slotKey === 'gloves') {
-      setRotationDeg(0);
-      engineRef.current?.setRotationDeg(0);
+  const onCanvasPointerUp = (e) => {
+    if (!canvasDragRef.current.active) return;
+    const wasMoved = canvasDragRef.current.moved;
+    canvasDragRef.current.active = false;
+    try {
+      canvasRef.current?.releasePointerCapture?.(e.pointerId);
+    } catch {
+      // ignore
     }
-    onSwapSlotItem?.(slotKey, newItem);
+    if (!wasMoved && engineRef.current) {
+      const hitSlot = engineRef.current.hitTestClientPoint?.(e.clientX, e.clientY);
+      if (hitSlot) {
+        setActiveDrawerSlot(hitSlot);
+      }
+    }
   };
 
-  const resetView = () => {
-    setSelectedSlot('all');
-    focusSlot('all');
+  // Strict Bottom Wardrobe Drawer Swipe Gesture (Isolated from 3D Canvas — Req 12.b, 13.a, 15.b)
+  const stopBubble = (e) => {
+    e.stopPropagation();
   };
 
-  const handleRotatePreset = (deg) => {
-    setRotationDeg(deg);
-    engineRef.current?.setRotationDeg(deg);
+  const onDrawerHandlePointerDown = (e) => {
+    e.stopPropagation();
+    const y = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+    drawerDragRef.current = { active: true, startY: y, moved: false, deltaY: 0 };
+    e.currentTarget?.setPointerCapture?.(e.pointerId);
   };
 
-  const getPoint = (e) => {
-    const t = e.touches?.[0] || e.changedTouches?.[0];
-    return t ? { x: t.clientX, y: t.clientY } : { x: e.clientX, y: e.clientY };
+  const onDrawerHandlePointerMove = (e) => {
+    e.stopPropagation();
+    if (!drawerDragRef.current.active) return;
+    const y = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+    const dy = y - drawerDragRef.current.startY;
+    if (Math.abs(dy) > 5) drawerDragRef.current.moved = true;
+    drawerDragRef.current.deltaY = dy;
+    setDrawerDragOffset(dy);
   };
 
-  const handlePointerDown = (e) => {
-    const { x } = getPoint(e);
-    dragStateRef.current = { dragging: true, startX: x, startYaw: rotationDeg, moved: false };
-  };
+  const onDrawerHandlePointerUp = (e) => {
+    e.stopPropagation();
+    if (!drawerDragRef.current.active) return;
+    const { moved, deltaY } = drawerDragRef.current;
+    drawerDragRef.current.active = false;
+    setDrawerDragOffset(0);
+    try {
+      e.currentTarget?.releasePointerCapture?.(e.pointerId);
+    } catch {
+      // ignore
+    }
 
-  const handlePointerMove = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const { x, y } = getPoint(e);
-
-    if (dragStateRef.current.dragging) {
-      const deltaX = x - dragStateRef.current.startX;
-      if (Math.abs(deltaX) > 4) dragStateRef.current.moved = true;
-      const nextDeg = (dragStateRef.current.startYaw + deltaX * 0.65) % 360;
-      setRotationDeg(nextDeg);
-      engineRef.current?.setRotationDeg(nextDeg);
+    if (!moved) {
+      triggerHaptic('selection');
+      setDrawerOpen((prev) => !prev);
       return;
     }
 
-    if (engineRef.current && !e.touches) {
-      const rect = canvas.getBoundingClientRect();
-      engineRef.current.setParallax(
-        ((x - rect.left) / rect.width - 0.5) * 2,
-        ((y - rect.top) / rect.height - 0.5) * 2
-      );
-      const hitSlot = engineRef.current.hitTestClientPoint(x, y);
-      if (hitSlot !== hoveredSlot) setHoveredSlot(hitSlot);
+    if (deltaY < -24) {
+      triggerHaptic('selection');
+      setDrawerOpen(true);
+    } else if (deltaY > 24) {
+      triggerHaptic('selection');
+      setDrawerOpen(false);
     }
   };
 
-  const handlePointerUp = (e) => {
-    if (dragStateRef.current.dragging && !dragStateRef.current.moved && engineRef.current) {
-      const { x, y } = getPoint(e);
-      const hitSlot = engineRef.current.hitTestClientPoint(x, y);
-      if (hitSlot) handleSlotClick(hitSlot);
-    }
-    dragStateRef.current.dragging = false;
+  const candidatesForActiveSlot = useMemo(() => {
+    return (effectiveGarments || []).filter((g) => {
+      if (activeDrawerSlot === 'accessory') {
+        return g.category === 'accessory' || g.category === 'bag' || g.slot_key === 'accessory';
+      }
+      return (g.slot_key || g.category) === activeDrawerSlot;
+    });
+  }, [effectiveGarments, activeDrawerSlot]);
+
+  const cycleMotionMode = () => {
+    const idx = MOTION_CYCLE.findIndex((m) => m.key === motionMode);
+    const next = MOTION_CYCLE[(idx + 1) % MOTION_CYCLE.length];
+    triggerHaptic('selection');
+    setMotionMode(next.key);
   };
 
-  const handlePointerLeave = () => {
-    dragStateRef.current.dragging = false;
-    engineRef.current?.setParallax(0, 0);
-    setHoveredSlot(null);
-  };
-
-  const renderSlotCard = (slotKey) => {
-    const slot = SLOT_BY_KEY[slotKey];
-    const item = resolvedLoadout[slotKey];
-    const isActive = selectedSlot === slotKey;
-    const isHover = hoveredSlot === slotKey;
-    const fabric = item ? inferFabricMaterialSpec(item) : null;
-    const phys = item ? infer3DRegistrationSpec(item) : null;
+  // Immersive Full-Bleed 3D Studio Layout (>= 85% Clear Viewport — Req 12.b)
+  if (immersiveStudio) {
+    const tempVal = weather?.tempC ?? weather?.avgTemp ?? weather?.tempMax ?? 14;
+    const cityLabel = weather?.city || weather?.cityName || '서울';
+    const condLabel = weather?.condition || '맑음';
+    const currentSlotEquipped = loadoutBySlot[activeDrawerSlot];
 
     return (
-      <div
-        key={slotKey}
-        role="button"
-        tabIndex={0}
-        id={`mannequin-slot-card-${slotKey}`}
-        className={`atl-slot-card ${isActive ? 'active' : ''} ${isHover ? 'hover' : ''} ${item ? '' : 'empty'}`}
-        onClick={() => handleSlotClick(slotKey)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleSlotClick(slotKey);
-          }
-        }}
-        onMouseEnter={() => setHoveredSlot(slotKey)}
-        onMouseLeave={() => setHoveredSlot(null)}
-        title={item ? `${slot.labelKo}: ${item.name} (클릭하여 부위 줌 · 교체)` : `${slot.labelKo} — 비어 있음`}
-      >
-        <span className="atl-slot-thumb">
-          {item ? (
-            <StudioGarmentImage item={item} style={{ width: '100%', height: '100%', borderRadius: 8 }} />
-          ) : (
-            <span className="atl-slot-no">{slot.no}</span>
-          )}
-        </span>
-        <span className="atl-slot-text">
-          <small>
-            {slot.no} · {slot.labelKo}
-          </small>
-          <strong>{item ? item.name : '착용 안 함 (비어 있음)'}</strong>
-          {fabric && (
-            <em>
-              <span className="atl-color-dot" style={{ background: item.color_hex || '#ccc' }} />
-              {phys?.physicsKey !== 'rigid_fitted' ? '지글 피직스 · ' : ''}
-              {fabric.labelKo}
-            </em>
-          )}
-        </span>
-        {item && onSwapSlotItem && (
+      <section className="hig-studio-screen" aria-label="3D 마네킹 스튜디오">
+        {/* Top Ultra-Compact Weather · Temp Capsule (1 Item Only — Req 12.b) */}
+        <div className="hig-studio-top-bar">
           <button
+            id="studio-weather-capsule"
             type="button"
-            id={`unequip-slot-${slotKey}`}
-            className="atl-slot-unequip-btn"
-            onClick={(e) => handleQuickUnequip(e, slotKey)}
-            title={`${slot.shortKo} 벗기 (장착 해제)`}
-            aria-label={`${slot.shortKo} 벗기`}
+            className="hig-weather-capsule hig-vibrancy-capsule tabular-nums"
+            aria-label="날씨 및 AI 코디 추천 열기"
+            onClick={() => {
+              triggerHaptic('selection');
+              onOpenWeatherSheet?.();
+            }}
           >
-            <X size={13} />
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  const renderGroups = (groups) =>
-    groups.map((g) => (
-      <div key={g.titleKo} className="atl-slot-group">
-        <h4 className="atl-group-title">{g.titleKo}</h4>
-        <div className="atl-slot-list">{g.keys.map(renderSlotCard)}</div>
-      </div>
-    ));
-
-  const hoverInfoSlot = hoveredSlot || (selectedSlot !== 'all' ? selectedSlot : null);
-  const hoverInfoItem = hoverInfoSlot ? resolvedLoadout[hoverInfoSlot] : null;
-
-  const statRows = [
-    { key: 'warmth', labelKo: '보온', value: loadoutStats.warmth },
-    { key: 'waterproof', labelKo: '방수', value: loadoutStats.waterproof },
-    { key: 'formality', labelKo: '포멀 지수', value: loadoutStats.formality },
-    { key: 'colorHarmony', labelKo: '퍼스널컬러 조화', value: loadoutStats.colorHarmony },
-  ];
-
-  return (
-    <section className={`atl-fitting ${compact ? 'compact' : ''}`} aria-label="3D 피팅 스튜디오">
-      <header className="atl-fitting-head">
-        <div className="atl-fitting-title">
-          <span className="atl-eyebrow">3D Fitting Studio · Live Motion &amp; Physics</span>
-          <h3>{title}</h3>
-        </div>
-
-        <div className="atl-body-badges">
-          <button
-            id="open-personal-color-camera-badge"
-            type="button"
-            className="atl-badge"
-            onClick={() => openProfile?.(2)}
-            title="카메라 촬영 · 사진 크롭 에디터로 퍼스널컬러 측정 및 3D 모델 컬러 변경"
-          >
-            <span className="atl-tone-swatch" style={{ background: bodyToneHex }} />
-            {personalColorLabel} 바디 · 퍼스널컬러 측정
-          </button>
-          <button
-            id="open-body-shape-badge"
-            type="button"
-            className="atl-badge"
-            onClick={() => openProfile?.(1)}
-            title="7대 체형 선택"
-          >
-            <User size={13} />
-            {anatomical.shapeShortKo}
-          </button>
-          <button
-            type="button"
-            className="atl-badge atl-badge-hide-xs"
-            onClick={() => openProfile?.(1)}
-            title="스리사이즈 · 머리둘레"
-          >
-            <Ruler size={13} />
-            {formatMeasurementsLine(anatomical)}
-            <span className={`atl-badge-tag ${customMeasureCount > 0 ? 'custom' : ''}`}>
-              {customMeasureCount > 0 ? `커스텀 ${customMeasureCount}/4` : '디폴트'}
+            {weather?.isRainy ? <CloudRain size={14} /> : null}
+            <span>
+              {cityLabel} · {condLabel} {tempVal}°
             </span>
           </button>
         </div>
 
-        <div className="atl-head-meta">
-          <span>
-            착장 <strong>{loadoutStats.equippedCount}</strong>/11
-          </span>
-          <span>
-            총액 <strong>{formatKRW(loadoutStats.totalValue)}</strong>
-          </span>
-          {openProfile && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => openProfile(1)}>
-              <SlidersHorizontal size={13} /> 체형 · 컬러
+        {/* 85%+ Unobstructed Mannequin Viewport */}
+        <div className="hig-studio-viewport">
+          {!fallback2DMode && (
+            <canvas
+              id="studio-3d-canvas"
+              ref={canvasRef}
+              className="hig-studio-canvas"
+              aria-label="3D 아틀리에 마네킹 캔버스"
+              onPointerDown={onCanvasPointerDown}
+              onPointerMove={onCanvasPointerMove}
+              onPointerUp={onCanvasPointerUp}
+              onPointerCancel={onCanvasPointerUp}
+            />
+          )}
+
+          {(fallback2DMode || contextLost) && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 5,
+                background: 'var(--bg-canvas)',
+              }}
+            >
+              <Mannequin2DCollageFallback
+                loadoutBySlot={loadoutBySlot}
+                reasonLabel={
+                  contextLost
+                    ? 'WebGL 컨텍스트 자동 복구 중 · 2D 콜라주 뷰'
+                    : '저전력 2D 콜라주 뷰어'
+                }
+                onSelectSlot={(slotKey) => {
+                  setActiveDrawerSlot(slotKey);
+                  setDrawerOpen(true);
+                }}
+                onRestore3D={
+                  fallback2DMode
+                    ? () => {
+                        triggerHaptic('light');
+                        setFallback2DMode(false);
+                      }
+                    : null
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Empty Closet Onboarding Floating Card for Newly Registered Users (Req 8.a) */}
+        {emptyClosetOverlay}
+
+        {/* Minimal Floating Action Icons (Right Rail — Req 12.b) */}
+        <div
+          className="hig-studio-float-rail"
+          style={{
+            opacity: drawerOpen ? 0 : 1,
+            pointerEvents: drawerOpen ? 'none' : 'auto',
+            transition: 'opacity 0.24s var(--spring-ease)',
+          }}
+        >
+          <button
+            id="studio-motion-cycle-btn"
+            type="button"
+            className={`hig-float-icon-btn ${motionMode !== 'auto' ? 'active' : ''}`}
+            aria-label={`마네킹 모션 전환 (${motionMode})`}
+            title="모션 전환 (자동/호흡/워킹/인사/우산)"
+            onClick={cycleMotionMode}
+          >
+            {motionMode === 'umbrella' || (motionMode === 'auto' && weather?.isRainy) ? (
+              <Umbrella size={17} />
+            ) : motionMode === 'wave' ? (
+              <Hand size={17} />
+            ) : (
+              <Play size={16} />
+            )}
+          </button>
+
+          {focusedSlot && (
+            <button
+              id="studio-reset-zoom-btn"
+              type="button"
+              className="hig-float-icon-btn active"
+              aria-label="전신 뷰 복귀"
+              title="전신 뷰 복귀"
+              onClick={() => {
+                triggerHaptic('selection');
+                setFocusedSlot(null);
+              }}
+            >
+              <RotateCcw size={16} />
+            </button>
+          )}
+
+          <button
+            id="toggle-2d-fallback-btn"
+            type="button"
+            className={`hig-float-icon-btn ${fallback2DMode ? 'active' : ''}`}
+            aria-label="2D 3D 뷰어 전환"
+            title="2D 콜라주 / 3D 마네킹 전환"
+            onClick={() => {
+              triggerHaptic('selection');
+              setFallback2DMode((v) => !v);
+            }}
+          >
+            <Layers size={16} />
+          </button>
+
+          {onSaveOutfitLog && (
+            <button
+              id="studio-save-ootd-btn"
+              type="button"
+              className={`hig-float-icon-btn ${savedCheck ? 'active' : ''}`}
+              aria-label="오늘의 OOTD 기록 저장"
+              title="오늘의 OOTD 기록 저장"
+              onClick={async () => {
+                triggerHaptic('medium');
+                await onSaveOutfitLog();
+                setSavedCheck(true);
+                setTimeout(() => setSavedCheck(false), 1200);
+              }}
+            >
+              <Check size={17} />
+            </button>
+          )}
+
+          <button
+            id="studio-open-profile-btn"
+            type="button"
+            className="hig-float-icon-btn"
+            aria-label="체형 및 퍼스널컬러 설정"
+            title="체형 및 퍼스널컬러 설정"
+            onClick={() => {
+              triggerHaptic('selection');
+              effectiveOpenProfile?.(1);
+            }}
+          >
+            <Sparkles size={16} />
+          </button>
+
+          {onOpenAccountSettings && (
+            <button
+              id="studio-open-settings-btn"
+              type="button"
+              className="hig-float-icon-btn"
+              aria-label="계정 및 화면 설정"
+              title="계정 및 화면 설정"
+              onClick={() => {
+                triggerHaptic('selection');
+                onOpenAccountSettings();
+              }}
+            >
+              <SlidersHorizontal size={16} />
             </button>
           )}
         </div>
-      </header>
 
-      {/* Mobile-First Horizontal 11-Slot Touch Rail (visible on mobile/tablet < 1024px) */}
-      <div className="atl-mobile-slot-rail" role="tablist" aria-label="11부위 착용 슬롯 선택">
-        <button
-          type="button"
-          className={`atl-mobile-slot-pill ${selectedSlot === 'all' ? 'active' : ''}`}
-          onClick={resetView}
+        {/* Collapsible Swipe-Up Wardrobe Drawer (Bottom — Req 12.b, 13.a, 15.b) */}
+        <div
+          id="studio-wardrobe-drawer"
+          className={`hig-wardrobe-drawer ${drawerOpen ? 'expanded' : 'collapsed'}`}
+          data-drawer-state={drawerOpen ? 'expanded' : 'collapsed'}
+          style={
+            drawerDragOffset !== 0
+              ? {
+                  transition: 'none',
+                  transform: drawerOpen
+                    ? `translateY(${Math.max(0, drawerDragOffset)}px)`
+                    : `translateY(calc(100% - 52px + ${Math.min(0, drawerDragOffset)}px))`,
+                }
+              : undefined
+          }
+          onPointerDown={stopBubble}
+          onPointerMove={stopBubble}
+          onPointerUp={stopBubble}
+          onTouchStart={stopBubble}
+          onTouchMove={stopBubble}
+          onTouchEnd={stopBubble}
         >
-          <span>전신</span>
-        </button>
-        {ALL_11_SLOTS.map((slot) => {
-          const eq = resolvedLoadout[slot.key];
-          return (
-            <button
-              key={slot.key}
-              type="button"
-              id={`mobile-slot-pill-${slot.key}`}
-              className={`atl-mobile-slot-pill ${selectedSlot === slot.key ? 'active' : ''} ${eq ? 'equipped' : 'empty'}`}
-              onClick={() => handleSlotClick(slot.key)}
+          <div
+            id="studio-drawer-handle"
+            role="button"
+            tabIndex={0}
+            aria-expanded={drawerOpen}
+            aria-label="옷장 드로어 열기 및 닫기 핸들"
+            className="hig-drawer-handle-bar"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerUp}
+            onPointerCancel={onDrawerHandlePointerUp}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setDrawerOpen((v) => !v);
+              }
+            }}
+          >
+            <span className="hig-drawer-pill" aria-hidden="true" />
+            <span className="hig-caption tabular-nums" style={{ fontSize: '0.74rem' }}>
+              옷장 슬롯 · 장착 {equippedCount}점
+            </span>
+          </div>
+
+          <div className="hig-drawer-body">
+            {/* 11-Slot Selector Chips */}
+            <div className="ui-chip-rail" role="tablist" aria-label="11부위 착용 슬롯">
+              {ALL_11_SLOTS.map((slot) => {
+                const isSelected = activeDrawerSlot === slot.key;
+                const hasItem = Boolean(loadoutBySlot[slot.key]);
+                return (
+                  <button
+                    key={slot.key}
+                    id={`drawer-slot-chip-${slot.key}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    className={`chip ${isSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setActiveDrawerSlot(slot.key);
+                      setFocusedSlot(slot.key);
+                    }}
+                  >
+                    <span>{slot.label.split(' · ')[0]}</span>
+                    {hasItem && <span className="tabular-nums">•</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Cutout Garment Quick-Swap & 1-Tap Unequip Strip */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
+                gap: 8,
+              }}
             >
-              <span
-                className="atl-color-dot"
-                style={{ background: eq ? eq.color_hex || '#888' : 'transparent', borderStyle: eq ? 'solid' : 'dashed' }}
-              />
-              <span>{slot.shortKo}</span>
-              {eq && onSwapSlotItem && (
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  className="atl-pill-x"
-                  onClick={(e) => handleQuickUnequip(e, slot.key)}
-                  aria-label={`${slot.shortKo} 벗기`}
-                >
-                  ×
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="atl-fitting-grid">
-        <div className="atl-col atl-col-desktop">{renderGroups(LEFT_GROUPS)}</div>
-
-        <div className="atl-stage">
-          {/* Live Motion Mode Selector Bar (Default Idle / Walk / Wave / Weather Umbrella) */}
-          <div className="atl-motion-bar" role="toolbar" aria-label="3D 마네킹 모션 전환">
-            {MOTION_PRESETS.map((m) => {
-              const active = motionMode === m.key;
-              return (
+              {currentSlotEquipped && effectiveUnequipSlot && (
                 <button
-                  key={m.key}
-                  id={`mannequin-motion-${m.key}`}
+                  id="drawer-unequip-slot-btn"
                   type="button"
-                  className={`atl-motion-chip ${active ? 'active' : ''}`}
-                  onClick={() => setMotionMode(m.key)}
+                  aria-label="현재 부위 벗기"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    effectiveUnequipSlot(activeDrawerSlot);
+                  }}
+                  style={{
+                    aspectRatio: '1 / 1',
+                    borderRadius: 16,
+                    background: 'var(--bg-canvas)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                  }}
                 >
-                  {motionIconForKey(m.key)}
-                  <span>
-                    {m.key === 'auto' && isRainyWeather ? '자동(우산ON)' : m.labelKo}
+                  <X size={16} />
+                  <span className="hig-caption" style={{ fontSize: '0.68rem' }}>
+                    벗기
                   </span>
                 </button>
-              );
-            })}
-          </div>
+              )}
 
-          <canvas
-            ref={canvasRef}
-            width={440}
-            height={540}
-            className="atl-stage-canvas"
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onMouseLeave={handlePointerLeave}
-            onTouchStart={handlePointerDown}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
-          />
-
-          {hoverInfoSlot && (
-            <div className="atl-stage-callout">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <small>
-                  {SLOT_BY_KEY[hoverInfoSlot]?.no} · {SLOT_BY_KEY[hoverInfoSlot]?.labelKo}
-                </small>
-                {hoverInfoItem && onSwapSlotItem && (
+              {candidatesForActiveSlot.map((cand) => {
+                const equipped = currentSlotEquipped?.id === cand.id;
+                return (
                   <button
+                    key={cand.id}
                     type="button"
-                    className="atl-callout-unequip"
-                    onClick={(e) => handleQuickUnequip(e, hoverInfoSlot)}
+                    className="drawer-garment-tile"
+                    aria-label={`${cand.name} 착용`}
+                    onClick={() => {
+                      triggerHaptic('light');
+                      effectiveSlotSwap?.(activeDrawerSlot, cand);
+                    }}
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '1 / 1',
+                      borderRadius: 16,
+                      padding: 6,
+                      background: equipped ? 'var(--bg-subtle)' : 'var(--bg-canvas)',
+                      overflow: 'hidden',
+                    }}
                   >
-                    <X size={11} /> 벗기
+                    <StudioGarmentImage
+                      item={cand}
+                      alt={cand.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                    {equipped && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          right: 6,
+                          width: 18,
+                          height: 18,
+                          borderRadius: '50%',
+                          background: 'var(--accent-mono)',
+                          color: 'var(--ink-inverse)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Check size={11} strokeWidth={2.8} />
+                      </span>
+                    )}
                   </button>
-                )}
-              </div>
-              <strong>{hoverInfoItem ? hoverInfoItem.name : '착용 아이템 없음 (맨손/맨몸 상태)'}</strong>
-              {hoverInfoItem && (
-                <span>
-                  {inferFabricMaterialSpec(hoverInfoItem).labelKo} ·{' '}
-                  {infer3DRegistrationSpec(hoverInfoItem).preset.labelKo}
-                </span>
+                );
+              })}
+
+              {candidatesForActiveSlot.length === 0 && (
+                <div
+                  className="hig-caption"
+                  style={{ gridColumn: '1 / -1', padding: '12px 4px' }}
+                >
+                  이 슬롯에 등록된 의류가 없습니다.
+                </div>
               )}
             </div>
-          )}
-
-          <div className="atl-stage-hint">
-            드래그하여 360° 회전 · 부위 선택 시 카메라 포커스 &amp; 즉시 벗기/교체
-          </div>
-
-          <div className="atl-stage-controls">
-            {ANGLE_PRESETS.map((p) => (
-              <button
-                key={p.deg}
-                type="button"
-                className={`atl-chip ${Math.round(rotationDeg) === p.deg ? 'active' : ''}`}
-                onClick={() => handleRotatePreset(p.deg)}
-              >
-                {p.labelKo}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="atl-chip"
-              onClick={() => setHeadMode((m) => (m === 'avatar' ? 'mannequin' : 'avatar'))}
-              title="무안면 마네킹 헤드 / 아바타 헤드 전환"
-            >
-              {headMode === 'avatar' ? <UserCheck size={12} /> : <User size={12} />}
-              {headMode === 'avatar' ? '아바타' : '마네킹'}
-            </button>
-            {selectedSlot !== 'all' && (
-              <button type="button" className="atl-chip dark" id="mannequin-reset-fullbody" onClick={resetView}>
-                <RotateCcw size={11} /> 전신 보기
-              </button>
-            )}
           </div>
         </div>
+      </section>
+    );
+  }
 
-        <div className="atl-col atl-col-desktop">
-          {renderGroups(RIGHT_GROUPS)}
-          {onOpenInspector && (
+  // Compact Embedded Stage (Used inside OutfitStudioView Mix & Match)
+  return (
+    <section
+      className={`atl-fitting ${compact ? 'compact' : ''}`}
+      style={{ borderRadius: 24, padding: 16 }}
+      aria-label="3D 코디 프리뷰"
+    >
+      <div
+        className="atl-stage"
+        style={{
+          background: 'var(--bg-canvas)',
+          border: 'none',
+          borderRadius: 20,
+          minHeight: compact ? 420 : 480,
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          className="atl-stage-canvas"
+          style={{ height: compact ? 420 : 480, touchAction: 'none' }}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
+        />
+
+        <div className="atl-stage-controls">
+          <button
+            type="button"
+            className="chip"
+            onClick={cycleMotionMode}
+          >
+            모션: {MOTION_CYCLE.find((m) => m.key === motionMode)?.label}
+          </button>
+          {focusedSlot && (
             <button
               type="button"
-              className="btn btn-primary atl-inspector-btn"
-              onClick={() => onOpenInspector(selectedSlot === 'all' ? null : selectedSlot)}
+              className="chip active"
+              onClick={() => setFocusedSlot(null)}
             >
-              <Layers size={14} /> 11부위 전체 코디 인스펙터
+              <RotateCcw size={12} /> 전신 보기
             </button>
           )}
         </div>
       </div>
-
-      {/* Inline Whering-Style Quick-Swap & Unequip Dock (keeps 3D mannequin visible while swapping!) */}
-      {selectedSlot !== 'all' && onSwapSlotItem && (
-        <div className="atl-quick-dock" aria-label="선택 부위 빠른 착장/해제 독">
-          <div className="atl-quick-dock-head">
-            <div>
-              <span className="atl-eyebrow" style={{ display: 'block', marginBottom: 2 }}>
-                LIVE 3D SLOT FITTING
-              </span>
-              <strong>
-                {SLOT_BY_KEY[selectedSlot]?.no} · {SLOT_BY_KEY[selectedSlot]?.labelKo} 실시간 피팅
-              </strong>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {resolvedLoadout[selectedSlot] && (
-                <button
-                  type="button"
-                  id={`dock-unequip-${selectedSlot}`}
-                  className="btn btn-secondary btn-sm"
-                  onClick={(e) => handleQuickUnequip(e, selectedSlot)}
-                >
-                  <X size={13} /> 이 부위 벗기 (착용 해제)
-                </button>
-              )}
-              {onOpenInspector && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => onOpenInspector(selectedSlot)}
-                >
-                  <Layers size={13} /> 상세 인스펙터
-                </button>
-              )}
-              <button type="button" className="btn btn-ghost btn-sm" onClick={resetView}>
-                전신 복귀
-              </button>
-            </div>
-          </div>
-
-          <div className="atl-quick-dock-rail">
-            <button
-              type="button"
-              className={`atl-dock-item unequip-card ${!resolvedLoadout[selectedSlot] ? 'selected' : ''}`}
-              onClick={(e) => handleQuickUnequip(e, selectedSlot)}
-            >
-              <div className="atl-dock-unequip-box">
-                <X size={18} />
-              </div>
-              <span>미착용 (벗기)</span>
-            </button>
-
-            {slotCandidates.map((cand) => {
-              const isSelected = resolvedLoadout[selectedSlot]?.id === cand.id;
-              return (
-                <button
-                  key={cand.id}
-                  type="button"
-                  className={`atl-dock-item ${isSelected ? 'selected' : ''}`}
-                  onClick={() => handleQuickEquip(selectedSlot, cand)}
-                >
-                  <StudioGarmentImage
-                    item={cand}
-                    style={{ width: 56, height: 72, borderRadius: 8, flexShrink: 0 }}
-                  />
-                  <div className="atl-dock-item-meta">
-                    <strong>{cand.name}</strong>
-                    <small>{cand.color_name || '기본 컬러'}</small>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <footer className="atl-stat-strip">
-        {statRows.map((s) => (
-          <div key={s.key} className="atl-stat">
-            <div className="atl-stat-row">
-              <span>{s.labelKo}</span>
-              <strong>{loadoutStats.equippedCount ? s.value : '--'}</strong>
-            </div>
-            <div className="atl-stat-bar">
-              <div style={{ width: `${loadoutStats.equippedCount ? s.value : 0}%` }} />
-            </div>
-          </div>
-        ))}
-      </footer>
     </section>
   );
 }

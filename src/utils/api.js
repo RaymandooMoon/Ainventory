@@ -1,24 +1,53 @@
+import {
+  readCachedResponse,
+  writeCachedResponse,
+  applyOptimisticLocalMutation,
+  flushOfflineQueue,
+} from './offlineSync.js';
+
 const TOKEN_KEY = 'ainventory_auth_token';
+const SAMPLE_DEMO_KEY = 'ainventory_sample_demo_mode';
 
 export function getStoredToken() {
+  if (typeof localStorage === 'undefined') return '';
   return localStorage.getItem(TOKEN_KEY) || '';
 }
 
 export function setStoredToken(token) {
+  if (typeof localStorage === 'undefined') return;
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(SAMPLE_DEMO_KEY);
   } else {
     localStorage.removeItem(TOKEN_KEY);
   }
 }
 
-export async function apiFetch(path, options = {}) {
+export function isSampleDemoMode() {
+  if (typeof localStorage === 'undefined') return false;
+  return localStorage.getItem(SAMPLE_DEMO_KEY) === '1';
+}
+
+export function setSampleDemoMode(enabled) {
+  if (typeof localStorage === 'undefined') return;
+  if (enabled) {
+    localStorage.setItem(SAMPLE_DEMO_KEY, '1');
+  } else {
+    localStorage.removeItem(SAMPLE_DEMO_KEY);
+  }
+}
+
+async function rawNetworkFetch(path, options = {}) {
   const token = getStoredToken();
+  const sampleDemo = isSampleDemoMode();
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
-  if (token) {
+  if (sampleDemo) {
+    headers['X-Demo-Mode'] = 'sample';
+  } else if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
@@ -26,7 +55,6 @@ export async function apiFetch(path, options = {}) {
     ...options,
     headers,
   });
-
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data.error || `요청 실패 (${res.status})`);
@@ -37,19 +65,91 @@ export async function apiFetch(path, options = {}) {
   return data;
 }
 
+export function flushPendingOfflineSync() {
+  return flushOfflineQueue((p, opts) => rawNetworkFetch(p, opts));
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (!isSampleDemoMode() && getStoredToken()) {
+      flushPendingOfflineSync().catch(() => {});
+    }
+  });
+}
+
+/**
+ * Offline-First + Sample Demo Mode API Client (Requirements 8.a & 8.b)
+ * - Mirrors GET responses into IndexedDB (`ainventory_offline_v1`)
+ * - Serves cached IndexedDB data seamlessly when offline
+ * - Routes Guest Sample Demo mutations locally without requiring login
+ * - Queues authenticated offline mutations and syncs automatically when online
+ */
+export async function apiFetch(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const sampleDemo = isSampleDemoMode();
+  const isAuthEndpoint = path.startsWith('/auth/');
+  const isStatelessCompute =
+    path === '/garments/analyze' || path === '/shopping/analyze' || path === '/shopping-check';
+
+  // In Sample Closet Demo Mode, mutations stay sandboxed in local IndexedDB
+  if (sampleDemo && method !== 'GET' && !isAuthEndpoint && !isStatelessCompute) {
+    return applyOptimisticLocalMutation(path, method, options.body, false);
+  }
+
+  const isBrowserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if (method === 'GET') {
+    const cacheKey = sampleDemo ? `demo:${path}` : path;
+    if (isBrowserOffline) {
+      const cached = await readCachedResponse(cacheKey);
+      if (cached) return { ...cached, _fromOfflineCache: true };
+    }
+    try {
+      const data = await rawNetworkFetch(path, options);
+      writeCachedResponse(cacheKey, data).catch(() => {});
+      if (!sampleDemo && getStoredToken()) {
+        flushOfflineQueue((p, opts) => rawNetworkFetch(p, opts)).catch(() => {});
+      }
+      return data;
+    } catch (err) {
+      // Network failure fallback to IndexedDB cache (do not swallow HTTP 401/4xx errors)
+      if (!err.status) {
+        const cached = await readCachedResponse(cacheKey);
+        if (cached) return { ...cached, _fromOfflineCache: true };
+      }
+      throw err;
+    }
+  }
+
+  // Authenticated write operations (POST / PATCH / DELETE)
+  if (!isAuthEndpoint && isBrowserOffline) {
+    return applyOptimisticLocalMutation(path, method, options.body, true);
+  }
+
+  try {
+    const data = await rawNetworkFetch(path, options);
+    return data;
+  } catch (err) {
+    if (!isAuthEndpoint && !err.status) {
+      return applyOptimisticLocalMutation(path, method, options.body, true);
+    }
+    throw err;
+  }
+}
+
 export const CATEGORIES = [
-  { value: 'all', label: '전체', labelEn: 'All' },
-  { value: 'headwear', label: '모자·헤드웨어', labelEn: 'Headwear' },
-  { value: 'neckwear', label: '목도리·스카프·타이', labelEn: 'Neckwear' },
-  { value: 'outer', label: '아우터', labelEn: 'Outerwear' },
-  { value: 'top', label: '상의', labelEn: 'Tops' },
-  { value: 'bottom', label: '하의', labelEn: 'Bottoms' },
-  { value: 'dress', label: '원피스', labelEn: 'Dress' },
-  { value: 'gloves', label: '장갑', labelEn: 'Gloves' },
-  { value: 'underwear', label: '언더웨어·이너', labelEn: 'Innerwear' },
-  { value: 'socks', label: '양말', labelEn: 'Socks' },
-  { value: 'shoes', label: '신발', labelEn: 'Footwear' },
-  { value: 'accessory', label: '가방·액세서리', labelEn: 'Accessories' },
+  { key: 'all', value: 'all', label: '전체', labelEn: 'All' },
+  { key: 'headwear', value: 'headwear', label: '모자·헤드웨어', labelEn: 'Headwear' },
+  { key: 'neckwear', value: 'neckwear', label: '목도리·스카프·타이', labelEn: 'Neckwear' },
+  { key: 'outer', value: 'outer', label: '아우터', labelEn: 'Outerwear' },
+  { key: 'top', value: 'top', label: '상의', labelEn: 'Tops' },
+  { key: 'bottom', value: 'bottom', label: '하의', labelEn: 'Bottoms' },
+  { key: 'dress', value: 'dress', label: '원피스', labelEn: 'Dress' },
+  { key: 'gloves', value: 'gloves', label: '장갑', labelEn: 'Gloves' },
+  { key: 'underwear', value: 'underwear', label: '언더웨어·이너', labelEn: 'Innerwear' },
+  { key: 'socks', value: 'socks', label: '양말', labelEn: 'Socks' },
+  { key: 'shoes', value: 'shoes', label: '신발', labelEn: 'Footwear' },
+  { key: 'accessory', value: 'accessory', label: '가방·액세서리', labelEn: 'Accessories' },
 ];
 
 export const SUBCATEGORIES_BY_CAT = {
@@ -151,7 +251,7 @@ export function formatKRW(num) {
 
 export function computeItemTier(item, personalColor = '') {
   if (!item) {
-    return { tier: 'COMMON', labelKo: '일반', color: '#8E9299', score: 50 };
+    return { tier: 'COMMON', labelKo: '일반', color: '#86868B', score: 50 };
   }
   const wears = Number(item.wear_count) || 0;
   const price = Number(item.price) || 0;
@@ -171,16 +271,32 @@ export function computeItemTier(item, personalColor = '') {
   if (personalColor && (item.notes || '').includes(personalColor)) score += 8;
 
   if (score >= 90 || (isFav && wears >= 16)) {
-    return { tier: 'ICONIC', labelKo: '아이코닉', color: '#FFB800', glow: 'rgba(255, 184, 0, 0.45)', score };
+    return { tier: 'ICONIC', labelKo: '아이코닉', color: '#1D1D1F', score };
   }
   if (score >= 78) {
-    return { tier: 'LEGENDARY', labelKo: '레전더리', color: '#FF6B2B', glow: 'rgba(255, 107, 43, 0.40)', score };
+    return { tier: 'LEGENDARY', labelKo: '프리미엄', color: '#3A3A3C', score };
   }
   if (score >= 66) {
-    return { tier: 'EPIC', labelKo: '에픽', color: '#B85CFF', glow: 'rgba(184, 92, 255, 0.36)', score };
+    return { tier: 'EPIC', labelKo: '핵심', color: '#48484A', score };
   }
   if (score >= 56) {
-    return { tier: 'RARE', labelKo: '레어', color: '#00D2FF', glow: 'rgba(0, 210, 255, 0.36)', score };
+    return { tier: 'RARE', labelKo: '자주 착용', color: '#636366', score };
   }
-  return { tier: 'COMMON', labelKo: '커먼', color: '#8896A6', glow: 'rgba(136, 150, 166, 0.25)', score };
+  return { tier: 'COMMON', labelKo: '기본', color: '#8E8E93', score };
 }
+
+export const SEASONS = [
+  { key: 'spring', value: 'spring', label: '봄', labelEn: 'Spring' },
+  { key: 'summer', value: 'summer', label: '여름', labelEn: 'Summer' },
+  { key: 'autumn', value: 'autumn', label: '가을', labelEn: 'Autumn' },
+  { key: 'winter', value: 'winter', label: '겨울', labelEn: 'Winter' },
+];
+
+export const CITY_COORDS = [
+  { key: 'seoul', name: '서울', lat: 37.5665, lon: 126.978 },
+  { key: 'busan', name: '부산', lat: 35.1796, lon: 129.0756 },
+  { key: 'jeju', name: '제주', lat: 33.4996, lon: 126.5312 },
+  { key: 'tokyo', name: '도쿄', lat: 35.6762, lon: 139.6503 },
+  { key: 'newyork', name: '뉴욕', lat: 40.7128, lon: -74.006 },
+  { key: 'paris', name: '파리', lat: 48.8566, lon: 2.3522 },
+];

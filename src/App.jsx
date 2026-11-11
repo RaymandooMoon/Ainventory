@@ -4,12 +4,14 @@ import {
   Camera,
   Globe,
   Layers,
-  LogOut,
+  Moon,
   Settings,
   Shirt,
+  SlidersHorizontal,
   Sparkles,
   Sun,
 } from 'lucide-react';
+import AccountSettingsSheet from './components/AccountSettingsSheet.jsx';
 import AdminPanelView from './components/AdminPanelView.jsx';
 import AnalyticsCalendarView from './components/AnalyticsCalendarView.jsx';
 import LoginView from './components/LoginView.jsx';
@@ -18,8 +20,26 @@ import ProfilePersonalColorModal from './components/ProfilePersonalColorModal.js
 import ShoppingCheckView from './components/ShoppingCheckView.jsx';
 import WardrobeView from './components/WardrobeView.jsx';
 import WeatherStylingView from './components/WeatherStylingView.jsx';
-import { apiFetch, getStoredToken, setStoredToken } from './utils/api.js';
+import {
+  SampleImportSheet,
+  SkeletonShimmer,
+  StatusCapsule,
+} from './components/common/AppUI.jsx';
+import {
+  apiFetch,
+  getStoredToken,
+  setSampleDemoMode,
+  setStoredToken,
+} from './utils/api.js';
 import { getStoredLang, setStoredLang, tr } from './utils/i18n.js';
+import {
+  applyThemePreference,
+  emitStatusCapsule,
+  getStoredThemePreference,
+  initNativeBackBridge,
+  pushBackHandler,
+  triggerHaptic,
+} from './utils/nativeBridge.js';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -27,22 +47,44 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('weather');
   const [activeCloset, setActiveCloset] = useState('husband');
   const [refreshKey, setRefreshKey] = useState(0);
-  const [toast, setToast] = useState('');
   const [lang, setLang] = useState(getStoredLang());
+  const [themePref, setThemePref] = useState(getStoredThemePreference());
 
-  // Modals for first-login closet name & styling/personal-color profile
   const [closetSetupInput, setClosetSetupInput] = useState('');
   const [savingClosetName, setSavingClosetName] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileInitialStep, setProfileInitialStep] = useState(1);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [showSampleImport, setShowSampleImport] = useState(false);
+
+  // Initialize Apple HIG theme & Capacitor Android hardware back-button bridge
+  useEffect(() => {
+    applyThemePreference(getStoredThemePreference());
+    initNativeBackBridge();
+  }, []);
+
+  // Sync 3D WebGL active attribute so CSS Vibrancy never exceeds 1 concurrent blur layer (Req 14.b)
+  useEffect(() => {
+    const is3D = Boolean(user) && (activeTab === 'weather' || activeTab === 'studio');
+    document.documentElement.setAttribute('data-3d-active', is3D ? 'true' : 'false');
+  }, [user, activeTab]);
+
+  // Push non-default tab onto Android back stack so back button returns to 3D Studio first
+  useEffect(() => {
+    if (!user || activeTab === 'weather') return undefined;
+    return pushBackHandler(() => {
+      setActiveTab('weather');
+      return true;
+    });
+  }, [user, activeTab]);
+
+  const showToast = (msg) => {
+    if (msg) emitStatusCapsule(msg);
+  };
 
   const openProfileModal = (stepNum = 1) => {
     setProfileInitialStep(typeof stepNum === 'number' ? stepNum : 1);
     setShowProfileModal(true);
-  };
-
-  const showToast = (msg) => {
-    setToast(msg);
   };
 
   const handleChangeLang = (nextLang) => {
@@ -50,15 +92,18 @@ export default function App() {
     setLang(valid);
   };
 
-  useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), 3400);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const handleQuickToggleTheme = () => {
+    const currentResolved = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = currentResolved === 'dark' ? 'light' : 'dark';
+    setThemePref(next);
+    applyThemePreference(next);
+    triggerHaptic('selection');
+  };
 
   useEffect(() => {
     const checkSession = async () => {
       try {
+        setSampleDemoMode(false);
         if (!getStoredToken()) {
           setBooting(false);
           return;
@@ -66,9 +111,6 @@ export default function App() {
         const data = await apiFetch('/auth/me');
         setUser(data.user);
         setActiveCloset(data.user.defaultCloset || 'husband');
-        if (data.user.closetName && (!data.user.profileCompleted || !data.user.personalColor)) {
-          setShowProfileModal(true);
-        }
       } catch {
         setStoredToken('');
       } finally {
@@ -78,16 +120,40 @@ export default function App() {
     checkSession();
   }, []);
 
+  const handleEnterSampleDemo = () => {
+    setStoredToken('');
+    setSampleDemoMode(true);
+    const guestUser = {
+      id: 0,
+      username: 'sample_guest',
+      displayName: lang === 'en' ? 'Sample Guest' : '샘플 체험 게스트',
+      role: 'member',
+      defaultCloset: 'sample',
+      closetName: '샘플 캡슐 옷장',
+      isSampleDemo: true,
+      profileCompleted: true,
+      personalColor: 'autumn_warm',
+      gender: 'male',
+      heightCm: 176,
+      weightKg: 70,
+      bodyShape: 'standard_balanced',
+    };
+    setUser(guestUser);
+    setActiveCloset('sample');
+    setActiveTab('weather');
+    triggerHaptic('light');
+    showToast('샘플 옷장 체험 모드로 진입했습니다');
+  };
+
   const handleLoginSuccess = (loggedInUser) => {
+    setSampleDemoMode(false);
     setUser(loggedInUser);
     setActiveCloset(loggedInUser.defaultCloset || 'husband');
-    if (loggedInUser.closetName && (!loggedInUser.profileCompleted || !loggedInUser.personalColor)) {
-      setShowProfileModal(true);
-    }
+    setActiveTab('weather');
     showToast(
       lang === 'en'
-        ? `Welcome, ${loggedInUser.displayName}.`
-        : `${loggedInUser.displayName}님, 환영합니다.`,
+        ? `Welcome, ${loggedInUser.displayName}`
+        : `${loggedInUser.displayName}님 환영합니다`
     );
   };
 
@@ -101,14 +167,7 @@ export default function App() {
         body: JSON.stringify({ closetName: closetSetupInput.trim() }),
       });
       setUser(res.user);
-      showToast(
-        lang === 'en'
-          ? `Closet "${res.user.closetName}" initialized!`
-          : `"${res.user.closetName}" 옷장이 설정되었습니다.`,
-      );
-      if (!res.user.profileCompleted || !res.user.personalColor) {
-        setShowProfileModal(true);
-      }
+      showToast(`"${res.user.closetName}" 옷장이 준비되었습니다`);
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -117,14 +176,18 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await apiFetch('/auth/logout', { method: 'POST' });
-    } catch {
-      // ignore
+    if (!user?.isSampleDemo) {
+      try {
+        await apiFetch('/auth/logout', { method: 'POST' });
+      } catch {
+        // ignore network error on logout
+      }
     }
+    setSampleDemoMode(false);
     setStoredToken('');
     setUser(null);
     setShowProfileModal(false);
+    setShowAccountSettings(false);
   };
 
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
@@ -134,40 +197,47 @@ export default function App() {
       <div
         style={{
           minHeight: '100dvh',
+          padding: 24,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--ink-muted)',
+          gap: 16,
+          background: 'var(--bg-canvas)',
         }}
       >
-        {tr(lang, 'loadingAtelier')}
+        <SkeletonShimmer height={36} width={180} radius={999} />
+        <SkeletonShimmer height={360} width="min(420px, 90vw)" radius={24} />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <LoginView
-        onLoginSuccess={handleLoginSuccess}
-        lang={lang}
-        onChangeLang={handleChangeLang}
-      />
+      <>
+        <StatusCapsule />
+        <LoginView
+          onLoginSuccess={handleLoginSuccess}
+          onEnterSampleDemo={handleEnterSampleDemo}
+          lang={lang}
+          onChangeLang={handleChangeLang}
+          themePref={themePref}
+          onToggleTheme={handleQuickToggleTheme}
+        />
+      </>
     );
   }
 
   const userDefaultCloset = user.defaultCloset || 'husband';
   const isCustomUserCloset =
-    userDefaultCloset !== 'husband' && userDefaultCloset !== 'wife';
+    !user.isSampleDemo &&
+    userDefaultCloset !== 'husband' &&
+    userDefaultCloset !== 'wife';
 
   const navItems = [
     { id: 'weather', label: tr(lang, 'navWeather'), icon: Sun },
-    {
-      id: 'shopping',
-      label: tr(lang, 'navShopping'),
-      badge: tr(lang, 'badgeCore'),
-      icon: Camera,
-    },
     { id: 'wardrobe', label: tr(lang, 'navWardrobe'), icon: Shirt },
+    { id: 'shopping', label: tr(lang, 'navShopping'), icon: Camera },
     { id: 'studio', label: tr(lang, 'navStudio'), icon: Layers },
     { id: 'analytics', label: tr(lang, 'navAnalytics'), icon: BarChart3 },
   ];
@@ -176,37 +246,60 @@ export default function App() {
     navItems.push({ id: 'admin', label: tr(lang, 'navAdmin'), icon: Settings });
   }
 
-  const needsClosetSetup = !user.closetName;
+  const needsClosetSetup = !user.isSampleDemo && !user.closetName;
+
+  const selectTab = (tabId) => {
+    triggerHaptic('selection');
+    setActiveTab(tabId);
+  };
 
   return (
-    <div className="app-shell">
-      {/* Desktop Atelier Sidebar */}
+    <div className={`app-shell ${activeTab === 'weather' ? 'is-studio-tab' : ''}`}>
+      <StatusCapsule />
+
+      {/* Desktop Monochrome Sidebar */}
       <aside className="sidebar">
         <div
           className="sidebar-brand"
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <div>
-            <div className="brand-mark">A inventory</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', marginTop: 2 }}>
-              {tr(lang, 'brandSubtitle')}
+            <div className="hig-headline" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+              A inventory
+            </div>
+            <div className="hig-caption" style={{ marginTop: 2 }}>
+              {user.isSampleDemo ? '샘플 옷장 체험 모드' : tr(lang, 'brandSubtitle')}
             </div>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-            onClick={() => handleChangeLang(lang === 'ko' ? 'en' : 'ko')}
-            title="KO / EN Language Toggle"
-          >
-            <Globe size={12} /> {lang === 'ko' ? 'EN' : 'KO'}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={handleQuickToggleTheme}
+              aria-label="테마 전환"
+              title="라이트 / 다크 전환"
+            >
+              {document.documentElement.getAttribute('data-theme') === 'dark' ? (
+                <Sun size={15} />
+              ) : (
+                <Moon size={15} />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              style={{ width: 'auto', padding: '0 8px', fontSize: '0.72rem', fontWeight: 600 }}
+              onClick={() => handleChangeLang(lang === 'ko' ? 'en' : 'ko')}
+            >
+              <Globe size={13} />
+            </button>
+          </div>
         </div>
 
-        <div className="closet-switcher" role="group" aria-label="옷장 프로필 전환">
-          {isCustomUserCloset ? (
-            <>
+        {!user.isSampleDemo ? (
+          <div className="closet-switcher" role="group" aria-label="옷장 프로필 전환">
+            {isCustomUserCloset ? (
               <button
                 id="switch-closet-personal"
                 type="button"
@@ -215,56 +308,45 @@ export default function App() {
               >
                 {user.closetName || tr(lang, 'closetPersonal')}
               </button>
-              <button
-                id="switch-closet-husband"
-                type="button"
-                className={`closet-switch-btn ${activeCloset === 'husband' ? 'active' : ''}`}
-                onClick={() => setActiveCloset('husband')}
-              >
-                {tr(lang, 'closetHusband')}
-              </button>
-              <button
-                id="switch-closet-all"
-                type="button"
-                className={`closet-switch-btn ${activeCloset === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveCloset('all')}
-              >
-                {tr(lang, 'closetAll')}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                id="switch-closet-husband"
-                type="button"
-                className={`closet-switch-btn ${activeCloset === 'husband' ? 'active' : ''}`}
-                onClick={() => setActiveCloset('husband')}
-              >
-                {userDefaultCloset === 'husband' && user.closetName
-                  ? user.closetName
-                  : tr(lang, 'closetHusband')}
-              </button>
-              <button
-                id="switch-closet-wife"
-                type="button"
-                className={`closet-switch-btn ${activeCloset === 'wife' ? 'active' : ''}`}
-                onClick={() => setActiveCloset('wife')}
-              >
-                {userDefaultCloset === 'wife' && user.closetName
-                  ? user.closetName
-                  : tr(lang, 'closetWife')}
-              </button>
-              <button
-                id="switch-closet-all"
-                type="button"
-                className={`closet-switch-btn ${activeCloset === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveCloset('all')}
-              >
-                {tr(lang, 'closetAll')}
-              </button>
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <button
+                  id="switch-closet-husband"
+                  type="button"
+                  className={`closet-switch-btn ${activeCloset === 'husband' ? 'active' : ''}`}
+                  onClick={() => setActiveCloset('husband')}
+                >
+                  {tr(lang, 'closetHusband')}
+                </button>
+                <button
+                  id="switch-closet-wife"
+                  type="button"
+                  className={`closet-switch-btn ${activeCloset === 'wife' ? 'active' : ''}`}
+                  onClick={() => setActiveCloset('wife')}
+                >
+                  {tr(lang, 'closetWife')}
+                </button>
+                <button
+                  id="switch-closet-all"
+                  type="button"
+                  className={`closet-switch-btn ${activeCloset === 'all' ? 'active' : ''}`}
+                  onClick={() => setActiveCloset('all')}
+                >
+                  {tr(lang, 'closetAll')}
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <button
+            id="demo-exit-to-login-btn"
+            type="button"
+            className="btn btn-primary btn-sm btn-full"
+            onClick={handleLogout}
+          >
+            내 계정으로 시작 · 로그인
+          </button>
+        )}
 
         <nav className="nav-list" aria-label="주요 메뉴">
           {navItems.map((item) => {
@@ -275,17 +357,16 @@ export default function App() {
                 id={`nav-tab-${item.id}`}
                 type="button"
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => selectTab(item.id)}
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
-                {item.badge && <span className="nav-item-badge">{item.badge}</span>}
               </button>
             );
           })}
         </nav>
 
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button
             id="sidebar-open-profile-btn"
             type="button"
@@ -294,105 +375,84 @@ export default function App() {
             onClick={() => openProfileModal(1)}
           >
             <Sparkles size={14} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {tr(lang, 'profileBtn')}
-            </span>
+            <span>{tr(lang, 'profileBtn')}</span>
           </button>
         </div>
 
         <div className="sidebar-footer">
           <div className="user-chip">
             <strong>{user.displayName}</strong>
-            <span>
-              @{user.username} · {user.personalColor || (user.role === 'admin' ? 'Admin' : 'Member')}
-            </span>
+            <span>@{user.username}</span>
           </div>
           <button
-            id="logout-btn"
+            id="open-account-settings-btn"
             type="button"
             className="icon-btn"
-            title={tr(lang, 'logout')}
-            onClick={handleLogout}
+            aria-label="계정 및 개인정보 설정"
+            onClick={() => setShowAccountSettings(true)}
           >
-            <LogOut size={16} />
+            <SlidersHorizontal size={16} />
           </button>
         </div>
       </aside>
 
-      {/* Mobile Top Header */}
+      {/* Mobile Top Header (Hidden automatically on 3D Studio tab for 85%+ clear viewport) */}
       <header className="mobile-topbar">
-        <div className="brand-mark" style={{ fontSize: '1.4rem' }}>
+        <div className="hig-headline" style={{ fontWeight: 700 }}>
           A inventory
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => handleChangeLang(lang === 'ko' ? 'en' : 'ko')}
-            title="KO / EN"
-            style={{ width: 'auto', padding: '0 8px', fontSize: '0.74rem', fontWeight: 700 }}
-          >
-            {lang === 'ko' ? 'EN' : 'KO'}
-          </button>
-
-          <select
-            aria-label="모바일 옷장 선택"
-            className="select-input"
-            style={{ width: 'auto', padding: '6px 10px', fontSize: '0.78rem' }}
-            value={activeCloset}
-            onChange={(e) => setActiveCloset(e.target.value)}
-          >
-            {isCustomUserCloset && (
-              <option value={userDefaultCloset}>
-                {user.closetName || tr(lang, 'closetPersonal')}
-              </option>
-            )}
-            <option value="husband">{tr(lang, 'closetHusband')}</option>
-            <option value="wife">{tr(lang, 'closetWife')}</option>
-            <option value="all">{tr(lang, 'closetAll')}</option>
-          </select>
-
-          <button
-            id="mobile-open-profile-btn"
-            type="button"
-            className="icon-btn"
-            aria-label="퍼스널컬러 및 체형 설정"
-            onClick={() => openProfileModal(1)}
-          >
-            <Sparkles size={15} />
-          </button>
-
-          {user.role === 'admin' && (
+          {user.isSampleDemo && (
             <button
               type="button"
-              className="icon-btn"
-              aria-label="어드민 설정"
-              onClick={() => setActiveTab('admin')}
+              className="btn btn-primary btn-sm"
+              style={{ padding: '6px 10px', fontSize: '0.74rem' }}
+              onClick={handleLogout}
             >
-              <Settings size={16} />
+              로그인
             </button>
           )}
+
           <button
             type="button"
             className="icon-btn"
-            aria-label={tr(lang, 'logout')}
-            onClick={handleLogout}
+            aria-label="테마 전환"
+            onClick={handleQuickToggleTheme}
           >
-            <LogOut size={16} />
+            {document.documentElement.getAttribute('data-theme') === 'dark' ? (
+              <Sun size={15} />
+            ) : (
+              <Moon size={15} />
+            )}
+          </button>
+
+          <button
+            id="mobile-open-account-settings-btn"
+            type="button"
+            className="icon-btn"
+            aria-label="계정 및 개인정보 설정"
+            onClick={() => setShowAccountSettings(true)}
+          >
+            <SlidersHorizontal size={16} />
           </button>
         </div>
       </header>
 
       {/* Main Content Workspace */}
-      <main className="main-workspace">
+      <main className={`main-workspace ${activeTab === 'weather' ? 'is-studio-mode' : ''}`}>
         {activeTab === 'weather' && (
           <WeatherStylingView
             activeCloset={activeCloset}
             user={user}
             lang={lang}
-            onNavigateShopping={() => setActiveTab('shopping')}
+            refreshKey={refreshKey}
+            onNavigateShopping={() => selectTab('shopping')}
+            onNavigateWardrobe={() => selectTab('wardrobe')}
             onOpenProfileModal={openProfileModal}
+            onOpenAccountSettings={() => setShowAccountSettings(true)}
+            onOpenSampleImport={() => setShowSampleImport(true)}
+            onExitSampleDemo={handleLogout}
             onClosetUpdated={bumpRefresh}
             showToast={showToast}
           />
@@ -409,7 +469,9 @@ export default function App() {
         {activeTab === 'wardrobe' && (
           <WardrobeView
             activeCloset={activeCloset}
+            user={user}
             refreshKey={refreshKey}
+            onOpenSampleImport={() => setShowSampleImport(true)}
             onClosetUpdated={bumpRefresh}
             showToast={showToast}
           />
@@ -429,6 +491,7 @@ export default function App() {
         {activeTab === 'analytics' && (
           <AnalyticsCalendarView
             activeCloset={activeCloset}
+            user={user}
             refreshKey={refreshKey}
             onClosetUpdated={bumpRefresh}
             showToast={showToast}
@@ -440,28 +503,31 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile PWA Bottom Navigation */}
-      <nav className="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+      {/* Mobile Floating Vibrancy Bottom Navigation (Req 14.a) */}
+      <nav className="mobile-bottom-nav hig-vibrancy-bar" aria-label="모바일 하단 메뉴">
         <button
+          id="mobile-tab-weather"
           type="button"
           className={`mobile-tab-btn ${activeTab === 'weather' ? 'active' : ''}`}
-          onClick={() => setActiveTab('weather')}
+          onClick={() => selectTab('weather')}
         >
           <Sun size={19} />
           <span>{tr(lang, 'mobileWeather')}</span>
         </button>
         <button
+          id="mobile-tab-wardrobe"
           type="button"
           className={`mobile-tab-btn ${activeTab === 'wardrobe' ? 'active' : ''}`}
-          onClick={() => setActiveTab('wardrobe')}
+          onClick={() => selectTab('wardrobe')}
         >
           <Shirt size={19} />
           <span>{tr(lang, 'mobileWardrobe')}</span>
         </button>
         <button
+          id="mobile-tab-shopping"
           type="button"
           className={`mobile-tab-btn center-cta ${activeTab === 'shopping' ? 'active' : ''}`}
-          onClick={() => setActiveTab('shopping')}
+          onClick={() => selectTab('shopping')}
         >
           <span className="cta-circle">
             <Camera size={18} />
@@ -469,17 +535,19 @@ export default function App() {
           <span>{tr(lang, 'mobileShopping')}</span>
         </button>
         <button
+          id="mobile-tab-studio"
           type="button"
           className={`mobile-tab-btn ${activeTab === 'studio' ? 'active' : ''}`}
-          onClick={() => setActiveTab('studio')}
+          onClick={() => selectTab('studio')}
         >
           <Layers size={19} />
           <span>{tr(lang, 'mobileStudio')}</span>
         </button>
         <button
+          id="mobile-tab-analytics"
           type="button"
           className={`mobile-tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('analytics')}
+          onClick={() => selectTab('analytics')}
         >
           <BarChart3 size={19} />
           <span>{tr(lang, 'mobileReport')}</span>
@@ -488,12 +556,12 @@ export default function App() {
 
       {/* First-Login Closet Name Setup Modal */}
       {needsClosetSetup && (
-        <div className="modal-backdrop" style={{ zIndex: 130 }}>
-          <div className="modal-box" style={{ maxWidth: 440 }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 8 }}>
+        <div className="modal-backdrop ui-sheet-backdrop" style={{ zIndex: 130 }}>
+          <div className="modal-box ui-sheet-box" style={{ maxWidth: 420 }}>
+            <h3 className="hig-headline" style={{ marginBottom: 8 }}>
               {tr(lang, 'closetSetupTitle')}
             </h3>
-            <p style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)', marginBottom: 16 }}>
+            <p className="hig-caption" style={{ marginBottom: 16 }}>
               {tr(lang, 'closetSetupDesc')}
             </p>
             <form onSubmit={handleSaveClosetName}>
@@ -512,12 +580,41 @@ export default function App() {
                 className="btn btn-primary btn-full"
                 disabled={savingClosetName}
               >
-                {savingClosetName ? '...' : tr(lang, 'closetSaveBtn')}
+                {savingClosetName ? '저장 중...' : tr(lang, 'closetSaveBtn')}
               </button>
             </form>
           </div>
         </div>
       )}
+
+      {/* Account Settings & Immediate Permanent Account Deletion Sheet */}
+      <AccountSettingsSheet
+        open={showAccountSettings}
+        onClose={() => setShowAccountSettings(false)}
+        user={user}
+        lang={lang}
+        onChangeLang={handleChangeLang}
+        onOpenSampleImport={() => setShowSampleImport(true)}
+        onOpenProfileModal={openProfileModal}
+        onLogout={handleLogout}
+        onAccountDeleted={() => {
+          setShowAccountSettings(false);
+          setSampleDemoMode(false);
+          setStoredToken('');
+          setUser(null);
+        }}
+      />
+
+      {/* Selective Sample Closet Import Sheet */}
+      <SampleImportSheet
+        open={showSampleImport}
+        onClose={() => setShowSampleImport(false)}
+        targetOwner={activeCloset === 'all' ? userDefaultCloset : activeCloset}
+        onImported={(count) => {
+          bumpRefresh();
+          showToast(`샘플 아이템 ${count}점이 내 옷장에 추가되었습니다`);
+        }}
+      />
 
       {/* Styling Profile + 7 Body Shapes + Personal Color Modal */}
       {showProfileModal && !needsClosetSetup && (
@@ -535,17 +632,13 @@ export default function App() {
             setShowProfileModal(false);
             bumpRefresh();
             if (generatedWardrobe?.createdCount > 0) {
-              showToast(
-                `프로필 저장 및 통계 기반 ${generatedWardrobe.createdCount}벌 의류가 자동 생성되었습니다.`,
-              );
+              showToast(`프로필 저장 · ${generatedWardrobe.createdCount}벌 의류 생성 완료`);
             } else {
-              showToast('7체형 · 3사이즈 · 퍼스널컬러 · 3D 모델링 컬러가 업데이트되었습니다.');
+              showToast('체형 · 퍼스널컬러 · 3D 모델링 업데이트 완료');
             }
           }}
         />
       )}
-
-      {toast && <div className="toast-banner">{toast}</div>}
     </div>
   );
 }

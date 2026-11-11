@@ -4,6 +4,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { resolveAnatomicalProfile } from './bodyAnthropometrics.js';
 import { GARMENT_3D_PHYSICS_PRESETS } from './garment3DPhysicsSpecs.js';
+import { SpringBoneSystem } from './springBonePhysics.js';
+import { setVibrancySolidFallback } from './nativeBridge.js';
 
 export const SLOT_CAMERA_TARGETS = {
   all: { x: 0.0, y: 0.96, dist: 3.62, fov: 35, labelKo: '전신 풀샷 (Full Body)' },
@@ -54,13 +56,28 @@ export function resolveSkinHex(profile = {}) {
   return PERSONAL_COLOR_DEFAULT_SKIN[pc] || '#E4C8B0';
 }
 
+const EXPLICIT_FABRIC_PRESETS = {
+  padding: { type: 'padding', labelKo: '구스다운 퀼팅 나일론', roughness: 0.38, metalness: 0.06, sheen: 0.35, clearcoat: 0.18, bumpScale: 0.024 },
+  leather: { type: 'leather', labelKo: '이탈리안 풀그레인 레더', roughness: 0.30, metalness: 0.08, sheen: 0.24, clearcoat: 0.44, bumpScale: 0.011 },
+  gabardine: { type: 'gabardine', labelKo: '발수 코튼 개버딘 트윌', roughness: 0.50, metalness: 0.03, sheen: 0.44, clearcoat: 0.10, bumpScale: 0.014 },
+  denim: { type: 'denim', labelKo: '셀비지 인디고 데님 트윌', roughness: 0.76, metalness: 0.02, sheen: 0.25, clearcoat: 0.0, bumpScale: 0.020 },
+  silk: { type: 'silk', labelKo: '실크 크레이프 드레이프', roughness: 0.28, metalness: 0.05, sheen: 0.85, clearcoat: 0.16, bumpScale: 0.006 },
+  wool: { type: 'wool', labelKo: '버진 울 · 캐시미어 브러시드', roughness: 0.66, metalness: 0.02, sheen: 0.68, clearcoat: 0.03, bumpScale: 0.016 },
+  knit: { type: 'knit', labelKo: '파인 메리노 골지 니트', roughness: 0.72, metalness: 0.01, sheen: 0.60, clearcoat: 0.0, bumpScale: 0.022 },
+  cotton: { type: 'cotton', labelKo: '수피마 코튼 포플린', roughness: 0.60, metalness: 0.02, sheen: 0.36, clearcoat: 0.03, bumpScale: 0.010 },
+};
+
 export function inferFabricMaterialSpec(item = {}) {
+  const explicit = String(item.fabric || '').toLowerCase().trim();
+  if (explicit && EXPLICIT_FABRIC_PRESETS[explicit]) {
+    return EXPLICIT_FABRIC_PRESETS[explicit];
+  }
   const sub = String(item.subcategory || '').toLowerCase();
   const cat = String(item.category || '').toLowerCase();
   const name = String(item.name || '');
 
   if (sub === 'padding' || name.includes('패딩') || name.includes('다운') || name.includes('퀼팅')) {
-    return { type: 'padding', labelKo: '구스다운 퀼팅 나일론', roughness: 0.38, metalness: 0.06, sheen: 0.35, clearcoat: 0.18, bumpScale: 0.024 };
+    return EXPLICIT_FABRIC_PRESETS.padding;
   }
   if (
     sub === 'loafers' ||
@@ -79,24 +96,24 @@ export function inferFabricMaterialSpec(item = {}) {
     name.includes('서류가방') ||
     name.includes('브리프케이스')
   ) {
-    return { type: 'leather', labelKo: '이탈리안 풀그레인 레더', roughness: 0.30, metalness: 0.08, sheen: 0.24, clearcoat: 0.44, bumpScale: 0.011 };
+    return EXPLICIT_FABRIC_PRESETS.leather;
   }
   if (sub === 'trench' || name.includes('트렌치') || name.includes('개버딘') || name.includes('발수')) {
-    return { type: 'gabardine', labelKo: '발수 코튼 개버딘 트윌', roughness: 0.50, metalness: 0.03, sheen: 0.44, clearcoat: 0.10, bumpScale: 0.014 };
+    return EXPLICIT_FABRIC_PRESETS.gabardine;
   }
   if (sub === 'denim' || name.includes('데님') || name.includes('청바지')) {
-    return { type: 'denim', labelKo: '셀비지 인디고 데님 트윌', roughness: 0.76, metalness: 0.02, sheen: 0.25, clearcoat: 0.0, bumpScale: 0.020 };
+    return EXPLICIT_FABRIC_PRESETS.denim;
   }
   if (sub === 'blouse' || sub === 'necktie' || name.includes('실크') || name.includes('새틴')) {
-    return { type: 'silk', labelKo: '실크 크레이프 드레이프', roughness: 0.28, metalness: 0.05, sheen: 0.85, clearcoat: 0.16, bumpScale: 0.006 };
+    return EXPLICIT_FABRIC_PRESETS.silk;
   }
   if (sub === 'coat' || sub === 'blazer' || sub === 'slacks' || sub === 'beret' || sub === 'bucket_hat' || sub === 'scarf' || name.includes('울') || name.includes('캐시미어')) {
-    return { type: 'wool', labelKo: '버진 울 · 캐시미어 브러시드', roughness: 0.66, metalness: 0.02, sheen: 0.68, clearcoat: 0.03, bumpScale: 0.016 };
+    return EXPLICIT_FABRIC_PRESETS.wool;
   }
   if (sub === 'knit' || sub === 'cardigan' || sub === 'beanie' || sub === 'muffler' || sub === 'gloves' || cat === 'socks') {
-    return { type: 'knit', labelKo: '파인 메리노 골지 니트', roughness: 0.72, metalness: 0.01, sheen: 0.60, clearcoat: 0.0, bumpScale: 0.022 };
+    return EXPLICIT_FABRIC_PRESETS.knit;
   }
-  return { type: 'cotton', labelKo: '수피마 코튼 포플린', roughness: 0.60, metalness: 0.02, sheen: 0.36, clearcoat: 0.03, bumpScale: 0.010 };
+  return EXPLICIT_FABRIC_PRESETS.cotton;
 }
 
 // -----------------------------------------------------------------------------
@@ -138,6 +155,7 @@ const garmentPromiseCache = new Map();
 const externalTexCache = new Map();
 const bumpTextureCache = new Map();
 const previewListeners = new Map();
+const activeEngineInstances = new Set();
 
 // Default MakeHuman rest-pose joint coordinates (in Three.js Y-up meters)
 const DEFAULT_JOINTS = {
@@ -491,83 +509,99 @@ function getTexLoader() {
   return texLoaderInstance;
 }
 
-function loadCachedTexture(url, { srgb = false, repeat = 1 } = {}) {
-  if (externalTexCache.has(url)) return externalTexCache.get(url);
-  const tex = getTexLoader().load(
-    url,
-    () => notifyPreviewListeners(),
-    undefined,
-    () => {}
-  );
-  // MakeHuman UV textures align cleanly with flipY = false when exported via glTF!
-  tex.flipY = false;
-  if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-  if (repeat > 1) {
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(repeat, repeat);
+function acquireCachedTexture(url, { srgb = false, repeat = 1 } = {}) {
+  const cacheKey = `${url}|srgb:${srgb ? 1 : 0}|rep:${repeat}`;
+  let entry = externalTexCache.get(cacheKey);
+  if (!entry) {
+    const tex = getTexLoader().load(
+      url,
+      () => notifyPreviewListeners(),
+      undefined,
+      () => {}
+    );
+    // MakeHuman UV textures align cleanly with flipY = false when exported via glTF!
+    tex.flipY = false;
+    if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+    if (repeat > 1) {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeat, repeat);
+    }
+    entry = { tex, refCount: 0, cacheKey, mapRef: externalTexCache };
+    externalTexCache.set(cacheKey, entry);
   }
-  externalTexCache.set(url, tex);
-  return tex;
+  entry.refCount += 1;
+  return entry;
 }
 
-function getProceduralFabricBumpMap(fabricType = 'knit') {
-  if (bumpTextureCache.has(fabricType)) {
-    return bumpTextureCache.get(fabricType);
-  }
-  if (typeof document === 'undefined') return null;
+function acquireFabricBumpMap(fabricType = 'knit') {
+  let entry = bumpTextureCache.get(fabricType);
+  if (!entry) {
+    if (typeof document === 'undefined') return null;
 
-  const size = 192;
-  const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
-  const ctx = c.getContext('2d');
-  const imgData = ctx.createImageData(size, size);
-  const { data } = imgData;
+    const size = 192;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    const imgData = ctx.createImageData(size, size);
+    const { data } = imgData;
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      let v = 128;
-      if (fabricType === 'knit') {
-        const rib = Math.sin((x / size) * Math.PI * 36) * 38;
-        const loop = Math.sin((y / size) * Math.PI * 48 + (x % 4) * 0.9) * 26;
-        v = 128 + rib + loop;
-      } else if (fabricType === 'padding') {
-        const baffle = Math.abs(Math.sin((y / size) * Math.PI * 6));
-        v = baffle < 0.08 ? 36 : 122 + Math.pow(baffle, 0.45) * 112;
-      } else if (fabricType === 'denim' || fabricType === 'gabardine') {
-        const twill = Math.sin(((x + y * 1.4) / size) * Math.PI * 42) * 34;
-        v = 128 + twill;
-      } else if (fabricType === 'leather') {
-        const grain = Math.sin(x * 0.85) * Math.cos(y * 0.85) * 16 + Math.sin((x + y) * 1.7) * 8;
-        v = 128 + grain;
-      } else if (fabricType === 'wool') {
-        const felt = Math.sin((x - y) * 0.65) * 20 + Math.cos((x + y) * 0.85) * 18;
-        v = 128 + felt;
-      } else if (fabricType === 'skin') {
-        const pore = Math.sin(x * 1.3) * Math.cos(y * 1.3) * 7 + Math.sin(x * 0.4 + y * 0.5) * 5;
-        v = 128 + pore;
-      } else {
-        const weave = (Math.sin(x * 1.3) + Math.sin(y * 1.3)) * 14;
-        v = 128 + weave;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        let v = 128;
+        if (fabricType === 'knit') {
+          const rib = Math.sin((x / size) * Math.PI * 36) * 38;
+          const loop = Math.sin((y / size) * Math.PI * 48 + (x % 4) * 0.9) * 26;
+          v = 128 + rib + loop;
+        } else if (fabricType === 'padding') {
+          const baffle = Math.abs(Math.sin((y / size) * Math.PI * 6));
+          v = baffle < 0.08 ? 36 : 122 + Math.pow(baffle, 0.45) * 112;
+        } else if (fabricType === 'denim' || fabricType === 'gabardine') {
+          const twill = Math.sin(((x + y * 1.4) / size) * Math.PI * 42) * 34;
+          v = 128 + twill;
+        } else if (fabricType === 'leather') {
+          const grain = Math.sin(x * 0.85) * Math.cos(y * 0.85) * 16 + Math.sin((x + y) * 1.7) * 8;
+          v = 128 + grain;
+        } else if (fabricType === 'wool') {
+          const felt = Math.sin((x - y) * 0.65) * 20 + Math.cos((x + y) * 0.85) * 18;
+          v = 128 + felt;
+        } else if (fabricType === 'skin') {
+          const pore = Math.sin(x * 1.3) * Math.cos(y * 1.3) * 7 + Math.sin(x * 0.4 + y * 0.5) * 5;
+          v = 128 + pore;
+        } else {
+          const weave = (Math.sin(x * 1.3) + Math.sin(y * 1.3)) * 14;
+          v = 128 + weave;
+        }
+        const clamped = Math.max(0, Math.min(255, Math.round(v)));
+        const idx = (y * size + x) * 4;
+        data[idx] = clamped;
+        data[idx + 1] = clamped;
+        data[idx + 2] = clamped;
+        data[idx + 3] = 255;
       }
-      const clamped = Math.max(0, Math.min(255, Math.round(v)));
-      const idx = (y * size + x) * 4;
-      data[idx] = clamped;
-      data[idx + 1] = clamped;
-      data[idx + 2] = clamped;
-      data[idx + 3] = 255;
     }
-  }
-  ctx.putImageData(imgData, 0, 0);
+    ctx.putImageData(imgData, 0, 0);
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  const rep = fabricType === 'padding' ? 2 : fabricType === 'skin' ? 16 : 6;
-  tex.repeat.set(rep, rep);
-  bumpTextureCache.set(fabricType, tex);
-  return tex;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    const rep = fabricType === 'padding' ? 2 : fabricType === 'skin' ? 16 : 6;
+    tex.repeat.set(rep, rep);
+    entry = { tex, refCount: 0, cacheKey: fabricType, mapRef: bumpTextureCache };
+    bumpTextureCache.set(fabricType, entry);
+  }
+  entry.refCount += 1;
+  return entry;
+}
+
+function releaseTextureEntry(entry) {
+  if (!entry) return;
+  entry.refCount -= 1;
+  if (entry.refCount <= 0) {
+    entry.mapRef?.delete(entry.cacheKey);
+    entry.tex?.dispose?.();
+  }
 }
 
 function loadManifest() {
@@ -804,22 +838,37 @@ function applyTriangleMask(mesh, hiddenVertMask) {
   const geom = mesh.geometry;
   const full = geom.userData.fullIndexArray;
   if (!full || !geom.index || geom.userData.zoneGroups) return;
+
+  let idxAttr = geom.index;
+  if (idxAttr.array.length < full.length) {
+    idxAttr = new THREE.BufferAttribute(full.slice(), 1);
+    geom.setIndex(idxAttr);
+  }
+
   if (!hiddenVertMask) {
-    if (geom.index.array.length !== full.length) {
-      geom.setIndex(new THREE.BufferAttribute(full.slice(), 1));
+    if (geom.userData.isMasked) {
+      idxAttr.array.set(full);
+      idxAttr.needsUpdate = true;
+      geom.setDrawRange(0, full.length);
+      geom.userData.isMasked = false;
     }
     return;
   }
-  const kept = [];
+
+  const arr = idxAttr.array;
+  let ptr = 0;
   for (let i = 0; i < full.length; i += 3) {
     const a = full[i];
     const b = full[i + 1];
     const c = full[i + 2];
     if (hiddenVertMask[a] && hiddenVertMask[b] && hiddenVertMask[c]) continue;
-    kept.push(a, b, c);
+    arr[ptr++] = a;
+    arr[ptr++] = b;
+    arr[ptr++] = c;
   }
-  const ArrType = full.constructor;
-  geom.setIndex(new THREE.BufferAttribute(new ArrType(kept), 1));
+  idxAttr.needsUpdate = true;
+  geom.setDrawRange(0, ptr);
+  geom.userData.isMasked = true;
 }
 
 function maskInnerTopUnderOuter(topMesh, hasOuter) {
@@ -1029,7 +1078,84 @@ export function computeMorphTargetWeights(profile = {}) {
   return { anat, weights };
 }
 
+function cloneRuntimeGeometryWithoutMorphs(tplGeom) {
+  const geom = new THREE.BufferGeometry();
+  const basePos = tplGeom.attributes.position;
+  if (basePos) {
+    const count = basePos.count;
+    const posArr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      posArr[i * 3] = basePos.getX(i);
+      posArr[i * 3 + 1] = basePos.getY(i);
+      posArr[i * 3 + 2] = basePos.getZ(i);
+    }
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
+  }
+  for (const [attrName, attr] of Object.entries(tplGeom.attributes)) {
+    if (attrName === 'position') continue;
+    geom.setAttribute(attrName, attr.clone());
+  }
+  if (tplGeom.index) {
+    geom.setIndex(tplGeom.index.clone());
+  }
+  geom.morphAttributes = {};
+  geom.morphTargetsRelative = false;
+  if (tplGeom.boundingBox) geom.boundingBox = tplGeom.boundingBox.clone();
+  if (tplGeom.boundingSphere) geom.boundingSphere = tplGeom.boundingSphere.clone();
+  return geom;
+}
+
 function applyMorphsToMesh(mesh, weights) {
+  const tpl = mesh?.userData?.templateRef;
+  if (tpl?.geometry) {
+    const weightsKey = JSON.stringify(weights || {});
+    if (mesh.userData.bakedWeightsKey === weightsKey) return;
+    mesh.userData.bakedWeightsKey = weightsKey;
+
+    const tplGeom = tpl.geometry;
+    const basePos = tplGeom.attributes.position;
+    const targetPos = mesh.geometry.attributes.position;
+    if (!basePos || !targetPos) return;
+
+    const count = basePos.count;
+    const dst = targetPos.array;
+    for (let i = 0; i < count; i++) {
+      dst[i * 3] = basePos.getX(i);
+      dst[i * 3 + 1] = basePos.getY(i);
+      dst[i * 3 + 2] = basePos.getZ(i);
+    }
+
+    const dict = tpl.morphTargetDictionary;
+    const morphPosList = tplGeom.morphAttributes?.position;
+    if (dict && morphPosList?.length) {
+      const isRel = Boolean(tplGeom.morphTargetsRelative);
+      for (const [name, rawVal] of Object.entries(weights || {})) {
+        const w = Number(rawVal) || 0;
+        if (Math.abs(w) < 0.001) continue;
+        const idx = dict[name];
+        const mAttr = idx !== undefined ? morphPosList[idx] : null;
+        if (!mAttr) continue;
+        if (isRel) {
+          for (let i = 0; i < count; i++) {
+            const o = i * 3;
+            dst[o] += mAttr.getX(i) * w;
+            dst[o + 1] += mAttr.getY(i) * w;
+            dst[o + 2] += mAttr.getZ(i) * w;
+          }
+        } else {
+          for (let i = 0; i < count; i++) {
+            const o = i * 3;
+            dst[o] += (mAttr.getX(i) - dst[o]) * w;
+            dst[o + 1] += (mAttr.getY(i) - dst[o + 1]) * w;
+            dst[o + 2] += (mAttr.getZ(i) - dst[o + 2]) * w;
+          }
+        }
+      }
+    }
+    targetPos.needsUpdate = true;
+    return;
+  }
+
   const dict = mesh.morphTargetDictionary;
   const inf = mesh.morphTargetInfluences;
   if (!dict || !inf) return;
@@ -1044,6 +1170,10 @@ function applyMorphsToMesh(mesh, weights) {
 
 export function resolveGarmentIdForItem(slotKey, item) {
   if (!item) return null;
+  const explicitGlb = String(item.base_glb || '').trim();
+  if (explicitGlb && (explicitGlb.startsWith(`${slotKey}_`) || manifestData?.garments?.[explicitGlb]?.slot === slotKey)) {
+    return explicitGlb;
+  }
   const sub = String(item.subcategory || '').toLowerCase().trim();
   const name = String(item.name || '');
 
@@ -1109,10 +1239,15 @@ export function resolveGarmentIdForItem(slotKey, item) {
   return null;
 }
 
-function createSkinMaterial(skinHex) {
+function createSkinMaterial(skinHex, isSoftware = false) {
   const baseColor = new THREE.Color(skinHex);
-  const skinBump = getProceduralFabricBumpMap('skin');
-  return new THREE.MeshPhysicalMaterial({
+  const skinBumpEntry = acquireFabricBumpMap('skin');
+  if (isSoftware) {
+    const mat = new THREE.MeshLambertMaterial({ color: baseColor });
+    mat.userData.refTextureEntries = skinBumpEntry ? [skinBumpEntry] : [];
+    return mat;
+  }
+  const mat = new THREE.MeshPhysicalMaterial({
     color: baseColor,
     roughness: 0.40,
     metalness: 0.01,
@@ -1121,21 +1256,122 @@ function createSkinMaterial(skinHex) {
     sheen: 0.48,
     sheenRoughness: 0.56,
     sheenColor: baseColor.clone().lerp(new THREE.Color('#fff2ec'), 0.44),
-    bumpMap: skinBump,
+    bumpMap: skinBumpEntry?.tex || null,
     bumpScale: 0.0018,
   });
+  mat.userData.refTextureEntries = skinBumpEntry ? [skinBumpEntry] : [];
+  return mat;
 }
 
-function createGarmentMaterial(item, gid, slotKey, isHighlighted, hasMultiZones = false) {
+/**
+ * Requirement 6.c: Hybrid 3D Texture + PBR Synthesis
+ * Composites cropped WebP cutout photo over base garment UV carrier while preserving
+ * fabric PBR normalMap, bumpMap, roughness & metalness — avoiding heavy runtime mesh generation.
+ */
+function attachDynamicCroppedGarmentTexture(primaryMat, item, baseHex) {
+  if (typeof document === 'undefined' || !item) return;
+  const imgUrl = String(item.image_url || '');
+  const isCustomCutout =
+    Boolean(item.custom_texture) ||
+    imgUrl.startsWith('/uploads/') ||
+    imgUrl.startsWith('data:image/');
+  if (!isCustomCutout) return;
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    if (primaryMat.userData.isDisposed) return;
+    const size = 256;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = baseHex || '#2E3540';
+    ctx.fillRect(0, 0, size, size);
+
+    // Draw cutout texture softly blended into UV torso/limb islands
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(img, size * 0.12, size * 0.10, size * 0.76, size * 0.80);
+    ctx.restore();
+
+    const dynTex = new THREE.CanvasTexture(c);
+    dynTex.flipY = false;
+    dynTex.colorSpace = THREE.SRGBColorSpace;
+
+    if (primaryMat.userData.isDisposed) {
+      dynTex.dispose();
+      return;
+    }
+    primaryMat.userData.ownedTextures = [dynTex];
+    primaryMat.map = dynTex;
+    primaryMat.color.set('#ffffff');
+    primaryMat.needsUpdate = true;
+    notifyPreviewListeners();
+  };
+  img.src = imgUrl;
+}
+
+function createGarmentMaterial(
+  item,
+  gid,
+  slotKey,
+  isHighlighted,
+  hasMultiZones = false,
+  isSoftware = false
+) {
   const hex = item?.color_hex || '#2E3540';
   const spec = inferFabricMaterialSpec(item || { category: slotKey });
-  const bump = getProceduralFabricBumpMap(spec.type);
+  const refEntries = [];
+  const bumpEntry = acquireFabricBumpMap(spec.type);
+  if (bumpEntry) refEntries.push(bumpEntry);
+
   const baseColor = new THREE.Color(hex);
   const emissiveColor = isHighlighted
-    ? baseColor.clone().lerp(new THREE.Color('#f3e6cf'), 0.55)
+    ? baseColor.clone().lerp(new THREE.Color('#ffffff'), 0.45)
     : new THREE.Color('#000000');
 
   const uvTex = GARMENT_UV_TEXTURE_MAP[gid];
+
+  if (isSoftware) {
+    const lambertProps = {
+      color: baseColor,
+      emissive: emissiveColor,
+      emissiveIntensity: isHighlighted ? 0.18 : 0.0,
+      side: THREE.DoubleSide,
+    };
+    if (uvTex?.detail) {
+      const detailEntry = acquireCachedTexture(`${TEXTURE_BASE}/${uvTex.detail}`, {
+        srgb: true,
+        repeat: 1,
+      });
+      lambertProps.map = detailEntry.tex;
+      refEntries.push(detailEntry);
+    }
+    const primaryMat = new THREE.MeshLambertMaterial(lambertProps);
+    primaryMat.userData.refTextureEntries = refEntries;
+    attachDynamicCroppedGarmentTexture(primaryMat, item, hex);
+    if (!hasMultiZones) return primaryMat;
+
+    const metalMat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color('#dde2e8'),
+      emissive: emissiveColor,
+      emissiveIntensity: isHighlighted ? 0.14 : 0.0,
+      side: THREE.DoubleSide,
+    });
+    const dialMat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color('#f7f3ea'),
+      side: THREE.DoubleSide,
+    });
+    const glassMat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color('#dce8f2'),
+      transparent: true,
+      opacity: 0.32,
+      side: THREE.DoubleSide,
+    });
+    return [primaryMat, metalMat, dialMat, glassMat];
+  }
+
   const matProps = {
     color: baseColor,
     roughness: spec.roughness,
@@ -1145,23 +1381,33 @@ function createGarmentMaterial(item, gid, slotKey, isHighlighted, hasMultiZones 
     sheenColor: baseColor.clone().offsetHSL(0, 0, 0.14),
     clearcoat: spec.clearcoat,
     clearcoatRoughness: 0.34,
-    bumpMap: bump,
+    bumpMap: bumpEntry?.tex || null,
     bumpScale: spec.bumpScale,
     emissive: emissiveColor,
-    emissiveIntensity: isHighlighted ? 0.22 : 0.0,
+    emissiveIntensity: isHighlighted ? 0.18 : 0.0,
     side: THREE.DoubleSide,
   };
 
   if (uvTex?.detail) {
-    matProps.map = loadCachedTexture(`${TEXTURE_BASE}/${uvTex.detail}`, { srgb: true, repeat: 1 });
+    const detailEntry = acquireCachedTexture(`${TEXTURE_BASE}/${uvTex.detail}`, {
+      srgb: true,
+      repeat: 1,
+    });
+    matProps.map = detailEntry.tex;
+    refEntries.push(detailEntry);
   }
   if (uvTex?.normal) {
-    matProps.normalMap = loadCachedTexture(`${TEXTURE_BASE}/${uvTex.normal}`, { repeat: 1 });
+    const normalEntry = acquireCachedTexture(`${TEXTURE_BASE}/${uvTex.normal}`, { repeat: 1 });
+    matProps.normalMap = normalEntry.tex;
+    refEntries.push(normalEntry);
     const ns = uvTex.normalScale || 0.5;
     matProps.normalScale = new THREE.Vector2(ns, ns);
   }
 
   const primaryMat = new THREE.MeshPhysicalMaterial(matProps);
+  primaryMat.userData.refTextureEntries = refEntries;
+  attachDynamicCroppedGarmentTexture(primaryMat, item, hex);
+
   if (!hasMultiZones) {
     return primaryMat;
   }
@@ -1174,7 +1420,7 @@ function createGarmentMaterial(item, gid, slotKey, isHighlighted, hasMultiZones 
     clearcoat: 0.65,
     clearcoatRoughness: 0.18,
     emissive: emissiveColor,
-    emissiveIntensity: isHighlighted ? 0.16 : 0.0,
+    emissiveIntensity: isHighlighted ? 0.14 : 0.0,
     side: THREE.DoubleSide,
   });
 
@@ -1203,12 +1449,32 @@ function createGarmentMaterial(item, gid, slotKey, isHighlighted, hasMultiZones 
   return [primaryMat, metalMat, dialMat, glassMat];
 }
 
+function disposeSingleMaterial(m) {
+  if (!m) return;
+  m.userData = m.userData || {};
+  if (m.userData.isDisposed) return;
+  m.userData.isDisposed = true;
+  if (Array.isArray(m.userData.ownedTextures)) {
+    for (const tex of m.userData.ownedTextures) {
+      tex?.dispose?.();
+    }
+    m.userData.ownedTextures = [];
+  }
+  if (Array.isArray(m.userData.refTextureEntries)) {
+    for (const entry of m.userData.refTextureEntries) {
+      releaseTextureEntry(entry);
+    }
+    m.userData.refTextureEntries = [];
+  }
+  m.dispose?.();
+}
+
 function disposeMaterialOrArray(mat) {
   if (!mat) return;
   if (Array.isArray(mat)) {
-    for (const m of mat) m?.dispose?.();
+    for (const m of mat) disposeSingleMaterial(m);
   } else {
-    mat.dispose?.();
+    disposeSingleMaterial(mat);
   }
 }
 
@@ -1333,42 +1599,119 @@ function inferBodySlotFromPoint(localY, localX) {
   return 'shoes';
 }
 
+let cachedIsSoftwareWebGL = null;
+function detectSoftwareWebGL() {
+  if (cachedIsSoftwareWebGL !== null) return cachedIsSoftwareWebGL;
+  if (typeof document === 'undefined') return false;
+  try {
+    const probe = document.createElement('canvas');
+    probe.width = 1;
+    probe.height = 1;
+    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
+    if (!gl) {
+      cachedIsSoftwareWebGL = true;
+      return true;
+    }
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const rendererStr = String(
+      (dbg && gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) ||
+        gl.getParameter(gl.RENDERER) ||
+        ''
+    );
+    cachedIsSoftwareWebGL = /swiftshader|llvmpipe|software|basic render/i.test(rendererStr);
+    return cachedIsSoftwareWebGL;
+  } catch {
+    cachedIsSoftwareWebGL = false;
+    return false;
+  }
+}
+
 /**
  * Game-Quality Skinned GLB Mannequin WebGL Engine
  * - 21-Bone GPU Skeleton (`idle`, `walk`, `wave`, `umbrella`, `pose_hands`)
  * - 28 Real-Time Anthropometric Morph Targets
- * - 60fps Damped Pendulum & Soft-Cloth Jiggle Physics (`briefcase`, `tote`, `scarf`, `tie`, `coat`, `skirt`)
- * - Multi-Zone PBR Hardware Materials (`COLOR_0`) + Real MakeHuman Baked Normal/Detail Maps
+ * - Lightweight Bone-Based `SpringBoneSystem` (`briefcase`, `tote`, `scarf`, `tie`, `coat`, `skirt`)
+ * - Dynamic Hybrid Cropped WebP + Fabric PBR Normal/Roughness Synthesis
+ * - Strict GPU Geometry/Material/Texture Disposal & `webglcontextlost` Auto-Recovery
  */
 export class Mannequin3DWebGLEngine {
-  constructor(canvas) {
+  constructor(canvas, options = {}) {
     this.canvas = canvas;
+    this.onContextStatusChange = options.onContextStatusChange || null;
+    this.isPreviewOnly = Boolean(options.previewOnly);
+    this.isSoftwareRenderer = detectSoftwareWebGL();
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
-      alpha: true,
+      antialias: !this.isSoftwareRenderer,
+      alpha: this.isPreviewOnly,
+      stencil: false,
+      preserveDrawingBuffer: this.isPreviewOnly || this.isSoftwareRenderer,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
-    this.renderer.shadowMap.enabled = true;
+    if (!this.isPreviewOnly) {
+      this.renderer.setClearColor(0xffffff, 1);
+    }
+    this.renderer.setPixelRatio(
+      this.isSoftwareRenderer
+        ? 1
+        : Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, isMobile ? 1.5 : 2)
+    );
+    this.renderer.shadowMap.enabled = !this.isSoftwareRenderer;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.07;
+    this.renderer.toneMapping = this.isSoftwareRenderer
+      ? THREE.NoToneMapping
+      : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.06;
 
     this.scene = new THREE.Scene();
+    this._rebuildEnvironmentMap();
 
+    // Cache WEBGL_lose_context extension handle prior to any context loss for deterministic recovery
     try {
-      const pmrem = new THREE.PMREMGenerator(this.renderer);
-      const envScene = new RoomEnvironment();
-      this.envMap = pmrem.fromScene(envScene, 0.04).texture;
-      this.scene.environment = this.envMap;
-      this.scene.environmentIntensity = 0.58;
-      envScene.dispose?.();
-      pmrem.dispose();
+      this._loseContextExt = this.renderer.getContext()?.getExtension?.('WEBGL_lose_context') || null;
     } catch {
-      // Fallback on software WebGL
+      this._loseContextExt = null;
     }
+
+    this.isContextLost = false;
+    this.recoveryCount = 0;
+
+    this._handleContextLost = (e) => {
+      e.preventDefault();
+      this.isContextLost = true;
+      this.onContextStatusChange?.({ lost: true, recoveryCount: this.recoveryCount });
+      // Auto-recover synthetic WEBGL_lose_context invocations as well as OS GPU resets
+      if (this._loseContextExt) {
+        setTimeout(() => {
+          if (this.isContextLost && !this.disposed) {
+            try {
+              this._loseContextExt.restoreContext();
+            } catch {
+              // Already restored by caller or browser
+            }
+          }
+        }, 150);
+      }
+    };
+
+    this._handleContextRestored = () => {
+      if (this.disposed) return;
+      this.isContextLost = false;
+      this.recoveryCount += 1;
+      this._sceneDirty = true;
+      this._rebuildEnvironmentMap();
+      this.updateScene(this.lastState);
+      this.onContextStatusChange?.({
+        lost: false,
+        recovered: true,
+        recoveryCount: this.recoveryCount,
+      });
+    };
+
+    this.canvas.addEventListener('webglcontextlost', this._handleContextLost, false);
+    this.canvas.addEventListener('webglcontextrestored', this._handleContextRestored, false);
 
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 30);
     this.camera.position.set(0, 1.00, 3.62);
@@ -1418,128 +1761,165 @@ export class Mannequin3DWebGLEngine {
     this.camDist = 3.62;
     this.scanProgress = 1.0;
 
-    // Motion & real-time jiggle physics state
+    // Motion & lightweight SpringBone physics state (Req 6.d)
     this.motionMode = 'auto';
     this.weatherInfo = null;
     this.clockStart = performance.now() * 0.001;
     this.lastFrameTime = this.clockStart;
+    this.lastRawNowMs = performance.now();
     this.poseBlend = { walk: 0, wave: 0, umbrella: 0, hands: 0 };
 
-    // 2-DOF spring-damper oscillators:
-    // 1. Handheld bag pendulum (pitch X along stride, roll Z lateral)
-    this.bagSpring = {
-      pitch: 0,
-      velPitch: 0,
-      roll: 0,
-      velRoll: 0,
+    this.springBones = new SpringBoneSystem();
+    this.bagSpringState = {
       prevHandPos: new THREE.Vector3(0.45, 0.98, 0.18),
       prevHandVel: new THREE.Vector3(),
-      preset: GARMENT_3D_PHYSICS_PRESETS.pendulum_briefcase,
     };
-    // 2. Neckwear soft cloth jiggle (muffler / tie)
-    this.neckJiggle = { rx: 0, vrx: 0, rz: 0, vrz: 0 };
-    // 3. Coat / skirt hem sway jiggle
-    this.hemJiggle = { rx: 0, vrx: 0, rz: 0, vrz: 0 };
+
+    // FPS telemetry & Vibrancy auto-fallback ring buffer (Req 14.b & 15.b)
+    this.frameCount = 0;
+    this._frameMsSamples = [];
+    this.avgFps = 60;
+    this._vibrancyDegraded = false;
+    this._sceneDirty = true;
+    this._lastSoftwareRenderMs = 0;
 
     this._tmpVecA = new THREE.Vector3();
     this._tmpVecB = new THREE.Vector3();
     this._invCharMat = new THREE.Matrix4();
 
+    activeEngineInstances.add(this);
+
     this._setupLightsAndPedestal();
+    if (typeof document !== 'undefined') {
+      this.setDarkTheme(document.documentElement.dataset.theme === 'dark');
+    }
+
+    const syncCanvasSize = () => {
+      if (this.disposed || !this.canvas) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const w = rect.width || this.canvas.clientWidth || 360;
+      const h = rect.height || this.canvas.clientHeight || 520;
+      if (w > 20 && h > 20) {
+        this.resize(w, h);
+      }
+    };
+    syncCanvasSize();
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => syncCanvasSize());
+      this._resizeObserver.observe(this.canvas);
+    }
+
+    if (!options.previewOnly) {
+      this.canvas.__mannequinEngine = this;
+      if (typeof window !== 'undefined') {
+        window.__ainventory3DEngine = this;
+      }
+    }
+
     this._startLoop();
     this._initAssets();
+  }
+
+  markDirty() {
+    this._sceneDirty = true;
+  }
+
+  _rebuildEnvironmentMap() {
+    if (this.isSoftwareRenderer) return;
+    try {
+      this.envMap?.dispose?.();
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const envScene = new RoomEnvironment();
+      this.envMap = pmrem.fromScene(envScene, 0.04).texture;
+      this.scene.environment = this.envMap;
+      this.scene.environmentIntensity = 0.56;
+      envScene.dispose?.();
+      pmrem.dispose();
+    } catch {
+      // Fallback to analytical studio lights
+    }
   }
 
   _initAssets() {
     loadBodyTemplate()
       .then((tpl) => {
         if (this.disposed) return;
-        const geom = tpl.geometry.clone();
+        const geom = cloneRuntimeGeometryWithoutMorphs(tpl.geometry);
         geom.userData.fullIndexArray = tpl.geometry.userData.fullIndexArray?.slice();
         const skinHex = resolveSkinHex(this.lastState.profile || {});
-        const mesh = new THREE.SkinnedMesh(geom, createSkinMaterial(skinHex));
+        const mesh = new THREE.SkinnedMesh(geom, createSkinMaterial(skinHex, this.isSoftwareRenderer));
         applyNodeTransform(mesh, tpl);
         mesh.bind(this.skeleton, new THREE.Matrix4());
         mesh.frustumCulled = false;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.morphTargetDictionary = { ...tpl.morphTargetDictionary };
-        mesh.morphTargetInfluences = tpl.morphTargetInfluences ? [...tpl.morphTargetInfluences] : [];
+        mesh.castShadow = !this.isSoftwareRenderer;
+        mesh.receiveShadow = !this.isSoftwareRenderer;
+        mesh.userData.templateRef = tpl;
         mesh.userData.isBody = true;
         this.bodyMesh = mesh;
         this.characterGroup.add(mesh);
+        this._sceneDirty = true;
         this.updateScene(this.lastState);
       })
       .catch(() => {});
   }
 
   _setupLightsAndPedestal() {
-    const hemi = new THREE.HemisphereLight(0xfbf8f2, 0xd8cfc0, 0.88);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8dc, this.isSoftwareRenderer ? 1.45 : 0.92);
     this.scene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xfffaf2, 1.9);
+    const keyLight = new THREE.DirectionalLight(0xffffff, this.isSoftwareRenderer ? 1.85 : 1.9);
     keyLight.position.set(1.8, 2.95, 2.55);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
-    keyLight.shadow.bias = -0.0005;
-    keyLight.shadow.radius = 5;
+    keyLight.castShadow = !this.isSoftwareRenderer;
+    if (!this.isSoftwareRenderer) {
+      keyLight.shadow.mapSize.set(1024, 1024);
+      keyLight.shadow.bias = -0.0005;
+      keyLight.shadow.radius = 5;
+
+      const coolRim = new THREE.PointLight(0xf0f2f7, 1.24, 5.5);
+      coolRim.position.set(-1.65, 1.68, -1.28);
+      this.scene.add(coolRim);
+
+      const warmRim = new THREE.PointLight(0xf5f5f7, 1.08, 5.5);
+      warmRim.position.set(1.65, 1.15, -1.35);
+      this.scene.add(warmRim);
+    }
     this.scene.add(keyLight);
 
-    const coolRim = new THREE.PointLight(0xe8eef6, 1.28, 5.5);
-    coolRim.position.set(-1.65, 1.68, -1.28);
-    this.scene.add(coolRim);
-
-    const warmRim = new THREE.PointLight(0xf3dcc0, 1.12, 5.5);
-    warmRim.position.set(1.65, 1.15, -1.35);
-    this.scene.add(warmRim);
-
-    const frontFill = new THREE.DirectionalLight(0xf6f2ea, 0.68);
+    const frontFill = new THREE.DirectionalLight(0xfafafc, this.isSoftwareRenderer ? 0.65 : 0.72);
     frontFill.position.set(-0.75, 1.42, 2.45);
     this.scene.add(frontFill);
 
+    this.pedestalDiskMat = this.isSoftwareRenderer
+      ? new THREE.MeshLambertMaterial({ color: 0xf2f2f5 })
+      : new THREE.MeshPhysicalMaterial({
+          color: 0xf2f2f5,
+          metalness: 0.0,
+          roughness: 0.62,
+          clearcoat: 0.22,
+          clearcoatRoughness: 0.48,
+        });
     const baseDisk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.58, 0.64, 0.04, 56),
-      new THREE.MeshPhysicalMaterial({
-        color: 0xebe4d8,
-        metalness: 0.0,
-        roughness: 0.58,
-        clearcoat: 0.28,
-        clearcoatRoughness: 0.45,
-      })
+      new THREE.CylinderGeometry(0.56, 0.61, 0.032, 48),
+      this.pedestalDiskMat
     );
-    baseDisk.position.y = -0.02;
-    baseDisk.receiveShadow = true;
+    baseDisk.position.y = -0.016;
+    baseDisk.receiveShadow = !this.isSoftwareRenderer;
     this.pedestalGroup.add(baseDisk);
 
-    const ringOuter = new THREE.Mesh(
-      new THREE.RingGeometry(0.555, 0.565, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0x1c1917,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.22,
-      })
-    );
+    this.pedestalRingMat = new THREE.MeshBasicMaterial({
+      color: 0x86868b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.18,
+    });
+    const ringOuter = new THREE.Mesh(new THREE.RingGeometry(0.535, 0.541, 56), this.pedestalRingMat);
     ringOuter.rotation.x = -Math.PI / 2;
     ringOuter.position.y = 0.002;
     this.pedestalGroup.add(ringOuter);
 
-    const ringInner = new THREE.Mesh(
-      new THREE.RingGeometry(0.415, 0.421, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0xc8b294,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.62,
-      })
-    );
-    ringInner.rotation.x = -Math.PI / 2;
-    ringInner.position.y = 0.003;
-    this.pedestalGroup.add(ringInner);
-
-    const scanRingGeom = new THREE.RingGeometry(0.34, 0.4, 48);
+    const scanRingGeom = new THREE.RingGeometry(0.34, 0.39, 44);
     this.scanRingMat = new THREE.MeshBasicMaterial({
-      color: 0xc8b294,
+      color: 0x86868b,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.0,
@@ -1550,37 +1930,134 @@ export class Mannequin3DWebGLEngine {
     this.rootGroup.add(this.scanRingMesh);
   }
 
+  setDarkTheme(isDark) {
+    if (!this.isPreviewOnly) {
+      this.renderer.setClearColor(isDark ? 0x000000 : 0xffffff, 1);
+    }
+    if (this.pedestalDiskMat) {
+      this.pedestalDiskMat.color.set(isDark ? 0x1c1c1e : 0xf2f2f5);
+    }
+    if (this.pedestalRingMat) {
+      this.pedestalRingMat.color.set(isDark ? 0x48484a : 0x86868b);
+    }
+    if (this.scanRingMat) {
+      this.scanRingMat.color.set(isDark ? 0xf5f5f7 : 0x1d1d1f);
+    }
+    this._sceneDirty = true;
+  }
+
   triggerEquipScanPulse() {
     this.scanProgress = 0.0;
+    this._sceneDirty = true;
+  }
+
+  get targetYawDeg() {
+    return (this.targetYaw * 180) / Math.PI;
   }
 
   setRotationDeg(deg) {
-    this.targetYaw = ((Number(deg) || 0) * Math.PI) / 180;
+    const nextYaw = ((Number(deg) || 0) * Math.PI) / 180;
+    if (Math.abs(nextYaw - this.targetYaw) > 0.0001) {
+      this.targetYaw = nextYaw;
+      this._sceneDirty = true;
+    }
+  }
+
+  setYaw(deg, immediate = false) {
+    this.setRotationDeg(deg);
+    if (immediate) {
+      this.currentYaw = this.targetYaw;
+      this.prevYaw = this.targetYaw;
+      this._sceneDirty = true;
+    }
   }
 
   setMotionMode(mode = 'auto') {
-    this.motionMode = mode || 'auto';
+    const next = mode || 'auto';
+    if (this.motionMode !== next) {
+      this.motionMode = next;
+      this._sceneDirty = true;
+    }
   }
 
   setWeatherInfo(weather = null) {
     this.weatherInfo = weather;
+    this._sceneDirty = true;
+  }
+
+  setWeatherState(weather = null) {
+    this.setWeatherInfo(weather);
   }
 
   setParallax(nx, ny) {
-    this.parallaxX = Math.max(-1, Math.min(1, Number(nx) || 0));
-    this.parallaxY = Math.max(-1, Math.min(1, Number(ny) || 0));
+    const px = Math.max(-1, Math.min(1, Number(nx) || 0));
+    const py = Math.max(-1, Math.min(1, Number(ny) || 0));
+    if (Math.abs(px - this.parallaxX) > 0.001 || Math.abs(py - this.parallaxY) > 0.001) {
+      this.parallaxX = px;
+      this.parallaxY = py;
+      this._sceneDirty = true;
+    }
   }
 
   setFocusSlot(slotKey = 'all') {
-    this.focusSlot = SLOT_CAMERA_TARGETS[slotKey] ? slotKey : 'all';
+    const next = SLOT_CAMERA_TARGETS[slotKey] ? slotKey : 'all';
+    if (this.focusSlot !== next) {
+      this.focusSlot = next;
+      this._sceneDirty = true;
+    }
+  }
+
+  setFocusedSlot(slotKey = 'all') {
+    this.setFocusSlot(slotKey || 'all');
+  }
+
+  get _fpsSamples() {
+    return this._frameMsSamples;
+  }
+
+  set _fpsSamples(arr) {
+    this._frameMsSamples = Array.isArray(arr) ? arr : [];
+    this.lastRawNowMs = performance.now();
   }
 
   resize(width, height) {
     const w = Math.max(200, Math.floor(width));
     const h = Math.max(260, Math.floor(height));
-    this.renderer.setSize(w, h, false);
+    const swScale = this.isSoftwareRenderer ? Math.min(1, 380 / Math.max(w, h)) : 1;
+    this.renderer.setSize(
+      Math.max(120, Math.round(w * swScale)),
+      Math.max(160, Math.round(h * swScale)),
+      false
+    );
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this._sceneDirty = true;
+  }
+
+  getTelemetry() {
+    return {
+      frameCount: this.frameCount,
+      avgFps: Math.round(this.avgFps * 10) / 10,
+      geometries: this.renderer?.info?.memory?.geometries ?? 0,
+      textures: this.renderer?.info?.memory?.textures ?? 0,
+      calls: this.renderer?.info?.render?.calls ?? 0,
+      isContextLost: Boolean(this.isContextLost),
+      recoveryCount: this.recoveryCount,
+      currentYawDeg: (this.currentYaw * 180) / Math.PI,
+      targetYawDeg: (this.targetYaw * 180) / Math.PI,
+      effectiveMotion: this._resolveEffectiveMotion(),
+      activeGarmentIds: [...this.garmentMeshes.keys()],
+      isSoftwareRenderer: this.isSoftwareRenderer,
+    };
+  }
+
+  _disposeGarmentInstance(gid) {
+    const mesh = this.garmentMeshes.get(gid);
+    if (!mesh) return;
+    mesh.parent?.remove(mesh);
+    mesh.geometry?.dispose?.();
+    disposeMaterialOrArray(mesh.material);
+    this.garmentMeshes.delete(gid);
   }
 
   _getOrCreateGarmentInstance(tpl, gid) {
@@ -1589,7 +2066,7 @@ export class Mannequin3DWebGLEngine {
     }
     const spec = tpl.userData.spec || {};
     const isHandSocket = spec.mount === 'hand_l' || spec.mount === 'hand_r';
-    const geom = tpl.geometry.clone();
+    const geom = cloneRuntimeGeometryWithoutMorphs(tpl.geometry);
     geom.userData.fullIndexArray = tpl.geometry.userData.fullIndexArray?.slice();
     if (tpl.geometry.userData.zoneGroups) {
       geom.userData.zoneGroups = tpl.geometry.userData.zoneGroups;
@@ -1599,23 +2076,25 @@ export class Mannequin3DWebGLEngine {
       }
     }
 
+    const placeholderMat = this.isSoftwareRenderer
+      ? new THREE.MeshLambertMaterial()
+      : new THREE.MeshPhysicalMaterial();
     let mesh;
     if (isHandSocket) {
-      mesh = new THREE.Mesh(geom, new THREE.MeshPhysicalMaterial());
+      mesh = new THREE.Mesh(geom, placeholderMat);
       applyNodeTransform(mesh, tpl);
       this.leftHandSocket.add(mesh);
     } else {
-      mesh = new THREE.SkinnedMesh(geom, new THREE.MeshPhysicalMaterial());
+      mesh = new THREE.SkinnedMesh(geom, placeholderMat);
       applyNodeTransform(mesh, tpl);
       mesh.bind(this.skeleton, new THREE.Matrix4());
       this.characterGroup.add(mesh);
     }
 
     mesh.frustumCulled = false;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.morphTargetDictionary = tpl.morphTargetDictionary ? { ...tpl.morphTargetDictionary } : undefined;
-    mesh.morphTargetInfluences = tpl.morphTargetInfluences ? [...tpl.morphTargetInfluences] : undefined;
+    mesh.castShadow = !this.isSoftwareRenderer;
+    mesh.receiveShadow = !this.isSoftwareRenderer;
+    mesh.userData.templateRef = tpl;
     mesh.userData.gid = gid;
     mesh.userData.spec = spec;
     mesh.userData.hasMultiZones = Boolean(tpl.userData.hasMultiZones);
@@ -1626,18 +2105,21 @@ export class Mannequin3DWebGLEngine {
 
   updateScene({
     profile = {},
-    loadout = {},
+    loadout: rawLoadout,
+    loadoutBySlot,
     headMode = 'mannequin',
     selectedSlot = null,
     hoveredSlot = null,
     motionMode,
     weather,
   } = {}) {
+    const loadout = loadoutBySlot || rawLoadout || {};
     if (motionMode !== undefined) this.motionMode = motionMode;
     if (weather !== undefined) this.weatherInfo = weather;
     this.lastState = {
       profile,
       loadout,
+      loadoutBySlot: loadout,
       headMode,
       selectedSlot,
       hoveredSlot,
@@ -1651,8 +2133,9 @@ export class Mannequin3DWebGLEngine {
     const skinHex = resolveSkinHex(profile);
 
     this.bodyMesh.material.color.set(skinHex);
-    this.bodyMesh.material.sheenColor.set(skinHex).lerp(new THREE.Color('#ffdad0'), 0.42);
+    this.bodyMesh.material.sheenColor?.set(skinHex)?.lerp(new THREE.Color('#ffdad0'), 0.42);
     applyMorphsToMesh(this.bodyMesh, weights);
+    this._sceneDirty = true;
 
     const baseScale = 1.075;
     const hScale = baseScale * anat.morph.heightScale;
@@ -1686,10 +2169,6 @@ export class Mannequin3DWebGLEngine {
       }
     }
 
-    for (const mesh of this.garmentMeshes.values()) {
-      mesh.visible = false;
-    }
-
     Promise.all(
       desired.map((d) =>
         loadGarmentTemplate(d.gid)
@@ -1700,6 +2179,15 @@ export class Mannequin3DWebGLEngine {
       if (this.disposed || seq !== this.updateSeq) return;
 
       const active = loadedList.filter(Boolean);
+      const activeGids = new Set(active.map((d) => d.gid));
+
+      // Requirement 9.b: Strictly dispose unequipped / swapped-out garment Geometry, Material & Textures
+      for (const existingGid of [...this.garmentMeshes.keys()]) {
+        if (!activeGids.has(existingGid)) {
+          this._disposeGarmentInstance(existingGid);
+        }
+      }
+
       const outerEntry = active.find((d) => d.slotKey === 'outer') || null;
       const hasOuter = Boolean(outerEntry);
       const hasTopActive = active.some((d) => d.slotKey === 'top');
@@ -1717,14 +2205,22 @@ export class Mannequin3DWebGLEngine {
         mesh.userData.slot = slotKey;
         const isHighlighted = Boolean(slotKey && (slotKey === selectedSlot || slotKey === hoveredSlot));
 
-        disposeMaterialOrArray(mesh.material);
-        mesh.material = createGarmentMaterial(item, gid, slotKey, isHighlighted, mesh.userData.hasMultiZones);
+        const prevMat = mesh.material;
+        mesh.material = createGarmentMaterial(
+          item,
+          gid,
+          slotKey,
+          isHighlighted,
+          mesh.userData.hasMultiZones,
+          this.isSoftwareRenderer
+        );
+        disposeMaterialOrArray(prevMat);
         applyMorphsToMesh(mesh, weights);
 
         if (gid === 'accessory_briefcase') {
-          this.bagSpring.preset = GARMENT_3D_PHYSICS_PRESETS.pendulum_briefcase;
+          this.springBones.handBagSpring.configure(GARMENT_3D_PHYSICS_PRESETS.pendulum_briefcase);
         } else if (gid === 'accessory_tote') {
-          this.bagSpring.preset = GARMENT_3D_PHYSICS_PRESETS.pendulum_tote;
+          this.springBones.handBagSpring.configure(GARMENT_3D_PHYSICS_PRESETS.pendulum_tote);
         }
 
         if (slotKey === 'top') {
@@ -1748,6 +2244,8 @@ export class Mannequin3DWebGLEngine {
       }
 
       applyTriangleMask(this.bodyMesh, combinedBodyMask);
+      this.renderer.renderLists?.dispose?.();
+      this._sceneDirty = true;
     });
   }
 
@@ -1773,13 +2271,16 @@ export class Mannequin3DWebGLEngine {
       return this.motionMode;
     }
     const w = this.weatherInfo;
+    if (w?.recommendedMotion === 'umbrella') return 'umbrella';
     const isRainy = Boolean(
       w &&
         (w.isRainy ||
           Number(w.precipProb) >= 50 ||
           /비|소나기|우천|눈|폭우|장마|rain|shower|snow|drizzle/i.test(String(w.condition || w.summary || '')))
     );
-    return isRainy ? 'umbrella' : 'idle';
+    if (isRainy) return 'umbrella';
+    if (w?.recommendedMotion === 'walk') return 'walk';
+    return 'idle';
   }
 
   _updateSkeletalMotionAndPhysics(nowSec, dt, yawVel) {
@@ -1798,17 +2299,15 @@ export class Mannequin3DWebGLEngine {
     const wHands = this.poseBlend.hands;
 
     const b = this.bones;
-    // Reset bone rotations before layering smooth procedural animation
     for (let i = 0; i <= BONE.ANKLE_R; i++) {
       b[i].rotation.set(0, 0, 0);
     }
 
-    // 1. Default Natural Breathing & Editorial Contrapposto Life (always active at base!)
+    // 1. Default Natural Breathing & Editorial Contrapposto Life
     const breath = Math.sin(t * 1.85);
     const sway = Math.sin(t * 0.72);
     const look = Math.sin(t * 0.48 + 0.7);
 
-    // Relax stiff MakeHuman 42-deg A-pose arms smoothly down beside the silhouette (~11 deg)
     let shLZ = -0.52 + breath * 0.015;
     let shRZ = 0.52 - breath * 0.015;
     let shLY = 0.0;
@@ -1851,7 +2350,6 @@ export class Mannequin3DWebGLEngine {
       pelvisYRot += stride * 0.055 * wWalk;
       spine2Z += -stride * 0.032 * wWalk;
 
-      // Natural leg stride (negative X swings forward +Z in Three.js!)
       hipLX += -stride * 0.34 * wWalk;
       hipRX += -oppStride * 0.34 * wWalk;
       kneeLX += (0.06 + liftL * 0.46) * wWalk;
@@ -1859,7 +2357,6 @@ export class Mannequin3DWebGLEngine {
       ankleLX += (-liftL * 0.18 + stride * 0.08) * wWalk;
       ankleRX += (-liftR * 0.18 + oppStride * 0.08) * wWalk;
 
-      // Counter-swinging arms
       shLX += oppStride * 0.24 * wWalk;
       shRX += stride * 0.24 * wWalk;
       elLX += (-0.12 - Math.max(0, -oppStride) * 0.18) * wWalk;
@@ -1877,7 +2374,7 @@ export class Mannequin3DWebGLEngine {
       headY = THREE.MathUtils.lerp(headY, -0.05, wWave);
     }
 
-    // 4. Weather Umbrella Hold Layer (`umbrella`) — right hand holds walnut grip comfortably in front of chest
+    // 4. Weather Umbrella Hold Layer (`umbrella`)
     if (wUmb > 0.005) {
       shRX = THREE.MathUtils.lerp(shRX, -0.36, wUmb);
       shRY = THREE.MathUtils.lerp(shRY, 0.16, wUmb);
@@ -1887,7 +2384,7 @@ export class Mannequin3DWebGLEngine {
       elRZ = THREE.MathUtils.lerp(elRZ, 0.22, wUmb);
     }
 
-    // 5. Hands / Gloves Inspection Pose (`pose_hands`) — presents BOTH hands side-by-side at x = ±0.145m, y = 1.12m, z = +0.32m!
+    // 5. Hands / Gloves Inspection Pose (`pose_hands`)
     if (wHands > 0.005) {
       const handPulse = Math.sin(t * 1.6) * 0.025;
       shLX = THREE.MathUtils.lerp(shLX, -0.34, wHands);
@@ -1928,74 +2425,44 @@ export class Mannequin3DWebGLEngine {
     b[BONE.KNEE_R].rotation.set(kneeRX, 0, 0);
     b[BONE.ANKLE_R].rotation.set(ankleRX, 0, 0);
 
-    // 6. Update Soft-Cloth Jiggle Bones (`JIGGLE_NECK` & `JIGGLE_HEM`) via Spring-Damper Physics
-    const windWave = Math.sin(t * 2.1) * 0.4 + Math.sin(t * 3.7) * 0.25;
-    const walkImpulseZ = wWalk * Math.cos(t * 3.8) * 1.1;
-    const walkImpulseX = wWalk * Math.abs(Math.sin(t * 3.8)) * 0.55;
-    const spinImpulseZ = Math.max(-2.5, Math.min(2.5, yawVel)) * 0.65;
-
-    // Neckwear jiggle (muffler panels & fringe / silk necktie)
-    {
-      const k = 26.0;
-      const c = 5.2;
-      const targetRx = -(0.02 + walkImpulseX * 0.06 + Math.max(0, windWave) * 0.045);
-      const targetRz = spinImpulseZ * 0.09 + walkImpulseZ * 0.045 + windWave * 0.032;
-      this.neckJiggle.vrx += ((targetRx - this.neckJiggle.rx) * k - this.neckJiggle.vrx * c) * dt;
-      this.neckJiggle.vrz += ((targetRz - this.neckJiggle.rz) * k - this.neckJiggle.vrz * c) * dt;
-      this.neckJiggle.rx = Math.min(0.01, Math.max(-0.22, this.neckJiggle.rx + this.neckJiggle.vrx * dt));
-      this.neckJiggle.rz = Math.min(0.20, Math.max(-0.20, this.neckJiggle.rz + this.neckJiggle.vrz * dt));
-      b[BONE.JIGGLE_NECK].rotation.set(this.neckJiggle.rx, 0, this.neckJiggle.rz);
-    }
-
-    // Coat / Skirt / Crossbody hem jiggle
-    {
-      const k = 28.0;
-      const c = 5.8;
-      const targetRx = walkImpulseX * 0.04 + windWave * 0.022;
-      const targetRz = spinImpulseZ * 0.11 + walkImpulseZ * 0.055 + windWave * 0.025;
-      this.hemJiggle.vrx += ((targetRx - this.hemJiggle.rx) * k - this.hemJiggle.vrx * c) * dt;
-      this.hemJiggle.vrz += ((targetRz - this.hemJiggle.rz) * k - this.hemJiggle.vrz * c) * dt;
-      this.hemJiggle.rx = Math.min(0.16, Math.max(-0.16, this.hemJiggle.rx + this.hemJiggle.vrx * dt));
-      this.hemJiggle.rz = Math.min(0.18, Math.max(-0.18, this.hemJiggle.rz + this.hemJiggle.vrz * dt));
-      b[BONE.JIGGLE_HEM].rotation.set(this.hemJiggle.rx, 0, this.hemJiggle.rz);
-    }
-
     this.characterGroup.updateMatrixWorld(true);
     this._invCharMat.copy(this.characterGroup.matrixWorld).invert();
 
-    // 7. Update Left-Hand Pendulum Socket (`accessory_briefcase` / `accessory_tote`)
+    // 6. Compute Hand Acceleration + Step Lightweight `SpringBoneSystem` (Req 6.d)
     this._tmpVecA.setFromMatrixPosition(b[BONE.HAND_L].matrixWorld).applyMatrix4(this._invCharMat);
     const handLocalL = this._tmpVecA;
     this.leftHandSocket.position.set(handLocalL.x + 0.028, handLocalL.y - 0.028, handLocalL.z + 0.006);
 
     const invDt = 1.0 / Math.max(0.008, dt);
-    const vx = (handLocalL.x - this.bagSpring.prevHandPos.x) * invDt;
-    const vz = (handLocalL.z - this.bagSpring.prevHandPos.z) * invDt;
-    const ax = Math.max(-8, Math.min(8, (vx - this.bagSpring.prevHandVel.x) * invDt));
-    const az = Math.max(-8, Math.min(8, (vz - this.bagSpring.prevHandVel.z) * invDt));
-    this.bagSpring.prevHandPos.copy(handLocalL);
-    this.bagSpring.prevHandVel.set(vx, 0, vz);
+    const vx = (handLocalL.x - this.bagSpringState.prevHandPos.x) * invDt;
+    const vz = (handLocalL.z - this.bagSpringState.prevHandPos.z) * invDt;
+    const ax = Math.max(-8, Math.min(8, (vx - this.bagSpringState.prevHandVel.x) * invDt));
+    const az = Math.max(-8, Math.min(8, (vz - this.bagSpringState.prevHandVel.z) * invDt));
+    this.bagSpringState.prevHandPos.copy(handLocalL);
+    this.bagSpringState.prevHandVel.set(vx, 0, vz);
 
-    const bagP = this.bagSpring.preset || GARMENT_3D_PHYSICS_PRESETS.pendulum_briefcase;
-    const pitchTarget = Math.max(-bagP.maxPitchRad, Math.min(bagP.maxPitchRad, -az * 0.032 + Math.sin(t * 1.9) * 0.018));
-    const rollTarget = Math.max(
-      -0.02,
-      Math.min(bagP.maxRollRad, bagP.outwardRestRollRad - ax * 0.022 + Math.abs(yawVel) * 0.06)
-    );
-    this.bagSpring.velPitch += ((pitchTarget - this.bagSpring.pitch) * bagP.stiffness - this.bagSpring.velPitch * bagP.damping) * dt;
-    this.bagSpring.velRoll += ((rollTarget - this.bagSpring.roll) * bagP.stiffness - this.bagSpring.velRoll * bagP.damping) * dt;
-    this.bagSpring.pitch = Math.max(-bagP.maxPitchRad, Math.min(bagP.maxPitchRad, this.bagSpring.pitch + this.bagSpring.velPitch * dt));
-    this.bagSpring.roll = Math.max(0.03, Math.min(bagP.maxRollRad + 0.08, this.bagSpring.roll + this.bagSpring.velRoll * dt));
-    this.leftHandSocket.rotation.set(this.bagSpring.pitch, 0, this.bagSpring.roll);
+    const springs = this.springBones.update({
+      dt,
+      timeSec: t,
+      walkWeight: wWalk,
+      yawVel,
+      handAccelX: ax,
+      handAccelZ: az,
+    });
 
-    // 8. Update Right-Hand Weather Umbrella Socket + Raindrop Streaks
+    b[BONE.JIGGLE_NECK].rotation.set(springs.neck.rx, 0, springs.neck.rz);
+    b[BONE.JIGGLE_HEM].rotation.set(springs.hem.rx, 0, springs.hem.rz);
+    this.leftHandSocket.rotation.set(springs.bag.rx, 0, springs.bag.rz);
+    b[BONE.JIGGLE_NECK].updateMatrixWorld(true);
+    b[BONE.JIGGLE_HEM].updateMatrixWorld(true);
+
+    // 7. Update Right-Hand Weather Umbrella Socket + Raindrop Streaks
     const showUmbrella = wUmb > 0.18;
     this.umbrellaProp.visible = showUmbrella;
     this.rainStreaks.visible = showUmbrella;
     if (showUmbrella) {
       this._tmpVecB.setFromMatrixPosition(b[BONE.HAND_R].matrixWorld).applyMatrix4(this._invCharMat);
       this.rightHandSocket.position.set(this._tmpVecB.x + 0.015, this._tmpVecB.y - 0.012, this._tmpVecB.z + 0.022);
-      // Tilt shaft inward (-Z rot on right side) & back (-X rot) so canopy centers directly above head
       this.rightHandSocket.rotation.set(-0.28 + Math.sin(t * 1.4) * 0.015, 0, -0.24);
 
       const seeds = this.rainStreaks.userData.seeds;
@@ -2015,13 +2482,47 @@ export class Mannequin3DWebGLEngine {
       if (this.disposed) return;
       this.rafId = requestAnimationFrame(animate);
 
-      const nowSec = performance.now() * 0.001;
+      const nowMs = performance.now();
+      const rawDeltaMs = nowMs - this.lastRawNowMs;
+      this.lastRawNowMs = nowMs;
+
+      if (rawDeltaMs > 1 && rawDeltaMs < 250) {
+        this._frameMsSamples.push(rawDeltaMs);
+        if (this._frameMsSamples.length > 40) this._frameMsSamples.shift();
+        const meanMs =
+          this._frameMsSamples.reduce((acc, v) => acc + v, 0) / this._frameMsSamples.length;
+        this.avgFps = Math.min(120, 1000 / Math.max(1, meanMs));
+
+        // Requirement 14.b: Auto-degrade Vibrancy backdrop-filter to solid surface on FPS drop
+        if (this._frameMsSamples.length >= 25) {
+          if (!this._vibrancyDegraded && this.avgFps < 45) {
+            this._vibrancyDegraded = true;
+            setVibrancySolidFallback(true);
+          } else if (this._vibrancyDegraded && this.avgFps >= 52) {
+            this._vibrancyDegraded = false;
+            setVibrancySolidFallback(false);
+          }
+        }
+      }
+
+      if (this.isContextLost) return;
+
+      const nowSec = nowMs * 0.001;
       const dt = Math.min(0.05, Math.max(0.004, nowSec - this.lastFrameTime));
       this.lastFrameTime = nowSec;
 
       const desiredYaw = this.targetYaw + this.parallaxX * 0.18;
       this.prevYaw = this.currentYaw;
-      this.currentYaw += (desiredYaw - this.currentYaw) * 0.12;
+      const yawLerp = this.isSoftwareRenderer ? 0.24 : 0.12;
+      const yawDiff = desiredYaw - this.currentYaw;
+      if (Math.abs(yawDiff) < 0.0015) {
+        if (this.currentYaw !== desiredYaw) {
+          this.currentYaw = desiredYaw;
+          this._sceneDirty = true;
+        }
+      } else {
+        this.currentYaw += yawDiff * yawLerp;
+      }
       const yawVel = (this.currentYaw - this.prevYaw) / dt;
 
       this.characterGroup.rotation.y = this.currentYaw;
@@ -2029,9 +2530,9 @@ export class Mannequin3DWebGLEngine {
 
       this._updateSkeletalMotionAndPhysics(nowSec, dt, yawVel);
 
-      // Context-aware camera target (e.g. umbrella canopy headroom, glasses/watch/briefcase focus)
+      const mode = this._resolveEffectiveMotion();
       let targetSpec = SLOT_CAMERA_TARGETS[this.focusSlot] || SLOT_CAMERA_TARGETS.all;
-      if (this.focusSlot === 'all' && this._resolveEffectiveMotion() === 'umbrella') {
+      if (this.focusSlot === 'all' && mode === 'umbrella') {
         targetSpec = { x: 0.0, y: 1.08, dist: 4.18 };
       } else if (this.focusSlot === 'accessory') {
         if (this.activeAccessorySub === 'accessory_glasses') {
@@ -2043,37 +2544,103 @@ export class Mannequin3DWebGLEngine {
         }
       }
 
-      this.camTargetX += ((targetSpec.x || 0) - this.camTargetX) * 0.10;
-      this.camTargetY += (targetSpec.y - this.camTargetY) * 0.10;
-      this.camDist += (targetSpec.dist - this.camDist) * 0.10;
+      const camLerp = this.isSoftwareRenderer ? 0.24 : 0.10;
+      const tx = targetSpec.x || 0;
+      const dxCam = tx - this.camTargetX;
+      const dyCam = targetSpec.y - this.camTargetY;
+      const ddCam = targetSpec.dist - this.camDist;
+      const isCamSettling =
+        Math.abs(dxCam) > 0.0018 || Math.abs(dyCam) > 0.0018 || Math.abs(ddCam) > 0.0018;
+
+      if (isCamSettling) {
+        this.camTargetX += dxCam * camLerp;
+        this.camTargetY += dyCam * camLerp;
+        this.camDist += ddCam * camLerp;
+      } else if (
+        this.camTargetX !== tx ||
+        this.camTargetY !== targetSpec.y ||
+        this.camDist !== targetSpec.dist
+      ) {
+        this.camTargetX = tx;
+        this.camTargetY = targetSpec.y;
+        this.camDist = targetSpec.dist;
+        this._sceneDirty = true;
+      }
 
       this.camera.position.set(this.camTargetX + this.parallaxX * 0.08, this.camTargetY + 0.04, this.camDist);
       this.camera.lookAt(this.camTargetX, this.camTargetY - 0.02, 0);
 
       if (this.scanProgress < 1.0) {
-        this.scanProgress = Math.min(1.0, this.scanProgress + 0.028);
+        this.scanProgress = Math.min(1.0, this.scanProgress + (this.isSoftwareRenderer ? 0.12 : 0.028));
         this.scanRingMesh.position.y = 1.82 - this.scanProgress * 1.78;
-        this.scanRingMat.opacity = Math.sin(this.scanProgress * Math.PI) * 0.85;
-      } else {
+        this.scanRingMat.opacity = Math.sin(this.scanProgress * Math.PI) * 0.55;
+      } else if (this.scanRingMat.opacity !== 0.0) {
         this.scanRingMat.opacity = 0.0;
+        this._sceneDirty = true;
       }
 
-      this.renderer.render(this.scene, this.camera);
+      const isInteractingOrMoving =
+        Math.abs(yawDiff) >= 0.0015 || isCamSettling || this.scanProgress < 1.0;
+      const isPoseTransitioning =
+        Math.abs((mode === 'walk' ? 1 : 0) - this.poseBlend.walk) > 0.04 ||
+        Math.abs((mode === 'wave' ? 1 : 0) - this.poseBlend.wave) > 0.04 ||
+        Math.abs((mode === 'umbrella' ? 1 : 0) - this.poseBlend.umbrella) > 0.04 ||
+        Math.abs((mode === 'pose_hands' ? 1 : 0) - this.poseBlend.hands) > 0.04;
+
+      const shouldRender =
+        !this.isSoftwareRenderer ||
+        this._sceneDirty ||
+        isInteractingOrMoving ||
+        isPoseTransitioning ||
+        nowMs - this._lastSoftwareRenderMs >= 520;
+
+      if (shouldRender) {
+        this._sceneDirty = false;
+        this._lastSoftwareRenderMs = nowMs;
+        this.renderer.render(this.scene, this.camera);
+      }
+      if (this._lastSoftwareRenderMs > 0 || !this.isSoftwareRenderer) {
+        this.frameCount += 1;
+      }
     };
     animate();
   }
 
   dispose() {
     this.disposed = true;
+    activeEngineInstances.delete(this);
     if (this.rafId) cancelAnimationFrame(this.rafId);
-    for (const mesh of this.garmentMeshes.values()) {
-      mesh.geometry?.dispose?.();
-      disposeMaterialOrArray(mesh.material);
+    this._resizeObserver?.disconnect?.();
+    this.canvas?.removeEventListener?.('webglcontextlost', this._handleContextLost, false);
+    this.canvas?.removeEventListener?.('webglcontextrestored', this._handleContextRestored, false);
+
+    for (const gid of [...this.garmentMeshes.keys()]) {
+      this._disposeGarmentInstance(gid);
     }
     this.bodyMesh?.geometry?.dispose?.();
     disposeMaterialOrArray(this.bodyMesh?.material);
+
+    const disposeSubtree = (root) => {
+      root?.traverse?.((obj) => {
+        obj.geometry?.dispose?.();
+        disposeMaterialOrArray(obj.material);
+      });
+    };
+    disposeSubtree(this.pedestalGroup);
+    disposeSubtree(this.umbrellaProp);
+    disposeSubtree(this.rainStreaks);
+    disposeSubtree(this.scanRingMesh);
+
     this.envMap?.dispose?.();
+    this.renderer.renderLists?.dispose?.();
     this.renderer.dispose();
+
+    if (this.canvas?.__mannequinEngine === this) {
+      delete this.canvas.__mannequinEngine;
+    }
+    if (typeof window !== 'undefined' && window.__ainventory3DEngine === this) {
+      delete window.__ainventory3DEngine;
+    }
   }
 }
 
@@ -2083,6 +2650,9 @@ export class Mannequin3DWebGLEngine {
 let sharedPreviewEngine = null;
 
 function notifyPreviewListeners() {
+  for (const eng of activeEngineInstances) {
+    eng.markDirty?.();
+  }
   const callbacks = [...previewListeners.values()];
   previewListeners.clear();
   for (const fn of callbacks) {

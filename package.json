@@ -8,9 +8,15 @@
     "build": "vite build",
     "start": "node server/start.js",
     "lint": "oxlint src server",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "vite build && cap sync android",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/haptics": "^8.0.2",
     "@mediapipe/tasks-vision": "^1.2.2",
     "express": "^5.3.0",
     "lucide-react": "^1.70.0",
@@ -20,10 +26,13 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
+    "@playwright/test": "^1.65.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.90.0",
+    "typescript": "^7.0.2",
     "vite": "^8.3.6"
   }
 }

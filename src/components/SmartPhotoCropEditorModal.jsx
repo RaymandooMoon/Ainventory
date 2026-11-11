@@ -11,6 +11,10 @@ import {
   X,
 } from 'lucide-react';
 import { COLOR_PALETTE } from '../utils/api.js';
+import {
+  extractGarmentAIMetadata,
+  removeBackgroundAndEncodeWebP,
+} from '../utils/aiGarmentPipeline.js';
 
 const ASPECT_OPTIONS = [
   { key: 'free', label: '자유 비율', ratio: null },
@@ -205,10 +209,35 @@ export async function renderCroppedImageOutput(
     .toUpperCase()}`;
   const matchedColor = matchClosestPaletteColor(avgR, avgG, avgB);
 
+  const rawCroppedPng = outCanvas.toDataURL('image/png');
+  if (studioCutout) {
+    const cutoutRes = await removeBackgroundAndEncodeWebP(rawCroppedPng, {
+      maxDim: maxOutputSide,
+      quality: 0.86,
+    });
+    const aiMeta = await extractGarmentAIMetadata(cutoutRes.webpDataUrl);
+    return {
+      dataUrl: cutoutRes.webpDataUrl,
+      format: cutoutRes.format,
+      cutoutApplied: cutoutRes.cutoutApplied,
+      detectedHex: aiMeta.sampled_hex || detectedHex,
+      matchedColor: {
+        name: aiMeta.color_name || matchedColor.name,
+        hex: aiMeta.color_hex || matchedColor.hex,
+      },
+      aiMetadata: aiMeta,
+      width: cutoutRes.width,
+      height: cutoutRes.height,
+    };
+  }
+
   return {
-    dataUrl: outCanvas.toDataURL('image/jpeg', 0.92),
+    dataUrl: outCanvas.toDataURL('image/webp', 0.88),
+    format: 'webp',
+    cutoutApplied: false,
     detectedHex,
     matchedColor,
+    aiMetadata: null,
     width: outW,
     height: outH,
   };

@@ -204,6 +204,18 @@ export function initDb() {
       decision TEXT NOT NULL DEFAULT 'undecided',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS packing_lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      closet_owner TEXT NOT NULL DEFAULT 'husband',
+      title TEXT NOT NULL,
+      destination TEXT NOT NULL DEFAULT '도쿄',
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      climate TEXT NOT NULL DEFAULT 'mild',
+      items_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   const alterStatements = [
@@ -228,6 +240,17 @@ export function initDb() {
     'ALTER TABLE users ADD COLUMN waist_cm REAL DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN hip_cm REAL DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN head_cm REAL DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN apple_sub TEXT DEFAULT NULL',
+    "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'",
+    'ALTER TABLE users ADD COLUMN verify_last_sent_at TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN verify_send_count INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN verify_fail_count INTEGER NOT NULL DEFAULT 0',
+    "ALTER TABLE garments ADD COLUMN fabric TEXT NOT NULL DEFAULT 'cotton'",
+    'ALTER TABLE garments ADD COLUMN slot_key TEXT DEFAULT NULL',
+    'ALTER TABLE garments ADD COLUMN base_glb TEXT DEFAULT NULL',
+    "ALTER TABLE garments ADD COLUMN physics_preset TEXT NOT NULL DEFAULT 'rigid_fitted'",
+    'ALTER TABLE garments ADD COLUMN custom_texture INTEGER NOT NULL DEFAULT 0',
+    "ALTER TABLE wear_logs ADD COLUMN status TEXT NOT NULL DEFAULT 'worn'",
   ];
 
   for (const stmt of alterStatements) {

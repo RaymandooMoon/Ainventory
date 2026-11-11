@@ -28,8 +28,11 @@ import {
   PERSONAL_COLOR_SUBTYPES,
   analyzePersonalColorFromImage,
 } from '../utils/imageTools.js';
+import { analyzeFaceSkinOnDevice } from '../utils/faceLandmarkerLocal.js';
+import { hasBiometricConsent } from '../utils/nativeBridge.js';
 import PortraitCropAndPinEditorModal from './PortraitCropAndPinEditorModal.jsx';
 import { Mannequin3DBodyPreview } from './VirtualMannequin.jsx';
+import { BiometricConsentModal } from './common/AppUI.jsx';
 
 const AGE_GROUP_OPTIONS = [
   { value: 'unspecified', label: '입력하지 않음 (기본 30대 통계 적용)' },
@@ -158,6 +161,7 @@ export default function ProfilePersonalColorModal({
   const [mannequinColorMode, setMannequinColorMode] = useState('personal_color');
   const [customMannequinHex, setCustomMannequinHex] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pendingBiometricAction, setPendingBiometricAction] = useState(null); // 'camera' | 'upload' | null
 
   useEffect(() => {
     if (open && initialStep) {
@@ -339,6 +343,18 @@ export default function ProfilePersonalColorModal({
     activeBriefsColorHex,
   ]);
 
+  const requestBiometricCapture = (actionType) => {
+    if (!hasBiometricConsent()) {
+      setPendingBiometricAction(actionType);
+      return;
+    }
+    if (actionType === 'camera') {
+      startCameraStream('user');
+    } else if (actionType === 'upload') {
+      fileInputRef.current?.click();
+    }
+  };
+
   const executePersonalColorAnalysis = async (
     imgUrl,
     mode = lightingMode,
@@ -347,9 +363,33 @@ export default function ProfilePersonalColorModal({
     crop = cropRect
   ) => {
     if (!imgUrl) return;
+    let resolvedPins = pins;
+    if (!resolvedPins && hasBiometricConsent()) {
+      try {
+        const imgEl = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = 'anonymous';
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = imgUrl;
+        });
+        const localLandmark = await analyzeFaceSkinOnDevice(imgEl);
+        if (localLandmark?.usedWasm && localLandmark.pins) {
+          resolvedPins = [
+            { id: 'forehead', labelKo: '이마', ...localLandmark.pins.forehead },
+            { id: 'left_cheek', labelKo: '왼쪽 볼', ...localLandmark.pins.cheekL },
+            { id: 'right_cheek', labelKo: '오른쪽 볼', ...localLandmark.pins.cheekR },
+            { id: 'chin', labelKo: '턱', ...localLandmark.pins.chin },
+          ];
+        }
+      } catch {
+        // Fallback to local ROI pins inside analyzePersonalColorFromImage
+      }
+    }
+
     const res = await analyzePersonalColorFromImage(imgUrl, {
       lightingMode: mode,
-      customPins: pins,
+      customPins: resolvedPins,
       rotationDeg: rot,
       cropRect: crop,
     });
@@ -1169,7 +1209,9 @@ export default function ProfilePersonalColorModal({
                     <button
                       id="start-live-camera-btn"
                       type="button"
-                      onClick={() => (cameraActive ? stopCameraStream() : startCameraStream('user'))}
+                      onClick={() =>
+                        cameraActive ? stopCameraStream() : requestBiometricCapture('camera')
+                      }
                       style={{
                         padding: '6px 11px',
                         borderRadius: 999,
@@ -1188,7 +1230,7 @@ export default function ProfilePersonalColorModal({
                     <button
                       id="upload-photo-btn"
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => requestBiometricCapture('upload')}
                       style={{
                         padding: '6px 11px',
                         borderRadius: 999,
@@ -1836,6 +1878,20 @@ export default function ProfilePersonalColorModal({
             if (finalImg) setPortraitDataUrl(finalImg);
             setPinEditorOpen(false);
             executePersonalColorAnalysis(finalImg, lightingMode, pins, nextRot || 0, nextCrop || null);
+          }}
+        />
+
+        <BiometricConsentModal
+          open={Boolean(pendingBiometricAction)}
+          onClose={() => setPendingBiometricAction(null)}
+          onConfirm={() => {
+            const action = pendingBiometricAction;
+            setPendingBiometricAction(null);
+            if (action === 'camera') {
+              startCameraStream('user');
+            } else if (action === 'upload') {
+              fileInputRef.current?.click();
+            }
           }}
         />
       </div>

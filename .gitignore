@@ -15,6 +15,22 @@ data/
 .env
 .env.*
 
+# Capacitor Android build cache & machine-local properties only (track android/ source)
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

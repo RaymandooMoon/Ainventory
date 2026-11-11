@@ -342,8 +342,33 @@ function weatherCodeToKorean(code) {
   return '구름 조금';
 }
 
-export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live') {
-  const city = CITY_COORDS[cityKey] || CITY_COORDS.seoul;
+function inferWeatherMotion(code, precipProb, windSpeed, condition = '') {
+  if (
+    precipProb >= 45 ||
+    (code >= 51 && code <= 99) ||
+    /비|눈|소나기|우산|뇌우/.test(String(condition))
+  ) {
+    return 'umbrella';
+  }
+  if (windSpeed >= 17) {
+    return 'walk';
+  }
+  return 'idle';
+}
+
+export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live', customCoords = null) {
+  const hasCustom =
+    customCoords &&
+    Number.isFinite(Number(customCoords.lat)) &&
+    Number.isFinite(Number(customCoords.lon));
+  const city = hasCustom
+    ? {
+        name: customCoords.label || '현재 위치',
+        lat: Number(customCoords.lat),
+        lon: Number(customCoords.lon),
+      }
+    : CITY_COORDS[cityKey] || CITY_COORDS.seoul;
+
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().slice(0, 10);
@@ -351,14 +376,20 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live')
   if (scenario && scenario !== 'live' && WEATHER_SCENARIOS[scenario]) {
     const preset = WEATHER_SCENARIOS[scenario];
     return {
-      cityKey,
+      cityKey: hasCustom ? 'gps' : cityKey,
       cityName: city.name,
       date: tomorrowStr,
       ...preset,
+      recommendedMotion: inferWeatherMotion(
+        preset.weatherCode,
+        preset.precipProb,
+        preset.windSpeed,
+        preset.condition
+      ),
     };
   }
 
-  const cacheKey = `${cityKey}:${tomorrowStr}`;
+  const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : cityKey}:${tomorrowStr}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < 20 * 60 * 1000) {
     return cached.data;
@@ -371,23 +402,27 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live')
     const json = await res.json();
     const idx = json.daily?.time?.length > 1 ? 1 : 0;
     const code = json.daily.weather_code[idx] ?? 1;
+    const condition = weatherCodeToKorean(code);
+    const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
+    const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
     const data = {
-      cityKey,
+      cityKey: hasCustom ? 'gps' : cityKey,
       cityName: city.name,
       date: json.daily.time[idx] || tomorrowStr,
-      condition: weatherCodeToKorean(code),
+      condition,
       weatherCode: code,
       tempMin: Math.round(json.daily.temperature_2m_min[idx]),
       tempMax: Math.round(json.daily.temperature_2m_max[idx]),
-      precipProb: Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10),
-      windSpeed: Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10),
+      precipProb,
+      windSpeed,
       isSimulated: false,
+      recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
     };
     weatherCache.set(cacheKey, { fetchedAt: Date.now(), data });
     return data;
   } catch {
     return {
-      cityKey,
+      cityKey: hasCustom ? 'gps' : cityKey,
       cityName: city.name,
       date: tomorrowStr,
       condition: '대체로 맑음',
@@ -398,6 +433,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live')
       windSpeed: 11,
       isSimulated: false,
       fallbackUsed: true,
+      recommendedMotion: 'idle',
     };
   }
 }
@@ -696,10 +732,166 @@ export function getSubcategoryLabel(sub) {
     loafers: '로퍼 · 구두',
     boots: '부츠',
     heels: '힐 · 펌프스',
-    bag: '가방 · 토트백',
+    briefcase: '서류가방 · 브리프케이스',
+    tote: '토트백 · 쇼퍼백',
+    bag: '가방 · 크로스백',
     watch: '시계 · 워치',
     belt: '레더 벨트',
     glasses: '아이웨어 · 안경',
   };
   return map[sub] || sub;
 }
+
+const MANIFEST_GLB_BY_SUB = {
+  beanie: { slotKey: 'headwear', baseGlb: 'headwear_beanie', physicsPreset: 'rigid_fitted' },
+  cap: { slotKey: 'headwear', baseGlb: 'headwear_cap', physicsPreset: 'rigid_fitted' },
+  beret: { slotKey: 'headwear', baseGlb: 'headwear_beret', physicsPreset: 'rigid_fitted' },
+  bucket_hat: { slotKey: 'headwear', baseGlb: 'headwear_fedora', physicsPreset: 'rigid_fitted' },
+  scarf: { slotKey: 'neckwear', baseGlb: 'neckwear_scarf', physicsPreset: 'soft_jiggle_muffler' },
+  muffler: { slotKey: 'neckwear', baseGlb: 'neckwear_scarf', physicsPreset: 'soft_jiggle_muffler' },
+  necktie: { slotKey: 'neckwear', baseGlb: 'neckwear_tie', physicsPreset: 'soft_jiggle_tie' },
+  trench: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
+  coat: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
+  blazer: { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'rigid_fitted' },
+  jacket: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
+  padding: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
+  cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'rigid_fitted' },
+  knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'rigid_fitted' },
+  shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'rigid_fitted' },
+  blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'rigid_fitted' },
+  tshirt: { slotKey: 'top', baseGlb: 'top_tshirt', physicsPreset: 'rigid_fitted' },
+  sweatshirt: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'rigid_fitted' },
+  slacks: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'rigid_fitted' },
+  chinos: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'rigid_fitted' },
+  denim: { slotKey: 'bottom', baseGlb: 'bottom_denim', physicsPreset: 'rigid_fitted' },
+  skirt: { slotKey: 'bottom', baseGlb: 'bottom_skirt', physicsPreset: 'hem_sway_skirt' },
+  shorts: { slotKey: 'bottom', baseGlb: 'bottom_shorts', physicsPreset: 'rigid_fitted' },
+  dress: { slotKey: 'dress', baseGlb: 'dress_shift', physicsPreset: 'hem_sway_skirt' },
+  onepiece: { slotKey: 'dress', baseGlb: 'dress_onepiece', physicsPreset: 'hem_sway_skirt' },
+  gloves: { slotKey: 'gloves', baseGlb: 'gloves_short', physicsPreset: 'rigid_fitted' },
+  leather_gloves: { slotKey: 'gloves', baseGlb: 'gloves_short', physicsPreset: 'rigid_fitted' },
+  inner_top: { slotKey: 'underwear', baseGlb: 'underwear_top', physicsPreset: 'rigid_fitted' },
+  underwear: { slotKey: 'underwear', baseGlb: 'underwear_briefs', physicsPreset: 'rigid_fitted' },
+  crew_socks: { slotKey: 'socks', baseGlb: 'socks_crew', physicsPreset: 'rigid_fitted' },
+  socks: { slotKey: 'socks', baseGlb: 'socks_ankle', physicsPreset: 'rigid_fitted' },
+  sneakers: { slotKey: 'shoes', baseGlb: 'shoes_sneakers', physicsPreset: 'rigid_fitted' },
+  loafers: { slotKey: 'shoes', baseGlb: 'shoes_loafers', physicsPreset: 'rigid_fitted' },
+  boots: { slotKey: 'shoes', baseGlb: 'shoes_boots', physicsPreset: 'rigid_fitted' },
+  heels: { slotKey: 'shoes', baseGlb: 'shoes_heels', physicsPreset: 'rigid_fitted' },
+  briefcase: { slotKey: 'accessory', baseGlb: 'accessory_briefcase', physicsPreset: 'pendulum_briefcase' },
+  tote: { slotKey: 'accessory', baseGlb: 'accessory_tote', physicsPreset: 'pendulum_tote' },
+  bag: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_crossbody' },
+  watch: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
+  belt: { slotKey: 'accessory', baseGlb: 'accessory_belt', physicsPreset: 'rigid_fitted' },
+  glasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
+};
+
+export function resolveManifestSlotAndGlb(category = 'top', subcategory = 'knit') {
+  const cleanCat = String(category || 'top').toLowerCase();
+  const cleanSub = String(subcategory || '').toLowerCase();
+  if (MANIFEST_GLB_BY_SUB[cleanSub]) {
+    if (cleanCat === 'outer' && cleanSub === 'cardigan') {
+      return { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' };
+    }
+    return MANIFEST_GLB_BY_SUB[cleanSub];
+  }
+  const fallbackByCat = {
+    headwear: MANIFEST_GLB_BY_SUB.cap,
+    neckwear: MANIFEST_GLB_BY_SUB.scarf,
+    outer: MANIFEST_GLB_BY_SUB.coat,
+    top: MANIFEST_GLB_BY_SUB.knit,
+    bottom: MANIFEST_GLB_BY_SUB.slacks,
+    dress: MANIFEST_GLB_BY_SUB.dress,
+    gloves: MANIFEST_GLB_BY_SUB.gloves,
+    underwear: MANIFEST_GLB_BY_SUB.inner_top,
+    socks: MANIFEST_GLB_BY_SUB.crew_socks,
+    shoes: MANIFEST_GLB_BY_SUB.sneakers,
+    accessory: MANIFEST_GLB_BY_SUB.bag,
+  };
+  return fallbackByCat[cleanCat] || MANIFEST_GLB_BY_SUB.knit;
+}
+
+export function buildTripPackingList({
+  destination = '도쿄',
+  startDate,
+  endDate,
+  climate = 'mild',
+  garments = [],
+}) {
+  const s = startDate ? new Date(startDate) : new Date();
+  const e = endDate ? new Date(endDate) : new Date(Date.now() + 2 * 86400000);
+  const days = Math.max(1, Math.min(21, Math.round((e - s) / 86400000) + 1));
+
+  const targetTemp = climate === 'cold' ? 3 : climate === 'warm' ? 25 : climate === 'rainy' ? 13 : 16;
+  const active = garments.filter((g) => g.status === 'active');
+
+  const pickByCat = (cat, limit) => {
+    return [...active]
+      .filter((g) => g.category === cat)
+      .sort((a, b) => {
+        const fitA = Math.abs(((a.min_temp + a.max_temp) / 2) - targetTemp) - (climate === 'rainy' && a.water_resistant ? 8 : 0);
+        const fitB = Math.abs(((b.min_temp + b.max_temp) / 2) - targetTemp) - (climate === 'rainy' && b.water_resistant ? 8 : 0);
+        return fitA - fitB;
+      })
+      .slice(0, limit);
+  };
+
+  const chosen = [
+    ...pickByCat('outer', climate === 'warm' ? 1 : Math.min(2, Math.ceil(days / 3))),
+    ...pickByCat('top', Math.min(5, Math.max(2, days))),
+    ...pickByCat('bottom', Math.min(3, Math.max(1, Math.ceil(days / 2)))),
+    ...pickByCat('shoes', Math.min(2, days >= 3 ? 2 : 1)),
+    ...pickByCat('underwear', Math.min(3, days)),
+    ...pickByCat('socks', Math.min(3, days)),
+    ...pickByCat('accessory', 1),
+  ];
+
+  if (climate === 'cold') {
+    chosen.push(...pickByCat('neckwear', 1), ...pickByCat('gloves', 1));
+  }
+
+  const seen = new Set();
+  const items = [];
+  for (const g of chosen) {
+    if (seen.has(g.id)) continue;
+    seen.add(g.id);
+    items.push({
+      key: `g-${g.id}`,
+      garment_id: g.id,
+      name: g.name,
+      category: g.category,
+      image_url: g.image_url,
+      qty: g.category === 'socks' || g.category === 'underwear' ? Math.min(days, 4) : 1,
+      checked: false,
+    });
+  }
+
+  // Always include essential travel care items
+  items.push(
+    {
+      key: 'essential-pouch',
+      garment_id: null,
+      name: `${destination} 여행 워시 파우치 · 충전 키트`,
+      category: 'essential',
+      image_url: null,
+      qty: 1,
+      checked: false,
+    },
+    ...(climate === 'rainy'
+      ? [
+          {
+            key: 'essential-umbrella',
+            garment_id: null,
+            name: '초경량 방풍 우산',
+            category: 'essential',
+            image_url: null,
+            qty: 1,
+            checked: false,
+          },
+        ]
+      : [])
+  );
+
+  return { days, items };
+}
+

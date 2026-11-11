@@ -1,609 +1,880 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  CalendarPlus,
-  ChevronLeft,
+  AlertCircle,
+  Calendar,
+  Check,
   ChevronRight,
   Download,
-  ExternalLink,
+  Luggage,
+  PieChart,
+  Plus,
   Trash2,
+  TrendingDown,
 } from 'lucide-react';
-import { apiFetch, formatKRW } from '../utils/api.js';
-import { KpiMetricStrip, PageHeader, ResponsiveSheetModal } from './common/AppUI.jsx';
+import { CATEGORIES, apiFetch, formatKRW } from '../utils/api.js';
+import { triggerHaptic } from '../utils/nativeBridge.js';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+import {
+  PageHeader,
+  ResponsiveSheetModal,
+  SkeletonBentoGrid,
+} from './common/AppUI.jsx';
 
-function buildGoogleCalendarUrl(log) {
-  const dateCompact = String(log.worn_date || '').replace(/-/g, '');
-  if (!dateCompact) return 'https://calendar.google.com';
-  const itemNames = (log.items || []).map((i) => i.name).join(', ');
-  const title = encodeURIComponent(`[A inventory OOTD] ${log.note || '오늘의 착용 코디'}`);
-  const details = encodeURIComponent(
-    `착용 아이템: ${itemNames}\n날씨: ${log.weather_summary || '-'} (${log.temp_c ?? '-'}°C)\n메모: ${log.note || '-'}`
-  );
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateCompact}/${dateCompact}&details=${details}`;
-}
+const CATEGORY_LABEL_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 
-function downloadLogsAsIcs(logs = []) {
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//A inventory//Smart Wardrobe Atelier//KO',
-    'CALSCALE:GREGORIAN',
-  ];
-
-  for (const log of logs) {
-    const dt = String(log.worn_date || '').replace(/-/g, '');
-    if (!dt) continue;
-    const itemNames = (log.items || []).map((i) => i.name).join(', ');
-    const summary = `[A inventory OOTD] ${log.note || itemNames.slice(0, 32) || '착용 기록'}`;
-    const desc = `착용 의류: ${itemNames} | 날씨: ${log.weather_summary || '-'}`;
-    lines.push(
-      'BEGIN:VEVENT',
-      `UID:ainventory-log-${log.id}@ainventory.kr`,
-      `DTSTART;VALUE=DATE:${dt}`,
-      `DTEND;VALUE=DATE:${dt}`,
-      `SUMMARY:${summary.replace(/[\r\n]/g, ' ')}`,
-      `DESCRIPTION:${desc.replace(/[\r\n]/g, ' ')}`,
-      'END:VEVENT'
-    );
-  }
-
-  lines.push('END:VCALENDAR');
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ainventory-wear-calendar-${new Date().toISOString().slice(0, 10)}.ics`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
+/**
+ * Apple HIG Bento Insights, CPW Dashboard, OOTD Calendar & Trip Packing List View (Reqs 7.a, 7.c, 12.d, 13.a-c)
+ * - Main screen presents concise Apple Fitness-style Bento Summary Cards with tabular-nums
+ * - Tapping each card drills down into a spring physics Bottom Sheet
+ */
 export default function AnalyticsCalendarView({
   activeCloset,
+  user,
   refreshKey,
   onClosetUpdated,
   showToast,
 }) {
   const [analytics, setAnalytics] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [garments, setGarments] = useState([]);
-  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [outfits, setOutfits] = useState([]);
+  const [packingLists, setPackingLists] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const today = new Date();
-  const [calYear, setCalYear] = useState(today.getFullYear());
-  const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-indexed
-  const [selectedDayStr, setSelectedDayStr] = useState(today.toISOString().slice(0, 10));
+  // Active Drill-Down Sheet: null | 'cpw' | 'dormant' | 'balance' | 'calendar' | 'packing'
+  const [activeSheet, setActiveSheet] = useState(null);
 
-  const [wornDate, setWornDate] = useState(today.toISOString().slice(0, 10));
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [note, setNote] = useState('');
+  // Calendar Form State
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [logForm, setLogForm] = useState({
+    worn_date: todayStr,
+    outfit_id: '',
+    status: 'worn', // 'worn' | 'planned'
+    note: '',
+  });
 
-  const loadAll = async () => {
+  // Trip Packing Form State
+  const [tripForm, setTripForm] = useState({
+    title: '주말 여행 패킹',
+    destination: '도쿄',
+    start_date: todayStr,
+    end_date: todayStr,
+    climate: 'mild',
+  });
+  const [creatingTrip, setCreatingTrip] = useState(false);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
     try {
-      const [aRes, cRes, gRes] = await Promise.all([
-        apiFetch(`/analytics?closet=${encodeURIComponent(activeCloset)}`),
-        apiFetch(`/calendar?closet=${encodeURIComponent(activeCloset)}`),
-        apiFetch(`/garments?closet=${encodeURIComponent(activeCloset)}`),
+      const q = encodeURIComponent(activeCloset);
+      const [anaRes, calRes, outRes, packRes] = await Promise.all([
+        apiFetch(`/analytics?closet=${q}`),
+        apiFetch(`/calendar?closet=${q}`),
+        apiFetch(`/outfits?closet=${q}`),
+        apiFetch(`/packing-lists?closet=${q}`),
       ]);
-      setAnalytics(aRes);
-      setLogs(cRes.logs || []);
-      setGarments(gRes.garments || []);
+      setAnalytics(anaRes);
+      setLogs(calRes.logs || []);
+      const loadedOutfits = outRes.outfits || [];
+      setOutfits(loadedOutfits);
+      setPackingLists(packRes.lists || packRes.packingLists || []);
+      if (loadedOutfits.length > 0) {
+        setLogForm((prev) => ({
+          ...prev,
+          outfit_id: prev.outfit_id || String(loadedOutfits[0].id),
+        }));
+      }
     } catch (err) {
-      showToast(err.message || '리포트를 불러오지 못했습니다.');
+      showToast?.(err.message);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [activeCloset, showToast]);
 
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCloset, refreshKey]);
+  }, [loadAll, refreshKey]);
 
-  const logsByDate = useMemo(() => {
-    const map = new Map();
-    for (const log of logs) {
-      if (!map.has(log.worn_date)) map.set(log.worn_date, []);
-      map.get(log.worn_date).push(log);
-    }
-    return map;
-  }, [logs]);
-
-  const calendarCells = useMemo(() => {
-    const firstDay = new Date(calYear, calMonth, 1).getDay();
-    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-    const cells = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      cells.push({ day: d, dateStr, logs: logsByDate.get(dateStr) || [] });
-    }
-    return cells;
-  }, [calYear, calMonth, logsByDate]);
-
-  const stepMonth = (delta) => {
-    const next = new Date(calYear, calMonth + delta, 1);
-    setCalYear(next.getFullYear());
-    setCalMonth(next.getMonth());
-  };
-
-  const toggleItemSelection = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleCreateLog = async (e) => {
+  const handleAddCalendarEntry = async (e) => {
     e.preventDefault();
-    if (selectedIds.length === 0) {
-      showToast('착용한 옷을 1벌 이상 선택해주세요.');
-      return;
-    }
+    const isFuture = logForm.worn_date > todayStr;
+    const resolvedStatus = isFuture ? 'planned' : logForm.status;
     try {
+      const targetOwner =
+        activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
+      const chosenOutfit = outfits.find((o) => String(o.id) === String(logForm.outfit_id));
       await apiFetch('/calendar', {
         method: 'POST',
         body: JSON.stringify({
-          closet_owner: activeCloset === 'all' ? 'husband' : activeCloset,
-          worn_date: wornDate,
-          item_ids: selectedIds,
-          note,
+          closet_owner: targetOwner,
+          worn_date: logForm.worn_date,
+          outfit_id: logForm.outfit_id ? Number(logForm.outfit_id) : null,
+          item_ids: chosenOutfit?.item_ids || [],
+          status: resolvedStatus,
+          weather_summary: resolvedStatus === 'planned' ? '예약된 코디 일정' : '착용 기록',
+          note: logForm.note,
         }),
       });
-      setLogModalOpen(false);
-      setSelectedIds([]);
-      setNote('');
-      loadAll();
+      setLogForm((prev) => ({ ...prev, note: '' }));
+      await loadAll();
       onClosetUpdated?.();
-      showToast('OOTD 착용 기록이 저장되고 아이템별 CPW가 갱신되었습니다.');
+      showToast?.(
+        resolvedStatus === 'planned'
+          ? '미래 일정 코디가 예약되었습니다'
+          : 'OOTD 착용 기록이 저장되었습니다'
+      );
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
   };
 
-  const handleDeleteLog = async (id) => {
+  const handleMarkPlannedAsWorn = async (entryId) => {
     try {
-      await apiFetch(`/calendar/${id}`, { method: 'DELETE' });
-      loadAll();
-      showToast('기록이 삭제되었습니다.');
+      await apiFetch(`/calendar/${entryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'worn' }),
+      });
+      await loadAll();
+      onClosetUpdated?.();
+      showToast?.('예약 코디를 착용 완료로 전환했습니다');
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
+  };
+
+  const handleDeleteCalendarEntry = async (entryId) => {
+    try {
+      await apiFetch(`/calendar/${entryId}`, { method: 'DELETE' });
+      await loadAll();
+      showToast?.('캘린더 일정이 삭제되었습니다');
+    } catch (err) {
+      showToast?.(err.message);
+    }
+  };
+
+  const handleCreatePackingList = async (e) => {
+    e.preventDefault();
+    setCreatingTrip(true);
+    try {
+      const targetOwner =
+        activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
+      await apiFetch('/packing-lists', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...tripForm,
+          closet_owner: targetOwner,
+        }),
+      });
+      await loadAll();
+      showToast?.('여행 기간·기후 맞춤 패킹 체크리스트가 생성되었습니다');
+    } catch (err) {
+      showToast?.(err.message);
+    } finally {
+      setCreatingTrip(false);
+    }
+  };
+
+  const handleTogglePackingItem = async (listObj, itemIdx) => {
+    const nextItems = (listObj.items || []).map((it, idx) =>
+      idx === itemIdx ? { ...it, packed: !it.packed, checked: !(it.packed || it.checked) } : it
+    );
+    triggerHaptic('selection');
+    setPackingLists((prev) =>
+      prev.map((pl) => (pl.id === listObj.id ? { ...pl, items: nextItems } : pl))
+    );
+    try {
+      await apiFetch(`/packing-lists/${listObj.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ items: nextItems }),
+      });
+    } catch (err) {
+      showToast?.(err.message);
+    }
+  };
+
+  const handleDeletePackingList = async (listId) => {
+    try {
+      await apiFetch(`/packing-lists/${listId}`, { method: 'DELETE' });
+      await loadAll();
+      showToast?.('패킹 리스트가 삭제되었습니다');
+    } catch (err) {
+      showToast?.(err.message);
+    }
+  };
+
+  if (loading || !analytics) {
+    return (
+      <div>
+        <PageHeader title="인사이트" subtitle="데이터 집계 중" />
+        <SkeletonBentoGrid count={3} />
+      </div>
+    );
+  }
+
+  const summary = analytics.summary || {
+    totalItems: analytics.totalItems ?? 0,
+    totalValue: analytics.totalValue ?? 0,
+    avgCpw: analytics.avgCpw ?? 0,
+    utilizationRate: analytics.utilizationRate ?? 0,
+    unwornCount: (analytics.sleepingItems || []).length,
+  };
+  const dormantItems = analytics.sleepingItems || analytics.dormantItems || [];
+  const bestCpwList = analytics.bestValueItems || analytics.bestCpw || [];
+  const worstCpwList =
+    analytics.worstCpw || [...(analytics.cpwRanking || [])].reverse().slice(0, 6);
+  const colorDistList = analytics.colorDist || analytics.colorDistribution || [];
+  const catDistList = analytics.sortedCategories || analytics.categoryDistribution || [];
+  const topColor = colorDistList[0];
+  const topCat = catDistList[0];
+  const plannedCount = logs.filter((l) => l.status === 'planned').length;
+  const wornCount = logs.length - plannedCount;
+
+  const openSheet = (key) => {
+    triggerHaptic('selection');
+    setActiveSheet(key);
   };
 
   return (
     <div>
       <PageHeader
-        eyebrow="OOTD CALENDAR & CPW REPORT · WHERING & GETWARDROBE STANDARD"
-        title="월간 착용 캘린더 & CPW 리포트"
-        subtitle="월간 착용 캘린더, Google Calendar 일정 연동, .ics 내보내기 및 1회 착용당 비용(CPW) 인사이트를 제공합니다."
-        actions={
-          <>
-            <button
-              id="export-ics-btn"
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                downloadLogsAsIcs(logs);
-                showToast('착용 캘린더(.ics) 파일이 다운로드되었습니다.');
-              }}
-            >
-              <Download size={16} /> .ics 캘린더 내보내기
-            </button>
-            <button
-              id="open-ootd-log-btn"
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setLogModalOpen(true)}
-            >
-              <CalendarPlus size={17} /> 오늘 입은 옷 기록
-            </button>
-          </>
-        }
+        title="인사이트"
+        subtitle={`총 ${summary.totalItems}벌 · 활용률 ${summary.utilizationRate}%`}
       />
 
-      {analytics && (
-        <>
-          <KpiMetricStrip
-            items={[
-              {
-                key: 'totalValue',
-                label: '옷장 총 가치',
-                value: formatKRW(analytics.totalValue),
-                sub: `총 ${analytics.totalItems}벌 등록됨`,
-              },
-              {
-                key: 'avgCpw',
-                label: '평균 1회 착용당 비용 (CPW)',
-                value: formatKRW(analytics.avgCpw),
-                sub: `누적 ${analytics.totalWears}회 착용`,
-              },
-              {
-                key: 'utilizationRate',
-                label: '옷장 실사용률',
-                value: `${analytics.utilizationRate}%`,
-                sub: '3회 이상 착용된 활성 비율',
-              },
-              {
-                key: 'savedMoney',
-                label: '충동구매 방어 절약액',
-                value: formatKRW(analytics.savedMoney),
-                sub: `오프라인 판독 후 ${analytics.passedCount}건 패스`,
-              },
-            ]}
-          />
+      {/* Primary Apple Fitness-Style Bento Grid (3 Summary Metric Cards — Req 12.d) */}
+      <div className="hig-bento-grid" style={{ marginBottom: 16 }}>
+        {/* Bento 1: Average CPW */}
+        <button
+          id="bento-cpw-card"
+          type="button"
+          className="hig-bento-card"
+          onClick={() => openSheet('cpw')}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span className="hig-caption">1회 착용 비용 (CPW)</span>
+            <TrendingDown size={16} />
+          </div>
+          <div>
+            <div className="hig-large-title tabular-nums">{formatKRW(summary.avgCpw)}</div>
+            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
+              총 자산 {formatKRW(summary.totalValue)} · 탭하여 순위 보기
+            </div>
+          </div>
+        </button>
 
-          {/* Monthly Wear Calendar Grid */}
-          <section className="section-card" style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 14,
-                flexWrap: 'wrap',
-                gap: 10,
-              }}
-            >
-              <div>
-                <h3 style={{ marginBottom: 2 }}>
-                  {calYear}년 {calMonth + 1}월 OOTD 착용 캘린더
-                </h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--ink-secondary)' }}>
-                  날짜를 클릭하면 해당 날짜에 착용을 기록하거나 Google Calendar로 바로 전송할 수 있습니다.
-                </span>
+        {/* Bento 2: Dormant / Unworn Garment Alert */}
+        <button
+          id="bento-dormant-card"
+          type="button"
+          className="hig-bento-card"
+          onClick={() => openSheet('dormant')}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span className="hig-caption">미착용 방치 의류 알림</span>
+            <AlertCircle size={16} />
+          </div>
+          <div>
+            <div className="hig-large-title tabular-nums">
+              {dormantItems.length || summary.unwornCount}벌
+            </div>
+            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
+              옷장 가동률 {summary.utilizationRate}% · 순환 착용 필요
+            </div>
+          </div>
+        </button>
+
+        {/* Bento 3: Color & Category Concentration */}
+        <button
+          id="bento-balance-card"
+          type="button"
+          className="hig-bento-card"
+          onClick={() => openSheet('balance')}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span className="hig-caption">컬러 · 카테고리 편중도</span>
+            <PieChart size={16} />
+          </div>
+          <div>
+            <div className="hig-large-title tabular-nums">
+              {topColor ? `${topColor.name} ${topColor.sharePct ?? topColor.pct ?? Math.round((topColor.count / Math.max(1, summary.totalItems)) * 100)}%` : '균형'}
+            </div>
+            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
+              최다 분류: {topCat ? CATEGORY_LABEL_MAP[topCat.category] || topCat.category : '-'}
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Retention Bento Row: OOTD Calendar + Trip Packing Checklists (Req 7.a) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 16,
+        }}
+      >
+        <button
+          id="bento-calendar-card"
+          type="button"
+          className="hig-bento-card"
+          onClick={() => openSheet('calendar')}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span className="hig-caption">OOTD 코디 캘린더 · 예약</span>
+            <Calendar size={16} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
+            <div>
+              <div className="hig-headline tabular-nums">
+                착용 기록 {wornCount}건 · 미래 예약 {plannedCount}건
               </div>
+              <div className="hig-caption" style={{ marginTop: 4 }}>
+                날짜별 착용 이력 및 미래 일정 코디 예약
+              </div>
+            </div>
+            <ChevronRight size={18} />
+          </div>
+        </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepMonth(-1)}>
-                  <ChevronLeft size={15} /> 이전 달
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    setCalYear(today.getFullYear());
-                    setCalMonth(today.getMonth());
+        <button
+          id="bento-packing-card"
+          type="button"
+          className="hig-bento-card"
+          onClick={() => openSheet('packing')}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span className="hig-caption">여행 패킹 리스트</span>
+            <Luggage size={16} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
+            <div>
+              <div className="hig-headline tabular-nums">
+                체크리스트 {packingLists.length}개
+              </div>
+              <div className="hig-caption" style={{ marginTop: 4 }}>
+                여행 기간 · 목적지 기후별 짐싸기 자동 구성
+              </div>
+            </div>
+            <ChevronRight size={18} />
+          </div>
+        </button>
+      </div>
+
+      {/* Sheet 1: CPW Drill-Down */}
+      <ResponsiveSheetModal
+        open={activeSheet === 'cpw'}
+        onClose={() => setActiveSheet(null)}
+        eyebrow="COST PER WEAR"
+        title="아이템별 1회 착용 비용(CPW) 상세"
+        maxWidth={580}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 8 }}>
+              최고 효율 아이템 (Best CPW)
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {bestCpwList.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: 12,
+                    borderRadius: 16,
+                    background: 'var(--bg-surface)',
                   }}
                 >
-                  이번 달
-                </button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => stepMonth(1)}>
-                  다음 달 <ChevronRight size={15} />
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: 6,
-                textAlign: 'center',
-                fontSize: '0.76rem',
-                fontWeight: 700,
-                color: 'var(--ink-muted)',
-                marginBottom: 6,
-              }}
-            >
-              {['일', '월', '화', '수', '목', '금', '토'].map((d) => (
-                <div key={d}>{d}</div>
-              ))}
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-                gap: 6,
-              }}
-            >
-              {calendarCells.map((cell, idx) => {
-                if (!cell) {
-                  return (
-                    <div
-                      key={`empty-${idx}`}
-                      style={{
-                        minHeight: 74,
-                        borderRadius: 8,
-                        background: 'rgba(28,25,23,0.02)',
-                      }}
-                    />
-                  );
-                }
-                const hasLogs = cell.logs.length > 0;
-                const isSelected = selectedDayStr === cell.dateStr;
-                return (
-                  <button
-                    key={cell.dateStr}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDayStr(cell.dateStr);
-                      setWornDate(cell.dateStr);
-                    }}
-                    style={{
-                      minHeight: 78,
-                      padding: 6,
-                      borderRadius: 10,
-                      border: isSelected
-                        ? '2px solid var(--ink-primary)'
-                        : hasLogs
-                          ? '1px solid var(--accent-sage)'
-                          : '1px solid var(--border-hairline)',
-                      background: hasLogs ? 'var(--verdict-buy-bg)' : 'var(--bg-canvas)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{cell.day}</span>
-                    {hasLogs && (
-                      <div style={{ width: '100%' }}>
-                        <span
-                          style={{
-                            display: 'block',
-                            fontSize: '0.68rem',
-                            fontWeight: 600,
-                            color: 'var(--verdict-buy-ink)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {cell.logs[0].items?.[0]?.name || '착용 기록'}
-                        </span>
-                        <span style={{ fontSize: '0.64rem', color: 'var(--ink-muted)' }}>
-                          {cell.logs[0].items?.length || 0}벌 착용
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="two-col-panels">
-            <div className="section-card">
-              <h3>최고 가성비 에센셜 (Best CPW)</h3>
-              {analytics.bestValueItems.map((item) => (
-                <div key={item.id} className="cpw-row">
-                  <StudioGarmentImage
-                    item={item}
-                    style={{ width: 48, height: 62, borderRadius: 6, flexShrink: 0 }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <strong style={{ fontSize: '0.9rem' }}>{item.name}</strong>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
+                    <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div className="hig-caption tabular-nums">
                       구매가 {formatKRW(item.price)} · {item.wear_count}회 착용
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <strong style={{ color: 'var(--accent-sage)', fontSize: '0.92rem' }}>
-                      {formatKRW(item.cpw)}
-                    </strong>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>1회당</div>
-                  </div>
+                  <strong className="hig-headline tabular-nums">{formatKRW(item.cpw)}/회</strong>
                 </div>
               ))}
             </div>
+          </div>
 
-            <div className="section-card">
-              <h3>서랍 속 잠자는 옷 (착용 2회 이하)</h3>
-              {analytics.sleepingItems.length === 0 ? (
-                <p style={{ color: 'var(--ink-secondary)', fontSize: '0.9rem' }}>
-                  모든 옷이 3회 이상 알차게 활용되고 있습니다!
-                </p>
-              ) : (
-                analytics.sleepingItems.map((item) => (
-                  <div key={item.id} className="cpw-row">
-                    <StudioGarmentImage
-                      item={item}
-                      style={{ width: 48, height: 62, borderRadius: 6, flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: '0.9rem' }}>{item.name}</strong>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)' }}>
-                        {item.brand || '내 옷장'} · 마지막 착용 {item.last_worn_date || '기록 없음'}
-                      </div>
-                    </div>
-                    <span className="verdict-badge skip" style={{ marginBottom: 0 }}>
-                      {item.wear_count}회 착용
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="section-card" style={{ marginBottom: 24 }}>
-            <h3>내 옷장 컬러 팔레트 비중</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
-              {analytics.colorDist.map((c) => (
+          <div>
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 8 }}>
+              개선 필요 아이템 (High CPW)
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {worstCpwList.map((item) => (
                 <div
-                  key={c.name}
+                  key={item.id}
                   style={{
-                    display: 'inline-flex',
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 14px',
-                    borderRadius: 'var(--radius-pill)',
-                    background: 'var(--bg-canvas)',
-                    border: '1px solid var(--border-hairline)',
-                    fontSize: '0.84rem',
+                    gap: 12,
+                    padding: 12,
+                    borderRadius: 16,
+                    background: 'var(--bg-surface)',
                   }}
                 >
-                  <span className="color-dot" style={{ width: 14, height: 14, backgroundColor: c.hex }} />
-                  <strong>{c.name}</strong>
-                  <span style={{ color: 'var(--ink-muted)' }}>{c.count}벌</span>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
+                    <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div className="hig-caption tabular-nums">
+                      구매가 {formatKRW(item.price)} · {item.wear_count}회 착용
+                    </div>
+                  </div>
+                  <strong className="hig-headline tabular-nums">{formatKRW(item.cpw)}/회</strong>
                 </div>
               ))}
             </div>
-          </section>
-        </>
-      )}
+          </div>
+        </div>
+      </ResponsiveSheetModal>
 
-      <section className="section-card">
-        <h3>최근 OOTD 착용 캘린더 로그 (Google Calendar 연동)</h3>
-        {logs.length === 0 ? (
-          <p style={{ color: 'var(--ink-secondary)' }}>아직 기록된 착용 일지가 없습니다.</p>
-        ) : (
-          <div>
-            {logs.map((log) => (
+      {/* Sheet 2: Dormant Garments Alert */}
+      <ResponsiveSheetModal
+        open={activeSheet === 'dormant'}
+        onClose={() => setActiveSheet(null)}
+        eyebrow="DORMANT WARDROBE ALERT"
+        title="장기간 미착용 · 방치 의류 리포트"
+        maxWidth={560}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {dormantItems.length === 0 ? (
+            <p className="hig-caption">현재 모든 의류가 고르게 착용되고 있습니다.</p>
+          ) : (
+            dormantItems.map((item) => (
               <div
-                key={log.id}
+                key={item.id}
                 style={{
-                  padding: '16px 0',
-                  borderBottom: '1px solid var(--border-hairline)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 16,
-                  flexWrap: 'wrap',
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 16,
+                  background: 'var(--bg-surface)',
                 }}
               >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <strong>{log.worn_date}</strong>
-                    {log.weather_summary && (
-                      <span className="rec-tag">
-                        {log.weather_summary} {log.temp_c !== null ? `${log.temp_c}°C` : ''}
-                      </span>
-                    )}
-                    <a
-                      href={buildGoogleCalendarUrl(log)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '3px 8px', fontSize: '0.73rem' }}
-                    >
-                      <ExternalLink size={12} /> Google Calendar에 추가
-                    </a>
-                  </div>
-                  {log.note && (
-                    <p style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)', marginBottom: 8 }}>
-                      {log.note}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {log.items.map((it) => (
-                      <div
-                        key={it.id}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          background: 'var(--bg-canvas)',
-                          padding: '4px 10px 4px 4px',
-                          borderRadius: 'var(--radius-xs)',
-                          border: '1px solid var(--border-hairline)',
-                          fontSize: '0.79rem',
-                        }}
-                      >
-                        <StudioGarmentImage
-                          item={it}
-                          style={{ width: 26, height: 32, borderRadius: 4, flexShrink: 0 }}
-                        />
-                        <span>{it.name}</span>
-                      </div>
-                    ))}
+                <div style={{ width: 46, height: 46, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
+                  <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
+                  <div className="hig-caption tabular-nums">
+                    착용 {item.wear_count || 0}회 ·{' '}
+                    {item.daysUnworn && item.daysUnworn < 900
+                      ? `${item.daysUnworn}일 경과`
+                      : item.daysSinceWorn
+                        ? `${item.daysSinceWorn}일 경과`
+                        : '미착용 상태'}
                   </div>
                 </div>
-
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => handleDeleteLog(log.id)}
+                  className="btn btn-primary btn-sm"
+                  onClick={async () => {
+                    await apiFetch(`/garments/${item.id}/wear`, { method: 'POST' });
+                    await loadAll();
+                    onClosetUpdated?.();
+                    showToast?.('오늘 착용으로 전환되었습니다');
+                  }}
                 >
-                  <Trash2 size={14} />
+                  착용 +1
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </div>
+      </ResponsiveSheetModal>
 
+      {/* Sheet 3: Color & Category Concentration */}
       <ResponsiveSheetModal
-        open={logModalOpen}
-        onClose={() => setLogModalOpen(false)}
-        eyebrow="OOTD WEAR LOG"
-        title="착용 기록 (OOTD) 추가"
-        maxWidth={680}
+        open={activeSheet === 'balance'}
+        onClose={() => setActiveSheet(null)}
+        eyebrow="WARDROBE BALANCE"
+        title="보유 의류 색상 · 카테고리 편중도"
+        maxWidth={540}
       >
-        <form onSubmit={handleCreateLog}>
-          <div className="form-grid-2">
-            <div className="field-group">
-              <label className="field-label">착용 날짜</label>
-              <input
-                type="date"
-                className="text-input"
-                value={wornDate}
-                onChange={(e) => setWornDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="field-group">
-              <label className="field-label">메모</label>
-              <input
-                className="text-input"
-                placeholder="예: 결혼식 하객룩, 성수동 데이트"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="field-group">
-            <label className="field-label">
-              착용한 아이템 선택 ({selectedIds.length}벌 선택됨)
-            </label>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
-                gap: 8,
-                maxHeight: 280,
-                overflowY: 'auto',
-                padding: 4,
-              }}
-            >
-              {garments.map((g) => {
-                const checked = selectedIds.includes(g.id);
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div>
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 10 }}>
+              색상 분포
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {colorDistList.map((c) => {
+                const pct = c.sharePct ?? Math.round((c.count / Math.max(1, summary.totalItems)) * 100);
                 return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => toggleItemSelection(g.id)}
-                    style={{
-                      padding: 8,
-                      borderRadius: 'var(--radius-sm)',
-                      border: checked
-                        ? '2px solid var(--ink-primary)'
-                        : '1px solid var(--border-hairline)',
-                      background: checked ? 'var(--bg-subtle)' : 'var(--bg-canvas)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <StudioGarmentImage
-                      item={g}
+                  <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span
                       style={{
-                        width: '100%',
-                        aspectRatio: '3 / 4',
-                        borderRadius: 4,
-                        marginBottom: 4,
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        background: c.hex,
+                        flexShrink: 0,
                       }}
                     />
-                    <span style={{ fontSize: '0.74rem', display: 'block' }}>{g.name}</span>
-                  </button>
+                    <span className="hig-caption" style={{ width: 84 }}>{c.name}</span>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        borderRadius: 999,
+                        background: 'var(--bg-surface)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          background: 'var(--accent-mono)',
+                          borderRadius: 999,
+                        }}
+                      />
+                    </div>
+                    <span className="hig-caption tabular-nums" style={{ width: 42, textAlign: 'right' }}>
+                      {pct}%
+                    </span>
+                  </div>
                 );
               })}
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full">
-            캘린더에 기록하기
-          </button>
-        </form>
+          <div>
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 10 }}>
+              카테고리 비중
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {catDistList.map((cat) => {
+                const pct = cat.sharePct ?? Math.round((cat.count / Math.max(1, summary.totalItems)) * 100);
+                return (
+                  <div key={cat.category} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="hig-caption" style={{ width: 96 }}>
+                      {CATEGORY_LABEL_MAP[cat.category] || cat.category}
+                    </span>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        borderRadius: 999,
+                        background: 'var(--bg-surface)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          background: 'var(--accent-mono)',
+                          borderRadius: 999,
+                        }}
+                      />
+                    </div>
+                    <span className="hig-caption tabular-nums" style={{ width: 52, textAlign: 'right' }}>
+                      {cat.count}벌 ({pct}%)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </ResponsiveSheetModal>
+
+      {/* Sheet 4: OOTD Outfit Calendar & Future Schedule Reservation (Req 7.a) */}
+      <ResponsiveSheetModal
+        open={activeSheet === 'calendar'}
+        onClose={() => setActiveSheet(null)}
+        eyebrow="OOTD CALENDAR & SCHEDULE"
+        title="OOTD 기록 · 미래 일정 코디 예약"
+        maxWidth={580}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form
+            onSubmit={handleAddCalendarEntry}
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 18,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input
+                id="calendar-date-input"
+                type="date"
+                className="text-input tabular-nums"
+                style={{ background: 'var(--bg-canvas)' }}
+                value={logForm.worn_date}
+                onChange={(e) => {
+                  const nextDate = e.target.value;
+                  setLogForm((prev) => ({
+                    ...prev,
+                    worn_date: nextDate,
+                    status: nextDate > todayStr ? 'planned' : 'worn',
+                  }));
+                }}
+              />
+              <select
+                className="select-input"
+                style={{ background: 'var(--bg-canvas)' }}
+                value={logForm.status}
+                onChange={(e) => setLogForm((prev) => ({ ...prev, status: e.target.value }))}
+              >
+                <option value="worn">착용 완료 (OOTD)</option>
+                <option value="planned">미래 일정 코디 예약</option>
+              </select>
+            </div>
+
+            <select
+              className="select-input"
+              style={{ background: 'var(--bg-canvas)' }}
+              value={logForm.outfit_id}
+              onChange={(e) => setLogForm((prev) => ({ ...prev, outfit_id: e.target.value }))}
+            >
+              <option value="">자유 코디 기록</option>
+              {outfits.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.title || o.name}
+                </option>
+              ))}
+            </select>
+
+            <input
+              className="text-input"
+              style={{ background: 'var(--bg-canvas)' }}
+              placeholder="일정 메모 (예: 출장 미팅, 주말 브런치)"
+              value={logForm.note}
+              onChange={(e) => setLogForm((prev) => ({ ...prev, note: e.target.value }))}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <a
+                href={`/api/calendar/ics?closet=${encodeURIComponent(activeCloset)}`}
+                download="ainventory-ootd.ics"
+                className="btn btn-secondary btn-sm"
+              >
+                <Download size={14} /> .ics 내보내기
+              </a>
+              <button id="save-calendar-entry-btn" type="submit" className="btn btn-primary btn-sm">
+                <Plus size={14} />
+                <span>{logForm.status === 'planned' || logForm.worn_date > todayStr ? '일정 코디 예약' : '착용 기록 추가'}</span>
+              </button>
+            </div>
+          </form>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {logs.map((entry) => {
+              const matchedOutfit = outfits.find((o) => Number(o.id) === Number(entry.outfit_id));
+              return (
+                <div
+                  key={entry.id}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    borderRadius: 16,
+                    padding: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>
+                      <span className="tabular-nums">{entry.worn_date}</span> ·{' '}
+                      {matchedOutfit?.title || entry.outfit?.name || '데일리 코디'}
+                    </div>
+                  <div className="hig-caption">
+                    {entry.status === 'planned' ? '예약됨' : '착용 완료'}
+                    {entry.note ? ` · ${entry.note}` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {entry.status === 'planned' && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleMarkPlannedAsWorn(entry.id)}
+                    >
+                      <Check size={13} /> 착용 완료
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="기록 삭제"
+                    onClick={() => handleDeleteCalendarEntry(entry.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        </div>
+      </ResponsiveSheetModal>
+
+      {/* Sheet 5: Trip Packing Checklist Generator (Req 7.a) */}
+      <ResponsiveSheetModal
+        open={activeSheet === 'packing'}
+        onClose={() => setActiveSheet(null)}
+        eyebrow="TRIP PACKING CHECKLIST"
+        title="여행 기간 · 목적지별 패킹 리스트"
+        maxWidth={580}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form
+            onSubmit={handleCreatePackingList}
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 18,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input
+                id="packing-title-input"
+                className="text-input"
+                style={{ background: 'var(--bg-canvas)' }}
+                placeholder="여행 제목"
+                value={tripForm.title}
+                onChange={(e) => setTripForm((prev) => ({ ...prev, title: e.target.value }))}
+                required
+              />
+              <input
+                id="packing-dest-input"
+                className="text-input"
+                style={{ background: 'var(--bg-canvas)' }}
+                placeholder="목적지 (예: 도쿄, 제주)"
+                value={tripForm.destination}
+                onChange={(e) => setTripForm((prev) => ({ ...prev, destination: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              <input
+                type="date"
+                className="text-input tabular-nums"
+                style={{ background: 'var(--bg-canvas)' }}
+                value={tripForm.start_date}
+                onChange={(e) => setTripForm((prev) => ({ ...prev, start_date: e.target.value }))}
+              />
+              <input
+                type="date"
+                className="text-input tabular-nums"
+                style={{ background: 'var(--bg-canvas)' }}
+                value={tripForm.end_date}
+                onChange={(e) => setTripForm((prev) => ({ ...prev, end_date: e.target.value }))}
+              />
+              <select
+                className="select-input"
+                style={{ background: 'var(--bg-canvas)' }}
+                value={tripForm.climate}
+                onChange={(e) => setTripForm((prev) => ({ ...prev, climate: e.target.value }))}
+              >
+                <option value="mild">선선·온화</option>
+                <option value="warm">더움·휴양지</option>
+                <option value="cold">추움·겨울</option>
+                <option value="rainy">비·우천 대비</option>
+              </select>
+            </div>
+
+            <button
+              id="create-packing-list-btn"
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={creatingTrip}
+              style={{ alignSelf: 'flex-end' }}
+            >
+              <Plus size={14} /> {creatingTrip ? '구성 중...' : '패킹 체크리스트 자동 생성'}
+            </button>
+          </form>
+
+          {packingLists.map((pl) => {
+            const items = pl.items || [];
+            const checkedCount = items.filter((i) => i.packed || i.checked).length;
+            return (
+              <div
+                key={pl.id}
+                data-packing-list-id={pl.id}
+                style={{
+                  background: 'var(--bg-surface)',
+                  borderRadius: 18,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="hig-headline">
+                      {pl.title} · {pl.destination}
+                    </div>
+                    <div className="hig-caption tabular-nums">
+                      {pl.start_date} ~ {pl.end_date} ({checkedCount}/{items.length} 챙김)
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="패킹 리스트 삭제"
+                    onClick={() => handleDeletePackingList(pl.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {items.map((it, idx) => {
+                    const isChecked = Boolean(it.packed || it.checked);
+                    return (
+                      <button
+                        key={`${pl.id}-${idx}`}
+                        type="button"
+                        onClick={() => handleTogglePackingItem(pl, idx)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          background: 'var(--bg-canvas)',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span
+                          className="hig-body"
+                          style={{
+                            textDecoration: isChecked ? 'line-through' : 'none',
+                            opacity: isChecked ? 0.55 : 1,
+                          }}
+                        >
+                          {it.label || it.name}
+                        </span>
+                        <span className="hig-caption tabular-nums">
+                          {isChecked ? '완료 ✓' : `x${it.qty || 1}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </ResponsiveSheetModal>
     </div>
   );

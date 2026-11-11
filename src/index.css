@@ -1,47 +1,96 @@
-:root {
-  --bg-canvas: #faf8f4;
-  --bg-subtle: #f2eee7;
-  --bg-studio: #f6f4ef;
-  --bg-surface: #ffffff;
-  --bg-elevated: rgba(255, 255, 255, 0.92);
+:root,
+[data-theme='light'] {
+  --bg-canvas: #FFFFFF;
+  --bg-subtle: #F5F5F7;
+  --bg-studio: #F5F5F7;
+  --bg-surface: #F5F5F7;
+  --bg-elevated: #FFFFFF;
+  --bg-tertiary: #EBEBF0;
 
-  --ink-primary: #1c1917;
-  --ink-secondary: #5c544d;
-  --ink-muted: #8b8177;
-  --ink-inverse: #faf8f4;
+  --ink-primary: #1D1D1F;
+  --ink-secondary: #6E6E73;
+  --ink-muted: #86868B;
+  --ink-inverse: #FFFFFF;
 
-  --accent-espresso: #1c1917;
-  --accent-espresso-hover: #312c28;
-  --accent-sand: #c8b294;
-  --accent-sage: #2d543e;
-  --accent-terracotta: #a2422a;
+  --accent-espresso: #1D1D1F;
+  --accent-espresso-hover: #3A3A3C;
+  --accent-mono: #1D1D1F;
+  --accent-mono-fg: #FFFFFF;
+  --accent-sand: #86868B;
+  --accent-sage: #1D1D1F;
+  --accent-terracotta: #1D1D1F;
 
-  --verdict-buy-bg: #ebf3ee;
-  --verdict-buy-ink: #214a34;
-  --verdict-consider-bg: #faf2e3;
-  --verdict-consider-ink: #7d5216;
-  --verdict-skip-bg: #faeae5;
-  --verdict-skip-ink: #983620;
+  --verdict-buy-bg: #F5F5F7;
+  --verdict-buy-ink: #1D1D1F;
+  --verdict-consider-bg: #F5F5F7;
+  --verdict-consider-ink: #6E6E73;
+  --verdict-skip-bg: #EBEBF0;
+  --verdict-skip-ink: #1D1D1F;
 
-  --border-hairline: rgba(28, 25, 23, 0.085);
-  --border-medium: rgba(28, 25, 23, 0.16);
+  --border-hairline: transparent;
+  --border-medium: transparent;
+  --border-strong: transparent;
+  --vibrancy-bg: rgba(255, 255, 255, 0.76);
+  --vibrancy-solid-bg: rgba(245, 245, 247, 0.96);
+  --vibrancy-hairline: rgba(29, 29, 31, 0.12);
 
-  --shadow-soft: 0 2px 10px rgba(28, 25, 23, 0.035);
-  --shadow-card: 0 8px 28px rgba(28, 25, 23, 0.055);
-  --shadow-modal: 0 24px 64px rgba(28, 25, 23, 0.16);
+  --shadow-soft: none;
+  --shadow-card: none;
+  --shadow-modal: none;
 
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --radius-pill: 999px;
 
-  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
+  --font-serif: var(--font-sans);
 
-  --sidebar-w: 258px;
-  --mobile-nav-h: 68px;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --sidebar-w: 248px;
+  --mobile-nav-h: 64px;
+  --spring-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-theme='dark'] {
+  --bg-canvas: #000000;
+  --bg-subtle: #1C1C1E;
+  --bg-studio: #1C1C1E;
+  --bg-surface: #1C1C1E;
+  --bg-elevated: #2C2C2E;
+  --bg-tertiary: #2C2C2E;
+
+  --ink-primary: #F5F5F7;
+  --ink-secondary: #AEAEB2;
+  --ink-muted: #8E8E93;
+  --ink-inverse: #000000;
+
+  --accent-espresso: #F5F5F7;
+  --accent-espresso-hover: #E5E5EA;
+  --accent-mono: #F5F5F7;
+  --accent-mono-fg: #000000;
+  --accent-sand: #8E8E93;
+  --accent-sage: #F5F5F7;
+  --accent-terracotta: #F5F5F7;
+
+  --verdict-buy-bg: #1C1C1E;
+  --verdict-buy-ink: #F5F5F7;
+  --verdict-consider-bg: #1C1C1E;
+  --verdict-consider-ink: #AEAEB2;
+  --verdict-skip-bg: #2C2C2E;
+  --verdict-skip-ink: #F5F5F7;
+
+  --border-hairline: transparent;
+  --border-medium: transparent;
+  --border-strong: transparent;
+  --vibrancy-bg: rgba(28, 28, 30, 0.74);
+  --vibrancy-solid-bg: rgba(28, 28, 30, 0.96);
+  --vibrancy-hairline: rgba(245, 245, 247, 0.14);
+
+  --shadow-soft: none;
+  --shadow-card: none;
+  --shadow-modal: none;
 }
 
 *,
@@ -58,11 +107,13 @@ body {
   color: var(--ink-primary);
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.55;
+  line-height: 1.5;
   letter-spacing: -0.012em;
+  font-variant-numeric: tabular-nums;
   word-break: keep-all;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
 }
 
 h1,
@@ -80,12 +131,14 @@ textarea {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 button {
   cursor: pointer;
   border: none;
   background: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 img {
@@ -3113,3 +3166,590 @@ body {
 
 
 
+/* ==========================================================================
+   APPLE HIG MONOCHROME DESIGN SYSTEM, PROGRESSIVE DISCLOSURE & VIBRANCY (11–14)
+   ========================================================================== */
+
+/* 11.c — Strictly 4 Typography Hierarchy Tiers + Mandatory Tabular Numerals */
+.hig-large-title {
+  font-size: var(--type-large-title);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.028em;
+  color: var(--ink-primary);
+}
+
+.hig-headline {
+  font-size: var(--type-headline);
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.016em;
+  color: var(--ink-primary);
+}
+
+.hig-body {
+  font-size: var(--type-body);
+  font-weight: 400;
+  line-height: 1.48;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+
+.hig-caption {
+  font-size: var(--type-caption);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.004em;
+  color: var(--ink-secondary);
+}
+
+.tabular-nums,
+.hig-metric-num,
+.bento-metric-value,
+.ui-kpi-value,
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* 11.a & 11.b — Borderless, Shadowless, Dividerless Pure Monochrome Surfaces (8pt Grid) */
+hr,
+.divider {
+  display: none !important;
+  border: none !important;
+}
+
+.sidebar {
+  background: var(--bg-surface) !important;
+  border-right: none !important;
+  box-shadow: none !important;
+  padding: 24px 16px !important;
+  gap: 16px !important;
+}
+
+.sidebar-footer {
+  border-top: none !important;
+  background: var(--bg-canvas);
+  border-radius: 16px;
+  padding: 12px !important;
+}
+
+.mobile-topbar {
+  background: var(--bg-canvas) !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px !important;
+}
+
+.section-card,
+.auth-card,
+.garment-card,
+.rec-card,
+.capture-panel,
+.verdict-hero-card,
+.slot-machine-card,
+.ui-kpi-card,
+.atl-fitting,
+.atl-slot-card,
+.pcm-top-3d-banner,
+.pcm-top-3d-stage,
+.pcm-shape-card,
+.crop-controls-panel {
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--bg-surface);
+}
+
+.atl-stage-callout,
+.atl-chip,
+.pcm-camera-prompt-pill {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.btn {
+  border: none !important;
+  box-shadow: none !important;
+  transition:
+    transform 0.28s var(--spring-ease),
+    background-color 0.24s var(--spring-ease),
+    opacity 0.2s var(--spring-ease) !important;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent-mono) !important;
+  color: var(--ink-inverse) !important;
+}
+
+.btn-secondary {
+  background: var(--bg-subtle) !important;
+  color: var(--ink-primary) !important;
+}
+
+.chip {
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  transition:
+    background-color 0.28s var(--spring-ease),
+    color 0.28s var(--spring-ease),
+    transform 0.28s var(--spring-ease) !important;
+}
+
+.chip.active {
+  background: var(--accent-mono) !important;
+  color: var(--ink-inverse) !important;
+}
+
+.text-input,
+.select-input {
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--bg-surface) !important;
+  color: var(--ink-primary) !important;
+  border-radius: 12px !important;
+}
+
+.text-input:focus,
+.select-input:focus {
+  outline: 1.5px solid var(--accent-mono) !important;
+}
+
+/* 14.a & 14.b — Strictly Controlled Vibrancy (ONLY Bottom Floating Bar & Top Status Capsule, <= 1 Layer over WebGL) */
+.hig-vibrancy-bar,
+.hig-vibrancy-capsule {
+  background: var(--vibrancy-bg) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 0.5px solid var(--vibrancy-hairline) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 980px) {
+  .mobile-bottom-nav.hig-vibrancy-bar {
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    border-top: 0.5px solid var(--vibrancy-hairline) !important;
+  }
+
+  /* When 3D WebGL is active on mobile, mobile-bottom-nav owns the single blur slot (1 layer max). */
+  html[data-3d-active='true'] .hig-vibrancy-capsule {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--vibrancy-solid-bg) !important;
+  }
+}
+
+@media (min-width: 981px) {
+  /* On desktop, mobile-bottom-nav is hidden; ensure top status capsule drops blur if studio pill already uses vibrancy */
+  html[data-3d-active='true'] .hig-status-capsule.hig-vibrancy-capsule {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--vibrancy-solid-bg) !important;
+  }
+}
+
+/* Automatic FPS Degradation Fallback -> Pure Solid Translucent Surface */
+html[data-vibrancy-fallback='solid'] .hig-vibrancy-bar,
+html[data-vibrancy-fallback='solid'] .hig-vibrancy-capsule {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--vibrancy-solid-bg) !important;
+}
+
+/* 13.b — Dynamic Island Top Minimal Status Capsule (Replaces Bottom Text Toasts) */
+.hig-status-capsule-wrap {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 260;
+  pointer-events: none;
+}
+
+.hig-status-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  color: var(--ink-primary);
+  font-size: var(--type-caption);
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 88vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: higCapsulePop 0.38s var(--spring-ease) both;
+}
+
+@keyframes higCapsulePop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 13.a — Spring Physics Bottom Sheets & Modals + Drag-to-Dismiss */
+@keyframes higSheetSpringIn {
+  from {
+    opacity: 0;
+    transform: translateY(36px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ui-sheet-backdrop,
+.modal-backdrop {
+  background: var(--scrim-bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: opacity 0.32s var(--spring-ease);
+}
+
+.ui-sheet-box,
+.modal-box {
+  background: var(--bg-elevated) !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 24px;
+  animation: higSheetSpringIn 0.42s var(--spring-ease);
+  will-change: transform;
+}
+
+.ui-sheet-drag-zone {
+  padding: 8px 0 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.ui-sheet-drag-handle {
+  display: block !important;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ink-muted);
+  opacity: 0.45;
+  margin: 0 auto;
+}
+
+/* 13.c — Skeleton Shimmer & Smooth Fade-In (Replaces Spinning Loaders) */
+@keyframes higShimmerWave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.hig-skeleton {
+  border-radius: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 20%,
+    var(--bg-subtle) 50%,
+    var(--bg-surface) 80%
+  );
+  background-size: 200% 100%;
+  animation: higShimmerWave 1.4s var(--spring-ease) infinite;
+}
+
+.hig-fade-in {
+  animation: higFadeInSmooth 0.36s var(--spring-ease) both;
+}
+
+@keyframes higFadeInSmooth {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 12.b — 3D Studio Screen: >= 85% Mannequin Viewport + Top Weather Capsule + Bottom Swipe-Up Drawer */
+.main-workspace.is-studio-mode {
+  padding: 0 !important;
+  max-width: none !important;
+  overflow: hidden;
+}
+
+.hig-studio-screen {
+  position: relative;
+  width: 100%;
+  height: calc(100dvh - 8px);
+  min-height: 540px;
+  background: var(--bg-canvas);
+  overflow: hidden;
+  user-select: none;
+}
+
+@media (max-width: 980px) {
+  /* Hide top mobile header on 3D studio tab so 3D canvas occupies > 88% of mobile viewport */
+  .app-shell.is-studio-tab .mobile-topbar {
+    display: none !important;
+  }
+
+  .hig-studio-screen {
+    height: calc(100dvh - var(--mobile-nav-h) - env(safe-area-inset-bottom, 0px));
+    min-height: 480px;
+  }
+}
+
+.hig-studio-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hig-studio-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hig-studio-canvas:active {
+  cursor: grabbing;
+}
+
+/* Top Ultra-Compact Weather & Temperature Capsule (1 item only) */
+.hig-studio-top-bar {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hig-weather-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  color: var(--ink-primary);
+  cursor: pointer;
+  transition: transform 0.28s var(--spring-ease);
+}
+
+.hig-weather-capsule:active {
+  transform: scale(0.96);
+}
+
+/* Minimal Floating Icon Actions (Bottom-Right above Drawer Handle) */
+.hig-studio-float-rail {
+  position: absolute;
+  right: 16px;
+  bottom: 76px;
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hig-float-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.28s var(--spring-ease), background-color 0.24s var(--spring-ease);
+}
+
+.hig-float-icon-btn.active {
+  background: var(--accent-mono);
+  color: var(--ink-inverse);
+}
+
+.hig-float-icon-btn:active {
+  transform: scale(0.93);
+}
+
+/* Collapsible Swipe-Up Wardrobe Drawer (Bottom of 3D Studio) */
+.hig-wardrobe-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--bg-surface);
+  border-radius: 24px 24px 0 0;
+  max-height: 68%;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.44s var(--spring-ease);
+  will-change: transform;
+  touch-action: pan-y;
+}
+
+.hig-wardrobe-drawer.collapsed {
+  transform: translateY(calc(100% - 52px));
+}
+
+.hig-wardrobe-drawer.expanded {
+  transform: translateY(0);
+}
+
+.hig-drawer-handle-bar {
+  height: 52px;
+  min-height: 52px;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.hig-drawer-pill {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ink-muted);
+  opacity: 0.5;
+}
+
+.hig-drawer-body {
+  padding: 0 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 12.c — Borderless Cutout-Only Wardrobe Grid (Zero Text Labels, Zero Permanent Buttons) */
+.hig-cutout-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 980px) {
+  .hig-cutout-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+.hig-cutout-tile {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background: var(--bg-surface);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.28s var(--spring-ease), background-color 0.24s var(--spring-ease);
+}
+
+.hig-cutout-tile:active {
+  transform: scale(0.96);
+  background: var(--bg-subtle);
+}
+
+.hig-cutout-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* 12.d — Apple Fitness-Style Bento Summary Grid (2–3 Key Metric Cards -> Tap to Drill Down) */
+.hig-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .hig-bento-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.hig-bento-card {
+  background: var(--bg-surface);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.32s var(--spring-ease), background-color 0.24s var(--spring-ease);
+}
+
+.hig-bento-card:active {
+  transform: scale(0.98);
+  background: var(--bg-subtle);
+}
+
+/* Minimal Monochrome Auth Entry Screen (11.a, 12.a) */
+.hig-auth-shell {
+  min-height: 100dvh;
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.hig-auth-container {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.hig-auth-panel {
+  background: var(--bg-surface);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
