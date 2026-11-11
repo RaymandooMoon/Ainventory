@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package com.ainventory.app;
 
 import static org.junit.Assert.*;
 
@@ -9,7 +9,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
- * Instrumented test, which will execute on an Android device.
+ * Instrumented Android test aligned with applicationId com.ainventory.app.
  *
  * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
  */
@@ -17,10 +17,8 @@ import org.junit.runner.RunWith;
 public class ExampleInstrumentedTest {
 
     @Test
-    public void useAppContext() throws Exception {
-        // Context of the app under test.
+    public void useAppContext() {
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-
-        assertEquals("com.getcapacitor.app", appContext.getPackageName());
+        assertEquals("com.ainventory.app", appContext.getPackageName());
     }
 }

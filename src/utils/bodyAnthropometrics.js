@@ -162,15 +162,22 @@ export const BODY_SHAPE_OPTIONS = [
 
 export const BODY_SHAPE_MAP = Object.fromEntries(BODY_SHAPE_OPTIONS.map((b) => [b.key, b]));
 
+function hasOwnShapeKey(key) {
+  return typeof key === 'string' && Object.hasOwn(BODY_SHAPE_MAP, key);
+}
+
 // Legacy `body_type` (fit preference) values and loose aliases → 7 body shape keys
 const BODY_SHAPE_ALIASES = {
   slim: 'ectomorph_thin',
+  slim_lean: 'ectomorph_thin',
+  slim_straight: 'ectomorph_thin',
   thin: 'ectomorph_thin',
   ectomorph: 'ectomorph_thin',
   regular: 'standard_balanced',
   standard: 'standard_balanced',
   balanced: 'standard_balanced',
   athletic: 'muscular_athletic',
+  athletic_muscular: 'muscular_athletic',
   muscular: 'muscular_athletic',
   mesomorph: 'muscular_athletic',
   relaxed: 'plus_curvy',
@@ -188,8 +195,11 @@ export function normalizeBodyShapeKey(raw) {
   if (raw === null || raw === undefined) return null;
   const key = String(raw).trim().toLowerCase();
   if (!key) return null;
-  if (BODY_SHAPE_MAP[key]) return key;
-  return BODY_SHAPE_ALIASES[key] || null;
+  if (hasOwnShapeKey(key)) return key;
+  if (Object.hasOwn(BODY_SHAPE_ALIASES, key)) {
+    return BODY_SHAPE_ALIASES[key];
+  }
+  return null;
 }
 
 export function suggestBodyShapeFromMetrics({
@@ -272,8 +282,11 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
     hipCm: rawProfile.hip_cm ?? rawProfile.hipCm,
   });
 
-  const bodyShape = BODY_SHAPE_MAP[rawShape] ? rawShape : recommendedShape;
-  const shapeInfo = BODY_SHAPE_MAP[bodyShape] || BODY_SHAPE_MAP.standard_balanced;
+  const hasExplicitShape = Boolean(rawShape && hasOwnShapeKey(rawShape));
+  const bodyShape = hasExplicitShape ? rawShape : recommendedShape;
+  const shapeInfo =
+    (hasOwnShapeKey(bodyShape) ? BODY_SHAPE_MAP[bodyShape] : undefined) ||
+    BODY_SHAPE_MAP.standard_balanced;
 
   // Anthropometric baseline equations from height, BMI, gender, and bodyShape
   const heightRatio = heightCm / (isFemale ? 163 : 175);
@@ -363,6 +376,9 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
     armScale: Number(
       (shapeInfo.morph.armScale * (0.65 + 0.35 * chestOverrideRatio)).toFixed(3)
     ),
+    neckScale: Number(
+      (shapeInfo.morph.neckScale * (0.8 + 0.2 * chestOverrideRatio)).toFixed(3)
+    ),
     headScale: Number(headOverrideRatio.toFixed(3)),
   };
 
@@ -405,7 +421,7 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
       headCm: defaultHeadCm,
     },
     sources: {
-      bodyShape: BODY_SHAPE_MAP[rawShape] ? 'user' : 'default',
+      bodyShape: hasExplicitShape ? 'user' : 'default',
       bodyFatPct: userBodyFat !== null ? 'user' : 'default',
       chestCm: userChest !== null ? 'user' : 'default',
       waistCm: userWaist !== null ? 'user' : 'default',
@@ -417,7 +433,11 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
 }
 
 export function getBodyShapeStylingAdvice(bodyShapeKey) {
-  return (BODY_SHAPE_MAP[bodyShapeKey] || BODY_SHAPE_MAP.standard_balanced).stylingAdviceKo;
+  const normalized = normalizeBodyShapeKey(bodyShapeKey);
+  const info =
+    (normalized && hasOwnShapeKey(normalized) ? BODY_SHAPE_MAP[normalized] : undefined) ||
+    BODY_SHAPE_MAP.standard_balanced;
+  return info.stylingAdviceKo;
 }
 
 // Backward-compatible aliases (pre-handoff names used by earlier builds)
