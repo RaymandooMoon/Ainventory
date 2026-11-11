@@ -4,6 +4,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "allowJs": true,
     "checkJs": false,
@@ -11,21 +12,30 @@
     "strict": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node", "vite/client"]
   },
   "include": [
     "capacitor.config.ts",
-    "src/contracts/**/*.ts",
+    "vite.config.ts",
+    "vite.config.js",
+    "playwright.config.ts",
+    "playwright.config.js",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.js",
-    "src/**/*.jsx"
+    "src/**/*.jsx",
+    "server/**/*.ts",
+    "server/**/*.js",
+    "tests/**/*.ts",
+    "tests/**/*.js"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "android",
     "data",
-    "test-results"
+    "test-results",
+    "playwright-report"
   ]
 }
