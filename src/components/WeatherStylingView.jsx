@@ -208,7 +208,7 @@ export default function WeatherStylingView({
       style={{
         position: 'absolute',
         left: 16,
-        bottom: 68,
+        bottom: 64,
         zIndex: 21,
         maxWidth: 'min(320px, calc(100vw - 88px))',
         background: 'var(--bg-surface)',
@@ -216,14 +216,14 @@ export default function WeatherStylingView({
         padding: 16,
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 8,
       }}
     >
       <div>
-        <div className="hig-headline" style={{ fontSize: '0.96rem' }}>
+        <div className="hig-headline">
           새 옷장이 비어 있습니다
         </div>
-        <div className="hig-caption" style={{ marginTop: 2 }}>
+        <div className="hig-caption" style={{ marginTop: 4 }}>
           직접 의류를 촬영하거나 샘플 아이템을 골라 담아보세요
         </div>
       </div>
@@ -284,16 +284,16 @@ export default function WeatherStylingView({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 12,
+              gap: 8,
               flexWrap: 'wrap',
               background: 'var(--bg-surface)',
-              borderRadius: 14,
-              padding: '10px 14px',
+              borderRadius: 16,
+              padding: '8px 16px',
             }}
           >
             <span
               className="hig-caption tabular-nums"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}
             >
               <Wind size={13} />
               풍속 {Math.round(normalizedWeather?.windSpeed ?? 11)}km/h · 강수{' '}
@@ -307,7 +307,7 @@ export default function WeatherStylingView({
           <p className="hig-caption">{normalizedWeather?.stylingTip}</p>
 
           {/* Weather Scenario Simulation Chips (Wind / Rain / Cold / Live) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="hig-caption">기상 시나리오 시뮬레이션</span>
             <div className="ui-chip-rail" role="tablist" aria-label="기상 시나리오 시뮬레이션">
               {(
@@ -377,8 +377,8 @@ export default function WeatherStylingView({
 
           {/* AI Recommended Outfits */}
           {recs.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <span className="hig-caption">기상 연동 AI 추천 코디 ({recs.length})</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span className="hig-caption tabular-nums">기상 연동 AI 추천 코디 ({recs.length})</span>
               {recs.map((rec, idx) => {
                 const isSelected = idx === selectedIdx;
                 return (
@@ -392,32 +392,32 @@ export default function WeatherStylingView({
                     }}
                     style={{
                       background: isSelected ? 'var(--bg-subtle)' : 'var(--bg-surface)',
-                      borderRadius: 18,
-                      padding: 14,
+                      borderRadius: 16,
+                      padding: 16,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      gap: 12,
+                      gap: 16,
                     }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="hig-body" style={{ fontWeight: 600 }}>
                         {rec.title || rec.name}
                       </div>
-                      <div className="hig-caption tabular-nums" style={{ marginTop: 2 }}>
+                      <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
                         매칭 {rec.suitabilityScore ?? rec.score ?? 94}점 · {(rec.items || []).length}피스
                       </div>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                         {(rec.items || []).slice(0, 5).map((it) => (
                           <div
                             key={it.id}
                             style={{
                               width: 40,
                               height: 40,
-                              borderRadius: 10,
+                              borderRadius: 8,
                               background: 'var(--bg-canvas)',
-                              padding: 3,
+                              padding: 4,
                             }}
                           >
                             <StudioGarmentImage

@@ -69,6 +69,7 @@ export function KpiMetricStrip({ items = [] }) {
  * Spring Physics Bottom Sheet / Modal with Drag-to-Dismiss & Hardware Back Stack (Reqs 9.a, 13.a)
  */
 export function ResponsiveSheetModal({
+  id,
   open,
   onClose,
   title,
@@ -83,13 +84,15 @@ export function ResponsiveSheetModal({
 
   useEffect(() => {
     if (!open) return undefined;
-    setDragY(0);
-    setIsDragging(false);
     const popBack = pushBackHandler(() => {
       onClose?.();
       return true;
     });
-    return () => popBack();
+    return () => {
+      popBack();
+      setDragY(0);
+      setIsDragging(false);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -113,7 +116,7 @@ export function ResponsiveSheetModal({
     if (!isDragging) return;
     e?.stopPropagation?.();
     setIsDragging(false);
-    if (dragY > 84) {
+    if (dragY > 80) {
       triggerHaptic('selection');
       setDragY(0);
       onClose?.();
@@ -129,19 +132,26 @@ export function ResponsiveSheetModal({
       onPointerMove={handleDragMove}
       onPointerUp={handleDragEnd}
       onPointerCancel={handleDragEnd}
+      onTouchMove={handleDragMove}
+      onTouchEnd={handleDragEnd}
     >
       <div
+        id={id}
+        data-sheet-panel="true"
         className="modal-box ui-sheet-box"
         style={{
           maxWidth,
           transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-          transition: isDragging ? 'none' : 'transform 0.42s var(--spring-ease)',
+          transition: isDragging
+            ? 'none'
+            : 'transform 0.42s cubic-bezier(0.32, 0.72, 0, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
           className="ui-sheet-drag-zone"
           onPointerDown={handleDragStart}
+          onTouchStart={handleDragStart}
           aria-label="드래그하여 닫기"
         >
           <div className="ui-sheet-drag-handle" aria-hidden="true" />
@@ -151,7 +161,7 @@ export function ResponsiveSheetModal({
           <div className="modal-header" style={{ marginBottom: 16 }}>
             <div>
               {eyebrow && (
-                <span className="hig-caption" style={{ display: 'block', marginBottom: 2 }}>
+                <span className="hig-caption" style={{ display: 'block', marginBottom: 4 }}>
                   {eyebrow}
                 </span>
               )}
@@ -174,6 +184,8 @@ export function ResponsiveSheetModal({
   );
 }
 
+export const BottomSheet = ResponsiveSheetModal;
+
 export function EmptyStateBox({ icon, title, description, action }) {
   return (
     <div
@@ -185,7 +197,7 @@ export function EmptyStateBox({ icon, title, description, action }) {
         textAlign: 'center',
       }}
     >
-      {icon && <div className="ui-empty-icon" style={{ marginBottom: 12 }}>{icon}</div>}
+      {icon && <div className="ui-empty-icon" style={{ marginBottom: 16 }}>{icon}</div>}
       <h3 className="hig-headline" style={{ marginBottom: 8 }}>{title}</h3>
       {description && (
         <p className="hig-caption" style={{ maxWidth: 380, margin: '0 auto 16px' }}>
@@ -222,7 +234,7 @@ export function StatusCapsule() {
 
   return (
     <div className="hig-status-capsule-wrap" role="status" aria-live="polite">
-      <div className="hig-status-capsule hig-vibrancy-capsule">
+      <div className="hig-status-capsule hig-top-capsule hig-vibrancy-capsule">
         <Check size={13} strokeWidth={2.5} />
         <span>{payload.message}</span>
       </div>

@@ -358,7 +358,7 @@ export default function WardrobeView({
       {/* Minimal Header: Essential Count Metric + Filter Sheet + Add Action (Req 12.a & 12.c) */}
       <PageHeader
         title="옷장"
-        subtitle={`${filtered.length}벌 보관 중`}
+        subtitle={<span className="tabular-nums">{filtered.length}벌 보관 중</span>}
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -442,6 +442,9 @@ export default function WardrobeView({
               onPointerUp={cancelTilePress}
               onPointerLeave={cancelTilePress}
               onPointerCancel={cancelTilePress}
+              onTouchStart={() => startTilePress(item)}
+              onTouchEnd={cancelTilePress}
+              onTouchMove={cancelTilePress}
               onClick={() => handleTileClick(item)}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -462,6 +465,28 @@ export default function WardrobeView({
         </div>
       )}
 
+      {/* Floating Minimal Add Garment Button (#open-garment-add-btn) */}
+      <button
+        id="open-garment-add-btn"
+        type="button"
+        aria-label="새 의류 등록 열기"
+        className="hig-float-icon-btn active"
+        onClick={() => {
+          triggerHaptic('selection');
+          setShowAddModal(true);
+        }}
+        style={{
+          position: 'fixed',
+          right: 16,
+          bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))',
+          width: 48,
+          height: 48,
+          zIndex: 25,
+        }}
+      >
+        <Plus size={20} />
+      </button>
+
       {/* Filter & Search Bottom Sheet (Progressive Disclosure — Req 12.a) */}
       <ResponsiveSheetModal
         open={filterSheetOpen}
@@ -476,7 +501,7 @@ export default function WardrobeView({
               size={16}
               style={{
                 position: 'absolute',
-                left: 12,
+                left: 16,
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'var(--ink-muted)',
@@ -485,7 +510,7 @@ export default function WardrobeView({
             <input
               type="search"
               className="text-input"
-              style={{ paddingLeft: 36 }}
+              style={{ paddingLeft: 40 }}
               placeholder="아이템명, 소재, 브랜드, 컬러 검색"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -531,7 +556,7 @@ export default function WardrobeView({
             </button>
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm tabular-nums"
               onClick={() => setFilterSheetOpen(false)}
             >
               적용 ({filtered.length}벌)
@@ -552,8 +577,8 @@ export default function WardrobeView({
           <div id="garment-detail-sheet" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div
               style={{
-                height: 220,
-                borderRadius: 20,
+                height: 224,
+                borderRadius: 16,
                 background: 'var(--bg-surface)',
                 padding: 16,
                 display: 'flex',
@@ -569,19 +594,19 @@ export default function WardrobeView({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 12 }}>
+              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
                 <span className="hig-caption">구매가</span>
                 <div className="hig-headline tabular-nums" style={{ marginTop: 4 }}>
                   {formatKRW(detailItem.price)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 12 }}>
+              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
                 <span className="hig-caption">누적 착용</span>
                 <div className="hig-headline tabular-nums" style={{ marginTop: 4 }}>
                   {detailItem.wear_count || 0}회
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 12 }}>
+              <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
                 <span className="hig-caption">1회 착용 비용</span>
                 <div className="hig-headline tabular-nums" style={{ marginTop: 4 }}>
                   {formatKRW(
@@ -596,7 +621,7 @@ export default function WardrobeView({
               style={{
                 background: 'var(--bg-surface)',
                 borderRadius: 16,
-                padding: 12,
+                padding: 16,
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 8,
@@ -724,6 +749,7 @@ export default function WardrobeView({
             </button>
             {!user?.isSampleDemo && (
               <button
+                id="quick-delete-garment-btn"
                 type="button"
                 className="btn btn-secondary btn-full"
                 onClick={() => handleDelete(quickMenuItem)}
@@ -743,7 +769,7 @@ export default function WardrobeView({
         title="새 의류 촬영 · AI 자동 등록"
         maxWidth={560}
       >
-        <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <input
             id="wardrobe-camera-file-input"
             ref={addCameraInputRef}
@@ -765,26 +791,26 @@ export default function WardrobeView({
           <div
             style={{
               background: 'var(--bg-surface)',
-              borderRadius: 18,
+              borderRadius: 16,
               padding: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 12,
+              gap: 16,
               flexWrap: 'wrap',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {croppedDataUrl ? (
                 <img
                   id="cropped-webp-preview-img"
                   src={croppedDataUrl}
                   alt="WebP 배경제거 프리뷰"
                   style={{
-                    width: 68,
-                    height: 84,
+                    width: 64,
+                    height: 80,
                     objectFit: 'contain',
-                    borderRadius: 12,
+                    borderRadius: 8,
                     background: 'var(--bg-canvas)',
                     padding: 4,
                   }}
@@ -837,8 +863,8 @@ export default function WardrobeView({
               className="hig-caption"
               style={{
                 background: 'var(--bg-surface)',
-                borderRadius: 14,
-                padding: '10px 14px',
+                borderRadius: 16,
+                padding: '8px 16px',
               }}
             >
               AI 분석: 포맷 <strong>{aiDetectedBadge.format}</strong> · 슬롯{' '}

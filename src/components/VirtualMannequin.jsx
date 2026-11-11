@@ -48,9 +48,17 @@ const MOTION_CYCLE = [
 /**
  * Lightweight 3D WebGL preview used inside the Profile & Personal Color calibration modal
  */
-export function Mannequin3DBodyPreview({ profile = {}, rotDeg = -16, height = 270 }) {
+export function Mannequin3DBodyPreview({
+  profile = {},
+  user = null,
+  rotDeg,
+  poseYawDeg,
+  height = 270,
+}) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
+  const effectiveProfile = user || profile;
+  const effectiveYaw = poseYawDeg ?? rotDeg ?? -16;
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -71,10 +79,10 @@ export function Mannequin3DBodyPreview({ profile = {}, rotDeg = -16, height = 27
   useEffect(() => {
     const eng = engineRef.current;
     if (!eng) return;
-    eng.setYaw(rotDeg, true);
+    eng.setYaw(effectiveYaw, true);
     eng.setMotionMode('idle');
-    eng.updateScene({ profile, loadoutBySlot: {} });
-  }, [profile, rotDeg]);
+    eng.updateScene({ profile: effectiveProfile, loadoutBySlot: {} });
+  }, [effectiveProfile, effectiveYaw]);
 
   return (
     <canvas
@@ -101,6 +109,7 @@ export default function VirtualMannequin({
   personalColor = 'autumn_warm',
   userProfile = null,
   weather = null,
+  capsuleLabel = null,
   immersiveStudio = false,
   compact = false,
   onOpenWeatherSheet,
@@ -111,6 +120,7 @@ export default function VirtualMannequin({
   onSlotSwap,
   onSwapSlotItem,
   onUnequipSlot,
+  extraFloatingActions = null,
   emptyClosetOverlay = null,
 }) {
   const canvasRef = useRef(null);
@@ -377,22 +387,28 @@ export default function VirtualMannequin({
           <button
             id="studio-weather-capsule"
             type="button"
-            className="hig-weather-capsule hig-vibrancy-capsule tabular-nums"
+            className="hig-weather-capsule hig-top-capsule hig-vibrancy-capsule tabular-nums"
             aria-label="날씨 및 AI 코디 추천 열기"
             onClick={() => {
               triggerHaptic('selection');
               onOpenWeatherSheet?.();
             }}
           >
-            {weather?.isRainy ? (
-              <CloudRain size={14} />
-            ) : isWindyWeather ? (
-              <Wind size={14} />
-            ) : null}
-            <span>
-              {cityLabel} · {condLabel} {tempVal}°
-              {isWindyWeather && windVal > 0 ? ` · ${Math.round(windVal)}km/h` : ''}
-            </span>
+            {capsuleLabel ? (
+              <span>{capsuleLabel}</span>
+            ) : (
+              <>
+                {weather?.isRainy ? (
+                  <CloudRain size={14} />
+                ) : isWindyWeather ? (
+                  <Wind size={14} />
+                ) : null}
+                <span>
+                  {cityLabel} · {condLabel} {tempVal}°
+                  {isWindyWeather && windVal > 0 ? ` · ${Math.round(windVal)}km/h` : ''}
+                </span>
+              </>
+            )}
           </button>
         </div>
 
@@ -456,6 +472,8 @@ export default function VirtualMannequin({
             transition: 'opacity 0.24s var(--spring-ease)',
           }}
         >
+          {extraFloatingActions}
+
           <button
             id="studio-motion-cycle-btn"
             type="button"
@@ -566,7 +584,7 @@ export default function VirtualMannequin({
                   transition: 'none',
                   transform: drawerOpen
                     ? `translateY(${Math.max(0, drawerDragOffset)}px)`
-                    : `translateY(calc(100% - 52px + ${Math.min(0, drawerDragOffset)}px))`,
+                    : `translateY(calc(100% - 48px + ${Math.min(0, drawerDragOffset)}px))`,
                 }
               : undefined
           }

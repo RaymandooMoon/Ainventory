@@ -77,7 +77,7 @@ export const STANDALONE_SAMPLE_GARMENTS = [
     cpw: 15000,
     is_favorite: true,
     status: 'active',
-    image_url: '/seed/camel-coat.jpg',
+    image_url: '/seed/studio-coat.jpg',
     slot_key: 'outer',
     base_glb: 'outer_coat',
     physics_preset: 'hem_sway',
@@ -102,7 +102,7 @@ export const STANDALONE_SAMPLE_GARMENTS = [
     cpw: 7789,
     is_favorite: true,
     status: 'active',
-    image_url: '/seed/cashmere-scarf.jpg',
+    image_url: '/seed/studio-scarf.jpg',
     slot_key: 'neckwear',
     base_glb: 'neck_scarf',
     physics_preset: 'spring_cloth',
@@ -177,13 +177,38 @@ export const STANDALONE_SAMPLE_GARMENTS = [
     cpw: 6500,
     is_favorite: true,
     status: 'active',
-    image_url: '/seed/leather-crossbody.jpg',
+    image_url: '/seed/studio-bag.jpg',
     slot_key: 'accessory',
     base_glb: 'acc_crossbody',
     physics_preset: 'pendulum_strap',
   },
   {
     id: 9006,
+    closet_owner: 'sample',
+    name: '블랙 레더 페니 로퍼',
+    category: 'shoes',
+    subcategory: 'loafers',
+    fabric: 'leather',
+    color_name: '블랙',
+    color_hex: '#1D1D1F',
+    seasons: ['봄', '가을', '겨울'],
+    min_temp: -5,
+    max_temp: 25,
+    water_resistant: true,
+    formality: 'smart',
+    brand: 'Atelier Leather',
+    price: 228000,
+    wear_count: 38,
+    cpw: 6000,
+    is_favorite: true,
+    status: 'active',
+    image_url: '/seed/black-loafers.jpg',
+    slot_key: 'shoes',
+    base_glb: 'shoes_loafers',
+    physics_preset: 'rigid_fitted',
+  },
+  {
+    id: 9007,
     closet_owner: 'sample',
     name: '차콜 플리츠 미디 스커트',
     category: 'bottom',
@@ -202,7 +227,7 @@ export const STANDALONE_SAMPLE_GARMENTS = [
     cpw: 12000,
     is_favorite: false,
     status: 'active',
-    image_url: '/seed/pleated-skirt.jpg',
+    image_url: '/seed/studio-skirt.jpg',
     slot_key: 'bottom',
     base_glb: 'bottom_skirt',
     physics_preset: 'hem_sway',
@@ -500,10 +525,10 @@ export async function handleStandaloneApiFallback(path, options = {}) {
     return { ok: true, importedCount: imported.length, garments: imported };
   }
 
-  if (pathname === '/weather-styling' && method === 'GET') {
+  if ((pathname === '/weather-styling' || pathname === '/weather/recommendations') && method === 'GET') {
     const scKey = params.get('scenario') || 'windy_gale';
     const weather = WEATHER_SCENARIOS[scKey] || WEATHER_SCENARIOS.windy_gale;
-    const outfitItems = garments.slice(0, 5);
+    const outfitItems = garments.slice(0, 6);
     return {
       weather,
       scenarios: Object.values(WEATHER_SCENARIOS).map((s) => ({
@@ -538,8 +563,8 @@ export async function handleStandaloneApiFallback(path, options = {}) {
               title: '강풍 대비 캐시미어 코트 룩',
               occasion: '출근 · 데일리',
               season: '가을/겨울',
-              item_ids: garments.slice(0, 5).map((g) => g.id),
-              items: garments.slice(0, 5),
+              item_ids: garments.slice(0, 6).map((g) => g.id),
+              items: garments.slice(0, 6),
               wear_count: 6,
             },
           ]
@@ -549,29 +574,45 @@ export async function handleStandaloneApiFallback(path, options = {}) {
 
   if (pathname === '/analytics' && method === 'GET') {
     const totalValue = garments.reduce((acc, g) => acc + (Number(g.price) || 0), 0);
-    const avgCpw = garments.length
-      ? Math.round(garments.reduce((acc, g) => acc + (Number(g.cpw) || 0), 0) / garments.length)
+    const withCpw = garments.map((g) => {
+      const price = Number(g.price) || 0;
+      const wears = Math.max(1, Number(g.wear_count) || 1);
+      return {
+        ...g,
+        cpw: Number(g.cpw) || Math.round(price / wears),
+      };
+    });
+    const sortedByCpw = [...withCpw].sort((a, b) => a.cpw - b.cpw);
+    const avgCpw = withCpw.length
+      ? Math.round(withCpw.reduce((acc, g) => acc + g.cpw, 0) / withCpw.length)
       : 0;
     return {
       summary: {
+        totalItems: garments.length,
         totalGarments: garments.length,
         totalValue,
         avgCpw,
-        utilizationRate: garments.length ? 84 : 0,
+        utilizationRate: garments.length ? 86 : 0,
         unwornCount: 0,
       },
-      bestValueItems: garments.slice(0, 4),
+      cpwRanking: sortedByCpw,
+      bestValueItems: sortedByCpw.slice(0, 4),
+      bestCpw: sortedByCpw.slice(0, 4),
+      worstCpw: [...sortedByCpw].reverse().slice(0, 4),
       unwornItems: [],
+      sleepingItems: [],
       categoryBreakdown: [
         { category: 'outer', count: 1 },
         { category: 'neckwear', count: 1 },
         { category: 'top', count: 1 },
         { category: 'bottom', count: 2 },
+        { category: 'shoes', count: 1 },
         { category: 'accessory', count: 1 },
       ],
       colorBreakdown: [
         { color_name: '카멜', color_hex: '#BFA98B', count: 2 },
         { color_name: '차콜', color_hex: '#2E3036', count: 2 },
+        { color_name: '블랙', color_hex: '#1D1D1F', count: 1 },
         { color_name: '크림', color_hex: '#EFECE6', count: 1 },
       ],
     };

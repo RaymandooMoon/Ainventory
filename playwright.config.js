@@ -4,38 +4,44 @@ import { defineConfig } from '@playwright/test';
 const systemChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH || '/usr/bin/chromium';
 const hasSystemChromium = fs.existsSync(systemChromium);
 
+const PORT = Number(process.env.PLAYWRIGHT_PORT || process.env.PORT || 4173);
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
+
+const SWIFTSHADER_WEBGL_ARGS = [
+  '--no-sandbox',
+  '--disable-dev-shm-usage',
+  '--ignore-certificate-errors',
+  '--enable-webgl',
+  '--use-gl=angle',
+  '--use-angle=swiftshader',
+  '--enable-unsafe-swiftshader',
+  '--ignore-gpu-blocklist',
+];
+
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 60000,
+  timeout: 75000,
   expect: {
-    timeout: 12000,
+    timeout: 15000,
   },
   fullyParallel: false,
   workers: 1,
   retries: 0,
   reporter: 'list',
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 5173',
-    url: 'http://127.0.0.1:5173/api/health',
+    command:
+      process.env.PLAYWRIGHT_WEB_COMMAND ||
+      `sh -c "test -f dist/index.html || npm run build; PORT=${PORT} node server/start.js"`,
+    url: `${BASE_URL}/api/health`,
     reuseExistingServer: true,
-    timeout: 30000,
+    timeout: 60000,
   },
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: BASE_URL,
     trace: 'off',
     launchOptions: {
       ...(hasSystemChromium ? { executablePath: systemChromium } : {}),
-      args: hasSystemChromium
-        ? [
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--ignore-certificate-errors',
-            '--use-gl=angle',
-            '--use-angle=swiftshader',
-            '--enable-unsafe-swiftshader',
-            '--ignore-gpu-blocklist',
-          ]
-        : ['--ignore-gpu-blocklist'],
+      args: SWIFTSHADER_WEBGL_ARGS,
     },
   },
   projects: [
@@ -43,7 +49,7 @@ export default defineConfig({
       name: 'ios-notch',
       use: {
         viewport: { width: 393, height: 852 },
-        deviceScaleFactor: 2,
+        deviceScaleFactor: 3,
         isMobile: true,
         hasTouch: true,
         userAgent:
@@ -54,7 +60,7 @@ export default defineConfig({
       name: 'android-foldable',
       use: {
         viewport: { width: 717, height: 841 },
-        deviceScaleFactor: 2,
+        deviceScaleFactor: 2.6,
         isMobile: true,
         hasTouch: true,
         userAgent:

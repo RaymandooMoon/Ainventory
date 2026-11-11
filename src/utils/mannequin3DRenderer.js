@@ -2207,6 +2207,7 @@ export class Mannequin3DWebGLEngine {
     this._frameMsSamples = [];
     this.avgFps = 60;
     this._vibrancyDegraded = false;
+    this._simulatedLowFps = false;
     this._sceneDirty = true;
     this._lastSoftwareRenderMs = 0;
 
@@ -2219,6 +2220,9 @@ export class Mannequin3DWebGLEngine {
     this._setupLightsAndPedestal();
     if (typeof document !== 'undefined') {
       this.setDarkTheme(document.documentElement.dataset.theme === 'dark');
+      if (document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid') {
+        document.documentElement.setAttribute('data-vibrancy-fallback', 'blur');
+      }
     }
 
     const syncCanvasSize = () => {
@@ -2249,6 +2253,22 @@ export class Mannequin3DWebGLEngine {
 
   markDirty() {
     this._sceneDirty = true;
+  }
+
+  setSimulatedLowFps(degraded = true) {
+    const next = Boolean(degraded);
+    this._simulatedLowFps = next;
+    this._vibrancyDegraded = next;
+    if (next) {
+      this.avgFps = Math.min(this.avgFps, 28);
+    } else {
+      this._frameMsSamples = [];
+      this.avgFps = 60;
+      this.lastRawNowMs = performance.now();
+    }
+    setVibrancySolidFallback(next);
+    this._sceneDirty = true;
+    return this._vibrancyDegraded;
   }
 
   _rebuildEnvironmentMap() {
@@ -2482,6 +2502,7 @@ export class Mannequin3DWebGLEngine {
       windSpeedKmh: Number(this.weatherInfo?.windSpeed) || 11,
       activeGarmentIds: [...this.garmentMeshes.keys()],
       isSoftwareRenderer: this.isSoftwareRenderer,
+      vibrancyDegraded: Boolean(this._vibrancyDegraded),
       jiggle: sp
         ? {
             windIntensity: Number(sp.windIntensity.toFixed(4)),
@@ -3121,7 +3142,7 @@ export class Mannequin3DWebGLEngine {
       const rawDeltaMs = nowMs - this.lastRawNowMs;
       this.lastRawNowMs = nowMs;
 
-      if (rawDeltaMs > 1 && rawDeltaMs < 250) {
+      if (!this._simulatedLowFps && rawDeltaMs > 1 && rawDeltaMs < 250) {
         this._frameMsSamples.push(rawDeltaMs);
         if (this._frameMsSamples.length > 40) this._frameMsSamples.shift();
         const meanMs =
@@ -3130,7 +3151,7 @@ export class Mannequin3DWebGLEngine {
 
         // Requirement 14.b: Auto-degrade Vibrancy backdrop-filter to solid surface on FPS drop
         if (this._frameMsSamples.length >= 25) {
-          if (!this._vibrancyDegraded && this.avgFps < 45) {
+          if (!this._vibrancyDegraded && this.avgFps < 46) {
             this._vibrancyDegraded = true;
             setVibrancySolidFallback(true);
           } else if (this._vibrancyDegraded && this.avgFps >= 52) {
@@ -3323,18 +3344,18 @@ function getSharedPreviewEngine() {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(33, 360 / 500, 0.1, 20);
 
-    const hemi = new THREE.HemisphereLight(0xfbf8f2, 0xd8cfc0, 1.05);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8dc, 1.05);
     scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xfffaf2, 2.0);
+    const key = new THREE.DirectionalLight(0xffffff, 2.0);
     key.position.set(1.6, 2.6, 2.4);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0xe8eef6, 1.1);
+    const rim = new THREE.DirectionalLight(0xf5f5f7, 1.1);
     rim.position.set(-1.5, 1.6, -1.4);
     scene.add(rim);
 
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(0.46, 0.50, 0.03, 40),
-      new THREE.MeshStandardMaterial({ color: 0xe8e0d2, roughness: 0.7 })
+      new THREE.MeshStandardMaterial({ color: 0xf2f2f5, roughness: 0.7 })
     );
     pedestal.position.y = -0.015;
     scene.add(pedestal);
@@ -3409,11 +3430,11 @@ export function render3DMannequinScene(canvas, options = {}) {
       Math.max(width, height) * 0.65
     );
     if (darkHud) {
-      bgGrad.addColorStop(0, 'rgba(30, 27, 24, 0.52)');
-      bgGrad.addColorStop(1, 'rgba(18, 16, 14, 0.0)');
+      bgGrad.addColorStop(0, 'rgba(28, 28, 30, 0.56)');
+      bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
     } else {
-      bgGrad.addColorStop(0, 'rgba(255, 252, 246, 0.92)');
-      bgGrad.addColorStop(1, 'rgba(235, 228, 216, 0.25)');
+      bgGrad.addColorStop(0, 'rgba(245, 245, 247, 0.94)');
+      bgGrad.addColorStop(1, 'rgba(245, 245, 247, 0.18)');
     }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);

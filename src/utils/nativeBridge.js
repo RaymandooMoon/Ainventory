@@ -58,6 +58,8 @@ export async function triggerHaptic(kind = 'light') {
         await Haptics.notification({ type: NotificationType.Success });
       } else if (kind === 'warning') {
         await Haptics.notification({ type: NotificationType.Warning });
+      } else if (kind === 'heavy') {
+        await Haptics.impact({ style: ImpactStyle.Heavy });
       } else if (kind === 'medium') {
         await Haptics.impact({ style: ImpactStyle.Medium });
       } else {
@@ -71,7 +73,7 @@ export async function triggerHaptic(kind = 'light') {
 
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(kind === 'medium' ? 10 : 5);
+      navigator.vibrate(kind === 'heavy' ? 15 : kind === 'medium' ? 10 : 5);
     }
   } catch {
     // ignore
@@ -119,6 +121,9 @@ export function applyThemePreference(pref = getThemePreference()) {
   const effective = resolveEffectiveTheme(pref);
   document.documentElement.dataset.theme = effective;
   document.documentElement.style.colorScheme = effective;
+  if (document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid') {
+    document.documentElement.setAttribute('data-vibrancy-fallback', 'blur');
+  }
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
     metaTheme.setAttribute('content', effective === 'dark' ? '#000000' : '#FFFFFF');
@@ -129,11 +134,7 @@ export function applyThemePreference(pref = getThemePreference()) {
 // Requirement 14.b: Automatic Vibrancy degradation when 3D WebGL FPS drops
 export function setVibrancySolidFallback(enabled) {
   if (typeof document === 'undefined') return;
-  if (enabled) {
-    document.documentElement.dataset.vibrancyFallback = 'solid';
-  } else {
-    delete document.documentElement.dataset.vibrancyFallback;
-  }
+  document.documentElement.setAttribute('data-vibrancy-fallback', enabled ? 'solid' : 'blur');
 }
 
 // Requirement 10.c: Pre-permission rationale & biometric local-processing consent flags
