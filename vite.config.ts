@@ -39,16 +39,17 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string): string | undefined {
-          if (id.includes('node_modules/three')) {
+          const normId = id.replace(/\\/g, '/');
+          if (normId.includes('node_modules/three')) {
             return 'vendor-three';
           }
-          if (id.includes('node_modules/@mediapipe/tasks-vision')) {
+          if (normId.includes('node_modules/@mediapipe/tasks-vision')) {
             return 'vendor-mediapipe';
           }
           if (
-            id.includes('node_modules/react/') ||
-            id.includes('node_modules/react-dom/') ||
-            id.includes('node_modules/scheduler/')
+            normId.includes('node_modules/react/') ||
+            normId.includes('node_modules/react-dom/') ||
+            normId.includes('node_modules/scheduler/')
           ) {
             return 'vendor-react';
           }

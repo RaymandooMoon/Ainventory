@@ -31,7 +31,11 @@ export default defineConfig({
   webServer: {
     command:
       process.env.PLAYWRIGHT_WEB_COMMAND ||
-      `sh -c "test -f dist/index.html || npm run build; PORT=${PORT} node server/start.js"`,
+      `node -e "const fs=require('node:fs'),cp=require('node:child_process');if(!fs.existsSync('dist/index.html'))cp.execSync('npm run build',{stdio:'inherit'});" && node server/start.js`,
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+    },
     url: `${BASE_URL}/api/health`,
     reuseExistingServer: true,
     timeout: 60000,
@@ -41,7 +45,7 @@ export default defineConfig({
     trace: 'off',
     launchOptions: {
       ...(hasSystemChromium ? { executablePath: systemChromium } : {}),
-      args: SWIFTSHADER_WEBGL_ARGS,
+      args: hasSystemChromium ? SWIFTSHADER_WEBGL_ARGS : ['--enable-webgl', '--ignore-gpu-blocklist'],
     },
   },
   projects: [
