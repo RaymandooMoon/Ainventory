@@ -21,6 +21,16 @@ const WEATHER_SCENARIOS = {
     windSpeed: 11,
     isSimulated: true,
   },
+  windy_gale: {
+    label: '강풍 부는 날',
+    condition: '강풍 주의보',
+    weatherCode: 2,
+    tempMin: 8,
+    tempMax: 15,
+    precipProb: 15,
+    windSpeed: 32,
+    isSimulated: true,
+  },
   rainy_cool: {
     label: '비 오는 쌀쌀한 날',
     condition: '비 예보',
@@ -28,7 +38,7 @@ const WEATHER_SCENARIOS = {
     tempMin: 9,
     tempMax: 13,
     precipProb: 80,
-    windSpeed: 18,
+    windSpeed: 19,
     isSimulated: true,
   },
   warm_spring: {
@@ -42,13 +52,13 @@ const WEATHER_SCENARIOS = {
     isSimulated: true,
   },
   winter_cold: {
-    label: '영하권 겨울 추위',
-    condition: '맑고 추움',
+    label: '영하권 겨울 칼바람',
+    condition: '맑고 강추위',
     weatherCode: 0,
     tempMin: -4,
     tempMax: 4,
     precipProb: 10,
-    windSpeed: 20,
+    windSpeed: 26,
     isSimulated: true,
   },
 };
@@ -350,7 +360,13 @@ function inferWeatherMotion(code, precipProb, windSpeed, condition = '') {
   ) {
     return 'umbrella';
   }
-  if (windSpeed >= 17) {
+  if (
+    Number(windSpeed) >= 22 ||
+    /강풍|돌풍|칼바람|바람|gale|windy/i.test(String(condition))
+  ) {
+    return 'wind';
+  }
+  if (Number(windSpeed) >= 15) {
     return 'walk';
   }
   return 'idle';
@@ -454,8 +470,11 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
   const avgTemp = Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55);
   const diurnalSwing = weather.tempMax - weather.tempMin;
   const isRainy = weather.precipProb >= 45 || (weather.weatherCode >= 51 && weather.weatherCode <= 82);
-  const needOuter = avgTemp <= 19 || diurnalSwing >= 8 || isRainy;
-  const needWarmAcc = avgTemp <= 9;
+  const isWindy =
+    Number(weather.windSpeed) >= 22 ||
+    /강풍|돌풍|칼바람|gale|windy/i.test(String(weather.condition || ''));
+  const needOuter = avgTemp <= 19 || diurnalSwing >= 8 || isRainy || isWindy;
+  const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
 
   const bodyMetrics = computeBodyMetrics(userProfile || {});
   const personalColorKey = userProfile?.personal_color || userProfile?.personalColor || 'autumn_warm';
@@ -487,6 +506,18 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       }
       if ((item.notes || '').includes('스웨이드')) {
         score -= 20;
+      }
+    }
+
+    if (isWindy) {
+      if (item.category === 'outer' && /coat|trench|jacket/.test(String(item.subcategory || ''))) {
+        score += 14;
+      }
+      if (item.category === 'neckwear') {
+        score += 12;
+      }
+      if (item.water_resistant) {
+        score += 8;
       }
     }
 
@@ -528,13 +559,17 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     {
       id: 'commute',
       badge: '출근 · 스마트 포멀',
-      title: isRainy ? '비 예보 대비 단정한 출근 코디' : '일교차 대응 깔끔한 오피스룩',
+      title: isRainy
+        ? '비 예보 대비 단정한 출근 코디'
+        : isWindy
+          ? '강풍 대비 방풍 아우터 출근 코디'
+          : '일교차 대응 깔끔한 오피스룩',
       formality: 'formal',
     },
     {
       id: 'daily',
       badge: '데일리 · 미니멀 캐주얼',
-      title: '하루 종일 편안하고 정돈된 데일리룩',
+      title: isWindy ? '바람 부는 날 포근한 레이어드 데일리룩' : '하루 종일 편안하고 정돈된 데일리룩',
       formality: 'smart',
     },
     {
@@ -607,6 +642,8 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       if (needOuter && chosenOuter) {
         if (isRainy && chosenOuter.water_resistant) {
           reasons.push(`강수 확률 ${weather.precipProb}%에 대비해 발수 소재 '${chosenOuter.name}'을(를) 선택했습니다.`);
+        } else if (isWindy) {
+          reasons.push(`풍속 ${weather.windSpeed}km/h 강풍에 체감 온도를 지켜주는 '${chosenOuter.name}' 레이어드를 매치했습니다.`);
         } else if (diurnalSwing >= 8) {
           reasons.push(`아침 최저 ${weather.tempMin}°C · 낮 최고 ${weather.tempMax}°C(일교차 ${diurnalSwing}°C)라 탈착하기 편한 '${chosenOuter.name}'을(를) 매치했습니다.`);
         } else {
@@ -645,6 +682,8 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
   let weatherTip = '';
   if (isRainy) {
     weatherTip = `내일 비 소식(${weather.precipProb}%)이 있습니다. 밝은 밑단 바지나 스웨이드 슈즈는 피하고 발수 아우터·가죽 슈즈 위주로 준비하세요.`;
+  } else if (isWindy) {
+    weatherTip = `강한 바람(풍속 ${weather.windSpeed}km/h)이 예보되어 있습니다. 바람을 막아주는 트렌치·오버코트와 머플러 레이어드를 추천합니다.`;
   } else if (diurnalSwing >= 9) {
     weatherTip = `내일 아침(${weather.tempMin}°C)과 낮(${weather.tempMax}°C) 기온 차가 ${diurnalSwing}°C로 큽니다. 얇은 이너 위에 탈착하기 좋은 아우터가 필수입니다.`;
   } else if (avgTemp <= 4) {
@@ -659,6 +698,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       avgTemp,
       diurnalSwing,
       isRainy,
+      isWindy,
       weatherTip,
     },
     stylingProfile: {
@@ -752,20 +792,20 @@ const MANIFEST_GLB_BY_SUB = {
   necktie: { slotKey: 'neckwear', baseGlb: 'neckwear_tie', physicsPreset: 'soft_jiggle_tie' },
   trench: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
   coat: { slotKey: 'outer', baseGlb: 'outer_coat', physicsPreset: 'hem_sway_coat' },
-  blazer: { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'rigid_fitted' },
-  jacket: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
+  blazer: { slotKey: 'outer', baseGlb: 'outer_blazer', physicsPreset: 'drape_wind_garment' },
+  jacket: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' },
   padding: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
-  cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'rigid_fitted' },
-  knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'rigid_fitted' },
-  shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'rigid_fitted' },
-  blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'rigid_fitted' },
-  tshirt: { slotKey: 'top', baseGlb: 'top_tshirt', physicsPreset: 'rigid_fitted' },
-  sweatshirt: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'rigid_fitted' },
-  slacks: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'rigid_fitted' },
-  chinos: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'rigid_fitted' },
+  cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'drape_wind_garment' },
+  knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'drape_wind_garment' },
+  shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
+  blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
+  tshirt: { slotKey: 'top', baseGlb: 'top_tshirt', physicsPreset: 'drape_wind_garment' },
+  sweatshirt: { slotKey: 'top', baseGlb: 'top_sweatshirt', physicsPreset: 'drape_wind_garment' },
+  slacks: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
+  chinos: { slotKey: 'bottom', baseGlb: 'bottom_slacks', physicsPreset: 'drape_wind_garment' },
   denim: { slotKey: 'bottom', baseGlb: 'bottom_denim', physicsPreset: 'rigid_fitted' },
   skirt: { slotKey: 'bottom', baseGlb: 'bottom_skirt', physicsPreset: 'hem_sway_skirt' },
-  shorts: { slotKey: 'bottom', baseGlb: 'bottom_shorts', physicsPreset: 'rigid_fitted' },
+  shorts: { slotKey: 'bottom', baseGlb: 'bottom_shorts', physicsPreset: 'drape_wind_garment' },
   dress: { slotKey: 'dress', baseGlb: 'dress_shift', physicsPreset: 'hem_sway_skirt' },
   onepiece: { slotKey: 'dress', baseGlb: 'dress_onepiece', physicsPreset: 'hem_sway_skirt' },
   gloves: { slotKey: 'gloves', baseGlb: 'gloves_short', physicsPreset: 'rigid_fitted' },
@@ -791,7 +831,7 @@ export function resolveManifestSlotAndGlb(category = 'top', subcategory = 'knit'
   const cleanSub = String(subcategory || '').toLowerCase();
   if (MANIFEST_GLB_BY_SUB[cleanSub]) {
     if (cleanCat === 'outer' && cleanSub === 'cardigan') {
-      return { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' };
+      return { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' };
     }
     return MANIFEST_GLB_BY_SUB[cleanSub];
   }

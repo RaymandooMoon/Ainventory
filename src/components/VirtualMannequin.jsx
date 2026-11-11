@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Umbrella,
+  Wind,
   X,
 } from 'lucide-react';
 import { Mannequin3DWebGLEngine } from '../utils/mannequin3DRenderer.js';
@@ -39,6 +40,7 @@ const MOTION_CYCLE = [
   { key: 'auto', label: '자동 모션' },
   { key: 'idle', label: '자연 호흡' },
   { key: 'walk', label: '워킹' },
+  { key: 'wind', label: '강풍 바람' },
   { key: 'wave', label: '인사' },
   { key: 'umbrella', label: '우산' },
 ];
@@ -364,6 +366,8 @@ export default function VirtualMannequin({
     const tempVal = weather?.tempC ?? weather?.avgTemp ?? weather?.tempMax ?? 14;
     const cityLabel = weather?.city || weather?.cityName || '서울';
     const condLabel = weather?.condition || '맑음';
+    const windVal = Number(weather?.windSpeed || 0);
+    const isWindyWeather = Boolean(weather?.isWindy) || windVal >= 22 || motionMode === 'wind';
     const currentSlotEquipped = loadoutBySlot[activeDrawerSlot];
 
     return (
@@ -380,9 +384,14 @@ export default function VirtualMannequin({
               onOpenWeatherSheet?.();
             }}
           >
-            {weather?.isRainy ? <CloudRain size={14} /> : null}
+            {weather?.isRainy ? (
+              <CloudRain size={14} />
+            ) : isWindyWeather ? (
+              <Wind size={14} />
+            ) : null}
             <span>
               {cityLabel} · {condLabel} {tempVal}°
+              {isWindyWeather && windVal > 0 ? ` · ${Math.round(windVal)}km/h` : ''}
             </span>
           </button>
         </div>
@@ -452,11 +461,14 @@ export default function VirtualMannequin({
             type="button"
             className={`hig-float-icon-btn ${motionMode !== 'auto' ? 'active' : ''}`}
             aria-label={`마네킹 모션 전환 (${motionMode})`}
-            title="모션 전환 (자동/호흡/워킹/인사/우산)"
+            title="모션 전환 (자동/호흡/워킹/강풍/인사/우산)"
             onClick={cycleMotionMode}
           >
             {motionMode === 'umbrella' || (motionMode === 'auto' && weather?.isRainy) ? (
               <Umbrella size={17} />
+            ) : motionMode === 'wind' ||
+              (motionMode === 'auto' && !weather?.isRainy && isWindyWeather) ? (
+              <Wind size={17} />
             ) : motionMode === 'wave' ? (
               <Hand size={17} />
             ) : (

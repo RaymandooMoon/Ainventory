@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, Check, MapPin, Navigation, Plus, Sparkles } from 'lucide-react';
+import { CalendarPlus, Check, MapPin, Navigation, Plus, Sparkles, Wind } from 'lucide-react';
 import { CITY_COORDS, apiFetch } from '../utils/api.js';
 import { triggerHaptic } from '../utils/nativeBridge.js';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
@@ -23,6 +23,7 @@ export default function WeatherStylingView({
   showToast,
 }) {
   const [cityKey, setCityKey] = useState('seoul');
+  const [scenario, setScenario] = useState('live');
   const [customGeo, setCustomGeo] = useState(null);
   const [locating, setLocating] = useState(false);
   const [data, setData] = useState(null);
@@ -41,6 +42,9 @@ export default function WeatherStylingView({
         city: selectedCity.key,
         closet: activeCloset,
       });
+      if (scenario && scenario !== 'live') {
+        params.set('scenario', scenario);
+      }
       if (customGeo) {
         params.set('lat', String(customGeo.lat));
         params.set('lon', String(customGeo.lon));
@@ -59,7 +63,7 @@ export default function WeatherStylingView({
     } finally {
       setLoading(false);
     }
-  }, [activeCloset, customGeo, selectedCity.key, showToast]);
+  }, [activeCloset, customGeo, scenario, selectedCity.key, showToast]);
 
   useEffect(() => {
     loadRecommendations();
@@ -275,7 +279,68 @@ export default function WeatherStylingView({
         maxWidth={620}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              background: 'var(--bg-surface)',
+              borderRadius: 14,
+              padding: '10px 14px',
+            }}
+          >
+            <span
+              className="hig-caption tabular-nums"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+            >
+              <Wind size={13} />
+              풍속 {Math.round(normalizedWeather?.windSpeed ?? 11)}km/h · 강수{' '}
+              {Math.round(normalizedWeather?.precipProb ?? 10)}%
+            </span>
+            <span className="hig-caption tabular-nums">
+              최저 {normalizedWeather?.tempMin ?? 8}° / 최고 {normalizedWeather?.tempMax ?? 16}°
+            </span>
+          </div>
+
           <p className="hig-caption">{normalizedWeather?.stylingTip}</p>
+
+          {/* Weather Scenario Simulation Chips (Wind / Rain / Cold / Live) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="hig-caption">기상 시나리오 시뮬레이션</span>
+            <div className="ui-chip-rail" role="tablist" aria-label="기상 시나리오 시뮬레이션">
+              {(
+                data?.scenarios?.length
+                  ? data.scenarios
+                  : [
+                      { key: 'live', label: '실시간 내일 예보' },
+                      { key: 'windy_gale', label: '강풍 부는 날' },
+                      { key: 'crisp_autumn', label: '선선한 가을 맑음' },
+                      { key: 'rainy_cool', label: '비 오는 쌀쌀한 날' },
+                      { key: 'winter_cold', label: '영하권 겨울 칼바람' },
+                    ]
+              ).map((sc) => {
+                const isScSelected = scenario === sc.key;
+                return (
+                  <button
+                    key={sc.key}
+                    id={`weather-scenario-chip-${sc.key}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={isScSelected}
+                    className={`chip ${isScSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setScenario(sc.key);
+                    }}
+                  >
+                    <span>{sc.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* City & GPS Controls */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

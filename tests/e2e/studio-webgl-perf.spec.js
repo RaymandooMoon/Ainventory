@@ -169,5 +169,8 @@ test.describe('3D Studio Touch Isolation, WebGL Context Recovery & Memory/FPS Gu
     expect(afterSwaps.geometries).toBeLessThanOrEqual(baselineMem.geometries + 2);
     expect(afterSwaps.textures).toBeLessThanOrEqual(baselineMem.textures + 2);
     expect(afterSwaps.avgFps).toBeGreaterThanOrEqual(50);
+    expect(afterSwaps.jiggle).not.toBeNull();
+    expect(afterSwaps.jiggle.crossbodyBag.rz).toBeGreaterThanOrEqual(-0.008);
+    expect(afterSwaps.jiggle.neckTip.rx).toBeLessThanOrEqual(0.028);
   });
 });

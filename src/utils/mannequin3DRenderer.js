@@ -3,7 +3,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { resolveAnatomicalProfile } from './bodyAnthropometrics.js';
-import { GARMENT_3D_PHYSICS_PRESETS } from './garment3DPhysicsSpecs.js';
+import {
+  GARMENT_3D_PHYSICS_PRESETS,
+  resolveFabricWindSensitivity,
+} from './garment3DPhysicsSpecs.js';
 import { SpringBoneSystem } from './springBonePhysics.js';
 import { setVibrancySolidFallback } from './nativeBridge.js';
 
@@ -26,6 +29,7 @@ export const MOTION_PRESETS = [
   { key: 'auto', labelKo: '자동(날씨연동)', labelEn: 'Auto (Weather)' },
   { key: 'idle', labelKo: '자연스러운 호흡', labelEn: 'Natural Idle' },
   { key: 'walk', labelKo: '런웨이 워킹', labelEn: 'Runway Walk' },
+  { key: 'wind', labelKo: '강풍 바람', labelEn: 'Gale Wind' },
   { key: 'wave', labelKo: '안녕? 인사', labelEn: 'Wave Hello' },
   { key: 'umbrella', labelKo: '우산 쓰기', labelEn: 'Rain Umbrella' },
 ];
@@ -183,7 +187,7 @@ const DEFAULT_JOINTS = {
   footR: [-0.17644, 0.00854, 0.13105],
 };
 
-// Bone indices in our 21-bone GPU Skeleton
+// Bone indices in our 26-bone Articulated & Multi-Chain Jiggle GPU Skeleton
 const BONE = {
   ROOT: 0,
   PELVIS: 1,
@@ -204,8 +208,13 @@ const BONE = {
   HIP_R: 16,
   KNEE_R: 17,
   ANKLE_R: 18,
-  JIGGLE_NECK: 19,
-  JIGGLE_HEM: 20,
+  JIGGLE_NECK_UPPER: 19,
+  JIGGLE_NECK_TIP: 20,
+  JIGGLE_HEM_UPPER: 21,
+  JIGGLE_HEM_LOWER: 22,
+  JIGGLE_STRAP: 23,
+  JIGGLE_BAG: 24,
+  JIGGLE_LAPEL: 25,
 };
 
 const BONE_DEFS = [
@@ -228,8 +237,13 @@ const BONE_DEFS = [
   { idx: BONE.HIP_R, name: 'hipR', parent: BONE.PELVIS, posKey: 'hipR' },
   { idx: BONE.KNEE_R, name: 'kneeR', parent: BONE.HIP_R, posKey: 'kneeR' },
   { idx: BONE.ANKLE_R, name: 'ankleR', parent: BONE.KNEE_R, posKey: 'ankleR' },
-  { idx: BONE.JIGGLE_NECK, name: 'jiggleNeck', parent: BONE.SPINE1, posKey: null, fallback: [0, 1.34, 0.08] },
-  { idx: BONE.JIGGLE_HEM, name: 'jiggleHem', parent: BONE.PELVIS, posKey: null, fallback: [0, 0.90, 0.0] },
+  { idx: BONE.JIGGLE_NECK_UPPER, name: 'jiggleNeckUpper', parent: BONE.SPINE1, posKey: null, fallback: [0, 1.33, 0.09] },
+  { idx: BONE.JIGGLE_NECK_TIP, name: 'jiggleNeckTip', parent: BONE.JIGGLE_NECK_UPPER, posKey: null, fallback: [0, 1.16, 0.14] },
+  { idx: BONE.JIGGLE_HEM_UPPER, name: 'jiggleHemUpper', parent: BONE.PELVIS, posKey: null, fallback: [0, 0.92, 0.0] },
+  { idx: BONE.JIGGLE_HEM_LOWER, name: 'jiggleHemLower', parent: BONE.JIGGLE_HEM_UPPER, posKey: null, fallback: [0, 0.66, 0.0] },
+  { idx: BONE.JIGGLE_STRAP, name: 'jiggleStrap', parent: BONE.PELVIS, posKey: null, fallback: [0.06, 1.08, 0.0] },
+  { idx: BONE.JIGGLE_BAG, name: 'jiggleBag', parent: BONE.JIGGLE_STRAP, posKey: null, fallback: [0.168, 0.916, -0.010] },
+  { idx: BONE.JIGGLE_LAPEL, name: 'jiggleLapel', parent: BONE.SPINE1, posKey: null, fallback: [0, 1.16, 0.11] },
 ];
 
 function createHumanoidSkeleton(jointsMap = {}) {
@@ -245,6 +259,7 @@ function createHumanoidSkeleton(jointsMap = {}) {
     } else {
       b.position.set(wp[0], wp[1], wp[2]);
     }
+    b.userData.restPos = b.position.clone();
     return b;
   });
   BONE_DEFS.forEach((d, i) => {
@@ -330,21 +345,28 @@ function attachHumanoidSkinAttributes(geom, jointsMap = {}, gid = '', spec = {})
     return;
   }
 
-  // Crossbody saddle bag: rigid hip-mounted pouch + C1-welded torso spine strap (zero arm/hand pull!)
+  // Crossbody saddle bag: coupled D-ring pouch (`JIGGLE_BAG`) + elastic diagonal leather strap (`JIGGLE_STRAP`)
   if (gid === 'accessory_bag') {
     for (let i = 0; i < n; i++) {
       const [x, y] = readMeterCoord(geom, i);
-      const isPouch = y <= 0.918 && x > 0.145;
+      const isPouch = y <= 0.919 && x > 0.130;
       if (isPouch) {
         skinIndex[i * 4] = BONE.PELVIS;
-        skinWeight[i * 4] = 0.80;
-        skinIndex[i * 4 + 1] = BONE.JIGGLE_HEM;
-        skinWeight[i * 4 + 1] = 0.20;
+        skinWeight[i * 4] = 0.18;
+        skinIndex[i * 4 + 1] = BONE.JIGGLE_BAG;
+        skinWeight[i * 4 + 1] = 0.82;
         continue;
       }
 
-      const wJiggle = 0.20 * smoothstep(1.00, 0.918, y) * smoothstep(0.08, 0.155, x);
-      const remain = 1.0 - wJiggle;
+      // C1-continuous weld at D-rings (`y = 0.919`) -> elastic leather strap flex (`y = 0.95..1.22`) -> shoulder anchor
+      const wBagWeld = 0.82 * smoothstep(0.985, 0.919, y) * smoothstep(0.08, 0.145, x);
+      const wStrapFlex =
+        0.54 *
+        smoothstep(1.23, 1.03, y) *
+        smoothstep(0.919, 0.985, y) *
+        Math.max(0, 1.0 - wBagWeld / 0.82);
+      const remain = Math.max(0, 1.0 - wBagWeld - wStrapFlex);
+
       let b0 = BONE.PELVIS;
       let b1 = BONE.SPINE3;
       let tBlend = 0.0;
@@ -369,9 +391,13 @@ function attachHumanoidSkinAttributes(geom, jointsMap = {}, gid = '', spec = {})
       skinWeight[i * 4] = remain * (1.0 - tBlend);
       skinIndex[i * 4 + 1] = b1;
       skinWeight[i * 4 + 1] = remain * tBlend;
-      if (wJiggle > 0.001) {
-        skinIndex[i * 4 + 2] = BONE.JIGGLE_HEM;
-        skinWeight[i * 4 + 2] = wJiggle;
+      if (wStrapFlex > 0.0005) {
+        skinIndex[i * 4 + 2] = BONE.JIGGLE_STRAP;
+        skinWeight[i * 4 + 2] = wStrapFlex;
+      }
+      if (wBagWeld > 0.0005) {
+        skinIndex[i * 4 + 3] = BONE.JIGGLE_BAG;
+        skinWeight[i * 4 + 3] = wBagWeld;
       }
     }
     geom.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
@@ -461,40 +487,135 @@ function attachHumanoidSkinAttributes(geom, jointsMap = {}, gid = '', spec = {})
     }
 
     cand.sort((a, b) => b.score - a.score);
-    const top = cand.slice(0, 3);
-    let sum = top.reduce((acc, it) => acc + it.score, 0) || 1;
-    for (let k = 0; k < top.length; k++) {
-      top[k].w = top[k].score / sum;
-    }
 
-    // Inject GPU Jiggle Bone weight on slot 3 for soft cloth / hem / crossbody items!
-    let jiggleBone = -1;
-    let jiggleW = 0;
-    if (physicsKey === 'soft_jiggle_muffler' || physicsKey === 'soft_jiggle_tie') {
-      jiggleBone = BONE.JIGGLE_NECK;
-      // Front chest hanging panels sway smoothly while neck collar stays anchored
-      const downFactor = smoothstep(1.34, 1.04, y);
-      const frontFactor = smoothstep(0.02, 0.08, z);
-      jiggleW = downFactor * (0.35 + 0.65 * frontFactor) * 0.78;
-    } else if (physicsKey === 'hem_sway_coat' || physicsKey === 'hem_sway_skirt') {
-      jiggleBone = BONE.JIGGLE_HEM;
-      jiggleW = smoothstep(0.95, 0.50, y) * 0.42;
-    } else if (physicsKey === 'pendulum_crossbody') {
-      jiggleBone = BONE.JIGGLE_HEM;
-      // Bag body at hip bounces while upper strap stays flush on torso
-      jiggleW = smoothstep(1.02, 0.78, y) * smoothstep(0.10, 0.20, x) * 0.65;
-    }
+    // Compute up to 2 articulated GPU Jiggle Bone weights `(jBoneA, jWeightA)` & `(jBoneB, jWeightB)`
+    let jBoneA = -1;
+    let jWeightA = 0;
+    let jBoneB = -1;
+    let jWeightB = 0;
+    const torsoCoreMask = smoothstep(0.22, 0.13, Math.abs(x));
 
-    const remain = 1.0 - jiggleW;
-    for (let k = 0; k < 3; k++) {
-      if (top[k]) {
-        skinIndex[i * 4 + k] = top[k].bone;
-        skinWeight[i * 4 + k] = top[k].w * remain;
+    if (
+      physicsKey === 'soft_jiggle_muffler' ||
+      physicsKey === 'soft_jiggle_tie' ||
+      gid === 'neckwear_scarf' ||
+      gid === 'neckwear_tie'
+    ) {
+      // 2-Link Ribbon Chain: collar anchored at neck (`y >= 1.35`), upper panel -> fringe tip S-wave
+      const downFactor = smoothstep(1.345, 1.175, y);
+      const frontFactor = smoothstep(0.01, 0.075, z);
+      const maxFlutter = gid === 'neckwear_tie' ? 0.82 : 0.90;
+      const totalW = downFactor * (0.32 + 0.68 * frontFactor) * maxFlutter;
+      const tipRatio = smoothstep(1.24, 1.075, y);
+      jBoneA = BONE.JIGGLE_NECK_UPPER;
+      jWeightA = totalW * (1.0 - tipRatio);
+      jBoneB = BONE.JIGGLE_NECK_TIP;
+      jWeightB = totalW * tipRatio;
+    } else if (physicsKey === 'hem_sway_coat' || gid === 'outer_coat') {
+      // 2-Link Coat Flare & Wind Billow below waist + Open Front Lapel Flutter above waist
+      // Keep front-thigh leg-follow strong so walking strides never poke slacks through the coat front
+      if (y < 0.90) {
+        const frontStrideGuard = z > 0.03 ? 0.56 : 1.0;
+        const totalHem = smoothstep(0.90, 0.49, y) * 0.44 * frontStrideGuard;
+        const lowerRatio = smoothstep(0.74, 0.48, y);
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = totalHem * (1.0 - lowerRatio);
+        jBoneB = BONE.JIGGLE_HEM_LOWER;
+        jWeightB = totalHem * lowerRatio;
+      } else if (y <= 1.27 && z > 0.085 && torsoCoreMask > 0.01) {
+        jBoneA = BONE.JIGGLE_LAPEL;
+        jWeightA =
+          smoothstep(0.97, 1.10, y) *
+          smoothstep(1.27, 1.16, y) *
+          smoothstep(0.085, 0.155, z) *
+          torsoCoreMask *
+          0.34;
+      }
+    } else if (
+      physicsKey === 'hem_sway_skirt' ||
+      gid === 'bottom_skirt' ||
+      gid === 'dress_shift' ||
+      gid === 'dress_onepiece'
+    ) {
+      // 2-Link Pleated Skirt / Dress Wave & Radial Wind Billow
+      if (y < 0.90) {
+        const totalHem = smoothstep(0.90, 0.40, y) * 0.56;
+        const lowerRatio = smoothstep(0.73, 0.40, y);
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = totalHem * (1.0 - lowerRatio);
+        jBoneB = BONE.JIGGLE_HEM_LOWER;
+        jWeightB = totalHem * lowerRatio;
+      }
+    } else if (gid === 'outer_blazer' || gid === 'outer_jacket') {
+      // Tailored Blazer / Jacket: wind-responsive lower vent hem + open lapel flutter (sleeves & collar excluded)
+      const isBlazer = gid === 'outer_blazer';
+      if (y < 0.89 && torsoCoreMask > 0.02) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.89, 0.72, y) * torsoCoreMask * (isBlazer ? 0.28 : 0.20);
+      } else if (y > 0.98 && y < 1.25 && z > 0.088 && torsoCoreMask > 0.05) {
+        jBoneA = BONE.JIGGLE_LAPEL;
+        jWeightA =
+          smoothstep(0.98, 1.10, y) *
+          smoothstep(1.25, 1.15, y) *
+          smoothstep(0.088, 0.15, z) *
+          torsoCoreMask *
+          (isBlazer ? 0.20 : 0.15);
+      }
+    } else if (gid === 'top_cardigan' || gid === 'top_shirt') {
+      // Poplin Shirt / Cardigan: untucked lower hem sway + front placket wind ripple
+      if (y < 0.885 && torsoCoreMask > 0.02) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.885, 0.78, y) * torsoCoreMask * 0.16;
+      } else if (y > 0.98 && y < 1.24 && z > 0.078 && torsoCoreMask > 0.05) {
+        jBoneA = BONE.JIGGLE_LAPEL;
+        jWeightA =
+          smoothstep(0.98, 1.10, y) *
+          smoothstep(1.24, 1.14, y) *
+          smoothstep(0.078, 0.135, z) *
+          torsoCoreMask *
+          0.18;
+      }
+    } else if (gid === 'top_knit' || gid === 'top_tshirt' || gid === 'top_sweatshirt') {
+      // Knit / Tee / Sweatshirt: subtle waist-hem & chest fabric wind response
+      if (y < 0.885 && torsoCoreMask > 0.02) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.885, 0.79, y) * torsoCoreMask * 0.14;
+      } else if (y > 1.00 && y < 1.24 && z > 0.088 && torsoCoreMask > 0.1) {
+        jBoneA = BONE.JIGGLE_LAPEL;
+        jWeightA = smoothstep(0.088, 0.14, z) * torsoCoreMask * 0.14;
+      }
+    } else if (gid === 'bottom_slacks') {
+      // Tailored Slacks: upper pleat breeze drape above knee so ankles track SHIN_L/SHIN_R 100% cleanly
+      if (y > 0.64 && y < 0.87) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.87, 0.76, y) * smoothstep(0.64, 0.74, y) * 0.12;
+      }
+    } else if (gid === 'bottom_shorts') {
+      if (y > 0.48 && y < 0.64) {
+        jBoneA = BONE.JIGGLE_HEM_UPPER;
+        jWeightA = smoothstep(0.64, 0.52, y) * 0.12;
       }
     }
-    if (jiggleBone >= 0 && jiggleW > 0.001) {
-      skinIndex[i * 4 + 3] = jiggleBone;
-      skinWeight[i * 4 + 3] = jiggleW;
+
+    const hasTwoJiggle = jBoneB >= 0 && jWeightB > 0.0008;
+    const totalJiggle = (jBoneA >= 0 ? jWeightA : 0) + (hasTwoJiggle ? jWeightB : 0);
+    const remain = Math.max(0, 1.0 - totalJiggle);
+    const maxBodySlots = hasTwoJiggle ? 2 : jBoneA >= 0 && jWeightA > 0.0008 ? 3 : 4;
+    const top = cand.slice(0, maxBodySlots);
+    const sum = top.reduce((acc, it) => acc + it.score, 0) || 1;
+
+    for (let k = 0; k < top.length; k++) {
+      skinIndex[i * 4 + k] = top[k].bone;
+      skinWeight[i * 4 + k] = (top[k].score / sum) * remain;
+    }
+    if (hasTwoJiggle) {
+      skinIndex[i * 4 + 2] = jBoneA;
+      skinWeight[i * 4 + 2] = jWeightA;
+      skinIndex[i * 4 + 3] = jBoneB;
+      skinWeight[i * 4 + 3] = jWeightB;
+    } else if (jBoneA >= 0 && jWeightA > 0.0008) {
+      skinIndex[i * 4 + 3] = jBoneA;
+      skinWeight[i * 4 + 3] = jWeightA;
     }
   }
 
@@ -1849,6 +1970,38 @@ function buildRainStreaksGroup() {
   return group;
 }
 
+function buildWindStreaksGroup() {
+  const group = new THREE.Group();
+  group.visible = false;
+  const count = 26;
+  const segPts = 4; // 3 connected segments per curved breeze streamline = 6 vertices per streamline
+  const vertsPerRibbon = (segPts - 1) * 2;
+  const positions = new Float32Array(count * vertsPerRibbon * 3);
+  const seeds = [];
+  for (let i = 0; i < count; i++) {
+    const x = -1.15 + Math.random() * 2.3;
+    const y = 0.24 + Math.random() * 1.56;
+    const z = (Math.random() - 0.5) * 0.95;
+    const len = 0.20 + Math.random() * 0.16;
+    const speed = 2.0 + Math.random() * 1.15;
+    const phase = Math.random() * Math.PI * 2;
+    seeds.push({ x, y, z, len, speed, phase });
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x8e8e93,
+    transparent: true,
+    opacity: 0.24,
+  });
+  const lines = new THREE.LineSegments(geom, mat);
+  group.add(lines);
+  group.userData.seeds = seeds;
+  group.userData.lines = lines;
+  group.userData.mat = mat;
+  return group;
+}
+
 function inferBodySlotFromPoint(localY, localX) {
   if (localY > 1.50) return 'headwear';
   if (localY > 1.36) return 'neckwear';
@@ -1888,9 +2041,9 @@ function detectSoftwareWebGL() {
 
 /**
  * Game-Quality Skinned GLB Mannequin WebGL Engine
- * - 21-Bone GPU Skeleton (`idle`, `walk`, `wave`, `umbrella`, `pose_hands`)
+ * - 26-Bone Multi-Chain GPU Skeleton (`idle`, `walk`, `wind`, `wave`, `umbrella`, `pose_hands`)
  * - 28 Real-Time Anthropometric Morph Targets
- * - Lightweight Bone-Based `SpringBoneSystem` (`briefcase`, `tote`, `scarf`, `tie`, `coat`, `skirt`)
+ * - Lightweight Multi-Chain `SpringBoneSystem` (2-link muffler/tie flutter, 2-link coat/skirt wave + radial billow, coupled crossbody strap + D-ring hip bounce, 3-DOF handheld bags)
  * - Dynamic Hybrid Cropped WebP + Fabric PBR Normal/Roughness Synthesis
  * - Strict GPU Geometry/Material/Texture Disposal & `webglcontextlost` Auto-Recovery
  */
@@ -1983,7 +2136,7 @@ export class Mannequin3DWebGLEngine {
     this.rootGroup.add(this.characterGroup);
     this.scene.add(this.rootGroup);
 
-    // Build shared 21-bone humanoid skeleton + handheld prop sockets
+    // Build shared 26-bone humanoid + multi-chain jiggle skeleton + handheld prop sockets
     const rig = createHumanoidSkeleton(DEFAULT_JOINTS);
     this.skeleton = rig.skeleton;
     this.bones = rig.bones;
@@ -2011,6 +2164,9 @@ export class Mannequin3DWebGLEngine {
     this.rainStreaks = buildRainStreaksGroup();
     this.rootGroup.add(this.rainStreaks);
 
+    this.windStreaks = buildWindStreaksGroup();
+    this.rootGroup.add(this.windStreaks);
+
     this.raycaster = new THREE.Raycaster();
     this.interactiveMeshes = [];
 
@@ -2037,9 +2193,10 @@ export class Mannequin3DWebGLEngine {
     this.clockStart = performance.now() * 0.001;
     this.lastFrameTime = this.clockStart;
     this.lastRawNowMs = performance.now();
-    this.poseBlend = { walk: 0, wave: 0, umbrella: 0, hands: 0 };
+    this.poseBlend = { walk: 0, wind: 0, wave: 0, umbrella: 0, hands: 0 };
 
     this.springBones = new SpringBoneSystem();
+    this.lastSprings = null;
     this.bagSpringState = {
       prevHandPos: new THREE.Vector3(0.45, 0.98, 0.18),
       prevHandVel: new THREE.Vector3(),
@@ -2213,6 +2370,9 @@ export class Mannequin3DWebGLEngine {
     if (this.scanRingMat) {
       this.scanRingMat.color.set(isDark ? 0xf5f5f7 : 0x1d1d1f);
     }
+    if (this.windStreaks?.userData?.mat) {
+      this.windStreaks.userData.mat.color.set(isDark ? 0x636366 : 0x8e8e93);
+    }
     this._sceneDirty = true;
   }
 
@@ -2305,6 +2465,7 @@ export class Mannequin3DWebGLEngine {
   }
 
   getTelemetry() {
+    const sp = this.lastSprings;
     return {
       frameCount: this.frameCount,
       avgFps: Math.round(this.avgFps * 10) / 10,
@@ -2316,8 +2477,29 @@ export class Mannequin3DWebGLEngine {
       currentYawDeg: (this.currentYaw * 180) / Math.PI,
       targetYawDeg: (this.targetYaw * 180) / Math.PI,
       effectiveMotion: this._resolveEffectiveMotion(),
+      windSpeedKmh: Number(this.weatherInfo?.windSpeed) || 11,
       activeGarmentIds: [...this.garmentMeshes.keys()],
       isSoftwareRenderer: this.isSoftwareRenderer,
+      jiggle: sp
+        ? {
+            windIntensity: Number(sp.windIntensity.toFixed(4)),
+            neckUpper: { rx: sp.neckUpper.rx, ry: sp.neckUpper.ry, rz: sp.neckUpper.rz },
+            neckTip: { rx: sp.neckTip.rx, ry: sp.neckTip.ry, rz: sp.neckTip.rz },
+            hemUpper: { rx: sp.hemUpper.rx, ry: sp.hemUpper.ry, rz: sp.hemUpper.rz },
+            hemLower: { rx: sp.hemLower.rx, ry: sp.hemLower.ry, rz: sp.hemLower.rz },
+            billowX: sp.billowX,
+            billowZ: sp.billowZ,
+            lapel: { rx: sp.lapel.rx, ry: sp.lapel.ry, rz: sp.lapel.rz },
+            bagStrap: { rx: sp.bagStrap.rx, rz: sp.bagStrap.rz, dy: sp.bagStrap.dy },
+            crossbodyBag: {
+              rx: sp.crossbodyBag.rx,
+              ry: sp.crossbodyBag.ry,
+              rz: sp.crossbodyBag.rz,
+              dy: sp.crossbodyBag.dy,
+            },
+            handBag: { rx: sp.handBag.rx, ry: sp.handBag.ry, rz: sp.handBag.rz, dy: sp.handBag.dy },
+          }
+        : null,
     };
   }
 
@@ -2459,8 +2641,24 @@ export class Mannequin3DWebGLEngine {
       }
 
       const outerEntry = active.find((d) => d.slotKey === 'outer') || null;
+      const topEntry = active.find((d) => d.slotKey === 'top') || null;
+      const dressEntry = active.find((d) => d.slotKey === 'dress') || null;
+      const bottomEntry = active.find((d) => d.slotKey === 'bottom') || null;
+      const neckEntry = active.find((d) => d.slotKey === 'neckwear') || null;
+      const accEntry = active.find((d) => d.slotKey === 'accessory') || null;
+
+      // Sync fabric-aware aerodynamic wind sensitivities across all jiggle chains
+      const hemSourceItem = dressEntry?.item || outerEntry?.item || bottomEntry?.item || topEntry?.item;
+      const topSourceItem = outerEntry?.item || topEntry?.item;
+      this.springBones.setGarmentWindScales({
+        neck: neckEntry ? resolveFabricWindSensitivity(neckEntry.item) * 1.08 : 1.22,
+        hem: hemSourceItem ? resolveFabricWindSensitivity(hemSourceItem) * 1.05 : 1.0,
+        top: topSourceItem ? resolveFabricWindSensitivity(topSourceItem) : 0.90,
+        crossbody: accEntry?.gid === 'accessory_bag' ? 0.76 : 0.68,
+      });
+
       const hasOuter = Boolean(outerEntry);
-      const hasTopActive = active.some((d) => d.slotKey === 'top');
+      const hasTopActive = Boolean(topEntry);
       const hasLongPants = active.some(
         (d) => d.slotKey === 'bottom' && (d.gid === 'bottom_slacks' || d.gid === 'bottom_denim')
       );
@@ -2567,6 +2765,14 @@ export class Mannequin3DWebGLEngine {
           /비|소나기|우천|눈|폭우|장마|rain|shower|snow|drizzle/i.test(String(w.condition || w.summary || '')))
     );
     if (isRainy) return 'umbrella';
+    if (
+      w?.recommendedMotion === 'wind' ||
+      w?.isWindy ||
+      Number(w?.windSpeed) >= 22 ||
+      /강풍|돌풍|칼바람|gale|windy/i.test(String(w?.condition || ''))
+    ) {
+      return 'wind';
+    }
     if (w?.recommendedMotion === 'walk') return 'walk';
     return 'idle';
   }
@@ -2577,11 +2783,13 @@ export class Mannequin3DWebGLEngine {
     const blendRate = Math.min(1, dt * 6.5);
 
     this.poseBlend.walk += ((mode === 'walk' ? 1 : 0) - this.poseBlend.walk) * blendRate;
+    this.poseBlend.wind += ((mode === 'wind' ? 1 : 0) - this.poseBlend.wind) * blendRate;
     this.poseBlend.wave += ((mode === 'wave' ? 1 : 0) - this.poseBlend.wave) * blendRate;
     this.poseBlend.umbrella += ((mode === 'umbrella' ? 1 : 0) - this.poseBlend.umbrella) * blendRate;
     this.poseBlend.hands += ((mode === 'pose_hands' ? 1 : 0) - this.poseBlend.hands) * blendRate;
 
     const wWalk = this.poseBlend.walk;
+    const wWind = this.poseBlend.wind;
     const wWave = this.poseBlend.wave;
     const wUmb = this.poseBlend.umbrella;
     const wHands = this.poseBlend.hands;
@@ -2649,6 +2857,23 @@ export class Mannequin3DWebGLEngine {
       shRX += stride * 0.24 * wWalk;
       elLX += (-0.12 - Math.max(0, -oppStride) * 0.18) * wWalk;
       elRX += (-0.12 - Math.max(0, -stride) * 0.18) * wWalk;
+    }
+
+    // 2b. Gale Wind Bracing Layer (`wind`) — natural editorial lean & balance into gusts
+    if (wWind > 0.005) {
+      const gustSwell = 0.5 + 0.5 * Math.sin(t * 1.65);
+      spine1X += (0.046 + gustSwell * 0.026) * wWind;
+      spine2Z += (-0.028 - gustSwell * 0.016) * wWind;
+      pelvisYRot += -0.055 * wWind;
+      headY = THREE.MathUtils.lerp(headY, 0.095 + Math.sin(t * 1.3) * 0.03, wWind * 0.75);
+      headX += 0.032 * wWind;
+      headZ += -0.026 * wWind;
+      shRX = THREE.MathUtils.lerp(shRX, -0.14 - gustSwell * 0.05, wWind * 0.65);
+      elRX = THREE.MathUtils.lerp(elRX, -0.30 - gustSwell * 0.06, wWind * 0.65);
+      shRZ += -0.04 * wWind;
+      hipLX += -0.035 * wWind;
+      hipRX += 0.030 * wWind;
+      kneeLX += 0.035 * wWind;
     }
 
     // 3. Friendly "안녕?" Greeting Wave Layer (`wave`)
@@ -2734,12 +2959,11 @@ export class Mannequin3DWebGLEngine {
     this.characterGroup.updateMatrixWorld(true);
     this._invCharMat.copy(this.characterGroup.matrixWorld).invert();
 
-    // 6. Compute Palm Grip Anchor + Step Lightweight `SpringBoneSystem` (Req 6.d)
+    // 6. Compute Palm Grip Anchor + Step Multi-Chain `SpringBoneSystem` (Req 6.d)
     this._tmpVecA
       .setFromMatrixPosition(this.leftPalmGripAnchor.matrixWorld)
       .applyMatrix4(this._invCharMat);
     const palmLocalL = this._tmpVecA;
-    this.leftHandSocket.position.set(palmLocalL.x - 0.006, palmLocalL.y, palmLocalL.z);
 
     const invDt = 1.0 / Math.max(0.008, dt);
     const vx = (palmLocalL.x - this.bagSpringState.prevHandPos.x) * invDt;
@@ -2749,22 +2973,90 @@ export class Mannequin3DWebGLEngine {
     this.bagSpringState.prevHandPos.copy(palmLocalL);
     this.bagSpringState.prevHandVel.set(vx, 0, vz);
 
+    const weatherWindKmh = Number(this.weatherInfo?.windSpeed) || (wUmb > 0.2 ? 19 : 11);
     const springs = this.springBones.update({
       dt,
       timeSec: t,
       walkWeight: wWalk,
+      windWeight: wWind,
+      windSpeedKmh: weatherWindKmh,
       yawVel,
       handAccelX: ax,
       handAccelZ: az,
     });
+    this.lastSprings = springs;
 
-    b[BONE.JIGGLE_NECK].rotation.set(springs.neck.rx, 0, springs.neck.rz);
-    b[BONE.JIGGLE_HEM].rotation.set(springs.hem.rx, 0, springs.hem.rz);
-    this.leftHandSocket.rotation.set(springs.bag.rx, 0, springs.bag.rz);
-    b[BONE.JIGGLE_NECK].updateMatrixWorld(true);
-    b[BONE.JIGGLE_HEM].updateMatrixWorld(true);
+    // Apply 2-Link Muffler/Tie Flutter + Lapel Drape
+    b[BONE.JIGGLE_NECK_UPPER].rotation.set(
+      springs.neckUpper.rx,
+      springs.neckUpper.ry,
+      springs.neckUpper.rz
+    );
+    b[BONE.JIGGLE_NECK_TIP].rotation.set(
+      springs.neckTip.rx,
+      springs.neckTip.ry,
+      springs.neckTip.rz
+    );
+    b[BONE.JIGGLE_LAPEL].rotation.set(springs.lapel.rx, springs.lapel.ry, springs.lapel.rz);
 
-    // 7. Update Right-Hand Weather Umbrella Socket + Raindrop Streaks
+    // Apply 2-Link Coat/Skirt/Dress Wave + Radial Billow Volume Inflation
+    b[BONE.JIGGLE_HEM_UPPER].rotation.set(
+      springs.hemUpper.rx,
+      springs.hemUpper.ry,
+      springs.hemUpper.rz
+    );
+    b[BONE.JIGGLE_HEM_LOWER].rotation.set(
+      springs.hemLower.rx,
+      springs.hemLower.ry,
+      springs.hemLower.rz
+    );
+    b[BONE.JIGGLE_HEM_LOWER].scale.set(
+      1 + springs.billowX * 1.48,
+      1,
+      1 + springs.billowZ + wWalk * 0.055
+    );
+
+    // Apply Coupled Crossbody Leather Strap Flex & D-Ring Hip Bounce
+    const strapRest = b[BONE.JIGGLE_STRAP].userData.restPos;
+    b[BONE.JIGGLE_STRAP].position.set(
+      strapRest.x + Math.max(0, springs.bagStrap.rz) * 0.016,
+      strapRest.y + springs.bagStrap.dy,
+      strapRest.z
+    );
+    b[BONE.JIGGLE_STRAP].rotation.set(
+      springs.bagStrap.rx,
+      springs.bagStrap.ry,
+      springs.bagStrap.rz
+    );
+
+    const bagRest = b[BONE.JIGGLE_BAG].userData.restPos;
+    b[BONE.JIGGLE_BAG].position.set(
+      bagRest.x + Math.max(0, springs.crossbodyBag.rz) * 0.012,
+      bagRest.y + springs.crossbodyBag.dy,
+      bagRest.z
+    );
+    b[BONE.JIGGLE_BAG].rotation.set(
+      springs.crossbodyBag.rx,
+      springs.crossbodyBag.ry,
+      springs.crossbodyBag.rz
+    );
+
+    // Apply 3-DOF Handheld Briefcase / Shopper Tote Socket Swing & Bounce
+    this.leftHandSocket.position.set(
+      palmLocalL.x - 0.006,
+      palmLocalL.y + springs.handBag.dy,
+      palmLocalL.z
+    );
+    this.leftHandSocket.rotation.set(
+      springs.handBag.rx,
+      springs.handBag.ry,
+      springs.handBag.rz
+    );
+
+    b[BONE.SPINE1].updateMatrixWorld(true);
+    b[BONE.PELVIS].updateMatrixWorld(true);
+
+    // 7. Update Right-Hand Weather Umbrella Socket + Raindrop / Wind Breeze Streamlines
     const showUmbrella = wUmb > 0.18;
     this.umbrellaProp.visible = showUmbrella;
     this.rainStreaks.visible = showUmbrella;
@@ -2781,7 +3073,38 @@ export class Mannequin3DWebGLEngine {
         seeds[i].y -= seeds[i].speed * dt;
         if (seeds[i].y < 0.04) seeds[i].y = 2.18;
         posAttr.setXYZ(i * 2, seeds[i].x, seeds[i].y, seeds[i].z);
-        posAttr.setXYZ(i * 2 + 1, seeds[i].x - 0.008, seeds[i].y - 0.095, seeds[i].z);
+        posAttr.setXYZ(i * 2 + 1, seeds[i].x - 0.008 - springs.windNorm * 0.022, seeds[i].y - 0.095, seeds[i].z);
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    const showWindStreaks = !showUmbrella && (wWind > 0.16 || weatherWindKmh >= 22);
+    this.windStreaks.visible = showWindStreaks;
+    if (showWindStreaks) {
+      const seeds = this.windStreaks.userData.seeds;
+      const posAttr = this.windStreaks.userData.lines.geometry.attributes.position;
+      const windSpeedScale = 0.75 + springs.windNorm * 0.85;
+      this.windStreaks.userData.mat.opacity = Math.min(0.30, 0.12 + springs.windIntensity * 0.14);
+      for (let i = 0; i < seeds.length; i++) {
+        const s = seeds[i];
+        s.x += s.speed * windSpeedScale * dt;
+        s.y -= s.speed * 0.11 * dt;
+        if (s.x > 1.25 || s.y < 0.12) {
+          s.x = -1.25 - Math.random() * 0.25;
+          s.y = 0.32 + Math.random() * 1.48;
+        }
+        const segLen = s.len * (0.85 + 0.25 * springs.windNorm);
+        const baseIdx = i * 6;
+        for (let seg = 0; seg < 3; seg++) {
+          const u0 = seg / 3;
+          const u1 = (seg + 1) / 3;
+          const x0 = s.x - u0 * segLen;
+          const x1 = s.x - u1 * segLen;
+          const wave0 = Math.sin(t * 5.2 + s.phase - u0 * 2.6) * 0.016;
+          const wave1 = Math.sin(t * 5.2 + s.phase - u1 * 2.6) * 0.016;
+          posAttr.setXYZ(baseIdx + seg * 2, x0, s.y + u0 * 0.028 + wave0, s.z);
+          posAttr.setXYZ(baseIdx + seg * 2 + 1, x1, s.y + u1 * 0.028 + wave1, s.z);
+        }
       }
       posAttr.needsUpdate = true;
     }
@@ -2895,6 +3218,7 @@ export class Mannequin3DWebGLEngine {
         Math.abs(yawDiff) >= 0.0015 || isCamSettling || this.scanProgress < 1.0;
       const isPoseTransitioning =
         Math.abs((mode === 'walk' ? 1 : 0) - this.poseBlend.walk) > 0.04 ||
+        Math.abs((mode === 'wind' ? 1 : 0) - this.poseBlend.wind) > 0.04 ||
         Math.abs((mode === 'wave' ? 1 : 0) - this.poseBlend.wave) > 0.04 ||
         Math.abs((mode === 'umbrella' ? 1 : 0) - this.poseBlend.umbrella) > 0.04 ||
         Math.abs((mode === 'pose_hands' ? 1 : 0) - this.poseBlend.hands) > 0.04;
@@ -2941,6 +3265,7 @@ export class Mannequin3DWebGLEngine {
     disposeSubtree(this.pedestalGroup);
     disposeSubtree(this.umbrellaProp);
     disposeSubtree(this.rainStreaks);
+    disposeSubtree(this.windStreaks);
     disposeSubtree(this.scanRingMesh);
 
     this.envMap?.dispose?.();
