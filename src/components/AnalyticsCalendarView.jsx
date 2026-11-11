@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Download,
   Luggage,
-  PieChart,
   Plus,
   Trash2,
   TrendingDown,
@@ -237,11 +236,26 @@ export default function AnalyticsCalendarView({
     <div>
       <PageHeader
         title="인사이트"
-        subtitle={`총 ${summary.totalItems}벌 · 활용률 ${summary.utilizationRate}%`}
+        subtitle={
+          <span className="tabular-nums">
+            총 {summary.totalItems}벌 · 활용률 {summary.utilizationRate}%
+          </span>
+        }
+        actions={
+          <button
+            id="open-ootd-calendar-sheet-btn"
+            type="button"
+            className="btn btn-secondary btn-sm tabular-nums"
+            onClick={() => openSheet('calendar')}
+          >
+            <Calendar size={14} />
+            <span>캘린더 ({wornCount + plannedCount})</span>
+          </button>
+        }
       />
 
       {/* Primary Apple Fitness-Style Bento Grid (3 Summary Metric Cards — Req 12.d) */}
-      <div className="hig-bento-grid" style={{ marginBottom: 16 }}>
+      <div className="hig-bento-grid">
         {/* Bento 1: Average CPW */}
         <button
           id="bento-cpw-card"
@@ -255,86 +269,35 @@ export default function AnalyticsCalendarView({
           </div>
           <div>
             <div className="hig-large-title tabular-nums">{formatKRW(summary.avgCpw)}</div>
-            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
-              총 자산 {formatKRW(summary.totalValue)} · 탭하여 순위 보기
+            <div className="hig-caption tabular-nums" style={{ marginTop: 8 }}>
+              총 자산 {formatKRW(summary.totalValue)} · 순위 보기
             </div>
           </div>
         </button>
 
-        {/* Bento 2: Dormant / Unworn Garment Alert */}
+        {/* Bento 2: Closet Utilization, Dormant Alert & Balance (#bento-utilization-card) */}
         <button
-          id="bento-dormant-card"
+          id="bento-utilization-card"
           type="button"
           className="hig-bento-card"
-          onClick={() => openSheet('dormant')}
+          onClick={() => openSheet('utilization')}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <span className="hig-caption">미착용 방치 의류 알림</span>
+            <span className="hig-caption">옷장 가동률 · 미착용 리포트</span>
             <AlertCircle size={16} />
           </div>
           <div>
-            <div className="hig-large-title tabular-nums">
-              {dormantItems.length || summary.unwornCount}벌
-            </div>
-            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
-              옷장 가동률 {summary.utilizationRate}% · 순환 착용 필요
+            <div className="hig-large-title tabular-nums">{summary.utilizationRate}%</div>
+            <div className="hig-caption tabular-nums" style={{ marginTop: 8 }}>
+              미착용 {dormantItems.length || summary.unwornCount}벌
+              {topColor
+                ? ` · 최다 컬러 ${topColor.name} ${topColor.sharePct ?? topColor.pct ?? Math.round((topColor.count / Math.max(1, summary.totalItems)) * 100)}%`
+                : ''}
             </div>
           </div>
         </button>
 
-        {/* Bento 3: Color & Category Concentration */}
-        <button
-          id="bento-balance-card"
-          type="button"
-          className="hig-bento-card"
-          onClick={() => openSheet('balance')}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <span className="hig-caption">컬러 · 카테고리 편중도</span>
-            <PieChart size={16} />
-          </div>
-          <div>
-            <div className="hig-large-title tabular-nums">
-              {topColor ? `${topColor.name} ${topColor.sharePct ?? topColor.pct ?? Math.round((topColor.count / Math.max(1, summary.totalItems)) * 100)}%` : '균형'}
-            </div>
-            <div className="hig-caption tabular-nums" style={{ marginTop: 4 }}>
-              최다 분류: {topCat ? CATEGORY_LABEL_MAP[topCat.category] || topCat.category : '-'}
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* Retention Bento Row: OOTD Calendar + Trip Packing Checklists (Req 7.a) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 16,
-        }}
-      >
-        <button
-          id="bento-calendar-card"
-          type="button"
-          className="hig-bento-card"
-          onClick={() => openSheet('calendar')}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <span className="hig-caption">OOTD 코디 캘린더 · 예약</span>
-            <Calendar size={16} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
-            <div>
-              <div className="hig-headline tabular-nums">
-                착용 기록 {wornCount}건 · 미래 예약 {plannedCount}건
-              </div>
-              <div className="hig-caption" style={{ marginTop: 4 }}>
-                날짜별 착용 이력 및 미래 일정 코디 예약
-              </div>
-            </div>
-            <ChevronRight size={18} />
-          </div>
-        </button>
-
+        {/* Bento 3: Trip Packing Checklists (#bento-packing-card) */}
         <button
           id="bento-packing-card"
           type="button"
@@ -345,13 +308,18 @@ export default function AnalyticsCalendarView({
             <span className="hig-caption">여행 패킹 리스트</span>
             <Luggage size={16} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              width: '100%',
+            }}
+          >
             <div>
-              <div className="hig-headline tabular-nums">
-                체크리스트 {packingLists.length}개
-              </div>
-              <div className="hig-caption" style={{ marginTop: 4 }}>
-                여행 기간 · 목적지 기후별 짐싸기 자동 구성
+              <div className="hig-large-title tabular-nums">{packingLists.length}개</div>
+              <div className="hig-caption tabular-nums" style={{ marginTop: 8 }}>
+                OOTD 기록 {wornCount}건 · 예약 {plannedCount}건
               </div>
             </div>
             <ChevronRight size={18} />
@@ -379,17 +347,31 @@ export default function AnalyticsCalendarView({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 12,
-                    padding: 12,
+                    gap: 16,
+                    padding: 16,
                     borderRadius: 16,
                     background: 'var(--bg-surface)',
                   }}
                 >
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
-                    <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      background: 'var(--bg-canvas)',
+                      padding: 4,
+                    }}
+                  >
+                    <StudioGarmentImage
+                      item={item}
+                      alt={item.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>
+                      {item.name}
+                    </div>
                     <div className="hig-caption tabular-nums">
                       구매가 {formatKRW(item.price)} · {item.wear_count}회 착용
                     </div>
@@ -411,17 +393,31 @@ export default function AnalyticsCalendarView({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 12,
-                    padding: 12,
+                    gap: 16,
+                    padding: 16,
                     borderRadius: 16,
                     background: 'var(--bg-surface)',
                   }}
                 >
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
-                    <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      background: 'var(--bg-canvas)',
+                      padding: 4,
+                    }}
+                  >
+                    <StudioGarmentImage
+                      item={item}
+                      alt={item.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>
+                      {item.name}
+                    </div>
                     <div className="hig-caption tabular-nums">
                       구매가 {formatKRW(item.price)} · {item.wear_count}회 착용
                     </div>
@@ -434,94 +430,102 @@ export default function AnalyticsCalendarView({
         </div>
       </ResponsiveSheetModal>
 
-      {/* Sheet 2: Dormant Garments Alert */}
+      {/* Sheet 2: Utilization, Dormant Garments & Wardrobe Balance Drill-Down */}
       <ResponsiveSheetModal
-        open={activeSheet === 'dormant'}
+        open={activeSheet === 'utilization' || activeSheet === 'dormant' || activeSheet === 'balance'}
         onClose={() => setActiveSheet(null)}
-        eyebrow="DORMANT WARDROBE ALERT"
-        title="장기간 미착용 · 방치 의류 리포트"
+        eyebrow="UTILIZATION & BALANCE"
+        title="옷장 가동률 · 미착용 및 편중도"
         maxWidth={560}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {dormantItems.length === 0 ? (
-            <p className="hig-caption">현재 모든 의류가 고르게 착용되고 있습니다.</p>
-          ) : (
-            dormantItems.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 12,
-                  borderRadius: 16,
-                  background: 'var(--bg-surface)',
-                }}
-              >
-                <div style={{ width: 46, height: 46, borderRadius: 10, background: 'var(--bg-canvas)', padding: 4 }}>
-                  <StudioGarmentImage item={item} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div className="hig-body" style={{ fontWeight: 600 }}>{item.name}</div>
-                  <div className="hig-caption tabular-nums">
-                    착용 {item.wear_count || 0}회 ·{' '}
-                    {item.daysUnworn && item.daysUnworn < 900
-                      ? `${item.daysUnworn}일 경과`
-                      : item.daysSinceWorn
-                        ? `${item.daysSinceWorn}일 경과`
-                        : '미착용 상태'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={async () => {
-                    await apiFetch(`/garments/${item.id}/wear`, { method: 'POST' });
-                    await loadAll();
-                    onClosetUpdated?.();
-                    showToast?.('오늘 착용으로 전환되었습니다');
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="hig-caption">장기간 미착용 의류 ({dormantItems.length}벌)</span>
+            {dormantItems.length === 0 ? (
+              <p className="hig-caption">현재 모든 의류가 고르게 착용되고 있습니다.</p>
+            ) : (
+              dormantItems.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    padding: 16,
+                    borderRadius: 16,
+                    background: 'var(--bg-surface)',
                   }}
                 >
-                  착용 +1
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </ResponsiveSheetModal>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      background: 'var(--bg-canvas)',
+                      padding: 4,
+                    }}
+                  >
+                    <StudioGarmentImage
+                      item={item}
+                      alt={item.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="hig-body" style={{ fontWeight: 600 }}>
+                      {item.name}
+                    </div>
+                    <div className="hig-caption tabular-nums">
+                      착용 {item.wear_count || 0}회 ·{' '}
+                      {item.daysUnworn && item.daysUnworn < 900
+                        ? `${item.daysUnworn}일 경과`
+                        : item.daysSinceWorn
+                          ? `${item.daysSinceWorn}일 경과`
+                          : '미착용 상태'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={async () => {
+                      await apiFetch(`/garments/${item.id}/wear`, { method: 'POST' });
+                      await loadAll();
+                      onClosetUpdated?.();
+                      showToast?.('오늘 착용으로 전환되었습니다');
+                    }}
+                  >
+                    착용 +1
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
 
-      {/* Sheet 3: Color & Category Concentration */}
-      <ResponsiveSheetModal
-        open={activeSheet === 'balance'}
-        onClose={() => setActiveSheet(null)}
-        eyebrow="WARDROBE BALANCE"
-        title="보유 의류 색상 · 카테고리 편중도"
-        maxWidth={540}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div>
-            <span className="hig-caption" style={{ display: 'block', marginBottom: 10 }}>
-              색상 분포
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 8 }}>
+              색상 분포 · 최다 분류 ({topCat ? CATEGORY_LABEL_MAP[topCat.category] || topCat.category : '-'})
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {colorDistList.map((c) => {
                 const pct = c.sharePct ?? Math.round((c.count / Math.max(1, summary.totalItems)) * 100);
                 return (
-                  <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span
                       style={{
-                        width: 12,
-                        height: 12,
+                        width: 8,
+                        height: 8,
                         borderRadius: '50%',
                         background: c.hex,
                         flexShrink: 0,
                       }}
                     />
-                    <span className="hig-caption" style={{ width: 84 }}>{c.name}</span>
+                    <span className="hig-caption" style={{ width: 80 }}>
+                      {c.name}
+                    </span>
                     <div
                       style={{
                         flex: 1,
-                        height: 6,
+                        height: 8,
                         borderRadius: 999,
                         background: 'var(--bg-surface)',
                         overflow: 'hidden',
@@ -536,7 +540,7 @@ export default function AnalyticsCalendarView({
                         }}
                       />
                     </div>
-                    <span className="hig-caption tabular-nums" style={{ width: 42, textAlign: 'right' }}>
+                    <span className="hig-caption tabular-nums" style={{ width: 48, textAlign: 'right' }}>
                       {pct}%
                     </span>
                   </div>
@@ -546,21 +550,22 @@ export default function AnalyticsCalendarView({
           </div>
 
           <div>
-            <span className="hig-caption" style={{ display: 'block', marginBottom: 10 }}>
+            <span className="hig-caption" style={{ display: 'block', marginBottom: 8 }}>
               카테고리 비중
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {catDistList.map((cat) => {
-                const pct = cat.sharePct ?? Math.round((cat.count / Math.max(1, summary.totalItems)) * 100);
+                const pct =
+                  cat.sharePct ?? Math.round((cat.count / Math.max(1, summary.totalItems)) * 100);
                 return (
-                  <div key={cat.category} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div key={cat.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="hig-caption" style={{ width: 96 }}>
                       {CATEGORY_LABEL_MAP[cat.category] || cat.category}
                     </span>
                     <div
                       style={{
                         flex: 1,
-                        height: 6,
+                        height: 8,
                         borderRadius: 999,
                         background: 'var(--bg-surface)',
                         overflow: 'hidden',
@@ -575,7 +580,7 @@ export default function AnalyticsCalendarView({
                         }}
                       />
                     </div>
-                    <span className="hig-caption tabular-nums" style={{ width: 52, textAlign: 'right' }}>
+                    <span className="hig-caption tabular-nums" style={{ width: 56, textAlign: 'right' }}>
                       {cat.count}벌 ({pct}%)
                     </span>
                   </div>
@@ -599,11 +604,11 @@ export default function AnalyticsCalendarView({
             onSubmit={handleAddCalendarEntry}
             style={{
               background: 'var(--bg-surface)',
-              borderRadius: 18,
+              borderRadius: 16,
               padding: 16,
               display: 'flex',
               flexDirection: 'column',
-              gap: 10,
+              gap: 8,
             }}
           >
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>

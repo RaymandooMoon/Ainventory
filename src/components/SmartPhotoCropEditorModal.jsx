@@ -92,7 +92,7 @@ export async function renderCroppedImageOutput(
   stageCanvas.width = Math.max(64, baseW);
   stageCanvas.height = Math.max(64, baseH);
   const sCtx = stageCanvas.getContext('2d', { willReadFrequently: true });
-  sCtx.fillStyle = '#F4F1EA';
+  sCtx.fillStyle = '#F5F5F7';
   sCtx.fillRect(0, 0, stageCanvas.width, stageCanvas.height);
 
   sCtx.save();
@@ -149,9 +149,9 @@ export async function renderCroppedImageOutput(
   bgG /= borderSamples.length;
   bgB /= borderSamples.length;
 
-  // Optional 1-click Acloset-style Studio Paper Background Cleanup (#F4F1EA)
+  // Optional 1-click Neutral Monochrome Studio Paper Background Cleanup (#F5F5F7)
   if (studioCutout) {
-    const studioRGB = [244, 241, 234];
+    const studioRGB = [245, 245, 247];
     for (let y = 0; y < outH; y++) {
       for (let x = 0; x < outW; x++) {
         const i = (y * outW + x) * 4;
@@ -449,16 +449,17 @@ export default function SmartPhotoCropEditorModal({
     >
       <div
         className="modal-box ui-sheet-box photo-crop-modal"
-        style={{ maxWidth: 780, width: '95vw', padding: '20px 22px' }}
+        data-sheet-panel="true"
+        style={{ maxWidth: 780, width: '95vw', padding: 24 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="ui-sheet-drag-handle" aria-hidden="true" />
-        <div className="modal-header" style={{ marginBottom: 12 }}>
+        <div className="modal-header" style={{ marginBottom: 16 }}>
           <div>
             <span className="rec-tag" style={{ marginBottom: 4, display: 'inline-block' }}>
               SMART PHOTO CROP &amp; STUDIO CUTOUT
             </span>
-            <h2>{title}</h2>
+            <h2 className="hig-headline">{title}</h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="닫기">
             <X size={18} />
@@ -483,10 +484,10 @@ export default function SmartPhotoCropEditorModal({
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm tabular-nums"
               onClick={() => setRotation90((r) => (r - 90 + 360) % 360)}
               title="-90° 회전"
             >
@@ -494,7 +495,7 @@ export default function SmartPhotoCropEditorModal({
             </button>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm tabular-nums"
               onClick={() => setRotation90((r) => (r + 90) % 360)}
               title="+90° 회전"
             >
@@ -520,7 +521,7 @@ export default function SmartPhotoCropEditorModal({
           >
             <canvas ref={previewCanvasRef} className="crop-preview-canvas" />
 
-            {/* Interactive Crop Box + Darkened Exterior Scrim via box-shadow */}
+            {/* Interactive Crop Box */}
             <div
               className="crop-selection-box"
               style={{
@@ -532,13 +533,11 @@ export default function SmartPhotoCropEditorModal({
               onMouseDown={(e) => beginDrag(e, 'move')}
               onTouchStart={(e) => beginDrag(e, 'move')}
             >
-              {/* Rule of thirds grid */}
               <span className="crop-grid-line v1" />
               <span className="crop-grid-line v2" />
               <span className="crop-grid-line h1" />
               <span className="crop-grid-line h2" />
 
-              {/* 8 Resize Handles */}
               {['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].map((dir) => (
                 <span
                   key={dir}
@@ -553,12 +552,12 @@ export default function SmartPhotoCropEditorModal({
 
         {/* Aspect Ratio + Fine Sliders + Studio Background Toggle */}
         <div className="crop-controls-panel">
-          <div className="ui-chip-rail" style={{ marginBottom: 10 }}>
+          <div className="ui-chip-rail" style={{ marginBottom: 8 }}>
             {ASPECT_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
                 type="button"
-                className={`chip ${aspectKey === opt.key ? 'active' : ''}`}
+                className={`chip tabular-nums ${aspectKey === opt.key ? 'active' : ''}`}
                 onClick={() => applyAspectPreset(opt)}
               >
                 {opt.label}
@@ -578,7 +577,9 @@ export default function SmartPhotoCropEditorModal({
 
           <div className="crop-sliders-grid">
             <label className="crop-slider-item">
-              <span>수평 미세 보정 ({straightenDeg > 0 ? `+${straightenDeg}` : straightenDeg}°)</span>
+              <span className="tabular-nums">
+                수평 미세 보정 ({straightenDeg > 0 ? `+${straightenDeg}` : straightenDeg}°)
+              </span>
               <input
                 type="range"
                 min="-20"
@@ -589,7 +590,7 @@ export default function SmartPhotoCropEditorModal({
               />
             </label>
             <label className="crop-slider-item">
-              <span>
+              <span className="tabular-nums">
                 <Sun size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                 노출 · 밝기 ({brightness}%)
               </span>
@@ -610,13 +611,13 @@ export default function SmartPhotoCropEditorModal({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            gap: 10,
-            marginTop: 14,
+            gap: 8,
+            marginTop: 16,
             flexWrap: 'wrap',
           }}
         >
-          <span style={{ fontSize: '0.79rem', color: 'var(--ink-secondary)' }}>
-            전신샷에서도 원하는 부위(얼굴·상의·하의·가방)로 박스를 드래그해 자연스럽게 크롭하세요.
+          <span className="hig-caption">
+            원하는 부위로 박스를 드래그해 크롭하면 자동 WebP 배경제거가 적용됩니다.
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>

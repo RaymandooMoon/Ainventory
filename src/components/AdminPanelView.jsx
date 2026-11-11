@@ -10,12 +10,14 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newCloset, setNewCloset] = useState('wife');
 
+  const [confirmReset, setConfirmReset] = useState(false);
+
   const loadOverview = async () => {
     try {
       const data = await apiFetch('/admin/overview');
       setOverview(data);
     } catch (err) {
-      showToast(err.message || '어드민 정보를 불러오지 못했습니다.');
+      showToast?.(err.message || '어드민 정보를 불러오지 못했습니다.');
     }
   };
 
@@ -40,23 +42,21 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
       setNewPassword('');
       setNewDisplayName('');
       loadOverview();
-      showToast('새 테스터 계정이 생성되었습니다.');
+      showToast?.('새 테스터 계정이 생성되었습니다.');
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
   };
 
   const handleResetDemo = async () => {
-    if (!window.confirm('데모 옷장 및 기록 데이터를 초기 상태로 리셋할까요? (계정 정보는 유지됩니다)')) {
-      return;
-    }
     try {
       await apiFetch('/admin/reset-demo', { method: 'POST' });
+      setConfirmReset(false);
       loadOverview();
       onClosetUpdated?.();
-      showToast('초기 샘플 옷장 데이터로 복원되었습니다.');
+      showToast?.('초기 샘플 옷장 데이터로 복원되었습니다.');
     } catch (err) {
-      showToast(err.message);
+      showToast?.(err.message);
     }
   };
 
@@ -64,12 +64,35 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
     <div>
       <PageHeader
         eyebrow="ADMIN & HOME SERVER CONSOLE"
-        title="어드민 & 맥미니 M2 서버 콘솔"
-        subtitle="부부 테스터 계정 관리, SQLite 데이터베이스 현황, 그리고 향후 App Store / Play Store 및 Mac mini M2 운영 패널입니다."
+        title="어드민 & 서버 콘솔"
+        subtitle="테스터 계정 관리 및 로컬 데이터베이스 현황"
         actions={
-          <button type="button" className="btn btn-secondary" onClick={handleResetDemo}>
-            <RefreshCw size={15} /> 샘플 옷장 데이터 초기화
-          </button>
+          !confirmReset ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setConfirmReset(true)}
+            >
+              <RefreshCw size={15} /> 샘플 데이터 초기화
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setConfirmReset(false)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleResetDemo}
+              >
+                <RefreshCw size={14} /> 초기화 확정
+              </button>
+            </div>
+          )
         }
       />
 
@@ -106,18 +129,16 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
 
           <section className="two-col-panels">
             <div className="section-card">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 className="hig-headline tabular-nums" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <ShieldCheck size={18} /> 등록된 테스터 계정 ({overview.users.length}명)
               </h3>
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 16 }}>
                 {overview.users.map((u) => (
                   <div key={u.id} className="cpw-row">
                     <div style={{ flex: 1 }}>
-                      <strong>{u.display_name}</strong>{' '}
-                      <span style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-                        (@{u.username})
-                      </span>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)' }}>
+                      <strong className="hig-body">{u.display_name}</strong>{' '}
+                      <span className="hig-caption">(@{u.username})</span>
+                      <div className="hig-caption">
                         기본 연결 옷장: {u.default_closet === 'husband' ? '남편 옷장' : '와이프 옷장'}
                       </div>
                     </div>
@@ -130,9 +151,13 @@ export default function AdminPanelView({ onClosetUpdated, showToast }) {
 
               <form
                 onSubmit={handleCreateUser}
-                style={{ borderTop: '1px solid var(--border-hairline)', paddingTop: 16 }}
+                style={{
+                  background: 'var(--bg-canvas)',
+                  borderRadius: 16,
+                  padding: 16,
+                }}
               >
-                <h4 style={{ fontSize: '0.92rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <h4 className="hig-headline" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <UserPlus size={15} /> 추가 테스터 계정 발급
                 </h4>
                 <div className="form-grid-2">

@@ -609,14 +609,21 @@ export default function ProfilePersonalColorModal({
 
   return (
     <div className="modal-backdrop" onClick={() => allowDismiss && onClose?.()}>
-      <div className="pcm-modal-box" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pcm-modal-box"
+        data-sheet-panel="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Responsive Header */}
         <div className="pcm-header">
           <div className="pcm-header-title">
-            <span className="rec-tag" style={{ marginBottom: 6, display: 'inline-block' }}>
+            <span
+              className="hig-caption tabular-nums"
+              style={{ marginBottom: 4, display: 'inline-block', color: 'var(--ink-secondary)' }}
+            >
               STEP {step} OF 2 · 3D MANNEQUIN &amp; PERSONAL COLOR STUDIO
             </span>
-            <h2>
+            <h2 className="hig-headline">
               {step === 1
                 ? 'Step 1. 7대 체형 · 스리사이즈 · 3D 마네킹 실루엣 설정'
                 : 'Step 2. 실시간 카메라/사진 퍼스널컬러 측정 · PCCS 톤 맵'}
@@ -627,7 +634,7 @@ export default function ProfilePersonalColorModal({
             <button
               id="tab-step1-body-btn"
               type="button"
-              className={`chip ${step === 1 ? 'active' : ''}`}
+              className={`chip tabular-nums ${step === 1 ? 'active' : ''}`}
               onClick={() => setStep(1)}
             >
               Step 1. 7체형 · 3사이즈
@@ -635,7 +642,7 @@ export default function ProfilePersonalColorModal({
             <button
               id="tab-step2-pc-btn"
               type="button"
-              className={`chip ${step === 2 ? 'active' : ''}`}
+              className={`chip tabular-nums ${step === 2 ? 'active' : ''}`}
               onClick={() => setStep(2)}
             >
               Step 2. 카메라 퍼스널컬러 측정
@@ -667,7 +674,7 @@ export default function ProfilePersonalColorModal({
               displayHeight={220}
               style={{ objectFit: 'contain' }}
             />
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
               {[
                 { deg: 0, label: '정면' },
                 { deg: -16, label: '3/4 입체' },
@@ -676,7 +683,7 @@ export default function ProfilePersonalColorModal({
                 <button
                   key={p.deg}
                   type="button"
-                  className={`atl-chip ${previewRotDeg === p.deg ? 'active' : ''}`}
+                  className={`atl-chip tabular-nums ${previewRotDeg === p.deg ? 'active' : ''}`}
                   onClick={() => setPreviewRotDeg(p.deg)}
                 >
                   {p.label}
@@ -688,23 +695,24 @@ export default function ProfilePersonalColorModal({
           <div className="pcm-top-3d-info">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
-                <span className="atl-eyebrow">LIVE 3D MODELING · 실시간 체형 및 퍼스널컬러 동기화</span>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: 2 }}>
+                <span className="hig-caption" style={{ color: 'var(--ink-secondary)' }}>
+                  LIVE 3D MODELING · 실시간 체형 및 퍼스널컬러 동기화
+                </span>
+                <h3 className="hig-headline" style={{ marginTop: 4 }}>
                   {resolvedAnat.shapeLabelKo} ·{' '}
-                  <span style={{ color: 'var(--accent-terracotta)' }}>{activeSubType.labelKo}</span>
+                  <span style={{ color: 'var(--ink-primary)' }}>{activeSubType.labelKo}</span>
                 </h3>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span
+                  className="hig-caption tabular-nums"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
-                    padding: '5px 11px',
+                    gap: 8,
+                    padding: '4px 12px',
                     borderRadius: 999,
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-medium)',
-                    fontSize: '0.78rem',
+                    background: 'var(--bg-canvas)',
                     fontWeight: 700,
                   }}
                 >
@@ -714,7 +722,6 @@ export default function ProfilePersonalColorModal({
                       height: 14,
                       borderRadius: '50%',
                       background: activeMannequinColorHex,
-                      border: '1px solid rgba(0,0,0,0.2)',
                     }}
                   />
                   3D 모델링 컬러: {activeMannequinColorHex}
@@ -722,7 +729,10 @@ export default function ProfilePersonalColorModal({
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', fontSize: '0.82rem', color: 'var(--ink-secondary)' }}>
+            <div
+              className="hig-caption tabular-nums"
+              style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', color: 'var(--ink-secondary)' }}
+            >
               <span>
                 • <strong>BMI {resolvedAnat.bmi}</strong> ({resolvedAnat.bmiCategory})
               </span>
@@ -744,11 +754,10 @@ export default function ProfilePersonalColorModal({
                 alignItems: 'center',
                 gap: 8,
                 flexWrap: 'wrap',
-                paddingTop: 6,
-                borderTop: '1px solid var(--border-hairline)',
+                paddingTop: 8,
               }}
             >
-              <span style={{ fontSize: '0.76rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span className="hig-caption" style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Palette size={14} /> 3D 모델링 컬러 적용:
               </span>
               <button
@@ -769,7 +778,7 @@ export default function ProfilePersonalColorModal({
               <button
                 id="mode-skin-color-btn"
                 type="button"
-                className={`atl-chip ${mannequinColorMode === 'skin_tone' && !customMannequinHex ? 'active' : ''}`}
+                className={`atl-chip tabular-nums ${mannequinColorMode === 'skin_tone' && !customMannequinHex ? 'active' : ''}`}
                 onClick={() => {
                   setMannequinColorMode('skin_tone');
                   setCustomMannequinHex(null);
@@ -789,17 +798,16 @@ export default function ProfilePersonalColorModal({
                   type="button"
                   title={`${st.labelKo} 컬러로 3D 모델링 변경`}
                   onClick={() => handleSelectSubType(st.key)}
+                  className="hig-caption"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
                     padding: '4px 8px',
                     borderRadius: 999,
-                    fontSize: '0.7rem',
                     fontWeight: 600,
-                    background: selectedSubTypeKey === st.key ? 'var(--ink-primary)' : 'var(--bg-surface)',
-                    color: selectedSubTypeKey === st.key ? '#fff' : 'var(--ink-secondary)',
-                    border: '1px solid var(--border-hairline)',
+                    background: selectedSubTypeKey === st.key ? 'var(--accent-mono)' : 'var(--bg-canvas)',
+                    color: selectedSubTypeKey === st.key ? 'var(--accent-mono-ink)' : 'var(--ink-secondary)',
                   }}
                 >
                   <span
@@ -808,7 +816,6 @@ export default function ProfilePersonalColorModal({
                       height: 10,
                       borderRadius: '50%',
                       background: st.bubbleHex,
-                      border: '1px solid rgba(0,0,0,0.15)',
                     }}
                   />
                   {st.shortKo.replace('\n', ' ')}
@@ -830,7 +837,7 @@ export default function ProfilePersonalColorModal({
                     <label className="field-label">연령대 (10단계 통계 벤치마크 기준)</label>
                     <select
                       id="profile-age-group"
-                      className="select-input"
+                      className="select-input tabular-nums"
                       value={ageGroup}
                       onChange={(e) => setAgeGroup(e.target.value)}
                     >
@@ -863,7 +870,7 @@ export default function ProfilePersonalColorModal({
                     <input
                       id="profile-age-input"
                       type="number"
-                      className="text-input"
+                      className="text-input tabular-nums"
                       value={age}
                       onChange={(e) => setAge(e.target.value)}
                       placeholder="예: 33"
@@ -874,7 +881,7 @@ export default function ProfilePersonalColorModal({
                     <input
                       id="profile-height-input"
                       type="number"
-                      className="text-input"
+                      className="text-input tabular-nums"
                       value={heightCm}
                       onChange={(e) => setHeightCm(e.target.value)}
                       placeholder="예: 175"
@@ -885,7 +892,7 @@ export default function ProfilePersonalColorModal({
                     <input
                       id="profile-weight-input"
                       type="number"
-                      className="text-input"
+                      className="text-input tabular-nums"
                       value={weightKg}
                       onChange={(e) => setWeightKg(e.target.value)}
                       placeholder="예: 68"
@@ -894,13 +901,13 @@ export default function ProfilePersonalColorModal({
                 </div>
 
                 {/* 7 Body Shape Cards with Mini 3D Mannequins */}
-                <div style={{ marginTop: 6, marginBottom: 16 }}>
+                <div style={{ marginTop: 8, marginBottom: 16 }}>
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: 10,
+                      marginBottom: 8,
                       flexWrap: 'wrap',
                       gap: 8,
                     }}
@@ -911,7 +918,7 @@ export default function ProfilePersonalColorModal({
                     <button
                       id="recommend-body-shape-btn"
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-secondary btn-sm tabular-nums"
                       onClick={handleRecommendBodyShape}
                     >
                       <Wand2 size={14} /> BMI({resolvedAnat.bmi}) 기반 추천 체형 자동 선택
@@ -932,19 +939,19 @@ export default function ProfilePersonalColorModal({
                         >
                           {active && (
                             <span
+                              className="hig-caption"
                               style={{
                                 position: 'absolute',
-                                top: 6,
-                                left: 6,
-                                fontSize: '0.62rem',
+                                top: 8,
+                                left: 8,
                                 fontWeight: 700,
-                                background: 'var(--ink-primary)',
-                                color: '#fff',
-                                padding: '2px 6px',
+                                background: 'var(--accent-mono)',
+                                color: 'var(--accent-mono-ink)',
+                                padding: '4px 8px',
                                 borderRadius: 999,
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: 2,
+                                gap: 4,
                               }}
                             >
                               <Check size={10} /> 선택됨
@@ -952,15 +959,15 @@ export default function ProfilePersonalColorModal({
                           )}
                           {isRec && (
                             <span
+                              className="hig-caption"
                               style={{
                                 position: 'absolute',
-                                top: 6,
-                                right: 6,
-                                fontSize: '0.62rem',
+                                top: 8,
+                                right: 8,
                                 fontWeight: 700,
-                                background: 'var(--accent-sage)',
-                                color: '#fff',
-                                padding: '2px 5px',
+                                background: 'var(--bg-canvas)',
+                                color: 'var(--ink-primary)',
+                                padding: '4px 8px',
                                 borderRadius: 999,
                               }}
                             >
@@ -984,10 +991,10 @@ export default function ProfilePersonalColorModal({
                             displayWidth={78}
                             displayHeight={110}
                           />
-                          <strong style={{ display: 'block', fontSize: '0.8rem', marginTop: 4 }}>
+                          <strong className="hig-caption" style={{ display: 'block', marginTop: 4 }}>
                             {b.shortKo}
                           </strong>
-                          <span style={{ fontSize: '0.66rem', color: 'var(--ink-muted)' }}>
+                          <span className="hig-caption" style={{ color: 'var(--ink-muted)' }}>
                             {b.badge}
                           </span>
                         </button>
@@ -999,10 +1006,9 @@ export default function ProfilePersonalColorModal({
                 {/* Detailed Three-Sizes (Chest / Waist / Hip), Head Circumference, Body Fat % */}
                 <div
                   style={{
-                    background: 'var(--bg-subtle)',
+                    background: 'var(--bg-surface)',
                     padding: 16,
-                    borderRadius: 12,
-                    border: '1px solid var(--border-hairline)',
+                    borderRadius: 16,
                   }}
                 >
                   <div
@@ -1010,16 +1016,16 @@ export default function ProfilePersonalColorModal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: 10,
+                      marginBottom: 8,
                       flexWrap: 'wrap',
                       gap: 8,
                     }}
                   >
                     <div>
-                      <strong style={{ fontSize: '0.9rem' }}>
+                      <strong className="hig-body">
                         체지방률 · 스리사이즈(가슴/허리/엉덩이) · 머리둘레 상세 치수 (선택)
                       </strong>
-                      <div style={{ fontSize: '0.76rem', color: 'var(--ink-secondary)' }}>
+                      <div className="hig-caption" style={{ color: 'var(--ink-secondary)' }}>
                         입력 시 3D 마네킹 볼륨과 등신대 비율에 즉시 반영되며, 비워두면 선택한 체형({resolvedAnat.shapeShortKo})의 인체공학 디폴트가 자동 적용됩니다.
                       </div>
                     </div>
@@ -1035,70 +1041,60 @@ export default function ProfilePersonalColorModal({
 
                   <div className="pcm-5size-grid">
                     <div>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>
-                        체지방률 (%)
-                      </label>
+                      <label className="field-label">체지방률 (%)</label>
                       <input
                         id="input-body-fat"
                         type="number"
                         step="0.5"
-                        className="text-input"
+                        className="text-input tabular-nums"
                         placeholder={`기본 ${resolvedAnat.defaults.bodyFatPct}%`}
                         value={bodyFatPct}
                         onChange={(e) => setBodyFatPct(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>
-                        가슴둘레 (cm)
-                      </label>
+                      <label className="field-label">가슴둘레 (cm)</label>
                       <input
                         id="input-chest-cm"
                         type="number"
                         step="0.5"
-                        className="text-input"
+                        className="text-input tabular-nums"
                         placeholder={`기본 ${resolvedAnat.defaults.chestCm}`}
                         value={chestCm}
                         onChange={(e) => setChestCm(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>
-                        허리둘레 (cm)
-                      </label>
+                      <label className="field-label">허리둘레 (cm)</label>
                       <input
                         id="input-waist-cm"
                         type="number"
                         step="0.5"
-                        className="text-input"
+                        className="text-input tabular-nums"
                         placeholder={`기본 ${resolvedAnat.defaults.waistCm}`}
                         value={waistCm}
                         onChange={(e) => setWaistCm(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>
-                        엉덩이둘레 (cm)
-                      </label>
+                      <label className="field-label">엉덩이둘레 (cm)</label>
                       <input
                         id="input-hip-cm"
                         type="number"
                         step="0.5"
-                        className="text-input"
+                        className="text-input tabular-nums"
                         placeholder={`기본 ${resolvedAnat.defaults.hipCm}`}
                         value={hipCm}
                         onChange={(e) => setHipCm(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>
-                        머리둘레 (cm)
-                      </label>
+                      <label className="field-label">머리둘레 (cm)</label>
                       <input
                         id="input-head-cm"
                         type="number"
                         step="0.5"
-                        className="text-input"
+                        className="text-input tabular-nums"
                         placeholder={`기본 ${resolvedAnat.defaults.headCm}`}
                         value={headCm}
                         onChange={(e) => setHeadCm(e.target.value)}
@@ -1110,7 +1106,7 @@ export default function ProfilePersonalColorModal({
             </div>
 
             <div className="pcm-footer">
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.84rem' }}>
+              <label className="hig-caption tabular-nums" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                 <input
                   type="checkbox"
                   checked={regenerateWardrobe}
@@ -1121,10 +1117,10 @@ export default function ProfilePersonalColorModal({
                 </span>
               </label>
 
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-secondary tabular-nums"
                   disabled={saving}
                   onClick={handleSaveProfile}
                 >
@@ -1133,7 +1129,7 @@ export default function ProfilePersonalColorModal({
                 <button
                   id="goto-step2-personal-color-btn"
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-primary tabular-nums"
                   onClick={() => setStep(2)}
                 >
                   <Camera size={16} /> Step 2. 카메라 촬영 · 퍼스널컬러 측정으로 이동
@@ -1165,13 +1161,13 @@ export default function ProfilePersonalColorModal({
 
             {cameraError && (
               <div
+                className="hig-caption"
                 style={{
-                  background: 'var(--verdict-consider-bg)',
-                  color: 'var(--verdict-consider-ink)',
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  marginBottom: 12,
-                  fontSize: '0.82rem',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--ink-primary)',
+                  padding: '8px 16px',
+                  borderRadius: 12,
+                  marginBottom: 16,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -1191,37 +1187,36 @@ export default function ProfilePersonalColorModal({
 
             {/* Main Personal Color App Split View (Left: Camera Viewfinder, Right: PCCS 12-Tone Chart & Subtype Bubbles) */}
             <div className="pcm-pc-app-grid">
-              {/* LEFT: Camera Selfie Viewfinder & Photo Upload (matches left half of image_3.png) */}
+              {/* LEFT: Camera Selfie Viewfinder & Photo Upload */}
               <div className="pcm-camera-card">
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    background: '#1c1f28',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
-                    gap: 6,
+                    padding: '8px 16px',
+                    background: '#1C1C1E',
+                    gap: 8,
                     flexWrap: 'wrap',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       id="start-live-camera-btn"
                       type="button"
                       onClick={() =>
                         cameraActive ? stopCameraStream() : requestBiometricCapture('camera')
                       }
+                      className="hig-caption"
                       style={{
-                        padding: '6px 11px',
+                        padding: '8px 12px',
                         borderRadius: 999,
-                        fontSize: '0.76rem',
                         fontWeight: 700,
-                        background: cameraActive ? '#39e75f' : 'rgba(255,255,255,0.14)',
-                        color: cameraActive ? '#0d1318' : '#ffffff',
+                        background: cameraActive ? '#FFFFFF' : 'rgba(255,255,255,0.14)',
+                        color: cameraActive ? '#1D1D1F' : '#FFFFFF',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 5,
+                        gap: 4,
                       }}
                     >
                       <Camera size={13} />
@@ -1231,16 +1226,16 @@ export default function ProfilePersonalColorModal({
                       id="upload-photo-btn"
                       type="button"
                       onClick={() => requestBiometricCapture('upload')}
+                      className="hig-caption"
                       style={{
-                        padding: '6px 11px',
+                        padding: '8px 12px',
                         borderRadius: 999,
-                        fontSize: '0.76rem',
                         fontWeight: 700,
                         background: 'rgba(255,255,255,0.14)',
-                        color: '#ffffff',
+                        color: '#FFFFFF',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 5,
+                        gap: 4,
                       }}
                     >
                       <Upload size={13} /> 사진 올리기
@@ -1251,12 +1246,12 @@ export default function ProfilePersonalColorModal({
                     id="open-pin-editor-btn"
                     type="button"
                     onClick={() => setPinEditorOpen(true)}
+                    className="hig-caption tabular-nums"
                     style={{
-                      padding: '5px 9px',
+                      padding: '4px 8px',
                       borderRadius: 999,
-                      fontSize: '0.72rem',
-                      background: 'rgba(255,255,255,0.1)',
-                      color: '#d0d7e2',
+                      background: 'rgba(255,255,255,0.12)',
+                      color: '#F5F5F7',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4,
@@ -1266,7 +1261,7 @@ export default function ProfilePersonalColorModal({
                   </button>
                 </div>
 
-                {/* Camera / Portrait Viewport with Green Corner Brackets */}
+                {/* Camera / Portrait Viewport with Monochrome Corner Brackets */}
                 <div className="pcm-camera-viewport">
                   {cameraActive ? (
                     <video
@@ -1285,7 +1280,7 @@ export default function ProfilePersonalColorModal({
                     />
                   )}
 
-                  {/* Green 4-Corner Guide Brackets ([  ] from image_3.png) */}
+                  {/* Monochrome 4-Corner Guide Brackets */}
                   <div className="pcm-face-guide-box">
                     <span className="pcm-corner tl" />
                     <span className="pcm-corner tr" />
@@ -1302,17 +1297,16 @@ export default function ProfilePersonalColorModal({
                           key={pin.id}
                           type="button"
                           onClick={() => setHighlightedPinId(pin.id)}
+                          className="hig-caption tabular-nums"
                           style={{
                             position: 'absolute',
                             left: `${pin.x * 100}%`,
                             top: `${pin.y * 100}%`,
                             transform: 'translate(-50%, -50%)',
-                            padding: active ? '3px 8px' : '2px 6px',
+                            padding: '4px 8px',
                             borderRadius: 999,
-                            background: active ? '#39e75f' : 'rgba(15, 21, 32, 0.82)',
-                            color: active ? '#0d131c' : '#fff',
-                            border: '1.5px solid #39e75f',
-                            fontSize: '0.66rem',
+                            background: active ? '#FFFFFF' : 'rgba(28, 28, 30, 0.84)',
+                            color: active ? '#1D1D1F' : '#F5F5F7',
                             fontWeight: 700,
                             zIndex: 3,
                           }}
@@ -1322,15 +1316,15 @@ export default function ProfilePersonalColorModal({
                       );
                     })}
 
-                  {/* Bottom Status Pill ("지금, 진단 버튼을 눌러주세요" from image_3.png) */}
-                  <div className="pcm-camera-prompt-pill">
+                  {/* Bottom Status Pill */}
+                  <div className="pcm-camera-prompt-pill tabular-nums">
                     {cameraActive
                       ? '지금, 진단 버튼을 눌러주세요'
                       : `진단 완료: ${activeSubType.labelKo} · 신뢰도 ${pcResult?.confidence ?? 92}%`}
                   </div>
                 </div>
 
-                {/* Frosted Bottom Shutter Bar (matches bottom of left side in image_3.png) */}
+                {/* Bottom Shutter Bar */}
                 <div className="pcm-camera-bottom-bar">
                   <button
                     type="button"
@@ -1364,12 +1358,11 @@ export default function ProfilePersonalColorModal({
                 {/* Quick Sample Portrait Buttons for 1-Click Demo */}
                 <div
                   style={{
-                    padding: '10px 12px',
-                    background: '#181b22',
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                    padding: '8px 16px 16px',
+                    background: '#1C1C1E',
                   }}
                 >
-                  <span style={{ fontSize: '0.7rem', color: '#9ca3af', display: 'block', marginBottom: 6 }}>
+                  <span className="hig-caption tabular-nums" style={{ color: '#AEAEB2', display: 'block', marginBottom: 8 }}>
                     샘플 얼굴로 퍼스널컬러 측정 &amp; 3D 모델링 색상 즉시 테스트:
                   </span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
@@ -1389,14 +1382,14 @@ export default function ProfilePersonalColorModal({
                           setPortraitDataUrl(url);
                           executePersonalColorAnalysis(url, lightingMode, null, 0, null);
                         }}
+                        className="hig-caption"
                         style={{
-                          padding: '5px 4px',
-                          borderRadius: 6,
-                          fontSize: '0.72rem',
+                          padding: '8px 4px',
+                          borderRadius: 8,
                           fontWeight: 600,
                           background:
-                            selectedPersonalColor === s.k ? '#8347ff' : 'rgba(255,255,255,0.1)',
-                          color: '#fff',
+                            selectedPersonalColor === s.k ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
+                          color: selectedPersonalColor === s.k ? '#1D1D1F' : '#F5F5F7',
                         }}
                       >
                         {s.l}
@@ -1406,7 +1399,7 @@ export default function ProfilePersonalColorModal({
                 </div>
               </div>
 
-              {/* RIGHT: PCCS 12-Tone Map & Subtype Bubble Diagram (matches right half of image_3.png) */}
+              {/* RIGHT: PCCS 12-Tone Map & Subtype Bubble Diagram */}
               <div className="pcm-pccs-panel">
                 {/* 1) PCCS 12-Tone Chart (WARM TONE / COOL TONE) */}
                 <div>
@@ -1415,15 +1408,15 @@ export default function ProfilePersonalColorModal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: 12,
+                      marginBottom: 16,
                       flexWrap: 'wrap',
                       gap: 8,
                     }}
                   >
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: '0.04em' }}>
+                    <h3 className="hig-headline" style={{ letterSpacing: '0.04em' }}>
                       {chartToneFamily}
                     </h3>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       {['WARM TONE', 'COOL TONE'].map((tf) => (
                         <button
                           key={tf}
@@ -1439,14 +1432,14 @@ export default function ProfilePersonalColorModal({
 
                   <div className="pcm-pccs-chart-wrap">
                     {/* Left Grayscale Value Bar (White N8.5 .. N2.5 Black) */}
-                    <div className="pcm-grayscale-col">
+                    <div className="pcm-grayscale-col tabular-nums">
                       {PCCS_GRAYSCALE_BAR.map((g) => (
                         <div
                           key={g.label}
                           className="pcm-gray-step"
                           style={{
                             background: g.hex,
-                            color: g.textDark ? '#222' : '#fff',
+                            color: g.textDark ? '#1D1D1F' : '#FFFFFF',
                           }}
                         >
                           {g.label}
@@ -1480,19 +1473,16 @@ export default function ProfilePersonalColorModal({
                               height: 58,
                               borderRadius: '50%',
                               background: isSelected
-                                ? 'rgba(255, 158, 145, 0.16)'
-                                : 'transparent',
-                              border: isSelected
-                                ? '2px solid var(--ink-primary)'
+                                ? 'var(--bg-subtle)'
                                 : isMatched
-                                  ? '2px dashed #ff7a63'
-                                  : '1px solid transparent',
+                                  ? 'var(--bg-surface)'
+                                  : 'transparent',
                               padding: 0,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              opacity: isMatched || isSelected ? 1 : 0.78,
-                              transition: 'transform 0.16s ease, opacity 0.16s ease',
+                              opacity: isMatched || isSelected ? 1 : 0.72,
+                              transition: 'transform 0.24s var(--spring-ease), opacity 0.24s var(--spring-ease)',
                             }}
                           >
                             {/* 12 Hue Dots arranged in a circle */}
@@ -1513,16 +1503,15 @@ export default function ProfilePersonalColorModal({
                                     borderRadius: '50%',
                                     background: dotHex,
                                     transform: 'translate(-50%, -50%)',
-                                    boxShadow: '0 0 1px rgba(0,0,0,0.25)',
                                   }}
                                 />
                               );
                             })}
                             <span
+                              className="hig-caption"
                               style={{
-                                fontSize: '0.56rem',
                                 fontWeight: 700,
-                                color: '#27272a',
+                                color: 'var(--ink-primary)',
                                 lineHeight: 1.05,
                                 whiteSpace: 'pre-line',
                                 textAlign: 'center',
@@ -1539,15 +1528,16 @@ export default function ProfilePersonalColorModal({
                   </div>
                 </div>
 
-                {/* 2) Subtype Bubble Diagram ("OOO님의 서브 유형" from bottom-right of image_3.png) */}
+                {/* 2) Subtype Bubble Diagram */}
                 <div
                   style={{
-                    borderTop: '1px solid var(--border-hairline)',
-                    paddingTop: 16,
+                    background: 'var(--bg-canvas)',
+                    borderRadius: 16,
+                    padding: 16,
                     textAlign: 'center',
                   }}
                 >
-                  <h4 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: 8 }}>
+                  <h4 className="hig-headline" style={{ marginBottom: 8 }}>
                     {user?.displayName || '사용자'}님의 서브 유형
                   </h4>
 
@@ -1593,18 +1583,18 @@ export default function ProfilePersonalColorModal({
                     )}
                   </div>
 
-                  <div style={{ maxWidth: 420, margin: '4px auto 0' }}>
+                  <div style={{ maxWidth: 420, margin: '8px auto 0' }}>
                     <strong
+                      className="hig-body"
                       style={{
                         display: 'block',
-                        fontSize: '0.88rem',
-                        color: '#f28b82',
-                        marginBottom: 6,
+                        color: 'var(--ink-primary)',
+                        marginBottom: 8,
                       }}
                     >
                       {activeSubType.tipTitleKo}
                     </strong>
-                    <p style={{ fontSize: '0.83rem', color: 'var(--ink-secondary)', lineHeight: 1.55 }}>
+                    <p className="hig-caption" style={{ color: 'var(--ink-secondary)', lineHeight: 1.55 }}>
                       {activeSubType.tipBodyKo}
                     </p>
                   </div>
@@ -1613,35 +1603,38 @@ export default function ProfilePersonalColorModal({
             </div>
 
             {/* 4 Illumination Calibration Modes */}
-            <div style={{ marginBottom: 14 }}>
-              <label className="field-label">
+            <div style={{ marginBottom: 16 }}>
+              <label className="field-label tabular-nums">
                 <Sun size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />
                 광원 전처리 보정 모드 (변경 시 0~100% 재분석 수행)
               </label>
               <div className="pcm-lighting-grid">
-                {LIGHTING_MODES.map((m) => (
-                  <button
-                    key={m.key}
-                    id={`lighting-mode-${m.key}`}
-                    type="button"
-                    onClick={() => handleRequestLightingModeChange(m.key)}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border:
-                        lightingMode === m.key
-                          ? '2px solid var(--ink-primary)'
-                          : '1px solid var(--border-hairline)',
-                      background: lightingMode === m.key ? 'var(--bg-subtle)' : 'var(--bg-surface)',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <strong style={{ fontSize: '0.8rem', display: 'block' }}>{m.labelKo}</strong>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-                      {m.descKo}
-                    </span>
-                  </button>
-                ))}
+                {LIGHTING_MODES.map((m) => {
+                  const isActiveMode = lightingMode === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      id={`lighting-mode-${m.key}`}
+                      type="button"
+                      onClick={() => handleRequestLightingModeChange(m.key)}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 12,
+                        background: isActiveMode ? 'var(--accent-mono)' : 'var(--bg-surface)',
+                        color: isActiveMode ? 'var(--accent-mono-ink)' : 'var(--ink-primary)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <strong className="hig-caption" style={{ display: 'block' }}>{m.labelKo}</strong>
+                      <span
+                        className="hig-caption"
+                        style={{ color: isActiveMode ? 'var(--accent-mono-ink)' : 'var(--ink-secondary)', opacity: isActiveMode ? 0.85 : 1 }}
+                      >
+                        {m.descKo}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1650,22 +1643,21 @@ export default function ProfilePersonalColorModal({
               <div
                 id="lighting-change-confirm-popup"
                 style={{
-                  background: '#121924',
-                  color: '#fff',
-                  padding: '14px 18px',
-                  borderRadius: 12,
-                  marginBottom: 14,
+                  background: 'var(--bg-surface)',
+                  color: 'var(--ink-primary)',
+                  padding: 16,
+                  borderRadius: 16,
+                  marginBottom: 16,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 12,
+                  gap: 16,
                   flexWrap: 'wrap',
-                  border: '1px solid #00e5ff',
                 }}
               >
-                <div style={{ fontSize: '0.84rem' }}>
+                <div className="hig-body tabular-nums">
                   <strong>전처리 조명 보정 모드를 변경하고 픽셀 언더톤을 0~100% 재분석하시겠습니까?</strong>
-                  <div style={{ fontSize: '0.76rem', color: '#b8c4d4' }}>
+                  <div className="hig-caption" style={{ color: 'var(--ink-secondary)', marginTop: 4 }}>
                     선택한 광원: {LIGHTING_MODES.find((x) => x.key === pendingLightingMode)?.labelKo}
                   </div>
                 </div>
@@ -1680,7 +1672,7 @@ export default function ProfilePersonalColorModal({
                   <button
                     id="confirm-lighting-reanalyze-btn"
                     type="button"
-                    className="btn btn-sage btn-sm"
+                    className="btn btn-primary btn-sm"
                     onClick={confirmLightingModeChange}
                   >
                     재분석 실행
@@ -1694,24 +1686,26 @@ export default function ProfilePersonalColorModal({
               <div
                 id="reanalyzing-progress-banner"
                 style={{
-                  background: 'var(--bg-subtle)',
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  marginBottom: 14,
-                  border: '1px solid var(--border-medium)',
+                  background: 'var(--bg-surface)',
+                  padding: 16,
+                  borderRadius: 16,
+                  marginBottom: 16,
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: 6 }}>
+                <div
+                  className="hig-caption tabular-nums"
+                  style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}
+                >
                   <strong>CIE L*a*b* 4부위 언더톤 및 PCCS 톤 맵 재분석 중...</strong>
                   <strong>{reanalyzingPct}%</strong>
                 </div>
-                <div style={{ height: 8, background: '#ddd6ca', borderRadius: 999, overflow: 'hidden' }}>
+                <div style={{ height: 8, background: 'var(--bg-canvas)', borderRadius: 999, overflow: 'hidden' }}>
                   <div
                     style={{
                       width: `${reanalyzingPct}%`,
                       height: '100%',
-                      background: 'var(--accent-sage)',
-                      transition: 'width 0.08s linear',
+                      background: 'var(--accent-mono)',
+                      transition: 'width 0.18s var(--spring-ease)',
                     }}
                   />
                 </div>
@@ -1723,24 +1717,23 @@ export default function ProfilePersonalColorModal({
               <div className="pcm-evidence-grid">
                 {/* Confidence Formula & 4 Pins */}
                 <div
+                  className="hig-caption tabular-nums"
                   style={{
                     background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-hairline)',
-                    borderRadius: 12,
-                    padding: 14,
-                    fontSize: '0.78rem',
+                    borderRadius: 16,
+                    padding: 16,
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       <Info size={14} /> CIE L*a*b* 4핀 측정값 &amp; 신뢰도 ({pcResult.confidence}%)
                     </strong>
-                    <span style={{ color: 'var(--ink-muted)', fontSize: '0.74rem' }}>
+                    <span style={{ color: 'var(--ink-muted)' }}>
                       L*{pcResult.lab.L} · a*{pcResult.lab.a} · b*{pcResult.lab.b} · ITA° {pcResult.lab.itaDeg}°
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                     {(pcResult.pins || []).map((pin, idx) => (
                       <div
                         key={pin.id}
@@ -1749,28 +1742,27 @@ export default function ProfilePersonalColorModal({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '6px 8px',
+                          padding: 8,
                           borderRadius: 8,
                           cursor: 'pointer',
                           background: highlightedPinId === pin.id ? 'var(--bg-subtle)' : 'var(--bg-canvas)',
-                          border: '1px solid var(--border-hairline)',
                         }}
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                           <span
                             className="color-dot"
                             style={{ width: 12, height: 12, backgroundColor: pin.hex }}
                           />
                           <strong>P{idx + 1} {pin.labelKo}</strong>
                         </span>
-                        <span style={{ color: 'var(--ink-muted)', fontSize: '0.7rem' }}>
+                        <span style={{ color: 'var(--ink-muted)' }}>
                           L*{pin.lab.L} b*{pin.lab.b}
                         </span>
                       </div>
                     ))}
                   </div>
 
-                  <div style={{ fontSize: '0.73rem', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
+                  <div style={{ color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
                     <div>• {pcResult.confidenceBreakdown.formulaText}</div>
                     <div>
                       • 균일도 {pcResult.confidenceBreakdown.uniformity40}점 · 분리도{' '}
@@ -1781,16 +1773,16 @@ export default function ProfilePersonalColorModal({
                   </div>
                 </div>
 
-                {/* Directional 20-Color Undertone Similarity (상/하/좌/우 각 5색 — 클릭 시 3D 모델링 색상 변경) */}
+                {/* Directional 20-Color Undertone Similarity */}
                 <div
+                  className="tabular-nums"
                   style={{
                     background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-hairline)',
-                    borderRadius: 12,
-                    padding: 14,
+                    borderRadius: 16,
+                    padding: 16,
                   }}
                 >
-                  <strong style={{ fontSize: '0.8rem', display: 'block', marginBottom: 8 }}>
+                  <strong className="hig-caption" style={{ display: 'block', marginBottom: 8 }}>
                     20색 드레이프 조화 유사도 (컬러칩 클릭 시 상단 3D 모델링에 즉시 적용)
                   </strong>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -1799,14 +1791,13 @@ export default function ProfilePersonalColorModal({
                         key={dirKey}
                         style={{
                           padding: 8,
-                          borderRadius: 8,
+                          borderRadius: 12,
                           background: 'var(--bg-canvas)',
-                          border: '1px solid var(--border-hairline)',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginBottom: 4 }}>
+                        <div className="hig-caption" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <strong>{group.seasonLabel.split(' ')[0]}</strong>
-                          <strong style={{ color: 'var(--accent-sage)' }}>{group.avgSimilarity}%</strong>
+                          <strong style={{ color: 'var(--ink-primary)' }}>{group.avgSimilarity}%</strong>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
                           {group.swatches.map((sw) => (
@@ -1825,13 +1816,10 @@ export default function ProfilePersonalColorModal({
                                   height: 20,
                                   borderRadius: 4,
                                   backgroundColor: sw.hex,
-                                  border:
-                                    activeMannequinColorHex === sw.hex
-                                      ? '2px solid var(--ink-primary)'
-                                      : '1px solid rgba(0,0,0,0.12)',
+                                  transform: activeMannequinColorHex === sw.hex ? 'scale(1.08)' : 'none',
                                 }}
                               />
-                              <span style={{ fontSize: '0.62rem', fontWeight: 600 }}>
+                              <span className="hig-caption" style={{ fontWeight: 600 }}>
                                 {sw.similarity}%
                               </span>
                             </button>
@@ -1845,13 +1833,13 @@ export default function ProfilePersonalColorModal({
             )}
 
             <div className="pcm-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setStep(1)}>
+              <button type="button" className="btn btn-secondary tabular-nums" onClick={() => setStep(1)}>
                 ← Step 1 (7체형 · 3사이즈)로 돌아가기
               </button>
               <button
                 id="save-profile-personal-color-btn"
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-primary tabular-nums"
                 disabled={saving}
                 onClick={handleSaveProfile}
               >

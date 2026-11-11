@@ -99,7 +99,7 @@ export default function AccountSettingsSheet({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            gap: 12,
+            gap: 16,
           }}
         >
           <div>
@@ -119,7 +119,7 @@ export default function AccountSettingsSheet({
 
         {/* Light / Dark / System Monochrome Appearance */}
         <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
-          <div className="hig-caption" style={{ marginBottom: 10 }}>
+          <div className="hig-caption" style={{ marginBottom: 8 }}>
             화면 스타일 (Apple HIG 무채색 테마)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -151,7 +151,7 @@ export default function AccountSettingsSheet({
             padding: 16,
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
+            gap: 8,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -174,7 +174,7 @@ export default function AccountSettingsSheet({
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -240,7 +240,7 @@ export default function AccountSettingsSheet({
               padding: 16,
               display: 'flex',
               flexDirection: 'column',
-              gap: 10,
+              gap: 8,
             }}
           >
             <div className="hig-caption" style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>

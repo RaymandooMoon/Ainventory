@@ -389,25 +389,49 @@ export default function StudioGarmentImage({
     };
   }, [resolvedSrc, targetHex, shouldTintSeed]);
 
+  const [loadedSrc, setLoadedSrc] = useState(null);
+  const isReady =
+    loadedSrc === displaySrc || Boolean(displaySrc && displaySrc.startsWith('data:'));
+
   return (
     <div
       className={`studio-garment-image ${className}`.trim()}
       style={{
         position: 'relative',
         overflow: 'hidden',
-        backgroundColor: 'var(--bg-studio, #f4f1ea)',
+        backgroundColor: 'transparent',
         ...style,
       }}
     >
+      {!isReady && (
+        <div
+          aria-hidden="true"
+          className="hig-skeleton"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: 'inherit',
+          }}
+        />
+      )}
       <img
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth > 0 && loadedSrc !== displaySrc) {
+            setLoadedSrc(displaySrc);
+          }
+        }}
         src={displaySrc}
         alt={label}
         loading="lazy"
+        onLoad={() => setLoadedSrc(displaySrc)}
+        onError={() => setLoadedSrc(displaySrc)}
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'cover',
           display: 'block',
+          opacity: isReady ? 1 : 0,
+          transition: 'opacity 0.28s var(--spring-ease)',
           ...imgStyle,
         }}
       />
