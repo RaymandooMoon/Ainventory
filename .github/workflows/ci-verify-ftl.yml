@@ -32,6 +32,7 @@ jobs:
   web-verify:
     name: Web Lint, Typecheck, Build & E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,7 +62,18 @@ jobs:
           npm run build 2>&1 | tee -a /tmp/web-verify.log
 
           echo "=== [5/5] Playwright Chromium E2E ===" | tee -a /tmp/web-verify.log
-          (npx playwright install --with-deps chromium || (sleep 5 && npx playwright install --with-deps chromium)) 2>&1 | tee -a /tmp/web-verify.log
+          if [[ -x "/opt/google/chrome/chrome" ]]; then
+            export PLAYWRIGHT_CHROMIUM_PATH="/opt/google/chrome/chrome"
+            echo "Using preinstalled Google Chrome: ${PLAYWRIGHT_CHROMIUM_PATH}" | tee -a /tmp/web-verify.log
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            export PLAYWRIGHT_CHROMIUM_PATH="$(command -v google-chrome-stable)"
+            echo "Using preinstalled Google Chrome: ${PLAYWRIGHT_CHROMIUM_PATH}" | tee -a /tmp/web-verify.log
+          elif command -v chromium >/dev/null 2>&1; then
+            export PLAYWRIGHT_CHROMIUM_PATH="$(command -v chromium)"
+            echo "Using preinstalled Chromium: ${PLAYWRIGHT_CHROMIUM_PATH}" | tee -a /tmp/web-verify.log
+          else
+            PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=20000 npx playwright install chromium 2>&1 | tee -a /tmp/web-verify.log
+          fi
           npm run test:e2e 2>&1 | tee -a /tmp/web-verify.log
 
       - name: Upload web-dist artifact
@@ -111,6 +123,7 @@ jobs:
     needs: web-verify
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write

@@ -1,8 +1,15 @@
 import fs from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
-const systemChromium: string = process.env.PLAYWRIGHT_CHROMIUM_PATH || '/usr/bin/chromium';
-const hasSystemChromium: boolean = fs.existsSync(systemChromium);
+const CHROMIUM_CANDIDATES: string[] = [
+  process.env.PLAYWRIGHT_CHROMIUM_PATH || '',
+  '/usr/bin/chromium',
+  '/opt/google/chrome/chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+].filter(Boolean);
+const systemChromium: string = CHROMIUM_CANDIDATES.find((p) => fs.existsSync(p)) || '';
+const hasSystemChromium: boolean = Boolean(systemChromium);
 const useHeadlessSwiftShader: boolean =
   hasSystemChromium || Boolean(process.env.CI) || process.platform === 'linux';
 
