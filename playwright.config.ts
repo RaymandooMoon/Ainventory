@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
-const systemChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH || '/usr/bin/chromium';
-const hasSystemChromium = fs.existsSync(systemChromium);
+const systemChromium: string = process.env.PLAYWRIGHT_CHROMIUM_PATH || '/usr/bin/chromium';
+const hasSystemChromium: boolean = fs.existsSync(systemChromium);
 
-const PORT = Number(process.env.PLAYWRIGHT_PORT || process.env.PORT || 4173);
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
+const PORT: number = Number(process.env.PLAYWRIGHT_PORT || process.env.PORT || 4173);
+const BASE_URL: string = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
 
-const SWIFTSHADER_WEBGL_ARGS = [
+const SWIFTSHADER_WEBGL_ARGS: string[] = [
   '--no-sandbox',
   '--disable-dev-shm-usage',
   '--ignore-certificate-errors',

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Globe, KeyRound, Mail, Moon, Play, Sun } from 'lucide-react';
+import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { apiFetch, setStoredToken } from '../utils/api.js';
+import { tr } from '../utils/i18n.js';
 import { triggerHaptic } from '../utils/nativeBridge.js';
+import { LegalDisclosureModal } from './common/AppUI.jsx';
 
 /**
  * Apple HIG Minimal Monochrome Initial Entry Screen (Reqs 8.a, 10.b, 11.a-c, 12.a)
@@ -15,8 +18,13 @@ export default function LoginView({
   onEnterSampleDemo,
   lang = 'ko',
   onChangeLang,
+  effectiveTheme = 'light',
   onToggleTheme,
 }) {
+  const isEn = lang === 'en';
+  const isDev = Boolean(import.meta.env.DEV);
+  const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
+
   const [authMode, setAuthMode] = useState('otp'); // 'otp' | 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +42,7 @@ export default function LoginView({
   const [devPreviewCode, setDevPreviewCode] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [cooldownSec, setCooldownSec] = useState(0);
+  const [legalModalDoc, setLegalModalDoc] = useState(null); // null | 'privacy' | 'terms'
 
   useEffect(() => {
     if (cooldownSec <= 0) return undefined;
@@ -64,6 +73,14 @@ export default function LoginView({
 
   const handleAppleSignIn = async () => {
     setError('');
+    if (!isDev && !hasAppleClientId) {
+      setError(
+        isEn
+          ? 'Apple Sign-In client ID is not configured in this build. Please use Email OTP.'
+          : '현재 빌드에 Apple 로그인 클라이언트(VITE_APPLE_CLIENT_ID)가 설정되지 않았습니다. 이메일 인증을 이용해 주세요.'
+      );
+      return;
+    }
     setLoading(true);
     try {
       const data = await apiFetch('/auth/apple', {
@@ -87,7 +104,9 @@ export default function LoginView({
   const handleSendOtp = async () => {
     setError('');
     if (!regEmail.trim() || !regEmail.includes('@')) {
-      setError('유효한 이메일 주소를 입력해 주세요.');
+      setError(
+        isEn ? 'Please enter a valid email address.' : '유효한 이메일 주소를 입력해 주세요.'
+      );
       return;
     }
     if (cooldownSec > 0) return;
@@ -101,7 +120,7 @@ export default function LoginView({
       setOtpSent(true);
       setOtpVerified(false);
       setCooldownSec(Number(res.resendCooldownSec || 60));
-      if (res.devPreviewCode) {
+      if (isDev && res.devPreviewCode) {
         setDevPreviewCode(res.devPreviewCode);
         setOtpCode(res.devPreviewCode);
       }
@@ -116,7 +135,9 @@ export default function LoginView({
   const handleVerifyOtp = async () => {
     setError('');
     if (!otpCode.trim()) {
-      setError('6자리 인증코드를 입력해 주세요.');
+      setError(
+        isEn ? 'Please enter the 6-digit verification code.' : '6자리 인증코드를 입력해 주세요.'
+      );
       return;
     }
     setLoading(true);
@@ -138,7 +159,9 @@ export default function LoginView({
     e?.preventDefault?.();
     setError('');
     if (!otpCode.trim()) {
-      setError('6자리 인증코드를 입력해 주세요.');
+      setError(
+        isEn ? 'Please enter the 6-digit verification code.' : '6자리 인증코드를 입력해 주세요.'
+      );
       return;
     }
     setLoading(true);
@@ -175,11 +198,19 @@ export default function LoginView({
     e.preventDefault();
     setError('');
     if (!otpVerified) {
-      setError('먼저 이메일 인증코드 확인을 완료해 주세요.');
+      setError(
+        isEn
+          ? 'Please verify your email code first.'
+          : '먼저 이메일 인증코드 확인을 완료해 주세요.'
+      );
       return;
     }
     if (regPassword.length < 4) {
-      setError('비밀번호는 최소 4자 이상 입력해 주세요.');
+      setError(
+        isEn
+          ? 'Password must be at least 4 characters.'
+          : '비밀번호는 최소 4자 이상 입력해 주세요.'
+      );
       return;
     }
     setLoading(true);
@@ -211,22 +242,19 @@ export default function LoginView({
       <div className="hig-auth-container">
         {/* Top Utility Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="hig-caption">DIGITAL WARDROBE &amp; 3D STUDIO</span>
+          <span className="hig-caption">{tr(lang, 'brandSubtitle').toUpperCase()}</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              id="login-theme-toggle-btn"
+              id={CARBON_DOM_CONTRACT.loginThemeToggleId}
               type="button"
               className="icon-btn"
               aria-label="라이트 다크 모드 전환"
               onClick={onToggleTheme}
             >
-              {document.documentElement.getAttribute('data-theme') === 'dark' ? (
-                <Sun size={15} />
-              ) : (
-                <Moon size={15} />
-              )}
+              {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <button
+              id={CARBON_DOM_CONTRACT.loginLangToggleId}
               type="button"
               className="icon-btn"
               aria-label="언어 전환"
@@ -243,43 +271,55 @@ export default function LoginView({
 
         {/* Minimal Hero Title (1 Screen = 1 Core Purpose) */}
         <div>
-          <h1 className="hig-large-title">A inventory</h1>
+          <h1 className="hig-large-title">{tr(lang, 'brandTitle')}</h1>
           <p className="hig-caption" style={{ marginTop: 8 }}>
-            실사 의류 누끼와 날씨 기반 3D 마네킹이 연동되는 미니멀 디지털 옷장
+            {isEn
+              ? 'Minimal monochrome digital wardrobe with WebP cutouts and weather-synced 3D fitting'
+              : '실사 의류 누끼와 날씨 기반 3D 마네킹이 연동되는 미니멀 디지털 옷장'}
           </p>
         </div>
 
         {/* Unauthenticated Immediate Sample Closet Demo Entry (Req 8.a & 12.a — Robo Crawler & First-Time Users) */}
         <button
-          id="enter-sample-demo-btn"
+          id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
           type="button"
-          aria-label="샘플 옷장 체험 모드 시작"
+          aria-label={CARBON_DOM_CONTRACT.sampleDemoAriaLabel}
           className="btn btn-primary btn-full"
           style={{ minHeight: 48, borderRadius: 16 }}
           onClick={() => onEnterSampleDemo?.()}
         >
           <Play size={16} />
-          <span>샘플 옷장 체험 모드</span>
+          <span>{isEn ? 'Sample Closet Demo Mode' : '샘플 옷장 체험 모드'}</span>
         </button>
 
         {/* Sign in with Apple (Req 10.b — Mandatory iOS App Store Parity) */}
-        <button
-          id="apple-signin-btn"
-          type="button"
-          aria-label="Sign in with Apple"
-          className="btn btn-secondary btn-full"
-          style={{ minHeight: 48, borderRadius: 16 }}
-          disabled={loading}
-          onClick={handleAppleSignIn}
-        >
-          <span>Apple로 계속하기</span>
-        </button>
+        {(isDev || hasAppleClientId) && (
+          <button
+            id={CARBON_DOM_CONTRACT.appleSignInBtnId}
+            type="button"
+            aria-label="Sign in with Apple"
+            className="btn btn-secondary btn-full"
+            style={{ minHeight: 48, borderRadius: 16 }}
+            disabled={loading}
+            onClick={handleAppleSignIn}
+          >
+            <span>
+              {isEn
+                ? hasAppleClientId
+                  ? 'Continue with Apple'
+                  : 'Continue with Apple (Sandbox)'
+                : hasAppleClientId
+                  ? 'Apple로 계속하기'
+                  : 'Apple로 계속하기 (개발 샌드박스)'}
+            </span>
+          </button>
+        )}
 
         {/* Progressive Monochrome Auth Surface */}
         <div className="hig-auth-panel">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             <button
-              id="auth-tab-otp"
+              id={CARBON_DOM_CONTRACT.authTabOtpId}
               type="button"
               className={`btn btn-sm ${authMode === 'otp' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => {
@@ -287,10 +327,10 @@ export default function LoginView({
                 setError('');
               }}
             >
-              이메일 시작
+              {isEn ? 'Email OTP' : '이메일 시작'}
             </button>
             <button
-              id="auth-tab-login"
+              id={CARBON_DOM_CONTRACT.authTabLoginId}
               type="button"
               className={`btn btn-sm ${authMode === 'login' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => {
@@ -298,10 +338,10 @@ export default function LoginView({
                 setError('');
               }}
             >
-              로그인
+              {isEn ? 'Sign In' : '로그인'}
             </button>
             <button
-              id="auth-tab-register"
+              id={CARBON_DOM_CONTRACT.authTabRegisterId}
               type="button"
               className={`btn btn-sm ${authMode === 'register' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => {
@@ -309,7 +349,7 @@ export default function LoginView({
                 setError('');
               }}
             >
-              회원가입
+              {isEn ? 'Sign Up' : '회원가입'}
             </button>
           </div>
 
@@ -335,11 +375,12 @@ export default function LoginView({
             >
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
-                  id="email-auth-input"
+                  id={CARBON_DOM_CONTRACT.emailAuthInputId}
                   type="email"
                   className="text-input"
                   style={{ flex: 1, background: 'var(--bg-canvas)' }}
                   placeholder="name@example.com"
+                  aria-label={isEn ? 'Email address' : '이메일 주소'}
                   value={regEmail}
                   onChange={(e) => {
                     setRegEmail(e.target.value);
@@ -348,7 +389,7 @@ export default function LoginView({
                   required
                 />
                 <button
-                  id="request-email-code-btn"
+                  id={CARBON_DOM_CONTRACT.requestEmailCodeBtnId}
                   type="button"
                   className="btn btn-secondary btn-sm tabular-nums"
                   disabled={loading || cooldownSec > 0}
@@ -358,10 +399,16 @@ export default function LoginView({
                   <Mail size={14} />
                   <span>
                     {cooldownSec > 0
-                      ? `재발송 ${cooldownSec}s`
+                      ? isEn
+                        ? `Resend ${cooldownSec}s`
+                        : `재발송 ${cooldownSec}s`
                       : otpSent
-                        ? '재발송'
-                        : '코드 받기'}
+                        ? isEn
+                          ? 'Resend'
+                          : '재발송'
+                        : isEn
+                          ? 'Get Code'
+                          : '코드 받기'}
                   </span>
                 </button>
               </div>
@@ -370,7 +417,7 @@ export default function LoginView({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
-                      id="email-otp-code-input"
+                      id={CARBON_DOM_CONTRACT.emailOtpCodeInputId}
                       type="text"
                       inputMode="numeric"
                       maxLength={6}
@@ -381,23 +428,26 @@ export default function LoginView({
                         letterSpacing: '0.18em',
                         fontWeight: 700,
                       }}
-                      placeholder="6자리 인증코드"
+                      placeholder={isEn ? '6-digit code' : '6자리 인증코드'}
+                      aria-label={isEn ? '6-digit verification code' : '6자리 인증코드'}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
                     />
                     <button
-                      id="verify-email-code-btn"
+                      id={CARBON_DOM_CONTRACT.verifyEmailCodeBtnId}
                       type="submit"
                       className="btn btn-primary btn-sm"
                       disabled={loading}
                     >
                       <KeyRound size={14} />
-                      <span>인증 시작</span>
+                      <span>{isEn ? 'Verify' : '인증 시작'}</span>
                     </button>
                   </div>
-                  {devPreviewCode && !otpVerified && (
+                  {isDev && devPreviewCode && !otpVerified && (
                     <span className="hig-caption tabular-nums">
-                      로컬 테스트 코드: {devPreviewCode}
+                      {isEn
+                        ? `Local dev code: ${devPreviewCode}`
+                        : `로컬 테스트 코드: ${devPreviewCode}`}
                     </span>
                   )}
                 </div>
@@ -416,7 +466,8 @@ export default function LoginView({
                 style={{ background: 'var(--bg-canvas)' }}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="아이디 또는 이메일"
+                placeholder={isEn ? 'Username or email' : '아이디 또는 이메일'}
+                aria-label={isEn ? 'Username or email' : '아이디 또는 이메일'}
                 autoComplete="username"
                 required
               />
@@ -427,51 +478,58 @@ export default function LoginView({
                 style={{ background: 'var(--bg-canvas)' }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="비밀번호"
+                placeholder={isEn ? 'Password' : '비밀번호'}
+                aria-label={isEn ? 'Password' : '비밀번호'}
                 autoComplete="current-password"
                 required
               />
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <span className="hig-caption">데모 계정</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setUsername('husband');
-                      setPassword('husband1234');
-                      setError('');
-                    }}
-                  >
-                    남편 옷장
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setUsername('wife');
-                      setPassword('wife1234');
-                      setError('');
-                    }}
-                  >
-                    아내 옷장
-                  </button>
+              {isDev && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <span className="hig-caption">{isEn ? 'Dev Seed' : '개발 시드 계정'}</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setUsername('admin');
+                        setPassword('admin');
+                        setError('');
+                      }}
+                    >
+                      {tr(lang, 'closetHusband')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setUsername('wife');
+                        setPassword('wife1234');
+                        setError('');
+                      }}
+                    >
+                      {tr(lang, 'closetWife')}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
               <button
                 id="login-submit-btn"
                 type="submit"
                 className="btn btn-primary btn-full"
                 disabled={loading}
               >
-                {loading ? '로그인 중...' : '로그인'}
+                {loading
+                  ? isEn
+                    ? 'Signing in...'
+                    : '로그인 중...'
+                  : tr(lang, 'loginSubmit')}
               </button>
             </form>
           )}
@@ -488,6 +546,7 @@ export default function LoginView({
                   className="text-input"
                   style={{ flex: 1, background: 'var(--bg-canvas)' }}
                   placeholder="name@example.com"
+                  aria-label={isEn ? 'Email address' : '이메일 주소'}
                   value={regEmail}
                   onChange={(e) => {
                     setRegEmail(e.target.value);
@@ -506,10 +565,16 @@ export default function LoginView({
                   <Mail size={14} />
                   <span>
                     {cooldownSec > 0
-                      ? `재발송 ${cooldownSec}s`
+                      ? isEn
+                        ? `Resend ${cooldownSec}s`
+                        : `재발송 ${cooldownSec}s`
                       : otpSent
-                        ? '재발송'
-                        : '코드 발송'}
+                        ? isEn
+                          ? 'Resend'
+                          : '재발송'
+                        : isEn
+                          ? 'Send Code'
+                          : '코드 발송'}
                   </span>
                 </button>
               </div>
@@ -529,7 +594,8 @@ export default function LoginView({
                         letterSpacing: '0.18em',
                         fontWeight: 700,
                       }}
-                      placeholder="6자리 코드"
+                      placeholder={isEn ? '6-digit code' : '6자리 코드'}
+                      aria-label={isEn ? '6-digit code' : '6자리 코드'}
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
                     />
@@ -542,18 +608,20 @@ export default function LoginView({
                     >
                       {otpVerified ? (
                         <>
-                          <CheckCircle2 size={14} /> 인증됨
+                          <CheckCircle2 size={14} /> {isEn ? 'Verified' : '인증됨'}
                         </>
                       ) : (
                         <>
-                          <KeyRound size={14} /> 확인
+                          <KeyRound size={14} /> {isEn ? 'Verify' : '확인'}
                         </>
                       )}
                     </button>
                   </div>
-                  {devPreviewCode && !otpVerified && (
+                  {isDev && devPreviewCode && !otpVerified && (
                     <span className="hig-caption tabular-nums">
-                      로컬 테스트 코드: {devPreviewCode}
+                      {isEn
+                        ? `Local dev code: ${devPreviewCode}`
+                        : `로컬 테스트 코드: ${devPreviewCode}`}
                     </span>
                   )}
                 </div>
@@ -565,7 +633,8 @@ export default function LoginView({
                   type="text"
                   className="text-input"
                   style={{ background: 'var(--bg-canvas)' }}
-                  placeholder="이름 / 닉네임"
+                  placeholder={isEn ? 'Display name' : '이름 / 닉네임'}
+                  aria-label={isEn ? 'Display name' : '이름 / 닉네임'}
                   value={regDisplayName}
                   onChange={(e) => setRegDisplayName(e.target.value)}
                 />
@@ -574,10 +643,10 @@ export default function LoginView({
                   style={{ background: 'var(--bg-canvas)' }}
                   value={regGender}
                   onChange={(e) => setRegGender(e.target.value)}
-                  aria-label="성별 선택"
+                  aria-label={isEn ? 'Select gender' : '성별 선택'}
                 >
-                  <option value="male">남성</option>
-                  <option value="female">여성</option>
+                  <option value="male">{isEn ? 'Male' : '남성'}</option>
+                  <option value="female">{isEn ? 'Female' : '여성'}</option>
                 </select>
               </div>
 
@@ -586,7 +655,8 @@ export default function LoginView({
                 type="text"
                 className="text-input"
                 style={{ background: 'var(--bg-canvas)' }}
-                placeholder="내 옷장 이름 (선택)"
+                placeholder={isEn ? 'Closet name (optional)' : '내 옷장 이름 (선택)'}
+                aria-label={isEn ? 'Closet name' : '내 옷장 이름'}
                 value={regClosetName}
                 onChange={(e) => setRegClosetName(e.target.value)}
               />
@@ -596,7 +666,8 @@ export default function LoginView({
                 type="password"
                 className="text-input"
                 style={{ background: 'var(--bg-canvas)' }}
-                placeholder="비밀번호 (4자 이상)"
+                placeholder={isEn ? 'Password (4+ chars)' : '비밀번호 (4자 이상)'}
+                aria-label={isEn ? 'Password' : '비밀번호'}
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
                 required
@@ -608,12 +679,58 @@ export default function LoginView({
                 className="btn btn-primary btn-full"
                 disabled={loading || !otpVerified}
               >
-                {loading ? '가입 처리 중...' : '빈 옷장으로 시작하기'}
+                {loading
+                  ? isEn
+                    ? 'Creating account...'
+                    : '가입 처리 중...'
+                  : isEn
+                    ? 'Start with Empty Closet'
+                    : '빈 옷장으로 시작하기'}
               </button>
             </form>
           )}
         </div>
+
+        {/* Store Compliance Footer: Privacy Policy & Terms of Service */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            id="login-privacy-policy-btn"
+            type="button"
+            className="hig-caption"
+            style={{ minHeight: 44, padding: '0 8px', textDecoration: 'underline' }}
+            onClick={() => setLegalModalDoc('privacy')}
+          >
+            {isEn ? 'Privacy Policy' : '개인정보처리방침'}
+          </button>
+          <span className="hig-caption" aria-hidden="true">
+            ·
+          </span>
+          <button
+            id="login-terms-btn"
+            type="button"
+            className="hig-caption"
+            style={{ minHeight: 44, padding: '0 8px', textDecoration: 'underline' }}
+            onClick={() => setLegalModalDoc('terms')}
+          >
+            {isEn ? 'Terms of Service' : '이용약관'}
+          </button>
+        </div>
       </div>
+
+      <LegalDisclosureModal
+        open={Boolean(legalModalDoc)}
+        initialDoc={legalModalDoc || 'privacy'}
+        onClose={() => setLegalModalDoc(null)}
+        lang={lang}
+      />
     </div>
   );
 }

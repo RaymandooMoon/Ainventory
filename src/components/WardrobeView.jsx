@@ -29,6 +29,7 @@ import {
 } from '../utils/nativeBridge.js';
 import SmartPhotoCropEditorModal from './SmartPhotoCropEditorModal.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
   EmptyStateBox,
   HorizontalChipRail,
@@ -146,6 +147,15 @@ export default function WardrobeView({
     loadGarments();
   }, [loadGarments, refreshKey]);
 
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     return garments.filter((g) => {
       if (categoryFilter !== 'all' && g.category !== categoryFilter) return false;
@@ -177,8 +187,13 @@ export default function WardrobeView({
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setRawUploadSrc(String(reader.result || ''));
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) return;
+      setRawUploadSrc(dataUrl);
       setCropEditorOpen(true);
+    };
+    reader.onerror = () => {
+      showToast?.('사진 파일을 읽지 못했습니다.');
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -296,7 +311,7 @@ export default function WardrobeView({
           physics_preset: form.physics_preset || mapping.physicsPreset,
           custom_texture: Boolean(croppedDataUrl),
           image_data: croppedDataUrl || undefined,
-          image_url: croppedDataUrl ? undefined : '/seed/white-oxford.jpg',
+          image_url: croppedDataUrl ? undefined : '/seed/white-shirt.jpg',
         }),
       });
 
@@ -372,7 +387,7 @@ export default function WardrobeView({
               <span>필터</span>
             </button>
             <button
-              id="open-add-garment-btn"
+              id={CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}
               type="button"
               className="btn btn-primary btn-sm"
               onClick={() => setShowAddModal(true)}
@@ -437,7 +452,7 @@ export default function WardrobeView({
               tabIndex={0}
               aria-label={item.name}
               data-garment-id={item.id}
-              className="hig-cutout-tile"
+              className={CARBON_DOM_CONTRACT.cutoutTileClass}
               onPointerDown={() => startTilePress(item)}
               onPointerUp={cancelTilePress}
               onPointerLeave={cancelTilePress}
@@ -509,6 +524,7 @@ export default function WardrobeView({
             />
             <input
               type="search"
+              aria-label="아이템명, 소재, 브랜드, 컬러 검색"
               className="text-input"
               style={{ paddingLeft: 40 }}
               placeholder="아이템명, 소재, 브랜드, 컬러 검색"
@@ -567,6 +583,7 @@ export default function WardrobeView({
 
       {/* Tap -> Garment Detail Bottom Sheet (Req 12.c) */}
       <ResponsiveSheetModal
+        id={CARBON_DOM_CONTRACT.garmentDetailSheetId}
         open={Boolean(detailItem)}
         onClose={() => setDetailItem(null)}
         eyebrow="GARMENT DETAILS"
@@ -574,7 +591,7 @@ export default function WardrobeView({
         maxWidth={520}
       >
         {detailItem && (
-          <div id="garment-detail-sheet" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div
               style={{
                 height: 224,
@@ -699,6 +716,7 @@ export default function WardrobeView({
 
       {/* Long-Press -> Quick Action Menu Sheet (Req 12.c) */}
       <ResponsiveSheetModal
+        id={CARBON_DOM_CONTRACT.garmentQuickMenuSheetId}
         open={Boolean(quickMenuItem)}
         onClose={() => setQuickMenuItem(null)}
         eyebrow="QUICK ACTIONS"
@@ -706,7 +724,7 @@ export default function WardrobeView({
         maxWidth={400}
       >
         {quickMenuItem && (
-          <div id="garment-quick-menu-sheet" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button
               type="button"
               className="btn btn-primary btn-full"
@@ -771,7 +789,7 @@ export default function WardrobeView({
       >
         <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <input
-            id="wardrobe-camera-file-input"
+            id={CARBON_DOM_CONTRACT.wardrobeCameraInputId}
             ref={addCameraInputRef}
             type="file"
             accept="image/*"
@@ -780,7 +798,7 @@ export default function WardrobeView({
             onChange={handleSelectPhotoForAdd}
           />
           <input
-            id="wardrobe-gallery-file-input"
+            id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
             ref={addGalleryInputRef}
             type="file"
             accept="image/*"
@@ -803,7 +821,7 @@ export default function WardrobeView({
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {croppedDataUrl ? (
                 <img
-                  id="cropped-webp-preview-img"
+                  id={CARBON_DOM_CONTRACT.croppedWebpPreviewImgId}
                   src={croppedDataUrl}
                   alt="WebP 배경제거 프리뷰"
                   style={{
@@ -859,7 +877,7 @@ export default function WardrobeView({
 
           {aiDetectedBadge && (
             <div
-              id="ai-garment-mapping-summary"
+              id={CARBON_DOM_CONTRACT.aiGarmentMappingSummaryId}
               className="hig-caption"
               style={{
                 background: 'var(--bg-surface)',
@@ -877,6 +895,7 @@ export default function WardrobeView({
 
           <input
             id="garment-name-input"
+            aria-label="아이템 이름"
             className="text-input"
             placeholder="아이템 이름 (예: 차콜 캐시미어 코트)"
             value={form.name}
@@ -952,6 +971,7 @@ export default function WardrobeView({
 
             <input
               id="garment-price-input"
+              aria-label="구매가"
               type="number"
               className="text-input tabular-nums"
               placeholder="구매가 (원)"
@@ -969,7 +989,7 @@ export default function WardrobeView({
               취소
             </button>
             <button
-              id="submit-add-garment-btn"
+              id={CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}
               type="submit"
               className="btn btn-primary"
               disabled={savingAdd}

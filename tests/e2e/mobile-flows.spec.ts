@@ -1,13 +1,20 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import {
+  CARBON_DOM_CONTRACT,
+  CARBON_HIG_TOKENS,
+} from '../../src/contracts/carbonDesignContract.ts';
 
 /**
  * Unattended Mobile E2E Verification Suite (Requirement 15a + Apple HIG 11–14)
  * Executes across both `ios-notch` (393x852, DPR 3) and `android-foldable` (717x841, DPR 2.6) viewports.
  */
 
-async function dismissOpenSheetByDragOrBackdrop(page, targetLocator) {
+async function dismissOpenSheetByDragOrBackdrop(
+  page: Page,
+  targetLocator?: Locator
+): Promise<void> {
   const handle = page
-    .locator('[data-sheet-handle="true"]:visible, .ui-sheet-drag-zone:visible')
+    .locator(`[${CARBON_DOM_CONTRACT.attrSheetHandle}="true"]:visible, .ui-sheet-drag-zone:visible`)
     .last();
   if (await handle.isVisible().catch(() => false)) {
     const box = await handle.boundingBox();
@@ -36,16 +43,16 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     await page.goto('/');
 
     // 1. Verify Sample Closet Demo entry button & exact aria-label
-    const demoBtn = page.locator('#enter-sample-demo-btn');
+    const demoBtn = page.locator(`#${CARBON_DOM_CONTRACT.sampleDemoButtonId}`);
     await expect(demoBtn).toBeVisible();
-    await expect(demoBtn).toHaveAttribute('aria-label', '샘플 옷장 체험 모드 시작');
+    await expect(demoBtn).toHaveAttribute('aria-label', CARBON_DOM_CONTRACT.sampleDemoAriaLabel);
 
     // 2. Verify Light (#FFFFFF) & Dark (#000000) pure monochrome canvas + system font stack + tabular-nums
     const initialTheme = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );
     if (initialTheme === 'dark') {
-      await page.locator('#login-theme-toggle-btn').click();
+      await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     }
 
     const lightSurfaceMetrics = await page.evaluate(() => {
@@ -58,14 +65,14 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     });
     expect(lightSurfaceMetrics.backgroundColor).toBe('rgb(255, 255, 255)');
     expect(lightSurfaceMetrics.fontFamily).toContain('-apple-system');
-    expect(lightSurfaceMetrics.fontVariantNumeric).toContain('tabular-nums');
+    expect(lightSurfaceMetrics.fontVariantNumeric).toContain(CARBON_HIG_TOKENS.numericVariant);
 
-    await page.locator('#login-theme-toggle-btn').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     expect(darkBg).toBe('rgb(0, 0, 0)');
 
     // Restore Light mode before entering Sample Demo
-    await page.locator('#login-theme-toggle-btn').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
       'rgb(255, 255, 255)'
     );
@@ -73,10 +80,10 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     // 3. Enter Sample Demo Mode -> 3D Studio >= 85% viewport height, weather capsule & collapsed drawer
     await demoBtn.click();
 
-    const studioScreen = page.locator('.hig-studio-screen');
-    const studioCanvas = page.locator('#studio-3d-canvas');
-    const weatherCapsule = page.locator('#studio-weather-capsule');
-    const wardrobeDrawer = page.locator('#studio-wardrobe-drawer');
+    const studioScreen = page.locator(`.${CARBON_DOM_CONTRACT.studioScreenClass}`);
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studioCanvasId}`);
+    const weatherCapsule = page.locator(`#${CARBON_DOM_CONTRACT.studioWeatherCapsuleId}`);
+    const wardrobeDrawer = page.locator(`#${CARBON_DOM_CONTRACT.studioWardrobeDrawerId}`);
 
     await expect(studioScreen).toBeVisible();
     await expect(studioCanvas).toBeVisible();
@@ -90,6 +97,10 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       const drawerEl = document.querySelector('#studio-wardrobe-drawer');
       const weatherEl = document.querySelector('#studio-weather-capsule');
 
+      if (!screenEl || !canvasEl || !handleEl || !weatherEl) {
+        throw new Error('Required 3D Studio DOM elements missing');
+      }
+
       const screenRect = screenEl.getBoundingClientRect();
       const canvasRect = canvasEl.getBoundingClientRect();
       const handleRect = handleEl.getBoundingClientRect();
@@ -97,7 +108,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
       const drawerAria =
         drawerEl?.getAttribute('aria-expanded') ??
-        handleEl?.getAttribute('aria-expanded') ??
+        handleEl.getAttribute('aria-expanded') ??
         (drawerEl?.getAttribute('data-drawer-state') === 'expanded' ? 'true' : 'false');
 
       return {
@@ -106,33 +117,39 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
         canvasCoverageRatio:
           (canvasRect.width * canvasRect.height) / (screenRect.width * screenRect.height),
         drawerAria,
-        drawerCollapsedClass:
+        drawerCollapsedClass: Boolean(
           drawerEl?.classList.contains('collapsed') ||
-          drawerEl?.getAttribute('data-drawer-state') === 'collapsed',
+            drawerEl?.getAttribute('data-drawer-state') === 'collapsed'
+        ),
         weatherFontVariantNumeric: getComputedStyle(weatherEl).fontVariantNumeric,
       };
     });
 
-    expect(studioMetrics.studioViewportHeightRatio).toBeGreaterThanOrEqual(0.85);
-    expect(studioMetrics.unobstructedViewportRatio).toBeGreaterThanOrEqual(0.85);
+    expect(studioMetrics.studioViewportHeightRatio).toBeGreaterThanOrEqual(
+      CARBON_HIG_TOKENS.minStudioViewportRatio
+    );
+    expect(studioMetrics.unobstructedViewportRatio).toBeGreaterThanOrEqual(
+      CARBON_HIG_TOKENS.minStudioViewportRatio
+    );
     expect(studioMetrics.canvasCoverageRatio).toBeGreaterThanOrEqual(0.95);
     expect(studioMetrics.drawerAria).toBe('false');
     expect(studioMetrics.drawerCollapsedClass).toBe(true);
-    expect(studioMetrics.weatherFontVariantNumeric).toContain('tabular-nums');
+    expect(studioMetrics.weatherFontVariantNumeric).toContain(CARBON_HIG_TOKENS.numericVariant);
 
     // 4. Navigate to Wardrobe -> Borderless cutout-only tiles, Spring Detail Sheet & Drag-to-Dismiss, Quick Menu
     await page.locator('#mobile-tab-wardrobe').click();
-    const firstTile = page.locator('.hig-cutout-tile').first();
+    const firstTile = page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`).first();
     await expect(firstTile).toBeVisible();
 
     const tileMetrics = await firstTile.evaluate((el) => {
-      const cs = getComputedStyle(el);
+      const htmlEl = el as HTMLElement;
+      const cs = getComputedStyle(htmlEl);
       return {
         borderWidth: cs.borderWidth || cs.borderTopWidth,
         borderTopWidth: cs.borderTopWidth,
         boxShadow: cs.boxShadow,
-        persistentTextLength: (el.innerText || '').trim().length,
-        persistentButtonCount: el.querySelectorAll('button').length,
+        persistentTextLength: (htmlEl.innerText || '').trim().length,
+        persistentButtonCount: htmlEl.querySelectorAll('button').length,
       };
     });
     expect(tileMetrics.borderWidth).toBe('0px');
@@ -143,7 +160,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     // Tap cutout tile -> opens #garment-detail-sheet with spring curve cubic-bezier(0.32, 0.72, 0, 1)
     await firstTile.click();
-    const detailSheet = page.locator('#garment-detail-sheet');
+    const detailSheet = page.locator(`#${CARBON_DOM_CONTRACT.garmentDetailSheetId}`);
     await expect(detailSheet).toBeVisible();
 
     const detailSpringInfo = await page.evaluate(() => {
@@ -164,18 +181,24 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       };
     });
     expect(detailSpringInfo).not.toBeNull();
+    if (!detailSpringInfo) {
+      throw new Error('Missing detail sheet panel');
+    }
     expect(
       `${detailSpringInfo.transitionTimingFunction} ${detailSpringInfo.animationTimingFunction} ${detailSpringInfo.springVar}`
-    ).toContain('cubic-bezier(0.32, 0.72, 0, 1)');
+    ).toContain(CARBON_HIG_TOKENS.springEasing);
 
     // Downward drag on [data-sheet-handle="true"] (or sheet drag zone) dismisses #garment-detail-sheet
     await page.waitForTimeout(460); // Let 0.42s spring entrance settle so handle coordinates are stationary
     const sheetHandle = page
-      .locator('[data-sheet-handle="true"]:visible, .ui-sheet-drag-zone:visible')
+      .locator(`[${CARBON_DOM_CONTRACT.attrSheetHandle}="true"]:visible, .ui-sheet-drag-zone:visible`)
       .last();
     await expect(sheetHandle).toBeVisible();
     const handleBox = await sheetHandle.boundingBox();
     expect(handleBox).not.toBeNull();
+    if (!handleBox) {
+      throw new Error('Missing sheet handle bounding box');
+    }
     const viewportSize = page.viewportSize() || { width: 393, height: 852 };
     const shx = handleBox.x + handleBox.width / 2;
     const shy = handleBox.y + handleBox.height / 2;
@@ -189,7 +212,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     // Right-click / contextmenu on .hig-cutout-tile opens #garment-quick-menu-sheet
     await firstTile.dispatchEvent('contextmenu');
-    const quickMenuSheet = page.locator('#garment-quick-menu-sheet');
+    const quickMenuSheet = page.locator(`#${CARBON_DOM_CONTRACT.garmentQuickMenuSheetId}`);
     await expect(quickMenuSheet).toBeVisible();
     await dismissOpenSheetByDragOrBackdrop(page, quickMenuSheet);
     await expect(quickMenuSheet).toBeHidden();
@@ -197,9 +220,9 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     // 5. Navigate to Insights -> Bento summary cards borderless/shadowless + tabular-nums + drill-down sheet
     await page.locator('#mobile-tab-analytics').click();
 
-    const cpwCard = page.locator('#bento-cpw-card');
-    const utilizationCard = page.locator('#bento-utilization-card, #bento-dormant-card').first();
-    const packingCard = page.locator('#bento-packing-card');
+    const cpwCard = page.locator(`#${CARBON_DOM_CONTRACT.bentoCpwCardId}`);
+    const utilizationCard = page.locator(`#${CARBON_DOM_CONTRACT.bentoUtilizationCardId}`);
+    const packingCard = page.locator(`#${CARBON_DOM_CONTRACT.bentoPackingCardId}`);
 
     await expect(cpwCard).toBeVisible();
     await expect(utilizationCard).toBeVisible();
@@ -219,20 +242,20 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       expect(cardStyle.borderWidth).toBe('0px');
       expect(cardStyle.borderTopWidth).toBe('0px');
       expect(cardStyle.boxShadow).toBe('none');
-      expect(cardStyle.fontVariantNumeric).toContain('tabular-nums');
+      expect(cardStyle.fontVariantNumeric).toContain(CARBON_HIG_TOKENS.numericVariant);
     }
 
     // Tap #bento-cpw-card -> opens drill-down bottom sheet
     await cpwCard.click();
     const drilldownSheetPanel = page
-      .locator('[data-sheet-panel="true"]:visible, .ui-sheet-box:visible')
+      .locator(`[${CARBON_DOM_CONTRACT.attrSheetPanel}="true"]:visible, .ui-sheet-box:visible`)
       .first();
     await expect(drilldownSheetPanel).toBeVisible();
     const drilldownEasing = await drilldownSheetPanel.evaluate((el) => {
       const cs = getComputedStyle(el);
       return `${cs.transitionTimingFunction} ${cs.animationTimingFunction}`;
     });
-    expect(drilldownEasing).toContain('cubic-bezier(0.32, 0.72, 0, 1)');
+    expect(drilldownEasing).toContain(CARBON_HIG_TOKENS.springEasing);
     await dismissOpenSheetByDragOrBackdrop(page, drilldownSheetPanel);
   });
 
@@ -242,7 +265,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
   }) => {
     const cdpSession = await context.newCDPSession(page);
     await cdpSession.send('Network.enable');
-    const setBrowserOnline = async (online) => {
+    const setBrowserOnline = async (online: boolean): Promise<void> => {
       if (!online) {
         await context.setOffline(true);
         await cdpSession.send('Network.emulateNetworkConditions', {
@@ -268,12 +291,9 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     // 1. Email OTP Signup
     const uniqueEmail = `e2e_${Date.now()}_${Math.floor(Math.random() * 99999)}@ainventory.test`;
 
-    const directEmailInput = page.locator('#email-auth-input');
-    if (!(await directEmailInput.isVisible().catch(() => false))) {
-      const registerTab = page.locator('#auth-tab-register');
-      if (await registerTab.isVisible().catch(() => false)) {
-        await registerTab.click();
-      }
+    const registerTab = page.locator('#auth-tab-register');
+    if (await registerTab.isVisible().catch(() => false)) {
+      await registerTab.click();
     }
 
     const emailInput = page.locator('#email-auth-input, #register-email-input').first();
@@ -292,7 +312,12 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       ),
       requestCodeBtn.click(),
     ]);
-    const otpDispatchJson = await otpDispatchRes.json().catch(() => ({}));
+    const otpDispatchJson = (await otpDispatchRes.json().catch(() => ({}))) as {
+      devPreviewCode?: string;
+      verificationCode?: string;
+      verification?: { code?: string };
+      code?: string;
+    };
     const previewOtp = String(
       otpDispatchJson.devPreviewCode ||
         otpDispatchJson.verificationCode ||
@@ -328,15 +353,17 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     }
 
     // Verify authenticated session & empty closet (0 garments)
-    await expect(page.locator('#studio-3d-canvas')).toBeVisible();
-    await expect(page.locator('#studio-empty-closet-card')).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studioCanvasId}`)).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studioEmptyClosetCardId}`)).toBeVisible();
 
     const { authToken, userCloset } = await page.evaluate(async () => {
       const token = localStorage.getItem('ainventory_auth_token') || '';
       const meRes = await fetch('/api/auth/me', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const meJson = await meRes.json().catch(() => ({}));
+      const meJson = (await meRes.json().catch(() => ({}))) as {
+        user?: { defaultCloset?: string };
+      };
       return {
         authToken: token,
         userCloset: meJson.user?.defaultCloset || '',
@@ -347,10 +374,12 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     await page.locator('#mobile-tab-wardrobe').click();
     await expect(page.getByText(/비어 있습니다|빈 옷장/).first()).toBeVisible();
-    await expect(page.locator('.hig-cutout-tile')).toHaveCount(0);
+    await expect(page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`)).toHaveCount(0);
 
     // 2. Upload synthetic dark-navy long coat on bright background -> auto WebP cutout & AI outer/coat mapping
-    const openAddBtn = page.locator('#open-garment-add-btn, #open-add-garment-btn').first();
+    const openAddBtn = page
+      .locator(`#open-garment-add-btn, #${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`)
+      .first();
     await expect(openAddBtn).toBeVisible();
     await openAddBtn.click();
 
@@ -359,6 +388,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       c.width = 360;
       c.height = 520;
       const ctx = c.getContext('2d');
+      if (!ctx) throw new Error('2D context unavailable');
       // Clean bright studio background (#F8F8FA)
       ctx.fillStyle = '#F8F8FA';
       ctx.fillRect(0, 0, c.width, c.height);
@@ -367,12 +397,10 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       ctx.fillRect(118, 56, 124, 384);
       ctx.fillRect(92, 74, 28, 224);
       ctx.fillRect(240, 74, 28, 224);
-      return c.toDataURL('image/png').split(',')[1];
+      return c.toDataURL('image/png').split(',')[1] || '';
     });
 
-    const photoInput = page
-      .locator('#garment-photo-file-input, #wardrobe-gallery-file-input')
-      .first();
+    const photoInput = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeGalleryInputId}`);
     await photoInput.setInputFiles({
       name: 'synthetic-navy-coat.png',
       mimeType: 'image/png',
@@ -380,7 +408,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     });
 
     // Confirm SmartPhotoCropEditorModal if opened
-    const confirmCropBtn = page.locator('#confirm-smart-crop-btn');
+    const confirmCropBtn = page.locator(`#${CARBON_DOM_CONTRACT.confirmSmartCropBtnId}`);
     try {
       await confirmCropBtn.waitFor({ state: 'visible', timeout: 3000 });
       await confirmCropBtn.click();
@@ -390,7 +418,9 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     // Verify automatic background removal produces image/webp
     const webpPreview = page
-      .locator('#cropped-webp-preview-img, img[src^="data:image/webp"], img[src$=".webp"]')
+      .locator(
+        `#${CARBON_DOM_CONTRACT.croppedWebpPreviewImgId}, img[src^="data:image/webp"], img[src$=".webp"]`
+      )
       .first();
     await expect(webpPreview).toBeVisible();
     const previewSrc = (await webpPreview.getAttribute('src')) || '';
@@ -399,7 +429,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     ).toBe(true);
 
     // Verify AI slot mapping auto-classifies coat / outer
-    const mappingBadge = page.locator('#ai-garment-mapping-summary');
+    const mappingBadge = page.locator(`#${CARBON_DOM_CONTRACT.aiGarmentMappingSummaryId}`);
     if (await mappingBadge.isVisible().catch(() => false)) {
       const badgeText = (await mappingBadge.textContent()) || '';
       expect(badgeText.toUpperCase()).toContain('WEBP');
@@ -418,9 +448,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       }
     }
 
-    const saveGarmentBtn = page
-      .locator('#save-garment-submit-btn, #submit-add-garment-btn')
-      .first();
+    const saveGarmentBtn = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}`);
     await expect(saveGarmentBtn).toBeEnabled();
 
     const [postGarmentRes] = await Promise.all([
@@ -437,7 +465,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       throw new Error(`POST /api/garments failed (${postGarmentRes.status()}): ${errTxt}`);
     }
 
-    await expect(page.locator('.hig-cutout-tile')).toHaveCount(1);
+    await expect(page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`)).toHaveCount(1);
 
     // Verify persisted garment format (.webp / data:image/webp) & outer/coat classification
     const serverGarmentsAfterAdd = await page.evaluate(
@@ -445,7 +473,15 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
         const r = await fetch(`/api/garments?closet=${encodeURIComponent(closet)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        return { status: r.status, body: await r.json().catch(() => ({})) };
+        const body = (await r.json().catch(() => ({}))) as {
+          garments?: Array<{
+            id: number;
+            category: string;
+            slot_key?: string;
+            image_url: string;
+          }>;
+        };
+        return { status: r.status, body };
       },
       { closet: userCloset, token: authToken }
     );
@@ -461,14 +497,15 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     // Wear in 3D Studio & verify activeGarmentIds on 3D engine (window.__MANNEQUIN_3D_ENGINE__)
     await page.locator('#mobile-tab-weather').click();
-    await expect(page.locator('#studio-3d-canvas')).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studioCanvasId}`)).toBeVisible();
 
     await page.waitForFunction(
       () => {
+        const canvasEl = document.querySelector('#studio-3d-canvas') as HTMLCanvasElement | null;
         const eng =
           window.__MANNEQUIN_3D_ENGINE__ ||
           window.__ainventory3DEngine ||
-          document.querySelector('#studio-3d-canvas')?.__mannequinEngine;
+          canvasEl?.__mannequinEngine;
         if (eng && !window.__MANNEQUIN_3D_ENGINE__) {
           window.__MANNEQUIN_3D_ENGINE__ = eng;
         }
@@ -483,10 +520,10 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       () => (window.__MANNEQUIN_3D_ENGINE__?.getTelemetry()?.activeGarmentIds || []).length > 0
     );
     if (!hasEquippedInitially) {
-      await page.locator('#studio-drawer-handle').click();
+      await page.locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`).click();
       await page.locator('#drawer-slot-chip-outer').click();
       await page.locator('.drawer-garment-tile').first().click();
-      await page.locator('#studio-drawer-handle').click();
+      await page.locator(`#${CARBON_DOM_CONTRACT.studioDrawerHandleId}`).click();
     }
 
     await page.waitForFunction(
@@ -495,7 +532,7 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
       { timeout: 10000 }
     );
     const studioActiveGarmentIds = await page.evaluate(
-      () => window.__MANNEQUIN_3D_ENGINE__.getTelemetry().activeGarmentIds
+      () => window.__MANNEQUIN_3D_ENGINE__?.getTelemetry().activeGarmentIds ?? []
     );
     expect(studioActiveGarmentIds.length).toBeGreaterThanOrEqual(1);
     expect(
@@ -507,50 +544,54 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     // 3. Offline IndexedDB Cache & Automatic Background Sync
     // Warm Insights & Wardrobe IndexedDB caches before going offline
     await page.locator('#mobile-tab-wardrobe').click();
-    await expect(page.locator('.hig-cutout-tile')).toHaveCount(1);
+    await expect(page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`)).toHaveCount(1);
     await page.locator('#mobile-tab-analytics').click();
-    await expect(page.locator('#bento-packing-card')).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.bentoPackingCardId}`)).toBeVisible();
 
     await setBrowserOnline(false);
 
     // Verify IndexedDB cached wardrobe still loads while offline (GET /api/garments returns cached item)
     await page.locator('#mobile-tab-wardrobe').click();
-    await expect(page.locator('.hig-cutout-tile')).toHaveCount(1);
+    await expect(page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`)).toHaveCount(1);
 
     const idbCachedCount = await page.evaluate(async () => {
-      const db = await new Promise((resolve, reject) => {
+      interface KvCacheRow {
+        key?: string;
+        data?: { garments?: unknown[] };
+      }
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
         const req = indexedDB.open('ainventory_offline_v1', 1);
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
       });
-      const rows = await new Promise((resolve) => {
+      const rows = await new Promise<KvCacheRow[]>((resolve) => {
         const tx = db.transaction('kv_cache', 'readonly');
         const getReq = tx.objectStore('kv_cache').getAll();
-        getReq.onsuccess = () => resolve(getReq.result || []);
+        getReq.onsuccess = () => resolve((getReq.result as KvCacheRow[]) || []);
         getReq.onerror = () => resolve([]);
       });
       db.close();
-      const garmentEntries = rows.filter((r) => String(r.key || '').startsWith('/garments'));
+      const garmentEntries = rows.filter((r) => String(r.key || '').includes('/garments'));
       return garmentEntries.reduce((max, r) => Math.max(max, (r.data?.garments || []).length), 0);
     });
     expect(idbCachedCount).toBe(1);
 
     // Perform an offline mutation (create trip packing list) & verify IndexedDB mutation_queue queues it
     await page.locator('#mobile-tab-analytics').click();
-    await page.locator('#bento-packing-card').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.bentoPackingCardId}`).click();
     const offlineTripTitle = `오프라인동기화_${Date.now()}`;
-    await page.locator('#packing-title-input').fill(offlineTripTitle);
-    await page.locator('#packing-dest-input').fill('부산');
-    await page.locator('#create-packing-list-btn').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.packingTitleInputId}`).fill(offlineTripTitle);
+    await page.locator(`#${CARBON_DOM_CONTRACT.packingDestInputId}`).fill('부산');
+    await page.locator(`#${CARBON_DOM_CONTRACT.createPackingListBtnId}`).click();
     await expect(page.getByText(new RegExp(offlineTripTitle))).toBeVisible();
 
     const queuedWhileOffline = await page.evaluate(async () => {
-      const db = await new Promise((resolve, reject) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
         const req = indexedDB.open('ainventory_offline_v1', 1);
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
       });
-      const count = await new Promise((resolve) => {
+      const count = await new Promise<number>((resolve) => {
         const tx = db.transaction('mutation_queue', 'readonly');
         const cReq = tx.objectStore('mutation_queue').count();
         cReq.onsuccess = () => resolve(Number(cReq.result) || 0);
@@ -569,13 +610,13 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
 
     await page.waitForFunction(
       async () => {
-        const db = await new Promise((resolve) => {
+        const db = await new Promise<IDBDatabase | null>((resolve) => {
           const req = indexedDB.open('ainventory_offline_v1', 1);
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => resolve(null);
         });
         if (!db) return false;
-        const remaining = await new Promise((resolve) => {
+        const remaining = await new Promise<number>((resolve) => {
           const tx = db.transaction('mutation_queue', 'readonly');
           const cReq = tx.objectStore('mutation_queue').count();
           cReq.onsuccess = () => resolve(Number(cReq.result) || 0);
@@ -593,7 +634,11 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
         const r = await fetch(`/api/packing-lists?closet=${encodeURIComponent(closet)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        return { status: r.status, body: await r.json().catch(() => ({})) };
+        const body = (await r.json().catch(() => ({}))) as {
+          lists?: Array<{ title?: string }>;
+          packingLists?: Array<{ title?: string }>;
+        };
+        return { status: r.status, body };
       },
       { closet: userCloset, token: authToken }
     );
@@ -605,37 +650,30 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     // Close packing sheet before opening Account Settings
     await dismissOpenSheetByDragOrBackdrop(
       page,
-      page.locator('#packing-title-input')
+      page.locator(`#${CARBON_DOM_CONTRACT.packingTitleInputId}`)
     );
 
     // 4. Immediate Permanent Account Deletion
     const accountSettingsBtn = page
       .locator(
-        '#open-account-settings-btn:visible, #mobile-open-account-settings-btn:visible, #studio-open-settings-btn:visible'
+        `#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}:visible, #${CARBON_DOM_CONTRACT.mobileOpenAccountSettingsBtnId}:visible, #studio-open-settings-btn:visible`
       )
       .first();
     await expect(accountSettingsBtn).toBeVisible();
     await accountSettingsBtn.click();
 
-    const openDeleteBtn = page
-      .locator('#open-delete-account-modal-btn, #initiate-delete-account-btn')
-      .first();
+    const openDeleteBtn = page.locator(`#${CARBON_DOM_CONTRACT.initiateDeleteAccountBtnId}`);
     await expect(openDeleteBtn).toBeVisible();
     await openDeleteBtn.click();
 
-    const deleteConfirmInput = page.locator('#delete-account-confirm-input');
-    if (await deleteConfirmInput.isVisible().catch(() => false)) {
-      await deleteConfirmInput.fill('영구 탈퇴');
-    }
-
-    const confirmPermanentDeleteBtn = page
-      .locator('#confirm-permanent-delete-btn, #delete-account-permanent-btn')
-      .first();
+    const confirmPermanentDeleteBtn = page.locator(
+      `#${CARBON_DOM_CONTRACT.confirmPermanentDeleteBtnId}`
+    );
     await expect(confirmPermanentDeleteBtn).toBeEnabled();
     await confirmPermanentDeleteBtn.click();
 
     // Assert immediate redirect to unauthenticated login screen & HTTP 401 on GET /api/auth/me
-    await expect(page.locator('#enter-sample-demo-btn')).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.sampleDemoButtonId}`)).toBeVisible();
 
     const postDeleteAuthStatuses = await page.evaluate(async (oldToken) => {
       const r1 = await fetch('/api/auth/me', {
@@ -646,5 +684,49 @@ test.describe('Mobile Store-Ready E2E & Apple HIG Progressive Disclosure (Req 15
     }, authToken);
     expect(postDeleteAuthStatuses.withOldToken).toBe(401);
     expect(postDeleteAuthStatuses.unauthenticated).toBe(401);
+
+    // Verify local auth token & IndexedDB offline stores (`kv_cache` & `mutation_queue`) are completely purged
+    const localPurgeState = await page.evaluate(async () => {
+      const remainingToken = localStorage.getItem('ainventory_auth_token');
+      let remainingCacheCount = 0;
+      let remainingQueueCount = 0;
+
+      if (typeof indexedDB !== 'undefined' && typeof indexedDB.databases === 'function') {
+        const dbs = await indexedDB.databases();
+        const exists = dbs.some((d) => d.name === 'ainventory_offline_v1');
+        if (!exists) {
+          return { remainingToken, remainingCacheCount: 0, remainingQueueCount: 0 };
+        }
+      }
+
+      const db = await new Promise<IDBDatabase | null>((resolve) => {
+        const req = indexedDB.open('ainventory_offline_v1', 1);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+      if (db) {
+        if (db.objectStoreNames.contains('kv_cache')) {
+          remainingCacheCount = await new Promise<number>((resolve) => {
+            const tx = db.transaction('kv_cache', 'readonly');
+            const cReq = tx.objectStore('kv_cache').count();
+            cReq.onsuccess = () => resolve(Number(cReq.result) || 0);
+            cReq.onerror = () => resolve(0);
+          });
+        }
+        if (db.objectStoreNames.contains('mutation_queue')) {
+          remainingQueueCount = await new Promise<number>((resolve) => {
+            const tx = db.transaction('mutation_queue', 'readonly');
+            const cReq = tx.objectStore('mutation_queue').count();
+            cReq.onsuccess = () => resolve(Number(cReq.result) || 0);
+            cReq.onerror = () => resolve(0);
+          });
+        }
+        db.close();
+      }
+      return { remainingToken, remainingCacheCount, remainingQueueCount };
+    });
+    expect(localPurgeState.remainingToken || '').toBe('');
+    expect(localPurgeState.remainingCacheCount).toBe(0);
+    expect(localPurgeState.remainingQueueCount).toBe(0);
   });
 });

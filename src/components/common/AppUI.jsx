@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { apiFetch, formatKRW } from '../../utils/api.js';
 import {
   acknowledgeCameraNotice,
+  emitStatusCapsule,
   pushBackHandler,
   setBiometricConsent,
   subscribeStatusCapsule,
@@ -66,7 +67,7 @@ export function KpiMetricStrip({ items = [] }) {
 }
 
 /**
- * Spring Physics Bottom Sheet / Modal with Drag-to-Dismiss & Hardware Back Stack (Reqs 9.a, 13.a)
+ * Spring Physics Bottom Sheet / Modal with Drag-to-Dismiss, Escape & Hardware Back Stack (Reqs 9.a, 13.a)
  */
 export function ResponsiveSheetModal({
   id,
@@ -74,6 +75,7 @@ export function ResponsiveSheetModal({
   onClose,
   title,
   eyebrow,
+  actions,
   maxWidth = 720,
   children,
   footer,
@@ -81,6 +83,7 @@ export function ResponsiveSheetModal({
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(0);
+  const headingId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -88,7 +91,15 @@ export function ResponsiveSheetModal({
       onClose?.();
       return true;
     });
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       popBack();
       setDragY(0);
       setIsDragging(false);
@@ -137,6 +148,10 @@ export function ResponsiveSheetModal({
     >
       <div
         id={id}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? headingId : undefined}
+        aria-label={!title ? eyebrow || '시트 대화상자' : undefined}
         data-sheet-panel="true"
         className="modal-box ui-sheet-box"
         style={{
@@ -149,6 +164,7 @@ export function ResponsiveSheetModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div
+          data-sheet-handle="true"
           className="ui-sheet-drag-zone"
           onPointerDown={handleDragStart}
           onTouchStart={handleDragStart}
@@ -157,24 +173,31 @@ export function ResponsiveSheetModal({
           <div className="ui-sheet-drag-handle" aria-hidden="true" />
         </div>
 
-        {(title || eyebrow) && (
+        {(title || eyebrow || actions) && (
           <div className="modal-header" style={{ marginBottom: 16 }}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               {eyebrow && (
                 <span className="hig-caption" style={{ display: 'block', marginBottom: 4 }}>
                   {eyebrow}
                 </span>
               )}
-              {title && <h2 className="hig-headline">{title}</h2>}
+              {title && (
+                <h2 id={headingId} className="hig-headline">
+                  {title}
+                </h2>
+              )}
             </div>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={onClose}
-              aria-label="닫기"
-            >
-              <X size={18} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {actions}
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={onClose}
+                aria-label="닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         )}
         <div className="ui-sheet-content">{children}</div>
@@ -188,19 +211,11 @@ export const BottomSheet = ResponsiveSheetModal;
 
 export function EmptyStateBox({ icon, title, description, action }) {
   return (
-    <div
-      className="ui-empty-box hig-fade-in"
-      style={{
-        background: 'var(--bg-surface)',
-        borderRadius: 24,
-        padding: '40px 24px',
-        textAlign: 'center',
-      }}
-    >
-      {icon && <div className="ui-empty-icon" style={{ marginBottom: 16 }}>{icon}</div>}
-      <h3 className="hig-headline" style={{ marginBottom: 8 }}>{title}</h3>
+    <div className="ui-empty-box hig-fade-in">
+      {icon && <div className="ui-empty-icon" style={{ marginBottom: 8 }}>{icon}</div>}
+      <h3 className="hig-headline" style={{ marginBottom: 4 }}>{title}</h3>
       {description && (
-        <p className="hig-caption" style={{ maxWidth: 380, margin: '0 auto 16px' }}>
+        <p className="hig-caption" style={{ maxWidth: 380, margin: '0 auto 12px' }}>
           {description}
         </p>
       )}
@@ -445,6 +460,142 @@ export function BiometricConsentModal({ open, onConfirm, onClose }) {
 }
 
 /**
+ * App Store / Play Store Privacy Policy & Terms of Service Disclosure Modal (Req 10)
+ */
+export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, lang = 'ko' }) {
+  const [doc, setDoc] = useState(initialDoc);
+
+  useEffect(() => {
+    if (open) {
+      setDoc(initialDoc);
+    }
+  }, [open, initialDoc]);
+
+  const isEn = lang === 'en';
+
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      eyebrow="LEGAL & PRIVACY"
+      title={
+        doc === 'terms'
+          ? isEn
+            ? 'Terms of Service'
+            : '서비스 이용약관'
+          : isEn
+            ? 'Privacy Policy'
+            : '개인정보처리방침'
+      }
+      maxWidth={540}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <button
+            type="button"
+            className={`chip ${doc === 'privacy' ? 'active' : ''}`}
+            style={{ minHeight: 44 }}
+            onClick={() => setDoc('privacy')}
+          >
+            {isEn ? 'Privacy Policy' : '개인정보처리방침'}
+          </button>
+          <button
+            type="button"
+            className={`chip ${doc === 'terms' ? 'active' : ''}`}
+            style={{ minHeight: 44 }}
+            onClick={() => setDoc('terms')}
+          >
+            {isEn ? 'Terms of Service' : '서비스 이용약관'}
+          </button>
+        </div>
+
+        {doc === 'privacy' ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              background: 'var(--bg-surface)',
+              padding: 16,
+              borderRadius: 16,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShieldCheck size={18} />
+              <strong className="hig-body">
+                {isEn
+                  ? '1. Collected Items & Purpose'
+                  : '1. 수집하는 개인정보 항목 및 이용 목적'}
+              </strong>
+            </div>
+            <p className="hig-caption">
+              {isEn
+                ? 'We process account identifiers (email/username), body sizing profile, and cropped WebP garment cutouts solely to provide digital wardrobe management, 3D fitting, and outfit recommendations.'
+                : '계정 식별 정보(이메일·아이디), 체형 치수 설정값 및 사용자가 등록한 의류 크롭(WebP) 이미지는 디지털 옷장 관리, 3D 마네킹 착장 및 날씨 맞춤 코디 추천 제공 목적으로만 처리됩니다.'}
+            </p>
+            <strong className="hig-body">
+              {isEn
+                ? '2. On-Device Face Analysis (Zero Server Upload)'
+                : '2. 온디바이스 얼굴 피부톤 진단 (외부 서버 미전송)'}
+            </strong>
+            <p className="hig-caption">
+              {isEn
+                ? 'Personal color face landmark & Lab undertone analysis runs 100% locally inside on-device WASM memory after explicit consent and is discarded immediately without server upload.'
+                : '퍼스널컬러 진단을 위한 얼굴 랜드마크 및 Lab 언더톤 분석은 명시적 동의 후 100% 기기 내 브라우저 WASM 메모리에서만 수행되며, 원본 얼굴 사진은 서버로 전송·저장되지 않고 즉시 파기됩니다.'}
+            </p>
+            <strong className="hig-body">
+              {isEn
+                ? '3. Offline Cache & Immediate Account Deletion'
+                : '3. 오프라인 캐시 및 계정·데이터 즉시 영구 파기'}
+            </strong>
+            <p className="hig-caption">
+              {isEn
+                ? 'Offline cache in IndexedDB is cleared on logout, and requesting account deletion in Settings permanently erases all account, garment, outfit, calendar, and local cache records immediately.'
+                : '오프라인 조회용 IndexedDB 캐시는 로그아웃 시 즉시 정리되며, 계정 설정에서 회원 탈퇴 실행 시 계정·의류·룩북·캘린더·로컬 캐시 데이터가 유예 기간 없이 즉시 영구 파기됩니다.'}
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              background: 'var(--bg-surface)',
+              padding: 16,
+              borderRadius: 16,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileText size={18} />
+              <strong className="hig-body">
+                {isEn ? '1. Service Scope & Guest Trial' : '1. 서비스 제공 범위 및 샘플 옷장 체험'}
+              </strong>
+            </div>
+            <p className="hig-caption">
+              {isEn
+                ? 'A inventory provides 3D digital wardrobe management, weather styling, shopping duplicate checks, and a login-free sample closet demo.'
+                : 'A inventory는 3D 디지털 옷장 관리, 기상 연동 코디 추천, 오프라인 쇼핑 중복 판독 및 비로그인 샘플 옷장 체험 기능을 제공합니다.'}
+            </p>
+            <strong className="hig-body">
+              {isEn ? '2. User Content Ownership' : '2. 사용자 콘텐츠 권리 및 책임'}
+            </strong>
+            <p className="hig-caption">
+              {isEn
+                ? 'Users retain full rights to garment photos uploaded to their closet and may export schedules (.ics) or delete items and accounts at any time.'
+                : '사용자가 등록한 의류 사진 및 코디 기록에 대한 권리는 사용자에게 귀속되며, 언제든 개별 삭제, 캘린더(.ics) 내보내기 또는 계정 영구 삭제를 수행할 수 있습니다.'}
+            </p>
+          </div>
+        )}
+
+        <button type="button" className="btn btn-primary btn-full" onClick={onClose}>
+          {isEn ? 'Close' : '확인'}
+        </button>
+      </div>
+    </ResponsiveSheetModal>
+  );
+}
+
+/**
  * Selective Sample Closet Import Sheet for Logged-in Users (Req 8.a)
  */
 export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
@@ -464,7 +615,11 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
         setSamples(list);
         setSelectedKeys(list.slice(0, 5).map((item) => item.key || item.sampleKey));
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (active) {
+          emitStatusCapsule(err?.message || '샘플 카탈로그를 불러오지 못했습니다');
+        }
+      })
       .finally(() => {
         if (active) setLoading(false);
       });
@@ -494,6 +649,8 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
       triggerHaptic('medium');
       onImported?.(res.count ?? res.importedCount ?? selectedKeys.length);
       onClose?.();
+    } catch (err) {
+      emitStatusCapsule(err?.message || '샘플 아이템 가져오기에 실패했습니다');
     } finally {
       setImporting(false);
     }

@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Layers, ShieldAlert, Sparkles } from 'lucide-react';
+import { WEAR_SLOTS_11 } from '../shared/garmentTaxonomy.js';
 import { computeItemTier, formatKRW } from '../utils/api.js';
 import { inferFabricMaterialSpec } from '../utils/mannequin3DRenderer.js';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-import { ALL_11_SLOTS } from './VirtualMannequin.jsx';
 
 export default function OutfitInspectorModal({
   open,
@@ -18,6 +18,13 @@ export default function OutfitInspectorModal({
 }) {
   const [activeSlot, setActiveSlot] = useState(initialSlot || 'outer');
   const [pendingCandidate, setPendingCandidate] = useState(null);
+
+  useEffect(() => {
+    if (open && initialSlot) {
+      setActiveSlot(initialSlot);
+      setPendingCandidate(null);
+    }
+  }, [open, initialSlot]);
 
   const candidatesForSlot = useMemo(() => {
     return (closetGarments || []).filter((g) => {
@@ -61,10 +68,10 @@ export default function OutfitInspectorModal({
             gap: 8,
           }}
         >
-          {ALL_11_SLOTS.map((slot) => {
+          {WEAR_SLOTS_11.map((slot) => {
             const item = loadoutBySlot[slot.key] || null;
             const isSelected = activeSlot === slot.key;
-            const slotShortLabel = (slot.labelKo || slot.label || '').split('·')[0].trim();
+            const slotShortLabel = slot.shortKo || (slot.labelKo || '').split('·')[0].trim();
             return (
               <button
                 key={slot.key}
