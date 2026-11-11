@@ -13,8 +13,12 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { DEFAULT_SKIN_PINS, detectFaceAndSkinPins } from '../utils/faceLandmarkEngine.js';
-import { renderCroppedImageOutput } from './SmartPhotoCropEditorModal.jsx';
+import {
+  DEFAULT_SKIN_PINS,
+  detectFaceAndSkinPins,
+  disposeFaceLandmarker,
+} from '../utils/faceLandmarkEngine.ts';
+import { renderCroppedImageOutput } from '../utils/imageTools.js';
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -26,14 +30,7 @@ const FACE_CROP_SHORTCUTS = [
   { key: 'upper_portrait', label: '반신샷 얼굴 포커스', box: { x: 0.22, y: 0.05, w: 0.56, h: 0.46 } },
 ];
 
-/**
- * 2-Stage Personal Color Photo Editor:
- * - Stage 1 (`crop`): Interactive 8-handle crop box + AI auto-locate face + rotation/straighten/brightness
- *   (opens IMMEDIATELY whenever the user uploads a full-body/portrait photo OR takes a live camera shot!)
- * - Stage 2 (`pins`): 478-landmark contour + 4 draggable skin sampling pins with live zoomed pixel preview
- */
-export default function PortraitCropAndPinEditorModal({
-  open,
+function PortraitCropAndPinEditorContent({
   imageSource,
   initialStage = 'crop',
   initialPins = null,
@@ -45,7 +42,7 @@ export default function PortraitCropAndPinEditorModal({
   const dragRef = useRef(null);
   const pinContainerRef = useRef(null);
 
-  const [stage, setStage] = useState(initialStage || 'crop'); // 'crop' | 'pins'
+  const [stage, setStage] = useState(initialStage || 'crop');
   const [rotation90, setRotation90] = useState(0);
   const [straightenDeg, setStraightenDeg] = useState(0);
   const [flipH, setFlipH] = useState(false);
@@ -60,20 +57,40 @@ export default function PortraitCropAndPinEditorModal({
   const [lowConfPopup, setLowConfPopup] = useState(false);
   const [scanning, setScanning] = useState(false);
 
-  // Reset state whenever modal opens with a fresh photo
+  // Escape key closes modal cleanly
   useEffect(() => {
-    if (!open || !imageSource) return;
-    setStage(initialStage || 'crop');
-    setRotation90(0);
-    setStraightenDeg(0);
-    setFlipH(false);
-    setBrightness(100);
-    setLowConfPopup(false);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
-    // Smart initial crop: if image is tall portrait (e.g. full-body shot h > w * 1.45), default crop near upper-head/bust!
+  // Release MediaPipe WASM FaceLandmarker + preview canvas backing store on close/unmount
+  useEffect(() => {
+    const canvasEl = cropCanvasRef.current;
+    return () => {
+      if (canvasEl) {
+        canvasEl.width = 0;
+        canvasEl.height = 0;
+      }
+      disposeFaceLandmarker();
+    };
+  }, []);
+
+  // Smart initial crop based on natural aspect ratio (async onload only — zero sync setState)
+  useEffect(() => {
+    if (!imageSource) return undefined;
+    let cancelled = false;
     const probe = new Image();
     probe.crossOrigin = 'anonymous';
     probe.onload = () => {
+      if (cancelled) return;
       const ratio = (probe.naturalHeight || 1) / Math.max(1, probe.naturalWidth || 1);
       if (ratio > 1.45) {
         setCropBox({ x: 0.20, y: 0.04, w: 0.60, h: 0.44 });
@@ -82,11 +99,14 @@ export default function PortraitCropAndPinEditorModal({
       }
     };
     probe.src = imageSource;
-  }, [open, imageSource, initialStage]);
+    return () => {
+      cancelled = true;
+    };
+  }, [imageSource]);
 
   // Render live transformed preview canvas in Stage 1
   useEffect(() => {
-    if (!open || !imageSource || stage !== 'crop') return;
+    if (!imageSource || stage !== 'crop') return undefined;
     let cancelled = false;
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -106,7 +126,7 @@ export default function PortraitCropAndPinEditorModal({
       canvas.width = cw;
       canvas.height = ch;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#141820';
+      ctx.fillStyle = '#1C1C1E';
       ctx.fillRect(0, 0, cw, ch);
       ctx.save();
       if (brightness !== 100) ctx.filter = `brightness(${brightness}%)`;
@@ -122,9 +142,7 @@ export default function PortraitCropAndPinEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [open, imageSource, stage, rotation90, straightenDeg, flipH, brightness]);
-
-  if (!open || !imageSource) return null;
+  }, [imageSource, stage, rotation90, straightenDeg, flipH, brightness]);
 
   const getClientXY = (e) => {
     const t = e.touches?.[0] || e.changedTouches?.[0];
@@ -181,7 +199,6 @@ export default function PortraitCropAndPinEditorModal({
     dragRef.current = null;
   };
 
-  // AI Auto-Locate Face inside full-body shot!
   const handleAutoLocateFace = async () => {
     setScanning(true);
     try {
@@ -270,6 +287,36 @@ export default function PortraitCropAndPinEditorModal({
     );
   };
 
+  const handlePinKeyDown = (e, pinId) => {
+    const step = e.shiftKey ? 0.03 : 0.01;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = -step;
+    else if (e.key === 'ArrowDown') dy = step;
+    else return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    setPins((prev) =>
+      prev.map((p) =>
+        p.id === pinId
+          ? {
+              ...p,
+              x: Number(clamp(p.x + dx, 0.06, 0.94).toFixed(3)),
+              y: Number(clamp(p.y + dy, 0.06, 0.94).toFixed(3)),
+            }
+          : p
+      )
+    );
+  };
+
+  const dialogLabel =
+    stage === 'crop'
+      ? '전신샷 · 셀피 크롭 & 방향 보정 에디터'
+      : '얼굴 4대 피부 참조 핀 정밀 확인';
+
   return (
     <div
       className="modal-backdrop ui-sheet-backdrop"
@@ -286,6 +333,9 @@ export default function PortraitCropAndPinEditorModal({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={dialogLabel}
         className="modal-box ui-sheet-box"
         data-sheet-panel="true"
         style={{ maxWidth: 780, width: '95vw', padding: 24 }}
@@ -297,11 +347,7 @@ export default function PortraitCropAndPinEditorModal({
             <span className="rec-tag tabular-nums" style={{ marginBottom: 4, display: 'inline-block' }}>
               {stage === 'crop' ? 'STEP 1/2 · SMART PORTRAIT CROP' : 'STEP 2/2 · 478 LANDMARK & 4-PIN'}
             </span>
-            <h2 className="hig-headline">
-              {stage === 'crop'
-                ? '전신샷 · 셀피 크롭 & 방향 보정 에디터'
-                : '얼굴 4대 피부 참조 핀 정밀 확인'}
-            </h2>
+            <h2 className="hig-headline">{dialogLabel}</h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="닫기">
             <X size={18} />
@@ -502,6 +548,7 @@ export default function PortraitCropAndPinEditorModal({
                 <img
                   src={detectionInfo?.processedDataUrl || croppedDataUrl || imageSource}
                   alt="크롭된 얼굴 피부 핀 편집"
+                  decoding="async"
                   style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                 />
 
@@ -522,42 +569,51 @@ export default function PortraitCropAndPinEditorModal({
                   />
                 ))}
 
-                {pins.map((pin, idx) => (
-                  <div
-                    key={pin.id}
-                    role="slider"
-                    aria-label={pin.labelKo}
-                    tabIndex={0}
-                    className="tabular-nums"
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setDraggingPinId(pin.id);
-                    }}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      setDraggingPinId(pin.id);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: `${pin.x * 100}%`,
-                      top: `${pin.y * 100}%`,
-                      transform: 'translate(-50%, -50%)',
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: draggingPinId === pin.id ? '#000000' : 'rgba(29, 29, 31, 0.92)',
-                      color: '#FFFFFF',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'grab',
-                    }}
-                  >
-                    {idx + 1}
-                  </div>
-                ))}
+                {pins.map((pin, idx) => {
+                  const pctX = Math.round(pin.x * 100);
+                  const pctY = Math.round(pin.y * 100);
+                  return (
+                    <div
+                      key={pin.id}
+                      role="slider"
+                      aria-label={pin.labelKo}
+                      aria-valuemin={6}
+                      aria-valuemax={94}
+                      aria-valuenow={pctX}
+                      aria-valuetext={`X ${pctX}%, Y ${pctY}%`}
+                      tabIndex={0}
+                      className="tabular-nums"
+                      onKeyDown={(e) => handlePinKeyDown(e, pin.id)}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDraggingPinId(pin.id);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        setDraggingPinId(pin.id);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${pin.x * 100}%`,
+                        top: `${pin.y * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        background: draggingPinId === pin.id ? '#000000' : 'rgba(29, 29, 31, 0.92)',
+                        color: '#FFFFFF',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'grab',
+                      }}
+                    >
+                      {idx + 1}
+                    </div>
+                  );
+                })}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16 }}>
@@ -565,7 +621,7 @@ export default function PortraitCropAndPinEditorModal({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <Crosshair size={16} />
                     <strong className="hig-headline tabular-nums">
-                      4대 피부 샘플링 좌표 ({detectionInfo?.engine === 'mediapipe_478' ? '478 랜드마크' : '스마트 감지'})
+                      4대 피부 샘플링 좌표 ({String(detectionInfo?.engine || '').includes('478') ? '478 랜드마크' : '스마트 감지'})
                     </strong>
                   </div>
                   <p className="hig-caption" style={{ marginBottom: 16 }}>
@@ -626,5 +682,31 @@ export default function PortraitCropAndPinEditorModal({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 2-Stage Personal Color Photo Editor:
+ * - Stage 1 (`crop`): Interactive 8-handle crop box + AI auto-locate face + rotation/straighten/brightness
+ * - Stage 2 (`pins`): 478-landmark contour + 4 draggable skin sampling pins with keyboard accessibility
+ */
+export default function PortraitCropAndPinEditorModal({
+  open,
+  imageSource,
+  initialStage = 'crop',
+  initialPins = null,
+  onApply,
+  onClose,
+}) {
+  if (!open || !imageSource) return null;
+  return (
+    <PortraitCropAndPinEditorContent
+      key={`${imageSource}::${initialStage}`}
+      imageSource={imageSource}
+      initialStage={initialStage}
+      initialPins={initialPins}
+      onApply={onApply}
+      onClose={onClose}
+    />
   );
 }

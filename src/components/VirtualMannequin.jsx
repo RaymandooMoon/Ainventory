@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   CloudRain,
@@ -12,29 +12,10 @@ import {
   Wind,
   X,
 } from 'lucide-react';
-import { Mannequin3DWebGLEngine } from '../utils/mannequin3DRenderer.js';
+import { WEAR_SLOTS_11 } from '../shared/garmentTaxonomy.js';
 import { pushBackHandler, triggerHaptic } from '../utils/nativeBridge.js';
 import Mannequin2DCollageFallback from './Mannequin2DCollageFallback.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-
-export const LEFT_HUD_SLOTS = [
-  { key: 'headwear', no: '01', label: '모자 · 헤드웨어', group: 'HEAD & NECK' },
-  { key: 'neckwear', no: '02', label: '머플러 · 넥타이', group: 'HEAD & NECK' },
-  { key: 'outer', no: '03', label: '아우터 · 코트', group: 'UPPERLAYERS' },
-  { key: 'top', no: '04', label: '상의 · 니트/셔츠', group: 'UPPERLAYERS' },
-  { key: 'gloves', no: '05', label: '장갑 · 핸드웨어', group: 'HANDS' },
-  { key: 'accessory', no: '06', label: '가방 · 서류가방', group: 'CARRY & ACC' },
-];
-
-export const RIGHT_HUD_SLOTS = [
-  { key: 'dress', no: '07', label: '원피스 · 셋업', group: 'FULL SILHOUETTE' },
-  { key: 'bottom', no: '08', label: '하의 · 팬츠/스커트', group: 'LOWERWARE' },
-  { key: 'underwear', no: '09', label: '언더웨어 · 이너', group: 'INNER BASE' },
-  { key: 'socks', no: '10', label: '양말 · 레그웨어', group: 'FEET & LEGS' },
-  { key: 'shoes', no: '11', label: '신발 · 구두/부츠', group: 'FEET & LEGS' },
-];
-
-export const ALL_11_SLOTS = [...LEFT_HUD_SLOTS, ...RIGHT_HUD_SLOTS];
 
 const MOTION_CYCLE = [
   { key: 'auto', label: '자동 모션' },
@@ -45,58 +26,152 @@ const MOTION_CYCLE = [
   { key: 'umbrella', label: '우산' },
 ];
 
+const BODY_PREVIEW_PROFILE_KEYS = [
+  'gender',
+  'height_cm',
+  'heightCm',
+  'weight_kg',
+  'weightKg',
+  'body_shape',
+  'bodyShape',
+  'body_fat_pct',
+  'bodyFatPct',
+  'chest_cm',
+  'chestCm',
+  'waist_cm',
+  'waistCm',
+  'hip_cm',
+  'hipCm',
+  'head_cm',
+  'headCm',
+  'personal_color',
+  'personalColor',
+  'skin_tone_hex',
+  'skinToneHex',
+  'mannequinModelColorHex',
+  'mannequinBriefsColorHex',
+];
+
+function areBodyPreviewPropsEqual(prev, next) {
+  const prevYaw = prev.poseYawDeg ?? prev.rotDeg ?? -16;
+  const nextYaw = next.poseYawDeg ?? next.rotDeg ?? -16;
+  if (
+    prevYaw !== nextYaw ||
+    prev.width !== next.width ||
+    prev.height !== next.height ||
+    prev.displayWidth !== next.displayWidth ||
+    prev.displayHeight !== next.displayHeight ||
+    prev.className !== next.className
+  ) {
+    return false;
+  }
+  const pA = prev.user || prev.profile || {};
+  const pB = next.user || next.profile || {};
+  for (const key of BODY_PREVIEW_PROFILE_KEYS) {
+    if (pA[key] !== pB[key]) return false;
+  }
+  return true;
+}
+
 /**
- * Lightweight 3D WebGL preview used inside the Profile & Personal Color calibration modal
+ * Shared Offscreen-Backed 2D Canvas Preview for Profile & Personal Color Calibration Cards
+ * Uses a single shared offscreen WebGL context (`render3DMannequinScene`) instead of spawning
+ * 8 separate WebGL contexts concurrently.
  */
-export function Mannequin3DBodyPreview({
+export const Mannequin3DBodyPreview = memo(function Mannequin3DBodyPreview({
   profile = {},
   user = null,
   rotDeg,
   poseYawDeg,
+  width,
   height = 270,
+  displayWidth,
+  displayHeight,
+  className = '',
+  style = {},
 }) {
   const canvasRef = useRef(null);
-  const engineRef = useRef(null);
+  const latestArgsRef = useRef({ profile: user || profile, yaw: poseYawDeg ?? rotDeg ?? -16 });
+
   const effectiveProfile = user || profile;
   const effectiveYaw = poseYawDeg ?? rotDeg ?? -16;
+  const canvasHeight = Math.max(64, Math.round(Number(height) || 270));
+  const canvasWidth = Math.max(48, Math.round(Number(width) || canvasHeight * 0.72));
+  const cssHeight = displayHeight ?? canvasHeight;
+  const cssWidth = displayWidth ?? (width ? canvasWidth : Math.round(canvasHeight * 0.72));
 
   useEffect(() => {
-    if (!canvasRef.current) return undefined;
-    let engine = null;
-    try {
-      engine = new Mannequin3DWebGLEngine(canvasRef.current, { previewOnly: true });
-      engine.setDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
-      engineRef.current = engine;
-    } catch {
-      engineRef.current = null;
-    }
+    latestArgsRef.current = { profile: effectiveProfile, yaw: effectiveYaw };
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    let cancelled = false;
+
+    import('../utils/mannequin3DRenderer.js')
+      .then((mod) => {
+        if (cancelled || !canvasRef.current) return;
+        const isDark =
+          typeof document !== 'undefined' &&
+          document.documentElement.getAttribute('data-theme') === 'dark';
+        mod.render3DMannequinScene(canvasRef.current, {
+          profile: latestArgsRef.current.profile,
+          rotationDeg: latestArgsRef.current.yaw,
+          compact: true,
+          darkHud: isDark,
+        });
+      })
+      .catch(() => {});
+
     return () => {
-      engine?.dispose();
-      engineRef.current = null;
+      cancelled = true;
+    };
+  }, [effectiveProfile, effectiveYaw, canvasWidth, canvasHeight]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof MutationObserver === 'undefined') return undefined;
+    const observer = new MutationObserver(() => {
+      import('../utils/mannequin3DRenderer.js')
+        .then((mod) => {
+          if (!canvasRef.current) return;
+          const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+          mod.render3DMannequinScene(canvasRef.current, {
+            profile: latestArgsRef.current.profile,
+            rotationDeg: latestArgsRef.current.yaw,
+            compact: true,
+            darkHud: isDark,
+          });
+        })
+        .catch(() => {});
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    return () => {
+      observer.disconnect();
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
     };
   }, []);
-
-  useEffect(() => {
-    const eng = engineRef.current;
-    if (!eng) return;
-    eng.setYaw(effectiveYaw, true);
-    eng.setMotionMode('idle');
-    eng.updateScene({ profile: effectiveProfile, loadoutBySlot: {} });
-  }, [effectiveProfile, effectiveYaw]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="atl-body-preview"
+      width={canvasWidth}
+      height={canvasHeight}
+      className={`atl-body-preview ${className}`.trim()}
       style={{
-        width: Math.round(height * 0.72),
-        height,
-        cursor: 'grab',
+        width: cssWidth,
+        height: cssHeight,
+        display: 'block',
         touchAction: 'none',
+        ...style,
       }}
     />
   );
-}
+}, areBodyPreviewPropsEqual);
 
 /**
  * Apple HIG 3D Mannequin Viewport + Collapsible Swipe-Up Wardrobe Drawer (Reqs 6.c-d, 7.b, 9.b-c, 12.b, 13.a, 15.b)
@@ -110,8 +185,9 @@ export default function VirtualMannequin({
   userProfile = null,
   weather = null,
   capsuleLabel = null,
-  immersiveStudio = false,
+  immersiveStudio = true,
   compact = false,
+  paused = false,
   onOpenWeatherSheet,
   onOpenProfileModal,
   onOpenBodySetup,
@@ -125,6 +201,7 @@ export default function VirtualMannequin({
 }) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
+  const desiredYawRef = useRef(0);
   const canvasDragRef = useRef({ active: false, startX: 0, lastX: 0, moved: false });
   const drawerDragRef = useRef({ active: false, startY: 0, moved: false, deltaY: 0 });
 
@@ -197,7 +274,7 @@ export default function VirtualMannequin({
   }, [outfit, propLoadoutBySlot]);
 
   const equippedCount = useMemo(
-    () => ALL_11_SLOTS.filter((s) => Boolean(loadoutBySlot[s.key])).length,
+    () => WEAR_SLOTS_11.filter((s) => Boolean(loadoutBySlot[s.key])).length,
     [loadoutBySlot]
   );
 
@@ -220,22 +297,32 @@ export default function VirtualMannequin({
     [userProfile, personalColor]
   );
 
-  // Mount Three.js WebGL Engine & observe Light/Dark theme + context loss
+  const latestSyncRef = useRef({
+    profilePayload,
+    loadoutBySlot,
+    focusedSlot,
+    weather,
+    motionMode,
+    paused,
+  });
+
+  useEffect(() => {
+    latestSyncRef.current = {
+      profilePayload,
+      loadoutBySlot,
+      focusedSlot,
+      weather,
+      motionMode,
+      paused,
+    };
+  }, [profilePayload, loadoutBySlot, focusedSlot, weather, motionMode, paused]);
+
+  // Lazy-load Three.js WebGL Engine chunk & observe Light/Dark theme + context loss
   useEffect(() => {
     if (fallback2DMode || !canvasRef.current) return undefined;
+    const canvasEl = canvasRef.current;
+    let cancelled = false;
     let engine = null;
-    try {
-      engine = new Mannequin3DWebGLEngine(canvasRef.current, {
-        exposeDebugGlobal: true,
-        onContextStatusChange: ({ lost, status }) => {
-          setContextLost(Boolean(lost ?? status === 'lost'));
-        },
-      });
-      engine.setDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
-      engineRef.current = engine;
-    } catch {
-      setFallback2DMode(true);
-    }
 
     const observer = new MutationObserver(() => {
       const dark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -246,10 +333,40 @@ export default function VirtualMannequin({
       attributeFilter: ['data-theme'],
     });
 
+    import('../utils/mannequin3DRenderer.js')
+      .then((mod) => {
+        if (cancelled || !canvasRef.current) return;
+        engine = new mod.Mannequin3DWebGLEngine(canvasEl, {
+          paused: Boolean(latestSyncRef.current.paused),
+          onContextStatusChange: ({ lost, status }) => {
+            if (!cancelled) {
+              setContextLost(Boolean(lost ?? status === 'lost'));
+            }
+          },
+        });
+        engine.setDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+        const s = latestSyncRef.current;
+        engine.setRotationDeg(desiredYawRef.current);
+        engine.setFocusSlot(s.focusedSlot || 'all');
+        engine.setWeatherInfo(s.weather);
+        engine.setMotionMode(s.motionMode);
+        engine.setPaused(Boolean(s.paused));
+        engine.updateScene({ profile: s.profilePayload, loadoutBySlot: s.loadoutBySlot });
+        engineRef.current = engine;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFallback2DMode(true);
+        }
+      });
+
     return () => {
+      cancelled = true;
       observer.disconnect();
       engine?.dispose();
-      engineRef.current = null;
+      if (engineRef.current === engine) {
+        engineRef.current = null;
+      }
     };
   }, [fallback2DMode]);
 
@@ -260,14 +377,19 @@ export default function VirtualMannequin({
 
   // Sync focused zoom slot
   useEffect(() => {
-    engineRef.current?.setFocusedSlot(focusedSlot || null);
+    engineRef.current?.setFocusSlot(focusedSlot || 'all');
   }, [focusedSlot]);
 
   // Sync live weather & motion mode (Req 7.b — rainy/snowy triggers umbrella motion automatically)
   useEffect(() => {
-    engineRef.current?.setWeatherState(weather);
+    engineRef.current?.setWeatherInfo(weather);
     engineRef.current?.setMotionMode(motionMode);
   }, [weather, motionMode]);
+
+  // Sync pause state when hidden/inactive
+  useEffect(() => {
+    engineRef.current?.setPaused(Boolean(paused));
+  }, [paused]);
 
   // Strict Canvas-Only Rotation Gesture (Zero interference with Bottom Drawer Swipe — Req 15.b)
   const onCanvasPointerDown = (e) => {
@@ -283,10 +405,10 @@ export default function VirtualMannequin({
       canvasDragRef.current.moved = true;
     }
     canvasDragRef.current.lastX = e.clientX;
-    if (engineRef.current) {
-      const next = engineRef.current.targetYawDeg + dx * 0.58;
-      engineRef.current.setYaw(next, false);
-    }
+    const baseYaw = engineRef.current ? engineRef.current.targetYawDeg : desiredYawRef.current;
+    const nextYaw = baseYaw + dx * 0.58;
+    desiredYawRef.current = nextYaw;
+    engineRef.current?.setYaw(nextYaw, false);
   };
 
   const onCanvasPointerUp = (e) => {
@@ -304,6 +426,10 @@ export default function VirtualMannequin({
         setActiveDrawerSlot(hitSlot);
       }
     }
+  };
+
+  const onCanvasLostPointerCapture = () => {
+    canvasDragRef.current.active = false;
   };
 
   // Strict Bottom Wardrobe Drawer Swipe Gesture (Isolated from 3D Canvas — Req 12.b, 13.a, 15.b)
@@ -353,6 +479,13 @@ export default function VirtualMannequin({
       triggerHaptic('selection');
       setDrawerOpen(false);
     }
+  };
+
+  const onDrawerHandleLostPointerCapture = (e) => {
+    e.stopPropagation();
+    if (!drawerDragRef.current.active) return;
+    drawerDragRef.current.active = false;
+    setDrawerDragOffset(0);
   };
 
   const candidatesForActiveSlot = useMemo(() => {
@@ -424,6 +557,7 @@ export default function VirtualMannequin({
               onPointerMove={onCanvasPointerMove}
               onPointerUp={onCanvasPointerUp}
               onPointerCancel={onCanvasPointerUp}
+              onLostPointerCapture={onCanvasLostPointerCapture}
             />
           )}
 
@@ -606,6 +740,7 @@ export default function VirtualMannequin({
             onPointerMove={onDrawerHandlePointerMove}
             onPointerUp={onDrawerHandlePointerUp}
             onPointerCancel={onDrawerHandlePointerUp}
+            onLostPointerCapture={onDrawerHandleLostPointerCapture}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -622,7 +757,7 @@ export default function VirtualMannequin({
           <div className="hig-drawer-body">
             {/* 11-Slot Selector Chips */}
             <div className="ui-chip-rail" role="tablist" aria-label="11부위 착용 슬롯">
-              {ALL_11_SLOTS.map((slot) => {
+              {WEAR_SLOTS_11.map((slot) => {
                 const isSelected = activeDrawerSlot === slot.key;
                 const hasItem = Boolean(loadoutBySlot[slot.key]);
                 return (
@@ -639,7 +774,7 @@ export default function VirtualMannequin({
                       setFocusedSlot(slot.key);
                     }}
                   >
-                    <span>{slot.label.split(' · ')[0]}</span>
+                    <span>{slot.shortKo || slot.labelKo.split(' · ')[0]}</span>
                     {hasItem && <span className="tabular-nums">•</span>}
                   </button>
                 );
@@ -745,50 +880,39 @@ export default function VirtualMannequin({
     );
   }
 
-  // Compact Embedded Stage (Used inside OutfitStudioView Mix & Match)
+  // Minimal Embedded Stage Fallback when immersiveStudio={false}
   return (
     <section
-      className={`atl-fitting ${compact ? 'compact' : ''}`}
-      style={{ borderRadius: 24, padding: 16 }}
+      style={{
+        borderRadius: 24,
+        padding: 16,
+        background: 'var(--bg-surface)',
+      }}
       aria-label="3D 코디 프리뷰"
     >
       <div
-        className="atl-stage"
         style={{
+          position: 'relative',
           background: 'var(--bg-canvas)',
-          border: 'none',
           borderRadius: 20,
           minHeight: compact ? 420 : 480,
+          overflow: 'hidden',
         }}
       >
         <canvas
           ref={canvasRef}
-          className="atl-stage-canvas"
-          style={{ height: compact ? 420 : 480, touchAction: 'none' }}
+          style={{
+            width: '100%',
+            height: compact ? 420 : 480,
+            display: 'block',
+            touchAction: 'none',
+          }}
           onPointerDown={onCanvasPointerDown}
           onPointerMove={onCanvasPointerMove}
           onPointerUp={onCanvasPointerUp}
           onPointerCancel={onCanvasPointerUp}
+          onLostPointerCapture={onCanvasLostPointerCapture}
         />
-
-        <div className="atl-stage-controls">
-          <button
-            type="button"
-            className="chip"
-            onClick={cycleMotionMode}
-          >
-            모션: {MOTION_CYCLE.find((m) => m.key === motionMode)?.label}
-          </button>
-          {focusedSlot && (
-            <button
-              type="button"
-              className="chip active"
-              onClick={() => setFocusedSlot(null)}
-            >
-              <RotateCcw size={12} /> 전신 보기
-            </button>
-          )}
-        </div>
       </div>
     </section>
   );

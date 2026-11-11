@@ -331,7 +331,7 @@
    "fabric": "wool",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "toigo_male_suit_3/toigo_male_suit_3.mhclo",
    "vertexCount": 5033
@@ -373,7 +373,7 @@
    "fabric": "padding",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "male_casualsuit05/male_casualsuit05.mhclo",
    "vertexCount": 1936
@@ -393,7 +393,7 @@
    "fabric": "knit",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "toigo_fisherman_sweater/toigo_fisherman_sweater.mhclo",
    "vertexCount": 2126
@@ -414,7 +414,7 @@
    "fabric": "cotton",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "male_casualsuit03/male_casualsuit03.mhclo",
    "vertexCount": 1613
@@ -434,7 +434,7 @@
    "fabric": "cotton",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "toigo_basic_tucked_t-shirt/toigo_basic_tucked_t-shirt.mhclo",
    "vertexCount": 1391
@@ -455,7 +455,7 @@
    "fabric": "cotton",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "male_casualsuit02/male_casualsuit02.mhclo",
    "vertexCount": 1250
@@ -475,7 +475,7 @@
    "fabric": "knit",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "namuhekam_male_polo_shirt/namuhekam_male_polo_shirt.mhclo",
    "vertexCount": 2189
@@ -495,7 +495,7 @@
    "fabric": "wool",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "toigo_wool_pants/toigo_wool_pants.mhclo",
    "vertexCount": 1372
@@ -557,7 +557,7 @@
    "fabric": "denim",
    "cullBody": true,
    "mount": "body",
-   "physics": "rigid_fitted",
+   "physics": "drape_wind_garment",
    "noMorphs": false,
    "source": "cortu_jeans_shorts/cortu_jeans_shorts.mhclo",
    "vertexCount": 285
@@ -876,7 +876,7 @@
    ],
    "file": "garments/accessory_watch.glb",
    "label": "Minimalist steel dress watch",
-   "fabric": "leather",
+   "fabric": "metal",
    "cullBody": false,
    "mount": "body",
    "physics": "rigid_fitted",
@@ -896,7 +896,7 @@
    ],
    "file": "garments/accessory_glasses.glb",
    "label": "Acetate optical eyewear",
-   "fabric": "leather",
+   "fabric": "acetate",
    "cullBody": false,
    "mount": "body",
    "physics": "rigid_fitted",
