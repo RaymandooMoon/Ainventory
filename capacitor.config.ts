@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.ainventory.app',
   appName: 'A inventory',
   webDir: 'dist',
-  bundledWebRuntime: false,
   server: {
     androidScheme: 'https',
     iosScheme: 'capacitor',

@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "node server/start.js",
     "lint": "oxlint src server",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "cap:sync": "vite build && cap sync android",
     "test:e2e": "playwright test"
