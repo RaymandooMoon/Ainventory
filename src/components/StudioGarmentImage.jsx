@@ -48,14 +48,20 @@ function writeLruCachedUrl(key, url) {
   TINTED_URL_CACHE.set(key, url);
 }
 
-function runBorderFloodFill(d, w, h, bgR, bgG, bgB, distLimit) {
+function runBorderFloodFill(d, w, h, bgR, bgG, bgB, profile) {
+  const { distLimit, stepLimit, shadowLumDrop, chromaLimit } = profile;
   const nPx = w * h;
   const bgMask = new Uint8Array(nPx);
   const queue = new Int32Array(nPx);
   let head = 0;
   let tail = 0;
 
-  const trySeed = (p) => {
+  const bgLum = Math.max(1, 0.299 * bgR + 0.587 * bgG + 0.114 * bgB);
+  const bgRn = bgR / bgLum;
+  const bgGn = bgG / bgLum;
+  const bgBn = bgB / bgLum;
+
+  const tryAccept = (p, fromP) => {
     if (bgMask[p]) return;
     const i = p * 4;
     if (d[i + 3] < 16) {
@@ -63,34 +69,141 @@ function runBorderFloodFill(d, w, h, bgR, bgG, bgB, distLimit) {
       queue[tail++] = p;
       return;
     }
-    const dist = Math.hypot(d[i] - bgR, d[i + 1] - bgG, d[i + 2] - bgB);
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+
+    if (fromP >= 0) {
+      const fi = fromP * 4;
+      const stepDist = Math.hypot(r - d[fi], g - d[fi + 1], b - d[fi + 2]);
+      if (stepDist > stepLimit) return;
+    }
+
+    const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
     if (dist <= distLimit) {
       bgMask[p] = 1;
       queue[tail++] = p;
+      return;
+    }
+
+    if (shadowLumDrop > 0) {
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (lum >= bgLum - shadowLumDrop && lum <= bgLum + 14 && lum > 30) {
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        if (sat <= 26) {
+          const chromaDist = Math.hypot(r / lum - bgRn, g / lum - bgGn, b / lum - bgBn);
+          if (chromaDist <= chromaLimit) {
+            bgMask[p] = 1;
+            queue[tail++] = p;
+          }
+        }
+      }
     }
   };
 
   for (let x = 0; x < w; x++) {
-    trySeed(x);
-    trySeed((h - 1) * w + x);
+    tryAccept(x, -1);
+    tryAccept((h - 1) * w + x, -1);
   }
   for (let y = 1; y < h - 1; y++) {
-    trySeed(y * w);
-    trySeed(y * w + (w - 1));
+    tryAccept(y * w, -1);
+    tryAccept(y * w + (w - 1), -1);
   }
 
   while (head < tail) {
     const p = queue[head++];
     const x = p % w;
     const y = (p - x) / w;
-    if (x > 0) trySeed(p - 1);
-    if (x < w - 1) trySeed(p + 1);
-    if (y > 0) trySeed(p - w);
-    if (y < h - 1) trySeed(p + w);
+    if (x > 0) tryAccept(p - 1, p);
+    if (x < w - 1) tryAccept(p + 1, p);
+    if (y > 0) tryAccept(p - w, p);
+    if (y < h - 1) tryAccept(p + w, p);
   }
 
-  return { bgMask, bgCount: tail };
+  // Measure central garment core invasion to protect white/ivory garments on bright studio paper
+  const x0 = Math.floor(w * 0.35);
+  const x1 = Math.ceil(w * 0.65);
+  const y0 = Math.floor(h * 0.3);
+  const y1 = Math.ceil(h * 0.7);
+  let coreTotal = 0;
+  let coreBg = 0;
+  for (let y = y0; y < y1; y++) {
+    const row = y * w;
+    for (let x = x0; x < x1; x++) {
+      coreTotal++;
+      if (bgMask[row + x]) coreBg++;
+    }
+  }
+  const coreBgRatio = coreTotal > 0 ? coreBg / coreTotal : 0;
+
+  return { bgMask, bgCount: tail, coreBgRatio };
 }
+
+function pruneForegroundSpeckles(bgMask, w, h, minIslandPx = 64) {
+  const nPx = w * h;
+  const visited = new Uint8Array(nPx);
+  const stack = new Int32Array(nPx);
+  const component = new Int32Array(nPx);
+  let removed = 0;
+
+  for (let start = 0; start < nPx; start++) {
+    if (bgMask[start] || visited[start]) continue;
+    let sp = 0;
+    let compLen = 0;
+    visited[start] = 1;
+    stack[sp++] = start;
+
+    while (sp > 0) {
+      const p = stack[--sp];
+      component[compLen++] = p;
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x > 0) {
+        const n = p - 1;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (x < w - 1) {
+        const n = p + 1;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (y > 0) {
+        const n = p - w;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+      if (y < h - 1) {
+        const n = p + w;
+        if (!bgMask[n] && !visited[n]) {
+          visited[n] = 1;
+          stack[sp++] = n;
+        }
+      }
+    }
+
+    if (compLen < minIslandPx) {
+      for (let k = 0; k < compLen; k++) {
+        bgMask[component[k]] = 1;
+      }
+      removed += compLen;
+    }
+  }
+  return removed;
+}
+
+const CUTOUT_PROFILES = [
+  { distLimit: 24, stepLimit: 11.5, shadowLumDrop: 62, chromaLimit: 0.056 },
+  { distLimit: 14, stepLimit: 6.2, shadowLumDrop: 20, chromaLimit: 0.026 },
+  { distLimit: 9, stepLimit: 4.2, shadowLumDrop: 8, chromaLimit: 0.015 },
+  { distLimit: 5.5, stepLimit: 2.8, shadowLumDrop: 0, chromaLimit: 0 },
+];
 
 function encodeCanvasObjectUrl(canvas) {
   return new Promise((resolve) => {
@@ -154,7 +267,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
 
-        // Sample 4 corner blocks to measure exact studio paper background RGB
+        // Sample corner & edge blocks to measure studio paper background RGB
         let bgR = 0;
         let bgG = 0;
         let bgB = 0;
@@ -179,21 +292,38 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         bgB /= bgSampleCount;
 
         const nPx = w * h;
-        let { bgMask, bgCount } = runBorderFloodFill(d, w, h, bgR, bgG, bgB, 20);
-        if (bgCount > nPx * 0.88) {
-          ({ bgMask, bgCount } = runBorderFloodFill(d, w, h, bgR, bgG, bgB, 10));
-        }
-        const applyAlphaCutout = bgCount > nPx * 0.04 && bgCount < nPx * 0.94;
+        const nativeHex = NATIVE_SEED_HEX[srcUrl];
+        const nativeRgb = nativeHex ? hexToRgb(nativeHex) : null;
+        const nativeLum = nativeRgb
+          ? 0.299 * nativeRgb.r + 0.587 * nativeRgb.g + 0.114 * nativeRgb.b
+          : 120;
+        const startProfileIdx = nativeLum > 208 ? 1 : 0;
 
-        // Pass 1: compute foreground weights and transparent studio background alpha
+        let chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[startProfileIdx]);
+        for (let pi = startProfileIdx + 1; pi < CUTOUT_PROFILES.length; pi++) {
+          if (chosen.bgCount <= nPx * 0.84 && chosen.coreBgRatio <= 0.16) break;
+          chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[pi]);
+        }
+
+        const bgMask = chosen.bgMask;
+        let bgCount = chosen.bgCount;
+        const applyAlphaCutout =
+          bgCount > nPx * 0.04 && bgCount < nPx * 0.92 && chosen.coreBgRatio <= 0.28;
+        if (applyAlphaCutout) {
+          bgCount += pruneForegroundSpeckles(bgMask, w, h, 72);
+        }
+
+        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+
+        // Pass 1: compute foreground weights, transparent studio background alpha & edge color decontamination
         let fgLumSum = 0;
         let fgWeightSum = 0;
         const masks = new Float32Array(nPx);
         for (let p = 0; p < nPx; p++) {
           const i = p * 4;
-          const r = d[i];
-          const g = d[i + 1];
-          const b = d[i + 2];
+          let r = d[i];
+          let g = d[i + 1];
+          let b = d[i + 2];
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
           if (applyAlphaCutout && bgMask[p]) {
@@ -207,19 +337,30 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
           if (applyAlphaCutout) {
             const x = p % w;
             const y = (p - x) / w;
-            const touchesBg =
-              (x > 0 && bgMask[p - 1]) ||
-              (x < w - 1 && bgMask[p + 1]) ||
-              (y > 0 && bgMask[p - w]) ||
-              (y < h - 1 && bgMask[p + w]);
-            if (touchesBg) {
-              edgeAlpha = smoothstep(8, 28, distBg);
+            let bgNeighbors = 0;
+            if (x > 0 && bgMask[p - 1]) bgNeighbors++;
+            if (x < w - 1 && bgMask[p + 1]) bgNeighbors++;
+            if (y > 0 && bgMask[p - w]) bgNeighbors++;
+            if (y < h - 1 && bgMask[p + w]) bgNeighbors++;
+            if (bgNeighbors > 0) {
+              const featherLow = nativeLum > 208 ? 4 : 14;
+              const featherHigh = nativeLum > 208 ? 18 : 44;
+              edgeAlpha = smoothstep(featherLow, featherHigh, distBg);
               d[i + 3] = Math.round(d[i + 3] * edgeAlpha);
+              // Decontaminate studio paper fringe on semi-transparent boundary pixels
+              if (edgeAlpha > 0.08 && edgeAlpha < 0.94 && nativeLum <= 208) {
+                const invA = 1 / Math.max(0.28, edgeAlpha);
+                r = Math.max(0, Math.min(255, Math.round((r - bgR * (1 - edgeAlpha)) * invA)));
+                g = Math.max(0, Math.min(255, Math.round((g - bgG * (1 - edgeAlpha)) * invA)));
+                b = Math.max(0, Math.min(255, Math.round((b - bgB * (1 - edgeAlpha)) * invA)));
+                d[i] = r;
+                d[i + 1] = g;
+                d[i + 2] = b;
+              }
             }
           }
 
           const sat = Math.max(r, g, b) - Math.min(r, g, b);
-          const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
           const isPaperOrSoftShadow = sat < 14 && lum > bgLum - 32 && distBg < 36;
           const m = isPaperOrSoftShadow ? 0 : smoothstep(16, 42, distBg) * edgeAlpha;
           masks[p] = m;

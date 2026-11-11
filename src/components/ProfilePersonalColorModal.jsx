@@ -742,15 +742,16 @@ export default function ProfilePersonalColorModal({
   };
 
   return (
-    <div className="modal-backdrop" onClick={() => allowDismiss && onClose?.()}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pcm-modal-title"
-        className="pcm-modal-box"
-        data-sheet-panel="true"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <>
+      <div className="modal-backdrop" onClick={() => allowDismiss && onClose?.()}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pcm-modal-title"
+          className="pcm-modal-box"
+          data-sheet-panel="true"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Responsive Header */}
         <div className="pcm-header">
           <div className="pcm-header-title">
@@ -2022,34 +2023,35 @@ export default function ProfilePersonalColorModal({
             </div>
           </div>
         )}
-
-        <PortraitCropAndPinEditorModal
-          open={pinEditorOpen}
-          imageSource={rawPortraitSourceUrl || portraitDataUrl}
-          initialStage="crop"
-          initialPins={pcResult?.pins}
-          onClose={() => setPinEditorOpen(false)}
-          onApply={({ croppedDataUrl, pins, rotationDeg: nextRot, cropRect: nextCrop }) => {
-            const finalImg = croppedDataUrl || portraitDataUrl;
-            setCustomPins(pins);
-            setRotationDeg(nextRot || 0);
-            setCropRect(nextCrop || null);
-            if (finalImg) setPortraitDataUrl(finalImg);
-            setPinEditorOpen(false);
-            executePersonalColorAnalysis(finalImg, lightingMode, pins, nextRot || 0, nextCrop || null);
-          }}
-        />
-
-        <BiometricConsentModal
-          open={Boolean(pendingBiometricAction)}
-          onClose={() => setPendingBiometricAction(null)}
-          onConfirm={() => {
-            const action = pendingBiometricAction;
-            setPendingBiometricAction(null);
-            runConsentedBiometricAction(action);
-          }}
-        />
+        </div>
       </div>
-    </div>
+
+      <PortraitCropAndPinEditorModal
+        open={pinEditorOpen}
+        imageSource={rawPortraitSourceUrl || portraitDataUrl}
+        initialStage="crop"
+        initialPins={pcResult?.pins}
+        onClose={() => setPinEditorOpen(false)}
+        onApply={({ croppedDataUrl, pins, rotationDeg: nextRot, cropRect: nextCrop }) => {
+          const finalImg = croppedDataUrl || portraitDataUrl;
+          setCustomPins(pins);
+          setRotationDeg(nextRot || 0);
+          setCropRect(nextCrop || null);
+          if (finalImg) setPortraitDataUrl(finalImg);
+          setPinEditorOpen(false);
+          executePersonalColorAnalysis(finalImg, lightingMode, pins, nextRot || 0, nextCrop || null);
+        }}
+      />
+
+      <BiometricConsentModal
+        open={Boolean(pendingBiometricAction)}
+        onClose={() => setPendingBiometricAction(null)}
+        onConfirm={() => {
+          const action = pendingBiometricAction;
+          setPendingBiometricAction(null);
+          runConsentedBiometricAction(action);
+        }}
+      />
+    </>
   );
 }

@@ -601,6 +601,19 @@ export function initDb() {
         updateImg.run(getStudioSeedImageForGarment(g.category, g.subcategory), g.id);
       }
     }
+    const glbFixes = [
+      ['outer_padding', 'outer_jacket', 'drape_wind_garment'],
+      ['bottom_chinos', 'bottom_slacks', 'drape_wind_garment'],
+      ['dress_knit', 'dress_onepiece', 'hem_sway_skirt'],
+      ['gloves_leather', 'gloves_short', 'rigid_fitted'],
+      ['underwear_camisole', 'underwear_top', 'rigid_fitted'],
+    ];
+    const updateGlbStmt = db.prepare(
+      'UPDATE garments SET base_glb = ?, physics_preset = ? WHERE base_glb = ?'
+    );
+    for (const [legacyGlb, nextGlb, nextPreset] of glbFixes) {
+      updateGlbStmt.run(nextGlb, nextPreset, legacyGlb);
+    }
   } catch {
     // ignore migration error
   }

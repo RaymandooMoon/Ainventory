@@ -1070,7 +1070,7 @@ function applyTriangleMask(mesh, hiddenVertMask) {
   geom.userData.isMasked = true;
 }
 
-function maskInnerTopUnderOuter(topMesh, hasOuter) {
+function maskInnerTopUnderOuter(topMesh, hasOuter, outerGid = null) {
   const geom = topMesh.geometry;
   const full = geom.userData.fullIndexArray;
   if (!full || !geom.index) return;
@@ -1078,12 +1078,16 @@ function maskInnerTopUnderOuter(topMesh, hasOuter) {
     applyTriangleMask(topMesh, null);
     return;
   }
+  const isDoubleBreastedCoat = outerGid === 'outer_coat';
   const pos = geom.attributes.position;
   const hide = new Uint8Array(pos.count);
   for (let i = 0; i < pos.count; i++) {
     const [x, y, z] = readMeterCoord(geom, i);
-    const inFrontOpening = Math.abs(x) < 0.095 && y > 1.06 && z > 0.02;
-    const inCollar = Math.abs(x) < 0.105 && y > 1.33;
+    const absX = Math.abs(x);
+    const inFrontOpening = isDoubleBreastedCoat
+      ? y > 1.245 && z > 0.02 && absX < Math.min(0.068, 0.014 + Math.max(0, y - 1.245) * 0.42)
+      : absX < 0.084 && y > 1.11 && z > 0.02;
+    const inCollar = isDoubleBreastedCoat ? absX < 0.076 && y > 1.355 : absX < 0.094 && y > 1.34;
     if (!inFrontOpening && !inCollar) {
       hide[i] = 1;
     }
@@ -1563,10 +1567,55 @@ function conformAccessoryToGarmentLayers(accMesh, gid, bodyMesh, shellMeshes = [
 }
 
 
+const VALID_MANIFEST_GARMENT_IDS = new Set([
+  'headwear_beanie',
+  'headwear_cap',
+  'headwear_beret',
+  'headwear_fedora',
+  'neckwear_scarf',
+  'neckwear_tie',
+  'outer_blazer',
+  'outer_coat',
+  'outer_jacket',
+  'top_knit',
+  'top_shirt',
+  'top_tshirt',
+  'top_sweatshirt',
+  'top_cardigan',
+  'bottom_slacks',
+  'bottom_denim',
+  'bottom_skirt',
+  'bottom_shorts',
+  'dress_shift',
+  'dress_onepiece',
+  'gloves_short',
+  'underwear_top',
+  'underwear_briefs',
+  'socks_crew',
+  'socks_ankle',
+  'shoes_sneakers',
+  'shoes_loafers',
+  'shoes_boots',
+  'shoes_heels',
+  'accessory_bag',
+  'accessory_briefcase',
+  'accessory_tote',
+  'accessory_belt',
+  'accessory_watch',
+  'accessory_glasses',
+]);
+
 export function resolveGarmentIdForItem(slotKey, item) {
   if (!item) return null;
   const explicitGlb = String(item.base_glb || '').trim();
-  if (explicitGlb && (explicitGlb.startsWith(`${slotKey}_`) || manifestData?.garments?.[explicitGlb]?.slot === slotKey)) {
+  const isKnownManifestGlb = manifestData?.garments
+    ? Boolean(manifestData.garments[explicitGlb])
+    : VALID_MANIFEST_GARMENT_IDS.has(explicitGlb);
+  if (
+    explicitGlb &&
+    isKnownManifestGlb &&
+    (explicitGlb.startsWith(`${slotKey}_`) || manifestData?.garments?.[explicitGlb]?.slot === slotKey)
+  ) {
     return explicitGlb;
   }
   const sub = String(item.subcategory || '').toLowerCase().trim();
@@ -2950,7 +2999,7 @@ export class Mannequin3DWebGLEngine {
         }
 
         if (slotKey === 'top') {
-          maskInnerTopUnderOuter(mesh, hasOuter);
+          maskInnerTopUnderOuter(mesh, hasOuter, outerEntry?.gid || null);
         } else if (slotKey === 'bottom') {
           maskBottomUnderOuterAndTop(mesh, outerEntry?.gid || null, hasTopActive);
         } else if (slotKey === 'socks') {
