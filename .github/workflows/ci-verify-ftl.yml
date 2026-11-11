@@ -1,0 +1,254 @@
+name: CI Verify & Firebase Test Lab Robo
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  web-verify:
+    name: Web Lint, Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install, lint, typecheck, and build web bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          : > /tmp/web-verify.log
+
+          echo "=== [1/4] npm ci ===" | tee -a /tmp/web-verify.log
+          npm ci 2>&1 | tee -a /tmp/web-verify.log
+
+          echo "=== [2/4] npx oxlint src server ===" | tee -a /tmp/web-verify.log
+          npx oxlint src server 2>&1 | tee -a /tmp/web-verify.log
+
+          echo "=== [3/4] npx tsc --noEmit ===" | tee -a /tmp/web-verify.log
+          npx tsc --noEmit 2>&1 | tee -a /tmp/web-verify.log
+
+          echo "=== [4/4] npm run build ===" | tee -a /tmp/web-verify.log
+          npm run build 2>&1 | tee -a /tmp/web-verify.log
+
+      - name: Upload web-dist artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Summarize web-verify failure logs
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f /tmp/web-verify.log ]]; then
+            tail -n 60 /tmp/web-verify.log > /tmp/web-verify-tail60.log
+          else
+            echo "No /tmp/web-verify.log produced (failure occurred before verification step)." > /tmp/web-verify-tail60.log
+          fi
+
+          {
+            echo "## Web Verification Failure (\`web-verify\`)"
+            echo ""
+            echo "- **Run:** \`${GITHUB_RUN_ID}\` (attempt \`${GITHUB_RUN_ATTEMPT}\`)"
+            echo "- **Ref:** \`${GITHUB_REF}\`"
+            echo "- **Commit:** \`${GITHUB_SHA}\`"
+            echo ""
+            echo "### Last 60 Lines of \`/tmp/web-verify.log\`"
+            echo ""
+            echo '```text'
+            cat /tmp/web-verify-tail60.log
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload web-verify-logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-verify-logs
+          path: /tmp/web-verify-tail60.log
+          retention-days: 7
+
+  firebase-test-lab:
+    name: Android Debug APK & Firebase Test Lab Robo
+    needs: web-verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Download web-dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Sync Capacitor Android & build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          npx cap sync android
+          chmod +x android/gradlew
+          (
+            cd android
+            ./gradlew assembleDebug --no-daemon
+          )
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Validate required GCP OIDC repository variables
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA_EMAIL: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          RESULTS_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [[ -z "${WIF_PROVIDER}" ]]; then
+            missing+=("GCP_WORKLOAD_IDENTITY_PROVIDER")
+          fi
+          if [[ -z "${SA_EMAIL}" ]]; then
+            missing+=("GCP_SERVICE_ACCOUNT")
+          fi
+          if [[ -z "${RESULTS_BUCKET}" ]]; then
+            missing+=("FTL_RESULTS_BUCKET")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing required GitHub repository variables: ${missing[*]}. Run ./scripts/setup-gcp-github-ci.sh first."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud via Keyless OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run Firebase Test Lab Android Robo test
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud firebase test android run \
+            --type=robo \
+            --app=android/app/build/outputs/apk/debug/app-debug.apk \
+            --device="model=${{ vars.FTL_DEVICE_MODEL || 'shiba' }},version=${{ vars.FTL_OS_VERSION || '34' }},locale=ko,orientation=portrait" \
+            --timeout=5m \
+            --results-bucket="gs://${{ vars.FTL_RESULTS_BUCKET }}" \
+            --results-dir="ftl-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Collect Firebase Test Lab Logcat crash & graphics diagnostics
+        if: failure()
+        shell: bash
+        env:
+          FTL_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
+          FTL_DIR: ftl-${{ github.run_id }}-${{ github.run_attempt }}
+          FTL_MODEL: ${{ vars.FTL_DEVICE_MODEL || 'shiba' }}
+          FTL_VERSION: ${{ vars.FTL_OS_VERSION || '34' }}
+        run: |
+          set -euo pipefail
+          CRASH_DIR="/tmp/ftl-crash-logs"
+          DIAG_FILE="${CRASH_DIR}/crash-diagnostics.txt"
+          PATTERN='FATAL EXCEPTION|RenderProcessGone|chromium|WebGL|mediapipe|OutOfMemoryError|SIGSEGV|ANR in'
+          GCS_RESULTS_URI="gs://${FTL_BUCKET}/${FTL_DIR}"
+
+          rm -rf "${CRASH_DIR}"
+          mkdir -p "${CRASH_DIR}"
+
+          downloaded_files=()
+          if [[ -n "${FTL_BUCKET}" ]] && command -v gcloud >/dev/null 2>&1; then
+            mapfile -t logcat_uris < <(
+              gcloud storage ls "${GCS_RESULTS_URI}/**" 2>/dev/null \
+                | grep -Ei '(^|/)[^/]*logcat[^/]*$|\.log$' || true
+            )
+            for uri in "${logcat_uris[@]}"; do
+              if [[ -z "${uri}" ]]; then
+                continue
+              fi
+              rel_path="${uri#${GCS_RESULTS_URI}/}"
+              dest_path="${CRASH_DIR}/${rel_path}"
+              mkdir -p "$(dirname "${dest_path}")"
+              if gcloud storage cp "${uri}" "${dest_path}" >/dev/null 2>&1; then
+                downloaded_files+=("${dest_path}")
+              fi
+            done
+          fi
+
+          if (( ${#downloaded_files[@]} > 0 )); then
+            if ! grep -E -n -C 3 "${PATTERN}" "${downloaded_files[@]}" > "${DIAG_FILE}" 2>/dev/null; then
+              echo "No Logcat lines matched crash/graphics filter (${PATTERN}) across ${#downloaded_files[@]} file(s)." > "${DIAG_FILE}"
+            fi
+          else
+            echo "No Logcat files found at ${GCS_RESULTS_URI}/ (step may have failed prior to Firebase Test Lab upload)." > "${DIAG_FILE}"
+          fi
+
+          {
+            echo "## Firebase Test Lab Failure Diagnostics (\`firebase-test-lab\`)"
+            echo ""
+            echo "- **Device:** \`model=${FTL_MODEL},version=${FTL_VERSION},locale=ko,orientation=portrait\`"
+            echo "- **GCS Results Path:** \`${GCS_RESULTS_URI}/\`"
+            echo "- **Downloaded Logcat Files:** \`${#downloaded_files[@]}\`"
+            echo ""
+            echo "### Extracted Crash / WebGL / MediaPipe Diagnostics"
+            echo ""
+            echo '```text'
+            head -n 300 "${DIAG_FILE}"
+            total_lines="$(wc -l < "${DIAG_FILE}" | tr -d ' ')"
+            if (( total_lines > 300 )); then
+              echo "... (truncated at 300 of ${total_lines} lines; inspect the ftl-crash-logs artifact for full output)"
+            fi
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload ftl-crash-logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftl-crash-logs
+          path: /tmp/ftl-crash-logs/
+          retention-days: 14
