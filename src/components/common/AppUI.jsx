@@ -89,6 +89,8 @@ export function ResponsiveSheetModal({
   const onCloseRef = useRef(onClose);
   const headingId = useId();
 
+  const suppressBackdropClickRef = useRef(false);
+
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
@@ -105,12 +107,49 @@ export function ResponsiveSheetModal({
         onCloseRef.current?.();
       }
     };
+    const handleWindowMove = (e) => {
+      if (!isDraggingRef.current) return;
+      const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+      const delta = Math.max(0, clientY - startYRef.current);
+      dragYRef.current = delta;
+      setDragY(delta);
+    };
+    const handleWindowEnd = () => {
+      if (!isDraggingRef.current) return;
+      const finalDelta = dragYRef.current;
+      isDraggingRef.current = false;
+      dragYRef.current = 0;
+      setIsDragging(false);
+      setDragY(0);
+      if (finalDelta > 80) {
+        triggerHaptic('selection');
+        onCloseRef.current?.();
+      } else {
+        suppressBackdropClickRef.current = true;
+        setTimeout(() => {
+          suppressBackdropClickRef.current = false;
+        }, 0);
+      }
+    };
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('pointermove', handleWindowMove);
+    window.addEventListener('pointerup', handleWindowEnd);
+    window.addEventListener('pointercancel', handleWindowEnd);
+    window.addEventListener('touchmove', handleWindowMove, { passive: true });
+    window.addEventListener('touchend', handleWindowEnd);
+    window.addEventListener('touchcancel', handleWindowEnd);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('pointermove', handleWindowMove);
+      window.removeEventListener('pointerup', handleWindowEnd);
+      window.removeEventListener('pointercancel', handleWindowEnd);
+      window.removeEventListener('touchmove', handleWindowMove);
+      window.removeEventListener('touchend', handleWindowEnd);
+      window.removeEventListener('touchcancel', handleWindowEnd);
       popBack();
       dragYRef.current = 0;
       isDraggingRef.current = false;
+      suppressBackdropClickRef.current = false;
       setDragY(0);
       setIsDragging(false);
     };
@@ -120,13 +159,6 @@ export function ResponsiveSheetModal({
 
   const handleDragStart = (e) => {
     e.stopPropagation();
-    if (e.pointerId !== undefined) {
-      try {
-        e.currentTarget?.setPointerCapture?.(e.pointerId);
-      } catch {
-        // ignore synthetic events without active pointerId
-      }
-    }
     const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
     startYRef.current = clientY;
     dragYRef.current = 0;
@@ -134,45 +166,13 @@ export function ResponsiveSheetModal({
     setIsDragging(true);
   };
 
-  const handleDragMove = (e) => {
-    if (!isDraggingRef.current) return;
-    e.stopPropagation();
-    const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
-    const delta = Math.max(0, clientY - startYRef.current);
-    dragYRef.current = delta;
-    setDragY(delta);
-  };
-
-  const handleDragEnd = (e) => {
-    if (!isDraggingRef.current) return;
-    e?.stopPropagation?.();
-    if (e?.pointerId !== undefined) {
-      try {
-        e.currentTarget?.releasePointerCapture?.(e.pointerId);
-      } catch {
-        // ignore release errors
-      }
-    }
-    const finalDelta = dragYRef.current;
-    isDraggingRef.current = false;
-    dragYRef.current = 0;
-    setIsDragging(false);
-    setDragY(0);
-    if (finalDelta > 80) {
-      triggerHaptic('selection');
-      onCloseRef.current?.();
-    }
-  };
-
   return (
     <div
       className="modal-backdrop ui-sheet-backdrop"
-      onClick={() => onCloseRef.current?.()}
-      onPointerMove={handleDragMove}
-      onPointerUp={handleDragEnd}
-      onPointerCancel={handleDragEnd}
-      onTouchMove={handleDragMove}
-      onTouchEnd={handleDragEnd}
+      onClick={() => {
+        if (suppressBackdropClickRef.current) return;
+        onCloseRef.current?.();
+      }}
     >
       <div
         id={id}
@@ -195,9 +195,6 @@ export function ResponsiveSheetModal({
           data-sheet-handle="true"
           className="ui-sheet-drag-zone"
           onPointerDown={handleDragStart}
-          onPointerMove={handleDragMove}
-          onPointerUp={handleDragEnd}
-          onPointerCancel={handleDragEnd}
           onTouchStart={handleDragStart}
           aria-label="드래그하여 닫기"
         >

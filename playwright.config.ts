@@ -3,6 +3,8 @@ import { defineConfig } from '@playwright/test';
 
 const systemChromium: string = process.env.PLAYWRIGHT_CHROMIUM_PATH || '/usr/bin/chromium';
 const hasSystemChromium: boolean = fs.existsSync(systemChromium);
+const useHeadlessSwiftShader: boolean =
+  hasSystemChromium || Boolean(process.env.CI) || process.platform === 'linux';
 
 const PORT: number = Number(process.env.PLAYWRIGHT_PORT || process.env.PORT || 4173);
 const BASE_URL: string = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
@@ -45,7 +47,9 @@ export default defineConfig({
     trace: 'off',
     launchOptions: {
       ...(hasSystemChromium ? { executablePath: systemChromium } : {}),
-      args: hasSystemChromium ? SWIFTSHADER_WEBGL_ARGS : ['--enable-webgl', '--ignore-gpu-blocklist'],
+      args: useHeadlessSwiftShader
+        ? SWIFTSHADER_WEBGL_ARGS
+        : ['--enable-webgl', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     },
   },
   projects: [

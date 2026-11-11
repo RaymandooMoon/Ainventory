@@ -61,7 +61,7 @@ jobs:
           npm run build 2>&1 | tee -a /tmp/web-verify.log
 
           echo "=== [5/5] Playwright Chromium E2E ===" | tee -a /tmp/web-verify.log
-          npx playwright install --with-deps chromium 2>&1 | tee -a /tmp/web-verify.log
+          (npx playwright install --with-deps chromium || (sleep 5 && npx playwright install --with-deps chromium)) 2>&1 | tee -a /tmp/web-verify.log
           npm run test:e2e 2>&1 | tee -a /tmp/web-verify.log
 
       - name: Upload web-dist artifact
@@ -153,7 +153,8 @@ jobs:
           )
           test -f android/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Validate required GCP OIDC repository variables
+      - name: Check GCP OIDC repository variables for Firebase Test Lab
+        id: gcp_vars
         shell: bash
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -164,6 +165,19 @@ jobs:
           FTL_VERSION: ${{ vars.FTL_OS_VERSION || '34' }}
         run: |
           set -euo pipefail
+          if [[ -z "${WIF_PROVIDER}" && -z "${SA_EMAIL}" && -z "${RESULTS_BUCKET}" ]]; then
+            echo "ftl_enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Android JVM unit tests and debug APK build succeeded. Skipping cloud Firebase Test Lab Robo step because optional GCP OIDC repository variables are not configured yet (run ./scripts/setup-gcp-github-ci.sh to enable)."
+            {
+              echo "## Android Verification Summary (\`firebase-test-lab\`)"
+              echo ""
+              echo "- **Capacitor Android Sync & JVM Unit Tests (\`testDebugUnitTest\`):** Passed"
+              echo "- **Debug APK Build (\`assembleDebug\`):** Passed (\`android/app/build/outputs/apk/debug/app-debug.apk\`)"
+              echo "- **Firebase Test Lab Cloud Robo Run:** Skipped (optional GCP OIDC variables \`GCP_WORKLOAD_IDENTITY_PROVIDER\`, \`GCP_SERVICE_ACCOUNT\`, \`FTL_RESULTS_BUCKET\` are not set on this repository; run \`./scripts/setup-gcp-github-ci.sh\` to enable cloud device runs)"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
           missing=()
           if [[ -z "${WIF_PROVIDER}" ]]; then
             missing+=("GCP_WORKLOAD_IDENTITY_PROVIDER")
@@ -175,7 +189,7 @@ jobs:
             missing+=("FTL_RESULTS_BUCKET")
           fi
           if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing required GitHub repository variables: ${missing[*]}. Run ./scripts/setup-gcp-github-ci.sh first."
+            echo "::error::Incomplete GCP OIDC configuration — missing GitHub repository variables: ${missing[*]}. Run ./scripts/setup-gcp-github-ci.sh first."
             exit 1
           fi
 
@@ -195,17 +209,21 @@ jobs:
             echo "::error::Invalid FTL_OS_VERSION format."
             exit 1
           fi
+          echo "ftl_enabled=true" >> "${GITHUB_OUTPUT}"
 
       - name: Authenticate to Google Cloud via Keyless OIDC
+        if: steps.gcp_vars.outputs.ftl_enabled == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Google Cloud SDK
+        if: steps.gcp_vars.outputs.ftl_enabled == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Run Firebase Test Lab Android Robo test
+        if: steps.gcp_vars.outputs.ftl_enabled == 'true'
         shell: bash
         env:
           FTL_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
@@ -240,7 +258,7 @@ jobs:
             --results-dir="${FTL_RESULTS_DIR}"
 
       - name: Collect Firebase Test Lab Logcat crash & graphics diagnostics
-        if: failure()
+        if: failure() && steps.gcp_vars.outputs.ftl_enabled == 'true'
         shell: bash
         env:
           FTL_BUCKET: ${{ vars.FTL_RESULTS_BUCKET }}
@@ -303,7 +321,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload ftl-crash-logs artifact
-        if: failure()
+        if: failure() && steps.gcp_vars.outputs.ftl_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ftl-crash-logs

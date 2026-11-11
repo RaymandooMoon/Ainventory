@@ -273,11 +273,14 @@ export default function AnalyticsCalendarView({
     }
   };
 
-  if (loading || !analytics) {
+  if (!analytics) {
     return (
       <div>
-        <PageHeader title="인사이트" subtitle="데이터 집계 중" />
-        <SkeletonBentoGrid count={3} />
+        <PageHeader
+          title="인사이트"
+          subtitle={loading ? '데이터 집계 중' : '데이터를 불러오지 못했습니다'}
+        />
+        {loading && <SkeletonBentoGrid count={3} />}
       </div>
     );
   }

@@ -2167,7 +2167,10 @@ function detectSoftwareWebGL() {
         gl.getParameter(gl.RENDERER) ||
         ''
     );
-    cachedIsSoftwareWebGL = /swiftshader|llvmpipe|software|basic render/i.test(rendererStr);
+    cachedIsSoftwareWebGL =
+      /swiftshader|subzero|llvmpipe|lavapipe|\blvp\b|softpipe|software|basic render/i.test(
+        rendererStr
+      );
     return cachedIsSoftwareWebGL;
   } catch {
     cachedIsSoftwareWebGL = false;
