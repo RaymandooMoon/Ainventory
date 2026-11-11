@@ -4,6 +4,7 @@ import {
   applyOptimisticLocalMutation,
   flushOfflineQueue,
 } from './offlineSync.js';
+import { handleStandaloneApiFallback } from './standaloneFallback.js';
 
 const TOKEN_KEY = 'ainventory_auth_token';
 const SAMPLE_DEMO_KEY = 'ainventory_sample_demo_mode';
@@ -55,11 +56,25 @@ async function rawNetworkFetch(path, options = {}) {
     ...options,
     headers,
   });
+  const contentType = String(res.headers?.get?.('content-type') || '').toLowerCase();
+  const isJson = contentType.includes('application/json');
+
+  // Static hosts / SPA routers / Capacitor WebViews return text/html or non-JSON 404/405 when no API server is running
+  if (!isJson) {
+    const err = new Error(`API 서버 미연결 (${res.status})`);
+    err.status = res.status;
+    err.isBackendUnavailable = true;
+    throw err;
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data.error || `요청 실패 (${res.status})`);
     err.status = res.status;
     err.data = data;
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      err.isBackendUnavailable = true;
+    }
     throw err;
   }
   return data;
@@ -78,11 +93,10 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Offline-First + Sample Demo Mode API Client (Requirements 8.a & 8.b)
+ * Offline-First + Sample Demo + Standalone Fallback API Client (Requirements 8.a & 8.b)
  * - Mirrors GET responses into IndexedDB (`ainventory_offline_v1`)
  * - Serves cached IndexedDB data seamlessly when offline
- * - Routes Guest Sample Demo mutations locally without requiring login
- * - Queues authenticated offline mutations and syncs automatically when online
+ * - Falls back to `handleStandaloneApiFallback` on Capacitor APK / static hosts without Express backend
  */
 export async function apiFetch(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
@@ -103,6 +117,9 @@ export async function apiFetch(path, options = {}) {
     if (isBrowserOffline) {
       const cached = await readCachedResponse(cacheKey);
       if (cached) return { ...cached, _fromOfflineCache: true };
+      const localData = await handleStandaloneApiFallback(path, options);
+      await writeCachedResponse(cacheKey, localData).catch(() => {});
+      return { ...localData, _fromOfflineCache: true };
     }
     try {
       const data = await rawNetworkFetch(path, options);
@@ -112,16 +129,19 @@ export async function apiFetch(path, options = {}) {
       }
       return data;
     } catch (err) {
-      // Network failure fallback to IndexedDB cache (do not swallow HTTP 401/4xx errors)
-      if (!err.status) {
+      // Network failure or missing backend fallback (never swallow genuine HTTP 401/4xx JSON API errors)
+      if (!err.status || err.isBackendUnavailable) {
         const cached = await readCachedResponse(cacheKey);
         if (cached) return { ...cached, _fromOfflineCache: true };
+        const localData = await handleStandaloneApiFallback(path, options);
+        await writeCachedResponse(cacheKey, localData).catch(() => {});
+        return { ...localData, _fromOfflineCache: true };
       }
       throw err;
     }
   }
 
-  // Authenticated write operations (POST / PATCH / DELETE)
+  // Write / Auth operations (POST / PATCH / DELETE)
   if (!isAuthEndpoint && isBrowserOffline) {
     return applyOptimisticLocalMutation(path, method, options.body, true);
   }
@@ -130,7 +150,17 @@ export async function apiFetch(path, options = {}) {
     const data = await rawNetworkFetch(path, options);
     return data;
   } catch (err) {
-    if (!isAuthEndpoint && !err.status) {
+    if (!err.status || err.isBackendUnavailable) {
+      if (isAuthEndpoint || path === '/garments/import-samples') {
+        const res = await handleStandaloneApiFallback(path, options);
+        if (path === '/garments/import-samples' && Array.isArray(res.garments)) {
+          const targetCloset = res.garments[0]?.closet_owner || 'sample';
+          await writeCachedResponse(`/garments?closet=${encodeURIComponent(targetCloset)}`, {
+            garments: res.garments,
+          }).catch(() => {});
+        }
+        return res;
+      }
       return applyOptimisticLocalMutation(path, method, options.body, true);
     }
     throw err;

@@ -2453,7 +2453,9 @@ export class Mannequin3DWebGLEngine {
   resize(width, height) {
     const w = Math.max(200, Math.floor(width));
     const h = Math.max(260, Math.floor(height));
-    const swScale = this.isSoftwareRenderer ? Math.min(1, 380 / Math.max(w, h)) : 1;
+    const swScale = this.isSoftwareRenderer
+      ? Math.min(1, 320 / Math.max(w, h), 220 / Math.min(w, h))
+      : 1;
     this.renderer.setSize(
       Math.max(120, Math.round(w * swScale)),
       Math.max(160, Math.round(h * swScale)),

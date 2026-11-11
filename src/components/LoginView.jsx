@@ -302,6 +302,40 @@ export default function LoginView({
                 autoComplete="current-password"
                 required
               />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <span className="hig-caption">테스트 계정 빠른 입력</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setUsername('husband');
+                      setPassword('husband1234');
+                      setError('');
+                    }}
+                  >
+                    남편 옷장
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setUsername('wife');
+                      setPassword('wife1234');
+                      setError('');
+                    }}
+                  >
+                    아내 옷장
+                  </button>
+                </div>
+              </div>
               <button
                 id="login-submit-btn"
                 type="submit"

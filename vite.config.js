@@ -5,14 +5,16 @@ import { createApiRouter } from './server/api.js';
 import { UPLOADS_DIR } from './server/db.js';
 
 function ainventoryBackendPlugin() {
+  const mountApi = (server) => {
+    const app = express();
+    app.use('/api', createApiRouter());
+    app.use('/uploads', express.static(UPLOADS_DIR));
+    server.middlewares.use(app);
+  };
   return {
     name: 'ainventory-backend',
-    configureServer(server) {
-      const app = express();
-      app.use('/api', createApiRouter());
-      app.use('/uploads', express.static(UPLOADS_DIR));
-      server.middlewares.use(app);
-    },
+    configureServer: mountApi,
+    configurePreviewServer: mountApi,
   };
 }
 
