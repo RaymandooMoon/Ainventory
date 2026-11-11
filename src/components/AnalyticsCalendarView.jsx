@@ -209,12 +209,14 @@ export default function AnalyticsCalendarView({
     );
   }
 
-  const summary = analytics.summary || {
-    totalItems: analytics.totalItems ?? 0,
-    totalValue: analytics.totalValue ?? 0,
-    avgCpw: analytics.avgCpw ?? 0,
-    utilizationRate: analytics.utilizationRate ?? 0,
-    unwornCount: (analytics.sleepingItems || []).length,
+  const rawSummary = analytics.summary || {};
+  const summary = {
+    totalItems:
+      rawSummary.totalItems ?? rawSummary.totalGarments ?? analytics.totalItems ?? 0,
+    totalValue: rawSummary.totalValue ?? analytics.totalValue ?? 0,
+    avgCpw: rawSummary.avgCpw ?? analytics.avgCpw ?? 0,
+    utilizationRate: rawSummary.utilizationRate ?? analytics.utilizationRate ?? 0,
+    unwornCount: rawSummary.unwornCount ?? (analytics.sleepingItems || []).length,
   };
   const dormantItems = analytics.sleepingItems || analytics.dormantItems || [];
   const bestCpwList = analytics.bestValueItems || analytics.bestCpw || [];

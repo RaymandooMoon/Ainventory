@@ -84,12 +84,29 @@ export function flushPendingOfflineSync() {
   return flushOfflineQueue((p, opts) => rawNetworkFetch(p, opts));
 }
 
+let explicitlyOffline = false;
+
 if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => {
+    explicitlyOffline = true;
+  });
   window.addEventListener('online', () => {
+    explicitlyOffline = false;
     if (!isSampleDemoMode() && getStoredToken()) {
       flushPendingOfflineSync().catch(() => {});
     }
   });
+}
+
+function isEffectivelyOffline() {
+  if (explicitlyOffline) return true;
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) return false;
+  if (typeof window !== 'undefined') {
+    const host = window.location?.hostname || '';
+    // Loopback servers (127.0.0.1 / localhost) remain reachable in isolated VMs even when navigator.onLine starts false
+    if (host === '127.0.0.1' || host === 'localhost') return false;
+  }
+  return true;
 }
 
 /**
@@ -110,7 +127,7 @@ export async function apiFetch(path, options = {}) {
     return applyOptimisticLocalMutation(path, method, options.body, false);
   }
 
-  const isBrowserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const isBrowserOffline = isEffectivelyOffline();
 
   if (method === 'GET') {
     const cacheKey = sampleDemo ? `demo:${path}` : path;
