@@ -143,6 +143,9 @@ export async function removeBackgroundAndEncodeWebP(
     let bgL = 95;
     let bgA = 0;
     let bgB = 1;
+    let bgR = 242;
+    let bgG = 240;
+    let bgBChannel = 236;
     if (samples.length > 0) {
       samples.sort((a, b) => a.L - b.L);
       const mid = samples[Math.floor(samples.length * 0.6)];
@@ -150,8 +153,28 @@ export async function removeBackgroundAndEncodeWebP(
       bgA = mid.a;
       bgB = mid.b;
     }
+    {
+      let sr = 0;
+      let sg = 0;
+      let sb = 0;
+      let sc = 0;
+      const cornerIdx = [0, w - 1, (h - 1) * w, h * w - 1];
+      for (const ci of cornerIdx) {
+        if (d[ci * 4 + 3] > 200) {
+          sr += d[ci * 4];
+          sg += d[ci * 4 + 1];
+          sb += d[ci * 4 + 2];
+          sc++;
+        }
+      }
+      if (sc > 0) {
+        bgR = sr / sc;
+        bgG = sg / sc;
+        bgBChannel = sb / sc;
+      }
+    }
 
-    // 2. Perimeter flood-fill background segmentation (preserves bright interior garment highlights!)
+    // 2. Perimeter flood-fill background segmentation (strips backdrop + soft chroma-matched cast shadows)
     const total = w * h;
     const visited = new Uint8Array(total);
     const isBg = new Uint8Array(total);
@@ -159,17 +182,25 @@ export async function removeBackgroundAndEncodeWebP(
     let qHead = 0;
     let qTail = 0;
 
-    const colorDistToBg = (idx) => {
+    const BG_TOLERANCE = 18.5;
+    const isBackdropOrSoftShadow = (idx) => {
       const p = idx * 4;
+      if (d[p + 3] < 20) return true;
       const lab = rgbToCieLab(d[p], d[p + 1], d[p + 2]);
-      return Math.hypot((lab.L - bgL) * 0.9, lab.a - bgA, lab.b - bgB);
+      const chromaDist = Math.hypot(lab.a - bgA, lab.b - bgB);
+      const fullDist = Math.hypot((lab.L - bgL) * 0.9, lab.a - bgA, lab.b - bgB);
+      if (fullDist <= BG_TOLERANCE) return true;
+      // Soft cast shadow on wall/backdrop: darker L along identical backdrop chromaticity
+      if (bgL > 65 && lab.L >= bgL - 28 && lab.L <= bgL + 5 && chromaDist <= 5.2) {
+        return true;
+      }
+      return false;
     };
 
-    const BG_TOLERANCE = 18.5;
     const enqueueIfBorderBg = (idx) => {
       if (visited[idx]) return;
       visited[idx] = 1;
-      if (d[idx * 4 + 3] < 20 || colorDistToBg(idx) <= BG_TOLERANCE) {
+      if (isBackdropOrSoftShadow(idx)) {
         isBg[idx] = 1;
         queue[qTail++] = idx;
       }
@@ -193,7 +224,7 @@ export async function removeBackgroundAndEncodeWebP(
         const nb = curr - 1;
         if (!visited[nb]) {
           visited[nb] = 1;
-          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+          if (isBackdropOrSoftShadow(nb)) {
             isBg[nb] = 1;
             queue[qTail++] = nb;
           }
@@ -203,7 +234,7 @@ export async function removeBackgroundAndEncodeWebP(
         const nb = curr + 1;
         if (!visited[nb]) {
           visited[nb] = 1;
-          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+          if (isBackdropOrSoftShadow(nb)) {
             isBg[nb] = 1;
             queue[qTail++] = nb;
           }
@@ -213,7 +244,7 @@ export async function removeBackgroundAndEncodeWebP(
         const nb = curr - w;
         if (!visited[nb]) {
           visited[nb] = 1;
-          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+          if (isBackdropOrSoftShadow(nb)) {
             isBg[nb] = 1;
             queue[qTail++] = nb;
           }
@@ -223,7 +254,7 @@ export async function removeBackgroundAndEncodeWebP(
         const nb = curr + w;
         if (!visited[nb]) {
           visited[nb] = 1;
-          if (colorDistToBg(nb) <= BG_TOLERANCE) {
+          if (isBackdropOrSoftShadow(nb)) {
             isBg[nb] = 1;
             queue[qTail++] = nb;
           }
@@ -242,17 +273,32 @@ export async function removeBackgroundAndEncodeWebP(
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = y * w + x;
+          const p = idx * 4;
           if (isBg[idx]) {
-            d[idx * 4 + 3] = 0;
+            d[p] = 0;
+            d[p + 1] = 0;
+            d[p + 2] = 0;
+            d[p + 3] = 0;
           } else {
-            // Soft 1px anti-aliased edge feathering adjacent to transparent background
+            // Soft anti-aliased edge feathering + RGB backdrop decontamination for Dark Mode clarity
             let adjBg = 0;
             if (x > 0 && isBg[idx - 1]) adjBg++;
             if (x < w - 1 && isBg[idx + 1]) adjBg++;
             if (y > 0 && isBg[idx - w]) adjBg++;
             if (y < h - 1 && isBg[idx + w]) adjBg++;
             if (adjBg > 0) {
-              d[idx * 4 + 3] = Math.round(d[idx * 4 + 3] * (1 - adjBg * 0.14));
+              const edgeFactor = Math.max(0.28, 1 - adjBg * 0.18);
+              const invA = 1 / Math.max(0.38, edgeFactor);
+              d[p] = Math.max(0, Math.min(255, Math.round((d[p] - bgR * (1 - edgeFactor)) * invA)));
+              d[p + 1] = Math.max(
+                0,
+                Math.min(255, Math.round((d[p + 1] - bgG * (1 - edgeFactor)) * invA))
+              );
+              d[p + 2] = Math.max(
+                0,
+                Math.min(255, Math.round((d[p + 2] - bgBChannel * (1 - edgeFactor)) * invA))
+              );
+              d[p + 3] = Math.round(d[p + 3] * edgeFactor);
             }
           }
         }

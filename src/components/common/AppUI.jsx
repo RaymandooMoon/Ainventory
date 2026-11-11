@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
+import StudioGarmentImage from '../StudioGarmentImage.jsx';
 import { apiFetch, formatKRW } from '../../utils/api.js';
 import {
   acknowledgeCameraNotice,
@@ -119,6 +120,13 @@ export function ResponsiveSheetModal({
 
   const handleDragStart = (e) => {
     e.stopPropagation();
+    if (e.pointerId !== undefined) {
+      try {
+        e.currentTarget?.setPointerCapture?.(e.pointerId);
+      } catch {
+        // ignore synthetic events without active pointerId
+      }
+    }
     const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
     startYRef.current = clientY;
     dragYRef.current = 0;
@@ -138,6 +146,13 @@ export function ResponsiveSheetModal({
   const handleDragEnd = (e) => {
     if (!isDraggingRef.current) return;
     e?.stopPropagation?.();
+    if (e?.pointerId !== undefined) {
+      try {
+        e.currentTarget?.releasePointerCapture?.(e.pointerId);
+      } catch {
+        // ignore release errors
+      }
+    }
     const finalDelta = dragYRef.current;
     isDraggingRef.current = false;
     dragYRef.current = 0;
@@ -180,6 +195,9 @@ export function ResponsiveSheetModal({
           data-sheet-handle="true"
           className="ui-sheet-drag-zone"
           onPointerDown={handleDragStart}
+          onPointerMove={handleDragMove}
+          onPointerUp={handleDragEnd}
+          onPointerCancel={handleDragEnd}
           onTouchStart={handleDragStart}
           aria-label="드래그하여 닫기"
         >
@@ -731,16 +749,17 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
                       borderRadius: 12,
                       overflow: 'hidden',
                       marginBottom: 8,
-                      background: 'var(--bg-canvas)',
+                      background: 'var(--bg-subtle)',
+                      padding: 6,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <img
-                      src={item.image_url}
+                    <StudioGarmentImage
+                      item={item}
                       alt={item.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      style={{ width: '100%', height: '100%' }}
                     />
                   </div>
                   <div

@@ -41,6 +41,8 @@ export const PERSONAL_COLOR_CATALOG: Readonly<
 >;
 export const MANIFEST_SLOT_GLB_BY_SUB: Readonly<Record<string, ManifestSlotGlbSpec>>;
 
+export function upgradeStudioSeedToWebp(url?: string | null): string;
+export function getNativeSeedHex(url?: string | null): string | null;
 export function getStudioSeedImageForGarment(category?: string, subcategory?: string): string;
 export function resolveStudioSeedUrl(
   itemOrUrl?: string | { image_url?: string; name?: string; category?: string; subcategory?: string } | null,

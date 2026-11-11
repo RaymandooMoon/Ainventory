@@ -489,10 +489,19 @@ img {
   background: var(--bg-tertiary);
 }
 
+[data-theme='dark'] .sample-preset-btn {
+  background: radial-gradient(circle at 50% 44%, #28282D 0%, #161619 78%);
+}
+
+[data-theme='dark'] .sample-preset-btn:hover,
+[data-theme='dark'] .sample-preset-btn.active {
+  background: radial-gradient(circle at 50% 44%, #35353C 0%, #222227 80%);
+}
+
 .sample-preset-btn img {
   width: 100%;
   aspect-ratio: 3 / 4;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 5px;
   margin-bottom: 5px;
 }
@@ -525,6 +534,14 @@ img {
 
 .photo-dropzone:hover {
   background: var(--bg-tertiary);
+}
+
+[data-theme='dark'] .photo-dropzone {
+  background: radial-gradient(circle at 50% 46%, #2A2A30 0%, #161619 78%);
+}
+
+[data-theme='dark'] .photo-dropzone:hover {
+  background: radial-gradient(circle at 50% 46%, #33333A 0%, #1E1E22 80%);
 }
 
 .photo-dropzone:focus-visible {
@@ -2327,7 +2344,7 @@ html[data-vibrancy-fallback='solid'] .hig-vibrancy-capsule {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 10px;
   cursor: pointer;
   user-select: none;
   -webkit-touch-callout: none;
@@ -2339,11 +2356,24 @@ html[data-vibrancy-fallback='solid'] .hig-vibrancy-capsule {
   background: var(--bg-subtle);
 }
 
+[data-theme='dark'] .hig-cutout-tile {
+  background: radial-gradient(circle at 50% 44%, #2B2B30 0%, #1C1C1E 74%);
+}
+
+[data-theme='dark'] .hig-cutout-tile:active {
+  background: radial-gradient(circle at 50% 44%, #34343A 0%, #232327 78%);
+}
+
 .hig-cutout-tile img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+}
+
+[data-theme='dark'] .studio-garment-image img {
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.52))
+    drop-shadow(0 0 0.75px rgba(245, 245, 247, 0.22));
 }
 
 /* 12.d — Apple Fitness-Style Bento Summary Grid (2–3 Key Metric Cards -> Tap to Drill Down) */

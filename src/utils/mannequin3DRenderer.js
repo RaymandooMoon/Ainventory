@@ -2544,11 +2544,13 @@ export class Mannequin3DWebGLEngine {
 
   _setupLightsAndPedestal() {
     const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8dc, this.isSoftwareRenderer ? 1.45 : 0.92);
+    this.hemiLight = hemi;
     this.scene.add(hemi);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, this.isSoftwareRenderer ? 1.85 : 1.9);
     keyLight.position.set(1.8, 2.95, 2.55);
     keyLight.castShadow = !this.isSoftwareRenderer;
+    this.keyLight = keyLight;
     if (!this.isSoftwareRenderer) {
       keyLight.shadow.mapSize.set(1024, 1024);
       keyLight.shadow.bias = -0.0005;
@@ -2556,17 +2558,26 @@ export class Mannequin3DWebGLEngine {
 
       const coolRim = new THREE.PointLight(0xf0f2f7, 1.24, 5.5);
       coolRim.position.set(-1.65, 1.68, -1.28);
+      this.coolRimLight = coolRim;
       this.scene.add(coolRim);
 
       const warmRim = new THREE.PointLight(0xf5f5f7, 1.08, 5.5);
       warmRim.position.set(1.65, 1.15, -1.35);
+      this.warmRimLight = warmRim;
       this.scene.add(warmRim);
     }
     this.scene.add(keyLight);
 
     const frontFill = new THREE.DirectionalLight(0xfafafc, this.isSoftwareRenderer ? 0.65 : 0.72);
     frontFill.position.set(-0.75, 1.42, 2.45);
+    this.frontFillLight = frontFill;
     this.scene.add(frontFill);
+
+    // Lightweight shadowless silhouette rim light for Dark Mode garment separation against #000000
+    const backRim = new THREE.DirectionalLight(0xeef2ff, 0.0);
+    backRim.position.set(0.0, 2.15, -2.55);
+    this.backRimDirLight = backRim;
+    this.scene.add(backRim);
 
     this.pedestalDiskMat = this.isSoftwareRenderer
       ? new THREE.MeshLambertMaterial({ color: 0xf2f2f5 })
@@ -2613,11 +2624,40 @@ export class Mannequin3DWebGLEngine {
     if (!this.isPreviewOnly) {
       this.renderer.setClearColor(isDark ? 0x000000 : 0xffffff, 1);
     }
+    if (this.hemiLight) {
+      this.hemiLight.groundColor.set(isDark ? 0x42424a : 0xd8d8dc);
+      this.hemiLight.intensity = isDark
+        ? this.isSoftwareRenderer
+          ? 1.62
+          : 1.08
+        : this.isSoftwareRenderer
+          ? 1.45
+          : 0.92;
+    }
+    if (this.frontFillLight) {
+      this.frontFillLight.intensity = isDark
+        ? this.isSoftwareRenderer
+          ? 0.86
+          : 0.94
+        : this.isSoftwareRenderer
+          ? 0.65
+          : 0.72;
+    }
+    if (this.coolRimLight) {
+      this.coolRimLight.intensity = isDark ? 1.92 : 1.24;
+    }
+    if (this.warmRimLight) {
+      this.warmRimLight.intensity = isDark ? 1.62 : 1.08;
+    }
+    if (this.backRimDirLight) {
+      this.backRimDirLight.intensity = isDark ? (this.isSoftwareRenderer ? 0.95 : 0.78) : 0.0;
+    }
     if (this.pedestalDiskMat) {
-      this.pedestalDiskMat.color.set(isDark ? 0x1c1c1e : 0xf2f2f5);
+      this.pedestalDiskMat.color.set(isDark ? 0x242428 : 0xf2f2f5);
     }
     if (this.pedestalRingMat) {
-      this.pedestalRingMat.color.set(isDark ? 0x48484a : 0x86868b);
+      this.pedestalRingMat.color.set(isDark ? 0x636368 : 0x86868b);
+      this.pedestalRingMat.opacity = isDark ? 0.34 : 0.18;
     }
     if (this.scanRingMat) {
       this.scanRingMat.color.set(isDark ? 0xf5f5f7 : 0x1d1d1f);
@@ -3608,6 +3648,13 @@ export class Mannequin3DWebGLEngine {
     disposeSubtree(this.windStreaks);
     disposeSubtree(this.scanRingMesh);
 
+    this.keyLight?.shadow?.map?.dispose?.();
+    this.hemiLight = null;
+    this.keyLight = null;
+    this.frontFillLight = null;
+    this.coolRimLight = null;
+    this.warmRimLight = null;
+    this.backRimDirLight = null;
     this._envRenderTarget?.dispose?.();
     this._envRenderTarget = null;
     this.envMap = null;

@@ -1,9 +1,8 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { hexToRgb } from '../shared/colorMath.js';
 import {
-  NATIVE_SEED_HEX,
-  STUDIO_SEED_BY_CATEGORY,
-  STUDIO_SEED_BY_SUBCATEGORY,
+  getNativeSeedHex,
+  getStudioSeedImageForGarment,
   resolveStudioSeedUrl,
 } from '../shared/garmentTaxonomy.js';
 
@@ -120,7 +119,6 @@ function runBorderFloodFill(d, w, h, bgR, bgG, bgB, profile) {
     if (y < h - 1) tryAccept(p + w, p);
   }
 
-  // Measure central garment core invasion to protect white/ivory garments on bright studio paper
   const x0 = Math.floor(w * 0.35);
   const x1 = Math.ceil(w * 0.65);
   const y0 = Math.floor(h * 0.3);
@@ -208,7 +206,7 @@ const CUTOUT_PROFILES = [
 function encodeCanvasObjectUrl(canvas) {
   return new Promise((resolve) => {
     if (typeof canvas.toBlob !== 'function' || typeof URL === 'undefined' || !URL.createObjectURL) {
-      const dataUrl = canvas.toDataURL('image/webp', 0.9);
+      const dataUrl = canvas.toDataURL('image/webp', 0.92);
       canvas.width = 0;
       canvas.height = 0;
       resolve(dataUrl);
@@ -220,19 +218,19 @@ function encodeCanvasObjectUrl(canvas) {
         if (blob) {
           outUrl = URL.createObjectURL(blob);
         } else {
-          outUrl = canvas.toDataURL('image/webp', 0.9);
+          outUrl = canvas.toDataURL('image/webp', 0.92);
         }
         canvas.width = 0;
         canvas.height = 0;
         resolve(outUrl);
       },
       'image/webp',
-      0.9
+      0.92
     );
   });
 }
 
-function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
+function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcategory = '') {
   const key = `${srcUrl}|${shouldTint ? (targetHex || '').toUpperCase() : 'RAW_CUTOUT'}`;
   const cached = readLruCachedUrl(key);
   if (cached) {
@@ -252,7 +250,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
     img.onload = async () => {
       let canvas = null;
       try {
-        const maxSide = 360;
+        const maxSide = 440;
         const scale = Math.min(
           1,
           maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)
@@ -266,115 +264,149 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
         ctx.drawImage(img, 0, 0, w, h);
         const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
-
-        // Sample corner & edge blocks to measure studio paper background RGB
-        let bgR = 0;
-        let bgG = 0;
-        let bgB = 0;
-        let bgSampleCount = 0;
-        const samplePts = [
-          [2, 2],
-          [w - 3, 2],
-          [2, h - 3],
-          [w - 3, h - 3],
-          [Math.floor(w * 0.5), 2],
-          [Math.floor(w * 0.5), h - 3],
-        ];
-        for (const [sx, sy] of samplePts) {
-          const idx = (sy * w + sx) * 4;
-          bgR += d[idx];
-          bgG += d[idx + 1];
-          bgB += d[idx + 2];
-          bgSampleCount++;
-        }
-        bgR /= bgSampleCount;
-        bgG /= bgSampleCount;
-        bgB /= bgSampleCount;
-
         const nPx = w * h;
-        const nativeHex = NATIVE_SEED_HEX[srcUrl];
-        const nativeRgb = nativeHex ? hexToRgb(nativeHex) : null;
-        const nativeLum = nativeRgb
-          ? 0.299 * nativeRgb.r + 0.587 * nativeRgb.g + 0.114 * nativeRgb.b
-          : 120;
-        const startProfileIdx = nativeLum > 208 ? 1 : 0;
 
-        let chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[startProfileIdx]);
-        for (let pi = startProfileIdx + 1; pi < CUTOUT_PROFILES.length; pi++) {
-          if (chosen.bgCount <= nPx * 0.84 && chosen.coreBgRatio <= 0.16) break;
-          chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[pi]);
+        let transparentPx = 0;
+        for (let p = 0; p < nPx; p++) {
+          if (d[p * 4 + 3] < 245) transparentPx++;
         }
+        const hasPreBakedAlpha = transparentPx > nPx * 0.03;
+        const preserveDial = subcategory === 'watch' || srcUrl.includes('studio-watch');
+        const isEyewear = subcategory === 'glasses' || srcUrl.includes('studio-glasses');
 
-        const bgMask = chosen.bgMask;
-        let bgCount = chosen.bgCount;
-        const applyAlphaCutout =
-          bgCount > nPx * 0.04 && bgCount < nPx * 0.92 && chosen.coreBgRatio <= 0.28;
-        if (applyAlphaCutout) {
-          bgCount += pruneForegroundSpeckles(bgMask, w, h, 72);
-        }
-
-        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-
-        // Pass 1: compute foreground weights, transparent studio background alpha & edge color decontamination
         let fgLumSum = 0;
         let fgWeightSum = 0;
         const masks = new Float32Array(nPx);
-        for (let p = 0; p < nPx; p++) {
-          const i = p * 4;
-          let r = d[i];
-          let g = d[i + 1];
-          let b = d[i + 2];
-          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-          if (applyAlphaCutout && bgMask[p]) {
-            masks[p] = 0;
-            d[i + 3] = 0;
-            continue;
-          }
-
-          const distBg = Math.hypot(r - bgR, g - bgG, b - bgB);
-          let edgeAlpha = 1;
-          if (applyAlphaCutout) {
-            const x = p % w;
-            const y = (p - x) / w;
-            let bgNeighbors = 0;
-            if (x > 0 && bgMask[p - 1]) bgNeighbors++;
-            if (x < w - 1 && bgMask[p + 1]) bgNeighbors++;
-            if (y > 0 && bgMask[p - w]) bgNeighbors++;
-            if (y < h - 1 && bgMask[p + w]) bgNeighbors++;
-            if (bgNeighbors > 0) {
-              const featherLow = nativeLum > 208 ? 4 : 14;
-              const featherHigh = nativeLum > 208 ? 18 : 44;
-              edgeAlpha = smoothstep(featherLow, featherHigh, distBg);
-              d[i + 3] = Math.round(d[i + 3] * edgeAlpha);
-              // Decontaminate studio paper fringe on semi-transparent boundary pixels
-              if (edgeAlpha > 0.08 && edgeAlpha < 0.94 && nativeLum <= 208) {
-                const invA = 1 / Math.max(0.28, edgeAlpha);
-                r = Math.max(0, Math.min(255, Math.round((r - bgR * (1 - edgeAlpha)) * invA)));
-                g = Math.max(0, Math.min(255, Math.round((g - bgG * (1 - edgeAlpha)) * invA)));
-                b = Math.max(0, Math.min(255, Math.round((b - bgB * (1 - edgeAlpha)) * invA)));
-                d[i] = r;
-                d[i + 1] = g;
-                d[i + 2] = b;
-              }
+        if (hasPreBakedAlpha) {
+          // Ground-truth pre-matted `.webp` cutout: zero flood-fill needed, zero shadow contamination!
+          for (let p = 0; p < nPx; p++) {
+            const i = p * 4;
+            const a = d[i + 3];
+            if (a < 8 || (isEyewear && a < 64)) {
+              masks[p] = 0;
+              continue;
+            }
+            const r = d[i];
+            const g = d[i + 1];
+            const b = d[i + 2];
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const sat = Math.max(r, g, b) - Math.min(r, g, b);
+            const alphaNorm = a / 255;
+            // Full tint mask across pre-decontaminated alpha contour prevents any light edge halo!
+            masks[p] = 1;
+            if (alphaNorm > 0.35 && !(preserveDial && sat < 22 && lum > 180)) {
+              fgLumSum += lum * alphaNorm;
+              fgWeightSum += alphaNorm;
             }
           }
+        } else {
+          // Legacy fallback for opaque non-alpha packshots
+          let bgR = 0;
+          let bgG = 0;
+          let bgB = 0;
+          let bgSampleCount = 0;
+          const samplePts = [
+            [2, 2],
+            [w - 3, 2],
+            [2, h - 3],
+            [w - 3, h - 3],
+            [Math.floor(w * 0.5), 2],
+            [Math.floor(w * 0.5), h - 3],
+          ];
+          for (const [sx, sy] of samplePts) {
+            const idx = (sy * w + sx) * 4;
+            bgR += d[idx];
+            bgG += d[idx + 1];
+            bgB += d[idx + 2];
+            bgSampleCount++;
+          }
+          bgR /= bgSampleCount;
+          bgG /= bgSampleCount;
+          bgB /= bgSampleCount;
 
-          const sat = Math.max(r, g, b) - Math.min(r, g, b);
-          const isPaperOrSoftShadow = sat < 14 && lum > bgLum - 32 && distBg < 36;
-          const m = isPaperOrSoftShadow ? 0 : smoothstep(16, 42, distBg) * edgeAlpha;
-          masks[p] = m;
-          if (m > 0.35) {
-            fgLumSum += lum * m;
-            fgWeightSum += m;
+          const nativeHex = getNativeSeedHex(srcUrl);
+          const nativeRgb = nativeHex ? hexToRgb(nativeHex) : null;
+          const nativeLum = nativeRgb
+            ? 0.299 * nativeRgb.r + 0.587 * nativeRgb.g + 0.114 * nativeRgb.b
+            : 120;
+          const startProfileIdx = nativeLum > 208 ? 1 : 0;
+
+          let chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[startProfileIdx]);
+          for (let pi = startProfileIdx + 1; pi < CUTOUT_PROFILES.length; pi++) {
+            if (chosen.bgCount <= nPx * 0.84 && chosen.coreBgRatio <= 0.16) break;
+            chosen = runBorderFloodFill(d, w, h, bgR, bgG, bgB, CUTOUT_PROFILES[pi]);
+          }
+
+          const bgMask = chosen.bgMask;
+          let bgCount = chosen.bgCount;
+          const applyAlphaCutout =
+            bgCount > nPx * 0.04 && bgCount < nPx * 0.92 && chosen.coreBgRatio <= 0.42;
+          if (applyAlphaCutout) {
+            bgCount += pruneForegroundSpeckles(bgMask, w, h, 72);
+          }
+
+          const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+          for (let p = 0; p < nPx; p++) {
+            const i = p * 4;
+            let r = d[i];
+            let g = d[i + 1];
+            let b = d[i + 2];
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            if (applyAlphaCutout && bgMask[p]) {
+              masks[p] = 0;
+              d[i + 3] = 0;
+              continue;
+            }
+
+            const distBg = Math.hypot(r - bgR, g - bgG, b - bgB);
+            let edgeAlpha = 1;
+            if (applyAlphaCutout) {
+              const x = p % w;
+              const y = (p - x) / w;
+              let bgNeighbors = 0;
+              if (x > 0 && bgMask[p - 1]) bgNeighbors++;
+              if (x < w - 1 && bgMask[p + 1]) bgNeighbors++;
+              if (y > 0 && bgMask[p - w]) bgNeighbors++;
+              if (y < h - 1 && bgMask[p + w]) bgNeighbors++;
+              if (bgNeighbors > 0) {
+                const featherLow = nativeLum > 208 ? 4 : 14;
+                const featherHigh = nativeLum > 208 ? 18 : 44;
+                edgeAlpha = smoothstep(featherLow, featherHigh, distBg);
+                d[i + 3] = Math.round(d[i + 3] * edgeAlpha);
+                if (edgeAlpha > 0.08 && edgeAlpha < 0.94 && nativeLum <= 208) {
+                  const invA = 1 / Math.max(0.28, edgeAlpha);
+                  r = Math.max(0, Math.min(255, Math.round((r - bgR * (1 - edgeAlpha)) * invA)));
+                  g = Math.max(0, Math.min(255, Math.round((g - bgG * (1 - edgeAlpha)) * invA)));
+                  b = Math.max(0, Math.min(255, Math.round((b - bgB * (1 - edgeAlpha)) * invA)));
+                  d[i] = r;
+                  d[i + 1] = g;
+                  d[i + 2] = b;
+                }
+              }
+            }
+
+            const sat = Math.max(r, g, b) - Math.min(r, g, b);
+            const isPaperOrSoftShadow = sat < 14 && lum > bgLum - 32 && distBg < 36;
+            const m = isPaperOrSoftShadow ? 0 : smoothstep(16, 42, distBg) * edgeAlpha;
+            masks[p] = m;
+            if (m > 0.35) {
+              fgLumSum += lum * m;
+              fgWeightSum += m;
+            }
           }
         }
 
-        // Pass 2: optional re-shade of garment pixels, preserving grain, seams, folds & metallic glints
+        // Pass 2: re-shade garment pixels while preserving grain, seams, folds, dials & dark-mode sheen
         if (shouldTint && targetHex && fgWeightSum >= 40) {
           const meanFgLum = Math.max(42, Math.min(215, fgLumSum / fgWeightSum));
           const tgt = hexToRgb(targetHex);
           const tgtLum = 0.299 * tgt.r + 0.587 * tgt.g + 0.114 * tgt.b;
+          const specStart = preserveDial ? 182 : 208;
+          const specEnd = preserveDial ? 216 : 242;
+          const specStrength = preserveDial ? 0.96 : 0.78;
+          const exp = tgtLum < 45 ? 0.76 : 0.92;
 
           for (let p = 0; p < nPx; p++) {
             const m = masks[p];
@@ -387,13 +419,11 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true) {
             const sat = Math.max(r, g, b) - Math.min(r, g, b);
 
             const metalSpecularProtect =
-              sat < 18 && lum > 205 ? smoothstep(205, 242, lum) * 0.75 : 0;
+              sat < 22 && lum > specStart ? smoothstep(specStart, specEnd, lum) * specStrength : 0;
             const blend = m * (1 - metalSpecularProtect) * 0.88;
-            const shadeRatio = Math.pow(
-              Math.max(0.08, lum / meanFgLum),
-              tgtLum < 55 ? 0.85 : 0.95
-            );
-            const specLift = Math.max(0, (lum - meanFgLum * 1.18) * 0.32);
+            const shadeRatio = Math.pow(Math.min(2.2, Math.max(0.12, lum / meanFgLum)), exp);
+            const darkSheen = tgtLum < 42 ? Math.max(0, (lum - meanFgLum * 0.92) * 0.24) : 0;
+            const specLift = Math.max(0, (lum - meanFgLum * 1.18) * 0.28) + darkSheen;
 
             const nr = Math.min(255, Math.max(0, tgt.r * shadeRatio + specLift));
             const ng = Math.min(255, Math.max(0, tgt.g * shadeRatio + specLift));
@@ -448,8 +478,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   const targetHex = colorHex || item?.color_hex || '';
   const label = alt || item?.name || '의류 이미지';
 
-  const fallbackSeedSrc =
-    STUDIO_SEED_BY_SUBCATEGORY[sub] || STUDIO_SEED_BY_CATEGORY[cat] || '/seed/cream-knit.jpg';
+  const fallbackSeedSrc = getStudioSeedImageForGarment(cat, sub);
 
   const resolvedSrc = useMemo(() => {
     if (
@@ -481,7 +510,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
 
   const shouldTintSeed = useMemo(() => {
     if (!targetHex || !isProcessableSeed) return false;
-    const nativeHex = NATIVE_SEED_HEX[resolvedSrc];
+    const nativeHex = getNativeSeedHex(resolvedSrc);
     if (nativeHex) {
       if (rgbDist(hexToRgb(targetHex), hexToRgb(nativeHex)) < 40) {
         return false;
@@ -490,17 +519,21 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     return true;
   }, [resolvedSrc, targetHex, isProcessableSeed]);
 
+  // Pre-matted `.webp` studio seeds that match their native color require zero Canvas work!
+  const isPreCutoutWebp = isProcessableSeed && resolvedSrc.endsWith('.webp');
+  const needsCanvasProcessing = isProcessableSeed && (!isPreCutoutWebp || shouldTintSeed);
+
   const cacheKey = `${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
 
   const [asyncTinted, setAsyncTinted] = useState(null);
   const [failedKey, setFailedKey] = useState(null);
 
   useEffect(() => {
-    if (!isProcessableSeed || TINTED_URL_CACHE.has(cacheKey)) {
+    if (!needsCanvasProcessing || TINTED_URL_CACHE.has(cacheKey)) {
       return undefined;
     }
     let cancelled = false;
-    getGarmentTintedPackshot(resolvedSrc, targetHex, shouldTintSeed).then((cutoutUrl) => {
+    getGarmentTintedPackshot(resolvedSrc, targetHex, shouldTintSeed, sub).then((cutoutUrl) => {
       if (!cancelled) {
         setAsyncTinted({ key: cacheKey, url: cutoutUrl });
       }
@@ -508,10 +541,10 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     return () => {
       cancelled = true;
     };
-  }, [resolvedSrc, targetHex, shouldTintSeed, isProcessableSeed, cacheKey]);
+  }, [resolvedSrc, targetHex, shouldTintSeed, needsCanvasProcessing, cacheKey, sub]);
 
-  const cachedUrl = isProcessableSeed ? readLruCachedUrl(cacheKey) : null;
-  const computedSrc = !isProcessableSeed
+  const cachedUrl = needsCanvasProcessing ? readLruCachedUrl(cacheKey) : null;
+  const computedSrc = !needsCanvasProcessing
     ? resolvedSrc
     : cachedUrl || (asyncTinted?.key === cacheKey ? asyncTinted.url : resolvedSrc);
   const displaySrc = failedKey === cacheKey ? fallbackSeedSrc : computedSrc;

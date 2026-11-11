@@ -194,7 +194,7 @@ export const STUDIO_SEED_BY_CATEGORY = {
   bag: '/seed/studio-bag.jpg',
 };
 
-export const NATIVE_SEED_HEX = {
+const RAW_NATIVE_SEED_HEX = {
   '/seed/beige-trench.jpg': '#C4B193',
   '/seed/black-blazer.jpg': '#1E1F22',
   '/seed/black-loafers.jpg': '#1A1A1C',
@@ -205,6 +205,7 @@ export const NATIVE_SEED_HEX = {
   '/seed/olive-jacket.jpg': '#7D836D',
   '/seed/white-shirt.jpg': '#F2F1EC',
   '/seed/white-sneakers.jpg': '#EAE7E1',
+  '/seed/studio-cardigan.png': '#DFD1BE',
   '/seed/studio-coat.jpg': '#BA9163',
   '/seed/studio-padding.jpg': '#DCD8CE',
   '/seed/studio-hoodie.jpg': '#BEBDB8',
@@ -238,12 +239,42 @@ export const NATIVE_SEED_HEX = {
   '/seed/studio-glasses.jpg': '#4A3222',
 };
 
+export function upgradeStudioSeedToWebp(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('/seed/')) return trimmed;
+  if (
+    trimmed === '/seed/store-navy-sweater.jpg' ||
+    trimmed === '/seed/store-terracotta-cardigan.jpg'
+  ) {
+    return trimmed;
+  }
+  return trimmed.replace(/\.(jpe?g|png)$/i, '.webp');
+}
+
+export const NATIVE_SEED_HEX = Object.freeze(
+  Object.entries(RAW_NATIVE_SEED_HEX).reduce((acc, [key, hex]) => {
+    acc[key] = hex;
+    acc[upgradeStudioSeedToWebp(key)] = hex;
+    return acc;
+  }, {})
+);
+
+export function getNativeSeedHex(url) {
+  if (!url || typeof url !== 'string') return null;
+  return NATIVE_SEED_HEX[url] || NATIVE_SEED_HEX[upgradeStudioSeedToWebp(url)] || null;
+}
+
 export function getStudioSeedImageForGarment(category = 'top', subcategory = 'knit') {
   const subKey = String(subcategory || '').toLowerCase().trim();
   const catKey = String(category || 'top').toLowerCase().trim();
-  if (STUDIO_SEED_BY_SUBCATEGORY[subKey]) return STUDIO_SEED_BY_SUBCATEGORY[subKey];
-  if (STUDIO_SEED_BY_CATEGORY[catKey]) return STUDIO_SEED_BY_CATEGORY[catKey];
-  return '/seed/cream-knit.jpg';
+  if (STUDIO_SEED_BY_SUBCATEGORY[subKey]) {
+    return upgradeStudioSeedToWebp(STUDIO_SEED_BY_SUBCATEGORY[subKey]);
+  }
+  if (STUDIO_SEED_BY_CATEGORY[catKey]) {
+    return upgradeStudioSeedToWebp(STUDIO_SEED_BY_CATEGORY[catKey]);
+  }
+  return '/seed/cream-knit.webp';
 }
 
 export function resolveStudioSeedUrl(itemOrUrl, category = 'top', subcategory = 'knit') {
@@ -257,10 +288,10 @@ export function resolveStudioSeedUrl(itemOrUrl, category = 'top', subcategory = 
     else if (/토트|쇼퍼|tote/i.test(name)) sub = 'tote';
   }
 
+  const normalizedBagCheck = rawUrl.replace(/\.(jpe?g|png|webp)$/i, '');
   const isUnknownSeed =
     rawUrl.startsWith('/seed/') &&
-    !NATIVE_SEED_HEX[rawUrl] &&
-    rawUrl !== '/seed/studio-cardigan.png' &&
+    !getNativeSeedHex(rawUrl) &&
     rawUrl !== '/seed/store-navy-sweater.jpg';
 
   if (
@@ -268,11 +299,11 @@ export function resolveStudioSeedUrl(itemOrUrl, category = 'top', subcategory = 
     rawUrl.startsWith('data:image/svg+xml') ||
     rawUrl === '/seed/store-terracotta-cardigan.jpg' ||
     isUnknownSeed ||
-    (rawUrl === '/seed/studio-bag.jpg' && (sub === 'briefcase' || sub === 'tote'))
+    (normalizedBagCheck === '/seed/studio-bag' && (sub === 'briefcase' || sub === 'tote'))
   ) {
     return getStudioSeedImageForGarment(cat, sub);
   }
-  return rawUrl;
+  return upgradeStudioSeedToWebp(rawUrl);
 }
 
 export const PERSONAL_COLOR_CATALOG = {
