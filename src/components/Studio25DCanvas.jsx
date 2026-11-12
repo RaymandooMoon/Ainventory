@@ -1,19 +1,26 @@
 import { memo, useCallback, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { CloudRain, Palette, Sun, Wind, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
+import Character25DMannequin from './Character25DMannequin.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 /**
- * 2.5D Studio Fitting Canvas (Middle '2.5D' Reference Aesthetic)
- * - Soft radial studio lighting + subtle volumetric silhouette + grounded floor contact shadow.
- * - Composes equipped slot layers with subtle 2.5D parallax & multi-layered soft drop shadows,
- *   or displays synthesized AI Virtual Try-On (`compositeImageUrl`) when provided by `FittingRenderer`.
+ * 2.5D Studio Fitting Canvas with Tone-Adaptive 2.5D Character & Weather Atmosphere
+ * - Renders `Character25DMannequin` shaded dynamically in the user's analyzed `skinToneHex` & `personalColor`
+ * - Overlays tomorrow's weather ambient cues (rain mist, breeze, clear studio sunbeam)
+ * - Includes quick-switch skin-tone dots + `[피부톤 분석]` pill right on the studio stage
  */
 const Studio25DCanvas = memo(function Studio25DCanvas({
   renderResult,
+  theme = 'light',
+  skinProfile,
+  weather,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
+  onQuickSelectPreset,
+  onOpenSkinToneModal,
 }) {
   const stageRef = useRef(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -36,11 +43,27 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   const lighting = renderResult?.lighting;
   const compositeUrl = renderResult?.compositeImageUrl || null;
 
+  const hasTopOrOuter = layers.some((l) => l.slotKey === 'top' || l.slotKey === 'outer');
+  const hasBottom = layers.some((l) => l.slotKey === 'bottom');
+
+  const isRainy = Boolean(weather?.isRainy || weather?.isRaining);
+  const isWindy = Boolean(weather?.isWindy);
+
+  // Pick 5 representative presets across light -> medium -> deep warm/cool for the quick dock
+  const quickPresets = [
+    SKIN_TONE_MANNEQUIN_PRESETS[0], // 포슬린 쿨
+    SKIN_TONE_MANNEQUIN_PRESETS[1], // 봄 웜 아이보리
+    SKIN_TONE_MANNEQUIN_PRESETS[2], // 여름 쿨 로즈
+    SKIN_TONE_MANNEQUIN_PRESETS[4], // 가을 웜 베이지
+    SKIN_TONE_MANNEQUIN_PRESETS[6], // 허니 브론즈
+    SKIN_TONE_MANNEQUIN_PRESETS[7], // 딥 에스프레소
+  ];
+
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
       ref={stageRef}
-      className="studio-25d-canvas"
+      className={`studio-25d-canvas ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`}
       data-fitting-mode={renderResult?.mode || '2.5d-studio'}
       data-equipped-count={layers.length}
       onPointerMove={handlePointerMove}
@@ -59,19 +82,25 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
         }}
       />
 
-      {/* Soft Sculptural 2.5D Studio Form Silhouette (Subtle Ambient Presence, Zero 3D Plastic Mesh) */}
-      <div
-        aria-hidden="true"
-        className="studio-25d-silhouette"
-        style={{
-          opacity: compositeUrl ? 0 : layers.length > 0 ? 0.42 : 0.72,
-          transform: `translate3d(calc(-50% + ${Math.round(pointer.x * 4)}px), ${Math.round(pointer.y * 3)}px, 0)`,
-        }}
-      >
-        <div className="studio-25d-silhouette-head" />
-        <div className="studio-25d-silhouette-torso" />
-        <div className="studio-25d-silhouette-legs" />
-      </div>
+      {/* Tomorrow Weather Ambient Stage Cues (Rain Streaks / Wind Lines) */}
+      {isRainy && <div aria-hidden="true" className="studio-25d-rain-layer" />}
+      {isWindy && <div aria-hidden="true" className="studio-25d-wind-layer" />}
+
+      {/* Top Floating Weather Badge on 2.5D Stage */}
+      {weather && (
+        <div className="studio-25d-weather-badge tabular-nums">
+          {isRainy ? (
+            <CloudRain size={13} />
+          ) : isWindy ? (
+            <Wind size={13} />
+          ) : (
+            <Sun size={13} />
+          )}
+          <span>
+            내일 {weather.cityName || '서울'} · {weather.condition} {weather.tempMin}°/{weather.tempMax}°C
+          </span>
+        </div>
+      )}
 
       {/* Grounded Floor Contact Shadow */}
       <div
@@ -81,9 +110,22 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           background: lighting?.floorShadowColor
             ? `radial-gradient(ellipse at center, ${lighting.floorShadowColor} 0%, rgba(0,0,0,0) 72%)`
             : undefined,
-          transform: `translate3d(calc(-50% + ${Math.round(-pointer.x * 8)}px), 0, 0)`,
+          transform: `translate3d(calc(-50% + ${Math.round(-pointer.x * 7)}px), 0, 0)`,
         }}
       />
+
+      {/* Tone-Adaptive 2.5D Studio Character Mannequin */}
+      {!compositeUrl && (
+        <Character25DMannequin
+          skinToneHex={skinProfile?.skinToneHex || '#DFBA9B'}
+          personalColor={skinProfile?.personalColor || 'autumn_warm'}
+          gender={skinProfile?.gender || 'male'}
+          theme={theme}
+          hasTopOrOuter={hasTopOrOuter}
+          hasBottom={hasBottom}
+          pointer={pointer}
+        />
+      )}
 
       {/* AI Virtual Try-On Composite Output (when VtonApiFittingRenderer is active) */}
       {compositeUrl ? (
@@ -93,11 +135,11 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           className="studio-25d-vton-composite"
         />
       ) : (
-        /* Layered 2.5D Garment Objects */
+        /* Layered 2.5D Garment Objects Dressed onto the 2.5D Character */
         <div className="studio-25d-layers-stage">
           {layers.map((layer) => {
-            const shiftX = Math.round(pointer.x * 9 * layer.parallaxDepth);
-            const shiftY = Math.round(pointer.y * 7 * layer.parallaxDepth);
+            const shiftX = Math.round(pointer.x * 7 * layer.parallaxDepth);
+            const shiftY = Math.round(pointer.y * 5 * layer.parallaxDepth);
             const isSelectedSlot = activeSlotKey === layer.slotKey;
 
             return (
@@ -142,6 +184,43 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           })}
         </div>
       )}
+
+      {/* Floating Skin-Tone Quick Switcher & Portrait Skin Analyzer Trigger */}
+      <div className="studio-25d-tone-dock" aria-label="2.5D 캐릭터 피부톤 변경">
+        <div className="studio-25d-tone-swatches">
+          {quickPresets.map((preset) => {
+            const active =
+              (skinProfile?.skinToneHex || '').toUpperCase() === preset.skinToneHex.toUpperCase();
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                data-quick-skin-preset={preset.key}
+                title={`${preset.shortKo} (${preset.subTypeLabelKo})`}
+                aria-label={`${preset.shortKo} 마네킹 톤 적용`}
+                className={`studio-tone-dot ${active ? 'is-active' : ''}`}
+                style={{ backgroundColor: preset.skinToneHex }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickSelectPreset?.(preset);
+                }}
+              />
+            );
+          })}
+        </div>
+        <button
+          id={CARBON_DOM_CONTRACT.openSkinToneModalBtnId}
+          type="button"
+          className="studio-tone-analyze-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSkinToneModal?.();
+          }}
+        >
+          <Palette size={13} />
+          <span>{skinProfile?.subTypeLabelKo || '피부톤 분석'}</span>
+        </button>
+      </div>
     </div>
   );
 });

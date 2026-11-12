@@ -2575,7 +2575,16 @@ export function createApiRouter() {
       return res.status(authz.status).json({ error: authz.error });
     }
 
-    const { city = 'seoul', scenario = 'live', lat, lon, location_label } = req.query;
+    const {
+      city = 'seoul',
+      scenario = 'live',
+      lat,
+      lon,
+      location_label,
+      personal_color,
+      skin_tone_hex,
+      gender,
+    } = req.query;
     const closetOwner = authz.primaryCloset;
 
     const garments = db
@@ -2583,10 +2592,17 @@ export function createApiRouter() {
       .all(closetOwner)
       .map(parseGarmentRow);
 
-    const ownerUser =
+    const baseOwnerUser =
       closetOwner === 'sample'
         ? req.userRow
         : db.prepare('SELECT * FROM users WHERE default_closet = ?').get(closetOwner) || req.userRow;
+
+    const ownerUser = {
+      ...(baseOwnerUser || {}),
+      ...(personal_color ? { personal_color: String(personal_color) } : {}),
+      ...(skin_tone_hex ? { skin_tone_hex: String(skin_tone_hex) } : {}),
+      ...(gender ? { gender: String(gender) } : {}),
+    };
 
     const customCoords =
       lat !== undefined && lon !== undefined

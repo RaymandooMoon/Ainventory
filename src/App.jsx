@@ -6,9 +6,14 @@ import CalendarView from './components/CalendarView.jsx';
 import ItemDetailSheet from './components/ItemDetailSheet.jsx';
 import LoginView from './components/LoginView.jsx';
 import OutfitStudioView from './components/OutfitStudioView.jsx';
+import SkinToneAnalysisModal from './components/SkinToneAnalysisModal.jsx';
 import StatsView from './components/StatsView.jsx';
 import WardrobeView from './components/WardrobeView.jsx';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
+import {
+  getStoredSkinProfile,
+  saveStoredSkinProfile,
+} from './services/skinToneAnalyzer.ts';
 import {
   apiFetch,
   getStoredToken,
@@ -90,6 +95,9 @@ export default function App() {
   const [garmentsLoading, setGarmentsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [skinProfile, setSkinProfile] = useState(() => getStoredSkinProfile());
+  const [skinToneModalOpen, setSkinToneModalOpen] = useState(false);
+
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
 
@@ -152,6 +160,14 @@ export default function App() {
         if (data?.user) {
           setSampleDemoMode(false);
           setUser(data.user);
+          if (data.user.skinToneHex || data.user.personalColor) {
+            const synced = saveStoredSkinProfile({
+              skinToneHex: data.user.skinToneHex || undefined,
+              personalColor: data.user.personalColor || undefined,
+              gender: data.user.gender === 'female' ? 'female' : 'male',
+            });
+            setSkinProfile(synced);
+          }
         } else {
           setStoredToken(null);
           setSampleDemoMode(true);
@@ -193,6 +209,40 @@ export default function App() {
     if (selectedItemId === null || selectedItemId === undefined) return null;
     return garments.find((g) => Number(g.id) === Number(selectedItemId)) || null;
   }, [garments, selectedItemId]);
+
+  const handleApplySkinProfile = useCallback(
+    (nextProfile) => {
+      const saved = saveStoredSkinProfile(nextProfile);
+      setSkinProfile(saved);
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              skinToneHex: saved.skinToneHex,
+              personalColor: saved.personalColor,
+              personalColorLabelKo: saved.personalColorLabelKo,
+              gender: saved.gender,
+            }
+          : prev
+      );
+
+      if (user && !user.isSampleDemo) {
+        apiFetch('/auth/profile', {
+          method: 'POST',
+          body: JSON.stringify({
+            personal_color: saved.personalColor,
+            skin_tone_hex: saved.skinToneHex,
+            gender: saved.gender,
+          }),
+        }).catch(() => {
+          // persisted locally in localStorage as well
+        });
+      }
+
+      showToast(`2.5D 캐릭터(${saved.subTypeLabelKo})와 내일 코디 추천이 업데이트되었습니다.`);
+    },
+    [user, showToast]
+  );
 
   const navigateTab = useCallback((tabKey) => {
     const target = FLOATING_TABS.find((t) => t.key === tabKey) || FLOATING_TABS[0];
@@ -260,6 +310,14 @@ export default function App() {
   const handleLoginSuccess = useCallback((loggedInUser) => {
     setSampleDemoMode(false);
     setUser(loggedInUser);
+    if (loggedInUser?.skinToneHex || loggedInUser?.personalColor) {
+      const synced = saveStoredSkinProfile({
+        skinToneHex: loggedInUser.skinToneHex || undefined,
+        personalColor: loggedInUser.personalColor || undefined,
+        gender: loggedInUser.gender === 'female' ? 'female' : 'male',
+      });
+      setSkinProfile(synced);
+    }
     setShowAuthScreen(false);
     setSelectedItemId(null);
     setActiveTab('closet');
@@ -348,6 +406,9 @@ export default function App() {
             activeCloset={activeCloset}
             garments={garments}
             theme={resolvedTheme}
+            skinProfile={skinProfile}
+            onUpdateSkinProfile={handleApplySkinProfile}
+            onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
             preEquippedGarment={preEquippedGarment}
             onConsumePreEquipped={() => setPreEquippedGarment(null)}
             onClosetUpdated={() => setRefreshKey((k) => k + 1)}
@@ -369,6 +430,8 @@ export default function App() {
           <StatsView
             garments={garments}
             theme={resolvedTheme}
+            skinProfile={skinProfile}
+            onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
             onToggleTheme={handleToggleTheme}
             onOpenAccount={() => setAccountSheetOpen(true)}
             onSelectGarment={handleOpenGarmentDetail}
@@ -420,6 +483,15 @@ export default function App() {
         }}
         onTryInOutfits={handleTryInOutfits}
         showToast={showToast}
+      />
+
+      {/* Portrait Skin-Tone Analyzer & 2.5D Mannequin Tone Selector */}
+      <SkinToneAnalysisModal
+        open={skinToneModalOpen}
+        onClose={() => setSkinToneModalOpen(false)}
+        skinProfile={skinProfile}
+        theme={resolvedTheme}
+        onApplySkinProfile={handleApplySkinProfile}
       />
 
       <AccountSettingsSheet

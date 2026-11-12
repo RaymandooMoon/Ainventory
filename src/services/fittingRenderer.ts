@@ -92,8 +92,8 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         slotLabel: 'Bottoms',
         garment: slots.bottom,
         xPct: 50,
-        yPct: 60.5,
-        widthPct: 39,
+        yPct: 58.5,
+        widthPct: 32,
         zIndex: 20,
         rotationDeg: 0,
         parallaxDepth: 0.55,
@@ -107,11 +107,11 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         slotKey: 'top',
         slotLabel: 'Tops',
         garment: slots.top,
-        xPct: hasOuter ? 44 : 50,
-        yPct: 31.5,
-        widthPct: hasOuter ? 36 : 41,
+        xPct: hasOuter ? 46 : 50,
+        yPct: 35.5,
+        widthPct: hasOuter ? 31 : 34,
         zIndex: 30,
-        rotationDeg: hasOuter ? -2.5 : 0,
+        rotationDeg: hasOuter ? -2 : 0,
         parallaxDepth: 0.75,
         shadowBlurPx: 24,
         shadowOffsetY: 13,
@@ -123,11 +123,11 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         slotKey: 'outer',
         slotLabel: 'Outerwear',
         garment: slots.outer,
-        xPct: hasTop ? 56.5 : 50,
-        yPct: 33,
-        widthPct: 44,
+        xPct: hasTop ? 53.5 : 50,
+        yPct: 37,
+        widthPct: 37,
         zIndex: 40,
-        rotationDeg: hasTop ? 2.5 : 0,
+        rotationDeg: hasTop ? 2 : 0,
         parallaxDepth: 1.0,
         shadowBlurPx: 28,
         shadowOffsetY: 16,
@@ -140,8 +140,8 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         slotLabel: 'Shoes',
         garment: slots.shoes,
         xPct: 50,
-        yPct: 85.5,
-        widthPct: 29,
+        yPct: 79.5,
+        widthPct: 22,
         zIndex: 25,
         rotationDeg: 0,
         parallaxDepth: 0.45,
@@ -151,18 +151,27 @@ export class Studio25DFittingRenderer implements FittingRenderer {
     }
 
     if (slots.accessory) {
+      const accSub = String(slots.accessory.subcategory || '').toLowerCase();
+      const accCat = String(slots.accessory.category || '').toLowerCase();
+      const accName = String(slots.accessory.name || '');
+      const isNeckwear =
+        accCat === 'neckwear' ||
+        accSub === 'scarf' ||
+        accSub === 'necktie' ||
+        /머플러|스카프|넥타이|타이/.test(accName);
+
       layers.push({
         slotKey: 'accessory',
         slotLabel: 'Accessories',
         garment: slots.accessory,
-        xPct: 75.5,
-        yPct: 57,
-        widthPct: 24,
+        xPct: isNeckwear ? 62 : 74.5,
+        yPct: isNeckwear ? 28.5 : 55,
+        widthPct: isNeckwear ? 18.5 : 20,
         zIndex: 45,
-        rotationDeg: 3,
-        parallaxDepth: 1.15,
-        shadowBlurPx: 22,
-        shadowOffsetY: 14,
+        rotationDeg: isNeckwear ? 4 : 3,
+        parallaxDepth: 1.12,
+        shadowBlurPx: 20,
+        shadowOffsetY: 12,
       });
     }
 

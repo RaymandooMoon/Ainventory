@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Moon, Sun, User } from 'lucide-react';
+import { Moon, Palette, Sun, User } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
   WARDROBE_CATEGORY_OPTIONS,
@@ -10,6 +10,8 @@ import GarmentObject25D from './GarmentObject25D.jsx';
 export default function StatsView({
   garments = [],
   theme,
+  skinProfile,
+  onOpenSkinToneModal,
   onToggleTheme,
   onOpenAccount,
   onSelectGarment,
@@ -68,6 +70,33 @@ export default function StatsView({
           </button>
         </div>
       </header>
+
+      {/* 2.5D Character & Skin-Tone Profile Summary Card */}
+      <div className="hig-stats-skin-card">
+        <div className="hig-stats-skin-info">
+          <span
+            className="hig-stats-skin-swatch"
+            style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
+          />
+          <div>
+            <strong className="hig-stats-skin-title">
+              2.5D 캐릭터 · {skinProfile?.subTypeLabelKo || '가을 웜 뮤트'}
+            </strong>
+            <span className="hig-stats-skin-sub tabular-nums">
+              {skinProfile?.skinToneHex || '#DFBA9B'} ·{' '}
+              {skinProfile?.gender === 'female' ? '여성 2.5D 마네킹' : '남성 2.5D 마네킹'}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="hig-secondary-btn"
+          onClick={onOpenSkinToneModal}
+        >
+          <Palette size={15} />
+          <span>피부톤 분석 · 변경</span>
+        </button>
+      </div>
 
       {/* Category Composition Bars */}
       <div className="hig-stats-panel">

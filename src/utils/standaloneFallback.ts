@@ -982,30 +982,63 @@ export async function handleStandaloneApiFallback(
         ? WEATHER_SCENARIOS[normalizedScKey]
         : null) || WEATHER_SCENARIOS.crisp_autumn;
 
+    const cityKey = params.get('city') || 'seoul';
+    const matchedCity = CITY_COORDS.find((c) => c.key === cityKey);
+    const resolvedCityName = params.get('location_label') || matchedCity?.name || spec.cityName;
+
+    const pcKey =
+      params.get('personal_color') || activeUser?.personalColor || 'autumn_warm';
+    const pcLabels = getPersonalColorLabels(pcKey);
+    const resolvedSkinHex =
+      params.get('skin_tone_hex') || activeUser?.skinToneHex || '#DFBA9B';
+
     const avgTemp = Math.round(spec.tempMin * 0.45 + spec.tempMax * 0.55);
     const isRainy = spec.precipProb >= 45;
     const isWindy = spec.windSpeed >= 22;
+    const needOuter = avgTemp <= 19 || spec.tempMax - spec.tempMin >= 8 || isRainy || isWindy;
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
-    const outfitItems = seededGarments.slice(0, 6);
-    const slotMap: Record<string, GarmentRecord | null> = {
-      headwear: null,
-      neckwear: seededGarments.find((g) => g.category === 'neckwear') || null,
-      outer: seededGarments.find((g) => g.category === 'outer') || null,
-      top: seededGarments.find((g) => g.category === 'top') || null,
-      bottom: seededGarments.find((g) => g.category === 'bottom') || null,
-      dress: null,
-      gloves: null,
-      underwear: null,
-      socks: null,
-      shoes: seededGarments.find((g) => g.category === 'shoes') || null,
-      accessory: seededGarments.find((g) => g.category === 'accessory') || null,
+    const outers = seededGarments.filter((g) => g.category === 'outer');
+    const tops = seededGarments.filter((g) => g.category === 'top');
+    const bottoms = seededGarments.filter((g) => g.category === 'bottom');
+    const shoesList = seededGarments.filter((g) => g.category === 'shoes');
+    const accList = seededGarments.filter(
+      (g) => g.category === 'accessory' || g.category === 'neckwear'
+    );
+
+    const buildFallbackRec = (idx: number, id: string, badge: string, title: string) => {
+      const chosenOuter = needOuter && outers.length
+        ? (isRainy ? outers.find((o) => o.water_resistant) || outers[idx % outers.length] : outers[idx % outers.length])
+        : null;
+      const chosenTop = tops.length ? tops[idx % tops.length] : null;
+      const chosenBottom = bottoms.length ? bottoms[idx % bottoms.length] : null;
+      const chosenShoes = shoesList.length ? shoesList[idx % shoesList.length] : null;
+      const chosenAcc = accList.length ? accList[idx % accList.length] : null;
+      const items = [chosenOuter, chosenTop, chosenBottom, chosenShoes, chosenAcc].filter(
+        (x): x is GarmentRecord => Boolean(x)
+      );
+      return {
+        id,
+        badge,
+        title,
+        items,
+        loadoutBySlot: {
+          outer: chosenOuter,
+          top: chosenTop,
+          bottom: chosenBottom,
+          shoes: chosenShoes,
+          accessory: chosenAcc,
+        },
+        rationale: `${spec.weatherTip} [${pcLabels.ko || '가을 웜톤'} 톤 매칭]`,
+        suitabilityScore: Math.max(88, 97 - idx * 3),
+        personalColorSync: Math.max(86, 95 - idx * 2),
+      };
     };
 
     return {
       weather: {
-        cityKey: params.get('city') || 'seoul',
-        cityName: spec.cityName,
+        cityKey,
+        cityName: resolvedCityName,
         date: tomorrow,
         condition: spec.condition,
         weatherCode: spec.weatherCode,
@@ -1026,11 +1059,11 @@ export async function handleStandaloneApiFallback(
         isSimulated: rawScKey !== 'live',
       },
       stylingProfile: {
-        personalColor: activeUser?.personalColor || 'autumn_warm',
-        personalColorLabel: '가을 웜톤 (Autumn Warm)',
+        personalColor: pcKey,
+        personalColorLabel: `${pcLabels.ko || '가을 웜톤'} (${pcLabels.en || 'Autumn Warm'})`,
         personalColorAdvice:
-          '베이지·카멜·네이비·차콜 등 차분하고 깊이감 있는 톤온톤 매치가 잘 어울립니다.',
-        skinToneHex: activeUser?.skinToneHex || '#E2C6AE',
+          '피부 언더톤과 명도에 맞춘 톤온톤 컬러 매치로 얼굴 혈색을 또렷하게 살려줍니다.',
+        skinToneHex: resolvedSkinHex,
         heightCm: activeUser?.heightCm || 175,
         weightKg: activeUser?.weightKg || 68,
         bodyShape: activeUser?.bodyShape || 'standard_balanced',
@@ -1044,18 +1077,10 @@ export async function handleStandaloneApiFallback(
           label: s.label,
         })),
       ],
-      recommendations: outfitItems.length
+      recommendations: seededGarments.length
         ? [
-            {
-              id: 'commute',
-              badge: '출근 · 스마트 포멀',
-              title: `${spec.condition} 맞춤 캡슐 코디`,
-              items: outfitItems,
-              loadoutBySlot: slotMap,
-              rationale: spec.weatherTip,
-              suitabilityScore: 96,
-              personalColorSync: 92,
-            },
+            buildFallbackRec(0, 'commute', '출근 · 스마트 포멀', `${spec.condition} 맞춤 출근 코디`),
+            buildFallbackRec(1, 'daily', '데일리 · 미니멀', `내일 ${avgTemp}°C 일교차 대응 데일리룩`),
           ]
         : [],
       isClosetEmpty: seededGarments.length === 0,

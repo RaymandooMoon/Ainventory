@@ -495,7 +495,8 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
   const isWindy =
     Number(weather.windSpeed) >= 22 ||
     /강풍|돌풍|칼바람|gale|windy/i.test(String(weather.condition || ''));
-  const needOuter = avgTemp <= 19 || diurnalSwing >= 8 || isRainy || isWindy;
+  const needOuter =
+    (weather.tempMax < 23 && (avgTemp <= 19 || diurnalSwing >= 8)) || isRainy || isWindy;
   const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
 
   const bodyMetrics = computeBodyMetrics(userProfile || {});

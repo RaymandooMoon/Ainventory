@@ -285,4 +285,61 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       '/media/login-bg-light.mp4'
     );
   });
+
+  test('4. Tomorrow Weather AI Outfit Styling on 2.5D Character & Portrait Skin-Tone Mannequin Switching', async ({
+    page,
+  }) => {
+    const forbiddenAssetRequests: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url().toLowerCase();
+      if (url.endsWith('.glb') || url.endsWith('.wasm') || url.endsWith('.task')) {
+        forbiddenAssetRequests.push(url);
+      }
+    });
+
+    await page.goto('/outfits');
+
+    // 1. Tomorrow Weather Recommendation Panel & 2.5D Character Mannequin are visible
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    await expect(weatherPanel).toBeVisible();
+    await expect(weatherPanel).toContainText('내일 날씨 코디');
+    await expect(weatherPanel.locator('[data-weather-rec-id]').first()).toBeVisible();
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    await expect(mannequin).toBeVisible();
+
+    // Wait for Tomorrow's Weather #1 recommendation to dress the 2.5D character
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+
+    // 2. Switch weather scenario: Rainy Cool (needs outer + rain stage cue) -> Warm Spring (no outer)
+    await weatherPanel.locator('[data-weather-scenario="rainy_cool"]').click();
+    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+
+    await weatherPanel.locator('[data-weather-scenario="warm_spring"]').click();
+    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(0);
+
+    // 3. Quick 1-Tap Skin-Tone Swatch on 2.5D Studio Canvas changes mannequin tone immediately
+    await studioCanvas.locator('[data-quick-skin-preset="deep_espresso"]').click();
+    await expect(mannequin).toHaveAttribute('data-skin-hex', '#8E5C40');
+
+    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Female 2.5D -> Apply
+    await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    await page.locator('[data-sample-portrait="spring_warm"]').click();
+
+    await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
+    await expect(page.locator('.skin-lab-metrics')).toContainText('ITA°');
+
+    await page.getByRole('button', { name: '여성 2.5D' }).click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+
+    await expect(mannequin).toHaveAttribute('data-character-gender', 'female');
+    await expect(mannequin).toHaveAttribute('data-personal-color', 'spring_warm');
+    const updatedHex = await mannequin.getAttribute('data-skin-hex');
+    expect(updatedHex).not.toBe('#8E5C40');
+    expect(forbiddenAssetRequests).toEqual([]);
+  });
 });
+
