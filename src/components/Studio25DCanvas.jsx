@@ -147,6 +147,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           gender={currentGender}
           bodySpec={bodySpec}
           slots={slots}
+          weather={weather}
           cameraPreset={cameraPreset}
           presetNonce={presetNonce}
           onUserOrbit={handleUserOrbit}

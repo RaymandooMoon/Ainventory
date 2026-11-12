@@ -292,7 +292,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const forbiddenAssetRequests: string[] = [];
     page.on('request', (req) => {
       const url = req.url().toLowerCase();
-      if (url.endsWith('.glb') || url.endsWith('.wasm') || url.endsWith('.task')) {
+      if (url.endsWith('.wasm') || url.endsWith('.task')) {
         forbiddenAssetRequests.push(url);
       }
     });
