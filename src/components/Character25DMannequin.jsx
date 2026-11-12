@@ -21,6 +21,8 @@ export const CAMERA_VIEW_PRESETS = {
 
 /**
  * Interactive 360° CC0 MakeHuman Skinned 3D Character & Tailored Garment Viewport
+ * - Creates a dedicated <canvas> per mount lifecycle so React 19 <StrictMode> (`npm run dev`)
+ *   and Vite HMR hot reloads never reuse a lost WebGL context
  * - 13,380-vertex anatomical MakeHuman body + 35 tailored 3D clothes with PBR normal/detail maps
  * - 28 real-time anthropometric morph targets (`gender`, `heightCm`, `weightKg`, `bodyShape`, shoulder/waist/hip)
  * - Full game-character spherical camera (`앞`, `뒤`, `좌`, `우`, `상`, `하` + drag & pinch/wheel zoom)
@@ -38,8 +40,10 @@ const Character25DMannequin = memo(function Character25DMannequin({
   theme = 'light',
   compact = false,
 }) {
-  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const compactCanvasRef = useRef(null);
   const engineRef = useRef(null);
+  const latestSceneRef = useRef(null);
   const pointersRef = useRef(new Map());
   const lastPinchDistRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -83,10 +87,19 @@ const Character25DMannequin = memo(function Character25DMannequin({
     [compact, slots]
   );
 
-  // 1a. Compact Modal Preview (`SkinToneAnalysisModal`): shared offscreen 3D blitter so modal never competes for WebGL contexts
+  latestSceneRef.current = {
+    theme,
+    cameraPreset,
+    profilePayload,
+    loadoutBySlot,
+    weather,
+    ariaLabel: `360도 캐릭터 모델 (${palette.base})`,
+  };
+
+  // 1a. Compact Modal Preview (`SkinToneAnalysisModal`): shared offscreen 3D blitter
   useEffect(() => {
     if (!compact) return undefined;
-    const canvas = canvasRef.current;
+    const canvas = compactCanvasRef.current;
     if (!canvas) return undefined;
 
     render3DMannequinScene(canvas, {
@@ -98,29 +111,45 @@ const Character25DMannequin = memo(function Character25DMannequin({
     return undefined;
   }, [compact, profilePayload, compactYawDeg, theme]);
 
-  // 1b. Main Interactive 3D Stage (`#character-25d-mannequin`): full SkinnedMesh + SpringBone WebGL engine
+  // 1b. Main Interactive 3D Stage (`#character-25d-mannequin`): fresh <canvas> per mount for React <StrictMode> & HMR safety
   useEffect(() => {
     if (compact) return undefined;
-    const canvas = canvasRef.current;
-    if (!canvas) return undefined;
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    const snap = latestSceneRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'character-25d-render-canvas';
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', snap.ariaLabel);
+    container.appendChild(canvas);
 
     let engine;
     try {
       engine = new Mannequin3DWebGLEngine(canvas, {
         transparentBackground: true,
       });
+      setWebglUnavailable(false);
     } catch {
+      if (canvas.parentNode === container) {
+        container.removeChild(canvas);
+      }
       setWebglUnavailable(true);
       return undefined;
     }
 
-    const initialPreset = CAMERA_VIEW_PRESETS[cameraPreset] || CAMERA_VIEW_PRESETS.front;
-    engine.setDarkTheme(theme === 'dark');
+    const initialPreset = CAMERA_VIEW_PRESETS[snap.cameraPreset] || CAMERA_VIEW_PRESETS.front;
+    engine.setDarkTheme(snap.theme === 'dark');
     engine.setSphericalView({
       yawRad: initialPreset.yawRad,
       polarRad: initialPreset.polarRad,
       zoom: initialPreset.zoom,
       immediate: true,
+    });
+    engine.updateScene({
+      profile: snap.profilePayload,
+      loadoutBySlot: snap.loadoutBySlot,
+      weather: snap.weather,
     });
     engineRef.current = engine;
 
@@ -132,8 +161,13 @@ const Character25DMannequin = memo(function Character25DMannequin({
 
     return () => {
       canvas.removeEventListener('wheel', handleWheel);
+      if (canvas.parentNode === container) {
+        container.removeChild(canvas);
+      }
       engine.dispose();
-      engineRef.current = null;
+      if (engineRef.current === engine) {
+        engineRef.current = null;
+      }
     };
   }, [compact]);
 
@@ -146,12 +180,15 @@ const Character25DMannequin = memo(function Character25DMannequin({
   // 3. Sync Anthropometric Body Morphs, Skin Tone, Tailored 3D Garments & Weather Motion
   useEffect(() => {
     if (compact) return;
-    engineRef.current?.updateScene({
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.canvas?.setAttribute?.('aria-label', `360도 캐릭터 모델 (${palette.base})`);
+    engine.updateScene({
       profile: profilePayload,
       loadoutBySlot,
       weather,
     });
-  }, [compact, profilePayload, loadoutBySlot, weather]);
+  }, [compact, profilePayload, loadoutBySlot, weather, palette.base]);
 
   // 4. Apply 6-Direction Game-Character Camera Presets (`앞`, `뒤`, `좌`, `우`, `상`, `하`)
   useEffect(() => {
@@ -231,6 +268,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
   return (
     <div
       id={compact ? undefined : CARBON_DOM_CONTRACT.character25dMannequinId}
+      ref={containerRef}
       className={`character-25d-mannequin ${compact ? 'is-compact' : ''} ${isDragging ? 'is-dragging' : ''}`}
       data-skin-hex={palette.base}
       data-personal-color={personalColor}
@@ -253,18 +291,18 @@ const Character25DMannequin = memo(function Character25DMannequin({
         }}
       />
 
-      {!webglUnavailable && (
+      {compact && (
         <canvas
-          ref={canvasRef}
-          width={compact ? 220 : undefined}
-          height={compact ? 310 : undefined}
+          ref={compactCanvasRef}
+          width={220}
+          height={310}
           className="character-25d-render-canvas"
           role="img"
           aria-label={`360도 캐릭터 모델 (${palette.base})`}
         />
       )}
 
-      {webglUnavailable && (
+      {!compact && webglUnavailable && (
         <svg
           viewBox="0 0 120 200"
           className="character-25d-fallback-svg"

@@ -308,6 +308,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(mannequin).toBeVisible();
+    await expect(mannequin.locator('.character-25d-fallback-svg')).toHaveCount(0);
+    await expect(
+      mannequin.locator('canvas.character-25d-render-canvas[data-body-ready="true"]')
+    ).toBeVisible();
 
     // Wait for Tomorrow's Weather #1 recommendation to dress the 2.5D character
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
@@ -354,6 +358,16 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(0);
     await expect(mannequin).toBeVisible();
+
+    // 6. Unmount -> Remount lifecycle regression guard (prevents WebGL context-loss fallback SVG)
+    const tabBar = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId}`);
+    await tabBar.getByRole('button', { name: 'Closet' }).click();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toBeVisible();
+    await tabBar.getByRole('button', { name: 'Outfits' }).click();
+    await expect(mannequin.locator('.character-25d-fallback-svg')).toHaveCount(0);
+    await expect(
+      mannequin.locator('canvas.character-25d-render-canvas[data-body-ready="true"]')
+    ).toBeVisible();
 
     expect(forbiddenAssetRequests).toEqual([]);
   });

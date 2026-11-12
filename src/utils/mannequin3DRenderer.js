@@ -814,6 +814,10 @@ function loadManifest() {
       .then((json) => {
         manifestData = json;
         return json;
+      })
+      .catch((err) => {
+        manifestPromise = null;
+        throw err;
       });
   }
   return manifestPromise;
@@ -860,13 +864,21 @@ function loadBodyTemplate() {
     bodyTemplatePromise = Promise.all([
       loadManifest(),
       getGLTFLoader().loadAsync(`${MODEL_BASE}/body.glb`),
-    ]).then(([manifest, gltf]) => {
-      const mesh = extractFirstMesh(gltf);
-      attachHumanoidSkinAttributes(mesh.geometry, manifest.joints, 'body', { slot: 'body', mount: 'body' });
-      bodyTemplateMesh = mesh;
-      notifyPreviewListeners();
-      return bodyTemplateMesh;
-    });
+    ])
+      .then(([manifest, gltf]) => {
+        const mesh = extractFirstMesh(gltf);
+        attachHumanoidSkinAttributes(mesh.geometry, manifest.joints, 'body', {
+          slot: 'body',
+          mount: 'body',
+        });
+        bodyTemplateMesh = mesh;
+        notifyPreviewListeners();
+        return bodyTemplateMesh;
+      })
+      .catch((err) => {
+        bodyTemplatePromise = null;
+        throw err;
+      });
   }
   return bodyTemplatePromise;
 }
@@ -878,30 +890,35 @@ function loadGarmentTemplate(gid) {
   if (garmentPromiseCache.has(gid)) {
     return garmentPromiseCache.get(gid);
   }
-  const p = loadManifest().then((manifest) => {
-    const spec = manifest.garments?.[gid];
-    if (!spec) throw new Error(`Unknown garment ${gid}`);
-    return Promise.all([
-      loadBodyTemplate(),
-      getGLTFLoader().loadAsync(`${MODEL_BASE}/${spec.file}`),
-    ]).then(([bodyTpl, gltf]) => {
-      const mesh = extractFirstMesh(gltf);
-      mesh.userData.gid = gid;
-      mesh.userData.spec = spec;
-      mesh.userData.hasMultiZones = buildMultiZoneMaterialGroups(mesh.geometry);
-      attachHumanoidSkinAttributes(mesh.geometry, manifest.joints, gid, spec);
-      if (bodyTpl && spec.cullBody) {
-        mesh.userData.coveredBodyVerts = computeCoveredVertices(
-          bodyTpl.geometry,
-          mesh.geometry,
-          spec.slot
-        );
-      }
-      garmentTemplateCache.set(gid, mesh);
-      notifyPreviewListeners();
-      return mesh;
+  const p = loadManifest()
+    .then((manifest) => {
+      const spec = manifest.garments?.[gid];
+      if (!spec) throw new Error(`Unknown garment ${gid}`);
+      return Promise.all([
+        loadBodyTemplate(),
+        getGLTFLoader().loadAsync(`${MODEL_BASE}/${spec.file}`),
+      ]).then(([bodyTpl, gltf]) => {
+        const mesh = extractFirstMesh(gltf);
+        mesh.userData.gid = gid;
+        mesh.userData.spec = spec;
+        mesh.userData.hasMultiZones = buildMultiZoneMaterialGroups(mesh.geometry);
+        attachHumanoidSkinAttributes(mesh.geometry, manifest.joints, gid, spec);
+        if (bodyTpl && spec.cullBody) {
+          mesh.userData.coveredBodyVerts = computeCoveredVertices(
+            bodyTpl.geometry,
+            mesh.geometry,
+            spec.slot
+          );
+        }
+        garmentTemplateCache.set(gid, mesh);
+        notifyPreviewListeners();
+        return mesh;
+      });
+    })
+    .catch((err) => {
+      garmentPromiseCache.delete(gid);
+      throw err;
     });
-  });
   garmentPromiseCache.set(gid, p);
   return p;
 }
@@ -2589,6 +2606,7 @@ export class Mannequin3DWebGLEngine {
         this.lastRawNowMs = performance.now();
         this._sceneDirty = true;
         this.updateScene(this.lastState);
+        this.canvas?.setAttribute?.('data-body-ready', 'true');
         this.onModelReady?.();
       })
       .catch(() => {});
@@ -3825,10 +3843,12 @@ export class Mannequin3DWebGLEngine {
     this.skeleton?.dispose?.();
     this.renderer?.renderLists?.dispose?.();
     this.renderer?.dispose?.();
-    try {
-      this.renderer?.forceContextLoss?.();
-    } catch {
-      // ignore context loss errors on teardown
+    if (!this.canvas || this.canvas.isConnected === false) {
+      try {
+        this.renderer?.forceContextLoss?.();
+      } catch {
+        // ignore context loss errors on teardown
+      }
     }
 
     if (this.canvas?.__mannequinEngine === this) {
