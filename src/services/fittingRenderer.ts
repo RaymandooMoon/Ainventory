@@ -71,66 +71,40 @@ export function mapGarmentToFittingSlot(garment?: Partial<GarmentRecord> | null)
 
 /**
  * Default 2.5D Studio Canvas Fitting Renderer:
- * Computes calibrated spatial layering, soft top-left studio illumination,
- * depth parallax weights, and grounded floor shadows matching the 2.5D reference aesthetic.
+ * Calibrated directly against the 8-head 2.5D Studio Fashion Model (`800x1200`, `top: 1.5%`, `height: 86%`)
+ * so tops, coats, trousers, skirts, shoes, headwear, and bags dress naturally centered on the body.
  */
 export class Studio25DFittingRenderer implements FittingRenderer {
-  readonly id = 'studio-25d-renderer-v1';
+  readonly id = 'studio-25d-renderer-v2';
   readonly mode = '2.5d-studio' as const;
 
   async render(request: FittingRenderRequest): Promise<FittingRenderResult> {
     const isDark = request.theme === 'dark';
     const slots = request.slots || {};
     const hasOuter = Boolean(slots.outer);
-    const hasTop = Boolean(slots.top);
 
     const layers: Studio25DLayer[] = [];
 
     if (slots.bottom) {
+      const bSub = String(slots.bottom.subcategory || '').toLowerCase();
+      const bName = String(slots.bottom.name || '');
+      const isSkirtOrShorts =
+        bSub === 'skirt' ||
+        bSub === 'shorts' ||
+        /스커트|치마|쇼츠|반바지/.test(bName);
+
       layers.push({
         slotKey: 'bottom',
         slotLabel: 'Bottoms',
         garment: slots.bottom,
         xPct: 50,
-        yPct: 58.5,
-        widthPct: 32,
+        yPct: isSkirtOrShorts ? 50.0 : 56.5,
+        widthPct: isSkirtOrShorts ? 38 : 48,
         zIndex: 20,
         rotationDeg: 0,
-        parallaxDepth: 0.55,
-        shadowBlurPx: 22,
-        shadowOffsetY: 12,
-      });
-    }
-
-    if (slots.top) {
-      layers.push({
-        slotKey: 'top',
-        slotLabel: 'Tops',
-        garment: slots.top,
-        xPct: hasOuter ? 46 : 50,
-        yPct: 35.5,
-        widthPct: hasOuter ? 31 : 34,
-        zIndex: 30,
-        rotationDeg: hasOuter ? -2 : 0,
-        parallaxDepth: 0.75,
-        shadowBlurPx: 24,
-        shadowOffsetY: 13,
-      });
-    }
-
-    if (slots.outer) {
-      layers.push({
-        slotKey: 'outer',
-        slotLabel: 'Outerwear',
-        garment: slots.outer,
-        xPct: hasTop ? 53.5 : 50,
-        yPct: 37,
-        widthPct: 37,
-        zIndex: 40,
-        rotationDeg: hasTop ? 2 : 0,
-        parallaxDepth: 1.0,
-        shadowBlurPx: 28,
-        shadowOffsetY: 16,
+        parallaxDepth: 0.5,
+        shadowBlurPx: 18,
+        shadowOffsetY: 10,
       });
     }
 
@@ -140,13 +114,49 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         slotLabel: 'Shoes',
         garment: slots.shoes,
         xPct: 50,
-        yPct: 79.5,
-        widthPct: 22,
+        yPct: 79.0,
+        widthPct: 21.5,
         zIndex: 25,
         rotationDeg: 0,
-        parallaxDepth: 0.45,
-        shadowBlurPx: 18,
-        shadowOffsetY: 9,
+        parallaxDepth: 0.42,
+        shadowBlurPx: 16,
+        shadowOffsetY: 8,
+      });
+    }
+
+    if (slots.top) {
+      const tCat = String(slots.top.category || '').toLowerCase();
+      const tSub = String(slots.top.subcategory || '').toLowerCase();
+      const isDress = tCat === 'dress' || tCat === 'onepiece' || tSub === 'dress' || tSub === 'onepiece';
+
+      layers.push({
+        slotKey: 'top',
+        slotLabel: 'Tops',
+        garment: slots.top,
+        xPct: 50,
+        yPct: isDress ? 44.5 : hasOuter ? 28.4 : 30.8,
+        widthPct: isDress ? 47 : hasOuter ? 30.5 : 46.0,
+        zIndex: 30,
+        rotationDeg: 0,
+        parallaxDepth: 0.68,
+        shadowBlurPx: 20,
+        shadowOffsetY: 11,
+      });
+    }
+
+    if (slots.outer) {
+      layers.push({
+        slotKey: 'outer',
+        slotLabel: 'Outerwear',
+        garment: slots.outer,
+        xPct: 50,
+        yPct: 30.0,
+        widthPct: 48.5,
+        zIndex: 40,
+        rotationDeg: 0,
+        parallaxDepth: 0.85,
+        shadowBlurPx: 24,
+        shadowOffsetY: 13,
       });
     }
 
@@ -154,24 +164,35 @@ export class Studio25DFittingRenderer implements FittingRenderer {
       const accSub = String(slots.accessory.subcategory || '').toLowerCase();
       const accCat = String(slots.accessory.category || '').toLowerCase();
       const accName = String(slots.accessory.name || '');
+
+      const isHeadwear =
+        accCat === 'headwear' ||
+        accSub === 'cap' ||
+        accSub === 'beanie' ||
+        accSub === 'beret' ||
+        accSub === 'bucket_hat' ||
+        /볼캡|비니|베레모|모자|버킷햇/.test(accName);
+
       const isNeckwear =
-        accCat === 'neckwear' ||
-        accSub === 'scarf' ||
-        accSub === 'necktie' ||
-        /머플러|스카프|넥타이|타이/.test(accName);
+        !isHeadwear &&
+        (accCat === 'neckwear' ||
+          accSub === 'scarf' ||
+          accSub === 'muffler' ||
+          accSub === 'necktie' ||
+          /머플러|스카프|넥타이|타이/.test(accName));
 
       layers.push({
         slotKey: 'accessory',
         slotLabel: 'Accessories',
         garment: slots.accessory,
-        xPct: isNeckwear ? 62 : 74.5,
-        yPct: isNeckwear ? 28.5 : 55,
-        widthPct: isNeckwear ? 18.5 : 20,
-        zIndex: 45,
-        rotationDeg: isNeckwear ? 4 : 3,
-        parallaxDepth: 1.12,
-        shadowBlurPx: 20,
-        shadowOffsetY: 12,
+        xPct: isHeadwear ? 50 : isNeckwear ? 61.5 : 76.5,
+        yPct: isHeadwear ? 6.8 : isNeckwear ? 25.5 : 55.5,
+        widthPct: isHeadwear ? 14 : isNeckwear ? 16.5 : 19.5,
+        zIndex: isHeadwear ? 46 : 45,
+        rotationDeg: isNeckwear ? 3 : 0,
+        parallaxDepth: 0.95,
+        shadowBlurPx: 18,
+        shadowOffsetY: 10,
       });
     }
 

@@ -20,6 +20,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onSelectSlot,
   onUnequipSlot,
   onQuickSelectPreset,
+  onToggleGender,
   onOpenSkinToneModal,
 }) {
   const stageRef = useRef(null);
@@ -43,13 +44,49 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   const lighting = renderResult?.lighting;
   const compositeUrl = renderResult?.compositeImageUrl || null;
 
-  const hasTopOrOuter = layers.some((l) => l.slotKey === 'top' || l.slotKey === 'outer');
-  const hasBottom = layers.some((l) => l.slotKey === 'bottom');
+  const topLayer = layers.find((l) => l.slotKey === 'top') || null;
+  const outerLayer = layers.find((l) => l.slotKey === 'outer') || null;
+  const bottomLayer = layers.find((l) => l.slotKey === 'bottom') || null;
+  const shoesLayer = layers.find((l) => l.slotKey === 'shoes') || null;
+
+  const topCat = String(topLayer?.garment?.category || '').toLowerCase();
+  const topSub = String(topLayer?.garment?.subcategory || '').toLowerCase();
+  const topName = String(topLayer?.garment?.name || '');
+
+  const isDress =
+    Boolean(topLayer) &&
+    (topCat === 'dress' ||
+      topCat === 'onepiece' ||
+      topSub === 'dress' ||
+      topSub === 'onepiece' ||
+      /원피스|드레스/.test(topName));
+
+  const isShortSleeveOnly =
+    !outerLayer &&
+    Boolean(topLayer) &&
+    !isDress &&
+    (topSub === 'tshirt' ||
+      topSub === 'polo' ||
+      topSub === 'sleeveless' ||
+      /반팔|티셔츠|폴로|슬리브리스|나시/.test(topName));
+
+  const botSub = String(bottomLayer?.garment?.subcategory || '').toLowerCase();
+  const botName = String(bottomLayer?.garment?.name || '');
+  const isSkirtOrShorts =
+    Boolean(bottomLayer) &&
+    (botSub === 'skirt' ||
+      botSub === 'shorts' ||
+      /스커트|치마|쇼츠|반바지/.test(botName));
+
+  const hasTopOrOuter = Boolean(topLayer || outerLayer);
+  const hasBottom = Boolean(bottomLayer);
+  const hasShoes = Boolean(shoesLayer);
+  const currentGender = skinProfile?.gender === 'female' ? 'female' : 'male';
 
   const isRainy = Boolean(weather?.isRainy || weather?.isRaining);
   const isWindy = Boolean(weather?.isWindy);
 
-  // Pick 5 representative presets across light -> medium -> deep warm/cool for the quick dock
+  // Pick 6 representative presets across light -> medium -> deep warm/cool for the quick dock
   const quickPresets = [
     SKIN_TONE_MANNEQUIN_PRESETS[0], // 포슬린 쿨
     SKIN_TONE_MANNEQUIN_PRESETS[1], // 봄 웜 아이보리
@@ -102,6 +139,21 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
         </div>
       )}
 
+      {/* Top-Right 1-Tap Male/Female 2.5D Fashion Model Switcher */}
+      <button
+        type="button"
+        data-quick-gender-toggle={currentGender}
+        className="studio-gender-toggle-btn"
+        title={currentGender === 'female' ? '여성 모델 (클릭 시 남성 전환)' : '남성 모델 (클릭 시 여성 전환)'}
+        aria-label="스튜디오 모델 성별 전환"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleGender?.();
+        }}
+      >
+        {currentGender === 'female' ? '여성 모델 ⇄' : '남성 모델 ⇄'}
+      </button>
+
       {/* Grounded Floor Contact Shadow */}
       <div
         aria-hidden="true"
@@ -114,15 +166,20 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
         }}
       />
 
-      {/* Tone-Adaptive 2.5D Studio Character Mannequin */}
+      {/* Tone-Adaptive 2.5D Studio Fashion Model */}
       {!compositeUrl && (
         <Character25DMannequin
           skinToneHex={skinProfile?.skinToneHex || '#DFBA9B'}
           personalColor={skinProfile?.personalColor || 'autumn_warm'}
-          gender={skinProfile?.gender || 'male'}
+          gender={currentGender}
           theme={theme}
           hasTopOrOuter={hasTopOrOuter}
+          hasOuter={Boolean(outerLayer)}
+          isShortSleeveOnly={isShortSleeveOnly}
+          isDress={isDress}
           hasBottom={hasBottom}
+          isSkirtOrShorts={isSkirtOrShorts}
+          hasShoes={hasShoes}
           pointer={pointer}
         />
       )}
@@ -186,7 +243,8 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       )}
 
       {/* Floating Skin-Tone Quick Switcher & Portrait Skin Analyzer Trigger */}
-      <div className="studio-25d-tone-dock" aria-label="2.5D 캐릭터 피부톤 변경">
+      <div className="studio-25d-tone-dock" aria-label="2.5D 모델 피부톤 변경">
+
         <div className="studio-25d-tone-swatches">
           {quickPresets.map((preset) => {
             const active =

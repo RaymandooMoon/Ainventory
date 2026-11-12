@@ -364,6 +364,22 @@ export default function OutfitStudioView({
     });
   };
 
+  const handleToggleGender = () => {
+    const nextGender = skinProfile?.gender === 'female' ? 'male' : 'female';
+    triggerHaptic('selection');
+    if (!userModifiedSlotsRef.current) {
+      forceAutoApplyWeatherRef.current = true;
+    }
+    onUpdateSkinProfile?.({
+      ...(skinProfile || {}),
+      skinToneHex: skinProfile?.skinToneHex || '#DFBA9B',
+      personalColor: skinProfile?.personalColor || 'autumn_warm',
+      personalColorLabelKo: skinProfile?.personalColorLabelKo || '가을 웜톤',
+      subTypeLabelKo: skinProfile?.subTypeLabelKo || '가을 소프트 베이지',
+      gender: nextGender,
+    });
+  };
+
   const handleLogTomorrowCalendar = async () => {
     if (equippedItems.length === 0) {
       showToast?.('먼저 2.5D 캐릭터에 입힐 코디를 선택해주세요.');
@@ -718,6 +734,7 @@ export default function OutfitStudioView({
             }}
             onUnequipSlot={handleUnequipSlot}
             onQuickSelectPreset={handleQuickSelectSkinPreset}
+            onToggleGender={handleToggleGender}
             onOpenSkinToneModal={onOpenSkinToneModal}
           />
 
