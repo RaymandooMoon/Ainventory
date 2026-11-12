@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Globe, KeyRound, Mail, Moon, Play, Sun } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
-import { apiFetch, setStoredToken } from '../utils/api.js';
-import { tr } from '../utils/i18n.js';
-import { triggerHaptic } from '../utils/nativeBridge.js';
+import { apiFetch, setStoredToken } from '../utils/api.ts';
+import { tr } from '../utils/i18n.ts';
+import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 
 /**
- * Apple HIG Minimal Monochrome Initial Entry Screen (Reqs 8.a, 10.b, 11.a-c, 12.a)
+ * Apple HIG Frosted Glass Initial Entry Screen with Dual-Theme 2.5D Atelier Video Background
+ * - Light & Dark mode seamless-looping 2.5D wardrobe showcase videos (`/media/login-bg-light.mp4`, `/media/login-bg-dark.mp4`)
  * - Unauthenticated '샘플 옷장 체험 모드' button (#enter-sample-demo-btn) with explicit aria-label
  * - Sign in with Apple (#apple-signin-btn)
- * - Progressive Email OTP quick entry (#email-auth-input -> #request-email-code-btn -> #email-otp-code-input -> #verify-email-code-btn)
- * - Full Login (#auth-tab-login) & Email OTP Sign-Up (#auth-tab-register) modes with 60s cooldown & 429 handling
+ * - Progressive Email OTP, Sign In (#auth-tab-login), and Sign Up (#auth-tab-register)
  */
 export default function LoginView({
   onLoginSuccess,
@@ -27,6 +27,9 @@ export default function LoginView({
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const isDev = Boolean(import.meta.env.DEV) || isLocalHost;
   const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
+
+  const lightVideoRef = useRef(null);
+  const darkVideoRef = useRef(null);
 
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'otp' | 'register'
   const [username, setUsername] = useState('');
@@ -46,6 +49,36 @@ export default function LoginView({
   const [otpVerified, setOtpVerified] = useState(false);
   const [cooldownSec, setCooldownSec] = useState(0);
   const [legalModalDoc, setLegalModalDoc] = useState(null); // null | 'privacy' | 'terms'
+
+  useEffect(() => {
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+    const lightEl = lightVideoRef.current;
+    const darkEl = darkVideoRef.current;
+    if (prefersReducedMotion) {
+      lightEl?.pause();
+      darkEl?.pause();
+      return;
+    }
+
+    const activeEl = effectiveTheme === 'dark' ? darkEl : lightEl;
+    const inactiveEl = effectiveTheme === 'dark' ? lightEl : darkEl;
+
+    if (activeEl && inactiveEl && !Number.isNaN(inactiveEl.currentTime) && inactiveEl.currentTime > 0) {
+      try {
+        activeEl.currentTime = inactiveEl.currentTime;
+      } catch {
+        // ignore seek before metadata ready
+      }
+    }
+    activeEl?.play?.().catch(() => {});
+    const pauseTimer = setTimeout(() => {
+      inactiveEl?.pause?.();
+    }, 650);
+    return () => clearTimeout(pauseTimer);
+  }, [effectiveTheme]);
 
   useEffect(() => {
     if (cooldownSec <= 0) return undefined;
@@ -241,96 +274,115 @@ export default function LoginView({
   };
 
   return (
-    <div className="hig-auth-shell">
+    <div className="hig-auth-shell" data-auth-theme={effectiveTheme}>
+      {/* Dual-Theme Seamless Looping 2.5D Wardrobe Showcase Video Stage */}
+      <div className="hig-auth-video-stage" aria-hidden="true">
+        <video
+          id="login-bg-video-light"
+          ref={lightVideoRef}
+          className={`hig-auth-bg-video ${effectiveTheme !== 'dark' ? 'is-active' : ''}`}
+          src="/media/login-bg-light.mp4"
+          poster="/media/login-bg-light-poster.jpg"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+        />
+        <video
+          id="login-bg-video-dark"
+          ref={darkVideoRef}
+          className={`hig-auth-bg-video ${effectiveTheme === 'dark' ? 'is-active' : ''}`}
+          src="/media/login-bg-dark.mp4"
+          poster="/media/login-bg-dark-poster.jpg"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+        />
+        <div className="hig-auth-video-scrim" />
+      </div>
+
       <div className="hig-auth-container">
-        {/* Top Utility Controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="hig-caption">{tr(lang, 'brandSubtitle').toUpperCase()}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
+        {/* Top Utility Controls (Theme Switcher + Language Switcher) */}
+        <div className="hig-auth-topbar">
+          <span className="hig-auth-brand-kicker">MY WARDROBE · 2.5D</span>
+          <div className="hig-auth-utility-group">
             <button
               id={CARBON_DOM_CONTRACT.loginThemeToggleId}
               type="button"
-              className="icon-btn"
+              className="hig-auth-utility-pill"
               aria-label="라이트 다크 모드 전환"
               onClick={onToggleTheme}
             >
-              {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              {effectiveTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
             </button>
             <button
               id={CARBON_DOM_CONTRACT.loginLangToggleId}
               type="button"
-              className="icon-btn"
+              className="hig-auth-utility-pill"
               aria-label="언어 전환"
-              style={{ width: 'auto', padding: '0 12px' }}
               onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
             >
-              <Globe size={13} style={{ marginRight: 4 }} />
-              <span className="hig-caption" style={{ color: 'var(--ink-primary)' }}>
-                {lang === 'ko' ? 'EN' : 'KO'}
-              </span>
+              <Globe size={13} />
+              <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
             </button>
           </div>
         </div>
 
-        {/* Minimal Hero Title (1 Screen = 1 Core Purpose) */}
-        <div>
-          <h1 className="hig-large-title">{tr(lang, 'brandTitle')}</h1>
+        {/* Minimal Hero Title */}
+        <div className="hig-auth-hero-head">
+          <h1 className="hig-auth-brand-title">{tr(lang, 'brandTitle')}</h1>
         </div>
 
-        {/* Unauthenticated Immediate Sample Closet Demo Entry (Req 8.a & 12.a — Robo Crawler & First-Time Users) */}
-        <button
-          id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
-          type="button"
-          aria-label={CARBON_DOM_CONTRACT.sampleDemoAriaLabel}
-          className="btn btn-primary btn-full"
-          style={{ minHeight: 48, borderRadius: 16 }}
-          onClick={() => onEnterSampleDemo?.()}
-        >
-          <Play size={16} />
-          <span>{isEn ? 'Sample Closet Demo Mode' : '샘플 옷장 체험 모드'}</span>
-        </button>
-
-        {/* Sign in with Apple (Req 10.b — Mandatory iOS App Store Parity) */}
-        {(isDev || hasAppleClientId) && (
+        {/* Quick Entry CTAs */}
+        <div className="hig-auth-cta-row">
           <button
-            id={CARBON_DOM_CONTRACT.appleSignInBtnId}
+            id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
             type="button"
-            aria-label="Sign in with Apple"
-            className="btn btn-secondary btn-full"
-            style={{ minHeight: 48, borderRadius: 16 }}
-            disabled={loading}
-            onClick={handleAppleSignIn}
+            aria-label={CARBON_DOM_CONTRACT.sampleDemoAriaLabel}
+            className="btn btn-primary btn-full"
+            style={{ minHeight: 46 }}
+            onClick={() => onEnterSampleDemo?.()}
           >
-            <span>
-              {isEn
-                ? hasAppleClientId
-                  ? 'Continue with Apple'
-                  : 'Continue with Apple (Sandbox)'
-                : hasAppleClientId
-                  ? 'Apple로 계속하기'
-                  : 'Apple로 계속하기 (개발 샌드박스)'}
-            </span>
+            <Play size={15} />
+            <span>{isEn ? 'Sample Closet Demo Mode' : '샘플 옷장 체험 모드'}</span>
           </button>
-        )}
 
-        {/* Progressive Monochrome Auth Surface */}
-        <div className="hig-auth-panel">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {(isDev || hasAppleClientId) && (
             <button
-              id={CARBON_DOM_CONTRACT.authTabOtpId}
+              id={CARBON_DOM_CONTRACT.appleSignInBtnId}
               type="button"
-              className={`btn btn-sm ${authMode === 'otp' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => {
-                setAuthMode('otp');
-                setError('');
-              }}
+              aria-label="Sign in with Apple"
+              className="btn btn-secondary btn-full"
+              style={{ minHeight: 46, background: 'var(--auth-input-bg)' }}
+              disabled={loading}
+              onClick={handleAppleSignIn}
             >
-              {isEn ? 'Email OTP' : '이메일 시작'}
+              <span>
+                {isEn
+                  ? hasAppleClientId
+                    ? 'Continue with Apple'
+                    : 'Continue with Apple (Sandbox)'
+                  : hasAppleClientId
+                    ? 'Apple로 계속하기'
+                    : 'Apple로 계속하기 (개발 샌드박스)'}
+              </span>
             </button>
+          )}
+        </div>
+
+        {/* Progressive Frosted Glass Auth Surface */}
+        <div className="hig-auth-panel">
+          <div className="hig-auth-segmented" role="tablist">
             <button
               id={CARBON_DOM_CONTRACT.authTabLoginId}
               type="button"
-              className={`btn btn-sm ${authMode === 'login' ? 'btn-primary' : 'btn-secondary'}`}
+              role="tab"
+              aria-selected={authMode === 'login'}
+              className={`hig-auth-seg-btn ${authMode === 'login' ? 'is-active' : ''}`}
               onClick={() => {
                 setAuthMode('login');
                 setError('');
@@ -339,9 +391,24 @@ export default function LoginView({
               {isEn ? 'Sign In' : '로그인'}
             </button>
             <button
+              id={CARBON_DOM_CONTRACT.authTabOtpId}
+              type="button"
+              role="tab"
+              aria-selected={authMode === 'otp'}
+              className={`hig-auth-seg-btn ${authMode === 'otp' ? 'is-active' : ''}`}
+              onClick={() => {
+                setAuthMode('otp');
+                setError('');
+              }}
+            >
+              {isEn ? 'Email OTP' : '이메일 시작'}
+            </button>
+            <button
               id={CARBON_DOM_CONTRACT.authTabRegisterId}
               type="button"
-              className={`btn btn-sm ${authMode === 'register' ? 'btn-primary' : 'btn-secondary'}`}
+              role="tab"
+              aria-selected={authMode === 'register'}
+              className={`hig-auth-seg-btn ${authMode === 'register' ? 'is-active' : ''}`}
               onClick={() => {
                 setAuthMode('register');
                 setError('');
@@ -690,20 +757,11 @@ export default function LoginView({
         </div>
 
         {/* Store Compliance Footer: Privacy Policy & Terms of Service */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="hig-auth-footer">
           <button
             id="login-privacy-policy-btn"
             type="button"
-            className="hig-caption"
-            style={{ minHeight: 44, padding: '0 8px', textDecoration: 'underline' }}
+            className="hig-auth-legal-link"
             onClick={() => setLegalModalDoc('privacy')}
           >
             {isEn ? 'Privacy Policy' : '개인정보처리방침'}
@@ -714,8 +772,7 @@ export default function LoginView({
           <button
             id="login-terms-btn"
             type="button"
-            className="hig-caption"
-            style={{ minHeight: 44, padding: '0 8px', textDecoration: 'underline' }}
+            className="hig-auth-legal-link"
             onClick={() => setLegalModalDoc('terms')}
           >
             {isEn ? 'Terms of Service' : '이용약관'}

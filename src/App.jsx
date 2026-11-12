@@ -50,7 +50,12 @@ function parseAppLocation() {
   }
   const { pathname, search } = window.location;
   const params = new URLSearchParams(search);
-  if (params.get('auth') === '1' || params.get('verify_token')) {
+  if (
+    pathname === '/login' ||
+    pathname === '/login/' ||
+    params.get('auth') === '1' ||
+    params.get('verify_token')
+  ) {
     return { tab: 'closet', itemId: null, showAuth: true };
   }
 

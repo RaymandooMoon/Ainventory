@@ -266,8 +266,23 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.getByRole('button', { name: '다크 모드로 전환' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-    // Verify Account Settings Sheet opens cleanly from Stats
+    // Verify Account Settings Sheet -> Login View with Dual-Theme Background Videos
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
     await expect(page.locator('#account-logout-btn')).toBeVisible();
+    await page.locator('#account-logout-btn').click();
+
+    await expect(page.locator('#login-bg-video-dark')).toHaveClass(/is-active/);
+    await expect(page.locator('#login-bg-video-dark')).toHaveAttribute(
+      'src',
+      '/media/login-bg-dark.mp4'
+    );
+
+    await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('#login-bg-video-light')).toHaveClass(/is-active/);
+    await expect(page.locator('#login-bg-video-light')).toHaveAttribute(
+      'src',
+      '/media/login-bg-light.mp4'
+    );
   });
 });
