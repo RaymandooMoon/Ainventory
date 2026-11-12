@@ -594,8 +594,15 @@ export async function applyOptimisticLocalMutation(
   // 1. POST /garments
   if (path === '/garments' && upperMethod === 'POST') {
     const id = tempId!;
+    const defaultSubMap: Record<string, string> = {
+      top: 'knit',
+      bottom: 'slacks',
+      outer: 'coat',
+      shoes: 'sneakers',
+      accessory: 'bag',
+    };
     const category = String(body.category || 'top');
-    const subcategory = String(body.subcategory || 'knit');
+    const subcategory = String(body.subcategory || defaultSubMap[category] || 'knit');
     const spec = resolveManifestSlotAndGlb(category, subcategory);
     const price = Math.max(0, Number(body.price) || 0);
     const wearCount = Math.max(0, Number(body.wear_count) || 0);
@@ -603,11 +610,12 @@ export async function applyOptimisticLocalMutation(
     const imageSource = String(
       body.image_data || body.image_url || getStudioSeedImageForGarment(category, subcategory)
     );
+    const resolvedNotes = String(body.memo !== undefined ? body.memo : body.notes || '');
 
     const fakeGarment: GarmentRecord = {
       id,
       closet_owner: closetOwner,
-      name: String(body.name || '오프라인 등록 의류'),
+      name: String(body.name || '신규 등록 의류'),
       category,
       subcategory,
       fabric: String(body.fabric || 'cotton'),
@@ -619,13 +627,15 @@ export async function applyOptimisticLocalMutation(
       water_resistant: Boolean(body.water_resistant),
       formality: String(body.formality || 'smart'),
       brand: String(body.brand || ''),
+      size: String(body.size || ''),
       price,
       wear_count: wearCount,
       cpw: wearCount > 0 ? Math.round(price / wearCount) : price,
       is_favorite: false,
       status: String(body.status || 'active'),
       image_url: imageSource,
-      notes: String(body.notes || ''),
+      notes: resolvedNotes,
+      memo: resolvedNotes,
       slot_key: String(body.slot_key || spec.slotKey),
       base_glb: String(body.base_glb || spec.baseGlb),
       physics_preset: String(body.physics_preset || spec.physicsPreset),
@@ -655,6 +665,13 @@ export async function applyOptimisticLocalMutation(
     const garmentId = Number(path.split('/')[2]);
     const entries = await listCacheEntriesByPrefix('/garments', isDemo);
     let updatedGarment: GarmentRecord | null = null;
+    const defaultSubMap: Record<string, string> = {
+      top: 'knit',
+      bottom: 'slacks',
+      outer: 'coat',
+      shoes: 'sneakers',
+      accessory: 'bag',
+    };
 
     for (const row of entries) {
       const garments = Array.isArray(row.data?.garments)
@@ -662,18 +679,37 @@ export async function applyOptimisticLocalMutation(
         : [];
       const nextGarments = garments.map((g) => {
         if (Number(g.id) !== garmentId) return g;
+        const nextCategory = body.category !== undefined ? String(body.category) : g.category;
+        const nextSubcategory =
+          body.subcategory !== undefined
+            ? String(body.subcategory)
+            : nextCategory !== g.category
+              ? defaultSubMap[nextCategory] || g.subcategory
+              : g.subcategory;
+        const nextSpec = resolveManifestSlotAndGlb(nextCategory, nextSubcategory);
         const nextPrice = body.price !== undefined ? Math.max(0, Number(body.price) || 0) : g.price;
         const nextWear =
           body.wear_count !== undefined ? Math.max(0, Number(body.wear_count) || 0) : g.wear_count;
+        const rawNotes = body.memo !== undefined ? body.memo : body.notes;
+        const nextNotes =
+          rawNotes !== undefined ? String(rawNotes) : String(g.memo ?? g.notes ?? '');
         const next: GarmentRecord = {
           ...g,
-          name: body.name !== undefined ? String(body.name) : g.name,
+          name: body.name !== undefined && String(body.name).trim() ? String(body.name) : g.name,
+          category: nextCategory,
+          subcategory: nextSubcategory,
+          slot_key:
+            nextCategory !== g.category || body.subcategory !== undefined
+              ? nextSpec.slotKey
+              : g.slot_key,
           status: body.status !== undefined ? String(body.status) : g.status,
           is_favorite:
             body.is_favorite !== undefined ? Boolean(body.is_favorite) : Boolean(g.is_favorite),
           price: nextPrice,
           brand: body.brand !== undefined ? String(body.brand) : g.brand,
-          notes: body.notes !== undefined ? String(body.notes) : g.notes,
+          size: body.size !== undefined ? String(body.size) : String(g.size || ''),
+          notes: nextNotes,
+          memo: nextNotes,
           wear_count: nextWear,
           cpw: nextWear > 0 ? Math.round(nextPrice / nextWear) : nextPrice,
           offlinePending: shouldQueue,

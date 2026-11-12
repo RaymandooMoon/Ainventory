@@ -6,13 +6,16 @@ import { ROOT_DIR, UPLOADS_DIR } from './db.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '0.0.0.0';
 const distDir = path.join(ROOT_DIR, 'dist');
 
 app.disable('x-powered-by');
 
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  if (process.env.ALLOW_PREVIEW_IFRAME !== '1') {
+    res.setHeader('X-Frame-Options', 'DENY');
+  }
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
@@ -43,7 +46,7 @@ app.get('/{*splat}', (_req, res) => {
   res.sendFile(indexPath);
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`[A inventory] Server listening on http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`[A inventory] Server listening on http://${HOST}:${PORT}`);
 });
 server.keepAliveTimeout = 65000;

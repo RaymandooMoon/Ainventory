@@ -504,10 +504,14 @@ function parseGarmentRow(row) {
     imageUrl = getStudioSeedImageForGarment(row.category, row.subcategory);
   }
   const manifestSpec = resolveManifestSlotAndGlb(row.category, row.subcategory);
+  const resolvedNotes = row.notes || '';
   return {
     ...row,
     image_url: imageUrl,
     seasons,
+    size: row.size || '',
+    notes: resolvedNotes,
+    memo: resolvedNotes,
     fabric: row.fabric || 'cotton',
     slot_key: row.slot_key || manifestSpec.slotKey,
     base_glb: row.base_glb || manifestSpec.baseGlb,
@@ -2170,7 +2174,7 @@ export function createApiRouter() {
       closet_owner = req.user.defaultCloset,
       name,
       category = 'top',
-      subcategory = 'knit',
+      subcategory,
       color_name = '블랙',
       color_hex = '#1D1D1F',
       seasons = ['봄', '가을'],
@@ -2179,6 +2183,7 @@ export function createApiRouter() {
       water_resistant = false,
       formality = 'smart',
       brand = '',
+      size = '',
       price = 0,
       wear_count = 0,
       status = 'active',
@@ -2190,6 +2195,7 @@ export function createApiRouter() {
       image_data,
       image_url,
       notes = '',
+      memo,
     } = req.body || {};
 
     const authz = resolveAuthorizedClosets(req, closet_owner, { mode: 'write' });
@@ -2202,13 +2208,28 @@ export function createApiRouter() {
       return res.status(400).json({ error: '옷 이름을 입력해주세요.' });
     }
 
-    const fallbackSeed = getStudioSeedImageForGarment(category, subcategory);
+    const defaultSubMap = {
+      top: 'knit',
+      bottom: 'slacks',
+      outer: 'coat',
+      shoes: 'sneakers',
+      accessory: 'bag',
+    };
+    const resolvedCategory = String(category || 'top').trim();
+    const resolvedSubcategory = String(
+      subcategory || defaultSubMap[resolvedCategory] || 'knit'
+    ).trim();
+    const resolvedNotes = String(memo !== undefined ? memo : notes || '')
+      .trim()
+      .slice(0, 500);
+
+    const fallbackSeed = getStudioSeedImageForGarment(resolvedCategory, resolvedSubcategory);
     const uploadRes = saveDataUrlImage(image_data || image_url, targetCloset, fallbackSeed);
     if (!uploadRes.ok) {
       return res.status(uploadRes.status).json({ error: uploadRes.error });
     }
     const savedUrl = uploadRes.url;
-    const spec = resolveManifestSlotAndGlb(category, subcategory);
+    const spec = resolveManifestSlotAndGlb(resolvedCategory, resolvedSubcategory);
     const isCustomTex =
       custom_texture !== undefined
         ? Boolean(custom_texture)
@@ -2218,14 +2239,14 @@ export function createApiRouter() {
       INSERT INTO garments (
         closet_owner, name, category, subcategory, color_name, color_hex,
         seasons, min_temp, max_temp, water_resistant, formality,
-        brand, price, wear_count, status, image_url, notes,
+        brand, size, price, wear_count, status, image_url, notes,
         fabric, slot_key, base_glb, physics_preset, custom_texture
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       targetCloset,
       String(name).trim().slice(0, 120),
-      String(category).trim(),
-      String(subcategory).trim(),
+      resolvedCategory,
+      resolvedSubcategory,
       String(color_name).trim(),
       String(color_hex).trim(),
       JSON.stringify(Array.isArray(seasons) ? seasons : ['봄', '가을']),
@@ -2234,11 +2255,12 @@ export function createApiRouter() {
       water_resistant ? 1 : 0,
       String(formality || 'smart').trim(),
       String(brand || '').trim().slice(0, 80),
+      String(size || '').trim().slice(0, 32),
       Math.max(0, Number(price) || 0),
       Math.max(0, Number(wear_count) || 0),
       String(status || 'active').trim(),
       savedUrl,
-      String(notes || '').trim().slice(0, 500),
+      resolvedNotes,
       String(fabric || 'cotton').trim(),
       slot_key || spec.slotKey,
       base_glb || spec.baseGlb,
@@ -2259,17 +2281,42 @@ export function createApiRouter() {
     }
 
     const body = req.body || {};
+    const defaultSubMap = {
+      top: 'knit',
+      bottom: 'slacks',
+      outer: 'coat',
+      shoes: 'sneakers',
+      accessory: 'bag',
+    };
+    const nextCategory =
+      body.category !== undefined ? String(body.category).trim() : existing.category;
+    const nextSubcategory =
+      body.subcategory !== undefined
+        ? String(body.subcategory).trim()
+        : nextCategory !== existing.category
+          ? defaultSubMap[nextCategory] || existing.subcategory
+          : existing.subcategory;
+    const nextSpec = resolveManifestSlotAndGlb(nextCategory, nextSubcategory);
+    const nextSlotKey =
+      nextCategory !== existing.category || body.subcategory !== undefined
+        ? nextSpec.slotKey
+        : existing.slot_key;
     const nextStatus = body.status !== undefined ? String(body.status).trim() : existing.status;
     const nextFav =
       body.is_favorite !== undefined ? (body.is_favorite ? 1 : 0) : existing.is_favorite;
     const nextName =
-      body.name !== undefined ? String(body.name).trim().slice(0, 120) : existing.name;
+      body.name !== undefined && String(body.name).trim()
+        ? String(body.name).trim().slice(0, 120)
+        : existing.name;
     const nextPrice =
       body.price !== undefined ? Math.max(0, Number(body.price) || 0) : existing.price;
     const nextBrand =
       body.brand !== undefined ? String(body.brand).trim().slice(0, 80) : existing.brand;
+    const nextSize =
+      body.size !== undefined ? String(body.size).trim().slice(0, 32) : existing.size || '';
+    const rawNotes = body.memo !== undefined ? body.memo : body.notes;
     const nextNotes =
-      body.notes !== undefined ? String(body.notes).trim().slice(0, 500) : existing.notes;
+      rawNotes !== undefined ? String(rawNotes).trim().slice(0, 500) : existing.notes;
     const nextWearCount =
       body.wear_count !== undefined
         ? Math.max(0, Number(body.wear_count) || 0)
@@ -2277,9 +2324,23 @@ export function createApiRouter() {
 
     db.prepare(`
       UPDATE garments
-      SET name = ?, status = ?, is_favorite = ?, price = ?, brand = ?, notes = ?, wear_count = ?
+      SET name = ?, category = ?, subcategory = ?, slot_key = ?, status = ?, is_favorite = ?,
+          price = ?, brand = ?, size = ?, notes = ?, wear_count = ?
       WHERE id = ?
-    `).run(nextName, nextStatus, nextFav, nextPrice, nextBrand, nextNotes, nextWearCount, id);
+    `).run(
+      nextName,
+      nextCategory,
+      nextSubcategory,
+      nextSlotKey,
+      nextStatus,
+      nextFav,
+      nextPrice,
+      nextBrand,
+      nextSize,
+      nextNotes,
+      nextWearCount,
+      id
+    );
 
     const updated = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     res.json({ garment: parseGarmentRow(updated) });

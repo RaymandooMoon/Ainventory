@@ -1,8 +1,7 @@
 /**
- * Carbon Architecture Freeze Contract (Reqs 1–16 + Full Renewal)
- * Shared immutable Apple HIG design tokens, progressive-disclosure DOM anchors,
- * 3D WebGL telemetry/engine contracts, and core domain DTO interfaces frozen prior to
- * parallel Git Worktree execution across Track A (Core/Security), Track B (3D/Vision), and Track C (HIG UI/QA).
+ * Carbon Apple HIG & 2.5D Inventory Architecture Contract
+ * Defines immutable Apple HIG tokens, 4-tab inventory-first IA,
+ * 6-pill wardrobe taxonomy, DOM anchors, and core domain DTO interfaces.
  */
 
 export const CARBON_HIG_TOKENS = {
@@ -13,7 +12,7 @@ export const CARBON_HIG_TOKENS = {
     inkPrimary: '#1D1D1F',
     inkSecondary: '#6E6E73',
     accentMono: '#1D1D1F',
-    vibrancyHairline: 'rgba(29, 29, 31, 0.12)',
+    vibrancyHairline: 'rgba(29, 29, 31, 0.08)',
   },
   dark: {
     bgCanvas: '#000000',
@@ -22,21 +21,77 @@ export const CARBON_HIG_TOKENS = {
     inkPrimary: '#F5F5F7',
     inkSecondary: '#AEAEB2',
     accentMono: '#F5F5F7',
-    vibrancyHairline: 'rgba(245, 245, 247, 0.14)',
+    vibrancyHairline: 'rgba(245, 245, 247, 0.12)',
   },
   gridUnitPt: 8,
   touchTargetMinPx: 44,
+  squircleRadiusPx: 22,
   spacingScalePx: [4, 8, 16, 24, 32, 40, 48] as const,
   fontStack:
-    "-apple-system, BlinkMacSystemFont, 'Pretendard Variable', 'Pretendard', system-ui, sans-serif",
-  typographyTiers: ['large-title', 'headline', 'body', 'caption'] as const,
+    "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Pretendard Variable', 'Pretendard', system-ui, sans-serif",
   numericVariant: 'tabular-nums' as const,
   springEasing: 'cubic-bezier(0.32, 0.72, 0, 1)' as const,
-  vibrancyBackdropFilter: 'blur(20px) saturate(180%)' as const,
-  maxConcurrent3DBlurLayers: 1,
-  minStudioViewportRatio: 0.85,
-  minSteadyFps: 50,
+  vibrancyBackdropFilter: 'blur(22px) saturate(180%)' as const,
+  minVisualRatio: 0.85,
 } as const;
+
+export type AppTabKey = 'closet' | 'outfits' | 'calendar' | 'stats';
+
+export type WardrobeCategoryKey = 'top' | 'bottom' | 'outer' | 'shoes' | 'accessory';
+export type WardrobePillKey = 'all' | WardrobeCategoryKey;
+
+export interface WardrobePillOption {
+  key: WardrobePillKey;
+  label: 'All' | 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories';
+}
+
+export const WARDROBE_PILL_FILTERS: readonly WardrobePillOption[] = [
+  { key: 'all', label: 'All' },
+  { key: 'top', label: 'Tops' },
+  { key: 'bottom', label: 'Bottoms' },
+  { key: 'outer', label: 'Outerwear' },
+  { key: 'shoes', label: 'Shoes' },
+  { key: 'accessory', label: 'Accessories' },
+] as const;
+
+export const WARDROBE_CATEGORY_OPTIONS: ReadonlyArray<{
+  key: WardrobeCategoryKey;
+  label: 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories';
+  defaultSubcategory: string;
+}> = [
+  { key: 'top', label: 'Tops', defaultSubcategory: 'knit' },
+  { key: 'bottom', label: 'Bottoms', defaultSubcategory: 'slacks' },
+  { key: 'outer', label: 'Outerwear', defaultSubcategory: 'coat' },
+  { key: 'shoes', label: 'Shoes', defaultSubcategory: 'sneakers' },
+  { key: 'accessory', label: 'Accessories', defaultSubcategory: 'bag' },
+] as const;
+
+export function normalizeWardrobeCategoryKey(rawCategory?: string | null): WardrobeCategoryKey {
+  const key = String(rawCategory || '')
+    .trim()
+    .toLowerCase();
+  if (key === 'top' || key === 'tops' || key === 'onepiece' || key === 'dress') {
+    return 'top';
+  }
+  if (key === 'bottom' || key === 'bottoms') {
+    return 'bottom';
+  }
+  if (key === 'outer' || key === 'outerwear') {
+    return 'outer';
+  }
+  if (key === 'shoes' || key === 'footwear') {
+    return 'shoes';
+  }
+  return 'accessory';
+}
+
+export function getWardrobeCategoryLabel(
+  rawCategory?: string | null
+): 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories' {
+  const normalized = normalizeWardrobeCategoryKey(rawCategory);
+  const found = WARDROBE_CATEGORY_OPTIONS.find((opt) => opt.key === normalized);
+  return found ? found.label : 'Tops';
+}
 
 export const CARBON_DOM_CONTRACT = {
   sampleDemoButtonId: 'enter-sample-demo-btn',
@@ -51,35 +106,28 @@ export const CARBON_DOM_CONTRACT = {
   requestEmailCodeBtnId: 'request-email-code-btn',
   emailOtpCodeInputId: 'email-otp-code-input',
   verifyEmailCodeBtnId: 'verify-email-code-btn',
-  studioScreenClass: 'hig-studio-screen',
-  studioCanvasId: 'studio-3d-canvas',
-  studioWeatherCapsuleId: 'studio-weather-capsule',
-  studioWardrobeDrawerId: 'studio-wardrobe-drawer',
-  studioDrawerHandleId: 'studio-drawer-handle',
-  studioEmptyClosetCardId: 'studio-empty-closet-card',
-  drawerUnequipSlotBtnId: 'drawer-unequip-slot-btn',
-  cutoutTileClass: 'hig-cutout-tile',
-  garmentDetailSheetId: 'garment-detail-sheet',
-  garmentQuickMenuSheetId: 'garment-quick-menu-sheet',
+  floatingTabBarId: 'floating-glass-tabbar',
+  wardrobeHeaderTitleId: 'wardrobe-header-title',
+  wardrobeItemCountId: 'wardrobe-item-count',
   wardrobeOpenAddBtnId: 'open-add-garment-btn',
+  wardrobeCategoryRailId: 'wardrobe-category-pill-rail',
+  wardrobeGridId: 'wardrobe-squircle-grid',
+  cutoutTileClass: 'hig-squircle-card',
   wardrobeGalleryInputId: 'wardrobe-gallery-file-input',
   wardrobeCameraInputId: 'wardrobe-camera-file-input',
   wardrobeSubmitAddBtnId: 'submit-add-garment-btn',
-  confirmSmartCropBtnId: 'confirm-smart-crop-btn',
-  croppedWebpPreviewImgId: 'cropped-webp-preview-img',
-  aiGarmentMappingSummaryId: 'ai-garment-mapping-summary',
-  bentoCardClass: 'hig-bento-card',
-  bentoCpwCardId: 'bento-cpw-card',
-  bentoUtilizationCardId: 'bento-utilization-card',
-  bentoPackingCardId: 'bento-packing-card',
-  packingTitleInputId: 'packing-title-input',
-  packingDestInputId: 'packing-dest-input',
-  createPackingListBtnId: 'create-packing-list-btn',
+  addGarmentPreviewId: 'add-garment-25d-preview',
+  garmentDetailSheetId: 'garment-detail-sheet',
+  itemDetailTiltStageId: 'item-detail-25d-stage',
+  itemDetailSaveBtnId: 'item-detail-save-btn',
+  itemDetailDeleteBtnId: 'item-detail-delete-btn',
+  itemDetailTryOutfitBtnId: 'item-detail-try-outfit-btn',
+  studio25dCanvasId: 'studio-25d-canvas',
+  studioSlotPickerId: 'studio-slot-picker',
+  studioSaveOutfitBtnId: 'studio-save-outfit-btn',
   openAccountSettingsBtnId: 'open-account-settings-btn',
-  mobileOpenAccountSettingsBtnId: 'mobile-open-account-settings-btn',
   initiateDeleteAccountBtnId: 'initiate-delete-account-btn',
   confirmPermanentDeleteBtnId: 'delete-account-permanent-btn',
-  attrData3DActive: 'data-3d-active',
   attrVibrancyFallback: 'data-vibrancy-fallback',
   attrSheetPanel: 'data-sheet-panel',
   attrSheetHandle: 'data-sheet-handle',
@@ -128,83 +176,6 @@ export type BodyShapeKey =
   | 'athletic_muscular'
   | 'plus_curvy';
 
-export type SkinPinId = 'forehead' | 'leftCheek' | 'rightCheek' | 'noseChin';
-
-export interface SkinSamplingPin {
-  id: SkinPinId;
-  labelKo: string;
-  labelEn: string;
-  x: number;
-  y: number;
-  landmarkIdx?: number;
-}
-
-export interface FaceLandmarkDetectionResult {
-  detected: boolean;
-  isLowConfidence: boolean;
-  confidence: number;
-  engine: string;
-  detectionStage: string;
-  landmarkCount: number;
-  orientationDeg: number;
-  faceBox: { x: number; y: number; w: number; h: number };
-  pins: SkinSamplingPin[];
-  meshPoints: Array<{ x: number; y: number; landmarkIdx?: number }>;
-  processedDataUrl?: string;
-}
-
-export interface CarbonSpringAxisSample {
-  rx: number;
-  ry?: number;
-  rz: number;
-  dy?: number;
-}
-
-export interface CarbonJiggleTelemetry {
-  windIntensity: number;
-  neckUpper: CarbonSpringAxisSample;
-  neckTip: CarbonSpringAxisSample;
-  hemUpper: CarbonSpringAxisSample;
-  hemLower: CarbonSpringAxisSample;
-  billowX: number;
-  billowZ: number;
-  lapel: CarbonSpringAxisSample;
-  bagStrap: CarbonSpringAxisSample;
-  crossbodyBag: CarbonSpringAxisSample;
-  handBag: CarbonSpringAxisSample;
-}
-
-export interface Carbon3DTelemetry {
-  frameCount: number;
-  avgFps: number;
-  geometries: number;
-  textures: number;
-  calls: number;
-  isContextLost: boolean;
-  recoveryCount: number;
-  currentYawDeg: number;
-  targetYawDeg: number;
-  effectiveMotion: string;
-  windSpeedKmh: number;
-  activeGarmentIds: Array<string | number>;
-  equippedDbGarmentIds?: number[];
-  isSoftwareRenderer: boolean;
-  vibrancyDegraded: boolean;
-  jiggle: CarbonJiggleTelemetry | null;
-}
-
-export interface Mannequin3DEngineHandle {
-  getTelemetry: () => Carbon3DTelemetry;
-  markDirty: () => void;
-  setSimulatedLowFps: (degraded?: boolean) => boolean;
-  simulateContextLoss: (opts?: { autoRestoreMs?: number }) => boolean;
-  resetFpsWindow: () => void;
-  dispose: () => void;
-  _fpsSamples?: number[];
-  _frameMsSamples?: number[];
-  lastRawNowMs?: number;
-}
-
 export interface UserProfile {
   id: number;
   username: string;
@@ -251,6 +222,8 @@ export interface GarmentRecord {
   water_resistant: boolean | number;
   formality: string;
   brand: string;
+  size?: string;
+  memo?: string;
   price: number;
   wear_count: number;
   cpw?: number;

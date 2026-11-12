@@ -559,7 +559,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
       className={`studio-garment-image ${className}`.trim()}
       style={{
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'visible',
         backgroundColor: 'transparent',
         ...style,
       }}

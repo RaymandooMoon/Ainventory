@@ -1,555 +1,426 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  Lock,
-  Maximize2,
-  Shuffle,
-  Trash2,
-  Unlock,
-  X,
-} from 'lucide-react';
-import { apiFetch } from '../utils/api.js';
-import { triggerHaptic } from '../utils/nativeBridge.js';
+  FITTING_SLOTS,
+  mapGarmentToFittingSlot,
+  renderOutfitFitting,
+} from '../services/fittingRenderer.ts';
+import { apiFetch } from '../utils/api.ts';
+import { triggerHaptic } from '../utils/nativeBridge.ts';
+import GarmentObject25D from './GarmentObject25D.jsx';
+import Studio25DCanvas from './Studio25DCanvas.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
-import OutfitInspectorModal from './OutfitInspectorModal.jsx';
-import StudioGarmentImage from './StudioGarmentImage.jsx';
-import VirtualMannequin from './VirtualMannequin.jsx';
 
-const DRESS_ME_SLOTS = [
-  { key: 'headwear', label: '모자' },
-  { key: 'neckwear', label: '머플러·타이' },
-  { key: 'outer', label: '아우터' },
-  { key: 'top', label: '상의' },
-  { key: 'bottom', label: '하의' },
-  { key: 'gloves', label: '장갑' },
-  { key: 'shoes', label: '신발' },
-  { key: 'accessory', label: '가방·액세서리' },
-];
-
-/**
- * Apple HIG Full-Bleed 3D Outfit Studio & Dress Me Lookbook (Reqs 11, 12.b, 13)
- * - 85%+ clear 3D mannequin viewport with swipe-up wardrobe drawer
- * - Dress Me slot lock/shuffle & Saved Lookbooks stowed into spring BottomSheets
- */
 export default function OutfitStudioView({
-  user,
   activeCloset,
-  refreshKey,
-  paused = false,
-  onOpenProfileModal,
+  garments = [],
+  theme = 'light',
+  preEquippedGarment,
+  onConsumePreEquipped,
   onClosetUpdated,
   showToast,
 }) {
-  const closetOwner = activeCloset === 'all' ? user?.defaultCloset || 'husband' : activeCloset;
-  const [garments, setGarments] = useState([]);
-  const [outfits, setOutfits] = useState([]);
-
-  const [indices, setIndices] = useState({
-    headwear: 0,
-    neckwear: 0,
-    outer: 0,
-    top: 0,
-    bottom: 0,
-    gloves: 0,
-    underwear: 0,
-    socks: 0,
-    shoes: 0,
-    accessory: 0,
+  const [slots, setSlots] = useState({
+    outer: null,
+    top: null,
+    bottom: null,
+    shoes: null,
+    accessory: null,
   });
-  const [unequipped, setUnequipped] = useState({
-    headwear: true,
-    gloves: false,
-  });
-  const [locked, setLocked] = useState({
-    outer: false,
-    top: false,
-    bottom: false,
-    shoes: false,
-  });
+  const [seededInitial, setSeededInitial] = useState(false);
+  const [activeSlotKey, setActiveSlotKey] = useState('top');
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [renderResult, setRenderResult] = useState(null);
 
-  const [title, setTitle] = useState('');
-  const [occasion, setOccasion] = useState('출근룩');
-  const [memo, setMemo] = useState('');
-  const [dressMeSheetOpen, setDressMeSheetOpen] = useState(false);
-  const [lookbookSheetOpen, setLookbookSheetOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [inspectorSlot, setInspectorSlot] = useState('outer');
+  const [savedOutfits, setSavedOutfits] = useState([]);
+  const [outfitTitle, setOutfitTitle] = useState('');
+  const [savingOutfit, setSavingOutfit] = useState(false);
 
-  const loadStudioData = useCallback(async () => {
+  const loadOutfits = useCallback(async () => {
     try {
-      const [gRes, oRes] = await Promise.all([
-        apiFetch(`/garments?closet=${encodeURIComponent(closetOwner)}`),
-        apiFetch(`/outfits?closet=${encodeURIComponent(closetOwner)}`),
-      ]);
-      setGarments((gRes.garments || []).filter((g) => g.status === 'active'));
-      setOutfits(oRes.outfits || []);
-    } catch (err) {
-      showToast?.(err.message || '코디 데이터를 불러오지 못했습니다.');
+      const q = encodeURIComponent(activeCloset || 'sample');
+      const res = await apiFetch(`/outfits?closet=${q}`);
+      setSavedOutfits(res.outfits || []);
+    } catch {
+      // keep local state
     }
-  }, [closetOwner, showToast]);
+  }, [activeCloset]);
 
   useEffect(() => {
-    loadStudioData();
-  }, [loadStudioData, refreshKey]);
+    loadOutfits();
+  }, [loadOutfits]);
 
-  const pools = useMemo(
-    () => ({
-      headwear: garments.filter((g) => g.category === 'headwear'),
-      neckwear: garments.filter((g) => g.category === 'neckwear'),
-      outer: garments.filter((g) => g.category === 'outer'),
-      top: garments.filter((g) => g.category === 'top'),
-      bottom: garments.filter((g) => g.category === 'bottom'),
-      dress: garments.filter((g) => g.category === 'dress'),
-      gloves: garments.filter((g) => g.category === 'gloves'),
-      underwear: garments.filter((g) => g.category === 'underwear'),
-      socks: garments.filter((g) => g.category === 'socks'),
-      shoes: garments.filter((g) => g.category === 'shoes'),
-      accessory: garments.filter((g) => g.category === 'accessory' || g.category === 'bag'),
-    }),
-    [garments]
-  );
-
-  const stepSlot = useCallback(
-    (slot, delta) => {
-      const len = (pools[slot] || []).length;
-      if (len === 0) return;
-      triggerHaptic('selection');
-      setUnequipped((prev) => ({ ...prev, [slot]: false }));
-      setIndices((prev) => ({
-        ...prev,
-        [slot]: ((prev[slot] || 0) + delta + len) % len,
-      }));
-    },
-    [pools]
-  );
-
-  const handleShuffle = useCallback(() => {
-    triggerHaptic('medium');
-    setIndices((prev) => {
-      const next = { ...prev };
-      Object.keys(pools).forEach((slot) => {
-        const len = pools[slot].length;
-        if (!locked[slot] && !unequipped[slot] && len > 1) {
-          let rand = Math.floor(Math.random() * len);
-          if (rand === prev[slot]) rand = (rand + 1) % len;
-          next[slot] = rand;
-        }
-      });
-      return next;
+  // Seed a balanced initial 2.5D studio outfit once garments load (unless preEquippedGarment arrives first)
+  useEffect(() => {
+    if (seededInitial || garments.length === 0) return;
+    const findFirst = (slotKey) =>
+      garments.find((g) => mapGarmentToFittingSlot(g) === slotKey) || null;
+    setSlots((prev) => {
+      const hasAny = Object.values(prev).some(Boolean);
+      if (hasAny) return prev;
+      return {
+        outer: null,
+        top: findFirst('top'),
+        bottom: findFirst('bottom'),
+        shoes: findFirst('shoes'),
+        accessory: null,
+      };
     });
-  }, [locked, pools, unequipped]);
+    setSeededInitial(true);
+  }, [garments, seededInitial]);
 
-  const loadoutBySlot = useMemo(() => {
-    const pick = (slotKey) => {
-      if (unequipped[slotKey]) return null;
-      const list = pools[slotKey] || [];
-      if (list.length === 0) return null;
-      return list[(indices[slotKey] || 0) % list.length];
-    };
-    return {
-      headwear: pick('headwear'),
-      neckwear: pick('neckwear'),
-      outer: pick('outer'),
-      top: pick('top'),
-      bottom: pick('bottom'),
-      dress: unequipped.dress !== false ? null : pick('dress'),
-      gloves: pick('gloves'),
-      underwear: pick('underwear'),
-      socks: pick('socks'),
-      shoes: pick('shoes'),
-      accessory: pick('accessory'),
-    };
-  }, [indices, pools, unequipped]);
+  // Handle `[Outfits에서 코디해보기]` handoff from ItemDetailSheet
+  useEffect(() => {
+    if (!preEquippedGarment) return;
+    const targetSlot = mapGarmentToFittingSlot(preEquippedGarment);
+    setSlots((prev) => ({
+      ...prev,
+      [targetSlot]: preEquippedGarment,
+    }));
+    setActiveSlotKey(targetSlot);
+    setSeededInitial(true);
+    onConsumePreEquipped?.();
+  }, [preEquippedGarment, onConsumePreEquipped]);
 
-  const pickedItems = useMemo(
-    () => Object.values(loadoutBySlot).filter(Boolean),
-    [loadoutBySlot]
-  );
-
-  const handleConfirmSwap = useCallback(
-    (slotKey, newItem) => {
-      if (!newItem) {
-        setUnequipped((prev) => ({ ...prev, [slotKey]: true }));
-        showToast?.(`[${slotKey}] 부위 의류를 벗었습니다.`);
-        return;
+  // Keep equipped garment references fresh if edited or deleted in Closet
+  useEffect(() => {
+    if (garments.length === 0) return;
+    const byId = new Map(garments.map((g) => [Number(g.id), g]));
+    setSlots((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        const cur = next[key];
+        if (!cur) continue;
+        const fresh = byId.get(Number(cur.id));
+        if (!fresh) {
+          next[key] = null;
+          changed = true;
+        } else if (fresh !== cur) {
+          next[key] = fresh;
+          changed = true;
+        }
       }
-      const list = pools[slotKey] || [];
-      const foundIdx = list.findIndex((g) => g.id === newItem.id);
-      setUnequipped((prev) => ({ ...prev, [slotKey]: false }));
-      if (foundIdx >= 0) {
-        setIndices((prev) => ({ ...prev, [slotKey]: foundIdx }));
+      return changed ? next : prev;
+    });
+  }, [garments]);
+
+  // Run modular FittingRenderer (`Studio25DFittingRenderer` or `VtonApiFittingRenderer`)
+  useEffect(() => {
+    let cancelled = false;
+    renderOutfitFitting({ slots, theme }).then((res) => {
+      if (!cancelled) {
+        setRenderResult(res);
       }
-      showToast?.(`'${newItem.name}' 아이템이 3D 마네킹에 장착되었습니다.`);
-    },
-    [pools, showToast]
-  );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slots, theme]);
 
-  const handleUnequipSlot = useCallback(
-    (slotKey) => handleConfirmSwap(slotKey, null),
-    [handleConfirmSwap]
-  );
+  const slotGarments = useMemo(() => {
+    return garments.filter((g) => mapGarmentToFittingSlot(g) === activeSlotKey);
+  }, [garments, activeSlotKey]);
 
-  const handleOpenWeatherSheet = useCallback(() => {
-    setDressMeSheetOpen(true);
-  }, []);
+  const equippedItems = useMemo(() => {
+    return FITTING_SLOTS.map((s) => slots[s.key]).filter(Boolean);
+  }, [slots]);
 
-  const handleSaveLook = async (e) => {
+  const handleToggleEquip = (item) => {
+    const slotKey = mapGarmentToFittingSlot(item);
+    triggerHaptic('selection');
+    setSlots((prev) => ({
+      ...prev,
+      [slotKey]: prev[slotKey]?.id === item.id ? null : item,
+    }));
+  };
+
+  const handleUnequipSlot = (slotKey) => {
+    triggerHaptic('selection');
+    setSlots((prev) => ({ ...prev, [slotKey]: null }));
+  };
+
+  const handleClearAll = () => {
+    triggerHaptic('selection');
+    setSlots({
+      outer: null,
+      top: null,
+      bottom: null,
+      shoes: null,
+      accessory: null,
+    });
+  };
+
+  const handleSaveOutfit = async (e) => {
     e?.preventDefault?.();
-    if (pickedItems.length < 2) {
-      showToast?.('최소 2개 이상의 아이템이 필요합니다.');
+    if (equippedItems.length === 0) {
+      showToast?.('최소 1개 이상의 의류를 선택해주세요.');
       return;
     }
+    setSavingOutfit(true);
     try {
+      const title =
+        outfitTitle.trim() ||
+        equippedItems
+          .slice(0, 2)
+          .map((g) => g.name)
+          .join(' + ');
       await apiFetch('/outfits', {
         method: 'POST',
         body: JSON.stringify({
-          closet_owner: closetOwner,
-          title: title.trim() || `${occasion} 3D 코디 조합`,
-          occasion,
-          season: '사계절',
-          item_ids: pickedItems.map((i) => i.id),
-          memo,
+          closet_owner: activeCloset || 'sample',
+          title,
+          occasion: 'Daily',
+          season: '봄/가을',
+          item_ids: equippedItems.map((g) => g.id),
         }),
       });
-      setTitle('');
-      setMemo('');
-      loadStudioData();
+      setOutfitTitle('');
+      triggerHaptic('medium');
+      await loadOutfits();
       onClosetUpdated?.();
-      setDressMeSheetOpen(false);
-      showToast?.('룩북에 새 코디가 저장되었습니다.');
+      showToast?.('코디가 저장되었습니다.');
     } catch (err) {
-      showToast?.(err.message);
+      showToast?.(err?.message || '코디 저장에 실패했습니다.');
+    } finally {
+      setSavingOutfit(false);
     }
   };
 
-  const handleDeleteOutfit = async (id) => {
+  const handleApplySavedOutfit = (outfit) => {
+    const idSet = new Set((outfit.item_ids || []).map(Number));
+    const next = {
+      outer: null,
+      top: null,
+      bottom: null,
+      shoes: null,
+      accessory: null,
+    };
+    for (const g of garments) {
+      if (idSet.has(Number(g.id))) {
+        const sKey = mapGarmentToFittingSlot(g);
+        if (!next[sKey]) next[sKey] = g;
+      }
+    }
+    triggerHaptic('selection');
+    setSlots(next);
+  };
+
+  const handleDeleteSavedOutfit = async (outfitId) => {
     try {
-      await apiFetch(`/outfits/${id}`, { method: 'DELETE' });
-      triggerHaptic('light');
-      loadStudioData();
-      onClosetUpdated?.();
-      showToast?.('코디가 삭제되었습니다.');
-    } catch (err) {
-      showToast?.(err.message);
+      await apiFetch(`/outfits/${outfitId}`, { method: 'DELETE' });
+      await loadOutfits();
+    } catch {
+      // ignore
     }
   };
 
-  const renderSlotRow = (slotKey, slotLabel) => {
-    const list = pools[slotKey] || [];
-    const current = loadoutBySlot[slotKey] || null;
-
-    if (list.length === 0) {
-      return (
-        <div key={slotKey} className="slot-row" style={{ gridTemplateColumns: '1fr' }}>
-          <span className="hig-caption">{slotLabel} 보유 아이템 없음</span>
-        </div>
-      );
-    }
-
-    if (!current) {
-      return (
-        <div key={slotKey} className="slot-row" style={{ gridTemplateColumns: '1fr auto' }}>
-          <span className="hig-body">
-            <strong>{slotLabel}</strong> · 미착용
-          </span>
+  const renderSlotInventoryGrid = (closeOnPick = false) => (
+    <div className="studio-mini-inventory-grid">
+      {slotGarments.map((item) => {
+        const isEquipped = slots[activeSlotKey]?.id === item.id;
+        return (
           <button
+            key={item.id}
             type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setUnequipped((prev) => ({ ...prev, [slotKey]: false }))}
-          >
-            입히기
-          </button>
-        </div>
-      );
-    }
-
-    return (
-      <div key={slotKey} className="slot-row">
-        <StudioGarmentImage item={current} style={{ width: 56, height: 72, borderRadius: 8 }} />
-        <div style={{ minWidth: 0 }}>
-          <span className="hig-caption">
-            {slotLabel} · {current.color_name}
-          </span>
-          <div className="hig-body" style={{ fontWeight: 600, marginTop: 4 }}>
-            {current.name}
-          </div>
-          <span className="hig-caption tabular-nums">
-            {current.brand || '내 옷장'} · 착용 {current.wear_count}회
-          </span>
-        </div>
-        <div className="slot-controls">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="이전 아이템"
-            onClick={() => stepSlot(slotKey, -1)}
-          >
-            <ChevronLeft size={15} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="다음 아이템"
-            onClick={() => stepSlot(slotKey, 1)}
-          >
-            <ChevronRight size={15} />
-          </button>
-          <button
-            type="button"
-            className={`icon-btn ${locked[slotKey] ? 'locked' : ''}`}
-            aria-label="고정 잠금"
-            title={locked[slotKey] ? '잠금 해제' : '이 아이템 고정'}
+            data-slot-garment-id={item.id}
+            aria-pressed={isEquipped}
+            className={`studio-mini-garment-card ${isEquipped ? 'is-equipped' : ''}`}
             onClick={() => {
-              triggerHaptic('selection');
-              setLocked((p) => ({ ...p, [slotKey]: !p[slotKey] }));
+              handleToggleEquip(item);
+              if (closeOnPick) setMobileSheetOpen(false);
             }}
           >
-            {locked[slotKey] ? <Lock size={14} /> : <Unlock size={14} />}
+            <div className="studio-mini-squircle">
+              <GarmentObject25D item={item} padding="11%" />
+              {isEquipped && (
+                <span className="studio-equipped-badge" aria-hidden="true">
+                  <Check size={12} strokeWidth={2.6} />
+                </span>
+              )}
+            </div>
+            <span className="hig-garment-name">{item.name}</span>
           </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={`${slotLabel} 벗기`}
-            title={`${slotLabel} 벗기`}
-            onClick={() => handleConfirmSwap(slotKey, null)}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const floatingStudioControls = (
-    <>
-      <button
-        id="dress-me-shuffle-btn"
-        type="button"
-        className="hig-float-icon-btn"
-        aria-label="잠금 제외 랜덤 셔플"
-        title="잠금 제외 랜덤 셔플"
-        onClick={handleShuffle}
-      >
-        <Shuffle size={16} />
-      </button>
-      <button
-        id="studio-open-dressme-sheet-btn"
-        type="button"
-        className="hig-float-icon-btn"
-        aria-label="Dress Me 슬롯 잠금 및 코디 저장"
-        title="Dress Me 슬롯 잠금 및 코디 저장"
-        onClick={() => {
-          triggerHaptic('selection');
-          setDressMeSheetOpen(true);
-        }}
-      >
-        <Lock size={16} />
-      </button>
-      <button
-        id="studio-open-lookbook-sheet-btn"
-        type="button"
-        className="hig-float-icon-btn"
-        aria-label="저장된 룩북 보기"
-        title="저장된 룩북 보기"
-        onClick={() => {
-          triggerHaptic('selection');
-          setLookbookSheetOpen(true);
-        }}
-      >
-        <Bookmark size={16} />
-      </button>
-      <button
-        id="studio-open-inspector-btn"
-        type="button"
-        className="hig-float-icon-btn"
-        aria-label="11부위 전체 코디 인스펙터"
-        title="11부위 전체 코디 인스펙터"
-        onClick={() => {
-          triggerHaptic('selection');
-          setInspectorSlot('outer');
-          setInspectorOpen(true);
-        }}
-      >
-        <Maximize2 size={15} />
-      </button>
-    </>
+        );
+      })}
+    </div>
   );
 
   return (
-    <>
-      <VirtualMannequin
-        immersiveStudio
-        paused={paused || dressMeSheetOpen || lookbookSheetOpen || inspectorOpen}
-        userProfile={user}
-        loadoutBySlot={loadoutBySlot}
-        allGarments={garments}
-        capsuleLabel={`코디 스튜디오 · 장착 ${pickedItems.length}점 · 룩북 ${outfits.length}`}
-        onOpenWeatherSheet={handleOpenWeatherSheet}
-        onOpenProfileModal={onOpenProfileModal}
-        onSlotSwap={handleConfirmSwap}
-        onUnequipSlot={handleUnequipSlot}
-        onSaveOutfitLog={pickedItems.length >= 2 ? () => handleSaveLook() : null}
-        extraFloatingActions={floatingStudioControls}
-      />
-
-      {/* Dress Me 8-Slot Lock & Lookbook Save Bottom Sheet */}
-      <ResponsiveSheetModal
-        id="studio-dressme-sheet"
-        open={dressMeSheetOpen}
-        onClose={() => setDressMeSheetOpen(false)}
-        eyebrow="DRESS ME · SLOT CONTROLLER"
-        title="슬롯 잠금 & 룩북 저장"
-        actions={
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleShuffle}
-          >
-            <Shuffle size={14} /> 셔플
-          </button>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {DRESS_ME_SLOTS.map((s) => renderSlotRow(s.key, s.label))}
-          </div>
-
-          <form
-            onSubmit={handleSaveLook}
-            style={{
-              background: 'var(--bg-surface)',
-              borderRadius: 16,
-              padding: 16,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-            }}
-          >
-            <div className="form-grid-2">
-              <div className="field-group" style={{ marginBottom: 0 }}>
-                <label className="field-label" htmlFor="studio-look-title">코디 제목</label>
-                <input
-                  id="studio-look-title"
-                  className="text-input"
-                  style={{ background: 'var(--bg-canvas)' }}
-                  placeholder="예: 금요일 세미 캐주얼"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
-              <div className="field-group" style={{ marginBottom: 0 }}>
-                <label className="field-label" htmlFor="studio-look-occasion">상황 태그</label>
-                <select
-                  id="studio-look-occasion"
-                  className="select-input"
-                  style={{ background: 'var(--bg-canvas)' }}
-                  value={occasion}
-                  onChange={(e) => setOccasion(e.target.value)}
-                >
-                  <option value="출근룩">출근룩</option>
-                  <option value="주말 데이트">주말 데이트</option>
-                  <option value="데일리">데일리</option>
-                  <option value="비 오는 날">비 오는 날</option>
-                  <option value="여행">여행</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="field-group" style={{ marginBottom: 0 }}>
-              <label className="field-label" htmlFor="studio-look-memo">스타일링 메모</label>
-              <input
-                id="studio-look-memo"
-                className="text-input"
-                style={{ background: 'var(--bg-canvas)' }}
-                placeholder="예: 서류가방 + 트렌치 매칭"
-                value={memo}
-                onChange={(e) => setMemo(e.target.value)}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary btn-full">
-              현재 조합을 룩북에 저장
-            </button>
-          </form>
+    <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
+      <header className="hig-top-bar">
+        <div className="hig-top-bar-titles">
+          <h1 className="hig-screen-title">OUTFITS</h1>
+          <span className="hig-item-count tabular-nums">{equippedItems.length} ACTIVE</span>
         </div>
-      </ResponsiveSheetModal>
 
-      {/* Saved Outfits Lookbook Bottom Sheet */}
-      <ResponsiveSheetModal
-        id="studio-lookbook-sheet"
-        open={lookbookSheetOpen}
-        onClose={() => setLookbookSheetOpen(false)}
-        eyebrow="SAVED LOOKBOOK"
-        title={`저장된 코디 룩북 (${outfits.length})`}
-      >
-        {outfits.length === 0 ? (
-          <p className="hig-caption">저장된 코디 조합이 없습니다.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {outfits.map((o) => (
-              <article
-                key={o.id}
-                style={{
-                  background: 'var(--bg-surface)',
-                  borderRadius: 16,
-                  padding: 16,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
+        <div className="hig-top-bar-actions">
+          {equippedItems.length > 0 && (
+            <button
+              type="button"
+              className="hig-circle-icon-btn is-subtle"
+              onClick={handleClearAll}
+              aria-label="착장 초기화"
+            >
+              <RotateCcw size={17} />
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="studio-25d-layout">
+        {/* Center: 2.5D Studio Canvas */}
+        <div className="studio-25d-stage-col">
+          <Studio25DCanvas
+            renderResult={renderResult}
+            activeSlotKey={activeSlotKey}
+            onSelectSlot={(slotKey) => {
+              setActiveSlotKey(slotKey);
+              if (window.innerWidth < 900) {
+                setMobileSheetOpen(true);
+              }
+            }}
+            onUnequipSlot={handleUnequipSlot}
+          />
+
+          {/* Mobile Slot Dock Trigger (opens Bottom Sheet Picker on < 900px) */}
+          <div className="studio-mobile-slot-bar">
+            {FITTING_SLOTS.map((slot) => {
+              const assigned = slots[slot.key];
+              const isSelected = activeSlotKey === slot.key;
+              return (
+                <button
+                  key={slot.key}
+                  type="button"
+                  data-mobile-slot-btn={slot.key}
+                  className={`studio-mobile-slot-pill ${isSelected ? 'active' : ''} ${assigned ? 'filled' : ''}`}
+                  onClick={() => {
+                    setActiveSlotKey(slot.key);
+                    setMobileSheetOpen(true);
                   }}
                 >
-                  <span className="hig-caption">{o.occasion}</span>
+                  <span>{slot.label}</span>
+                  {assigned ? <span className="studio-slot-dot" /> : <Plus size={12} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Side (Desktop >= 900px): Mini Inventory Slot Combiner */}
+        <aside id={CARBON_DOM_CONTRACT.studioSlotPickerId} className="studio-desktop-picker-col">
+          <div className="hig-pill-rail studio-slot-tabs" role="tablist" aria-label="Outfit Slots">
+            {FITTING_SLOTS.map((slot) => {
+              const active = activeSlotKey === slot.key;
+              const hasItem = Boolean(slots[slot.key]);
+              return (
+                <button
+                  key={slot.key}
+                  type="button"
+                  role="tab"
+                  data-outfit-slot-tab={slot.key}
+                  aria-selected={active}
+                  className={`hig-filter-pill ${active ? 'active' : ''}`}
+                  onClick={() => setActiveSlotKey(slot.key)}
+                >
+                  <span>{slot.label}</span>
+                  {hasItem && <span className="studio-slot-dot" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="studio-desktop-inventory-scroll">{renderSlotInventoryGrid(false)}</div>
+
+          <form onSubmit={handleSaveOutfit} className="studio-save-bar">
+            <input
+              type="text"
+              className="hig-native-input"
+              placeholder="Outfit Name"
+              value={outfitTitle}
+              onChange={(e) => setOutfitTitle(e.target.value)}
+              maxLength={80}
+            />
+            <button
+              id={CARBON_DOM_CONTRACT.studioSaveOutfitBtnId}
+              type="submit"
+              className="hig-primary-cta-btn studio-save-submit"
+              disabled={savingOutfit || equippedItems.length === 0}
+            >
+              <Check size={16} />
+              <span>Save</span>
+            </button>
+          </form>
+
+          {savedOutfits.length > 0 && (
+            <div className="studio-saved-looks-rail" aria-label="Saved Outfits">
+              {savedOutfits.map((outfit) => (
+                <div key={outfit.id} className="studio-saved-look-chip">
                   <button
                     type="button"
-                    className="icon-btn"
-                    aria-label="코디 삭제"
-                    onClick={() => handleDeleteOutfit(o.id)}
+                    className="studio-saved-look-select"
+                    onClick={() => handleApplySavedOutfit(outfit)}
                   >
-                    <Trash2 size={14} />
+                    {outfit.title}
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-saved-look-del"
+                    aria-label={`${outfit.title} 삭제`}
+                    onClick={() => handleDeleteSavedOutfit(outfit.id)}
+                  >
+                    <Trash2 size={13} />
                   </button>
                 </div>
-                <div className="hig-headline">{o.title}</div>
-                <div className="outfit-collage">
-                  {(o.items || []).map((item) => (
-                    <div key={item.id} className="collage-piece">
-                      <StudioGarmentImage
-                        item={item}
-                        style={{ width: '100%', aspectRatio: '3 / 4', borderRadius: 8 }}
-                      />
-                      <span className="hig-caption">{item.name}</span>
-                    </div>
-                  ))}
-                </div>
-                {o.memo && <p className="hig-caption">{o.memo}</p>}
-                <span className="hig-caption tabular-nums">
-                  누적 착용 {o.wear_count}회{o.last_worn_date ? ` · 최근 ${o.last_worn_date}` : ''}
-                </span>
-              </article>
-            ))}
-          </div>
-        )}
-      </ResponsiveSheetModal>
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
 
-      <OutfitInspectorModal
-        open={inspectorOpen}
-        initialSlot={inspectorSlot}
-        loadoutBySlot={loadoutBySlot}
-        closetGarments={garments}
-        personalColor={user?.personalColor || 'autumn_warm'}
-        onConfirmSwap={handleConfirmSwap}
-        onSaveOutfit={() => handleSaveLook()}
-        onClose={() => setInspectorOpen(false)}
-      />
-    </>
+      {/* Mobile Save Bar */}
+      <form onSubmit={handleSaveOutfit} className="studio-mobile-save-row">
+        <input
+          type="text"
+          className="hig-native-input"
+          placeholder="Outfit Name"
+          value={outfitTitle}
+          onChange={(e) => setOutfitTitle(e.target.value)}
+          maxLength={80}
+        />
+        <button
+          type="submit"
+          data-testid="mobile-save-outfit-btn"
+          className="hig-primary-cta-btn studio-save-submit"
+          disabled={savingOutfit || equippedItems.length === 0}
+        >
+          <Check size={16} />
+          <span>Save</span>
+        </button>
+      </form>
+
+      {/* Mobile Bottom Sheet Mini Inventory Picker */}
+      <ResponsiveSheetModal
+        open={mobileSheetOpen}
+        onClose={() => setMobileSheetOpen(false)}
+        title={FITTING_SLOTS.find((s) => s.key === activeSlotKey)?.label || 'Select Item'}
+        maxWidth={520}
+      >
+        <div className="hig-pill-rail" style={{ marginBottom: 14 }}>
+          {FITTING_SLOTS.map((slot) => (
+            <button
+              key={slot.key}
+              type="button"
+              className={`hig-filter-pill ${activeSlotKey === slot.key ? 'active' : ''}`}
+              onClick={() => setActiveSlotKey(slot.key)}
+            >
+              {slot.label}
+            </button>
+          ))}
+        </div>
+        {renderSlotInventoryGrid(true)}
+      </ResponsiveSheetModal>
+    </section>
   );
 }

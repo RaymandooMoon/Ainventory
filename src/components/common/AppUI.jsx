@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
 import StudioGarmentImage from '../StudioGarmentImage.jsx';
-import { apiFetch, formatKRW } from '../../utils/api.js';
+import { apiFetch, formatKRW } from '../../utils/api.ts';
 import {
   acknowledgeCameraNotice,
   emitStatusCapsule,
@@ -9,7 +9,7 @@ import {
   setBiometricConsent,
   subscribeStatusCapsule,
   triggerHaptic,
-} from '../../utils/nativeBridge.js';
+} from '../../utils/nativeBridge.ts';
 
 export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (

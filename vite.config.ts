@@ -40,12 +40,6 @@ export default defineConfig({
       output: {
         manualChunks(id: string): string | undefined {
           const normId = id.replace(/\\/g, '/');
-          if (normId.includes('node_modules/three')) {
-            return 'vendor-three';
-          }
-          if (normId.includes('node_modules/@mediapipe/tasks-vision')) {
-            return 'vendor-mediapipe';
-          }
           if (
             normId.includes('node_modules/react/') ||
             normId.includes('node_modules/react-dom/') ||

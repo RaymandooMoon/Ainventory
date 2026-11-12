@@ -20,6 +20,7 @@ import { handleStandaloneApiFallback } from './standaloneFallback.ts';
 
 const TOKEN_KEY = 'ainventory_auth_token';
 const SAMPLE_DEMO_KEY = 'ainventory_sample_demo_mode';
+const SAMPLE_DEMO_MUTATED_KEY = 'ainventory_sample_demo_mutated';
 const API_BASE_URL = String(import.meta.env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
@@ -97,7 +98,26 @@ export function setSampleDemoMode(enabled: boolean): void {
       localStorage.setItem(SAMPLE_DEMO_KEY, '1');
     } else {
       localStorage.removeItem(SAMPLE_DEMO_KEY);
+      localStorage.removeItem(SAMPLE_DEMO_MUTATED_KEY);
     }
+  } catch {
+    // ignore storage write error
+  }
+}
+
+function isSampleDemoMutated(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(SAMPLE_DEMO_MUTATED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSampleDemoMutated(): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(SAMPLE_DEMO_MUTATED_KEY, '1');
   } catch {
     // ignore storage write error
   }
@@ -187,10 +207,10 @@ function isNetworkOrBackendUnavailable(err: unknown): boolean {
 }
 
 /**
- * Offline-First + Sample Demo + Standalone Fallback API Client (Requirements 8.a & 8.b)
+ * Offline-First + Sample Demo + Standalone Fallback API Client
  * - Mirrors GET responses into IndexedDB (`ainventory_offline_v1`) with user-scope isolation
+ * - Preserves local IndexedDB mutations in default sample/local closet mode across GET refreshes
  * - Flushes pending offline mutations BEFORE refreshing online GET caches to prevent clobbering
- * - Serves cached IndexedDB data seamlessly when offline
  * - Falls back to `handleStandaloneApiFallback` on Capacitor APK / static hosts without Express backend
  */
 // oxlint-disable-next-line typescript/no-explicit-any
@@ -204,8 +224,36 @@ export async function apiFetch<T = Record<string, any>>(
   const isStatelessCompute =
     path === '/garments/analyze' || path === '/shopping/analyze' || path === '/shopping-check';
 
-  // In Sample Closet Demo Mode, state mutations stay sandboxed in local IndexedDB
+  // In Sample / Default Local Closet Mode, state mutations persist in local IndexedDB
   if (sampleDemo && method !== 'GET' && !isAuthEndpoint && !isStatelessCompute) {
+    if (path.startsWith('/garments')) {
+      const existingDemo = await readCachedResponse<Record<string, unknown>>(
+        'demo:/garments?closet=sample'
+      );
+      if (!existingDemo) {
+        try {
+          const seed = await rawNetworkFetch('/garments?closet=sample');
+          await writeCachedResponse('demo:/garments?closet=sample', seed);
+        } catch {
+          const localSeed = await handleStandaloneApiFallback('/garments?closet=sample', {});
+          await writeCachedResponse('demo:/garments?closet=sample', localSeed);
+        }
+      }
+    } else if (path.startsWith('/outfits')) {
+      const existingOutfits = await readCachedResponse<Record<string, unknown>>(
+        'demo:/outfits?closet=sample'
+      );
+      if (!existingOutfits) {
+        try {
+          const seed = await rawNetworkFetch('/outfits?closet=sample');
+          await writeCachedResponse('demo:/outfits?closet=sample', seed);
+        } catch {
+          const localSeed = await handleStandaloneApiFallback('/outfits?closet=sample', {});
+          await writeCachedResponse('demo:/outfits?closet=sample', localSeed);
+        }
+      }
+    }
+    markSampleDemoMutated();
     return (await applyOptimisticLocalMutation(path, method, options.body, false)) as unknown as T;
   }
 
@@ -213,6 +261,12 @@ export async function apiFetch<T = Record<string, any>>(
 
   if (method === 'GET') {
     const cacheKey = sampleDemo ? `demo:${path}` : path;
+    if (sampleDemo && isSampleDemoMutated()) {
+      const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
+      if (mutatedCached) {
+        return mutatedCached as unknown as T;
+      }
+    }
     if (isBrowserOffline) {
       const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
       if (cached) return { ...cached, _fromOfflineCache: true } as unknown as T;

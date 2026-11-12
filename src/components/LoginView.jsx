@@ -22,10 +22,13 @@ export default function LoginView({
   onToggleTheme,
 }) {
   const isEn = lang === 'en';
-  const isDev = Boolean(import.meta.env.DEV);
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isDev = Boolean(import.meta.env.DEV) || isLocalHost;
   const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
 
-  const [authMode, setAuthMode] = useState('otp'); // 'otp' | 'login' | 'register'
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'otp' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -272,11 +275,6 @@ export default function LoginView({
         {/* Minimal Hero Title (1 Screen = 1 Core Purpose) */}
         <div>
           <h1 className="hig-large-title">{tr(lang, 'brandTitle')}</h1>
-          <p className="hig-caption" style={{ marginTop: 8 }}>
-            {isEn
-              ? 'Minimal monochrome digital wardrobe with WebP cutouts and weather-synced 3D fitting'
-              : '실사 의류 누끼와 날씨 기반 3D 마네킹이 연동되는 미니멀 디지털 옷장'}
-          </p>
         </div>
 
         {/* Unauthenticated Immediate Sample Closet Demo Entry (Req 8.a & 12.a — Robo Crawler & First-Time Users) */}

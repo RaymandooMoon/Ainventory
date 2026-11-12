@@ -12,20 +12,18 @@ import {
   Trash2,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
-import { apiFetch, flushPendingOfflineSync } from '../utils/api.js';
+import { apiFetch, flushPendingOfflineSync } from '../utils/api.ts';
 import {
   applyThemePreference,
   emitStatusCapsule,
   getStoredThemePreference,
-  hasBiometricConsent,
-  setBiometricConsent,
   triggerHaptic,
-} from '../utils/nativeBridge.js';
-import { getOfflineQueueCount, purgeAllLocalUserData } from '../utils/offlineSync.js';
+} from '../utils/nativeBridge.ts';
+import { getOfflineQueueCount, purgeAllLocalUserData } from '../utils/offlineSync.ts';
 import { LegalDisclosureModal, ResponsiveSheetModal } from './common/AppUI.jsx';
 
 /**
- * Account Settings, Theme Appearance, Offline Sync Status & Immediate Permanent Account Deletion (Reqs 8.a-b, 10.a, 11.a)
+ * Account Settings, Theme Appearance, Offline Sync Status & Immediate Permanent Account Deletion
  */
 export default function AccountSettingsSheet({
   open,
@@ -34,13 +32,11 @@ export default function AccountSettingsSheet({
   lang,
   onChangeLang,
   onOpenSampleImport,
-  onOpenProfileModal,
   onLogout,
   onAccountDeleted,
 }) {
   const [themePref, setThemePref] = useState(getStoredThemePreference());
   const [queueCount, setQueueCount] = useState(0);
-  const [biometricAllowed, setBiometricAllowed] = useState(hasBiometricConsent());
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -50,7 +46,6 @@ export default function AccountSettingsSheet({
     if (!open) return;
     setConfirmDeleteStep(false);
     setThemePref(getStoredThemePreference());
-    setBiometricAllowed(hasBiometricConsent());
     getOfflineQueueCount()
       .then((c) => setQueueCount(c))
       .catch(() => setQueueCount(0));
@@ -122,7 +117,7 @@ export default function AccountSettingsSheet({
               <div className="hig-headline">{user?.displayName || '사용자'}</div>
               <div className="hig-caption">
                 @{user?.username} ·{' '}
-                {user?.isSampleDemo ? '샘플 옷장 체험 모드' : user?.closetName || '개인 옷장'}
+                {user?.isSampleDemo ? '로컬 인벤토리 모드' : user?.closetName || '개인 옷장'}
               </div>
             </div>
             <button
@@ -138,7 +133,7 @@ export default function AccountSettingsSheet({
           {/* Light / Dark / System Monochrome Appearance */}
           <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
             <div className="hig-caption" style={{ marginBottom: 8 }}>
-              화면 스타일 (Apple HIG 무채색 테마)
+              화면 스타일 (Apple HIG 테마)
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {[
@@ -193,20 +188,8 @@ export default function AccountSettingsSheet({
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                style={{ minHeight: 44 }}
-                onClick={() => {
-                  onClose?.();
-                  onOpenProfileModal?.(1);
-                }}
-              >
-                <Sparkles size={14} /> 체형 · 퍼스널컬러 재설정
-              </button>
-
-              {!user?.isSampleDemo && (
+            {!user?.isSampleDemo && onOpenSampleImport && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <button
                   id="settings-open-sample-import-btn"
                   type="button"
@@ -219,24 +202,8 @@ export default function AccountSettingsSheet({
                 >
                   샘플 아이템 선택 가져오기
                 </button>
-              )}
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                style={{ minHeight: 44 }}
-                onClick={() => {
-                  const next = !biometricAllowed;
-                  setBiometricConsent(next);
-                  setBiometricAllowed(next);
-                  emitStatusCapsule(
-                    next ? '로컬 얼굴 분석 동의 활성화' : '로컬 얼굴 분석 동의 철회됨'
-                  );
-                }}
-              >
-                얼굴 로컬분석 동의: {biometricAllowed ? '허용' : '미동의'}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Legal Disclosures: Privacy Policy & Terms of Service */}
