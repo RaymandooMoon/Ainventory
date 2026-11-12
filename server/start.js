@@ -20,6 +20,11 @@ app.use((_req, res, next) => {
   next();
 });
 
+app.get('/api/build-info', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ architecture: 'hig-2.5d', version: '2.5.0' });
+});
+
 app.use('/api', createApiRouter());
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API endpoint not found' });
@@ -35,7 +40,15 @@ app.use(
   express.static(UPLOADS_DIR, { fallthrough: false })
 );
 
-app.use(express.static(distDir));
+app.use(
+  express.static(distDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html') || filePath.endsWith('.webmanifest')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      }
+    },
+  })
+);
 
 app.get('/{*splat}', (_req, res) => {
   const indexPath = path.join(distDir, 'index.html');
@@ -43,10 +56,11 @@ app.get('/{*splat}', (_req, res) => {
     res.status(404).type('text/plain').send('Build output not found. Run npm run build first.');
     return;
   }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(indexPath);
 });
 
 const server = app.listen(PORT, HOST, () => {
-  console.log(`[A inventory] Server listening on http://${HOST}:${PORT}`);
+  console.log(`[A inventory 2.5D] Server listening on http://${HOST}:${PORT}`);
 });
 server.keepAliveTimeout = 65000;
