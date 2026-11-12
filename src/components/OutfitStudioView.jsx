@@ -5,10 +5,8 @@ import {
   CloudRain,
   CloudSun,
   LocateFixed,
-  Palette,
   Plus,
   RotateCcw,
-  Sparkles,
   Sun,
   Trash2,
   Wind,
@@ -19,6 +17,11 @@ import {
   mapGarmentToFittingSlot,
   renderOutfitFitting,
 } from '../services/fittingRenderer.ts';
+import {
+  BODY_SHAPE_OPTIONS,
+  getDefaultBodySpec,
+  sanitizeBodySpec,
+} from '../services/parametricAvatar3D.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
@@ -28,8 +31,8 @@ import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const DEFAULT_CITIES = [
   { key: 'seoul', name: '서울' },
-  { key: 'bundang', name: '성남 · 분당' },
-  { key: 'incheon', name: '인천 · 송도' },
+  { key: 'bundang', name: '분당' },
+  { key: 'incheon', name: '인천' },
   { key: 'daejeon', name: '대전' },
   { key: 'daegu', name: '대구' },
   { key: 'busan', name: '부산' },
@@ -39,13 +42,22 @@ const DEFAULT_CITIES = [
   { key: 'paris', name: '파리' },
 ];
 
+const SHORT_SCENARIO_LABELS = {
+  live: '예보',
+  crisp_autumn: '맑음',
+  rainy_cool: '비',
+  windy_gale: '강풍',
+  warm_spring: '포근',
+  winter_cold: '한파',
+};
+
 const DEFAULT_SCENARIOS = [
-  { key: 'live', label: '실시간 내일 예보' },
-  { key: 'crisp_autumn', label: '선선한 가을 맑음' },
-  { key: 'rainy_cool', label: '비 오는 쌀쌀한 날' },
-  { key: 'windy_gale', label: '강풍 부는 날' },
-  { key: 'warm_spring', label: '포근한 봄 · 초여름' },
-  { key: 'winter_cold', label: '영하권 겨울 칼바람' },
+  { key: 'live', label: '예보' },
+  { key: 'crisp_autumn', label: '맑음' },
+  { key: 'rainy_cool', label: '비' },
+  { key: 'windy_gale', label: '강풍' },
+  { key: 'warm_spring', label: '포근' },
+  { key: 'winter_cold', label: '한파' },
 ];
 
 function mapWeatherRecToSlots(rec, allGarments, weather) {
@@ -70,7 +82,6 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
       resolveItem(slotMap.headwear)
     : resolveItem(slotMap.accessory) || resolveItem(slotMap.neckwear);
 
-  // Fallback if `rec.loadoutBySlot` was omitted (e.g. offline fallback)
   if (!top && !outer && Array.isArray(rec?.items)) {
     for (const raw of rec.items) {
       const item = resolveItem(raw);
@@ -94,11 +105,14 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
 }
 
 export default function OutfitStudioView({
+  user,
   activeCloset,
   garments = [],
   theme = 'light',
   skinProfile,
+  bodySpec,
   onUpdateSkinProfile,
+  onUpdateBodySpec,
   onOpenSkinToneModal,
   preEquippedGarment,
   onConsumePreEquipped,
@@ -115,19 +129,18 @@ export default function OutfitStudioView({
   const [seededInitial, setSeededInitial] = useState(false);
   const [activeSlotKey, setActiveSlotKey] = useState('top');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [bodyModalOpen, setBodyModalOpen] = useState(false);
+  const [draftBody, setDraftBody] = useState(() => sanitizeBodySpec(bodySpec));
   const [renderResult, setRenderResult] = useState(null);
 
-  // Guard so `[Outfits에서 코디해보기]` from ItemDetailSheet or manual slot edits aren't overwritten by initial weather load
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
 
-  // Tomorrow's Weather Styling Engine State
   const [cityKey, setCityKey] = useState('seoul');
   const [scenarioKey, setScenarioKey] = useState('live');
   const [gpsCoords, setGpsCoords] = useState(null);
   const [locatingGps, setLocatingGps] = useState(false);
   const [weatherPayload, setWeatherPayload] = useState(null);
-  const [weatherLoading, setWeatherLoading] = useState(true);
   const [activeRecId, setActiveRecId] = useState(null);
   const activeRecIdRef = useRef(null);
   const [loggingTomorrow, setLoggingTomorrow] = useState(false);
@@ -135,6 +148,12 @@ export default function OutfitStudioView({
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [outfitTitle, setOutfitTitle] = useState('');
   const [savingOutfit, setSavingOutfit] = useState(false);
+
+  useEffect(() => {
+    if (bodyModalOpen) {
+      setDraftBody(sanitizeBodySpec(bodySpec));
+    }
+  }, [bodyModalOpen, bodySpec]);
 
   const loadOutfits = useCallback(async () => {
     try {
@@ -150,14 +169,18 @@ export default function OutfitStudioView({
     loadOutfits();
   }, [loadOutfits]);
 
-  // Fetch Tomorrow's Weather & Tone-Aware Outfit Recommendations
+  const effectiveGender =
+    bodySpec?.gender === 'female' || (!bodySpec && skinProfile?.gender === 'female')
+      ? 'female'
+      : 'male';
+
   const loadWeatherRecommendations = useCallback(async () => {
-    setWeatherLoading(true);
     try {
       const params = new URLSearchParams({
         closet: activeCloset || 'sample',
         city: cityKey,
         scenario: scenarioKey,
+        gender: effectiveGender,
       });
       if (skinProfile?.personalColor) {
         params.set('personal_color', skinProfile.personalColor);
@@ -165,13 +188,10 @@ export default function OutfitStudioView({
       if (skinProfile?.skinToneHex) {
         params.set('skin_tone_hex', skinProfile.skinToneHex);
       }
-      if (skinProfile?.gender) {
-        params.set('gender', skinProfile.gender);
-      }
       if (cityKey === 'gps' && gpsCoords) {
         params.set('lat', String(gpsCoords.lat));
         params.set('lon', String(gpsCoords.lon));
-        params.set('location_label', gpsCoords.label || '현재 내 위치');
+        params.set('location_label', gpsCoords.label || '내 위치');
       }
 
       const data = await apiFetch(`/weather/recommendations?${params.toString()}`);
@@ -187,17 +207,14 @@ export default function OutfitStudioView({
         forceAutoApplyWeatherRef.current = false;
       }
     } catch {
-      // Fallback: keep current slots
-    } finally {
-      setWeatherLoading(false);
+      // keep current slots
     }
-  }, [activeCloset, cityKey, scenarioKey, gpsCoords, skinProfile, garments]);
+  }, [activeCloset, cityKey, scenarioKey, gpsCoords, skinProfile, effectiveGender, garments]);
 
   useEffect(() => {
     loadWeatherRecommendations();
   }, [loadWeatherRecommendations]);
 
-  // Seed a balanced initial 2.5D studio outfit once garments load (unless preEquippedGarment arrives first)
   useEffect(() => {
     if (seededInitial || garments.length === 0) return;
     const findFirst = (slotKey) =>
@@ -216,7 +233,6 @@ export default function OutfitStudioView({
     setSeededInitial(true);
   }, [garments, seededInitial]);
 
-  // Handle `[Outfits에서 코디해보기]` handoff from ItemDetailSheet
   useEffect(() => {
     if (!preEquippedGarment) return;
     userModifiedSlotsRef.current = true;
@@ -237,7 +253,6 @@ export default function OutfitStudioView({
     onConsumePreEquipped?.();
   }, [preEquippedGarment, garments, onConsumePreEquipped]);
 
-  // Keep equipped garment references fresh if edited or deleted in Closet
   useEffect(() => {
     if (garments.length === 0) return;
     const byId = new Map(garments.map((g) => [Number(g.id), g]));
@@ -260,7 +275,6 @@ export default function OutfitStudioView({
     });
   }, [garments]);
 
-  // Run modular FittingRenderer (`Studio25DFittingRenderer` or `VtonApiFittingRenderer`)
   useEffect(() => {
     let cancelled = false;
     renderOutfitFitting({ slots, theme }).then((res) => {
@@ -280,6 +294,20 @@ export default function OutfitStudioView({
   const equippedItems = useMemo(() => {
     return FITTING_SLOTS.map((s) => slots[s.key]).filter(Boolean);
   }, [slots]);
+
+  // Deduplicate saved outfits by title so repeated saves never clutter the minimal rail
+  const uniqueSavedOutfits = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    for (const outfit of savedOutfits) {
+      const key = String(outfit.title || '').trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      list.push(outfit);
+      if (list.length >= 6) break;
+    }
+    return list;
+  }, [savedOutfits]);
 
   const weather = weatherPayload?.weather || null;
   const cities = weatherPayload?.cities?.length ? weatherPayload.cities : DEFAULT_CITIES;
@@ -310,7 +338,7 @@ export default function OutfitStudioView({
 
   const handleUseGpsLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      showToast?.('이 기기에서 위치 정보를 사용할 수 없습니다.');
+      showToast?.('위치 정보를 사용할 수 없습니다.');
       return;
     }
     setLocatingGps(true);
@@ -320,18 +348,17 @@ export default function OutfitStudioView({
         setGpsCoords({
           lat: Number(pos.coords.latitude.toFixed(4)),
           lon: Number(pos.coords.longitude.toFixed(4)),
-          label: '현재 위치',
+          label: '내 위치',
         });
         userModifiedSlotsRef.current = false;
         forceAutoApplyWeatherRef.current = true;
         activeRecIdRef.current = null;
         setCityKey('gps');
         setScenarioKey('live');
-        showToast?.('현재 위치 기준 내일 날씨 코디를 불러왔습니다.');
       },
       () => {
         setLocatingGps(false);
-        showToast?.('위치 권한을 허용하면 현재 위치 예보를 불러옵니다.');
+        showToast?.('위치 권한을 확인해주세요.');
       },
       { timeout: 6000 }
     );
@@ -359,32 +386,13 @@ export default function OutfitStudioView({
       personalColor: preset.personalColor,
       personalColorLabelKo: seasonInfo.labelKo,
       subTypeLabelKo: preset.subTypeLabelKo,
-      gender: skinProfile?.gender || 'male',
+      gender: effectiveGender,
       presetKey: preset.key,
     });
   };
 
-  const handleToggleGender = () => {
-    const nextGender = skinProfile?.gender === 'female' ? 'male' : 'female';
-    triggerHaptic('selection');
-    if (!userModifiedSlotsRef.current) {
-      forceAutoApplyWeatherRef.current = true;
-    }
-    onUpdateSkinProfile?.({
-      ...(skinProfile || {}),
-      skinToneHex: skinProfile?.skinToneHex || '#DFBA9B',
-      personalColor: skinProfile?.personalColor || 'autumn_warm',
-      personalColorLabelKo: skinProfile?.personalColorLabelKo || '가을 웜톤',
-      subTypeLabelKo: skinProfile?.subTypeLabelKo || '가을 소프트 베이지',
-      gender: nextGender,
-    });
-  };
-
   const handleLogTomorrowCalendar = async () => {
-    if (equippedItems.length === 0) {
-      showToast?.('먼저 2.5D 캐릭터에 입힐 코디를 선택해주세요.');
-      return;
-    }
+    if (equippedItems.length === 0) return;
     setLoggingTomorrow(true);
     try {
       const tomorrowDate =
@@ -392,7 +400,7 @@ export default function OutfitStudioView({
         new Date(Date.now() + 86400000).toISOString().slice(0, 10);
       const labelTitle =
         activeRecommendation?.title ||
-        `${weather?.cityName || '서울'} 내일 날씨 코디`;
+        `${weather?.cityName || '서울'} 내일 코디`;
       await apiFetch('/calendar', {
         method: 'POST',
         body: JSON.stringify({
@@ -401,14 +409,14 @@ export default function OutfitStudioView({
           outfit_id: null,
           item_ids: equippedItems.map((g) => g.id),
           status: 'planned',
-          note: `${labelTitle} (${weather?.condition || '맑음'} ${weather?.tempMin ?? 9}°/${weather?.tempMax ?? 17}°C)`,
+          note: `${labelTitle} (${weather?.tempMin ?? 9}°/${weather?.tempMax ?? 17}°)`,
         }),
       });
       triggerHaptic('medium');
       onClosetUpdated?.();
-      showToast?.(`내일(${tomorrowDate}) 착용 예정 코디로 캘린더에 기록되었습니다.`);
+      showToast?.('내일 캘린더에 추가됨');
     } catch (err) {
-      showToast?.(err?.message || '캘린더 기록에 실패했습니다.');
+      showToast?.(err?.message || '기록 실패');
     } finally {
       setLoggingTomorrow(false);
     }
@@ -447,10 +455,7 @@ export default function OutfitStudioView({
 
   const handleSaveOutfit = async (e) => {
     e?.preventDefault?.();
-    if (equippedItems.length === 0) {
-      showToast?.('최소 1개 이상의 의류를 선택해주세요.');
-      return;
-    }
+    if (equippedItems.length === 0) return;
     setSavingOutfit(true);
     try {
       const title =
@@ -459,7 +464,7 @@ export default function OutfitStudioView({
         equippedItems
           .slice(0, 2)
           .map((g) => g.name)
-          .join(' + ');
+          .join(' · ');
       await apiFetch('/outfits', {
         method: 'POST',
         body: JSON.stringify({
@@ -474,9 +479,9 @@ export default function OutfitStudioView({
       triggerHaptic('medium');
       await loadOutfits();
       onClosetUpdated?.();
-      showToast?.('코디가 저장되었습니다.');
+      showToast?.('저장됨');
     } catch (err) {
-      showToast?.(err?.message || '코디 저장에 실패했습니다.');
+      showToast?.(err?.message || '저장 실패');
     } finally {
       setSavingOutfit(false);
     }
@@ -512,6 +517,12 @@ export default function OutfitStudioView({
     }
   };
 
+  const handleSaveBodySpec = () => {
+    const cleaned = sanitizeBodySpec(draftBody);
+    onUpdateBodySpec?.(cleaned);
+    setBodyModalOpen(false);
+  };
+
   const renderSlotInventoryGrid = (closeOnPick = false) => (
     <div className="studio-mini-inventory-grid">
       {slotGarments.map((item) => {
@@ -543,6 +554,8 @@ export default function OutfitStudioView({
     </div>
   );
 
+  const isSignedAccount = Boolean(user && !user.isSampleDemo);
+
   return (
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
       <header className="hig-top-bar">
@@ -552,20 +565,6 @@ export default function OutfitStudioView({
         </div>
 
         <div className="hig-top-bar-actions">
-          <button
-            type="button"
-            className="hig-skin-header-pill"
-            onClick={onOpenSkinToneModal}
-            aria-label="인물 피부톤 분석 및 2.5D 마네킹 변경"
-          >
-            <span
-              className="hig-skin-header-swatch"
-              style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
-            />
-            <span>{skinProfile?.subTypeLabelKo || '피부톤 분석'}</span>
-            <Palette size={14} />
-          </button>
-
           {equippedItems.length > 0 && (
             <button
               type="button"
@@ -579,71 +578,96 @@ export default function OutfitStudioView({
         </div>
       </header>
 
-      {/* Tomorrow's Weather AI Outfit Recommendation Strip */}
+      {/* Ultra-Minimal Apple HIG Tomorrow Weather Bar (Zero Prose, Pure Controls) */}
       <section
         id={CARBON_DOM_CONTRACT.weatherRecommendPanelId}
         className="weather-recommend-panel"
-        aria-label="내일 날씨 기반 2.5D 코디 추천"
+        aria-label="내일 날씨 코디"
       >
-        <div className="weather-header-row">
-          <div className="weather-forecast-summary">
+        <div className="weather-minimal-top">
+          <div className="weather-minimal-badge-group">
             <span className="weather-tomorrow-chip">
               {weather?.isRainy ? (
-                <CloudRain size={14} />
+                <CloudRain size={13} />
               ) : weather?.isWindy ? (
-                <Wind size={14} />
+                <Wind size={13} />
               ) : weather ? (
-                <CloudSun size={14} />
+                <CloudSun size={13} />
               ) : (
-                <Sun size={14} />
+                <Sun size={13} />
               )}
               <strong>내일 날씨 코디</strong>
             </span>
 
-            {weather ? (
-              <span className="weather-metrics-inline tabular-nums">
-                {weather.cityName} · {weather.condition} · 최저 {weather.tempMin}° / 최고{' '}
-                {weather.tempMax}°C · 강수 {weather.precipProb ?? 10}%
-              </span>
-            ) : (
-              <span className="weather-metrics-inline">
-                {weatherLoading ? '내일 예보를 분석하는 중...' : '내일 기온 맞춤 코디'}
+            {weather && (
+              <span className="weather-temp-compact tabular-nums">
+                {weather.tempMin}°/{weather.tempMax}°
               </span>
             )}
           </div>
 
+          {recommendations.length > 0 && (
+            <div className="weather-look-pills" role="list" aria-label="추천 코디">
+              {recommendations.map((rec, idx) => {
+                const isSelected = activeRecId === rec.id;
+                return (
+                  <button
+                    key={rec.id}
+                    type="button"
+                    data-weather-rec-id={rec.id}
+                    className={`weather-look-pill ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => handleApplyRecommendation(rec)}
+                  >
+                    <span>Look {idx + 1}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="weather-location-controls">
             <select
-              aria-label="내일 예보 도시 선택"
+              aria-label="도시 선택"
               className="weather-city-select"
               value={cityKey}
               onChange={(e) => handleSelectCity(e.target.value)}
             >
-              {gpsCoords && <option value="gps">현재 내 위치</option>}
+              {gpsCoords && <option value="gps">내 위치</option>}
               {cities.map((c) => (
                 <option key={c.key} value={c.key}>
-                  {c.name}
+                  {c.name.split('·')[0].trim()}
                 </option>
               ))}
             </select>
 
             <button
               type="button"
-              className="weather-gps-btn"
+              className="weather-icon-btn"
               onClick={handleUseGpsLocation}
               disabled={locatingGps}
-              title="현재 위치 기준 내일 예보"
-              aria-label="현재 위치 기준 내일 예보"
+              aria-label="현재 위치 예보"
             >
-              <LocateFixed size={14} />
+              <LocateFixed size={13} />
+            </button>
+
+            <button
+              type="button"
+              id="log-tomorrow-outfit-btn"
+              className="weather-icon-btn"
+              disabled={loggingTomorrow || equippedItems.length === 0}
+              onClick={handleLogTomorrowCalendar}
+              title="내일 캘린더에 기록"
+              aria-label="내일 캘린더에 기록"
+            >
+              <CalendarPlus size={13} />
             </button>
           </div>
         </div>
 
-        {/* Weather Scenario Selector Pills */}
-        <div className="hig-pill-rail weather-scenario-rail" role="tablist" aria-label="날씨 시나리오">
+        <div className="hig-pill-rail weather-scenario-rail" role="tablist" aria-label="날씨">
           {scenarios.map((sc) => {
             const active = scenarioKey === sc.key;
+            const shortLabel = SHORT_SCENARIO_LABELS[sc.key] || sc.label;
             return (
               <button
                 key={sc.key}
@@ -654,76 +678,22 @@ export default function OutfitStudioView({
                 className={`hig-filter-pill ${active ? 'active' : ''}`}
                 onClick={() => handleSelectScenario(sc.key)}
               >
-                {sc.label}
+                {shortLabel}
               </button>
             );
           })}
         </div>
-
-        {/* Ranked AI Tomorrow Outfit Cards (Click -> Instantly Dresses 2.5D Character) */}
-        {recommendations.length > 0 && (
-          <div className="weather-rec-cards-rail" role="list" aria-label="내일 날씨 추천 코디 목록">
-            {recommendations.map((rec, idx) => {
-              const isSelected = activeRecId === rec.id;
-              return (
-                <button
-                  key={rec.id}
-                  type="button"
-                  data-weather-rec-id={rec.id}
-                  className={`weather-rec-card ${isSelected ? 'is-selected' : ''}`}
-                  onClick={() => handleApplyRecommendation(rec)}
-                >
-                  <div className="weather-rec-card-top">
-                    <span className="weather-rec-badge">
-                      <Sparkles size={11} />
-                      <span>
-                        추천 {idx + 1} · {rec.badge}
-                      </span>
-                    </span>
-                    <span className="weather-rec-score tabular-nums">
-                      적합 {rec.suitabilityScore}% · 톤조화 {rec.personalColorSync || 90}%
-                    </span>
-                  </div>
-                  <strong className="weather-rec-title">{rec.title}</strong>
-                  <span className="weather-rec-items-line">
-                    {(rec.items || [])
-                      .slice(0, 4)
-                      .map((it) => it.name)
-                      .join(' · ')}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Concise Weather Tip + 1-Tap Tomorrow Calendar Log */}
-        {(activeRecommendation || weather?.summary) && (
-          <div className="weather-rationale-bar">
-            <p className="weather-rationale-text">
-              {activeRecommendation?.rationale || weather?.summary}
-            </p>
-            <button
-              type="button"
-              id="log-tomorrow-outfit-btn"
-              className="weather-calendar-log-btn"
-              disabled={loggingTomorrow || equippedItems.length === 0}
-              onClick={handleLogTomorrowCalendar}
-            >
-              <CalendarPlus size={14} />
-              <span>내일 코디 캘린더 기록</span>
-            </button>
-          </div>
-        )}
       </section>
 
       <div className="studio-25d-layout">
-        {/* Center: Tone-Adaptive 2.5D Character Studio Canvas */}
+        {/* Center: 360° Parametric Character Stage */}
         <div className="studio-25d-stage-col">
           <Studio25DCanvas
+            slots={slots}
             renderResult={renderResult}
             theme={theme}
             skinProfile={skinProfile}
+            bodySpec={bodySpec}
             weather={weather}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -734,11 +704,11 @@ export default function OutfitStudioView({
             }}
             onUnequipSlot={handleUnequipSlot}
             onQuickSelectPreset={handleQuickSelectSkinPreset}
-            onToggleGender={handleToggleGender}
             onOpenSkinToneModal={onOpenSkinToneModal}
+            onOpenBodyModal={() => setBodyModalOpen(true)}
           />
 
-          {/* Mobile Slot Dock Trigger (opens Bottom Sheet Picker on < 900px) */}
+          {/* Mobile Slot Dock (< 900px) */}
           <div className="studio-mobile-slot-bar">
             {FITTING_SLOTS.map((slot) => {
               const assigned = slots[slot.key];
@@ -762,7 +732,7 @@ export default function OutfitStudioView({
           </div>
         </div>
 
-        {/* Right Side (Desktop >= 900px): Mini Inventory Slot Combiner */}
+        {/* Right Side (Desktop >= 900px): Minimal Slot Inventory Grid */}
         <aside id={CARBON_DOM_CONTRACT.studioSlotPickerId} className="studio-desktop-picker-col">
           <div className="hig-pill-rail studio-slot-tabs" role="tablist" aria-label="Outfit Slots">
             {FITTING_SLOTS.map((slot) => {
@@ -807,9 +777,9 @@ export default function OutfitStudioView({
             </button>
           </form>
 
-          {savedOutfits.length > 0 && (
+          {uniqueSavedOutfits.length > 0 && (
             <div className="studio-saved-looks-rail" aria-label="Saved Outfits">
-              {savedOutfits.map((outfit) => (
+              {uniqueSavedOutfits.map((outfit) => (
                 <div key={outfit.id} className="studio-saved-look-chip">
                   <button
                     type="button"
@@ -824,7 +794,7 @@ export default function OutfitStudioView({
                     aria-label={`${outfit.title} 삭제`}
                     onClick={() => handleDeleteSavedOutfit(outfit.id)}
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={12} />
                   </button>
                 </div>
               ))}
@@ -874,6 +844,142 @@ export default function OutfitStudioView({
           ))}
         </div>
         {renderSlotInventoryGrid(true)}
+      </ResponsiveSheetModal>
+
+      {/* Human Body Shape Morphing Sheet (`체형 설정`) */}
+      <ResponsiveSheetModal
+        open={bodyModalOpen}
+        onClose={() => setBodyModalOpen(false)}
+        title="체형 설정"
+        maxWidth={440}
+      >
+        <div className="body-spec-sheet">
+          <div className="body-spec-row">
+            <span className="body-spec-label">성별</span>
+            {isSignedAccount ? (
+              <span className="body-spec-account-badge" data-account-gender={draftBody.gender}>
+                회원 정보 · {draftBody.gender === 'female' ? '여성' : '남성'}
+              </span>
+            ) : (
+              <div className="body-spec-seg">
+                {[
+                  { key: 'male', label: '남성' },
+                  { key: 'female', label: '여성' },
+                ].map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    data-body-gender-btn={g.key}
+                    className={`body-spec-seg-btn ${draftBody.gender === g.key ? 'is-active' : ''}`}
+                    onClick={() => {
+                      const def = getDefaultBodySpec(g.key);
+                      setDraftBody((prev) => ({
+                        ...prev,
+                        gender: g.key,
+                        heightCm: def.heightCm,
+                        weightKg: def.weightKg,
+                      }));
+                    }}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="body-spec-slider-block">
+            <div className="body-spec-slider-head tabular-nums">
+              <span>신장</span>
+              <strong>{draftBody.heightCm} cm</strong>
+            </div>
+            <input
+              type="range"
+              min={148}
+              max={198}
+              step={1}
+              value={draftBody.heightCm}
+              aria-label="신장 cm"
+              onChange={(e) =>
+                setDraftBody((prev) => ({ ...prev, heightCm: Number(e.target.value) }))
+              }
+            />
+          </div>
+
+          <div className="body-spec-slider-block">
+            <div className="body-spec-slider-head tabular-nums">
+              <span>체중</span>
+              <strong>{draftBody.weightKg} kg</strong>
+            </div>
+            <input
+              type="range"
+              min={40}
+              max={120}
+              step={1}
+              value={draftBody.weightKg}
+              aria-label="체중 kg"
+              onChange={(e) =>
+                setDraftBody((prev) => ({ ...prev, weightKg: Number(e.target.value) }))
+              }
+            />
+          </div>
+
+          <div className="body-spec-preset-group">
+            <span className="body-spec-label">체형 타입</span>
+            <div className="body-spec-shape-pills">
+              {BODY_SHAPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  data-body-shape-btn={opt.key}
+                  className={`hig-filter-pill ${draftBody.bodyShape === opt.key ? 'active' : ''}`}
+                  onClick={() => setDraftBody((prev) => ({ ...prev, bodyShape: opt.key }))}
+                >
+                  {opt.labelKo}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="body-spec-fine-grid">
+            {[
+              { key: 'shoulderScale', label: '어깨', min: 0.88, max: 1.18 },
+              { key: 'waistScale', label: '허리', min: 0.84, max: 1.22 },
+              { key: 'hipScale', label: '골반', min: 0.88, max: 1.2 },
+            ].map((ctrl) => (
+              <label key={ctrl.key} className="body-spec-fine-item tabular-nums">
+                <div className="body-spec-slider-head">
+                  <span>{ctrl.label}</span>
+                  <small>{Math.round((draftBody[ctrl.key] || 1) * 100)}%</small>
+                </div>
+                <input
+                  type="range"
+                  min={ctrl.min}
+                  max={ctrl.max}
+                  step={0.02}
+                  value={draftBody[ctrl.key] || 1}
+                  aria-label={`${ctrl.label} 비율`}
+                  onChange={(e) =>
+                    setDraftBody((prev) => ({
+                      ...prev,
+                      [ctrl.key]: Number(e.target.value),
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+
+          <button
+            id="apply-body-spec-btn"
+            type="button"
+            className="hig-primary-cta-btn"
+            onClick={handleSaveBodySpec}
+          >
+            <Check size={16} />
+            <span>적용</span>
+          </button>
+        </div>
       </ResponsiveSheetModal>
     </section>
   );

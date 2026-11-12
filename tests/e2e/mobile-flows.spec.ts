@@ -339,7 +339,66 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(mannequin).toHaveAttribute('data-personal-color', 'spring_warm');
     const updatedHex = await mannequin.getAttribute('data-skin-hex');
     expect(updatedHex).not.toBe('#8E5C40');
+    // 5. 360° Game-Character Multi-Angle Inspection (`앞`, `뒤`, `좌`, `우`, `상`, `하`) & Body Shape Morph
+    for (const preset of ['back', 'left', 'right', 'top', 'bottom', 'front']) {
+      await studioCanvas.locator(`[data-camera-preset-btn="${preset}"]`).click();
+      await expect(mannequin).toHaveAttribute('data-camera-preset', preset);
+    }
+
+    await studioCanvas.locator('#open-body-spec-btn').click();
+    await page.locator('[data-body-shape-btn="muscular"]').click();
+    await page.locator('#apply-body-spec-btn').click();
+    await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
+
+    // Unequipping Tops leaves an unbroken parametric 3D character (no waist chop)
+    await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(0);
+    await expect(mannequin).toBeVisible();
+
     expect(forbiddenAssetRequests).toEqual([]);
+  });
+
+  test('5. Signup gender & anthropometric info automatically configure the 3D character model', async ({
+    page,
+  }) => {
+    await page.goto('/?auth=1');
+
+    await page.locator(`#${CARBON_DOM_CONTRACT.authTabRegisterId}`).click();
+    const uniqueEmail = `female.avatar.${Date.now()}@example.com`;
+    await page.locator('#register-email-input').fill(uniqueEmail);
+    await page.locator('#send-otp-btn').click();
+
+    // Local dev mode auto-fills OTP code; click Verify
+    await expect(page.locator('#verify-otp-btn')).toBeVisible();
+    await page.locator('#verify-otp-btn').click();
+    await expect(page.locator('#verify-otp-btn')).toContainText('인증됨');
+
+    // Select Female (`여성`) + 165cm + 53kg at signup
+    await page.locator('[data-signup-gender="female"]').click();
+    await page.locator('#register-name-input').fill('서연');
+    await page.locator('#register-height-input').fill('165');
+    await page.locator('#register-weight-input').fill('53');
+    await page.locator('#register-password-input').fill('pass1234');
+    await page.locator('#complete-register-btn').click();
+
+    // Lands on MY WARDROBE -> navigate to Outfits and verify Female + 165cm + 53kg reflected automatically
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toHaveText(
+      'MY WARDROBE'
+    );
+    await page.locator('[data-nav-tab="outfits"]').click();
+
+    const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    await expect(mannequin).toBeVisible();
+    await expect(mannequin).toHaveAttribute('data-character-gender', 'female');
+    await expect(mannequin).toHaveAttribute('data-height-cm', '165');
+    await expect(mannequin).toHaveAttribute('data-weight-kg', '53');
+
+    // Clean up test user account immediately
+    await page.locator('[data-nav-tab="stats"]').click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.initiateDeleteAccountBtnId}`).click();
+    await page.locator(`#${CARBON_DOM_CONTRACT.confirmPermanentDeleteBtnId}`).click();
+    await expect(page.locator('#login-bg-video-light, #login-bg-video-dark').first()).toBeVisible();
   });
 });
 

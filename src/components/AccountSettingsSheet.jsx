@@ -29,6 +29,7 @@ export default function AccountSettingsSheet({
   open,
   onClose,
   user,
+  bodySpec,
   lang,
   onChangeLang,
   onOpenSampleImport,
@@ -63,9 +64,9 @@ export default function AccountSettingsSheet({
       await flushPendingOfflineSync();
       const left = await getOfflineQueueCount();
       setQueueCount(left);
-      emitStatusCapsule('오프라인 변경 내역 동기화 완료');
+      emitStatusCapsule('동기화 완료');
     } catch (err) {
-      emitStatusCapsule(err?.message || '오프라인 동기화 중 오류가 발생했습니다');
+      emitStatusCapsule(err?.message || '동기화 오류');
     } finally {
       setSyncing(false);
     }
@@ -82,25 +83,30 @@ export default function AccountSettingsSheet({
       }
       await purgeAllLocalUserData();
       triggerHaptic('heavy');
-      emitStatusCapsule('계정 및 모든 개인 데이터가 영구 삭제되었습니다');
+      emitStatusCapsule('계정이 삭제되었습니다');
       onAccountDeleted?.();
     } catch (err) {
-      emitStatusCapsule(err.message || '계정 삭제 중 오류가 발생했습니다');
+      emitStatusCapsule(err.message || '계정 삭제 오류');
     } finally {
       setDeleting(false);
     }
   };
+
+  const resolvedGenderLabel =
+    (user?.isSampleDemo ? bodySpec?.gender : user?.gender || bodySpec?.gender) === 'female'
+      ? '여성'
+      : '남성';
 
   return (
     <>
       <ResponsiveSheetModal
         open={open}
         onClose={onClose}
-        eyebrow="ACCOUNT & PRIVACY"
-        title="계정 · 화면 모드 · 개인정보 관리"
-        maxWidth={520}
+        eyebrow="ACCOUNT"
+        title="계정 설정"
+        maxWidth={500}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* User Summary */}
           <div
             style={{
@@ -115,9 +121,9 @@ export default function AccountSettingsSheet({
           >
             <div>
               <div className="hig-headline">{user?.displayName || '사용자'}</div>
-              <div className="hig-caption">
-                @{user?.username} ·{' '}
-                {user?.isSampleDemo ? '로컬 인벤토리 모드' : user?.closetName || '개인 옷장'}
+              <div className="hig-caption tabular-nums">
+                @{user?.username} · {resolvedGenderLabel}
+                {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
               </div>
             </div>
             <button

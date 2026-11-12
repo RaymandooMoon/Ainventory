@@ -1135,7 +1135,13 @@ export function createApiRouter() {
       password = '',
       displayName = '',
       closetName = '',
-      gender = 'unspecified',
+      gender = 'male',
+      heightCm: rawHeightCm,
+      height_cm: rawHeightSnake,
+      weightKg: rawWeightKg,
+      weight_kg: rawWeightSnake,
+      bodyShape: rawBodyShape,
+      body_shape: rawBodyShapeSnake,
     } = req.body || {};
 
     const cleanEmail = String(email).trim().toLowerCase();
@@ -1183,6 +1189,18 @@ export function createApiRouter() {
       cleanUsername = `${baseUsername}_${crypto.randomInt(100, 9999)}`;
     }
 
+    const parseSignupNum = (v, min, max) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      if (Number.isNaN(n) || n <= 0) return null;
+      return Number(Math.max(min, Math.min(max, n)).toFixed(1));
+    };
+
+    const cleanGender = gender === 'female' ? 'female' : 'male';
+    const cleanHeightCm = parseSignupNum(rawHeightCm ?? rawHeightSnake, 120, 220);
+    const cleanWeightKg = parseSignupNum(rawWeightKg ?? rawWeightSnake, 30, 180);
+    const cleanBodyShape = normalizeBodyShapeKey(rawBodyShape ?? rawBodyShapeSnake);
+
     const cleanDisplayName = String(displayName || cleanUsername).trim().slice(0, 60);
     const cleanClosetName = String(closetName || `${cleanDisplayName}의 옷장`).trim().slice(0, 80);
     const closetKey = `closet_${cleanUsername}`;
@@ -1194,8 +1212,8 @@ export function createApiRouter() {
         INSERT INTO users (
           username, email, password_hash, display_name, role, default_closet,
           closet_name, verification_token, verification_code, verified_at, verification_hash,
-          gender, profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
-        ) VALUES (?, ?, ?, ?, 'member', ?, ?, NULL, NULL, ?, ?, ?, 0, 'email', ?, 1, 0)
+          gender, height_cm, weight_kg, body_shape, profile_completed, auth_provider, verify_last_sent_at, verify_send_count, verify_fail_count
+        ) VALUES (?, ?, ?, ?, 'member', ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 1, 'email', ?, 1, 0)
       `).run(
         cleanUsername,
         cleanEmail,
@@ -1205,7 +1223,10 @@ export function createApiRouter() {
         cleanClosetName,
         nowIso,
         vHash,
-        String(gender || 'unspecified').slice(0, 24),
+        cleanGender,
+        cleanHeightCm,
+        cleanWeightKg,
+        cleanBodyShape,
         nowIso
       );
       return db.prepare('SELECT * FROM users WHERE username = ?').get(cleanUsername);
@@ -1964,6 +1985,34 @@ export function createApiRouter() {
 
     const ownedUploadsToRemove = [];
     const { updated, generatedWardrobe } = db.transaction(() => {
+      const prevRow = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) || {};
+      const nextAge = age !== null ? Math.round(age) : (prevRow.age ?? null);
+      const nextAgeGroup =
+        body.age_group || body.ageGroup || age !== null
+          ? ageGroup
+          : (prevRow.age_group || 'unspecified');
+      const nextHeightCm = heightCm !== null ? heightCm : (prevRow.height_cm ?? null);
+      const nextWeightKg = weightKg !== null ? weightKg : (prevRow.weight_kg ?? null);
+      const nextGender =
+        body.gender !== undefined && body.gender !== null && String(body.gender).trim() !== ''
+          ? gender
+          : (prevRow.gender || 'male');
+      const nextPersonalColor =
+        body.personal_color || body.personalColor
+          ? personalColor
+          : (prevRow.personal_color || 'autumn_warm');
+      const nextSkinToneHex =
+        body.skin_tone_hex || body.skinToneHex
+          ? skinToneHex
+          : (prevRow.skin_tone_hex || '#DFBA9B');
+      const nextSkinLab = skinUndertoneLab !== null ? skinUndertoneLab : (prevRow.skin_undertone_lab ?? null);
+      const nextBodyShape = rawBodyShape !== undefined ? bodyShape : (prevRow.body_shape ?? null);
+      const nextBodyFat = bodyFatPct !== null ? bodyFatPct : (prevRow.body_fat_pct ?? null);
+      const nextChest = chestCm !== null ? chestCm : (prevRow.chest_cm ?? null);
+      const nextWaist = waistCm !== null ? waistCm : (prevRow.waist_cm ?? null);
+      const nextHip = hipCm !== null ? hipCm : (prevRow.hip_cm ?? null);
+      const nextHead = headCm !== null ? headCm : (prevRow.head_cm ?? null);
+
       db.prepare(`
         UPDATE users
         SET age_group = ?,
@@ -1983,20 +2032,20 @@ export function createApiRouter() {
             profile_completed = 1
         WHERE id = ?
       `).run(
-        ageGroup,
-        age !== null ? Math.round(age) : null,
-        heightCm,
-        weightKg,
-        gender,
-        personalColor,
-        skinToneHex,
-        skinUndertoneLab,
-        bodyShape,
-        bodyFatPct,
-        chestCm,
-        waistCm,
-        hipCm,
-        headCm,
+        nextAgeGroup,
+        nextAge,
+        nextHeightCm,
+        nextWeightKg,
+        nextGender,
+        nextPersonalColor,
+        nextSkinToneHex,
+        nextSkinLab,
+        nextBodyShape,
+        nextBodyFat,
+        nextChest,
+        nextWaist,
+        nextHip,
+        nextHead,
         req.user.id
       );
 

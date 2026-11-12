@@ -11,6 +11,12 @@ import StatsView from './components/StatsView.jsx';
 import WardrobeView from './components/WardrobeView.jsx';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
 import {
+  deriveBodySpecFromUser,
+  getDefaultBodySpec,
+  getStoredBodySpec,
+  saveStoredBodySpec,
+} from './services/parametricAvatar3D.ts';
+import {
   getStoredSkinProfile,
   saveStoredSkinProfile,
 } from './services/skinToneAnalyzer.ts';
@@ -96,6 +102,7 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [skinProfile, setSkinProfile] = useState(() => getStoredSkinProfile());
+  const [bodySpec, setBodySpec] = useState(() => getStoredBodySpec());
   const [skinToneModalOpen, setSkinToneModalOpen] = useState(false);
 
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
@@ -111,6 +118,24 @@ export default function App() {
 
   const showToast = useCallback((msg) => {
     if (msg) emitStatusCapsule(msg);
+  }, []);
+
+  const syncAccountToAvatar = useCallback((accountUser) => {
+    if (!accountUser || accountUser.isSampleDemo) return;
+    const accountGender = accountUser.gender === 'female' ? 'female' : 'male';
+    const currentSkin = getStoredSkinProfile();
+    const syncedSkin = saveStoredSkinProfile({
+      ...currentSkin,
+      skinToneHex: accountUser.skinToneHex || currentSkin.skinToneHex,
+      personalColor: accountUser.personalColor || currentSkin.personalColor,
+      gender: accountGender,
+    });
+    setSkinProfile(syncedSkin);
+
+    const syncedBody = saveStoredBodySpec(
+      deriveBodySpecFromUser(accountUser, getStoredBodySpec())
+    );
+    setBodySpec(syncedBody);
   }, []);
 
   // Native shell + theme + offline sync listener
@@ -160,14 +185,7 @@ export default function App() {
         if (data?.user) {
           setSampleDemoMode(false);
           setUser(data.user);
-          if (data.user.skinToneHex || data.user.personalColor) {
-            const synced = saveStoredSkinProfile({
-              skinToneHex: data.user.skinToneHex || undefined,
-              personalColor: data.user.personalColor || undefined,
-              gender: data.user.gender === 'female' ? 'female' : 'male',
-            });
-            setSkinProfile(synced);
-          }
+          syncAccountToAvatar(data.user);
         } else {
           setStoredToken(null);
           setSampleDemoMode(true);
@@ -182,7 +200,7 @@ export default function App() {
       .finally(() => {
         setAuthReady(true);
       });
-  }, []);
+  }, [syncAccountToAvatar]);
 
   const activeCloset = user?.defaultCloset || 'sample';
 
@@ -212,8 +230,32 @@ export default function App() {
 
   const handleApplySkinProfile = useCallback(
     (nextProfile) => {
-      const saved = saveStoredSkinProfile(nextProfile);
+      const lockedGender =
+        user && !user.isSampleDemo
+          ? user.gender === 'female'
+            ? 'female'
+            : 'male'
+          : nextProfile?.gender === 'female'
+            ? 'female'
+            : 'male';
+
+      const saved = saveStoredSkinProfile({
+        ...nextProfile,
+        gender: lockedGender,
+      });
       setSkinProfile(saved);
+
+      setBodySpec((prev) => {
+        if (prev.gender === lockedGender) return prev;
+        const def = getDefaultBodySpec(lockedGender);
+        return saveStoredBodySpec({
+          ...prev,
+          gender: lockedGender,
+          heightCm: def.heightCm,
+          weightKg: def.weightKg,
+        });
+      });
+
       setUser((prev) =>
         prev
           ? {
@@ -221,7 +263,7 @@ export default function App() {
               skinToneHex: saved.skinToneHex,
               personalColor: saved.personalColor,
               personalColorLabelKo: saved.personalColorLabelKo,
-              gender: saved.gender,
+              gender: lockedGender,
             }
           : prev
       );
@@ -232,14 +274,63 @@ export default function App() {
           body: JSON.stringify({
             personal_color: saved.personalColor,
             skin_tone_hex: saved.skinToneHex,
-            gender: saved.gender,
+            gender: lockedGender,
           }),
-        }).catch(() => {
-          // persisted locally in localStorage as well
-        });
+        }).catch(() => {});
       }
 
-      showToast(`2.5D 캐릭터(${saved.subTypeLabelKo})와 내일 코디 추천이 업데이트되었습니다.`);
+      showToast('피부톤 적용됨');
+    },
+    [user, showToast]
+  );
+
+  const handleUpdateBodySpec = useCallback(
+    (nextSpec) => {
+      const lockedGender =
+        user && !user.isSampleDemo
+          ? user.gender === 'female'
+            ? 'female'
+            : 'male'
+          : nextSpec?.gender === 'female'
+            ? 'female'
+            : 'male';
+
+      const savedBody = saveStoredBodySpec({
+        ...nextSpec,
+        gender: lockedGender,
+      });
+      setBodySpec(savedBody);
+
+      setSkinProfile((prev) => {
+        if (prev?.gender === lockedGender) return prev;
+        return saveStoredSkinProfile({ ...prev, gender: lockedGender });
+      });
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              gender: lockedGender,
+              heightCm: savedBody.heightCm,
+              weightKg: savedBody.weightKg,
+              bodyShape: savedBody.bodyShape,
+            }
+          : prev
+      );
+
+      if (user && !user.isSampleDemo) {
+        apiFetch('/auth/profile', {
+          method: 'POST',
+          body: JSON.stringify({
+            gender: lockedGender,
+            height_cm: savedBody.heightCm,
+            weight_kg: savedBody.weightKg,
+            body_shape: savedBody.bodyShape,
+          }),
+        }).catch(() => {});
+      }
+
+      showToast('체형 반영됨');
     },
     [user, showToast]
   );
@@ -307,25 +398,21 @@ export default function App() {
     }
   }, []);
 
-  const handleLoginSuccess = useCallback((loggedInUser) => {
-    setSampleDemoMode(false);
-    setUser(loggedInUser);
-    if (loggedInUser?.skinToneHex || loggedInUser?.personalColor) {
-      const synced = saveStoredSkinProfile({
-        skinToneHex: loggedInUser.skinToneHex || undefined,
-        personalColor: loggedInUser.personalColor || undefined,
-        gender: loggedInUser.gender === 'female' ? 'female' : 'male',
-      });
-      setSkinProfile(synced);
-    }
-    setShowAuthScreen(false);
-    setSelectedItemId(null);
-    setActiveTab('closet');
-    setRefreshKey((k) => k + 1);
-    if (typeof window !== 'undefined') {
-      window.history.replaceState({}, '', '/');
-    }
-  }, []);
+  const handleLoginSuccess = useCallback(
+    (loggedInUser) => {
+      setSampleDemoMode(false);
+      setUser(loggedInUser);
+      syncAccountToAvatar(loggedInUser);
+      setShowAuthScreen(false);
+      setSelectedItemId(null);
+      setActiveTab('closet');
+      setRefreshKey((k) => k + 1);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/');
+      }
+    },
+    [syncAccountToAvatar]
+  );
 
   const handleLogout = useCallback(async () => {
     try {
@@ -403,11 +490,14 @@ export default function App() {
 
         {activeTab === 'outfits' && (
           <OutfitStudioView
+            user={user}
             activeCloset={activeCloset}
             garments={garments}
             theme={resolvedTheme}
             skinProfile={skinProfile}
+            bodySpec={bodySpec}
             onUpdateSkinProfile={handleApplySkinProfile}
+            onUpdateBodySpec={handleUpdateBodySpec}
             onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
             preEquippedGarment={preEquippedGarment}
             onConsumePreEquipped={() => setPreEquippedGarment(null)}
@@ -485,11 +575,13 @@ export default function App() {
         showToast={showToast}
       />
 
-      {/* Portrait Skin-Tone Analyzer & 2.5D Mannequin Tone Selector */}
+      {/* Portrait Skin-Tone Analyzer & Mannequin Tone Selector */}
       <SkinToneAnalysisModal
         open={skinToneModalOpen}
         onClose={() => setSkinToneModalOpen(false)}
+        user={user}
         skinProfile={skinProfile}
+        bodySpec={bodySpec}
         theme={resolvedTheme}
         onApplySkinProfile={handleApplySkinProfile}
       />
@@ -498,6 +590,7 @@ export default function App() {
         open={accountSheetOpen}
         onClose={() => setAccountSheetOpen(false)}
         user={user}
+        bodySpec={bodySpec}
         lang={lang}
         onChangeLang={handleChangeLang}
         onOpenSampleImport={() => setSampleImportOpen(true)}

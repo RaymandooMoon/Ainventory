@@ -37,18 +37,31 @@ export default function LoginView({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Email OTP States (shared cleanly between quick 'otp' mode and detailed 'register' mode)
+  // Email OTP & Sign-Up States (gender + body measurements synced directly to 3D character)
   const [regEmail, setRegEmail] = useState('');
   const [regDisplayName, setRegDisplayName] = useState('');
   const [regClosetName, setRegClosetName] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regGender, setRegGender] = useState('male');
+  const [regHeightCm, setRegHeightCm] = useState('176');
+  const [regWeightKg, setRegWeightKg] = useState('70');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [devPreviewCode, setDevPreviewCode] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [cooldownSec, setCooldownSec] = useState(0);
   const [legalModalDoc, setLegalModalDoc] = useState(null); // null | 'privacy' | 'terms'
+
+  const handleSelectSignupGender = (nextGender) => {
+    const g = nextGender === 'female' ? 'female' : 'male';
+    setRegGender(g);
+    setRegHeightCm((prev) =>
+      prev === '176' || prev === '164' || !prev ? (g === 'female' ? '164' : '176') : prev
+    );
+    setRegWeightKg((prev) =>
+      prev === '70' || prev === '52' || !prev ? (g === 'female' ? '52' : '70') : prev
+    );
+  };
 
   useEffect(() => {
     const prefersReducedMotion =
@@ -218,6 +231,8 @@ export default function LoginView({
           displayName: resolvedName,
           closetName: regClosetName.trim() || `${resolvedName}의 옷장`,
           gender: regGender,
+          heightCm: Number(regHeightCm) || undefined,
+          weightKg: Number(regWeightKg) || undefined,
         }),
       });
       setStoredToken(data.token);
@@ -261,6 +276,8 @@ export default function LoginView({
           displayName: resolvedName,
           closetName: regClosetName.trim() || `${resolvedName}의 옷장`,
           gender: regGender,
+          heightCm: Number(regHeightCm) || undefined,
+          weightKg: Number(regWeightKg) || undefined,
         }),
       });
       setStoredToken(data.token);
@@ -436,8 +453,31 @@ export default function LoginView({
           {authMode === 'otp' && (
             <form
               onSubmit={handleVerifyQuickEmailCode}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
             >
+              <div
+                className="hig-auth-segmented"
+                role="radiogroup"
+                aria-label="성별 선택"
+                style={{ gridTemplateColumns: '1fr 1fr' }}
+              >
+                {[
+                  { key: 'male', label: isEn ? 'Male' : '남성' },
+                  { key: 'female', label: isEn ? 'Female' : '여성' },
+                ].map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    data-signup-gender={g.key}
+                    aria-pressed={regGender === g.key}
+                    className={`hig-auth-seg-btn ${regGender === g.key ? 'is-active' : ''}`}
+                    onClick={() => handleSelectSignupGender(g.key)}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   id={CARBON_DOM_CONTRACT.emailAuthInputId}
@@ -523,7 +563,7 @@ export default function LoginView({
           {authMode === 'login' && (
             <form
               onSubmit={handleLoginSubmit}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
             >
               <input
                 id="login-username"
@@ -557,7 +597,7 @@ export default function LoginView({
                     gap: 8,
                   }}
                 >
-                  <span className="hig-caption">{isEn ? 'Dev Seed' : '개발 시드 계정'}</span>
+                  <span className="hig-caption">{isEn ? 'Dev Seed' : '시드 계정'}</span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       type="button"
@@ -602,7 +642,7 @@ export default function LoginView({
           {authMode === 'register' && (
             <form
               onSubmit={handleCompleteRegister}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 11 }}
             >
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
@@ -645,7 +685,7 @@ export default function LoginView({
               </div>
 
               {otpSent && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
                       id="register-otp-input"
@@ -692,39 +732,65 @@ export default function LoginView({
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div
+                className="hig-auth-segmented"
+                role="radiogroup"
+                aria-label="성별 선택"
+                style={{ gridTemplateColumns: '1fr 1fr' }}
+              >
+                {[
+                  { key: 'male', label: isEn ? 'Male' : '남성' },
+                  { key: 'female', label: isEn ? 'Female' : '여성' },
+                ].map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    data-signup-gender={g.key}
+                    aria-pressed={regGender === g.key}
+                    className={`hig-auth-seg-btn ${regGender === g.key ? 'is-active' : ''}`}
+                    onClick={() => handleSelectSignupGender(g.key)}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 0.9fr', gap: 8 }}>
                 <input
                   id="register-name-input"
                   type="text"
                   className="text-input"
                   style={{ background: 'var(--bg-canvas)' }}
-                  placeholder={isEn ? 'Display name' : '이름 / 닉네임'}
+                  placeholder={isEn ? 'Name' : '닉네임'}
                   aria-label={isEn ? 'Display name' : '이름 / 닉네임'}
                   value={regDisplayName}
                   onChange={(e) => setRegDisplayName(e.target.value)}
                 />
-                <select
-                  className="select-input"
+                <input
+                  id="register-height-input"
+                  type="number"
+                  min={145}
+                  max={200}
+                  className="text-input tabular-nums"
                   style={{ background: 'var(--bg-canvas)' }}
-                  value={regGender}
-                  onChange={(e) => setRegGender(e.target.value)}
-                  aria-label={isEn ? 'Select gender' : '성별 선택'}
-                >
-                  <option value="male">{isEn ? 'Male' : '남성'}</option>
-                  <option value="female">{isEn ? 'Female' : '여성'}</option>
-                </select>
+                  placeholder="cm"
+                  aria-label={isEn ? 'Height (cm)' : '신장 cm'}
+                  value={regHeightCm}
+                  onChange={(e) => setRegHeightCm(e.target.value)}
+                />
+                <input
+                  id="register-weight-input"
+                  type="number"
+                  min={38}
+                  max={130}
+                  className="text-input tabular-nums"
+                  style={{ background: 'var(--bg-canvas)' }}
+                  placeholder="kg"
+                  aria-label={isEn ? 'Weight (kg)' : '체중 kg'}
+                  value={regWeightKg}
+                  onChange={(e) => setRegWeightKg(e.target.value)}
+                />
               </div>
-
-              <input
-                id="register-closet-input"
-                type="text"
-                className="text-input"
-                style={{ background: 'var(--bg-canvas)' }}
-                placeholder={isEn ? 'Closet name (optional)' : '내 옷장 이름 (선택)'}
-                aria-label={isEn ? 'Closet name' : '내 옷장 이름'}
-                value={regClosetName}
-                onChange={(e) => setRegClosetName(e.target.value)}
-              />
 
               <input
                 id="register-password-input"
@@ -746,11 +812,11 @@ export default function LoginView({
               >
                 {loading
                   ? isEn
-                    ? 'Creating account...'
-                    : '가입 처리 중...'
+                    ? 'Creating...'
+                    : '가입 중...'
                   : isEn
-                    ? 'Start with Empty Closet'
-                    : '빈 옷장으로 시작하기'}
+                    ? 'Create Account'
+                    : '회원가입 완료'}
               </button>
             </form>
           )}

@@ -24,12 +24,15 @@ const SAMPLE_PORTRAIT_BUTTONS = [
 export default function SkinToneAnalysisModal({
   open,
   onClose,
+  user,
   skinProfile,
+  bodySpec,
   theme = 'light',
   onApplySkinProfile,
 }) {
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
   const [draftHex, setDraftHex] = useState(skinProfile?.skinToneHex || '#DFBA9B');
   const [draftSeason, setDraftSeason] = useState(
@@ -39,7 +42,7 @@ export default function SkinToneAnalysisModal({
     skinProfile?.subTypeLabelKo || '가을 웜 뮤트'
   );
   const [draftGender, setDraftGender] = useState(
-    skinProfile?.gender === 'female' ? 'female' : 'male'
+    (isSignedAccount ? user?.gender : skinProfile?.gender) === 'female' ? 'female' : 'male'
   );
   const [draftPresetKey, setDraftPresetKey] = useState(
     skinProfile?.presetKey || 'autumn_beige'
@@ -56,10 +59,12 @@ export default function SkinToneAnalysisModal({
     setDraftHex(skinProfile?.skinToneHex || '#DFBA9B');
     setDraftSeason(normalizeSeasonKey(skinProfile?.personalColor || 'autumn_warm'));
     setDraftSubType(skinProfile?.subTypeLabelKo || '가을 웜 뮤트');
-    setDraftGender(skinProfile?.gender === 'female' ? 'female' : 'male');
+    const resolvedGender =
+      (isSignedAccount ? user?.gender : skinProfile?.gender) === 'female' ? 'female' : 'male';
+    setDraftGender(resolvedGender);
     setDraftPresetKey(skinProfile?.presetKey || 'autumn_beige');
     setErrorMsg('');
-  }, [open, skinProfile]);
+  }, [open, skinProfile, isSignedAccount, user?.gender]);
 
   const runAnalysis = async (imgSrc, nextLighting = lightingMode) => {
     if (!imgSrc) return;
@@ -74,7 +79,7 @@ export default function SkinToneAnalysisModal({
       setDraftPresetKey(res.matchedPresetKey);
       triggerHaptic('light');
     } catch (err) {
-      setErrorMsg(err?.message || '피부톤 분석 중 오류가 발생했습니다.');
+      setErrorMsg(err?.message || '분석 실패');
     } finally {
       setAnalyzing(false);
     }
@@ -133,7 +138,7 @@ export default function SkinToneAnalysisModal({
       personalColor: draftSeason,
       personalColorLabelKo: seasonInfo.labelKo,
       subTypeLabelKo: draftSubType,
-      gender: draftGender,
+      gender: isSignedAccount ? (user?.gender === 'female' ? 'female' : 'male') : draftGender,
       presetKey: draftPresetKey,
     });
     onClose?.();
@@ -145,11 +150,10 @@ export default function SkinToneAnalysisModal({
     <ResponsiveSheetModal
       open={open}
       onClose={onClose}
-      title="인물 피부톤 분석 · 2.5D 마네킹 설정"
-      maxWidth={560}
+      title="피부톤 설정"
+      maxWidth={540}
     >
       <div className="skin-modal-body">
-        {/* Top Stage: Live 2.5D Character Preview + Analyzed Portrait Side-by-Side */}
         <div className="skin-modal-preview-grid">
           <div className="skin-modal-character-box">
             <div className="skin-modal-character-stage">
@@ -157,26 +161,33 @@ export default function SkinToneAnalysisModal({
                 skinToneHex={draftHex}
                 personalColor={draftSeason}
                 gender={draftGender}
+                bodySpec={bodySpec ? { ...bodySpec, gender: draftGender } : null}
                 theme={theme}
                 compact
               />
             </div>
-            <div className="skin-modal-gender-switch" role="radiogroup" aria-label="2.5D 캐릭터 체형">
-              <button
-                type="button"
-                className={`skin-gender-pill ${draftGender === 'male' ? 'active' : ''}`}
-                onClick={() => setDraftGender('male')}
-              >
-                남성 2.5D
-              </button>
-              <button
-                type="button"
-                className={`skin-gender-pill ${draftGender === 'female' ? 'active' : ''}`}
-                onClick={() => setDraftGender('female')}
-              >
-                여성 2.5D
-              </button>
-            </div>
+            {isSignedAccount ? (
+              <span className="body-spec-account-badge">
+                회원 정보 · {draftGender === 'female' ? '여성' : '남성'}
+              </span>
+            ) : (
+              <div className="skin-modal-gender-switch" role="radiogroup" aria-label="2.5D 캐릭터 체형">
+                <button
+                  type="button"
+                  className={`skin-gender-pill ${draftGender === 'male' ? 'active' : ''}`}
+                  onClick={() => setDraftGender('male')}
+                >
+                  남성 2.5D
+                </button>
+                <button
+                  type="button"
+                  className={`skin-gender-pill ${draftGender === 'female' ? 'active' : ''}`}
+                  onClick={() => setDraftGender('female')}
+                >
+                  여성 2.5D
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="skin-modal-summary-box">
@@ -229,8 +240,6 @@ export default function SkinToneAnalysisModal({
               </div>
             )}
 
-            <p className="skin-tone-advice-text">{activeSeasonMeta.adviceKo}</p>
-
             <div className="skin-best-drape-row" aria-label="베스트 매칭 컬러">
               {activeSeasonMeta.colors.map((sw) => (
                 <div key={sw.hex} className="skin-best-drape-chip" title={sw.name}>
@@ -245,8 +254,8 @@ export default function SkinToneAnalysisModal({
         {/* Section 1: Portrait Upload / Camera / 1-Click Sample Analysis */}
         <div className="skin-modal-section">
           <div className="skin-modal-section-head">
-            <span>1. 인물 사진으로 피부톤 자동 분석</span>
-            {analyzing && <span className="skin-analyzing-tag">분석 중...</span>}
+            <span>사진 분석</span>
+            {analyzing && <span className="skin-analyzing-tag">분석 중</span>}
           </div>
 
           <input
@@ -274,7 +283,7 @@ export default function SkinToneAnalysisModal({
               onClick={() => galleryInputRef.current?.click()}
             >
               <Upload size={15} />
-              <span>인물 사진 업로드</span>
+              <span>사진 업로드</span>
             </button>
             <button
               type="button"
@@ -282,11 +291,10 @@ export default function SkinToneAnalysisModal({
               onClick={() => cameraInputRef.current?.click()}
             >
               <Camera size={15} />
-              <span>셀피 촬영</span>
+              <span>촬영</span>
             </button>
           </div>
 
-          {/* 1-Click Sample Portraits for Instant Verification */}
           <div className="skin-sample-test-rail">
             {SAMPLE_PORTRAIT_BUTTONS.map((btn) => (
               <button
@@ -297,12 +305,11 @@ export default function SkinToneAnalysisModal({
                 onClick={() => handleSelectSamplePortrait(btn.key)}
               >
                 <Sparkles size={12} />
-                <span>{btn.label}</span>
+                <span>{btn.label.replace(' 인물 샘플', '')}</span>
               </button>
             ))}
           </div>
 
-          {/* Lighting Calibration */}
           <div className="hig-pill-rail" style={{ paddingBottom: 2 }}>
             {LIGHTING_CALIBRATION_MODES.map((m) => (
               <button
@@ -319,12 +326,12 @@ export default function SkinToneAnalysisModal({
           {errorMsg && <p className="hig-form-error">{errorMsg}</p>}
         </div>
 
-        {/* Section 2: 8 Tone-by-Tone 2.5D Mannequin Presets + Custom Color Picker */}
+        {/* Section 2: 8 Tone-by-Tone Presets + Custom Color Picker */}
         <div className="skin-modal-section">
           <div className="skin-modal-section-head">
-            <span>2. 톤별 2.5D 마네킹 직접 변경 (8종 스킨 셰이드)</span>
+            <span>톤 프리셋</span>
             <label className="skin-custom-color-label">
-              <span>직접 미세조정</span>
+              <span>직접 선택</span>
               <input
                 type="color"
                 value={draftHex}
@@ -368,7 +375,7 @@ export default function SkinToneAnalysisModal({
           onClick={handleApply}
         >
           <Check size={17} />
-          <span>2.5D 캐릭터 적용 · 내일 날씨 코디 재추천</span>
+          <span>적용</span>
         </button>
       </div>
     </ResponsiveSheetModal>
