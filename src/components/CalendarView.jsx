@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Calendar as CalendarIcon, Check, Download, Plus, Trash2 } from 'lucide-react';
 import { apiFetch, getStoredToken } from '../utils/api.ts';
+import { tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
-import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
 
 function escapeIcsField(value) {
   return String(value || '')
@@ -42,6 +43,10 @@ function buildIcsText(logs, outfits) {
 export default function CalendarView({
   activeCloset,
   garments = [],
+  lang = 'ko',
+  skinProfile,
+  onOpenProfile,
+  onOpenAccount,
   refreshKey,
   onClosetUpdated,
   showToast,
@@ -78,11 +83,13 @@ export default function CalendarView({
         setSelectedOutfitId((prev) => prev || String(nextOutfits[0].id));
       }
     } catch (err) {
-      showToast?.(err?.message || '캘린더를 불러오지 못했습니다.');
+      showToast?.(
+        err?.message || tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
+      );
     } finally {
       setLoading(false);
     }
-  }, [fetchCalendarData, showToast]);
+  }, [fetchCalendarData, lang, showToast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +104,9 @@ export default function CalendarView({
         }
       } catch (err) {
         if (!cancelled) {
-          showToast?.(err?.message || '캘린더를 불러오지 못했습니다.');
+          showToast?.(
+            err?.message || tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
+          );
         }
       } finally {
         if (!cancelled) {
@@ -108,7 +117,7 @@ export default function CalendarView({
     return () => {
       cancelled = true;
     };
-  }, [fetchCalendarData, refreshKey, showToast]);
+  }, [fetchCalendarData, refreshKey, lang, showToast]);
 
   const handleAddLog = async (e) => {
     e.preventDefault();
@@ -133,7 +142,9 @@ export default function CalendarView({
       await reloadCalendar();
       onClosetUpdated?.();
     } catch (err) {
-      showToast?.(err?.message || '일정 등록에 실패했습니다.');
+      showToast?.(
+        err?.message || tx(lang, '일정 등록에 실패했습니다.', 'Failed to save calendar entry.')
+      );
     }
   };
 
@@ -143,7 +154,7 @@ export default function CalendarView({
       triggerHaptic('selection');
       await reloadCalendar();
     } catch (err) {
-      showToast?.(err?.message || '삭제에 실패했습니다.');
+      showToast?.(err?.message || tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.'));
     }
   };
 
@@ -184,24 +195,34 @@ export default function CalendarView({
           <span className="hig-item-count tabular-nums">{logs.length} ENTRIES</span>
         </div>
         <div className="hig-top-bar-actions">
-          {logs.length > 0 && (
-            <button
-              type="button"
-              className="hig-circle-icon-btn is-subtle"
-              onClick={handleExportIcs}
-              aria-label="캘린더 내보내기"
-            >
-              <Download size={18} />
-            </button>
-          )}
-          <button
-            type="button"
-            className="hig-circle-icon-btn"
-            onClick={() => setAddOpen(true)}
-            aria-label="착용 일정 추가"
-          >
-            <Plus size={20} strokeWidth={2.2} />
-          </button>
+          <TopRightUtilityActions
+            skinProfile={skinProfile}
+            lang={lang}
+            onOpenProfile={onOpenProfile}
+            onOpenAccount={onOpenAccount}
+            extraActions={
+              <>
+                {logs.length > 0 && (
+                  <button
+                    type="button"
+                    className="hig-circle-icon-btn is-subtle"
+                    onClick={handleExportIcs}
+                    aria-label={tx(lang, '캘린더 내보내기', 'Export Calendar (.ics)')}
+                  >
+                    <Download size={18} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="hig-circle-icon-btn"
+                  onClick={() => setAddOpen(true)}
+                  aria-label={tx(lang, '착용 일정 추가', 'Add Outfit Entry')}
+                >
+                  <Plus size={20} strokeWidth={2.2} />
+                </button>
+              </>
+            }
+          />
         </div>
       </header>
 
@@ -214,7 +235,7 @@ export default function CalendarView({
       ) : logs.length === 0 ? (
         <div className="hig-minimal-empty">
           <CalendarIcon size={28} strokeWidth={1.6} />
-          <span>No Entries</span>
+          <span>{tx(lang, '등록된 착용 기록이 없습니다', 'No Entries')}</span>
         </div>
       ) : (
         <div className="hig-calendar-list">
@@ -237,18 +258,20 @@ export default function CalendarView({
                       <span
                         className={`hig-calendar-status-badge ${entry.status === 'planned' ? 'is-planned' : ''}`}
                       >
-                        {entry.status === 'planned' ? 'PLANNED' : 'WORN'}
+                        {entry.status === 'planned'
+                          ? tx(lang, '예정', 'PLANNED')
+                          : tx(lang, '착용', 'WORN')}
                       </span>
                     </div>
                     <span className="hig-calendar-title">
-                      {matchedOutfit?.title || entry.note || 'Daily Look'}
+                      {matchedOutfit?.title || entry.note || tx(lang, '데일리 룩', 'Daily Look')}
                     </span>
                   </div>
                   <button
                     type="button"
                     className="hig-icon-ghost-btn"
                     onClick={() => handleDeleteLog(entry.id)}
-                    aria-label="일정 삭제"
+                    aria-label={tx(lang, '일정 삭제', 'Delete Entry')}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -272,13 +295,14 @@ export default function CalendarView({
       <ResponsiveSheetModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        title="Log Outfit"
+        lang={lang}
+        title={tx(lang, '코디 일정 추가', 'Log Outfit')}
         maxWidth={460}
       >
         <form onSubmit={handleAddLog} className="hig-add-garment-form">
           <div className="hig-field-group">
             <label htmlFor="calendar-date-input" className="hig-field-label">
-              Date
+              {tx(lang, '날짜', 'Date')}
             </label>
             <input
               id="calendar-date-input"
@@ -293,7 +317,7 @@ export default function CalendarView({
           {outfits.length > 0 && (
             <div className="hig-field-group">
               <label htmlFor="calendar-outfit-select" className="hig-field-label">
-                Outfit
+                {tx(lang, '저장된 코디', 'Outfit')}
               </label>
               <select
                 id="calendar-outfit-select"
@@ -312,13 +336,13 @@ export default function CalendarView({
 
           <div className="hig-field-group">
             <label htmlFor="calendar-note-input" className="hig-field-label">
-              Memo
+              {tx(lang, '메모', 'Memo')}
             </label>
             <input
               id="calendar-note-input"
               type="text"
               className="hig-native-input"
-              placeholder="Occasion"
+              placeholder={tx(lang, '출근룩 / 모임 / 여행', 'Occasion')}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={120}
@@ -327,7 +351,7 @@ export default function CalendarView({
 
           <button type="submit" className="hig-primary-cta-btn">
             <Check size={18} />
-            <span>Save Entry</span>
+            <span>{tx(lang, '일정 저장', 'Save Entry')}</span>
           </button>
         </form>
       </ResponsiveSheetModal>

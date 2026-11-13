@@ -75,9 +75,13 @@ function syncDomTheme(pref: ThemePreference): EffectiveTheme {
   const effective = resolveEffectiveTheme(pref);
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = effective;
-    document.documentElement.style.colorScheme = effective;
+    document.documentElement.style.colorScheme = effective === 'dark' ? 'dark' : 'only light';
     if (document.documentElement.getAttribute('data-vibrancy-fallback') !== 'solid') {
       document.documentElement.setAttribute('data-vibrancy-fallback', 'blur');
+    }
+    const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+    if (metaColorScheme) {
+      metaColorScheme.setAttribute('content', effective === 'dark' ? 'dark' : 'light only');
     }
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {

@@ -20,7 +20,7 @@ import {
   setSampleDemoMode,
   setStoredToken,
 } from './utils/api.ts';
-import { getStoredLang, setStoredLang } from './utils/i18n.ts';
+import { getStoredLang, setStoredLang, syncDocumentLang, tx } from './utils/i18n.ts';
 import {
   applyThemePreference,
   emitStatusCapsule,
@@ -113,7 +113,8 @@ export default function App() {
 
   const [skinProfile, setSkinProfile] = useState(() => getStoredSkinProfile());
   const [bodySpec, setBodySpec] = useState(() => getStoredBodySpec());
-  const [skinToneModalOpen, setSkinToneModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileModalTab, setProfileModalTab] = useState('skin');
 
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
@@ -123,8 +124,21 @@ export default function App() {
     applyThemePreference(getStoredThemePreference())
   );
 
+  useEffect(() => {
+    syncDocumentLang(lang);
+  }, [lang]);
+
   const showToast = useCallback((msg) => {
     if (msg) emitStatusCapsule(msg);
+  }, []);
+
+  const handleOpenProfileModal = useCallback((tab = 'skin') => {
+    setProfileModalTab(tab === 'body' ? 'body' : 'skin');
+    setProfileModalOpen(true);
+  }, []);
+
+  const handleOpenAccountSheet = useCallback(() => {
+    setAccountSheetOpen(true);
   }, []);
 
   const syncAccountToAvatar = useCallback((accountUser) => {
@@ -226,7 +240,10 @@ export default function App() {
       })
       .catch((err) => {
         if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
-          showToast(err?.message || '인벤토리를 불러오지 못했습니다.');
+          showToast(
+            err?.message ||
+              tx(lang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
+          );
         }
       })
       .finally(() => {
@@ -238,7 +255,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeCloset, authReady, showAuthScreen, refreshKey, showToast]);
+  }, [activeCloset, authReady, showAuthScreen, refreshKey, lang, showToast]);
 
   const selectedGarment = useMemo(() => {
     if (selectedItemId === null || selectedItemId === undefined) return null;
@@ -252,7 +269,7 @@ export default function App() {
           ? user.gender === 'female'
             ? 'female'
             : 'male'
-          : nextProfile?.gender === 'female'
+          : (bodySpec?.gender || skinProfile?.gender) === 'female'
             ? 'female'
             : 'male';
 
@@ -296,9 +313,9 @@ export default function App() {
         }).catch(() => {});
       }
 
-      showToast('피부톤 적용됨');
+      showToast(tx(lang, '피부톤 적용됨', 'Skin tone applied'));
     },
-    [user, showToast]
+    [user, bodySpec, skinProfile, lang, showToast]
   );
 
   const handleUpdateBodySpec = useCallback(
@@ -308,7 +325,7 @@ export default function App() {
           ? user.gender === 'female'
             ? 'female'
             : 'male'
-          : nextSpec?.gender === 'female'
+          : (bodySpec?.gender || skinProfile?.gender) === 'female'
             ? 'female'
             : 'male';
 
@@ -347,9 +364,9 @@ export default function App() {
         }).catch(() => {});
       }
 
-      showToast('체형 반영됨');
+      showToast(tx(lang, '체형 반영됨', 'Body profile applied'));
     },
-    [user, showToast]
+    [user, bodySpec, skinProfile, lang, showToast]
   );
 
   const navigateTab = useCallback((tabKey) => {
@@ -494,6 +511,10 @@ export default function App() {
             activeCloset={activeCloset}
             garments={garments}
             loading={garmentsLoading}
+            lang={lang}
+            skinProfile={skinProfile}
+            onOpenProfile={handleOpenProfileModal}
+            onOpenAccount={handleOpenAccountSheet}
             onSelectGarment={handleOpenGarmentDetail}
             onGarmentRegistered={(created) => {
               if (created) {
@@ -518,11 +539,14 @@ export default function App() {
               activeCloset={activeCloset}
               garments={garments}
               theme={resolvedTheme}
+              lang={lang}
               skinProfile={skinProfile}
               bodySpec={bodySpec}
               onUpdateSkinProfile={handleApplySkinProfile}
-              onUpdateBodySpec={handleUpdateBodySpec}
-              onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
+              onOpenProfile={handleOpenProfileModal}
+              onOpenAccount={handleOpenAccountSheet}
+              onOpenSkinToneModal={() => handleOpenProfileModal('skin')}
+              onOpenBodyProfile={() => handleOpenProfileModal('body')}
               preEquippedGarment={preEquippedGarment}
               onConsumePreEquipped={() => setPreEquippedGarment(null)}
               onClosetUpdated={() => setRefreshKey((k) => k + 1)}
@@ -534,6 +558,10 @@ export default function App() {
             <CalendarView
               activeCloset={activeCloset}
               garments={garments}
+              lang={lang}
+              skinProfile={skinProfile}
+              onOpenProfile={handleOpenProfileModal}
+              onOpenAccount={handleOpenAccountSheet}
               refreshKey={refreshKey}
               onClosetUpdated={() => setRefreshKey((k) => k + 1)}
               showToast={showToast}
@@ -544,10 +572,13 @@ export default function App() {
             <StatsView
               garments={garments}
               theme={resolvedTheme}
+              lang={lang}
               skinProfile={skinProfile}
-              onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
+              bodySpec={bodySpec}
+              onOpenProfile={handleOpenProfileModal}
+              onOpenSkinToneModal={() => handleOpenProfileModal('skin')}
               onToggleTheme={handleToggleTheme}
-              onOpenAccount={() => setAccountSheetOpen(true)}
+              onOpenAccount={handleOpenAccountSheet}
               onSelectGarment={handleOpenGarmentDetail}
             />
           )}
@@ -582,6 +613,7 @@ export default function App() {
       <ItemDetailSheet
         garment={selectedGarment}
         open={Boolean(selectedGarment)}
+        lang={lang}
         onClose={handleCloseGarmentDetail}
         onUpdated={(updated) => {
           if (!updated) return;
@@ -602,17 +634,20 @@ export default function App() {
         showToast={showToast}
       />
 
-      {/* Portrait Skin-Tone Analyzer & Mannequin Tone Selector */}
-      {skinToneModalOpen && (
+      {/* Unified Portrait Skin-Tone Analyzer & Body Profile Modal */}
+      {profileModalOpen && (
         <Suspense fallback={null}>
           <SkinToneAnalysisModal
-            open={skinToneModalOpen}
-            onClose={() => setSkinToneModalOpen(false)}
+            open={profileModalOpen}
+            initialTab={profileModalTab}
+            lang={lang}
+            onClose={() => setProfileModalOpen(false)}
             user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
             theme={resolvedTheme}
             onApplySkinProfile={handleApplySkinProfile}
+            onApplyBodySpec={handleUpdateBodySpec}
           />
         </Suspense>
       )}
@@ -623,9 +658,11 @@ export default function App() {
             open={accountSheetOpen}
             onClose={() => setAccountSheetOpen(false)}
             user={user}
+            skinProfile={skinProfile}
             bodySpec={bodySpec}
             lang={lang}
             onChangeLang={handleChangeLang}
+            onOpenProfile={handleOpenProfileModal}
             onOpenSampleImport={() => setSampleImportOpen(true)}
             onLogout={handleLogout}
             onAccountDeleted={handleAccountDeleted}

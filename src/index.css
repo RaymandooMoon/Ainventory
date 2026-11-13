@@ -6,16 +6,21 @@
 
 :root,
 [data-theme='light'] {
+  color-scheme: only light;
+
   /* Core Canvas & Atelier Surface Hierarchy (Contract-Compliant) */
-  --bg-canvas: #FFFFFF;
+  --bg-canvas: #FAFBFD;
   --bg-surface: #F5F5F7;
   --bg-elevated: #FFFFFF;
   --bg-tertiary: #E8E8ED;
-  --bg-subtle: #EFEFF4;
+  --bg-subtle: #F2F4F8;
+  --card-bg: #FFFFFF;
+  --card-subtle: #F7F8FC;
+  --card-border: rgba(29, 29, 31, 0.075);
   --atelier-ambient-wash: radial-gradient(
     120% 80% at 50% -10%,
-    rgba(250, 248, 244, 0.92) 0%,
-    rgba(255, 255, 255, 0) 68%
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(250, 251, 253, 0) 68%
   );
 
   /* 2.5D Squircle Surface (Preserves exact rgb(245, 245, 247) backgroundColor) */
@@ -146,12 +151,17 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
+
   /* Obsidian Gallery Core Surfaces */
   --bg-canvas: #000000;
   --bg-surface: #161618;
   --bg-elevated: #1C1C1F;
   --bg-tertiary: #2A2A2E;
   --bg-subtle: #232327;
+  --card-bg: #1C1C1F;
+  --card-subtle: #242429;
+  --card-border: rgba(245, 245, 247, 0.095);
   --atelier-ambient-wash: radial-gradient(
     120% 80% at 50% -10%,
     rgba(42, 44, 54, 0.38) 0%,
@@ -4126,7 +4136,214 @@ html[data-vibrancy-fallback='solid'] .hig-auth-container {
 }
 
 /* ==========================================================================
-   15. REDUCED MOTION ACCESSIBILITY GUARD
+   15. BRIGHT LIGHT-MODE CARDS, AUTO-DARK GUARD, PERSISTENT TOP-RIGHT PROFILE & FACE DETECTION UI
+   ========================================================================== */
+html,
+body,
+canvas,
+img,
+.skin-preset-swatch,
+.studio-tone-dot,
+.hig-stats-skin-swatch,
+.skin-tone-large-swatch,
+.hig-profile-quick-swatch,
+.skin-sample-pin,
+.hig-detail-color-chip span,
+.skin-best-drape-chip span {
+  forced-color-adjust: none;
+}
+
+.hig-calendar-card,
+.hig-stats-skin-card,
+.hig-stats-panel,
+.hig-sheet-card,
+.ui-kpi-card,
+.weather-recommend-panel,
+.skin-modal-character-box,
+.skin-modal-summary-box,
+.skin-preset-card,
+.studio-desktop-picker-col,
+.hig-minimal-empty,
+.ui-empty-box {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+
+.skin-preset-card.is-selected {
+  background: var(--card-subtle);
+  border-color: var(--accent-mono);
+  box-shadow: var(--elevation-sm);
+}
+
+:root:not([data-theme='dark']) .weather-tomorrow-chip,
+[data-theme='light'] .weather-tomorrow-chip {
+  background: #EEF2FA;
+  color: #1D1D1F;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+}
+
+:root:not([data-theme='dark']) .studio-25d-canvas,
+[data-theme='light'] .studio-25d-canvas {
+  background: radial-gradient(circle at 46% 24%, #FFFFFF 0%, #F7F9FC 58%, #ECEFF6 100%);
+}
+
+:root:not([data-theme='dark']) .skin-modal-character-stage,
+[data-theme='light'] .skin-modal-character-stage {
+  background: radial-gradient(circle at 50% 30%, #FFFFFF 0%, #F4F6FB 100%);
+  border-radius: 16px;
+}
+
+:root:not([data-theme='dark']) .hig-circle-icon-btn.is-subtle,
+[data-theme='light'] .hig-circle-icon-btn.is-subtle {
+  background: #FFFFFF;
+  border-color: var(--card-border);
+}
+
+/* Persistent Top-Right Profile Quick Pill (`#open-profile-studio-btn`) */
+.hig-top-right-utility-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hig-profile-quick-pill {
+  height: 44px;
+  padding: 0 13px 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--elevation-xs);
+  color: var(--ink-primary);
+  font-size: 0.78rem;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: transform 0.2s var(--spring-ease), box-shadow 0.2s var(--spring-ease),
+    background-color 0.2s var(--spring-ease);
+}
+
+.hig-profile-quick-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-sm);
+}
+
+.hig-profile-quick-pill:active {
+  transform: scale(0.95);
+}
+
+.hig-profile-quick-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+@media (max-width: 390px) {
+  .hig-profile-quick-pill {
+    padding: 0 10px;
+    font-size: 0.74rem;
+    gap: 5px;
+  }
+}
+
+/* Unified Profile Modal Segmented Tabs (`[Photo & Skin | Body Profile]`) */
+.profile-modal-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: 1px solid var(--card-border);
+  margin-bottom: 14px;
+}
+
+.profile-modal-tab-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.81rem;
+  font-weight: 660;
+  color: var(--ink-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.2s var(--spring-ease), color 0.2s var(--spring-ease),
+    box-shadow 0.2s var(--spring-ease);
+}
+
+.profile-modal-tab-btn.is-active {
+  background: var(--card-bg);
+  color: var(--ink-primary);
+  box-shadow: var(--elevation-xs);
+}
+
+[data-theme='dark'] .profile-modal-tab-btn.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
+/* Face Detection Bounding Guide, Badge & Tap-to-Focus */
+.skin-portrait-pin-frame.is-clickable {
+  cursor: crosshair;
+  width: 132px;
+  height: 132px;
+}
+
+.skin-face-box-guide {
+  position: absolute;
+  border: 1.8px dashed rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.28);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.skin-face-detected-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 6;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(22, 101, 52, 0.88);
+  color: #FFFFFF;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+.skin-face-detected-badge.is-fallback {
+  background: rgba(29, 29, 31, 0.78);
+}
+
+.skin-tap-hint {
+  font-size: 0.71rem;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* Account Settings Profile Shortcut Card & Stats Dual Action Buttons */
+.account-profile-shortcut-actions,
+.hig-stats-skin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   16. REDUCED MOTION ACCESSIBILITY GUARD
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   *,

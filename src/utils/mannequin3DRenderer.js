@@ -2704,6 +2704,7 @@ export class Mannequin3DWebGLEngine {
   }
 
   setDarkTheme(isDark) {
+    this.isDarkTheme = Boolean(isDark);
     if (this.transparentBackground) {
       this.renderer.setClearColor(0x000000, 0);
     } else if (!this.isPreviewOnly) {
@@ -3046,10 +3047,11 @@ export class Mannequin3DWebGLEngine {
       }
     }
 
+    const studioBasewearHex = this.isDarkTheme ? '#2C2E36' : '#E2E4EC';
     if (!hasBottom && !hasDress && !desired.some((d) => d.gid === 'underwear_briefs')) {
       desired.push({
         slotKey: 'underwear',
-        item: { subcategory: 'underwear', color_hex: '#252830', name: '스튜디오 브리프' },
+        item: { subcategory: 'underwear', color_hex: studioBasewearHex, name: '스튜디오 브리프' },
         gid: 'underwear_briefs',
       });
     }
@@ -3061,7 +3063,7 @@ export class Mannequin3DWebGLEngine {
     ) {
       desired.push({
         slotKey: 'underwear',
-        item: { subcategory: 'inner_top', color_hex: '#252830', name: '스튜디오 이너탑' },
+        item: { subcategory: 'inner_top', color_hex: studioBasewearHex, name: '스튜디오 이너탑' },
         gid: 'underwear_top',
       });
     }
@@ -4123,7 +4125,7 @@ export function render3DMannequinScene(canvas, options = {}) {
     eng.bodyMesh.material.sheenColor?.set(skinHex)?.lerp(new THREE.Color('#fff5f0'), 0.38);
     applyMorphsToMesh(eng.bodyMesh, weights);
 
-    const defaultBriefsHex = isDarkTheme ? '#2C2C2E' : '#1D1D1F';
+    const defaultBriefsHex = isDarkTheme ? '#2C2E36' : '#E2E4EC';
     const rawBriefsHex = profile.mannequinBriefsColorHex;
     const briefsHex =
       !rawBriefsHex || String(rawBriefsHex).toLowerCase() === '#2c2623'

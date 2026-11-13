@@ -213,10 +213,10 @@ export class Studio25DFittingRenderer implements FittingRenderer {
           }
         : {
             backdropGradient:
-              'radial-gradient(circle at 46% 24%, #FFFFFF 0%, #F3F4F7 56%, #E6E8EE 100%)',
+              'radial-gradient(circle at 48% 24%, #FFFFFF 0%, #F7F8FC 60%, #EEF0F6 100%)',
             keyLightGlow:
-              'radial-gradient(ellipse at 36% 18%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0) 66%)',
-            floorShadowColor: 'rgba(15, 23, 42, 0.16)',
+              'radial-gradient(ellipse at 38% 18%, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0) 68%)',
+            floorShadowColor: 'rgba(15, 23, 42, 0.11)',
           },
       vtonReady: Boolean(import.meta.env?.VITE_VTON_API_URL),
     };

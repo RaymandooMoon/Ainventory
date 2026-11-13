@@ -326,20 +326,23 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await studioCanvas.locator('[data-quick-skin-preset="deep_espresso"]').click();
     await expect(mannequin).toHaveAttribute('data-skin-hex', '#8E5C40');
 
-    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Female 2.5D -> Apply
+    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Apply (gender locked, zero 2.5D text)
     await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    await expect(page.locator('#profile-tab-skin')).toBeVisible();
+    await expect(page.locator('#profile-tab-body')).toBeVisible();
+    await expect(page.locator('.skin-gender-pill')).toHaveCount(0);
+
     await page.locator('[data-sample-portrait="spring_warm"]').click();
 
     await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
     await expect(page.locator('.skin-lab-metrics')).toContainText('ITA°');
 
-    await page.getByRole('button', { name: '여성 2.5D' }).click();
     await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
 
-    await expect(mannequin).toHaveAttribute('data-character-gender', 'female');
     await expect(mannequin).toHaveAttribute('data-personal-color', 'spring_warm');
     const updatedHex = await mannequin.getAttribute('data-skin-hex');
     expect(updatedHex).not.toBe('#8E5C40');
+
     // 5. 360° Game-Character Multi-Angle Inspection (`앞`, `뒤`, `좌`, `우`, `상`, `하`) & Body Shape Morph
     for (const preset of ['back', 'left', 'right', 'top', 'bottom', 'front']) {
       await studioCanvas.locator(`[data-camera-preset-btn="${preset}"]`).click();
@@ -347,6 +350,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     }
 
     await studioCanvas.locator('#open-body-spec-btn').click();
+    await expect(page.locator('[data-body-gender-btn]')).toHaveCount(0);
     await page.locator('[data-body-shape-btn="muscular"]').click();
     await page.locator('#apply-body-spec-btn').click();
     await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
@@ -404,12 +408,181 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(mannequin).toHaveAttribute('data-height-cm', '165');
     await expect(mannequin).toHaveAttribute('data-weight-kg', '53');
 
-    // Clean up test user account immediately
-    await page.locator('[data-nav-tab="stats"]').click();
+    // Clean up test user account immediately (accessible from top-right right here on Outfits!)
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
     await page.locator(`#${CARBON_DOM_CONTRACT.initiateDeleteAccountBtnId}`).click();
     await page.locator(`#${CARBON_DOM_CONTRACT.confirmPermanentDeleteBtnId}`).click();
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.loginMotionStageId}`)).toBeVisible();
   });
+
+  test('6. Bilingual i18n, bright Light Mode cards, top-right Account/Profile everywhere, zero 2.5D copy, and half-body portrait face detection', async ({
+    page,
+  }) => {
+    // Build a realistic 240x360 half-body portrait: small upper face + dark hair + large mint-green top (#68C2A8)
+    const w = 240;
+    const h = 360;
+    const raw = Buffer.alloc((w * 4 + 1) * h);
+    for (let y = 0; y < h; y++) {
+      const rowStart = y * (w * 4 + 1);
+      raw[rowStart] = 0;
+      for (let x = 0; x < w; x++) {
+        const px = rowStart + 1 + x * 4;
+        // Default bright studio wall (#F3F4F6)
+        let r = 243;
+        let g = 244;
+        let b = 246;
+
+        // Large mint-green shirt across chest & lower frame (#68C2A8)
+        if (y >= 146 && x >= 38 && x <= 202) {
+          r = 104;
+          g = 194;
+          b = 168;
+        }
+
+        // Neck (#EBBE9E)
+        if (y >= 116 && y < 152 && x >= 104 && x <= 136) {
+          r = 235;
+          g = 190;
+          b = 158;
+        }
+
+        // Dark hair crown (#252022)
+        const hairDx = (x - 120) / 46;
+        const hairDy = (y - 76) / 54;
+        if (hairDx * hairDx + hairDy * hairDy <= 1.0) {
+          r = 37;
+          g = 32;
+          b = 34;
+        }
+
+        // Upper-frame face oval (#F1CFB3)
+        const faceDx = (x - 120) / 31;
+        const faceDy = (y - 84) / 39;
+        if (faceDx * faceDx + faceDy * faceDy <= 1.0) {
+          r = 241;
+          g = 207;
+          b = 179;
+          // Dark eyes / brows band around y = 74..79
+          if (y >= 74 && y <= 79 && ((x >= 101 && x <= 113) || (x >= 127 && x <= 139))) {
+            r = 42;
+            g = 34;
+            b = 32;
+          }
+        }
+
+        raw[px] = r;
+        raw[px + 1] = g;
+        raw[px + 2] = b;
+        raw[px + 3] = 255;
+      }
+    }
+
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) {
+        c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      }
+      crcTable[n] = c >>> 0;
+    }
+    const crc32 = (buf: Buffer): number => {
+      let c = 0xffffffff;
+      for (let i = 0; i < buf.length; i++) {
+        c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      }
+      return (c ^ 0xffffffff) >>> 0;
+    };
+    const chunk = (type: string, data: Buffer): Buffer => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
+      const typeBuf = Buffer.from(type, 'ascii');
+      const crcBuf = Buffer.alloc(4);
+      crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+      return Buffer.concat([len, typeBuf, data, crcBuf]);
+    };
+    const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0);
+    ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 6;
+    const halfBodyPng = Buffer.concat([
+      sig,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(raw)),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+
+    await page.goto('/');
+
+    // 1. Verify persistent top-right Profile & Account buttons on EVERY screen + zero "2.5D" text
+    for (const tab of ['closet', 'outfits', 'calendar', 'stats']) {
+      await page.locator(`[data-nav-tab="${tab}"]`).click();
+      const accountBtn = page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`);
+      const profileBtn = page.locator('#open-profile-studio-btn');
+      await expect(accountBtn).toHaveCount(1);
+      await expect(accountBtn).toBeVisible();
+      await expect(profileBtn).toHaveCount(1);
+      await expect(profileBtn).toBeVisible();
+
+      const screenText = await page.locator('body').innerText();
+      expect(screenText.toLowerCase()).not.toContain('2.5d');
+    }
+
+    // 2. Verify Light Mode is bright with color-scheme: only light and bright white/alabaster cards
+    const lightStatsCardRgb = await page.locator('.hig-stats-skin-card').evaluate((el) => {
+      const cs = window.getComputedStyle(el);
+      const docCs = window.getComputedStyle(document.documentElement);
+      return { bg: cs.backgroundColor, colorScheme: docCs.colorScheme };
+    });
+    expect(lightStatsCardRgb.colorScheme).toContain('light');
+    expect(lightStatsCardRgb.bg).toBe('rgb(255, 255, 255)');
+
+    // 3. Switch language to English via top-right Account Settings and verify full UI translation
+    await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    await page.locator('[data-lang-btn="en"]').click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.locator('.ui-sheet-box')).toContainText('Account Settings');
+    await expect(page.locator('.ui-sheet-box')).toContainText('Photo, Skin Tone & Body Profile');
+
+    // Open unified Profile Modal directly from Account Settings shortcut
+    await page.locator('#settings-open-profile-btn').click();
+    await expect(page.locator('#profile-tab-skin')).toHaveText('Photo & Skin');
+    await expect(page.locator('#profile-tab-body')).toHaveText('Body Profile');
+
+    // 4. Upload half-body portrait wearing mint-green top -> verify face detection & warm skin extraction (NOT gray #A3999B)
+    await page.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'half-body-mint-top.png',
+      mimeType: 'image/png',
+      buffer: halfBodyPng,
+    });
+
+    await expect(page.locator('.skin-face-detected-badge')).toHaveText('Face Detected');
+    await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
+
+    const extractedText = await page.locator('.skin-lab-metrics strong').innerText();
+    expect(extractedText).toMatch(/^#[0-9A-F]{6}$/);
+    const hex = extractedText.trim();
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
+    expect(r).toBeGreaterThanOrEqual(210);
+    expect(r - g).toBeGreaterThanOrEqual(15);
+    expect(r - b).toBeGreaterThanOrEqual(30);
+
+    await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+
+    // Navigate to Outfits and verify English translation on weather bar & camera HUD
+    await page.locator('[data-nav-tab="outfits"]').click();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toContainText(
+      'Tomorrow Weather'
+    );
+
+    // Switch back to Korean via top-right Account Settings on Outfits
+    await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    await page.locator('[data-lang-btn="ko"]').click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
+  });
 });
+
 

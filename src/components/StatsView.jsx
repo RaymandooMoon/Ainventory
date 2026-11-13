@@ -1,16 +1,21 @@
 import { useMemo } from 'react';
-import { Moon, Palette, Sun, User } from 'lucide-react';
+import { Moon, Palette, SlidersHorizontal, Sun } from 'lucide-react';
 import {
-  CARBON_DOM_CONTRACT,
   WARDROBE_CATEGORY_OPTIONS,
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
+import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
+import { tx } from '../utils/i18n.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
+import { TopRightUtilityActions } from './common/AppUI.jsx';
 
 export default function StatsView({
   garments = [],
   theme,
+  lang = 'ko',
   skinProfile,
+  bodySpec,
+  onOpenProfile,
   onOpenSkinToneModal,
   onToggleTheme,
   onOpenAccount,
@@ -43,6 +48,11 @@ export default function StatsView({
       .slice(0, 6);
   }, [garments]);
 
+  const diagnosisLabel =
+    lang === 'en'
+      ? translateSubTypeLabel(skinProfile?.subTypeLabelKo, skinProfile?.personalColor)
+      : skinProfile?.subTypeLabelKo || '가을 웜 뮤트';
+
   return (
     <section className="hig-screen-container" aria-label="Stats">
       <header className="hig-top-bar">
@@ -51,28 +61,31 @@ export default function StatsView({
           <span className="hig-item-count tabular-nums">{garments.length} ITEMS</span>
         </div>
         <div className="hig-top-bar-actions">
-          <button
-            type="button"
-            className="hig-circle-icon-btn is-subtle"
-            onClick={onToggleTheme}
-            aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-          >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button
-            id={CARBON_DOM_CONTRACT.openAccountSettingsBtnId}
-            type="button"
-            className="hig-circle-icon-btn is-subtle"
-            onClick={onOpenAccount}
-            aria-label="계정 설정"
-          >
-            <User size={18} />
-          </button>
+          <TopRightUtilityActions
+            skinProfile={skinProfile}
+            lang={lang}
+            onOpenProfile={onOpenProfile}
+            onOpenAccount={onOpenAccount}
+            extraActions={
+              <button
+                type="button"
+                className="hig-circle-icon-btn is-subtle"
+                onClick={onToggleTheme}
+                aria-label={
+                  theme === 'dark'
+                    ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
+                    : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
+                }
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+            }
+          />
         </div>
       </header>
 
       <div className="hig-stats-overview-grid">
-        {/* 2.5D Character & Skin-Tone Profile Summary Card */}
+        {/* Personal Profile (Skin Tone & Body Measurements) Card — Zero 2.5D / Zero Gender Copy */}
         <div className="hig-stats-skin-card">
           <div className="hig-stats-skin-info">
             <span
@@ -80,23 +93,38 @@ export default function StatsView({
               style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
             />
             <div>
-              <strong className="hig-stats-skin-title">
-                2.5D 캐릭터 · {skinProfile?.subTypeLabelKo || '가을 웜 뮤트'}
-              </strong>
+              <strong className="hig-stats-skin-title">{diagnosisLabel}</strong>
               <span className="hig-stats-skin-sub tabular-nums">
-                {skinProfile?.skinToneHex || '#DFBA9B'} ·{' '}
-                {skinProfile?.gender === 'female' ? '여성 2.5D 마네킹' : '남성 2.5D 마네킹'}
+                {skinProfile?.skinToneHex || '#DFBA9B'}
+                {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            className="hig-secondary-btn"
-            onClick={onOpenSkinToneModal}
-          >
-            <Palette size={15} />
-            <span>피부톤 분석 · 변경</span>
-          </button>
+
+          <div className="hig-stats-skin-actions">
+            <button
+              type="button"
+              className="hig-secondary-btn"
+              onClick={() => {
+                if (onOpenProfile) onOpenProfile('skin');
+                else onOpenSkinToneModal?.();
+              }}
+            >
+              <Palette size={15} />
+              <span>{tx(lang, '사진 · 피부톤', 'Photo & Skin')}</span>
+            </button>
+            <button
+              type="button"
+              className="hig-secondary-btn"
+              onClick={() => {
+                if (onOpenProfile) onOpenProfile('body');
+                else onOpenSkinToneModal?.();
+              }}
+            >
+              <SlidersHorizontal size={15} />
+              <span>{tx(lang, '체형 설정', 'Body Profile')}</span>
+            </button>
+          </div>
         </div>
 
         {/* Category Composition Bars */}
@@ -133,7 +161,12 @@ export default function StatsView({
               <div className="hig-garment-meta">
                 <span className="hig-garment-name">{item.name}</span>
                 <span className="hig-garment-brand tabular-nums">
-                  {item.brand || `${Number(item.wear_count) || 0} wears`}
+                  {item.brand ||
+                    tx(
+                      lang,
+                      `${Number(item.wear_count) || 0}회 착용`,
+                      `${Number(item.wear_count) || 0} wears`
+                    )}
                 </span>
               </div>
             </button>

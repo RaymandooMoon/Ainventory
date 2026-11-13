@@ -3,6 +3,7 @@ import { Palette, SlidersHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { CAMERA_VIEW_PRESETS } from '../services/parametricAvatar3D.ts';
 import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
+import { tx } from '../utils/i18n.ts';
 import Character25DMannequin from './Character25DMannequin.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
@@ -17,14 +18,12 @@ const CAMERA_BUTTON_LIST = [
 
 /**
  * Minimal Apple HIG 360° Character & Outfit Stage
- * - Full Front / Back / Left / Right / Top / Bottom (`앞·뒤·좌·우·상·하`) orbit + drag/zoom
- * - Reflects user's signup gender & anthropometric body shape (`bodySpec`)
- * - Compact left-rail worn-item chips (`[data-studio-slot]`) for 1-tap unequip without obscuring the 3D model
  */
 const Studio25DCanvas = memo(function Studio25DCanvas({
   slots,
   renderResult,
   theme = 'light',
+  lang = 'ko',
   skinProfile,
   bodySpec,
   weather,
@@ -60,12 +59,12 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   const isWindy = Boolean(weather?.isWindy);
 
   const quickPresets = [
-    SKIN_TONE_MANNEQUIN_PRESETS[0], // 포슬린 쿨
-    SKIN_TONE_MANNEQUIN_PRESETS[1], // 봄 웜 아이보리
-    SKIN_TONE_MANNEQUIN_PRESETS[2], // 여름 쿨 로즈
-    SKIN_TONE_MANNEQUIN_PRESETS[4], // 가을 웜 베이지
-    SKIN_TONE_MANNEQUIN_PRESETS[6], // 허니 브론즈
-    SKIN_TONE_MANNEQUIN_PRESETS[7], // 딥 에스프레소
+    SKIN_TONE_MANNEQUIN_PRESETS[0],
+    SKIN_TONE_MANNEQUIN_PRESETS[1],
+    SKIN_TONE_MANNEQUIN_PRESETS[2],
+    SKIN_TONE_MANNEQUIN_PRESETS[4],
+    SKIN_TONE_MANNEQUIN_PRESETS[6],
+    SKIN_TONE_MANNEQUIN_PRESETS[7],
   ];
 
   return (
@@ -90,33 +89,36 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       {/* Studio Cyclorama Horizon Reflection */}
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
 
-      {/* Weather Ambient Stage Cues (Zero Text, Pure Visual Atmosphere) */}
+      {/* Weather Ambient Stage Cues */}
       {isRainy && <div aria-hidden="true" className="studio-25d-rain-layer" />}
       {isWindy && <div aria-hidden="true" className="studio-25d-wind-layer" />}
 
-      {/* Top HUD: 6-Angle Game-Character Camera Pills (`앞·뒤·좌·우·상·하`) + Body Spec Trigger */}
+      {/* Top HUD: 6-Angle Game-Character Camera Pills + Body Profile Trigger */}
       <div className="studio-stage-top-hud">
         <div
           className="studio-camera-pill-bar"
           role="toolbar"
-          aria-label="캐릭터 시점 전환"
+          aria-label={tx(lang, '캐릭터 시점 전환', 'Character Camera Angles')}
         >
           {CAMERA_BUTTON_LIST.map((cam) => {
             const active = cameraPreset === cam.key;
+            const camLabel = lang === 'en' ? cam.labelEn : cam.labelKo;
             return (
               <button
                 key={cam.key}
                 type="button"
                 data-camera-preset-btn={cam.key}
                 aria-pressed={active}
-                aria-label={`${cam.labelKo} 시점 보기`}
+                aria-label={
+                  lang === 'en' ? `${camLabel} camera view` : `${cam.labelKo} 시점 보기`
+                }
                 className={`studio-camera-pill ${active ? 'is-active' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelectCameraPreset(cam.key);
                 }}
               >
-                {cam.labelKo}
+                {camLabel}
               </button>
             );
           })}
@@ -126,18 +128,20 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           id="open-body-spec-btn"
           type="button"
           className="studio-body-pill-btn tabular-nums"
-          aria-label="체형 설정 열기"
+          aria-label={tx(lang, '체형 설정 열기', 'Open Body Profile')}
           onClick={(e) => {
             e.stopPropagation();
             onOpenBodyModal?.();
           }}
         >
           <SlidersHorizontal size={12} />
-          <span>{bodySpec ? `${bodySpec.heightCm}·${bodySpec.weightKg}` : '체형'}</span>
+          <span>
+            {bodySpec ? `${bodySpec.heightCm}·${bodySpec.weightKg}` : tx(lang, '체형', 'Body')}
+          </span>
         </button>
       </div>
 
-      {/* Interactive 360° Parametric Character + Tailored 3D Garments */}
+      {/* Interactive 360° Parametric Character + Tailored Garments */}
       {compositeUrl ? (
         <img
           src={compositeUrl}
@@ -159,9 +163,12 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
         />
       )}
 
-      {/* Compact Left Worn-Slot Chips (Quick Inspect / Unequip Without Blocking the 3D Model) */}
+      {/* Compact Left Worn-Slot Chips */}
       {!compositeUrl && layers.length > 0 && (
-        <div className="studio-worn-slots-dock" aria-label="착용 아이템">
+        <div
+          className="studio-worn-slots-dock"
+          aria-label={tx(lang, '착용 아이템', 'Equipped Items')}
+        >
           {layers.map((layer) => {
             const isSelectedSlot = activeSlotKey === layer.slotKey;
             return (
@@ -187,7 +194,11 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
                 <button
                   type="button"
                   className="studio-worn-slot-remove"
-                  aria-label={`${layer.garment.name} 착장 해제`}
+                  aria-label={
+                    lang === 'en'
+                      ? `Remove ${layer.garment.name}`
+                      : `${layer.garment.name} 착장 해제`
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     onUnequipSlot?.(layer.slotKey);
@@ -202,18 +213,25 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       )}
 
       {/* Bottom Minimal Skin-Tone Swatch Bar */}
-      <div className="studio-25d-tone-dock" aria-label="모델 피부톤 변경">
+      <div
+        className="studio-25d-tone-dock"
+        aria-label={tx(lang, '모델 피부톤 변경', 'Change Mannequin Skin Tone')}
+      >
         <div className="studio-25d-tone-swatches">
           {quickPresets.map((preset) => {
             const active =
-              (skinProfile?.skinToneHex || '').toUpperCase() === preset.skinToneHex.toUpperCase();
+              (skinProfile?.skinToneHex || '').toUpperCase() ===
+              preset.skinToneHex.toUpperCase();
+            const label = lang === 'en' ? preset.shortEn : preset.shortKo;
             return (
               <button
                 key={preset.key}
                 type="button"
                 data-quick-skin-preset={preset.key}
-                title={preset.shortKo}
-                aria-label={`${preset.shortKo} 마네킹 톤 적용`}
+                title={label}
+                aria-label={
+                  lang === 'en' ? `Apply ${label} tone` : `${preset.shortKo} 마네킹 톤 적용`
+                }
                 className={`studio-tone-dot ${active ? 'is-active' : ''}`}
                 style={{ backgroundColor: preset.skinToneHex }}
                 onClick={(e) => {
@@ -228,14 +246,14 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           id={CARBON_DOM_CONTRACT.openSkinToneModalBtnId}
           type="button"
           className="studio-tone-analyze-btn"
-          aria-label="피부톤 분석 열기"
+          aria-label={tx(lang, '피부톤 분석 열기', 'Open Skin Tone Analyzer')}
           onClick={(e) => {
             e.stopPropagation();
             onOpenSkinToneModal?.();
           }}
         >
           <Palette size={12} />
-          <span>피부톤</span>
+          <span>{tx(lang, '피부톤', 'Skin Tone')}</span>
         </button>
       </div>
     </div>

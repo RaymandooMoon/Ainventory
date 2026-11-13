@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Camera, Check, FileText, ShieldCheck, Sparkles, UserCog, X } from 'lucide-react';
+import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
 import StudioGarmentImage from '../StudioGarmentImage.jsx';
 import { apiFetch, formatKRW } from '../../utils/api.ts';
+import { tx } from '../../utils/i18n.ts';
 import {
   acknowledgeCameraNotice,
   emitStatusCapsule,
@@ -10,6 +12,58 @@ import {
   subscribeStatusCapsule,
   triggerHaptic,
 } from '../../utils/nativeBridge.ts';
+
+/**
+ * Persistent Top-Right Utility Controls rendered on EVERY screen (`Closet`, `Outfits`, `Calendar`, `Stats`):
+ * - 1-tap Profile / Photo Skin-Tone / Body Profile button (`#open-profile-studio-btn`) with live skin swatch
+ * - Optional screen-specific action (e.g. `+` Add Garment on Closet, Reset on Outfits, `.ics` on Calendar)
+ * - Persistent Account Settings button (`#open-account-settings-btn`) always anchored at the top-right corner
+ */
+export function TopRightUtilityActions({
+  skinProfile,
+  lang = 'ko',
+  onOpenProfile,
+  onOpenAccount,
+  extraActions = null,
+}) {
+  const swatchHex = skinProfile?.skinToneHex || '#DFBA9B';
+  return (
+    <div className="hig-top-right-utility-group">
+      {extraActions}
+      <button
+        id="open-profile-studio-btn"
+        type="button"
+        className="hig-profile-quick-pill"
+        aria-label={tx(lang, '사진·피부톤·체형 설정 열기', 'Open Photo, Skin Tone & Body Profile')}
+        title={tx(lang, '사진 · 피부톤 · 체형 설정', 'Photo, Skin Tone & Body Profile')}
+        onClick={() => {
+          triggerHaptic('selection');
+          onOpenProfile?.('skin');
+        }}
+      >
+        <span
+          className="hig-profile-quick-swatch"
+          style={{ backgroundColor: swatchHex }}
+          aria-hidden="true"
+        />
+        <span>{tx(lang, '프로필', 'Profile')}</span>
+      </button>
+      <button
+        id={CARBON_DOM_CONTRACT.openAccountSettingsBtnId}
+        type="button"
+        className="hig-circle-icon-btn is-subtle"
+        aria-label={tx(lang, '계정 설정', 'Account Settings')}
+        title={tx(lang, '계정 설정', 'Account Settings')}
+        onClick={() => {
+          triggerHaptic('selection');
+          onOpenAccount?.();
+        }}
+      >
+        <UserCog size={18} />
+      </button>
+    </div>
+  );
+}
 
 export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
@@ -78,6 +132,7 @@ export function ResponsiveSheetModal({
   eyebrow,
   actions,
   maxWidth = 720,
+  lang = 'ko',
   children,
   footer,
 }) {
@@ -179,7 +234,7 @@ export function ResponsiveSheetModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? headingId : undefined}
-        aria-label={!title ? eyebrow || '시트 대화상자' : undefined}
+        aria-label={!title ? eyebrow || tx(lang, '시트 대화상자', 'Sheet Dialog') : undefined}
         data-sheet-panel="true"
         className="modal-box ui-sheet-box"
         style={{
@@ -196,7 +251,7 @@ export function ResponsiveSheetModal({
           className="ui-sheet-drag-zone"
           onPointerDown={handleDragStart}
           onTouchStart={handleDragStart}
-          aria-label="드래그하여 닫기"
+          aria-label={tx(lang, '드래그하여 닫기', 'Drag down to close')}
         >
           <div className="ui-sheet-drag-handle" aria-hidden="true" />
         </div>
@@ -221,7 +276,7 @@ export function ResponsiveSheetModal({
                 type="button"
                 className="icon-btn"
                 onClick={() => onCloseRef.current?.()}
-                aria-label="닫기"
+                aria-label={tx(lang, '닫기', 'Close')}
               >
                 <X size={18} />
               </button>

@@ -21,14 +21,15 @@ export interface BodyMorphSpec {
 export interface BodyShapePresetOption {
   key: BodyShapeKey;
   labelKo: string;
+  labelEn: string;
 }
 
 export const BODY_SHAPE_OPTIONS: readonly BodyShapePresetOption[] = [
-  { key: 'slim', labelKo: '슬림' },
-  { key: 'standard_balanced', labelKo: '표준' },
-  { key: 'upper_developed', labelKo: '상체 발달' },
-  { key: 'lower_developed', labelKo: '하체 볼륨' },
-  { key: 'muscular', labelKo: '탄탄·머슬' },
+  { key: 'slim', labelKo: '슬림', labelEn: 'Slim' },
+  { key: 'standard_balanced', labelKo: '표준', labelEn: 'Balanced' },
+  { key: 'upper_developed', labelKo: '상체 발달', labelEn: 'Broad' },
+  { key: 'lower_developed', labelKo: '하체 볼륨', labelEn: 'Curvy' },
+  { key: 'muscular', labelKo: '탄탄·머슬', labelEn: 'Athletic' },
 ] as const;
 
 export type CameraPresetKey = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom';
@@ -36,18 +37,19 @@ export type CameraPresetKey = 'front' | 'back' | 'left' | 'right' | 'top' | 'bot
 export interface CameraViewPreset {
   key: CameraPresetKey;
   labelKo: string;
+  labelEn: string;
   yawRad: number;
   polarRad: number;
   zoom: number;
 }
 
 export const CAMERA_VIEW_PRESETS: Record<CameraPresetKey, CameraViewPreset> = {
-  front: { key: 'front', labelKo: '앞', yawRad: 0, polarRad: 1.52, zoom: 0.98 },
-  back: { key: 'back', labelKo: '뒤', yawRad: Math.PI, polarRad: 1.52, zoom: 0.98 },
-  left: { key: 'left', labelKo: '좌', yawRad: -Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
-  right: { key: 'right', labelKo: '우', yawRad: Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
-  top: { key: 'top', labelKo: '상', yawRad: 0, polarRad: 0.28, zoom: 0.88 },
-  bottom: { key: 'bottom', labelKo: '하', yawRad: 0, polarRad: 2.34, zoom: 0.92 },
+  front: { key: 'front', labelKo: '앞', labelEn: 'F', yawRad: 0, polarRad: 1.52, zoom: 0.98 },
+  back: { key: 'back', labelKo: '뒤', labelEn: 'B', yawRad: Math.PI, polarRad: 1.52, zoom: 0.98 },
+  left: { key: 'left', labelKo: '좌', labelEn: 'L', yawRad: -Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
+  right: { key: 'right', labelKo: '우', labelEn: 'R', yawRad: Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
+  top: { key: 'top', labelKo: '상', labelEn: 'Top', yawRad: 0, polarRad: 0.28, zoom: 0.88 },
+  bottom: { key: 'bottom', labelKo: '하', labelEn: 'Bot', yawRad: 0, polarRad: 2.34, zoom: 0.92 },
 };
 
 const BODY_STORAGE_KEY = 'ainventory_body_spec_v1';

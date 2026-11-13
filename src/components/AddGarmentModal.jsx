@@ -6,11 +6,12 @@ import {
 } from '../contracts/carbonDesignContract.ts';
 import { processGarmentUpload } from '../services/backgroundRemovalService.ts';
 import { apiFetch } from '../utils/api.ts';
+import { tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
-function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
+function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, showToast }) {
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -35,10 +36,15 @@ function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
       });
       setProcessedAsset(asset);
       setCategory(asset.suggestedCategory || 'top');
-      setName((prev) => prev.trim() || asset.suggestedName || 'New Garment');
+      setName(
+        (prev) =>
+          prev.trim() || asset.suggestedName || tx(lang, '새 아이템', 'New Garment')
+      );
       triggerHaptic('selection');
     } catch (err) {
-      showToast?.(err?.message || '이미지를 처리하지 못했습니다.');
+      showToast?.(
+        err?.message || tx(lang, '이미지를 처리하지 못했습니다.', 'Failed to process image.')
+      );
     } finally {
       setProcessing(false);
     }
@@ -47,12 +53,14 @@ function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!processedAsset?.cutoutDataUrl) {
-      showToast?.('의류 사진을 먼저 선택해주세요.');
+      showToast?.(
+        tx(lang, '의류 사진을 먼저 선택해주세요.', 'Please select a garment photo first.')
+      );
       return;
     }
     const trimmedName = name.trim();
     if (!trimmedName) {
-      showToast?.('아이템 이름을 입력해주세요.');
+      showToast?.(tx(lang, '아이템 이름을 입력해주세요.', 'Please enter an item name.'));
       return;
     }
 
@@ -82,7 +90,9 @@ function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
       onRegistered?.(res?.garment);
       onClose?.();
     } catch (err) {
-      showToast?.(err?.message || '등록 중 오류가 발생했습니다.');
+      showToast?.(
+        err?.message || tx(lang, '등록 중 오류가 발생했습니다.', 'Failed to save item.')
+      );
     } finally {
       setSubmitting(false);
     }
@@ -90,176 +100,182 @@ function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
 
   return (
     <form onSubmit={handleSubmit} className="hig-add-garment-form">
-        <input
-          id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
-          ref={galleryInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleSelectFile}
-          className="sr-only-input"
-        />
-        <input
-          id={CARBON_DOM_CONTRACT.wardrobeCameraInputId}
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleSelectFile}
-          className="sr-only-input"
-        />
+      <input
+        id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleSelectFile}
+        className="sr-only-input"
+      />
+      <input
+        id={CARBON_DOM_CONTRACT.wardrobeCameraInputId}
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleSelectFile}
+        className="sr-only-input"
+      />
 
-        {/* 1:1 Normalized 2.5D Studio Preview Stage + Optical Scan Viewfinder */}
+      {/* 1:1 Normalized Studio Preview Stage + Optical Scan Viewfinder */}
+      <div
+        id={CARBON_DOM_CONTRACT.addGarmentPreviewId}
+        className="hig-add-preview-squircle"
+        onClick={() => {
+          if (!processedAsset && !processing) {
+            galleryInputRef.current?.click();
+          }
+        }}
+      >
         <div
-          id={CARBON_DOM_CONTRACT.addGarmentPreviewId}
-          className="hig-add-preview-squircle"
-          onClick={() => {
-            if (!processedAsset && !processing) {
+          aria-hidden="true"
+          className={`hig-optical-scan-overlay ${processing ? 'is-scanning' : ''}`}
+        >
+          <span className="wardrobe-scanner-corner is-tl" />
+          <span className="wardrobe-scanner-corner is-tr" />
+          <span className="wardrobe-scanner-corner is-bl" />
+          <span className="wardrobe-scanner-corner is-br" />
+        </div>
+
+        {processing ? (
+          <div className="hig-add-upload-prompt">
+            <Loader2 size={28} className="hig-spin" />
+            <span>
+              {tx(lang, '배경 제거 및 스튜디오 보정 중...', 'Studio Cutout Normalization...')}
+            </span>
+          </div>
+        ) : processedAsset ? (
+          <GarmentObject25D
+            src={processedAsset.cutoutDataUrl}
+            category={category}
+            colorHex={processedAsset.dominantColorHex}
+            alt={name || 'Preview'}
+            interactive
+            padding="10%"
+          />
+        ) : (
+          <div className="hig-add-upload-prompt">
+            <div className="hig-upload-action-pair">
+              <button
+                type="button"
+                className="hig-pill-action-btn"
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  galleryInputRef.current?.click();
+                }}
+              >
+                <ImagePlus size={18} />
+                <span>{tx(lang, '사진 보관함', 'Photo Library')}</span>
+              </button>
+              <button
+                type="button"
+                className="hig-pill-action-btn"
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  cameraInputRef.current?.click();
+                }}
+              >
+                <Camera size={18} />
+                <span>{tx(lang, '카메라 촬영', 'Camera')}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {processedAsset && !processing && processedAsset.dominantColorHex && (
+          <div className="hig-detail-color-chip tabular-nums">
+            <span
+              className="hig-detail-color-dot"
+              style={{ backgroundColor: processedAsset.dominantColorHex }}
+            />
+            <span>{processedAsset.dominantColorName || processedAsset.dominantColorHex}</span>
+          </div>
+        )}
+
+        {processedAsset && !processing && (
+          <button
+            type="button"
+            className="hig-reselect-photo-chip"
+            onClick={(ev) => {
+              ev.stopPropagation();
               galleryInputRef.current?.click();
-            }
-          }}
-        >
-          <div
-            aria-hidden="true"
-            className={`hig-optical-scan-overlay ${processing ? 'is-scanning' : ''}`}
+            }}
           >
-            <span className="wardrobe-scanner-corner is-tl" />
-            <span className="wardrobe-scanner-corner is-tr" />
-            <span className="wardrobe-scanner-corner is-bl" />
-            <span className="wardrobe-scanner-corner is-br" />
-          </div>
+            {tx(lang, '사진 변경', 'Replace')}
+          </button>
+        )}
+      </div>
 
-          {processing ? (
-            <div className="hig-add-upload-prompt">
-              <Loader2 size={28} className="hig-spin" />
-              <span>Cutout &amp; 2.5D Studio Normalization</span>
-            </div>
-          ) : processedAsset ? (
-            <GarmentObject25D
-              src={processedAsset.cutoutDataUrl}
-              category={category}
-              colorHex={processedAsset.dominantColorHex}
-              alt={name || 'Preview'}
-              interactive
-              padding="10%"
-            />
-          ) : (
-            <div className="hig-add-upload-prompt">
-              <div className="hig-upload-action-pair">
-                <button
-                  type="button"
-                  className="hig-pill-action-btn"
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    galleryInputRef.current?.click();
-                  }}
-                >
-                  <ImagePlus size={18} />
-                  <span>Photo Library</span>
-                </button>
-                <button
-                  type="button"
-                  className="hig-pill-action-btn"
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    cameraInputRef.current?.click();
-                  }}
-                >
-                  <Camera size={18} />
-                  <span>Camera</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {processedAsset && !processing && processedAsset.dominantColorHex && (
-            <div className="hig-detail-color-chip tabular-nums">
-              <span
-                className="hig-detail-color-dot"
-                style={{ backgroundColor: processedAsset.dominantColorHex }}
-              />
-              <span>{processedAsset.dominantColorName || processedAsset.dominantColorHex}</span>
-            </div>
-          )}
-
-          {processedAsset && !processing && (
-            <button
-              type="button"
-              className="hig-reselect-photo-chip"
-              onClick={(ev) => {
-                ev.stopPropagation();
-                galleryInputRef.current?.click();
-              }}
-            >
-              Replace
-            </button>
-          )}
+      {/* Category Pill Selector */}
+      <div className="hig-field-group">
+        <label className="hig-field-label">{tx(lang, '카테고리', 'Category')}</label>
+        <div className="hig-pill-row" role="radiogroup" aria-label="Category">
+          {WARDROBE_CATEGORY_OPTIONS.map((opt) => {
+            const selected = category === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`hig-filter-pill ${selected ? 'active' : ''}`}
+                onClick={() => setCategory(opt.key)}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Category Pill Selector */}
+      {/* Minimal Tags: Name & Brand */}
+      <div className="hig-field-grid-2">
         <div className="hig-field-group">
-          <label className="hig-field-label">Category</label>
-          <div className="hig-pill-row" role="radiogroup" aria-label="Category">
-            {WARDROBE_CATEGORY_OPTIONS.map((opt) => {
-              const selected = category === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  className={`hig-filter-pill ${selected ? 'active' : ''}`}
-                  onClick={() => setCategory(opt.key)}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+          <label htmlFor="add-garment-name-input" className="hig-field-label">
+            {tx(lang, '아이템명', 'Name')}
+          </label>
+          <input
+            id="add-garment-name-input"
+            type="text"
+            className="hig-native-input"
+            placeholder={tx(lang, '캐시미어 크루넥', 'Cashmere Crewneck')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={120}
+            required
+          />
         </div>
 
-        {/* Minimal Tags: Name & Brand */}
-        <div className="hig-field-grid-2">
-          <div className="hig-field-group">
-            <label htmlFor="add-garment-name-input" className="hig-field-label">
-              Name
-            </label>
-            <input
-              id="add-garment-name-input"
-              type="text"
-              className="hig-native-input"
-              placeholder="Cashmere Crewneck"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={120}
-              required
-            />
-          </div>
-
-          <div className="hig-field-group">
-            <label htmlFor="add-garment-brand-input" className="hig-field-label">
-              Brand
-            </label>
-            <input
-              id="add-garment-brand-input"
-              type="text"
-              className="hig-native-input"
-              placeholder="Lemaire"
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-              maxLength={80}
-            />
-          </div>
+        <div className="hig-field-group">
+          <label htmlFor="add-garment-brand-input" className="hig-field-label">
+            {tx(lang, '브랜드', 'Brand')}
+          </label>
+          <input
+            id="add-garment-brand-input"
+            type="text"
+            className="hig-native-input"
+            placeholder="Lemaire"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            maxLength={80}
+          />
         </div>
+      </div>
 
-        <button
-          id={CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}
-          type="submit"
-          className="hig-primary-cta-btn"
-          disabled={processing || submitting || !processedAsset}
-        >
-          <Check size={18} />
-          <span>{submitting ? 'Saving...' : 'Add to Wardrobe'}</span>
-        </button>
+      <button
+        id={CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}
+        type="submit"
+        className="hig-primary-cta-btn"
+        disabled={processing || submitting || !processedAsset}
+      >
+        <Check size={18} />
+        <span>
+          {submitting
+            ? tx(lang, '저장 중...', 'Saving...')
+            : tx(lang, '옷장에 추가', 'Add to Wardrobe')}
+        </span>
+      </button>
     </form>
   );
 }
@@ -267,6 +283,7 @@ function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
 export default function AddGarmentModal({
   open,
   activeCloset,
+  lang = 'ko',
   onClose,
   onRegistered,
   showToast,
@@ -275,12 +292,14 @@ export default function AddGarmentModal({
     <ResponsiveSheetModal
       open={open}
       onClose={onClose}
-      title="Add Item"
+      lang={lang}
+      title={tx(lang, '옷 등록', 'Add Item')}
       maxWidth={500}
     >
       {open && (
         <AddGarmentForm
           activeCloset={activeCloset}
+          lang={lang}
           onClose={onClose}
           onRegistered={onRegistered}
           showToast={showToast}

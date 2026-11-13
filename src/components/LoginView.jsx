@@ -266,7 +266,7 @@ export default function LoginView({
       <div className="hig-auth-container">
         {/* Top Utility Controls (Theme Switcher + Language Switcher) */}
         <div className="hig-auth-topbar">
-          <span className="hig-auth-brand-kicker">MY WARDROBE · 2.5D</span>
+          <span className="hig-auth-brand-kicker">MY WARDROBE</span>
           <div className="hig-auth-utility-group">
             <button
               id={CARBON_DOM_CONTRACT.loginThemeToggleId}
