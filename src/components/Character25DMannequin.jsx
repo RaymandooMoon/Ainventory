@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
+  CAMERA_VIEW_PRESETS,
   mapStudioSlotsTo3DLoadout,
   sanitizeBodySpec,
 } from '../services/parametricAvatar3D.ts';
@@ -9,15 +10,6 @@ import {
   Mannequin3DWebGLEngine,
   render3DMannequinScene,
 } from '../utils/mannequin3DRenderer.js';
-
-export const CAMERA_VIEW_PRESETS = {
-  front: { key: 'front', labelKo: '앞', yawRad: 0, polarRad: 1.52, zoom: 0.98 },
-  back: { key: 'back', labelKo: '뒤', yawRad: Math.PI, polarRad: 1.52, zoom: 0.98 },
-  left: { key: 'left', labelKo: '좌', yawRad: -Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
-  right: { key: 'right', labelKo: '우', yawRad: Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
-  top: { key: 'top', labelKo: '상', yawRad: 0, polarRad: 0.28, zoom: 0.88 },
-  bottom: { key: 'bottom', labelKo: '하', yawRad: 0, polarRad: 2.34, zoom: 0.92 },
-};
 
 /**
  * Interactive 360° CC0 MakeHuman Skinned 3D Character & Tailored Garment Viewport
@@ -87,14 +79,16 @@ const Character25DMannequin = memo(function Character25DMannequin({
     [compact, slots]
   );
 
-  latestSceneRef.current = {
-    theme,
-    cameraPreset,
-    profilePayload,
-    loadoutBySlot,
-    weather,
-    ariaLabel: `360도 캐릭터 모델 (${palette.base})`,
-  };
+  useEffect(() => {
+    latestSceneRef.current = {
+      theme,
+      cameraPreset,
+      profilePayload,
+      loadoutBySlot,
+      weather,
+      ariaLabel: `360도 캐릭터 모델 (${palette.base})`,
+    };
+  });
 
   // 1a. Compact Modal Preview (`SkinToneAnalysisModal`): shared offscreen 3D blitter
   useEffect(() => {
@@ -118,6 +112,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
     if (!container) return undefined;
 
     const snap = latestSceneRef.current;
+    if (!snap) return undefined;
     const canvas = document.createElement('canvas');
     canvas.className = 'character-25d-render-canvas';
     canvas.setAttribute('role', 'img');
@@ -129,7 +124,6 @@ const Character25DMannequin = memo(function Character25DMannequin({
       engine = new Mannequin3DWebGLEngine(canvas, {
         transparentBackground: true,
       });
-      setWebglUnavailable(false);
     } catch {
       if (canvas.parentNode === container) {
         container.removeChild(canvas);

@@ -90,7 +90,7 @@ export default function WardrobeView({
         })}
       </nav>
 
-      {/* Main 2~3 Column Squircle Inventory Grid */}
+      {/* Main 2~4 Column Squircle Inventory Grid */}
       {loading ? (
         <div className="hig-wardrobe-grid" aria-busy="true">
           {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -99,28 +99,35 @@ export default function WardrobeView({
         </div>
       ) : (
         <div id={CARBON_DOM_CONTRACT.wardrobeGridId} className="hig-wardrobe-grid">
-          {filteredGarments.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              data-garment-id={item.id}
-              className="hig-wardrobe-card"
-              onClick={() => {
-                triggerHaptic('selection');
-                onSelectGarment?.(item);
-              }}
-            >
-              <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
-                <GarmentObject25D item={item} padding="13%" />
-              </div>
-              <div className="hig-garment-meta">
-                <span className="hig-garment-name">{item.name}</span>
-                {item.brand ? (
-                  <span className="hig-garment-brand">{item.brand}</span>
-                ) : null}
-              </div>
-            </button>
-          ))}
+          {filteredGarments.length === 0 ? (
+            <div className="hig-minimal-empty" style={{ gridColumn: '1 / -1' }}>
+              <span>No Items</span>
+            </div>
+          ) : (
+            filteredGarments.map((item, idx) => (
+              <button
+                key={item.id}
+                type="button"
+                data-garment-id={item.id}
+                className="hig-wardrobe-card"
+                style={{ '--card-stagger': Math.min(idx, 11) }}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onSelectGarment?.(item);
+                }}
+              >
+                <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
+                  <GarmentObject25D item={item} padding="13%" />
+                </div>
+                <div className="hig-garment-meta">
+                  <span className="hig-garment-name">{item.name}</span>
+                  {item.brand ? (
+                    <span className="hig-garment-brand">{item.brand}</span>
+                  ) : null}
+                </div>
+              </button>
+            ))
+          )}
         </div>
       )}
 

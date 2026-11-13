@@ -73,7 +73,7 @@ const GarmentObject25D = memo(function GarmentObject25D({
     <div
       id={stageId}
       ref={stageRef}
-      className={`garment-object-25d ${interactive ? 'is-interactive' : ''} ${className}`.trim()}
+      className={`garment-object-25d ${interactive ? 'is-interactive' : ''} ${interactive && tilt.active ? 'is-tilting' : ''} ${className}`.trim()}
       data-tilt-x={rotY}
       data-tilt-y={rotX}
       onPointerMove={interactive ? handlePointerMove : undefined}
@@ -112,6 +112,17 @@ const GarmentObject25D = memo(function GarmentObject25D({
             : undefined,
         }}
       />
+
+      {/* Interactive Studio Specular Sheen (pure div, zero SVG) */}
+      {interactive && (
+        <div
+          aria-hidden="true"
+          className="garment-25d-specular-sheen"
+          style={{
+            transform: `translate3d(${Math.round(-tilt.nx * 18)}px, ${Math.round(-tilt.ny * 14)}px, 0)`,
+          }}
+        />
+      )}
 
       {/* Grounded Elliptical Contact Shadow */}
       <div

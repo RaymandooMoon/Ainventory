@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Layers, Trash2 } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
@@ -12,33 +12,21 @@ import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const QUICK_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'FREE'];
 
-export default function ItemDetailSheet({
+function ItemDetailContent({
   garment,
-  open,
   onClose,
   onUpdated,
   onDeleted,
   onTryInOutfits,
   showToast,
 }) {
-  const [name, setName] = useState('');
-  const [brand, setBrand] = useState('');
-  const [category, setCategory] = useState('top');
-  const [size, setSize] = useState('');
-  const [memo, setMemo] = useState('');
+  const [name, setName] = useState(() => garment.name || '');
+  const [brand, setBrand] = useState(() => garment.brand || '');
+  const [category, setCategory] = useState(() => normalizeWardrobeCategoryKey(garment.category));
+  const [size, setSize] = useState(() => garment.size || '');
+  const [memo, setMemo] = useState(() => garment.memo ?? garment.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!garment) return;
-    setName(garment.name || '');
-    setBrand(garment.brand || '');
-    setCategory(normalizeWardrobeCategoryKey(garment.category));
-    setSize(garment.size || '');
-    setMemo(garment.memo ?? garment.notes ?? '');
-  }, [garment]);
-
-  if (!open || !garment) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -88,17 +76,9 @@ export default function ItemDetailSheet({
   };
 
   return (
-    <ResponsiveSheetModal
-      id={CARBON_DOM_CONTRACT.garmentDetailSheetId}
-      open={open}
-      onClose={onClose}
-      title={garment.name}
-      eyebrow={garment.brand || undefined}
-      maxWidth={560}
-    >
-      <div className="hig-item-detail-body">
-        {/* Interactive 2.5D Tilt-Responsive Zoomed Garment View */}
-        <div className="hig-detail-25d-squircle">
+    <div className="hig-item-detail-body">
+      {/* Interactive 2.5D Tilt-Responsive Zoomed Garment View */}
+      <div className="hig-detail-25d-squircle">
           <GarmentObject25D
             stageId={CARBON_DOM_CONTRACT.itemDetailTiltStageId}
             item={garment}
@@ -106,6 +86,15 @@ export default function ItemDetailSheet({
             maxTiltDeg={13}
             padding="11%"
           />
+          {garment.color_hex && (
+            <div className="hig-detail-color-chip tabular-nums">
+              <span
+                className="hig-detail-color-dot"
+                style={{ backgroundColor: garment.color_hex }}
+              />
+              <span>{garment.color_name || garment.color_hex}</span>
+            </div>
+          )}
         </div>
 
         {/* Primary Action: Try in Outfits (Clearly Separated from Metadata Form & Delete) */}
@@ -244,6 +233,38 @@ export default function ItemDetailSheet({
           </div>
         </form>
       </div>
+  );
+}
+
+export default function ItemDetailSheet({
+  garment,
+  open,
+  onClose,
+  onUpdated,
+  onDeleted,
+  onTryInOutfits,
+  showToast,
+}) {
+  if (!open || !garment) return null;
+
+  return (
+    <ResponsiveSheetModal
+      id={CARBON_DOM_CONTRACT.garmentDetailSheetId}
+      open={open}
+      onClose={onClose}
+      title={garment.name}
+      eyebrow={garment.brand || undefined}
+      maxWidth={560}
+    >
+      <ItemDetailContent
+        key={garment.id}
+        garment={garment}
+        onClose={onClose}
+        onUpdated={onUpdated}
+        onDeleted={onDeleted}
+        onTryInOutfits={onTryInOutfits}
+        showToast={showToast}
+      />
     </ResponsiveSheetModal>
   );
 }

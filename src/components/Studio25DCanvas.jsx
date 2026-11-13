@@ -1,8 +1,9 @@
 import { memo, useCallback, useState } from 'react';
 import { Palette, SlidersHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import { CAMERA_VIEW_PRESETS } from '../services/parametricAvatar3D.ts';
 import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
-import Character25DMannequin, { CAMERA_VIEW_PRESETS } from './Character25DMannequin.jsx';
+import Character25DMannequin from './Character25DMannequin.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 const CAMERA_BUTTON_LIST = [
@@ -85,6 +86,9 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           background: lighting?.keyLightGlow,
         }}
       />
+
+      {/* Studio Cyclorama Horizon Reflection */}
+      <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
 
       {/* Weather Ambient Stage Cues (Zero Text, Pure Visual Atmosphere) */}
       {isRainy && <div aria-hidden="true" className="studio-25d-rain-layer" />}

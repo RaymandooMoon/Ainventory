@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, Check, ImagePlus, Loader2 } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
@@ -10,13 +10,7 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
-export default function AddGarmentModal({
-  open,
-  activeCloset,
-  onClose,
-  onRegistered,
-  showToast,
-}) {
+function AddGarmentForm({ activeCloset, onClose, onRegistered, showToast }) {
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -26,17 +20,6 @@ export default function AddGarmentModal({
   const [category, setCategory] = useState('top');
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
-
-  useEffect(() => {
-    if (!open) {
-      setProcessing(false);
-      setSubmitting(false);
-      setProcessedAsset(null);
-      setCategory('top');
-      setName('');
-      setBrand('');
-    }
-  }, [open]);
 
   const handleSelectFile = async (e) => {
     const file = e.target.files?.[0];
@@ -106,20 +89,14 @@ export default function AddGarmentModal({
   };
 
   return (
-    <ResponsiveSheetModal
-      open={open}
-      onClose={onClose}
-      title="Add Item"
-      maxWidth={500}
-    >
-      <form onSubmit={handleSubmit} className="hig-add-garment-form">
+    <form onSubmit={handleSubmit} className="hig-add-garment-form">
         <input
           id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
           ref={galleryInputRef}
           type="file"
           accept="image/*"
           onChange={handleSelectFile}
-          style={{ display: 'none' }}
+          className="sr-only-input"
         />
         <input
           id={CARBON_DOM_CONTRACT.wardrobeCameraInputId}
@@ -128,10 +105,10 @@ export default function AddGarmentModal({
           accept="image/*"
           capture="environment"
           onChange={handleSelectFile}
-          style={{ display: 'none' }}
+          className="sr-only-input"
         />
 
-        {/* 1:1 Normalized 2.5D Studio Preview Stage */}
+        {/* 1:1 Normalized 2.5D Studio Preview Stage + Optical Scan Viewfinder */}
         <div
           id={CARBON_DOM_CONTRACT.addGarmentPreviewId}
           className="hig-add-preview-squircle"
@@ -141,6 +118,16 @@ export default function AddGarmentModal({
             }
           }}
         >
+          <div
+            aria-hidden="true"
+            className={`hig-optical-scan-overlay ${processing ? 'is-scanning' : ''}`}
+          >
+            <span className="wardrobe-scanner-corner is-tl" />
+            <span className="wardrobe-scanner-corner is-tr" />
+            <span className="wardrobe-scanner-corner is-bl" />
+            <span className="wardrobe-scanner-corner is-br" />
+          </div>
+
           {processing ? (
             <div className="hig-add-upload-prompt">
               <Loader2 size={28} className="hig-spin" />
@@ -181,6 +168,16 @@ export default function AddGarmentModal({
                   <span>Camera</span>
                 </button>
               </div>
+            </div>
+          )}
+
+          {processedAsset && !processing && processedAsset.dominantColorHex && (
+            <div className="hig-detail-color-chip tabular-nums">
+              <span
+                className="hig-detail-color-dot"
+                style={{ backgroundColor: processedAsset.dominantColorHex }}
+              />
+              <span>{processedAsset.dominantColorName || processedAsset.dominantColorHex}</span>
             </div>
           )}
 
@@ -263,7 +260,32 @@ export default function AddGarmentModal({
           <Check size={18} />
           <span>{submitting ? 'Saving...' : 'Add to Wardrobe'}</span>
         </button>
-      </form>
+    </form>
+  );
+}
+
+export default function AddGarmentModal({
+  open,
+  activeCloset,
+  onClose,
+  onRegistered,
+  showToast,
+}) {
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      title="Add Item"
+      maxWidth={500}
+    >
+      {open && (
+        <AddGarmentForm
+          activeCloset={activeCloset}
+          onClose={onClose}
+          onRegistered={onRegistered}
+          showToast={showToast}
+        />
+      )}
     </ResponsiveSheetModal>
   );
 }

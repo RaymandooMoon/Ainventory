@@ -71,57 +71,60 @@ export default function StatsView({
         </div>
       </header>
 
-      {/* 2.5D Character & Skin-Tone Profile Summary Card */}
-      <div className="hig-stats-skin-card">
-        <div className="hig-stats-skin-info">
-          <span
-            className="hig-stats-skin-swatch"
-            style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
-          />
-          <div>
-            <strong className="hig-stats-skin-title">
-              2.5D 캐릭터 · {skinProfile?.subTypeLabelKo || '가을 웜 뮤트'}
-            </strong>
-            <span className="hig-stats-skin-sub tabular-nums">
-              {skinProfile?.skinToneHex || '#DFBA9B'} ·{' '}
-              {skinProfile?.gender === 'female' ? '여성 2.5D 마네킹' : '남성 2.5D 마네킹'}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="hig-secondary-btn"
-          onClick={onOpenSkinToneModal}
-        >
-          <Palette size={15} />
-          <span>피부톤 분석 · 변경</span>
-        </button>
-      </div>
-
-      {/* Category Composition Bars */}
-      <div className="hig-stats-panel">
-        {categoryBreakdown.map((row) => (
-          <div key={row.key} className="hig-stat-bar-row">
-            <span className="hig-stat-bar-label">{row.label}</span>
-            <div className="hig-stat-bar-track">
-              <div
-                className="hig-stat-bar-fill"
-                style={{ width: `${Math.max(row.count > 0 ? 6 : 0, row.ratioPct)}%` }}
-              />
+      <div className="hig-stats-overview-grid">
+        {/* 2.5D Character & Skin-Tone Profile Summary Card */}
+        <div className="hig-stats-skin-card">
+          <div className="hig-stats-skin-info">
+            <span
+              className="hig-stats-skin-swatch"
+              style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
+            />
+            <div>
+              <strong className="hig-stats-skin-title">
+                2.5D 캐릭터 · {skinProfile?.subTypeLabelKo || '가을 웜 뮤트'}
+              </strong>
+              <span className="hig-stats-skin-sub tabular-nums">
+                {skinProfile?.skinToneHex || '#DFBA9B'} ·{' '}
+                {skinProfile?.gender === 'female' ? '여성 2.5D 마네킹' : '남성 2.5D 마네킹'}
+              </span>
             </div>
-            <span className="hig-stat-bar-count tabular-nums">{row.count}</span>
           </div>
-        ))}
+          <button
+            type="button"
+            className="hig-secondary-btn"
+            onClick={onOpenSkinToneModal}
+          >
+            <Palette size={15} />
+            <span>피부톤 분석 · 변경</span>
+          </button>
+        </div>
+
+        {/* Category Composition Bars */}
+        <div className="hig-stats-panel">
+          {categoryBreakdown.map((row) => (
+            <div key={row.key} className="hig-stat-bar-row">
+              <span className="hig-stat-bar-label">{row.label}</span>
+              <div className="hig-stat-bar-track">
+                <div
+                  className="hig-stat-bar-fill"
+                  style={{ width: `${Math.max(row.count > 0 ? 6 : 0, row.ratioPct)}%` }}
+                />
+              </div>
+              <span className="hig-stat-bar-count tabular-nums">{row.count}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Most Worn Garments Grid */}
       {topWornGarments.length > 0 && (
-        <div className="hig-wardrobe-grid" style={{ marginTop: 24 }}>
-          {topWornGarments.map((item) => (
+        <div className="hig-wardrobe-grid">
+          {topWornGarments.map((item, idx) => (
             <button
               key={item.id}
               type="button"
               className="hig-wardrobe-card"
+              style={{ '--card-stagger': idx }}
               onClick={() => onSelectGarment?.(item)}
             >
               <div className="hig-squircle-card">

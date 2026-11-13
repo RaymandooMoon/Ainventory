@@ -35,7 +35,7 @@ export default defineConfig({
     allowedHosts: ['localhost', '127.0.0.1'],
   },
   build: {
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 750,
     rollupOptions: {
       output: {
         manualChunks(id: string): string | undefined {
@@ -46,6 +46,12 @@ export default defineConfig({
             normId.includes('node_modules/scheduler/')
           ) {
             return 'vendor-react';
+          }
+          if (normId.includes('node_modules/three/')) {
+            return 'vendor-three';
+          }
+          if (normId.includes('node_modules/lucide-react/')) {
+            return 'vendor-icons';
           }
           return undefined;
         },

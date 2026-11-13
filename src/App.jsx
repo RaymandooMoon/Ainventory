@@ -1,13 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, Calendar, Layers, LayoutGrid } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
-import AccountSettingsSheet from './components/AccountSettingsSheet.jsx';
-import CalendarView from './components/CalendarView.jsx';
 import ItemDetailSheet from './components/ItemDetailSheet.jsx';
-import LoginView from './components/LoginView.jsx';
-import OutfitStudioView from './components/OutfitStudioView.jsx';
-import SkinToneAnalysisModal from './components/SkinToneAnalysisModal.jsx';
-import StatsView from './components/StatsView.jsx';
 import WardrobeView from './components/WardrobeView.jsx';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
 import {
@@ -36,6 +30,13 @@ import {
   triggerHaptic,
 } from './utils/nativeBridge.ts';
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
+
+const LoginView = lazy(() => import('./components/LoginView.jsx'));
+const OutfitStudioView = lazy(() => import('./components/OutfitStudioView.jsx'));
+const CalendarView = lazy(() => import('./components/CalendarView.jsx'));
+const StatsView = lazy(() => import('./components/StatsView.jsx'));
+const SkinToneAnalysisModal = lazy(() => import('./components/SkinToneAnalysisModal.jsx'));
+const AccountSettingsSheet = lazy(() => import('./components/AccountSettingsSheet.jsx'));
 
 const DEFAULT_LOCAL_USER = {
   id: 0,
@@ -87,19 +88,28 @@ function parseAppLocation() {
 }
 
 export default function App() {
-  const initialLoc = parseAppLocation();
+  const [initialLoc] = useState(() => parseAppLocation());
+  const [hasInitialToken] = useState(() => {
+    const token = Boolean(getStoredToken());
+    if (!token) {
+      setSampleDemoMode(true);
+    }
+    return token;
+  });
 
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState(() => (hasInitialToken ? null : DEFAULT_LOCAL_USER));
+  const [authReady, setAuthReady] = useState(() => !hasInitialToken);
   const [showAuthScreen, setShowAuthScreen] = useState(initialLoc.showAuth);
 
   const [activeTab, setActiveTab] = useState(initialLoc.tab);
   const [selectedItemId, setSelectedItemId] = useState(initialLoc.itemId);
   const [preEquippedGarment, setPreEquippedGarment] = useState(null);
+  const [studioSessionKey, setStudioSessionKey] = useState(0);
 
   const [garments, setGarments] = useState([]);
   const [garmentsLoading, setGarmentsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const garmentsMutationSeqRef = useRef(0);
 
   const [skinProfile, setSkinProfile] = useState(() => getStoredSkinProfile());
   const [bodySpec, setBodySpec] = useState(() => getStoredBodySpec());
@@ -109,12 +119,9 @@ export default function App() {
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
 
   const [lang, setLang] = useState(() => getStoredLang());
-  const [resolvedTheme, setResolvedTheme] = useState(() => {
-    if (typeof document !== 'undefined') {
-      return document.documentElement.getAttribute('data-theme') || 'light';
-    }
-    return 'light';
-  });
+  const [resolvedTheme, setResolvedTheme] = useState(() =>
+    applyThemePreference(getStoredThemePreference())
+  );
 
   const showToast = useCallback((msg) => {
     if (msg) emitStatusCapsule(msg);
@@ -141,8 +148,6 @@ export default function App() {
   // Native shell + theme + offline sync listener
   useEffect(() => {
     void initNativeBackBridge();
-    const currentTheme = applyThemePreference(getStoredThemePreference());
-    setResolvedTheme(currentTheme);
 
     const unsubTheme = subscribeThemeChange((effective) => {
       setResolvedTheme(effective);
@@ -170,18 +175,14 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Boot session -> Default home is ALWAYS Closet (`MY WARDROBE`) unless `?auth=1`
+  // Boot session -> Only verify `/auth/me` asynchronously when a stored token exists
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
-      setSampleDemoMode(true);
-      setUser(DEFAULT_LOCAL_USER);
-      setAuthReady(true);
-      return;
-    }
+    if (!hasInitialToken) return undefined;
 
+    let cancelled = false;
     apiFetch('/auth/me')
       .then((data) => {
+        if (cancelled) return;
         if (data?.user) {
           setSampleDemoMode(false);
           setUser(data.user);
@@ -193,35 +194,51 @@ export default function App() {
         }
       })
       .catch(() => {
+        if (cancelled) return;
         setStoredToken(null);
         setSampleDemoMode(true);
         setUser(DEFAULT_LOCAL_USER);
       })
       .finally(() => {
-        setAuthReady(true);
+        if (!cancelled) {
+          setAuthReady(true);
+        }
       });
-  }, [syncAccountToAvatar]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasInitialToken, syncAccountToAvatar]);
 
   const activeCloset = user?.defaultCloset || 'sample';
 
   // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats
-  const loadGarments = useCallback(async () => {
-    if (!authReady || showAuthScreen) return;
-    setGarmentsLoading(true);
-    try {
-      const q = encodeURIComponent(activeCloset);
-      const res = await apiFetch(`/garments?closet=${q}`);
-      setGarments(Array.isArray(res?.garments) ? res.garments : []);
-    } catch (err) {
-      showToast(err?.message || '인벤토리를 불러오지 못했습니다.');
-    } finally {
-      setGarmentsLoading(false);
-    }
-  }, [activeCloset, authReady, showAuthScreen, showToast]);
-
   useEffect(() => {
-    loadGarments();
-  }, [loadGarments, refreshKey]);
+    if (!authReady || showAuthScreen) return undefined;
+    let cancelled = false;
+    const seqAtStart = garmentsMutationSeqRef.current;
+    const q = encodeURIComponent(activeCloset);
+
+    apiFetch(`/garments?closet=${q}`)
+      .then((res) => {
+        if (cancelled || garmentsMutationSeqRef.current !== seqAtStart) return;
+        setGarments(Array.isArray(res?.garments) ? res.garments : []);
+      })
+      .catch((err) => {
+        if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
+          showToast(err?.message || '인벤토리를 불러오지 못했습니다.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
+          setGarmentsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCloset, authReady, showAuthScreen, refreshKey, showToast]);
 
   const selectedGarment = useMemo(() => {
     if (selectedItemId === null || selectedItemId === undefined) return null;
@@ -367,6 +384,7 @@ export default function App() {
   const handleTryInOutfits = useCallback((garment) => {
     if (!garment) return;
     setPreEquippedGarment(garment);
+    setStudioSessionKey((k) => k + 1);
     setSelectedItemId(null);
     setActiveTab('outfits');
     if (typeof window !== 'undefined') {
@@ -432,6 +450,7 @@ export default function App() {
   }, [user]);
 
   const handleAccountDeleted = useCallback(() => {
+    garmentsMutationSeqRef.current += 1;
     setAccountSheetOpen(false);
     setStoredToken(null);
     setSampleDemoMode(false);
@@ -451,14 +470,16 @@ export default function App() {
     return (
       <>
         <StatusCapsule />
-        <LoginView
-          onLoginSuccess={handleLoginSuccess}
-          onEnterSampleDemo={handleEnterSampleCloset}
-          lang={lang}
-          onChangeLang={handleChangeLang}
-          effectiveTheme={resolvedTheme}
-          onToggleTheme={handleToggleTheme}
-        />
+        <Suspense fallback={<div className="hig-boot-screen" aria-busy="true" />}>
+          <LoginView
+            onLoginSuccess={handleLoginSuccess}
+            onEnterSampleDemo={handleEnterSampleCloset}
+            lang={lang}
+            onChangeLang={handleChangeLang}
+            effectiveTheme={resolvedTheme}
+            onToggleTheme={handleToggleTheme}
+          />
+        </Suspense>
       </>
     );
   }
@@ -476,6 +497,7 @@ export default function App() {
             onSelectGarment={handleOpenGarmentDetail}
             onGarmentRegistered={(created) => {
               if (created) {
+                garmentsMutationSeqRef.current += 1;
                 setGarments((prev) => [
                   created,
                   ...prev.filter((g) => Number(g.id) !== Number(created.id)),
@@ -488,45 +510,48 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'outfits' && (
-          <OutfitStudioView
-            user={user}
-            activeCloset={activeCloset}
-            garments={garments}
-            theme={resolvedTheme}
-            skinProfile={skinProfile}
-            bodySpec={bodySpec}
-            onUpdateSkinProfile={handleApplySkinProfile}
-            onUpdateBodySpec={handleUpdateBodySpec}
-            onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
-            preEquippedGarment={preEquippedGarment}
-            onConsumePreEquipped={() => setPreEquippedGarment(null)}
-            onClosetUpdated={() => setRefreshKey((k) => k + 1)}
-            showToast={showToast}
-          />
-        )}
+        <Suspense fallback={<div className="hig-screen-container" aria-busy="true" />}>
+          {activeTab === 'outfits' && (
+            <OutfitStudioView
+              key={studioSessionKey}
+              user={user}
+              activeCloset={activeCloset}
+              garments={garments}
+              theme={resolvedTheme}
+              skinProfile={skinProfile}
+              bodySpec={bodySpec}
+              onUpdateSkinProfile={handleApplySkinProfile}
+              onUpdateBodySpec={handleUpdateBodySpec}
+              onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
+              preEquippedGarment={preEquippedGarment}
+              onConsumePreEquipped={() => setPreEquippedGarment(null)}
+              onClosetUpdated={() => setRefreshKey((k) => k + 1)}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'calendar' && (
-          <CalendarView
-            activeCloset={activeCloset}
-            garments={garments}
-            refreshKey={refreshKey}
-            onClosetUpdated={() => setRefreshKey((k) => k + 1)}
-            showToast={showToast}
-          />
-        )}
+          {activeTab === 'calendar' && (
+            <CalendarView
+              activeCloset={activeCloset}
+              garments={garments}
+              refreshKey={refreshKey}
+              onClosetUpdated={() => setRefreshKey((k) => k + 1)}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'stats' && (
-          <StatsView
-            garments={garments}
-            theme={resolvedTheme}
-            skinProfile={skinProfile}
-            onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
-            onToggleTheme={handleToggleTheme}
-            onOpenAccount={() => setAccountSheetOpen(true)}
-            onSelectGarment={handleOpenGarmentDetail}
-          />
-        )}
+          {activeTab === 'stats' && (
+            <StatsView
+              garments={garments}
+              theme={resolvedTheme}
+              skinProfile={skinProfile}
+              onOpenSkinToneModal={() => setSkinToneModalOpen(true)}
+              onToggleTheme={handleToggleTheme}
+              onOpenAccount={() => setAccountSheetOpen(true)}
+              onSelectGarment={handleOpenGarmentDetail}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* Unified Bottom-Center Floating Glassmorphism Tab Bar */}
@@ -560,11 +585,13 @@ export default function App() {
         onClose={handleCloseGarmentDetail}
         onUpdated={(updated) => {
           if (!updated) return;
+          garmentsMutationSeqRef.current += 1;
           setGarments((prev) =>
             prev.map((g) => (Number(g.id) === Number(updated.id) ? { ...g, ...updated } : g))
           );
         }}
         onDeleted={(deletedId) => {
+          garmentsMutationSeqRef.current += 1;
           setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
           setSelectedItemId(null);
           if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
@@ -576,27 +603,35 @@ export default function App() {
       />
 
       {/* Portrait Skin-Tone Analyzer & Mannequin Tone Selector */}
-      <SkinToneAnalysisModal
-        open={skinToneModalOpen}
-        onClose={() => setSkinToneModalOpen(false)}
-        user={user}
-        skinProfile={skinProfile}
-        bodySpec={bodySpec}
-        theme={resolvedTheme}
-        onApplySkinProfile={handleApplySkinProfile}
-      />
+      {skinToneModalOpen && (
+        <Suspense fallback={null}>
+          <SkinToneAnalysisModal
+            open={skinToneModalOpen}
+            onClose={() => setSkinToneModalOpen(false)}
+            user={user}
+            skinProfile={skinProfile}
+            bodySpec={bodySpec}
+            theme={resolvedTheme}
+            onApplySkinProfile={handleApplySkinProfile}
+          />
+        </Suspense>
+      )}
 
-      <AccountSettingsSheet
-        open={accountSheetOpen}
-        onClose={() => setAccountSheetOpen(false)}
-        user={user}
-        bodySpec={bodySpec}
-        lang={lang}
-        onChangeLang={handleChangeLang}
-        onOpenSampleImport={() => setSampleImportOpen(true)}
-        onLogout={handleLogout}
-        onAccountDeleted={handleAccountDeleted}
-      />
+      {accountSheetOpen && (
+        <Suspense fallback={null}>
+          <AccountSettingsSheet
+            open={accountSheetOpen}
+            onClose={() => setAccountSheetOpen(false)}
+            user={user}
+            bodySpec={bodySpec}
+            lang={lang}
+            onChangeLang={handleChangeLang}
+            onOpenSampleImport={() => setSampleImportOpen(true)}
+            onLogout={handleLogout}
+            onAccountDeleted={handleAccountDeleted}
+          />
+        </Suspense>
+      )}
 
       <SampleImportSheet
         open={sampleImportOpen}

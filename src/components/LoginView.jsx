@@ -291,9 +291,10 @@ export default function LoginView({
           </div>
         </div>
 
-        {/* Minimal Hero Title */}
+        {/* Minimal Hero Title & Subtitle Hierarchy */}
         <div className="hig-auth-hero-head">
           <h1 className="hig-auth-brand-title">{tr(lang, 'brandTitle')}</h1>
+          <p className="hig-auth-brand-subtitle">{tr(lang, 'brandSubtitle')}</p>
         </div>
 
         {/* Quick Entry CTAs */}
@@ -302,8 +303,7 @@ export default function LoginView({
             id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
             type="button"
             aria-label={CARBON_DOM_CONTRACT.sampleDemoAriaLabel}
-            className="btn btn-primary btn-full"
-            style={{ minHeight: 46 }}
+            className="btn btn-primary btn-full hig-auth-cta-btn"
             onClick={() => onEnterSampleDemo?.()}
           >
             <Play size={15} />
@@ -315,8 +315,7 @@ export default function LoginView({
               id={CARBON_DOM_CONTRACT.appleSignInBtnId}
               type="button"
               aria-label="Sign in with Apple"
-              className="btn btn-secondary btn-full"
-              style={{ minHeight: 46, background: 'var(--auth-input-bg)' }}
+              className="btn btn-secondary btn-full hig-auth-cta-apple"
               disabled={loading}
               onClick={handleAppleSignIn}
             >
@@ -378,30 +377,17 @@ export default function LoginView({
           </div>
 
           {error && (
-            <div
-              role="alert"
-              className="hig-caption"
-              style={{
-                padding: '8px 16px',
-                borderRadius: 12,
-                background: 'var(--bg-canvas)',
-                color: 'var(--ink-primary)',
-              }}
-            >
+            <div role="alert" className="hig-auth-alert">
               {error}
             </div>
           )}
 
           {authMode === 'otp' && (
-            <form
-              onSubmit={handleVerifyQuickEmailCode}
-              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-            >
+            <form onSubmit={handleVerifyQuickEmailCode} className="hig-auth-form">
               <div
-                className="hig-auth-segmented"
+                className="hig-auth-segmented is-two-col"
                 role="radiogroup"
                 aria-label="성별 선택"
-                style={{ gridTemplateColumns: '1fr 1fr' }}
               >
                 {[
                   { key: 'male', label: isEn ? 'Male' : '남성' },
@@ -420,12 +406,11 @@ export default function LoginView({
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="hig-auth-inline-row">
                 <input
                   id={CARBON_DOM_CONTRACT.emailAuthInputId}
                   type="email"
                   className="text-input"
-                  style={{ flex: 1, background: 'var(--bg-canvas)' }}
                   placeholder="name@example.com"
                   aria-label={isEn ? 'Email address' : '이메일 주소'}
                   value={regEmail}
@@ -441,7 +426,6 @@ export default function LoginView({
                   className="btn btn-secondary btn-sm tabular-nums"
                   disabled={loading || cooldownSec > 0}
                   onClick={handleSendOtp}
-                  style={{ whiteSpace: 'nowrap' }}
                 >
                   <Mail size={14} />
                   <span>
@@ -461,20 +445,14 @@ export default function LoginView({
               </div>
 
               {otpSent && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                <div className="hig-auth-otp-stack">
+                  <div className="hig-auth-inline-row">
                     <input
                       id={CARBON_DOM_CONTRACT.emailOtpCodeInputId}
                       type="text"
                       inputMode="numeric"
                       maxLength={6}
-                      className="text-input tabular-nums"
-                      style={{
-                        flex: 1,
-                        background: 'var(--bg-canvas)',
-                        letterSpacing: '0.18em',
-                        fontWeight: 700,
-                      }}
+                      className="text-input tabular-nums hig-auth-otp-input"
                       placeholder={isEn ? '6-digit code' : '6자리 인증코드'}
                       aria-label={isEn ? '6-digit verification code' : '6자리 인증코드'}
                       value={otpCode}
@@ -503,14 +481,10 @@ export default function LoginView({
           )}
 
           {authMode === 'login' && (
-            <form
-              onSubmit={handleLoginSubmit}
-              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
-            >
+            <form onSubmit={handleLoginSubmit} className="hig-auth-form">
               <input
                 id="login-username"
                 className="text-input"
-                style={{ background: 'var(--bg-canvas)' }}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={isEn ? 'Username or email' : '아이디 또는 이메일'}
@@ -522,7 +496,6 @@ export default function LoginView({
                 id="login-password"
                 type="password"
                 className="text-input"
-                style={{ background: 'var(--bg-canvas)' }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={isEn ? 'Password' : '비밀번호'}
@@ -531,16 +504,9 @@ export default function LoginView({
                 required
               />
               {isDev && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                  }}
-                >
+                <div className="hig-auth-seed-bar">
                   <span className="hig-caption">{isEn ? 'Dev Seed' : '시드 계정'}</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="hig-auth-seed-btns">
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
@@ -582,16 +548,12 @@ export default function LoginView({
           )}
 
           {authMode === 'register' && (
-            <form
-              onSubmit={handleCompleteRegister}
-              style={{ display: 'flex', flexDirection: 'column', gap: 11 }}
-            >
-              <div style={{ display: 'flex', gap: 8 }}>
+            <form onSubmit={handleCompleteRegister} className="hig-auth-form">
+              <div className="hig-auth-inline-row">
                 <input
                   id="register-email-input"
                   type="email"
                   className="text-input"
-                  style={{ flex: 1, background: 'var(--bg-canvas)' }}
                   placeholder="name@example.com"
                   aria-label={isEn ? 'Email address' : '이메일 주소'}
                   value={regEmail}
@@ -607,7 +569,6 @@ export default function LoginView({
                   className="btn btn-secondary btn-sm tabular-nums"
                   disabled={loading || cooldownSec > 0}
                   onClick={handleSendOtp}
-                  style={{ whiteSpace: 'nowrap' }}
                 >
                   <Mail size={14} />
                   <span>
@@ -627,20 +588,14 @@ export default function LoginView({
               </div>
 
               {otpSent && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                <div className="hig-auth-otp-stack">
+                  <div className="hig-auth-inline-row">
                     <input
                       id="register-otp-input"
                       type="text"
                       inputMode="numeric"
                       maxLength={6}
-                      className="text-input tabular-nums"
-                      style={{
-                        flex: 1,
-                        background: 'var(--bg-canvas)',
-                        letterSpacing: '0.18em',
-                        fontWeight: 700,
-                      }}
+                      className="text-input tabular-nums hig-auth-otp-input"
                       placeholder={isEn ? '6-digit code' : '6자리 코드'}
                       aria-label={isEn ? '6-digit code' : '6자리 코드'}
                       value={otpCode}
@@ -675,10 +630,9 @@ export default function LoginView({
               )}
 
               <div
-                className="hig-auth-segmented"
+                className="hig-auth-segmented is-two-col"
                 role="radiogroup"
                 aria-label="성별 선택"
-                style={{ gridTemplateColumns: '1fr 1fr' }}
               >
                 {[
                   { key: 'male', label: isEn ? 'Male' : '남성' },
@@ -697,12 +651,11 @@ export default function LoginView({
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 0.9fr', gap: 8 }}>
+              <div className="hig-auth-anthropometric-grid">
                 <input
                   id="register-name-input"
                   type="text"
                   className="text-input"
-                  style={{ background: 'var(--bg-canvas)' }}
                   placeholder={isEn ? 'Name' : '닉네임'}
                   aria-label={isEn ? 'Display name' : '이름 / 닉네임'}
                   value={regDisplayName}
@@ -714,7 +667,6 @@ export default function LoginView({
                   min={145}
                   max={200}
                   className="text-input tabular-nums"
-                  style={{ background: 'var(--bg-canvas)' }}
                   placeholder="cm"
                   aria-label={isEn ? 'Height (cm)' : '신장 cm'}
                   value={regHeightCm}
@@ -726,7 +678,6 @@ export default function LoginView({
                   min={38}
                   max={130}
                   className="text-input tabular-nums"
-                  style={{ background: 'var(--bg-canvas)' }}
                   placeholder="kg"
                   aria-label={isEn ? 'Weight (kg)' : '체중 kg'}
                   value={regWeightKg}
@@ -738,7 +689,6 @@ export default function LoginView({
                 id="register-password-input"
                 type="password"
                 className="text-input"
-                style={{ background: 'var(--bg-canvas)' }}
                 placeholder={isEn ? 'Password (4+ chars)' : '비밀번호 (4자 이상)'}
                 aria-label={isEn ? 'Password' : '비밀번호'}
                 value={regPassword}

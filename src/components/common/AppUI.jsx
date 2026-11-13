@@ -202,10 +202,10 @@ export function ResponsiveSheetModal({
         </div>
 
         {(title || eyebrow || actions) && (
-          <div className="modal-header" style={{ marginBottom: 16 }}>
+          <div className="modal-header">
             <div style={{ minWidth: 0 }}>
               {eyebrow && (
-                <span className="hig-caption" style={{ display: 'block', marginBottom: 4 }}>
+                <span className="hig-eyebrow" style={{ display: 'block', marginBottom: 4 }}>
                   {eyebrow}
                 </span>
               )}
@@ -215,7 +215,7 @@ export function ResponsiveSheetModal({
                 </h2>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div className="modal-header-actions">
               {actions}
               <button
                 type="button"
@@ -370,18 +370,9 @@ export function PermissionNoticeModal({ open, mode = 'camera', onConfirm, onClos
       title={mode === 'camera' ? '카메라 및 사진 접근 안내' : '사진 보관함 접근 안내'}
       maxWidth={440}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: 16,
-            borderRadius: 16,
-            background: 'var(--bg-surface)',
-          }}
-        >
-          <Camera size={22} />
+      <div className="hig-item-detail-body">
+        <div className="hig-sheet-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Camera size={22} style={{ flexShrink: 0 }} />
           <p className="hig-body" style={{ fontSize: '0.88rem' }}>
             선택하거나 촬영한 사진은 의류 배경 제거(WebP 누끼) 및 옷장 등록 용도로만 사용되며,
             동의 없이 외부 제3자에게 공유되지 않습니다.
@@ -424,17 +415,8 @@ export function BiometricConsentModal({ open, onConfirm, onClose }) {
       title="온디바이스 얼굴 피부톤 분석 동의"
       maxWidth={460}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 12,
-            padding: 16,
-            borderRadius: 16,
-            background: 'var(--bg-surface)',
-          }}
-        >
+      <div className="hig-item-detail-body">
+        <div className="hig-sheet-card" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
           <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: 2 }} />
           <div className="hig-body" style={{ fontSize: '0.86rem' }}>
             <strong>100% 기기 내부 메모리 처리 (서버 미전송)</strong>
@@ -490,20 +472,13 @@ export function BiometricConsentModal({ open, onConfirm, onClose }) {
 /**
  * App Store / Play Store Privacy Policy & Terms of Service Disclosure Modal (Req 10)
  */
-export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, lang = 'ko' }) {
+function LegalDisclosureModalInner({ initialDoc = 'privacy', onClose, lang = 'ko' }) {
   const [doc, setDoc] = useState(initialDoc);
-
-  useEffect(() => {
-    if (open) {
-      setDoc(initialDoc);
-    }
-  }, [open, initialDoc]);
-
   const isEn = lang === 'en';
 
   return (
     <ResponsiveSheetModal
-      open={open}
+      open
       onClose={onClose}
       eyebrow="LEGAL & PRIVACY"
       title={
@@ -517,12 +492,11 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
       }
       maxWidth={540}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      <div className="hig-item-detail-body">
+        <div className="hig-grid-2">
           <button
             type="button"
             className={`chip ${doc === 'privacy' ? 'active' : ''}`}
-            style={{ minHeight: 44 }}
             onClick={() => setDoc('privacy')}
           >
             {isEn ? 'Privacy Policy' : '개인정보처리방침'}
@@ -530,7 +504,6 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
           <button
             type="button"
             className={`chip ${doc === 'terms' ? 'active' : ''}`}
-            style={{ minHeight: 44 }}
             onClick={() => setDoc('terms')}
           >
             {isEn ? 'Terms of Service' : '서비스 이용약관'}
@@ -538,16 +511,7 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
         </div>
 
         {doc === 'privacy' ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              background: 'var(--bg-surface)',
-              padding: 16,
-              borderRadius: 16,
-            }}
-          >
+          <div className="hig-sheet-card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ShieldCheck size={18} />
               <strong className="hig-body">
@@ -583,16 +547,7 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
             </p>
           </div>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              background: 'var(--bg-surface)',
-              padding: 16,
-              borderRadius: 16,
-            }}
-          >
+          <div className="hig-sheet-card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <FileText size={18} />
               <strong className="hig-body">
@@ -624,18 +579,28 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
 }
 
 /**
- * Selective Sample Closet Import Sheet for Logged-in Users (Req 8.a)
+ * App Store / Play Store Privacy Policy & Terms of Service Disclosure Modal (Req 10)
  */
-export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
+export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, lang = 'ko' }) {
+  if (!open) return null;
+  return (
+    <LegalDisclosureModalInner
+      key={initialDoc}
+      initialDoc={initialDoc}
+      onClose={onClose}
+      lang={lang}
+    />
+  );
+}
+
+function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
   const [samples, setSamples] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     let active = true;
-    setLoading(true);
     apiFetch('/sample-catalog')
       .then((res) => {
         if (!active) return;
@@ -654,7 +619,7 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
     return () => {
       active = false;
     };
-  }, [open]);
+  }, []);
 
   const toggleKey = (key) => {
     triggerHaptic('selection');
@@ -686,7 +651,7 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
 
   return (
     <ResponsiveSheetModal
-      open={open}
+      open
       onClose={onClose}
       eyebrow="SAMPLE CAPSULE IMPORT"
       title="샘플 아이템 선택 가져오기"
@@ -695,9 +660,9 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
       {loading ? (
         <SkeletonWardrobeGrid count={6} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="hig-caption">
+        <div className="hig-item-detail-body">
+          <div className="hig-sheet-row-between">
+            <span className="hig-caption tabular-nums">
               원하는 아이템만 내 옷장으로 선택 복제할 수 있습니다 ({selectedKeys.length}개 선택됨)
             </span>
             <button
@@ -715,15 +680,7 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
             </button>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
-              gap: 12,
-              maxHeight: '52dvh',
-              overflowY: 'auto',
-            }}
-          >
+          <div className="sample-import-grid">
             {samples.map((item) => {
               const itemKey = item.key || item.sampleKey;
               const checked = selectedKeys.includes(itemKey);
@@ -731,63 +688,20 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
                 <button
                   key={itemKey}
                   type="button"
+                  className={`sample-import-card ${checked ? 'is-selected' : ''}`}
                   onClick={() => toggleKey(itemKey)}
-                  style={{
-                    background: checked ? 'var(--bg-subtle)' : 'var(--bg-surface)',
-                    borderRadius: 16,
-                    padding: 12,
-                    textAlign: 'left',
-                    position: 'relative',
-                  }}
                 >
-                  <div
-                    style={{
-                      aspectRatio: '1 / 1',
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      marginBottom: 8,
-                      background: 'var(--bg-subtle)',
-                      padding: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
+                  <div className="sample-import-thumb">
                     <StudioGarmentImage
                       item={item}
                       alt={item.name}
                       style={{ width: '100%', height: '100%' }}
                     />
                   </div>
-                  <div
-                    className="hig-caption"
-                    style={{
-                      color: 'var(--ink-primary)',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {item.name}
-                  </div>
+                  <div className="hig-garment-name">{item.name}</div>
                   <div className="hig-caption tabular-nums">{formatKRW(item.price)}</div>
                   {checked && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        width: 22,
-                        height: 22,
-                        borderRadius: '50%',
-                        background: 'var(--accent-mono)',
-                        color: 'var(--ink-inverse)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
+                    <span className="sample-import-check">
                       <Check size={13} strokeWidth={2.6} />
                     </span>
                   )}
@@ -816,5 +730,19 @@ export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
         </div>
       )}
     </ResponsiveSheetModal>
+  );
+}
+
+/**
+ * Selective Sample Closet Import Sheet for Logged-in Users (Req 8.a)
+ */
+export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
+  if (!open) return null;
+  return (
+    <SampleImportSheetInner
+      onClose={onClose}
+      targetOwner={targetOwner}
+      onImported={onImported}
+    />
   );
 }

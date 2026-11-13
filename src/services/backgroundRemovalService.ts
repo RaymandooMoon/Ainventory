@@ -64,7 +64,7 @@ function inferCategoryAndNameFromHint(
     return { category: 'outer', defaultName: hint || 'Tailored Outerwear' };
   }
   if (/(pant|pants|trouser|slacks|denim|jean|chino|short|skirt|슬랙스|데님|팬츠|바지|스커트)/.test(lower)) {
-    return { category: 'bottom', defaultName: hint || ' Pleated Trousers' };
+    return { category: 'bottom', defaultName: hint || 'Pleated Trousers' };
   }
   if (/(shoe|sneaker|loafer|boot|heel|sandal|신발|스니커즈|로퍼|부츠)/.test(lower)) {
     return { category: 'shoes', defaultName: hint || 'Minimal Leather Sneakers' };

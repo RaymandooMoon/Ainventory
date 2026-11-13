@@ -25,8 +25,7 @@ import { LegalDisclosureModal, ResponsiveSheetModal } from './common/AppUI.jsx';
 /**
  * Account Settings, Theme Appearance, Offline Sync Status & Immediate Permanent Account Deletion
  */
-export default function AccountSettingsSheet({
-  open,
+function AccountSettingsContent({
   onClose,
   user,
   bodySpec,
@@ -35,22 +34,27 @@ export default function AccountSettingsSheet({
   onOpenSampleImport,
   onLogout,
   onAccountDeleted,
+  onOpenLegalDoc,
 }) {
-  const [themePref, setThemePref] = useState(getStoredThemePreference());
+  const [themePref, setThemePref] = useState(() => getStoredThemePreference());
   const [queueCount, setQueueCount] = useState(0);
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [legalDoc, setLegalDoc] = useState(null);
 
   useEffect(() => {
-    if (!open) return;
-    setConfirmDeleteStep(false);
-    setThemePref(getStoredThemePreference());
+    let active = true;
     getOfflineQueueCount()
-      .then((c) => setQueueCount(c))
-      .catch(() => setQueueCount(0));
-  }, [open]);
+      .then((c) => {
+        if (active) setQueueCount(c);
+      })
+      .catch(() => {
+        if (active) setQueueCount(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleThemeSelect = (nextPref) => {
     triggerHaptic('selection');
@@ -98,50 +102,31 @@ export default function AccountSettingsSheet({
       : '남성';
 
   return (
-    <>
-      <ResponsiveSheetModal
-        open={open}
-        onClose={onClose}
-        eyebrow="ACCOUNT"
-        title="계정 설정"
-        maxWidth={500}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="hig-item-detail-body">
           {/* User Summary */}
-          <div
-            style={{
-              background: 'var(--bg-surface)',
-              borderRadius: 16,
-              padding: 16,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 16,
-            }}
-          >
-            <div>
-              <div className="hig-headline">{user?.displayName || '사용자'}</div>
-              <div className="hig-caption tabular-nums">
-                @{user?.username} · {resolvedGenderLabel}
-                {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
+          <div className="hig-sheet-card">
+            <div className="hig-sheet-row-between">
+              <div>
+                <div className="hig-headline">{user?.displayName || '사용자'}</div>
+                <div className="hig-caption tabular-nums">
+                  @{user?.username} · {resolvedGenderLabel}
+                  {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
+                </div>
               </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
+              >
+                <Globe size={14} /> {lang === 'ko' ? 'English' : '한국어'}
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              style={{ minHeight: 44 }}
-              onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
-            >
-              <Globe size={14} /> {lang === 'ko' ? 'English' : '한국어'}
-            </button>
           </div>
 
           {/* Light / Dark / System Monochrome Appearance */}
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 16 }}>
-            <div className="hig-caption" style={{ marginBottom: 8 }}>
-              화면 스타일 (Apple HIG 테마)
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <div className="hig-sheet-card">
+            <div className="hig-caption">화면 스타일 (Apple HIG 테마)</div>
+            <div className="hig-grid-3">
               {[
                 { key: 'light', label: '라이트', icon: <Sun size={14} /> },
                 { key: 'dark', label: '다크', icon: <Moon size={14} /> },
@@ -152,7 +137,6 @@ export default function AccountSettingsSheet({
                   id={`theme-mode-${opt.key}-btn`}
                   type="button"
                   className={`btn ${themePref === opt.key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                  style={{ justifyContent: 'center', minHeight: 44 }}
                   onClick={() => handleThemeSelect(opt.key)}
                 >
                   {opt.icon}
@@ -163,17 +147,8 @@ export default function AccountSettingsSheet({
           </div>
 
           {/* Offline-First Sync & Sample Closet Import */}
-          <div
-            style={{
-              background: 'var(--bg-surface)',
-              borderRadius: 16,
-              padding: 16,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="hig-sheet-card">
+            <div className="hig-sheet-row-between">
               <div>
                 <div className="hig-body" style={{ fontWeight: 600 }}>
                   오프라인 우선 캐시 동기화
@@ -185,7 +160,6 @@ export default function AccountSettingsSheet({
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                style={{ minHeight: 44 }}
                 disabled={syncing}
                 onClick={handleSyncNow}
               >
@@ -195,12 +169,11 @@ export default function AccountSettingsSheet({
             </div>
 
             {!user?.isSampleDemo && onOpenSampleImport && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <div>
                 <button
                   id="settings-open-sample-import-btn"
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  style={{ minHeight: 44 }}
                   onClick={() => {
                     onClose?.();
                     onOpenSampleImport?.();
@@ -213,13 +186,12 @@ export default function AccountSettingsSheet({
           </div>
 
           {/* Legal Disclosures: Privacy Policy & Terms of Service */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="hig-grid-2">
             <button
               id="settings-privacy-policy-btn"
               type="button"
               className="btn btn-secondary btn-sm"
-              style={{ minHeight: 44 }}
-              onClick={() => setLegalDoc('privacy')}
+              onClick={() => onOpenLegalDoc?.('privacy')}
             >
               <ShieldCheck size={14} />
               <span>개인정보처리방침</span>
@@ -228,8 +200,7 @@ export default function AccountSettingsSheet({
               id="settings-terms-btn"
               type="button"
               className="btn btn-secondary btn-sm"
-              style={{ minHeight: 44 }}
-              onClick={() => setLegalDoc('terms')}
+              onClick={() => onOpenLegalDoc?.('terms')}
             >
               <FileText size={14} />
               <span>이용약관</span>
@@ -241,7 +212,6 @@ export default function AccountSettingsSheet({
             id="account-logout-btn"
             type="button"
             className="btn btn-secondary btn-full"
-            style={{ minHeight: 44 }}
             onClick={() => {
               onClose?.();
               onLogout?.();
@@ -253,16 +223,7 @@ export default function AccountSettingsSheet({
 
           {/* Mandatory Store Compliance: Immediate Permanent Account & Data Deletion (Req 10.a) */}
           {!user?.isSampleDemo && (
-            <div
-              style={{
-                background: 'var(--bg-surface)',
-                borderRadius: 16,
-                padding: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
+            <div className="hig-sheet-card">
               <div className="hig-caption" style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>
                 개인 데이터 및 계정 영구 파기
               </div>
@@ -275,18 +236,18 @@ export default function AccountSettingsSheet({
                 <button
                   id={CARBON_DOM_CONTRACT.initiateDeleteAccountBtnId}
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ alignSelf: 'flex-start', minHeight: 44 }}
+                  className="hig-danger-outline-btn"
+                  style={{ alignSelf: 'flex-start' }}
                   onClick={() => setConfirmDeleteStep(true)}
                 >
-                  <Trash2 size={14} /> 회원 탈퇴 및 모든 개인 데이터 즉시 영구 삭제
+                  <Trash2 size={14} />
+                  <span>회원 탈퇴 및 모든 개인 데이터 즉시 영구 삭제</span>
                 </button>
               ) : (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div className="hig-sheet-row-between">
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    style={{ minHeight: 44 }}
                     onClick={() => setConfirmDeleteStep(false)}
                   >
                     취소
@@ -295,7 +256,6 @@ export default function AccountSettingsSheet({
                     id={CARBON_DOM_CONTRACT.confirmPermanentDeleteBtnId}
                     type="button"
                     className="btn btn-primary btn-sm"
-                    style={{ minHeight: 44 }}
                     disabled={deleting}
                     onClick={handleImmediatePermanentDelete}
                   >
@@ -306,7 +266,45 @@ export default function AccountSettingsSheet({
               )}
             </div>
           )}
-        </div>
+    </div>
+  );
+}
+
+export default function AccountSettingsSheet({
+  open,
+  onClose,
+  user,
+  bodySpec,
+  lang,
+  onChangeLang,
+  onOpenSampleImport,
+  onLogout,
+  onAccountDeleted,
+}) {
+  const [legalDoc, setLegalDoc] = useState(null);
+
+  return (
+    <>
+      <ResponsiveSheetModal
+        open={open}
+        onClose={onClose}
+        eyebrow="ACCOUNT"
+        title="계정 설정"
+        maxWidth={500}
+      >
+        {open && (
+          <AccountSettingsContent
+            onClose={onClose}
+            user={user}
+            bodySpec={bodySpec}
+            lang={lang}
+            onChangeLang={onChangeLang}
+            onOpenSampleImport={onOpenSampleImport}
+            onLogout={onLogout}
+            onAccountDeleted={onAccountDeleted}
+            onOpenLegalDoc={setLegalDoc}
+          />
+        )}
       </ResponsiveSheetModal>
 
       <LegalDisclosureModal

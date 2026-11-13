@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, Check, Sparkles, Upload } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -21,8 +21,16 @@ const SAMPLE_PORTRAIT_BUTTONS = [
   { key: 'winter_cool', label: '겨울 쿨 인물 샘플' },
 ];
 
-export default function SkinToneAnalysisModal({
-  open,
+function isDarkSwatch(hex = '#DFBA9B') {
+  const clean = String(hex).replace('#', '');
+  if (clean.length !== 6) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 145;
+}
+
+function SkinToneModalContent({
   onClose,
   user,
   skinProfile,
@@ -34,18 +42,18 @@ export default function SkinToneAnalysisModal({
   const cameraInputRef = useRef(null);
   const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
-  const [draftHex, setDraftHex] = useState(skinProfile?.skinToneHex || '#DFBA9B');
-  const [draftSeason, setDraftSeason] = useState(
+  const [draftHex, setDraftHex] = useState(() => skinProfile?.skinToneHex || '#DFBA9B');
+  const [draftSeason, setDraftSeason] = useState(() =>
     normalizeSeasonKey(skinProfile?.personalColor || 'autumn_warm')
   );
   const [draftSubType, setDraftSubType] = useState(
-    skinProfile?.subTypeLabelKo || '가을 웜 뮤트'
+    () => skinProfile?.subTypeLabelKo || '가을 웜 뮤트'
   );
-  const [draftGender, setDraftGender] = useState(
+  const [draftGender, setDraftGender] = useState(() =>
     (isSignedAccount ? user?.gender : skinProfile?.gender) === 'female' ? 'female' : 'male'
   );
   const [draftPresetKey, setDraftPresetKey] = useState(
-    skinProfile?.presetKey || 'autumn_beige'
+    () => skinProfile?.presetKey || 'autumn_beige'
   );
 
   const [lightingMode, setLightingMode] = useState('auto_d65');
@@ -53,18 +61,6 @@ export default function SkinToneAnalysisModal({
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    setDraftHex(skinProfile?.skinToneHex || '#DFBA9B');
-    setDraftSeason(normalizeSeasonKey(skinProfile?.personalColor || 'autumn_warm'));
-    setDraftSubType(skinProfile?.subTypeLabelKo || '가을 웜 뮤트');
-    const resolvedGender =
-      (isSignedAccount ? user?.gender : skinProfile?.gender) === 'female' ? 'female' : 'male';
-    setDraftGender(resolvedGender);
-    setDraftPresetKey(skinProfile?.presetKey || 'autumn_beige');
-    setErrorMsg('');
-  }, [open, skinProfile, isSignedAccount, user?.gender]);
 
   const runAnalysis = async (imgSrc, nextLighting = lightingMode) => {
     if (!imgSrc) return;
@@ -147,14 +143,8 @@ export default function SkinToneAnalysisModal({
   const activeSeasonMeta = SEASON_BEST_SWATCHES[draftSeason] || SEASON_BEST_SWATCHES.autumn_warm;
 
   return (
-    <ResponsiveSheetModal
-      open={open}
-      onClose={onClose}
-      title="피부톤 설정"
-      maxWidth={540}
-    >
-      <div className="skin-modal-body">
-        <div className="skin-modal-preview-grid">
+    <div className="skin-modal-body">
+      <div className="skin-modal-preview-grid">
           <div className="skin-modal-character-box">
             <div className="skin-modal-character-stage">
               <Character25DMannequin
@@ -198,6 +188,15 @@ export default function SkinToneAnalysisModal({
                   alt="피부톤 샘플링 프리뷰"
                   className="skin-portrait-pin-img"
                 />
+                <div
+                  className={`hig-optical-scan-overlay ${analyzing ? 'is-scanning' : ''}`}
+                  aria-hidden="true"
+                >
+                  <span className="wardrobe-scanner-corner is-tl" />
+                  <span className="wardrobe-scanner-corner is-tr" />
+                  <span className="wardrobe-scanner-corner is-bl" />
+                  <span className="wardrobe-scanner-corner is-br" />
+                </div>
                 {analysisResult.pins.map((pin) => (
                   <span
                     key={pin.id}
@@ -310,7 +309,7 @@ export default function SkinToneAnalysisModal({
             ))}
           </div>
 
-          <div className="hig-pill-rail" style={{ paddingBottom: 2 }}>
+          <div className="hig-pill-rail">
             {LIGHTING_CALIBRATION_MODES.map((m) => (
               <button
                 key={m.key}
@@ -344,6 +343,7 @@ export default function SkinToneAnalysisModal({
           <div className="skin-preset-grid">
             {SKIN_TONE_MANNEQUIN_PRESETS.map((preset) => {
               const selected = draftPresetKey === preset.key && draftHex === preset.skinToneHex;
+              const checkStroke = isDarkSwatch(preset.skinToneHex) ? '#FFFFFF' : '#1D1D1F';
               return (
                 <button
                   key={preset.key}
@@ -356,7 +356,7 @@ export default function SkinToneAnalysisModal({
                     className="skin-preset-swatch"
                     style={{ backgroundColor: preset.skinToneHex }}
                   >
-                    {selected && <Check size={13} strokeWidth={2.8} color="#1D1D1F" />}
+                    {selected && <Check size={13} strokeWidth={2.8} color={checkStroke} />}
                   </span>
                   <div className="skin-preset-meta">
                     <strong>{preset.shortKo}</strong>
@@ -377,7 +377,36 @@ export default function SkinToneAnalysisModal({
           <Check size={17} />
           <span>적용</span>
         </button>
-      </div>
+    </div>
+  );
+}
+
+export default function SkinToneAnalysisModal({
+  open,
+  onClose,
+  user,
+  skinProfile,
+  bodySpec,
+  theme = 'light',
+  onApplySkinProfile,
+}) {
+  return (
+    <ResponsiveSheetModal
+      open={open}
+      onClose={onClose}
+      title="피부톤 설정"
+      maxWidth={540}
+    >
+      {open && (
+        <SkinToneModalContent
+          onClose={onClose}
+          user={user}
+          skinProfile={skinProfile}
+          bodySpec={bodySpec}
+          theme={theme}
+          onApplySkinProfile={onApplySkinProfile}
+        />
+      )}
     </ResponsiveSheetModal>
   );
 }

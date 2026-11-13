@@ -158,6 +158,19 @@ function easeSpringFlight(t) {
   return 1 - Math.pow(1 - x, 3.15);
 }
 
+function evaluateCubicBezier(t, p0, c1, c2, p3) {
+  const u = Math.max(0, Math.min(1, t));
+  const inv = 1 - u;
+  const inv2 = inv * inv;
+  const u2 = u * u;
+  return (
+    inv2 * inv * p0 +
+    3 * inv2 * u * c1 +
+    3 * inv * u2 * c2 +
+    u2 * u * p3
+  );
+}
+
 function HangerGraphic() {
   return (
     <svg
@@ -233,6 +246,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
   const scanBeamRef = useRef(null);
   const scanReadoutRef = useRef(null);
 
+  const flightWakeRef = useRef(null);
   const activeActorRef = useRef(null);
   const activePhysicalRef = useRef(null);
   const activePhysicalHangerRef = useRef(null);
@@ -256,7 +270,9 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
   const archiveCountRef = useRef(null);
 
   const langRef = useRef(isEn);
-  langRef.current = isEn;
+  useEffect(() => {
+    langRef.current = isEn;
+  }, [isEn]);
 
   useEffect(() => {
     // Preload transparent garment cutouts into decoded browser image cache
@@ -299,7 +315,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
       geom.scanH = scRect.height;
       geom.scanCenterX = geom.scanLeft + scRect.width * 0.5;
       geom.scanCenterY = geom.scanTop + scRect.height * 0.5;
-      geom.isCompactStage = sRect.width < 920;
+      geom.isCompactStage = sRect.width < 1000;
       geom.railStep = Math.max(92, scRect.width * (geom.isCompactStage ? 0.94 : 1.02));
       stageEl.style.setProperty('--scanner-w', `${scRect.width}px`);
       stageEl.style.setProperty('--scanner-h', `${scRect.height}px`);
@@ -457,6 +473,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
       const digiEl = activeDigitalRef.current;
       const beamEl = scanBeamRef.current;
       const scEl = scannerRef.current;
+      const wakeEl = flightWakeRef.current;
 
       if (!actorEl || !physEl || !digiEl || !beamEl || !scEl) {
         rafId = requestAnimationFrame(tick);
@@ -468,6 +485,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
           applyItemToActiveAndQueue(0);
           lastBoundCycle = 0;
         }
+        if (wakeEl) wakeEl.style.opacity = '0';
         actorEl.style.opacity = '1';
         actorEl.style.transform = `translate3d(${geom.scanLeft.toFixed(1)}px, ${geom.scanTop.toFixed(1)}px, 0) scale(1)`;
         physEl.style.opacity = '1';
@@ -532,6 +550,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
       if (u < 0.18) {
         // ACT 1: Garment glides along closet rod into the Optical Capture Frame
         setReceivingSlot(-1);
+        if (wakeEl) wakeEl.style.opacity = '0';
         const ax = geom.scanLeft - geom.railStep * (1 - tRail);
         actorEl.style.opacity = '1';
         actorEl.style.transform = `translate3d(${ax.toFixed(1)}px, ${geom.scanTop.toFixed(1)}px, 0) scale(1)`;
@@ -547,6 +566,7 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
       } else if (u < 0.58) {
         // ACT 2: Optical Cutout Scan Wipe (Physical Closet Hanger -> 2.5D Squircle Inventory Card)
         setReceivingSlot(-1);
+        if (wakeEl) wakeEl.style.opacity = '0';
         const rawScan = (u - 0.18) / 0.4;
         const scanP = easeInOutCubic(rawScan);
         const settleDeg = advanceSwayDeg * (1 - rawScan);
@@ -565,37 +585,41 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
         digiEl.style.clipPath = `inset(0% 0% ${(100 - pct).toFixed(2)}% 0% round 20px)`;
 
         const beamAlpha = Math.sin(rawScan * Math.PI);
-        beamEl.style.opacity = Math.min(1, beamAlpha * 2.4).toFixed(3);
+        beamEl.style.opacity = Math.min(1, beamAlpha * 2.5).toFixed(3);
         beamEl.style.transform = `translate3d(0, ${(geom.scanH * scanP).toFixed(1)}px, 0)`;
 
         scEl.dataset.scanActive = 'scanning';
         updateReadout(`${String(Math.round(pct)).padStart(2, '0')}%`);
       } else if (u < 0.88 && targetSlot) {
-        // ACT 3: Newly Digitized Squircle Card Arcs into Target Digital Inventory Slot
+        // ACT 3: Cubic Bézier Curved Trajectory Docking + Aerodynamic Banking & Optical Wake
         setReceivingSlot(targetDomIdx);
         const rawFly = (u - 0.58) / 0.3;
         const easeFly = easeSpringFlight(rawFly);
 
         const p0x = geom.scanCenterX;
         const p0y = geom.scanCenterY;
-        const p2x = targetSlot.centerX;
-        const p2y = targetSlot.centerY;
+        const p3x = targetSlot.centerX;
+        const p3y = targetSlot.centerY;
+        const dx = p3x - p0x;
+        const dy = p3y - p0y;
+        const arcLift = Math.min(104, Math.max(46, geom.stageH * 0.12));
 
-        const ctrlX = (p0x + p2x) * 0.5 + (geom.isCompactStage ? 28 : 0);
-        const ctrlY = geom.isCompactStage
-          ? (p0y + p2y) * 0.5 - 18
-          : Math.min(p0y, p2y) - Math.min(78, geom.stageH * 0.1);
+        const c1x = geom.isCompactStage ? p0x + 42 : p0x + dx * 0.36;
+        const c1y = geom.isCompactStage ? p0y + dy * 0.22 - 18 : p0y - arcLift;
+        const c2x = geom.isCompactStage ? p3x + 14 : p3x - dx * 0.16;
+        const c2y = geom.isCompactStage
+          ? p3y - Math.max(36, Math.abs(dy) * 0.28)
+          : Math.min(p0y, p3y) - arcLift * 0.52;
 
-        const inv = 1 - easeFly;
-        const cx = inv * inv * p0x + 2 * inv * easeFly * ctrlX + easeFly * easeFly * p2x;
-        const cy = inv * inv * p0y + 2 * inv * easeFly * ctrlY + easeFly * easeFly * p2y;
+        const cx = evaluateCubicBezier(easeFly, p0x, c1x, c2x, p3x);
+        const cy = evaluateCubicBezier(easeFly, p0y, c1y, c2y, p3y);
 
         const endScaleX = targetSlot.width / geom.scanW;
         const endScaleY = targetSlot.height / geom.scanH;
-        const midLift = 1 + 0.06 * Math.sin(rawFly * Math.PI);
+        const midLift = 1 + 0.075 * Math.sin(rawFly * Math.PI);
         const sx = (1 + (endScaleX - 1) * easeFly) * midLift;
         const sy = (1 + (endScaleY - 1) * easeFly) * midLift;
-        const bankDeg = Math.sin(rawFly * Math.PI) * (geom.isCompactStage ? -2.2 : 2.6);
+        const bankDeg = Math.sin(rawFly * Math.PI) * (geom.isCompactStage ? -3.1 : 3.4);
 
         const drawLeft = cx - geom.scanW * 0.5;
         const drawTop = cy - geom.scanH * 0.5;
@@ -606,6 +630,18 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
           activePhysicalHangerRef.current.style.transform = 'rotate(0deg)';
         }
 
+        if (wakeEl) {
+          const wakeRaw = Math.max(0, rawFly - 0.08);
+          const wakeEase = easeSpringFlight(wakeRaw);
+          const wx = evaluateCubicBezier(wakeEase, p0x, c1x, c2x, p3x) - geom.scanW * 0.5;
+          const wy = evaluateCubicBezier(wakeEase, p0y, c1y, c2y, p3y) - geom.scanH * 0.5;
+          const wsx = (1 + (endScaleX - 1) * wakeEase) * 0.94;
+          const wsy = (1 + (endScaleY - 1) * wakeEase) * 0.94;
+          const wakeAlpha = Math.sin(rawFly * Math.PI) * 0.56;
+          wakeEl.style.opacity = wakeAlpha.toFixed(3);
+          wakeEl.style.transform = `translate3d(${wx.toFixed(1)}px, ${wy.toFixed(1)}px, 0) rotate(${(bankDeg * 0.85).toFixed(2)}deg) scale(${wsx.toFixed(3)}, ${wsy.toFixed(3)})`;
+        }
+
         physEl.style.opacity = '0';
         digiEl.style.opacity = '1';
         digiEl.style.clipPath = 'inset(0% 0% 0% 0% round 20px)';
@@ -613,8 +649,9 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
         scEl.dataset.scanActive = 'synced';
         updateReadout('SYNCED');
       } else {
-        // ACT 4: Docked into Structured Inventory Archive + Tactile Settle Pulse
+        // ACT 4: Docked into Structured Inventory Archive + Damped Harmonic Settle
         setReceivingSlot(-1);
+        if (wakeEl) wakeEl.style.opacity = '0';
         if (lastCommittedCycle !== cycleIdx && targetDomIdx >= 0) {
           const total = WARDROBE_STREAM_ITEMS.length;
           const activeItem = WARDROBE_STREAM_ITEMS[cycleIdx % total];
@@ -625,7 +662,8 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
 
         const rawSettle = (u - 0.88) / 0.12;
         if (targetDomIdx >= 0 && slotCardRefs.current[targetDomIdx]) {
-          const pulse = 1 + 0.055 * Math.sin(rawSettle * Math.PI) * (1 - rawSettle * 0.4);
+          const pulse =
+            1 + 0.068 * Math.sin(rawSettle * Math.PI * 1.45) * Math.exp(-rawSettle * 2.25);
           slotCardRefs.current[targetDomIdx].style.transform = `scale(${pulse.toFixed(3)})`;
         }
 
@@ -691,6 +729,9 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
         {/* LEFT / UPPER WING: Physical Closet Rail & Optical Cutout Scanner */}
         <div className="wardrobe-motion-closet-wing">
           <div id="wardrobe-optical-scanner" ref={scannerRef} className="wardrobe-motion-scanner">
+            {/* Precision Optical Calibration Reticle */}
+            <div className="wardrobe-scanner-reticle" />
+
             {/* Brushed Metal Closet Rod anchored directly to hanger hook height */}
             <div className="wardrobe-motion-rail">
               <span className="wardrobe-motion-rail-cap" />
@@ -712,9 +753,10 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
             <span className="wardrobe-scanner-corner is-bl" />
             <span className="wardrobe-scanner-corner is-br" />
 
-            {/* Luminous Optical Cutout Sweep Bar */}
+            {/* Luminous Optical Cutout Sweep Bar + Soft Halo */}
             <div ref={scanBeamRef} className="wardrobe-scanner-beam">
               <div className="wardrobe-scanner-beam-veil" />
+              <div className="wardrobe-scanner-beam-halo" />
               <div className="wardrobe-scanner-beam-line" />
             </div>
           </div>
@@ -753,6 +795,9 @@ const LoginWardrobeMotionStage = memo(function LoginWardrobeMotionStage({
             </div>
           );
         })}
+
+        {/* Curved Flight Optical Wake Trailing Behind Flying Squircle Card */}
+        <div ref={flightWakeRef} className="wardrobe-flight-wake" />
 
         {/* Active Transformation Actor (Physical Closet Layer -> Optical Wipe -> Flying Squircle Card) */}
         <div ref={activeActorRef} className="wardrobe-active-actor">

@@ -5,7 +5,16 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
+function escapeIcsField(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
 function buildIcsText(logs, outfits) {
+  const dtStamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -16,12 +25,13 @@ function buildIcsText(logs, outfits) {
     const rawDate = String(entry.worn_date || '').replace(/-/g, '');
     if (rawDate.length !== 8) continue;
     const matchedOutfit = outfits.find((o) => Number(o.id) === Number(entry.outfit_id));
-    const title = matchedOutfit?.title || 'Outfit';
+    const title = matchedOutfit?.title || entry.note || 'Outfit';
     lines.push(
       'BEGIN:VEVENT',
       `UID:ainventory-${entry.id}@ainventory.local`,
+      `DTSTAMP:${dtStamp}`,
       `DTSTART;VALUE=DATE:${rawDate}`,
-      `SUMMARY:${title}`,
+      `SUMMARY:${escapeIcsField(title)}`,
       'END:VEVENT'
     );
   }
@@ -41,21 +51,27 @@ export default function CalendarView({
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const [todayStr] = useState(() => new Date().toISOString().slice(0, 10));
   const [wornDate, setWornDate] = useState(todayStr);
   const [selectedOutfitId, setSelectedOutfitId] = useState('');
   const [note, setNote] = useState('');
 
-  const loadCalendar = useCallback(async () => {
+  const fetchCalendarData = useCallback(async () => {
+    const q = encodeURIComponent(activeCloset || 'sample');
+    const [calRes, outRes] = await Promise.all([
+      apiFetch(`/calendar?closet=${q}`),
+      apiFetch(`/outfits?closet=${q}`),
+    ]);
+    return {
+      nextLogs: calRes.logs || [],
+      nextOutfits: outRes.outfits || [],
+    };
+  }, [activeCloset]);
+
+  const reloadCalendar = useCallback(async () => {
     setLoading(true);
     try {
-      const q = encodeURIComponent(activeCloset || 'sample');
-      const [calRes, outRes] = await Promise.all([
-        apiFetch(`/calendar?closet=${q}`),
-        apiFetch(`/outfits?closet=${q}`),
-      ]);
-      const nextLogs = calRes.logs || [];
-      const nextOutfits = outRes.outfits || [];
+      const { nextLogs, nextOutfits } = await fetchCalendarData();
       setLogs(nextLogs);
       setOutfits(nextOutfits);
       if (nextOutfits.length > 0) {
@@ -66,11 +82,33 @@ export default function CalendarView({
     } finally {
       setLoading(false);
     }
-  }, [activeCloset, showToast]);
+  }, [fetchCalendarData, showToast]);
 
   useEffect(() => {
-    loadCalendar();
-  }, [loadCalendar, refreshKey]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { nextLogs, nextOutfits } = await fetchCalendarData();
+        if (cancelled) return;
+        setLogs(nextLogs);
+        setOutfits(nextOutfits);
+        if (nextOutfits.length > 0) {
+          setSelectedOutfitId((prev) => prev || String(nextOutfits[0].id));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          showToast?.(err?.message || '캘린더를 불러오지 못했습니다.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCalendarData, refreshKey, showToast]);
 
   const handleAddLog = async (e) => {
     e.preventDefault();
@@ -92,7 +130,7 @@ export default function CalendarView({
       triggerHaptic('selection');
       setNote('');
       setAddOpen(false);
-      await loadCalendar();
+      await reloadCalendar();
       onClosetUpdated?.();
     } catch (err) {
       showToast?.(err?.message || '일정 등록에 실패했습니다.');
@@ -103,7 +141,7 @@ export default function CalendarView({
     try {
       await apiFetch(`/calendar/${logId}`, { method: 'DELETE' });
       triggerHaptic('selection');
-      await loadCalendar();
+      await reloadCalendar();
     } catch (err) {
       showToast?.(err?.message || '삭제에 실패했습니다.');
     }
@@ -193,8 +231,15 @@ export default function CalendarView({
             return (
               <article key={entry.id} className="hig-calendar-card">
                 <div className="hig-calendar-card-head">
-                  <div>
-                    <strong className="hig-calendar-date tabular-nums">{entry.worn_date}</strong>
+                  <div className="hig-calendar-meta-group">
+                    <div className="hig-calendar-date-row">
+                      <strong className="hig-calendar-date tabular-nums">{entry.worn_date}</strong>
+                      <span
+                        className={`hig-calendar-status-badge ${entry.status === 'planned' ? 'is-planned' : ''}`}
+                      >
+                        {entry.status === 'planned' ? 'PLANNED' : 'WORN'}
+                      </span>
+                    </div>
                     <span className="hig-calendar-title">
                       {matchedOutfit?.title || entry.note || 'Daily Look'}
                     </span>

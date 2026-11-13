@@ -31,6 +31,25 @@ export const BODY_SHAPE_OPTIONS: readonly BodyShapePresetOption[] = [
   { key: 'muscular', labelKo: '탄탄·머슬' },
 ] as const;
 
+export type CameraPresetKey = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom';
+
+export interface CameraViewPreset {
+  key: CameraPresetKey;
+  labelKo: string;
+  yawRad: number;
+  polarRad: number;
+  zoom: number;
+}
+
+export const CAMERA_VIEW_PRESETS: Record<CameraPresetKey, CameraViewPreset> = {
+  front: { key: 'front', labelKo: '앞', yawRad: 0, polarRad: 1.52, zoom: 0.98 },
+  back: { key: 'back', labelKo: '뒤', yawRad: Math.PI, polarRad: 1.52, zoom: 0.98 },
+  left: { key: 'left', labelKo: '좌', yawRad: -Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
+  right: { key: 'right', labelKo: '우', yawRad: Math.PI / 2, polarRad: 1.52, zoom: 0.98 },
+  top: { key: 'top', labelKo: '상', yawRad: 0, polarRad: 0.28, zoom: 0.88 },
+  bottom: { key: 'bottom', labelKo: '하', yawRad: 0, polarRad: 2.34, zoom: 0.92 },
+};
+
 const BODY_STORAGE_KEY = 'ainventory_body_spec_v1';
 
 function clamp(v: number, min: number, max: number): number {
