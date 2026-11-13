@@ -1,13 +1,19 @@
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Moon, Palette, SlidersHorizontal, Sun } from 'lucide-react';
-import {
-  WARDROBE_CATEGORY_OPTIONS,
-  normalizeWardrobeCategoryKey,
-} from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
-import { localizeBrandName, localizeGarmentName, tx } from '../utils/i18n.ts';
-import GarmentObject25D from './GarmentObject25D.jsx';
+import { apiFetch } from '../utils/api.ts';
+import { tx } from '../utils/i18n.ts';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
+import {
+  MostWornRankingCard,
+  UnwornSleeperCard,
+} from './stats/StatsEditorialRankings.jsx';
+import {
+  ColorSpectrumWidget,
+  InteractiveCompositionWidget,
+  WardrobeHeroSummaryCard,
+} from './stats/StatsSvgWidgets.jsx';
+import './stats/statsBento.css';
 
 export default function StatsView({
   garments = [],
@@ -21,44 +27,50 @@ export default function StatsView({
   onOpenAccount,
   onSelectGarment,
 }) {
-  const categoryBreakdown = useMemo(() => {
-    const counts = {
-      top: 0,
-      bottom: 0,
-      outer: 0,
-      shoes: 0,
-      accessory: 0,
-    };
-    for (const item of garments) {
-      const key = normalizeWardrobeCategoryKey(item.category);
-      counts[key] = (counts[key] || 0) + 1;
-    }
-    const total = Math.max(1, garments.length);
-    return WARDROBE_CATEGORY_OPTIONS.map((opt) => ({
-      key: opt.key,
-      label: opt.label,
-      count: counts[opt.key] || 0,
-      ratioPct: Math.round(((counts[opt.key] || 0) / total) * 100),
-    }));
-  }, [garments]);
+  const [activeOutfitCount, setActiveOutfitCount] = useState(0);
+  const [wearLogCount, setWearLogCount] = useState(0);
 
-  const topWornGarments = useMemo(() => {
-    return [...garments]
-      .sort((a, b) => (Number(b.wear_count) || 0) - (Number(a.wear_count) || 0))
-      .slice(0, 6);
-  }, [garments]);
+  const closetOwner = garments[0]?.closet_owner || 'sample';
+
+  useEffect(() => {
+    let cancelled = false;
+    const q = encodeURIComponent(closetOwner);
+    (async () => {
+      try {
+        const [outRes, calRes] = await Promise.all([
+          apiFetch(`/outfits?closet=${q}`),
+          apiFetch(`/calendar?closet=${q}`),
+        ]);
+        if (cancelled) return;
+        setActiveOutfitCount(Array.isArray(outRes?.outfits) ? outRes.outfits.length : 0);
+        setWearLogCount(Array.isArray(calRes?.logs) ? calRes.logs.length : 0);
+      } catch {
+        if (!cancelled) {
+          setActiveOutfitCount(0);
+          setWearLogCount(0);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [closetOwner, garments.length]);
 
   const diagnosisLabel =
     lang === 'en'
       ? translateSubTypeLabel(skinProfile?.subTypeLabelKo, skinProfile?.personalColor)
       : skinProfile?.subTypeLabelKo || '가을 웜 뮤트';
 
+  const swatchHex = skinProfile?.skinToneHex || '#DFBA9B';
+
   return (
     <section className="hig-screen-container" aria-label="Stats">
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
           <h1 className="hig-screen-title">STATS</h1>
-          <span className="hig-item-count tabular-nums">{garments.length} ITEMS</span>
+          <span className="hig-item-count tabular-nums">
+            {tx(lang, `${garments.length}개 아이템`, `${garments.length} ITEMS`)}
+          </span>
         </div>
         <div className="hig-top-bar-actions">
           <TopRightUtilityActions
@@ -84,22 +96,63 @@ export default function StatsView({
         </div>
       </header>
 
-      <div className="hig-stats-overview-grid">
-        {/* Personal Profile (Skin Tone & Body Measurements) Card — Zero 2.5D / Zero Gender Copy */}
-        <div className="hig-stats-skin-card">
+      <div className="stats-bento-grid">
+        {/* 1. Wardrobe Vitality Hero Card + Utilization Gauge Ring (Span 7) */}
+        <WardrobeHeroSummaryCard
+          garments={garments}
+          activeOutfitCount={activeOutfitCount}
+          wearLogCount={wearLogCount}
+          lang={lang}
+          bentoIndex={0}
+        />
+
+        {/* 2. Personal Palette & Body Profile Card (Span 5 — preserves .hig-stats-skin-card contract) */}
+        <div
+          className="hig-stats-skin-card stats-bento-profile stats-span-5"
+          style={{ '--bento-idx': 1 }}
+        >
+          <div className="stats-card-head">
+            <div className="stats-title-stack">
+              <span className="stats-eyebrow">
+                {tx(lang, '퍼스널 톤 · 체형 스펙', 'PERSONAL PALETTE & FIT')}
+              </span>
+              <h2 className="stats-card-title">
+                {tx(lang, '아틀리에 피팅 프로필', 'Atelier Fitting Profile')}
+              </h2>
+            </div>
+            <span className="stats-glass-pill tabular-nums">{swatchHex}</span>
+          </div>
+
           <div className="hig-stats-skin-info">
             <span
               className="hig-stats-skin-swatch"
-              style={{ backgroundColor: skinProfile?.skinToneHex || '#DFBA9B' }}
+              style={{ backgroundColor: swatchHex }}
             />
             <div>
               <strong className="hig-stats-skin-title">{diagnosisLabel}</strong>
               <span className="hig-stats-skin-sub tabular-nums">
-                {skinProfile?.skinToneHex || '#DFBA9B'}
+                {swatchHex}
                 {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
               </span>
             </div>
           </div>
+
+          {bodySpec && (
+            <div className="stats-profile-specs">
+              <span className="stats-spec-chip">{bodySpec.heightCm} cm</span>
+              <span className="stats-spec-chip">{bodySpec.weightKg} kg</span>
+              {bodySpec.chestCm ? (
+                <span className="stats-spec-chip">
+                  {tx(lang, `가슴 ${bodySpec.chestCm}`, `Chest ${bodySpec.chestCm}`)}
+                </span>
+              ) : null}
+              {bodySpec.waistCm ? (
+                <span className="stats-spec-chip">
+                  {tx(lang, `허리 ${bodySpec.waistCm}`, `Waist ${bodySpec.waistCm}`)}
+                </span>
+              ) : null}
+            </div>
+          )}
 
           <div className="hig-stats-skin-actions">
             <button
@@ -127,56 +180,36 @@ export default function StatsView({
           </div>
         </div>
 
-        {/* Category Composition Bars */}
-        <div className="hig-stats-panel">
-          {categoryBreakdown.map((row) => (
-            <div key={row.key} className="hig-stat-bar-row">
-              <span className="hig-stat-bar-label">{row.label}</span>
-              <div className="hig-stat-bar-track">
-                <div
-                  className="hig-stat-bar-fill"
-                  style={{ width: `${Math.max(row.count > 0 ? 6 : 0, row.ratioPct)}%` }}
-                />
-              </div>
-              <span className="hig-stat-bar-count tabular-nums">{row.count}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* 3. Interactive Category & Season Donut + Bar Chart (Span 7) */}
+        <InteractiveCompositionWidget
+          garments={garments}
+          lang={lang}
+          bentoIndex={2}
+        />
 
-      {/* Most Worn Garments Grid */}
-      {topWornGarments.length > 0 && (
-        <div className="hig-wardrobe-grid">
-          {topWornGarments.map((item, idx) => {
-            const displayName = localizeGarmentName(item.name, lang);
-            const displayBrand = localizeBrandName(item.brand, lang);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className="hig-wardrobe-card"
-                style={{ '--card-stagger': idx }}
-                onClick={() => onSelectGarment?.(item)}
-              >
-                <div className="hig-squircle-card">
-                  <GarmentObject25D item={item} alt={displayName} padding="13%" />
-                </div>
-                <div className="hig-garment-meta">
-                  <span className="hig-garment-name">{displayName}</span>
-                  <span className="hig-garment-brand tabular-nums">
-                    {displayBrand ||
-                      tx(
-                        lang,
-                        `${Number(item.wear_count) || 0}회 착용`,
-                        `${Number(item.wear_count) || 0} wears`
-                      )}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {/* 4. Chromatic Color Palette Spectrum Bar (Span 5) */}
+        <ColorSpectrumWidget
+          garments={garments}
+          lang={lang}
+          bentoIndex={3}
+        />
+
+        {/* 5. Most Worn Signature Pieces Ranking (Span 6) */}
+        <MostWornRankingCard
+          garments={garments}
+          lang={lang}
+          onSelectGarment={onSelectGarment}
+          bentoIndex={4}
+        />
+
+        {/* 6. Unworn Sleeper Archive Ranking (Span 6) */}
+        <UnwornSleeperCard
+          garments={garments}
+          lang={lang}
+          onSelectGarment={onSelectGarment}
+          bentoIndex={5}
+        />
+      </div>
     </section>
   );
 }

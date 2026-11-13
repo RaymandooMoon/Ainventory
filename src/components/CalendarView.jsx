@@ -1,16 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Calendar as CalendarIcon, Check, Download, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Download, Plus } from 'lucide-react';
 import { apiFetch, getStoredToken } from '../utils/api.ts';
 import {
   localizeApiMessage,
   localizeCalendarNote,
-  localizeGarmentName,
   localizeOutfitTitle,
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
-import GarmentObject25D from './GarmentObject25D.jsx';
-import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
+import CalendarLookbookGrid from './calendar/CalendarLookbookGrid.jsx';
+import {
+  formatIsoDateLocal,
+  shiftIsoDate,
+  shiftIsoMonth,
+} from './calendar/calendarHelpers.js';
+import CalendarSlideOverDrawer from './calendar/CalendarSlideOverDrawer.jsx';
+import { TopRightUtilityActions } from './common/AppUI.jsx';
+import './calendar/calendarEditorial.css';
 
 function escapeIcsField(value) {
   return String(value || '')
@@ -63,12 +69,14 @@ export default function CalendarView({
   const [logs, setLogs] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [todayStr] = useState(() => new Date().toISOString().slice(0, 10));
-  const [wornDate, setWornDate] = useState(todayStr);
-  const [selectedOutfitId, setSelectedOutfitId] = useState('');
-  const [note, setNote] = useState('');
+  const [todayStr] = useState(() => formatIsoDateLocal(new Date()));
+  const [viewMode, setViewMode] = useState('month');
+  const [cursorDate, setCursorDate] = useState(todayStr);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [drawerEntryId, setDrawerEntryId] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const fetchCalendarData = useCallback(async () => {
     const q = encodeURIComponent(activeCloset || 'sample');
@@ -83,19 +91,17 @@ export default function CalendarView({
   }, [activeCloset]);
 
   const reloadCalendar = useCallback(async () => {
-    setLoading(true);
     try {
       const { nextLogs, nextOutfits } = await fetchCalendarData();
       setLogs(nextLogs);
       setOutfits(nextOutfits);
-      if (nextOutfits.length > 0) {
-        setSelectedOutfitId((prev) => prev || String(nextOutfits[0].id));
-      }
+      return nextLogs;
     } catch (err) {
       showToast?.(
         localizeApiMessage(err?.message, lang) ||
           tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
       );
+      return [];
     } finally {
       setLoading(false);
     }
@@ -109,9 +115,6 @@ export default function CalendarView({
         if (cancelled) return;
         setLogs(nextLogs);
         setOutfits(nextOutfits);
-        if (nextOutfits.length > 0) {
-          setSelectedOutfitId((prev) => prev || String(nextOutfits[0].id));
-        }
       } catch (err) {
         if (!cancelled) {
           showToast?.(
@@ -130,46 +133,144 @@ export default function CalendarView({
     };
   }, [fetchCalendarData, refreshKey, lang, showToast]);
 
-  const handleAddLog = async (e) => {
-    e.preventDefault();
+  const garmentMap = useMemo(
+    () => new Map(garments.map((g) => [Number(g.id), g])),
+    [garments]
+  );
+
+  const handleNavigatePeriod = useCallback(
+    (direction) => {
+      setCursorDate((prev) =>
+        viewMode === 'week' ? shiftIsoDate(prev, direction * 7) : shiftIsoMonth(prev, direction)
+      );
+    },
+    [viewMode]
+  );
+
+  const handleJumpToday = useCallback(() => {
+    setCursorDate(todayStr);
+    setSelectedDate(todayStr);
+  }, [todayStr]);
+
+  const handleSelectDate = useCallback((dateStr, entryId = null) => {
+    setSelectedDate(dateStr);
+    setCursorDate(dateStr);
+    setDrawerEntryId(entryId);
+    setDrawerOpen(true);
+  }, []);
+
+  const handleDrawerChangeDate = useCallback((nextDate) => {
+    setSelectedDate(nextDate);
+    setCursorDate(nextDate);
+    setDrawerEntryId(null);
+  }, []);
+
+  const handleSaveDrawerEntry = async ({
+    existingEntry,
+    worn_date,
+    outfit_id,
+    item_ids,
+    status,
+    weather_summary,
+    temp_c,
+    note,
+  }) => {
+    setSaving(true);
     try {
-      const chosenOutfit = outfits.find((o) => String(o.id) === String(selectedOutfitId));
-      const fallbackItemIds = garments.slice(0, 2).map((g) => g.id);
-      const isFuture = wornDate > todayStr;
-      await apiFetch('/calendar', {
-        method: 'POST',
-        body: JSON.stringify({
-          closet_owner: activeCloset || 'sample',
-          worn_date: wornDate,
-          outfit_id: chosenOutfit ? Number(chosenOutfit.id) : null,
-          item_ids: chosenOutfit?.item_ids?.length ? chosenOutfit.item_ids : fallbackItemIds,
-          status: isFuture ? 'planned' : 'worn',
-          note: note.trim(),
-        }),
-      });
+      const fallbackItemIds =
+        Array.isArray(item_ids) && item_ids.length > 0
+          ? item_ids
+          : garments.slice(0, 2).map((g) => Number(g.id));
+
+      if (existingEntry) {
+        const prevIds = Array.isArray(existingEntry.item_ids)
+          ? existingEntry.item_ids.map(Number)
+          : [];
+        const sameItems =
+          prevIds.length === fallbackItemIds.length &&
+          prevIds.every((val, i) => val === Number(fallbackItemIds[i]));
+        const sameMeta =
+          String(existingEntry.worn_date || '') === String(worn_date) &&
+          Number(existingEntry.outfit_id || 0) === Number(outfit_id || 0) &&
+          String(existingEntry.note || '').trim() === String(note || '').trim() &&
+          String(existingEntry.weather_summary || '').trim() ===
+            String(weather_summary || '').trim() &&
+          (existingEntry.temp_c ?? null) === (temp_c ?? null) &&
+          sameItems;
+
+        if (sameMeta && existingEntry.status !== status) {
+          await apiFetch(`/calendar/${existingEntry.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status }),
+          });
+        } else {
+          await apiFetch(`/calendar/${existingEntry.id}`, { method: 'DELETE' });
+          await apiFetch('/calendar', {
+            method: 'POST',
+            body: JSON.stringify({
+              closet_owner: activeCloset || 'sample',
+              worn_date,
+              outfit_id,
+              item_ids: fallbackItemIds,
+              status,
+              weather_summary,
+              temp_c,
+              note,
+            }),
+          });
+        }
+      } else {
+        await apiFetch('/calendar', {
+          method: 'POST',
+          body: JSON.stringify({
+            closet_owner: activeCloset || 'sample',
+            worn_date,
+            outfit_id,
+            item_ids: fallbackItemIds,
+            status,
+            weather_summary,
+            temp_c,
+            note,
+          }),
+        });
+      }
+
       triggerHaptic('selection');
-      setNote('');
-      setAddOpen(false);
       await reloadCalendar();
       onClosetUpdated?.();
+      setDrawerOpen(false);
     } catch (err) {
       showToast?.(
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '일정 등록에 실패했습니다.', 'Failed to save calendar entry.')
+          tx(lang, '일정 저장에 실패했습니다.', 'Failed to save calendar entry.')
       );
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteLog = async (logId) => {
+  const handleDeleteDrawerEntry = async (logId) => {
+    setSaving(true);
     try {
       await apiFetch(`/calendar/${logId}`, { method: 'DELETE' });
       triggerHaptic('selection');
-      await reloadCalendar();
+      const nextLogs = await reloadCalendar();
+      onClosetUpdated?.();
+      const remainingForDay = nextLogs.filter(
+        (l) => String(l.worn_date || '').slice(0, 10) === selectedDate
+      );
+      if (remainingForDay.length === 0) {
+        setDrawerOpen(false);
+      } else {
+        setDrawerEntryId(remainingForDay[0].id);
+      }
     } catch (err) {
       showToast?.(
         localizeApiMessage(err?.message, lang) ||
           tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.')
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -200,14 +301,14 @@ export default function CalendarView({
     setTimeout(() => URL.revokeObjectURL(url), 800);
   };
 
-  const garmentMap = new Map(garments.map((g) => [Number(g.id), g]));
-
   return (
     <section className="hig-screen-container" aria-label="Calendar">
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
           <h1 className="hig-screen-title">CALENDAR</h1>
-          <span className="hig-item-count tabular-nums">{logs.length} ENTRIES</span>
+          <span className="hig-item-count tabular-nums">
+            {tx(lang, `${logs.length}건 기록`, `${logs.length} ENTRIES`)}
+          </span>
         </div>
         <div className="hig-top-bar-actions">
           <TopRightUtilityActions
@@ -230,7 +331,11 @@ export default function CalendarView({
                 <button
                   type="button"
                   className="hig-circle-icon-btn"
-                  onClick={() => setAddOpen(true)}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setDrawerEntryId(null);
+                    setDrawerOpen(true);
+                  }}
                   aria-label={tx(lang, '착용 일정 추가', 'Add Outfit Entry')}
                 >
                   <Plus size={20} strokeWidth={2.2} />
@@ -243,139 +348,43 @@ export default function CalendarView({
 
       {loading ? (
         <div className="hig-wardrobe-grid">
-          {[1, 2, 3].map((k) => (
+          {[1, 2, 3, 4].map((k) => (
             <div key={k} className="hig-squircle-skeleton" />
           ))}
         </div>
-      ) : logs.length === 0 ? (
-        <div className="hig-minimal-empty">
-          <CalendarIcon size={28} strokeWidth={1.6} />
-          <span>{tx(lang, '등록된 착용 기록이 없습니다', 'No Entries')}</span>
-        </div>
       ) : (
-        <div className="hig-calendar-list">
-          {logs.map((entry) => {
-            const matchedOutfit = outfits.find((o) => Number(o.id) === Number(entry.outfit_id));
-            const itemIds = Array.isArray(entry.item_ids)
-              ? entry.item_ids
-              : matchedOutfit?.item_ids || [];
-            const previewItems = itemIds
-              .map((id) => garmentMap.get(Number(id)))
-              .filter(Boolean)
-              .slice(0, 4);
-
-            return (
-              <article key={entry.id} className="hig-calendar-card">
-                <div className="hig-calendar-card-head">
-                  <div className="hig-calendar-meta-group">
-                    <div className="hig-calendar-date-row">
-                      <strong className="hig-calendar-date tabular-nums">{entry.worn_date}</strong>
-                      <span
-                        className={`hig-calendar-status-badge ${entry.status === 'planned' ? 'is-planned' : ''}`}
-                      >
-                        {entry.status === 'planned'
-                          ? tx(lang, '예정', 'PLANNED')
-                          : tx(lang, '착용', 'WORN')}
-                      </span>
-                    </div>
-                    <span className="hig-calendar-title">
-                      {localizeOutfitTitle(matchedOutfit?.title, lang) ||
-                        localizeCalendarNote(entry.note, lang) ||
-                        tx(lang, '데일리 룩', 'Daily Look')}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="hig-icon-ghost-btn"
-                    onClick={() => handleDeleteLog(entry.id)}
-                    aria-label={tx(lang, '일정 삭제', 'Delete Entry')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                {previewItems.length > 0 && (
-                  <div className="hig-calendar-thumbs">
-                    {previewItems.map((item) => (
-                      <div key={item.id} className="hig-calendar-thumb-squircle">
-                        <GarmentObject25D
-                          item={item}
-                          alt={localizeGarmentName(item.name, lang)}
-                          padding="10%"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        <CalendarLookbookGrid
+          logs={logs}
+          outfits={outfits}
+          garmentMap={garmentMap}
+          lang={lang}
+          viewMode={viewMode}
+          onChangeViewMode={setViewMode}
+          cursorDate={cursorDate}
+          selectedDate={selectedDate}
+          todayStr={todayStr}
+          onNavigatePeriod={handleNavigatePeriod}
+          onJumpToday={handleJumpToday}
+          onSelectDate={handleSelectDate}
+        />
       )}
 
-      <ResponsiveSheetModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
+      <CalendarSlideOverDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        selectedDate={selectedDate}
+        initialEntryId={drawerEntryId}
+        onChangeDate={handleDrawerChangeDate}
+        todayStr={todayStr}
+        logs={logs}
+        outfits={outfits}
+        garments={garments}
+        garmentMap={garmentMap}
         lang={lang}
-        title={tx(lang, '코디 일정 추가', 'Log Outfit')}
-        maxWidth={460}
-      >
-        <form onSubmit={handleAddLog} className="hig-add-garment-form">
-          <div className="hig-field-group">
-            <label htmlFor="calendar-date-input" className="hig-field-label">
-              {tx(lang, '날짜', 'Date')}
-            </label>
-            <input
-              id="calendar-date-input"
-              type="date"
-              className="hig-native-input"
-              value={wornDate}
-              onChange={(e) => setWornDate(e.target.value)}
-              required
-            />
-          </div>
-
-          {outfits.length > 0 && (
-            <div className="hig-field-group">
-              <label htmlFor="calendar-outfit-select" className="hig-field-label">
-                {tx(lang, '저장된 코디', 'Outfit')}
-              </label>
-              <select
-                id="calendar-outfit-select"
-                className="hig-native-input"
-                value={selectedOutfitId}
-                onChange={(e) => setSelectedOutfitId(e.target.value)}
-              >
-                {outfits.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {localizeOutfitTitle(o.title, lang)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="hig-field-group">
-            <label htmlFor="calendar-note-input" className="hig-field-label">
-              {tx(lang, '메모', 'Memo')}
-            </label>
-            <input
-              id="calendar-note-input"
-              type="text"
-              className="hig-native-input"
-              placeholder={tx(lang, '출근룩 / 모임 / 여행', 'Occasion')}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={120}
-            />
-          </div>
-
-          <button type="submit" className="hig-primary-cta-btn">
-            <Check size={18} />
-            <span>{tx(lang, '일정 저장', 'Save Entry')}</span>
-          </button>
-        </form>
-      </ResponsiveSheetModal>
+        saving={saving}
+        onSaveEntry={handleSaveDrawerEntry}
+        onDeleteEntry={handleDeleteDrawerEntry}
+      />
     </section>
   );
 }
