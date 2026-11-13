@@ -266,24 +266,21 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.getByRole('button', { name: '다크 모드로 전환' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-    // Verify Account Settings Sheet -> Login View with Dual-Theme Background Videos
+    // Verify Account Settings Sheet -> Login View with Pure JS+CSS Wardrobe-to-Inventory Motion Stage (zero <video>)
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
     await expect(page.locator('#account-logout-btn')).toBeVisible();
     await page.locator('#account-logout-btn').click();
 
-    await expect(page.locator('#login-bg-video-dark')).toHaveClass(/is-active/);
-    await expect(page.locator('#login-bg-video-dark')).toHaveAttribute(
-      'src',
-      '/media/login-bg-dark.mp4'
-    );
+    const motionStage = page.locator(`#${CARBON_DOM_CONTRACT.loginMotionStageId}`);
+    await expect(motionStage).toBeVisible();
+    await expect(page.locator('video')).toHaveCount(0);
+    await expect(motionStage).toHaveAttribute('data-motion-theme', 'dark');
+    await expect(motionStage.locator('#wardrobe-optical-scanner')).toBeVisible();
+    await expect(motionStage.locator('[data-inventory-slot="0"]')).toBeVisible();
 
     await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await expect(page.locator('#login-bg-video-light')).toHaveClass(/is-active/);
-    await expect(page.locator('#login-bg-video-light')).toHaveAttribute(
-      'src',
-      '/media/login-bg-light.mp4'
-    );
+    await expect(motionStage).toHaveAttribute('data-motion-theme', 'light');
   });
 
   test('4. Tomorrow Weather AI Outfit Styling on 2.5D Character & Portrait Skin-Tone Mannequin Switching', async ({
@@ -412,7 +409,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
     await page.locator(`#${CARBON_DOM_CONTRACT.initiateDeleteAccountBtnId}`).click();
     await page.locator(`#${CARBON_DOM_CONTRACT.confirmPermanentDeleteBtnId}`).click();
-    await expect(page.locator('#login-bg-video-light, #login-bg-video-dark').first()).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.loginMotionStageId}`)).toBeVisible();
   });
 });
 

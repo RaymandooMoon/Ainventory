@@ -96,6 +96,7 @@ export function getWardrobeCategoryLabel(
 export const CARBON_DOM_CONTRACT = {
   sampleDemoButtonId: 'enter-sample-demo-btn',
   sampleDemoAriaLabel: '샘플 옷장 체험 모드 시작',
+  loginMotionStageId: 'login-wardrobe-motion-stage',
   loginThemeToggleId: 'login-theme-toggle-btn',
   loginLangToggleId: 'login-lang-toggle-btn',
   appleSignInBtnId: 'apple-sign-in-btn',

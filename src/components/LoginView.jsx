@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, Globe, KeyRound, Mail, Moon, Play, Sun } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { apiFetch, setStoredToken } from '../utils/api.ts';
 import { tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import LoginWardrobeMotionStage from './LoginWardrobeMotionStage.jsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 
 /**
- * Apple HIG Frosted Glass Initial Entry Screen with Dual-Theme 2.5D Atelier Video Background
- * - Light & Dark mode seamless-looping 2.5D wardrobe showcase videos (`/media/login-bg-light.mp4`, `/media/login-bg-dark.mp4`)
+ * Apple HIG Frosted Glass Initial Entry Screen with Pure JS+CSS Wardrobe-to-Inventory Motion Stage
+ * - Dual-Theme (Light & Dark) real-time closet-to-inventory digitization animation (`LoginWardrobeMotionStage`)
  * - Unauthenticated '샘플 옷장 체험 모드' button (#enter-sample-demo-btn) with explicit aria-label
  * - Sign in with Apple (#apple-signin-btn)
  * - Progressive Email OTP, Sign In (#auth-tab-login), and Sign Up (#auth-tab-register)
@@ -28,9 +29,6 @@ export default function LoginView({
   const isDev = Boolean(import.meta.env.DEV) || isLocalHost;
   const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
 
-  const lightVideoRef = useRef(null);
-  const darkVideoRef = useRef(null);
-
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'otp' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +38,7 @@ export default function LoginView({
   // Email OTP & Sign-Up States (gender + body measurements synced directly to 3D character)
   const [regEmail, setRegEmail] = useState('');
   const [regDisplayName, setRegDisplayName] = useState('');
-  const [regClosetName, setRegClosetName] = useState('');
+  const [regClosetName] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regGender, setRegGender] = useState('male');
   const [regHeightCm, setRegHeightCm] = useState('176');
@@ -62,36 +60,6 @@ export default function LoginView({
       prev === '70' || prev === '52' || !prev ? (g === 'female' ? '52' : '70') : prev
     );
   };
-
-  useEffect(() => {
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-
-    const lightEl = lightVideoRef.current;
-    const darkEl = darkVideoRef.current;
-    if (prefersReducedMotion) {
-      lightEl?.pause();
-      darkEl?.pause();
-      return;
-    }
-
-    const activeEl = effectiveTheme === 'dark' ? darkEl : lightEl;
-    const inactiveEl = effectiveTheme === 'dark' ? lightEl : darkEl;
-
-    if (activeEl && inactiveEl && !Number.isNaN(inactiveEl.currentTime) && inactiveEl.currentTime > 0) {
-      try {
-        activeEl.currentTime = inactiveEl.currentTime;
-      } catch {
-        // ignore seek before metadata ready
-      }
-    }
-    activeEl?.play?.().catch(() => {});
-    const pauseTimer = setTimeout(() => {
-      inactiveEl?.pause?.();
-    }, 650);
-    return () => clearTimeout(pauseTimer);
-  }, [effectiveTheme]);
 
   useEffect(() => {
     if (cooldownSec <= 0) return undefined;
@@ -292,34 +260,8 @@ export default function LoginView({
 
   return (
     <div className="hig-auth-shell" data-auth-theme={effectiveTheme}>
-      {/* Dual-Theme Seamless Looping 2.5D Wardrobe Showcase Video Stage */}
-      <div className="hig-auth-video-stage" aria-hidden="true">
-        <video
-          id="login-bg-video-light"
-          ref={lightVideoRef}
-          className={`hig-auth-bg-video ${effectiveTheme !== 'dark' ? 'is-active' : ''}`}
-          src="/media/login-bg-light.mp4"
-          poster="/media/login-bg-light-poster.jpg"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-        />
-        <video
-          id="login-bg-video-dark"
-          ref={darkVideoRef}
-          className={`hig-auth-bg-video ${effectiveTheme === 'dark' ? 'is-active' : ''}`}
-          src="/media/login-bg-dark.mp4"
-          poster="/media/login-bg-dark-poster.jpg"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-        />
-        <div className="hig-auth-video-scrim" />
-      </div>
+      {/* Dual-Theme Pure JS+CSS Closet-to-Inventory Digitization Motion Stage */}
+      <LoginWardrobeMotionStage effectiveTheme={effectiveTheme} lang={lang} />
 
       <div className="hig-auth-container">
         {/* Top Utility Controls (Theme Switcher + Language Switcher) */}

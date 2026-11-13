@@ -37,11 +37,11 @@
     rgba(29, 29, 31, 0.01) 100%
   );
 
-  --auth-glass-bg: rgba(255, 255, 255, 0.8);
-  --auth-glass-border: rgba(255, 255, 255, 0.88);
+  --auth-glass-bg: rgba(255, 255, 255, 0.88);
+  --auth-glass-border: rgba(255, 255, 255, 0.92);
   --auth-glass-shadow: 0 28px 72px rgba(15, 23, 42, 0.14), 0 4px 16px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94);
-  --auth-inner-panel: rgba(245, 245, 247, 0.78);
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  --auth-inner-panel: rgba(245, 245, 247, 0.84);
   --auth-input-bg: rgba(255, 255, 255, 0.92);
   --auth-input-border: rgba(29, 29, 31, 0.09);
   --auth-seg-track: rgba(228, 228, 234, 0.78);
@@ -98,11 +98,11 @@
     rgba(245, 245, 247, 0.015) 100%
   );
 
-  --auth-glass-bg: rgba(20, 20, 24, 0.76);
+  --auth-glass-bg: rgba(18, 19, 23, 0.85);
   --auth-glass-border: rgba(255, 255, 255, 0.16);
   --auth-glass-shadow: 0 32px 80px rgba(0, 0, 0, 0.68), 0 6px 20px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  --auth-inner-panel: rgba(32, 33, 38, 0.78);
+  --auth-inner-panel: rgba(30, 31, 37, 0.84);
   --auth-input-bg: rgba(18, 18, 22, 0.78);
   --auth-input-border: rgba(245, 245, 247, 0.12);
   --auth-seg-track: rgba(44, 45, 52, 0.72);
@@ -1279,7 +1279,7 @@ img {
   color: var(--ink-primary);
 }
 
-/* ---------------- VIDEO-BACKED FROSTED GLASS AUTH VIEW (`/?auth=1` | `/login`) ---------------- */
+/* ---------------- CINEMATIC JS+CSS WARDROBE-TO-INVENTORY AUTH VIEW (`/?auth=1` | `/login`) ---------------- */
 .hig-auth-shell {
   position: relative;
   min-height: 100dvh;
@@ -1291,36 +1291,647 @@ img {
   overflow: hidden;
 }
 
-.hig-auth-video-stage {
+.hig-auth-video-stage,
+.wardrobe-motion-stage {
+  --scanner-w: 156px;
+  --scanner-h: 204px;
+  --motion-bg: radial-gradient(
+    118% 95% at 20% 24%,
+    #faf9f5 0%,
+    #efede7 54%,
+    #e5e2da 100%
+  );
+  --motion-ray: linear-gradient(
+    116deg,
+    rgba(255, 255, 255, 0) 12%,
+    rgba(255, 253, 247, 0.82) 25%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 253, 248, 0.56) 55%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  --motion-alcove-line: rgba(29, 29, 31, 0.055);
+  --motion-alcove-fill: linear-gradient(
+    90deg,
+    rgba(226, 222, 213, 0.42) 0%,
+    rgba(255, 255, 255, 0) 48%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  --motion-rail-bg: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #d8d5ce 46%,
+    #b3b0a8 82%,
+    #e2dfd8 100%
+  );
+  --motion-rail-shadow: 0 5px 14px rgba(28, 25, 21, 0.14);
+  --motion-hanger-ink: #57534d;
+  --motion-garment-shadow: drop-shadow(0 16px 22px rgba(24, 22, 18, 0.17));
+  --motion-scanner-stroke: rgba(29, 29, 31, 0.48);
+  --motion-scanner-fill: rgba(255, 255, 255, 0.26);
+  --motion-scanner-ink: #1d1d1f;
+  --motion-beam-line: linear-gradient(
+    90deg,
+    rgba(29, 29, 31, 0) 0%,
+    rgba(29, 29, 31, 0.58) 18%,
+    #1d1d1f 50%,
+    rgba(29, 29, 31, 0.58) 82%,
+    rgba(29, 29, 31, 0) 100%
+  );
+  --motion-beam-veil: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.38) 100%
+  );
+  --motion-card-bg: rgba(255, 255, 255, 0.92);
+  --motion-card-surface: radial-gradient(circle at 50% 36%, #ffffff 0%, #f3f3f6 84%);
+  --motion-card-border: rgba(29, 29, 31, 0.085);
+  --motion-card-shadow: 0 14px 30px rgba(15, 23, 42, 0.09), 0 2px 6px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  --motion-card-elevated-shadow: 0 22px 46px rgba(15, 23, 42, 0.17),
+    0 4px 12px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  --motion-shelf-bg: rgba(255, 255, 255, 0.46);
+  --motion-shelf-border: rgba(29, 29, 31, 0.075);
+  --motion-kicker-ink: #515156;
+  --motion-meta-ink: #1d1d1f;
+  --motion-code-ink: #6e6e73;
+  --motion-scrim: radial-gradient(
+    circle at 50% 50%,
+    rgba(248, 247, 243, 0.34) 0%,
+    rgba(245, 244, 240, 0.08) 44%,
+    rgba(236, 234, 228, 0.03) 100%
+  );
+
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  background: var(--bg-canvas);
+  background: var(--motion-bg);
+  transition: background 0.55s var(--spring-ease);
 }
 
-.hig-auth-bg-video {
+[data-theme='dark'] .wardrobe-motion-stage,
+.wardrobe-motion-stage[data-motion-theme='dark'] {
+  --motion-bg: radial-gradient(
+    118% 95% at 22% 22%,
+    #1b1c21 0%,
+    #0f1014 54%,
+    #07080a 100%
+  );
+  --motion-ray: linear-gradient(
+    116deg,
+    rgba(255, 255, 255, 0) 12%,
+    rgba(248, 242, 230, 0.082) 25%,
+    rgba(255, 255, 255, 0) 39%,
+    rgba(245, 245, 247, 0.05) 56%,
+    rgba(255, 255, 255, 0) 71%
+  );
+  --motion-alcove-line: rgba(245, 245, 247, 0.065);
+  --motion-alcove-fill: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.36) 0%,
+    rgba(255, 255, 255, 0) 48%,
+    rgba(255, 255, 255, 0.025) 100%
+  );
+  --motion-rail-bg: linear-gradient(
+    180deg,
+    #787a82 0%,
+    #3c3e45 48%,
+    #212227 84%,
+    #52545d 100%
+  );
+  --motion-rail-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
+  --motion-hanger-ink: #c6c3bc;
+  --motion-garment-shadow: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.72));
+  --motion-scanner-stroke: rgba(245, 245, 247, 0.62);
+  --motion-scanner-fill: rgba(255, 255, 255, 0.035);
+  --motion-scanner-ink: #f5f5f7;
+  --motion-beam-line: linear-gradient(
+    90deg,
+    rgba(255, 250, 240, 0) 0%,
+    rgba(255, 250, 240, 0.72) 18%,
+    #fffdf9 50%,
+    rgba(255, 250, 240, 0.72) 82%,
+    rgba(255, 250, 240, 0) 100%
+  );
+  --motion-beam-veil: linear-gradient(
+    180deg,
+    rgba(255, 250, 240, 0) 0%,
+    rgba(255, 250, 240, 0.17) 100%
+  );
+  --motion-card-bg: rgba(27, 28, 33, 0.94);
+  --motion-card-surface: radial-gradient(circle at 50% 36%, #2f3139 0%, #1a1b20 84%);
+  --motion-card-border: rgba(245, 245, 247, 0.13);
+  --motion-card-shadow: 0 18px 36px rgba(0, 0, 0, 0.54), 0 2px 8px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  --motion-card-elevated-shadow: 0 26px 54px rgba(0, 0, 0, 0.72),
+    0 6px 16px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --motion-shelf-bg: rgba(20, 21, 26, 0.56);
+  --motion-shelf-border: rgba(245, 245, 247, 0.1);
+  --motion-kicker-ink: #b4b4ba;
+  --motion-meta-ink: #f5f5f7;
+  --motion-code-ink: #98989f;
+  --motion-scrim: radial-gradient(
+    circle at 50% 50%,
+    rgba(8, 9, 12, 0.42) 0%,
+    rgba(8, 9, 12, 0.12) 45%,
+    rgba(6, 7, 10, 0.18) 100%
+  );
+}
+
+.wardrobe-motion-light-shafts {
+  position: absolute;
+  inset: -12%;
+  background: var(--motion-ray);
+  animation: atelierRayDrift 18s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes atelierRayDrift {
+  0% {
+    transform: translate3d(-2.2%, -1%, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(2.2%, 1%, 0) scale(1.06);
+  }
+}
+
+.wardrobe-motion-alcove-panels {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transform: scale(1.015);
-  transition: opacity 0.65s var(--spring-ease), transform 0.9s var(--spring-ease);
-  will-change: opacity;
+  background: var(--motion-alcove-fill);
 }
 
-.hig-auth-bg-video.is-active {
+.wardrobe-motion-alcove-panels::before,
+.wardrobe-motion-alcove-panels::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid var(--motion-alcove-line);
+}
+
+.wardrobe-motion-alcove-panels::before {
+  left: 16%;
+}
+
+.wardrobe-motion-alcove-panels::after {
+  left: 34%;
+}
+
+.wardrobe-motion-camera-plane {
+  --cam-shift-x: 0px;
+  --cam-shift-y: 0px;
+  position: absolute;
+  inset: 0;
+  transform: translate3d(var(--cam-shift-x), var(--cam-shift-y), 0);
+  will-change: transform;
+}
+
+/* Left / Upper Wing: Physical Closet Rail & Optical Cutout Scanner */
+.wardrobe-motion-closet-wing {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(50% - 216px);
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: clamp(22px, 3.6vw, 58px);
+}
+
+.wardrobe-motion-scanner {
+  position: relative;
+  width: clamp(142px, 12.2vw, 178px);
+  aspect-ratio: 0.77;
+  border-radius: 22px;
+  background: var(--motion-scanner-fill);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background-color 0.35s ease;
+}
+
+.wardrobe-motion-rail {
+  position: absolute;
+  top: 11px;
+  right: calc(50% - 34px);
+  width: 100vw;
+  height: 6px;
+  border-radius: 0 999px 999px 0;
+  background: var(--motion-rail-bg);
+  box-shadow: var(--motion-rail-shadow);
+  z-index: 1;
+}
+
+.wardrobe-motion-rail-cap {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--motion-rail-bg);
+  box-shadow: var(--motion-rail-shadow);
+}
+
+.wardrobe-scanner-hud {
+  position: absolute;
+  top: -24px;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--motion-kicker-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wardrobe-scanner-pct {
+  color: var(--motion-scanner-ink);
+}
+
+.wardrobe-scanner-corner {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-color: var(--motion-scanner-stroke);
+  border-style: solid;
+  border-width: 0;
+  transition: transform 0.28s var(--spring-ease), border-color 0.28s ease;
+  z-index: 5;
+}
+
+.wardrobe-scanner-corner.is-tl {
+  top: -2px;
+  left: -2px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: 8px;
+}
+
+.wardrobe-scanner-corner.is-tr {
+  top: -2px;
+  right: -2px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+  border-top-right-radius: 8px;
+}
+
+.wardrobe-scanner-corner.is-bl {
+  bottom: -2px;
+  left: -2px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+  border-bottom-left-radius: 8px;
+}
+
+.wardrobe-scanner-corner.is-br {
+  bottom: -2px;
+  right: -2px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+  border-bottom-right-radius: 8px;
+}
+
+.wardrobe-motion-scanner[data-scan-active='scanning'] .wardrobe-scanner-corner {
+  transform: scale(1.04);
+}
+
+.wardrobe-scanner-beam {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  right: -8px;
+  height: 0;
+  z-index: 6;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.wardrobe-scanner-beam-veil {
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 34px;
+  background: var(--motion-beam-veil);
+  pointer-events: none;
+}
+
+.wardrobe-scanner-beam-line {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--motion-beam-line);
+}
+
+/* Hanging Queue & Active Transformation Actor */
+.wardrobe-rail-actor,
+.wardrobe-active-actor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--scanner-w);
+  height: var(--scanner-h);
+  will-change: transform, opacity;
+}
+
+.wardrobe-rail-actor {
+  z-index: 2;
+  transform-origin: 50% 13px;
+}
+
+.wardrobe-active-actor {
+  z-index: 4;
+  transform-origin: 50% 50%;
+}
+
+.wardrobe-actor-layer-physical,
+.wardrobe-actor-layer-digital {
+  position: absolute;
+  inset: 0;
+  will-change: clip-path, opacity;
+}
+
+.wardrobe-physical-garment {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 13px;
+  color: var(--motion-hanger-ink);
+}
+
+.wardrobe-hanger-svg {
+  position: absolute;
+  top: 6px;
+  left: 13%;
+  width: 74%;
+  height: 36px;
+  overflow: visible;
+}
+
+.wardrobe-hanger-svg .hanger-variant {
+  opacity: 0;
+}
+
+.wardrobe-physical-garment[data-hanger-type='coat'] .hanger-variant-coat,
+.wardrobe-physical-garment[data-hanger-type='top'] .hanger-variant-top,
+.wardrobe-physical-garment[data-hanger-type='clip'] .hanger-variant-clip,
+.wardrobe-physical-garment[data-hanger-type='hook'] .hanger-variant-hook {
   opacity: 1;
-  transform: scale(1);
+}
+
+.wardrobe-physical-img {
+  position: absolute;
+  top: 25px;
+  left: 7%;
+  width: 86%;
+  height: calc(100% - 30px);
+  object-fit: contain;
+  filter: var(--motion-garment-shadow);
+  user-select: none;
+}
+
+.wardrobe-physical-garment[data-hanger-type='clip'] .wardrobe-physical-img,
+.wardrobe-physical-garment[data-hanger-type='hook'] .wardrobe-physical-img {
+  top: 22px;
+}
+
+/* Digitized 2.5D Squircle Inventory Card */
+.wardrobe-inventory-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  background: var(--motion-card-surface);
+  border: 1px solid var(--motion-card-border);
+  box-shadow: var(--motion-card-shadow);
+  padding: 8px 8px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  transition: border-color 0.25s ease, opacity 0.25s ease, background 0.35s ease;
+}
+
+.wardrobe-inventory-card.is-elevated {
+  box-shadow: var(--motion-card-elevated-shadow);
+}
+
+.wardrobe-slot-card[data-receiving='true'] {
+  opacity: 0.38;
+  border-style: dashed;
+}
+
+.wardrobe-inventory-card-glow {
+  position: absolute;
+  inset: 0;
+  background: var(--garment-studio-glow);
+  pointer-events: none;
+}
+
+.wardrobe-inventory-card-media {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.wardrobe-inventory-card-img {
+  width: 88%;
+  height: 92%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px var(--garment-shadow-ambient));
+  user-select: none;
+}
+
+.wardrobe-inventory-card-meta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding-top: 3px;
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--motion-meta-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wardrobe-inventory-card-cat-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wardrobe-inventory-card-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.28);
+}
+
+.wardrobe-inventory-card-cat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wardrobe-inventory-card-code {
+  color: var(--motion-code-ink);
+  font-size: 0.56rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Right / Lower Wing: Structured Digital A inventory Wall */
+.wardrobe-motion-inventory-wing {
+  position: absolute;
+  top: 50%;
+  right: clamp(16px, 3vw, 52px);
+  width: min(420px, calc(50% - 236px));
+  min-width: 248px;
+  transform: translateY(-50%);
+  padding: 14px;
+  border-radius: 26px;
+  background: var(--motion-shelf-bg);
+  border: 1px solid var(--motion-shelf-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 3;
+}
+
+.wardrobe-inventory-shelf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 10px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--motion-kicker-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wardrobe-inventory-shelf-count {
+  color: var(--motion-meta-ink);
+}
+
+.wardrobe-motion-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wardrobe-slot-cell {
+  aspect-ratio: 0.82;
+  min-width: 0;
+}
+
+/* Tablet & Mobile Portrait Choreography: Top Closet Rail + Bottom Digital Inventory Shelf */
+@media (max-width: 919px) {
+  .wardrobe-motion-closet-wing {
+    top: max(28px, calc(env(safe-area-inset-top) + 16px));
+    bottom: auto;
+    left: 0;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-right: clamp(18px, 6vw, 44px);
+  }
+
+  .wardrobe-motion-scanner {
+    width: 110px;
+    border-radius: 18px;
+  }
+
+  .wardrobe-scanner-hud {
+    top: -18px;
+    font-size: 0.56rem;
+  }
+
+  .wardrobe-hanger-svg {
+    top: 5px;
+    height: 28px;
+  }
+
+  .wardrobe-physical-img {
+    top: 20px;
+    height: calc(100% - 24px);
+  }
+
+  .wardrobe-motion-inventory-wing {
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    min-width: 0;
+    max-width: 520px;
+    margin: 0 auto;
+    transform: none;
+    padding: 9px 11px;
+    border-radius: 22px;
+  }
+
+  .wardrobe-inventory-shelf-head {
+    padding-bottom: 6px;
+    font-size: 0.58rem;
+  }
+
+  .wardrobe-motion-inventory-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .wardrobe-slot-cell.is-desktop-only {
+    display: none;
+  }
+
+  .wardrobe-slot-cell {
+    aspect-ratio: 0.94;
+  }
+
+  .wardrobe-inventory-card {
+    border-radius: 16px;
+    padding: 6px 6px 5px;
+  }
+
+  .wardrobe-inventory-card-meta {
+    font-size: 0.54rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .wardrobe-slot-cell:nth-child(n + 4) {
+    display: none;
+  }
 }
 
 .hig-auth-video-scrim {
   position: absolute;
   inset: 0;
-  background: var(--auth-scrim);
+  z-index: 5;
+  background: var(--motion-scrim, var(--auth-scrim));
   transition: background 0.45s var(--spring-ease);
 }
 
