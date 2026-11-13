@@ -1,0 +1,574 @@
+/* ==========================================================================
+   2D Editorial Virtual Try-On (VTON) Viewer & Stage Styles
+   Strictly inherits theme custom properties from src/index.css (Light & Dark)
+   ========================================================================== */
+
+.studio-25d-canvas.studio-2d-vton-viewer,
+[data-theme='light'] .studio-25d-canvas.studio-2d-vton-viewer,
+[data-theme='dark'] .studio-25d-canvas.studio-2d-vton-viewer {
+  box-sizing: border-box;
+  background-color: var(--squircle-bg-color);
+  background-image: var(--squircle-illumination);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--squircle-inset-rim), var(--elevation-sm);
+  color: var(--ink-primary);
+  transition: background-color 0.3s var(--spring-ease), border-color 0.3s var(--spring-ease),
+    box-shadow 0.3s var(--spring-ease);
+}
+
+@media (max-width: 699px) {
+  .studio-25d-canvas.studio-2d-vton-viewer {
+    width: min(100%, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+.studio-2d-vton-viewer .studio-25d-keylight {
+  background: var(--garment-studio-glow);
+}
+
+.studio-2d-vton-viewer .studio-25d-cyclorama-floor,
+[data-theme='light'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor,
+[data-theme='dark'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor {
+  background: var(--silhouette-fill);
+}
+
+/* ==========================================================================
+   1. 2D EDITORIAL MODEL STAGE, ZOOM/PAN RIG & COMPACT PREVIEW
+   ========================================================================== */
+.studio-2d-model-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 12;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.studio-2d-model-stage.is-zoomable {
+  cursor: zoom-in;
+}
+
+.studio-2d-model-stage.is-zoomed {
+  cursor: grab;
+}
+
+.studio-2d-model-stage.is-panning {
+  cursor: grabbing;
+}
+
+.studio-2d-model-stage.is-compact {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  max-height: 206px;
+  aspect-ratio: 2 / 3;
+  cursor: default;
+  touch-action: manipulation;
+}
+
+.studio-2d-compact-canvas {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.studio-2d-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.studio-2d-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 44px 12px 54px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  will-change: clip-path;
+}
+
+.studio-2d-layer-after {
+  z-index: 2;
+}
+
+.studio-2d-layer-before {
+  z-index: 3;
+  will-change: clip-path;
+}
+
+.studio-2d-media-el,
+.studio-2d-live-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.studio-2d-model-stage:not(.is-panning) .studio-2d-media-el,
+.studio-2d-model-stage:not(.is-panning) .studio-2d-live-canvas {
+  transition: transform 0.24s var(--spring-ease), opacity 0.22s var(--spring-ease);
+}
+
+.studio-2d-model-stage.is-panning .studio-2d-media-el,
+.studio-2d-model-stage.is-panning .studio-2d-live-canvas {
+  transition: opacity 0.22s var(--spring-ease);
+}
+
+/* ==========================================================================
+   2. BEFORE / AFTER INTERACTIVE SPLIT COMPARISON VIEW
+   ========================================================================== */
+.studio-2d-compare-slider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 28;
+  width: 44px;
+  margin-left: -22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+
+.studio-2d-compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  box-shadow: var(--elevation-sm);
+  pointer-events: none;
+}
+
+.studio-2d-compare-knob {
+  position: relative;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-md);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s var(--spring-ease), background-color 0.18s var(--spring-ease),
+    color 0.18s var(--spring-ease), border-color 0.18s var(--spring-ease);
+}
+
+.studio-2d-compare-slider:hover .studio-2d-compare-knob,
+.studio-2d-compare-slider:focus-visible .studio-2d-compare-knob,
+.studio-2d-compare-slider.is-dragging .studio-2d-compare-knob {
+  transform: scale(1.08);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.studio-2d-compare-slider:focus-visible .studio-2d-compare-knob {
+  outline: 2px solid var(--ink-primary);
+  outline-offset: 2px;
+}
+
+.studio-2d-compare-badges {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 58px;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.studio-2d-compare-tag {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-xs);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-primary);
+  font-size: 0.63rem;
+  font-weight: 720;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.18s var(--spring-ease);
+}
+
+.studio-2d-compare-tag.is-after {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.studio-2d-compare-tag.is-muted {
+  opacity: 0.25;
+}
+
+/* ==========================================================================
+   3. TOP HUD: ZOOM PILL BAR, COMPARE TOGGLE & PROFILE BUTTON
+   ========================================================================== */
+.studio-2d-vton-viewer .studio-stage-top-hud {
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.studio-vton-hud-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.studio-vton-zoom-bar {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-sm);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+}
+
+.studio-vton-zoom-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease);
+}
+
+.studio-vton-zoom-btn:hover:not(:disabled) {
+  background: var(--accent-soft-bg);
+}
+
+.studio-vton-zoom-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.studio-vton-zoom-btn:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+.studio-vton-zoom-level-btn {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+.studio-vton-zoom-level-btn:hover {
+  background: var(--accent-soft-bg);
+}
+
+.studio-vton-zoom-level-btn.is-zoomed {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
+.studio-vton-zoom-level-btn:active {
+  transform: scale(0.93);
+}
+
+.studio-vton-compare-btn {
+  pointer-events: auto;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-sm);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-primary);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease),
+    opacity 0.18s var(--spring-ease);
+}
+
+.studio-vton-compare-btn:hover:not(:disabled):not(.is-active) {
+  background: var(--bg-elevated);
+  border-color: var(--squircle-border-hover);
+}
+
+.studio-vton-compare-btn.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.studio-vton-compare-btn:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+.studio-vton-compare-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.studio-2d-vton-viewer .studio-body-pill-btn {
+  min-height: 38px;
+  padding: 0 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--ink-primary);
+  box-shadow: var(--elevation-sm);
+}
+
+.studio-2d-vton-viewer .studio-worn-slots-dock {
+  top: 60px;
+  left: 12px;
+  z-index: 54;
+}
+
+.studio-2d-vton-viewer .studio-worn-slot-remove {
+  box-shadow: var(--elevation-xs);
+}
+
+.studio-2d-vton-viewer .studio-tone-dot {
+  border: 1.5px solid var(--bg-elevated);
+  box-shadow: var(--elevation-xs);
+}
+
+.studio-2d-vton-viewer .studio-tone-dot.is-active {
+  box-shadow: 0 0 0 2px var(--accent-mono);
+}
+
+.studio-2d-vton-viewer .studio-tone-analyze-btn {
+  min-height: 32px;
+  padding: 0 11px;
+}
+
+/* ==========================================================================
+   4. NON-BLOCKING SYNTHESIS PROGRESS BAR & SHIMMER SKELETON BADGE
+   ========================================================================== */
+.studio-vton-progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 60;
+  background: var(--accent-soft-bg);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.studio-vton-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  transition: width 0.24s var(--spring-ease);
+}
+
+.studio-vton-loading-badge {
+  position: absolute;
+  right: 12px;
+  top: 58px;
+  z-index: 56;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  background: var(--shimmer-base);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-xs);
+  color: var(--ink-secondary);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.studio-vton-loading-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    var(--shimmer-highlight) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: studioVtonShimmer 1.4s var(--spring-ease) infinite;
+}
+
+.studio-vton-loading-dot {
+  position: relative;
+  z-index: 1;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  animation: studioVtonPulse 0.9s var(--spring-ease) infinite alternate;
+}
+
+.studio-vton-loading-label {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes studioVtonShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes studioVtonPulse {
+  from {
+    opacity: 0.35;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* ==========================================================================
+   5. NARROW MOBILE & FOLD COVER RESPONSIVENESS (<= 420px)
+   ========================================================================== */
+@media (max-width: 420px) {
+  .studio-2d-vton-viewer .studio-stage-top-hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    gap: 5px;
+  }
+
+  .studio-vton-hud-left {
+    gap: 4px;
+  }
+
+  .studio-vton-zoom-bar {
+    padding: 2px;
+    gap: 1px;
+  }
+
+  .studio-vton-zoom-btn {
+    min-width: 30px;
+    min-height: 32px;
+    padding: 0 5px;
+  }
+
+  .studio-vton-zoom-level-btn {
+    min-width: 40px;
+    min-height: 32px;
+    padding: 0 6px;
+    font-size: 0.69rem;
+  }
+
+  .studio-vton-compare-btn {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0 8px;
+  }
+
+  .studio-vton-compare-label {
+    display: none;
+  }
+
+  .studio-2d-vton-viewer .studio-body-pill-btn {
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 0.69rem;
+  }
+
+  .studio-2d-vton-viewer .studio-worn-slots-dock {
+    top: 52px;
+    left: 10px;
+    gap: 6px;
+  }
+
+  .studio-vton-loading-badge {
+    top: 52px;
+    right: 10px;
+    height: 26px;
+    padding: 0 9px;
+  }
+
+  .studio-2d-compare-badges {
+    left: 10px;
+    right: 10px;
+    bottom: 54px;
+  }
+}

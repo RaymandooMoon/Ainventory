@@ -306,11 +306,14 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(mannequin).toBeVisible();
     await expect(mannequin.locator('.character-25d-fallback-svg')).toHaveCount(0);
+    await expect(mannequin).toHaveAttribute('data-viewer-mode', '2d-vton');
     await expect(
-      mannequin.locator('canvas.character-25d-render-canvas[data-body-ready="true"]')
+      mannequin.locator(
+        '[data-vton-after-img="true"], canvas.character-25d-render-canvas[data-body-ready="true"]'
+      )
     ).toBeVisible();
 
-    // Wait for Tomorrow's Weather #1 recommendation to dress the 2.5D character
+    // Wait for Tomorrow's Weather #1 recommendation to dress the 2D VTON model
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
     // 2. Switch weather scenario: Rainy Cool (needs outer + rain stage cue) -> Warm Spring (no outer)
@@ -322,7 +325,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(0);
 
-    // 3. Quick 1-Tap Skin-Tone Swatch on 2.5D Studio Canvas changes mannequin tone immediately
+    // 3. Quick 1-Tap Skin-Tone Swatch on Studio Canvas changes model tone immediately
     await studioCanvas.locator('[data-quick-skin-preset="deep_espresso"]').click();
     await expect(mannequin).toHaveAttribute('data-skin-hex', '#8E5C40');
 
@@ -343,11 +346,12 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const updatedHex = await mannequin.getAttribute('data-skin-hex');
     expect(updatedHex).not.toBe('#8E5C40');
 
-    // 5. 360° Game-Character Multi-Angle Inspection (`앞`, `뒤`, `좌`, `우`, `상`, `하`) & Body Shape Morph
-    for (const preset of ['back', 'left', 'right', 'top', 'bottom', 'front']) {
-      await studioCanvas.locator(`[data-camera-preset-btn="${preset}"]`).click();
-      await expect(mannequin).toHaveAttribute('data-camera-preset', preset);
-    }
+    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, 2D zoom & body shape morph)
+    await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
+    await studioCanvas.locator('[data-vton-zoom-in="true"]').click();
+    await expect(mannequin).not.toHaveAttribute('data-zoom', '1.00');
+    await studioCanvas.locator('[data-vton-zoom-level="true"]').click();
+    await expect(mannequin).toHaveAttribute('data-zoom', '1.00');
 
     await studioCanvas.locator('#open-body-spec-btn').click();
     await expect(page.locator('[data-body-gender-btn]')).toHaveCount(0);
@@ -355,25 +359,27 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#apply-body-spec-btn').click();
     await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
 
-    // Unequipping Tops leaves an unbroken parametric 3D character (no waist chop)
+    // Unequipping Tops leaves an unbroken 2D editorial base model
     await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(0);
     await expect(mannequin).toBeVisible();
 
-    // 6. Unmount -> Remount lifecycle regression guard (prevents WebGL context-loss fallback SVG)
+    // 6. Unmount -> Remount lifecycle regression guard
     const tabBar = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId}`);
     await tabBar.getByRole('button', { name: 'Closet' }).click();
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toBeVisible();
     await tabBar.getByRole('button', { name: 'Outfits' }).click();
     await expect(mannequin.locator('.character-25d-fallback-svg')).toHaveCount(0);
     await expect(
-      mannequin.locator('canvas.character-25d-render-canvas[data-body-ready="true"]')
+      mannequin.locator(
+        '[data-vton-after-img="true"], canvas.character-25d-render-canvas[data-body-ready="true"]'
+      )
     ).toBeVisible();
 
     expect(forbiddenAssetRequests).toEqual([]);
   });
 
-  test('5. Signup gender & anthropometric info automatically configure the 3D character model', async ({
+  test('5. Signup anthropometric info automatically configures the gender-neutral 2D model', async ({
     page,
   }) => {
     await page.goto('/?auth=1');
@@ -388,7 +394,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#verify-otp-btn').click();
     await expect(page.locator('#verify-otp-btn')).toContainText('인증됨');
 
-    // Select Female (`여성`) + 165cm + 53kg at signup
+    // Select signup option + 165cm + 53kg at signup
     await page.locator('[data-signup-gender="female"]').click();
     await page.locator('#register-name-input').fill('서연');
     await page.locator('#register-height-input').fill('165');
@@ -396,7 +402,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#register-password-input').fill('pass1234');
     await page.locator('#complete-register-btn').click();
 
-    // Lands on MY WARDROBE -> navigate to Outfits and verify Female + 165cm + 53kg reflected automatically
+    // Lands on MY WARDROBE -> navigate to Outfits and verify gender-neutral 2D model + 165cm + 53kg reflected automatically
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toHaveText(
       'MY WARDROBE'
     );
@@ -404,7 +410,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(mannequin).toBeVisible();
-    await expect(mannequin).toHaveAttribute('data-character-gender', 'female');
+    await expect(mannequin).toHaveAttribute('data-viewer-mode', '2d-vton');
     await expect(mannequin).toHaveAttribute('data-height-cm', '165');
     await expect(mannequin).toHaveAttribute('data-weight-kg', '53');
 

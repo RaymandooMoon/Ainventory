@@ -916,6 +916,17 @@ export async function handleStandaloneApiFallback(
     };
   }
 
+  if (pathname === '/vton/status' || pathname === '/vton/synthesize') {
+    return {
+      ok: true,
+      mode: '2d-vton',
+      provider: 'client-editorial-2d',
+      geminiUsed: false,
+      compositeImageUrl: null,
+      baseModelImageUrl: null,
+    };
+  }
+
   // ---------------- DATA ENDPOINTS ----------------
   const activeUser = getActiveSessionUser();
   const closet = String(

@@ -3,6 +3,7 @@ import {
   type WardrobeCategoryKey,
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
+import { normalizeViewerMode } from './vton2DService.ts';
 
 export type FittingSlotKey = WardrobeCategoryKey;
 
@@ -42,10 +43,11 @@ export interface FittingRenderRequest {
   slots: FittingSlotAssignments;
   theme?: 'light' | 'dark';
   personReferenceUrl?: string;
+  legacyMode?: unknown;
 }
 
 export interface FittingRenderResult {
-  mode: '2.5d-studio' | 'ai-vton';
+  mode: '2d-vton' | '2.5d-studio' | 'ai-vton';
   rendererId: string;
   layers: Studio25DLayer[];
   /** Populated when an AI Virtual Try-On (VTON) image generation API returns a synthesized try-on frame */
@@ -60,7 +62,7 @@ export interface FittingRenderResult {
 
 export interface FittingRenderer {
   readonly id: string;
-  readonly mode: '2.5d-studio' | 'ai-vton';
+  readonly mode: '2d-vton' | '2.5d-studio' | 'ai-vton';
   render(request: FittingRenderRequest): Promise<FittingRenderResult>;
 }
 
@@ -76,10 +78,10 @@ export function mapGarmentToFittingSlot(garment?: Partial<GarmentRecord> | null)
  */
 export class Studio25DFittingRenderer implements FittingRenderer {
   readonly id = 'studio-25d-renderer-v2';
-  readonly mode = '2.5d-studio' as const;
+  readonly mode = '2d-vton' as const;
 
   async render(request: FittingRenderRequest): Promise<FittingRenderResult> {
-    const isDark = request.theme === 'dark';
+    const resolvedMode = normalizeViewerMode(request.legacyMode);
     const slots = request.slots || {};
     const hasOuter = Boolean(slots.outer);
 
@@ -199,25 +201,15 @@ export class Studio25DFittingRenderer implements FittingRenderer {
     layers.sort((a, b) => a.zIndex - b.zIndex);
 
     return {
-      mode: '2.5d-studio',
+      mode: resolvedMode,
       rendererId: this.id,
       layers,
       compositeImageUrl: null,
-      lighting: isDark
-        ? {
-            backdropGradient:
-              'radial-gradient(circle at 46% 24%, #2B2E37 0%, #1B1D24 52%, #111216 100%)',
-            keyLightGlow:
-              'radial-gradient(ellipse at 36% 18%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 64%)',
-            floorShadowColor: 'rgba(0, 0, 0, 0.56)',
-          }
-        : {
-            backdropGradient:
-              'radial-gradient(circle at 48% 24%, #FFFFFF 0%, #F7F8FC 60%, #EEF0F6 100%)',
-            keyLightGlow:
-              'radial-gradient(ellipse at 38% 18%, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0) 68%)',
-            floorShadowColor: 'rgba(15, 23, 42, 0.11)',
-          },
+      lighting: {
+        backdropGradient: 'var(--squircle-illumination, var(--bg-surface))',
+        keyLightGlow: 'var(--garment-studio-glow, none)',
+        floorShadowColor: 'var(--garment-floor-shadow, rgba(15, 23, 42, 0.12))',
+      },
       vtonReady: Boolean(import.meta.env?.VITE_VTON_API_URL),
     };
   }

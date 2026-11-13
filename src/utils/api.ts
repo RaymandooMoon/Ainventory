@@ -222,7 +222,10 @@ export async function apiFetch<T = Record<string, any>>(
   const sampleDemo = isSampleDemoMode();
   const isAuthEndpoint = path.startsWith('/auth/');
   const isStatelessCompute =
-    path === '/garments/analyze' || path === '/shopping/analyze' || path === '/shopping-check';
+    path === '/garments/analyze' ||
+    path === '/shopping/analyze' ||
+    path === '/shopping-check' ||
+    path === '/vton/synthesize';
 
   // In Sample / Default Local Closet Mode, state mutations persist in local IndexedDB
   if (sampleDemo && method !== 'GET' && !isAuthEndpoint && !isStatelessCompute) {

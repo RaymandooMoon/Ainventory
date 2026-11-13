@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createApiRouter } from './api.js';
 import { ROOT_DIR, UPLOADS_DIR } from './db.js';
+import { createVtonRouter } from './vtonRouter.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -25,6 +26,7 @@ app.get('/api/build-info', (_req, res) => {
   res.json({ architecture: 'hig-2.5d', version: '2.5.0' });
 });
 
+app.use('/api/vton', createVtonRouter());
 app.use('/api', createApiRouter());
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API endpoint not found' });
