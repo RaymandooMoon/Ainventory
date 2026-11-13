@@ -5,6 +5,7 @@ import {
   getStudioSeedImageForGarment,
   resolveStudioSeedUrl,
 } from '../shared/garmentTaxonomy.js';
+import { localizeGarmentName } from '../utils/i18n.ts';
 
 function rgbDist(a, b) {
   return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -476,7 +477,12 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   const cat = category || item?.category || 'top';
   const sub = subcategory || item?.subcategory || 'knit';
   const targetHex = colorHex || item?.color_hex || '';
-  const label = alt || item?.name || '의류 이미지';
+  const docLang =
+    typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko';
+  const label =
+    alt ||
+    localizeGarmentName(item?.name, docLang) ||
+    (docLang === 'en' ? 'Garment cutout' : '의류 이미지');
 
   const fallbackSeedSrc = getStudioSeedImageForGarment(cat, sub);
 

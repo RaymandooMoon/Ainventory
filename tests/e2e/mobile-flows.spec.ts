@@ -538,17 +538,59 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(lightStatsCardRgb.colorScheme).toContain('light');
     expect(lightStatsCardRgb.bg).toBe('rgb(255, 255, 255)');
 
+    const hangulRegex = /[\uAC00-\uD7A3\u3131-\u318E]/;
+    const assertZeroHangulOnPage = async (contextLabel: string) => {
+      const violations = await page.evaluate(() => {
+        const re = /[\uAC00-\uD7A3\u3131-\u318E]/;
+        const found: string[] = [];
+        const bodyText = document.body?.innerText || '';
+        if (re.test(bodyText)) {
+          const matchingLine =
+            bodyText.split('\n').find((line) => re.test(line)) || bodyText.slice(0, 80);
+          found.push(`text:${matchingLine.trim()}`);
+        }
+        const els = document.querySelectorAll('*');
+        for (const el of Array.from(els)) {
+          for (const attr of ['aria-label', 'placeholder', 'alt', 'title']) {
+            const val = el.getAttribute(attr);
+            if (val && re.test(val)) {
+              found.push(`${el.tagName.toLowerCase()}[${attr}="${val}"]`);
+            }
+          }
+          if (
+            (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) &&
+            el.type !== 'file' &&
+            re.test(el.value || '')
+          ) {
+            found.push(`${el.tagName.toLowerCase()}#${el.id}[value="${el.value}"]`);
+          }
+          if (el instanceof HTMLOptionElement && re.test(el.textContent || '')) {
+            found.push(`option("${(el.textContent || '').trim()}")`);
+          }
+        }
+        return found.slice(0, 10);
+      });
+      expect(violations, `Hangul leak in ${contextLabel}`).toEqual([]);
+    };
+
     // 3. Switch language to English via top-right Account Settings and verify full UI translation
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
     await page.locator('[data-lang-btn="en"]').click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.locator('.ui-sheet-box')).toContainText('Account Settings');
     await expect(page.locator('.ui-sheet-box')).toContainText('Photo, Skin Tone & Body Profile');
+    expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
 
     // Open unified Profile Modal directly from Account Settings shortcut
     await page.locator('#settings-open-profile-btn').click();
     await expect(page.locator('#profile-tab-skin')).toHaveText('Photo & Skin');
     await expect(page.locator('#profile-tab-body')).toHaveText('Body Profile');
+    expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
+
+    // Check Body Profile tab in English too
+    await page.locator('#profile-tab-body').click();
+    expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
+    await page.locator('#profile-tab-skin').click();
 
     // 4. Upload half-body portrait wearing mint-green top -> verify face detection & warm skin extraction (NOT gray #A3999B)
     await page.locator('#skin-portrait-file-input').setInputFiles({
@@ -559,6 +601,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await expect(page.locator('.skin-face-detected-badge')).toHaveText('Face Detected');
     await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
+    expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
 
     const extractedText = await page.locator('.skin-lab-metrics strong').innerText();
     expect(extractedText).toMatch(/^#[0-9A-F]{6}$/);
@@ -572,16 +615,64 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
 
-    // Navigate to Outfits and verify English translation on weather bar & camera HUD
-    await page.locator('[data-nav-tab="outfits"]').click();
-    await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toContainText(
-      'Tomorrow Weather'
-    );
+    // 5. Verify zero Hangul across all 4 tabs + ItemDetailSheet in Sample Demo Mode
+    for (const tab of ['closet', 'outfits', 'calendar', 'stats']) {
+      await page.locator(`[data-nav-tab="${tab}"]`).click();
+      if (tab === 'closet') {
+        await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
+      }
+      if (tab === 'outfits') {
+        await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toContainText(
+          'Tomorrow Weather'
+        );
+      }
+      await assertZeroHangulOnPage(`sample-${tab}`);
+    }
 
-    // Switch back to Korean via top-right Account Settings on Outfits
+    // Also sign into seeded SQLite account (`admin` / `admin`) in English mode and verify all Korean DB garments, brands & saved outfits render 100% in English!
+    await page.goto('/?auth=1');
+    await expect(page.locator('#login-username')).toBeVisible();
+    await assertZeroHangulOnPage('login-en');
+    await page.locator('#login-username').fill('admin');
+    await page.locator('#login-password').fill('admin');
+    await page.locator('#login-submit-btn').click();
+
+    await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
+    await assertZeroHangulOnPage('admin-closet-en');
+
+    // Open a seeded garment ItemDetailSheet and verify localized name/brand/memo inputs have zero Hangul
+    await page.locator('.hig-wardrobe-card').first().click();
+    await expect(page.locator('#detail-name-input')).toBeVisible();
+    await assertZeroHangulOnPage('admin-item-detail-en');
+    await page.keyboard.press('Escape');
+
+    // Navigate through Outfits (slot inventory + saved outfit chips), Calendar, and Stats on seeded SQLite data
+    for (const tab of ['outfits', 'calendar', 'stats']) {
+      await page.locator(`[data-nav-tab="${tab}"]`).click();
+      if (tab === 'outfits') {
+        await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toBeVisible();
+        const mobileSlotBtn = page.locator('.studio-mobile-slot-pill').first();
+        if (await mobileSlotBtn.isVisible()) {
+          await mobileSlotBtn.click();
+          await expect(page.locator('.ui-sheet-box .studio-mini-garment-card').first()).toBeVisible();
+          await assertZeroHangulOnPage('admin-outfits-mobile-sheet-en');
+          await page.keyboard.press('Escape');
+        } else {
+          await expect(page.locator('.studio-mini-garment-card').first()).toBeVisible();
+        }
+      }
+      await assertZeroHangulOnPage(`admin-${tab}-en`);
+    }
+
+    // Switch back to Korean via top-right Account Settings and confirm Korean strings return cleanly
     await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    await assertZeroHangulOnPage('admin-account-settings-en');
     await page.locator('[data-lang-btn="ko"]').click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
+    await page.keyboard.press('Escape');
+    await page.locator('[data-nav-tab="closet"]').click();
+    await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
+    expect(await page.locator('body').innerText()).toMatch(hangulRegex);
   });
 });
 

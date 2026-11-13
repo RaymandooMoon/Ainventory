@@ -15,7 +15,7 @@ import {
   normalizeSeasonKey,
   translateSubTypeLabel,
 } from '../services/skinToneAnalyzer.ts';
-import { tx } from '../utils/i18n.ts';
+import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import Character25DMannequin from './Character25DMannequin.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
@@ -102,7 +102,10 @@ function ProfileModalContent({
       setDraftPresetKey(res.matchedPresetKey);
       triggerHaptic('light');
     } catch (err) {
-      setErrorMsg(err?.message || tx(lang, '얼굴 피부톤 분석 실패', 'Failed to analyze portrait'));
+      setErrorMsg(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '얼굴 피부톤 분석 실패', 'Failed to analyze portrait')
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -242,6 +245,7 @@ function ProfileModalContent({
               gender={lockedGender}
               bodySpec={sanitizeBodySpec({ ...draftBody, gender: lockedGender })}
               theme={theme}
+              lang={lang}
               compact
             />
           </div>

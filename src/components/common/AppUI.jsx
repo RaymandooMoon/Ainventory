@@ -3,7 +3,7 @@ import { Camera, Check, FileText, ShieldCheck, Sparkles, UserCog, X } from 'luci
 import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
 import StudioGarmentImage from '../StudioGarmentImage.jsx';
 import { apiFetch, formatKRW } from '../../utils/api.ts';
-import { tx } from '../../utils/i18n.ts';
+import { localizeApiMessage, localizeGarmentName, tx } from '../../utils/i18n.ts';
 import {
   acknowledgeCameraNotice,
   emitStatusCapsule,
@@ -12,6 +12,12 @@ import {
   subscribeStatusCapsule,
   triggerHaptic,
 } from '../../utils/nativeBridge.ts';
+
+function isDocumentEnglish(lang) {
+  if (lang === 'en') return true;
+  if (lang === 'ko') return false;
+  return typeof document !== 'undefined' && document.documentElement.lang === 'en';
+}
 
 /**
  * Persistent Top-Right Utility Controls rendered on EVERY screen (`Closet`, `Outfits`, `Calendar`, `Stats`):
@@ -78,9 +84,10 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
   );
 }
 
-export function HorizontalChipRail({ items = [], activeKey, onSelect, ariaLabel = '필터 선택' }) {
+export function HorizontalChipRail({ items = [], activeKey, onSelect, ariaLabel }) {
+  const resolvedAriaLabel = ariaLabel || (isDocumentEnglish() ? 'Filter options' : '필터 선택');
   return (
-    <div className="ui-chip-rail" role="tablist" aria-label={ariaLabel}>
+    <div className="ui-chip-rail" role="tablist" aria-label={resolvedAriaLabel}>
       {items.map((item) => {
         const active = activeKey === item.key;
         return (
@@ -353,9 +360,10 @@ export function SkeletonShimmer({ height = 140, width = '100%', radius = 16, sty
   );
 }
 
-export function SkeletonWardrobeGrid({ count = 6 }) {
+export function SkeletonWardrobeGrid({ count = 6, lang }) {
+  const isEn = isDocumentEnglish(lang);
   return (
-    <div className="hig-cutout-grid" aria-label="옷장 로딩 중">
+    <div className="hig-cutout-grid" aria-label={isEn ? 'Loading wardrobe' : '옷장 로딩 중'}>
       {Array.from({ length: count }).map((_, idx) => (
         <div
           key={idx}
@@ -367,9 +375,10 @@ export function SkeletonWardrobeGrid({ count = 6 }) {
   );
 }
 
-export function SkeletonBentoGrid({ count = 3 }) {
+export function SkeletonBentoGrid({ count = 3, lang }) {
+  const isEn = isDocumentEnglish(lang);
   return (
-    <div className="hig-bento-grid" aria-label="인사이트 로딩 중">
+    <div className="hig-bento-grid" aria-label={isEn ? 'Loading insights' : '인사이트 로딩 중'}>
       {Array.from({ length: count }).map((_, idx) => (
         <div key={idx} className="hig-skeleton" style={{ height: 156, borderRadius: 24 }} />
       ))}
@@ -383,13 +392,15 @@ export function SkeletonBentoGrid({ count = 3 }) {
 export function MorphActionButton({
   icon,
   label,
-  morphedLabel = '완료',
+  morphedLabel,
   className = 'btn btn-secondary btn-sm',
   onClick,
   disabled = false,
   id,
+  lang,
 }) {
   const [morphed, setMorphed] = useState(false);
+  const resolvedMorphedLabel = morphedLabel || (isDocumentEnglish(lang) ? 'Done' : '완료');
 
   const handlePress = async (e) => {
     if (disabled) return;
@@ -408,7 +419,7 @@ export function MorphActionButton({
       onClick={handlePress}
     >
       {morphed ? <Check size={14} strokeWidth={2.5} /> : icon}
-      <span>{morphed ? morphedLabel : label}</span>
+      <span>{morphed ? resolvedMorphedLabel : label}</span>
     </button>
   );
 }
@@ -416,27 +427,39 @@ export function MorphActionButton({
 /**
  * Pre-Permission Rationale Modal for Camera / Photo Library (Req 10.c)
  */
-export function PermissionNoticeModal({ open, mode = 'camera', onConfirm, onClose }) {
+export function PermissionNoticeModal({ open, mode = 'camera', lang, onConfirm, onClose }) {
+  const isEn = isDocumentEnglish(lang);
+  const resolvedLang = isEn ? 'en' : 'ko';
   return (
     <ResponsiveSheetModal
       open={open}
       onClose={onClose}
+      lang={resolvedLang}
       eyebrow="PRIVACY & PERMISSION"
-      title={mode === 'camera' ? '카메라 및 사진 접근 안내' : '사진 보관함 접근 안내'}
+      title={
+        mode === 'camera'
+          ? isEn
+            ? 'Camera & Photo Access'
+            : '카메라 및 사진 접근 안내'
+          : isEn
+            ? 'Photo Library Access'
+            : '사진 보관함 접근 안내'
+      }
       maxWidth={440}
     >
       <div className="hig-item-detail-body">
         <div className="hig-sheet-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Camera size={22} style={{ flexShrink: 0 }} />
           <p className="hig-body" style={{ fontSize: '0.88rem' }}>
-            선택하거나 촬영한 사진은 의류 배경 제거(WebP 누끼) 및 옷장 등록 용도로만 사용되며,
-            동의 없이 외부 제3자에게 공유되지 않습니다.
+            {isEn
+              ? 'Selected or captured photos are used strictly for garment background removal (WebP cutout) and wardrobe registration, and are never shared with third parties without consent.'
+              : '선택하거나 촬영한 사진은 의류 배경 제거(WebP 누끼) 및 옷장 등록 용도로만 사용되며, 동의 없이 외부 제3자에게 공유되지 않습니다.'}
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
-            취소
+            {isEn ? 'Cancel' : '취소'}
           </button>
           <button
             id="confirm-camera-permission-btn"
@@ -448,7 +471,7 @@ export function PermissionNoticeModal({ open, mode = 'camera', onConfirm, onClos
               onConfirm?.();
             }}
           >
-            확인 및 계속하기
+            {isEn ? 'Continue' : '확인 및 계속하기'}
           </button>
         </div>
       </div>
@@ -459,26 +482,33 @@ export function PermissionNoticeModal({ open, mode = 'camera', onConfirm, onClos
 /**
  * Explicit Local Biometric Processing Notice & Consent Modal (Req 10.c)
  */
-export function BiometricConsentModal({ open, onConfirm, onClose }) {
+export function BiometricConsentModal({ open, lang, onConfirm, onClose }) {
   const [checked, setChecked] = useState(true);
+  const isEn = isDocumentEnglish(lang);
+  const resolvedLang = isEn ? 'en' : 'ko';
 
   return (
     <ResponsiveSheetModal
       open={open}
       onClose={onClose}
+      lang={resolvedLang}
       eyebrow="ON-DEVICE FACE PRIVACY"
-      title="온디바이스 얼굴 피부톤 분석 동의"
+      title={isEn ? 'On-Device Skin Tone Analysis Consent' : '온디바이스 얼굴 피부톤 분석 동의'}
       maxWidth={460}
     >
       <div className="hig-item-detail-body">
         <div className="hig-sheet-card" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
           <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: 2 }} />
           <div className="hig-body" style={{ fontSize: '0.86rem' }}>
-            <strong>100% 기기 내부 메모리 처리 (서버 미전송)</strong>
+            <strong>
+              {isEn
+                ? '100% On-Device Memory Processing (Zero Server Upload)'
+                : '100% 기기 내부 메모리 처리 (서버 미전송)'}
+            </strong>
             <p className="hig-caption" style={{ marginTop: 6 }}>
-              얼굴 랜드마크(이마·양볼·턱) 및 피부 명도·언더톤 추출은 브라우저 내부 온디바이스
-              WASM 엔진에서만 수행된 뒤 즉시 메모리에서 파기됩니다. 원본 얼굴 사진은 외부 서버로
-              업로드되지 않습니다.
+              {isEn
+                ? 'Facial landmarks (forehead, cheeks, chin) and Lab undertone sampling run strictly inside local browser memory and are discarded immediately. Raw face photos are never uploaded.'
+                : '얼굴 랜드마크(이마·양볼·턱) 및 피부 명도·언더톤 추출은 브라우저 내부 온디바이스 WASM 엔진에서만 수행된 뒤 즉시 메모리에서 파기됩니다. 원본 얼굴 사진은 외부 서버로 업로드되지 않습니다.'}
             </p>
           </div>
         </div>
@@ -498,12 +528,16 @@ export function BiometricConsentModal({ open, onConfirm, onClose }) {
             checked={checked}
             onChange={(e) => setChecked(e.target.checked)}
           />
-          <span>기기 내 로컬 얼굴 색상 분석 처리 안내를 확인했으며 동의합니다.</span>
+          <span>
+            {isEn
+              ? 'I understand and consent to local on-device facial skin tone analysis.'
+              : '기기 내 로컬 얼굴 색상 분석 처리 안내를 확인했으며 동의합니다.'}
+          </span>
         </label>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
-            취소
+            {isEn ? 'Cancel' : '취소'}
           </button>
           <button
             id="confirm-biometric-consent-btn"
@@ -516,7 +550,7 @@ export function BiometricConsentModal({ open, onConfirm, onClose }) {
               onConfirm?.();
             }}
           >
-            동의 후 분석 시작
+            {isEn ? 'Agree & Analyze' : '동의 후 분석 시작'}
           </button>
         </div>
       </div>
@@ -535,6 +569,7 @@ function LegalDisclosureModalInner({ initialDoc = 'privacy', onClose, lang = 'ko
     <ResponsiveSheetModal
       open
       onClose={onClose}
+      lang={lang}
       eyebrow="LEGAL & PRIVACY"
       title={
         doc === 'terms'
@@ -648,11 +683,13 @@ export function LegalDisclosureModal({ open, initialDoc = 'privacy', onClose, la
   );
 }
 
-function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
+function SampleImportSheetInner({ onClose, targetOwner, onImported, lang }) {
   const [samples, setSamples] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const isEn = isDocumentEnglish(lang);
+  const resolvedLang = isEn ? 'en' : 'ko';
 
   useEffect(() => {
     let active = true;
@@ -665,7 +702,10 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
       })
       .catch((err) => {
         if (active) {
-          emitStatusCapsule(err?.message || '샘플 카탈로그를 불러오지 못했습니다');
+          emitStatusCapsule(
+            localizeApiMessage(err?.message, resolvedLang) ||
+              tx(resolvedLang, '샘플 카탈로그를 불러오지 못했습니다', 'Failed to load sample catalog')
+          );
         }
       })
       .finally(() => {
@@ -674,7 +714,7 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [resolvedLang]);
 
   const toggleKey = (key) => {
     triggerHaptic('selection');
@@ -698,7 +738,10 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
       onImported?.(res.count ?? res.importedCount ?? selectedKeys.length);
       onClose?.();
     } catch (err) {
-      emitStatusCapsule(err?.message || '샘플 아이템 가져오기에 실패했습니다');
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, resolvedLang) ||
+          tx(resolvedLang, '샘플 아이템 가져오기에 실패했습니다', 'Failed to import sample items')
+      );
     } finally {
       setImporting(false);
     }
@@ -708,17 +751,22 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
     <ResponsiveSheetModal
       open
       onClose={onClose}
+      lang={resolvedLang}
       eyebrow="SAMPLE CAPSULE IMPORT"
-      title="샘플 아이템 선택 가져오기"
+      title={tx(resolvedLang, '샘플 아이템 선택 가져오기', 'Import Sample Closet Items')}
       maxWidth={680}
     >
       {loading ? (
-        <SkeletonWardrobeGrid count={6} />
+        <SkeletonWardrobeGrid count={6} lang={resolvedLang} />
       ) : (
         <div className="hig-item-detail-body">
           <div className="hig-sheet-row-between">
             <span className="hig-caption tabular-nums">
-              원하는 아이템만 내 옷장으로 선택 복제할 수 있습니다 ({selectedKeys.length}개 선택됨)
+              {tx(
+                resolvedLang,
+                `원하는 아이템만 내 옷장으로 선택 복제할 수 있습니다 (${selectedKeys.length}개 선택됨)`,
+                `Select curated items to clone into your closet (${selectedKeys.length} selected)`
+              )}
             </span>
             <button
               type="button"
@@ -731,7 +779,9 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
                 )
               }
             >
-              {selectedKeys.length === samples.length ? '전체 해제' : '전체 선택'}
+              {selectedKeys.length === samples.length
+                ? tx(resolvedLang, '전체 해제', 'Deselect All')
+                : tx(resolvedLang, '전체 선택', 'Select All')}
             </button>
           </div>
 
@@ -739,6 +789,7 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
             {samples.map((item) => {
               const itemKey = item.key || item.sampleKey;
               const checked = selectedKeys.includes(itemKey);
+              const displayName = localizeGarmentName(item.name, resolvedLang);
               return (
                 <button
                   key={itemKey}
@@ -749,11 +800,11 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
                   <div className="sample-import-thumb">
                     <StudioGarmentImage
                       item={item}
-                      alt={item.name}
+                      alt={displayName}
                       style={{ width: '100%', height: '100%' }}
                     />
                   </div>
-                  <div className="hig-garment-name">{item.name}</div>
+                  <div className="hig-garment-name">{displayName}</div>
                   <div className="hig-caption tabular-nums">{formatKRW(item.price)}</div>
                   {checked && (
                     <span className="sample-import-check">
@@ -767,7 +818,7 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>
-              취소
+              {tx(resolvedLang, '취소', 'Cancel')}
             </button>
             <button
               id="confirm-import-samples-btn"
@@ -778,7 +829,13 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
             >
               <Sparkles size={15} />
               <span>
-                {importing ? '가져오는 중...' : `${selectedKeys.length}개 아이템 내 옷장에 담기`}
+                {importing
+                  ? tx(resolvedLang, '가져오는 중...', 'Importing...')
+                  : tx(
+                      resolvedLang,
+                      `${selectedKeys.length}개 아이템 내 옷장에 담기`,
+                      `Import ${selectedKeys.length} Items`
+                    )}
               </span>
             </button>
           </div>
@@ -791,13 +848,14 @@ function SampleImportSheetInner({ onClose, targetOwner, onImported }) {
 /**
  * Selective Sample Closet Import Sheet for Logged-in Users (Req 8.a)
  */
-export function SampleImportSheet({ open, onClose, targetOwner, onImported }) {
+export function SampleImportSheet({ open, onClose, targetOwner, onImported, lang }) {
   if (!open) return null;
   return (
     <SampleImportSheetInner
       onClose={onClose}
       targetOwner={targetOwner}
       onImported={onImported}
+      lang={lang}
     />
   );
 }

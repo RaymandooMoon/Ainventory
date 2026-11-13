@@ -19,7 +19,12 @@ import {
 } from '../services/fittingRenderer.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
-import { tx } from '../utils/i18n.ts';
+import {
+  localizeApiMessage,
+  localizeGarmentName,
+  localizeOutfitTitle,
+  tx,
+} from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import Studio25DCanvas from './Studio25DCanvas.jsx';
@@ -436,7 +441,7 @@ export default function OutfitStudioView({
         weather?.date ||
         new Date(Date.now() + 86400000).toISOString().slice(0, 10);
       const labelTitle =
-        activeRecommendation?.title ||
+        localizeOutfitTitle(activeRecommendation?.title, lang) ||
         tx(lang, `${weather?.cityName || '서울'} 내일 코디`, 'Tomorrow Weather Look');
       await apiFetch('/calendar', {
         method: 'POST',
@@ -453,7 +458,9 @@ export default function OutfitStudioView({
       onClosetUpdated?.();
       showToast?.(tx(lang, '내일 캘린더에 추가됨', 'Added to tomorrow calendar'));
     } catch (err) {
-      showToast?.(err?.message || tx(lang, '기록 실패', 'Failed to log outfit'));
+      showToast?.(
+        localizeApiMessage(err?.message, lang) || tx(lang, '기록 실패', 'Failed to log outfit')
+      );
     } finally {
       setLoggingTomorrow(false);
     }
@@ -494,10 +501,10 @@ export default function OutfitStudioView({
     try {
       const title =
         outfitTitle.trim() ||
-        activeRecommendation?.title ||
+        localizeOutfitTitle(activeRecommendation?.title, lang) ||
         equippedItems
           .slice(0, 2)
-          .map((g) => g.name)
+          .map((g) => localizeGarmentName(g.name, lang))
           .join(' · ');
       await apiFetch('/outfits', {
         method: 'POST',
@@ -515,7 +522,9 @@ export default function OutfitStudioView({
       onClosetUpdated?.();
       showToast?.(tx(lang, '코디 저장됨', 'Outfit saved'));
     } catch (err) {
-      showToast?.(err?.message || tx(lang, '저장 실패', 'Failed to save outfit'));
+      showToast?.(
+        localizeApiMessage(err?.message, lang) || tx(lang, '저장 실패', 'Failed to save outfit')
+      );
     } finally {
       setSavingOutfit(false);
     }
@@ -550,6 +559,7 @@ export default function OutfitStudioView({
     <div className="studio-mini-inventory-grid">
       {slotGarments.map((item) => {
         const isEquipped = slots[activeSlotKey]?.id === item.id;
+        const displayName = localizeGarmentName(item.name, lang);
         return (
           <button
             key={item.id}
@@ -563,14 +573,14 @@ export default function OutfitStudioView({
             }}
           >
             <div className="studio-mini-squircle">
-              <GarmentObject25D item={item} padding="11%" />
+              <GarmentObject25D item={item} alt={displayName} padding="11%" />
               {isEquipped && (
                 <span className="studio-equipped-badge" aria-hidden="true">
                   <Check size={12} strokeWidth={2.6} />
                 </span>
               )}
             </div>
-            <span className="hig-garment-name">{item.name}</span>
+            <span className="hig-garment-name">{displayName}</span>
           </button>
         );
       })}
@@ -670,7 +680,10 @@ export default function OutfitStudioView({
               )}
               {cities.map((c) => {
                 const koName = c.name.split('·')[0].trim();
-                const label = lang === 'en' ? CITY_EN_NAMES[c.key] || koName : koName;
+                const label =
+                  lang === 'en'
+                    ? CITY_EN_NAMES[c.key] || localizeOutfitTitle(koName, 'en')
+                    : koName;
                 return (
                   <option key={c.key} value={c.key}>
                     {label}
@@ -715,7 +728,7 @@ export default function OutfitStudioView({
               ? lang === 'en'
                 ? pair.en
                 : pair.ko
-              : sc.label;
+              : localizeOutfitTitle(sc.label, lang);
             return (
               <button
                 key={sc.key}
@@ -831,27 +844,32 @@ export default function OutfitStudioView({
 
           {uniqueSavedOutfits.length > 0 && (
             <div className="studio-saved-looks-rail" aria-label="Saved Outfits">
-              {uniqueSavedOutfits.map((outfit) => (
-                <div key={outfit.id} className="studio-saved-look-chip">
-                  <button
-                    type="button"
-                    className="studio-saved-look-select"
-                    onClick={() => handleApplySavedOutfit(outfit)}
-                  >
-                    {outfit.title}
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-saved-look-del"
-                    aria-label={
-                      lang === 'en' ? `Delete ${outfit.title}` : `${outfit.title} 삭제`
-                    }
-                    onClick={() => handleDeleteSavedOutfit(outfit.id)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+              {uniqueSavedOutfits.map((outfit) => {
+                const displayOutfitTitle = localizeOutfitTitle(outfit.title, lang);
+                return (
+                  <div key={outfit.id} className="studio-saved-look-chip">
+                    <button
+                      type="button"
+                      className="studio-saved-look-select"
+                      onClick={() => handleApplySavedOutfit(outfit)}
+                    >
+                      {displayOutfitTitle}
+                    </button>
+                    <button
+                      type="button"
+                      className="studio-saved-look-del"
+                      aria-label={
+                        lang === 'en'
+                          ? `Delete ${displayOutfitTitle}`
+                          : `${outfit.title} 삭제`
+                      }
+                      onClick={() => handleDeleteSavedOutfit(outfit.id)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </aside>

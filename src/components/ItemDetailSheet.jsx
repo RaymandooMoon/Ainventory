@@ -6,7 +6,14 @@ import {
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
 import { apiFetch } from '../utils/api.ts';
-import { tx } from '../utils/i18n.ts';
+import {
+  localizeApiMessage,
+  localizeBrandName,
+  localizeColorName,
+  localizeGarmentMemo,
+  localizeGarmentName,
+  tx,
+} from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
@@ -22,11 +29,16 @@ function ItemDetailContent({
   onTryInOutfits,
   showToast,
 }) {
-  const [name, setName] = useState(() => garment.name || '');
-  const [brand, setBrand] = useState(() => garment.brand || '');
+  const initialDisplayName = localizeGarmentName(garment.name || '', lang);
+  const initialDisplayBrand = localizeBrandName(garment.brand || '', lang);
+  const rawMemoSource = garment.memo ?? garment.notes ?? '';
+  const initialDisplayMemo = localizeGarmentMemo(rawMemoSource, lang);
+
+  const [name, setName] = useState(() => initialDisplayName);
+  const [brand, setBrand] = useState(() => initialDisplayBrand);
   const [category, setCategory] = useState(() => normalizeWardrobeCategoryKey(garment.category));
   const [size, setSize] = useState(() => garment.size || '');
-  const [memo, setMemo] = useState(() => garment.memo ?? garment.notes ?? '');
+  const [memo, setMemo] = useState(() => initialDisplayMemo);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -38,14 +50,25 @@ function ItemDetailContent({
         WARDROBE_CATEGORY_OPTIONS.find((opt) => opt.key === category) ||
         WARDROBE_CATEGORY_OPTIONS[0];
       const currentNormCat = normalizeWardrobeCategoryKey(garment.category);
+      const trimmedName = name.trim();
+      const trimmedBrand = brand.trim();
+      const trimmedMemo = memo.trim();
+
+      const resolvedName =
+        trimmedName === initialDisplayName ? garment.name : trimmedName || garment.name;
+      const resolvedBrand =
+        trimmedBrand === initialDisplayBrand ? garment.brand || '' : trimmedBrand;
+      const resolvedMemo =
+        trimmedMemo === initialDisplayMemo ? rawMemoSource : trimmedMemo;
+
       const payload = {
-        name: name.trim() || garment.name,
-        brand: brand.trim(),
+        name: resolvedName,
+        brand: resolvedBrand,
         category: catOpt.key,
         ...(catOpt.key !== currentNormCat ? { subcategory: catOpt.defaultSubcategory } : {}),
         size: size.trim(),
-        memo: memo.trim(),
-        notes: memo.trim(),
+        memo: resolvedMemo,
+        notes: resolvedMemo,
       };
 
       const res = await apiFetch(`/garments/${garment.id}`, {
@@ -56,7 +79,10 @@ function ItemDetailContent({
       onUpdated?.(res?.garment || { ...garment, ...payload });
       showToast?.(tx(lang, '아이템 정보가 저장되었습니다.', 'Item details saved.'));
     } catch (err) {
-      showToast?.(err?.message || tx(lang, '저장에 실패했습니다.', 'Failed to save changes.'));
+      showToast?.(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '저장에 실패했습니다.', 'Failed to save changes.')
+      );
     } finally {
       setSaving(false);
     }
@@ -71,7 +97,10 @@ function ItemDetailContent({
       onClose?.();
       showToast?.(tx(lang, '아이템이 삭제되었습니다.', 'Item deleted.'));
     } catch (err) {
-      showToast?.(err?.message || tx(lang, '삭제에 실패했습니다.', 'Failed to delete item.'));
+      showToast?.(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '삭제에 실패했습니다.', 'Failed to delete item.')
+      );
     } finally {
       setDeleting(false);
     }
@@ -84,6 +113,7 @@ function ItemDetailContent({
         <GarmentObject25D
           stageId={CARBON_DOM_CONTRACT.itemDetailTiltStageId}
           item={garment}
+          alt={initialDisplayName}
           interactive
           maxTiltDeg={13}
           padding="11%"
@@ -94,7 +124,7 @@ function ItemDetailContent({
               className="hig-detail-color-dot"
               style={{ backgroundColor: garment.color_hex }}
             />
-            <span>{garment.color_name || garment.color_hex}</span>
+            <span>{localizeColorName(garment.color_name, lang) || garment.color_hex}</span>
           </div>
         )}
       </div>
@@ -260,18 +290,21 @@ export default function ItemDetailSheet({
 }) {
   if (!open || !garment) return null;
 
+  const displayTitle = localizeGarmentName(garment.name, lang);
+  const displayEyebrow = localizeBrandName(garment.brand, lang) || undefined;
+
   return (
     <ResponsiveSheetModal
       id={CARBON_DOM_CONTRACT.garmentDetailSheetId}
       open={open}
       onClose={onClose}
       lang={lang}
-      title={garment.name}
-      eyebrow={garment.brand || undefined}
+      title={displayTitle}
+      eyebrow={displayEyebrow}
       maxWidth={560}
     >
       <ItemDetailContent
-        key={garment.id}
+        key={`${garment.id}-${lang}`}
         garment={garment}
         lang={lang}
         onClose={onClose}

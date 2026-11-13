@@ -5,7 +5,7 @@ import {
   WARDROBE_PILL_FILTERS,
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
-import { tx } from '../utils/i18n.ts';
+import { localizeBrandName, localizeGarmentName, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AddGarmentModal from './AddGarmentModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
@@ -116,29 +116,33 @@ export default function WardrobeView({
               <span>{tx(lang, '등록된 의류가 없습니다', 'No Items')}</span>
             </div>
           ) : (
-            filteredGarments.map((item, idx) => (
-              <button
-                key={item.id}
-                type="button"
-                data-garment-id={item.id}
-                className="hig-wardrobe-card"
-                style={{ '--card-stagger': Math.min(idx, 11) }}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onSelectGarment?.(item);
-                }}
-              >
-                <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
-                  <GarmentObject25D item={item} padding="13%" />
-                </div>
-                <div className="hig-garment-meta">
-                  <span className="hig-garment-name">{item.name}</span>
-                  {item.brand ? (
-                    <span className="hig-garment-brand">{item.brand}</span>
-                  ) : null}
-                </div>
-              </button>
-            ))
+            filteredGarments.map((item, idx) => {
+              const displayName = localizeGarmentName(item.name, lang);
+              const displayBrand = localizeBrandName(item.brand, lang);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-garment-id={item.id}
+                  className="hig-wardrobe-card"
+                  style={{ '--card-stagger': Math.min(idx, 11) }}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onSelectGarment?.(item);
+                  }}
+                >
+                  <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
+                    <GarmentObject25D item={item} alt={displayName} padding="13%" />
+                  </div>
+                  <div className="hig-garment-meta">
+                    <span className="hig-garment-name">{displayName}</span>
+                    {displayBrand ? (
+                      <span className="hig-garment-brand">{displayBrand}</span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       )}

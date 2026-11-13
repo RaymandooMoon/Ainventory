@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Globe, KeyRound, Mail, Moon, Play, Sun } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { apiFetch, setStoredToken } from '../utils/api.ts';
-import { tr } from '../utils/i18n.ts';
+import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import LoginWardrobeMotionStage from './LoginWardrobeMotionStage.jsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
@@ -82,7 +82,7 @@ export default function LoginView({
       triggerHaptic('light');
       onLoginSuccess(data.user);
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -105,14 +105,14 @@ export default function LoginView({
         body: JSON.stringify({
           appleSub: 'apple_hig_member_01',
           email: 'apple.user@privaterelay.appleid.com',
-          fullName: 'Apple 사용자',
+          fullName: isEn ? 'Apple Member' : 'Apple 사용자',
         }),
       });
       setStoredToken(data.token);
       triggerHaptic('light');
       onLoginSuccess(data.user);
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -143,7 +143,7 @@ export default function LoginView({
       }
       triggerHaptic('light');
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -166,7 +166,7 @@ export default function LoginView({
       setOtpVerified(true);
       triggerHaptic('medium');
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -197,7 +197,8 @@ export default function LoginView({
           code: otpCode.trim(),
           password: regPassword.length >= 4 ? regPassword : 'otp12345',
           displayName: resolvedName,
-          closetName: regClosetName.trim() || `${resolvedName}의 옷장`,
+          closetName:
+            regClosetName.trim() || (isEn ? `${resolvedName}'s Closet` : `${resolvedName}의 옷장`),
           gender: regGender,
           heightCm: Number(regHeightCm) || undefined,
           weightKg: Number(regWeightKg) || undefined,
@@ -207,7 +208,7 @@ export default function LoginView({
       triggerHaptic('medium');
       onLoginSuccess(data.user);
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -242,7 +243,8 @@ export default function LoginView({
           code: otpCode.trim(),
           password: regPassword,
           displayName: resolvedName,
-          closetName: regClosetName.trim() || `${resolvedName}의 옷장`,
+          closetName:
+            regClosetName.trim() || (isEn ? `${resolvedName}'s Closet` : `${resolvedName}의 옷장`),
           gender: regGender,
           heightCm: Number(regHeightCm) || undefined,
           weightKg: Number(regWeightKg) || undefined,
@@ -252,7 +254,7 @@ export default function LoginView({
       triggerHaptic('medium');
       onLoginSuccess(data.user);
     } catch (err) {
-      setError(err.message);
+      setError(localizeApiMessage(err.message, lang));
     } finally {
       setLoading(false);
     }
@@ -272,7 +274,7 @@ export default function LoginView({
               id={CARBON_DOM_CONTRACT.loginThemeToggleId}
               type="button"
               className="hig-auth-utility-pill"
-              aria-label="라이트 다크 모드 전환"
+              aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
               onClick={onToggleTheme}
             >
               {effectiveTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
@@ -282,7 +284,7 @@ export default function LoginView({
               id={CARBON_DOM_CONTRACT.loginLangToggleId}
               type="button"
               className="hig-auth-utility-pill"
-              aria-label="언어 전환"
+              aria-label={isEn ? 'Switch language' : '언어 전환'}
               onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
             >
               <Globe size={13} />
@@ -302,7 +304,9 @@ export default function LoginView({
           <button
             id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
             type="button"
-            aria-label={CARBON_DOM_CONTRACT.sampleDemoAriaLabel}
+            aria-label={
+              isEn ? 'Enter Sample Closet Demo Mode' : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
+            }
             className="btn btn-primary btn-full hig-auth-cta-btn"
             onClick={() => onEnterSampleDemo?.()}
           >
@@ -387,7 +391,7 @@ export default function LoginView({
               <div
                 className="hig-auth-segmented is-two-col"
                 role="radiogroup"
-                aria-label="성별 선택"
+                aria-label={isEn ? 'Select gender' : '성별 선택'}
               >
                 {[
                   { key: 'male', label: isEn ? 'Male' : '남성' },
@@ -632,7 +636,7 @@ export default function LoginView({
               <div
                 className="hig-auth-segmented is-two-col"
                 role="radiogroup"
-                aria-label="성별 선택"
+                aria-label={isEn ? 'Select gender' : '성별 선택'}
               >
                 {[
                   { key: 'male', label: isEn ? 'Male' : '남성' },

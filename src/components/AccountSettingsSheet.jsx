@@ -16,7 +16,7 @@ import {
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
 import { apiFetch, flushPendingOfflineSync } from '../utils/api.ts';
-import { tx } from '../utils/i18n.ts';
+import { localizeApiMessage, localizeUserName, tx } from '../utils/i18n.ts';
 import {
   applyThemePreference,
   emitStatusCapsule,
@@ -77,7 +77,9 @@ function AccountSettingsContent({
       setQueueCount(left);
       emitStatusCapsule(tx(lang, '동기화 완료', 'Sync complete'));
     } catch (err) {
-      emitStatusCapsule(err?.message || tx(lang, '동기화 오류', 'Sync failed'));
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, lang) || tx(lang, '동기화 오류', 'Sync failed')
+      );
     } finally {
       setSyncing(false);
     }
@@ -97,7 +99,10 @@ function AccountSettingsContent({
       emitStatusCapsule(tx(lang, '계정이 삭제되었습니다', 'Account deleted'));
       onAccountDeleted?.();
     } catch (err) {
-      emitStatusCapsule(err.message || tx(lang, '계정 삭제 오류', 'Failed to delete account'));
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '계정 삭제 오류', 'Failed to delete account')
+      );
     } finally {
       setDeleting(false);
     }
@@ -115,7 +120,7 @@ function AccountSettingsContent({
         <div className="hig-sheet-row-between">
           <div>
             <div className="hig-headline">
-              {user?.displayName || tx(lang, '사용자', 'Member')}
+              {localizeUserName(user?.displayName, lang) || tx(lang, '사용자', 'Member')}
             </div>
             <div className="hig-caption tabular-nums">
               @{user?.username || 'wardrobe'}
@@ -185,7 +190,7 @@ function AccountSettingsContent({
         </div>
         <div className="hig-grid-2">
           {[
-            { key: 'ko', label: '한국어' },
+            { key: 'ko', label: lang === 'en' ? 'Korean' : '한국어' },
             { key: 'en', label: 'English' },
           ].map((opt) => (
             <button

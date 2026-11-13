@@ -6,7 +6,12 @@ import {
 } from '../contracts/carbonDesignContract.ts';
 import { processGarmentUpload } from '../services/backgroundRemovalService.ts';
 import { apiFetch } from '../utils/api.ts';
-import { tx } from '../utils/i18n.ts';
+import {
+  localizeApiMessage,
+  localizeColorName,
+  localizeGarmentName,
+  tx,
+} from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
@@ -38,12 +43,15 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       setCategory(asset.suggestedCategory || 'top');
       setName(
         (prev) =>
-          prev.trim() || asset.suggestedName || tx(lang, '새 아이템', 'New Garment')
+          prev.trim() ||
+          localizeGarmentName(asset.suggestedName, lang) ||
+          tx(lang, '새 아이템', 'New Garment')
       );
       triggerHaptic('selection');
     } catch (err) {
       showToast?.(
-        err?.message || tx(lang, '이미지를 처리하지 못했습니다.', 'Failed to process image.')
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '이미지를 처리하지 못했습니다.', 'Failed to process image.')
       );
     } finally {
       setProcessing(false);
@@ -91,7 +99,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       onClose?.();
     } catch (err) {
       showToast?.(
-        err?.message || tx(lang, '등록 중 오류가 발생했습니다.', 'Failed to save item.')
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '등록 중 오류가 발생했습니다.', 'Failed to save item.')
       );
     } finally {
       setSubmitting(false);
@@ -189,7 +198,10 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
               className="hig-detail-color-dot"
               style={{ backgroundColor: processedAsset.dominantColorHex }}
             />
-            <span>{processedAsset.dominantColorName || processedAsset.dominantColorHex}</span>
+            <span>
+              {localizeColorName(processedAsset.dominantColorName, lang) ||
+                processedAsset.dominantColorHex}
+            </span>
           </div>
         )}
 

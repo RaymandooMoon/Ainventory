@@ -30,6 +30,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
   presetNonce = 0,
   onUserOrbit,
   theme = 'light',
+  lang = 'ko',
   compact = false,
 }) {
   const containerRef = useRef(null);
@@ -79,6 +80,13 @@ const Character25DMannequin = memo(function Character25DMannequin({
     [compact, slots]
   );
 
+  const isEn =
+    lang === 'en' ||
+    (typeof document !== 'undefined' && document.documentElement.lang === 'en');
+  const modelAriaLabel = isEn
+    ? `360° Character Model (${palette.base})`
+    : `360도 캐릭터 모델 (${palette.base})`;
+
   useEffect(() => {
     latestSceneRef.current = {
       theme,
@@ -86,7 +94,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
       profilePayload,
       loadoutBySlot,
       weather,
-      ariaLabel: `360도 캐릭터 모델 (${palette.base})`,
+      ariaLabel: modelAriaLabel,
     };
   });
 
@@ -176,13 +184,13 @@ const Character25DMannequin = memo(function Character25DMannequin({
     if (compact) return;
     const engine = engineRef.current;
     if (!engine) return;
-    engine.canvas?.setAttribute?.('aria-label', `360도 캐릭터 모델 (${palette.base})`);
+    engine.canvas?.setAttribute?.('aria-label', modelAriaLabel);
     engine.updateScene({
       profile: profilePayload,
       loadoutBySlot,
       weather,
     });
-  }, [compact, profilePayload, loadoutBySlot, weather, palette.base]);
+  }, [compact, profilePayload, loadoutBySlot, weather, modelAriaLabel]);
 
   // 4. Apply 6-Direction Game-Character Camera Presets (`앞`, `뒤`, `좌`, `우`, `상`, `하`)
   useEffect(() => {
@@ -292,7 +300,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
           height={310}
           className="character-25d-render-canvas"
           role="img"
-          aria-label={`360도 캐릭터 모델 (${palette.base})`}
+          aria-label={modelAriaLabel}
         />
       )}
 
@@ -300,7 +308,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
         <svg
           viewBox="0 0 120 200"
           className="character-25d-fallback-svg"
-          aria-label={`캐릭터 모델 (${palette.base})`}
+          aria-label={isEn ? `Character Model (${palette.base})` : `캐릭터 모델 (${palette.base})`}
         >
           <circle cx="60" cy="30" r="16" fill={palette.base} />
           <rect x="38" y="50" width="44" height="68" rx="16" fill={palette.base} />

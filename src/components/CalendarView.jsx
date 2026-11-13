@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Calendar as CalendarIcon, Check, Download, Plus, Trash2 } from 'lucide-react';
 import { apiFetch, getStoredToken } from '../utils/api.ts';
-import { tx } from '../utils/i18n.ts';
+import {
+  localizeApiMessage,
+  localizeCalendarNote,
+  localizeGarmentName,
+  localizeOutfitTitle,
+  tx,
+} from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
@@ -14,19 +20,22 @@ function escapeIcsField(value) {
     .replace(/\r?\n/g, '\\n');
 }
 
-function buildIcsText(logs, outfits) {
+function buildIcsText(logs, outfits, lang = 'ko') {
   const dtStamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//A inventory//Wardrobe Calendar//KO',
+    `PRODID:-//A inventory//Wardrobe Calendar//${lang === 'en' ? 'EN' : 'KO'}`,
     'CALSCALE:GREGORIAN',
   ];
   for (const entry of logs) {
     const rawDate = String(entry.worn_date || '').replace(/-/g, '');
     if (rawDate.length !== 8) continue;
     const matchedOutfit = outfits.find((o) => Number(o.id) === Number(entry.outfit_id));
-    const title = matchedOutfit?.title || entry.note || 'Outfit';
+    const title =
+      localizeOutfitTitle(matchedOutfit?.title, lang) ||
+      localizeCalendarNote(entry.note, lang) ||
+      'Outfit';
     lines.push(
       'BEGIN:VEVENT',
       `UID:ainventory-${entry.id}@ainventory.local`,
@@ -84,7 +93,8 @@ export default function CalendarView({
       }
     } catch (err) {
       showToast?.(
-        err?.message || tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
       );
     } finally {
       setLoading(false);
@@ -105,7 +115,8 @@ export default function CalendarView({
       } catch (err) {
         if (!cancelled) {
           showToast?.(
-            err?.message || tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
+            localizeApiMessage(err?.message, lang) ||
+              tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
           );
         }
       } finally {
@@ -143,7 +154,8 @@ export default function CalendarView({
       onClosetUpdated?.();
     } catch (err) {
       showToast?.(
-        err?.message || tx(lang, '일정 등록에 실패했습니다.', 'Failed to save calendar entry.')
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '일정 등록에 실패했습니다.', 'Failed to save calendar entry.')
       );
     }
   };
@@ -154,14 +166,17 @@ export default function CalendarView({
       triggerHaptic('selection');
       await reloadCalendar();
     } catch (err) {
-      showToast?.(err?.message || tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.'));
+      showToast?.(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.')
+      );
     }
   };
 
   const handleExportIcs = async () => {
     let ics = '';
     const token = getStoredToken();
-    if (token) {
+    if (token && lang !== 'en') {
       try {
         const res = await fetch(`/api/calendar/ics?closet=${encodeURIComponent(activeCloset)}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -172,7 +187,7 @@ export default function CalendarView({
       }
     }
     if (!ics) {
-      ics = buildIcsText(logs, outfits);
+      ics = buildIcsText(logs, outfits, lang);
     }
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -264,7 +279,9 @@ export default function CalendarView({
                       </span>
                     </div>
                     <span className="hig-calendar-title">
-                      {matchedOutfit?.title || entry.note || tx(lang, '데일리 룩', 'Daily Look')}
+                      {localizeOutfitTitle(matchedOutfit?.title, lang) ||
+                        localizeCalendarNote(entry.note, lang) ||
+                        tx(lang, '데일리 룩', 'Daily Look')}
                     </span>
                   </div>
                   <button
@@ -281,7 +298,11 @@ export default function CalendarView({
                   <div className="hig-calendar-thumbs">
                     {previewItems.map((item) => (
                       <div key={item.id} className="hig-calendar-thumb-squircle">
-                        <GarmentObject25D item={item} padding="10%" />
+                        <GarmentObject25D
+                          item={item}
+                          alt={localizeGarmentName(item.name, lang)}
+                          padding="10%"
+                        />
                       </div>
                     ))}
                   </div>
@@ -327,7 +348,7 @@ export default function CalendarView({
               >
                 {outfits.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.title}
+                    {localizeOutfitTitle(o.title, lang)}
                   </option>
                 ))}
               </select>

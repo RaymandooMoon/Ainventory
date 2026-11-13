@@ -5,7 +5,7 @@ import {
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
-import { tx } from '../utils/i18n.ts';
+import { localizeBrandName, localizeGarmentName, tx } from '../utils/i18n.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
 
@@ -147,30 +147,34 @@ export default function StatsView({
       {/* Most Worn Garments Grid */}
       {topWornGarments.length > 0 && (
         <div className="hig-wardrobe-grid">
-          {topWornGarments.map((item, idx) => (
-            <button
-              key={item.id}
-              type="button"
-              className="hig-wardrobe-card"
-              style={{ '--card-stagger': idx }}
-              onClick={() => onSelectGarment?.(item)}
-            >
-              <div className="hig-squircle-card">
-                <GarmentObject25D item={item} padding="13%" />
-              </div>
-              <div className="hig-garment-meta">
-                <span className="hig-garment-name">{item.name}</span>
-                <span className="hig-garment-brand tabular-nums">
-                  {item.brand ||
-                    tx(
-                      lang,
-                      `${Number(item.wear_count) || 0}회 착용`,
-                      `${Number(item.wear_count) || 0} wears`
-                    )}
-                </span>
-              </div>
-            </button>
-          ))}
+          {topWornGarments.map((item, idx) => {
+            const displayName = localizeGarmentName(item.name, lang);
+            const displayBrand = localizeBrandName(item.brand, lang);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="hig-wardrobe-card"
+                style={{ '--card-stagger': idx }}
+                onClick={() => onSelectGarment?.(item)}
+              >
+                <div className="hig-squircle-card">
+                  <GarmentObject25D item={item} alt={displayName} padding="13%" />
+                </div>
+                <div className="hig-garment-meta">
+                  <span className="hig-garment-name">{displayName}</span>
+                  <span className="hig-garment-brand tabular-nums">
+                    {displayBrand ||
+                      tx(
+                        lang,
+                        `${Number(item.wear_count) || 0}회 착용`,
+                        `${Number(item.wear_count) || 0} wears`
+                      )}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </section>

@@ -20,7 +20,13 @@ import {
   setSampleDemoMode,
   setStoredToken,
 } from './utils/api.ts';
-import { getStoredLang, setStoredLang, syncDocumentLang, tx } from './utils/i18n.ts';
+import {
+  getStoredLang,
+  localizeApiMessage,
+  setStoredLang,
+  syncDocumentLang,
+  tx,
+} from './utils/i18n.ts';
 import {
   applyThemePreference,
   emitStatusCapsule,
@@ -241,7 +247,7 @@ export default function App() {
       .catch((err) => {
         if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
           showToast(
-            err?.message ||
+            localizeApiMessage(err?.message, lang) ||
               tx(lang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
           );
         }
@@ -672,6 +678,7 @@ export default function App() {
 
       <SampleImportSheet
         open={sampleImportOpen}
+        lang={lang}
         onClose={() => setSampleImportOpen(false)}
         targetOwner={activeCloset}
         onImported={() => setRefreshKey((k) => k + 1)}

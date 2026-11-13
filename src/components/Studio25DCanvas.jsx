@@ -3,7 +3,7 @@ import { Palette, SlidersHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { CAMERA_VIEW_PRESETS } from '../services/parametricAvatar3D.ts';
 import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
-import { tx } from '../utils/i18n.ts';
+import { localizeGarmentName, tx } from '../utils/i18n.ts';
 import Character25DMannequin from './Character25DMannequin.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
@@ -160,6 +160,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
           presetNonce={presetNonce}
           onUserOrbit={handleUserOrbit}
           theme={theme}
+          lang={lang}
         />
       )}
 
@@ -171,12 +172,13 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
         >
           {layers.map((layer) => {
             const isSelectedSlot = activeSlotKey === layer.slotKey;
+            const displayGarmentName = localizeGarmentName(layer.garment.name, lang);
             return (
               <div
                 key={`${layer.slotKey}-${layer.garment.id}`}
                 data-studio-slot={layer.slotKey}
                 className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''}`}
-                title={layer.garment.name}
+                title={displayGarmentName}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectSlot?.(layer.slotKey);
@@ -184,6 +186,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
               >
                 <StudioGarmentImage
                   item={layer.garment}
+                  alt={displayGarmentName}
                   allowStorePhoto={Boolean(
                     layer.garment.image_url &&
                       (layer.garment.image_url.startsWith('data:') ||
@@ -196,7 +199,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
                   className="studio-worn-slot-remove"
                   aria-label={
                     lang === 'en'
-                      ? `Remove ${layer.garment.name}`
+                      ? `Remove ${displayGarmentName}`
                       : `${layer.garment.name} 착장 해제`
                   }
                   onClick={(e) => {
