@@ -340,3 +340,50 @@ jobs:
           name: ftl-crash-logs
           path: /tmp/ftl-crash-logs/
           retention-days: 14
+
+  notify-ci-email:
+    name: Push CI Result Email Notification
+    needs:
+      - web-verify
+      - firebase-test-lab
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prepare failure logs directory
+        shell: bash
+        run: mkdir -p /tmp/ci-failure-logs
+
+      - name: Download web-verify failure logs (if failed)
+        if: needs.web-verify.result == 'failure'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: web-verify-logs
+          path: /tmp/ci-failure-logs/web
+
+      - name: Download Firebase Test Lab failure logs (if failed)
+        if: needs.firebase-test-lab.result == 'failure'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ftl-crash-logs
+          path: /tmp/ci-failure-logs/android
+
+      - name: Send post-CI result summary email via Gmail SMTP
+        shell: bash
+        env:
+          EMAIL_MODE: ci_summary
+          GMAIL_USER: ${{ secrets.GMAIL_USER || vars.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL || vars.NOTIFY_TO_EMAIL }}
+          WEB_VERIFY_RESULT: ${{ needs.web-verify.result }}
+          ANDROID_VERIFY_RESULT: ${{ needs.firebase-test-lab.result }}
+          FAILURE_LOGS_DIR: /tmp/ci-failure-logs
+        run: python3 scripts/send-github-push-email.py --mode ci_summary
+
