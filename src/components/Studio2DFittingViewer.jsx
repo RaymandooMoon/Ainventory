@@ -193,6 +193,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [compareSplitPct, setCompareSplitPct] = useState(50);
 
   const isInitialMountRef = useRef(true);
+  const hasSynthesizedEquippedRef = useRef(false);
   const abortControllerRef = useRef(null);
   const latestInputsRef = useRef({
     slots,
@@ -348,8 +349,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         });
     };
 
-    if (isInitialMountRef.current) {
+    if (isInitialMountRef.current || (!hasSynthesizedEquippedRef.current && equippedCount > 0)) {
       isInitialMountRef.current = false;
+      if (equippedCount > 0) {
+        hasSynthesizedEquippedRef.current = true;
+      }
       executeSynthesis();
     } else {
       debounceTimer = setTimeout(executeSynthesis, 55);
@@ -360,7 +364,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearTimers();
       abortControllerRef.current?.abort();
     };
-  }, [synthesisSignature]);
+  }, [synthesisSignature, equippedCount]);
 
   const handleZoomOut = useCallback((e) => {
     e.stopPropagation();

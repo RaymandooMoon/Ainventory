@@ -289,11 +289,11 @@ export default function OutfitStudioView({
   }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
 
   const [rawSlots, setSlots] = useState(() =>
-    buildInitialStudioSlots(garments, preEquippedGarment)
+    preEquippedGarment
+      ? buildInitialStudioSlots(garments, preEquippedGarment)
+      : { ...EMPTY_STUDIO_SLOTS }
   );
-  const [hasExplicitSlotState, setHasExplicitSlotState] = useState(() =>
-    Boolean(preEquippedGarment || garments.length > 0)
-  );
+  const [hasExplicitSlotState, setHasExplicitSlotState] = useState(true);
   const [activeSlotKey, setActiveSlotKey] = useState(() =>
     preEquippedGarment ? mapGarmentToFittingSlot(preEquippedGarment) : 'top'
   );
@@ -401,10 +401,20 @@ export default function OutfitStudioView({
           activeRecIdRef.current = chosenRec.id;
           setActiveRecId(chosenRec.id);
           forceAutoApplyWeatherRef.current = false;
+        } else if (recs.length === 0 && !userModifiedSlotsRef.current && garments.length > 0) {
+          setSlots((prev) =>
+            Object.values(prev).some(Boolean) ? prev : buildInitialStudioSlots(garments, null)
+          );
+          setHasExplicitSlotState(true);
         }
       })
       .catch(() => {
-        // keep current slots
+        if (!cancelled && !userModifiedSlotsRef.current && garments.length > 0) {
+          setSlots((prev) =>
+            Object.values(prev).some(Boolean) ? prev : buildInitialStudioSlots(garments, null)
+          );
+          setHasExplicitSlotState(true);
+        }
       });
 
     return () => {

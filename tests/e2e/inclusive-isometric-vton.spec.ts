@@ -18,7 +18,11 @@ async function selectStudioSlotAndPickItem(
     const target = options?.matchText ? cards.filter({ hasText: options.matchText }).first() : cards.first();
     await expect(target).toBeVisible();
     const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
-    await target.click();
+    if ((await target.getAttribute('aria-pressed')) === 'true') {
+      await page.keyboard.press('Escape');
+    } else {
+      await target.click();
+    }
     return pickedId;
   }
 
@@ -31,7 +35,9 @@ async function selectStudioSlotAndPickItem(
   const target = options?.matchText ? cards.filter({ hasText: options.matchText }).first() : cards.first();
   await expect(target).toBeVisible();
   const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
-  await target.click();
+  if ((await target.getAttribute('aria-pressed')) !== 'true') {
+    await target.click();
+  }
   return pickedId;
 }
 
@@ -189,7 +195,10 @@ test.describe('Inclusive Parametric Avatar, Isometric 8-Angle VTON & 4-Season 12
       expect(pickerText).not.toMatch(/이너탑|언더웨어|크루 삭스|앵클 삭스|Underwear|Socks/i);
     }
 
-    // Clear outfit, then equip Summer swimwear (`onepiece`) + Summer flip-flops (`shoes`) + sunglasses (`accessory`)
+    // Wait for initial weather look to settle, then clear outfit cleanly
+    await expect(
+      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+    ).toBeVisible();
     const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
     if (await resetBtn.isVisible()) {
       await resetBtn.click();
@@ -289,6 +298,14 @@ test.describe('Inclusive Parametric Avatar, Isometric 8-Angle VTON & 4-Season 12
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
+    await expect(
+      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+    ).toBeVisible();
+    const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
+    if (await resetBtn.isVisible()) {
+      await resetBtn.click();
+    }
+    await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
 
     await selectStudioSlotAndPickItem(page, 'outer', {
       season: '겨울',

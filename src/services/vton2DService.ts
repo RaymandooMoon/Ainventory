@@ -854,30 +854,33 @@ export async function synthesize2DVirtualTryOn(
     }
   }
 
-  // 2. Check L2 IndexedDB Cache ('ainventory_vton_iso_cache_v2', store 'vton_entries', 80 entries)
-  if (!forceRefresh) {
-    const l2Hit = await raceWithAbortSignal(readL2IdbCache(cacheKey), request.signal);
-    if (l2Hit) {
-      putL1Cache(cacheKey, l2Hit);
-      putBaseModelMemory(`${baseHash}:${theme}:${request.compact ? 'c' : 'f'}`, l2Hit.beforeImageUrl);
-      return {
-        ...l2Hit,
-        mode,
-        avatarConfigHash: resolvedAvatarHash,
-        viewAngleDeg: resolvedViewAngle,
-        fromCache: true,
-        cacheLayer: 'indexeddb',
-      };
-    }
-  }
-
-  // 3. Deduplicate concurrent syntheses per comboHash + theme
+  // 2. Deduplicate concurrent syntheses per comboHash + theme
   const dedupeKey = `${cacheKey}:${request.compact ? 'compact' : 'full'}`;
   if (!forceRefresh && inFlightSyntheses.has(dedupeKey)) {
     return raceWithAbortSignal(inFlightSyntheses.get(dedupeKey)!, request.signal);
   }
 
   const synthesisTask = (async (): Promise<VtonSynthesisResult> => {
+    // Check L2 IndexedDB Cache ('ainventory_vton_iso_cache_v2', store 'vton_entries', 80 entries)
+    if (!forceRefresh) {
+      const l2Hit = await readL2IdbCache(cacheKey);
+      if (l2Hit) {
+        putL1Cache(cacheKey, l2Hit);
+        putBaseModelMemory(
+          `${baseHash}:${theme}:${request.compact ? 'c' : 'f'}`,
+          l2Hit.beforeImageUrl
+        );
+        return {
+          ...l2Hit,
+          mode,
+          avatarConfigHash: resolvedAvatarHash,
+          viewAngleDeg: resolvedViewAngle,
+          fromCache: true,
+          cacheLayer: 'indexeddb',
+        };
+      }
+    }
+
     // Base model with empty slots = {}, keyed by baseHash (avatarConfigHash + viewAngleDeg + profile)
     let beforeImageUrl = await ensureBaseModelImageUrl(
       profile,
