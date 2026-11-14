@@ -110,6 +110,7 @@ export interface StoredSkinProfile {
   mstLevel?: MstLevel;
   mstUndertone?: MstUndertone;
   mstCode?: string;
+  portraitDataUrl?: string | null;
 }
 
 export interface SkinShadingPalette {
@@ -496,6 +497,16 @@ export function getStoredSkinProfile(): StoredSkinProfile {
       : autoMst.undertone;
     const mstSwatch = getMstSwatch(mstLevel, mstUndertone);
 
+    const portraitDataUrl =
+      typeof parsed.portraitDataUrl === 'string' &&
+      (parsed.portraitDataUrl.startsWith('data:image/') ||
+        parsed.portraitDataUrl.startsWith('blob:') ||
+        parsed.portraitDataUrl.startsWith('http://') ||
+        parsed.portraitDataUrl.startsWith('https://') ||
+        parsed.portraitDataUrl.startsWith('/'))
+        ? parsed.portraitDataUrl
+        : null;
+
     return {
       skinToneHex: hex,
       personalColor: pc,
@@ -506,6 +517,7 @@ export function getStoredSkinProfile(): StoredSkinProfile {
       mstLevel,
       mstUndertone,
       mstCode: parsed.mstCode || mstSwatch.code,
+      portraitDataUrl,
     };
   } catch {
     return DEFAULT_SKIN_PROFILE;
@@ -537,6 +549,13 @@ export function saveStoredSkinProfile(profile: Partial<StoredSkinProfile>): Stor
       : current.mstUndertone;
   const mstSwatch = getMstSwatch(mstLevel, mstUndertone);
 
+  const nextPortraitDataUrl =
+    'portraitDataUrl' in profile
+      ? typeof profile.portraitDataUrl === 'string' && profile.portraitDataUrl.trim()
+        ? profile.portraitDataUrl.trim()
+        : null
+      : current.portraitDataUrl ?? null;
+
   const merged: StoredSkinProfile = {
     skinToneHex: nextHex,
     personalColor: nextPc,
@@ -547,6 +566,7 @@ export function saveStoredSkinProfile(profile: Partial<StoredSkinProfile>): Stor
     mstLevel,
     mstUndertone,
     mstCode: profile.mstCode || mstSwatch.code,
+    portraitDataUrl: nextPortraitDataUrl,
   };
 
   if (typeof localStorage !== 'undefined') {

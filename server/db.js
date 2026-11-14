@@ -2,7 +2,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveManifestSlotAndGlb } from '../src/shared/garmentTaxonomy.js';
+import {
+  ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  resolveManifestSlotAndGlb,
+} from '../src/shared/garmentTaxonomy.js';
 import { SEASONAL_120_CATALOG } from '../src/shared/seasonal120Catalog.js';
 import {
   generateStatisticalWardrobeForUser,
@@ -228,6 +231,100 @@ function shouldSeedDemoAccounts(forceReset = false) {
   );
 }
 
+const SUBCATEGORY_MATERIAL_SEED_ALIASES = Object.freeze({
+  umbrella: ['umbrella'],
+  watch: ['watch'],
+  gloves: ['gloves', 'leather_gloves', 'mittens'],
+  eyewear: ['eyewear', 'sunglasses', 'glasses'],
+  headwear: ['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat'],
+  neckwear: ['neckwear', 'scarf', 'muffler', 'tie', 'necktie'],
+  belt: ['belt'],
+  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack'],
+  earring: ['earring'],
+  necklace: ['necklace'],
+  bracelet: ['bracelet'],
+  ring: ['ring'],
+  brooch: ['brooch'],
+});
+
+/**
+ * Requirement #6: Whenever any newly created category or body-part sub-slot
+ * has zero existing items in a closet, automatically seed 5 studio items
+ * differentiated by material (leather, fabric, wool, cashmere, gold, silver, bronze, etc.).
+ */
+export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
+  if (!closetOwner || closetOwner === 'all') return 0;
+
+  const existingRows = db
+    .prepare('SELECT category, subcategory, image_url FROM garments WHERE closet_owner = ?')
+    .all(closetOwner);
+  const existingUrls = new Set(existingRows.map((r) => r.image_url));
+
+  const today = new Date();
+  const fmtDate = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const insertSeed = db.prepare(`
+    INSERT INTO garments (
+      closet_owner, name, category, subcategory, color_name, color_hex,
+      seasons, min_temp, max_temp, water_resistant, formality,
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0)
+  `);
+
+  let insertedCount = 0;
+  const isDemoCloset =
+    closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife';
+
+  for (const [subKey, items] of Object.entries(ACCESSORY_JEWELRY_BY_SUBCATEGORY)) {
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const targetCategory = items[0].category; // 'accessory' or 'jewelry'
+    const aliases = SUBCATEGORY_MATERIAL_SEED_ALIASES[subKey] || [subKey];
+    const matchingExisting = existingRows.filter(
+      (r) => r.category === targetCategory && aliases.includes(String(r.subcategory || ''))
+    );
+    if (!isDemoCloset && matchingExisting.length > 0) continue;
+
+    for (const item of items) {
+      if (existingUrls.has(item.image_url)) continue;
+      const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+      const wearCount = ((item.idOffset * 3) % 16) + 1;
+      const lastWornDate = fmtDate(((item.idOffset * 2) % 24) + 1);
+      const isFav = item.idOffset % 5 === 1 ? 1 : 0;
+      insertSeed.run(
+        closetOwner,
+        item.name,
+        item.category,
+        item.subcategory,
+        item.color_name,
+        item.color_hex,
+        JSON.stringify(item.seasons),
+        item.min_temp,
+        item.max_temp,
+        item.water_resistant ? 1 : 0,
+        item.formality,
+        item.brand,
+        item.price,
+        wearCount,
+        lastWornDate,
+        isFav,
+        item.image_url,
+        item.fabric,
+        spec.slotKey,
+        spec.baseGlb,
+        spec.physicsPreset
+      );
+      existingUrls.add(item.image_url);
+      insertedCount += 1;
+    }
+  }
+  return insertedCount;
+}
+
 function ensureSampleClosetSeeded() {
   const sampleCount = db
     .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
@@ -237,7 +334,10 @@ function ensureSampleClosetSeeded() {
       "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp'"
     )
     .get().cnt;
-  if (sampleCount >= 120 && legacyNonWebp === 0) return;
+  if (sampleCount >= 120 && legacyNonWebp === 0) {
+    ensureNewSubcategoryMaterialSeeds('sample');
+    return;
+  }
 
   db.prepare("DELETE FROM garments WHERE closet_owner = 'sample'").run();
 
@@ -285,6 +385,8 @@ function ensureSampleClosetSeeded() {
       spec.physicsPreset
     );
   }
+
+  ensureNewSubcategoryMaterialSeeds('sample');
 }
 
 function ensureSeasonalHighlightsForDemoClosets() {
@@ -369,6 +471,9 @@ function ensureSeasonalHighlightsForDemoClosets() {
       existingUrls.add(item.image_url);
     }
   }
+
+  ensureNewSubcategoryMaterialSeeds('husband');
+  ensureNewSubcategoryMaterialSeeds('wife');
 }
 
 export function initDb() {

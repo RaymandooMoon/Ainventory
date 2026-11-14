@@ -37,6 +37,80 @@
 }
 
 /* ==========================================================================
+   0. FOREGROUND RAINY WEATHER ATMOSPHERE OVERLAY (VISIBLE OVER VTON & FLAT-LAY)
+   ========================================================================== */
+.studio-2d-vton-viewer .studio-25d-rain-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(92, 126, 168, 0.16) 0%,
+    rgba(110, 144, 184, 0.05) 38%,
+    rgba(92, 126, 168, 0.1) 100%
+  );
+}
+
+.studio-2d-vton-viewer .studio-25d-rain-layer::before,
+.studio-2d-vton-viewer .studio-25d-rain-layer::after {
+  content: '';
+  position: absolute;
+  inset: -40% -20%;
+  pointer-events: none;
+  transform: rotate(13deg);
+  will-change: background-position;
+}
+
+.studio-2d-vton-viewer .studio-25d-rain-layer::before {
+  background-image:
+    radial-gradient(1.6px 22px at 18px 26px, rgba(164, 204, 248, 0.78), transparent 72%),
+    radial-gradient(1.4px 18px at 66px 84px, rgba(210, 232, 255, 0.72), transparent 72%),
+    radial-gradient(1.8px 26px at 114px 42px, rgba(145, 190, 242, 0.68), transparent 72%),
+    radial-gradient(1.3px 16px at 152px 108px, rgba(196, 224, 255, 0.66), transparent 72%);
+  background-size: 176px 144px;
+  animation: studioForegroundRainFast 0.68s linear infinite;
+}
+
+.studio-2d-vton-viewer .studio-25d-rain-layer::after {
+  background-image:
+    radial-gradient(1.1px 14px at 34px 18px, rgba(140, 182, 230, 0.48), transparent 70%),
+    radial-gradient(1.2px 16px at 92px 68px, rgba(188, 218, 252, 0.44), transparent 70%),
+    radial-gradient(1px 13px at 138px 34px, rgba(152, 194, 240, 0.42), transparent 70%);
+  background-size: 156px 118px;
+  animation: studioForegroundRainSlow 1.05s linear infinite;
+}
+
+[data-theme='dark'] .studio-2d-vton-viewer .studio-25d-rain-layer {
+  background: linear-gradient(
+    180deg,
+    rgba(86, 134, 196, 0.22) 0%,
+    rgba(86, 134, 196, 0.07) 42%,
+    rgba(64, 108, 168, 0.16) 100%
+  );
+}
+
+@keyframes studioForegroundRainFast {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 144px;
+  }
+}
+
+@keyframes studioForegroundRainSlow {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 118px;
+  }
+}
+
+/* ==========================================================================
    1. STAGE VIEWPORT, ZOOM/PAN RIG & COMPACT AVATAR SPEC CARD
    ========================================================================== */
 .studio-2d-model-stage {
@@ -1383,6 +1457,31 @@
   top: 58px;
   left: 12px;
   z-index: 64;
+  max-height: calc(100% - 152px);
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: none;
+  padding-right: 4px;
+}
+
+.studio-2d-vton-viewer .studio-worn-slots-dock::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-worn-slot-side-tag {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  padding: 0 3px;
+  height: 12px;
+  border-radius: 5px;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-size: 0.5rem;
+  font-weight: 780;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
 
 .studio-2d-vton-viewer .studio-worn-slot-remove {
@@ -1627,3 +1726,200 @@
     white-space: nowrap;
   }
 }
+
+/* ==========================================================================
+   9. ACCESSORY & JEWELRY MULTI-PART SUB-TREE + MATERIAL TAGS + WARDROBE RAIL
+   ========================================================================== */
+.studio-slot-count-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-size: 0.6rem;
+  font-weight: 760;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hig-filter-pill.active .studio-slot-count-badge,
+.studio-mobile-slot-pill.active .studio-slot-count-badge {
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+}
+
+.studio-subtree-panel {
+  margin: 6px 0 8px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.studio-subtree-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.studio-subtree-branch-label {
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.03em;
+  color: var(--ink-tertiary);
+  padding-left: 2px;
+}
+
+.studio-subtree-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.studio-subtree-pill {
+  min-height: 27px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-secondary);
+  font-size: 0.69rem;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background-color 0.16s var(--spring-ease), color 0.16s var(--spring-ease),
+    border-color 0.16s var(--spring-ease), transform 0.12s var(--spring-ease);
+}
+
+.studio-subtree-pill:hover {
+  border-color: var(--squircle-border-hover);
+  color: var(--ink-primary);
+}
+
+.studio-subtree-pill.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.studio-subtree-pill.is-equipped:not(.active) {
+  border-color: var(--ink-primary);
+  color: var(--ink-primary);
+}
+
+.studio-subtree-active-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 5px;
+  border-top: 1px solid var(--squircle-border);
+  font-size: 0.66rem;
+  color: var(--ink-secondary);
+}
+
+.studio-subtree-active-hint strong {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+.studio-subtree-unequip-btn {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-secondary);
+  font-size: 0.62rem;
+  font-weight: 680;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.studio-subtree-unequip-btn:hover {
+  color: var(--ink-primary);
+  border-color: var(--squircle-border-hover);
+}
+
+.studio-mini-material-tag {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.6rem;
+  font-weight: 640;
+  color: var(--ink-tertiary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-opposite-side-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  color: var(--ink-primary);
+  font-size: 0.55rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.hig-wardrobe-subtree-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 12px;
+  padding: 4px 0 2px;
+}
+
+.hig-wardrobe-sub-pill {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-secondary);
+  font-size: 0.72rem;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background-color 0.16s var(--spring-ease), color 0.16s var(--spring-ease),
+    border-color 0.16s var(--spring-ease);
+}
+
+.hig-wardrobe-sub-pill:hover {
+  color: var(--ink-primary);
+  border-color: var(--squircle-border-hover);
+}
+
+.hig-wardrobe-sub-pill.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.hig-wardrobe-subtree-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--squircle-border);
+  margin: 0 2px;
+}
+

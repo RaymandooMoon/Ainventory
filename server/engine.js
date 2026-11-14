@@ -650,18 +650,35 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     active.filter(
       (g) => g.category === cat && !(avgTemp < 29 && SWIMWEAR_SUBS.has(String(g.subcategory || '')))
     );
+  const isUmbrellaItem = (g) =>
+    String(g.subcategory || '') === 'umbrella' ||
+    /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
+  const bagSubs = new Set(['bag', 'tote', 'crossbody', 'briefcase', 'backpack']);
+  const headSubs = new Set(['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat']);
+  const neckSubs = new Set(['neckwear', 'scarf', 'muffler', 'tie', 'necktie']);
+  const gloveSubs = new Set(['gloves', 'leather_gloves', 'mittens']);
+
   const pools = {
-    headwear: byCat('headwear'),
-    neckwear: byCat('neckwear'),
+    headwear: byCat('headwear').concat(
+      active.filter((g) => g.category === 'accessory' && headSubs.has(String(g.subcategory || '')))
+    ),
+    neckwear: byCat('neckwear').concat(
+      active.filter((g) => g.category === 'accessory' && neckSubs.has(String(g.subcategory || '')))
+    ),
     outer: byCat('outer'),
     top: byCat('top'),
     bottom: byCat('bottom'),
     dress: byCat('dress'),
-    gloves: byCat('gloves'),
+    gloves: byCat('gloves').concat(
+      active.filter((g) => g.category === 'accessory' && gloveSubs.has(String(g.subcategory || '')))
+    ),
     underwear: byCat('underwear'),
     socks: byCat('socks'),
     shoes: byCat('shoes'),
-    accessory: byCat('accessory').concat(byCat('bag')),
+    umbrella: active.filter(isUmbrellaItem),
+    accessory: byCat('accessory')
+      .filter((g) => !isUmbrellaItem(g) && bagSubs.has(String(g.subcategory || 'bag')))
+      .concat(byCat('bag')),
   };
 
   const themes = [
@@ -716,6 +733,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     const chosenUnderwear = pickBest('underwear', idx);
     const chosenSocks = pickBest('socks', idx);
     const chosenAccessory = pickBest('accessory', idx);
+    const chosenUmbrella = isRainy ? pickBest('umbrella', idx) : null;
     const chosenDress = idx === 2 && userProfile?.gender === 'female' ? pickBest('dress', 0) : null;
 
     const slotMap = {
@@ -730,6 +748,8 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       socks: chosenSocks,
       shoes: chosenShoes,
       accessory: chosenAccessory,
+      umbrella: chosenUmbrella,
+      acc_umbrella: chosenUmbrella,
     };
 
     const coreItems = [
@@ -744,6 +764,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       chosenSocks,
       chosenShoes,
       chosenAccessory,
+      chosenUmbrella,
     ].filter(Boolean);
 
     const comboKey = [chosenOuter?.id, chosenTop?.id, chosenBottom?.id, chosenShoes?.id]

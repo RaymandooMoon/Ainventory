@@ -755,6 +755,386 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(await aiImg.getAttribute('src')).toBe(lookBSrc45);
     expect(synthCalls).toBe(callsAfterInitial + 1);
   });
+
+  test('9. Twin/duplicate model isolation on wide 2x2 slice, user face photo upload -> portraitDataUrl VTON identity lock, and rainy weather rain layer + auto-umbrella', async ({
+    page,
+  }) => {
+    // Build a 256x192 2x2 sheet whose 180° (bottom-right, 128x96) quadrant intentionally contains TWO side-by-side twin figures
+    const buildTwinTurnaroundPng = (): string => {
+      const width = 256;
+      const height = 192;
+      const raw = Buffer.alloc((width * 4 + 1) * height);
+      for (let y = 0; y < height; y += 1) {
+        const rowOffset = y * (width * 4 + 1);
+        raw[rowOffset] = 0;
+        const isBottom = y >= height / 2;
+        const localY = y % (height / 2);
+        for (let x = 0; x < width; x += 1) {
+          const isRight = x >= width / 2;
+          const localX = x % (width / 2);
+          const px = rowOffset + 1 + x * 4;
+          // Studio #F5F5F7 background
+          let r = 245;
+          let g = 245;
+          let b = 247;
+          if (isBottom && isRight) {
+            // Twin Figure A (Red-toned) on left [20..46] and Twin Figure B (Blue-toned) on right [82..106]
+            if (localY >= 12 && localY <= 84 && localX >= 20 && localX <= 46) {
+              r = 195;
+              g = 38;
+              b = 42;
+            } else if (localY >= 14 && localY <= 82 && localX >= 82 && localX <= 106) {
+              r = 32;
+              g = 76;
+              b = 205;
+            }
+          } else if (localY >= 14 && localY <= 82 && localX >= 48 && localX <= 80) {
+            // Single centered figure in 0°/45°/90° quadrants
+            r = isBottom ? 55 : 42;
+            g = isRight ? 95 : 58;
+            b = 85;
+          }
+          raw[px] = r;
+          raw[px + 1] = g;
+          raw[px + 2] = b;
+          raw[px + 3] = 255;
+        }
+      }
+
+      const crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xffffffff;
+        for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+        return (c ^ 0xffffffff) >>> 0;
+      };
+      const makeChunk = (type: string, data: Buffer): Buffer => {
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+      };
+      const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(width, 0);
+      ihdr.writeUInt32BE(height, 4);
+      ihdr[8] = 8;
+      ihdr[9] = 6;
+      const png = Buffer.concat([
+        sig,
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', zlib.deflateSync(raw)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ]);
+      return `data:image/png;base64,${png.toString('base64')}`;
+    };
+
+    // Build a synthetic warm skin-tone portrait PNG for face upload test
+    const buildPortraitPngBuffer = (): Buffer => {
+      const w = 96;
+      const h = 96;
+      const raw = Buffer.alloc((w * 4 + 1) * h);
+      for (let y = 0; y < h; y += 1) {
+        const ro = y * (w * 4 + 1);
+        raw[ro] = 0;
+        for (let x = 0; x < w; x += 1) {
+          const px = ro + 1 + x * 4;
+          raw[px] = 226;
+          raw[px + 1] = 186;
+          raw[px + 2] = 158;
+          raw[px + 3] = 255;
+        }
+      }
+      const crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xffffffff;
+        for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+        return (c ^ 0xffffffff) >>> 0;
+      };
+      const makeChunk = (type: string, data: Buffer): Buffer => {
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+      };
+      const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(w, 0);
+      ihdr.writeUInt32BE(h, 4);
+      ihdr[8] = 8;
+      ihdr[9] = 6;
+      return Buffer.concat([
+        sig,
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', zlib.deflateSync(raw)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ]);
+    };
+
+    const twinSheetUrl = buildTwinTurnaroundPng();
+    const capturedPortraitUrls: Array<string | null> = [];
+
+    await page.route('**/api/vton/synthesize', async (route) => {
+      const body = JSON.parse(route.request().postData() || '{}') as {
+        profile?: { portraitDataUrl?: string | null };
+      };
+      capturedPortraitUrls.push(body.profile?.portraitDataUrl || null);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image-preview',
+          layout: 'turnaround_2x2',
+          styleMode: 'photorealistic',
+          geminiUsed: true,
+          compositeImageUrl: twinSheetUrl,
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+
+    // (1) Verify 180° quadrant twin-figure CV isolation removes the duplicate blue twin figure!
+    await studioCanvas.locator('[data-vton-angle-btn="180"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
+    const colorCounts180 = await aiImg.evaluate(async (el) => {
+      const img = el as HTMLImageElement;
+      if (!img.complete) {
+        await new Promise<void>((res) => {
+          img.onload = () => res();
+          img.onerror = () => res();
+        });
+      }
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      let redTwinPixels = 0;
+      let blueTwinPixels = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 150 && d[i + 2] < 90) redTwinPixels += 1;
+        if (d[i + 2] > 150 && d[i] < 90) blueTwinPixels += 1;
+      }
+      return { redTwinPixels, blueTwinPixels };
+    });
+    expect(colorCounts180.redTwinPixels).toBeGreaterThan(200);
+    expect(colorCounts180.blueTwinPixels).toBe(0);
+
+    // (2) Upload user face photo -> verify active face banner & portraitDataUrl sent to VTON!
+    await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    const portraitInput = page.locator('#skin-portrait-file-input');
+    await portraitInput.setInputFiles({
+      name: 'my-real-face.png',
+      mimeType: 'image/png',
+      buffer: buildPortraitPngBuffer(),
+    });
+    await expect(page.locator('[data-user-face-active="true"]')).toBeVisible();
+    await expect(page.locator('[data-reset-face-photo-btn="true"]')).toBeVisible();
+    await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+
+    // Trigger AI fitting regeneration with the new face identity
+    const genBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
+    if (await genBtn.isVisible()) {
+      await genBtn.click();
+    }
+    await expect
+      .poll(() => capturedPortraitUrls.some((u) => Boolean(u && u.startsWith('data:image/'))))
+      .toBe(true);
+
+    // (3) Select Rainy weather ('rainy_cool') -> verify visible rain layer above stage + auto-equipped umbrella!
+    await page.locator('[data-weather-scenario="rainy_cool"]').click();
+    const rainLayer = studioCanvas.locator('[data-studio-rain-layer="true"]');
+    await expect(rainLayer).toBeVisible();
+    const rainZIndex = await rainLayer.evaluate((el) =>
+      Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
+    );
+    expect(rainZIndex).toBeGreaterThanOrEqual(30);
+    await expect(studioCanvas.locator('[data-studio-slot="acc_umbrella"]')).toBeVisible();
+  });
+
+  test('10. Multi-part Accessories & Jewelry sub-trees (incl. asymmetric L/R gloves & watches), 5 material seeds per new sub-part, and zero Hangul leak in English', async ({
+    page,
+    request,
+  }) => {
+    // Create a brand-new authenticated user with an empty closet and verify 5 material seeds x 13 sub-types = 65 items!
+    const appleRes = await request.post('/api/auth/apple', {
+      data: {
+        apple_sub: `e2e_fresh_mat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        full_name: 'Atelier Material Tester',
+      },
+    });
+    expect(appleRes.ok()).toBeTruthy();
+    const appleJson = await appleRes.json();
+    const token: string = appleJson.token;
+    const freshCloset: string = appleJson.user.defaultCloset;
+
+    const seedRes = await request.post('/api/garments/ensure-material-seeds', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { closet_owner: freshCloset },
+    });
+    expect(seedRes.ok()).toBeTruthy();
+    const seedJson = await seedRes.json();
+    expect(seedJson.inserted).toBe(65);
+
+    const listRes = await request.get(`/api/garments?closet=${encodeURIComponent(freshCloset)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(listRes.ok()).toBeTruthy();
+    const listJson = await listRes.json();
+    const seededItems: Array<{ subcategory: string; fabric: string }> = listJson.garments || [];
+    expect(seededItems.length).toBe(65);
+
+    const expectedSubtypes = [
+      'umbrella',
+      'watch',
+      'gloves',
+      'eyewear',
+      'headwear',
+      'neckwear',
+      'belt',
+      'bag',
+      'earring',
+      'necklace',
+      'bracelet',
+      'ring',
+      'brooch',
+    ];
+    for (const sub of expectedSubtypes) {
+      const subItems = seededItems.filter((g) => g.subcategory === sub);
+      expect(subItems.length).toBeGreaterThanOrEqual(5);
+      const distinctMaterials = new Set(subItems.map((g) => g.fabric));
+      expect(distinctMaterials.size).toBeGreaterThanOrEqual(4);
+    }
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    const pickSubSlotCard = async (
+      parentTab: 'accessory' | 'jewelry',
+      subSlotKey: string,
+      cardIndex: number
+    ) => {
+      const mobileBtn = page.locator(`[data-mobile-slot-btn="${parentTab}"]`);
+      if (await mobileBtn.isVisible()) {
+        await mobileBtn.click();
+        const sheet = page.locator('.ui-sheet-box');
+        await expect(sheet).toBeVisible();
+        await sheet.locator(`[data-sub-slot-btn="${subSlotKey}"]`).click();
+        const cards = sheet.locator('[data-slot-garment-id]');
+        await expect(cards.nth(cardIndex)).toBeVisible();
+        await cards.nth(cardIndex).click();
+        return;
+      }
+      await page.locator(`[data-outfit-slot-tab="${parentTab}"]`).click();
+      const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
+      await picker.locator(`[data-sub-slot-btn="${subSlotKey}"]`).click();
+      const cards = picker.locator('[data-slot-garment-id]');
+      await expect(cards.nth(cardIndex)).toBeVisible();
+      await cards.nth(cardIndex).click();
+    };
+
+    // Equip TWO DIFFERENT gloves on Left Hand (index 0) and Right Hand (index 1) simultaneously!
+    await pickSubSlotCard('accessory', 'acc_hand_left', 0);
+    await pickSubSlotCard('accessory', 'acc_hand_right', 1);
+
+    // Equip TWO DIFFERENT watches on Left Wrist (index 0) and Right Wrist (index 1) simultaneously!
+    await pickSubSlotCard('accessory', 'acc_wrist_left', 0);
+    await pickSubSlotCard('accessory', 'acc_wrist_right', 1);
+
+    // Also equip Headwear and Eyewear simultaneously!
+    await pickSubSlotCard('accessory', 'acc_head', 0);
+    await pickSubSlotCard('accessory', 'acc_eyes', 0);
+
+    // Equip Jewelry across Necklace, Asymmetric L/R Earrings, Ring, and Brooch simultaneously!
+    await pickSubSlotCard('jewelry', 'jwl_neck', 0);
+    await pickSubSlotCard('jewelry', 'jwl_ear_left', 0);
+    await pickSubSlotCard('jewelry', 'jwl_ear_right', 1);
+    await pickSubSlotCard('jewelry', 'jwl_ring_left', 0);
+    await pickSubSlotCard('jewelry', 'jwl_brooch', 0);
+
+    // Assert ALL 11 Accessory + Jewelry sub-slots remain simultaneously equipped!
+    for (const key of [
+      'acc_hand_left',
+      'acc_hand_right',
+      'acc_wrist_left',
+      'acc_wrist_right',
+      'acc_head',
+      'acc_eyes',
+      'jwl_neck',
+      'jwl_ear_left',
+      'jwl_ear_right',
+      'jwl_ring_left',
+      'jwl_brooch',
+    ]) {
+      await expect(studioCanvas.locator(`[data-studio-slot="${key}"]`)).toHaveCount(1);
+    }
+
+    // Verify Left & Right micro-badges exist
+    await expect(
+      studioCanvas.locator('[data-studio-slot="acc_hand_left"] [data-slot-side="L"]')
+    ).toHaveCount(1);
+    await expect(
+      studioCanvas.locator('[data-studio-slot="acc_hand_right"] [data-slot-side="R"]')
+    ).toHaveCount(1);
+
+    // Switch to English and verify ZERO Hangul leak across all 11 equipped sub-slots, Flat-Lay cards, and Jewelry sub-tree!
+    await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    await page.locator('[data-lang-btn="en"]').click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await page.keyboard.press('Escape');
+
+    const mobileJwlBtn = page.locator('[data-mobile-slot-btn="jewelry"]');
+    if (await mobileJwlBtn.isVisible()) {
+      await mobileJwlBtn.click();
+      await expect(page.locator('.ui-sheet-box [data-jewelry-subtree="true"]')).toBeVisible();
+    }
+
+    const hangulLeaks = await page.evaluate(() => {
+      const re = /[\uAC00-\uD7A3\u3131-\u318E]/;
+      const found: string[] = [];
+      const bodyText = document.body?.innerText || '';
+      if (re.test(bodyText)) {
+        const line = bodyText.split('\n').find((l) => re.test(l)) || bodyText.slice(0, 80);
+        found.push(`text:${line.trim()}`);
+      }
+      for (const el of Array.from(document.querySelectorAll('*'))) {
+        for (const attr of ['aria-label', 'placeholder', 'alt', 'title']) {
+          const val = el.getAttribute(attr);
+          if (val && re.test(val)) {
+            found.push(`${el.tagName.toLowerCase()}[${attr}="${val}"]`);
+          }
+        }
+      }
+      return found.slice(0, 10);
+    });
+    expect(hangulLeaks).toEqual([]);
+  });
 });
+
 
 

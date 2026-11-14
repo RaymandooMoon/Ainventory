@@ -18,6 +18,23 @@ export const VTON_SLOTS = Object.freeze([
   'bottom',
   'shoes',
   'accessory',
+  'acc_umbrella',
+  'acc_belt',
+  'acc_head',
+  'acc_eyes',
+  'acc_neck',
+  'acc_hand_left',
+  'acc_hand_right',
+  'acc_wrist_left',
+  'acc_wrist_right',
+  'jwl_neck',
+  'jwl_ear_left',
+  'jwl_ear_right',
+  'jwl_wrist_left',
+  'jwl_wrist_right',
+  'jwl_ring_left',
+  'jwl_ring_right',
+  'jwl_brooch',
   'headwear',
   'neckwear',
   'gloves',
@@ -29,20 +46,63 @@ const VTON_SLOT_SET = new Set(VTON_SLOTS);
 export const ALL_ISO_VIEW_ANGLES = Object.freeze([45, 0, -45, -90, -135, 180, 135, 90]);
 export const DEFAULT_ISO_VIEW_ANGLE = 45;
 
-// Layering order for prompt clarity (from head/inner to outer/extremities)
+// Layering order for prompt clarity (from head/inner to outer/extremities/jewelry)
 const PROMPT_SLOT_ORDER = Object.freeze([
   'headwear',
+  'acc_head',
+  'acc_eyes',
+  'jwl_ear_left',
+  'jwl_ear_right',
   'onepiece',
   'top',
   'dress',
+  'acc_belt',
   'bottom',
   'outer',
+  'jwl_brooch',
   'neckwear',
+  'acc_neck',
+  'jwl_neck',
+  'acc_wrist_left',
+  'acc_wrist_right',
+  'jwl_wrist_left',
+  'jwl_wrist_right',
   'gloves',
+  'acc_hand_left',
+  'acc_hand_right',
+  'jwl_ring_left',
+  'jwl_ring_right',
   'socks',
   'shoes',
   'accessory',
+  'acc_umbrella',
 ]);
+
+const ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES = Object.freeze({
+  accessory: 'carried naturally in hand or slung cleanly over the shoulder',
+  acc_umbrella:
+    'held gracefully in the model’s hand (open rain canopy held over the shoulder on rainy weather, or poised upright walking umbrella)',
+  acc_belt: 'threaded neatly through the waist belt loops at the natural waistline',
+  acc_head: 'worn naturally atop the crown of the head',
+  acc_eyes: 'worn cleanly across the bridge of the nose and eyes',
+  acc_neck: 'draped or tied neatly around the neck and collar',
+  acc_hand_left:
+    'worn specifically on the model’s LEFT hand ONLY (respecting left/right glove asymmetry if a different glove or bare hand is on the right)',
+  acc_hand_right:
+    'worn specifically on the model’s RIGHT hand ONLY (respecting left/right glove asymmetry if a different glove or bare hand is on the left)',
+  acc_wrist_left:
+    'strapped specifically around the model’s LEFT wrist (allowing a different watch or bracelet on the right wrist)',
+  acc_wrist_right:
+    'strapped specifically around the model’s RIGHT wrist (allowing a different watch or bracelet on the left wrist)',
+  jwl_neck: 'resting naturally along the collarbone and neckline',
+  jwl_ear_left: 'worn specifically on the model’s LEFT earlobe/helix',
+  jwl_ear_right: 'worn specifically on the model’s RIGHT earlobe/helix',
+  jwl_wrist_left: 'worn specifically around the model’s LEFT wrist',
+  jwl_wrist_right: 'worn specifically around the model’s RIGHT wrist',
+  jwl_ring_left: 'worn specifically on a finger of the model’s LEFT hand',
+  jwl_ring_right: 'worn specifically on a finger of the model’s RIGHT hand',
+  jwl_brooch: 'pinned cleanly onto the left chest lapel or upper bodice',
+});
 
 const SLOT_ALIAS_MAP = Object.freeze({
   coat: 'outer',
@@ -68,6 +128,19 @@ const SLOT_ALIAS_MAP = Object.freeze({
   bag: 'accessory',
   bags: 'accessory',
   acc: 'accessory',
+  umbrella: 'acc_umbrella',
+  parasol: 'acc_umbrella',
+  belt: 'acc_belt',
+  eyewear: 'acc_eyes',
+  sunglasses: 'acc_eyes',
+  glasses: 'acc_eyes',
+  watch: 'acc_wrist_left',
+  jewelry: 'jwl_neck',
+  necklace: 'jwl_neck',
+  earring: 'jwl_ear_left',
+  bracelet: 'jwl_wrist_left',
+  ring: 'jwl_ring_left',
+  brooch: 'jwl_brooch',
   hat: 'headwear',
   cap: 'headwear',
   scarf: 'neckwear',
@@ -164,7 +237,7 @@ const GEMINI_TIMEOUT_MS = 45000;
 const MAX_TOTAL_SYNTHESIS_MS = 75000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'vton-multimodal-v3';
+const CACHE_SCHEMA_VERSION = 'vton-multimodal-v4';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
 const SAFE_SEED_REL_RE = /^(?:[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1038,14 +1111,14 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
   // 1. Array forms (`itemIds`, `items`, `garments`)
   const rawIds = rawInput.itemIds ?? rawInput.item_ids;
   if (Array.isArray(rawIds)) {
-    for (const id of rawIds.slice(0, 16)) {
+    for (const id of rawIds.slice(0, 28)) {
       assignCandidate(null, id);
     }
   }
 
   const rawArray = rawInput.garments ?? rawInput.items;
   if (Array.isArray(rawArray)) {
-    for (const item of rawArray.slice(0, 16)) {
+    for (const item of rawArray.slice(0, 28)) {
       assignCandidate(null, item);
     }
   }
@@ -1537,19 +1610,24 @@ function buildEditorialStyleAndBodyPrompt(profile) {
         '- Render a real, lifelike adult fashion model matching the exact casting profile below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
       ];
 
+  const isRainyMood = profile.weatherMood?.key === 'rainy';
+
   const cameraBlock = profile.turnaroundSheet
     ? [
-        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (MANDATORY):',
-        '- Compose a clean, borderless 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a seamless solid #F5F5F7 studio cyclorama background, depicting the EXACT SAME PERSON wearing the EXACT SAME OUTFIT at identical head-to-toe scale in every quadrant:',
-        '  * [Top-Left Quadrant — 0° Direct Front]: Full-body facing 0° straight toward the camera; symmetrical front garment fit, collar, torso, front trousers/skirt, and front shoe vamps.',
-        '  * [Top-Right Quadrant — 45° Quarter View]: Full-body turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
-        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Full-body turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand posture at the side, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
-        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: Full-body facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features).',
+        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — STRICT SINGLE-SUBJECT RULE):',
+        '- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a seamless solid #F5F5F7 studio cyclorama background.',
+        '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 4 quadrants, render EXACTLY ONE (1) solitary person centered horizontally in that quadrant. NEVER place two models side-by-side in a quadrant, NEVER duplicate or mirror a figure, NEVER render background extras or reflections, and NEVER generate a 1x4 or 2x4 multi-person lineup.',
+        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT at identical head-to-toe scale in each of the 4 quadrants:',
+        '  * [Top-Left Quadrant — 0° Direct Front]: ONE solitary full-body person facing 0° straight toward the camera; symmetrical front garment fit, collar, torso, front trousers/skirt, and front shoe vamps.',
+        '  * [Top-Right Quadrant — 45° Quarter View]: ONE solitary full-body person turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile]: ONE solitary full-body person turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand posture at the side, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
+        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: ONE solitary full-body person facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features and ZERO second figure).',
         '- Keep generous head-to-toe margin inside each of the 4 quadrants so neither hair nor shoe soles touch quadrant edges. Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
-        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK:',
+        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (STRICT SINGLE-SUBJECT RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
+        '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
         '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes with clean studio margin above head and below feet (NEVER crop head, hands, or feet).',
         '- For 90° lateral side views, ensure authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
         '- Solid, clean neutral studio background in exact hex #F5F5F7 with natural soft floor contact shadow. Include ZERO text, ZERO angle numbers, ZERO UI labels, and ZERO extra figures.',
@@ -1561,7 +1639,7 @@ function buildEditorialStyleAndBodyPrompt(profile) {
     ...cameraBlock,
     '',
     'STUDIO WEATHER & LIGHTING MOOD:',
-    `- Active Weather Lighting Mood (${profile.weatherMood?.key || 'studio_neutral'}): Illuminate the model and fabrics with ${weatherDesc}, while keeping background studio cyclorama clean (#F5F5F7) and garment colors true.`,
+    `- Active Weather Lighting Mood (${profile.weatherMood?.key || 'studio_neutral'}): Illuminate the model and fabrics with ${weatherDesc}, while keeping background studio cyclorama clean (#F5F5F7) and garment colors true.${isRainyMood ? ' Subtle cool rainy-day sheen on outerwear/leather/umbrella surfaces and crisp wet-weather editorial lighting.' : ''}`,
     '',
     'INCLUSIVE CASTING, PROPORTION & COMPLEXION LOCK (ZERO MODEL BIAS):',
     `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
@@ -1591,14 +1669,16 @@ function appendPortraitParts(parts, profile) {
   if (profile.portraitPart) {
     parts.push({
       text: [
-        '[PORTRAIT / IDENTITY LIKENESS REFERENCE PHOTO ATTACHED BELOW]:',
+        '[CRITICAL USER FACE IDENTITY LOCK — REAL UPLOADED USER PORTRAIT ATTACHED IMMEDIATELY BELOW]:',
+        'THE ATTACHED PORTRAIT PHOTO IS THE REAL USER. You MUST render the model\'s face with 100% recognizable likeness to this exact uploaded user face photo — do NOT replace their face with a generic fashion stock model!',
+        'Reproduce their exact eye shape & spacing, nose bridge & tip, lip contour, jawline/cheekbone structure, brow arch, hairstyle & hair parting/length/color from the photo, facial hair (if present), and eyeglasses (if worn in the photo unless overridden by equipped eyewear).',
         isTurnaround
-          ? `Preserve this person's facial identity, cranial proportions (${featureSummary}), eyeglasses (if worn), and natural hair volume consistently across the 0° front, 45° quarter, 90° lateral profile, and 180° rear back views in unified ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+          ? `Maintain this exact user's unmistakable face likeness across the 0° front, 45° quarter, and 90° lateral side profile quadrants, and match their exact rear hair silhouette & head shape on the 180° back quadrant, integrated seamlessly onto the body in ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
           : isPureBack
-            ? `Because the camera is at 180° full rear view, render ONLY the back of this person's head, hair/headwrap (${hairDesc}, ${profile.hairColorHex}), ears, and neck fullness with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
+            ? `Because the camera is at 180° full rear view, render ONLY the back of this exact user's head, hair silhouette/color from the attached photo, ears, and neck with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
             : isBackQuarter
-              ? `At ${angle}° back-quarter view, translate this person's rear/side hair silhouette (${hairDesc}, ${profile.hairColorHex}) and outer cheek/jawline contour (${profile.headShape}) with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
-              : `Preserve this person's craniofacial identity (${featureSummary}), eyeglasses (if present), and natural hair volume in unified ${mediumLabel} style at ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
+              ? `At ${angle}° back-quarter view, match this exact user's rear/side hair silhouette and outer cheek/jawline contour from the attached photo with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
+              : `Render this exact user's unmistakable facial identity, expression warmth, and hair from the attached photo at ${angle}° in unified ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
       ].join(' '),
     });
     parts.push({
@@ -1622,7 +1702,7 @@ function buildBaseModelParts(profile) {
   const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
   appendPortraitParts(parts, profile);
   const viewLabel = profile.turnaroundSheet
-    ? 'all 4 turnaround views (0°, 45°, 90°, 180°)'
+    ? 'all 4 turnaround views (0°, 45°, 90°, 180°) with ONE solitary person per quadrant'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°`;
   parts.push({
     text: [
@@ -1651,19 +1731,31 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const hasBottom = Boolean(resolvedSlots.bottom);
   const hasOuter = Boolean(resolvedSlots.outer);
   const hasShoes = Boolean(resolvedSlots.shoes);
+  const hasLeftRightAsymmetry =
+    Boolean(resolvedSlots.acc_hand_left && resolvedSlots.acc_hand_right) ||
+    Boolean(resolvedSlots.acc_wrist_left && resolvedSlots.acc_wrist_right) ||
+    Boolean(resolvedSlots.jwl_ear_left && resolvedSlots.jwl_ear_right) ||
+    Boolean(resolvedSlots.jwl_wrist_left && resolvedSlots.jwl_wrist_right) ||
+    Boolean(resolvedSlots.jwl_ring_left && resolvedSlots.jwl_ring_right);
   const viewScopeText = profile.turnaroundSheet
-    ? 'ALL 4 TURNAROUND VIEWS (0° Front, 45° Quarter, 90° Side Profile, 180° Back)'
+    ? 'ALL 4 TURNAROUND VIEWS (0° Front, 45° Quarter, 90° Side Profile, 180° Back — ONE solitary person per quadrant)'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW`;
 
   const layeringRules = [
-    `[OUTFIT LAYERING & REAL GARMENT PHOTO FIDELITY — ${viewScopeText}]:`,
-    '- Dress the model in ALL of the equipped garments attached below simultaneously, reproducing each attached garment photograph\'s exact cut, length, collar/lapel shape, buttons/zippers, fabric weave, pattern, and exact hex color.',
-    '- Render ONLY the equipped garments listed below — NEVER hallucinate unequipped coats, hats, or residual items.',
+    `[OUTFIT LAYERING, MULTI-PART ACCESSORIES/JEWELRY & REAL PHOTO FIDELITY — ${viewScopeText}]:`,
+    '- Dress the model in ALL of the equipped garments, body-part accessories, and fine jewelry items attached below simultaneously, reproducing each attached photograph\'s exact cut, material sheen (leather, fabric, wool, cashmere, 18K yellow gold, 925 sterling silver, bronze/copper, pearl/platinum), construction details, and exact hex color.',
+    '- Render ONLY the equipped items listed below — NEVER hallucinate unequipped coats, hats, or residual items.',
   ];
+
+  if (hasLeftRightAsymmetry) {
+    layeringRules.push(
+      '- ASYMMETRIC LEFT/RIGHT BODY-PART STYLING ACTIVE: Respect anatomical LEFT vs. RIGHT placement strictly (wearer\'s LEFT side vs. wearer\'s RIGHT side) when different gloves, watches, bracelets, rings, or earrings are equipped on opposite sides!'
+    );
+  }
 
   if (hasOuter && (hasTop || hasOnepiece)) {
     layeringRules.push(
-      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (worn relaxed open at the front on 0°/45° views so the inner top remains visible, with realistic side thickness at 90° and full outer back construction at 180°).'
+      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (worn relaxed open at the front on 0°/45° views so inner top, necklaces, and brooches remain visible, with realistic side thickness at 90° and full outer back construction at 180°).'
     );
   }
   if (hasOnepiece && isSwimwearOnepiece) {
@@ -1703,10 +1795,11 @@ function buildCompositeLookParts(profile, resolvedSlots) {
 
   for (const slot of equippedKeys) {
     const item = resolvedSlots[slot];
-    const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.`;
+    const placementCue = ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
+    const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Material/Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.${placementCue ? `\nAnatomical Placement: ${placementCue}` : ''}`;
     if (item.packshot) {
       parts.push({
-        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]. Reproduce its exact garment construction, texture, details, and color ${item.colorHex} naturally draped on the wearer (${viewScopeText}):`,
+        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]. Reproduce its exact construction, ${item.fabric} material surface, details, and color ${item.colorHex} naturally worn at its exact anatomical position (${viewScopeText}):`,
       });
       parts.push({
         inlineData: {
@@ -1716,13 +1809,13 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       });
     } else {
       parts.push({
-        text: `${specLine}\nRender this [${slot.toUpperCase()}] (${viewScopeText}) with authentic ${item.fabric} drape, construction stitching, and exact color ${item.colorHex}.`,
+        text: `${specLine}\nRender this [${slot.toUpperCase()}] (${viewScopeText}) with authentic ${item.fabric} material sheen, construction details, and exact color ${item.colorHex}.`,
       });
     }
   }
 
   parts.push({
-    text: '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
+    text: '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly (with strictly ONE solitary model per view/quadrant) without asking follow-up questions.',
   });
 
   return parts;
@@ -1814,9 +1907,16 @@ function isFatalCredentialReason(reason) {
   );
 }
 
-async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg = null) {
+async function generateWithGeminiModelChain(
+  parts,
+  apiKey,
+  modelChain,
+  vertexCfg = null,
+  options = {}
+) {
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
+  const aspectRatio = options?.turnaroundSheet ? '1:1' : '3:4';
 
   for (const model of modelChain) {
     const elapsed = Date.now() - startedAt;
@@ -1834,10 +1934,22 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
       break;
     }
 
-    const modalityStrategies = [['TEXT', 'IMAGE'], ['IMAGE']];
+    const requestConfigs = [
+      {
+        responseModalities: ['TEXT', 'IMAGE'],
+        imageConfig: { aspectRatio },
+      },
+      {
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
+      {
+        responseModalities: ['IMAGE'],
+      },
+    ];
 
-    for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
-      const responseModalities = modalityStrategies[stratIdx];
+    for (let stratIdx = 0; stratIdx < requestConfigs.length; stratIdx += 1) {
+      const generationConfig = requestConfigs[stratIdx];
+      const responseModalities = generationConfig.responseModalities;
       const innerElapsed = Date.now() - startedAt;
       if (innerElapsed >= MAX_TOTAL_SYNTHESIS_MS) {
         lastReason = 'gemini_timeout_budget_exceeded';
@@ -1855,9 +1967,7 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
           signal: AbortSignal.timeout(attemptTimeoutMs),
           body: JSON.stringify({
             contents: [{ role: 'user', parts }],
-            generationConfig: {
-              responseModalities,
-            },
+            generationConfig,
           }),
         });
 
@@ -1883,6 +1993,11 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
               dataUrl: null,
               reason: 'gemini_invalid_api_key',
             };
+          }
+
+          // If a model version rejects `imageConfig`, retry seamlessly without `imageConfig`
+          if (res.status === 400 && generationConfig.imageConfig) {
+            continue;
           }
 
           if (res.status === 401 || res.status === 403) {
@@ -1941,9 +2056,12 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
           `[VTON Gemini] ${model} returned 200 without image part (${lastReason}, modalities=${responseModalities.join(',')})`
         );
 
-        // Only retry with ['IMAGE'] modality on the same model if it returned a plain text STOP
-        if (stratIdx === 0 && finishReason.toUpperCase() === 'STOP') {
-          continue;
+        // Retry with ['IMAGE']-only modality if ['TEXT','IMAGE'] returned a plain text STOP
+        if (responseModalities.includes('TEXT') && finishReason.toUpperCase() === 'STOP') {
+          stratIdx = requestConfigs.findIndex(
+            (cfg) => !cfg.responseModalities.includes('TEXT')
+          ) - 1;
+          if (stratIdx >= 0) continue;
         }
         break;
       } catch (err) {
@@ -2107,7 +2225,8 @@ export async function synthesizeVtonLook(params = {}) {
               buildBaseModelParts(normalizedProfile),
               apiKey,
               modelChain,
-              vertexCfg
+              vertexCfg,
+              { turnaroundSheet: normalizedProfile.turnaroundSheet }
             );
         let finalLayout = layout;
         let finalBaseCacheKey = baseCacheKey;
@@ -2127,7 +2246,8 @@ export async function synthesizeVtonLook(params = {}) {
                 buildBaseModelParts(singleProfile),
                 apiKey,
                 modelChain,
-                vertexCfg
+                vertexCfg,
+                { turnaroundSheet: false }
               );
           if (baseGen.ok && baseGen.dataUrl) {
             finalLayout = 'single';
@@ -2179,7 +2299,8 @@ export async function synthesizeVtonLook(params = {}) {
             buildCompositeLookParts(normalizedProfile, resolvedSlots),
             apiKey,
             modelChain,
-            vertexCfg
+            vertexCfg,
+            { turnaroundSheet: normalizedProfile.turnaroundSheet }
           );
 
       const basePromise = !includeBaseModel
@@ -2195,7 +2316,8 @@ export async function synthesizeVtonLook(params = {}) {
               buildBaseModelParts(normalizedProfile),
               apiKey,
               modelChain,
-              vertexCfg
+              vertexCfg,
+              { turnaroundSheet: normalizedProfile.turnaroundSheet }
             );
 
       const [initialComboRes, baseRes] = await Promise.all([comboPromise, basePromise]);
@@ -2227,7 +2349,8 @@ export async function synthesizeVtonLook(params = {}) {
             buildCompositeLookParts(singleProfile, resolvedSlots),
             apiKey,
             modelChain,
-            vertexCfg
+            vertexCfg,
+            { turnaroundSheet: false }
           );
           if (retrySingle?.ok && retrySingle.dataUrl) {
             comboRes = retrySingle;

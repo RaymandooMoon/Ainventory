@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  ACCESSORY_JEWELRY_CATALOG,
   getPersonalColorLabels,
   getStudioSeedImageForGarment,
   resolveManifestSlotAndGlb,
@@ -17,6 +18,7 @@ import db, {
   SQLITE_DRIVER,
   UPLOADS_DIR,
   computeVerificationHash,
+  ensureNewSubcategoryMaterialSeeds,
   hashPassword,
   initDb,
   seedIfEmpty,
@@ -40,14 +42,18 @@ import {
 
 initDb();
 
-// Curated 4-Season 128-Item Photorealistic Capsule Catalog (Requirement 8.a: separated from real user empty closets, selectable for import)
-export const SAMPLE_CAPSULE_CATALOG = SEASONAL_120_CATALOG.map((item) => ({
+// Curated 4-Season + Multi-Part Accessories & Jewelry Capsule Catalog
+export const SAMPLE_CAPSULE_CATALOG = [
+  ...SEASONAL_120_CATALOG,
+  ...ACCESSORY_JEWELRY_CATALOG,
+].map((item) => ({
   key: item.key,
   name: item.name,
   name_en: item.name_en,
   category: item.category,
   subcategory: item.subcategory,
   fabric: item.fabric,
+  material_key: item.material_key || null,
   color_name: item.color_name,
   color_hex: item.color_hex,
   primary_season: item.primary_season,
@@ -2080,6 +2086,17 @@ export function createApiRouter() {
       return res.status(authz.status).json({ error: authz.error });
     }
 
+    for (const c of authz.closets) {
+      if (c === 'sample' || c === 'husband' || c === 'wife') {
+        ensureNewSubcategoryMaterialSeeds(c);
+      } else {
+        const hasAny = db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
+        if (hasAny) {
+          ensureNewSubcategoryMaterialSeeds(c);
+        }
+      }
+    }
+
     const { category = 'all', q = '' } = req.query;
     const inSpec = buildClosetInClause(authz.closets, 'closet_owner');
     let sql = `SELECT * FROM garments WHERE ${inSpec.clause}`;
@@ -2098,6 +2115,27 @@ export function createApiRouter() {
 
     const rows = db.prepare(sql).all(...params).map(parseGarmentRow);
     res.json({ garments: rows, isSampleDemo: Boolean(req.isSampleDemo || authz.primaryCloset === 'sample') });
+  });
+
+  router.post('/garments/ensure-material-seeds', (req, res) => {
+    const requestedCloset = req.body?.closet_owner || req.query.closet;
+    const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'read' });
+    if (!authz.ok) {
+      return res.status(authz.status).json({ error: authz.error });
+    }
+    const targetCloset = authz.primaryCloset;
+    if (targetCloset !== 'sample') {
+      const writeAuthz = resolveAuthorizedClosets(req, targetCloset, { mode: 'write' });
+      if (!writeAuthz.ok) {
+        return res.status(writeAuthz.status).json({ error: writeAuthz.error });
+      }
+    }
+    const insertedCount = ensureNewSubcategoryMaterialSeeds(targetCloset);
+    const rows = db
+      .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
+      .all(targetCloset)
+      .map(parseGarmentRow);
+    res.json({ ok: true, inserted: insertedCount, insertedCount, garments: rows });
   });
 
   router.post('/garments', requireStrictUserAuth, (req, res) => {
@@ -2517,6 +2555,14 @@ export function createApiRouter() {
       gender,
     } = req.query;
     const closetOwner = authz.primaryCloset;
+
+    if (closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife') {
+      ensureNewSubcategoryMaterialSeeds(closetOwner);
+    } else if (
+      db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(closetOwner)
+    ) {
+      ensureNewSubcategoryMaterialSeeds(closetOwner);
+    }
 
     const garments = db
       .prepare('SELECT * FROM garments WHERE closet_owner = ?')

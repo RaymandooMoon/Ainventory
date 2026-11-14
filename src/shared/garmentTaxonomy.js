@@ -5,6 +5,11 @@
  */
 
 import {
+  ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  ACCESSORY_JEWELRY_CATALOG,
+  ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
+} from './accessoryJewelryCatalog.js';
+import {
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,
@@ -12,6 +17,9 @@ import {
 } from './seasonal120Catalog.js';
 
 export {
+  ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  ACCESSORY_JEWELRY_CATALOG,
+  ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,
@@ -45,16 +53,19 @@ export const CATEGORIES = [
   { key: 'socks', value: 'socks', label: '양말', labelEn: 'Socks' },
   { key: 'shoes', value: 'shoes', label: '신발', labelEn: 'Footwear' },
   { key: 'accessory', value: 'accessory', label: '가방·액세서리', labelEn: 'Accessories' },
+  { key: 'jewelry', value: 'jewelry', label: '주얼리', labelEn: 'Jewelry' },
 ];
 
 export const SUBCATEGORIES_BY_CAT = {
   headwear: [
+    { value: 'headwear', label: '캐시미어 · 울 모자' },
     { value: 'beanie', label: '비니 · 니트모자' },
     { value: 'cap', label: '볼캡 · 캡모자' },
     { value: 'beret', label: '베레모 · 헌팅캡' },
-    { value: 'bucket_hat', label: '버킷햇 · 페도라' },
+    { value: 'bucket_hat', label: '버킷햇 · 선햇' },
   ],
   neckwear: [
+    { value: 'neckwear', label: '스카프 · 볼로타이' },
     { value: 'scarf', label: '캐시미어 · 울 머플러' },
     { value: 'muffler', label: '니트 스카프 · 넥워머' },
     { value: 'necktie', label: '실크 넥타이' },
@@ -105,8 +116,8 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'swim_trunks', label: '보드쇼츠 · 스윔트렁크' },
   ],
   gloves: [
-    { value: 'leather_gloves', label: '가죽 장갑' },
-    { value: 'gloves', label: '울 · 니트 장갑' },
+    { value: 'leather_gloves', label: '가죽 · 스웨이드 장갑' },
+    { value: 'gloves', label: '울 · 캐시미어 · 패브릭 장갑' },
   ],
   underwear: [
     { value: 'inner_top', label: '발열 · 심리스 이너탑' },
@@ -129,13 +140,25 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'flip_flops', label: '쪼리 · 플립플랍' },
   ],
   accessory: [
-    { value: 'briefcase', label: '서류가방 · 브리프케이스' },
-    { value: 'tote', label: '토트백 · 쇼퍼백' },
     { value: 'bag', label: '크로스백 · 숄더백' },
+    { value: 'tote', label: '토트백 · 쇼퍼백' },
+    { value: 'briefcase', label: '서류가방 · 브리프케이스' },
+    { value: 'umbrella', label: '우산 · 양산' },
+    { value: 'watch', label: '손목시계 · 워치' },
+    { value: 'gloves', label: '장갑 · 핸드웨어' },
+    { value: 'headwear', label: '모자 · 비니 · 베레모' },
+    { value: 'eyewear', label: '아이웨어 · 안경 · 선글라스' },
+    { value: 'neckwear', label: '머플러 · 스카프 · 타이' },
+    { value: 'belt', label: '벨트 · 스트랩' },
     { value: 'sunglasses', label: '선글라스' },
-    { value: 'watch', label: '시계 · 워치' },
-    { value: 'belt', label: '레더 벨트' },
     { value: 'glasses', label: '아이웨어 · 안경' },
+  ],
+  jewelry: [
+    { value: 'earring', label: '귀걸이 · 이어커프' },
+    { value: 'necklace', label: '목걸이 · 펜던트 · 초커' },
+    { value: 'bracelet', label: '팔찌 · 뱅글 · 커프' },
+    { value: 'ring', label: '반지 · 시그넷 링' },
+    { value: 'brooch', label: '브로치 · 코사지 · 라펠핀' },
   ],
   bag: [
     { value: 'briefcase', label: '서류가방 · 브리프케이스' },
@@ -233,10 +256,19 @@ export const STUDIO_SEED_BY_SUBCATEGORY = {
   tote: '/seed/studio-tote.jpg',
   bag: '/seed/studio-bag.jpg',
   sunglasses: '/seed/s4-summer-30-black-uv-sunglasses.webp',
-  watch: '/seed/studio-watch.jpg',
-  belt: '/seed/studio-belt.jpg',
-  glasses: '/seed/studio-glasses.jpg',
-  jewelry: '/seed/studio-watch.jpg',
+  eyewear: '/seed/s5-16-gold-round-glasses.webp',
+  umbrella: '/seed/s5-01-maple-fabric-umbrella.webp',
+  watch: '/seed/s5-06-espresso-leather-watch.webp',
+  belt: '/seed/s5-31-black-leather-belt.webp',
+  glasses: '/seed/s5-16-gold-round-glasses.webp',
+  headwear: '/seed/s5-21-cream-cashmere-beanie.webp',
+  neckwear: '/seed/s5-26-ivory-cashmere-muffler.webp',
+  earring: '/seed/s5-41-gold-hoop-earring.webp',
+  necklace: '/seed/s5-46-gold-herringbone-necklace.webp',
+  bracelet: '/seed/s5-51-gold-open-cuff-bracelet.webp',
+  ring: '/seed/s5-56-gold-oval-signet-ring.webp',
+  brooch: '/seed/s5-61-gold-botanical-brooch.webp',
+  jewelry: '/seed/s5-46-gold-herringbone-necklace.webp',
   accessory: '/seed/studio-bag.jpg',
 };
 
@@ -252,6 +284,7 @@ export const STUDIO_SEED_BY_CATEGORY = {
   socks: '/seed/studio-socks.jpg',
   shoes: '/seed/white-sneakers.jpg',
   accessory: '/seed/studio-bag.jpg',
+  jewelry: '/seed/s5-46-gold-herringbone-necklace.webp',
   bag: '/seed/studio-bag.jpg',
 };
 
@@ -299,6 +332,7 @@ const RAW_NATIVE_SEED_HEX = {
   '/seed/studio-belt.jpg': '#362720',
   '/seed/studio-glasses.jpg': '#4A3222',
   ...SEASONAL_120_NATIVE_HEX_MAP,
+  ...ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
 };
 
 export function upgradeStudioSeedToWebp(url) {
@@ -469,9 +503,18 @@ export const MANIFEST_SLOT_GLB_BY_SUB = {
   tote: { slotKey: 'accessory', baseGlb: 'accessory_tote', physicsPreset: 'pendulum_tote' },
   bag: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_crossbody' },
   sunglasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
+  eyewear: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
+  umbrella: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_briefcase' },
   watch: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
   belt: { slotKey: 'accessory', baseGlb: 'accessory_belt', physicsPreset: 'rigid_fitted' },
   glasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
+  headwear: { slotKey: 'headwear', baseGlb: 'headwear_beanie', physicsPreset: 'rigid_fitted' },
+  neckwear: { slotKey: 'neckwear', baseGlb: 'neckwear_scarf', physicsPreset: 'drape_wind_garment' },
+  earring: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
+  necklace: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
+  bracelet: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
+  ring: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
+  brooch: { slotKey: 'accessory', baseGlb: 'accessory_watch', physicsPreset: 'rigid_fitted' },
 };
 
 export function resolveManifestSlotAndGlb(category = 'top', subcategory = 'knit') {
@@ -495,6 +538,7 @@ export function resolveManifestSlotAndGlb(category = 'top', subcategory = 'knit'
     socks: MANIFEST_SLOT_GLB_BY_SUB.crew_socks,
     shoes: MANIFEST_SLOT_GLB_BY_SUB.loafers,
     accessory: MANIFEST_SLOT_GLB_BY_SUB.bag,
+    jewelry: MANIFEST_SLOT_GLB_BY_SUB.necklace,
     bag: MANIFEST_SLOT_GLB_BY_SUB.bag,
   };
   return fallbackByCat[cat] || MANIFEST_SLOT_GLB_BY_SUB.knit;

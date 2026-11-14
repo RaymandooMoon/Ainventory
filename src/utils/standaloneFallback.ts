@@ -7,6 +7,8 @@
 import type { GarmentRecord, UserProfile } from '../contracts/carbonDesignContract.ts';
 import { colorSimilarityScore } from '../shared/colorMath.js';
 import {
+  ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  ACCESSORY_JEWELRY_CATALOG,
   CITY_COORDS,
   getPersonalColorLabels,
   getStudioSeedImageForGarment,
@@ -18,6 +20,7 @@ import { readCachedResponse } from './offlineSync.ts';
 const LOCAL_USERS_KEY = 'ainventory_standalone_users_v2';
 const LOCAL_OTP_KEY = 'ainventory_standalone_otp_v1';
 const LOCAL_SESSION_KEY = 'ainventory_standalone_session_v1';
+const LOCAL_CUSTOM_GARMENTS_KEY = 'ainventory_standalone_custom_garments_v1';
 
 interface StoredStandaloneUser extends UserProfile {
   passwordHash?: string;
@@ -26,6 +29,7 @@ interface StoredStandaloneUser extends UserProfile {
 export interface SampleCatalogGarment extends GarmentRecord {
   key: string;
   name_en?: string;
+  material_key?: string | null;
   primary_season?: string;
   sleeveLength?: string;
   hemLength?: string;
@@ -145,50 +149,149 @@ const DEFAULT_STANDALONE_USERS: StoredStandaloneUser[] = [
   },
 ];
 
-export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = SEASONAL_120_CATALOG.map(
-  (item) => {
-    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
-    const wearCount = ((item.idOffset * 3) % 24) + 2;
-    const cpw = wearCount > 0 ? Math.round(item.price / wearCount) : item.price;
-    return {
-      key: item.key,
-      id: 9000 + item.idOffset,
-      closet_owner: 'sample',
-      name: item.name,
-      name_en: item.name_en,
-      category: item.category,
-      subcategory: item.subcategory,
-      fabric: item.fabric,
-      color_name: item.color_name,
-      color_hex: item.color_hex,
-      primary_season: item.primary_season,
-      seasons: [...item.seasons],
-      min_temp: item.min_temp,
-      max_temp: item.max_temp,
-      water_resistant: item.water_resistant,
-      formality: item.formality,
-      brand: item.brand,
-      size: 'M',
-      memo: '샘플 체험용 캡슐 아틀리에 아이템',
-      notes: '샘플 체험용 캡슐 아틀리에 아이템',
-      price: item.price,
-      wear_count: wearCount,
-      cpw,
-      is_favorite: item.idOffset % 4 === 1,
-      status: 'active',
-      image_url:
-        item.image_url || getStudioSeedImageForGarment(item.category, item.subcategory),
-      slot_key: spec.slotKey,
-      base_glb: spec.baseGlb,
-      physics_preset: spec.physicsPreset,
-      custom_texture: false,
-      sleeveLength: item.sleeveLength,
-      hemLength: item.hemLength,
-      shoeExposure: item.shoeExposure,
-      layerOrder: item.layerOrder,
-    };
+export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = [
+  ...SEASONAL_120_CATALOG,
+  ...ACCESSORY_JEWELRY_CATALOG,
+].map((item) => {
+  const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+  const wearCount = ((item.idOffset * 3) % 24) + 2;
+  const cpw = wearCount > 0 ? Math.round(item.price / wearCount) : item.price;
+  const materialKey = 'material_key' in item ? (item.material_key ?? null) : null;
+  return {
+    key: item.key,
+    id: 9000 + item.idOffset,
+    closet_owner: 'sample',
+    name: item.name,
+    name_en: item.name_en,
+    category: item.category,
+    subcategory: item.subcategory,
+    fabric: item.fabric,
+    material_key: materialKey,
+    color_name: item.color_name,
+    color_hex: item.color_hex,
+    primary_season: item.primary_season,
+    seasons: [...item.seasons],
+    min_temp: item.min_temp,
+    max_temp: item.max_temp,
+    water_resistant: item.water_resistant,
+    formality: item.formality,
+    brand: item.brand,
+    size: 'M',
+    memo: '샘플 체험용 캡슐 아틀리에 아이템',
+    notes: '샘플 체험용 캡슐 아틀리에 아이템',
+    price: item.price,
+    wear_count: wearCount,
+    cpw,
+    is_favorite: item.idOffset % 4 === 1,
+    status: 'active',
+    image_url:
+      item.image_url || getStudioSeedImageForGarment(item.category, item.subcategory),
+    slot_key: spec.slotKey,
+    base_glb: spec.baseGlb,
+    physics_preset: spec.physicsPreset,
+    custom_texture: false,
+    sleeveLength: item.sleeveLength,
+    hemLength: item.hemLength,
+    shoeExposure: item.shoeExposure,
+    layerOrder: item.layerOrder,
+  };
+});
+
+function loadCustomStandaloneGarments(): GarmentRecord[] {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(LOCAL_CUSTOM_GARMENTS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed as GarmentRecord[];
+      }
+    }
+  } catch {
+    // ignore
   }
-);
+  return [];
+}
+
+function saveCustomStandaloneGarments(list: GarmentRecord[]): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LOCAL_CUSTOM_GARMENTS_KEY, JSON.stringify(list));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const STANDALONE_SUB_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  umbrella: ['umbrella'],
+  watch: ['watch'],
+  gloves: ['gloves', 'leather_gloves', 'mittens'],
+  eyewear: ['eyewear', 'sunglasses', 'glasses'],
+  headwear: ['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat'],
+  neckwear: ['neckwear', 'scarf', 'muffler', 'tie', 'necktie'],
+  belt: ['belt'],
+  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack'],
+  earring: ['earring'],
+  necklace: ['necklace'],
+  bracelet: ['bracelet'],
+  ring: ['ring'],
+  brooch: ['brooch'],
+};
+
+function ensureStandaloneMaterialSeedsForCloset(closetOwner: string): GarmentRecord[] {
+  const custom = loadCustomStandaloneGarments();
+  const forCloset = custom.filter((g) => g.closet_owner === closetOwner);
+  let mutated = false;
+  for (const [subKey, items] of Object.entries(ACCESSORY_JEWELRY_BY_SUBCATEGORY)) {
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const targetCategory = items[0].category;
+    const aliases = STANDALONE_SUB_ALIASES[subKey] || [subKey];
+    const existing = forCloset.filter(
+      (g) => g.category === targetCategory && aliases.includes(String(g.subcategory || ''))
+    );
+    if (existing.length > 0) continue;
+    for (const item of items) {
+      const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+      const created: GarmentRecord = {
+        id: 19000 + item.idOffset + Math.floor(Math.random() * 900),
+        closet_owner: closetOwner,
+        name: item.name,
+        name_en: item.name_en,
+        category: item.category,
+        subcategory: item.subcategory,
+        fabric: item.fabric,
+        color_name: item.color_name,
+        color_hex: item.color_hex,
+        seasons: [...item.seasons],
+        min_temp: item.min_temp,
+        max_temp: item.max_temp,
+        water_resistant: item.water_resistant,
+        formality: item.formality,
+        brand: item.brand,
+        size: 'FREE',
+        memo: '샘플 체험용 캡슐 아틀리에 아이템',
+        notes: '샘플 체험용 캡슐 아틀리에 아이템',
+        price: item.price,
+        wear_count: 2,
+        cpw: Math.round(item.price / 2),
+        is_favorite: item.idOffset % 5 === 1,
+        status: 'active',
+        image_url: item.image_url,
+        slot_key: spec.slotKey,
+        base_glb: spec.baseGlb,
+        physics_preset: spec.physicsPreset,
+        custom_texture: false,
+      };
+      custom.push(created);
+      forCloset.push(created);
+      mutated = true;
+    }
+  }
+  if (mutated) {
+    saveCustomStandaloneGarments(custom);
+  }
+  return custom.filter((g) => g.closet_owner === closetOwner);
+}
 
 function loadUsers(): StoredStandaloneUser[] {
   try {
@@ -685,12 +788,99 @@ export async function handleStandaloneApiFallback(
     params.get('closet') || body.closet_owner || activeUser?.defaultCloset || 'sample'
   );
   const isSeededCloset = closet === 'sample' || closet === 'husband' || closet === 'wife';
+  const rawCustomForCloset = loadCustomStandaloneGarments().filter((g) => g.closet_owner === closet);
+  const customForCloset =
+    !isSeededCloset && rawCustomForCloset.length > 0
+      ? ensureStandaloneMaterialSeedsForCloset(closet)
+      : rawCustomForCloset;
   const seededGarments: GarmentRecord[] = isSeededCloset
-    ? STANDALONE_SAMPLE_GARMENTS.map((g) => ({ ...g, closet_owner: closet }))
-    : [];
+    ? [
+        ...customForCloset,
+        ...STANDALONE_SAMPLE_GARMENTS.map((g) => ({ ...g, closet_owner: closet })),
+      ]
+    : customForCloset;
 
   if (pathname === '/garments' && method === 'GET') {
-    return { garments: seededGarments, isSampleDemo: closet === 'sample' };
+    const reqCat = params.get('category') || 'all';
+    const reqQuery = (params.get('q') || '').trim().toLowerCase();
+    let filtered = seededGarments;
+    if (reqCat && reqCat !== 'all') {
+      filtered = filtered.filter((g) => g.category === reqCat);
+    }
+    if (reqQuery) {
+      filtered = filtered.filter((g) =>
+        `${g.name || ''} ${g.name_en || ''} ${g.brand || ''} ${g.color_name || ''}`
+          .toLowerCase()
+          .includes(reqQuery)
+      );
+    }
+    return { garments: filtered, isSampleDemo: closet === 'sample' };
+  }
+
+  if (pathname === '/garments/ensure-material-seeds' && method === 'POST') {
+    const targetCloset = String(body.closet_owner || activeUser?.defaultCloset || closet);
+    const beforeLen = loadCustomStandaloneGarments().filter(
+      (g) => g.closet_owner === targetCloset
+    ).length;
+    const updatedForCloset =
+      targetCloset === 'sample' || targetCloset === 'husband' || targetCloset === 'wife'
+        ? STANDALONE_SAMPLE_GARMENTS.map((g) => ({ ...g, closet_owner: targetCloset }))
+        : ensureStandaloneMaterialSeedsForCloset(targetCloset);
+    const inserted =
+      targetCloset === 'sample' || targetCloset === 'husband' || targetCloset === 'wife'
+        ? 0
+        : Math.max(0, updatedForCloset.length - beforeLen);
+    return { ok: true, inserted, insertedCount: inserted, garments: updatedForCloset };
+  }
+
+  if (pathname === '/garments' && method === 'POST') {
+    const targetCloset = String(body.closet_owner || activeUser?.defaultCloset || closet);
+    const category = String(body.category || 'top');
+    const subcategory = String(body.subcategory || category);
+    const spec = resolveManifestSlotAndGlb(category, subcategory);
+    const price = Math.max(0, Number(body.price) || 0);
+    const created: GarmentRecord = {
+      id: Date.now(),
+      closet_owner: targetCloset,
+      name: String(body.name || '새 아이템').trim(),
+      category,
+      subcategory,
+      fabric: String(body.fabric || 'cotton'),
+      color_name: String(body.color_name || '블랙'),
+      color_hex: String(body.color_hex || '#1D1D1F'),
+      seasons: Array.isArray(body.seasons) ? body.seasons.map(String) : ['봄', '가을'],
+      min_temp: Number(body.min_temp ?? 8),
+      max_temp: Number(body.max_temp ?? 22),
+      water_resistant: Boolean(body.water_resistant),
+      formality: String(body.formality || 'smart'),
+      brand: String(body.brand || ''),
+      size: String(body.size || ''),
+      memo: String(body.notes || body.memo || ''),
+      notes: String(body.notes || body.memo || ''),
+      price,
+      wear_count: Math.max(0, Number(body.wear_count) || 0),
+      cpw: price,
+      is_favorite: false,
+      status: 'active',
+      image_url: String(
+        body.image_data || body.image_url || getStudioSeedImageForGarment(category, subcategory)
+      ),
+      slot_key: String(body.slot_key || spec.slotKey),
+      base_glb: String(body.base_glb || spec.baseGlb),
+      physics_preset: String(body.physics_preset || spec.physicsPreset),
+      custom_texture: Boolean(body.image_data),
+    };
+    const allCustom = loadCustomStandaloneGarments();
+    allCustom.unshift(created);
+    saveCustomStandaloneGarments(allCustom);
+    return { ok: true, garment: created };
+  }
+
+  if (pathname.startsWith('/garments/') && method === 'DELETE') {
+    const targetId = Number(pathname.split('/')[2]);
+    const allCustom = loadCustomStandaloneGarments().filter((g) => Number(g.id) !== targetId);
+    saveCustomStandaloneGarments(allCustom);
+    return { ok: true };
   }
 
   if (pathname === '/garments/import-samples' && method === 'POST') {
@@ -705,6 +895,8 @@ export async function handleStandaloneApiFallback(
       id: Date.now() + i,
       closet_owner: targetCloset,
     }));
+    const existingCustom = loadCustomStandaloneGarments();
+    saveCustomStandaloneGarments([...existingCustom, ...imported]);
     return {
       ok: true,
       count: imported.length,
@@ -792,8 +984,16 @@ export async function handleStandaloneApiFallback(
           !((avgTemp < 23 || isRainy) && openSummerShoes.has(String(g.subcategory || '')))
       )
     );
+    const isUmbrellaItem = (g: GarmentRecord) =>
+      String(g.subcategory || '') === 'umbrella' ||
+      /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
+    const bagSubs = new Set(['bag', 'tote', 'crossbody', 'briefcase', 'backpack']);
+    const umbrellaList = seededGarments.filter(isUmbrellaItem);
     const accList = seededGarments.filter(
-      (g) => g.category === 'accessory' || g.category === 'neckwear'
+      (g) =>
+        !isUmbrellaItem(g) &&
+        ((g.category === 'accessory' && bagSubs.has(String(g.subcategory || 'bag'))) ||
+          g.category === 'bag')
     );
 
     const buildFallbackRec = (idx: number, id: string, badge: string, title: string) => {
@@ -804,9 +1004,16 @@ export async function handleStandaloneApiFallback(
       const chosenBottom = bottoms.length ? bottoms[idx % bottoms.length] : null;
       const chosenShoes = shoesList.length ? shoesList[idx % shoesList.length] : null;
       const chosenAcc = accList.length ? accList[idx % accList.length] : null;
-      const items = [chosenOuter, chosenTop, chosenBottom, chosenShoes, chosenAcc].filter(
-        (x): x is GarmentRecord => Boolean(x)
-      );
+      const chosenUmbrella =
+        isRainy && umbrellaList.length ? umbrellaList[idx % umbrellaList.length] : null;
+      const items = [
+        chosenOuter,
+        chosenTop,
+        chosenBottom,
+        chosenShoes,
+        chosenAcc,
+        chosenUmbrella,
+      ].filter((x): x is GarmentRecord => Boolean(x));
       return {
         id,
         badge,
@@ -818,6 +1025,8 @@ export async function handleStandaloneApiFallback(
           bottom: chosenBottom,
           shoes: chosenShoes,
           accessory: chosenAcc,
+          umbrella: chosenUmbrella,
+          acc_umbrella: chosenUmbrella,
         },
         rationale: `${spec.weatherTip} [${pcLabels.ko || '가을 웜톤'} 톤 매칭]`,
         suitabilityScore: Math.max(88, 97 - idx * 3),

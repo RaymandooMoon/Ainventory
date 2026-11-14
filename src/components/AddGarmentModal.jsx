@@ -16,6 +16,36 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
+const ACCESSORY_SUBTYPE_OPTIONS = [
+  { key: 'bag', ko: '가방 · 휴대', en: 'Bag / Carry' },
+  { key: 'umbrella', ko: '우산 · 양산', en: 'Umbrella' },
+  { key: 'watch', ko: '손목시계', en: 'Watch' },
+  { key: 'gloves', ko: '장갑', en: 'Gloves' },
+  { key: 'eyewear', ko: '아이웨어', en: 'Eyewear' },
+  { key: 'headwear', ko: '머리 · 모자', en: 'Headwear' },
+  { key: 'neckwear', ko: '목 · 머플러', en: 'Neckwear' },
+  { key: 'belt', ko: '허리 · 벨트', en: 'Belt' },
+];
+
+const JEWELRY_SUBTYPE_OPTIONS = [
+  { key: 'necklace', ko: '목걸이 · 펜던트', en: 'Necklace' },
+  { key: 'earring', ko: '귀걸이 · 이어커프', en: 'Earring' },
+  { key: 'bracelet', ko: '팔찌 · 뱅글', en: 'Bracelet' },
+  { key: 'ring', ko: '반지 · 링', en: 'Ring' },
+  { key: 'brooch', ko: '브로치 · 코사지', en: 'Brooch' },
+];
+
+const MATERIAL_OPTIONS = [
+  { key: 'Leather', ko: '가죽', en: 'Leather' },
+  { key: 'Fabric', ko: '패브릭', en: 'Fabric' },
+  { key: 'Wool', ko: '울', en: 'Wool' },
+  { key: 'Cashmere', ko: '캐시미어', en: 'Cashmere' },
+  { key: '18K Yellow Gold', ko: '18K 금', en: '18K Gold' },
+  { key: '925 Sterling Silver', ko: '925 은', en: '925 Silver' },
+  { key: 'Sculptural Bronze', ko: '동 · 브론즈', en: 'Bronze' },
+  { key: 'Platinum & Pearl', ko: '플래티넘 · 진주', en: 'Platinum' },
+];
+
 function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, showToast }) {
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -24,8 +54,30 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const [submitting, setSubmitting] = useState(false);
   const [processedAsset, setProcessedAsset] = useState(null);
   const [category, setCategory] = useState('top');
+  const [subpart, setSubpart] = useState('bag');
+  const [material, setMaterial] = useState('Fabric');
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
+
+  const categoryOptions = [
+    ...WARDROBE_CATEGORY_OPTIONS,
+    {
+      key: 'jewelry',
+      label: tx(lang, '주얼리', 'Jewelry'),
+      defaultSubcategory: 'necklace',
+    },
+  ];
+
+  const handleSelectCategory = (nextCat) => {
+    setCategory(nextCat);
+    if (nextCat === 'accessory') {
+      setSubpart('bag');
+      setMaterial('Leather');
+    } else if (nextCat === 'jewelry') {
+      setSubpart('necklace');
+      setMaterial('18K Yellow Gold');
+    }
+  };
 
   const handleSelectFile = async (e) => {
     const file = e.target.files?.[0];
@@ -40,7 +92,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         fileNameHint: file.name,
       });
       setProcessedAsset(asset);
-      setCategory(asset.suggestedCategory || 'top');
+      const suggestedCat = asset.suggestedCategory || 'top';
+      handleSelectCategory(suggestedCat);
       setName(
         (prev) =>
           prev.trim() ||
@@ -75,8 +128,11 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
     setSubmitting(true);
     try {
       const catOption =
-        WARDROBE_CATEGORY_OPTIONS.find((opt) => opt.key === category) ||
-        WARDROBE_CATEGORY_OPTIONS[0];
+        categoryOptions.find((opt) => opt.key === category) || categoryOptions[0];
+      const resolvedSubcategory =
+        category === 'accessory' || category === 'jewelry'
+          ? subpart
+          : catOption.defaultSubcategory;
       const targetOwner = !activeCloset || activeCloset === 'all' ? 'sample' : activeCloset;
 
       const res = await apiFetch('/garments', {
@@ -86,7 +142,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           name: trimmedName,
           brand: brand.trim(),
           category: catOption.key,
-          subcategory: catOption.defaultSubcategory,
+          subcategory: resolvedSubcategory,
+          fabric: material,
           color_hex: processedAsset.dominantColorHex,
           color_name: processedAsset.dominantColorName,
           image_data: processedAsset.cutoutDataUrl,
@@ -106,6 +163,13 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       setSubmitting(false);
     }
   };
+
+  const subtypeOptions =
+    category === 'accessory'
+      ? ACCESSORY_SUBTYPE_OPTIONS
+      : category === 'jewelry'
+        ? JEWELRY_SUBTYPE_OPTIONS
+        : null;
 
   return (
     <form onSubmit={handleSubmit} className="hig-add-garment-form">
@@ -223,7 +287,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       <div className="hig-field-group">
         <label className="hig-field-label">{tx(lang, '카테고리', 'Category')}</label>
         <div className="hig-pill-row" role="radiogroup" aria-label="Category">
-          {WARDROBE_CATEGORY_OPTIONS.map((opt) => {
+          {categoryOptions.map((opt) => {
             const selected = category === opt.key;
             return (
               <button
@@ -232,9 +296,67 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 role="radio"
                 aria-checked={selected}
                 className={`hig-filter-pill ${selected ? 'active' : ''}`}
-                onClick={() => setCategory(opt.key)}
+                onClick={() => handleSelectCategory(opt.key)}
               >
                 {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Sub-Part Selector for Accessories & Jewelry */}
+      {subtypeOptions && (
+        <div className="hig-field-group">
+          <label className="hig-field-label">
+            {tx(lang, '착용 부위 · 세부 종류', 'Body Part / Sub-Type')}
+          </label>
+          <div
+            className="hig-pill-row"
+            role="group"
+            data-add-subpart-group={category}
+            aria-label={tx(lang, '착용 부위', 'Body Part')}
+          >
+            {subtypeOptions.map((opt) => {
+              const selected = subpart === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  data-add-subpart-btn={opt.key}
+                  aria-pressed={selected}
+                  className={`hig-filter-pill ${selected ? 'active' : ''}`}
+                  onClick={() => setSubpart(opt.key)}
+                >
+                  {tx(lang, opt.ko, opt.en)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Material Selector */}
+      <div className="hig-field-group">
+        <label className="hig-field-label">{tx(lang, '소재', 'Material')}</label>
+        <div
+          className="hig-pill-row"
+          role="group"
+          data-add-material-group="true"
+          aria-label={tx(lang, '소재', 'Material')}
+        >
+          {MATERIAL_OPTIONS.map((mat) => {
+            const selected = material === mat.key;
+            return (
+              <button
+                key={mat.key}
+                type="button"
+                data-add-material-btn={mat.key}
+                aria-pressed={selected}
+                className={`hig-filter-pill ${selected ? 'active' : ''}`}
+                onClick={() => setMaterial(mat.key)}
+              >
+                {tx(lang, mat.ko, mat.en)}
               </button>
             );
           })}

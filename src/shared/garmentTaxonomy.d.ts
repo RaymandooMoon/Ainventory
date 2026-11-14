@@ -1,5 +1,12 @@
 import type { PersonalColorMacroKey, WearSlotKey } from '../contracts/carbonDesignContract.ts';
 
+export {
+  ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  ACCESSORY_JEWELRY_CATALOG,
+  ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
+  type AccessoryJewelryCatalogItem,
+} from './accessoryJewelryCatalog.js';
+
 export interface WearSlotDefinition {
   key: WearSlotKey;
   code: string;

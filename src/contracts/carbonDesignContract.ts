@@ -216,9 +216,11 @@ export interface GarmentRecord {
   id: number;
   closet_owner: string;
   name: string;
+  name_en?: string;
   category: string;
   subcategory: string;
   fabric?: string;
+  material_key?: string | null;
   color_name: string;
   color_hex: string;
   seasons: string[];

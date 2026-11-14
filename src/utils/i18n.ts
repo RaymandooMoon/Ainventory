@@ -1,3 +1,6 @@
+import { ACCESSORY_JEWELRY_CATALOG } from '../shared/accessoryJewelryCatalog.js';
+import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
+
 export type LangCode = 'ko' | 'en';
 
 const LANG_STORAGE_KEY = 'ainventory_lang';
@@ -200,11 +203,34 @@ const COLOR_KO_TO_EN: Readonly<Record<string, string>> = {
   코냑: 'Cognac',
   실버: 'Silver',
   골드: 'Gold',
+  브론즈: 'Bronze',
+  로즈골드: 'Rose Gold',
+  '로즈 골드': 'Rose Gold',
+  플래티넘: 'Platinum',
+  진주: 'Pearl',
+  오닉스: 'Onyx',
+  '포레스트 그린': 'Forest Green',
+  에스프레소: 'Espresso',
+  토프: 'Taupe',
+  샴페인: 'Champagne',
 };
 
 const COLOR_PREFIXES_SORTED = Object.keys(COLOR_KO_TO_EN).sort((a, b) => b.length - a.length);
 
+const CATALOG_GARMENT_KO_TO_EN: Record<string, string> = {};
+for (const item of SEASONAL_120_CATALOG) {
+  if (item.name && item.name_en) {
+    CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+  }
+}
+for (const item of ACCESSORY_JEWELRY_CATALOG) {
+  if (item.name && item.name_en) {
+    CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+  }
+}
+
 const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
+  ...CATALOG_GARMENT_KO_TO_EN,
   // Sample closet & Sample capsule catalog (`server/db.js`, `server/api.js`, `standaloneFallback.ts`)
   '발수 코튼 개버딘 트렌치코트': 'Water-Repellent Cotton Gabardine Trench Coat',
   '발수 코튼 싱글 맥 트렌치코트': 'Water-Repellent Cotton Single Mac Trench Coat',
@@ -924,3 +950,53 @@ export function localizeApiMessage(
   }
   return 'Request could not be completed. Please try again.';
 }
+
+export function localizeMaterialLabel(
+  fabricOrMaterial: string | undefined | null,
+  lang: string = 'ko'
+): string {
+  const s = String(fabricOrMaterial ?? '').trim().toLowerCase();
+  const isEn = lang === 'en';
+  if (!s) return isEn ? 'Atelier' : '아틀리에';
+  if (/18k.*yellow|yellow.*gold|gold|골드|금/.test(s) && !/rose|로즈/.test(s)) {
+    return isEn ? '18K Gold' : '18K 금';
+  }
+  if (/rose.*gold|로즈\s*골드/.test(s)) {
+    return isEn ? 'Rose Gold' : '로즈골드';
+  }
+  if (/silver|925|실버|은/.test(s)) {
+    return isEn ? '925 Silver' : '925 은';
+  }
+  if (/bronze|brass|copper|브론즈|황동|구리|동/.test(s)) {
+    return isEn ? 'Bronze' : '동·브론즈';
+  }
+  if (/platinum|titanium|플래티넘|백금|티타늄/.test(s)) {
+    return isEn ? 'Platinum' : '플래티넘';
+  }
+  if (/pearl|onyx|진주|오닉스/.test(s)) {
+    return isEn ? 'Pearl & Onyx' : '진주·오닉스';
+  }
+  if (/cashmere|캐시미어/.test(s)) {
+    return isEn ? 'Cashmere' : '캐시미어';
+  }
+  if (/wool|merino|울/.test(s)) {
+    return isEn ? 'Wool' : '울';
+  }
+  if (/leather|calf|nappa|suede|가죽/.test(s)) {
+    return isEn ? 'Leather' : '가죽';
+  }
+  if (/silk|실크/.test(s)) {
+    return isEn ? 'Silk' : '실크';
+  }
+  if (/fabric|canvas|cotton|nylon|gabardine|linen|패브릭/.test(s)) {
+    return isEn ? 'Fabric' : '패브릭';
+  }
+  if (/acetate|horn/.test(s)) {
+    return isEn ? 'Acetate' : '아세테이트';
+  }
+  if (isEn && HANGUL_REGEX.test(s)) {
+    return replaceKoreanPhrasesAndRomanize(s);
+  }
+  return isEn ? 'Atelier' : '패브릭';
+}
+

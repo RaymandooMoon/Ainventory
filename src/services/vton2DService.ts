@@ -177,14 +177,33 @@ const PACKSHOT_CACHE_MAX = 160;
 
 const ORDERED_OUTFIT_SLOTS = [
   'headwear',
+  'acc_head',
+  'acc_eyes',
+  'jwl_ear_left',
+  'jwl_ear_right',
   'neckwear',
+  'acc_neck',
+  'jwl_neck',
   'outer',
+  'jwl_brooch',
   'top',
   'onepiece',
   'dress',
+  'acc_belt',
   'bottom',
+  'acc_wrist_left',
+  'acc_wrist_right',
+  'jwl_wrist_left',
+  'jwl_wrist_right',
+  'gloves',
+  'acc_hand_left',
+  'acc_hand_right',
+  'jwl_ring_left',
+  'jwl_ring_right',
+  'socks',
   'shoes',
   'accessory',
+  'acc_umbrella',
 ] as const;
 
 const READONLY_PORTRAIT_STORAGE_KEYS = [
@@ -848,11 +867,206 @@ export async function deleteCachedAiVtonOutfit(params: {
 }
 
 /**
- * Crops an AI-generated 2x2 Turnaround Studio Sheet into 4 individual angle images:
+ * Pure raster single-subject isolator for VTON turnaround quadrants.
+ * Detects if Gemini accidentally rendered 2 side-by-side twin/duplicate models inside a wide slice
+ * (separated by studio background `#F5F5F7`) and cleanly crops & centers the single primary figure.
+ */
+function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasElement {
+  const cw = srcCanvas.width;
+  const ch = srcCanvas.height;
+  if (cw < 80 || ch < 72) return srcCanvas;
+
+  const ctx = srcCanvas.getContext('2d');
+  if (!ctx) return srcCanvas;
+
+  let imgData: ImageData;
+  try {
+    imgData = ctx.getImageData(0, 0, cw, ch);
+  } catch {
+    return srcCanvas;
+  }
+  const data = imgData.data;
+
+  // Estimate studio cyclorama background RGB from 4 corners
+  const rSamples: number[] = [];
+  const gSamples: number[] = [];
+  const bSamples: number[] = [];
+  const patch = Math.max(2, Math.min(8, Math.floor(Math.min(cw, ch) * 0.06)));
+  const cornerCoords = [
+    [1, 1],
+    [cw - patch - 1, 1],
+    [1, ch - patch - 1],
+    [cw - patch - 1, ch - patch - 1],
+  ];
+  for (const [cx, cy] of cornerCoords) {
+    for (let dy = 0; dy < patch; dy += 2) {
+      for (let dx = 0; dx < patch; dx += 2) {
+        const idx = ((cy + dy) * cw + (cx + dx)) * 4;
+        rSamples.push(data[idx]);
+        gSamples.push(data[idx + 1]);
+        bSamples.push(data[idx + 2]);
+      }
+    }
+  }
+  rSamples.sort((a, b) => a - b);
+  gSamples.sort((a, b) => a - b);
+  bSamples.sort((a, b) => a - b);
+  const midIdx = Math.floor(rSamples.length / 2);
+  const bgR = rSamples[midIdx] ?? 245;
+  const bgG = gSamples[midIdx] ?? 245;
+  const bgB = bSamples[midIdx] ?? 247;
+
+  const yStart = Math.floor(ch * 0.08);
+  const yEnd = Math.max(yStart + 1, Math.floor(ch * 0.92));
+  const bandH = yEnd - yStart;
+  const rawColFg = new Float32Array(cw);
+
+  for (let x = 0; x < cw; x += 1) {
+    let fgCount = 0;
+    for (let y = yStart; y < yEnd; y += 2) {
+      const idx = (y * cw + x) * 4;
+      const diff =
+        Math.abs(data[idx] - bgR) +
+        Math.abs(data[idx + 1] - bgG) +
+        Math.abs(data[idx + 2] - bgB);
+      if (diff > 36) fgCount += 1;
+    }
+    rawColFg[x] = fgCount / Math.max(1, Math.ceil(bandH / 2));
+  }
+
+  // 3-px box smoothing
+  const colFg = new Float32Array(cw);
+  for (let x = 0; x < cw; x += 1) {
+    const prev = rawColFg[Math.max(0, x - 1)];
+    const next = rawColFg[Math.min(cw - 1, x + 1)];
+    colFg[x] = (prev + rawColFg[x] + next) / 3;
+  }
+
+  interface FgRun {
+    start: number;
+    end: number;
+    mass: number;
+    peak: number;
+  }
+  const rawRuns: FgRun[] = [];
+  let inRun = false;
+  let runStart = 0;
+  for (let x = 0; x < cw; x += 1) {
+    if (colFg[x] >= 0.055) {
+      if (!inRun) {
+        inRun = true;
+        runStart = x;
+      }
+    } else if (inRun) {
+      rawRuns.push({ start: runStart, end: x - 1, mass: 0, peak: 0 });
+      inRun = false;
+    }
+  }
+  if (inRun) {
+    rawRuns.push({ start: runStart, end: cw - 1, mass: 0, peak: 0 });
+  }
+  if (rawRuns.length < 2) return srcCanvas;
+
+  // Merge tiny intra-body gaps (e.g., arm-to-waist space <= 3% of slice width)
+  const maxIntraGap = Math.max(2, Math.round(cw * 0.03));
+  const merged: FgRun[] = [rawRuns[0]];
+  for (let i = 1; i < rawRuns.length; i += 1) {
+    const prev = merged[merged.length - 1];
+    const cur = rawRuns[i];
+    if (cur.start - prev.end <= maxIntraGap) {
+      prev.end = cur.end;
+    } else {
+      merged.push(cur);
+    }
+  }
+
+  let maxMass = 0;
+  for (const run of merged) {
+    let mass = 0;
+    let peak = 0;
+    for (let x = run.start; x <= run.end; x += 1) {
+      mass += colFg[x];
+      if (colFg[x] > peak) peak = colFg[x];
+    }
+    run.mass = mass;
+    run.peak = peak;
+    if (mass > maxMass) maxMass = mass;
+  }
+
+  const humanIslands = merged.filter(
+    (r) => r.end - r.start + 1 >= cw * 0.1 && r.peak >= 0.16 && r.mass >= maxMass * 0.38
+  );
+  if (humanIslands.length < 2) return srcCanvas;
+
+  // Verify genuine background valley between adjacent human islands
+  let hasTrueSeparation = false;
+  for (let i = 0; i < humanIslands.length - 1; i += 1) {
+    const gapStart = humanIslands[i].end + 1;
+    const gapEnd = humanIslands[i + 1].start - 1;
+    if (gapEnd - gapStart + 1 >= Math.max(4, Math.round(cw * 0.035))) {
+      let minVal = 1;
+      for (let gx = gapStart; gx <= gapEnd; gx += 1) {
+        if (colFg[gx] < minVal) minVal = colFg[gx];
+      }
+      if (minVal <= 0.03) {
+        hasTrueSeparation = true;
+        break;
+      }
+    }
+  }
+  if (!hasTrueSeparation) return srcCanvas;
+
+  // Pick the primary model closest to center weighted by silhouette mass
+  let bestIdx = 0;
+  let bestScore = -1;
+  for (let i = 0; i < humanIslands.length; i += 1) {
+    const isl = humanIslands[i];
+    const center = (isl.start + isl.end) * 0.5;
+    const centerDistNorm = Math.abs(center - cw * 0.5) / (cw * 0.5);
+    const score = isl.mass * (1 - 0.3 * centerDistNorm);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  const best = humanIslands[bestIdx];
+  const minSafeX =
+    bestIdx > 0
+      ? Math.floor((humanIslands[bestIdx - 1].end + best.start) * 0.5)
+      : 0;
+  const maxSafeX =
+    bestIdx < humanIslands.length - 1
+      ? Math.ceil((best.end + 1 + humanIslands[bestIdx + 1].start) * 0.5)
+      : cw;
+
+  const islandW = best.end - best.start + 1;
+  const padX = Math.max(6, Math.round(islandW * 0.22));
+  const sx = Math.max(minSafeX, best.start - padX);
+  const ex = Math.min(maxSafeX, best.end + 1 + padX);
+  const subW = Math.max(16, ex - sx);
+  const outW = Math.max(subW, Math.min(cw, Math.round(ch * 0.82)));
+
+  const cleanCanvas = document.createElement('canvas');
+  cleanCanvas.width = outW;
+  cleanCanvas.height = ch;
+  const cleanCtx = cleanCanvas.getContext('2d');
+  if (!cleanCtx) return srcCanvas;
+
+  cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+  cleanCtx.fillRect(0, 0, outW, ch);
+  const dx = Math.round((outW - subW) * 0.5);
+  cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
+  return cleanCanvas;
+}
+
+/**
+ * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual angle images:
  * - Top-Left     -> `0°` (Front)
  * - Top-Right    -> `45°` (Quarter)
  * - Bottom-Left  -> `90°` (Side Profile)
  * - Bottom-Right -> `180°` (Back)
+ * Also runs `isolateSingleSubjectInSlice` to eliminate duplicate/twin models if an LLM generated two figures side-by-side.
  * Pure raster image crop of the AI photograph — ZERO procedural drawing!
  */
 export async function sliceTurnaround2x2Sheet(
@@ -879,27 +1093,49 @@ export async function sliceTurnaround2x2Sheet(
           return;
         }
 
-        const halfW = Math.floor(w / 2);
-        const halfH = Math.floor(h / 2);
-        // Trim 1.2% inner margin so quadrant seams never bleed across slices
-        const trimX = Math.max(1, Math.round(halfW * 0.012));
-        const trimY = Math.max(1, Math.round(halfH * 0.012));
-        const cropW = Math.max(16, halfW - trimX * 2);
-        const cropH = Math.max(16, halfH - trimY * 2);
         const useCompactJpeg = w > 256 && h > 256;
+        const isHorizontal1x4Strip = w / h >= 2.15;
 
-        const quadrants: Array<{ angle: TurnaroundAngleDeg; sx: number; sy: number }> = [
-          { angle: 0, sx: trimX, sy: trimY },
-          { angle: 45, sx: halfW + trimX, sy: trimY },
-          { angle: 90, sx: trimX, sy: halfH + trimY },
-          { angle: 180, sx: halfW + trimX, sy: halfH + trimY },
-        ];
+        let quadrants: Array<{
+          angle: TurnaroundAngleDeg;
+          sx: number;
+          sy: number;
+          cw: number;
+          ch: number;
+        }>;
+
+        if (isHorizontal1x4Strip) {
+          const colW = Math.floor(w / 4);
+          const trimX = Math.max(1, Math.round(colW * 0.015));
+          const trimY = Math.max(1, Math.round(h * 0.012));
+          const cw = Math.max(16, colW - trimX * 2);
+          const ch = Math.max(16, h - trimY * 2);
+          quadrants = [
+            { angle: 0, sx: trimX, sy: trimY, cw, ch },
+            { angle: 45, sx: colW + trimX, sy: trimY, cw, ch },
+            { angle: 90, sx: colW * 2 + trimX, sy: trimY, cw, ch },
+            { angle: 180, sx: colW * 3 + trimX, sy: trimY, cw, ch },
+          ];
+        } else {
+          const halfW = Math.floor(w / 2);
+          const halfH = Math.floor(h / 2);
+          const trimX = Math.max(1, Math.round(halfW * 0.012));
+          const trimY = Math.max(1, Math.round(halfH * 0.012));
+          const cw = Math.max(16, halfW - trimX * 2);
+          const ch = Math.max(16, halfH - trimY * 2);
+          quadrants = [
+            { angle: 0, sx: trimX, sy: trimY, cw, ch },
+            { angle: 45, sx: halfW + trimX, sy: trimY, cw, ch },
+            { angle: 90, sx: trimX, sy: halfH + trimY, cw, ch },
+            { angle: 180, sx: halfW + trimX, sy: halfH + trimY, cw, ch },
+          ];
+        }
 
         const out = {} as Record<TurnaroundAngleDeg, string>;
         for (const q of quadrants) {
           const cropCanvas = document.createElement('canvas');
-          cropCanvas.width = cropW;
-          cropCanvas.height = cropH;
+          cropCanvas.width = q.cw;
+          cropCanvas.height = q.ch;
           const ctx = cropCanvas.getContext('2d');
           if (!ctx) {
             out[q.angle] = sheetDataUrl;
@@ -907,12 +1143,13 @@ export async function sliceTurnaround2x2Sheet(
           }
           if (useCompactJpeg) {
             ctx.fillStyle = '#F5F5F7';
-            ctx.fillRect(0, 0, cropW, cropH);
+            ctx.fillRect(0, 0, q.cw, q.ch);
           }
-          ctx.drawImage(img, q.sx, q.sy, cropW, cropH, 0, 0, cropW, cropH);
+          ctx.drawImage(img, q.sx, q.sy, q.cw, q.ch, 0, 0, q.cw, q.ch);
+          const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
           out[q.angle] = useCompactJpeg
-            ? cropCanvas.toDataURL('image/jpeg', 0.9)
-            : cropCanvas.toDataURL('image/png');
+            ? finalCanvas.toDataURL('image/jpeg', 0.9)
+            : finalCanvas.toDataURL('image/png');
         }
         resolve(out);
       } catch {
@@ -1219,11 +1456,17 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? 'Borderless 2x2 Turnaround Sheet (4 equal quadrants on solid #F5F5F7, zero lines/text) of the SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back.'
-    : `Full-body studio portrait at ${angleDeg}° on solid #F5F5F7 background, soft floor shadow, zero text.`;
+    ? 'SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on solid #F5F5F7, zero lines/text) of the EXACT SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back. STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).'
+    : `Full-body studio portrait at ${angleDeg}° on solid #F5F5F7 background, soft floor shadow, zero text. STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
+
+  const hasUmbrella = Boolean(serializedSlots.acc_umbrella || serializedSlots.umbrella);
+  const weatherSceneLine =
+    weatherMood === 'rainy' || hasUmbrella
+      ? `Rainy-day editorial mood: cool overcast 6200K lighting with delicate atmospheric rain droplets${hasUmbrella ? ', with the model naturally holding the equipped umbrella' : ''}.`
+      : `Studio weather lighting mood: ${weatherMood}.`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
-  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}, light=${weatherMood}.`;
+  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}. ${weatherSceneLine}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
@@ -1232,17 +1475,44 @@ function buildDirectClientGeminiParts(params: {
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `Match facial identity/hair (${isStylized ? 'stylized' : 'photorealistic'}, skin ${profile.skinToneHex}):`,
+      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Quarter, and 90° Side Profile (and matching rear hair silhouette on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
   }
+
+  const slotPlacementPrompts: Record<string, string> = {
+    accessory: 'carried naturally on shoulder or in hand as main bag/tote/briefcase',
+    acc_umbrella:
+      'held naturally by the model (open overhead canopy on rainy days or poised stylishly by handle)',
+    acc_belt: 'fastened cleanly around the waist belt loops with visible buckle hardware',
+    acc_head: 'worn naturally on top of the head fitting crown and hair volume',
+    acc_eyes: 'worn cleanly across the nose bridge and ears as eyewear/glasses/sunglasses',
+    acc_neck: 'draped/knotted naturally around the neck over collar line',
+    acc_hand_left:
+      "worn EXCLUSIVELY on the model's ANATOMICAL LEFT HAND (keep right hand bare unless right glove is also equipped)",
+    acc_hand_right:
+      "worn EXCLUSIVELY on the model's ANATOMICAL RIGHT HAND (may intentionally differ from left hand glove for asymmetric styling)",
+    acc_wrist_left: "worn on the model's ANATOMICAL LEFT WRIST with visible watch case and strap",
+    acc_wrist_right:
+      "worn on the model's ANATOMICAL RIGHT WRIST (allow dual-wrist asymmetric watch styling when left watch is also worn)",
+    jwl_neck: 'worn gracefully around the collarbone / neckline as a necklace/pendant',
+    jwl_ear_left: "worn on the model's ANATOMICAL LEFT EARLOBE/EAR",
+    jwl_ear_right: "worn on the model's ANATOMICAL RIGHT EARLOBE/EAR",
+    jwl_wrist_left: "worn on the model's ANATOMICAL LEFT WRIST as a bracelet/bangle",
+    jwl_wrist_right: "worn on the model's ANATOMICAL RIGHT WRIST as a bracelet/bangle",
+    jwl_ring_left: "worn on a finger of the model's ANATOMICAL LEFT HAND",
+    jwl_ring_right: "worn on a finger of the model's ANATOMICAL RIGHT HAND",
+    jwl_brooch: 'pinned cleanly to the upper-left chest lapel/collar area as a brooch/corsage',
+  };
 
   for (const [slotKey, item] of Object.entries(serializedSlots)) {
     const inline = parseDataUrlInlinePart(
       typeof item.packshotDataUrl === 'string' ? item.packshotDataUrl : null
     );
+    const placementPrompt = slotPlacementPrompts[slotKey];
+    const placementHint = placementPrompt ? ` — Placement: ${placementPrompt}` : '';
     parts.push({
-      text: `[${slotKey.toUpperCase()}] "${String(item.name || slotKey)}" (${String(item.subcategory || item.category || slotKey)}, ${String(item.color_hex || '')}, ${String(item.fabric || 'cotton')}):`,
+      text: `[${slotKey.toUpperCase()}] "${String(item.name || slotKey)}" (${String(item.subcategory || item.category || slotKey)}, ${String(item.color_hex || '')}, ${String(item.fabric || 'cotton')})${placementHint}:`,
     });
     if (inline) {
       parts.push({ inlineData: inline });
@@ -1250,7 +1520,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: 'Wear all garments above together on #F5F5F7. Return image only.',
+    text: 'Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts on #F5F5F7. Strictly ONE solitary person per panel. Return image only.',
   });
 
   return parts;
@@ -1276,9 +1546,13 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   } = params;
 
   const sheetModes = useTurnaroundSheet ? [true, false] : [false];
-  const modalityStrategies: Array<Array<'TEXT' | 'IMAGE'>> = [
-    ['TEXT', 'IMAGE'],
-    ['IMAGE'],
+  const modalityStrategies: Array<{
+    responseModalities: Array<'TEXT' | 'IMAGE'>;
+    useAspectConfig: boolean;
+  }> = [
+    { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true },
+    { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false },
+    { responseModalities: ['IMAGE'], useAspectConfig: false },
   ];
   let lastReason = 'gemini_no_image_generated';
   let sawBillingQuota = false;
@@ -1296,13 +1570,19 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
     for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
       for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
-        const responseModalities = modalityStrategies[stratIdx];
+        const { responseModalities, useAspectConfig } = modalityStrategies[stratIdx];
         const requestSignal =
           typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
             ? AbortSignal.timeout(55_000)
             : undefined;
 
         try {
+          const generationConfig: Record<string, unknown> = {
+            responseModalities,
+            ...(useAspectConfig
+              ? { imageConfig: { aspectRatio: turnaroundSheet ? '1:1' : '3:4' } }
+              : {}),
+          };
           const res = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
             {
@@ -1314,9 +1594,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
               },
               body: JSON.stringify({
                 contents: [{ role: 'user', parts }],
-                generationConfig: {
-                  responseModalities,
-                },
+                generationConfig,
               }),
             }
           );
@@ -1339,7 +1617,15 @@ async function synthesizeDirectBrowserGeminiVton(params: {
                 compositeImageUrl: null,
               };
             }
-            if (res.status === 400 && stratIdx === 0 && msg.includes('modalit')) {
+            if (
+              res.status === 400 &&
+              stratIdx < modalityStrategies.length - 1 &&
+              (msg.includes('modalit') ||
+                msg.includes('imageconfig') ||
+                msg.includes('image_config') ||
+                msg.includes('aspect') ||
+                msg.includes('unknown name'))
+            ) {
               continue;
             }
             if (res.status === 401 || res.status === 403) {
@@ -1426,8 +1712,17 @@ async function synthesizeDirectBrowserGeminiVton(params: {
               ? `gemini_empty_image_${finish.toLowerCase()}`
               : 'gemini_empty_image_part';
           }
-          if (stratIdx === 0 && (!finish || finish.toUpperCase() === 'STOP')) {
-            continue;
+          if (
+            responseModalities.includes('TEXT') &&
+            (!finish || finish.toUpperCase() === 'STOP')
+          ) {
+            const imageOnlyIdx = modalityStrategies.findIndex(
+              (s) => !s.responseModalities.includes('TEXT')
+            );
+            if (imageOnlyIdx > stratIdx) {
+              stratIdx = imageOnlyIdx - 1;
+              continue;
+            }
           }
           break;
         } catch (err) {
@@ -1583,7 +1878,18 @@ export async function synthesizeGeminiMultiAngleVton(
 
   const runPromise = (async (): Promise<AiVtonSynthesisOutcome> => {
     try {
-      const serializedSlots = await buildMultimodalSlotsPayload(equippedGarments);
+      const [serializedSlots, encodedPortrait] = await Promise.all([
+        buildMultimodalSlotsPayload(equippedGarments),
+        profile.portraitDataUrl
+          ? encodeImageUrlToInlineDataUrl(profile.portraitDataUrl)
+          : Promise.resolve(null),
+      ]);
+      const effectivePortraitUrl = encodedPortrait || profile.portraitDataUrl || null;
+      const effectiveProfile: NormalizedVtonProfile =
+        effectivePortraitUrl !== profile.portraitDataUrl
+          ? { ...profile, portraitDataUrl: effectivePortraitUrl }
+          : profile;
+
       const clientGeminiKeys = resolveCandidateClientGeminiApiKeys();
       const clientGeminiKey = clientGeminiKeys[0] || '';
       const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
@@ -1614,20 +1920,21 @@ export async function synthesizeGeminiMultiAngleVton(
               viewAngleDeg: angleDeg,
               turnaroundSheet: useTurnaroundSheet,
               weather: request.weather ?? { mood: weatherMood },
-              avatarSpec: profile.avatarSpec,
-              avatarConfigHash: profile.avatarConfigHash,
+              avatarSpec: effectiveProfile.avatarSpec,
+              avatarConfigHash: effectiveProfile.avatarConfigHash,
+              portraitDataUrl: effectivePortraitUrl,
               profile: {
-                skinToneHex: profile.skinToneHex,
-                personalColor: profile.personalColor,
-                heightCm: profile.heightCm,
-                weightKg: profile.weightKg,
-                bodyShape: profile.bodyShape,
-                shoulderScale: profile.shoulderScale,
-                waistScale: profile.waistScale,
-                hipScale: profile.hipScale,
-                portraitDataUrl: profile.portraitDataUrl,
-                avatarSpec: profile.avatarSpec,
-                avatarConfigHash: profile.avatarConfigHash,
+                skinToneHex: effectiveProfile.skinToneHex,
+                personalColor: effectiveProfile.personalColor,
+                heightCm: effectiveProfile.heightCm,
+                weightKg: effectiveProfile.weightKg,
+                bodyShape: effectiveProfile.bodyShape,
+                shoulderScale: effectiveProfile.shoulderScale,
+                waistScale: effectiveProfile.waistScale,
+                hipScale: effectiveProfile.hipScale,
+                portraitDataUrl: effectivePortraitUrl,
+                avatarSpec: effectiveProfile.avatarSpec,
+                avatarConfigHash: effectiveProfile.avatarConfigHash,
                 styleMode,
                 viewAngleDeg: angleDeg,
                 turnaroundSheet: useTurnaroundSheet,
@@ -1667,7 +1974,7 @@ export async function synthesizeGeminiMultiAngleVton(
         for (const candidateKey of clientGeminiKeys) {
           const directJson = await synthesizeDirectBrowserGeminiVton({
             apiKey: candidateKey,
-            profile,
+            profile: effectiveProfile,
             styleMode,
             weatherMood,
             angleDeg,

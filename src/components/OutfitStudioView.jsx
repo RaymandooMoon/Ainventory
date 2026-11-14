@@ -17,17 +17,29 @@ import {
   useAvatarSpec,
 } from '../services/avatarSpecStore.ts';
 import {
+  ACCESSORY_SUBTREE_SLOTS,
+  ALL_EQUIPPABLE_SLOT_KEYS,
   FITTING_SLOTS,
+  JEWELRY_SUBTREE_SLOTS,
+  SUB_SLOT_META_BY_KEY,
+  doesGarmentMatchSubSlot,
+  getOppositeSideSubSlot,
+  isAccessorySlotKey,
+  isJewelrySlotKey,
   isSwimwearGarment,
+  isUmbrellaGarment,
   isWearableStudioGarment,
+  mapGarmentToDefaultSubSlot,
   mapGarmentToFittingSlot,
   renderOutfitFitting,
+  resolveParentFittingTab,
 } from '../services/fittingRenderer.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
   localizeApiMessage,
   localizeGarmentName,
+  localizeMaterialLabel,
   localizeOutfitTitle,
   tx,
 } from '../utils/i18n.ts';
@@ -100,6 +112,33 @@ const SEASON_TOKEN_ALIAS = {
   겨울: '겨울',
 };
 
+function groupSubSlotsByBranch(subSlots) {
+  const branches = [];
+  const byKey = new Map();
+  for (const slot of subSlots) {
+    let group = byKey.get(slot.branchKey);
+    if (!group) {
+      group = {
+        branchKey: slot.branchKey,
+        branchKo: slot.branchKo,
+        branchEn: slot.branchEn,
+        items: [],
+      };
+      byKey.set(slot.branchKey, group);
+      branches.push(group);
+    }
+    group.items.push(slot);
+  }
+  return branches;
+}
+
+const ACCESSORY_BRANCH_GROUPS = groupSubSlotsByBranch(ACCESSORY_SUBTREE_SLOTS);
+const JEWELRY_BRANCH_GROUPS = groupSubSlotsByBranch(JEWELRY_SUBTREE_SLOTS);
+
+const EMPTY_STUDIO_SLOTS = Object.freeze(
+  Object.fromEntries(ALL_EQUIPPABLE_SLOT_KEYS.map((k) => [k, null]))
+);
+
 function normalizeSeasonToken(raw) {
   const s = String(raw || '').trim();
   if (!s) return '';
@@ -151,94 +190,96 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
   const isChillyOrWindy = Boolean(
     weather?.isWindy || (typeof weather?.avgTemp === 'number' && weather.avgTemp <= 11)
   );
+  const isRainyWeather = Boolean(
+    weather?.isRainy || weather?.isRaining || weather?.scenarioKey === 'rainy_cool'
+  );
 
-  let outer = resolveItem(slotMap.outer);
-  let onepiece = resolveItem(slotMap.onepiece) || resolveItem(slotMap.dress);
+  const next = { ...EMPTY_STUDIO_SLOTS };
+
+  next.outer = resolveItem(slotMap.outer);
+  next.onepiece = resolveItem(slotMap.onepiece) || resolveItem(slotMap.dress);
   const rawTop = resolveItem(slotMap.top);
-  if (!onepiece && rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece') {
-    onepiece = rawTop;
+  if (!next.onepiece && rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece') {
+    next.onepiece = rawTop;
   }
 
-  const hasNonSwimOnepiece = Boolean(onepiece && !isSwimwearGarment(onepiece));
-  let top =
+  const hasNonSwimOnepiece = Boolean(next.onepiece && !isSwimwearGarment(next.onepiece));
+  next.top =
     hasNonSwimOnepiece || (rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece')
       ? null
       : rawTop;
-  let bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
-  let shoes = resolveItem(slotMap.shoes);
-  let accessory = isChillyOrWindy
-    ? resolveItem(slotMap.neckwear) ||
-      resolveItem(slotMap.accessory) ||
-      resolveItem(slotMap.headwear)
-    : resolveItem(slotMap.accessory) || resolveItem(slotMap.neckwear);
+  next.bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
+  next.shoes = resolveItem(slotMap.shoes);
 
-  if (!top && !onepiece && !outer && Array.isArray(rec?.items)) {
+  const candidateAcc = resolveItem(slotMap.accessory);
+  const candidateNeck = resolveItem(slotMap.neckwear) || resolveItem(slotMap.acc_neck);
+  const candidateHead = resolveItem(slotMap.headwear) || resolveItem(slotMap.acc_head);
+  const candidateUmbrella =
+    resolveItem(slotMap.acc_umbrella) ||
+    resolveItem(slotMap.umbrella) ||
+    (isRainyWeather
+      ? (allGarments || []).find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null
+      : null);
+
+  if (candidateAcc) {
+    const mappedAccSlot = mapGarmentToDefaultSubSlot(candidateAcc);
+    next[mappedAccSlot] = candidateAcc;
+  }
+  if (candidateNeck && !next.acc_neck) {
+    next.acc_neck = candidateNeck;
+  }
+  if (isChillyOrWindy && candidateHead && !next.acc_head) {
+    next.acc_head = candidateHead;
+  }
+  if (candidateUmbrella) {
+    next.acc_umbrella = candidateUmbrella;
+  }
+
+  if (Array.isArray(rec?.items)) {
     for (const raw of rec.items) {
       const item = resolveItem(raw);
       if (!item) continue;
-      const key = mapGarmentToFittingSlot(item);
-      if (key === 'outer' && !outer) outer = item;
-      else if (key === 'onepiece' && !onepiece) {
-        onepiece = item;
-        if (!isSwimwearGarment(item)) {
-          top = null;
-          bottom = null;
+      const defaultKey = mapGarmentToDefaultSubSlot(item);
+      if (defaultKey === 'onepiece') {
+        if (!next.onepiece) {
+          next.onepiece = item;
+          if (!isSwimwearGarment(item)) {
+            next.top = null;
+            next.bottom = null;
+          }
         }
-      } else if (key === 'top' && !top && !(onepiece && !isSwimwearGarment(onepiece))) {
-        top = item;
-      } else if (key === 'bottom' && !bottom && !(onepiece && !isSwimwearGarment(onepiece))) {
-        bottom = item;
-      } else if (key === 'shoes' && !shoes) shoes = item;
-      else if (key === 'accessory' && !accessory) accessory = item;
+      } else if (defaultKey === 'top' || defaultKey === 'bottom') {
+        if (!next[defaultKey] && !(next.onepiece && !isSwimwearGarment(next.onepiece))) {
+          next[defaultKey] = item;
+        }
+      } else if (!next[defaultKey]) {
+        next[defaultKey] = item;
+      }
     }
   }
 
-  return {
-    outer: outer || null,
-    top: top || null,
-    bottom: bottom || null,
-    onepiece: onepiece || null,
-    shoes: shoes || null,
-    accessory: accessory || null,
-  };
+  return next;
 }
-
-const EMPTY_STUDIO_SLOTS = {
-  outer: null,
-  top: null,
-  bottom: null,
-  onepiece: null,
-  shoes: null,
-  accessory: null,
-};
 
 function buildInitialStudioSlots(garments, preEquippedGarment) {
   const wearableList = (Array.isArray(garments) ? garments : []).filter((g) =>
     isWearableStudioGarment(g)
   );
   const findFirst = (slotKey) =>
-    wearableList.find((g) => mapGarmentToFittingSlot(g) === slotKey) || null;
+    wearableList.find((g) => doesGarmentMatchSubSlot(g, slotKey)) || null;
 
   if (preEquippedGarment && isWearableStudioGarment(preEquippedGarment)) {
-    const targetSlot = mapGarmentToFittingSlot(preEquippedGarment);
+    const targetSlot = mapGarmentToDefaultSubSlot(preEquippedGarment);
     const preIsNonSwimOnepiece =
       targetSlot === 'onepiece' && !isSwimwearGarment(preEquippedGarment);
-    return {
-      outer: targetSlot === 'outer' ? preEquippedGarment : null,
-      top: preIsNonSwimOnepiece
-        ? null
-        : targetSlot === 'top'
-          ? preEquippedGarment
-          : findFirst('top'),
-      bottom: preIsNonSwimOnepiece
-        ? null
-        : targetSlot === 'bottom'
-          ? preEquippedGarment
-          : findFirst('bottom'),
-      onepiece: targetSlot === 'onepiece' ? preEquippedGarment : null,
-      shoes: targetSlot === 'shoes' ? preEquippedGarment : findFirst('shoes'),
-      accessory: targetSlot === 'accessory' ? preEquippedGarment : null,
+    const next = {
+      ...EMPTY_STUDIO_SLOTS,
+      top: preIsNonSwimOnepiece ? null : findFirst('top'),
+      bottom: preIsNonSwimOnepiece ? null : findFirst('bottom'),
+      shoes: findFirst('shoes'),
     };
+    next[targetSlot] = preEquippedGarment;
+    return next;
   }
 
   if (wearableList.length > 0) {
@@ -246,12 +287,11 @@ function buildInitialStudioSlots(garments, preEquippedGarment) {
     const initialBottom = findFirst('bottom');
     const initialOnepiece = !initialTop && !initialBottom ? findFirst('onepiece') : null;
     return {
-      outer: null,
+      ...EMPTY_STUDIO_SLOTS,
       top: initialTop,
       bottom: initialBottom,
       onepiece: initialOnepiece,
       shoes: findFirst('shoes'),
-      accessory: null,
     };
   }
 
@@ -285,7 +325,12 @@ export default function OutfitStudioView({
   const bridgedAvatar = useMemo(() => {
     void storedAvatarSpec;
     void storedAvatarHash;
-    return bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user });
+    return bridgeLegacyPropsToAvatarSpec({
+      skinProfile,
+      bodySpec,
+      user,
+      personReferenceUrl: skinProfile?.portraitDataUrl || null,
+    });
   }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
 
   const [rawSlots, setSlots] = useState(() =>
@@ -295,14 +340,16 @@ export default function OutfitStudioView({
   );
   const [hasExplicitSlotState, setHasExplicitSlotState] = useState(true);
   const [activeSlotKey, setActiveSlotKey] = useState(() =>
-    preEquippedGarment ? mapGarmentToFittingSlot(preEquippedGarment) : 'top'
+    preEquippedGarment ? mapGarmentToDefaultSubSlot(preEquippedGarment) : 'top'
   );
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [renderResult, setRenderResult] = useState(null);
+  const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
+  const ensuredSeedClosetsRef = useRef(new Set());
 
   const [cityKey, setCityKey] = useState('seoul');
   const [scenarioKey, setScenarioKey] = useState('live');
@@ -316,6 +363,22 @@ export default function OutfitStudioView({
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [outfitTitle, setOutfitTitle] = useState('');
   const [savingOutfit, setSavingOutfit] = useState(false);
+
+  const activeParentTab = useMemo(
+    () => resolveParentFittingTab(activeSlotKey),
+    [activeSlotKey]
+  );
+
+  const handleSelectTopFittingTab = useCallback((tabKey) => {
+    triggerHaptic('selection');
+    if (tabKey === 'accessory') {
+      setActiveSlotKey((prev) => (isAccessorySlotKey(prev) ? prev : 'accessory'));
+    } else if (tabKey === 'jewelry') {
+      setActiveSlotKey((prev) => (isJewelrySlotKey(prev) ? prev : 'jwl_neck'));
+    } else {
+      setActiveSlotKey(tabKey);
+    }
+  }, []);
 
   const handleOpenBodyModal = useCallback(() => {
     if (onOpenBodyProfile) {
@@ -396,7 +459,11 @@ export default function OutfitStudioView({
           (forceAutoApplyWeatherRef.current || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
-          setSlots(mapWeatherRecToSlots(chosenRec, garments, data.weather));
+          const effectiveW =
+            scenarioKey === 'rainy_cool'
+              ? { ...(data?.weather || {}), scenarioKey: 'rainy_cool', isRainy: true, isRaining: true }
+              : data?.weather;
+          setSlots(mapWeatherRecToSlots(chosenRec, garments, effectiveW));
           setHasExplicitSlotState(true);
           activeRecIdRef.current = chosenRec.id;
           setActiveRecId(chosenRec.id);
@@ -422,6 +489,66 @@ export default function OutfitStudioView({
     };
   }, [activeCloset, cityKey, scenarioKey, gpsCoords, skinProfile, effectiveGender, garments]);
 
+  const weather = useMemo(() => {
+    const raw = weatherPayload?.weather || null;
+    if (scenarioKey === 'rainy_cool') {
+      return {
+        ...(raw || {
+          tempMin: 9,
+          tempMax: 13,
+          avgTemp: 11,
+          cityName: '서울',
+        }),
+        scenarioKey: 'rainy_cool',
+        isRainy: true,
+        isRaining: true,
+      };
+    }
+    return raw;
+  }, [weatherPayload, scenarioKey]);
+
+  const isRainyWeatherActive = Boolean(
+    scenarioKey === 'rainy_cool' || weather?.isRainy || weather?.isRaining
+  );
+
+  // Auto-seed 5 material items per newly created sub-slot (including rainy-day umbrellas) when empty
+  useEffect(() => {
+    const needsSubSlotCheck =
+      isAccessorySlotKey(activeSlotKey) || isJewelrySlotKey(activeSlotKey);
+    if (!needsSubSlotCheck && !isRainyWeatherActive) return;
+
+    const closetKey = activeCloset || 'sample';
+    const checkSlot = isRainyWeatherActive && !needsSubSlotCheck ? 'acc_umbrella' : activeSlotKey;
+    const matchingCount = garments.filter((g) => doesGarmentMatchSubSlot(g, checkSlot)).length;
+    const umbrellaCount = isRainyWeatherActive
+      ? garments.filter((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)).length
+      : 1;
+
+    if (matchingCount > 0 && umbrellaCount > 0) return;
+
+    const guardKey = `${closetKey}:${checkSlot}:${isRainyWeatherActive ? 'rain' : 'slot'}`;
+    if (ensuredSeedClosetsRef.current.has(guardKey)) return;
+    ensuredSeedClosetsRef.current.add(guardKey);
+
+    let cancelled = false;
+    apiFetch('/garments/ensure-material-seeds', {
+      method: 'POST',
+      body: JSON.stringify({ closet_owner: closetKey }),
+    })
+      .then((res) => {
+        if (!cancelled && res?.inserted > 0) {
+          onClosetUpdated?.();
+        }
+      })
+      .catch(() => {
+        // ignore offline/seed race
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSlotKey, isRainyWeatherActive, garments, activeCloset, onClosetUpdated]);
+
   const slots = useMemo(() => {
     const hasRawSelection = Object.values(rawSlots).some(Boolean);
     const baseSlots =
@@ -429,20 +556,33 @@ export default function OutfitStudioView({
         ? buildInitialStudioSlots(garments, null)
         : rawSlots;
 
+    const next = { ...EMPTY_STUDIO_SLOTS };
     if (garments.length === 0) {
-      return baseSlots;
+      for (const key of ALL_EQUIPPABLE_SLOT_KEYS) {
+        next[key] = baseSlots[key] || null;
+      }
+      return next;
     }
 
     const byId = new Map(garments.map((g) => [Number(g.id), g]));
-    const next = { ...EMPTY_STUDIO_SLOTS };
-    for (const key of Object.keys(next)) {
+    for (const key of ALL_EQUIPPABLE_SLOT_KEYS) {
       const cur = baseSlots[key];
       if (!cur) continue;
-      const resolved = byId.get(Number(cur.id)) || null;
+      const resolved = byId.get(Number(cur.id)) || cur;
       next[key] = resolved && isWearableStudioGarment(resolved) ? resolved : null;
     }
+
+    // Automatically equip first available umbrella on rainy weather unless user explicitly unequipped it
+    if (isRainyWeatherActive && !manualRainUmbrellaCleared && !next.acc_umbrella) {
+      const firstUmbrella =
+        garments.find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null;
+      if (firstUmbrella) {
+        next.acc_umbrella = firstUmbrella;
+      }
+    }
+
     return next;
-  }, [rawSlots, hasExplicitSlotState, garments]);
+  }, [rawSlots, hasExplicitSlotState, garments, isRainyWeatherActive, manualRainUmbrellaCleared]);
 
   useEffect(() => {
     let cancelled = false;
@@ -459,14 +599,28 @@ export default function OutfitStudioView({
   const slotGarments = useMemo(() => {
     return garments.filter((g) => {
       if (!isWearableStudioGarment(g)) return false;
-      if (mapGarmentToFittingSlot(g) !== activeSlotKey) return false;
+      if (!doesGarmentMatchSubSlot(g, activeSlotKey)) return false;
       if (seasonFilter === 'all') return true;
       return parseSeasons(g.seasons).includes(seasonFilter);
     });
   }, [garments, activeSlotKey, seasonFilter]);
 
   const equippedItems = useMemo(() => {
-    return FITTING_SLOTS.map((s) => slots[s.key]).filter(Boolean);
+    return ALL_EQUIPPABLE_SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
+  }, [slots]);
+
+  const equippedCountByParentTab = useMemo(() => {
+    const accCount = ACCESSORY_SUBTREE_SLOTS.filter((s) => Boolean(slots[s.key])).length;
+    const jwlCount = JEWELRY_SUBTREE_SLOTS.filter((s) => Boolean(slots[s.key])).length;
+    return {
+      outer: slots.outer ? 1 : 0,
+      top: slots.top ? 1 : 0,
+      bottom: slots.bottom ? 1 : 0,
+      onepiece: slots.onepiece ? 1 : 0,
+      shoes: slots.shoes ? 1 : 0,
+      accessory: accCount,
+      jewelry: jwlCount,
+    };
   }, [slots]);
 
   const uniqueSavedOutfits = useMemo(() => {
@@ -482,7 +636,6 @@ export default function OutfitStudioView({
     return list;
   }, [savedOutfits]);
 
-  const weather = weatherPayload?.weather || null;
   const cities = weatherPayload?.cities?.length ? weatherPayload.cities : DEFAULT_CITIES;
   const scenarios = weatherPayload?.scenarios?.length
     ? weatherPayload.scenarios
@@ -494,6 +647,7 @@ export default function OutfitStudioView({
   const handleSelectCity = (nextCity) => {
     userModifiedSlotsRef.current = false;
     forceAutoApplyWeatherRef.current = true;
+    setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = null;
     setActiveRecId(null);
     setCityKey(nextCity);
@@ -503,9 +657,19 @@ export default function OutfitStudioView({
   const handleSelectScenario = (nextScenario) => {
     userModifiedSlotsRef.current = false;
     forceAutoApplyWeatherRef.current = true;
+    setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = null;
     setActiveRecId(null);
     setScenarioKey(nextScenario);
+    if (nextScenario === 'rainy_cool') {
+      const firstUmbrella = garments.find(
+        (g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)
+      );
+      if (firstUmbrella) {
+        setSlots((prev) => ({ ...prev, acc_umbrella: firstUmbrella }));
+        setHasExplicitSlotState(true);
+      }
+    }
     triggerHaptic('selection');
   };
 
@@ -525,6 +689,7 @@ export default function OutfitStudioView({
         });
         userModifiedSlotsRef.current = false;
         forceAutoApplyWeatherRef.current = true;
+        setManualRainUmbrellaCleared(false);
         activeRecIdRef.current = null;
         setCityKey('gps');
         setScenarioKey('live');
@@ -541,6 +706,7 @@ export default function OutfitStudioView({
     if (!rec) return;
     triggerHaptic('selection');
     userModifiedSlotsRef.current = false;
+    setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = rec.id;
     setActiveRecId(rec.id);
     setHasExplicitSlotState(true);
@@ -605,25 +771,31 @@ export default function OutfitStudioView({
   };
 
   const handleToggleEquip = (item) => {
-    const slotKey = mapGarmentToFittingSlot(item);
-    const isUnequipping = slots[slotKey]?.id === item.id;
+    const targetSlotKey = doesGarmentMatchSubSlot(item, activeSlotKey)
+      ? activeSlotKey
+      : mapGarmentToDefaultSubSlot(item);
+    const isUnequipping = slots[targetSlotKey]?.id === item.id;
+
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
+    if (targetSlotKey === 'acc_umbrella') {
+      setManualRainUmbrellaCleared(isUnequipping);
+    }
     triggerHaptic('selection');
 
     const nextSlots = {
       ...slots,
-      [slotKey]: isUnequipping ? null : item,
+      [targetSlotKey]: isUnequipping ? null : item,
     };
 
     if (!isUnequipping) {
-      if (slotKey === 'onepiece' && !isSwimwearGarment(item)) {
+      if (targetSlotKey === 'onepiece' && !isSwimwearGarment(item)) {
         // Non-swimwear dress/jumpsuit replaces top & bottom cleanly
         nextSlots.top = null;
         nextSlots.bottom = null;
       } else if (
-        (slotKey === 'top' || slotKey === 'bottom') &&
+        (targetSlotKey === 'top' || targetSlotKey === 'bottom') &&
         nextSlots.onepiece &&
         !isSwimwearGarment(nextSlots.onepiece)
       ) {
@@ -639,6 +811,9 @@ export default function OutfitStudioView({
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
+    if (slotKey === 'acc_umbrella') {
+      setManualRainUmbrellaCleared(true);
+    }
     triggerHaptic('selection');
     setSlots({ ...slots, [slotKey]: null });
   };
@@ -647,6 +822,7 @@ export default function OutfitStudioView({
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
+    setManualRainUmbrellaCleared(true);
     triggerHaptic('selection');
     setSlots({ ...EMPTY_STUDIO_SLOTS });
   };
@@ -688,13 +864,19 @@ export default function OutfitStudioView({
   };
 
   const handleApplySavedOutfit = (outfit) => {
-    const idSet = new Set((outfit.item_ids || []).map(Number));
+    const byId = new Map(garments.map((g) => [Number(g.id), g]));
     const next = { ...EMPTY_STUDIO_SLOTS };
-    for (const g of garments) {
-      if (!isWearableStudioGarment(g)) continue;
-      if (idSet.has(Number(g.id))) {
-        const sKey = mapGarmentToFittingSlot(g);
-        if (!next[sKey]) next[sKey] = g;
+    for (const rawId of outfit.item_ids || []) {
+      const g = byId.get(Number(rawId));
+      if (!g || !isWearableStudioGarment(g)) continue;
+      const defaultKey = mapGarmentToDefaultSubSlot(g);
+      if (!next[defaultKey]) {
+        next[defaultKey] = g;
+      } else {
+        const oppKey = getOppositeSideSubSlot(defaultKey);
+        if (oppKey && !next[oppKey]) {
+          next[oppKey] = g;
+        }
       }
     }
     if (next.onepiece && !isSwimwearGarment(next.onepiece)) {
@@ -704,6 +886,9 @@ export default function OutfitStudioView({
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
+    if (next.acc_umbrella) {
+      setManualRainUmbrellaCleared(false);
+    }
     triggerHaptic('selection');
     setSlots(next);
   };
@@ -744,8 +929,92 @@ export default function OutfitStudioView({
     </div>
   );
 
-  const renderSlotInventoryGrid = (closeOnPick = false) =>
-    slotGarments.length === 0 ? (
+  const renderSubTreePanel = () => {
+    const isAcc = activeParentTab === 'accessory';
+    const isJwl = activeParentTab === 'jewelry';
+    if (!isAcc && !isJwl) return null;
+
+    const branchGroups = isAcc ? ACCESSORY_BRANCH_GROUPS : JEWELRY_BRANCH_GROUPS;
+    const activeMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
+    const activeEquipped = slots[activeSlotKey] || null;
+
+    return (
+      <div
+        className="studio-subtree-panel"
+        data-accessory-subtree={isAcc ? 'true' : undefined}
+        data-jewelry-subtree={isJwl ? 'true' : undefined}
+        role="region"
+        aria-label={
+          isAcc
+            ? tx(lang, '액세서리 부위별 착용 트리', 'Accessory Body-Part Tree')
+            : tx(lang, '주얼리 부위별 착용 트리', 'Jewelry Body-Part Tree')
+        }
+      >
+        {branchGroups.map((group) => (
+          <div key={group.branchKey} className="studio-subtree-branch">
+            <span className="studio-subtree-branch-label">
+              {lang === 'en' ? group.branchEn : group.branchKo}
+            </span>
+            <div className="studio-subtree-pills">
+              {group.items.map((sub) => {
+                const isSelected = activeSlotKey === sub.key;
+                const equippedInSub = Boolean(slots[sub.key]);
+                return (
+                  <button
+                    key={sub.key}
+                    type="button"
+                    data-sub-slot-btn={sub.key}
+                    aria-pressed={isSelected}
+                    className={`studio-subtree-pill ${isSelected ? 'active' : ''} ${equippedInSub ? 'is-equipped' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setActiveSlotKey(sub.key);
+                    }}
+                  >
+                    <span>{lang === 'en' ? sub.labelEn : sub.labelKo}</span>
+                    {equippedInSub && <span className="studio-slot-dot" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {activeMeta && (
+          <div className="studio-subtree-active-hint">
+            <span>
+              <strong>{lang === 'en' ? activeMeta.labelEn : activeMeta.labelKo}</strong>
+              {' · '}
+              {activeEquipped
+                ? resolveGarmentDisplayName(activeEquipped, lang)
+                : tx(
+                    lang,
+                    '각 부위(좌/우 포함) 동시 착용 가능',
+                    'Simultaneous wear per part (incl. L/R)'
+                  )}
+            </span>
+            {activeEquipped && (
+              <button
+                type="button"
+                className="studio-subtree-unequip-btn"
+                onClick={() => handleUnequipSlot(activeSlotKey)}
+              >
+                {tx(lang, '해제', 'Remove')}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSlotInventoryGrid = (closeOnPick = false) => {
+    const oppositeSlotKey = getOppositeSideSubSlot(activeSlotKey);
+    const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
+    const showMaterialBadge =
+      isAccessorySlotKey(activeSlotKey) || isJewelrySlotKey(activeSlotKey);
+
+    return slotGarments.length === 0 ? (
       <div className="studio-slot-empty-state">
         {tx(lang, '조건에 맞는 의류가 없습니다.', 'No matching garments in this slot.')}
       </div>
@@ -753,7 +1022,11 @@ export default function OutfitStudioView({
       <div className="studio-mini-inventory-grid">
         {slotGarments.map((item) => {
           const isEquipped = slots[activeSlotKey]?.id === item.id;
+          const isEquippedOpposite = Boolean(oppositeItem && oppositeItem.id === item.id);
           const displayName = resolveGarmentDisplayName(item, lang);
+          const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
+            ? tx(lang, 'L 착용', 'Worn L')
+            : tx(lang, 'R 착용', 'Worn R');
           return (
             <button
               key={item.id}
@@ -773,13 +1046,22 @@ export default function OutfitStudioView({
                     <Check size={12} strokeWidth={2.6} />
                   </span>
                 )}
+                {isEquippedOpposite && (
+                  <span className="studio-opposite-side-badge">{oppositeBadgeLabel}</span>
+                )}
               </div>
               <span className="hig-garment-name">{displayName}</span>
+              {showMaterialBadge && item.fabric && (
+                <span className="studio-mini-material-tag">
+                  {localizeMaterialLabel(item.fabric, lang)}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
     );
+  };
 
   return (
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
@@ -973,22 +1255,28 @@ export default function OutfitStudioView({
           {/* Mobile Slot Dock (< 700px) */}
           <div className="studio-mobile-slot-bar">
             {FITTING_SLOTS.map((slot) => {
-              const assigned = slots[slot.key];
-              const isSelected = activeSlotKey === slot.key;
+              const count = equippedCountByParentTab[slot.key] || 0;
+              const isSelected = activeParentTab === slot.key;
               const slotText = lang === 'en' ? slot.label : slot.labelKo;
               return (
                 <button
                   key={slot.key}
                   type="button"
                   data-mobile-slot-btn={slot.key}
-                  className={`studio-mobile-slot-pill ${isSelected ? 'active' : ''} ${assigned ? 'filled' : ''}`}
+                  className={`studio-mobile-slot-pill ${isSelected ? 'active' : ''} ${count > 0 ? 'filled' : ''}`}
                   onClick={() => {
-                    setActiveSlotKey(slot.key);
+                    handleSelectTopFittingTab(slot.key);
                     setMobileSheetOpen(true);
                   }}
                 >
                   <span>{slotText}</span>
-                  {assigned ? <span className="studio-slot-dot" /> : <Plus size={12} />}
+                  {count > 1 ? (
+                    <span className="studio-slot-count-badge">{count}</span>
+                  ) : count === 1 ? (
+                    <span className="studio-slot-dot" />
+                  ) : (
+                    <Plus size={12} />
+                  )}
                 </button>
               );
             })}
@@ -1003,8 +1291,8 @@ export default function OutfitStudioView({
             aria-label={tx(lang, '코디 슬롯', 'Outfit Slots')}
           >
             {FITTING_SLOTS.map((slot) => {
-              const active = activeSlotKey === slot.key;
-              const hasItem = Boolean(slots[slot.key]);
+              const active = activeParentTab === slot.key;
+              const count = equippedCountByParentTab[slot.key] || 0;
               const slotText = lang === 'en' ? slot.label : slot.labelKo;
               return (
                 <button
@@ -1014,14 +1302,20 @@ export default function OutfitStudioView({
                   data-outfit-slot-tab={slot.key}
                   aria-selected={active}
                   className={`hig-filter-pill ${active ? 'active' : ''}`}
-                  onClick={() => setActiveSlotKey(slot.key)}
+                  onClick={() => handleSelectTopFittingTab(slot.key)}
                 >
                   <span>{slotText}</span>
-                  {hasItem && <span className="studio-slot-dot" />}
+                  {count > 1 ? (
+                    <span className="studio-slot-count-badge">{count}</span>
+                  ) : count === 1 ? (
+                    <span className="studio-slot-dot" />
+                  ) : null}
                 </button>
               );
             })}
           </div>
+
+          {renderSubTreePanel()}
 
           {renderSeasonFilterRail()}
 
@@ -1107,7 +1401,11 @@ export default function OutfitStudioView({
         onClose={() => setMobileSheetOpen(false)}
         lang={lang}
         title={(() => {
-          const activeDef = FITTING_SLOTS.find((s) => s.key === activeSlotKey);
+          const subMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
+          if (subMeta) {
+            return lang === 'en' ? subMeta.labelEn : subMeta.labelKo;
+          }
+          const activeDef = FITTING_SLOTS.find((s) => s.key === activeParentTab);
           if (!activeDef) return tx(lang, '아이템 선택', 'Select Item');
           return lang === 'en' ? activeDef.label : activeDef.labelKo;
         })()}
@@ -1118,13 +1416,14 @@ export default function OutfitStudioView({
             <button
               key={slot.key}
               type="button"
-              className={`hig-filter-pill ${activeSlotKey === slot.key ? 'active' : ''}`}
-              onClick={() => setActiveSlotKey(slot.key)}
+              className={`hig-filter-pill ${activeParentTab === slot.key ? 'active' : ''}`}
+              onClick={() => handleSelectTopFittingTab(slot.key)}
             >
               {lang === 'en' ? slot.label : slot.labelKo}
             </button>
           ))}
         </div>
+        {renderSubTreePanel()}
         <div style={{ marginBottom: 14 }}>{renderSeasonFilterRail()}</div>
         {renderSlotInventoryGrid(true)}
       </ResponsiveSheetModal>

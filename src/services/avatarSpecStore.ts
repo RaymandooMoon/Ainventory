@@ -2260,7 +2260,7 @@ export function bridgeLegacyPropsToAvatarSpec(
     sanitizePhotoUrl(user?.avatarUrl) ||
     sanitizePhotoUrl(user?.photoUrl);
 
-  const facePhotoUrl = stored.appearance.facePhotoUrl || candidatePhoto || null;
+  const facePhotoUrl = candidatePhoto || stored.appearance.facePhotoUrl || null;
 
   const mergedSpec = sanitizeAvatarSpec({
     ...stored,

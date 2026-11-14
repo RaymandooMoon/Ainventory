@@ -20,9 +20,26 @@ const SLOT_EDITORIAL_PRIORITY = {
   top: 3,
   bottom: 4,
   shoes: 5,
-  headwear: 6,
-  neckwear: 7,
-  accessory: 8,
+  acc_umbrella: 6,
+  accessory: 7,
+  acc_head: 8,
+  headwear: 8,
+  acc_eyes: 9,
+  acc_neck: 10,
+  neckwear: 10,
+  acc_belt: 11,
+  acc_wrist_left: 12,
+  acc_wrist_right: 13,
+  acc_hand_left: 14,
+  acc_hand_right: 15,
+  jwl_neck: 16,
+  jwl_ear_left: 17,
+  jwl_ear_right: 18,
+  jwl_wrist_left: 19,
+  jwl_wrist_right: 20,
+  jwl_ring_left: 21,
+  jwl_ring_right: 22,
+  jwl_brooch: 23,
 };
 
 const SLOT_BADGE_LABELS = {
@@ -32,9 +49,26 @@ const SLOT_BADGE_LABELS = {
   dress: { ko: 'DRESS', en: 'DRESS' },
   bottom: { ko: 'BOTTOM', en: 'BOTTOM' },
   shoes: { ko: 'SHOES', en: 'SHOES' },
-  accessory: { ko: 'ACC', en: 'ACC' },
+  accessory: { ko: 'BAG', en: 'BAG' },
+  acc_umbrella: { ko: 'UMBRELLA', en: 'UMBRELLA' },
+  acc_belt: { ko: 'BELT', en: 'BELT' },
+  acc_head: { ko: 'HEAD', en: 'HEAD' },
   headwear: { ko: 'HEADWEAR', en: 'HEADWEAR' },
+  acc_eyes: { ko: 'EYEWEAR', en: 'EYEWEAR' },
+  acc_neck: { ko: 'NECK', en: 'NECK' },
   neckwear: { ko: 'NECKWEAR', en: 'NECKWEAR' },
+  acc_hand_left: { ko: 'L-GLOVE', en: 'L-GLOVE' },
+  acc_hand_right: { ko: 'R-GLOVE', en: 'R-GLOVE' },
+  acc_wrist_left: { ko: 'L-WATCH', en: 'L-WATCH' },
+  acc_wrist_right: { ko: 'R-WATCH', en: 'R-WATCH' },
+  jwl_neck: { ko: 'NECKLACE', en: 'NECKLACE' },
+  jwl_ear_left: { ko: 'L-EAR', en: 'L-EAR' },
+  jwl_ear_right: { ko: 'R-EAR', en: 'R-EAR' },
+  jwl_wrist_left: { ko: 'L-BANGLE', en: 'L-BANGLE' },
+  jwl_wrist_right: { ko: 'R-BANGLE', en: 'R-BANGLE' },
+  jwl_ring_left: { ko: 'L-RING', en: 'L-RING' },
+  jwl_ring_right: { ko: 'R-RING', en: 'R-RING' },
+  jwl_brooch: { ko: 'BROOCH', en: 'BROOCH' },
 };
 
 function clamp(val, min, max) {
@@ -43,8 +77,8 @@ function clamp(val, min, max) {
 
 /**
  * Computes balanced SSENSE / luxury editorial lookbook placements (`left%`, `top%`, `width%`, `height%`)
- * for 1..8 equipped garments. Every cell uses `object-fit: contain` so original aspect ratios
- * and high-resolution fabric details are 100% preserved with zero distortion.
+ * for 1..23 equipped garments & multi-part accessories/jewelry. Every cell uses `object-fit: contain`
+ * so original aspect ratios and high-resolution fabric/metal details are 100% preserved.
  */
 function computeFlatLayPlacements(layers) {
   const ordered = [...layers].sort((a, b) => {
@@ -141,23 +175,25 @@ function computeFlatLayPlacements(layers) {
     ];
   }
 
-  // 6+ items: crisp 2-column magazine grid
-  const cols = 2;
+  // 6..8 items: 2-column magazine grid; 9+ items: 3-column multi-part editorial grid
+  const cols = count >= 9 ? 3 : 2;
   const rows = Math.ceil(count / cols);
   const usableTop = 8;
-  const usableHeight = 84;
+  const usableHeight = 86;
   const rowH = usableHeight / rows;
+  const colWidth = cols === 3 ? 30 : 45;
 
   return ordered.map((entry, idx) => {
     const col = idx % cols;
     const row = Math.floor(idx / cols);
+    const leftPct = cols === 3 ? 3 + col * 32 : col === 0 ? 4 : 51;
     return {
       ...entry,
       box: {
-        left: col === 0 ? 4 : 51,
+        left: leftPct,
         top: Number((usableTop + row * rowH).toFixed(2)),
-        width: 45,
-        height: Number(Math.max(18, rowH - 2).toFixed(2)),
+        width: colWidth,
+        height: Number(Math.max(12, rowH - 1.5).toFixed(2)),
         zIndex: 4 + idx,
       },
     };

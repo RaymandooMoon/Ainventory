@@ -150,15 +150,61 @@ function ProfileModalContent({
     });
   };
 
-  const runAnalysis = async (imgSrc, nextLighting = lightingMode, focusPoint = undefined) => {
+  const downscaleUserPortrait = (rawDataUrl) =>
+    new Promise((resolve) => {
+      if (typeof document === 'undefined' || typeof Image === 'undefined') {
+        resolve(rawDataUrl);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 512;
+          const srcW = Math.max(1, img.naturalWidth || img.width || 1);
+          const srcH = Math.max(1, img.naturalHeight || img.height || 1);
+          const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
+          const dstW = Math.max(1, Math.round(srcW * scale));
+          const dstH = Math.max(1, Math.round(srcH * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = dstW;
+          canvas.height = dstH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(rawDataUrl);
+            return;
+          }
+          ctx.fillStyle = '#F5F5F7';
+          ctx.fillRect(0, 0, dstW, dstH);
+          ctx.drawImage(img, 0, 0, dstW, dstH);
+          resolve(canvas.toDataURL('image/jpeg', 0.88));
+        } catch {
+          resolve(rawDataUrl);
+        }
+      };
+      img.onerror = () => resolve(rawDataUrl);
+      img.src = rawDataUrl;
+    });
+
+  const [isSampleSource, setIsSampleSource] = useState(false);
+
+  const runAnalysis = async (
+    imgSrc,
+    nextLighting = lightingMode,
+    focusPoint = undefined,
+    options = {}
+  ) => {
     if (!imgSrc) return;
+    const isUserUpload = Boolean(options.isUserUpload);
     setAnalyzing(true);
     setErrorMsg('');
     try {
-      const res = await analyzePortraitSkinTone(imgSrc, {
-        lightingMode: nextLighting,
-        focusPoint,
-      });
+      const [res, compactPortraitUrl] = await Promise.all([
+        analyzePortraitSkinTone(imgSrc, {
+          lightingMode: nextLighting,
+          focusPoint,
+        }),
+        isUserUpload ? downscaleUserPortrait(imgSrc) : Promise.resolve(null),
+      ]);
       setAnalysisResult(res);
       setDraftSubType(res.subTypeLabelKo);
       setDraftPresetKey(res.matchedPresetKey);
@@ -176,8 +222,8 @@ function ProfileModalContent({
             mstUndertone: syncedMstUndertone,
             skinToneHex: res.skinToneHex,
             personalColor: res.personalColor,
-            facePhotoUrl: prev.appearance.facePhotoUrl
-              ? res.previewDataUrl || imgSrc
+            facePhotoUrl: isUserUpload
+              ? compactPortraitUrl || res.previewDataUrl || imgSrc
               : prev.appearance.facePhotoUrl,
           },
         })
@@ -201,8 +247,9 @@ function ProfileModalContent({
     reader.onload = () => {
       const dataUrl = String(reader.result || '');
       if (dataUrl) {
+        setIsSampleSource(false);
         setSourceImageUrl(dataUrl);
-        void runAnalysis(dataUrl, lightingMode);
+        void runAnalysis(dataUrl, lightingMode, undefined, { isUserUpload: true });
       }
     };
     reader.readAsDataURL(file);
@@ -211,14 +258,30 @@ function ProfileModalContent({
   const handleSelectSamplePortrait = (seasonKey) => {
     const sampleUrl = createSyntheticSamplePortrait(seasonKey);
     if (!sampleUrl) return;
+    setIsSampleSource(true);
     setSourceImageUrl(sampleUrl);
-    void runAnalysis(sampleUrl, lightingMode);
+    void runAnalysis(sampleUrl, lightingMode, undefined, { isUserUpload: false });
+  };
+
+  const handleResetFacePhoto = () => {
+    triggerHaptic('selection');
+    setDraftSpec((prev) =>
+      sanitizeAvatarSpec({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          facePhotoUrl: null,
+        },
+      })
+    );
   };
 
   const handleChangeLighting = (nextMode) => {
     setLightingMode(nextMode);
     if (sourceImageUrl) {
-      void runAnalysis(sourceImageUrl, nextMode);
+      void runAnalysis(sourceImageUrl, nextMode, undefined, {
+        isUserUpload: !isSampleSource && Boolean(draftSpec.appearance.facePhotoUrl),
+      });
     }
   };
 
@@ -231,7 +294,12 @@ function ProfileModalContent({
     const { sx, sy, side, srcW, srcH } = analysisResult.cropSourceRect;
     const fullX = Math.max(0.04, Math.min(0.96, (sx + relX * side) / Math.max(1, srcW)));
     const fullY = Math.max(0.04, Math.min(0.96, (sy + relY * side) / Math.max(1, srcH)));
-    void runAnalysis(sourceImageUrl, lightingMode, { x: fullX, y: fullY });
+    void runAnalysis(
+      sourceImageUrl,
+      lightingMode,
+      { x: fullX, y: fullY },
+      { isUserUpload: !isSampleSource && Boolean(draftSpec.appearance.facePhotoUrl) }
+    );
   };
 
   const handlePickPreset = (preset) => {
@@ -296,13 +364,15 @@ function ProfileModalContent({
       mstLevel: app.mstLevel,
       mstUndertone: app.mstUndertone,
       mstCode: mstSwatch.code,
+      portraitDataUrl: app.facePhotoUrl || null,
     };
 
     const skinChanged =
       skinProfile?.skinToneHex !== skinPayload.skinToneHex ||
       skinProfile?.personalColor !== skinPayload.personalColor ||
       skinProfile?.mstLevel !== skinPayload.mstLevel ||
-      skinProfile?.mstUndertone !== skinPayload.mstUndertone;
+      skinProfile?.mstUndertone !== skinPayload.mstUndertone ||
+      (skinProfile?.portraitDataUrl || null) !== (skinPayload.portraitDataUrl || null);
 
     const bodyChanged =
       bodySpec?.heightCm !== legacyBody.heightCm ||
@@ -643,6 +713,46 @@ function ProfileModalContent({
                 <span>{tx(lang, '카메라 촬영', 'Camera')}</span>
               </button>
             </div>
+
+            {draftSpec.appearance.facePhotoUrl && (
+              <div
+                className="avatar-face-photo-row"
+                data-user-face-active="true"
+                style={{ marginTop: 8, marginBottom: 8 }}
+              >
+                <div className="avatar-face-photo-info">
+                  <img
+                    src={draftSpec.appearance.facePhotoUrl}
+                    alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
+                    className="avatar-face-photo-thumb"
+                  />
+                  <div className="avatar-face-photo-text">
+                    <strong>
+                      {tx(
+                        lang,
+                        '내 얼굴 사진 반영 ON',
+                        'My Face Photo Active'
+                      )}
+                    </strong>
+                    <small>
+                      {tx(
+                        lang,
+                        'AI 피팅 시 업로드한 본인 얼굴·헤어로 생성됩니다',
+                        'AI Try-On uses your uploaded face & hair likeness'
+                      )}
+                    </small>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-reset-face-photo-btn="true"
+                  className="avatar-switch-btn"
+                  onClick={handleResetFacePhoto}
+                >
+                  {tx(lang, '초기화', 'Reset')}
+                </button>
+              </div>
+            )}
 
             <div className="skin-sample-test-rail">
               {SAMPLE_PORTRAIT_BUTTONS.map((btn) => (

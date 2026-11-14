@@ -77,16 +77,35 @@ function writeStoredAutoGenEnabled(enabled) {
   }
 }
 
+import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
+
 const ORDERED_SLOT_KEYS = [
+  'acc_head',
   'headwear',
+  'acc_eyes',
+  'jwl_ear_left',
+  'jwl_ear_right',
+  'acc_neck',
   'neckwear',
+  'jwl_neck',
+  'jwl_brooch',
   'outer',
   'top',
   'onepiece',
   'dress',
+  'acc_belt',
   'bottom',
+  'acc_wrist_left',
+  'acc_wrist_right',
+  'jwl_wrist_left',
+  'jwl_wrist_right',
+  'acc_hand_left',
+  'acc_hand_right',
+  'jwl_ring_left',
+  'jwl_ring_right',
   'shoes',
   'accessory',
+  'acc_umbrella',
 ];
 
 const QUICK_SKIN_PRESETS = [
@@ -270,7 +289,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const bridgedAvatar = useMemo(() => {
     void storeAvatarSpec;
     void storeAvatarHash;
-    return bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user });
+    return bridgeLegacyPropsToAvatarSpec({
+      skinProfile,
+      bodySpec,
+      user,
+      personReferenceUrl:
+        skinProfile?.portraitDataUrl || storeAvatarSpec?.appearance?.facePhotoUrl || null,
+    });
   }, [storeAvatarSpec, storeAvatarHash, skinProfile, bodySpec, user]);
 
   const resolvedAvatarSpec = avatarSpec || bridgedAvatar.spec;
@@ -403,6 +428,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const effectiveCompareActive = compareActive && equippedCount > 0;
 
   const { outfitComboId } = useMemo(() => computeOutfitComboId(slots), [slots]);
+  const activeFacePhotoUrl =
+    skinProfile?.portraitDataUrl ||
+    resolvedAvatarSpec?.appearance?.facePhotoUrl ||
+    null;
+  const prevFacePhotoRef = useRef(activeFacePhotoUrl);
+  const pendingFacePhotoApproveRef = useRef(null);
   const prevOutfitComboRef = useRef(outfitComboId);
 
   // Changing garments in the wardrobe returns focus from pinned history back to live outfit
@@ -490,10 +521,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   // Smart Credit-Saver Gemini Multimodal VTON Pipeline:
   // 1) L1 Memory (0ms) + L2 IndexedDB (~3ms) automatic reuse with 0 AI credits
-  // 2) Auto-runs once on initial entry; stages subsequent uncached garment edits at 0ms on Flat-Lay
-  //    until the user clicks [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
+  // 2) Auto-runs once on initial entry (and immediately when user applies a new face photo);
+  //    stages subsequent uncached garment edits at 0ms on Flat-Lay until the user clicks
+  //    [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
   useEffect(() => {
     abortControllerRef.current?.abort();
+
+    if (prevFacePhotoRef.current !== activeFacePhotoUrl) {
+      prevFacePhotoRef.current = activeFacePhotoUrl;
+      pendingFacePhotoApproveRef.current = activeFacePhotoUrl || null;
+      if (activeFacePhotoUrl) {
+        configBlockedRef.current = false;
+        setPinnedHistoryItem(null);
+      }
+    }
+    const facePhotoJustApplied = Boolean(
+      activeFacePhotoUrl && pendingFacePhotoApproveRef.current === activeFacePhotoUrl
+    );
 
     if (stageMode !== 'ai-vton' || equippedCount === 0) {
       setAiLoading(false);
@@ -502,6 +546,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     }
 
     if (
+      !facePhotoJustApplied &&
       pinnedHistoryItem &&
       (pinnedHistoryItem.outfitComboId !== outfitComboId ||
         pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
@@ -514,7 +559,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     const snap = latestInputsRef.current;
     const isForceBypass = Boolean(snap.forceRefresh || forceBypassCacheRef.current);
-    const isUserApproved = Boolean(isForceBypass || userApprovedGenRef.current);
+    const isUserApproved = Boolean(
+      isForceBypass || userApprovedGenRef.current || facePhotoJustApplied
+    );
     forceBypassCacheRef.current = false;
     userApprovedGenRef.current = false;
 
@@ -528,6 +575,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       : null;
 
     if (syncHit) {
+      pendingFacePhotoApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
       setAiState({
@@ -547,6 +595,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         snap.viewAngleDeg
       );
       if (cachedDemoUrl) {
+        pendingFacePhotoApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
         setStagedNeedsApply(false);
         setAiState({
@@ -590,6 +639,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               });
             }
           }
+          pendingFacePhotoApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
           setStagedNeedsApply(false);
           setAiState({
@@ -654,6 +704,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         loadShowcaseDemoVtonSlices(activeStyle)
           .then((slices) => {
             if (controller.signal.aborted) return;
+            pendingFacePhotoApproveRef.current = null;
             setAiLoading(false);
             const targetUrl =
               slices?.[liveSnap.viewAngleDeg] || slices?.[45] || slices?.[0] || null;
@@ -672,6 +723,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           })
           .catch(() => {
             if (controller.signal.aborted) return;
+            pendingFacePhotoApproveRef.current = null;
             setAiLoading(false);
           });
       };
@@ -701,6 +753,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
+        pendingFacePhotoApproveRef.current = null;
 
         if (outcome.ok && outcome.imageUrl) {
           setAiLoading(false);
@@ -753,6 +806,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     currentAiCacheKey,
     outfitComboId,
     resolvedAvatarHash,
+    activeFacePhotoUrl,
     styleMode,
     equippedCount,
     retryNonce,
@@ -1008,7 +1062,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount]
   );
 
-  const isRainy = Boolean(weather?.isRainy || weather?.isRaining);
+  const isRainy = Boolean(
+    weather?.isRainy ||
+      weather?.isRaining ||
+      weather?.scenarioKey === 'rainy_cool' ||
+      String(weather?.condition || weather?.conditionKo || '')
+        .toLowerCase()
+        .includes('rain') ||
+      String(weather?.condition || weather?.conditionKo || '').includes('비')
+  );
   const isWindy = Boolean(weather?.isWindy);
   const angleMeta = getTurnaroundAngleMeta(viewAngleDeg, resolvedLang);
 
@@ -1075,7 +1137,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
 
       {/* Weather Ambient Stage Cues */}
-      {isRainy && <div aria-hidden="true" className="studio-25d-rain-layer" />}
+      {isRainy && (
+        <div
+          aria-hidden="true"
+          data-studio-rain-layer="true"
+          className="studio-25d-rain-layer"
+        />
+      )}
       {isWindy && <div aria-hidden="true" className="studio-25d-wind-layer" />}
 
       {/* Top Synthesis Progress Line during Gemini AI VTON Generation */}
@@ -1260,6 +1328,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         user={user}
         avatarSpec={resolvedAvatarSpec}
         avatarConfigHash={resolvedAvatarHash}
+        personReferenceUrl={
+          skinProfile?.portraitDataUrl ||
+          resolvedAvatarSpec?.appearance?.facePhotoUrl ||
+          null
+        }
         viewAngleDeg={viewAngleDeg}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
@@ -1668,12 +1741,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               isEn && layer.garment.name_en
                 ? layer.garment.name_en
                 : localizeGarmentName(layer.garment.name, resolvedLang);
+            const subMeta = SUB_SLOT_META_BY_KEY[layer.slotKey];
+            const slotSide = layer.slotKey.endsWith('_left')
+              ? 'left'
+              : layer.slotKey.endsWith('_right')
+                ? 'right'
+                : null;
+            const sideBadge = slotSide === 'left' ? 'L' : slotSide === 'right' ? 'R' : null;
+            const slotFullTitle = subMeta
+              ? `${isEn ? subMeta.labelEn : subMeta.labelKo}: ${displayGarmentName}`
+              : displayGarmentName;
             return (
               <div
                 key={`${layer.slotKey}-${layer.garment.id}`}
                 data-studio-slot={layer.slotKey}
+                data-slot-side={slotSide || undefined}
                 className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''}`}
-                title={displayGarmentName}
+                title={slotFullTitle}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectSlot?.(layer.slotKey);
@@ -1689,6 +1773,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   )}
                   style={{ width: '100%', height: '100%' }}
                 />
+                {sideBadge && (
+                  <span
+                    className="studio-worn-slot-side-tag"
+                    data-slot-side={sideBadge}
+                    aria-hidden="true"
+                  >
+                    {sideBadge}
+                  </span>
+                )}
                 <button
                   type="button"
                   className="studio-worn-slot-remove"
