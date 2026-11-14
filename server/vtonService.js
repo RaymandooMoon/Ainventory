@@ -465,10 +465,10 @@ export function resolveVertexAiConfig() {
 export function resolveGeminiModelChain() {
   const candidates = [
     readServerEnvVar('GEMINI_VTON_MODEL'),
-    'gemini-3.1-flash-image',
-    'gemini-3.1-flash-lite-image',
-    'gemini-3-pro-image',
+    'gemini-3.1-flash-image-preview',
     'gemini-2.5-flash-image',
+    'gemini-3-pro-image-preview',
+    'gemini-3.1-flash-image',
   ].filter(Boolean);
   return [...new Set(candidates)];
 }
@@ -1884,6 +1884,14 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
           }
 
           if (res.status === 401 || res.status === 403) {
+            if (combinedErr.includes('leaked') || combinedErr.includes('blocked')) {
+              return {
+                ok: false,
+                model: null,
+                dataUrl: null,
+                reason: 'gemini_leaked_key',
+              };
+            }
             const isBilling =
               combinedErr.includes('billing') ||
               combinedErr.includes('paid') ||
@@ -1899,13 +1907,16 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
           if (res.status === 429) {
             const isZeroFreeQuota =
               combinedErr.includes('billing') ||
+              combinedErr.includes('free_tier') ||
               combinedErr.includes('limit: 0') ||
               combinedErr.includes('limit:0');
             lastReason = isZeroFreeQuota ? 'gemini_billing_required' : 'gemini_http_429';
-            break; // move to next model in modelChain (e.g. flash-lite-image)
+            break; // move to next model in modelChain
           }
 
-          lastReason = `gemini_http_${res.status}`;
+          if (lastReason !== 'gemini_billing_required' && lastReason !== 'gemini_http_429') {
+            lastReason = `gemini_http_${res.status}`;
+          }
           break; // move to next model in modelChain
         }
 

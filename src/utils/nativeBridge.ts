@@ -327,6 +327,29 @@ if (PUBLIC_BASE_PREFIX && typeof window !== 'undefined' && window.history) {
     win.__ainventoryBasePatched = true;
     const origPushState = window.history.pushState.bind(window.history);
     const origReplaceState = window.history.replaceState.bind(window.history);
+
+    // Allow direct subpath deep-links (e.g. /Ainventory/outfits?demo_vton=1 via 404.html)
+    // to match App.jsx's root-relative parseAppLocation() on initial mount, then restore prefix.
+    const initialPath = window.location.pathname || '/';
+    if (initialPath.startsWith(`${PUBLIC_BASE_PREFIX}/`)) {
+      const strippedPath = initialPath.slice(PUBLIC_BASE_PREFIX.length) || '/';
+      if (strippedPath !== '/') {
+        const suffix = `${window.location.search || ''}${window.location.hash || ''}`;
+        origReplaceState(window.history.state, '', `${strippedPath}${suffix}`);
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => {
+            if (window.location.pathname === strippedPath) {
+              origReplaceState(
+                window.history.state,
+                '',
+                `${PUBLIC_BASE_PREFIX}${strippedPath}${suffix}`
+              );
+            }
+          });
+        }
+      }
+    }
+
     window.history.pushState = (data: unknown, unused: string, url?: string | URL | null) => {
       origPushState(data, unused, prefixSubpathRouteUrl(url));
     };
@@ -335,4 +358,5 @@ if (PUBLIC_BASE_PREFIX && typeof window !== 'undefined' && window.history) {
     };
   }
 }
+
 

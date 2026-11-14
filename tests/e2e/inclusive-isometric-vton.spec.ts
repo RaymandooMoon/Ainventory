@@ -523,4 +523,32 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('[data-flatlay-item-slot="outer"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-item-slot="shoes"]')).toBeVisible();
   });
+
+  test('6. Live AI VTON Test Showcase (?demo_vton=1 & 1-click Sample Fit button) slices 0°/45°/90°/180° in both Photorealistic and Stylized modes', async ({
+    page,
+  }) => {
+    await page.goto('/outfits?demo_vton=1');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
+
+    const src45 = await aiImg.getAttribute('src');
+    expect(src45).toMatch(/^data:image\//);
+
+    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
+    const src90 = await aiImg.getAttribute('src');
+    expect(src90).toMatch(/^data:image\//);
+    expect(src90).not.toBe(src45);
+
+    await studioCanvas.locator('[data-vton-style-toggle="stylized_isometric"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
+    await expect
+      .poll(async () => await aiImg.getAttribute('src'))
+      .not.toBe(src90);
+  });
 });
+

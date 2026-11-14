@@ -786,10 +786,72 @@ export async function sliceTurnaround2x2Sheet(
 
 export const CLIENT_GEMINI_API_KEY_STORAGE = 'ainventory_gemini_api_key';
 
+export const INITIAL_DEMO_VTON_ENABLED =
+  typeof window !== 'undefined' &&
+  typeof window.location?.search === 'string' &&
+  new URLSearchParams(window.location.search).get('demo_vton') === '1';
+
+export function isDemoVtonShowcaseActive(): boolean {
+  if (INITIAL_DEMO_VTON_ENABLED) return true;
+  if (typeof window === 'undefined' || typeof window.location?.search !== 'string') {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get('demo_vton') === '1';
+}
+
+const showcaseMemorySlices: Partial<
+  Record<VtonStyleMode, Record<TurnaroundAngleDeg, string>>
+> = {};
+const showcaseInFlight: Partial<
+  Record<VtonStyleMode, Promise<Record<TurnaroundAngleDeg, string> | null>>
+> = {};
+
+export function peekShowcaseDemoVtonSlice(
+  styleMode: VtonStyleMode,
+  angleDeg: TurnaroundAngleDeg
+): string | null {
+  const normalizedStyle = normalizeVtonStyleMode(styleMode);
+  const normalizedAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
+  return showcaseMemorySlices[normalizedStyle]?.[normalizedAngle] || null;
+}
+
+export async function loadShowcaseDemoVtonSlices(
+  rawStyleMode?: string | null
+): Promise<Record<TurnaroundAngleDeg, string> | null> {
+  const styleMode = normalizeVtonStyleMode(rawStyleMode);
+  if (showcaseMemorySlices[styleMode]) {
+    return showcaseMemorySlices[styleMode]!;
+  }
+  if (showcaseInFlight[styleMode]) {
+    return showcaseInFlight[styleMode]!;
+  }
+
+  const job = (async (): Promise<Record<TurnaroundAngleDeg, string> | null> => {
+    try {
+      const assetPath =
+        styleMode === 'stylized_isometric'
+          ? '/seed/vton-showcase-stylized.jpg'
+          : '/seed/vton-showcase-photoreal.jpg';
+      const sheetUrl = withPublicBaseUrl(assetPath);
+      const sliced = await sliceTurnaround2x2Sheet(sheetUrl);
+      showcaseMemorySlices[styleMode] = sliced;
+      return sliced;
+    } catch {
+      return null;
+    } finally {
+      delete showcaseInFlight[styleMode];
+    }
+  })();
+
+  showcaseInFlight[styleMode] = job;
+  return job;
+}
+
 const DIRECT_GEMINI_MODEL_CHAIN = [
+  'gemini-3.1-flash-image-preview',
+  'gemini-2.5-flash-image',
+  'gemini-3-pro-image-preview',
   'gemini-3.1-flash-image',
-  'gemini-3.1-flash-lite-image',
-  'gemini-3-pro-image',
 ] as const;
 
 function sanitizeGeminiKeyToken(rawKey: unknown): string {
@@ -839,7 +901,7 @@ export function resolveClientGeminiApiKey(): string {
   );
 }
 
-async function downscaleLargeImageBlob(blob: Blob): Promise<string | null> {
+async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | null> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') return null;
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
 
@@ -855,7 +917,7 @@ async function downscaleLargeImageBlob(blob: Blob): Promise<string | null> {
             resolve(null);
             return;
           }
-          const maxEdge = 768;
+          const maxEdge = 640;
           const scale = Math.min(1, maxEdge / Math.max(nw, nh));
           const targetW = Math.max(16, Math.round(nw * scale));
           const targetH = Math.max(16, Math.round(nh * scale));
@@ -867,13 +929,10 @@ async function downscaleLargeImageBlob(blob: Blob): Promise<string | null> {
             resolve(null);
             return;
           }
+          ctx.fillStyle = '#F5F5F7';
+          ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
-          const webp = canvas.toDataURL('image/webp', 0.86);
-          if (webp.startsWith('data:image/webp')) {
-            resolve(webp);
-            return;
-          }
-          resolve(canvas.toDataURL('image/jpeg', 0.86));
+          resolve(canvas.toDataURL('image/jpeg', 0.88));
         } catch {
           resolve(null);
         }
@@ -897,9 +956,9 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
     const blob = await res.blob();
     if (!blob || blob.size === 0 || blob.size > 6 * 1024 * 1024) return null;
 
-    if (blob.size > 450 * 1024) {
-      const compressed = await downscaleLargeImageBlob(blob);
-      if (compressed) return compressed;
+    if (blob.type === 'image/webp' || blob.size > 380 * 1024) {
+      const normalized = await normalizeImageBlobToJpegDataUrl(blob);
+      if (normalized) return normalized;
     }
 
     return await new Promise<string | null>((resolve) => {
@@ -1039,6 +1098,8 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
   const sheetModes = useTurnaroundSheet ? [true, false] : [false];
   let lastReason = 'gemini_no_image_generated';
+  let sawBillingQuota = false;
+  let sawRateLimit = false;
 
   for (const turnaroundSheet of sheetModes) {
     const parts = buildDirectClientGeminiParts({
@@ -1080,7 +1141,9 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           const msg = `${errJson?.error?.status || ''} ${errJson?.error?.message || ''}`.toLowerCase();
           if (
             res.status === 400 &&
-            (msg.includes('api key not valid') || msg.includes('api_key_invalid'))
+            (msg.includes('api key not valid') ||
+              msg.includes('api_key_invalid') ||
+              msg.includes('invalid api key'))
           ) {
             return {
               ok: false,
@@ -1089,15 +1152,42 @@ async function synthesizeDirectBrowserGeminiVton(params: {
             };
           }
           if (res.status === 401 || res.status === 403) {
+            if (msg.includes('leaked') || msg.includes('blocked')) {
+              return {
+                ok: false,
+                fallbackReason: 'gemini_leaked_key',
+                compositeImageUrl: null,
+              };
+            }
             return {
               ok: false,
-              fallbackReason: msg.includes('billing')
-                ? 'gemini_billing_required'
-                : `gemini_http_${res.status}`,
+              fallbackReason:
+                msg.includes('billing') || msg.includes('paid')
+                  ? 'gemini_billing_required'
+                  : `gemini_http_${res.status}`,
               compositeImageUrl: null,
             };
           }
-          lastReason = `gemini_http_${res.status}`;
+          if (res.status === 429) {
+            if (
+              msg.includes('limit: 0') ||
+              msg.includes('limit:0') ||
+              msg.includes('free_tier') ||
+              msg.includes('billing')
+            ) {
+              sawBillingQuota = true;
+              lastReason = 'gemini_billing_required';
+            } else {
+              sawRateLimit = true;
+              if (!sawBillingQuota) {
+                lastReason = 'gemini_http_429';
+              }
+            }
+            continue;
+          }
+          if (!sawBillingQuota && !sawRateLimit) {
+            lastReason = `gemini_http_${res.status}`;
+          }
           continue;
         }
 
@@ -1133,20 +1223,41 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           }
         }
         const finish = payload.candidates?.[0]?.finishReason;
-        lastReason = finish
-          ? `gemini_empty_image_${finish.toLowerCase()}`
-          : 'gemini_empty_image_part';
+        if (!sawBillingQuota && !sawRateLimit) {
+          lastReason = finish
+            ? `gemini_empty_image_${finish.toLowerCase()}`
+            : 'gemini_empty_image_part';
+        }
       } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
           return { ok: false, fallbackReason: 'aborted', compositeImageUrl: null };
         }
-        lastReason = 'gemini_network_error';
+        if (!sawBillingQuota && !sawRateLimit) {
+          lastReason = 'gemini_network_error';
+        }
       }
+    }
+
+    if (sawBillingQuota) {
+      return {
+        ok: false,
+        fallbackReason: 'gemini_billing_required',
+        compositeImageUrl: null,
+      };
     }
   }
 
-  return { ok: false, fallbackReason: lastReason, compositeImageUrl: null };
+  return {
+    ok: false,
+    fallbackReason: sawBillingQuota
+      ? 'gemini_billing_required'
+      : sawRateLimit
+        ? 'gemini_http_429'
+        : lastReason,
+    compositeImageUrl: null,
+  };
 }
+
 
 /**
  * 100% Gemini Multimodal Multi-Angle Virtual Try-On Dispatcher.

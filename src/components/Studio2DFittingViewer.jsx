@@ -27,11 +27,14 @@ import {
   buildAiVtonCacheKey,
   computeOutfitComboId,
   getStoredClientGeminiApiKey,
+  isDemoVtonShowcaseActive,
+  loadShowcaseDemoVtonSlices,
   normalizeTurnaroundAngleDeg,
   normalizeViewerMode,
   normalizeVtonStyleMode,
   normalizeWeatherMoodKey,
   peekMemoryAiVtonSlice,
+  peekShowcaseDemoVtonSlice,
   resolveClientGeminiApiKey,
   setStoredClientGeminiApiKey,
   synthesizeGeminiMultiAngleVton,
@@ -125,6 +128,7 @@ function isKeyActionableReason(reason) {
     reason === 'gemini_api_key_not_configured' ||
     reason === 'backend_unavailable' ||
     reason === 'gemini_invalid_api_key' ||
+    reason === 'gemini_leaked_key' ||
     reason === 'gemini_billing_required' ||
     reason === 'gemini_http_401' ||
     reason === 'gemini_http_403'
@@ -148,10 +152,15 @@ function formatFallbackToastMessage(reason, lang) {
       ? 'Invalid Gemini API key — please check your key.'
       : '유효하지 않은 Gemini API 키입니다 — 키를 다시 확인해 주세요.';
   }
+  if (reason === 'gemini_leaked_key') {
+    return isEn
+      ? 'This API key was blocked as publicly exposed — issue a new key in AI Studio.'
+      : '공개 노출로 차단된 API 키입니다 — AI Studio에서 새 키를 발급해 주세요.';
+  }
   if (reason === 'gemini_billing_required') {
     return isEn
-      ? 'Gemini image generation requires an API key with billing enabled.'
-      : 'Gemini 이미지 생성은 결제(유료 티어)가 연결된 API 키가 필요합니다.';
+      ? 'Free-tier keys have 0 quota for Gemini image generation — link Tier 1 billing or try Sample AI Try-On.'
+      : '무료 티어 키는 이미지 생성 한도가 0입니다 — 유료 결제(Tier 1)를 연결하거나 샘플 피팅을 체험해 보세요.';
   }
   if (reason === 'gemini_http_401' || reason === 'gemini_http_403') {
     return isEn
@@ -262,6 +271,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [aiLoading, setAiLoading] = useState(false);
   const [statusToast, setStatusToast] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(() =>
+    isDemoVtonShowcaseActive()
+  );
   const [keyPopoverOpen, setKeyPopoverOpen] = useState(false);
   const [draftApiKey, setDraftApiKey] = useState(() => getStoredClientGeminiApiKey());
   const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
@@ -276,6 +288,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const abortControllerRef = useRef(null);
   const toastTimerRef = useRef(null);
   const manualTriggerRef = useRef(false);
+  const manualDemoRef = useRef(false);
   const configBlockedRef = useRef(false);
 
   const showToast = useCallback((reason) => {
@@ -351,6 +364,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             angleDeg: viewAngleDeg,
           }),
     [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg, forceRefresh]
+  );
+
+  const demoSliceUrl = useMemo(
+    () =>
+      demoShowcaseEnabled
+        ? peekShowcaseDemoVtonSlice(styleMode, viewAngleDeg)
+        : null,
+    [demoShowcaseEnabled, styleMode, viewAngleDeg]
   );
 
   // Track Flat-Lay combination visits for deterministic revisit state
@@ -435,19 +456,80 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       return undefined;
     }
 
-    if (configBlockedRef.current && !isExplicitRetry && !snap.forceRefresh) {
+    if (demoShowcaseEnabled && !isExplicitRetry) {
+      const cachedDemoUrl = peekShowcaseDemoVtonSlice(
+        snap.styleMode,
+        snap.viewAngleDeg
+      );
+      if (cachedDemoUrl) {
+        setAiState({
+          cacheKey: currentAiCacheKey,
+          imageUrl: cachedDemoUrl,
+          fromCache: true,
+          provider: 'gemini-vton',
+        });
+        setStatusToast(null);
+        setAiLoading(false);
+        return undefined;
+      }
+    }
+
+    if (
+      configBlockedRef.current &&
+      !demoShowcaseEnabled &&
+      !isExplicitRetry &&
+      !snap.forceRefresh
+    ) {
       setAiLoading(false);
       return undefined;
     }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    const delayMs = isExplicitRetry ? 0 : 110;
+    const isDirectDemoClick = manualDemoRef.current;
+    manualDemoRef.current = false;
+    const delayMs = isExplicitRetry || isDirectDemoClick ? 0 : 110;
 
     const startSynthesis = () => {
       if (controller.signal.aborted) return;
       const liveSnap = latestInputsRef.current;
+
+      const applyShowcaseDemoSlices = () => {
+        const activeStyle = normalizeVtonStyleMode(liveSnap.styleMode);
+        const altStyle =
+          activeStyle === 'photorealistic' ? 'stylized_isometric' : 'photorealistic';
+        void loadShowcaseDemoVtonSlices(altStyle);
+        loadShowcaseDemoVtonSlices(activeStyle)
+          .then((slices) => {
+            if (controller.signal.aborted) return;
+            setAiLoading(false);
+            const targetUrl =
+              slices?.[liveSnap.viewAngleDeg] || slices?.[45] || slices?.[0] || null;
+            if (targetUrl) {
+              configBlockedRef.current = false;
+              setAiState({
+                cacheKey: currentAiCacheKey,
+                imageUrl: targetUrl,
+                fromCache: true,
+                provider: 'gemini-vton',
+              });
+              setStatusToast(null);
+              return;
+            }
+            showToast('gemini_unavailable');
+          })
+          .catch(() => {
+            if (controller.signal.aborted) return;
+            setAiLoading(false);
+          });
+      };
+
       setAiLoading(true);
+
+      if (demoShowcaseEnabled && (isDirectDemoClick || !resolveClientGeminiApiKey())) {
+        applyShowcaseDemoSlices();
+        return;
+      }
 
       synthesizeGeminiMultiAngleVton({
         slots: liveSnap.slots,
@@ -467,9 +549,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       })
         .then((outcome) => {
           if (controller.signal.aborted) return;
-          setAiLoading(false);
 
           if (outcome.ok && outcome.imageUrl) {
+            setAiLoading(false);
             configBlockedRef.current = false;
             setAiState({
               cacheKey: currentAiCacheKey,
@@ -481,6 +563,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             return;
           }
 
+          if (demoShowcaseEnabled && outcome.reason !== 'aborted') {
+            applyShowcaseDemoSlices();
+            return;
+          }
+
+          setAiLoading(false);
           if (outcome.reason !== 'aborted') {
             if (isKeyActionableReason(outcome.reason)) {
               configBlockedRef.current = true;
@@ -490,6 +578,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         })
         .catch(() => {
           if (controller.signal.aborted) return;
+          if (demoShowcaseEnabled) {
+            applyShowcaseDemoSlices();
+            return;
+          }
           setAiLoading(false);
           showToast('network_or_runtime_error');
         });
@@ -514,8 +606,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     weatherMoodKey,
     equippedCount,
     retryNonce,
+    demoShowcaseEnabled,
     showToast,
   ]);
+
+  const handleEnableDemoShowcase = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (equippedCount === 0) {
+        showToast('empty_outfit');
+        return;
+      }
+      configBlockedRef.current = false;
+      manualDemoRef.current = true;
+      setDemoShowcaseEnabled(true);
+      setStatusToast(null);
+      setStageMode('ai-vton');
+      setRetryNonce((n) => n + 1);
+    },
+    [equippedCount, showToast]
+  );
 
   const handleRetryAiSynthesis = useCallback(
     (e) => {
@@ -525,6 +635,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       configBlockedRef.current = false;
+      setDemoShowcaseEnabled(false);
       setStatusToast(null);
       manualTriggerRef.current = true;
       setStageMode('ai-vton');
@@ -540,6 +651,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStoredClientGeminiApiKey(draftApiKey);
       setHasSavedClientKey(Boolean(draftApiKey.trim()));
       configBlockedRef.current = false;
+      setDemoShowcaseEnabled(false);
       setKeyPopoverOpen(false);
       setStatusToast(null);
       if (equippedCount > 0) {
@@ -646,7 +758,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const resolvedAiImageUrl =
     stageMode === 'ai-vton'
       ? memorySlice?.imageUrl ||
-        (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null)
+        (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
+        demoSliceUrl
       : null;
 
   const activeProvider =
@@ -654,7 +767,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const isCachedHit =
     stageMode === 'ai-vton' && resolvedAiImageUrl
-      ? Boolean(memorySlice || aiState?.fromCache)
+      ? Boolean(memorySlice || aiState?.fromCache || demoSliceUrl)
       : flatLayCached;
 
   const activeSkinHex = (
@@ -881,6 +994,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </span>
             {statusToast.reason !== 'empty_outfit' && (
               <span className="studio-vton-toast-actions">
+                <button
+                  type="button"
+                  data-vton-demo-btn="true"
+                  className="studio-vton-toast-action"
+                  aria-label={isEn ? 'Preview Sample AI Try-On' : '샘플 AI 피팅 체험'}
+                  onClick={handleEnableDemoShowcase}
+                >
+                  <Sparkles size={11} />
+                  <span>{isEn ? 'Sample Fit' : '샘플 피팅'}</span>
+                </button>
                 <button
                   type="button"
                   data-vton-open-key-btn="true"
