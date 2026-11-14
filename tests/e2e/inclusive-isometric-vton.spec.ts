@@ -350,17 +350,23 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
 
     // Part A: AI Try-On runs automatically by default on load! Without API key configured on CI server,
     // it NEVER draws a polygon human; it keeps `ai-vton` stage mode with Editorial Flat-Lay Board visible
-    // underneath and surfaces a status toast with API Key & Retry actions!
+    // underneath, keeps a permanent [키 설정 / API Key] HUD button visible, and surfaces a status toast!
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
+    await expect(studioCanvas.locator('[data-vton-hud-key-btn="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
     await expect(studioCanvas.locator('canvas')).toHaveCount(0);
 
-    // Open inline Gemini API Key popover from toast action, inspect, and close
-    await studioCanvas.locator('[data-vton-open-key-btn="true"]').click();
-    await expect(studioCanvas.locator('[data-vton-key-popover="true"]')).toBeVisible();
+    // Open inline Gemini API Key popover from permanent HUD button, verify AI Studio link, and close
+    await studioCanvas.locator('[data-vton-hud-key-btn="true"]').click();
+    const keyPopover = studioCanvas.locator('[data-vton-key-popover="true"]');
+    await expect(keyPopover).toBeVisible();
+    await expect(keyPopover.locator('[data-vton-aistudio-link="true"]')).toHaveAttribute(
+      'href',
+      'https://aistudio.google.com/apikey'
+    );
     await studioCanvas.locator('[data-vton-close-key-btn="true"]').click();
-    await expect(studioCanvas.locator('[data-vton-key-popover="true"]')).toHaveCount(0);
+    await expect(keyPopover).toHaveCount(0);
 
     // Part B: Mock Gemini `/api/vton/synthesize` returning a 2x2 Turnaround Studio Sheet
     const sheetPhoto = buildMockTurnaround2x2PngDataUrl(10);

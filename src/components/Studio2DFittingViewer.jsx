@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Columns2,
+  ExternalLink,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -262,6 +263,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [retryNonce, setRetryNonce] = useState(0);
   const [keyPopoverOpen, setKeyPopoverOpen] = useState(false);
   const [draftApiKey, setDraftApiKey] = useState(() => getStoredClientGeminiApiKey());
+  const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
+    Boolean(getStoredClientGeminiApiKey())
+  );
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -276,11 +280,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
     }
     setStatusToast({ reason, ts: Date.now() });
-    toastTimerRef.current = setTimeout(() => {
-      setStatusToast(null);
-    }, 6000);
+    // Keep missing/invalid API key banner pinned until user configures key or dismisses it
+    if (!isKeyActionableReason(reason)) {
+      toastTimerRef.current = setTimeout(() => {
+        setStatusToast(null);
+      }, 10000);
+    }
   }, []);
 
   useEffect(() => {
@@ -529,6 +537,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       e?.preventDefault?.();
       e?.stopPropagation?.();
       setStoredClientGeminiApiKey(draftApiKey);
+      setHasSavedClientKey(Boolean(draftApiKey.trim()));
       configBlockedRef.current = false;
       setKeyPopoverOpen(false);
       setStatusToast(null);
@@ -545,6 +554,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     e?.stopPropagation?.();
     setDraftApiKey('');
     setStoredClientGeminiApiKey('');
+    setHasSavedClientKey(false);
+  }, []);
+
+  const handleToggleKeyPopover = useCallback((e) => {
+    e?.stopPropagation?.();
+    setKeyPopoverOpen((prev) => {
+      if (!prev) {
+        setDraftApiKey(getStoredClientGeminiApiKey());
+        setStatusToast(null);
+      }
+      return !prev;
+    });
   }, []);
 
   const handleSelectStageMode = useCallback(
@@ -838,55 +859,56 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       />
 
       {/* Status Toast when Gemini API key is missing or synthesis falls back to Flat-Lay Board */}
-      {!effectiveCompareActive && !keyPopoverOpen && statusToast && (
-        <div
-          className="studio-vton-status-toast"
-          data-vton-status-toast="true"
-          data-toast-reason={statusToast.reason}
-          role="status"
-          aria-live="polite"
-          onClick={(e) => {
-            e.stopPropagation();
-            setStatusToast(null);
-          }}
-        >
-          <span className="studio-vton-toast-dot" aria-hidden="true" />
-          <span className="studio-vton-toast-text">
-            {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
-          </span>
-          <span className="studio-vton-toast-actions">
-            {isKeyActionableReason(statusToast.reason) && (
-              <button
-                type="button"
-                data-vton-open-key-btn="true"
-                className="studio-vton-toast-action"
-                aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDraftApiKey(getStoredClientGeminiApiKey());
-                  setKeyPopoverOpen(true);
-                  setStatusToast(null);
-                }}
-              >
-                <KeyRound size={11} />
-                <span>{isEn ? 'API Key' : '키 설정'}</span>
-              </button>
-            )}
+      {!effectiveCompareActive &&
+        !keyPopoverOpen &&
+        statusToast &&
+        (equippedCount > 0 || statusToast.reason === 'empty_outfit') && (
+          <div
+            className="studio-vton-status-toast"
+            data-vton-status-toast="true"
+            data-toast-reason={statusToast.reason}
+            role="status"
+            aria-live="polite"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStatusToast(null);
+            }}
+          >
+            <span className="studio-vton-toast-dot" aria-hidden="true" />
+            <span className="studio-vton-toast-text">
+              {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
+            </span>
             {statusToast.reason !== 'empty_outfit' && (
-              <button
-                type="button"
-                data-vton-retry-btn="true"
-                className="studio-vton-toast-action"
-                aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 재시도'}
-                onClick={handleRetryAiSynthesis}
-              >
-                <RefreshCw size={11} />
-                <span>{isEn ? 'Retry' : '재시도'}</span>
-              </button>
+              <span className="studio-vton-toast-actions">
+                <button
+                  type="button"
+                  data-vton-open-key-btn="true"
+                  className="studio-vton-toast-action"
+                  aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDraftApiKey(getStoredClientGeminiApiKey());
+                    setKeyPopoverOpen(true);
+                    setStatusToast(null);
+                  }}
+                >
+                  <KeyRound size={11} />
+                  <span>{isEn ? 'API Key' : '키 설정'}</span>
+                </button>
+                <button
+                  type="button"
+                  data-vton-retry-btn="true"
+                  className="studio-vton-toast-action"
+                  aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 재시도'}
+                  onClick={handleRetryAiSynthesis}
+                >
+                  <RefreshCw size={11} />
+                  <span>{isEn ? 'Retry' : '재시도'}</span>
+                </button>
+              </span>
             )}
-          </span>
-        </div>
-      )}
+          </div>
+        )}
 
       {/* Compact Inline Gemini API Key Popover for Browser / Standalone Environments */}
       {keyPopoverOpen && (
@@ -919,6 +941,37 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               ? 'Stored locally in your browser to power multi-angle Gemini VTON.'
               : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다.'}
           </p>
+          <div className="studio-vton-key-links">
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-vton-aistudio-link="true"
+              className="studio-vton-key-ext-link"
+              aria-label={
+                isEn
+                  ? 'Get Gemini API key in Google AI Studio'
+                  : 'Google AI Studio에서 Gemini API 키 발급받기'
+              }
+            >
+              <span>{isEn ? 'Get API Key (AI Studio)' : 'API 키 발급 (AI Studio)'}</span>
+              <ExternalLink size={11} />
+            </a>
+            <a
+              href="https://aistudio.google.com/billing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="studio-vton-key-ext-link"
+              aria-label={
+                isEn
+                  ? 'Open Google AI Studio Billing settings'
+                  : 'Google AI Studio 결제 연결 확인'
+              }
+            >
+              <span>{isEn ? 'Billing (Paid)' : '결제 연결 확인'}</span>
+              <ExternalLink size={11} />
+            </a>
+          </div>
           <form className="studio-vton-key-form" onSubmit={handleSaveApiKeyAndRetry}>
             <input
               type="password"
@@ -1156,6 +1209,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           <Palette size={12} />
           <span>{isEn ? 'Tone' : '피부톤'}</span>
+        </button>
+        <button
+          id="open-vton-api-key-btn"
+          type="button"
+          data-vton-hud-key-btn="true"
+          aria-expanded={keyPopoverOpen}
+          aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
+          title={isEn ? 'Gemini API Key Settings' : 'Gemini API 키 설정'}
+          className={`studio-tone-analyze-btn studio-vton-key-dock-btn ${keyPopoverOpen ? 'is-active' : ''}`}
+          onClick={handleToggleKeyPopover}
+        >
+          <KeyRound size={12} />
+          <span>{isEn ? 'API Key' : '키 설정'}</span>
+          {hasSavedClientKey && (
+            <span className="studio-vton-key-saved-dot" aria-hidden="true" />
+          )}
         </button>
       </div>
     </div>

@@ -674,6 +674,34 @@
   color: var(--ink-secondary);
 }
 
+.studio-vton-key-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.studio-vton-key-ext-link {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-primary);
+  font-size: 0.61rem;
+  font-weight: 690;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: background-color 0.16s var(--spring-ease), border-color 0.16s var(--spring-ease);
+}
+
+.studio-vton-key-ext-link:hover {
+  border-color: var(--squircle-border-hover);
+}
+
 .studio-vton-key-form {
   display: flex;
   flex-direction: column;
@@ -724,6 +752,25 @@
 .studio-vton-key-save-btn {
   background: var(--accent-mono);
   color: var(--accent-mono-ink);
+}
+
+.studio-vton-key-dock-btn {
+  position: relative;
+  gap: 4px;
+}
+
+.studio-vton-key-dock-btn.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
+.studio-vton-key-saved-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -1255,5 +1302,12 @@
     left: 10px;
     right: 10px;
     bottom: 84px;
+  }
+
+  .studio-2d-vton-viewer .studio-tone-analyze-btn {
+    min-height: 29px;
+    padding: 0 8px;
+    font-size: 0.66rem;
+    white-space: nowrap;
   }
 }
