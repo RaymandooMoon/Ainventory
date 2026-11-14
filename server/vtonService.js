@@ -11,6 +11,7 @@ export const SEED_DIR = path.join(ROOT_DIR, 'public', 'seed');
 export const VTON_SLOTS = Object.freeze([
   'outer',
   'top',
+  'onepiece',
   'dress',
   'bottom',
   'shoes',
@@ -23,9 +24,13 @@ export const VTON_SLOTS = Object.freeze([
 
 const VTON_SLOT_SET = new Set(VTON_SLOTS);
 
+export const ALL_ISO_VIEW_ANGLES = Object.freeze([45, 0, -45, -90, -135, 180, 135, 90]);
+export const DEFAULT_ISO_VIEW_ANGLE = 45;
+
 // Layering order for prompt clarity (from head/inner to outer/extremities)
 const PROMPT_SLOT_ORDER = Object.freeze([
   'headwear',
+  'onepiece',
   'top',
   'dress',
   'bottom',
@@ -45,8 +50,13 @@ const SLOT_ALIAS_MAP = Object.freeze({
   shirt: 'top',
   knit: 'top',
   upper: 'top',
-  onepiece: 'dress',
-  gown: 'dress',
+  swimwear: 'onepiece',
+  swimsuit: 'onepiece',
+  bikini: 'onepiece',
+  rashguard: 'onepiece',
+  swim_trunks: 'onepiece',
+  jumpsuit: 'onepiece',
+  gown: 'onepiece',
   skirt: 'bottom',
   pants: 'bottom',
   trousers: 'bottom',
@@ -81,6 +91,48 @@ const VALID_BODY_SHAPES = new Set([
   'muscular',
 ]);
 
+const VALID_FRAME_PRESETS = new Set(['feminine', 'masculine', 'androgynous', 'custom']);
+const VALID_ARCHETYPES = new Set([
+  'hourglass',
+  'inverted_triangle',
+  'pear',
+  'apple',
+  'rectangle',
+  'athletic',
+  'petite',
+  'plus_size',
+]);
+const VALID_CHEST_FORMS = new Set(['flat', 'pectoral', 'contoured', 'full_bust']);
+const VALID_UNDERTONES = new Set(['cool', 'neutral', 'warm', 'olive']);
+const VALID_HAIR_STYLES = new Set([
+  'buzz_shaved',
+  'pixie_short',
+  'straight_bob',
+  'long_straight',
+  'soft_wavy',
+  'loose_curly',
+  'type4_coily_afro',
+  'box_braids_locs',
+  'hijab_headwrap',
+]);
+const VALID_FACIAL_HAIR = new Set([
+  'none',
+  'stubble',
+  'mustache',
+  'goatee',
+  'short_boxed_beard',
+  'full_beard',
+]);
+const VALID_HEAD_SHAPES = new Set(['oval', 'round', 'square', 'heart', 'long']);
+const VALID_EYE_SHAPES = new Set([
+  'almond',
+  'monolid',
+  'hooded',
+  'deep_set',
+  'upturned',
+  'round',
+]);
+
 const DEFAULT_SCALES_BY_SHAPE = Object.freeze({
   slim: { shoulderScale: 0.94, waistScale: 0.88, hipScale: 0.94 },
   standard_balanced: { shoulderScale: 1.0, waistScale: 1.0, hipScale: 1.0 },
@@ -110,7 +162,7 @@ const GEMINI_TIMEOUT_MS = 26000;
 const MAX_TOTAL_SYNTHESIS_MS = 32000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'vton-2d-editorial-v1';
+const CACHE_SCHEMA_VERSION = 'vton-iso-v2';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
 const SAFE_CACHE_KEY_RE = /^(combo|base)-[0-9a-f]{64}$/;
@@ -147,6 +199,54 @@ function clampNumber(value, min, max, fallback) {
 function roundToStep(value, step = 0.01) {
   const inv = 1 / step;
   return Math.round(value * inv) / inv;
+}
+
+/**
+ * Normalizes any numeric angle in degrees to one of the 8 canonical isometric angles
+ * (`45, 0, -45, -90, -135, 180, 135, 90`), defaulting to `45` (turn-based quarter view).
+ */
+export function normalizeIsoViewAngleDeg(rawAngle, fallback = DEFAULT_ISO_VIEW_ANGLE) {
+  if (rawAngle === null || rawAngle === undefined || rawAngle === '') {
+    return fallback;
+  }
+  const num = Number(rawAngle);
+  if (!Number.isFinite(num)) return fallback;
+  let wrapped = ((num + 180) % 360 + 360) % 360 - 180;
+  let snapped = Math.round(wrapped / 45) * 45;
+  if (snapped === -180) snapped = 180;
+  if (Object.is(snapped, -0)) snapped = 0;
+  return ALL_ISO_VIEW_ANGLES.includes(snapped) ? snapped : fallback;
+}
+
+function estimateMstFromHex(hexColor, personalColor = 'autumn_warm') {
+  const hex = normalizeHexColor(hexColor, '#DFBA9B');
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  // Map perceptual luminance onto Monk Skin Tone 1 (fairest) .. 10 (deepest)
+  let mstLevel = 5;
+  if (lum >= 0.83) mstLevel = 1;
+  else if (lum >= 0.76) mstLevel = 2;
+  else if (lum >= 0.68) mstLevel = 3;
+  else if (lum >= 0.6) mstLevel = 4;
+  else if (lum >= 0.51) mstLevel = 5;
+  else if (lum >= 0.41) mstLevel = 6;
+  else if (lum >= 0.31) mstLevel = 7;
+  else if (lum >= 0.22) mstLevel = 8;
+  else if (lum >= 0.14) mstLevel = 9;
+  else mstLevel = 10;
+
+  let mstUndertone = 'neutral';
+  if (g > r * 0.91 && b < g * 0.84) {
+    mstUndertone = 'olive';
+  } else if (r - b > 0.19) {
+    mstUndertone = 'warm';
+  } else if (r - b < 0.11 || personalColor.endsWith('_cool')) {
+    mstUndertone = 'cool';
+  }
+  return { mstLevel, mstUndertone, lum };
 }
 
 export function resolveGeminiApiKey() {
@@ -237,12 +337,19 @@ function normalizeBodyShape(rawShape, bmi = 21.6) {
     .trim()
     .toLowerCase();
   if (VALID_BODY_SHAPES.has(key)) return key;
-  if (key === 'slender' || key === 'ectomorph') return 'slim';
+  if (key === 'slender' || key === 'ectomorph' || key === 'petite') return 'slim';
   if (key === 'athletic' || key === 'mesomorph') return 'muscular';
   if (key === 'inverted_triangle' || key === 'top_heavy') return 'upper_developed';
-  if (key === 'pear' || key === 'bottom_heavy') return 'lower_developed';
+  if (key === 'pear' || key === 'bottom_heavy' || key === 'plus_size') return 'lower_developed';
   if (bmi < 18.8) return 'slim';
   return 'standard_balanced';
+}
+
+function normalizeEnumToken(raw, validSet, fallback) {
+  const key = String(raw || '')
+    .trim()
+    .toLowerCase();
+  return validSet.has(key) ? key : fallback;
 }
 
 /**
@@ -408,60 +515,166 @@ export function loadGarmentPackshot(
 }
 
 /**
- * Normalizes physical proportion & complexion profile in a strictly gender-neutral way.
- * `gender` is intentionally ignored at all stages (prompting, ratios, and hashing).
+ * Normalizes physical proportion, inclusive MST complexion, coupled soft-tissue, and camera angle
+ * in an anti-bias, parametric AvatarSpec-aware manner.
  */
-export function normalizeVtonProfile(rawProfile = {}, fallbackPortraitDataUrl = null) {
+export function normalizeVtonProfile(
+  rawProfile = {},
+  fallbackPortraitDataUrl = null,
+  extraOptions = {}
+) {
   const src = rawProfile && typeof rawProfile === 'object' ? rawProfile : {};
   const morph = src.morph && typeof src.morph === 'object' ? src.morph : {};
+  const rawAvatarSpec =
+    extraOptions?.avatarSpec && typeof extraOptions.avatarSpec === 'object'
+      ? extraOptions.avatarSpec
+      : src.avatarSpec && typeof src.avatarSpec === 'object'
+        ? src.avatarSpec
+        : {};
+  const anthro =
+    rawAvatarSpec.anthropometrics && typeof rawAvatarSpec.anthropometrics === 'object'
+      ? rawAvatarSpec.anthropometrics
+      : {};
+  const soft =
+    rawAvatarSpec.coupledSoftTissue && typeof rawAvatarSpec.coupledSoftTissue === 'object'
+      ? rawAvatarSpec.coupledSoftTissue
+      : {};
+  const app =
+    rawAvatarSpec.appearance && typeof rawAvatarSpec.appearance === 'object'
+      ? rawAvatarSpec.appearance
+      : {};
 
-  const skinToneHex = normalizeHexColor(src.skinToneHex ?? src.skin_tone_hex, '#DFBA9B');
-  const personalColor = normalizePersonalColor(src.personalColor ?? src.personal_color);
+  const skinToneHex = normalizeHexColor(
+    src.skinToneHex ?? src.skin_tone_hex ?? app.skinToneHex,
+    '#DFBA9B'
+  );
+  const personalColor = normalizePersonalColor(
+    src.personalColor ?? src.personal_color ?? app.personalColor
+  );
+  const estimatedMst = estimateMstFromHex(skinToneHex, personalColor);
+  const mstLevel = Math.round(clampNumber(app.mstLevel, 1, 10, estimatedMst.mstLevel));
+  const mstUndertone = normalizeEnumToken(
+    app.mstUndertone,
+    VALID_UNDERTONES,
+    estimatedMst.mstUndertone
+  );
 
   const heightCm = roundToStep(
-    clampNumber(src.heightCm ?? src.height_cm, 145, 200, 172),
+    clampNumber(src.heightCm ?? src.height_cm ?? anthro.heightCm, 140, 205, 172),
     0.5
   );
   const weightKg = roundToStep(
-    clampNumber(src.weightKg ?? src.weight_kg, 38, 130, 64),
+    clampNumber(src.weightKg ?? src.weight_kg ?? anthro.weightKg, 35, 160, 64),
     0.5
   );
   const bmi = roundToStep(weightKg / (heightCm / 100) ** 2, 0.1);
-  const bodyShape = normalizeBodyShape(src.bodyShape ?? src.body_shape, bmi);
-  const shapeDefaults = DEFAULT_SCALES_BY_SHAPE[bodyShape] || DEFAULT_SCALES_BY_SHAPE.standard_balanced;
+  const bodyShape = normalizeBodyShape(
+    src.bodyShape ?? src.body_shape ?? rawAvatarSpec.archetypePreset,
+    bmi
+  );
+  const shapeDefaults =
+    DEFAULT_SCALES_BY_SHAPE[bodyShape] || DEFAULT_SCALES_BY_SHAPE.standard_balanced;
+
+  const framePreset = normalizeEnumToken(
+    rawAvatarSpec.framePreset,
+    VALID_FRAME_PRESETS,
+    'androgynous'
+  );
+  const archetypePreset = normalizeEnumToken(
+    rawAvatarSpec.archetypePreset,
+    VALID_ARCHETYPES,
+    bmi >= 30 ? 'plus_size' : bodyShape === 'muscular' ? 'athletic' : 'rectangle'
+  );
+  const chestForm = normalizeEnumToken(
+    anthro.chestForm,
+    VALID_CHEST_FORMS,
+    framePreset === 'feminine' ? 'contoured' : framePreset === 'masculine' ? 'pectoral' : 'flat'
+  );
 
   const shoulderScale = roundToStep(
     clampNumber(
-      src.shoulderScale ?? src.shoulder_scale ?? morph.shoulderWidthScale ?? morph.shoulderScale,
-      0.8,
-      1.25,
+      src.shoulderScale ??
+        src.shoulder_scale ??
+        morph.shoulderWidthScale ??
+        morph.shoulderScale ??
+        anthro.shoulderScale,
+      0.75,
+      1.35,
       shapeDefaults.shoulderScale
     ),
     0.01
   );
   const waistScale = roundToStep(
     clampNumber(
-      src.waistScale ?? src.waist_scale ?? morph.waistWidthScale ?? morph.waistScale,
-      0.75,
-      1.3,
+      src.waistScale ??
+        src.waist_scale ??
+        morph.waistWidthScale ??
+        morph.waistScale ??
+        anthro.waistScale,
+      0.7,
+      1.35,
       shapeDefaults.waistScale
     ),
     0.01
   );
   const hipScale = roundToStep(
     clampNumber(
-      src.hipScale ?? src.hip_scale ?? morph.hipWidthScale ?? morph.hipScale,
+      src.hipScale ??
+        src.hip_scale ??
+        morph.hipWidthScale ??
+        morph.hipScale ??
+        anthro.hipScale,
       0.8,
-      1.25,
+      1.38,
       shapeDefaults.hipScale
     ),
     0.01
   );
+  const chestScale = roundToStep(clampNumber(anthro.chestScale, 0.75, 1.4, 1), 0.01);
+  const abdomenScale = roundToStep(clampNumber(anthro.abdomenScale, 0.75, 1.45, 1), 0.01);
+  const gluteScale = roundToStep(clampNumber(anthro.gluteScale, 0.75, 1.4, 1), 0.01);
+  const armMassScale = roundToStep(clampNumber(anthro.armMassScale, 0.75, 1.45, 1), 0.01);
+  const legMassScale = roundToStep(clampNumber(anthro.legMassScale, 0.75, 1.45, 1), 0.01);
+  const legLengthScale = roundToStep(clampNumber(anthro.legLengthScale, 0.88, 1.12, 1), 0.01);
+  const muscleDefinition = roundToStep(clampNumber(anthro.muscleDefinition, 0, 1, 0.3), 0.01);
+
+  const autoCoupleWithBmi =
+    typeof soft.autoCoupleWithBmi === 'boolean' ? soft.autoCoupleWithBmi : true;
+  const faceSoftnessBias = roundToStep(clampNumber(soft.faceSoftnessBias, -0.5, 0.8, 0), 0.01);
+  const neckThicknessBias = roundToStep(clampNumber(soft.neckThicknessBias, -0.4, 0.6, 0), 0.01);
+  const torsoSoftnessBias = roundToStep(clampNumber(soft.torsoSoftnessBias, -0.5, 0.8, 0), 0.01);
+  const limbSoftnessBias = roundToStep(clampNumber(soft.limbSoftnessBias, -0.5, 0.8, 0), 0.01);
+  const extremityPlumpnessBias = roundToStep(
+    clampNumber(soft.extremityPlumpnessBias, -0.4, 0.7, 0),
+    0.01
+  );
+
+  const headShape = normalizeEnumToken(app.headShape, VALID_HEAD_SHAPES, 'oval');
+  const eyeShape = normalizeEnumToken(app.eyeShape, VALID_EYE_SHAPES, 'almond');
+  const eyeSizeScale = roundToStep(clampNumber(app.eyeSizeScale, 0.8, 1.25, 1), 0.01);
+  const noseWidthScale = roundToStep(clampNumber(app.noseWidthScale, 0.8, 1.3, 1), 0.01);
+  const lipFullnessScale = roundToStep(clampNumber(app.lipFullnessScale, 0.8, 1.35, 1), 0.01);
+  const browStrength = roundToStep(clampNumber(app.browStrength, 0.6, 1.4, 1), 0.01);
+  const hairStyle = normalizeEnumToken(app.hairStyle, VALID_HAIR_STYLES, 'soft_wavy');
+  const hairColorHex = normalizeHexColor(app.hairColorHex, '#2B211B');
+  const facialHair = normalizeEnumToken(app.facialHair, VALID_FACIAL_HAIR, 'none');
+
+  const viewAngleDeg = normalizeIsoViewAngleDeg(
+    extraOptions?.viewAngleDeg ?? src.viewAngleDeg,
+    DEFAULT_ISO_VIEW_ANGLE
+  );
+  const rawAvatarHash = String(
+    extraOptions?.avatarConfigHash ?? src.avatarConfigHash ?? ''
+  )
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(0, 64);
 
   const rawPortrait =
     src.portraitDataUrl ??
     src.faceDataUrl ??
     src.avatarFaceDataUrl ??
+    app.facePhotoUrl ??
     fallbackPortraitDataUrl ??
     null;
   const portraitPart = rawPortrait
@@ -469,6 +682,13 @@ export function normalizeVtonProfile(rawProfile = {}, fallbackPortraitDataUrl = 
     : null;
 
   return {
+    viewAngleDeg,
+    avatarConfigHash: rawAvatarHash || null,
+    framePreset,
+    archetypePreset,
+    chestForm,
+    mstLevel,
+    mstUndertone,
     skinToneHex,
     personalColor,
     heightCm,
@@ -476,8 +696,30 @@ export function normalizeVtonProfile(rawProfile = {}, fallbackPortraitDataUrl = 
     bmi,
     bodyShape,
     shoulderScale,
+    chestScale,
     waistScale,
+    abdomenScale,
     hipScale,
+    gluteScale,
+    armMassScale,
+    legMassScale,
+    legLengthScale,
+    muscleDefinition,
+    autoCoupleWithBmi,
+    faceSoftnessBias,
+    neckThicknessBias,
+    torsoSoftnessBias,
+    limbSoftnessBias,
+    extremityPlumpnessBias,
+    headShape,
+    eyeShape,
+    eyeSizeScale,
+    noseWidthScale,
+    lipFullnessScale,
+    browStrength,
+    hairStyle,
+    hairColorHex,
+    facialHair,
     portraitPart: portraitPart
       ? {
           mimeType: portraitPart.mimeType,
@@ -669,14 +911,43 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
   const basePayload = {
     v: CACHE_SCHEMA_VERSION,
     stylePreset: VTON_STYLE_PRESET,
+    viewAngleDeg: normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
+    avatarConfigHash: normalizedProfile.avatarConfigHash || null,
+    framePreset: normalizedProfile.framePreset,
+    archetypePreset: normalizedProfile.archetypePreset,
+    chestForm: normalizedProfile.chestForm,
+    mstLevel: normalizedProfile.mstLevel,
+    mstUndertone: normalizedProfile.mstUndertone,
     skinToneHex: normalizedProfile.skinToneHex,
     personalColor: normalizedProfile.personalColor,
     heightCm: normalizedProfile.heightCm,
     weightKg: normalizedProfile.weightKg,
     bodyShape: normalizedProfile.bodyShape,
     shoulderScale: normalizedProfile.shoulderScale,
+    chestScale: normalizedProfile.chestScale,
     waistScale: normalizedProfile.waistScale,
+    abdomenScale: normalizedProfile.abdomenScale,
     hipScale: normalizedProfile.hipScale,
+    gluteScale: normalizedProfile.gluteScale,
+    armMassScale: normalizedProfile.armMassScale,
+    legMassScale: normalizedProfile.legMassScale,
+    legLengthScale: normalizedProfile.legLengthScale,
+    muscleDefinition: normalizedProfile.muscleDefinition,
+    autoCoupleWithBmi: normalizedProfile.autoCoupleWithBmi,
+    faceSoftnessBias: normalizedProfile.faceSoftnessBias,
+    neckThicknessBias: normalizedProfile.neckThicknessBias,
+    torsoSoftnessBias: normalizedProfile.torsoSoftnessBias,
+    limbSoftnessBias: normalizedProfile.limbSoftnessBias,
+    extremityPlumpnessBias: normalizedProfile.extremityPlumpnessBias,
+    headShape: normalizedProfile.headShape,
+    eyeShape: normalizedProfile.eyeShape,
+    eyeSizeScale: normalizedProfile.eyeSizeScale,
+    noseWidthScale: normalizedProfile.noseWidthScale,
+    lipFullnessScale: normalizedProfile.lipFullnessScale,
+    browStrength: normalizedProfile.browStrength,
+    hairStyle: normalizedProfile.hairStyle,
+    hairColorHex: normalizedProfile.hairColorHex,
+    facialHair: normalizedProfile.facialHair,
     portraitHash: normalizedProfile.portraitHash || null,
   };
   const baseHash = sha256Hex(JSON.stringify(basePayload));
@@ -702,6 +973,7 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
   const comboHash = sha256Hex(
     JSON.stringify({
       v: CACHE_SCHEMA_VERSION,
+      viewAngleDeg: normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
       baseHash,
       slots: sortedSlotSignatures,
     })
@@ -889,6 +1161,111 @@ function countTotalCacheEntries() {
   return keys.size;
 }
 
+const HAIR_STYLE_DESCRIPTIONS = Object.freeze({
+  buzz_shaved: 'clean close-cropped buzz/shaved cranial silhouette',
+  pixie_short: 'modern textured short pixie/cropped salon cut',
+  straight_bob: 'sleek chin-to-jawline straight architectural bob',
+  long_straight: 'smooth flowing shoulder-past-chest straight hair',
+  soft_wavy: 'relaxed natural S-wave editorial hair silhouette',
+  loose_curly: 'defined bouncy loose-curl ringlets with natural volume',
+  type4_coily_afro:
+    'authentic textured Type-4 coily Afro crown with rich sculptural halo volume (never flatten or straighten)',
+  box_braids_locs:
+    'neat articulated box braids / locs with distinct woven strand geometry draping naturally over shoulders',
+  hijab_headwrap:
+    'elegantly draped modest fabric hijab / headwrap framing the face cleanly and covering hair and neck modestly',
+});
+
+const FACIAL_HAIR_DESCRIPTIONS = Object.freeze({
+  none: 'clean-shaven face with zero beard or mustache',
+  stubble: 'subtle fine close-trimmed facial stubble along jaw and upper lip',
+  mustache: 'neatly groomed defined mustache above upper lip',
+  goatee: 'structured goatee framing chin and mustache line',
+  short_boxed_beard: 'cleanly contoured short boxed beard along jawline, chin, and upper lip',
+  full_beard: 'full, dense, well-shaped natural beard with dimensional volume',
+});
+
+function describeIsoCameraAngle(viewAngleDeg) {
+  const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
+  switch (angle) {
+    case 45:
+      return '45° Quarter-Front Right Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned 45° toward viewer-right so BOTH the front torso/face AND the viewer-left side depth plane are simultaneously visible, standing centered on a subtle warm-minimal diamond architectural plinth tile)';
+    case 0:
+      return '0° Direct Front Isometric-Editorial View (18° gentle studio camera elevation; figure facing directly forward 0° with symmetrical front face, chest, waist, and front shoe vamps centered on a subtle diamond plinth tile)';
+    case -45:
+      return '-45° Quarter-Front Left Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned -45° toward viewer-left so BOTH the front torso/face AND the viewer-right side depth plane are simultaneously visible on a subtle diamond plinth tile)';
+    case 90:
+      return '90° Strict Right-Facing Lateral Side Profile View (18° studio elevation; figure turned 90° sideways facing viewer-right, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a subtle diamond plinth tile)';
+    case -90:
+      return '-90° Strict Left-Facing Lateral Side Profile View (18° studio elevation; figure turned -90° sideways facing viewer-left, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a subtle diamond plinth tile)';
+    case 135:
+      return '135° Back-Quarter Right Isometric View (18° studio elevation; rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a subtle diamond plinth tile)';
+    case -135:
+      return '-135° Back-Quarter Left Isometric View (18° studio elevation; rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a subtle diamond plinth tile)';
+    case 180:
+      return '180° Strict Full Rear Back View (18° studio elevation; figure facing 180° directly away from camera showing ONLY the back of the head/hair/neck, rear shoulders, center-back garment seams/vents/back pockets, calves, and shoe heels on a subtle diamond plinth tile — render ZERO front facial features)';
+    default:
+      return '45° Quarter-Front Right Isometric Turn-Based Simulation View on a subtle diamond plinth tile';
+  }
+}
+
+function describeMstLightingDirective(profile) {
+  const mst = profile.mstLevel ?? 5;
+  const undertone = profile.mstUndertone || 'neutral';
+  if (mst >= 8) {
+    return [
+      `Monk Skin Tone MST-${mst} (${undertone} undertone), exact base hex ${profile.skinToneHex} — STRICT ANTI-WHITEWASHING & DEEP-MELANIN LIGHTING LOCK:`,
+      `Preserve rich, saturated deep melanin depth (${profile.skinToneHex}) across all exposed skin without lightening, bleaching, desaturating, or casting ashy gray.`,
+      'Apply luminance-adaptive warm-neutral studio specular highlights along cheekbones, nose bridge, brow ridge, collarbones, knuckles, and subtle studio rim-light separation so facial features and limb edges remain crisp and dimensional without muddy shadow crush.',
+    ].join(' ');
+  }
+  if (mst >= 5) {
+    return [
+      `Monk Skin Tone MST-${mst} (${undertone} undertone), exact base hex ${profile.skinToneHex} — TRUE-CHROMA COMPLEXION LOCK:`,
+      `Maintain authentic warm/olive/tan/brown skin chroma (${profile.skinToneHex}) evenly across face, neck, hands, and legs without overexposing toward pale beige or dulling into gray.`,
+    ].join(' ');
+  }
+  return [
+    `Monk Skin Tone MST-${mst} (${undertone} undertone), exact base hex ${profile.skinToneHex} — FAIR-LUMINANCE EDGE LOCK:`,
+    `Preserve delicate fair/light complexion (${profile.skinToneHex}) with subtle natural undertone warmth/coolness while keeping crisp charcoal-ink contour separation so skin never washes out into the #F5F5F7 studio background.`,
+  ].join(' ');
+}
+
+function describeCoupledSoftTissueDirective(profile) {
+  const { bmi, abdomenScale, hipScale, armMassScale, legMassScale, chestForm, chestScale } =
+    profile;
+  if (bmi >= 30 || abdomenScale >= 1.18 || profile.archetypePreset === 'plus_size') {
+    return [
+      `MANDATORY ANTI-SLIM-BIAS FULL-VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
+      'NEVER revert or idealize toward a thin fashion-illustration mannequin.',
+      `Render authentic, dignified coupled soft-tissue volume consistently across EVERY anatomical zone: rounded fuller cheeks and softer lower-jawline/submental fullness (faceSoftnessBias=${profile.faceSoftnessBias}), thicker cylindrical neck column (neckThicknessBias=${profile.neckThicknessBias}), fuller upper arms, elbows, forearms, and wrists (armMassScale=${armMassScale}, limbSoftnessBias=${profile.limbSoftnessBias}), softer plump dorsal hands and fingers (extremityPlumpnessBias=${profile.extremityPlumpnessBias}), natural ${chestForm} chest volume (chestScale=${chestScale}), prominent rounded anterior & lateral abdomen fullness (abdomenScale=${abdomenScale}, torsoSoftnessBias=${profile.torsoSoftnessBias}), generous hip/glute/thigh/calf circumference (hipScale=${hipScale}, gluteScale=${profile.gluteScale}, legMassScale=${legMassScale}), grounded ankles, and wider foot/instep volume.`,
+      'Drape every equipped garment realistically around this full 3D body volume with authentic fabric tension, ease, and hem circumference — NEVER shrink the body to fit the garment.',
+    ].join(' ');
+  }
+  if (bmi >= 25.5 || abdomenScale >= 1.08) {
+    return [
+      `ANTI-SLIM-BIAS MID-PLUS VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
+      `Preserve visibly fuller, grounded real-world soft-tissue proportions across cheeks/jawline, neck, upper arms (armMassScale=${armMassScale}), ${chestForm} chest (chestScale=${chestScale}), waist/abdomen curve (abdomenScale=${abdomenScale}), and hips/thighs (hipScale=${hipScale}, legMassScale=${legMassScale}) — strictly forbid fashion-mannequin slimming.`,
+    ].join(' ');
+  }
+  if (bmi <= 19.2) {
+    return `SLENDER ANTHROPOMETRIC LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Render genuinely lean, slender proportions with delicate clavicles, narrow waist, and light wrist/ankle volume.`;
+  }
+  return `TRUE ANTHROPOMETRIC VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Honor exact segment scales (chestForm=${chestForm}, chestScale=${chestScale}, abdomenScale=${abdomenScale}, armMassScale=${armMassScale}, legMassScale=${legMassScale}, muscleDefinition=${profile.muscleDefinition}) faithfully without generic mannequin distortion.`;
+}
+
+function isResolvedSwimwearItem(item) {
+  if (!item) return false;
+  const cat = String(item.category || '').toLowerCase();
+  const sub = String(item.subcategory || '').toLowerCase();
+  const name = String(item.name || '');
+  if (cat === 'swimwear') return true;
+  if (['swimsuit', 'bikini', 'rashguard', 'swim_trunks', 'swimwear'].includes(sub)) {
+    return true;
+  }
+  return /수영복|비키니|래시가드|스윔|swim|bikini|rashguard/i.test(name);
+}
+
 function buildEditorialStyleAndBodyPrompt(profile) {
   const pcDesc =
     PERSONAL_COLOR_DESCRIPTIONS[profile.personalColor] ||
@@ -899,39 +1276,58 @@ function buildEditorialStyleAndBodyPrompt(profile) {
 
   const statureCue =
     profile.heightCm >= 182
-      ? 'tall elongated editorial vertical line'
+      ? 'tall elongated vertical stature'
       : profile.heightCm <= 160
-        ? 'compact balanced vertical stature'
-        : 'natural medium-tall lookbook stature';
+        ? 'compact grounded vertical stature'
+        : 'natural medium adult stature';
+
+  const cameraLock = describeIsoCameraAngle(profile.viewAngleDeg);
+  const mstLightingLock = describeMstLightingDirective(profile);
+  const softTissueLock = describeCoupledSoftTissueDirective(profile);
 
   return [
-    'Generate a single 2D full-body editorial fashion lookbook illustration in modern ligne-claire pen-and-ink style (POPEYE Magazine Tokyo / contemporary Japanese-French editorial lookbook aesthetic).',
+    'Generate a single 2D full-body isometric editorial fashion virtual try-on illustration in crisp contemporary ligne-claire pen-and-ink + matte gouache style (POPEYE Magazine Tokyo / tactile turn-based simulation character aesthetic).',
     '',
-    'VISUAL STYLE & LINEWORK RULES:',
-    '- Crisp, organic dark charcoal-ink pen outlines (#1D1D1F) with clean, confident continuous line weight.',
-    '- Articulate tailored garment construction clearly with fine pen lines: collar roll, lapels, buttons, pocket welts, cuffs, hem break, topstitching, fabric weave/ribbing, and natural gravity-driven drape creases.',
-    '- Flat-to-subtle matte gouache color washes that preserve authentic garment colors without glossy airbrush gradients, 3D CGI plastic rendering, photorealism, or anime/manga exaggeration.',
-    '- Natural ~7.8-head adult lookbook proportions.',
-    '- Front-facing, relaxed, poised full-body standing studio pose, framed 100% from the crown of the head down to the complete soles of the shoes with clean studio margin above head and below feet (NEVER crop the head, hands, or shoes).',
-    '- Solid, clean, bright neutral studio background in exact hex #F5F5F7 with only a subtle soft contact shadow directly beneath the soles. Include ZERO text, ZERO labels, ZERO color swatches, ZERO extra figures, and ZERO background props.',
+    'CAMERA & 8-ANGLE ISOMETRIC POSE LOCK:',
+    `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
+    '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes and subtle diamond plinth tile, with clean studio margin above head and below plinth (NEVER crop head, hands, or feet).',
+    '- Solid, clean neutral studio background in exact hex #F5F5F7 with only a subtle soft contact shadow on the minimal diamond plinth tile beneath the feet. Include ZERO text, ZERO angle numbers, ZERO UI labels, ZERO color swatches, and ZERO extra figures.',
     '',
-    'STRICTLY GENDER-NEUTRAL ANATOMICAL PROPORTIONS & COMPLEXION:',
-    '- Render an authentic, contemporary gender-neutral adult lookbook silhouette governed strictly by these physical measurements:',
-    `  * Height: ${profile.heightCm} cm (${statureCue})`,
-    `  * Weight: ${profile.weightKg} kg (BMI ${profile.bmi})`,
-    `  * Body shape: ${profile.bodyShape} — ${shapeDesc}`,
-    `  * Quantitative frame scales: shoulderScale=${profile.shoulderScale}, waistScale=${profile.waistScale}, hipScale=${profile.hipScale}`,
-    `  * Skin complexion: render all visible skin (face, neck, hands, and any exposed ankle/leg) in exact hex ${profile.skinToneHex} with ${pcDesc}.`,
+    'VISUAL STYLE & GARMENT CONSTRUCTION FIDELITY:',
+    '- Crisp dark charcoal-ink outlines (#1D1D1F) with confident continuous line weight.',
+    '- Articulate real garment construction accurately for the active camera angle: collar roll, lapels, plackets, seams, cuffs, hem break, pockets, rear vents/back seams (on rear/back-quarter views), fabric weave, and gravity-driven folds.',
+    '- Matte gouache color fidelity that preserves authentic garment colors and textures without plastic 3D CGI gloss or anime exaggeration.',
+    '',
+    'INCLUSIVE ANTHROPOMETRIC, SOFT-TISSUE & COMPLEXION LOCK (ZERO MODEL BIAS):',
+    `  * Stature & Mass: Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
+    `  * Frame & Archetype: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, chestForm=${profile.chestForm}, legacyShape=${profile.bodyShape} (${shapeDesc})`,
+    `  * Segment Scales: shoulder=${profile.shoulderScale}, chest=${profile.chestScale}, waist=${profile.waistScale}, abdomen=${profile.abdomenScale}, hip=${profile.hipScale}, glute=${profile.gluteScale}, armMass=${profile.armMassScale}, legMass=${profile.legMassScale}, muscleDefinition=${profile.muscleDefinition}`,
+    `  * ${softTissueLock}`,
+    `  * ${mstLightingLock} (${pcDesc})`,
   ].join('\n');
 }
 
 function appendPortraitParts(parts, profile) {
+  const angle = normalizeIsoViewAngleDeg(profile.viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
+  const isPureBack = angle === 180;
+  const isBackQuarter = Math.abs(angle) === 135;
+  const hairDesc =
+    HAIR_STYLE_DESCRIPTIONS[profile.hairStyle] || HAIR_STYLE_DESCRIPTIONS.soft_wavy;
+  const facialHairDesc =
+    FACIAL_HAIR_DESCRIPTIONS[profile.facialHair] || FACIAL_HAIR_DESCRIPTIONS.none;
+
+  const featureSummary = `Head shape: ${profile.headShape}; Hair: ${hairDesc} in exact color ${profile.hairColorHex}; Facial hair: ${facialHairDesc}; Eye shape: ${profile.eyeShape} (scale ${profile.eyeSizeScale}); Nose width scale: ${profile.noseWidthScale}; Lip fullness scale: ${profile.lipFullnessScale}; Brow strength: ${profile.browStrength}.`;
+
   if (profile.portraitPart) {
     parts.push({
       text: [
-        '[PORTRAIT / FACE LIKENESS REFERENCE PHOTO ATTACHED BELOW]:',
-        `Translate this person's facial structure, brow/eye/nose/lip proportions, eyeglasses (if present), and natural hair silhouette & parting into a cohesive, refined 2D ligne-claire editorial pen-and-ink illustration face with exact skin tone ${profile.skinToneHex}.`,
-        'Keep face and body 100% unified in hand-inked 2D illustration style — never paste raw photographic pixels.',
+        '[PORTRAIT / IDENTITY LIKENESS REFERENCE PHOTO ATTACHED BELOW]:',
+        isPureBack
+          ? `Because the camera is at 180° full rear view, render ONLY the back of this person's head, hair/headwrap (${hairDesc}, ${profile.hairColorHex}), ears, and neck fullness with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
+          : isBackQuarter
+            ? `At ${angle}° back-quarter view, translate this person's rear/side hair silhouette (${hairDesc}, ${profile.hairColorHex}) and outer cheek/jawline contour (${profile.headShape}) with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
+            : `Translate this person's craniofacial structure (${featureSummary}), eyeglasses (if present), and natural hair silhouette into a unified 2D ligne-claire editorial illustration face at ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
+        'Keep head and body 100% unified in hand-inked 2D editorial style — never paste raw photographic face pixels.',
       ].join(' '),
     });
     parts.push({
@@ -942,7 +1338,9 @@ function appendPortraitParts(parts, profile) {
     });
   } else {
     parts.push({
-      text: `[FACE & HAIR DIRECTION]: Draw a calm, modern, approachable editorial lookbook face with minimalist dark-ink pen features (clean dot/fine-stroke eyes, subtle nose line, relaxed neutral expression), neat contemporary dark-espresso hair silhouette, and exact skin tone ${profile.skinToneHex}.`,
+      text: isPureBack
+        ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
+        : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, poised editorial lookbook expression matching camera angle ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
     });
   }
 }
@@ -953,8 +1351,8 @@ function buildBaseModelParts(profile) {
   parts.push({
     text: [
       '[STUDIO BASE MODEL ATTIRE]:',
-      '- Dress the figure in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.',
-      '- Keep the silhouette clean and unobstructed so body proportions and personal color complexion are clearly legible.',
+      `- Dress the figure (viewed at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
+      '- Keep the silhouette clean and unobstructed so authentic body proportions, coupled soft-tissue volume, and MST complexion are unmistakably legible.',
     ].join('\n'),
   });
   return parts;
@@ -969,37 +1367,56 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
   appendPortraitParts(parts, profile);
 
+  const onepieceItem = resolvedSlots.onepiece || resolvedSlots.dress || null;
+  const hasOnepiece = Boolean(onepieceItem);
+  const isSwimwearOnepiece = isResolvedSwimwearItem(onepieceItem);
   const hasTop = Boolean(resolvedSlots.top);
-  const hasDress = Boolean(resolvedSlots.dress);
   const hasBottom = Boolean(resolvedSlots.bottom);
   const hasOuter = Boolean(resolvedSlots.outer);
   const hasShoes = Boolean(resolvedSlots.shoes);
 
   const layeringRules = [
-    '[OUTFIT LAYERING & GARMENT FIDELITY INSTRUCTIONS]:',
-    '- Dress the single full-body figure in ALL of the equipped garments listed below simultaneously, matching each garment packshot reference image, cut, fabric texture, and exact hex color.',
+    `[OUTFIT LAYERING & GARMENT FIDELITY INSTRUCTIONS — ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW]:`,
+    '- Dress the single full-body figure in ALL of the equipped garments listed below simultaneously, matching each garment packshot reference image, cut, fabric texture, pattern, and exact hex color from the requested camera angle.',
+    '- Render ONLY the equipped garments listed below — NEVER hallucinate residual garments from previous outfits.',
   ];
-  if (hasOuter && (hasTop || hasDress)) {
+
+  if (hasOuter && (hasTop || hasOnepiece)) {
     layeringRules.push(
-      '- Wear the OUTER garment naturally open or relaxed-unbuttoned at the front so the inner TOP/DRESS neckline and chest remain clearly visible.'
+      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (relaxed open at front on front/quarter views; authentic outer back silhouette on rear views).'
     );
   }
-  if (hasDress && !hasBottom) {
-    layeringRules.push('- Render the DRESS as the primary one-piece silhouette.');
-  }
-  if (!hasTop && !hasDress) {
+  if (hasOnepiece && isSwimwearOnepiece) {
+    if (hasBottom) {
+      layeringRules.push(
+        '- Layer the equipped BOTTOM naturally over the lower half of the SWIMWEAR/ONEPIECE while keeping the upper swimwear/rashguard visible.'
+      );
+    } else {
+      layeringRules.push(
+        '- Render the SWIMWEAR ONEPIECE cleanly as solo resort/swim attire with natural bare legs (DO NOT add studio trousers or an extra T-shirt over the swimwear).'
+      );
+    }
+  } else if (hasOnepiece && !hasBottom) {
     layeringRules.push(
-      '- Since no top/dress is equipped, include a minimal neutral ecru (#EFECE6) crew-neck studio inner tee beneath outerwear/accessories.'
+      '- Render the ONEPIECE / DRESS / JUMPSUIT as the complete primary silhouette without adding studio trousers underneath.'
     );
   }
-  if (!hasBottom && !hasDress) {
+
+  if (!hasTop && !hasOnepiece) {
     layeringRules.push(
-      '- Since no bottom/dress is equipped, pair with clean neutral stone-taupe (#D8D3C8) straight tailored studio trousers.'
+      '- Since no top or onepiece is equipped, include a minimal neutral ecru (#EFECE6) crew-neck studio inner tee.'
+    );
+  }
+  if (!hasBottom && !hasOnepiece) {
+    layeringRules.push(
+      '- Since no bottom or onepiece is equipped, pair with clean neutral stone-taupe (#D8D3C8) straight tailored studio trousers.'
     );
   }
   if (!hasShoes) {
     layeringRules.push(
-      '- Since no shoes are equipped, complete the full-body stance with minimal off-white (#EAE7E1) low-profile studio court sneakers.'
+      isSwimwearOnepiece && !hasBottom && !hasOuter
+        ? '- Since solo swimwear is equipped without shoes, complete the stance with minimal neutral resort slides (#EAE7E1).'
+        : '- Since no shoes are equipped, complete the full-body stance with minimal off-white (#EAE7E1) low-profile studio court sneakers.'
     );
   }
   parts.push({ text: layeringRules.join('\n') });
@@ -1009,7 +1426,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.`;
     if (item.packshot) {
       parts.push({
-        text: `${specLine}\nUse the attached packshot image right below as the exact visual reference for [${slot.toUpperCase()}], translating its silhouette, details, pattern, and color ${item.colorHex} into the 2D ligne-claire editorial illustration:`,
+        text: `${specLine}\nUse the attached packshot image right below as the exact visual reference for [${slot.toUpperCase()}], wrapping and draping its authentic silhouette, details, pattern, and color ${item.colorHex} onto the wearer's body at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°:`,
       });
       parts.push({
         inlineData: {
@@ -1019,12 +1436,31 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       });
     } else {
       parts.push({
-        text: `${specLine}\nRender this [${slot.toUpperCase()}] with authentic ${item.fabric} drape, construction stitching, and exact color ${item.colorHex}.`,
+        text: `${specLine}\nRender this [${slot.toUpperCase()}] at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° with authentic ${item.fabric} drape, construction stitching, and exact color ${item.colorHex}.`,
       });
     }
   }
 
   return parts;
+}
+
+/**
+ * Deterministic helper returning the full structured anti-bias multi-angle Gemini text prompt
+ * for inspection, diagnostics, and verification.
+ */
+export function buildGeminiTryOnPrompt(profile, resolvedSlots = {}) {
+  const normalized =
+    profile && typeof profile.mstLevel === 'number' && typeof profile.bmi === 'number'
+      ? profile
+      : normalizeVtonProfile(profile);
+  const parts =
+    resolvedSlots && Object.keys(resolvedSlots).length > 0
+      ? buildCompositeLookParts(normalized, resolvedSlots)
+      : buildBaseModelParts(normalized);
+  return parts
+    .filter((part) => typeof part?.text === 'string')
+    .map((part) => part.text)
+    .join('\n\n');
 }
 
 function extractInlineImageFromGeminiResponse(payload) {
@@ -1138,7 +1574,12 @@ export async function synthesizeVtonLook(params = {}) {
     params.profile ?? params.bodyProfile ?? params.userProfile ?? params;
   const normalizedProfile = normalizeVtonProfile(
     rawProfile,
-    params.portraitDataUrl ?? params.faceDataUrl ?? null
+    params.portraitDataUrl ?? params.faceDataUrl ?? null,
+    {
+      avatarSpec: params.avatarSpec ?? rawProfile?.avatarSpec ?? null,
+      avatarConfigHash: params.avatarConfigHash ?? rawProfile?.avatarConfigHash ?? null,
+      viewAngleDeg: params.viewAngleDeg ?? rawProfile?.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
+    }
   );
 
   const authContext = {
@@ -1170,6 +1611,8 @@ export async function synthesizeVtonLook(params = {}) {
     cached: false,
     comboHash,
     baseHash,
+    viewAngleDeg: normalizedProfile.viewAngleDeg,
+    avatarConfigHash: normalizedProfile.avatarConfigHash,
     compositeImageUrl: null,
     baseModelImageUrl: null,
     fallbackReason,
@@ -1192,6 +1635,8 @@ export async function synthesizeVtonLook(params = {}) {
         cached: true,
         comboHash,
         baseHash,
+        viewAngleDeg: normalizedProfile.viewAngleDeg,
+        avatarConfigHash: normalizedProfile.avatarConfigHash,
         compositeImageUrl: cachedCombo.dataUrl,
         baseModelImageUrl: includeBaseModel
           ? cachedBase?.dataUrl || null
@@ -1216,7 +1661,7 @@ export async function synthesizeVtonLook(params = {}) {
   }
 
   // 3. Coalesce concurrent identical synthesis requests
-  const flightKey = `${comboHash}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}`;
+  const flightKey = `${comboHash}:${normalizedProfile.viewAngleDeg}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}`;
   if (!forceRefresh && inFlightSyntheses.has(flightKey)) {
     return inFlightSyntheses.get(flightKey);
   }
@@ -1258,6 +1703,8 @@ export async function synthesizeVtonLook(params = {}) {
           cached: Boolean(existingCombo),
           comboHash,
           baseHash,
+          viewAngleDeg: normalizedProfile.viewAngleDeg,
+          avatarConfigHash: normalizedProfile.avatarConfigHash,
           compositeImageUrl: baseGen.dataUrl,
           baseModelImageUrl: baseGen.dataUrl,
           fallbackReason: null,
@@ -1329,6 +1776,8 @@ export async function synthesizeVtonLook(params = {}) {
         cached: Boolean(comboRes.fromCache && (!includeBaseModel || baseRes?.fromCache)),
         comboHash,
         baseHash,
+        viewAngleDeg: normalizedProfile.viewAngleDeg,
+        avatarConfigHash: normalizedProfile.avatarConfigHash,
         compositeImageUrl: comboRes.dataUrl,
         baseModelImageUrl: resolvedBaseUrl,
         fallbackReason: null,

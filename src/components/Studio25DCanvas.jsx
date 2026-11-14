@@ -15,6 +15,10 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   skinProfile,
   bodySpec,
   user = null,
+  avatarSpec = null,
+  avatarConfigHash = null,
+  viewAngleDeg,
+  onViewAngleChange,
   weather,
   activeSlotKey,
   onSelectSlot,
@@ -43,6 +47,10 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       skinProfile={skinProfile}
       bodySpec={bodySpec}
       user={user}
+      avatarSpec={avatarSpec}
+      avatarConfigHash={avatarConfigHash}
+      viewAngleDeg={viewAngleDeg}
+      onViewAngleChange={onViewAngleChange}
       weather={weather}
       activeSlotKey={activeSlotKey}
       onSelectSlot={onSelectSlot}

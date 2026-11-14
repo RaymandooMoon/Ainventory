@@ -64,6 +64,10 @@
   cursor: grabbing;
 }
 
+.studio-2d-model-stage.is-rotating {
+  cursor: ew-resize;
+}
+
 .studio-2d-model-stage.is-compact {
   position: relative;
   inset: auto;
@@ -335,6 +339,78 @@
   transform: scale(0.93);
 }
 
+.studio-iso-rotate-bar {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-sm);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+}
+
+.studio-iso-rotate-btn {
+  min-width: 30px;
+  min-height: 32px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+.studio-iso-rotate-btn:hover {
+  background: var(--accent-soft-bg);
+}
+
+.studio-iso-rotate-btn:active {
+  transform: scale(0.92);
+}
+
+.studio-iso-angle-badge {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+.studio-iso-angle-badge:hover {
+  background: var(--accent-soft-bg);
+}
+
+.studio-iso-angle-badge.is-rotated {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
+.studio-iso-angle-badge:active {
+  transform: scale(0.93);
+}
+
+.studio-iso-angle-word {
+  font-size: 0.67rem;
+  font-weight: 640;
+  opacity: 0.88;
+}
+
 .studio-vton-compare-btn {
   pointer-events: auto;
   min-width: 38px;
@@ -411,6 +487,31 @@
 .studio-2d-vton-viewer .studio-tone-analyze-btn {
   min-height: 32px;
   padding: 0 11px;
+}
+
+/* Outfits Slot Picker Season Filter Rail & Empty Slot State */
+.studio-season-filter-rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 10px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.studio-season-filter-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-slot-empty-state {
+  padding: 24px 16px;
+  border-radius: 16px;
+  background: var(--accent-soft-bg);
+  color: var(--ink-secondary);
+  font-size: 0.8rem;
+  font-weight: 540;
+  text-align: center;
 }
 
 /* ==========================================================================
@@ -505,42 +606,57 @@
 }
 
 /* ==========================================================================
-   5. NARROW MOBILE & FOLD COVER RESPONSIVENESS (<= 420px)
+   5. COMPACT STAGE HUD FOR DUAL-PANE FOLDABLE (717px), TABLET & MOBILE
+   (`.studio-25d-canvas` is max 452px on desktop and ~350-375px at 700-1024px)
    ========================================================================== */
-@media (max-width: 420px) {
+@media (max-width: 1180px) {
+  .studio-iso-angle-word {
+    display: none;
+  }
+
+  .studio-iso-angle-badge {
+    min-width: 36px;
+    padding: 0 6px;
+  }
+}
+
+@media (max-width: 1060px) {
   .studio-2d-vton-viewer .studio-stage-top-hud {
     top: 10px;
     left: 10px;
     right: 10px;
-    gap: 5px;
-  }
-
-  .studio-vton-hud-left {
     gap: 4px;
   }
 
-  .studio-vton-zoom-bar {
+  .studio-vton-hud-left {
+    gap: 3px;
+  }
+
+  .studio-vton-zoom-bar,
+  .studio-iso-rotate-bar {
     padding: 2px;
     gap: 1px;
   }
 
-  .studio-vton-zoom-btn {
-    min-width: 30px;
-    min-height: 32px;
-    padding: 0 5px;
+  .studio-vton-zoom-btn,
+  .studio-iso-rotate-btn {
+    min-width: 26px;
+    min-height: 30px;
+    padding: 0 4px;
   }
 
-  .studio-vton-zoom-level-btn {
-    min-width: 40px;
-    min-height: 32px;
-    padding: 0 6px;
-    font-size: 0.69rem;
+  .studio-vton-zoom-level-btn,
+  .studio-iso-angle-badge {
+    min-width: 34px;
+    min-height: 30px;
+    padding: 0 5px;
+    font-size: 0.67rem;
   }
 
   .studio-vton-compare-btn {
-    min-width: 34px;
+    min-width: 32px;
     min-height: 34px;
-    padding: 0 8px;
+    padding: 0 7px;
   }
 
   .studio-vton-compare-label {
@@ -549,8 +665,8 @@
 
   .studio-2d-vton-viewer .studio-body-pill-btn {
     min-height: 34px;
-    padding: 0 9px;
-    font-size: 0.69rem;
+    padding: 0 8px;
+    font-size: 0.68rem;
   }
 
   .studio-2d-vton-viewer .studio-worn-slots-dock {

@@ -1,23 +1,30 @@
 import {
   type GarmentRecord,
-  type WardrobeCategoryKey,
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
 import { normalizeViewerMode } from './vton2DService.ts';
 
-export type FittingSlotKey = WardrobeCategoryKey;
+export type FittingSlotKey =
+  | 'outer'
+  | 'top'
+  | 'bottom'
+  | 'onepiece'
+  | 'shoes'
+  | 'accessory';
 
 export interface FittingSlotDefinition {
   key: FittingSlotKey;
-  label: 'Outerwear' | 'Tops' | 'Bottoms' | 'Shoes' | 'Accessories';
+  label: 'Outerwear' | 'Tops' | 'Bottoms' | 'One-piece' | 'Shoes' | 'Accessories';
+  labelKo: '아우터' | '상의' | '하의' | '원피스·수영복' | '신발' | '액세서리';
 }
 
 export const FITTING_SLOTS: readonly FittingSlotDefinition[] = [
-  { key: 'outer', label: 'Outerwear' },
-  { key: 'top', label: 'Tops' },
-  { key: 'bottom', label: 'Bottoms' },
-  { key: 'shoes', label: 'Shoes' },
-  { key: 'accessory', label: 'Accessories' },
+  { key: 'outer', label: 'Outerwear', labelKo: '아우터' },
+  { key: 'top', label: 'Tops', labelKo: '상의' },
+  { key: 'bottom', label: 'Bottoms', labelKo: '하의' },
+  { key: 'onepiece', label: 'One-piece', labelKo: '원피스·수영복' },
+  { key: 'shoes', label: 'Shoes', labelKo: '신발' },
+  { key: 'accessory', label: 'Accessories', labelKo: '액세서리' },
 ] as const;
 
 export type FittingSlotAssignments = Partial<Record<FittingSlotKey, GarmentRecord | null>>;
@@ -66,15 +73,128 @@ export interface FittingRenderer {
   render(request: FittingRenderRequest): Promise<FittingRenderResult>;
 }
 
+const SWIMWEAR_SUBCATEGORIES = new Set([
+  'swimsuit',
+  'bikini',
+  'rashguard',
+  'swim_trunks',
+]);
+
+const SWIMWEAR_NAME_RE = /수영복|비키니|래시가드|스윔|swimsuit|bikini|rashguard|swimwear|swim[\s_-]*trunks?/i;
+
+const INTIMATE_NON_WEARABLE_SUBCATEGORIES = new Set([
+  'underwear',
+  'inner_top',
+  'socks',
+  'crew_socks',
+  'ankle_socks',
+]);
+
+const ONEPIECE_CATEGORIES = new Set(['dress', 'onepiece', 'swimwear']);
+
+const ONEPIECE_SUBCATEGORIES = new Set([
+  'dress',
+  'onepiece',
+  'jumpsuit',
+  'swimsuit',
+  'bikini',
+  'rashguard',
+  'swim_trunks',
+]);
+
+const ONEPIECE_NAME_RE = /원피스|점프수트|수영복|비키니|래시가드/i;
+
+export function isSwimwearGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
+  const cat = String(garment.category || '')
+    .trim()
+    .toLowerCase();
+  const sub = String(garment.subcategory || '')
+    .trim()
+    .toLowerCase();
+  const name = String(garment.name || '');
+  return (
+    cat === 'swimwear' ||
+    SWIMWEAR_SUBCATEGORIES.has(sub) ||
+    SWIMWEAR_NAME_RE.test(name)
+  );
+}
+
+/**
+ * Returns `false` ONLY for non-outer intimate underwear/socks unless the item is swimwear.
+ * Permanently prevents underwear/socks from polluting the `Accessories` or other studio slots.
+ */
+export function isWearableStudioGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
+  if (isSwimwearGarment(garment)) return true;
+
+  const cat = String(garment.category || '')
+    .trim()
+    .toLowerCase();
+  const sub = String(garment.subcategory || '')
+    .trim()
+    .toLowerCase();
+
+  if (
+    cat === 'underwear' ||
+    cat === 'socks' ||
+    INTIMATE_NON_WEARABLE_SUBCATEGORIES.has(sub)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function mapGarmentToFittingSlot(garment?: Partial<GarmentRecord> | null): FittingSlotKey {
   if (!garment) return 'top';
+
+  const cat = String(garment.category || '')
+    .trim()
+    .toLowerCase();
+  const sub = String(garment.subcategory || '')
+    .trim()
+    .toLowerCase();
+  const name = String(garment.name || '');
+
+  if (
+    ONEPIECE_CATEGORIES.has(cat) ||
+    ONEPIECE_SUBCATEGORIES.has(sub) ||
+    ONEPIECE_NAME_RE.test(name)
+  ) {
+    return 'onepiece';
+  }
+
+  if (cat === 'outer' || cat === 'outerwear') {
+    return 'outer';
+  }
+  if (cat === 'top' || cat === 'tops') {
+    return 'top';
+  }
+  if (cat === 'bottom' || cat === 'bottoms') {
+    return 'bottom';
+  }
+  if (cat === 'shoes' || cat === 'footwear') {
+    return 'shoes';
+  }
+  if (
+    cat === 'accessory' ||
+    cat === 'accessories' ||
+    cat === 'headwear' ||
+    cat === 'neckwear' ||
+    cat === 'gloves' ||
+    cat === 'bag'
+  ) {
+    return 'accessory';
+  }
+
   return normalizeWardrobeCategoryKey(garment.category);
 }
 
 /**
- * Default 2.5D Studio Canvas Fitting Renderer:
- * Calibrated directly against the 8-head 2.5D Studio Fashion Model (`800x1200`, `top: 1.5%`, `height: 86%`)
- * so tops, coats, trousers, skirts, shoes, headwear, and bags dress naturally centered on the body.
+ * Default Studio Canvas Fitting Renderer:
+ * Enforces strict Z-ordering (`swimwear: 28`, `top: 32`, `bottom: 36`, `shoes: 38`,
+ * `onepiece(dress): 40`, `outer: 50`, `accessory: 60`).
  */
 export class Studio25DFittingRenderer implements FittingRenderer {
   readonly id = 'studio-25d-renderer-v2';
@@ -86,6 +206,44 @@ export class Studio25DFittingRenderer implements FittingRenderer {
     const hasOuter = Boolean(slots.outer);
 
     const layers: Studio25DLayer[] = [];
+
+    if (slots.onepiece) {
+      const swim = isSwimwearGarment(slots.onepiece);
+      layers.push({
+        slotKey: 'onepiece',
+        slotLabel: 'One-piece',
+        garment: slots.onepiece,
+        xPct: 50,
+        yPct: swim ? 40.5 : 44.5,
+        widthPct: swim ? 40.0 : 47.0,
+        zIndex: swim ? 28 : 40,
+        rotationDeg: 0,
+        parallaxDepth: swim ? 0.56 : 0.72,
+        shadowBlurPx: 20,
+        shadowOffsetY: 11,
+      });
+    }
+
+    if (slots.top) {
+      const tCat = String(slots.top.category || '').toLowerCase();
+      const tSub = String(slots.top.subcategory || '').toLowerCase();
+      const isDress =
+        tCat === 'dress' || tCat === 'onepiece' || tSub === 'dress' || tSub === 'onepiece';
+
+      layers.push({
+        slotKey: 'top',
+        slotLabel: 'Tops',
+        garment: slots.top,
+        xPct: 50,
+        yPct: isDress ? 44.5 : hasOuter ? 28.4 : 30.8,
+        widthPct: isDress ? 47 : hasOuter ? 30.5 : 46.0,
+        zIndex: 32,
+        rotationDeg: 0,
+        parallaxDepth: 0.68,
+        shadowBlurPx: 20,
+        shadowOffsetY: 11,
+      });
+    }
 
     if (slots.bottom) {
       const bSub = String(slots.bottom.subcategory || '').toLowerCase();
@@ -102,7 +260,7 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         xPct: 50,
         yPct: isSkirtOrShorts ? 50.0 : 56.5,
         widthPct: isSkirtOrShorts ? 38 : 48,
-        zIndex: 20,
+        zIndex: 36,
         rotationDeg: 0,
         parallaxDepth: 0.5,
         shadowBlurPx: 18,
@@ -118,31 +276,11 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         xPct: 50,
         yPct: 79.0,
         widthPct: 21.5,
-        zIndex: 25,
+        zIndex: 38,
         rotationDeg: 0,
         parallaxDepth: 0.42,
         shadowBlurPx: 16,
         shadowOffsetY: 8,
-      });
-    }
-
-    if (slots.top) {
-      const tCat = String(slots.top.category || '').toLowerCase();
-      const tSub = String(slots.top.subcategory || '').toLowerCase();
-      const isDress = tCat === 'dress' || tCat === 'onepiece' || tSub === 'dress' || tSub === 'onepiece';
-
-      layers.push({
-        slotKey: 'top',
-        slotLabel: 'Tops',
-        garment: slots.top,
-        xPct: 50,
-        yPct: isDress ? 44.5 : hasOuter ? 28.4 : 30.8,
-        widthPct: isDress ? 47 : hasOuter ? 30.5 : 46.0,
-        zIndex: 30,
-        rotationDeg: 0,
-        parallaxDepth: 0.68,
-        shadowBlurPx: 20,
-        shadowOffsetY: 11,
       });
     }
 
@@ -154,7 +292,7 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         xPct: 50,
         yPct: 30.0,
         widthPct: 48.5,
-        zIndex: 40,
+        zIndex: 50,
         rotationDeg: 0,
         parallaxDepth: 0.85,
         shadowBlurPx: 24,
@@ -190,7 +328,7 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         xPct: isHeadwear ? 50 : isNeckwear ? 61.5 : 76.5,
         yPct: isHeadwear ? 6.8 : isNeckwear ? 25.5 : 55.5,
         widthPct: isHeadwear ? 14 : isNeckwear ? 16.5 : 19.5,
-        zIndex: isHeadwear ? 46 : 45,
+        zIndex: 60,
         rotationDeg: isNeckwear ? 3 : 0,
         parallaxDepth: 0.95,
         shadowBlurPx: 18,

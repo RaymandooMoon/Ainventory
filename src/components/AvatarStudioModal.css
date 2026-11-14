@@ -1,0 +1,648 @@
+/* ==========================================================================
+   Avatar Studio Modal — Inclusive MST 1-10, Hair/Feature & Coupled Body Morph UI
+   Strictly inherits global theme tokens:
+   var(--bg-surface), var(--bg-elevated), var(--ink-primary),
+   var(--ink-secondary), var(--vibrancy-hairline), var(--accent-mono)
+   ========================================================================== */
+
+.avatar-studio-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Preview Isometric Rotation Bar inside .skin-modal-character-box */
+.avatar-iso-rotate-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+}
+
+.avatar-iso-rotate-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.16s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.avatar-iso-rotate-btn:hover {
+  border-color: var(--ink-secondary);
+}
+
+.avatar-iso-rotate-btn:active {
+  transform: scale(0.92);
+}
+
+.avatar-iso-angle-pill {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  color: var(--ink-primary);
+  font-size: 0.69rem;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-iso-angle-pill:hover {
+  background: var(--bg-elevated);
+}
+
+/* Live Summary Meta Row (MST Code + Deterministic Avatar Config Hash) */
+.avatar-live-hash-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avatar-mst-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-primary);
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.avatar-config-hash-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Studio Section Cards & Collapsible Headers */
+.avatar-studio-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  border-radius: 18px;
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.avatar-studio-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.avatar-studio-card-title {
+  font-size: 0.81rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.012em;
+}
+
+.avatar-studio-collapse-btn {
+  width: 100%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  color: var(--ink-primary);
+}
+
+.avatar-studio-collapse-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-secondary);
+  font-size: 0.72rem;
+  font-weight: 620;
+}
+
+.avatar-studio-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 660;
+  color: var(--ink-secondary);
+}
+
+.avatar-studio-hint {
+  font-size: 0.72rem;
+  line-height: 1.38;
+  color: var(--ink-secondary);
+}
+
+/* Monk Skin Tone (MST 1-10) x 4 Undertones Matrix */
+.avatar-mst-code-pill {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 12%, transparent));
+  color: var(--ink-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.avatar-mst-level-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.avatar-mst-level-btn {
+  padding: 7px 4px 6px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  transition: transform 0.15s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.avatar-mst-level-btn:hover {
+  border-color: var(--ink-secondary);
+}
+
+.avatar-mst-level-btn.is-selected {
+  border-color: var(--accent-mono);
+  box-shadow: 0 0 0 1px var(--accent-mono);
+}
+
+.avatar-mst-level-btn:active {
+  transform: scale(0.95);
+}
+
+.avatar-mst-swatch-dot,
+.avatar-mst-undertone-dot,
+.avatar-hair-color-dot {
+  forced-color-adjust: none;
+}
+
+.avatar-mst-swatch-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--ink-primary) 20%, var(--bg-elevated));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatar-mst-level-code {
+  font-size: 0.65rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.avatar-mst-undertone-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 360px) {
+  .avatar-mst-undertone-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.avatar-mst-undertone-pill {
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.74rem;
+  font-weight: 660;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: transform 0.15s ease, background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.avatar-mst-undertone-pill:hover:not(.is-selected) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.avatar-mst-undertone-pill.is-selected {
+  background: var(--accent-mono);
+  border-color: var(--accent-mono);
+  color: var(--bg-elevated);
+}
+
+.avatar-mst-undertone-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ink-primary) 22%, var(--bg-elevated));
+  flex-shrink: 0;
+}
+
+/* Portrait Photo Attachment Switch Row */
+.avatar-face-photo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+}
+
+.avatar-face-photo-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.avatar-face-photo-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 14%, transparent));
+  flex-shrink: 0;
+}
+
+.avatar-face-photo-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.avatar-face-photo-text strong {
+  font-size: 0.75rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.avatar-face-photo-text small {
+  font-size: 0.68rem;
+  color: var(--ink-secondary);
+}
+
+/* Universal Studio Chips (Hair, Facial Hair, Head Shape, Eye Shape) */
+.avatar-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avatar-studio-chip {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.74rem;
+  font-weight: 640;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: transform 0.15s ease, background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.avatar-studio-chip:hover:not(.is-active) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.avatar-studio-chip.is-active {
+  background: var(--accent-mono);
+  border-color: var(--accent-mono);
+  color: var(--bg-elevated);
+}
+
+.avatar-studio-chip:active {
+  transform: scale(0.95);
+}
+
+/* Hair Color Swatches */
+.avatar-hair-color-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.avatar-hair-color-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, border-color 0.18s ease;
+}
+
+.avatar-hair-color-btn.is-selected {
+  border-color: var(--accent-mono);
+  transform: scale(1.06);
+}
+
+.avatar-hair-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ink-primary) 22%, var(--bg-elevated));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Inclusive Frame Cards & Archetype Grid */
+.avatar-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 440px) {
+  .avatar-frame-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.avatar-frame-card {
+  min-height: 38px;
+  padding: 7px 8px;
+  border-radius: 13px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.75rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: transform 0.15s ease, background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.avatar-frame-card:hover:not(.is-active) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.avatar-frame-card.is-active {
+  background: var(--accent-mono);
+  border-color: var(--accent-mono);
+  color: var(--bg-elevated);
+}
+
+.avatar-archetype-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 460px) {
+  .avatar-archetype-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.avatar-archetype-chip {
+  min-height: 36px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.74rem;
+  font-weight: 660;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: transform 0.15s ease, background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.avatar-archetype-chip:hover:not(.is-active) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.avatar-archetype-chip.is-active {
+  background: var(--accent-mono);
+  border-color: var(--accent-mono);
+  color: var(--bg-elevated);
+}
+
+/* Primary Height/Weight + Live BMI Badge */
+.avatar-anthro-primary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 400px) {
+  .avatar-anthro-primary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.avatar-bmi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 12%, transparent));
+  color: var(--ink-primary);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+/* Chest Contour Form Selector */
+.avatar-chest-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 420px) {
+  .avatar-chest-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Regional & Facial Feature Sliders Grid */
+.avatar-fine-sliders-grid,
+.avatar-feature-slider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+@media (max-width: 359px) {
+  .avatar-fine-sliders-grid,
+  .avatar-feature-slider-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.avatar-slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.avatar-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+.avatar-slider-head strong,
+.avatar-slider-head small {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.avatar-studio-card input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-mono);
+  cursor: pointer;
+}
+
+.avatar-reset-link-btn {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.69rem;
+  font-weight: 650;
+}
+
+.avatar-reset-link-btn:hover {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+/* High-BMI Coupled Facial & Distal Extremity Morphing Section */
+.avatar-bmi-couple-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.avatar-bmi-couple-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.avatar-bmi-couple-title {
+  font-size: 0.79rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.avatar-switch-btn {
+  min-width: 54px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 14%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.71rem;
+  font-weight: 720;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.avatar-switch-btn.is-on {
+  background: var(--accent-mono);
+  border-color: var(--accent-mono);
+  color: var(--bg-elevated);
+}
+
+.avatar-coupled-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avatar-coupled-metric-pill {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--vibrancy-hairline, color-mix(in srgb, var(--ink-primary) 10%, transparent));
+  color: var(--ink-secondary);
+  font-size: 0.68rem;
+  font-weight: 640;
+}

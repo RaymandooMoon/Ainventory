@@ -13,7 +13,13 @@ import {
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
+  bridgeLegacyPropsToAvatarSpec,
+  useAvatarSpec,
+} from '../services/avatarSpecStore.ts';
+import {
   FITTING_SLOTS,
+  isSwimwearGarment,
+  isWearableStudioGarment,
   mapGarmentToFittingSlot,
   renderOutfitFitting,
 } from '../services/fittingRenderer.ts';
@@ -74,11 +80,71 @@ const DEFAULT_SCENARIOS = [
   { key: 'winter_cold', label: '한파' },
 ];
 
+const STUDIO_SEASON_FILTERS = [
+  { key: 'all', ko: '사계절 전체', en: 'All Seasons' },
+  { key: '봄', ko: '봄', en: 'Spring' },
+  { key: '여름', ko: '여름', en: 'Summer' },
+  { key: '가을', ko: '가을', en: 'Autumn' },
+  { key: '겨울', ko: '겨울', en: 'Winter' },
+];
+
+const SEASON_TOKEN_ALIAS = {
+  spring: '봄',
+  summer: '여름',
+  autumn: '가을',
+  fall: '가을',
+  winter: '겨울',
+  봄: '봄',
+  여름: '여름',
+  가을: '가을',
+  겨울: '겨울',
+};
+
+function normalizeSeasonToken(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  return SEASON_TOKEN_ALIAS[s.toLowerCase()] || s;
+}
+
+function parseSeasons(rawSeasons) {
+  if (Array.isArray(rawSeasons)) {
+    return rawSeasons.map(normalizeSeasonToken).filter(Boolean);
+  }
+  if (typeof rawSeasons === 'string') {
+    const trimmed = rawSeasons.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(normalizeSeasonToken).filter(Boolean);
+        }
+      } catch {
+        // fall through to delimiter split
+      }
+    }
+    return trimmed
+      .split(/[,/|]+/)
+      .map(normalizeSeasonToken)
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function resolveGarmentDisplayName(item, lang) {
+  if (!item) return '';
+  if (lang === 'en' && typeof item.name_en === 'string' && item.name_en.trim()) {
+    return item.name_en.trim();
+  }
+  return localizeGarmentName(item.name, lang);
+}
+
 function mapWeatherRecToSlots(rec, allGarments, weather) {
   const byId = new Map((allGarments || []).map((g) => [Number(g.id), g]));
   const resolveItem = (raw) => {
     if (!raw) return null;
-    return byId.get(Number(raw.id)) || raw;
+    const candidate = byId.get(Number(raw.id)) || raw;
+    return isWearableStudioGarment(candidate) ? candidate : null;
   };
 
   const slotMap = rec?.loadoutBySlot || {};
@@ -87,8 +153,18 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
   );
 
   let outer = resolveItem(slotMap.outer);
-  let top = resolveItem(slotMap.top) || resolveItem(slotMap.dress);
-  let bottom = slotMap.dress ? null : resolveItem(slotMap.bottom);
+  let onepiece = resolveItem(slotMap.onepiece) || resolveItem(slotMap.dress);
+  const rawTop = resolveItem(slotMap.top);
+  if (!onepiece && rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece') {
+    onepiece = rawTop;
+  }
+
+  const hasNonSwimOnepiece = Boolean(onepiece && !isSwimwearGarment(onepiece));
+  let top =
+    hasNonSwimOnepiece || (rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece')
+      ? null
+      : rawTop;
+  let bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
   let shoes = resolveItem(slotMap.shoes);
   let accessory = isChillyOrWindy
     ? resolveItem(slotMap.neckwear) ||
@@ -96,15 +172,23 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
       resolveItem(slotMap.headwear)
     : resolveItem(slotMap.accessory) || resolveItem(slotMap.neckwear);
 
-  if (!top && !outer && Array.isArray(rec?.items)) {
+  if (!top && !onepiece && !outer && Array.isArray(rec?.items)) {
     for (const raw of rec.items) {
       const item = resolveItem(raw);
       if (!item) continue;
       const key = mapGarmentToFittingSlot(item);
       if (key === 'outer' && !outer) outer = item;
-      else if (key === 'top' && !top) top = item;
-      else if (key === 'bottom' && !bottom) bottom = item;
-      else if (key === 'shoes' && !shoes) shoes = item;
+      else if (key === 'onepiece' && !onepiece) {
+        onepiece = item;
+        if (!isSwimwearGarment(item)) {
+          top = null;
+          bottom = null;
+        }
+      } else if (key === 'top' && !top && !(onepiece && !isSwimwearGarment(onepiece))) {
+        top = item;
+      } else if (key === 'bottom' && !bottom && !(onepiece && !isSwimwearGarment(onepiece))) {
+        bottom = item;
+      } else if (key === 'shoes' && !shoes) shoes = item;
       else if (key === 'accessory' && !accessory) accessory = item;
     }
   }
@@ -113,6 +197,7 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
     outer: outer || null,
     top: top || null,
     bottom: bottom || null,
+    onepiece: onepiece || null,
     shoes: shoes || null,
     accessory: accessory || null,
   };
@@ -122,31 +207,49 @@ const EMPTY_STUDIO_SLOTS = {
   outer: null,
   top: null,
   bottom: null,
+  onepiece: null,
   shoes: null,
   accessory: null,
 };
 
 function buildInitialStudioSlots(garments, preEquippedGarment) {
-  const list = Array.isArray(garments) ? garments : [];
+  const wearableList = (Array.isArray(garments) ? garments : []).filter((g) =>
+    isWearableStudioGarment(g)
+  );
   const findFirst = (slotKey) =>
-    list.find((g) => mapGarmentToFittingSlot(g) === slotKey) || null;
+    wearableList.find((g) => mapGarmentToFittingSlot(g) === slotKey) || null;
 
-  if (preEquippedGarment) {
+  if (preEquippedGarment && isWearableStudioGarment(preEquippedGarment)) {
     const targetSlot = mapGarmentToFittingSlot(preEquippedGarment);
+    const preIsNonSwimOnepiece =
+      targetSlot === 'onepiece' && !isSwimwearGarment(preEquippedGarment);
     return {
       outer: targetSlot === 'outer' ? preEquippedGarment : null,
-      top: targetSlot === 'top' ? preEquippedGarment : findFirst('top'),
-      bottom: targetSlot === 'bottom' ? preEquippedGarment : findFirst('bottom'),
+      top: preIsNonSwimOnepiece
+        ? null
+        : targetSlot === 'top'
+          ? preEquippedGarment
+          : findFirst('top'),
+      bottom: preIsNonSwimOnepiece
+        ? null
+        : targetSlot === 'bottom'
+          ? preEquippedGarment
+          : findFirst('bottom'),
+      onepiece: targetSlot === 'onepiece' ? preEquippedGarment : null,
       shoes: targetSlot === 'shoes' ? preEquippedGarment : findFirst('shoes'),
       accessory: targetSlot === 'accessory' ? preEquippedGarment : null,
     };
   }
 
-  if (list.length > 0) {
+  if (wearableList.length > 0) {
+    const initialTop = findFirst('top');
+    const initialBottom = findFirst('bottom');
+    const initialOnepiece = !initialTop && !initialBottom ? findFirst('onepiece') : null;
     return {
       outer: null,
-      top: findFirst('top'),
-      bottom: findFirst('bottom'),
+      top: initialTop,
+      bottom: initialBottom,
+      onepiece: initialOnepiece,
       shoes: findFirst('shoes'),
       accessory: null,
     };
@@ -173,6 +276,18 @@ export default function OutfitStudioView({
   onClosetUpdated,
   showToast,
 }) {
+  const {
+    spec: storedAvatarSpec,
+    avatarConfigHash: storedAvatarHash,
+    patchAvatarSpec,
+  } = useAvatarSpec();
+
+  const bridgedAvatar = useMemo(() => {
+    void storedAvatarSpec;
+    void storedAvatarHash;
+    return bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user });
+  }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
+
   const [rawSlots, setSlots] = useState(() =>
     buildInitialStudioSlots(garments, preEquippedGarment)
   );
@@ -182,6 +297,7 @@ export default function OutfitStudioView({
   const [activeSlotKey, setActiveSlotKey] = useState(() =>
     preEquippedGarment ? mapGarmentToFittingSlot(preEquippedGarment) : 'top'
   );
+  const [seasonFilter, setSeasonFilter] = useState('all');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [renderResult, setRenderResult] = useState(null);
 
@@ -312,7 +428,8 @@ export default function OutfitStudioView({
     for (const key of Object.keys(next)) {
       const cur = baseSlots[key];
       if (!cur) continue;
-      next[key] = byId.get(Number(cur.id)) || null;
+      const resolved = byId.get(Number(cur.id)) || null;
+      next[key] = resolved && isWearableStudioGarment(resolved) ? resolved : null;
     }
     return next;
   }, [rawSlots, hasExplicitSlotState, garments]);
@@ -330,8 +447,13 @@ export default function OutfitStudioView({
   }, [slots, theme]);
 
   const slotGarments = useMemo(() => {
-    return garments.filter((g) => mapGarmentToFittingSlot(g) === activeSlotKey);
-  }, [garments, activeSlotKey]);
+    return garments.filter((g) => {
+      if (!isWearableStudioGarment(g)) return false;
+      if (mapGarmentToFittingSlot(g) !== activeSlotKey) return false;
+      if (seasonFilter === 'all') return true;
+      return parseSeasons(g.seasons).includes(seasonFilter);
+    });
+  }, [garments, activeSlotKey, seasonFilter]);
 
   const equippedItems = useMemo(() => {
     return FITTING_SLOTS.map((s) => slots[s.key]).filter(Boolean);
@@ -431,6 +553,12 @@ export default function OutfitStudioView({
       gender: effectiveGender,
       presetKey: preset.key,
     });
+    patchAvatarSpec({
+      appearance: {
+        skinToneHex: preset.skinToneHex,
+        personalColor: preset.personalColor,
+      },
+    });
   };
 
   const handleLogTomorrowCalendar = async () => {
@@ -468,14 +596,33 @@ export default function OutfitStudioView({
 
   const handleToggleEquip = (item) => {
     const slotKey = mapGarmentToFittingSlot(item);
+    const isUnequipping = slots[slotKey]?.id === item.id;
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
     triggerHaptic('selection');
-    setSlots({
+
+    const nextSlots = {
       ...slots,
-      [slotKey]: slots[slotKey]?.id === item.id ? null : item,
-    });
+      [slotKey]: isUnequipping ? null : item,
+    };
+
+    if (!isUnequipping) {
+      if (slotKey === 'onepiece' && !isSwimwearGarment(item)) {
+        // Non-swimwear dress/jumpsuit replaces top & bottom cleanly
+        nextSlots.top = null;
+        nextSlots.bottom = null;
+      } else if (
+        (slotKey === 'top' || slotKey === 'bottom') &&
+        nextSlots.onepiece &&
+        !isSwimwearGarment(nextSlots.onepiece)
+      ) {
+        // Equipping top or bottom clears a non-swimwear dress (swimwear stays layerable!)
+        nextSlots.onepiece = null;
+      }
+    }
+
+    setSlots(nextSlots);
   };
 
   const handleUnequipSlot = (slotKey) => {
@@ -504,7 +651,7 @@ export default function OutfitStudioView({
         localizeOutfitTitle(activeRecommendation?.title, lang) ||
         equippedItems
           .slice(0, 2)
-          .map((g) => localizeGarmentName(g.name, lang))
+          .map((g) => resolveGarmentDisplayName(g, lang))
           .join(' · ');
       await apiFetch('/outfits', {
         method: 'POST',
@@ -534,10 +681,15 @@ export default function OutfitStudioView({
     const idSet = new Set((outfit.item_ids || []).map(Number));
     const next = { ...EMPTY_STUDIO_SLOTS };
     for (const g of garments) {
+      if (!isWearableStudioGarment(g)) continue;
       if (idSet.has(Number(g.id))) {
         const sKey = mapGarmentToFittingSlot(g);
         if (!next[sKey]) next[sKey] = g;
       }
+    }
+    if (next.onepiece && !isSwimwearGarment(next.onepiece)) {
+      next.top = null;
+      next.bottom = null;
     }
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
@@ -555,37 +707,69 @@ export default function OutfitStudioView({
     }
   };
 
-  const renderSlotInventoryGrid = (closeOnPick = false) => (
-    <div className="studio-mini-inventory-grid">
-      {slotGarments.map((item) => {
-        const isEquipped = slots[activeSlotKey]?.id === item.id;
-        const displayName = localizeGarmentName(item.name, lang);
+  const renderSeasonFilterRail = () => (
+    <div
+      className="hig-pill-rail studio-season-filter-rail"
+      role="group"
+      aria-label={tx(lang, '계절 필터', 'Season Filter')}
+    >
+      {STUDIO_SEASON_FILTERS.map((s) => {
+        const active = seasonFilter === s.key;
         return (
           <button
-            key={item.id}
+            key={s.key}
             type="button"
-            data-slot-garment-id={item.id}
-            aria-pressed={isEquipped}
-            className={`studio-mini-garment-card ${isEquipped ? 'is-equipped' : ''}`}
+            data-outfit-season-filter={s.key}
+            aria-pressed={active}
+            className={`hig-filter-pill ${active ? 'active' : ''}`}
             onClick={() => {
-              handleToggleEquip(item);
-              if (closeOnPick) setMobileSheetOpen(false);
+              triggerHaptic('selection');
+              setSeasonFilter(s.key);
             }}
           >
-            <div className="studio-mini-squircle">
-              <GarmentObject25D item={item} alt={displayName} padding="11%" />
-              {isEquipped && (
-                <span className="studio-equipped-badge" aria-hidden="true">
-                  <Check size={12} strokeWidth={2.6} />
-                </span>
-              )}
-            </div>
-            <span className="hig-garment-name">{displayName}</span>
+            {tx(lang, s.ko, s.en)}
           </button>
         );
       })}
     </div>
   );
+
+  const renderSlotInventoryGrid = (closeOnPick = false) =>
+    slotGarments.length === 0 ? (
+      <div className="studio-slot-empty-state">
+        {tx(lang, '조건에 맞는 의류가 없습니다.', 'No matching garments in this slot.')}
+      </div>
+    ) : (
+      <div className="studio-mini-inventory-grid">
+        {slotGarments.map((item) => {
+          const isEquipped = slots[activeSlotKey]?.id === item.id;
+          const displayName = resolveGarmentDisplayName(item, lang);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              data-slot-garment-id={item.id}
+              aria-pressed={isEquipped}
+              className={`studio-mini-garment-card ${isEquipped ? 'is-equipped' : ''}`}
+              onClick={() => {
+                handleToggleEquip(item);
+                if (closeOnPick) setMobileSheetOpen(false);
+              }}
+            >
+              <div className="studio-mini-squircle">
+                <GarmentObject25D item={item} alt={displayName} padding="11%" />
+                {isEquipped && (
+                  <span className="studio-equipped-badge" aria-hidden="true">
+                    <Check size={12} strokeWidth={2.6} />
+                  </span>
+                )}
+              </div>
+              <span className="hig-garment-name">{displayName}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
 
   return (
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
@@ -747,15 +931,18 @@ export default function OutfitStudioView({
       </section>
 
       <div className="studio-25d-layout">
-        {/* Center: 360° Parametric Character Stage */}
+        {/* Center: Isometric Parametric Character Stage */}
         <div className="studio-25d-stage-col">
           <Studio25DCanvas
             slots={slots}
             renderResult={renderResult}
             theme={theme}
             lang={lang}
+            user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
+            avatarSpec={bridgedAvatar.spec}
+            avatarConfigHash={bridgedAvatar.avatarConfigHash}
             weather={weather}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -778,6 +965,7 @@ export default function OutfitStudioView({
             {FITTING_SLOTS.map((slot) => {
               const assigned = slots[slot.key];
               const isSelected = activeSlotKey === slot.key;
+              const slotText = lang === 'en' ? slot.label : slot.labelKo;
               return (
                 <button
                   key={slot.key}
@@ -789,7 +977,7 @@ export default function OutfitStudioView({
                     setMobileSheetOpen(true);
                   }}
                 >
-                  <span>{slot.label}</span>
+                  <span>{slotText}</span>
                   {assigned ? <span className="studio-slot-dot" /> : <Plus size={12} />}
                 </button>
               );
@@ -799,10 +987,15 @@ export default function OutfitStudioView({
 
         {/* Right Side (>= 700px): Minimal Slot Inventory Grid */}
         <aside id={CARBON_DOM_CONTRACT.studioSlotPickerId} className="studio-desktop-picker-col">
-          <div className="hig-pill-rail studio-slot-tabs" role="tablist" aria-label="Outfit Slots">
+          <div
+            className="hig-pill-rail studio-slot-tabs"
+            role="tablist"
+            aria-label={tx(lang, '코디 슬롯', 'Outfit Slots')}
+          >
             {FITTING_SLOTS.map((slot) => {
               const active = activeSlotKey === slot.key;
               const hasItem = Boolean(slots[slot.key]);
+              const slotText = lang === 'en' ? slot.label : slot.labelKo;
               return (
                 <button
                   key={slot.key}
@@ -813,12 +1006,14 @@ export default function OutfitStudioView({
                   className={`hig-filter-pill ${active ? 'active' : ''}`}
                   onClick={() => setActiveSlotKey(slot.key)}
                 >
-                  <span>{slot.label}</span>
+                  <span>{slotText}</span>
                   {hasItem && <span className="studio-slot-dot" />}
                 </button>
               );
             })}
           </div>
+
+          {renderSeasonFilterRail()}
 
           <div className="studio-desktop-inventory-scroll">{renderSlotInventoryGrid(false)}</div>
 
@@ -901,10 +1096,14 @@ export default function OutfitStudioView({
         open={mobileSheetOpen}
         onClose={() => setMobileSheetOpen(false)}
         lang={lang}
-        title={FITTING_SLOTS.find((s) => s.key === activeSlotKey)?.label || 'Select Item'}
+        title={(() => {
+          const activeDef = FITTING_SLOTS.find((s) => s.key === activeSlotKey);
+          if (!activeDef) return tx(lang, '아이템 선택', 'Select Item');
+          return lang === 'en' ? activeDef.label : activeDef.labelKo;
+        })()}
         maxWidth={520}
       >
-        <div className="hig-pill-rail" style={{ marginBottom: 14 }}>
+        <div className="hig-pill-rail" style={{ marginBottom: 10 }}>
           {FITTING_SLOTS.map((slot) => (
             <button
               key={slot.key}
@@ -912,10 +1111,11 @@ export default function OutfitStudioView({
               className={`hig-filter-pill ${activeSlotKey === slot.key ? 'active' : ''}`}
               onClick={() => setActiveSlotKey(slot.key)}
             >
-              {slot.label}
+              {lang === 'en' ? slot.label : slot.labelKo}
             </button>
           ))}
         </div>
+        <div style={{ marginBottom: 14 }}>{renderSeasonFilterRail()}</div>
         {renderSlotInventoryGrid(true)}
       </ResponsiveSheetModal>
     </section>

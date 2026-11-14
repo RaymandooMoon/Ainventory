@@ -195,6 +195,7 @@ const SLOT_ITEM_TEMPLATES = {
   headwear: [
     { subcategory: 'beanie', fabric: 'knit', nameKo: '캐시미어 골지 비니', brand: 'COS', price: 69000, minTemp: -8, maxTemp: 10, formality: 'casual', water: 0 },
     { subcategory: 'cap', fabric: 'cotton', nameKo: '코튼 트윌 볼캡', brand: 'ARKET', price: 49000, minTemp: 8, maxTemp: 32, formality: 'casual', water: 1 },
+    { subcategory: 'bucket_hat', fabric: 'cotton', nameKo: '라피아 와이드 버킷햇', brand: 'HELEN KAMINSKI', price: 118000, minTemp: 18, maxTemp: 35, formality: 'casual', water: 0 },
     { subcategory: 'beret', fabric: 'wool', nameKo: '메리노 울 프렌치 베레모', brand: 'MHL', price: 89000, minTemp: 2, maxTemp: 18, formality: 'smart', water: 0 },
   ],
   neckwear: [
@@ -204,16 +205,20 @@ const SLOT_ITEM_TEMPLATES = {
   ],
   outer: [
     { subcategory: 'trench', fabric: 'gabardine', nameKo: '발수 개버딘 싱글 트렌치코트', brand: 'ARKET', price: 290000, minTemp: 7, maxTemp: 18, formality: 'smart', water: 1 },
+    { subcategory: 'windbreaker', fabric: 'nylon', nameKo: '발수 나일론 후드 윈드브레이커 자켓', brand: 'PATAGONIA', price: 189000, minTemp: 10, maxTemp: 22, formality: 'casual', water: 1 },
     { subcategory: 'blazer', fabric: 'wool', nameKo: '테일러드 버진 울 블레이저', brand: 'COS', price: 350000, minTemp: 6, maxTemp: 19, formality: 'formal', water: 0 },
+    { subcategory: 'leather_jacket', fabric: 'leather', nameKo: '아틀리에 레더 바이커 자켓', brand: 'ACNE STUDIOS', price: 520000, minTemp: 5, maxTemp: 17, formality: 'casual', water: 1 },
     { subcategory: 'coat', fabric: 'wool', nameKo: '더블 페이스 캐시미어 핸드메이드 코트', brand: 'SYSTEM', price: 480000, minTemp: -6, maxTemp: 9, formality: 'formal', water: 0 },
-    { subcategory: 'padding', fabric: 'nylon', nameKo: '구스다운 경량 스탠드넥 패딩', brand: 'DESCENTE', price: 320000, minTemp: -12, maxTemp: 5, formality: 'casual', water: 1 },
+    { subcategory: 'short_padding', fabric: 'nylon', nameKo: '구스다운 경량 스탠드넥 패딩', brand: 'DESCENTE', price: 320000, minTemp: -12, maxTemp: 5, formality: 'casual', water: 1 },
+    { subcategory: 'long_padding', fabric: 'nylon', nameKo: '방풍 구스다운 롱 패딩 코트', brand: 'MONCLER', price: 580000, minTemp: -18, maxTemp: 2, formality: 'casual', water: 1 },
     { subcategory: 'cardigan', fabric: 'knit', nameKo: '메리노 울 V넥 버튼 가디건', brand: 'AMI', price: 210000, minTemp: 9, maxTemp: 20, formality: 'smart', water: 0 },
-    { subcategory: 'jacket', fabric: 'nylon', nameKo: '경량 퀼팅 유틸리티 자켓', brand: 'BARBOUR', price: 265000, minTemp: 6, maxTemp: 17, formality: 'casual', water: 1 },
   ],
   top: [
     { subcategory: 'knit', fabric: 'knit', nameKo: '파인 메리노 울 크루넥 니트', brand: 'COS', price: 135000, minTemp: 4, maxTemp: 18, formality: 'smart', water: 0 },
     { subcategory: 'shirt', fabric: 'cotton', nameKo: '크리스프 포플린 옥스포드 셔츠', brand: 'POLO', price: 189000, minTemp: 9, maxTemp: 25, formality: 'smart', water: 0 },
+    { subcategory: 'short_shirt', fabric: 'linen', nameKo: '프렌치 린넨 오픈칼라 셔츠', brand: 'ARKET', price: 109000, minTemp: 20, maxTemp: 34, formality: 'casual', water: 0 },
     { subcategory: 'tshirt', fabric: 'cotton', nameKo: '헤비웨이트 수피마 코튼 티셔츠', brand: 'ARKET', price: 45000, minTemp: 17, maxTemp: 33, formality: 'casual', water: 0 },
+    { subcategory: 'tank_top', fabric: 'cotton', nameKo: '골지 코튼 슬리브리스 탑', brand: 'TOTEME', price: 79000, minTemp: 23, maxTemp: 36, formality: 'casual', water: 0 },
     { subcategory: 'sweatshirt', fabric: 'cotton', nameKo: '프렌치 테리 세미오버 후드 스웨트', brand: 'A.P.C.', price: 168000, minTemp: 7, maxTemp: 19, formality: 'casual', water: 0 },
     { subcategory: 'blouse', fabric: 'silk', nameKo: '실크 크레이프 드레이프 셔츠', brand: 'THEORY', price: 245000, minTemp: 12, maxTemp: 26, formality: 'formal', water: 0 },
   ],
@@ -221,11 +226,13 @@ const SLOT_ITEM_TEMPLATES = {
     { subcategory: 'slacks', fabric: 'wool', nameKo: '울 블렌드 원턱 와이드 슬랙스', brand: 'COS', price: 175000, minTemp: 2, maxTemp: 23, formality: 'smart', water: 0 },
     { subcategory: 'denim', fabric: 'denim', nameKo: '셀비지 스트레이트 데님 팬츠', brand: 'LEVIS', price: 159000, minTemp: 2, maxTemp: 26, formality: 'casual', water: 1 },
     { subcategory: 'chinos', fabric: 'cotton', nameKo: '코튼 트윌 테이퍼드 치노 팬츠', brand: 'BEAMS', price: 138000, minTemp: 8, maxTemp: 25, formality: 'smart', water: 0 },
+    { subcategory: 'cargo', fabric: 'cotton', nameKo: '코튼 트윌 유틸리티 팬츠', brand: 'OUR LEGACY', price: 225000, minTemp: 6, maxTemp: 22, formality: 'casual', water: 1 },
     { subcategory: 'shorts', fabric: 'cotton', nameKo: '버뮤다 플리츠 하프 팬츠', brand: 'ARKET', price: 95000, minTemp: 21, maxTemp: 34, formality: 'casual', water: 0 },
   ],
   dress: [
     { subcategory: 'dress', fabric: 'cotton', nameKo: '벨티드 미디 셔츠 원피스', brand: 'COS', price: 195000, minTemp: 13, maxTemp: 26, formality: 'smart', water: 0 },
     { subcategory: 'onepiece', fabric: 'knit', nameKo: '메리노 니트 롱 원피스', brand: 'TOTEME', price: 280000, minTemp: 4, maxTemp: 17, formality: 'formal', water: 0 },
+    { subcategory: 'swimsuit', fabric: 'nylon', nameKo: '스튜디오 스퀘어넥 원피스 스윔웨어', brand: 'SPEEDO', price: 138000, minTemp: 25, maxTemp: 38, formality: 'casual', water: 1 },
   ],
   gloves: [
     { subcategory: 'leather_gloves', fabric: 'leather', nameKo: '나파 레더 캐시미어 라이닝 장갑', brand: 'DENTS', price: 145000, minTemp: -12, maxTemp: 5, formality: 'formal', water: 1 },
@@ -243,9 +250,12 @@ const SLOT_ITEM_TEMPLATES = {
     { subcategory: 'sneakers', fabric: 'leather', nameKo: '미니멀 풀그레인 레더 코트 스니커즈', brand: 'COMMON PROJECTS', price: 268000, minTemp: 0, maxTemp: 32, formality: 'casual', water: 0 },
     { subcategory: 'loafers', fabric: 'leather', nameKo: '클래식 굿이어웰트 페니 로퍼', brand: 'BERWICK', price: 318000, minTemp: 0, maxTemp: 28, formality: 'formal', water: 1 },
     { subcategory: 'boots', fabric: 'leather', nameKo: '발수 스무스 레더 첼시 부츠', brand: 'CAMPER', price: 289000, minTemp: -8, maxTemp: 16, formality: 'smart', water: 1 },
+    { subcategory: 'long_boots', fabric: 'leather', nameKo: '클래식 레더 라이딩 부츠', brand: 'TOTEME', price: 460000, minTemp: -12, maxTemp: 10, formality: 'smart', water: 1 },
+    { subcategory: 'sandals', fabric: 'leather', nameKo: '미니멀 레더 스트랩 슈즈', brand: 'BIRKENSTOCK', price: 168000, minTemp: 22, maxTemp: 36, formality: 'casual', water: 1 },
   ],
   accessory: [
     { subcategory: 'bag', fabric: 'leather', nameKo: '미니멀 레더 크로스 & 토트백', brand: 'LEMAIRE', price: 420000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
+    { subcategory: 'sunglasses', fabric: 'acetate', nameKo: '아세테이트 선글라스 아이웨어', brand: 'GENTLE MONSTER', price: 290000, minTemp: -5, maxTemp: 38, formality: 'casual', water: 1 },
     { subcategory: 'watch', fabric: 'leather', nameKo: '스틸 케이스 레더 스트랩 드레스 워치', brand: 'NOMOS', price: 380000, minTemp: -10, maxTemp: 35, formality: 'formal', water: 1 },
     { subcategory: 'belt', fabric: 'leather', nameKo: '이탈리안 카프스킨 실버 버클 벨트', brand: 'OUR LEGACY', price: 145000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },
     { subcategory: 'glasses', fabric: 'acetate', nameKo: '아세테이트 아틀리에 아이웨어', brand: 'GENTLE MONSTER', price: 260000, minTemp: -10, maxTemp: 35, formality: 'smart', water: 1 },

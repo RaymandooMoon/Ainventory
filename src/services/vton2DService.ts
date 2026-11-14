@@ -1,7 +1,17 @@
 import type { GarmentRecord } from '../contracts/carbonDesignContract.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
+  type AvatarSpec,
+  type AvatarViewAngleDeg,
+  DEFAULT_ISO_VIEW_ANGLE,
+  bridgeLegacyPropsToAvatarSpec,
+  computeAvatarConfigHash,
+  normalizeViewAngleDeg,
+  sanitizeAvatarSpec,
+} from './avatarSpecStore.ts';
+import {
   type EditorialModelSpec,
+  type EditorialRenderInput,
   synthesizeEditorial2DDataUrl,
 } from './editorial2DArtist.ts';
 import {
@@ -48,6 +58,8 @@ export interface PortraitLookupSources {
 
 export interface GenderNeutralProfileInput extends PortraitLookupSources {
   profile?: Partial<NormalizedVtonProfile> | null;
+  avatarSpec?: AvatarSpec | null;
+  avatarConfigHash?: string | null;
   // oxlint-disable-next-line typescript/no-explicit-any
   bodySpec?: Record<string, any> | null;
   skinToneHex?: string | null;
@@ -63,6 +75,7 @@ export interface GenderNeutralProfileInput extends PortraitLookupSources {
 export interface VtonSynthesisRequest extends GenderNeutralProfileInput {
   // oxlint-disable-next-line typescript/no-explicit-any
   slots?: Record<string, any> | null;
+  viewAngleDeg?: number;
   theme?: 'light' | 'dark';
   legacyMode?: unknown;
   mode?: unknown;
@@ -79,6 +92,8 @@ export interface VtonSynthesisResult {
   compositeImageUrl: string;
   comboHash: string;
   baseHash: string;
+  avatarConfigHash: string;
+  viewAngleDeg: AvatarViewAngleDeg;
   equippedCount: number;
   equippedSlotKeys: string[];
   provider: VtonProviderId;
@@ -109,12 +124,12 @@ interface VtonServerResponse {
   beforeImageUrl?: string | null;
 }
 
-const VTON_IDB_NAME = 'ainventory_vton_2d_cache_v1';
+const VTON_IDB_NAME = 'ainventory_vton_iso_cache_v2';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_entries';
-const L1_MAX_ENTRIES = 48;
-const L2_MAX_ENTRIES = 60;
-const BASE_MODEL_L1_MAX = 24;
+const L1_MAX_ENTRIES = 64;
+const L2_MAX_ENTRIES = 80;
+const BASE_MODEL_L1_MAX = 32;
 
 const READONLY_PORTRAIT_STORAGE_KEYS = [
   'ainventory_user_portrait_v1',
@@ -300,8 +315,8 @@ function pickFiniteNumber(fallback: number, ...candidates: unknown[]): number {
 }
 
 /**
- * Merges stored skin/body profiles with passed `skinProfile`, `bodySpec`, and `user`
- * while completely stripping `gender` so 2D VTON model synthesis is 100% gender-neutral.
+ * Merges stored skin/body profiles with passed `avatarSpec`, `skinProfile`, `bodySpec`, and `user`
+ * while completely stripping legacy `gender` biases.
  */
 export function normalizeGenderNeutralProfile(
   input?: GenderNeutralProfileInput | null
@@ -313,6 +328,7 @@ export function normalizeGenderNeutralProfile(
     input?.profile?.skinToneHex,
     input?.skinToneHex,
     input?.skinProfile?.skinToneHex,
+    input?.avatarSpec?.appearance?.skinToneHex,
     input?.user?.skinToneHex,
     storedSkin.skinToneHex,
     '#DFBA9B'
@@ -322,6 +338,7 @@ export function normalizeGenderNeutralProfile(
     input?.profile?.personalColor ??
     input?.personalColor ??
     input?.skinProfile?.personalColor ??
+    input?.avatarSpec?.appearance?.personalColor ??
     input?.user?.personalColor ??
     storedSkin.personalColor;
   const personalColor: PersonalColorSeasonKey = normalizeSeasonKey(
@@ -348,11 +365,12 @@ export function normalizeGenderNeutralProfile(
         input?.profile?.heightCm,
         input?.heightCm,
         input?.bodySpec?.heightCm,
+        input?.avatarSpec?.anthropometrics?.heightCm,
         input?.user?.heightCm
       )
     ),
-    145,
-    200
+    140,
+    205
   );
 
   const weightKg = clamp(
@@ -362,11 +380,12 @@ export function normalizeGenderNeutralProfile(
         input?.profile?.weightKg,
         input?.weightKg,
         input?.bodySpec?.weightKg,
+        input?.avatarSpec?.anthropometrics?.weightKg,
         input?.user?.weightKg
       )
     ),
-    38,
-    130
+    35,
+    160
   );
 
   const rawBodyShape =
@@ -374,6 +393,7 @@ export function normalizeGenderNeutralProfile(
     input?.bodyShape ??
     input?.bodySpec?.bodyShape ??
     input?.user?.bodyShape ??
+    input?.avatarSpec?.archetypePreset ??
     storedBody.bodyShape;
   const bodyShape: BodyShapeKey = normalizeBodyShape(
     typeof rawBodyShape === 'string' ? rawBodyShape : storedBody.bodyShape
@@ -385,11 +405,12 @@ export function normalizeGenderNeutralProfile(
         storedBody.shoulderScale || 1,
         input?.profile?.shoulderScale,
         input?.shoulderScale,
-        input?.bodySpec?.shoulderScale
+        input?.bodySpec?.shoulderScale,
+        input?.avatarSpec?.anthropometrics?.shoulderScale
       ).toFixed(2)
     ),
-    0.85,
-    1.2
+    0.75,
+    1.35
   );
 
   const waistScale = clamp(
@@ -398,11 +419,12 @@ export function normalizeGenderNeutralProfile(
         storedBody.waistScale || 1,
         input?.profile?.waistScale,
         input?.waistScale,
-        input?.bodySpec?.waistScale
+        input?.bodySpec?.waistScale,
+        input?.avatarSpec?.anthropometrics?.waistScale
       ).toFixed(2)
     ),
-    0.82,
-    1.25
+    0.7,
+    1.35
   );
 
   const hipScale = clamp(
@@ -411,15 +433,17 @@ export function normalizeGenderNeutralProfile(
         storedBody.hipScale || 1,
         input?.profile?.hipScale,
         input?.hipScale,
-        input?.bodySpec?.hipScale
+        input?.bodySpec?.hipScale,
+        input?.avatarSpec?.anthropometrics?.hipScale
       ).toFixed(2)
     ),
-    0.85,
-    1.22
+    0.8,
+    1.38
   );
 
   const portraitDataUrl = resolveReadOnlyUserPortrait({
-    personReferenceUrl: input?.personReferenceUrl,
+    personReferenceUrl:
+      input?.personReferenceUrl ?? input?.avatarSpec?.appearance?.facePhotoUrl,
     portraitDataUrl: input?.portraitDataUrl ?? input?.profile?.portraitDataUrl,
     skinProfile: input?.skinProfile,
     user: input?.user,
@@ -440,13 +464,15 @@ export function normalizeGenderNeutralProfile(
   };
 }
 
+type SerializedVtonGarment = Partial<GarmentRecord> & { name_en?: string };
+
 // oxlint-disable-next-line typescript/no-explicit-any
 function serializeEquippedSlots(slots?: Record<string, any> | null): {
-  serializedSlots: Record<string, Partial<GarmentRecord>>;
+  serializedSlots: Record<string, SerializedVtonGarment>;
   equippedSlotKeys: string[];
   equippedCount: number;
 } {
-  const serializedSlots: Record<string, Partial<GarmentRecord>> = {};
+  const serializedSlots: Record<string, SerializedVtonGarment> = {};
   if (!slots || typeof slots !== 'object') {
     return { serializedSlots, equippedSlotKeys: [], equippedCount: 0 };
   }
@@ -458,6 +484,7 @@ function serializeEquippedSlots(slots?: Record<string, any> | null): {
     serializedSlots[key] = {
       id: Number(raw.id) || 0,
       name: String(raw.name || ''),
+      name_en: raw.name_en ? String(raw.name_en) : undefined,
       category: String(raw.category || key),
       subcategory: String(raw.subcategory || ''),
       fabric: raw.fabric ? String(raw.fabric) : undefined,
@@ -478,20 +505,37 @@ function serializeEquippedSlots(slots?: Record<string, any> | null): {
   };
 }
 
+export interface ComputeVtonHashOptions {
+  avatarConfigHash?: string | null;
+  avatarSpec?: AvatarSpec | null;
+  viewAngleDeg?: number;
+}
+
 export async function computeVtonHashes(
   profile: Partial<EditorialModelSpec> | NormalizedVtonProfile,
   // oxlint-disable-next-line typescript/no-explicit-any
-  slots?: Record<string, any> | null
+  slots?: Record<string, any> | null,
+  options?: ComputeVtonHashOptions
 ): Promise<{ baseHash: string; comboHash: string }> {
+  const viewAngleDeg = normalizeViewAngleDeg(
+    options?.viewAngleDeg,
+    DEFAULT_ISO_VIEW_ANGLE
+  );
+  const avatarConfigHash =
+    options?.avatarConfigHash ||
+    (options?.avatarSpec ? computeAvatarConfigHash(options.avatarSpec) : '');
+
   const canonicalProfile = {
+    avatarConfigHash,
+    viewAngleDeg,
     skinToneHex: pickValidHex(profile?.skinToneHex, '#DFBA9B'),
     personalColor: normalizeSeasonKey(profile?.personalColor),
-    heightCm: clamp(Math.round(Number(profile?.heightCm) || 172), 145, 200),
-    weightKg: clamp(Math.round(Number(profile?.weightKg) || 64), 38, 130),
+    heightCm: clamp(Math.round(Number(profile?.heightCm) || 172), 140, 205),
+    weightKg: clamp(Math.round(Number(profile?.weightKg) || 64), 35, 160),
     bodyShape: normalizeBodyShape(profile?.bodyShape),
-    shoulderScale: clamp(Number((Number(profile?.shoulderScale) || 1).toFixed(2)), 0.85, 1.2),
-    waistScale: clamp(Number((Number(profile?.waistScale) || 1).toFixed(2)), 0.82, 1.25),
-    hipScale: clamp(Number((Number(profile?.hipScale) || 1).toFixed(2)), 0.85, 1.22),
+    shoulderScale: clamp(Number((Number(profile?.shoulderScale) || 1).toFixed(2)), 0.75, 1.35),
+    waistScale: clamp(Number((Number(profile?.waistScale) || 1).toFixed(2)), 0.7, 1.35),
+    hipScale: clamp(Number((Number(profile?.hipScale) || 1).toFixed(2)), 0.8, 1.38),
     portraitFp: fingerprintLargeString(profile?.portraitDataUrl),
   };
 
@@ -511,12 +555,12 @@ export async function computeVtonHashes(
   });
 
   const baseHash = await sha256HexWithFallback(
-    `vton2d-base-v1:${JSON.stringify(canonicalProfile)}`
+    `vton2d-iso-base-v2:${JSON.stringify(canonicalProfile)}`
   );
   const comboPayload =
     canonicalSlotTuple.length === 0
-      ? `vton2d-combo-v1:${baseHash}:basewear`
-      : `vton2d-combo-v1:${baseHash}:${JSON.stringify(canonicalSlotTuple)}`;
+      ? `vton2d-iso-combo-v2:${baseHash}:basewear`
+      : `vton2d-iso-combo-v2:${baseHash}:${JSON.stringify(canonicalSlotTuple)}`;
   const comboHash = await sha256HexWithFallback(comboPayload);
 
   return { baseHash, comboHash };
@@ -716,6 +760,8 @@ function raceWithAbortSignal<T>(promise: Promise<T>, signal?: AbortSignal): Prom
 
 async function ensureBaseModelImageUrl(
   profile: NormalizedVtonProfile,
+  avatarSpec: AvatarSpec,
+  viewAngleDeg: AvatarViewAngleDeg,
   baseHash: string,
   theme: 'light' | 'dark',
   compact?: boolean
@@ -727,12 +773,16 @@ async function ensureBaseModelImageUrl(
     return memHit;
   }
 
-  const generated = await synthesizeEditorial2DDataUrl({
+  const renderInput = {
+    ...(avatarSpec ? { avatarSpec } : {}),
+    viewAngleDeg,
     profile,
     slots: {},
     theme,
     compact,
-  });
+  } as EditorialRenderInput;
+
+  const generated = await synthesizeEditorial2DDataUrl(renderInput);
   putBaseModelMemory(baseKey, generated);
   return generated;
 }
@@ -747,27 +797,64 @@ export async function synthesize2DVirtualTryOn(
   const mode = normalizeViewerMode(request.legacyMode ?? request.mode);
   const theme: 'light' | 'dark' = request.theme === 'dark' ? 'dark' : 'light';
   const forceRefresh = Boolean(request.forceRefresh);
+  const resolvedViewAngle = normalizeViewAngleDeg(
+    request.viewAngleDeg,
+    DEFAULT_ISO_VIEW_ANGLE
+  );
   const profile = normalizeGenderNeutralProfile(request);
+
+  const bridgedAvatar = request.avatarSpec
+    ? {
+        spec: sanitizeAvatarSpec(request.avatarSpec),
+        avatarConfigHash:
+          request.avatarConfigHash || computeAvatarConfigHash(request.avatarSpec),
+      }
+    : bridgeLegacyPropsToAvatarSpec({
+        skinProfile: request.skinProfile || {
+          skinToneHex: profile.skinToneHex,
+          personalColor: profile.personalColor,
+        },
+        bodySpec: request.bodySpec || {
+          heightCm: profile.heightCm,
+          weightKg: profile.weightKg,
+          bodyShape: profile.bodyShape,
+          shoulderScale: profile.shoulderScale,
+          waistScale: profile.waistScale,
+          hipScale: profile.hipScale,
+        },
+        user: request.user,
+        personReferenceUrl: request.personReferenceUrl ?? profile.portraitDataUrl,
+      });
+
+  const sanitizedAvatarSpec = bridgedAvatar.spec;
+  const resolvedAvatarHash = request.avatarConfigHash || bridgedAvatar.avatarConfigHash;
+
   const { serializedSlots, equippedSlotKeys, equippedCount } = serializeEquippedSlots(
     request.slots
   );
-  const { baseHash, comboHash } = await computeVtonHashes(profile, serializedSlots);
+  const { baseHash, comboHash } = await computeVtonHashes(profile, serializedSlots, {
+    avatarConfigHash: resolvedAvatarHash,
+    avatarSpec: sanitizedAvatarSpec,
+    viewAngleDeg: resolvedViewAngle,
+  });
   const cacheKey = makeCacheKey(comboHash, theme);
 
-  // 1. Check L1 Memory LRU Cache (48 entries)
+  // 1. Check L1 Memory LRU Cache (64 entries)
   if (!forceRefresh) {
     const l1Hit = getL1Cache(cacheKey);
     if (l1Hit) {
       return {
         ...l1Hit,
         mode,
+        avatarConfigHash: resolvedAvatarHash,
+        viewAngleDeg: resolvedViewAngle,
         fromCache: true,
         cacheLayer: 'memory',
       };
     }
   }
 
-  // 2. Check L2 IndexedDB Cache ('ainventory_vton_2d_cache_v1', store 'vton_entries', 60 entries)
+  // 2. Check L2 IndexedDB Cache ('ainventory_vton_iso_cache_v2', store 'vton_entries', 80 entries)
   if (!forceRefresh) {
     const l2Hit = await raceWithAbortSignal(readL2IdbCache(cacheKey), request.signal);
     if (l2Hit) {
@@ -776,6 +863,8 @@ export async function synthesize2DVirtualTryOn(
       return {
         ...l2Hit,
         mode,
+        avatarConfigHash: resolvedAvatarHash,
+        viewAngleDeg: resolvedViewAngle,
         fromCache: true,
         cacheLayer: 'indexeddb',
       };
@@ -789,9 +878,11 @@ export async function synthesize2DVirtualTryOn(
   }
 
   const synthesisTask = (async (): Promise<VtonSynthesisResult> => {
-    // Base model with empty slots = {}, keyed by baseHash
+    // Base model with empty slots = {}, keyed by baseHash (avatarConfigHash + viewAngleDeg + profile)
     let beforeImageUrl = await ensureBaseModelImageUrl(
       profile,
+      sanitizedAvatarSpec,
+      resolvedViewAngle,
       baseHash,
       theme,
       request.compact
@@ -807,6 +898,8 @@ export async function synthesize2DVirtualTryOn(
         compositeImageUrl: beforeImageUrl,
         comboHash,
         baseHash,
+        avatarConfigHash: resolvedAvatarHash,
+        viewAngleDeg: resolvedViewAngle,
         equippedCount: 0,
         equippedSlotKeys: [],
         provider: 'editorial-2d-studio',
@@ -830,6 +923,9 @@ export async function synthesize2DVirtualTryOn(
           baseHash,
           mode: '2d-vton',
           stylePreset: 'editorial_fashion_illustration',
+          viewAngleDeg: resolvedViewAngle,
+          avatarConfigHash: resolvedAvatarHash,
+          avatarSpec: sanitizedAvatarSpec,
           theme,
           profile,
           slots: serializedSlots,
@@ -861,12 +957,15 @@ export async function synthesize2DVirtualTryOn(
       provider = 'gemini-vton';
       cacheLayer = serverResponse?.cached ? 'server' : 'fresh';
     } else {
-      afterImageUrl = await synthesizeEditorial2DDataUrl({
+      const compositeInput = {
+        ...(sanitizedAvatarSpec ? { avatarSpec: sanitizedAvatarSpec } : {}),
+        viewAngleDeg: resolvedViewAngle,
         profile,
         slots: serializedSlots,
         theme,
         compact: request.compact,
-      });
+      } as EditorialRenderInput;
+      afterImageUrl = await synthesizeEditorial2DDataUrl(compositeInput);
       provider = 'editorial-2d-studio';
       cacheLayer = 'fresh';
     }
@@ -879,6 +978,8 @@ export async function synthesize2DVirtualTryOn(
       compositeImageUrl: afterImageUrl,
       comboHash,
       baseHash,
+      avatarConfigHash: resolvedAvatarHash,
+      viewAngleDeg: resolvedViewAngle,
       equippedCount,
       equippedSlotKeys,
       provider,
@@ -902,6 +1003,45 @@ export async function synthesize2DVirtualTryOn(
       inFlightSyntheses.delete(dedupeKey);
     }
   }
+}
+
+export async function invalidateVtonComboCache(
+  predicate?: (entry: VtonSynthesisResult, cacheKey: string) => boolean
+): Promise<void> {
+  if (!predicate) {
+    await clearVtonLocalCache();
+    return;
+  }
+
+  for (const [key, entry] of Array.from(l1MemoryCache.entries())) {
+    if (predicate(entry, key)) {
+      l1MemoryCache.delete(key);
+    }
+  }
+
+  const db = await openVtonIdb();
+  if (!db) return;
+
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(VTON_IDB_STORE, 'readwrite');
+      const store = tx.objectStore(VTON_IDB_STORE);
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = () => {
+        const all = (getAllReq.result as VtonIdbRecord[] | undefined) || [];
+        for (const rec of all) {
+          if (rec?.cacheKey && rec?.entry && predicate(rec.entry, rec.cacheKey)) {
+            store.delete(rec.cacheKey);
+          }
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
 }
 
 export async function clearVtonLocalCache(): Promise<void> {

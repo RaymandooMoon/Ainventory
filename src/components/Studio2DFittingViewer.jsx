@@ -2,12 +2,23 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Columns2,
   Palette,
+  RotateCcw,
+  RotateCw,
   SlidersHorizontal,
   X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import {
+  ALL_ISO_VIEW_ANGLES,
+  DEFAULT_ISO_VIEW_ANGLE,
+  ISO_VIEW_ANGLE_OPTIONS,
+  bridgeLegacyPropsToAvatarSpec,
+  computeAvatarConfigHash,
+  normalizeViewAngleDeg,
+  useAvatarSpec,
+} from '../services/avatarSpecStore.ts';
 import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
 import {
   normalizeViewerMode,
@@ -23,6 +34,7 @@ const ORDERED_SLOT_KEYS = [
   'neckwear',
   'outer',
   'top',
+  'onepiece',
   'dress',
   'bottom',
   'shoes',
@@ -49,16 +61,45 @@ const PRESET_LABEL_EN = {
   deep_espresso: 'Deep Espresso',
 };
 
+const ANGLE_CONCISE_SUFFIX = {
+  45: { en: 'Quarter', ko: '쿼터뷰' },
+  0: { en: 'Front', ko: '정면' },
+  [-45]: { en: 'Quarter', ko: '좌쿼터' },
+  [-90]: { en: 'Side', ko: '측면' },
+  [-135]: { en: 'Back-Q', ko: '후측면' },
+  180: { en: 'Back', ko: '후면' },
+  135: { en: 'Back-Q', ko: '후측면' },
+  90: { en: 'Side', ko: '측면' },
+};
+
 function formatZoomLabel(zoomValue) {
   const rounded = Math.round((Number(zoomValue) || 1) * 10) / 10;
   return `${rounded.toFixed(1)}×`;
 }
 
+function getIsoAngleMeta(angleDeg, lang) {
+  const safeAngle = normalizeViewAngleDeg(angleDeg, DEFAULT_ISO_VIEW_ANGLE);
+  const opt =
+    ISO_VIEW_ANGLE_OPTIONS.find((item) => item.angleDeg === safeAngle) ||
+    ISO_VIEW_ANGLE_OPTIONS[0];
+  const suffixPair = ANGLE_CONCISE_SUFFIX[safeAngle] || ANGLE_CONCISE_SUFFIX[45];
+  const isEn = lang === 'en';
+  return {
+    angleDeg: safeAngle,
+    word: isEn ? suffixPair.en : suffixPair.ko,
+    fullLabel: isEn ? opt.labelEn : opt.labelKo,
+    resetAriaLabel: isEn
+      ? `${opt.labelEn} — Reset to 45° quarter view`
+      : `${opt.labelKo} — 45° 쿼터뷰 초기화`,
+  };
+}
+
 /**
- * 2D Editorial Virtual Try-On (VTON) Fitting Viewer
- * - Replaces legacy 6-angle 3D camera stage with high-resolution 2D VTON synthesis
+ * 2D Isometric Editorial Virtual Try-On (VTON) Fitting Viewer
+ * - Default 45° turn-based simulation quarter-view with 8-direction rotation HUD & drag-to-rotate
  * - Supports 1.0x / 1.8x / 2.5x zoom pill controls, wheel/pinch zoom, drag-to-pan,
  *   and pixel-aligned Before/After split comparison
+ * - Instant residual-cache invalidation on slot/angle/avatar changes
  * - Preserves all `#studio-25d-canvas`, `[data-studio-slot]`, `#open-body-spec-btn`,
  *   `[data-quick-skin-preset]`, and `#open-skin-tone-modal-btn` DOM contracts
  */
@@ -69,6 +110,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   skinProfile,
   bodySpec,
   user = null,
+  avatarSpec = null,
+  avatarConfigHash = null,
+  viewAngleDeg: controlledViewAngleDeg,
+  onViewAngleChange,
   weather,
   activeSlotKey,
   onSelectSlot,
@@ -98,6 +143,46 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const resolvedTheme = theme === 'dark' ? 'dark' : 'light';
   const resolvedLang = lang === 'en' || lang === 'ko' ? lang : getStoredLang();
 
+  const { spec: storeAvatarSpec, avatarConfigHash: storeAvatarHash } = useAvatarSpec();
+  const bridgedAvatar = useMemo(() => {
+    void storeAvatarSpec;
+    void storeAvatarHash;
+    return bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user });
+  }, [storeAvatarSpec, storeAvatarHash, skinProfile, bodySpec, user]);
+
+  const resolvedAvatarSpec = avatarSpec || bridgedAvatar.spec;
+  const resolvedAvatarHash = useMemo(() => {
+    if (avatarConfigHash) return avatarConfigHash;
+    if (avatarSpec) return computeAvatarConfigHash(avatarSpec);
+    return bridgedAvatar.avatarConfigHash;
+  }, [avatarConfigHash, avatarSpec, bridgedAvatar.avatarConfigHash]);
+
+  const [internalViewAngleDeg, setInternalViewAngleDeg] = useState(DEFAULT_ISO_VIEW_ANGLE);
+  const viewAngleDeg =
+    controlledViewAngleDeg !== undefined
+      ? normalizeViewAngleDeg(controlledViewAngleDeg, DEFAULT_ISO_VIEW_ANGLE)
+      : internalViewAngleDeg;
+
+  const handleViewAngleChange = useCallback(
+    (nextRawAngle) => {
+      const normalized = normalizeViewAngleDeg(nextRawAngle, DEFAULT_ISO_VIEW_ANGLE);
+      setInternalViewAngleDeg(normalized);
+      onViewAngleChange?.(normalized);
+    },
+    [onViewAngleChange]
+  );
+
+  const handleStepAngle = useCallback(
+    (stepDelta) => {
+      const idx = ALL_ISO_VIEW_ANGLES.indexOf(viewAngleDeg);
+      const curIdx = idx >= 0 ? idx : 0;
+      const len = ALL_ISO_VIEW_ANGLES.length;
+      const nextAngle = ALL_ISO_VIEW_ANGLES[(curIdx + stepDelta + len) % len];
+      handleViewAngleChange(nextAngle);
+    },
+    [viewAngleDeg, handleViewAngleChange]
+  );
+
   const [vtonState, setVtonState] = useState(null);
   const [showLoadingUi, setShowLoadingUi] = useState(false);
   const [progressPct, setProgressPct] = useState(0);
@@ -114,6 +199,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     skinProfile,
     bodySpec,
     user,
+    resolvedAvatarSpec,
+    resolvedAvatarHash,
+    viewAngleDeg,
     resolvedTheme,
     rawLegacyMode,
     forceRefresh,
@@ -125,6 +213,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       skinProfile,
       bodySpec,
       user,
+      resolvedAvatarSpec,
+      resolvedAvatarHash,
+      viewAngleDeg,
       resolvedTheme,
       rawLegacyMode,
       forceRefresh,
@@ -162,19 +253,35 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           `${slotKey}:${garment.id ?? ''}:${garment.color_hex ?? ''}:${garment.image_url ?? ''}:${garment.subcategory ?? ''}`
       )
       .join('|');
-    const skinHex = skinProfile?.skinToneHex || '#DFBA9B';
-    const personalColor = skinProfile?.personalColor || 'autumn_warm';
-    const h = bodySpec?.heightCm ?? user?.heightCm ?? '';
-    const w = bodySpec?.weightKg ?? user?.weightKg ?? '';
-    const shape = bodySpec?.bodyShape ?? user?.bodyShape ?? '';
-    const sh = bodySpec?.shoulderScale ?? 1;
-    const wa = bodySpec?.waistScale ?? 1;
-    const hi = bodySpec?.hipScale ?? 1;
-    return `${slotSig}::${skinHex}:${personalColor}:${h}:${w}:${shape}:${sh}:${wa}:${hi}:${resolvedTheme}:${forceRefresh ? '1' : '0'}`;
-  }, [layers, skinProfile, bodySpec, user, resolvedTheme, forceRefresh]);
+    const skinHex =
+      skinProfile?.skinToneHex || resolvedAvatarSpec?.appearance?.skinToneHex || '#DFBA9B';
+    const personalColor =
+      skinProfile?.personalColor ||
+      resolvedAvatarSpec?.appearance?.personalColor ||
+      'autumn_warm';
+    const h = bodySpec?.heightCm ?? resolvedAvatarSpec?.anthropometrics?.heightCm ?? user?.heightCm ?? '';
+    const w = bodySpec?.weightKg ?? resolvedAvatarSpec?.anthropometrics?.weightKg ?? user?.weightKg ?? '';
+    const shape = bodySpec?.bodyShape ?? user?.bodyShape ?? resolvedAvatarSpec?.archetypePreset ?? '';
+    const sh = bodySpec?.shoulderScale ?? resolvedAvatarSpec?.anthropometrics?.shoulderScale ?? 1;
+    const wa = bodySpec?.waistScale ?? resolvedAvatarSpec?.anthropometrics?.waistScale ?? 1;
+    const hi = bodySpec?.hipScale ?? resolvedAvatarSpec?.anthropometrics?.hipScale ?? 1;
+    return `${slotSig}::${resolvedAvatarHash}::angle:${viewAngleDeg}::${skinHex}:${personalColor}:${h}:${w}:${shape}:${sh}:${wa}:${hi}:${resolvedTheme}:${forceRefresh ? '1' : '0'}`;
+  }, [
+    layers,
+    resolvedAvatarHash,
+    viewAngleDeg,
+    skinProfile,
+    resolvedAvatarSpec,
+    bodySpec,
+    user,
+    resolvedTheme,
+    forceRefresh,
+  ]);
 
-  const vtonResult = vtonState?.result || null;
-  const loading = !vtonState || vtonState.sig !== synthesisSignature;
+  // Immediate ghost/residual image invalidation: never display stale afterImageUrl from a previous signature
+  const isCurrentSigResolved = Boolean(vtonState && vtonState.sig === synthesisSignature);
+  const vtonResult = isCurrentSigResolved ? vtonState.result : null;
+  const loading = !isCurrentSigResolved;
 
   useEffect(() => {
     const targetSig = synthesisSignature;
@@ -182,6 +289,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     let loadingGateTimer = null;
     let midProgressTimer = null;
     let completed = false;
+
+    // Immediately cancel any previous in-flight synthesis request when signature changes
+    abortControllerRef.current?.abort();
 
     const clearTimers = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -212,6 +322,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         skinProfile: snap.skinProfile,
         bodySpec: snap.bodySpec,
         user: snap.user,
+        avatarSpec: snap.resolvedAvatarSpec,
+        avatarConfigHash: snap.resolvedAvatarHash,
+        viewAngleDeg: snap.viewAngleDeg,
         theme: snap.resolvedTheme,
         legacyMode: snap.rawLegacyMode,
         signal: controller.signal,
@@ -229,7 +342,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           if (controller.signal.aborted) return;
           completed = true;
           clearTimers();
-          setVtonState((prev) => ({ sig: targetSig, result: prev?.result || null }));
+          setVtonState({ sig: targetSig, result: null });
           setShowLoadingUi(false);
           setProgressPct(0);
         });
@@ -239,7 +352,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       isInitialMountRef.current = false;
       executeSynthesis();
     } else {
-      debounceTimer = setTimeout(executeSynthesis, 90);
+      debounceTimer = setTimeout(executeSynthesis, 55);
     }
 
     return () => {
@@ -290,9 +403,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const isRainy = Boolean(weather?.isRainy || weather?.isRaining);
   const isWindy = Boolean(weather?.isWindy);
+  const angleMeta = getIsoAngleMeta(viewAngleDeg, resolvedLang);
 
-  const afterImageUrl = vtonResult?.afterImageUrl || renderResult?.compositeImageUrl || null;
+  const afterImageUrl =
+    vtonResult?.afterImageUrl ||
+    (isCurrentSigResolved ? renderResult?.compositeImageUrl || null : null);
   const beforeImageUrl = vtonResult?.beforeImageUrl || null;
+
+  const activeSkinHex = (
+    skinProfile?.skinToneHex ||
+    resolvedAvatarSpec?.appearance?.skinToneHex ||
+    ''
+  ).toUpperCase();
+  const displayHeightCm =
+    bodySpec?.heightCm ?? resolvedAvatarSpec?.anthropometrics?.heightCm;
+  const displayWeightKg =
+    bodySpec?.weightKg ?? resolvedAvatarSpec?.anthropometrics?.weightKg;
 
   return (
     <div
@@ -303,6 +429,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-vton-provider={vtonResult?.provider || 'editorial-2d-studio'}
       data-vton-cached={vtonResult?.fromCache ? 'true' : 'false'}
       data-vton-loading={loading ? 'true' : 'false'}
+      data-view-angle={viewAngleDeg}
+      data-avatar-hash={resolvedAvatarHash}
     >
       {/* Subtle Top Key Illumination */}
       <div aria-hidden="true" className="studio-25d-keylight" />
@@ -335,7 +463,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Top HUD: Zoom Pill Bar + Before/After Compare Toggle + Body Spec Trigger */}
+      {/* Top HUD: Zoom Pill Bar + 8-Direction Angle HUD + Before/After Compare + Body Spec */}
       <div className="studio-stage-top-hud">
         <div className="studio-vton-hud-left">
           <div
@@ -378,6 +506,53 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </button>
           </div>
 
+          <div
+            className="studio-iso-rotate-bar"
+            role="group"
+            aria-label={resolvedLang === 'en' ? 'View angle controls' : '뷰 각도 회전'}
+          >
+            <button
+              type="button"
+              data-iso-rotate-btn="ccw"
+              className="studio-iso-rotate-btn"
+              aria-label={
+                resolvedLang === 'en' ? 'Rotate counter-clockwise' : '반시계 방향 회전'
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStepAngle(-1);
+              }}
+            >
+              <RotateCcw size={13} />
+            </button>
+            <button
+              type="button"
+              data-iso-angle-badge={viewAngleDeg}
+              title={angleMeta.fullLabel}
+              aria-label={angleMeta.resetAriaLabel}
+              className={`studio-iso-angle-badge tabular-nums ${viewAngleDeg !== DEFAULT_ISO_VIEW_ANGLE ? 'is-rotated' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewAngleChange(DEFAULT_ISO_VIEW_ANGLE);
+              }}
+            >
+              <span className="studio-iso-angle-deg">{angleMeta.angleDeg}°</span>
+              <span className="studio-iso-angle-word">{angleMeta.word}</span>
+            </button>
+            <button
+              type="button"
+              data-iso-rotate-btn="cw"
+              className="studio-iso-rotate-btn"
+              aria-label={resolvedLang === 'en' ? 'Rotate clockwise' : '시계 방향 회전'}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStepAngle(1);
+              }}
+            >
+              <RotateCw size={13} />
+            </button>
+          </div>
+
           <button
             id="toggle-vton-compare-btn"
             type="button"
@@ -413,20 +588,32 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           <SlidersHorizontal size={12} />
           <span>
-            {bodySpec
-              ? `${bodySpec.heightCm}·${bodySpec.weightKg}`
+            {displayHeightCm && displayWeightKg
+              ? `${displayHeightCm}·${displayWeightKg}`
               : tr(resolvedLang, 'profileBtn', 'Profile')}
           </span>
         </button>
       </div>
 
-      {/* 2D Editorial Fashion Model & Virtual Try-On Stage */}
+      {/* 2D Isometric Editorial Fashion Model & Virtual Try-On Stage */}
       <Studio2DModelStage
-        skinToneHex={skinProfile?.skinToneHex || '#DFBA9B'}
-        personalColor={skinProfile?.personalColor || 'autumn_warm'}
+        skinToneHex={
+          skinProfile?.skinToneHex ||
+          resolvedAvatarSpec?.appearance?.skinToneHex ||
+          '#DFBA9B'
+        }
+        personalColor={
+          skinProfile?.personalColor ||
+          resolvedAvatarSpec?.appearance?.personalColor ||
+          'autumn_warm'
+        }
         skinProfile={skinProfile}
         bodySpec={bodySpec}
         user={user}
+        avatarSpec={resolvedAvatarSpec}
+        avatarConfigHash={resolvedAvatarHash}
+        viewAngleDeg={viewAngleDeg}
+        onViewAngleChange={handleViewAngleChange}
         slots={slots}
         theme={resolvedTheme}
         afterImageUrl={afterImageUrl}
@@ -451,7 +638,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           {layers.map((layer) => {
             const isSelectedSlot = activeSlotKey === layer.slotKey;
-            const displayGarmentName = localizeGarmentName(layer.garment.name, resolvedLang);
+            const displayGarmentName =
+              resolvedLang === 'en' && layer.garment.name_en
+                ? layer.garment.name_en
+                : localizeGarmentName(layer.garment.name, resolvedLang);
             return (
               <div
                 key={`${layer.slotKey}-${layer.garment.id}`}
@@ -501,9 +691,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       >
         <div className="studio-25d-tone-swatches">
           {QUICK_SKIN_PRESETS.map((preset) => {
-            const active =
-              (skinProfile?.skinToneHex || '').toUpperCase() ===
-              preset.skinToneHex.toUpperCase();
+            const active = activeSkinHex === preset.skinToneHex.toUpperCase();
             const labelText =
               resolvedLang === 'en'
                 ? PRESET_LABEL_EN[preset.key] || preset.key

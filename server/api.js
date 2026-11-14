@@ -7,6 +7,10 @@ import {
   getStudioSeedImageForGarment,
   resolveManifestSlotAndGlb,
 } from '../src/shared/garmentTaxonomy.js';
+import {
+  SEASONAL_120_BY_IMAGE_URL,
+  SEASONAL_120_CATALOG,
+} from '../src/shared/seasonal120Catalog.js';
 import db, {
   DB_PATH,
   OUTBOX_DIR,
@@ -36,179 +40,43 @@ import {
 
 initDb();
 
-// Curated Sample Capsule Catalog (Requirement 8.a: separated from real user empty closets, selectable for import)
-export const SAMPLE_CAPSULE_CATALOG = [
-  {
-    key: 'sample_trench',
-    name: '발수 코튼 개버딘 트렌치코트',
-    category: 'outer',
-    subcategory: 'trench',
-    fabric: 'gabardine',
-    color_name: '베이지',
-    color_hex: '#C4B193',
-    seasons: ['봄', '가을'],
-    min_temp: 9,
-    max_temp: 19,
-    water_resistant: true,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 290000,
-    image_url: '/seed/beige-trench.jpg',
-  },
-  {
-    key: 'sample_coat',
-    name: '더블 페이스 캐시미어 테일러드 코트',
-    category: 'outer',
-    subcategory: 'coat',
-    fabric: 'wool',
-    color_name: '카멜',
-    color_hex: '#BA9163',
-    seasons: ['가을', '겨울'],
-    min_temp: -5,
-    max_temp: 11,
-    water_resistant: false,
-    formality: 'formal',
-    brand: 'Sample Atelier',
-    price: 420000,
-    image_url: '/seed/studio-coat.jpg',
-  },
-  {
-    key: 'sample_knit_navy',
-    name: '파인 메리노 크루넥 니트',
-    category: 'top',
-    subcategory: 'knit',
-    fabric: 'knit',
-    color_name: '네이비',
-    color_hex: '#1D273B',
-    seasons: ['봄', '가을', '겨울'],
-    min_temp: 4,
-    max_temp: 18,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 135000,
-    image_url: '/seed/navy-knit.jpg',
-  },
-  {
-    key: 'sample_shirt_white',
-    name: '수피마 코튼 옥스포드 셔츠',
-    category: 'top',
-    subcategory: 'shirt',
-    fabric: 'cotton',
-    color_name: '화이트',
-    color_hex: '#F2F1EC',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 8,
-    max_temp: 25,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 119000,
-    image_url: '/seed/white-shirt.jpg',
-  },
-  {
-    key: 'sample_slacks_charcoal',
-    name: '울 블렌드 원턱 와이드 슬랙스',
-    category: 'bottom',
-    subcategory: 'slacks',
-    fabric: 'wool',
-    color_name: '차콜',
-    color_hex: '#35383E',
-    seasons: ['봄', '가을', '겨울'],
-    min_temp: 0,
-    max_temp: 22,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 165000,
-    image_url: '/seed/charcoal-slacks.jpg',
-  },
-  {
-    key: 'sample_denim_indigo',
-    name: '셀비지 스트레이트 데님',
-    category: 'bottom',
-    subcategory: 'denim',
-    fabric: 'denim',
-    color_name: '인디고',
-    color_hex: '#284064',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 2,
-    max_temp: 26,
-    water_resistant: false,
-    formality: 'casual',
-    brand: 'Sample Atelier',
-    price: 149000,
-    image_url: '/seed/indigo-denim.jpg',
-  },
-  {
-    key: 'sample_sneakers_white',
-    name: '미니멀 레더 코트 스니커즈',
-    category: 'shoes',
-    subcategory: 'sneakers',
-    fabric: 'leather',
-    color_name: '화이트',
-    color_hex: '#EAE7E1',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: -2,
-    max_temp: 32,
-    water_resistant: true,
-    formality: 'casual',
-    brand: 'Sample Atelier',
-    price: 218000,
-    image_url: '/seed/white-sneakers.jpg',
-  },
-  {
-    key: 'sample_muffler_camel',
-    name: '퓨어 캐시미어 프린지 머플러',
-    category: 'neckwear',
-    subcategory: 'scarf',
-    fabric: 'wool',
-    color_name: '카멜',
-    color_hex: '#B58E63',
-    seasons: ['가을', '겨울'],
-    min_temp: -12,
-    max_temp: 11,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 195000,
-    image_url: '/seed/studio-muffler.jpg',
-  },
-  {
-    key: 'sample_briefcase_brown',
-    name: '이탈리안 풀그레인 레더 서류가방',
-    category: 'accessory',
-    subcategory: 'briefcase',
-    fabric: 'leather',
-    color_name: '브라운',
-    color_hex: '#5C3A24',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: -10,
-    max_temp: 35,
-    water_resistant: true,
-    formality: 'formal',
-    brand: 'Sample Atelier',
-    price: 450000,
-    image_url: '/seed/studio-briefcase.jpg',
-  },
-  {
-    key: 'sample_gloves_leather',
-    name: '나파 레더 캐시미어 라이닝 장갑',
-    category: 'gloves',
-    subcategory: 'leather_gloves',
-    fabric: 'leather',
-    color_name: '블랙',
-    color_hex: '#242120',
-    seasons: ['겨울'],
-    min_temp: -15,
-    max_temp: 7,
-    water_resistant: true,
-    formality: 'formal',
-    brand: 'Sample Atelier',
-    price: 128000,
-    image_url: '/seed/studio-leather-gloves.jpg',
-  },
-];
+// Curated 4-Season 128-Item Photorealistic Capsule Catalog (Requirement 8.a: separated from real user empty closets, selectable for import)
+export const SAMPLE_CAPSULE_CATALOG = SEASONAL_120_CATALOG.map((item) => ({
+  key: item.key,
+  name: item.name,
+  name_en: item.name_en,
+  category: item.category,
+  subcategory: item.subcategory,
+  fabric: item.fabric,
+  color_name: item.color_name,
+  color_hex: item.color_hex,
+  primary_season: item.primary_season,
+  seasons: item.seasons,
+  min_temp: item.min_temp,
+  max_temp: item.max_temp,
+  water_resistant: item.water_resistant,
+  formality: item.formality,
+  brand: item.brand,
+  price: item.price,
+  image_url: item.image_url,
+  sleeveLength: item.sleeveLength,
+  hemLength: item.hemLength,
+  shoeExposure: item.shoeExposure,
+  layerOrder: item.layerOrder,
+}));
+
+const LEGACY_SAMPLE_KEY_ALIASES = {
+  sample_trench: 's4_spring_01_beige_trench',
+  sample_coat: 's4_winter_06_camel_cashmere_coat',
+  sample_knit_navy: 's4_autumn_12_navy_merino_knit',
+  sample_shirt_white: 's4_spring_09_white_poplin_shirt',
+  sample_slacks_charcoal: 's4_autumn_18_charcoal_wide_slacks',
+  sample_denim_indigo: 's4_autumn_17_raw_selvedge_denim',
+  sample_sneakers_white: 's4_spring_26_white_court_sneakers',
+  sample_muffler_camel: 's4_autumn_32_burgundy_wool_muffler',
+  sample_briefcase_brown: 's4_autumn_30_brown_leather_briefcase',
+  sample_gloves_leather: 's4_winter_31_black_nappa_gloves',
+};
 
 // Rate limiting & OTP memory stores with bounded sweep (Requirement 10.b)
 const rateBuckets = new Map();
@@ -505,8 +373,19 @@ function parseGarmentRow(row) {
   }
   const manifestSpec = resolveManifestSlotAndGlb(row.category, row.subcategory);
   const resolvedNotes = row.notes || '';
+  const seasonalMeta = SEASONAL_120_BY_IMAGE_URL[imageUrl] || null;
   return {
     ...row,
+    ...(seasonalMeta
+      ? {
+          name_en: seasonalMeta.name_en,
+          primary_season: seasonalMeta.primary_season,
+          sleeveLength: seasonalMeta.sleeveLength,
+          hemLength: seasonalMeta.hemLength,
+          shoeExposure: seasonalMeta.shoeExposure,
+          layerOrder: seasonalMeta.layerOrder,
+        }
+      : {}),
     image_url: imageUrl,
     seasons,
     size: row.size || '',
@@ -2121,9 +2000,12 @@ export function createApiRouter() {
     const closetOwner = authz.primaryCloset;
 
     const requestedKeys = Array.isArray(req.body?.sample_keys) ? req.body.sample_keys : [];
+    const normalizedKeySet = new Set(
+      requestedKeys.map((k) => LEGACY_SAMPLE_KEY_ALIASES[String(k)] || String(k))
+    );
     const selected =
-      requestedKeys.length > 0
-        ? SAMPLE_CAPSULE_CATALOG.filter((s) => requestedKeys.includes(s.key))
+      normalizedKeySet.size > 0
+        ? SAMPLE_CAPSULE_CATALOG.filter((s) => normalizedKeySet.has(s.key))
         : SAMPLE_CAPSULE_CATALOG;
 
     const imported = db.transaction(() => {

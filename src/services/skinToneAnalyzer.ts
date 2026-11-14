@@ -1,4 +1,17 @@
 import { hexToRgb, rgbToCieLab, rgbToHex } from '../shared/colorMath.js';
+import {
+  type MstLevel,
+  type MstSwatch,
+  type MstUndertone,
+  computeAdaptiveMstShading,
+  extractNormalizedMstFromSamples,
+  findClosestMstFromHex,
+  getMstSwatch,
+  isMstLevel,
+  normalizeMstUndertone,
+} from './monkSkinTone.ts';
+
+export type { MstLevel, MstSwatch, MstUndertone };
 
 export type PersonalColorSeasonKey =
   | 'spring_warm'
@@ -53,6 +66,9 @@ export interface SkinToneAnalysisResult {
   subTypeLabelEn: string;
   undertone: 'warm' | 'cool';
   matchedPresetKey: string;
+  mstLevel?: MstLevel;
+  mstUndertone?: MstUndertone;
+  mstCode?: string;
   confidence: number;
   lightingMode: LightingCalibrationKey;
   faceDetected: boolean;
@@ -89,8 +105,11 @@ export interface StoredSkinProfile {
   personalColor: PersonalColorSeasonKey;
   personalColorLabelKo: string;
   subTypeLabelKo: string;
-  gender: 'male' | 'female';
+  gender?: 'male' | 'female';
   presetKey: string;
+  mstLevel?: MstLevel;
+  mstUndertone?: MstUndertone;
+  mstCode?: string;
 }
 
 export interface SkinShadingPalette {
@@ -107,6 +126,13 @@ export interface SkinShadingPalette {
   auraColor: string;
   basewearFill: string;
   basewearShadow: string;
+  specularHighlight?: string;
+  contourInk?: string;
+  lipShadow?: string;
+  nailBed?: string;
+  palmSoleTint?: string;
+  mstLevel?: MstLevel;
+  mstUndertone?: MstUndertone;
 }
 
 const SKIN_PROFILE_STORAGE_KEY = 'ainventory_skin_profile_v1';
@@ -390,6 +416,8 @@ export function translateSubTypeLabel(
   return getLocalizedSubTypeLabel(subTypeLabelKo, personalColor, 'en');
 }
 
+const DEFAULT_MST_SWATCH = findClosestMstFromHex('#DFBA9B');
+
 export const DEFAULT_SKIN_PROFILE: StoredSkinProfile = {
   skinToneHex: '#DFBA9B',
   personalColor: 'autumn_warm',
@@ -397,6 +425,9 @@ export const DEFAULT_SKIN_PROFILE: StoredSkinProfile = {
   subTypeLabelKo: '가을 웜 뮤트',
   gender: 'male',
   presetKey: 'autumn_beige',
+  mstLevel: DEFAULT_MST_SWATCH.level,
+  mstUndertone: DEFAULT_MST_SWATCH.undertone,
+  mstCode: DEFAULT_MST_SWATCH.code,
 };
 
 function clampByte(n: number): number {
@@ -405,27 +436,6 @@ function clampByte(n: number): number {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
-}
-
-function adjustRgb(
-  rgb: { r: number; g: number; b: number },
-  deltaR: number,
-  deltaG: number,
-  deltaB: number
-): string {
-  return rgbToHex(
-    clampByte(rgb.r + deltaR),
-    clampByte(rgb.g + deltaG),
-    clampByte(rgb.b + deltaB)
-  );
-}
-
-function scaleRgb(rgb: { r: number; g: number; b: number }, factor: number): string {
-  return rgbToHex(
-    clampByte(rgb.r * factor),
-    clampByte(rgb.g * factor),
-    clampByte(rgb.b * factor)
-  );
 }
 
 export function normalizeSeasonKey(raw?: string | null): PersonalColorSeasonKey {
@@ -479,6 +489,13 @@ export function getStoredSkinProfile(): StoredSkinProfile {
         ? parsed.skinToneHex.toUpperCase()
         : DEFAULT_SKIN_PROFILE.skinToneHex;
     const preset = findClosestSkinPreset(hex, pc);
+    const autoMst = findClosestMstFromHex(hex);
+    const mstLevel = isMstLevel(parsed.mstLevel) ? parsed.mstLevel : autoMst.level;
+    const mstUndertone = parsed.mstUndertone
+      ? normalizeMstUndertone(parsed.mstUndertone, autoMst.undertone)
+      : autoMst.undertone;
+    const mstSwatch = getMstSwatch(mstLevel, mstUndertone);
+
     return {
       skinToneHex: hex,
       personalColor: pc,
@@ -486,6 +503,9 @@ export function getStoredSkinProfile(): StoredSkinProfile {
       subTypeLabelKo: parsed.subTypeLabelKo || preset.subTypeLabelKo,
       gender: parsed.gender === 'female' ? 'female' : 'male',
       presetKey: parsed.presetKey || preset.key,
+      mstLevel,
+      mstUndertone,
+      mstCode: parsed.mstCode || mstSwatch.code,
     };
   } catch {
     return DEFAULT_SKIN_PROFILE;
@@ -503,13 +523,30 @@ export function saveStoredSkinProfile(profile: Partial<StoredSkinProfile>): Stor
       : current.skinToneHex;
   const matched = findClosestSkinPreset(nextHex, nextPc);
 
+  const hexChanged = nextHex !== current.skinToneHex;
+  const autoMst = findClosestMstFromHex(nextHex);
+  const mstLevel = isMstLevel(profile.mstLevel)
+    ? profile.mstLevel
+    : hexChanged || !isMstLevel(current.mstLevel)
+      ? autoMst.level
+      : current.mstLevel;
+  const mstUndertone = profile.mstUndertone
+    ? normalizeMstUndertone(profile.mstUndertone, autoMst.undertone)
+    : hexChanged || !current.mstUndertone
+      ? autoMst.undertone
+      : current.mstUndertone;
+  const mstSwatch = getMstSwatch(mstLevel, mstUndertone);
+
   const merged: StoredSkinProfile = {
     skinToneHex: nextHex,
     personalColor: nextPc,
     personalColorLabelKo: profile.personalColorLabelKo || SEASON_BEST_SWATCHES[nextPc].labelKo,
     subTypeLabelKo: profile.subTypeLabelKo || matched.subTypeLabelKo,
-    gender: profile.gender || current.gender,
+    gender: profile.gender || current.gender || 'male',
     presetKey: profile.presetKey || matched.key,
+    mstLevel,
+    mstUndertone,
+    mstCode: profile.mstCode || mstSwatch.code,
   };
 
   if (typeof localStorage !== 'undefined') {
@@ -524,39 +561,21 @@ export function saveStoredSkinProfile(profile: Partial<StoredSkinProfile>): Stor
 
 /**
  * Computes studio lighting & subsurface skin shading colors
- * from any `skinToneHex` + `personalColor` season.
+ * from any `skinToneHex` + `personalColor` season using luminance-adaptive MST shading
+ * (prevents shadow crushing on deep MST 8-10 skin and contour washout on fair MST 1-3 skin).
  */
 export function computeSkinShadingPalette(
   skinToneHex = '#DFBA9B',
   personalColor: string = 'autumn_warm',
   theme: 'light' | 'dark' = 'light'
 ): SkinShadingPalette {
-  const rgb = hexToRgb(skinToneHex || '#DFBA9B');
   const season = normalizeSeasonKey(personalColor);
-  const isWarm = season === 'spring_warm' || season === 'autumn_warm';
   const isDarkTheme = theme === 'dark';
-
-  const highlight = adjustRgb(
-    rgb,
-    isWarm ? 26 : 22,
-    isWarm ? 23 : 22,
-    isWarm ? 18 : 25
-  );
-  const subsurface = adjustRgb(
-    rgb,
-    isWarm ? 14 : 11,
-    isWarm ? -6 : -9,
-    isWarm ? -10 : -2
-  );
-  const midShadow = scaleRgb(rgb, 0.87);
-  const deepShadow = scaleRgb(rgb, 0.72);
-  const rimLight = adjustRgb(rgb, 36, 34, 34);
-  const lipTint = adjustRgb(
-    rgb,
-    isWarm ? 8 : 4,
-    isWarm ? -26 : -30,
-    isWarm ? -24 : -16
-  );
+  const adaptive = computeAdaptiveMstShading({
+    skinToneHex: skinToneHex || '#DFBA9B',
+    personalColor: season,
+    theme: isDarkTheme ? 'dark' : 'light',
+  });
 
   const hairPalettes: Record<PersonalColorSeasonKey, { main: string; hi: string; brow: string }> = {
     spring_warm: { main: '#4A3323', hi: '#6D4D36', brow: '#4E3728' },
@@ -581,19 +600,26 @@ export function computeSkinShadingPalette(
       };
 
   return {
-    highlight,
-    base: rgbToHex(rgb.r, rgb.g, rgb.b),
-    subsurface,
-    midShadow,
-    deepShadow,
-    rimLight,
-    lipTint,
+    highlight: adaptive.highlight,
+    base: adaptive.base,
+    subsurface: adaptive.subsurface,
+    midShadow: adaptive.midShadow,
+    deepShadow: adaptive.deepShadow,
+    rimLight: adaptive.rimLight,
+    lipTint: adaptive.lipNatural,
     browHair: hair.brow,
     hairMain: hair.main,
     hairHighlight: hair.hi,
     auraColor: auraMap[season],
     basewearFill: isDarkTheme ? '#2C2E35' : '#E7E7EC',
     basewearShadow: isDarkTheme ? '#1F2026' : '#D4D5DC',
+    specularHighlight: adaptive.specularHighlight,
+    contourInk: adaptive.contourInk,
+    lipShadow: adaptive.lipShadow,
+    nailBed: adaptive.nailBed,
+    palmSoleTint: adaptive.palmSoleTint,
+    mstLevel: adaptive.mstLevel,
+    mstUndertone: adaptive.mstUndertone,
   };
 }
 
@@ -1546,6 +1572,7 @@ export async function analyzePortraitSkinTone(
     verifiedSamples.length > 0 ? rawConfidence : Math.min(62, rawConfidence);
 
   const matchedPreset = findClosestSkinPreset(skinToneHex, personalColor);
+  const mstMatch = extractNormalizedMstFromSamples(pins, skinToneHex);
   const seasonMeta = SEASON_BEST_SWATCHES[personalColor];
 
   return {
@@ -1557,6 +1584,9 @@ export async function analyzePortraitSkinTone(
     subTypeLabelEn,
     undertone: isWarm ? 'warm' : 'cool',
     matchedPresetKey: matchedPreset.key,
+    mstLevel: mstMatch.swatch.level,
+    mstUndertone: mstMatch.swatch.undertone,
+    mstCode: mstMatch.swatch.code,
     confidence,
     lightingMode,
     faceDetected: detectedFace.detected && verifiedSamples.length > 0,

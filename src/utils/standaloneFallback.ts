@@ -12,6 +12,7 @@ import {
   getStudioSeedImageForGarment,
   resolveManifestSlotAndGlb,
 } from '../shared/garmentTaxonomy.js';
+import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
 import { readCachedResponse } from './offlineSync.ts';
 
 const LOCAL_USERS_KEY = 'ainventory_standalone_users_v2';
@@ -24,6 +25,12 @@ interface StoredStandaloneUser extends UserProfile {
 
 export interface SampleCatalogGarment extends GarmentRecord {
   key: string;
+  name_en?: string;
+  primary_season?: string;
+  sleeveLength?: string;
+  hemLength?: string;
+  shoeExposure?: string;
+  layerOrder?: number;
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -138,294 +145,50 @@ const DEFAULT_STANDALONE_USERS: StoredStandaloneUser[] = [
   },
 ];
 
-function buildSampleItem(
-  idx: number,
-  partial: {
-    id: number;
-    name: string;
-    category: string;
-    subcategory: string;
-    fabric: string;
-    color_name: string;
-    color_hex: string;
-    seasons: string[];
-    min_temp: number;
-    max_temp: number;
-    water_resistant: boolean;
-    formality: string;
-    brand: string;
-    price: number;
-    wear_count: number;
-    is_favorite: boolean;
-    image_url?: string;
+export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = SEASONAL_120_CATALOG.map(
+  (item) => {
+    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+    const wearCount = ((item.idOffset * 3) % 24) + 2;
+    const cpw = wearCount > 0 ? Math.round(item.price / wearCount) : item.price;
+    return {
+      key: item.key,
+      id: 9000 + item.idOffset,
+      closet_owner: 'sample',
+      name: item.name,
+      name_en: item.name_en,
+      category: item.category,
+      subcategory: item.subcategory,
+      fabric: item.fabric,
+      color_name: item.color_name,
+      color_hex: item.color_hex,
+      primary_season: item.primary_season,
+      seasons: [...item.seasons],
+      min_temp: item.min_temp,
+      max_temp: item.max_temp,
+      water_resistant: item.water_resistant,
+      formality: item.formality,
+      brand: item.brand,
+      size: 'M',
+      memo: '샘플 체험용 캡슐 아틀리에 아이템',
+      notes: '샘플 체험용 캡슐 아틀리에 아이템',
+      price: item.price,
+      wear_count: wearCount,
+      cpw,
+      is_favorite: item.idOffset % 4 === 1,
+      status: 'active',
+      image_url:
+        item.image_url || getStudioSeedImageForGarment(item.category, item.subcategory),
+      slot_key: spec.slotKey,
+      base_glb: spec.baseGlb,
+      physics_preset: spec.physicsPreset,
+      custom_texture: false,
+      sleeveLength: item.sleeveLength,
+      hemLength: item.hemLength,
+      shoeExposure: item.shoeExposure,
+      layerOrder: item.layerOrder,
+    };
   }
-): SampleCatalogGarment {
-  const spec = resolveManifestSlotAndGlb(partial.category, partial.subcategory);
-  const cpw =
-    partial.wear_count > 0 ? Math.round(partial.price / partial.wear_count) : partial.price;
-  return {
-    key: `sample_${idx}`,
-    id: partial.id,
-    closet_owner: 'sample',
-    name: partial.name,
-    category: partial.category,
-    subcategory: partial.subcategory,
-    fabric: partial.fabric,
-    color_name: partial.color_name,
-    color_hex: partial.color_hex,
-    seasons: partial.seasons,
-    min_temp: partial.min_temp,
-    max_temp: partial.max_temp,
-    water_resistant: partial.water_resistant,
-    formality: partial.formality,
-    brand: partial.brand,
-    size: 'M',
-    memo: '',
-    notes: '',
-    price: partial.price,
-    wear_count: partial.wear_count,
-    cpw,
-    is_favorite: partial.is_favorite,
-    status: 'active',
-    image_url:
-      partial.image_url || getStudioSeedImageForGarment(partial.category, partial.subcategory),
-    slot_key: spec.slotKey,
-    base_glb: spec.baseGlb,
-    physics_preset: spec.physicsPreset,
-    custom_texture: false,
-  };
-}
-
-export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = [
-  buildSampleItem(1, {
-    id: 9001,
-    name: '발마칸 캐시미어 롱코트',
-    category: 'outer',
-    subcategory: 'coat',
-    fabric: 'wool',
-    color_name: '카멜',
-    color_hex: '#BFA98B',
-    seasons: ['가을', '겨울'],
-    min_temp: -5,
-    max_temp: 14,
-    water_resistant: false,
-    formality: 'formal',
-    brand: 'A.Studio',
-    price: 420000,
-    wear_count: 28,
-    is_favorite: true,
-    image_url: '/seed/studio-coat.jpg',
-  }),
-  buildSampleItem(2, {
-    id: 9002,
-    name: '발수 코튼 개버딘 트렌치코트',
-    category: 'outer',
-    subcategory: 'trench',
-    fabric: 'gabardine',
-    color_name: '베이지',
-    color_hex: '#C4B193',
-    seasons: ['봄', '가을'],
-    min_temp: 7,
-    max_temp: 19,
-    water_resistant: true,
-    formality: 'smart',
-    brand: 'Sample Atelier',
-    price: 290000,
-    wear_count: 16,
-    is_favorite: true,
-    image_url: '/seed/beige-trench.jpg',
-  }),
-  buildSampleItem(3, {
-    id: 9003,
-    name: '캐시미어 프린지 머플러',
-    category: 'neckwear',
-    subcategory: 'scarf',
-    fabric: 'wool',
-    color_name: '카멜',
-    color_hex: '#C49245',
-    seasons: ['가을', '겨울'],
-    min_temp: -10,
-    max_temp: 13,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'A.Studio',
-    price: 148000,
-    wear_count: 19,
-    is_favorite: true,
-    image_url: '/seed/studio-muffler.jpg',
-  }),
-  buildSampleItem(4, {
-    id: 9004,
-    name: '실크 자카드 클래식 네이비 타이',
-    category: 'neckwear',
-    subcategory: 'necktie',
-    fabric: 'silk',
-    color_name: '네이비',
-    color_hex: '#233149',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 0,
-    max_temp: 30,
-    water_resistant: false,
-    formality: 'formal',
-    brand: 'Sample Atelier',
-    price: 145000,
-    wear_count: 9,
-    is_favorite: false,
-    image_url: '/seed/studio-necktie.jpg',
-  }),
-  buildSampleItem(5, {
-    id: 9005,
-    name: '아이보리 메리노 크루넥 니트',
-    category: 'top',
-    subcategory: 'knit',
-    fabric: 'knit',
-    color_name: '크림',
-    color_hex: '#EFECE6',
-    seasons: ['봄', '가을', '겨울'],
-    min_temp: 2,
-    max_temp: 18,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Minimal Lab',
-    price: 119000,
-    wear_count: 24,
-    is_favorite: true,
-    image_url: '/seed/cream-knit.jpg',
-  }),
-  buildSampleItem(6, {
-    id: 9006,
-    name: '수피마 코튼 옥스포드 화이트 셔츠',
-    category: 'top',
-    subcategory: 'shirt',
-    fabric: 'cotton',
-    color_name: '화이트',
-    color_hex: '#F2F1EC',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 8,
-    max_temp: 26,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Minimal Lab',
-    price: 129000,
-    wear_count: 21,
-    is_favorite: true,
-    image_url: '/seed/white-shirt.jpg',
-  }),
-  buildSampleItem(7, {
-    id: 9007,
-    name: '차콜 테이퍼드 울 슬랙스',
-    category: 'bottom',
-    subcategory: 'slacks',
-    fabric: 'wool',
-    color_name: '차콜',
-    color_hex: '#2E3036',
-    seasons: ['봄', '가을', '겨울'],
-    min_temp: -3,
-    max_temp: 20,
-    water_resistant: false,
-    formality: 'smart',
-    brand: 'Tailor Co',
-    price: 159000,
-    wear_count: 32,
-    is_favorite: false,
-    image_url: '/seed/charcoal-slacks.jpg',
-  }),
-  buildSampleItem(8, {
-    id: 9008,
-    name: '셀비지 스트레이트 인디고 데님',
-    category: 'bottom',
-    subcategory: 'denim',
-    fabric: 'denim',
-    color_name: '인디고',
-    color_hex: '#284064',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 2,
-    max_temp: 26,
-    water_resistant: false,
-    formality: 'casual',
-    brand: 'Tailor Co',
-    price: 149000,
-    wear_count: 25,
-    is_favorite: true,
-    image_url: '/seed/indigo-denim.jpg',
-  }),
-  buildSampleItem(9, {
-    id: 9009,
-    name: '이탈리안 풀그레인 레더 서류가방',
-    category: 'accessory',
-    subcategory: 'briefcase',
-    fabric: 'leather',
-    color_name: '브라운',
-    color_hex: '#5C3A24',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: -15,
-    max_temp: 35,
-    water_resistant: true,
-    formality: 'formal',
-    brand: 'Atelier Leather',
-    price: 450000,
-    wear_count: 34,
-    is_favorite: true,
-    image_url: '/seed/studio-briefcase.jpg',
-  }),
-  buildSampleItem(10, {
-    id: 9010,
-    name: '코냑 새들 크로스백',
-    category: 'accessory',
-    subcategory: 'bag',
-    fabric: 'leather',
-    color_name: '브라운',
-    color_hex: '#6B3E26',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: -15,
-    max_temp: 35,
-    water_resistant: true,
-    formality: 'smart',
-    brand: 'Atelier Leather',
-    price: 260000,
-    wear_count: 40,
-    is_favorite: true,
-    image_url: '/seed/studio-bag.jpg',
-  }),
-  buildSampleItem(11, {
-    id: 9011,
-    name: '블랙 레더 페니 로퍼',
-    category: 'shoes',
-    subcategory: 'loafers',
-    fabric: 'leather',
-    color_name: '블랙',
-    color_hex: '#1D1D1F',
-    seasons: ['봄', '가을', '겨울'],
-    min_temp: -5,
-    max_temp: 25,
-    water_resistant: true,
-    formality: 'formal',
-    brand: 'Atelier Leather',
-    price: 228000,
-    wear_count: 38,
-    is_favorite: true,
-    image_url: '/seed/black-loafers.jpg',
-  }),
-  buildSampleItem(12, {
-    id: 9012,
-    name: '미니멀 화이트 레더 스니커즈',
-    category: 'shoes',
-    subcategory: 'sneakers',
-    fabric: 'leather',
-    color_name: '화이트',
-    color_hex: '#EAE7E1',
-    seasons: ['봄', '여름', '가을', '겨울'],
-    min_temp: 0,
-    max_temp: 32,
-    water_resistant: false,
-    formality: 'casual',
-    brand: 'Atelier Leather',
-    price: 218000,
-    wear_count: 29,
-    is_favorite: true,
-    image_url: '/seed/white-sneakers.jpg',
-  }),
-];
+);
 
 function loadUsers(): StoredStandaloneUser[] {
   try {
@@ -1006,13 +769,40 @@ export async function handleStandaloneApiFallback(
     const avgTemp = Math.round(spec.tempMin * 0.45 + spec.tempMax * 0.55);
     const isRainy = spec.precipProb >= 45;
     const isWindy = spec.windSpeed >= 22;
-    const needOuter = avgTemp <= 19 || spec.tempMax - spec.tempMin >= 8 || isRainy || isWindy;
+    const needOuter =
+      (spec.tempMax < 23 && (avgTemp <= 19 || spec.tempMax - spec.tempMin >= 8)) ||
+      isRainy ||
+      isWindy;
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
-    const outers = seededGarments.filter((g) => g.category === 'outer');
-    const tops = seededGarments.filter((g) => g.category === 'top');
-    const bottoms = seededGarments.filter((g) => g.category === 'bottom');
-    const shoesList = seededGarments.filter((g) => g.category === 'shoes');
+    const openSummerShoes = new Set(['flip_flops', 'slides', 'sandals']);
+    const sortByTempFit = (list: GarmentRecord[]) =>
+      [...list].sort((a, b) => {
+        const midA = (Number(a.min_temp ?? 10) + Number(a.max_temp ?? 22)) * 0.5;
+        const midB = (Number(b.min_temp ?? 10) + Number(b.max_temp ?? 22)) * 0.5;
+        return Math.abs(midA - avgTemp) - Math.abs(midB - avgTemp);
+      });
+
+    const outers = sortByTempFit(seededGarments.filter((g) => g.category === 'outer'));
+    const tops = sortByTempFit(
+      seededGarments.filter(
+        (g) =>
+          g.category === 'top' &&
+          !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
+      )
+    );
+    const bottoms = sortByTempFit(
+      seededGarments.filter(
+        (g) => g.category === 'bottom' && !(avgTemp < 21 && g.subcategory === 'shorts')
+      )
+    );
+    const shoesList = sortByTempFit(
+      seededGarments.filter(
+        (g) =>
+          g.category === 'shoes' &&
+          !((avgTemp < 23 || isRainy) && openSummerShoes.has(String(g.subcategory || '')))
+      )
+    );
     const accList = seededGarments.filter(
       (g) => g.category === 'accessory' || g.category === 'neckwear'
     );

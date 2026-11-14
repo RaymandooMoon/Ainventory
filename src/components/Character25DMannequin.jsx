@@ -8,11 +8,15 @@ import Studio2DModelStage from './Studio2DModelStage.jsx';
  * `presetNonce`, `onUserOrbit`, `mode="3d"`, etc.) to `'2d-vton'` with zero WebGL or `.glb` loads.
  */
 const Character25DMannequin = memo(function Character25DMannequin({
-  skinToneHex = '#DFBA9B',
-  personalColor = 'autumn_warm',
+  skinToneHex,
+  personalColor,
   skinProfile = null,
   bodySpec = null,
   user = null,
+  avatarSpec = null,
+  avatarConfigHash = null,
+  viewAngleDeg,
+  onViewAngleChange,
   personReferenceUrl = null,
   slots = null,
   theme = 'light',
@@ -54,6 +58,10 @@ const Character25DMannequin = memo(function Character25DMannequin({
       skinProfile={skinProfile}
       bodySpec={bodySpec}
       user={user}
+      avatarSpec={avatarSpec}
+      avatarConfigHash={avatarConfigHash}
+      viewAngleDeg={viewAngleDeg}
+      onViewAngleChange={onViewAngleChange}
       personReferenceUrl={personReferenceUrl}
       slots={slots}
       theme={theme}

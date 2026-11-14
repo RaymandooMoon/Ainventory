@@ -62,13 +62,26 @@ export function normalizeBodyShape(raw?: string | null): BodyShapeKey {
   const s = String(raw || '')
     .trim()
     .toLowerCase();
-  if (s === 'slim' || s === 'lean' || s === 'ectomorph_thin' || s === 'slim_lean') {
+  if (
+    s === 'slim' ||
+    s === 'lean' ||
+    s === 'ectomorph_thin' ||
+    s === 'slim_lean' ||
+    s === 'petite'
+  ) {
     return 'slim';
   }
   if (s === 'upper_developed' || s === 'inverted_triangle' || s === 'broad') {
     return 'upper_developed';
   }
-  if (s === 'lower_developed' || s === 'pear' || s === 'curvy' || s === 'plus_curvy') {
+  if (
+    s === 'lower_developed' ||
+    s === 'pear' ||
+    s === 'apple' ||
+    s === 'plus_size' ||
+    s === 'curvy' ||
+    s === 'plus_curvy'
+  ) {
     return 'lower_developed';
   }
   if (s === 'muscular' || s === 'athletic' || s === 'muscular_athletic' || s === 'athletic_muscular') {
@@ -101,12 +114,12 @@ export function sanitizeBodySpec(partial?: Partial<BodyMorphSpec> | null): BodyM
 
   return {
     gender,
-    heightCm: Number.isFinite(h) && h > 0 ? clamp(Math.round(h), 145, 200) : def.heightCm,
-    weightKg: Number.isFinite(w) && w > 0 ? clamp(Math.round(w), 38, 130) : def.weightKg,
+    heightCm: Number.isFinite(h) && h > 0 ? clamp(Math.round(h), 140, 205) : def.heightCm,
+    weightKg: Number.isFinite(w) && w > 0 ? clamp(Math.round(w), 35, 160) : def.weightKg,
     bodyShape: normalizeBodyShape(partial?.bodyShape),
-    shoulderScale: Number.isFinite(sh) && sh > 0 ? clamp(Number(sh.toFixed(2)), 0.85, 1.2) : 1,
-    waistScale: Number.isFinite(wa) && wa > 0 ? clamp(Number(wa.toFixed(2)), 0.82, 1.25) : 1,
-    hipScale: Number.isFinite(hi) && hi > 0 ? clamp(Number(hi.toFixed(2)), 0.85, 1.22) : 1,
+    shoulderScale: Number.isFinite(sh) && sh > 0 ? clamp(Number(sh.toFixed(2)), 0.75, 1.35) : 1,
+    waistScale: Number.isFinite(wa) && wa > 0 ? clamp(Number(wa.toFixed(2)), 0.7, 1.35) : 1,
+    hipScale: Number.isFinite(hi) && hi > 0 ? clamp(Number(hi.toFixed(2)), 0.8, 1.38) : 1,
   };
 }
 
@@ -159,19 +172,37 @@ export function deriveBodySpecFromUser(
   });
 }
 
+export type StudioLoadoutInputSlots = Partial<FittingSlotAssignments> & {
+  onepiece?: Partial<GarmentRecord> | null;
+  dress?: Partial<GarmentRecord> | null;
+  headwear?: Partial<GarmentRecord> | null;
+  neckwear?: Partial<GarmentRecord> | null;
+  gloves?: Partial<GarmentRecord> | null;
+  socks?: Partial<GarmentRecord> | null;
+};
+
 /**
- * Maps the 5-pill Studio UI slot state (`outer`, `top`, `bottom`, `shoes`, `accessory`)
+ * Maps the Studio UI slot state (`outer`, `top`, `onepiece`, `bottom`, `shoes`, `accessory`)
  * onto the 11-slot MakeHuman 3D character garment architecture (`headwear`, `neckwear`,
  * `outer`, `top`, `dress`, `bottom`, `gloves`, `socks`, `shoes`, `accessory`).
  */
 export function mapStudioSlotsTo3DLoadout(
-  slots?: Partial<FittingSlotAssignments> | null
+  slots?:
+    | StudioLoadoutInputSlots
+    | Record<string, Partial<GarmentRecord> | null | undefined>
+    | null
 ): Partial<Record<WearSlotKey, Partial<GarmentRecord> | null>> {
   const loadout: Partial<Record<WearSlotKey, Partial<GarmentRecord> | null>> = {};
   if (!slots) return loadout;
 
   if (slots.outer) {
     loadout.outer = slots.outer;
+  }
+
+  if (slots.onepiece) {
+    loadout.dress = slots.onepiece;
+  } else if (slots.dress) {
+    loadout.dress = slots.dress;
   }
 
   if (slots.top) {
@@ -185,7 +216,9 @@ export function mapStudioSlotsTo3DLoadout(
       sub === 'dress' ||
       /원피스|드레스|onepiece|dress/i.test(name);
     if (isDress) {
-      loadout.dress = slots.top;
+      if (!loadout.dress) {
+        loadout.dress = slots.top;
+      }
     } else {
       loadout.top = slots.top;
     }

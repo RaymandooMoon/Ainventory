@@ -1,8 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronsLeftRight } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import {
+  ALL_ISO_VIEW_ANGLES,
+  DEFAULT_ISO_VIEW_ANGLE,
+  avatarSpecToLegacyBodySpec,
+  bridgeLegacyPropsToAvatarSpec,
+  computeAvatarConfigHash,
+  normalizeViewAngleDeg,
+  sanitizeAvatarSpec,
+  useAvatarSpec,
+} from '../services/avatarSpecStore.ts';
 import { renderEditorialFashionCanvas } from '../services/editorial2DArtist.ts';
-import { sanitizeBodySpec } from '../services/parametricAvatar3D.ts';
+import { normalizeBodyShape, sanitizeBodySpec } from '../services/parametricAvatar3D.ts';
 import { computeSkinShadingPalette } from '../services/skinToneAnalyzer.ts';
 import {
   normalizeGenderNeutralProfile,
@@ -16,6 +26,7 @@ const MAX_STAGE_ZOOM = 3;
 const DBLCLICK_TARGET_ZOOM = 1.85;
 const MIN_SPLIT_PCT = 5;
 const MAX_SPLIT_PCT = 95;
+const ROTATE_DRAG_STEP_PX = 34;
 
 function clampZoom(val) {
   const n = Number(val);
@@ -46,18 +57,22 @@ function clampPanToBounds(pan, zoomLevel, stageEl) {
 }
 
 /**
- * Pure 2D Editorial Fashion Model & Virtual Try-On Stage
+ * Pure 2D Isometric Editorial Fashion Model & Virtual Try-On Stage
  * - Zero WebGL / Three.js / .glb dependencies
- * - High-DPI live 2D editorial canvas preview + instant high-res VTON image display
- * - Smooth 1x ~ 3x zoom (wheel, 2-pointer pinch, double-click 1x <-> 1.85x) & bounded drag-to-pan
+ * - High-DPI live 2D isometric canvas preview (8 angles, default 45° quarter-view) + VTON image display
+ * - Horizontal drag-to-rotate (45° steps at 1x zoom), smooth 1x ~ 3x zoom & bounded drag-to-pan
  * - Pixel-aligned Before / After split comparison view with keyboard & pointer slider
  */
 const Studio2DModelStage = memo(function Studio2DModelStage({
-  skinToneHex = '#DFBA9B',
-  personalColor = 'autumn_warm',
+  skinToneHex,
+  personalColor,
   skinProfile = null,
   bodySpec = null,
   user = null,
+  avatarSpec = null,
+  avatarConfigHash = null,
+  viewAngleDeg,
+  onViewAngleChange = null,
   personReferenceUrl = null,
   slots = null,
   theme = 'light',
@@ -84,11 +99,14 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
   const beforeCanvasRef = useRef(null);
   const pointersRef = useRef(new Map());
   const lastPinchDistRef = useRef(0);
+  const rotateDragAnchorXRef = useRef(null);
 
   const [internalZoom, setInternalZoom] = useState(1);
   const [internalPan, setInternalPan] = useState({ x: 0, y: 0 });
   const [internalSplitPct, setInternalSplitPct] = useState(50);
+  const [internalViewAngleDeg, setInternalViewAngleDeg] = useState(DEFAULT_ISO_VIEW_ANGLE);
   const [isPanning, setIsPanning] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
 
   const viewerMode = normalizeViewerMode(legacyMode ?? mode ?? viewMode ?? renderMode);
@@ -100,8 +118,64 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
         ? 'en'
         : getStoredLang();
 
-  const resolvedSkinToneHex = skinToneHex || skinProfile?.skinToneHex || '#DFBA9B';
-  const resolvedPersonalColor = personalColor || skinProfile?.personalColor || 'autumn_warm';
+  const { spec: storeAvatarSpec, avatarConfigHash: storeAvatarHash } = useAvatarSpec();
+
+  const bridgedAvatar = useMemo(() => {
+    void storeAvatarSpec;
+    void storeAvatarHash;
+    const explicitSkin = skinToneHex || skinProfile?.skinToneHex;
+    const explicitPc = personalColor || skinProfile?.personalColor;
+    const mergedSkinProfile =
+      skinProfile || explicitSkin || explicitPc
+        ? {
+            ...(skinProfile || {}),
+            ...(explicitSkin ? { skinToneHex: explicitSkin } : {}),
+            ...(explicitPc ? { personalColor: explicitPc } : {}),
+          }
+        : null;
+    return bridgeLegacyPropsToAvatarSpec({
+      skinProfile: mergedSkinProfile,
+      bodySpec,
+      user,
+      personReferenceUrl,
+    });
+  }, [
+    storeAvatarSpec,
+    storeAvatarHash,
+    skinProfile,
+    skinToneHex,
+    personalColor,
+    bodySpec,
+    user,
+    personReferenceUrl,
+  ]);
+
+  const effectiveAvatarSpec = useMemo(
+    () => (avatarSpec ? sanitizeAvatarSpec(avatarSpec) : bridgedAvatar.spec),
+    [avatarSpec, bridgedAvatar.spec]
+  );
+
+  const effectiveAvatarHash = useMemo(() => {
+    if (avatarConfigHash) return avatarConfigHash;
+    if (avatarSpec) return computeAvatarConfigHash(effectiveAvatarSpec);
+    return bridgedAvatar.avatarConfigHash;
+  }, [avatarConfigHash, avatarSpec, effectiveAvatarSpec, bridgedAvatar.avatarConfigHash]);
+
+  const effectiveViewAngleDeg =
+    viewAngleDeg !== undefined
+      ? normalizeViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE)
+      : internalViewAngleDeg;
+
+  const resolvedSkinToneHex =
+    skinToneHex ||
+    skinProfile?.skinToneHex ||
+    effectiveAvatarSpec?.appearance?.skinToneHex ||
+    '#DFBA9B';
+  const resolvedPersonalColor =
+    personalColor ||
+    skinProfile?.personalColor ||
+    effectiveAvatarSpec?.appearance?.personalColor ||
+    'autumn_warm';
 
   const palette = useMemo(
     () => computeSkinShadingPalette(resolvedSkinToneHex, resolvedPersonalColor, resolvedTheme),
@@ -109,6 +183,24 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
   );
 
   const fallbackBodySpec = useMemo(() => sanitizeBodySpec(bodySpec), [bodySpec]);
+  const legacyFromAvatar = useMemo(
+    () => avatarSpecToLegacyBodySpec(effectiveAvatarSpec),
+    [effectiveAvatarSpec]
+  );
+
+  const effectiveBodySpecForProfile = useMemo(
+    () => ({
+      ...legacyFromAvatar,
+      ...(bodySpec || {}),
+      heightCm: bodySpec?.heightCm ?? effectiveAvatarSpec.anthropometrics.heightCm,
+      weightKg: bodySpec?.weightKg ?? effectiveAvatarSpec.anthropometrics.weightKg,
+      shoulderScale:
+        bodySpec?.shoulderScale ?? effectiveAvatarSpec.anthropometrics.shoulderScale,
+      waistScale: bodySpec?.waistScale ?? effectiveAvatarSpec.anthropometrics.waistScale,
+      hipScale: bodySpec?.hipScale ?? effectiveAvatarSpec.anthropometrics.hipScale,
+    }),
+    [legacyFromAvatar, bodySpec, effectiveAvatarSpec]
+  );
 
   const profile = useMemo(
     () =>
@@ -118,11 +210,20 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
           skinToneHex: palette.base,
           personalColor: resolvedPersonalColor,
         },
-        bodySpec,
+        bodySpec: effectiveBodySpecForProfile,
         user,
-        personReferenceUrl,
+        personReferenceUrl:
+          personReferenceUrl || effectiveAvatarSpec.appearance.facePhotoUrl || null,
       }),
-    [skinProfile, palette.base, resolvedPersonalColor, bodySpec, user, personReferenceUrl]
+    [
+      skinProfile,
+      palette.base,
+      resolvedPersonalColor,
+      effectiveBodySpecForProfile,
+      user,
+      personReferenceUrl,
+      effectiveAvatarSpec.appearance.facePhotoUrl,
+    ]
   );
 
   const effectiveZoom =
@@ -137,9 +238,11 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
 
   const zoomStateRef = useRef(effectiveZoom);
   const panStateRef = useRef(effectivePan);
+  const viewAngleRef = useRef(effectiveViewAngleDeg);
   useEffect(() => {
     zoomStateRef.current = effectiveZoom;
     panStateRef.current = effectivePan;
+    viewAngleRef.current = effectiveViewAngleDeg;
   });
 
   const commitZoomAndPan = useCallback(
@@ -192,7 +295,9 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
 
     renderEditorialFashionCanvas(canvas, {
       profile,
-      slots: null,
+      avatarSpec: effectiveAvatarSpec,
+      viewAngleDeg: effectiveViewAngleDeg,
+      slots: slots || null,
       theme: resolvedTheme,
       compact: true,
     }).catch(() => {
@@ -200,9 +305,17 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
     });
 
     return undefined;
-  }, [compact, profile, resolvedTheme]);
+  }, [
+    compact,
+    profile,
+    effectiveAvatarSpec,
+    effectiveAvatarHash,
+    effectiveViewAngleDeg,
+    slots,
+    resolvedTheme,
+  ]);
 
-  // 2. Live 2D Editorial Canvas Preview when before first synthesis resolves (or standalone usage)
+  // 2. Live 2D Isometric Canvas Preview when before synthesis resolves (or standalone usage)
   useEffect(() => {
     if (compact || afterImageUrl) return undefined;
     const canvas = liveCanvasRef.current;
@@ -210,6 +323,8 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
 
     renderEditorialFashionCanvas(canvas, {
       profile,
+      avatarSpec: effectiveAvatarSpec,
+      viewAngleDeg: effectiveViewAngleDeg,
       slots,
       theme: resolvedTheme,
       compact: false,
@@ -218,7 +333,16 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
     });
 
     return undefined;
-  }, [compact, afterImageUrl, profile, slots, resolvedTheme]);
+  }, [
+    compact,
+    afterImageUrl,
+    profile,
+    effectiveAvatarSpec,
+    effectiveAvatarHash,
+    effectiveViewAngleDeg,
+    slots,
+    resolvedTheme,
+  ]);
 
   // 2b. Fallback Base 2D Canvas for Split Compare if beforeImageUrl is not yet available
   useEffect(() => {
@@ -228,6 +352,8 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
 
     renderEditorialFashionCanvas(canvas, {
       profile,
+      avatarSpec: effectiveAvatarSpec,
+      viewAngleDeg: effectiveViewAngleDeg,
       slots: null,
       theme: resolvedTheme,
       compact: false,
@@ -236,7 +362,16 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
     });
 
     return undefined;
-  }, [compact, compareActive, beforeImageUrl, profile, resolvedTheme]);
+  }, [
+    compact,
+    compareActive,
+    beforeImageUrl,
+    profile,
+    effectiveAvatarSpec,
+    effectiveAvatarHash,
+    effectiveViewAngleDeg,
+    resolvedTheme,
+  ]);
 
   // 3. Wheel Zoom in Full Studio Mode (non-passive to prevent page scroll while zooming stage)
   useEffect(() => {
@@ -257,7 +392,7 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
     };
   }, [compact, commitZoomAndPan]);
 
-  // 4. Stage Pointer Gestures: 2-Pointer Pinch Zoom & Bounded Drag-to-Pan
+  // 4. Stage Pointer Gestures: 2-Pointer Pinch Zoom, 1x Horizontal Drag-to-Rotate (45° steps), & Zoomed Drag-to-Pan
   const handleStagePointerDown = (e) => {
     if (compact) return;
     if (e.target?.closest?.('[data-vton-compare-slider]')) return;
@@ -269,9 +404,14 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
     if (pointers.size === 2) {
       const pts = Array.from(pointers.values());
       lastPinchDistRef.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      rotateDragAnchorXRef.current = null;
+      setIsRotating(false);
       setIsPanning(true);
     } else if (pointers.size === 1 && zoomStateRef.current > 1.01) {
+      rotateDragAnchorXRef.current = null;
       setIsPanning(true);
+    } else if (pointers.size === 1 && !compareActive) {
+      rotateDragAnchorXRef.current = e.clientX;
     }
   };
 
@@ -301,6 +441,26 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
           y: panStateRef.current.y + dy,
         });
       }
+    } else if (
+      pointers.size === 1 &&
+      zoomStateRef.current <= 1.01 &&
+      !compareActive &&
+      rotateDragAnchorXRef.current !== null
+    ) {
+      const totalDx = e.clientX - rotateDragAnchorXRef.current;
+      if (Math.abs(totalDx) >= ROTATE_DRAG_STEP_PX) {
+        const steps = Math.trunc(totalDx / ROTATE_DRAG_STEP_PX);
+        rotateDragAnchorXRef.current += steps * ROTATE_DRAG_STEP_PX;
+        const curIdx = ALL_ISO_VIEW_ANGLES.indexOf(viewAngleRef.current);
+        const baseIdx = curIdx >= 0 ? curIdx : 0;
+        const len = ALL_ISO_VIEW_ANGLES.length;
+        const nextIdx = (((baseIdx + steps) % len) + len) % len;
+        const nextAngle = ALL_ISO_VIEW_ANGLES[nextIdx];
+        viewAngleRef.current = nextAngle;
+        setInternalViewAngleDeg(nextAngle);
+        setIsRotating(true);
+        onViewAngleChange?.(nextAngle);
+      }
     }
   };
 
@@ -312,7 +472,9 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
       lastPinchDistRef.current = 0;
     }
     if (pointers.size === 0) {
+      rotateDragAnchorXRef.current = null;
       setIsPanning(false);
+      setIsRotating(false);
     }
   };
 
@@ -378,17 +540,27 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
   const beforeClipPath = `inset(0 ${clipRightPct}% 0 0)`;
   const afterClipPath = showSplitCompare ? `inset(0 0 0 ${effectiveSplitPct}%)` : undefined;
 
-  const resolvedBodyShape = profile?.bodyShape || fallbackBodySpec.bodyShape;
-  const resolvedHeightCm = profile?.heightCm ?? fallbackBodySpec.heightCm;
-  const resolvedWeightKg = profile?.weightKg ?? fallbackBodySpec.weightKg;
+  const resolvedBodyShape = bodySpec?.bodyShape
+    ? normalizeBodyShape(bodySpec.bodyShape)
+    : legacyFromAvatar.bodyShape || profile?.bodyShape || fallbackBodySpec.bodyShape;
+  const resolvedHeightCm =
+    effectiveAvatarSpec?.anthropometrics?.heightCm ??
+    profile?.heightCm ??
+    fallbackBodySpec.heightCm;
+  const resolvedWeightKg =
+    effectiveAvatarSpec?.anthropometrics?.weightKg ??
+    profile?.weightKg ??
+    fallbackBodySpec.weightKg;
 
   const cursorClass = compact
     ? 'is-compact'
-    : isPanning
-      ? 'is-panning'
-      : effectiveZoom > 1.01
-        ? 'is-zoomed'
-        : 'is-zoomable';
+    : isRotating
+      ? 'is-rotating'
+      : isPanning
+        ? 'is-panning'
+        : effectiveZoom > 1.01
+          ? 'is-zoomed'
+          : 'is-zoomable';
 
   return (
     <div
@@ -396,12 +568,14 @@ const Studio2DModelStage = memo(function Studio2DModelStage({
       ref={stageRef}
       className={`character-25d-mannequin studio-2d-model-stage ${cursorClass}`}
       data-viewer-mode={viewerMode}
-      data-skin-hex={palette.base}
+      data-skin-hex={palette.base.toUpperCase()}
       data-personal-color={resolvedPersonalColor}
       data-body-shape={resolvedBodyShape}
       data-height-cm={resolvedHeightCm}
       data-weight-kg={resolvedWeightKg}
       data-zoom={effectiveZoom.toFixed(2)}
+      data-view-angle={effectiveViewAngleDeg}
+      data-avatar-hash={effectiveAvatarHash}
       data-stage-loading={isLoading ? 'true' : 'false'}
       onPointerDown={compact ? undefined : handleStagePointerDown}
       onPointerMove={compact ? undefined : handleStagePointerMove}

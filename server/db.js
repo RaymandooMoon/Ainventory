@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveManifestSlotAndGlb } from '../src/shared/garmentTaxonomy.js';
+import { SEASONAL_120_CATALOG } from '../src/shared/seasonal120Catalog.js';
 import {
   generateStatisticalWardrobeForUser,
   getStudioSeedImageForGarment,
@@ -231,7 +232,12 @@ function ensureSampleClosetSeeded() {
   const sampleCount = db
     .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
     .get().cnt;
-  if (sampleCount >= 16) return;
+  const legacyNonWebp = db
+    .prepare(
+      "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp'"
+    )
+    .get().cnt;
+  if (sampleCount >= 120 && legacyNonWebp === 0) return;
 
   db.prepare("DELETE FROM garments WHERE closet_owner = 'sample'").run();
 
@@ -242,29 +248,6 @@ function ensureSampleClosetSeeded() {
     return d.toISOString().slice(0, 10);
   };
 
-  const sampleItems = [
-    ['발수 코튼 개버딘 트렌치코트', 'outer', 'trench', 'gabardine', '베이지', '#C4B193', ['봄', '가을'], 8, 19, 1, 'smart', 'Sample Atelier', 290000, 11, fmtDate(3), 1, '/seed/beige-trench.jpg'],
-    ['더블 페이스 캐시미어 테일러드 코트', 'outer', 'coat', 'wool', '카멜', '#BA9163', ['가을', '겨울'], -5, 11, 0, 'formal', 'Sample Atelier', 420000, 7, fmtDate(8), 1, '/seed/studio-coat.jpg'],
-    ['테일러드 버진 울 싱글 블레이저', 'outer', 'blazer', 'wool', '블랙', '#1E1F22', ['봄', '가을', '겨울'], 5, 19, 0, 'formal', 'Sample Atelier', 340000, 9, fmtDate(5), 0, '/seed/black-blazer.jpg'],
-    ['파인 메리노 크루넥 니트', 'top', 'knit', 'knit', '네이비', '#1D273B', ['봄', '가을', '겨울'], 4, 18, 0, 'smart', 'Sample Atelier', 135000, 15, fmtDate(2), 1, '/seed/navy-knit.jpg'],
-    ['수피마 코튼 옥스포드 셔츠', 'top', 'shirt', 'cotton', '화이트', '#F2F1EC', ['봄', '여름', '가을', '겨울'], 8, 25, 0, 'smart', 'Sample Atelier', 119000, 20, fmtDate(4), 1, '/seed/white-shirt.jpg'],
-    ['오트밀 캐시미어 라운드 니트', 'top', 'knit', 'knit', '크림', '#DDD3C2', ['가을', '겨울'], -3, 15, 0, 'smart', 'Sample Atelier', 168000, 8, fmtDate(9), 0, '/seed/cream-knit.jpg'],
-    ['울 블렌드 원턱 와이드 슬랙스', 'bottom', 'slacks', 'wool', '차콜', '#35383E', ['봄', '가을', '겨울'], 0, 22, 0, 'smart', 'Sample Atelier', 165000, 18, fmtDate(2), 1, '/seed/charcoal-slacks.jpg'],
-    ['셀비지 스트레이트 데님', 'bottom', 'denim', 'denim', '인디고', '#284064', ['봄', '여름', '가을', '겨울'], 2, 26, 1, 'casual', 'Sample Atelier', 149000, 22, fmtDate(1), 1, '/seed/indigo-denim.jpg'],
-    ['코튼 트윌 테이퍼드 치노 팬츠', 'bottom', 'chinos', 'cotton', '베이지', '#C2B194', ['봄', '여름', '가을'], 8, 25, 0, 'smart', 'Sample Atelier', 132000, 10, fmtDate(6), 0, '/seed/studio-chinos.jpg'],
-    ['미니멀 레더 코트 스니커즈', 'shoes', 'sneakers', 'leather', '화이트', '#EAE7E1', ['봄', '여름', '가을', '겨울'], -2, 32, 1, 'casual', 'Sample Atelier', 218000, 26, fmtDate(1), 1, '/seed/white-sneakers.jpg'],
-    ['클래식 스무스 레더 페니 로퍼', 'shoes', 'loafers', 'leather', '블랙', '#1A1A1C', ['봄', '여름', '가을', '겨울'], 0, 28, 1, 'formal', 'Sample Atelier', 298000, 13, fmtDate(5), 1, '/seed/black-loafers.jpg'],
-    ['이탈리안 풀그레인 레더 서류가방', 'accessory', 'briefcase', 'leather', '브라운', '#5C3A24', ['봄', '여름', '가을', '겨울'], -10, 35, 1, 'formal', 'Sample Atelier', 450000, 14, fmtDate(2), 1, '/seed/studio-briefcase.jpg'],
-    ['페블 레더 미니멀 쇼퍼 토트백', 'accessory', 'tote', 'leather', '카멜', '#C3AE93', ['봄', '여름', '가을', '겨울'], -10, 35, 1, 'smart', 'Sample Atelier', 390000, 12, fmtDate(4), 0, '/seed/studio-tote.jpg'],
-    ['퓨어 캐시미어 프린지 머플러', 'neckwear', 'scarf', 'wool', '카멜', '#B58E63', ['가을', '겨울'], -12, 11, 0, 'smart', 'Sample Atelier', 195000, 9, fmtDate(7), 1, '/seed/studio-muffler.jpg'],
-    ['실크 자카드 클래식 네이비 타이', 'neckwear', 'necktie', 'silk', '네이비', '#233149', ['봄', '여름', '가을', '겨울'], 0, 30, 0, 'formal', 'Sample Atelier', 145000, 6, fmtDate(10), 0, '/seed/studio-necktie.jpg'],
-    ['캐시미어 골지 비니', 'headwear', 'beanie', 'knit', '그레이', '#B8B1A6', ['가을', '겨울'], -10, 10, 0, 'casual', 'Sample Atelier', 69000, 7, fmtDate(11), 0, '/seed/studio-beanie.jpg'],
-    ['코튼 트윌 아틀리에 볼캡', 'headwear', 'cap', 'cotton', '베이지', '#CBC2B2', ['봄', '여름', '가을'], 8, 33, 1, 'casual', 'Sample Atelier', 49000, 12, fmtDate(3), 0, '/seed/studio-cap.jpg'],
-    ['나파 레더 캐시미어 라이닝 장갑', 'gloves', 'leather_gloves', 'leather', '블랙', '#242120', ['겨울'], -15, 7, 1, 'formal', 'Sample Atelier', 128000, 5, fmtDate(14), 0, '/seed/studio-leather-gloves.jpg'],
-    ['메리노 울 골지 크루 삭스', 'socks', 'crew_socks', 'wool', '크림', '#CFC9BE', ['봄', '가을', '겨울'], -8, 20, 0, 'smart', 'Sample Atelier', 24000, 19, fmtDate(2), 0, '/seed/studio-crew-socks.jpg'],
-    ['심리스 모달 에어 이너탑', 'underwear', 'inner_top', 'cotton', '화이트', '#EBE8E1', ['봄', '여름', '가을', '겨울'], -10, 30, 0, 'casual', 'Sample Atelier', 29000, 21, fmtDate(1), 0, '/seed/studio-inner-top.jpg'],
-  ];
-
   const insertSample = db.prepare(`
     INSERT INTO garments (
       closet_owner, name, category, subcategory, color_name, color_hex,
@@ -274,49 +257,117 @@ function ensureSampleClosetSeeded() {
     ) VALUES ('sample', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0)
   `);
 
-  for (const item of sampleItems) {
-    const [
-      name,
-      category,
-      subcategory,
-      fabric,
-      colorName,
-      colorHex,
-      seasons,
-      minTemp,
-      maxTemp,
-      water,
-      formality,
-      brand,
-      price,
-      wearCount,
-      lastWornDate,
-      isFav,
-      imageUrl,
-    ] = item;
-    const spec = resolveManifestSlotAndGlb(category, subcategory);
+  for (const item of SEASONAL_120_CATALOG) {
+    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+    const wearCount = ((item.idOffset * 3) % 24) + 2;
+    const lastWornDate = fmtDate(((item.idOffset * 2) % 28) + 1);
+    const isFav = item.idOffset % 4 === 1 ? 1 : 0;
     insertSample.run(
-      name,
-      category,
-      subcategory,
-      colorName,
-      colorHex,
-      JSON.stringify(seasons),
-      minTemp,
-      maxTemp,
-      water,
-      formality,
-      brand,
-      price,
+      item.name,
+      item.category,
+      item.subcategory,
+      item.color_name,
+      item.color_hex,
+      JSON.stringify(item.seasons),
+      item.min_temp,
+      item.max_temp,
+      item.water_resistant ? 1 : 0,
+      item.formality,
+      item.brand,
+      item.price,
       wearCount,
       lastWornDate,
       isFav,
-      imageUrl,
-      fabric,
+      item.image_url,
+      item.fabric,
       spec.slotKey,
       spec.baseGlb,
       spec.physicsPreset
     );
+  }
+}
+
+function ensureSeasonalHighlightsForDemoClosets() {
+  const today = new Date();
+  const fmtDate = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const insertDemoSeasonal = db.prepare(`
+    INSERT INTO garments (
+      closet_owner, name, category, subcategory, color_name, color_hex,
+      seasons, min_temp, max_temp, water_resistant, formality,
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0)
+  `);
+
+  const femininePrioritySubs = new Set([
+    'dress',
+    'onepiece',
+    'skirt',
+    'blouse',
+    'heels',
+    'swimsuit',
+    'bikini',
+  ]);
+
+  for (const owner of ['husband', 'wife']) {
+    const existingSeasonalCnt = db
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = ? AND image_url LIKE '/seed/s4-%'"
+      )
+      .get(owner).cnt;
+    if (existingSeasonalCnt >= 48) continue;
+
+    const existingUrls = new Set(
+      db
+        .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+        .all(owner)
+        .map((r) => r.image_url)
+    );
+
+    for (const item of SEASONAL_120_CATALOG) {
+      if (existingUrls.has(item.image_url)) continue;
+      const isFemSub = femininePrioritySubs.has(item.subcategory);
+      const shouldInclude =
+        owner === 'wife'
+          ? isFemSub || item.idOffset % 2 === 0
+          : !isFemSub &&
+            (item.idOffset % 2 === 1 || item.category === 'shoes' || item.category === 'outer');
+      if (!shouldInclude) continue;
+
+      const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+      const wearCount = ((item.idOffset * 5) % 18) + 2;
+      const lastWornDate = fmtDate(((item.idOffset * 3) % 25) + 1);
+      const isFav = item.idOffset % 6 === 1 ? 1 : 0;
+      insertDemoSeasonal.run(
+        owner,
+        item.name,
+        item.category,
+        item.subcategory,
+        item.color_name,
+        item.color_hex,
+        JSON.stringify(item.seasons),
+        item.min_temp,
+        item.max_temp,
+        item.water_resistant ? 1 : 0,
+        item.formality,
+        item.brand,
+        item.price,
+        wearCount,
+        lastWornDate,
+        isFav,
+        item.image_url,
+        item.fabric,
+        spec.slotKey,
+        spec.baseGlb,
+        spec.physicsPreset
+      );
+      existingUrls.add(item.image_url);
+    }
   }
 }
 
@@ -842,6 +893,7 @@ export function seedIfEmpty(forceReset = false) {
           personal_color: 'spring_warm',
         });
       }
+      ensureSeasonalHighlightsForDemoClosets();
       return;
     }
 
@@ -983,6 +1035,7 @@ export function seedIfEmpty(forceReset = false) {
       gender: 'female',
       personal_color: 'spring_warm',
     });
+    ensureSeasonalHighlightsForDemoClosets();
 
     const commuteItemIds = [insertedIds[0], insertedIds[4], insertedIds[6], insertedIds[9]].filter(Boolean);
     const weekendNavyIds = [insertedIds[2], insertedIds[7], insertedIds[8]].filter(Boolean);

@@ -154,18 +154,49 @@ function computeColorSimilarityRatio(hexA, hexB, nameA = '', nameB = '') {
 }
 
 const RELATED_SUBCATEGORIES = {
-  knit: ['cardigan', 'sweatshirt'],
-  cardigan: ['knit', 'jacket'],
-  shirt: ['blouse', 'tshirt'],
-  tshirt: ['shirt', 'sweatshirt'],
-  trench: ['coat', 'jacket'],
-  coat: ['trench', 'blazer', 'padding'],
-  blazer: ['jacket', 'coat'],
-  jacket: ['blazer', 'trench', 'cardigan'],
+  knit: ['cardigan', 'sweatshirt', 'hoodie'],
+  cardigan: ['knit', 'jacket', 'fleece'],
+  shirt: ['blouse', 'short_shirt', 'tshirt'],
+  short_shirt: ['shirt', 'tshirt', 'sleeveless'],
+  tshirt: ['short_shirt', 'tank_top', 'sleeveless', 'sweatshirt'],
+  tank_top: ['sleeveless', 'tshirt'],
+  sleeveless: ['tank_top', 'tshirt', 'blouse'],
+  sweatshirt: ['hoodie', 'knit', 'tshirt'],
+  hoodie: ['sweatshirt', 'fleece', 'windbreaker'],
+  trench: ['coat', 'field_jacket', 'windbreaker'],
+  coat: ['trench', 'blazer', 'long_padding', 'mustang'],
+  blazer: ['jacket', 'coat', 'leather_jacket'],
+  jacket: ['windbreaker', 'denim_jacket', 'field_jacket', 'leather_jacket', 'blazer'],
+  windbreaker: ['jacket', 'field_jacket', 'trench'],
+  denim_jacket: ['jacket', 'field_jacket', 'leather_jacket'],
+  leather_jacket: ['jacket', 'mustang', 'blazer'],
+  field_jacket: ['jacket', 'windbreaker', 'trench'],
+  padding: ['short_padding', 'long_padding', 'fleece'],
+  short_padding: ['padding', 'long_padding', 'fleece', 'mustang'],
+  long_padding: ['padding', 'short_padding', 'coat'],
+  fleece: ['padding', 'short_padding', 'cardigan'],
+  mustang: ['leather_jacket', 'coat', 'short_padding'],
   slacks: ['chinos', 'denim'],
-  denim: ['chinos', 'slacks'],
-  sneakers: ['loafers', 'boots'],
-  loafers: ['sneakers', 'boots'],
+  denim: ['chinos', 'cargo', 'slacks'],
+  chinos: ['slacks', 'cargo', 'denim'],
+  cargo: ['chinos', 'jogger', 'denim'],
+  jogger: ['cargo', 'shorts'],
+  shorts: ['skirt', 'jogger'],
+  swimsuit: ['bikini', 'rashguard'],
+  bikini: ['swimsuit', 'rashguard'],
+  rashguard: ['swim_trunks', 'swimsuit'],
+  swim_trunks: ['rashguard', 'shorts'],
+  sneakers: ['loafers', 'derby', 'slides'],
+  loafers: ['derby', 'sneakers', 'boots'],
+  derby: ['loafers', 'boots'],
+  boots: ['long_boots', 'snow_boots', 'derby', 'loafers'],
+  long_boots: ['boots', 'snow_boots'],
+  snow_boots: ['long_boots', 'boots'],
+  sandals: ['slides', 'flip_flops'],
+  slides: ['sandals', 'flip_flops'],
+  flip_flops: ['slides', 'sandals'],
+  sunglasses: ['glasses'],
+  glasses: ['sunglasses'],
 };
 
 const NEUTRAL_COLORS = new Set(['블랙', '화이트', '크림', '그레이', '차콜', '베이지', '네이비', '인디고']);
@@ -520,13 +551,55 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     }
   }
 
+  const SWIMWEAR_SUBS = new Set(['swimsuit', 'bikini', 'rashguard', 'swim_trunks']);
+  const OPEN_SUMMER_SHOES = new Set(['flip_flops', 'slides', 'sandals']);
+  const HEAVY_WINTER_OUTER = new Set([
+    'short_padding',
+    'long_padding',
+    'padding',
+    'mustang',
+    'fleece',
+    'coat',
+  ]);
+  const WINTER_BOOTS = new Set(['long_boots', 'snow_boots', 'boots']);
+
   const scoreItem = (item, preferredFormality) => {
     let score = 50;
+    const sub = String(item.subcategory || '');
     if (avgTemp >= item.min_temp && avgTemp <= item.max_temp) {
       score += 28;
     } else {
       const dist = avgTemp < item.min_temp ? item.min_temp - avgTemp : avgTemp - item.max_temp;
       score -= Math.min(35, dist * 3.5);
+    }
+
+    if (SWIMWEAR_SUBS.has(sub) && avgTemp < 29) {
+      score -= 60;
+    }
+
+    if (OPEN_SUMMER_SHOES.has(sub)) {
+      if (avgTemp < 23 || isRainy || preferredFormality === 'formal') {
+        score -= 50;
+      } else if (avgTemp >= 26 && preferredFormality === 'casual') {
+        score += 12;
+      }
+    }
+
+    if (avgTemp <= 4) {
+      if (item.category === 'outer' && HEAVY_WINTER_OUTER.has(sub)) {
+        score += 18;
+      }
+      if (item.category === 'shoes' && WINTER_BOOTS.has(sub)) {
+        score += 16;
+      }
+      if (
+        sub === 'tank_top' ||
+        sub === 'sleeveless' ||
+        sub === 'short_shirt' ||
+        sub === 'shorts'
+      ) {
+        score -= 45;
+      }
     }
 
     if (isRainy) {
@@ -540,7 +613,10 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     }
 
     if (isWindy) {
-      if (item.category === 'outer' && /coat|trench|jacket/.test(String(item.subcategory || ''))) {
+      if (
+        item.category === 'outer' &&
+        /coat|trench|jacket|windbreaker|field_jacket|leather_jacket|padding|mustang/.test(sub)
+      ) {
         score += 14;
       }
       if (item.category === 'neckwear') {
@@ -570,7 +646,10 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     return score;
   };
 
-  const byCat = (cat) => active.filter((g) => g.category === cat);
+  const byCat = (cat) =>
+    active.filter(
+      (g) => g.category === cat && !(avgTemp < 29 && SWIMWEAR_SUBS.has(String(g.subcategory || '')))
+    );
   const pools = {
     headwear: byCat('headwear'),
     neckwear: byCat('neckwear'),
@@ -781,20 +860,38 @@ export function getSubcategoryLabel(sub) {
     coat: '울 · 캐시미어 코트',
     blazer: '블레이저',
     jacket: '자켓 · 점퍼',
-    padding: '패딩 · 다운',
+    windbreaker: '윈드브레이커 · 바람막이',
+    denim_jacket: '데님 · 트러커 자켓',
+    leather_jacket: '레더 · 라이더 자켓',
+    field_jacket: '필드 · 사파리 자켓',
+    padding: '경량 패딩 · 다운',
+    short_padding: '숏패딩 · 푸퍼',
+    long_padding: '롱패딩 · 벤치파카',
+    fleece: '보아 플리스 · 양털',
+    mustang: '무스탕 · 시어링',
     knit: '니트 · 스웨터',
     cardigan: '가디건',
     shirt: '셔츠',
+    short_shirt: '반팔 셔츠',
     blouse: '블라우스',
     tshirt: '티셔츠',
-    sweatshirt: '맨투맨 · 후드',
+    tank_top: '탱크탑 · 나시',
+    sleeveless: '슬리브리스 · 민소매',
+    sweatshirt: '맨투맨',
+    hoodie: '후드 스웨트',
     slacks: '슬랙스 · 팬츠',
     denim: '데님 · 청바지',
     chinos: '치노 · 면바지',
+    cargo: '카고 · 유틸리티 팬츠',
+    jogger: '조거 · 스웨트 팬츠',
     skirt: '스커트',
     shorts: '쇼츠 · 하프팬츠',
     dress: '원피스',
     onepiece: '롱 원피스',
+    swimsuit: '원피스 수영복',
+    bikini: '비키니 수영복',
+    rashguard: '래시가드',
+    swim_trunks: '보드쇼츠 · 스윔트렁크',
     gloves: '니트 장갑',
     leather_gloves: '가죽 장갑',
     inner_top: '발열 이너탑',
@@ -803,11 +900,18 @@ export function getSubcategoryLabel(sub) {
     socks: '앵클 삭스',
     sneakers: '스니커즈',
     loafers: '로퍼 · 구두',
+    derby: '더비 · 옥스포드화',
     boots: '부츠',
+    long_boots: '롱부츠 · 라이딩부츠',
+    snow_boots: '방한화 · 스노우부츠',
     heels: '힐 · 펌프스',
+    sandals: '스트랩 샌들',
+    slides: '슬라이드 · 슬리퍼',
+    flip_flops: '쪼리 · 플립플랍',
     briefcase: '서류가방 · 브리프케이스',
     tote: '토트백 · 쇼퍼백',
     bag: '가방 · 크로스백',
+    sunglasses: '선글라스',
     watch: '시계 · 워치',
     belt: '레더 벨트',
     glasses: '아이웨어 · 안경',

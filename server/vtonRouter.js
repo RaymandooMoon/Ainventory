@@ -1,14 +1,16 @@
 import express from 'express';
 import db from './db.js';
 import {
+  DEFAULT_ISO_VIEW_ANGLE,
   VTON_MODE,
   getVtonServiceStatus,
+  normalizeIsoViewAngleDeg,
   synthesizeVtonLook,
 } from './vtonService.js';
 
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const MAX_SYNTHESES_PER_WINDOW = 60;
-const MAX_STATUS_PER_WINDOW = 240;
+const MAX_SYNTHESES_PER_WINDOW = 360;
+const MAX_STATUS_PER_WINDOW = 480;
 const MAX_RATE_BUCKETS = 2048;
 
 const ACCEPTED_MODES = new Set([
@@ -22,6 +24,9 @@ const ACCEPTED_MODES = new Set([
   'vton',
   'editorial',
   'illustration',
+  'isometric',
+  'iso-2d',
+  'iso_2d',
 ]);
 
 /** @type {Map<string, { windowStart: number, count: number, lastAt: number }>} */
@@ -299,6 +304,42 @@ export function createVtonRouter() {
           ? payload.bodyProfile
           : {};
 
+    const rawViewAngle =
+      payload.viewAngleDeg ?? payload.view_angle_deg ?? rawClientProfile.viewAngleDeg;
+    if (
+      rawViewAngle !== undefined &&
+      rawViewAngle !== null &&
+      rawViewAngle !== '' &&
+      (typeof rawViewAngle === 'object' ||
+        typeof rawViewAngle === 'boolean' ||
+        !Number.isFinite(Number(rawViewAngle)))
+    ) {
+      return res
+        .status(400)
+        .json({ error: '유효하지 않은 시점 각도(viewAngleDeg) 형식입니다.' });
+    }
+    const viewAngleDeg = normalizeIsoViewAngleDeg(rawViewAngle, DEFAULT_ISO_VIEW_ANGLE);
+
+    const rawAvatarSpec =
+      payload.avatarSpec &&
+      typeof payload.avatarSpec === 'object' &&
+      !Array.isArray(payload.avatarSpec)
+        ? payload.avatarSpec
+        : rawClientProfile.avatarSpec &&
+            typeof rawClientProfile.avatarSpec === 'object' &&
+            !Array.isArray(rawClientProfile.avatarSpec)
+          ? rawClientProfile.avatarSpec
+          : null;
+
+    const rawHashCandidate =
+      payload.avatarConfigHash ??
+      payload.avatar_config_hash ??
+      rawClientProfile.avatarConfigHash;
+    const avatarConfigHash =
+      typeof rawHashCandidate === 'string' && rawHashCandidate.trim()
+        ? rawHashCandidate.trim().slice(0, 64)
+        : null;
+
     const mergedProfile = {
       ...userDefaults,
       ...(payload.skinToneHex !== undefined ? { skinToneHex: payload.skinToneHex } : {}),
@@ -310,11 +351,17 @@ export function createVtonRouter() {
       ...(payload.waistScale !== undefined ? { waistScale: payload.waistScale } : {}),
       ...(payload.hipScale !== undefined ? { hipScale: payload.hipScale } : {}),
       ...rawClientProfile,
+      viewAngleDeg,
+      ...(avatarConfigHash ? { avatarConfigHash } : {}),
+      ...(rawAvatarSpec ? { avatarSpec: rawAvatarSpec } : {}),
     };
 
     const result = await synthesizeVtonLook({
       mode: modeResult.mode,
       profile: mergedProfile,
+      avatarSpec: rawAvatarSpec,
+      avatarConfigHash,
+      viewAngleDeg,
       portraitDataUrl:
         rawClientProfile.portraitDataUrl ??
         payload.portraitDataUrl ??

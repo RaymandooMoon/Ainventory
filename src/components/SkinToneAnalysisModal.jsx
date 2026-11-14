@@ -1,10 +1,18 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Camera, Check, Palette, SlidersHorizontal, Sparkles, Upload } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
-  BODY_SHAPE_OPTIONS,
-  sanitizeBodySpec,
-} from '../services/parametricAvatar3D.ts';
+  ALL_ISO_VIEW_ANGLES,
+  DEFAULT_ISO_VIEW_ANGLE,
+  ISO_VIEW_ANGLE_OPTIONS,
+  avatarSpecToLegacyBodySpec,
+  bridgeLegacyPropsToAvatarSpec,
+  computeAvatarConfigHash,
+  resolveCoupledBodyMetrics,
+  sanitizeAvatarSpec,
+  setAvatarSpec,
+} from '../services/avatarSpecStore.ts';
+import { findClosestMstFromHex, getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   LIGHTING_CALIBRATION_MODES,
   SEASON_BEST_SWATCHES,
@@ -17,8 +25,13 @@ import {
 } from '../services/skinToneAnalyzer.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  InclusiveBodyMorphControls,
+  MstSkinAndAppearanceControls,
+} from './AvatarStudioControls.jsx';
 import Character25DMannequin from './Character25DMannequin.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import './AvatarStudioModal.css';
 
 const SAMPLE_PORTRAIT_BUTTONS = [
   { key: 'spring_warm', ko: '봄 웜', en: 'Spring' },
@@ -30,9 +43,9 @@ const SAMPLE_PORTRAIT_BUTTONS = [
 function isDarkSwatch(hex = '#DFBA9B') {
   const clean = String(hex).replace('#', '');
   if (clean.length !== 6) return false;
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
+  const r = Number.parseInt(clean.slice(0, 2), 16);
+  const g = Number.parseInt(clean.slice(2, 4), 16);
+  const b = Number.parseInt(clean.slice(4, 6), 16);
   return (r * 299 + g * 587 + b * 114) / 1000 < 145;
 }
 
@@ -51,8 +64,7 @@ function ProfileModalContent({
   const cameraInputRef = useRef(null);
   const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
-  // Gender is locked to signup / stored profile and is never exposed as a post-signup switch
-  const lockedGender =
+  const accountFallbackGender =
     (isSignedAccount
       ? user?.gender
       : bodySpec?.gender || skinProfile?.gender) === 'female'
@@ -63,17 +75,41 @@ function ProfileModalContent({
     initialTab === 'body' ? 'body' : 'skin'
   );
 
-  // Tab 1: Photo & Skin Tone state
-  const [draftHex, setDraftHex] = useState(() => skinProfile?.skinToneHex || '#DFBA9B');
-  const [draftSeason, setDraftSeason] = useState(() =>
-    normalizeSeasonKey(skinProfile?.personalColor || 'autumn_warm')
+  // Unified V2 AvatarSpec draft initialized from legacy props + persisted store
+  const [draftSpec, setDraftSpec] = useState(
+    () => bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec
   );
-  const [draftSubType, setDraftSubType] = useState(
-    () => skinProfile?.subTypeLabelKo || '가을 웜 뮤트'
-  );
-  const [draftPresetKey, setDraftPresetKey] = useState(
-    () => skinProfile?.presetKey || 'autumn_beige'
-  );
+
+  const [previewAngleDeg, setPreviewAngleDeg] = useState(DEFAULT_ISO_VIEW_ANGLE);
+
+  const [draftSubType, setDraftSubType] = useState(() => {
+    const initial = bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec;
+    if (
+      skinProfile?.subTypeLabelKo &&
+      normalizeSeasonKey(skinProfile?.personalColor) === initial.appearance.personalColor
+    ) {
+      return skinProfile.subTypeLabelKo;
+    }
+    return findClosestSkinPreset(
+      initial.appearance.skinToneHex,
+      initial.appearance.personalColor
+    ).subTypeLabelKo;
+  });
+
+  const [draftPresetKey, setDraftPresetKey] = useState(() => {
+    const initial = bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec;
+    if (
+      skinProfile?.presetKey &&
+      String(skinProfile?.skinToneHex || '').toUpperCase() ===
+        initial.appearance.skinToneHex.toUpperCase()
+    ) {
+      return skinProfile.presetKey;
+    }
+    return findClosestSkinPreset(
+      initial.appearance.skinToneHex,
+      initial.appearance.personalColor
+    ).key;
+  });
 
   const [lightingMode, setLightingMode] = useState('auto_d65');
   const [sourceImageUrl, setSourceImageUrl] = useState('');
@@ -81,10 +117,38 @@ function ProfileModalContent({
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Tab 2: Body Profile state
-  const [draftBody, setDraftBody] = useState(() =>
-    sanitizeBodySpec({ ...bodySpec, gender: lockedGender })
+  const fallbackGender =
+    draftSpec.framePreset === 'feminine'
+      ? 'female'
+      : draftSpec.framePreset === 'masculine'
+        ? 'male'
+        : accountFallbackGender;
+
+  const liveHash = useMemo(() => computeAvatarConfigHash(draftSpec), [draftSpec]);
+  const liveBodyMetrics = useMemo(() => resolveCoupledBodyMetrics(draftSpec), [draftSpec]);
+  const liveLegacyBodySpec = useMemo(
+    () => avatarSpecToLegacyBodySpec(draftSpec, fallbackGender),
+    [draftSpec, fallbackGender]
   );
+  const resolvedMstSwatch = useMemo(
+    () => getMstSwatch(draftSpec.appearance.mstLevel, draftSpec.appearance.mstUndertone),
+    [draftSpec.appearance.mstLevel, draftSpec.appearance.mstUndertone]
+  );
+
+  const draftHex = draftSpec.appearance.skinToneHex;
+  const draftSeason = normalizeSeasonKey(draftSpec.appearance.personalColor);
+
+  const handleStepPreviewAngle = (direction) => {
+    triggerHaptic('selection');
+    setPreviewAngleDeg((prev) => {
+      const idx = ALL_ISO_VIEW_ANGLES.indexOf(prev);
+      const safeIdx = idx >= 0 ? idx : 0;
+      const step = direction === 'cw' ? 1 : -1;
+      const nextIdx =
+        (safeIdx + step + ALL_ISO_VIEW_ANGLES.length) % ALL_ISO_VIEW_ANGLES.length;
+      return ALL_ISO_VIEW_ANGLES[nextIdx];
+    });
+  };
 
   const runAnalysis = async (imgSrc, nextLighting = lightingMode, focusPoint = undefined) => {
     if (!imgSrc) return;
@@ -96,10 +160,28 @@ function ProfileModalContent({
         focusPoint,
       });
       setAnalysisResult(res);
-      setDraftHex(res.skinToneHex);
-      setDraftSeason(res.personalColor);
       setDraftSubType(res.subTypeLabelKo);
       setDraftPresetKey(res.matchedPresetKey);
+
+      const autoMst = findClosestMstFromHex(res.skinToneHex);
+      const syncedMstLevel = res.mstLevel ?? autoMst.level;
+      const syncedMstUndertone = res.mstUndertone ?? autoMst.undertone;
+
+      setDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          appearance: {
+            ...prev.appearance,
+            mstLevel: syncedMstLevel,
+            mstUndertone: syncedMstUndertone,
+            skinToneHex: res.skinToneHex,
+            personalColor: res.personalColor,
+            facePhotoUrl: prev.appearance.facePhotoUrl
+              ? res.previewDataUrl || imgSrc
+              : prev.appearance.facePhotoUrl,
+          },
+        })
+      );
       triggerHaptic('light');
     } catch (err) {
       setErrorMsg(
@@ -154,40 +236,102 @@ function ProfileModalContent({
 
   const handlePickPreset = (preset) => {
     triggerHaptic('selection');
+    const mst = findClosestMstFromHex(preset.skinToneHex);
     setDraftPresetKey(preset.key);
-    setDraftHex(preset.skinToneHex);
-    setDraftSeason(preset.personalColor);
     setDraftSubType(preset.subTypeLabelKo);
+    setDraftSpec((prev) =>
+      sanitizeAvatarSpec({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          mstLevel: mst.level,
+          mstUndertone: mst.undertone,
+          skinToneHex: preset.skinToneHex,
+          personalColor: preset.personalColor,
+        },
+      })
+    );
   };
 
   const handleCustomHexChange = (e) => {
     const hex = String(e.target.value || '').toUpperCase();
     if (!/^#[0-9A-F]{6}$/.test(hex)) return;
     const closest = findClosestSkinPreset(hex, draftSeason);
-    setDraftHex(hex);
+    const mst = findClosestMstFromHex(hex);
     setDraftPresetKey(closest.key);
+    setDraftSpec((prev) =>
+      sanitizeAvatarSpec({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          mstLevel: mst.level,
+          mstUndertone: mst.undertone,
+          skinToneHex: hex,
+        },
+      })
+    );
   };
 
-  const handleApplySkin = () => {
-    const seasonInfo = SEASON_BEST_SWATCHES[draftSeason] || SEASON_BEST_SWATCHES.autumn_warm;
-    triggerHaptic('medium');
-    onApplySkinProfile?.({
-      skinToneHex: draftHex,
-      personalColor: draftSeason,
+  const handleSelectMstSwatch = (swatch) => {
+    const closest = findClosestSkinPreset(swatch.hex, swatch.personalColor);
+    setDraftPresetKey(closest.key);
+    setDraftSubType(closest.subTypeLabelKo);
+  };
+
+  const commitAvatarStudioChanges = (primarySource) => {
+    const cleanedSpec = sanitizeAvatarSpec(draftSpec);
+    const app = cleanedSpec.appearance;
+    const seasonKey = normalizeSeasonKey(app.personalColor);
+    const seasonInfo = SEASON_BEST_SWATCHES[seasonKey] || SEASON_BEST_SWATCHES.autumn_warm;
+    const mstSwatch = getMstSwatch(app.mstLevel, app.mstUndertone);
+    const legacyBody = avatarSpecToLegacyBodySpec(cleanedSpec, fallbackGender);
+
+    const skinPayload = {
+      skinToneHex: app.skinToneHex,
+      personalColor: seasonKey,
       personalColorLabelKo: seasonInfo.labelKo,
       subTypeLabelKo: draftSubType,
-      gender: lockedGender,
+      gender: fallbackGender,
       presetKey: draftPresetKey,
-    });
+      mstLevel: app.mstLevel,
+      mstUndertone: app.mstUndertone,
+      mstCode: mstSwatch.code,
+    };
+
+    const skinChanged =
+      skinProfile?.skinToneHex !== skinPayload.skinToneHex ||
+      skinProfile?.personalColor !== skinPayload.personalColor ||
+      skinProfile?.mstLevel !== skinPayload.mstLevel ||
+      skinProfile?.mstUndertone !== skinPayload.mstUndertone;
+
+    const bodyChanged =
+      bodySpec?.heightCm !== legacyBody.heightCm ||
+      bodySpec?.weightKg !== legacyBody.weightKg ||
+      bodySpec?.bodyShape !== legacyBody.bodyShape ||
+      bodySpec?.shoulderScale !== legacyBody.shoulderScale ||
+      bodySpec?.waistScale !== legacyBody.waistScale ||
+      bodySpec?.hipScale !== legacyBody.hipScale;
+
+    triggerHaptic('medium');
+
+    if (primarySource === 'skin') {
+      if (bodyChanged) {
+        onApplyBodySpec?.(legacyBody);
+      }
+      onApplySkinProfile?.(skinPayload);
+    } else {
+      if (skinChanged) {
+        onApplySkinProfile?.(skinPayload);
+      }
+      onApplyBodySpec?.(legacyBody);
+    }
+
+    setAvatarSpec(cleanedSpec);
     onClose?.();
   };
 
-  const handleApplyBody = () => {
-    const cleaned = sanitizeBodySpec({ ...draftBody, gender: lockedGender });
-    triggerHaptic('medium');
-    onApplyBodySpec?.(cleaned);
-    onClose?.();
-  };
+  const handleApplySkin = () => commitAvatarStudioChanges('skin');
+  const handleApplyBody = () => commitAvatarStudioChanges('body');
 
   const activeSeasonMeta = SEASON_BEST_SWATCHES[draftSeason] || SEASON_BEST_SWATCHES.autumn_warm;
   const localizedSubType =
@@ -196,6 +340,31 @@ function ProfileModalContent({
       : draftSubType;
   const localizedSeasonLabel =
     lang === 'en' ? activeSeasonMeta.labelEn : activeSeasonMeta.labelKo;
+
+  const activeAngleMeta =
+    ISO_VIEW_ANGLE_OPTIONS.find((item) => item.angleDeg === previewAngleDeg) ||
+    ISO_VIEW_ANGLE_OPTIONS[0];
+  const localizedAngleLabel =
+    lang === 'en' ? activeAngleMeta.labelEn : activeAngleMeta.labelKo;
+
+  const previewSkinProfile = useMemo(
+    () => ({
+      skinToneHex: draftHex,
+      personalColor: draftSeason,
+      mstLevel: draftSpec.appearance.mstLevel,
+      mstUndertone: draftSpec.appearance.mstUndertone,
+      mstCode: resolvedMstSwatch.code,
+      portraitDataUrl: draftSpec.appearance.facePhotoUrl,
+    }),
+    [
+      draftHex,
+      draftSeason,
+      draftSpec.appearance.mstLevel,
+      draftSpec.appearance.mstUndertone,
+      draftSpec.appearance.facePhotoUrl,
+      resolvedMstSwatch.code,
+    ]
+  );
 
   return (
     <div className="skin-modal-body">
@@ -235,22 +404,66 @@ function ProfileModalContent({
         </button>
       </div>
 
-      {/* Shared Live Character Preview + Skin/Body Summary */}
+      {/* Shared Live Character Preview + Isometric 8-Angle Rotation + Skin/Body Summary */}
       <div className="skin-modal-preview-grid">
         <div className="skin-modal-character-box">
           <div className="skin-modal-character-stage">
             <Character25DMannequin
+              avatarSpec={draftSpec}
+              viewAngleDeg={previewAngleDeg}
               skinToneHex={draftHex}
               personalColor={draftSeason}
-              gender={lockedGender}
-              bodySpec={sanitizeBodySpec({ ...draftBody, gender: lockedGender })}
+              skinProfile={previewSkinProfile}
+              bodySpec={liveLegacyBodySpec}
+              personReferenceUrl={draftSpec.appearance.facePhotoUrl}
               theme={theme}
               lang={lang}
               compact
             />
           </div>
+
+          <div
+            className="avatar-iso-rotate-bar"
+            role="group"
+            aria-label={tx(lang, '아바타 프리뷰 회전', 'Avatar Preview Rotation')}
+          >
+            <button
+              type="button"
+              data-iso-rotate-btn="ccw"
+              className="avatar-iso-rotate-btn"
+              aria-label={tx(lang, '반시계 방향 45° 회전', 'Rotate 45 degrees counter-clockwise')}
+              title={tx(lang, '반시계 방향 45° 회전', 'Rotate 45 degrees counter-clockwise')}
+              onClick={() => handleStepPreviewAngle('ccw')}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              data-iso-angle-badge={previewAngleDeg}
+              className="avatar-iso-angle-pill tabular-nums"
+              title={tx(lang, '클릭하여 45° 기본 각도로 복귀', 'Click to reset to 45 degree quarter view')}
+              onClick={() => {
+                triggerHaptic('selection');
+                setPreviewAngleDeg(DEFAULT_ISO_VIEW_ANGLE);
+              }}
+            >
+              {localizedAngleLabel}
+            </button>
+            <button
+              type="button"
+              data-iso-rotate-btn="cw"
+              className="avatar-iso-rotate-btn"
+              aria-label={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
+              title={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
+              onClick={() => handleStepPreviewAngle('cw')}
+            >
+              ↻
+            </button>
+          </div>
+
           <span className="body-spec-account-badge tabular-nums">
-            {draftBody.heightCm}cm · {draftBody.weightKg}kg
+            {draftSpec.anthropometrics.heightCm}cm · {draftSpec.anthropometrics.weightKg}kg · BMI{' '}
+            {liveBodyMetrics.bmi.toFixed(1)}
           </span>
         </div>
 
@@ -278,8 +491,8 @@ function ProfileModalContent({
                     style={{
                       left: `${analysisResult.faceBoxPreview.x * 100}%`,
                       top: `${analysisResult.faceBoxPreview.y * 100}%`,
-                      width: `${analysisResult.faceBoxPreview.width * 100}%`,
-                      height: `${analysisResult.faceBoxPreview.height * 100}%`,
+                      width: `${(analysisResult.faceBoxPreview.w ?? analysisResult.faceBoxPreview.width ?? 0) * 100}%`,
+                      height: `${(analysisResult.faceBoxPreview.h ?? analysisResult.faceBoxPreview.height ?? 0) * 100}%`,
                     }}
                   />
                 )}
@@ -351,6 +564,17 @@ function ProfileModalContent({
               </span>
             </div>
           )}
+
+          <div className="avatar-live-hash-row tabular-nums">
+            <span className="avatar-mst-summary-pill">{resolvedMstSwatch.code}</span>
+            <code
+              className="avatar-config-hash-badge"
+              data-avatar-config-hash={liveHash}
+              title={tx(lang, '실시간 아바타 설정 해시', 'Live Avatar Config Hash')}
+            >
+              {liveHash}
+            </code>
+          </div>
 
           <div
             className="skin-best-drape-row"
@@ -451,7 +675,7 @@ function ProfileModalContent({
             {errorMsg && <p className="hig-form-error">{errorMsg}</p>}
           </div>
 
-          {/* Section 2: 8 Tone-by-Tone Presets + Custom Color Picker */}
+          {/* Section 2: 8 Tone-by-Tone Quick Presets + Custom Color Picker */}
           <div className="skin-modal-section">
             <div className="skin-modal-section-head">
               <span>{tx(lang, '피부톤 프리셋', 'Skin Tone Presets')}</span>
@@ -497,6 +721,17 @@ function ProfileModalContent({
             </div>
           </div>
 
+          {/* Section 3: MST 1-10 x 4 Undertones + Hair / Facial Hair + Multi-Ethnic Facial Features */}
+          <div className="skin-modal-section">
+            <MstSkinAndAppearanceControls
+              lang={lang}
+              draftSpec={draftSpec}
+              onChangeDraftSpec={setDraftSpec}
+              availablePortraitUrl={analysisResult?.previewDataUrl || sourceImageUrl}
+              onSelectMstSwatch={handleSelectMstSwatch}
+            />
+          </div>
+
           <button
             id={CARBON_DOM_CONTRACT.skinToneApplyBtnId}
             type="button"
@@ -509,102 +744,11 @@ function ProfileModalContent({
         </>
       ) : (
         <div className="body-spec-sheet">
-          <div className="body-spec-slider-block">
-            <div className="body-spec-slider-head tabular-nums">
-              <span>{tx(lang, '신장', 'Height')}</span>
-              <strong>{draftBody.heightCm} cm</strong>
-            </div>
-            <input
-              type="range"
-              min={148}
-              max={198}
-              step={1}
-              value={draftBody.heightCm}
-              aria-label={tx(lang, '신장 cm', 'Height cm')}
-              onChange={(e) =>
-                setDraftBody((prev) => ({ ...prev, heightCm: Number(e.target.value) }))
-              }
-            />
-          </div>
-
-          <div className="body-spec-slider-block">
-            <div className="body-spec-slider-head tabular-nums">
-              <span>{tx(lang, '체중', 'Weight')}</span>
-              <strong>{draftBody.weightKg} kg</strong>
-            </div>
-            <input
-              type="range"
-              min={40}
-              max={120}
-              step={1}
-              value={draftBody.weightKg}
-              aria-label={tx(lang, '체중 kg', 'Weight kg')}
-              onChange={(e) =>
-                setDraftBody((prev) => ({ ...prev, weightKg: Number(e.target.value) }))
-              }
-            />
-          </div>
-
-          <div className="body-spec-preset-group">
-            <span className="body-spec-label">{tx(lang, '체형 타입', 'Body Type')}</span>
-            <div className="body-spec-shape-pills">
-              {BODY_SHAPE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  data-body-shape-btn={opt.key}
-                  className={`hig-filter-pill ${draftBody.bodyShape === opt.key ? 'active' : ''}`}
-                  onClick={() => setDraftBody((prev) => ({ ...prev, bodyShape: opt.key }))}
-                >
-                  {lang === 'en' ? opt.labelEn : opt.labelKo}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="body-spec-fine-grid">
-            {[
-              {
-                key: 'shoulderScale',
-                label: tx(lang, '어깨', 'Shoulder'),
-                min: 0.88,
-                max: 1.18,
-              },
-              {
-                key: 'waistScale',
-                label: tx(lang, '허리', 'Waist'),
-                min: 0.84,
-                max: 1.22,
-              },
-              {
-                key: 'hipScale',
-                label: tx(lang, '골반', 'Hip'),
-                min: 0.88,
-                max: 1.2,
-              },
-            ].map((ctrl) => (
-              <label key={ctrl.key} className="body-spec-fine-item tabular-nums">
-                <div className="body-spec-slider-head">
-                  <span>{ctrl.label}</span>
-                  <small>{Math.round((draftBody[ctrl.key] || 1) * 100)}%</small>
-                </div>
-                <input
-                  type="range"
-                  min={ctrl.min}
-                  max={ctrl.max}
-                  step={0.02}
-                  value={draftBody[ctrl.key] || 1}
-                  aria-label={`${ctrl.label} %`}
-                  onChange={(e) =>
-                    setDraftBody((prev) => ({
-                      ...prev,
-                      [ctrl.key]: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-            ))}
-          </div>
+          <InclusiveBodyMorphControls
+            lang={lang}
+            draftSpec={draftSpec}
+            onChangeDraftSpec={setDraftSpec}
+          />
 
           <button
             id="apply-body-spec-btn"
