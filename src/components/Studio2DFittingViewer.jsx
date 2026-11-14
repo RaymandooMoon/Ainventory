@@ -172,9 +172,18 @@ function formatFallbackToastMessage(reason, lang) {
       ? 'Gemini API rate limit reached (429) — please retry in a moment.'
       : 'Gemini API 요청 한도(429)에 도달했습니다 — 잠시 후 재시도해 주세요.';
   }
+  if (typeof reason === 'string' && reason.startsWith('gemini_empty_image_')) {
+    return isEn
+      ? `Model did not return an image (${reason.replace('gemini_empty_image_', '')}) — please retry or adjust garments.`
+      : `안전 필터 또는 응답 제한으로 이미지가 반환되지 않았습니다 (${reason.replace('gemini_empty_image_', '')}) — 재시도해 주세요.`;
+  }
+  const codeSuffix =
+    typeof reason === 'string' && reason && reason !== 'gemini_unavailable'
+      ? ` [${reason}]`
+      : '';
   return isEn
-    ? 'AI virtual try-on could not be generated — keeping Editorial Flat-Lay Board.'
-    : 'AI 가상 피팅 생성이 지연되어 에디토리얼 플랫레이 보드를 유지합니다.';
+    ? `AI virtual try-on could not be generated — keeping Editorial Flat-Lay Board.${codeSuffix}`
+    : `AI 가상 피팅 생성이 지연되어 에디토리얼 플랫레이 보드를 유지합니다.${codeSuffix}`;
 }
 
 /**

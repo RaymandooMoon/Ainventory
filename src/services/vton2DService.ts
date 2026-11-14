@@ -849,9 +849,8 @@ export async function loadShowcaseDemoVtonSlices(
 
 const DIRECT_GEMINI_MODEL_CHAIN = [
   'gemini-3.1-flash-image-preview',
-  'gemini-2.5-flash-image',
   'gemini-3-pro-image-preview',
-  'gemini-3.1-flash-image',
+  'gemini-2.5-flash-image',
 ] as const;
 
 function sanitizeGeminiKeyToken(rawKey: unknown): string {
@@ -861,6 +860,20 @@ function sanitizeGeminiKeyToken(rawKey: unknown): string {
     return '';
   }
   return trimmed;
+}
+
+function decodeBase64GeminiKey(rawB64: unknown): string {
+  if (typeof rawB64 !== 'string') return '';
+  const trimmed = rawB64.trim();
+  if (!trimmed) return '';
+  try {
+    if (typeof atob === 'function') {
+      return sanitizeGeminiKeyToken(atob(trimmed));
+    }
+  } catch {
+    // ignore malformed base64
+  }
+  return '';
 }
 
 export function getStoredClientGeminiApiKey(): string {
@@ -889,16 +902,20 @@ export function setStoredClientGeminiApiKey(rawKey: string | null | undefined): 
   return cleaned;
 }
 
-export function resolveClientGeminiApiKey(): string {
-  const stored = getStoredClientGeminiApiKey();
-  if (stored) return stored;
+function resolveCandidateClientGeminiApiKeys(): string[] {
   const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
-  return (
-    sanitizeGeminiKeyToken(envBag.VITE_GEMINI_API_KEY) ||
-    sanitizeGeminiKeyToken(envBag.VITE_GOOGLE_API_KEY) ||
-    sanitizeGeminiKeyToken(envBag.VITE_VTON_API_KEY) ||
-    ''
-  );
+  const candidates = [
+    getStoredClientGeminiApiKey(),
+    decodeBase64GeminiKey(envBag.VITE_GEMINI_API_KEY_B64),
+    sanitizeGeminiKeyToken(envBag.VITE_GEMINI_API_KEY),
+    sanitizeGeminiKeyToken(envBag.VITE_GOOGLE_API_KEY),
+    sanitizeGeminiKeyToken(envBag.VITE_VTON_API_KEY),
+  ].filter(Boolean);
+  return [...new Set(candidates)];
+}
+
+export function resolveClientGeminiApiKey(): string {
+  return resolveCandidateClientGeminiApiKeys()[0] || '';
 }
 
 async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | null> {
@@ -1083,7 +1100,6 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   angleDeg: TurnaroundAngleDeg;
   useTurnaroundSheet: boolean;
   serializedSlots: Record<string, Record<string, unknown>>;
-  signal?: AbortSignal;
 }): Promise<VtonServerResponse> {
   const {
     apiKey,
@@ -1093,10 +1109,13 @@ async function synthesizeDirectBrowserGeminiVton(params: {
     angleDeg,
     useTurnaroundSheet,
     serializedSlots,
-    signal,
   } = params;
 
   const sheetModes = useTurnaroundSheet ? [true, false] : [false];
+  const modalityStrategies: Array<Array<'TEXT' | 'IMAGE'>> = [
+    ['TEXT', 'IMAGE'],
+    ['IMAGE'],
+  ];
   let lastReason = 'gemini_no_image_generated';
   let sawBillingQuota = false;
   let sawRateLimit = false;
@@ -1112,128 +1131,151 @@ async function synthesizeDirectBrowserGeminiVton(params: {
     });
 
     for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
-      if (signal?.aborted) {
-        return { ok: false, fallbackReason: 'aborted', compositeImageUrl: null };
-      }
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-          {
-            method: 'POST',
-            signal,
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey,
-            },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: {
-                responseModalities: ['TEXT', 'IMAGE'],
-              },
-            }),
-          }
-        );
+      for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
+        const responseModalities = modalityStrategies[stratIdx];
+        const requestSignal =
+          typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(55_000)
+            : undefined;
 
-        if (!res.ok) {
-          const errJson = (await res.json().catch(() => null)) as
-            | { error?: { message?: string; status?: string } }
-            | null;
-          const msg = `${errJson?.error?.status || ''} ${errJson?.error?.message || ''}`.toLowerCase();
-          if (
-            res.status === 400 &&
-            (msg.includes('api key not valid') ||
-              msg.includes('api_key_invalid') ||
-              msg.includes('invalid api key'))
-          ) {
-            return {
-              ok: false,
-              fallbackReason: 'gemini_invalid_api_key',
-              compositeImageUrl: null,
-            };
-          }
-          if (res.status === 401 || res.status === 403) {
-            if (msg.includes('leaked') || msg.includes('blocked')) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: 'POST',
+              signal: requestSignal,
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+              },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts }],
+                generationConfig: {
+                  responseModalities,
+                },
+              }),
+            }
+          );
+
+          if (!res.ok) {
+            const errJson = (await res.json().catch(() => null)) as
+              | { error?: { message?: string; status?: string } }
+              | null;
+            const msg =
+              `${errJson?.error?.status || ''} ${errJson?.error?.message || ''}`.toLowerCase();
+            if (
+              res.status === 400 &&
+              (msg.includes('api key not valid') ||
+                msg.includes('api_key_invalid') ||
+                msg.includes('invalid api key'))
+            ) {
               return {
                 ok: false,
-                fallbackReason: 'gemini_leaked_key',
+                fallbackReason: 'gemini_invalid_api_key',
                 compositeImageUrl: null,
               };
             }
-            return {
-              ok: false,
-              fallbackReason:
-                msg.includes('billing') || msg.includes('paid')
-                  ? 'gemini_billing_required'
-                  : `gemini_http_${res.status}`,
-              compositeImageUrl: null,
-            };
-          }
-          if (res.status === 429) {
-            if (
-              msg.includes('limit: 0') ||
-              msg.includes('limit:0') ||
-              msg.includes('free_tier') ||
-              msg.includes('billing')
-            ) {
-              sawBillingQuota = true;
-              lastReason = 'gemini_billing_required';
-            } else {
-              sawRateLimit = true;
-              if (!sawBillingQuota) {
-                lastReason = 'gemini_http_429';
-              }
+            if (res.status === 400 && stratIdx === 0 && msg.includes('modalit')) {
+              continue;
             }
-            continue;
-          }
-          if (!sawBillingQuota && !sawRateLimit) {
-            lastReason = `gemini_http_${res.status}`;
-          }
-          continue;
-        }
-
-        const payload = (await res.json()) as {
-          candidates?: Array<{
-            finishReason?: string;
-            content?: {
-              parts?: Array<{
-                inlineData?: { mimeType?: string; data?: string };
-                inline_data?: { mime_type?: string; data?: string };
-              }>;
-            };
-          }>;
-        };
-
-        for (const cand of payload.candidates || []) {
-          for (const part of cand.content?.parts || []) {
-            const b64 = (part.inlineData?.data || part.inline_data?.data)?.replace(/\s+/g, '');
-            const mime = part.inlineData?.mimeType || part.inline_data?.mime_type || 'image/png';
-            if (b64 && mime.startsWith('image/')) {
+            if (res.status === 401 || res.status === 403) {
+              if (msg.includes('leaked') || msg.includes('blocked')) {
+                return {
+                  ok: false,
+                  fallbackReason: 'gemini_leaked_key',
+                  compositeImageUrl: null,
+                };
+              }
               return {
-                ok: true,
-                cached: false,
-                provider: 'gemini-vton',
-                model,
-                layout: turnaroundSheet ? 'turnaround_2x2' : 'single',
-                styleMode,
-                weatherMood,
-                geminiUsed: true,
-                compositeImageUrl: `data:${mime};base64,${b64}`,
+                ok: false,
+                fallbackReason:
+                  msg.includes('billing') || msg.includes('paid')
+                    ? 'gemini_billing_required'
+                    : `gemini_http_${res.status}`,
+                compositeImageUrl: null,
               };
             }
+            if (res.status === 429) {
+              if (
+                msg.includes('limit: 0') ||
+                msg.includes('limit:0') ||
+                msg.includes('free_tier') ||
+                msg.includes('billing')
+              ) {
+                sawBillingQuota = true;
+                lastReason = 'gemini_billing_required';
+              } else {
+                sawRateLimit = true;
+                if (!sawBillingQuota) {
+                  lastReason = 'gemini_http_429';
+                }
+              }
+              break;
+            }
+            if (!sawBillingQuota && !sawRateLimit) {
+              lastReason = `gemini_http_${res.status}`;
+            }
+            break;
           }
-        }
-        const finish = payload.candidates?.[0]?.finishReason;
-        if (!sawBillingQuota && !sawRateLimit) {
-          lastReason = finish
-            ? `gemini_empty_image_${finish.toLowerCase()}`
-            : 'gemini_empty_image_part';
-        }
-      } catch (err) {
-        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
-          return { ok: false, fallbackReason: 'aborted', compositeImageUrl: null };
-        }
-        if (!sawBillingQuota && !sawRateLimit) {
-          lastReason = 'gemini_network_error';
+
+          const payload = (await res.json()) as {
+            promptFeedback?: { blockReason?: string };
+            candidates?: Array<{
+              finishReason?: string;
+              content?: {
+                parts?: Array<{
+                  inlineData?: { mimeType?: string; data?: string };
+                  inline_data?: { mime_type?: string; data?: string };
+                }>;
+              };
+            }>;
+          };
+
+          for (const cand of payload.candidates || []) {
+            for (const part of cand.content?.parts || []) {
+              const b64 = (part.inlineData?.data || part.inline_data?.data)?.replace(/\s+/g, '');
+              const mime =
+                part.inlineData?.mimeType || part.inline_data?.mime_type || 'image/png';
+              if (b64 && mime.startsWith('image/')) {
+                return {
+                  ok: true,
+                  cached: false,
+                  provider: 'gemini-vton',
+                  model,
+                  layout: turnaroundSheet ? 'turnaround_2x2' : 'single',
+                  styleMode,
+                  weatherMood,
+                  geminiUsed: true,
+                  compositeImageUrl: `data:${mime};base64,${b64}`,
+                };
+              }
+            }
+          }
+
+          const finish = String(
+            payload.candidates?.[0]?.finishReason ||
+              payload.promptFeedback?.blockReason ||
+              ''
+          ).trim();
+          if (!sawBillingQuota && !sawRateLimit) {
+            lastReason = finish
+              ? `gemini_empty_image_${finish.toLowerCase()}`
+              : 'gemini_empty_image_part';
+          }
+          if (stratIdx === 0 && (!finish || finish.toUpperCase() === 'STOP')) {
+            continue;
+          }
+          break;
+        } catch (err) {
+          const isTimeout =
+            err instanceof Error &&
+            (err.name === 'TimeoutError' ||
+              err.name === 'AbortError' ||
+              err.message.toLowerCase().includes('timeout'));
+          if (!sawBillingQuota && !sawRateLimit) {
+            lastReason = isTimeout ? 'gemini_timeout' : 'gemini_network_error';
+          }
+          break;
         }
       }
     }
@@ -1264,7 +1306,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
  * - Zero procedural drawing or mathematical 2D mesh warping under ANY circumstance.
  * - Checks L1 Memory + L2 IndexedDB (`avatarConfigHash + outfitComboId + styleMode + angleDeg`) first for 0ms hits.
  * - Requests a 2x2 Turnaround Studio Sheet (`0°`, `45°`, `90°`, `180°`) from `/api/vton/synthesize`
- *   (with automatic direct browser Gemini fallback when running standalone/APK with a client key),
+ *   (or directly via browser Gemini REST API when running standalone or when backend proxy is unavailable),
  *   slices all 4 angles, and caches all 4 slices permanently in IndexedDB.
  * - On missing API key or synthesis failure, returns `fallbackToFlatLay: true` (`imageUrl: null`)
  *   so the viewer preserves the Editorial Flat-Lay Board and displays a clean toast.
@@ -1299,17 +1341,20 @@ export async function synthesizeGeminiMultiAngleVton(
       const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {
         [angleDeg]: cachedHit.slice.imageUrl,
       };
-      for (const candidateAngle of TURNAROUND_ANGLES) {
-        const other = peekMemoryAiVtonSlice({
-          avatarConfigHash: profile.avatarConfigHash,
-          outfitComboId,
-          styleMode,
-          angleDeg: candidateAngle,
-        });
-        if (other) {
-          angleSlices[candidateAngle] = other.imageUrl;
-        }
-      }
+      await Promise.all(
+        TURNAROUND_ANGLES.map(async (candidateAngle) => {
+          if (candidateAngle === angleDeg) return;
+          const other = await readCachedAiVtonSlice({
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            angleDeg: candidateAngle,
+          });
+          if (other) {
+            angleSlices[candidateAngle] = other.slice.imageUrl;
+          }
+        })
+      );
       return {
         ok: true,
         fallbackToFlatLay: false,
@@ -1348,98 +1393,132 @@ export async function synthesizeGeminiMultiAngleVton(
     };
   }
 
+  if (request.signal?.aborted) {
+    return {
+      ok: false,
+      fallbackToFlatLay: true,
+      reason: 'aborted',
+      mode,
+      provider: 'flatlay-lookbook',
+      styleMode,
+      angleDeg,
+      weatherMood,
+      avatarConfigHash: profile.avatarConfigHash,
+      outfitComboId,
+      cacheKey,
+      fromCache: false,
+      cacheLayer: 'flatlay',
+      imageUrl: null,
+      angleSlices: {},
+      equippedCount: equippedGarments.length,
+      equippedSlotKeys,
+      profile,
+      createdAt: Date.now(),
+    };
+  }
+
   const runPromise = (async (): Promise<AiVtonSynthesisOutcome> => {
     try {
       const serializedSlots = await buildMultimodalSlotsPayload(equippedGarments);
-      if (request.signal?.aborted) {
-        return {
-          ok: false,
-          fallbackToFlatLay: true,
-          reason: 'aborted',
-          mode,
-          provider: 'flatlay-lookbook',
-          styleMode,
-          angleDeg,
-          weatherMood,
-          avatarConfigHash: profile.avatarConfigHash,
-          outfitComboId,
-          cacheKey,
-          fromCache: false,
-          cacheLayer: 'flatlay',
-          imageUrl: null,
-          angleSlices: {},
-          equippedCount: equippedGarments.length,
-          equippedSlotKeys,
-          profile,
-          createdAt: Date.now(),
-        };
-      }
+      const clientGeminiKeys = resolveCandidateClientGeminiApiKeys();
+      const clientGeminiKey = clientGeminiKeys[0] || '';
+      const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
+      const isStaticStandalone = String(envBag.VITE_STATIC_STANDALONE || '') === '1';
 
-      const clientGeminiKey = resolveClientGeminiApiKey();
-      const reqHeaders: Record<string, string> = {
-        'X-Demo-Mode': 'sample',
+      let json: VtonServerResponse = {
+        ok: false,
+        fallbackReason: 'gemini_api_key_not_configured',
+        compositeImageUrl: null,
       };
-      if (clientGeminiKey) {
-        reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+      let rawComposite: string | null = null;
+
+      if (!isStaticStandalone) {
+        const reqHeaders: Record<string, string> = {
+          'X-Demo-Mode': 'sample',
+        };
+        if (clientGeminiKey) {
+          reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+        }
+
+        try {
+          json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+            method: 'POST',
+            headers: reqHeaders,
+            body: JSON.stringify({
+              mode,
+              styleMode,
+              viewAngleDeg: angleDeg,
+              turnaroundSheet: useTurnaroundSheet,
+              weather: request.weather ?? { mood: weatherMood },
+              avatarSpec: profile.avatarSpec,
+              avatarConfigHash: profile.avatarConfigHash,
+              profile: {
+                skinToneHex: profile.skinToneHex,
+                personalColor: profile.personalColor,
+                heightCm: profile.heightCm,
+                weightKg: profile.weightKg,
+                bodyShape: profile.bodyShape,
+                shoulderScale: profile.shoulderScale,
+                waistScale: profile.waistScale,
+                hipScale: profile.hipScale,
+                portraitDataUrl: profile.portraitDataUrl,
+                avatarSpec: profile.avatarSpec,
+                avatarConfigHash: profile.avatarConfigHash,
+                styleMode,
+                viewAngleDeg: angleDeg,
+                turnaroundSheet: useTurnaroundSheet,
+              },
+              slots: serializedSlots,
+              forceRefresh: Boolean(request.forceRefresh),
+            }),
+          });
+          rawComposite = sanitizeImageCandidate(
+            json?.compositeImageUrl ?? json?.afterImageUrl ?? null
+          );
+        } catch (serverErr) {
+          const serverStatus =
+            serverErr && typeof serverErr === 'object' && 'status' in serverErr
+              ? Number((serverErr as { status?: number }).status)
+              : 0;
+          json = {
+            ok: false,
+            fallbackReason:
+              serverStatus === 413
+                ? 'payload_too_large'
+                : serverStatus > 0
+                  ? `http_${serverStatus}`
+                  : 'backend_unavailable',
+            compositeImageUrl: null,
+          };
+          rawComposite = null;
+        }
       }
-
-      let json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
-        method: 'POST',
-        signal: request.signal,
-        headers: reqHeaders,
-        body: JSON.stringify({
-          mode,
-          styleMode,
-          viewAngleDeg: angleDeg,
-          turnaroundSheet: useTurnaroundSheet,
-          weather: request.weather ?? { mood: weatherMood },
-          avatarSpec: profile.avatarSpec,
-          avatarConfigHash: profile.avatarConfigHash,
-          profile: {
-            skinToneHex: profile.skinToneHex,
-            personalColor: profile.personalColor,
-            heightCm: profile.heightCm,
-            weightKg: profile.weightKg,
-            bodyShape: profile.bodyShape,
-            shoulderScale: profile.shoulderScale,
-            waistScale: profile.waistScale,
-            hipScale: profile.hipScale,
-            portraitDataUrl: profile.portraitDataUrl,
-            avatarSpec: profile.avatarSpec,
-            avatarConfigHash: profile.avatarConfigHash,
-            styleMode,
-            viewAngleDeg: angleDeg,
-            turnaroundSheet: useTurnaroundSheet,
-          },
-          slots: serializedSlots,
-          forceRefresh: Boolean(request.forceRefresh),
-        }),
-      });
-
-      let rawComposite = sanitizeImageCandidate(
-        json?.compositeImageUrl ?? json?.afterImageUrl ?? null
-      );
 
       if (
         !rawComposite &&
         !json?.panelImages &&
-        clientGeminiKey &&
-        (json?.fallbackReason === 'backend_unavailable' ||
-          json?.fallbackReason === 'gemini_api_key_not_configured')
+        clientGeminiKeys.length > 0 &&
+        json?.fallbackReason !== 'aborted'
       ) {
-        json = await synthesizeDirectBrowserGeminiVton({
-          apiKey: clientGeminiKey,
-          profile,
-          styleMode,
-          weatherMood,
-          angleDeg,
-          useTurnaroundSheet,
-          serializedSlots,
-          signal: request.signal,
-        });
-        rawComposite = sanitizeImageCandidate(
-          json?.compositeImageUrl ?? json?.afterImageUrl ?? null
-        );
+        for (const candidateKey of clientGeminiKeys) {
+          const directJson = await synthesizeDirectBrowserGeminiVton({
+            apiKey: candidateKey,
+            profile,
+            styleMode,
+            weatherMood,
+            angleDeg,
+            useTurnaroundSheet,
+            serializedSlots,
+          });
+          const directComposite = sanitizeImageCandidate(
+            directJson?.compositeImageUrl ?? directJson?.afterImageUrl ?? null
+          );
+          json = directJson;
+          rawComposite = directComposite;
+          if (rawComposite || directJson?.panelImages || directJson?.fallbackReason === 'aborted') {
+            break;
+          }
+        }
       }
 
       if (!rawComposite && !json?.panelImages) {

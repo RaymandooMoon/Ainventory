@@ -679,17 +679,6 @@ export async function handleStandaloneApiFallback(
     };
   }
 
-  if (pathname === '/vton/status' || pathname === '/vton/synthesize') {
-    return {
-      ok: true,
-      mode: '2d-vton',
-      provider: 'client-editorial-2d',
-      geminiUsed: false,
-      compositeImageUrl: null,
-      baseModelImageUrl: null,
-    };
-  }
-
   // ---------------- DATA ENDPOINTS ----------------
   const activeUser = getActiveSessionUser();
   const closet = String(
@@ -988,7 +977,7 @@ export async function handleStandaloneApiFallback(
     return { lists: [] };
   }
 
-  if (pathname === '/vton/status' && method === 'GET') {
+  if (pathname === '/vton/status') {
     return {
       ok: true,
       mode: '2d-vton',
@@ -998,12 +987,14 @@ export async function handleStandaloneApiFallback(
     };
   }
 
-  if (pathname === '/vton/synthesize' && method === 'POST') {
+  if (pathname === '/vton/synthesize') {
     return {
       ok: true,
       mode: '2d-vton',
       provider: 'flatlay-fallback',
+      geminiUsed: false,
       compositeImageUrl: null,
+      baseModelImageUrl: null,
       fallbackReason: 'backend_unavailable',
     };
   }

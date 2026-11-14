@@ -466,9 +466,8 @@ export function resolveGeminiModelChain() {
   const candidates = [
     readServerEnvVar('GEMINI_VTON_MODEL'),
     'gemini-3.1-flash-image-preview',
-    'gemini-2.5-flash-image',
     'gemini-3-pro-image-preview',
-    'gemini-3.1-flash-image',
+    'gemini-2.5-flash-image',
   ].filter(Boolean);
   return [...new Set(candidates)];
 }
@@ -1806,7 +1805,10 @@ function isFatalCredentialReason(reason) {
   return (
     reason === 'gemini_api_key_not_configured' ||
     reason === 'gemini_invalid_api_key' ||
+    reason === 'gemini_leaked_key' ||
     reason === 'gemini_billing_required' ||
+    reason === 'gemini_network_error' ||
+    reason === 'gemini_timeout_budget_exceeded' ||
     reason === 'gemini_http_401' ||
     reason === 'gemini_http_403'
   );

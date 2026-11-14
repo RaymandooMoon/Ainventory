@@ -39,11 +39,16 @@ jobs:
       - name: Install dependencies & build standalone web bundle
         shell: bash
         env:
-          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          RAW_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_STATIC_STANDALONE: '1'
         run: |
           set -euo pipefail
           npm ci
+          export VITE_GEMINI_API_KEY_B64=""
+          if [ -n "${RAW_GEMINI_API_KEY:-}" ]; then
+            VITE_GEMINI_API_KEY_B64="$(printf '%s' "$RAW_GEMINI_API_KEY" | base64 | tr -d '\r\n ')"
+          fi
+          unset RAW_GEMINI_API_KEY
           npx vite build --base=/Ainventory/
           node -e '
             const fs = require("fs");

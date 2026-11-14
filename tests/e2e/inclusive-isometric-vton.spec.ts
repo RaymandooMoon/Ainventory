@@ -550,5 +550,106 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .poll(async () => await aiImg.getAttribute('src'))
       .not.toBe(src90);
   });
+
+  test('7. Direct Browser Gemini Synthesis executes with Paid Tier key even when /api/vton/synthesize proxy returns gemini_network_error', async ({
+    page,
+  }) => {
+    const mockTurnaroundDataUrl = buildMockTurnaround2x2PngDataUrl(77);
+    const mockTurnaroundBase64 = mockTurnaroundDataUrl.replace(/^data:image\/png;base64,/, '');
+    let browserGeminiCalls = 0;
+    let capturedApiKeyHeader = '';
+    const seenModalities: string[] = [];
+
+    await page.route('**/api/vton/synthesize', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          mode: '2d-vton',
+          provider: 'flatlay-fallback',
+          geminiUsed: false,
+          compositeImageUrl: null,
+          fallbackReason: 'gemini_network_error',
+        }),
+      });
+    });
+
+    await page.route(
+      'https://generativelanguage.googleapis.com/v1beta/models/**',
+      async (route) => {
+        browserGeminiCalls += 1;
+        const req = route.request();
+        capturedApiKeyHeader = req.headers()['x-goog-api-key'] || '';
+        const bodyJson = JSON.parse(req.postData() || '{}') as {
+          generationConfig?: { responseModalities?: string[] };
+        };
+        const mods = (bodyJson.generationConfig?.responseModalities || []).join(',');
+        seenModalities.push(mods);
+
+        // First call returns text-only STOP to verify automatic ['IMAGE'] modality retry!
+        if (browserGeminiCalls === 1) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              candidates: [
+                {
+                  finishReason: 'STOP',
+                  content: { parts: [{ text: 'Generating studio lookbook...' }] },
+                },
+              ],
+            }),
+          });
+          return;
+        }
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            candidates: [
+              {
+                finishReason: 'STOP',
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: 'image/png',
+                        data: mockTurnaroundBase64,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        });
+      }
+    );
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    await studioCanvas.locator('[data-vton-hud-key-btn="true"]').click();
+    const keyInput = studioCanvas.locator('[data-vton-key-input="true"]');
+    await expect(keyInput).toBeVisible();
+    await keyInput.fill('test-paid-tier1-gemini-key-9876543210');
+    await studioCanvas.locator('[data-vton-save-key-btn="true"]').click();
+
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
+
+    expect(capturedApiKeyHeader).toBe('test-paid-tier1-gemini-key-9876543210');
+    expect(seenModalities).toEqual(['TEXT,IMAGE', 'IMAGE']);
+
+    const slice45 = await aiImg.getAttribute('src');
+    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
+    const slice90 = await aiImg.getAttribute('src');
+    expect(slice90).not.toBe(slice45);
+  });
 });
 
