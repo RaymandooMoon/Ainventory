@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { Camera, Check, Palette, SlidersHorizontal, Sparkles, Upload } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
-  ALL_ISO_VIEW_ANGLES,
   DEFAULT_ISO_VIEW_ANGLE,
   ISO_VIEW_ANGLE_OPTIONS,
   avatarSpecToLegacyBodySpec,
@@ -140,13 +139,14 @@ function ProfileModalContent({
 
   const handleStepPreviewAngle = (direction) => {
     triggerHaptic('selection');
+    const turnaroundAngles = [0, 45, 90, 180];
     setPreviewAngleDeg((prev) => {
-      const idx = ALL_ISO_VIEW_ANGLES.indexOf(prev);
-      const safeIdx = idx >= 0 ? idx : 0;
+      const idx = turnaroundAngles.indexOf(prev);
+      const safeIdx = idx >= 0 ? idx : 1;
       const step = direction === 'cw' ? 1 : -1;
       const nextIdx =
-        (safeIdx + step + ALL_ISO_VIEW_ANGLES.length) % ALL_ISO_VIEW_ANGLES.length;
-      return ALL_ISO_VIEW_ANGLES[nextIdx];
+        (safeIdx + step + turnaroundAngles.length) % turnaroundAngles.length;
+      return turnaroundAngles[nextIdx];
     });
   };
 

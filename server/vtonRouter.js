@@ -362,6 +362,24 @@ export function createVtonRouter() {
       avatarSpec: rawAvatarSpec,
       avatarConfigHash,
       viewAngleDeg,
+      styleMode:
+        payload.styleMode ??
+        payload.vtonStyle ??
+        payload.stylePreset ??
+        rawClientProfile.styleMode ??
+        null,
+      weather:
+        payload.weather ??
+        payload.weatherMood ??
+        rawClientProfile.weather ??
+        rawClientProfile.weatherMood ??
+        null,
+      turnaroundSheet: Boolean(
+        payload.turnaroundSheet ??
+          payload.turnaround_sheet ??
+          rawClientProfile.turnaroundSheet ??
+          false
+      ),
       portraitDataUrl:
         rawClientProfile.portraitDataUrl ??
         payload.portraitDataUrl ??

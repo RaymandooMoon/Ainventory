@@ -4,7 +4,9 @@ import path from 'node:path';
 import db, { DATA_DIR, ROOT_DIR, UPLOADS_DIR } from './db.js';
 
 export const VTON_MODE = '2d-vton';
-export const VTON_STYLE_PRESET = 'editorial_fashion_illustration';
+export const VTON_STYLE_PRESET = 'photorealistic';
+export const VALID_VTON_STYLE_MODES = new Set(['photorealistic', 'stylized_isometric']);
+export const TURNAROUND_ANGLES = Object.freeze([0, 45, 90, 180]);
 export const VTON_CACHE_DIR = path.join(DATA_DIR, 'vton-cache');
 export const SEED_DIR = path.join(ROOT_DIR, 'public', 'seed');
 
@@ -158,13 +160,14 @@ const BODY_SHAPE_DESCRIPTIONS = Object.freeze({
 
 const MAX_PACKSHOT_FILE_BYTES = 4 * 1024 * 1024; // 4MB max for disk garment packshots
 const MAX_DATA_URL_BYTES = 5 * 1024 * 1024; // 5MB max for inline data URLs
-const GEMINI_TIMEOUT_MS = 26000;
-const MAX_TOTAL_SYNTHESIS_MS = 32000;
+const GEMINI_TIMEOUT_MS = 28000;
+const MAX_TOTAL_SYNTHESIS_MS = 36000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'vton-iso-v2';
+const CACHE_SCHEMA_VERSION = 'vton-multimodal-v3';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
+const SAFE_SEED_REL_RE = /^(?:[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
 const SAFE_CACHE_KEY_RE = /^(combo|base)-[0-9a-f]{64}$/;
 
 /** @type {Map<string, { cacheKey: string, kind: 'combo' | 'base', model: string, dataUrl: string, createdAt: number, lastAccessedAt: number }>} */
@@ -201,9 +204,114 @@ function roundToStep(value, step = 0.01) {
   return Math.round(value * inv) / inv;
 }
 
+export function normalizeVtonStyleMode(rawStyle) {
+  const cleaned = String(rawStyle || '')
+    .trim()
+    .toLowerCase();
+  if (
+    cleaned === 'stylized_isometric' ||
+    cleaned === 'stylized-isometric' ||
+    cleaned === 'stylized' ||
+    cleaned === 'isometric' ||
+    cleaned === 'character'
+  ) {
+    return 'stylized_isometric';
+  }
+  return 'photorealistic';
+}
+
+export function normalizeWeatherMood(rawWeather) {
+  if (!rawWeather) {
+    return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+  }
+  if (typeof rawWeather === 'string') {
+    const token = rawWeather.trim().toLowerCase();
+    if (token.includes('rain') || token.includes('비')) {
+      return {
+        key: 'rainy',
+        description: 'cool overcast rainy-day editorial softbox illumination (6200K) with calm diffused atmospheric contrast',
+      };
+    }
+    if (token.includes('wind') || token.includes('강풍')) {
+      return {
+        key: 'windy',
+        description: 'crisp directional daylight studio key light with subtle natural breeze movement in outer hems and hair ends',
+      };
+    }
+    if (token.includes('cold') || token.includes('freeze') || token.includes('한파')) {
+      return {
+        key: 'cold',
+        description: 'crisp high-clarity winter daylight studio lighting (6000K) accentuating cozy wool, knit, and down loft',
+      };
+    }
+    if (token.includes('warm') || token.includes('mild') || token.includes('포근')) {
+      return {
+        key: 'mild',
+        description: 'warm-balanced golden spring/autumn daylight bounce (5000K) with gentle soft studio fill',
+      };
+    }
+    if (token.includes('clear') || token.includes('sun') || token.includes('맑음')) {
+      return {
+        key: 'clear',
+        description: 'bright crisp sunlit studio daylight (5600K) with clean soft floor contact shadow',
+      };
+    }
+    return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+  }
+
+  if (typeof rawWeather === 'object') {
+    const isRainy = Boolean(rawWeather.isRainy || rawWeather.isRaining);
+    const isWindy = Boolean(rawWeather.isWindy);
+    const scenario = String(rawWeather.scenarioKey || rawWeather.condition || rawWeather.mood || '').toLowerCase();
+    const maxTemp = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? rawWeather.temp);
+
+    if (isRainy || scenario.includes('rain') || scenario.includes('비')) {
+      return {
+        key: 'rainy',
+        description: 'cool overcast rainy-day editorial softbox illumination (6200K) with calm diffused atmospheric contrast',
+      };
+    }
+    if (isWindy || scenario.includes('wind') || scenario.includes('강풍')) {
+      return {
+        key: 'windy',
+        description: 'crisp directional daylight studio key light with subtle natural breeze movement in outer hems and hair ends',
+      };
+    }
+    if (
+      scenario.includes('cold') ||
+      scenario.includes('한파') ||
+      (Number.isFinite(maxTemp) && maxTemp <= 4)
+    ) {
+      return {
+        key: 'cold',
+        description: 'crisp high-clarity winter daylight studio lighting (6000K) accentuating cozy wool, knit, and down loft',
+      };
+    }
+    if (
+      scenario.includes('warm') ||
+      scenario.includes('mild') ||
+      scenario.includes('포근') ||
+      (Number.isFinite(maxTemp) && maxTemp >= 18 && maxTemp <= 25)
+    ) {
+      return {
+        key: 'mild',
+        description: 'warm-balanced golden spring/autumn daylight bounce (5000K) with gentle soft studio fill',
+      };
+    }
+    if (scenario.includes('clear') || scenario.includes('sun') || scenario.includes('맑음')) {
+      return {
+        key: 'clear',
+        description: 'bright crisp sunlit studio daylight (5600K) with clean soft floor contact shadow',
+      };
+    }
+  }
+
+  return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+}
+
 /**
- * Normalizes any numeric angle in degrees to one of the 8 canonical isometric angles
- * (`45, 0, -45, -90, -135, 180, 135, 90`), defaulting to `45` (turn-based quarter view).
+ * Normalizes any numeric angle in degrees to one of the 8 canonical angles
+ * (`45, 0, -45, -90, -135, 180, 135, 90`), defaulting to `45`.
  */
 export function normalizeIsoViewAngleDeg(rawAngle, fallback = DEFAULT_ISO_VIEW_ANGLE) {
   if (rawAngle === null || rawAngle === undefined || rawAngle === '') {
@@ -225,7 +333,6 @@ function estimateMstFromHex(hexColor, personalColor = 'autumn_warm') {
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-  // Map perceptual luminance onto Monk Skin Tone 1 (fairest) .. 10 (deepest)
   let mstLevel = 5;
   if (lum >= 0.83) mstLevel = 1;
   else if (lum >= 0.76) mstLevel = 2;
@@ -256,6 +363,24 @@ export function resolveGeminiApiKey() {
     process.env.VITE_VTON_API_KEY ||
     '';
   return String(raw).trim();
+}
+
+export function resolveVertexAiConfig() {
+  const customEndpoint = String(process.env.VERTEX_AI_ENDPOINT || '').trim();
+  const project = String(
+    process.env.VERTEX_AI_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || ''
+  ).trim();
+  const location = String(process.env.VERTEX_AI_LOCATION || 'us-central1').trim();
+  const accessToken = String(process.env.VERTEX_AI_ACCESS_TOKEN || '').trim();
+  const apiKey = String(process.env.VERTEX_AI_API_KEY || '').trim();
+
+  if (customEndpoint && (accessToken || apiKey)) {
+    return { enabled: true, customEndpoint, project, location, accessToken, apiKey };
+  }
+  if (project && (accessToken || apiKey)) {
+    return { enabled: true, customEndpoint: '', project, location, accessToken, apiKey };
+  }
+  return { enabled: false, customEndpoint: '', project: '', location, accessToken: '', apiKey: '' };
 }
 
 export function resolveGeminiModelChain() {
@@ -385,7 +510,7 @@ export function decodeValidatedDataUrl(dataUrl, maxBytes = MAX_DATA_URL_BYTES) {
 
 /**
  * Security-hardened garment packshot loader.
- * - `/seed/<basename>`: strictly validated basename inside `public/seed`, <= 4MB, magic bytes checked.
+ * - `/seed/<relPath>`: strictly validated file inside `public/seed` (including `public/seed/s4/*.webp`), <= 4MB, magic bytes checked.
  * - `/uploads/<basename>`: ONLY allowed for authenticated non-guest callers whose `authorizedClosets`
  *   own a garment row referencing `/uploads/<basename>`, <= 4MB, prefix + magic bytes checked.
  * - `data:image/(png|jpeg|jpg|webp);base64,...`: <= 5MB, magic bytes checked.
@@ -409,18 +534,18 @@ export function loadGarmentPackshot(
   }
 
   if (trimmed.startsWith('/seed/')) {
-    const basename = path.basename(trimmed);
+    const relPath = trimmed.slice('/seed/'.length);
     if (
-      trimmed !== `/seed/${basename}` ||
-      basename.includes('..') ||
-      basename === 'store-terracotta-cardigan.jpg' ||
-      !SAFE_BASENAME_RE.test(basename)
+      !relPath ||
+      relPath.includes('..') ||
+      relPath === 'store-terracotta-cardigan.jpg' ||
+      !SAFE_SEED_REL_RE.test(relPath)
     ) {
       return null;
     }
 
     const seedRoot = path.resolve(SEED_DIR);
-    const fullPath = path.resolve(SEED_DIR, basename);
+    const fullPath = path.resolve(SEED_DIR, relPath);
     if (!fullPath.startsWith(`${seedRoot}${path.sep}`)) {
       return null;
     }
@@ -439,7 +564,7 @@ export function loadGarmentPackshot(
       return {
         mimeType,
         base64Data: buffer.toString('base64'),
-        imageDigest: `seed:${basename}:${sha256Hex(buffer).slice(0, 20)}`,
+        imageDigest: `seed:${relPath}:${sha256Hex(buffer).slice(0, 20)}`,
       };
     } catch {
       return null;
@@ -663,6 +788,15 @@ export function normalizeVtonProfile(
     extraOptions?.viewAngleDeg ?? src.viewAngleDeg,
     DEFAULT_ISO_VIEW_ANGLE
   );
+  const styleMode = normalizeVtonStyleMode(
+    extraOptions?.styleMode ?? src.styleMode ?? src.vtonStyle ?? src.stylePreset
+  );
+  const weatherMood = normalizeWeatherMood(
+    extraOptions?.weather ?? extraOptions?.weatherMood ?? src.weather ?? src.weatherMood
+  );
+  const turnaroundSheet = Boolean(
+    extraOptions?.turnaroundSheet ?? src.turnaroundSheet ?? false
+  );
   const rawAvatarHash = String(
     extraOptions?.avatarConfigHash ?? src.avatarConfigHash ?? ''
   )
@@ -683,6 +817,9 @@ export function normalizeVtonProfile(
 
   return {
     viewAngleDeg,
+    styleMode,
+    weatherMood,
+    turnaroundSheet,
     avatarConfigHash: rawAvatarHash || null,
     framePreset,
     archetypePreset,
@@ -908,10 +1045,17 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
  * Computes deterministic SHA-256 `baseHash` and `comboHash` from normalized profile and sorted slot signatures.
  */
 export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
+  const layoutKey = normalizedProfile.turnaroundSheet
+    ? 'turnaround_2x2'
+    : `single_${normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}`;
+  const styleMode = normalizedProfile.styleMode || VTON_STYLE_PRESET;
+  const weatherKey = normalizedProfile.weatherMood?.key || 'studio_neutral';
+
   const basePayload = {
     v: CACHE_SCHEMA_VERSION,
-    stylePreset: VTON_STYLE_PRESET,
-    viewAngleDeg: normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
+    styleMode,
+    weatherKey,
+    layoutKey,
     avatarConfigHash: normalizedProfile.avatarConfigHash || null,
     framePreset: normalizedProfile.framePreset,
     archetypePreset: normalizedProfile.archetypePreset,
@@ -973,7 +1117,9 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
   const comboHash = sha256Hex(
     JSON.stringify({
       v: CACHE_SCHEMA_VERSION,
-      viewAngleDeg: normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
+      styleMode,
+      weatherKey,
+      layoutKey,
       baseHash,
       slots: sortedSlotSignatures,
     })
@@ -1284,23 +1430,50 @@ function buildEditorialStyleAndBodyPrompt(profile) {
   const cameraLock = describeIsoCameraAngle(profile.viewAngleDeg);
   const mstLightingLock = describeMstLightingDirective(profile);
   const softTissueLock = describeCoupledSoftTissueDirective(profile);
+  const isStylizedIso = profile.styleMode === 'stylized_isometric';
+  const weatherDesc =
+    profile.weatherMood?.description ||
+    'balanced 5500K neutral studio cyclorama daylight';
+
+  const styleHeader = isStylizedIso
+    ? [
+        'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On lookbook sheet/portrait (tactile charming life-simulation character aesthetic with warm dimensional shading, refined appealing cranial & facial modeling, lush voluminous hair clusters, clean relaxed fingers, and authentic real-fabric texture fidelity).',
+        '- NEVER draw crude flat 2D vector polygons or stick/mannequin limbs; render polished, high-craft studio simulation character art.',
+      ]
+    : [
+        'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS / Totême studio campaign photography shot on medium-format 85mm f/5.6 studio lens, ultra-clean natural skin micro-texture, realistic hair strands, relaxed anatomical hands, and hyper-accurate real garment drape, seam thickness, and fabric weave).',
+        '- Render a real, lifelike human fashion model matching the exact AvatarSpec below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
+      ];
+
+  const cameraBlock = profile.turnaroundSheet
+    ? [
+        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (MANDATORY):',
+        '- Compose a clean, borderless 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a seamless solid #F5F5F7 studio cyclorama background, depicting the EXACT SAME PERSON wearing the EXACT SAME OUTFIT at identical head-to-toe scale in every quadrant:',
+        '  * [Top-Left Quadrant — 0° Direct Front]: Full-body facing 0° straight toward the camera; symmetrical front garment fit, collar, chest, front trousers/skirt, and front shoe vamps.',
+        '  * [Top-Right Quadrant — 45° Quarter View]: Full-body turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Full-body turned 90° lateral side profile facing right — MUST exhibit natural anatomical side cranium & occipital skull depth, full lush hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand/finger posture at the side or pocket, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
+        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: Full-body facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features).',
+        '- Keep generous head-to-toe margin inside each of the 4 quadrants so neither hair nor shoe soles touch quadrant edges. Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
+      ]
+    : [
+        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK:',
+        `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
+        '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes with clean studio margin above head and below feet (NEVER crop head, hands, or feet).',
+        '- For 90° lateral side views, ensure authentic anatomical side cranium/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
+        '- Solid, clean neutral studio background in exact hex #F5F5F7 with natural soft floor contact shadow. Include ZERO text, ZERO angle numbers, ZERO UI labels, and ZERO extra figures.',
+      ];
 
   return [
-    'Generate a single 2D full-body isometric editorial fashion virtual try-on illustration in crisp contemporary ligne-claire pen-and-ink + matte gouache style (POPEYE Magazine Tokyo / tactile turn-based simulation character aesthetic).',
+    ...styleHeader,
     '',
-    'CAMERA & 8-ANGLE ISOMETRIC POSE LOCK:',
-    `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
-    '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes and subtle diamond plinth tile, with clean studio margin above head and below plinth (NEVER crop head, hands, or feet).',
-    '- Solid, clean neutral studio background in exact hex #F5F5F7 with only a subtle soft contact shadow on the minimal diamond plinth tile beneath the feet. Include ZERO text, ZERO angle numbers, ZERO UI labels, ZERO color swatches, and ZERO extra figures.',
+    ...cameraBlock,
     '',
-    'VISUAL STYLE & GARMENT CONSTRUCTION FIDELITY:',
-    '- Crisp dark charcoal-ink outlines (#1D1D1F) with confident continuous line weight.',
-    '- Articulate real garment construction accurately for the active camera angle: collar roll, lapels, plackets, seams, cuffs, hem break, pockets, rear vents/back seams (on rear/back-quarter views), fabric weave, and gravity-driven folds.',
-    '- Matte gouache color fidelity that preserves authentic garment colors and textures without plastic 3D CGI gloss or anime exaggeration.',
+    'STUDIO WEATHER & LIGHTING MOOD:',
+    `- Active Weather Lighting Mood (${profile.weatherMood?.key || 'studio_neutral'}): Illuminate the model and fabrics with ${weatherDesc}, while keeping background studio cyclorama clean (#F5F5F7) and garment colors true.`,
     '',
     'INCLUSIVE ANTHROPOMETRIC, SOFT-TISSUE & COMPLEXION LOCK (ZERO MODEL BIAS):',
-    `  * Stature & Mass: Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
-    `  * Frame & Archetype: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, chestForm=${profile.chestForm}, legacyShape=${profile.bodyShape} (${shapeDesc})`,
+    `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
+    `  * Gender / Non-Binary Presentation & Archetype: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, chestForm=${profile.chestForm}, legacyShape=${profile.bodyShape} (${shapeDesc})`,
     `  * Segment Scales: shoulder=${profile.shoulderScale}, chest=${profile.chestScale}, waist=${profile.waistScale}, abdomen=${profile.abdomenScale}, hip=${profile.hipScale}, glute=${profile.gluteScale}, armMass=${profile.armMassScale}, legMass=${profile.legMassScale}, muscleDefinition=${profile.muscleDefinition}`,
     `  * ${softTissueLock}`,
     `  * ${mstLightingLock} (${pcDesc})`,
@@ -1309,12 +1482,17 @@ function buildEditorialStyleAndBodyPrompt(profile) {
 
 function appendPortraitParts(parts, profile) {
   const angle = normalizeIsoViewAngleDeg(profile.viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
-  const isPureBack = angle === 180;
-  const isBackQuarter = Math.abs(angle) === 135;
+  const isTurnaround = Boolean(profile.turnaroundSheet);
+  const isPureBack = !isTurnaround && angle === 180;
+  const isBackQuarter = !isTurnaround && Math.abs(angle) === 135;
   const hairDesc =
     HAIR_STYLE_DESCRIPTIONS[profile.hairStyle] || HAIR_STYLE_DESCRIPTIONS.soft_wavy;
   const facialHairDesc =
     FACIAL_HAIR_DESCRIPTIONS[profile.facialHair] || FACIAL_HAIR_DESCRIPTIONS.none;
+  const mediumLabel =
+    profile.styleMode === 'stylized_isometric'
+      ? 'stylized isometric character'
+      : 'photorealistic studio fashion model';
 
   const featureSummary = `Head shape: ${profile.headShape}; Hair: ${hairDesc} in exact color ${profile.hairColorHex}; Facial hair: ${facialHairDesc}; Eye shape: ${profile.eyeShape} (scale ${profile.eyeSizeScale}); Nose width scale: ${profile.noseWidthScale}; Lip fullness scale: ${profile.lipFullnessScale}; Brow strength: ${profile.browStrength}.`;
 
@@ -1322,12 +1500,13 @@ function appendPortraitParts(parts, profile) {
     parts.push({
       text: [
         '[PORTRAIT / IDENTITY LIKENESS REFERENCE PHOTO ATTACHED BELOW]:',
-        isPureBack
-          ? `Because the camera is at 180° full rear view, render ONLY the back of this person's head, hair/headwrap (${hairDesc}, ${profile.hairColorHex}), ears, and neck fullness with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
-          : isBackQuarter
-            ? `At ${angle}° back-quarter view, translate this person's rear/side hair silhouette (${hairDesc}, ${profile.hairColorHex}) and outer cheek/jawline contour (${profile.headShape}) with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
-            : `Translate this person's craniofacial structure (${featureSummary}), eyeglasses (if present), and natural hair silhouette into a unified 2D ligne-claire editorial illustration face at ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
-        'Keep head and body 100% unified in hand-inked 2D editorial style — never paste raw photographic face pixels.',
+        isTurnaround
+          ? `Preserve this person's facial identity, cranial proportions (${featureSummary}), eyeglasses (if worn), and natural hair volume consistently across the 0° front, 45° quarter, 90° lateral profile, and 180° rear back views in unified ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+          : isPureBack
+            ? `Because the camera is at 180° full rear view, render ONLY the back of this person's head, hair/headwrap (${hairDesc}, ${profile.hairColorHex}), ears, and neck fullness with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
+            : isBackQuarter
+              ? `At ${angle}° back-quarter view, translate this person's rear/side hair silhouette (${hairDesc}, ${profile.hairColorHex}) and outer cheek/jawline contour (${profile.headShape}) with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
+              : `Preserve this person's craniofacial identity (${featureSummary}), eyeglasses (if present), and natural hair volume in unified ${mediumLabel} style at ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
       ].join(' '),
     });
     parts.push({
@@ -1338,9 +1517,11 @@ function appendPortraitParts(parts, profile) {
     });
   } else {
     parts.push({
-      text: isPureBack
-        ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
-        : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, poised editorial lookbook expression matching camera angle ${angle}° with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
+      text: isTurnaround
+        ? `[FACE & HAIR IDENTITY LOCK — 4-VIEW TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, and 180° back views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+        : isPureBack
+          ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
+          : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, natural editorial lookbook expression matching camera angle ${angle}° in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
     });
   }
 }
@@ -1348,10 +1529,13 @@ function appendPortraitParts(parts, profile) {
 function buildBaseModelParts(profile) {
   const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
   appendPortraitParts(parts, profile);
+  const viewLabel = profile.turnaroundSheet
+    ? 'all 4 turnaround views (0°, 45°, 90°, 180°)'
+    : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°`;
   parts.push({
     text: [
       '[STUDIO BASE MODEL ATTIRE]:',
-      `- Dress the figure (viewed at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
+      `- Dress the figure (${viewLabel}) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
       '- Keep the silhouette clean and unobstructed so authentic body proportions, coupled soft-tissue volume, and MST complexion are unmistakably legible.',
     ].join('\n'),
   });
@@ -1374,16 +1558,19 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const hasBottom = Boolean(resolvedSlots.bottom);
   const hasOuter = Boolean(resolvedSlots.outer);
   const hasShoes = Boolean(resolvedSlots.shoes);
+  const viewScopeText = profile.turnaroundSheet
+    ? 'ALL 4 TURNAROUND VIEWS (0° Front, 45° Quarter, 90° Side Profile, 180° Back)'
+    : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW`;
 
   const layeringRules = [
-    `[OUTFIT LAYERING & GARMENT FIDELITY INSTRUCTIONS — ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW]:`,
-    '- Dress the single full-body figure in ALL of the equipped garments listed below simultaneously, matching each garment packshot reference image, cut, fabric texture, pattern, and exact hex color from the requested camera angle.',
-    '- Render ONLY the equipped garments listed below — NEVER hallucinate residual garments from previous outfits.',
+    `[OUTFIT LAYERING & REAL GARMENT PHOTO FIDELITY — ${viewScopeText}]:`,
+    '- Dress the model in ALL of the equipped garments attached below simultaneously, reproducing each attached garment photograph\'s exact cut, length, collar/lapel shape, buttons/zippers, fabric weave, pattern, and exact hex color.',
+    '- Render ONLY the equipped garments listed below — NEVER hallucinate unequipped coats, hats, or residual items.',
   ];
 
   if (hasOuter && (hasTop || hasOnepiece)) {
     layeringRules.push(
-      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (relaxed open at front on front/quarter views; authentic outer back silhouette on rear views).'
+      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (worn relaxed open at the front on 0°/45° views so the inner top remains visible, with realistic side thickness at 90° and full outer back construction at 180°).'
     );
   }
   if (hasOnepiece && isSwimwearOnepiece) {
@@ -1426,7 +1613,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.`;
     if (item.packshot) {
       parts.push({
-        text: `${specLine}\nUse the attached packshot image right below as the exact visual reference for [${slot.toUpperCase()}], wrapping and draping its authentic silhouette, details, pattern, and color ${item.colorHex} onto the wearer's body at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°:`,
+        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]. Reproduce its exact garment construction, texture, details, and color ${item.colorHex} naturally draped on the wearer (${viewScopeText}):`,
       });
       parts.push({
         inlineData: {
@@ -1436,7 +1623,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       });
     } else {
       parts.push({
-        text: `${specLine}\nRender this [${slot.toUpperCase()}] at ${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° with authentic ${item.fabric} drape, construction stitching, and exact color ${item.colorHex}.`,
+        text: `${specLine}\nRender this [${slot.toUpperCase()}] (${viewScopeText}) with authentic ${item.fabric} drape, construction stitching, and exact color ${item.colorHex}.`,
       });
     }
   }
@@ -1490,7 +1677,31 @@ function extractInlineImageFromGeminiResponse(payload) {
   return null;
 }
 
-async function generateWithGeminiModelChain(parts, apiKey, modelChain) {
+function buildModelRequestTarget(model, apiKey, vertexCfg) {
+  if (apiKey) {
+    return {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      headers: { 'Content-Type': 'application/json' },
+    };
+  }
+  if (vertexCfg?.enabled) {
+    const baseUrl = vertexCfg.customEndpoint
+      ? vertexCfg.customEndpoint.replace(/\{model\}/g, encodeURIComponent(model))
+      : `https://${encodeURIComponent(vertexCfg.location)}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(vertexCfg.project)}/locations/${encodeURIComponent(vertexCfg.location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
+    const url = vertexCfg.apiKey
+      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}key=${encodeURIComponent(vertexCfg.apiKey)}`
+      : baseUrl;
+    /** @type {Record<string, string>} */
+    const headers = { 'Content-Type': 'application/json' };
+    if (vertexCfg.accessToken) {
+      headers.Authorization = `Bearer ${vertexCfg.accessToken}`;
+    }
+    return { url, headers };
+  }
+  return null;
+}
+
+async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg = null) {
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
 
@@ -1504,12 +1715,16 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain) {
       GEMINI_TIMEOUT_MS,
       Math.max(4000, MAX_TOTAL_SYNTHESIS_MS - elapsed)
     );
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const target = buildModelRequestTarget(model, apiKey, vertexCfg);
+    if (!target) {
+      lastReason = 'gemini_api_key_not_configured';
+      break;
+    }
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(target.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: target.headers,
         signal: AbortSignal.timeout(remainingTimeoutMs),
         body: JSON.stringify({
           contents: [{ role: 'user', parts }],
@@ -1521,7 +1736,6 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain) {
 
       if (!res.ok) {
         lastReason = `gemini_http_${res.status}`;
-        // Fast-fail if API key itself is unauthorized/invalid across all models
         if (res.status === 401 || res.status === 403) {
           break;
         }
@@ -1554,20 +1768,26 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain) {
 
 export function getVtonServiceStatus() {
   const apiKey = resolveGeminiApiKey();
+  const vertexCfg = resolveVertexAiConfig();
   const modelChain = resolveGeminiModelChain();
   return {
     ok: true,
     mode: VTON_MODE,
     stylePreset: VTON_STYLE_PRESET,
-    geminiConfigured: Boolean(apiKey),
+    supportedStyleModes: [...VALID_VTON_STYLE_MODES],
+    turnaroundAngles: [...TURNAROUND_ANGLES],
+    geminiConfigured: Boolean(apiKey || vertexCfg.enabled),
+    vertexConfigured: Boolean(vertexCfg.enabled),
     model: modelChain[0] || 'gemini-2.5-flash-image',
     cacheEntries: countTotalCacheEntries(),
   };
 }
 
 /**
- * Main 2D Editorial Fashion Virtual Try-On synthesis & server cache entry point.
- * Never throws on missing API key or upstream failure; always resolves with `{ ok: true, ... }`.
+ * Main Multimodal Gemini Virtual Try-On synthesis & server cache entry point.
+ * Zero procedural fallback: returns `compositeImageUrl: null` with explicit `fallbackReason`
+ * if Gemini/Vertex credentials are unconfigured or synthesis fails, allowing the client
+ * to preserve the Editorial Flat-Lay Board cleanly.
  */
 export async function synthesizeVtonLook(params = {}) {
   const rawProfile =
@@ -1579,6 +1799,11 @@ export async function synthesizeVtonLook(params = {}) {
       avatarSpec: params.avatarSpec ?? rawProfile?.avatarSpec ?? null,
       avatarConfigHash: params.avatarConfigHash ?? rawProfile?.avatarConfigHash ?? null,
       viewAngleDeg: params.viewAngleDeg ?? rawProfile?.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
+      styleMode: params.styleMode ?? params.vtonStyle ?? rawProfile?.styleMode ?? null,
+      weather: params.weather ?? params.weatherMood ?? rawProfile?.weather ?? null,
+      turnaroundSheet: Boolean(
+        params.turnaroundSheet ?? rawProfile?.turnaroundSheet ?? false
+      ),
     }
   );
 
@@ -1597,6 +1822,7 @@ export async function synthesizeVtonLook(params = {}) {
   const forceRefresh = Boolean(params.forceRefresh);
   const equippedSlots = Object.keys(resolvedSlots);
   const isBaseOnlyLook = equippedSlots.length === 0;
+  const layout = normalizedProfile.turnaroundSheet ? 'turnaround_2x2' : 'single';
 
   const comboCacheKey = isBaseOnlyLook ? `base-${baseHash}` : `combo-${comboHash}`;
   const baseCacheKey = `base-${baseHash}`;
@@ -1604,8 +1830,11 @@ export async function synthesizeVtonLook(params = {}) {
   const buildFallbackResult = (fallbackReason) => ({
     ok: true,
     mode: VTON_MODE,
-    stylePreset: VTON_STYLE_PRESET,
-    provider: 'client-editorial-2d',
+    stylePreset: normalizedProfile.styleMode,
+    styleMode: normalizedProfile.styleMode,
+    weatherMood: normalizedProfile.weatherMood.key,
+    layout,
+    provider: 'flatlay-fallback',
     model: null,
     geminiUsed: false,
     cached: false,
@@ -1619,7 +1848,7 @@ export async function synthesizeVtonLook(params = {}) {
     equippedSlots,
   });
 
-  // 1. Server Cache Lookup (works even if key was used earlier)
+  // 1. Server Cache Lookup
   if (!forceRefresh) {
     const cachedCombo = getCacheEntry(comboCacheKey);
     const cachedBase = includeBaseModel ? getCacheEntry(baseCacheKey) : null;
@@ -1628,8 +1857,11 @@ export async function synthesizeVtonLook(params = {}) {
       return {
         ok: true,
         mode: VTON_MODE,
-        stylePreset: VTON_STYLE_PRESET,
-        provider: 'gemini-editorial-2d',
+        stylePreset: normalizedProfile.styleMode,
+        styleMode: normalizedProfile.styleMode,
+        weatherMood: normalizedProfile.weatherMood.key,
+        layout,
+        provider: 'gemini-vton',
         model: cachedCombo.model,
         geminiUsed: true,
         cached: true,
@@ -1649,9 +1881,10 @@ export async function synthesizeVtonLook(params = {}) {
     }
   }
 
-  // 2. Check Gemini API Key configuration
+  // 2. Check Gemini / Vertex AI configuration
   const apiKey = resolveGeminiApiKey();
-  if (!apiKey) {
+  const vertexCfg = resolveVertexAiConfig();
+  if (!apiKey && !vertexCfg.enabled) {
     return buildFallbackResult('gemini_api_key_not_configured');
   }
 
@@ -1661,7 +1894,7 @@ export async function synthesizeVtonLook(params = {}) {
   }
 
   // 3. Coalesce concurrent identical synthesis requests
-  const flightKey = `${comboHash}:${normalizedProfile.viewAngleDeg}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}`;
+  const flightKey = `${comboHash}:${layout}:${normalizedProfile.viewAngleDeg}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}`;
   if (!forceRefresh && inFlightSyntheses.has(flightKey)) {
     return inFlightSyntheses.get(flightKey);
   }
@@ -1678,7 +1911,8 @@ export async function synthesizeVtonLook(params = {}) {
           : await generateWithGeminiModelChain(
               buildBaseModelParts(normalizedProfile),
               apiKey,
-              modelChain
+              modelChain,
+              vertexCfg
             );
 
         if (!baseGen.ok || !baseGen.dataUrl) {
@@ -1696,8 +1930,11 @@ export async function synthesizeVtonLook(params = {}) {
         return {
           ok: true,
           mode: VTON_MODE,
-          stylePreset: VTON_STYLE_PRESET,
-          provider: 'gemini-editorial-2d',
+          stylePreset: normalizedProfile.styleMode,
+          styleMode: normalizedProfile.styleMode,
+          weatherMood: normalizedProfile.weatherMood.key,
+          layout,
+          provider: 'gemini-vton',
           model: baseGen.model,
           geminiUsed: true,
           cached: Boolean(existingCombo),
@@ -1722,7 +1959,8 @@ export async function synthesizeVtonLook(params = {}) {
         : generateWithGeminiModelChain(
             buildCompositeLookParts(normalizedProfile, resolvedSlots),
             apiKey,
-            modelChain
+            modelChain,
+            vertexCfg
           );
 
       const basePromise = !includeBaseModel
@@ -1737,7 +1975,8 @@ export async function synthesizeVtonLook(params = {}) {
           : generateWithGeminiModelChain(
               buildBaseModelParts(normalizedProfile),
               apiKey,
-              modelChain
+              modelChain,
+              vertexCfg
             );
 
       const [comboRes, baseRes] = await Promise.all([comboPromise, basePromise]);
@@ -1769,8 +2008,11 @@ export async function synthesizeVtonLook(params = {}) {
       return {
         ok: true,
         mode: VTON_MODE,
-        stylePreset: VTON_STYLE_PRESET,
-        provider: 'gemini-editorial-2d',
+        stylePreset: normalizedProfile.styleMode,
+        styleMode: normalizedProfile.styleMode,
+        weatherMood: normalizedProfile.weatherMood.key,
+        layout,
+        provider: 'gemini-vton',
         model: comboRes.model,
         geminiUsed: true,
         cached: Boolean(comboRes.fromCache && (!includeBaseModel || baseRes?.fromCache)),

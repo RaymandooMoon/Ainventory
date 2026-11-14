@@ -140,10 +140,12 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const synthJson = await synthRes.json();
     expect(synthJson.mode).toBe('2d-vton');
 
-    // Verify Light Theme surface brightness (never hardcoded dark)
+    // Verify Light Theme surface brightness (never hardcoded dark) & Zero Procedural Canvas
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
+    await expect(studioCanvas.locator('canvas')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
     const lightLum = await studioCanvas.evaluate((el) => {
       const cs = window.getComputedStyle(el);
@@ -154,8 +156,11 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     });
     expect(lightLum).toBeGreaterThan(220);
 
-    // Compact preview in Skin-Tone Modal also uses 2D stage with zero WebGL errors
+    // Compact preview in Skin-Tone Modal uses non-procedural Avatar Spec Card with zero <canvas>
     await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
-    await expect(page.locator('.skin-modal-character-stage canvas')).toBeVisible();
+    await expect(page.locator('.skin-modal-character-stage canvas')).toHaveCount(0);
+    await expect(
+      page.locator('.skin-modal-character-stage [data-avatar-spec-card="true"]')
+    ).toBeVisible();
   });
 });

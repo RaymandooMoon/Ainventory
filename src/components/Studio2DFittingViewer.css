@@ -1,6 +1,7 @@
 /* ==========================================================================
-   2D Editorial Virtual Try-On (VTON) Viewer & Stage Styles
+   Editorial Flat-Lay Lookbook Board & 100% Gemini Multimodal VTON Stage Styles
    Strictly inherits theme custom properties from src/index.css (Light & Dark)
+   Zero hardcoded non-theme surface colors; Zero procedural human drawing
    ========================================================================== */
 
 .studio-25d-canvas.studio-2d-vton-viewer,
@@ -36,7 +37,7 @@
 }
 
 /* ==========================================================================
-   1. 2D EDITORIAL MODEL STAGE, ZOOM/PAN RIG & COMPACT PREVIEW
+   1. STAGE VIEWPORT, ZOOM/PAN RIG & COMPACT AVATAR SPEC CARD
    ========================================================================== */
 .studio-2d-model-stage {
   position: absolute;
@@ -53,7 +54,7 @@
 }
 
 .studio-2d-model-stage.is-zoomable {
-  cursor: zoom-in;
+  cursor: default;
 }
 
 .studio-2d-model-stage.is-zoomed {
@@ -64,28 +65,100 @@
   cursor: grabbing;
 }
 
-.studio-2d-model-stage.is-rotating {
-  cursor: ew-resize;
-}
-
-.studio-2d-model-stage.is-compact {
+/* Compact Non-Procedural Avatar Identity & MST Swatch Card (Profile Modal) */
+.studio-2d-model-stage.is-compact.avatar-spec-identity-card {
   position: relative;
   inset: auto;
   width: 100%;
   height: 100%;
   max-height: 206px;
   aspect-ratio: 2 / 3;
+  padding: 12px 10px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--elevation-xs);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   cursor: default;
   touch-action: manipulation;
 }
 
-.studio-2d-compact-canvas {
+.avatar-spec-medallion-wrap {
   position: relative;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-mst-swatch-orb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--glass-border);
+  box-shadow: var(--elevation-md), inset 0 6px 14px rgba(255, 255, 255, 0.34),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.14);
+  transition: background-color 0.25s var(--spring-ease), transform 0.22s var(--spring-ease);
+}
+
+.avatar-spec-portrait-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  object-fit: cover;
+  border: 2.5px solid var(--squircle-border);
+  box-shadow: var(--elevation-sm);
+}
+
+.avatar-spec-angle-chip {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-size: 0.62rem;
+  font-weight: 720;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--elevation-xs);
+}
+
+.avatar-spec-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.avatar-spec-mst-code {
+  font-size: 0.68rem;
+  font-weight: 740;
+  letter-spacing: 0.04em;
+  color: var(--ink-primary);
+}
+
+.avatar-spec-frame-tag {
+  font-size: 0.65rem;
+  font-weight: 620;
+  color: var(--ink-secondary);
+}
+
+.avatar-spec-ai-note {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-tertiary);
 }
 
 .studio-2d-viewport {
@@ -102,13 +175,17 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: 44px 12px 54px;
+  padding: 54px 12px 92px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
   will-change: clip-path;
+}
+
+.studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-2d-layer {
+  padding-left: 60px;
 }
 
 .studio-2d-layer-after {
@@ -120,8 +197,7 @@
   will-change: clip-path;
 }
 
-.studio-2d-media-el,
-.studio-2d-live-canvas {
+.studio-2d-media-el {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -132,23 +208,376 @@
   -webkit-user-drag: none;
 }
 
+.editorial-ai-vton-img {
+  border-radius: 18px;
+  filter: var(--garment-cutout-shadow);
+}
+
 .studio-2d-model-stage:not(.is-panning) .studio-2d-media-el,
-.studio-2d-model-stage:not(.is-panning) .studio-2d-live-canvas {
+.studio-2d-model-stage:not(.is-panning) .editorial-flatlay-board,
+.studio-2d-model-stage:not(.is-panning) .editorial-spec-compare-sheet {
   transition: transform 0.24s var(--spring-ease), opacity 0.22s var(--spring-ease);
 }
 
-.studio-2d-model-stage.is-panning .studio-2d-media-el,
-.studio-2d-model-stage.is-panning .studio-2d-live-canvas {
-  transition: opacity 0.22s var(--spring-ease);
+/* ==========================================================================
+   2. EDITORIAL FLAT-LAY LOOKBOOK BOARD (SSENSE / MAGAZINE STYLING BOARD)
+   ========================================================================== */
+.editorial-flatlay-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  background-color: var(--bg-elevated);
+  background-image: var(--squircle-illumination);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--squircle-inset-rim), var(--elevation-xs);
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: 50% 50%;
+}
+
+.editorial-flatlay-header {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.editorial-flatlay-kicker {
+  font-size: 0.58rem;
+  font-weight: 740;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.editorial-flatlay-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.62rem;
+  font-weight: 660;
+  color: var(--ink-secondary);
+}
+
+.editorial-flatlay-mst-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--squircle-border);
+}
+
+.editorial-flatlay-empty {
+  position: absolute;
+  inset: 28px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.editorial-flatlay-empty-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--squircle-border);
+  box-shadow: var(--elevation-xs);
+}
+
+.editorial-flatlay-empty-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+
+.editorial-flatlay-empty-desc {
+  margin: 0;
+  max-width: 240px;
+  font-size: 0.71rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.editorial-flatlay-collage {
+  position: absolute;
+  inset: 22px 6px 6px;
+}
+
+.editorial-flatlay-item {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 4px 4px 18px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.22s var(--spring-ease), background-color 0.18s var(--spring-ease),
+    box-shadow 0.18s var(--spring-ease);
+}
+
+.editorial-flatlay-item:hover,
+.editorial-flatlay-item:focus-visible {
+  transform: translateY(-2px) scale(1.025);
+  background: var(--accent-soft-bg);
+}
+
+.editorial-flatlay-item.is-selected {
+  background: var(--accent-soft-bg);
+  box-shadow: inset 0 0 0 1.5px var(--squircle-border-hover);
+}
+
+.editorial-flatlay-cutout-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: var(--garment-cutout-shadow);
+}
+
+.editorial-flatlay-garment-media {
+  width: 100%;
+  height: 100%;
+}
+
+.editorial-flatlay-caption {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.editorial-flatlay-slot-tag {
+  flex-shrink: 0;
+  font-size: 0.52rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-bg);
+  color: var(--ink-secondary);
+}
+
+.editorial-flatlay-item-name {
+  font-size: 0.6rem;
+  font-weight: 620;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Curatorial Spec Compare Sheet (used in B/A split when on Flat-Lay Board) */
+.editorial-spec-compare-sheet {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  box-sizing: border-box;
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--elevation-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.editorial-spec-header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.editorial-spec-chip {
+  font-size: 0.68rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.editorial-spec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.editorial-spec-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft-bg);
+}
+
+.editorial-spec-color-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--squircle-border);
+  flex-shrink: 0;
+}
+
+.editorial-spec-slot {
+  font-size: 0.56rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+.editorial-spec-name {
+  font-size: 0.68rem;
+  font-weight: 630;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ==========================================================================
-   2. BEFORE / AFTER INTERACTIVE SPLIT COMPARISON VIEW
+   3. GLASSMORPHISM SHIMMER LOADING OVERLAY & FALLBACK STATUS TOAST
+   ========================================================================== */
+.editorial-vton-shimmer-overlay {
+  position: absolute;
+  inset: 52px 12px 90px;
+  z-index: 34;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.editorial-vton-shimmer-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    108deg,
+    transparent 20%,
+    var(--shimmer-highlight) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: studioVtonShimmer 1.5s var(--spring-ease) infinite;
+}
+
+.editorial-vton-shimmer-card {
+  position: relative;
+  z-index: 1;
+  max-width: 270px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.editorial-vton-shimmer-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: studioVtonPulse 0.9s var(--spring-ease) infinite alternate;
+}
+
+.editorial-vton-shimmer-title {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 720;
+  color: var(--ink-primary);
+}
+
+.editorial-vton-shimmer-sub {
+  margin: 0;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.studio-vton-status-toast {
+  position: absolute;
+  left: 50%;
+  top: 56px;
+  transform: translateX(-50%);
+  z-index: 62;
+  max-width: calc(100% - 28px);
+  padding: 7px 13px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-md);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-primary);
+  font-size: 0.68rem;
+  font-weight: 660;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.studio-vton-toast-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  flex-shrink: 0;
+}
+
+.studio-vton-toast-text {
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   4. BEFORE / AFTER INTERACTIVE SPLIT COMPARISON VIEW
    ========================================================================== */
 .studio-2d-compare-slider {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 50px;
+  bottom: 88px;
   z-index: 28;
   width: 44px;
   margin-left: -22px;
@@ -208,9 +637,9 @@
 
 .studio-2d-compare-badges {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 58px;
+  left: 14px;
+  right: 14px;
+  bottom: 94px;
   z-index: 26;
   display: flex;
   align-items: center;
@@ -219,8 +648,8 @@
 }
 
 .studio-2d-compare-tag {
-  height: 24px;
-  padding: 0 10px;
+  height: 22px;
+  padding: 0 9px;
   border-radius: var(--radius-pill);
   background: var(--glass-bg-dense);
   border: 1px solid var(--glass-border);
@@ -228,9 +657,9 @@
   backdrop-filter: var(--vibrancy-filter-subtle);
   -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
   color: var(--ink-primary);
-  font-size: 0.63rem;
+  font-size: 0.6rem;
   font-weight: 720;
-  letter-spacing: 0.085em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
@@ -248,7 +677,7 @@
 }
 
 /* ==========================================================================
-   3. TOP HUD: ZOOM PILL BAR, COMPARE TOGGLE & PROFILE BUTTON
+   5. TOP HUD + BOTTOM MODE/STYLE/4-ANGLE RAIL + WORN SLOTS
    ========================================================================== */
 .studio-2d-vton-viewer .studio-stage-top-hud {
   top: 12px;
@@ -270,75 +699,7 @@
   pointer-events: none;
 }
 
-.studio-vton-zoom-bar {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--elevation-sm);
-  backdrop-filter: var(--vibrancy-filter-subtle);
-  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
-}
-
-.studio-vton-zoom-btn {
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0 7px;
-  border-radius: var(--radius-pill);
-  color: var(--ink-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease);
-}
-
-.studio-vton-zoom-btn:hover:not(:disabled) {
-  background: var(--accent-soft-bg);
-}
-
-.studio-vton-zoom-btn:active:not(:disabled) {
-  transform: scale(0.92);
-}
-
-.studio-vton-zoom-btn:disabled {
-  opacity: 0.36;
-  cursor: not-allowed;
-}
-
-.studio-vton-zoom-level-btn {
-  min-width: 44px;
-  min-height: 32px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  color: var(--ink-primary);
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    transform 0.14s var(--spring-ease);
-}
-
-.studio-vton-zoom-level-btn:hover {
-  background: var(--accent-soft-bg);
-}
-
-.studio-vton-zoom-level-btn.is-zoomed {
-  background: var(--accent-mono);
-  color: var(--accent-mono-ink);
-}
-
-.studio-vton-zoom-level-btn:active {
-  transform: scale(0.93);
-}
-
+.studio-vton-zoom-bar,
 .studio-iso-rotate-bar {
   pointer-events: auto;
   display: inline-flex;
@@ -353,6 +714,7 @@
   -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
 }
 
+.studio-vton-zoom-btn,
 .studio-iso-rotate-btn {
   min-width: 30px;
   min-height: 32px;
@@ -363,17 +725,25 @@
   align-items: center;
   justify-content: center;
   transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    transform 0.14s var(--spring-ease);
+    transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease);
 }
 
+.studio-vton-zoom-btn:hover:not(:disabled),
 .studio-iso-rotate-btn:hover {
   background: var(--accent-soft-bg);
 }
 
+.studio-vton-zoom-btn:active:not(:disabled),
 .studio-iso-rotate-btn:active {
   transform: scale(0.92);
 }
 
+.studio-vton-zoom-btn:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+.studio-vton-zoom-level-btn,
 .studio-iso-angle-badge {
   min-width: 44px;
   min-height: 32px;
@@ -392,17 +762,15 @@
     transform 0.14s var(--spring-ease);
 }
 
+.studio-vton-zoom-level-btn:hover,
 .studio-iso-angle-badge:hover {
   background: var(--accent-soft-bg);
 }
 
+.studio-vton-zoom-level-btn.is-zoomed,
 .studio-iso-angle-badge.is-rotated {
   background: var(--accent-mono);
   color: var(--accent-mono-ink);
-}
-
-.studio-iso-angle-badge:active {
-  transform: scale(0.93);
 }
 
 .studio-iso-angle-word {
@@ -447,10 +815,6 @@
   border-color: transparent;
 }
 
-.studio-vton-compare-btn:active:not(:disabled) {
-  transform: scale(0.93);
-}
-
 .studio-vton-compare-btn:disabled {
   opacity: 0.38;
   cursor: not-allowed;
@@ -465,8 +829,73 @@
   box-shadow: var(--elevation-sm);
 }
 
+/* Mode + Style + 4-Angle Floating Control Rail above Tone Dock */
+.studio-vton-mode-rail {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 52px;
+  z-index: 54;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.studio-vton-segmented-pill,
+.studio-vton-angle-pills {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-xs);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+}
+
+.studio-vton-seg-btn,
+.studio-vton-angle-pill {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  font-size: 0.65rem;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+.studio-vton-angle-pill {
+  padding: 0 6px;
+  min-width: 28px;
+}
+
+.studio-vton-seg-btn:hover:not(.is-active),
+.studio-vton-angle-pill:hover:not(.is-active) {
+  background: var(--accent-soft-bg);
+  color: var(--ink-primary);
+}
+
+.studio-vton-seg-btn.is-active,
+.studio-vton-angle-pill.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
 .studio-2d-vton-viewer .studio-worn-slots-dock {
-  top: 60px;
+  top: 58px;
   left: 12px;
   z-index: 54;
 }
@@ -515,7 +944,7 @@
 }
 
 /* ==========================================================================
-   4. NON-BLOCKING SYNTHESIS PROGRESS BAR & SHIMMER SKELETON BADGE
+   6. PROGRESS BAR & KEYFRAMES
    ========================================================================== */
 .studio-vton-progress-track {
   position: absolute;
@@ -533,59 +962,20 @@
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--accent-mono);
-  transition: width 0.24s var(--spring-ease);
 }
 
-.studio-vton-loading-badge {
-  position: absolute;
-  right: 12px;
-  top: 58px;
-  z-index: 56;
-  height: 28px;
-  padding: 0 11px;
-  border-radius: var(--radius-pill);
-  background: var(--shimmer-base);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--elevation-xs);
-  color: var(--ink-secondary);
-  font-size: 0.66rem;
-  font-weight: 720;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
-  pointer-events: none;
+.studio-vton-progress-fill.is-indeterminate {
+  width: 42%;
+  animation: studioVtonIndeterminate 1.25s var(--spring-ease) infinite;
 }
 
-.studio-vton-loading-badge::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 20%,
-    var(--shimmer-highlight) 50%,
-    transparent 80%
-  );
-  transform: translateX(-100%);
-  animation: studioVtonShimmer 1.4s var(--spring-ease) infinite;
-}
-
-.studio-vton-loading-dot {
-  position: relative;
-  z-index: 1;
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-mono);
-  animation: studioVtonPulse 0.9s var(--spring-ease) infinite alternate;
-}
-
-.studio-vton-loading-label {
-  position: relative;
-  z-index: 1;
+@keyframes studioVtonIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 @keyframes studioVtonShimmer {
@@ -596,18 +986,17 @@
 
 @keyframes studioVtonPulse {
   from {
-    opacity: 0.35;
-    transform: scale(0.86);
+    opacity: 0.55;
+    transform: scale(0.92);
   }
   to {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.06);
   }
 }
 
 /* ==========================================================================
-   5. COMPACT STAGE HUD FOR DUAL-PANE FOLDABLE (717px), TABLET & MOBILE
-   (`.studio-25d-canvas` is max 452px on desktop and ~350-375px at 700-1024px)
+   7. COMPACT STAGE HUD FOR DUAL-PANE FOLDABLE (717px), TABLET & MOBILE
    ========================================================================== */
 @media (max-width: 1180px) {
   .studio-iso-angle-word {
@@ -670,21 +1059,46 @@
   }
 
   .studio-2d-vton-viewer .studio-worn-slots-dock {
-    top: 52px;
+    top: 50px;
     left: 10px;
     gap: 6px;
   }
 
-  .studio-vton-loading-badge {
-    top: 52px;
-    right: 10px;
-    height: 26px;
-    padding: 0 9px;
+  .studio-2d-layer {
+    padding: 48px 10px 86px;
+  }
+
+  .studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-2d-layer {
+    padding-left: 54px;
+  }
+
+  .studio-vton-mode-rail {
+    left: 8px;
+    right: 8px;
+    bottom: 48px;
+    gap: 3px;
+  }
+
+  .studio-vton-seg-btn,
+  .studio-vton-angle-pill {
+    height: 24px;
+    padding: 0 5px;
+    font-size: 0.59rem;
+    gap: 2px;
+  }
+
+  .studio-vton-seg-btn svg {
+    display: none;
+  }
+
+  .studio-vton-angle-pill {
+    min-width: 24px;
+    padding: 0 4px;
   }
 
   .studio-2d-compare-badges {
     left: 10px;
     right: 10px;
-    bottom: 54px;
+    bottom: 84px;
   }
 }
