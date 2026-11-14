@@ -273,7 +273,11 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
         }
         const hasPreBakedAlpha = transparentPx > nPx * 0.03;
         const preserveDial = subcategory === 'watch' || srcUrl.includes('studio-watch');
-        const isEyewear = subcategory === 'glasses' || srcUrl.includes('studio-glasses');
+        const isEyewear =
+          subcategory === 'glasses' ||
+          subcategory === 'sunglasses' ||
+          srcUrl.includes('studio-glasses') ||
+          srcUrl.includes('sunglasses');
 
         let fgLumSum = 0;
         let fgWeightSum = 0;
@@ -481,7 +485,9 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko';
   const label =
     alt ||
-    localizeGarmentName(item?.name, docLang) ||
+    (docLang === 'en' && typeof item?.name_en === 'string' && item.name_en.trim()
+      ? item.name_en.trim()
+      : localizeGarmentName(item?.name, docLang)) ||
     (docLang === 'en' ? 'Garment cutout' : '의류 이미지');
 
   const fallbackSeedSrc = getStudioSeedImageForGarment(cat, sub);
