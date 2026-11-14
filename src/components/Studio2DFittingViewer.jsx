@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Columns2,
   ExternalLink,
+  History,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -10,7 +11,9 @@ import {
   RotateCw,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   X,
+  Zap,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -26,15 +29,17 @@ import {
   TURNAROUND_ANGLES,
   buildAiVtonCacheKey,
   computeOutfitComboId,
+  deleteCachedAiVtonOutfit,
   getStoredClientGeminiApiKey,
   isDemoVtonShowcaseActive,
+  listCachedAiVtonOutfits,
   loadShowcaseDemoVtonSlices,
   normalizeTurnaroundAngleDeg,
   normalizeViewerMode,
   normalizeVtonStyleMode,
-  normalizeWeatherMoodKey,
   peekMemoryAiVtonSlice,
   peekShowcaseDemoVtonSlice,
+  readCachedAiVtonSlice,
   resolveClientGeminiApiKey,
   setStoredClientGeminiApiKey,
   synthesizeGeminiMultiAngleVton,
@@ -44,6 +49,33 @@ import { getStoredLang, localizeGarmentName, tr } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import './Studio2DFittingViewer.css';
+
+const AUTOGEN_STORAGE_KEY = 'ainventory_vton_autogen_v1';
+
+function readStoredAutoGenEnabled() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(AUTOGEN_STORAGE_KEY) === '1';
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return false;
+}
+
+function writeStoredAutoGenEnabled(enabled) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      if (enabled) {
+        localStorage.setItem(AUTOGEN_STORAGE_KEY, '1');
+      } else {
+        localStorage.removeItem(AUTOGEN_STORAGE_KEY);
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 const ORDERED_SLOT_KEYS = [
   'headwear',
@@ -289,6 +321,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     Boolean(getStoredClientGeminiApiKey())
   );
 
+  // Smart Credit-Saver & Persistent History Gallery state
+  const [autoGenEnabled, setAutoGenEnabled] = useState(() => readStoredAutoGenEnabled());
+  const [stagedNeedsApply, setStagedNeedsApply] = useState(false);
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
@@ -296,9 +335,25 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const abortControllerRef = useRef(null);
   const toastTimerRef = useRef(null);
-  const manualTriggerRef = useRef(false);
+  const hasInitialAutoRunRef = useRef(false);
+  const userApprovedGenRef = useRef(false);
+  const forceBypassCacheRef = useRef(false);
   const manualDemoRef = useRef(false);
   const configBlockedRef = useRef(false);
+
+  const refreshHistoryList = useCallback(() => {
+    listCachedAiVtonOutfits(20)
+      .then((items) => {
+        setHistoryItems(items);
+      })
+      .catch(() => {
+        // Ignore IndexedDB enumeration errors
+      });
+  }, []);
+
+  useEffect(() => {
+    refreshHistoryList();
+  }, [refreshHistoryList]);
 
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
@@ -348,7 +403,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const effectiveCompareActive = compareActive && equippedCount > 0;
 
   const { outfitComboId } = useMemo(() => computeOutfitComboId(slots), [slots]);
-  const weatherMoodKey = useMemo(() => normalizeWeatherMoodKey(weather), [weather]);
+  const prevOutfitComboRef = useRef(outfitComboId);
+
+  // Changing garments in the wardrobe returns focus from pinned history back to live outfit
+  useEffect(() => {
+    if (prevOutfitComboRef.current !== outfitComboId) {
+      prevOutfitComboRef.current = outfitComboId;
+      setPinnedHistoryItem(null);
+    }
+  }, [outfitComboId]);
 
   const currentAiCacheKey = useMemo(
     () =>
@@ -361,19 +424,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg]
   );
 
-  // Instant 0ms L1 memory slice lookup when switching angles or styles
-  const memorySlice = useMemo(
-    () =>
-      forceRefresh
-        ? null
-        : peekMemoryAiVtonSlice({
-            avatarConfigHash: resolvedAvatarHash,
-            outfitComboId,
-            styleMode,
-            angleDeg: viewAngleDeg,
-          }),
-    [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg, forceRefresh]
-  );
+  // Instant 0ms L1 memory slice lookup when switching angles, styles, or revisiting outfits
+  const historyCount = historyItems.length;
+  const memorySlice = useMemo(() => {
+    void historyCount;
+    if (forceRefresh) return null;
+    return peekMemoryAiVtonSlice({
+      avatarConfigHash: resolvedAvatarHash,
+      outfitComboId,
+      styleMode,
+      angleDeg: viewAngleDeg,
+    });
+  }, [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg, forceRefresh, historyCount]);
 
   const demoSliceUrl = useMemo(
     () =>
@@ -426,51 +488,67 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   });
 
-  // Execute Gemini Multimodal VTON synthesis when AI Try-On stage is active (default!)
+  // Smart Credit-Saver Gemini Multimodal VTON Pipeline:
+  // 1) L1 Memory (0ms) + L2 IndexedDB (~3ms) automatic reuse with 0 AI credits
+  // 2) Auto-runs once on initial entry; stages subsequent uncached garment edits at 0ms on Flat-Lay
+  //    until the user clicks [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
   useEffect(() => {
     abortControllerRef.current?.abort();
 
-    if (stageMode !== 'ai-vton') {
+    if (stageMode !== 'ai-vton' || equippedCount === 0) {
       setAiLoading(false);
+      setStagedNeedsApply(false);
       return undefined;
     }
 
-    if (equippedCount === 0) {
+    if (
+      pinnedHistoryItem &&
+      (pinnedHistoryItem.outfitComboId !== outfitComboId ||
+        pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
+        pinnedHistoryItem.styleMode !== styleMode)
+    ) {
       setAiLoading(false);
+      setStagedNeedsApply(false);
       return undefined;
     }
 
     const snap = latestInputsRef.current;
-    const isExplicitRetry = manualTriggerRef.current;
-    manualTriggerRef.current = false;
+    const isForceBypass = Boolean(snap.forceRefresh || forceBypassCacheRef.current);
+    const isUserApproved = Boolean(isForceBypass || userApprovedGenRef.current);
+    forceBypassCacheRef.current = false;
+    userApprovedGenRef.current = false;
 
-    const syncHit =
-      !snap.forceRefresh && !isExplicitRetry
-        ? peekMemoryAiVtonSlice({
-            avatarConfigHash: snap.resolvedAvatarHash,
-            outfitComboId,
-            styleMode: snap.styleMode,
-            angleDeg: snap.viewAngleDeg,
-          })
-        : null;
+    const syncHit = !isForceBypass
+      ? peekMemoryAiVtonSlice({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          angleDeg: snap.viewAngleDeg,
+        })
+      : null;
 
     if (syncHit) {
+      hasInitialAutoRunRef.current = true;
+      setStagedNeedsApply(false);
       setAiState({
         cacheKey: currentAiCacheKey,
         imageUrl: syncHit.imageUrl,
         fromCache: true,
         provider: 'gemini-vton',
       });
+      setStatusToast(null);
       setAiLoading(false);
       return undefined;
     }
 
-    if (demoShowcaseEnabled && !isExplicitRetry) {
+    if (demoShowcaseEnabled && !isForceBypass) {
       const cachedDemoUrl = peekShowcaseDemoVtonSlice(
         snap.styleMode,
         snap.viewAngleDeg
       );
       if (cachedDemoUrl) {
+        hasInitialAutoRunRef.current = true;
+        setStagedNeedsApply(false);
         setAiState({
           cacheKey: currentAiCacheKey,
           imageUrl: cachedDemoUrl,
@@ -483,24 +561,89 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
     }
 
-    if (
-      configBlockedRef.current &&
-      !demoShowcaseEnabled &&
-      !isExplicitRetry &&
-      !snap.forceRefresh
-    ) {
-      setAiLoading(false);
-      return undefined;
-    }
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const isDirectDemoClick = manualDemoRef.current;
     manualDemoRef.current = false;
-    const delayMs = isExplicitRetry || isDirectDemoClick ? 0 : 110;
+    let delayTimerId = null;
 
-    const startSynthesis = () => {
+    const runPipeline = async () => {
+      // Step A: Fast ~3ms IndexedDB lookup before deciding whether to stage or call Gemini
+      if (!isForceBypass) {
+        const idbHit = await readCachedAiVtonSlice({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          angleDeg: snap.viewAngleDeg,
+        });
+        if (controller.signal.aborted) return;
+
+        if (idbHit) {
+          // Warm all sibling turnaround angles into L1 memory in background
+          for (const deg of TURNAROUND_ANGLES) {
+            if (deg !== snap.viewAngleDeg) {
+              void readCachedAiVtonSlice({
+                avatarConfigHash: snap.resolvedAvatarHash,
+                outfitComboId,
+                styleMode: snap.styleMode,
+                angleDeg: deg,
+              });
+            }
+          }
+          hasInitialAutoRunRef.current = true;
+          setStagedNeedsApply(false);
+          setAiState({
+            cacheKey: currentAiCacheKey,
+            imageUrl: idbHit.slice.imageUrl,
+            fromCache: true,
+            provider: 'gemini-vton',
+          });
+          setStatusToast(null);
+          setAiLoading(false);
+          return;
+        }
+      }
+
+      // Step B: Credit-Saver Staged Gate — after initial entry, do NOT burn credits on every garment tap!
+      if (
+        !isUserApproved &&
+        !isDirectDemoClick &&
+        hasInitialAutoRunRef.current &&
+        !autoGenEnabled &&
+        !demoShowcaseEnabled
+      ) {
+        setAiLoading(false);
+        setStagedNeedsApply(true);
+        setStatusToast(null);
+        return;
+      }
+
+      if (
+        configBlockedRef.current &&
+        !demoShowcaseEnabled &&
+        !isUserApproved &&
+        !isDirectDemoClick
+      ) {
+        setAiLoading(false);
+        return;
+      }
+
+      const delayMs =
+        isUserApproved || isDirectDemoClick
+          ? 0
+          : autoGenEnabled && hasInitialAutoRunRef.current
+            ? 850
+            : 110;
+
+      if (delayMs > 0) {
+        await new Promise((resolve) => {
+          delayTimerId = setTimeout(resolve, delayMs);
+        });
+      }
       if (controller.signal.aborted) return;
+
+      hasInitialAutoRunRef.current = true;
+      setStagedNeedsApply(false);
       const liveSnap = latestInputsRef.current;
 
       const applyShowcaseDemoSlices = () => {
@@ -540,82 +683,83 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
 
-      synthesizeGeminiMultiAngleVton({
-        slots: liveSnap.slots,
-        skinProfile: liveSnap.skinProfile,
-        bodySpec: liveSnap.bodySpec,
-        user: liveSnap.user,
-        avatarSpec: liveSnap.resolvedAvatarSpec,
-        avatarConfigHash: liveSnap.resolvedAvatarHash,
-        viewAngleDeg: liveSnap.viewAngleDeg,
-        styleMode: liveSnap.styleMode,
-        weather: liveSnap.weather,
-        turnaroundSheet: true,
-        theme: liveSnap.resolvedTheme,
-        legacyMode: liveSnap.rawLegacyMode,
-        forceRefresh: Boolean(liveSnap.forceRefresh || isExplicitRetry),
-        signal: controller.signal,
-      })
-        .then((outcome) => {
-          if (controller.signal.aborted) return;
-
-          if (outcome.ok && outcome.imageUrl) {
-            setAiLoading(false);
-            configBlockedRef.current = false;
-            setAiState({
-              cacheKey: currentAiCacheKey,
-              imageUrl: outcome.imageUrl,
-              fromCache: outcome.fromCache,
-              provider: 'gemini-vton',
-            });
-            setStatusToast(null);
-            return;
-          }
-
-          if (demoShowcaseEnabled && outcome.reason !== 'aborted') {
-            applyShowcaseDemoSlices();
-            return;
-          }
-
-          setAiLoading(false);
-          if (outcome.reason !== 'aborted') {
-            if (isKeyActionableReason(outcome.reason)) {
-              configBlockedRef.current = true;
-            }
-            showToast(outcome.reason || 'gemini_unavailable');
-          }
-        })
-        .catch(() => {
-          if (controller.signal.aborted) return;
-          if (demoShowcaseEnabled) {
-            applyShowcaseDemoSlices();
-            return;
-          }
-          setAiLoading(false);
-          showToast('network_or_runtime_error');
+      try {
+        const outcome = await synthesizeGeminiMultiAngleVton({
+          slots: liveSnap.slots,
+          skinProfile: liveSnap.skinProfile,
+          bodySpec: liveSnap.bodySpec,
+          user: liveSnap.user,
+          avatarSpec: liveSnap.resolvedAvatarSpec,
+          avatarConfigHash: liveSnap.resolvedAvatarHash,
+          viewAngleDeg: liveSnap.viewAngleDeg,
+          styleMode: liveSnap.styleMode,
+          weather: liveSnap.weather,
+          turnaroundSheet: true,
+          theme: liveSnap.resolvedTheme,
+          legacyMode: liveSnap.rawLegacyMode,
+          forceRefresh: isForceBypass,
+          signal: controller.signal,
         });
+        if (controller.signal.aborted) return;
+
+        if (outcome.ok && outcome.imageUrl) {
+          setAiLoading(false);
+          configBlockedRef.current = false;
+          setStagedNeedsApply(false);
+          setAiState({
+            cacheKey: currentAiCacheKey,
+            imageUrl: outcome.imageUrl,
+            fromCache: outcome.fromCache,
+            provider: 'gemini-vton',
+          });
+          setStatusToast(null);
+          refreshHistoryList();
+          return;
+        }
+
+        if (demoShowcaseEnabled && outcome.reason !== 'aborted') {
+          applyShowcaseDemoSlices();
+          return;
+        }
+
+        setAiLoading(false);
+        if (outcome.reason !== 'aborted') {
+          if (isKeyActionableReason(outcome.reason)) {
+            configBlockedRef.current = true;
+          }
+          showToast(outcome.reason || 'gemini_unavailable');
+        }
+      } catch {
+        if (controller.signal.aborted) return;
+        if (demoShowcaseEnabled) {
+          applyShowcaseDemoSlices();
+          return;
+        }
+        setAiLoading(false);
+        showToast('network_or_runtime_error');
+      }
     };
 
-    if (delayMs === 0) {
-      startSynthesis();
-      return () => {
-        controller.abort();
-      };
-    }
+    void runPipeline();
 
-    const timerId = setTimeout(startSynthesis, delayMs);
     return () => {
-      clearTimeout(timerId);
+      if (delayTimerId) {
+        clearTimeout(delayTimerId);
+      }
       controller.abort();
     };
   }, [
     stageMode,
     currentAiCacheKey,
     outfitComboId,
-    weatherMoodKey,
+    resolvedAvatarHash,
+    styleMode,
     equippedCount,
     retryNonce,
     demoShowcaseEnabled,
+    autoGenEnabled,
+    pinnedHistoryItem,
+    refreshHistoryList,
     showToast,
   ]);
 
@@ -628,6 +772,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       configBlockedRef.current = false;
       manualDemoRef.current = true;
+      setPinnedHistoryItem(null);
+      setStagedNeedsApply(false);
       setDemoShowcaseEnabled(true);
       setStatusToast(null);
       setStageMode('ai-vton');
@@ -636,6 +782,27 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast]
   );
 
+  // Explicit 1-click generation for a newly staged outfit (uses cache if hit, calls Gemini if new)
+  const handleApproveStagedSynthesis = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (equippedCount === 0) {
+        showToast('empty_outfit');
+        return;
+      }
+      configBlockedRef.current = false;
+      setPinnedHistoryItem(null);
+      setStagedNeedsApply(false);
+      setStatusToast(null);
+      userApprovedGenRef.current = true;
+      forceBypassCacheRef.current = false;
+      setStageMode('ai-vton');
+      setRetryNonce((n) => n + 1);
+    },
+    [equippedCount, showToast]
+  );
+
+  // Explicit regeneration / retry (bypasses cache when user explicitly clicks Retry)
   const handleRetryAiSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
@@ -644,13 +811,78 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       configBlockedRef.current = false;
+      setPinnedHistoryItem(null);
+      setStagedNeedsApply(false);
       setDemoShowcaseEnabled(false);
       setStatusToast(null);
-      manualTriggerRef.current = true;
+      userApprovedGenRef.current = true;
+      forceBypassCacheRef.current = true;
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
     [equippedCount, showToast]
+  );
+
+  const handleToggleAutoGen = useCallback((e) => {
+    e?.stopPropagation?.();
+    setAutoGenEnabled((prev) => {
+      const next = !prev;
+      writeStoredAutoGenEnabled(next);
+      return next;
+    });
+  }, []);
+
+  const handleToggleHistoryPopover = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      setHistoryOpen((prev) => {
+        const next = !prev;
+        if (next) {
+          setKeyPopoverOpen(false);
+          refreshHistoryList();
+        }
+        return next;
+      });
+    },
+    [refreshHistoryList]
+  );
+
+  const handleSelectHistoryItem = useCallback(
+    (item) => {
+      abortControllerRef.current?.abort();
+      setAiLoading(false);
+      setStatusToast(null);
+      setStagedNeedsApply(false);
+      setStyleMode(item.styleMode);
+      setStageMode('ai-vton');
+      if (
+        item.outfitComboId === outfitComboId &&
+        item.avatarConfigHash === resolvedAvatarHash
+      ) {
+        setPinnedHistoryItem(null);
+      } else {
+        setPinnedHistoryItem(item);
+      }
+      setHistoryOpen(false);
+    },
+    [outfitComboId, resolvedAvatarHash]
+  );
+
+  const handleDeleteHistoryItem = useCallback(
+    (e, item) => {
+      e?.stopPropagation?.();
+      void deleteCachedAiVtonOutfit({
+        avatarConfigHash: item.avatarConfigHash,
+        outfitComboId: item.outfitComboId,
+        styleMode: item.styleMode,
+      }).then(() => {
+        setPinnedHistoryItem((prev) =>
+          prev?.groupKey === item.groupKey ? null : prev
+        );
+        refreshHistoryList();
+      });
+    },
+    [refreshHistoryList]
   );
 
   const handleSaveApiKeyAndRetry = useCallback(
@@ -660,11 +892,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStoredClientGeminiApiKey(draftApiKey);
       setHasSavedClientKey(Boolean(draftApiKey.trim()));
       configBlockedRef.current = false;
+      setPinnedHistoryItem(null);
+      setStagedNeedsApply(false);
       setDemoShowcaseEnabled(false);
       setKeyPopoverOpen(false);
       setStatusToast(null);
       if (equippedCount > 0) {
-        manualTriggerRef.current = true;
+        userApprovedGenRef.current = true;
+        forceBypassCacheRef.current = false;
         setStageMode('ai-vton');
         setRetryNonce((n) => n + 1);
       }
@@ -683,6 +918,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     e?.stopPropagation?.();
     setKeyPopoverOpen((prev) => {
       if (!prev) {
+        setHistoryOpen(false);
         setDraftApiKey(getStoredClientGeminiApiKey());
         setStatusToast(null);
       }
@@ -705,8 +941,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       configBlockedRef.current = false;
+      setPinnedHistoryItem(null);
+      setStagedNeedsApply(false);
       setStatusToast(null);
-      manualTriggerRef.current = true;
+      // Approve synthesis ONLY if uncached — NEVER force-bypass existing L1/IndexedDB cache!
+      userApprovedGenRef.current = true;
+      forceBypassCacheRef.current = false;
       if (stageMode === 'ai-vton') {
         setRetryNonce((n) => n + 1);
       } else {
@@ -716,10 +956,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast, stageMode]
   );
 
-  const handleSelectStyleMode = useCallback((nextRawStyle) => {
-    const normalized = normalizeVtonStyleMode(nextRawStyle);
-    setStyleMode(normalized);
-  }, []);
+  const handleSelectStyleMode = useCallback(
+    (nextRawStyle) => {
+      const normalized = normalizeVtonStyleMode(nextRawStyle);
+      setPinnedHistoryItem(null);
+      if (stageMode === 'ai-vton') {
+        userApprovedGenRef.current = true;
+        forceBypassCacheRef.current = false;
+      }
+      setStyleMode(normalized);
+    },
+    [stageMode]
+  );
 
   const handleZoomOut = useCallback((e) => {
     e.stopPropagation();
@@ -764,9 +1012,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const isWindy = Boolean(weather?.isWindy);
   const angleMeta = getTurnaroundAngleMeta(viewAngleDeg, resolvedLang);
 
+  const isShowingPinnedHistory = Boolean(
+    stageMode === 'ai-vton' &&
+      pinnedHistoryItem &&
+      (pinnedHistoryItem.outfitComboId !== outfitComboId ||
+        pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
+        pinnedHistoryItem.styleMode !== styleMode)
+  );
+
+  const pinnedHistorySliceUrl = isShowingPinnedHistory
+    ? pinnedHistoryItem.angleSlices?.[viewAngleDeg] ||
+      pinnedHistoryItem.angleSlices?.[45] ||
+      pinnedHistoryItem.angleSlices?.[0] ||
+      pinnedHistoryItem.thumbnailUrl ||
+      null
+    : null;
+
   const resolvedAiImageUrl =
     stageMode === 'ai-vton'
-      ? memorySlice?.imageUrl ||
+      ? pinnedHistorySliceUrl ||
+        memorySlice?.imageUrl ||
         (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
         demoSliceUrl
       : null;
@@ -776,7 +1041,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const isCachedHit =
     stageMode === 'ai-vton' && resolvedAiImageUrl
-      ? Boolean(memorySlice || aiState?.fromCache || demoSliceUrl)
+      ? Boolean(isShowingPinnedHistory || memorySlice || aiState?.fromCache || demoSliceUrl)
       : flatLayCached;
 
   const activeSkinHex = (
@@ -921,27 +1186,53 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </button>
         </div>
 
-        <button
-          id="open-body-spec-btn"
-          type="button"
-          className="studio-body-pill-btn tabular-nums"
-          aria-label={tr(
-            resolvedLang,
-            'editProfileBtn',
-            isEn ? 'Body & Personal Color' : '체형 설정 열기'
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenBodyModal?.();
-          }}
-        >
-          <SlidersHorizontal size={12} />
-          <span>
-            {displayHeightCm && displayWeightKg
-              ? `${displayHeightCm}·${displayWeightKg}`
-              : tr(resolvedLang, 'profileBtn', 'Profile')}
-          </span>
-        </button>
+        <div className="studio-vton-hud-right">
+          <button
+            type="button"
+            data-vton-history-btn="true"
+            aria-expanded={historyOpen}
+            aria-label={
+              isEn
+                ? `Saved AI Try-On outfits (${historyItems.length})`
+                : `이전 AI 피팅 보관함 (${historyItems.length})`
+            }
+            title={
+              isEn
+                ? 'Reuse previously generated AI outfits (0 credits)'
+                : '이전에 생성한 AI 피팅 즉시 불러오기 (크레딧 차감 0)'
+            }
+            className={`studio-vton-history-pill-btn tabular-nums ${historyOpen ? 'is-active' : ''}`}
+            onClick={handleToggleHistoryPopover}
+          >
+            <History size={13} />
+            <span className="studio-vton-history-word">{isEn ? 'Saved' : '기록'}</span>
+            {historyItems.length > 0 && (
+              <span className="studio-vton-history-count">{historyItems.length}</span>
+            )}
+          </button>
+
+          <button
+            id="open-body-spec-btn"
+            type="button"
+            className="studio-body-pill-btn tabular-nums"
+            aria-label={tr(
+              resolvedLang,
+              'editProfileBtn',
+              isEn ? 'Body & Personal Color' : '체형 설정 열기'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBodyModal?.();
+            }}
+          >
+            <SlidersHorizontal size={12} />
+            <span>
+              {displayHeightCm && displayWeightKg
+                ? `${displayHeightCm}·${displayWeightKg}`
+                : tr(resolvedLang, 'profileBtn', 'Profile')}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Zero-Procedural-Drawing Central Stage: Editorial Flat-Lay Board + Gemini AI VTON */}
@@ -981,9 +1272,102 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         lang={resolvedLang}
       />
 
+      {/* Smart Credit-Saver Staged CTA Bar: Lets user swap multiple garments at 0ms & 0 credits before generating */}
+      {!effectiveCompareActive &&
+        !keyPopoverOpen &&
+        !historyOpen &&
+        !statusToast &&
+        stageMode === 'ai-vton' &&
+        equippedCount > 0 &&
+        stagedNeedsApply &&
+        !aiLoading &&
+        !resolvedAiImageUrl && (
+          <div
+            className="studio-vton-staged-bar"
+            data-vton-staged-bar="true"
+            role="region"
+            aria-label={isEn ? 'AI Try-On generation controls' : 'AI 피팅 생성 제어'}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              data-vton-generate-btn="true"
+              className="studio-vton-generate-cta-btn"
+              onClick={handleApproveStagedSynthesis}
+            >
+              <Sparkles size={12} />
+              <span>{isEn ? 'Generate AI Try-On' : '이 코디 AI 피팅 생성'}</span>
+            </button>
+            <button
+              type="button"
+              data-vton-autogen-toggle="true"
+              aria-pressed={autoGenEnabled}
+              title={
+                isEn
+                  ? 'Toggle automatic AI generation on garment change'
+                  : '옷 변경 시 자동 AI 생성 켜기/끄기 (OFF 권장: 크레딧 절약)'
+              }
+              className={`studio-vton-autogen-btn ${autoGenEnabled ? 'is-active' : ''}`}
+              onClick={handleToggleAutoGen}
+            >
+              <Zap size={11} />
+              <span>
+                {isEn
+                  ? `Auto ${autoGenEnabled ? 'ON' : 'OFF'}`
+                  : `자동 ${autoGenEnabled ? 'ON' : 'OFF'}`}
+              </span>
+            </button>
+            {historyItems.length > 0 && (
+              <button
+                type="button"
+                className="studio-vton-autogen-btn"
+                onClick={handleToggleHistoryPopover}
+              >
+                <History size={11} />
+                <span>
+                  {isEn
+                    ? `Saved (${historyItems.length})`
+                    : `이전 피팅 (${historyItems.length})`}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+      {/* Pinned History Banner when viewing a past generated outfit different from current wardrobe slots */}
+      {isShowingPinnedHistory &&
+        !effectiveCompareActive &&
+        !keyPopoverOpen &&
+        !historyOpen && (
+          <div
+            className="studio-vton-pinned-banner"
+            data-vton-pinned-banner="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <History size={12} />
+            <span className="studio-vton-pinned-label">
+              {isEn
+                ? `Saved fit: ${pinnedHistoryItem.outfitLabel}`
+                : `보관함 피팅: ${pinnedHistoryItem.outfitLabel}`}
+            </span>
+            <button
+              type="button"
+              data-vton-unpin-btn="true"
+              className="studio-vton-toast-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPinnedHistoryItem(null);
+              }}
+            >
+              <span>{isEn ? 'Current Outfit' : '현재 코디 보기'}</span>
+            </button>
+          </div>
+        )}
+
       {/* Status Toast when Gemini API key is missing or synthesis falls back to Flat-Lay Board */}
       {!effectiveCompareActive &&
         !keyPopoverOpen &&
+        !historyOpen &&
         statusToast &&
         (equippedCount > 0 || statusToast.reason === 'empty_outfit') && (
           <div
@@ -1020,6 +1404,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
                   onClick={(e) => {
                     e.stopPropagation();
+                    setHistoryOpen(false);
                     setDraftApiKey(getStoredClientGeminiApiKey());
                     setKeyPopoverOpen(true);
                     setStatusToast(null);
@@ -1042,6 +1427,141 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             )}
           </div>
         )}
+
+      {/* Persistent IndexedDB AI Fitting History Popover (0ms / 0-credit reuse) */}
+      {historyOpen && (
+        <div
+          className="studio-vton-history-popover"
+          data-vton-history-popover="true"
+          role="dialog"
+          aria-label={isEn ? 'Saved AI Try-On history' : '이전 AI 피팅 보관함'}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="studio-vton-key-popover-head">
+            <span className="studio-vton-key-popover-title">
+              {isEn
+                ? `Saved AI Fittings (${historyItems.length})`
+                : `이전 AI 피팅 보관함 (${historyItems.length})`}
+            </span>
+            <div className="studio-vton-history-head-actions">
+              <button
+                type="button"
+                data-vton-autogen-toggle="true"
+                aria-pressed={autoGenEnabled}
+                className={`studio-vton-autogen-btn ${autoGenEnabled ? 'is-active' : ''}`}
+                onClick={handleToggleAutoGen}
+              >
+                <Zap size={10} />
+                <span>
+                  {isEn
+                    ? `Auto ${autoGenEnabled ? 'ON' : 'OFF'}`
+                    : `자동 ${autoGenEnabled ? 'ON' : 'OFF'}`}
+                </span>
+              </button>
+              <button
+                type="button"
+                data-vton-close-history-btn="true"
+                className="studio-vton-key-close"
+                aria-label={isEn ? 'Close saved fittings' : '보관함 닫기'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHistoryOpen(false);
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+          <p className="studio-vton-key-popover-desc">
+            {isEn
+              ? 'Tap any previously generated look to view all 4 angles instantly with 0 AI credits.'
+              : '생성했던 코디는 브라우저에 자동 보관되어 크레딧 소모 없이 0초 만에 불러옵니다.'}
+          </p>
+
+          {historyItems.length === 0 ? (
+            <div className="studio-vton-history-empty">
+              {isEn
+                ? 'No saved AI fittings yet. Generated outfits will appear here automatically.'
+                : '아직 보관된 AI 피팅이 없습니다. 코디를 AI 피팅으로 생성하면 이곳에 자동 저장됩니다.'}
+            </div>
+          ) : (
+            <div className="studio-vton-history-list">
+              {historyItems.map((item) => {
+                const isActiveCard = isShowingPinnedHistory
+                  ? pinnedHistoryItem?.groupKey === item.groupKey
+                  : item.outfitComboId === outfitComboId &&
+                    item.avatarConfigHash === resolvedAvatarHash &&
+                    item.styleMode === styleMode &&
+                    Boolean(resolvedAiImageUrl);
+                const thumbSrc =
+                  item.angleSlices?.[viewAngleDeg] ||
+                  item.angleSlices?.[45] ||
+                  item.thumbnailUrl;
+                return (
+                  <div
+                    key={item.groupKey}
+                    role="button"
+                    tabIndex={0}
+                    data-vton-history-card={item.outfitComboId}
+                    className={`studio-vton-history-card ${isActiveCard ? 'is-active' : ''}`}
+                    onClick={() => handleSelectHistoryItem(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectHistoryItem(item);
+                      }
+                    }}
+                  >
+                    <img
+                      src={thumbSrc}
+                      alt={item.outfitLabel}
+                      className="studio-vton-history-thumb"
+                      loading="lazy"
+                    />
+                    <div className="studio-vton-history-meta">
+                      <span className="studio-vton-history-title">
+                        {item.outfitLabel}
+                      </span>
+                      <span className="studio-vton-history-sub">
+                        <span>
+                          {item.styleMode === 'stylized_isometric'
+                            ? isEn
+                              ? 'Stylized'
+                              : '시뮬레이션'
+                            : isEn
+                              ? 'Photo'
+                              : '실사 모델'}
+                        </span>
+                        <span>·</span>
+                        <span>
+                          {isEn
+                            ? `${item.availableAngles.length} angles`
+                            : `${item.availableAngles.length}각도`}
+                        </span>
+                        <span>·</span>
+                        <span>{isEn ? '0 Credit' : '0 크레딧'}</span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      data-vton-history-delete={item.outfitComboId}
+                      className="studio-vton-history-del-btn"
+                      aria-label={
+                        isEn
+                          ? `Delete ${item.outfitLabel}`
+                          : `${item.outfitLabel} 보관함에서 삭제`
+                      }
+                      onClick={(e) => handleDeleteHistoryItem(e, item)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Compact Inline Gemini API Key Popover for Browser / Standalone Environments */}
       {keyPopoverOpen && (

@@ -109,7 +109,24 @@ export interface CachedAiVtonSlice {
   weatherMood: WeatherMoodKey;
   imageUrl: string;
   sheetImageUrl?: string | null;
+  outfitLabel?: string;
+  garmentLabels?: string[];
+  equippedCount?: number;
   model: string;
+  updatedAt: number;
+}
+
+export interface AiVtonHistoryEntry {
+  groupKey: string;
+  avatarConfigHash: string;
+  outfitComboId: string;
+  styleMode: VtonStyleMode;
+  outfitLabel: string;
+  garmentLabels: string[];
+  equippedCount: number;
+  thumbnailUrl: string;
+  angleSlices: Partial<Record<TurnaroundAngleDeg, string>>;
+  availableAngles: TurnaroundAngleDeg[];
   updatedAt: number;
 }
 
@@ -154,8 +171,9 @@ interface VtonServerResponse {
 const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_slices';
-const L1_MAX_ENTRIES = 96;
-const L2_MAX_ENTRIES = 120;
+const L1_MAX_ENTRIES = 128;
+const L2_MAX_ENTRIES = 240;
+const PACKSHOT_CACHE_MAX = 160;
 
 const ORDERED_OUTFIT_SLOTS = [
   'headwear',
@@ -181,6 +199,7 @@ const LEGACY_MODE_STORAGE_KEYS = [
 ] as const;
 
 const l1SliceCache = new Map<string, CachedAiVtonSlice>();
+const encodedGarmentPackshotCache = new Map<string, string>();
 const seenFlatLayCombos = new Set<string>();
 const inFlightAiRequests = new Map<string, Promise<AiVtonSynthesisOutcome>>();
 let vtonDbPromise: Promise<IDBDatabase | null> | null = null;
@@ -712,6 +731,122 @@ async function persistAiVtonSlices(entries: CachedAiVtonSlice[]): Promise<void> 
   });
 }
 
+export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistoryEntry[]> {
+  const allRecords: CachedAiVtonSlice[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const memSlice of l1SliceCache.values()) {
+    if (memSlice?.cacheKey && memSlice.imageUrl?.startsWith('data:image/')) {
+      seenKeys.add(memSlice.cacheKey);
+      allRecords.push(memSlice);
+    }
+  }
+
+  const db = await openVtonIndexedDb();
+  if (db) {
+    const dbRecords = await new Promise<CachedAiVtonSlice[]>((resolve) => {
+      try {
+        const tx = db.transaction(VTON_IDB_STORE, 'readonly');
+        const req = tx.objectStore(VTON_IDB_STORE).getAll();
+        req.onsuccess = () =>
+          resolve(Array.isArray(req.result) ? (req.result as CachedAiVtonSlice[]) : []);
+        req.onerror = () => resolve([]);
+      } catch {
+        resolve([]);
+      }
+    });
+
+    for (const rec of dbRecords) {
+      if (rec?.cacheKey && !seenKeys.has(rec.cacheKey) && rec.imageUrl?.startsWith('data:image/')) {
+        seenKeys.add(rec.cacheKey);
+        allRecords.push(rec);
+        setL1Slice(rec);
+      }
+    }
+  }
+
+  const grouped = new Map<string, AiVtonHistoryEntry>();
+  for (const rec of allRecords) {
+    const groupKey = `${rec.avatarConfigHash}::${rec.outfitComboId}::${rec.styleMode}`;
+    let group = grouped.get(groupKey);
+    if (!group) {
+      const labels = Array.isArray(rec.garmentLabels) ? rec.garmentLabels.filter(Boolean) : [];
+      group = {
+        groupKey,
+        avatarConfigHash: rec.avatarConfigHash,
+        outfitComboId: rec.outfitComboId,
+        styleMode: rec.styleMode,
+        outfitLabel:
+          rec.outfitLabel ||
+          (labels.length > 0 ? labels.slice(0, 2).join(' · ') : '저장된 AI 피팅'),
+        garmentLabels: labels,
+        equippedCount: rec.equippedCount || labels.length || 1,
+        thumbnailUrl: rec.imageUrl,
+        angleSlices: {},
+        availableAngles: [],
+        updatedAt: rec.updatedAt || 0,
+      };
+      grouped.set(groupKey, group);
+    }
+
+    group.angleSlices[rec.angleDeg] = rec.imageUrl;
+    if (!group.availableAngles.includes(rec.angleDeg)) {
+      group.availableAngles.push(rec.angleDeg);
+      group.availableAngles.sort((a, b) => a - b);
+    }
+    if ((rec.updatedAt || 0) >= group.updatedAt) {
+      group.updatedAt = rec.updatedAt || group.updatedAt;
+      if (rec.outfitLabel) group.outfitLabel = rec.outfitLabel;
+      if (Array.isArray(rec.garmentLabels) && rec.garmentLabels.length > 0) {
+        group.garmentLabels = rec.garmentLabels;
+      }
+    }
+    group.thumbnailUrl =
+      group.angleSlices[45] || group.angleSlices[0] || group.thumbnailUrl || rec.imageUrl;
+  }
+
+  return [...grouped.values()]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, Math.max(1, limit));
+}
+
+export async function deleteCachedAiVtonOutfit(params: {
+  avatarConfigHash: string;
+  outfitComboId: string;
+  styleMode: VtonStyleMode;
+}): Promise<void> {
+  const keysToDelete = TURNAROUND_ANGLES.map((angleDeg) =>
+    buildAiVtonCacheKey({
+      avatarConfigHash: params.avatarConfigHash,
+      outfitComboId: params.outfitComboId,
+      styleMode: params.styleMode,
+      angleDeg,
+    })
+  );
+
+  for (const key of keysToDelete) {
+    l1SliceCache.delete(key);
+  }
+
+  const db = await openVtonIndexedDb();
+  if (!db) return;
+
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(VTON_IDB_STORE, 'readwrite');
+      const store = tx.objectStore(VTON_IDB_STORE);
+      for (const key of keysToDelete) {
+        store.delete(key);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 /**
  * Crops an AI-generated 2x2 Turnaround Studio Sheet into 4 individual angle images:
  * - Top-Left     -> `0°` (Front)
@@ -751,6 +886,7 @@ export async function sliceTurnaround2x2Sheet(
         const trimY = Math.max(1, Math.round(halfH * 0.012));
         const cropW = Math.max(16, halfW - trimX * 2);
         const cropH = Math.max(16, halfH - trimY * 2);
+        const useCompactJpeg = w > 256 && h > 256;
 
         const quadrants: Array<{ angle: TurnaroundAngleDeg; sx: number; sy: number }> = [
           { angle: 0, sx: trimX, sy: trimY },
@@ -769,8 +905,14 @@ export async function sliceTurnaround2x2Sheet(
             out[q.angle] = sheetDataUrl;
             continue;
           }
+          if (useCompactJpeg) {
+            ctx.fillStyle = '#F5F5F7';
+            ctx.fillRect(0, 0, cropW, cropH);
+          }
           ctx.drawImage(img, q.sx, q.sy, cropW, cropH, 0, 0, cropW, cropH);
-          out[q.angle] = cropCanvas.toDataURL('image/png');
+          out[q.angle] = useCompactJpeg
+            ? cropCanvas.toDataURL('image/jpeg', 0.9)
+            : cropCanvas.toDataURL('image/png');
         }
         resolve(out);
       } catch {
@@ -934,7 +1076,7 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
             resolve(null);
             return;
           }
-          const maxEdge = 640;
+          const maxEdge = 384;
           const scale = Math.min(1, maxEdge / Math.max(nw, nh));
           const targetW = Math.max(16, Math.round(nw * scale));
           const targetH = Math.max(16, Math.round(nh * scale));
@@ -949,7 +1091,7 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
           ctx.fillStyle = '#F5F5F7';
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
-          resolve(canvas.toDataURL('image/jpeg', 0.88));
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
         } catch {
           resolve(null);
         }
@@ -962,9 +1104,28 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
   }
 }
 
+function rememberPackshotCache(url: string, dataUrl: string): void {
+  if (encodedGarmentPackshotCache.has(url)) {
+    encodedGarmentPackshotCache.delete(url);
+  }
+  while (encodedGarmentPackshotCache.size >= PACKSHOT_CACHE_MAX) {
+    const oldest = encodedGarmentPackshotCache.keys().next().value;
+    if (!oldest) break;
+    encodedGarmentPackshotCache.delete(oldest);
+  }
+  encodedGarmentPackshotCache.set(url, dataUrl);
+}
+
 async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | null> {
   if (!srcUrl) return null;
   if (srcUrl.startsWith('data:image/')) return srcUrl;
+
+  const cachedPackshot = encodedGarmentPackshotCache.get(srcUrl);
+  if (cachedPackshot) {
+    rememberPackshotCache(srcUrl, cachedPackshot);
+    return cachedPackshot;
+  }
+
   if (typeof fetch === 'undefined' || typeof FileReader === 'undefined') return null;
 
   try {
@@ -973,12 +1134,15 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
     const blob = await res.blob();
     if (!blob || blob.size === 0 || blob.size > 6 * 1024 * 1024) return null;
 
-    if (blob.type === 'image/webp' || blob.size > 380 * 1024) {
+    if (blob.type === 'image/webp' || blob.size > 48 * 1024) {
       const normalized = await normalizeImageBlobToJpegDataUrl(blob);
-      if (normalized) return normalized;
+      if (normalized) {
+        rememberPackshotCache(srcUrl, normalized);
+        return normalized;
+      }
     }
 
-    return await new Promise<string | null>((resolve) => {
+    const encoded = await new Promise<string | null>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = typeof reader.result === 'string' ? reader.result : null;
@@ -987,6 +1151,10 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
     });
+    if (encoded) {
+      rememberPackshotCache(srcUrl, encoded);
+    }
+    return encoded;
   } catch {
     return null;
   }
@@ -1047,38 +1215,34 @@ function buildDirectClientGeminiParts(params: {
   const isStylized = styleMode === 'stylized_isometric';
 
   const header = isStylized
-    ? 'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On studio lookbook image (charming dimensional character modeling, natural hair clusters, relaxed fingers, and authentic real-fabric texture fidelity — ZERO crude flat 2D vector polygons).'
-    : 'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS studio campaign photography, medium-format 85mm lens, realistic skin texture, natural hair, relaxed hands, and hyper-accurate real garment drape).';
+    ? 'Stylized Isometric Simulation Character VTON lookbook (dimensional character, natural hair/hands, authentic fabric texture, zero flat vector polygons).'
+    : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? 'Compose a borderless 2x2 Grid Turnaround Studio Sheet (4 equal 50%x50% quadrants on solid #F5F5F7 background, ZERO grid lines or text) showing the EXACT SAME PERSON in the EXACT SAME OUTFIT at: Top-Left 0° Front, Top-Right 45° Quarter View, Bottom-Left 90° Side Profile (full side cranial depth, hair volume, relaxed hand, lateral garment folds), and Bottom-Right 180° Full Rear Back.'
-    : `Compose a full-body head-to-toe studio portrait at ${angleDeg}° camera angle on a clean solid #F5F5F7 studio background with soft floor contact shadow and ZERO text.`;
+    ? 'Borderless 2x2 Turnaround Sheet (4 equal quadrants on solid #F5F5F7, zero lines/text) of the SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back.'
+    : `Full-body studio portrait at ${angleDeg}° on solid #F5F5F7 background, soft floor shadow, zero text.`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
-  const bodyLock = `Casting & Proportion Lock: Height ${profile.heightCm} cm, Weight ${profile.weightKg} kg (BMI ${bmi}), presentation=${spec.framePreset}, archetype=${spec.archetypePreset}, chestLine=${anthro.chestForm}, skinTone=${profile.skinToneHex} (MST-${app.mstLevel}, ${app.mstUndertone} undertone), hairStyle=${app.hairStyle} (${app.hairColorHex}), facialHair=${app.facialHair}, weatherLighting=${weatherMood}. Reflect BMI ${bmi} faithfully across face/cheeks/jawline, neck, arms, wrists/hands/fingers, torso, hips, legs, and feet without fashion-mannequin slimming.`;
+  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}, light=${weatherMood}.`;
 
   const parts: Array<Record<string, unknown>> = [
-    { text: [header, cameraLine, bodyLock].join('\n\n') },
+    { text: `${header}\n${cameraLine}\n${bodyLock}` },
   ];
 
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `Preserve this person's facial identity and hair consistently in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}:`,
+      text: `Match facial identity/hair (${isStylized ? 'stylized' : 'photorealistic'}, skin ${profile.skinToneHex}):`,
     });
     parts.push({ inlineData: portraitPart });
   }
 
-  const entries = Object.entries(serializedSlots);
-  for (const [slotKey, item] of entries) {
-    const name = String(item.name || slotKey);
-    const colorHex = String(item.color_hex || '#8E8E93');
-    const fabric = String(item.fabric || 'cotton');
+  for (const [slotKey, item] of Object.entries(serializedSlots)) {
     const inline = parseDataUrlInlinePart(
       typeof item.packshotDataUrl === 'string' ? item.packshotDataUrl : null
     );
     parts.push({
-      text: `[EQUIPPED ${slotKey.toUpperCase()}]: "${name}" (${String(item.category || slotKey)} / ${String(item.subcategory || '')}, color ${colorHex}, fabric ${fabric}). Reproduce this exact garment naturally worn on the model:`,
+      text: `[${slotKey.toUpperCase()}] "${String(item.name || slotKey)}" (${String(item.subcategory || item.category || slotKey)}, ${String(item.color_hex || '')}, ${String(item.fabric || 'cotton')}):`,
     });
     if (inline) {
       parts.push({ inlineData: inline });
@@ -1086,7 +1250,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: 'Dress the model simultaneously in all equipped garments above on #F5F5F7 background. Output ONLY the final image directly without asking follow-up questions.',
+    text: 'Wear all garments above together on #F5F5F7. Return image only.',
   });
 
   return parts;
@@ -1547,6 +1711,13 @@ export async function synthesizeGeminiMultiAngleVton(
 
       const now = Date.now();
       const modelName = String(json.model || 'gemini-3.1-flash-image');
+      const garmentLabels = equippedGarments
+        .map(({ garment }) => String(garment.name || '').trim())
+        .filter(Boolean);
+      const outfitLabel =
+        garmentLabels.length > 2
+          ? `${garmentLabels.slice(0, 2).join(' · ')} 외 ${garmentLabels.length - 2}`
+          : garmentLabels.join(' · ') || '저장된 AI 피팅';
       const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
       const entriesToPersist: CachedAiVtonSlice[] = [];
       const isTurnaroundResponse = json.layout
@@ -1571,7 +1742,10 @@ export async function synthesizeGeminiMultiAngleVton(
               angleDeg: a,
               weatherMood,
               imageUrl: candidate,
-              sheetImageUrl: rawComposite,
+              sheetImageUrl: null,
+              outfitLabel,
+              garmentLabels,
+              equippedCount: equippedGarments.length,
               model: modelName,
               updatedAt: now,
             });
@@ -1595,7 +1769,10 @@ export async function synthesizeGeminiMultiAngleVton(
             angleDeg: a,
             weatherMood,
             imageUrl: sliceUrl,
-            sheetImageUrl: rawComposite,
+            sheetImageUrl: null,
+            outfitLabel,
+            garmentLabels,
+            equippedCount: equippedGarments.length,
             model: modelName,
             updatedAt: now,
           });
@@ -1611,6 +1788,9 @@ export async function synthesizeGeminiMultiAngleVton(
           weatherMood,
           imageUrl: rawComposite,
           sheetImageUrl: null,
+          outfitLabel,
+          garmentLabels,
+          equippedCount: equippedGarments.length,
           model: modelName,
           updatedAt: now,
         });

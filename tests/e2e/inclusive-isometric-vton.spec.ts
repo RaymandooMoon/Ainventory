@@ -651,5 +651,110 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const slice90 = await aiImg.getAttribute('src');
     expect(slice90).not.toBe(slice45);
   });
+
+  test('8. Smart Credit-Saver staging (0 API calls during multi-garment edits), automatic cache reuse, and Saved AI Fittings History gallery', async ({
+    page,
+  }) => {
+    const sheetLookA = buildMockTurnaround2x2PngDataUrl(15);
+    const sheetLookB = buildMockTurnaround2x2PngDataUrl(95);
+    let synthCalls = 0;
+
+    await page.route('**/api/vton/synthesize', async (route) => {
+      synthCalls += 1;
+      const currentCall = synthCalls;
+      await new Promise((r) => setTimeout(r, 60));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: 'turnaround_2x2',
+          styleMode: 'photorealistic',
+          geminiUsed: true,
+          compositeImageUrl: currentCall === 1 ? sheetLookA : sheetLookB,
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+    await expect(
+      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+    ).toBeVisible();
+
+    // 1. Initial entry auto-generates Look A once
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    const callsAfterInitial = synthCalls;
+    expect(callsAfterInitial).toBe(1);
+    const lookASrc45 = await aiImg.getAttribute('src');
+    expect(lookASrc45).toMatch(/^data:image\//);
+
+    // 2. Perform 3 consecutive garment changes -> Credit-Saver stages edits on Flat-Lay with ZERO API calls!
+    await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
+    await selectStudioSlotAndPickItem(page, 'outer', {
+      season: '겨울',
+      matchText: /롱패딩|숏패딩|무스탕|Puffer|Parka|Mustang/i,
+    });
+    await selectStudioSlotAndPickItem(page, 'shoes', {
+      season: '겨울',
+      matchText: /롱부츠|스노우|방한|Boots/i,
+    });
+
+    await page.waitForTimeout(300);
+    expect(synthCalls).toBe(callsAfterInitial);
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-vton-staged-bar="true"]')).toBeVisible();
+    const generateBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
+    await expect(generateBtn).toBeVisible();
+
+    // 3. Explicit 1-click generation for Look B -> fires exactly 1 API call
+    await generateBtn.click();
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    expect(synthCalls).toBe(callsAfterInitial + 1);
+    const lookBSrc45 = await aiImg.getAttribute('src');
+    expect(lookBSrc45).not.toBe(lookASrc45);
+
+    // 4. Switch back to Look 1 -> automatic 0ms cache reuse with ZERO extra API calls!
+    await page
+      .locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`)
+      .first()
+      .click();
+    await expect(aiImg).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
+    expect(await aiImg.getAttribute('src')).toBe(lookASrc45);
+    expect(synthCalls).toBe(callsAfterInitial + 1);
+
+    // Toggling Flat-Lay <-> AI Try-On also preserves cache with ZERO extra API calls!
+    await studioCanvas.locator('[data-viewer-stage-btn="flatlay"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
+    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
+    await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
+    expect(synthCalls).toBe(callsAfterInitial + 1);
+
+    // 5. Open Saved AI Fittings History gallery ([기록 2]) and reuse Look B in 0ms with ZERO extra API calls!
+    const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
+    await expect(historyBtn).toContainText('2');
+    await historyBtn.click();
+
+    const historyPopover = studioCanvas.locator('[data-vton-history-popover="true"]');
+    await expect(historyPopover).toBeVisible();
+    const cards = historyPopover.locator('[data-vton-history-card]');
+    await expect(cards).toHaveCount(2);
+
+    // Click the non-active card (Look B)
+    await historyPopover.locator('.studio-vton-history-card:not(.is-active)').first().click();
+    await expect(historyPopover).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-pinned-banner="true"]')).toBeVisible();
+    expect(await aiImg.getAttribute('src')).toBe(lookBSrc45);
+    expect(synthCalls).toBe(callsAfterInitial + 1);
+  });
 });
+
 
