@@ -160,8 +160,8 @@ const BODY_SHAPE_DESCRIPTIONS = Object.freeze({
 
 const MAX_PACKSHOT_FILE_BYTES = 4 * 1024 * 1024; // 4MB max for disk garment packshots
 const MAX_DATA_URL_BYTES = 5 * 1024 * 1024; // 5MB max for inline data URLs
-const GEMINI_TIMEOUT_MS = 28000;
-const MAX_TOTAL_SYNTHESIS_MS = 36000;
+const GEMINI_TIMEOUT_MS = 45000;
+const MAX_TOTAL_SYNTHESIS_MS = 75000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
 const CACHE_SCHEMA_VERSION = 'vton-multimodal-v3';
@@ -356,23 +356,102 @@ function estimateMstFromHex(hexColor, personalColor = 'autumn_warm') {
   return { mstLevel, mstUndertone, lum };
 }
 
-export function resolveGeminiApiKey() {
+/** @type {Map<string, { mtimeMs: number, values: Record<string, string> }>} */
+const dotEnvCache = new Map();
+
+function parseDotEnvContent(content) {
+  /** @type {Record<string, string>} */
+  const parsed = {};
+  for (const rawLine of String(content || '').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const withoutExport = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const eqIdx = withoutExport.indexOf('=');
+    if (eqIdx <= 0) continue;
+    const key = withoutExport.slice(0, eqIdx).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    let val = withoutExport.slice(eqIdx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    } else {
+      const commentIdx = val.indexOf(' #');
+      if (commentIdx >= 0) {
+        val = val.slice(0, commentIdx).trim();
+      }
+    }
+    if (val) {
+      parsed[key] = val;
+    }
+  }
+  return parsed;
+}
+
+function readLocalDotEnvMap() {
+  /** @type {Record<string, string>} */
+  const merged = {};
+  const candidates = [path.join(ROOT_DIR, '.env'), path.join(ROOT_DIR, '.env.local')];
+  for (const filePath of candidates) {
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile() || stat.size <= 0 || stat.size > 256 * 1024) continue;
+      const cached = dotEnvCache.get(filePath);
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        Object.assign(merged, cached.values);
+        continue;
+      }
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const values = parseDotEnvContent(raw);
+      dotEnvCache.set(filePath, { mtimeMs: stat.mtimeMs, values });
+      Object.assign(merged, values);
+    } catch {
+      // ignore missing or unreadable .env files
+    }
+  }
+  return merged;
+}
+
+function readServerEnvVar(key) {
+  const direct = process.env[key];
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
+  const localMap = readLocalDotEnvMap();
+  const fromFile = localMap[key];
+  return typeof fromFile === 'string' ? fromFile.trim() : '';
+}
+
+export function sanitizeClientGeminiKey(rawKey) {
+  if (typeof rawKey !== 'string') return '';
+  const trimmed = rawKey.trim();
+  if (trimmed.length < 12 || trimmed.length > 256) return '';
+  if (/[\r\n\s]/.test(trimmed)) return '';
+  return trimmed;
+}
+
+export function resolveGeminiApiKey(overrideKey = '') {
+  const explicit = sanitizeClientGeminiKey(overrideKey);
+  if (explicit) return explicit;
   const raw =
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.VITE_VTON_API_KEY ||
+    readServerEnvVar('GEMINI_API_KEY') ||
+    readServerEnvVar('GOOGLE_API_KEY') ||
+    readServerEnvVar('GOOGLE_GENAI_API_KEY') ||
+    readServerEnvVar('VITE_GEMINI_API_KEY') ||
+    readServerEnvVar('VITE_GOOGLE_API_KEY') ||
+    readServerEnvVar('VITE_VTON_API_KEY') ||
     '';
   return String(raw).trim();
 }
 
 export function resolveVertexAiConfig() {
-  const customEndpoint = String(process.env.VERTEX_AI_ENDPOINT || '').trim();
-  const project = String(
-    process.env.VERTEX_AI_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || ''
-  ).trim();
-  const location = String(process.env.VERTEX_AI_LOCATION || 'us-central1').trim();
-  const accessToken = String(process.env.VERTEX_AI_ACCESS_TOKEN || '').trim();
-  const apiKey = String(process.env.VERTEX_AI_API_KEY || '').trim();
+  const customEndpoint = readServerEnvVar('VERTEX_AI_ENDPOINT');
+  const project =
+    readServerEnvVar('VERTEX_AI_PROJECT') || readServerEnvVar('GOOGLE_CLOUD_PROJECT');
+  const location = readServerEnvVar('VERTEX_AI_LOCATION') || 'us-central1';
+  const accessToken = readServerEnvVar('VERTEX_AI_ACCESS_TOKEN');
+  const apiKey = readServerEnvVar('VERTEX_AI_API_KEY');
 
   if (customEndpoint && (accessToken || apiKey)) {
     return { enabled: true, customEndpoint, project, location, accessToken, apiKey };
@@ -385,9 +464,11 @@ export function resolveVertexAiConfig() {
 
 export function resolveGeminiModelChain() {
   const candidates = [
-    process.env.GEMINI_VTON_MODEL ? String(process.env.GEMINI_VTON_MODEL).trim() : '',
+    readServerEnvVar('GEMINI_VTON_MODEL'),
+    'gemini-3.1-flash-image',
+    'gemini-3.1-flash-lite-image',
+    'gemini-3-pro-image',
     'gemini-2.5-flash-image',
-    'gemini-2.0-flash-exp-image-generation',
   ].filter(Boolean);
   return [...new Set(candidates)];
 }
@@ -1377,27 +1458,37 @@ function describeMstLightingDirective(profile) {
   ].join(' ');
 }
 
+const CHEST_FORM_EDITORIAL_LABELS = Object.freeze({
+  flat: 'clean straight upper-torso tailoring line',
+  pectoral: 'structured athletic upper-chest tailoring line',
+  contoured: 'softly contoured upper-torso silhouette',
+  full_bust: 'fuller curved upper-torso silhouette',
+});
+
 function describeCoupledSoftTissueDirective(profile) {
   const { bmi, abdomenScale, hipScale, armMassScale, legMassScale, chestForm, chestScale } =
     profile;
+  const chestEditorial =
+    CHEST_FORM_EDITORIAL_LABELS[chestForm] || CHEST_FORM_EDITORIAL_LABELS.flat;
+
   if (bmi >= 30 || abdomenScale >= 1.18 || profile.archetypePreset === 'plus_size') {
     return [
-      `MANDATORY ANTI-SLIM-BIAS FULL-VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
+      `MANDATORY ANTI-SLIM-BIAS FULL-VOLUME CASTING LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
       'NEVER revert or idealize toward a thin fashion-illustration mannequin.',
-      `Render authentic, dignified coupled soft-tissue volume consistently across EVERY anatomical zone: rounded fuller cheeks and softer lower-jawline/submental fullness (faceSoftnessBias=${profile.faceSoftnessBias}), thicker cylindrical neck column (neckThicknessBias=${profile.neckThicknessBias}), fuller upper arms, elbows, forearms, and wrists (armMassScale=${armMassScale}, limbSoftnessBias=${profile.limbSoftnessBias}), softer plump dorsal hands and fingers (extremityPlumpnessBias=${profile.extremityPlumpnessBias}), natural ${chestForm} chest volume (chestScale=${chestScale}), prominent rounded anterior & lateral abdomen fullness (abdomenScale=${abdomenScale}, torsoSoftnessBias=${profile.torsoSoftnessBias}), generous hip/glute/thigh/calf circumference (hipScale=${hipScale}, gluteScale=${profile.gluteScale}, legMassScale=${legMassScale}), grounded ankles, and wider foot/instep volume.`,
-      'Drape every equipped garment realistically around this full 3D body volume with authentic fabric tension, ease, and hem circumference — NEVER shrink the body to fit the garment.',
+      `Render authentic, dignified full-body proportions consistently across every visible region: rounded fuller cheeks and softer lower-jawline/chin contour (faceSoftnessBias=${profile.faceSoftnessBias}), fuller cylindrical neck column (neckThicknessBias=${profile.neckThicknessBias}), fuller upper arms, forearms, wrists, and relaxed soft hands/fingers (armMassScale=${armMassScale}, extremityPlumpnessBias=${profile.extremityPlumpnessBias}), natural ${chestEditorial} (chestScale=${chestScale}), fuller rounded waist and midsection profile (abdomenScale=${abdomenScale}), generous hip, thigh, and calf circumference (hipScale=${hipScale}, legMassScale=${legMassScale}), grounded ankles, and wider foot/instep volume.`,
+      'Drape every equipped garment realistically around this full 3D stature with authentic fabric ease and hem circumference — NEVER shrink the wearer to fit the garment.',
     ].join(' ');
   }
   if (bmi >= 25.5 || abdomenScale >= 1.08) {
     return [
-      `ANTI-SLIM-BIAS MID-PLUS VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
-      `Preserve visibly fuller, grounded real-world soft-tissue proportions across cheeks/jawline, neck, upper arms (armMassScale=${armMassScale}), ${chestForm} chest (chestScale=${chestScale}), waist/abdomen curve (abdomenScale=${abdomenScale}), and hips/thighs (hipScale=${hipScale}, legMassScale=${legMassScale}) — strictly forbid fashion-mannequin slimming.`,
+      `ANTI-SLIM-BIAS MID-PLUS CASTING LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg):`,
+      `Preserve visibly fuller, grounded real-world proportions across cheeks/jawline, neck, upper arms (armMassScale=${armMassScale}), ${chestEditorial} (chestScale=${chestScale}), waist/midsection curve (abdomenScale=${abdomenScale}), and hips/thighs (hipScale=${hipScale}, legMassScale=${legMassScale}) — strictly forbid fashion-mannequin slimming.`,
     ].join(' ');
   }
   if (bmi <= 19.2) {
-    return `SLENDER ANTHROPOMETRIC LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Render genuinely lean, slender proportions with delicate clavicles, narrow waist, and light wrist/ankle volume.`;
+    return `SLENDER CASTING LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Render genuinely lean, slender proportions with narrow waist and light wrist/ankle volume.`;
   }
-  return `TRUE ANTHROPOMETRIC VOLUME LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Honor exact segment scales (chestForm=${chestForm}, chestScale=${chestScale}, abdomenScale=${abdomenScale}, armMassScale=${armMassScale}, legMassScale=${legMassScale}, muscleDefinition=${profile.muscleDefinition}) faithfully without generic mannequin distortion.`;
+  return `TRUE STATURE & PROPORTION LOCK (BMI ${bmi}, ${profile.heightCm} cm / ${profile.weightKg} kg): Honor exact tailoring proportions (${chestEditorial}, chestScale=${chestScale}, waistScale=${profile.waistScale}, hipScale=${hipScale}, armMassScale=${armMassScale}, legMassScale=${legMassScale}, athleticTone=${profile.muscleDefinition}) faithfully without generic mannequin distortion.`;
 }
 
 function isResolvedSwimwearItem(item) {
@@ -1419,6 +1510,8 @@ function buildEditorialStyleAndBodyPrompt(profile) {
   const shapeDesc =
     BODY_SHAPE_DESCRIPTIONS[profile.bodyShape] ||
     BODY_SHAPE_DESCRIPTIONS.standard_balanced;
+  const chestEditorial =
+    CHEST_FORM_EDITORIAL_LABELS[profile.chestForm] || CHEST_FORM_EDITORIAL_LABELS.flat;
 
   const statureCue =
     profile.heightCm >= 182
@@ -1437,21 +1530,21 @@ function buildEditorialStyleAndBodyPrompt(profile) {
 
   const styleHeader = isStylizedIso
     ? [
-        'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On lookbook sheet/portrait (tactile charming life-simulation character aesthetic with warm dimensional shading, refined appealing cranial & facial modeling, lush voluminous hair clusters, clean relaxed fingers, and authentic real-fabric texture fidelity).',
+        'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On lookbook image (tactile charming life-simulation character aesthetic with warm dimensional shading, refined appealing cranial & facial modeling, lush voluminous hair clusters, clean relaxed fingers, and authentic real-fabric texture fidelity).',
         '- NEVER draw crude flat 2D vector polygons or stick/mannequin limbs; render polished, high-craft studio simulation character art.',
       ]
     : [
-        'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS / Totême studio campaign photography shot on medium-format 85mm f/5.6 studio lens, ultra-clean natural skin micro-texture, realistic hair strands, relaxed anatomical hands, and hyper-accurate real garment drape, seam thickness, and fabric weave).',
-        '- Render a real, lifelike human fashion model matching the exact AvatarSpec below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
+        'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS / Totême studio campaign photography shot on medium-format 85mm f/5.6 studio lens, natural skin texture, realistic hair strands, relaxed natural hands, and hyper-accurate real garment drape, seam thickness, and fabric weave).',
+        '- Render a real, lifelike adult fashion model matching the exact casting profile below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
       ];
 
   const cameraBlock = profile.turnaroundSheet
     ? [
         'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (MANDATORY):',
         '- Compose a clean, borderless 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a seamless solid #F5F5F7 studio cyclorama background, depicting the EXACT SAME PERSON wearing the EXACT SAME OUTFIT at identical head-to-toe scale in every quadrant:',
-        '  * [Top-Left Quadrant — 0° Direct Front]: Full-body facing 0° straight toward the camera; symmetrical front garment fit, collar, chest, front trousers/skirt, and front shoe vamps.',
+        '  * [Top-Left Quadrant — 0° Direct Front]: Full-body facing 0° straight toward the camera; symmetrical front garment fit, collar, torso, front trousers/skirt, and front shoe vamps.',
         '  * [Top-Right Quadrant — 45° Quarter View]: Full-body turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
-        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Full-body turned 90° lateral side profile facing right — MUST exhibit natural anatomical side cranium & occipital skull depth, full lush hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand/finger posture at the side or pocket, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Full-body turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand posture at the side, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
         '  * [Bottom-Right Quadrant — 180° Full Rear Back]: Full-body facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features).',
         '- Keep generous head-to-toe margin inside each of the 4 quadrants so neither hair nor shoe soles touch quadrant edges. Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
@@ -1459,7 +1552,7 @@ function buildEditorialStyleAndBodyPrompt(profile) {
         'CAMERA & MULTI-ANGLE STUDIO POSE LOCK:',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
         '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes with clean studio margin above head and below feet (NEVER crop head, hands, or feet).',
-        '- For 90° lateral side views, ensure authentic anatomical side cranium/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
+        '- For 90° lateral side views, ensure authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
         '- Solid, clean neutral studio background in exact hex #F5F5F7 with natural soft floor contact shadow. Include ZERO text, ZERO angle numbers, ZERO UI labels, and ZERO extra figures.',
       ];
 
@@ -1471,10 +1564,10 @@ function buildEditorialStyleAndBodyPrompt(profile) {
     'STUDIO WEATHER & LIGHTING MOOD:',
     `- Active Weather Lighting Mood (${profile.weatherMood?.key || 'studio_neutral'}): Illuminate the model and fabrics with ${weatherDesc}, while keeping background studio cyclorama clean (#F5F5F7) and garment colors true.`,
     '',
-    'INCLUSIVE ANTHROPOMETRIC, SOFT-TISSUE & COMPLEXION LOCK (ZERO MODEL BIAS):',
+    'INCLUSIVE CASTING, PROPORTION & COMPLEXION LOCK (ZERO MODEL BIAS):',
     `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
-    `  * Gender / Non-Binary Presentation & Archetype: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, chestForm=${profile.chestForm}, legacyShape=${profile.bodyShape} (${shapeDesc})`,
-    `  * Segment Scales: shoulder=${profile.shoulderScale}, chest=${profile.chestScale}, waist=${profile.waistScale}, abdomen=${profile.abdomenScale}, hip=${profile.hipScale}, glute=${profile.gluteScale}, armMass=${profile.armMassScale}, legMass=${profile.legMassScale}, muscleDefinition=${profile.muscleDefinition}`,
+    `  * Presentation & Silhouette: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, upperTorsoLine="${chestEditorial}", shape="${shapeDesc}"`,
+    `  * Tailoring Proportions: shoulder=${profile.shoulderScale}, chest=${profile.chestScale}, waist=${profile.waistScale}, midsection=${profile.abdomenScale}, hip=${profile.hipScale}, armVolume=${profile.armMassScale}, legVolume=${profile.legMassScale}`,
     `  * ${softTissueLock}`,
     `  * ${mstLightingLock} (${pcDesc})`,
   ].join('\n');
@@ -1536,7 +1629,8 @@ function buildBaseModelParts(profile) {
     text: [
       '[STUDIO BASE MODEL ATTIRE]:',
       `- Dress the figure (${viewLabel}) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
-      '- Keep the silhouette clean and unobstructed so authentic body proportions, coupled soft-tissue volume, and MST complexion are unmistakably legible.',
+      '- Keep the silhouette clean and unobstructed so authentic body proportions and MST complexion are unmistakably legible.',
+      '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
     ].join('\n'),
   });
   return parts;
@@ -1576,11 +1670,11 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   if (hasOnepiece && isSwimwearOnepiece) {
     if (hasBottom) {
       layeringRules.push(
-        '- Layer the equipped BOTTOM naturally over the lower half of the SWIMWEAR/ONEPIECE while keeping the upper swimwear/rashguard visible.'
+        '- Layer the equipped BOTTOM naturally over the lower half of the RESORT/SWIMWEAR ONEPIECE while keeping the upper rashguard/swimwear visible.'
       );
     } else {
       layeringRules.push(
-        '- Render the SWIMWEAR ONEPIECE cleanly as solo resort/swim attire with natural bare legs (DO NOT add studio trousers or an extra T-shirt over the swimwear).'
+        '- Style the RESORT/SWIMWEAR ONEPIECE cleanly as a standalone summer resort lookbook outfit without adding extra trousers or an extra T-shirt over it.'
       );
     }
   } else if (hasOnepiece && !hasBottom) {
@@ -1602,7 +1696,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   if (!hasShoes) {
     layeringRules.push(
       isSwimwearOnepiece && !hasBottom && !hasOuter
-        ? '- Since solo swimwear is equipped without shoes, complete the stance with minimal neutral resort slides (#EAE7E1).'
+        ? '- Since standalone resort swimwear is equipped without shoes, complete the stance with minimal neutral resort slides (#EAE7E1).'
         : '- Since no shoes are equipped, complete the full-body stance with minimal off-white (#EAE7E1) low-profile studio court sneakers.'
     );
   }
@@ -1627,6 +1721,10 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       });
     }
   }
+
+  parts.push({
+    text: '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
+  });
 
   return parts;
 }
@@ -1680,8 +1778,11 @@ function extractInlineImageFromGeminiResponse(payload) {
 function buildModelRequestTarget(model, apiKey, vertexCfg) {
   if (apiKey) {
     return {
-      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      headers: { 'Content-Type': 'application/json' },
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
     };
   }
   if (vertexCfg?.enabled) {
@@ -1701,6 +1802,16 @@ function buildModelRequestTarget(model, apiKey, vertexCfg) {
   return null;
 }
 
+function isFatalCredentialReason(reason) {
+  return (
+    reason === 'gemini_api_key_not_configured' ||
+    reason === 'gemini_invalid_api_key' ||
+    reason === 'gemini_billing_required' ||
+    reason === 'gemini_http_401' ||
+    reason === 'gemini_http_403'
+  );
+}
+
 async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg = null) {
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
@@ -1713,7 +1824,7 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
     }
     const remainingTimeoutMs = Math.min(
       GEMINI_TIMEOUT_MS,
-      Math.max(4000, MAX_TOTAL_SYNTHESIS_MS - elapsed)
+      Math.max(5000, MAX_TOTAL_SYNTHESIS_MS - elapsed)
     );
     const target = buildModelRequestTarget(model, apiKey, vertexCfg);
     if (!target) {
@@ -1721,44 +1832,115 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
       break;
     }
 
-    try {
-      const res = await fetch(target.url, {
-        method: 'POST',
-        headers: target.headers,
-        signal: AbortSignal.timeout(remainingTimeoutMs),
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-          },
-        }),
-      });
+    const modalityStrategies = [['TEXT', 'IMAGE'], ['IMAGE']];
 
-      if (!res.ok) {
-        lastReason = `gemini_http_${res.status}`;
-        if (res.status === 401 || res.status === 403) {
-          break;
-        }
-        continue;
-      }
-
-      const json = await res.json();
-      const dataUrl = extractInlineImageFromGeminiResponse(json);
-      if (dataUrl) {
-        return { ok: true, model, dataUrl, reason: null };
-      }
-      const finishReason = json?.candidates?.[0]?.finishReason;
-      lastReason = finishReason
-        ? `gemini_empty_image_${String(finishReason).toLowerCase()}`
-        : 'gemini_empty_image_part';
-    } catch (err) {
-      const isAbort =
-        err?.name === 'TimeoutError' ||
-        err?.name === 'AbortError' ||
-        String(err?.message || '').toLowerCase().includes('timeout');
-      lastReason = isAbort ? 'gemini_timeout' : 'gemini_network_error';
-      if (isAbort) {
+    for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
+      const responseModalities = modalityStrategies[stratIdx];
+      const innerElapsed = Date.now() - startedAt;
+      if (innerElapsed >= MAX_TOTAL_SYNTHESIS_MS) {
+        lastReason = 'gemini_timeout_budget_exceeded';
         break;
+      }
+      const attemptTimeoutMs = Math.min(
+        remainingTimeoutMs,
+        Math.max(5000, MAX_TOTAL_SYNTHESIS_MS - innerElapsed)
+      );
+
+      try {
+        const res = await fetch(target.url, {
+          method: 'POST',
+          headers: target.headers,
+          signal: AbortSignal.timeout(attemptTimeoutMs),
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              responseModalities,
+            },
+          }),
+        });
+
+        if (!res.ok) {
+          const errPayload = await res.json().catch(() => null);
+          const errMsg = String(errPayload?.error?.message || '');
+          const errStatus = String(errPayload?.error?.status || '');
+          const combinedErr = `${errStatus} ${errMsg}`.toLowerCase();
+
+          console.warn(
+            `[VTON Gemini] ${model} HTTP ${res.status} (${errStatus || 'ERR'}): ${errMsg.slice(0, 180)}`
+          );
+
+          if (
+            res.status === 400 &&
+            (combinedErr.includes('api key not valid') ||
+              combinedErr.includes('api_key_invalid') ||
+              combinedErr.includes('invalid api key'))
+          ) {
+            return {
+              ok: false,
+              model: null,
+              dataUrl: null,
+              reason: 'gemini_invalid_api_key',
+            };
+          }
+
+          if (res.status === 401 || res.status === 403) {
+            const isBilling =
+              combinedErr.includes('billing') ||
+              combinedErr.includes('paid') ||
+              combinedErr.includes('billing_disabled');
+            return {
+              ok: false,
+              model: null,
+              dataUrl: null,
+              reason: isBilling ? 'gemini_billing_required' : `gemini_http_${res.status}`,
+            };
+          }
+
+          if (res.status === 429) {
+            const isZeroFreeQuota =
+              combinedErr.includes('billing') ||
+              combinedErr.includes('limit: 0') ||
+              combinedErr.includes('limit:0');
+            lastReason = isZeroFreeQuota ? 'gemini_billing_required' : 'gemini_http_429';
+            break; // move to next model in modelChain (e.g. flash-lite-image)
+          }
+
+          lastReason = `gemini_http_${res.status}`;
+          break; // move to next model in modelChain
+        }
+
+        const json = await res.json();
+        const dataUrl = extractInlineImageFromGeminiResponse(json);
+        if (dataUrl) {
+          return { ok: true, model, dataUrl, reason: null };
+        }
+
+        const finishReason = String(
+          json?.candidates?.[0]?.finishReason ||
+            json?.promptFeedback?.blockReason ||
+            ''
+        ).trim();
+        lastReason = finishReason
+          ? `gemini_empty_image_${finishReason.toLowerCase()}`
+          : 'gemini_empty_image_part';
+
+        console.warn(
+          `[VTON Gemini] ${model} returned 200 without image part (${lastReason}, modalities=${responseModalities.join(',')})`
+        );
+
+        // Only retry with ['IMAGE'] modality on the same model if it returned a plain text STOP
+        if (stratIdx === 0 && finishReason.toUpperCase() === 'STOP') {
+          continue;
+        }
+        break;
+      } catch (err) {
+        const isAbort =
+          err?.name === 'TimeoutError' ||
+          err?.name === 'AbortError' ||
+          String(err?.message || '').toLowerCase().includes('timeout');
+        lastReason = isAbort ? 'gemini_timeout' : 'gemini_network_error';
+        console.warn(`[VTON Gemini] ${model} fetch exception (${lastReason}):`, err?.message || err);
+        break; // try next faster model in modelChain if budget remains
       }
     }
   }
@@ -1766,8 +1948,8 @@ async function generateWithGeminiModelChain(parts, apiKey, modelChain, vertexCfg
   return { ok: false, model: null, dataUrl: null, reason: lastReason };
 }
 
-export function getVtonServiceStatus() {
-  const apiKey = resolveGeminiApiKey();
+export function getVtonServiceStatus(options = {}) {
+  const apiKey = resolveGeminiApiKey(options?.geminiApiKey);
   const vertexCfg = resolveVertexAiConfig();
   const modelChain = resolveGeminiModelChain();
   return {
@@ -1778,7 +1960,7 @@ export function getVtonServiceStatus() {
     turnaroundAngles: [...TURNAROUND_ANGLES],
     geminiConfigured: Boolean(apiKey || vertexCfg.enabled),
     vertexConfigured: Boolean(vertexCfg.enabled),
-    model: modelChain[0] || 'gemini-2.5-flash-image',
+    model: modelChain[0] || 'gemini-3.1-flash-image',
     cacheEntries: countTotalCacheEntries(),
   };
 }
@@ -1827,13 +2009,13 @@ export async function synthesizeVtonLook(params = {}) {
   const comboCacheKey = isBaseOnlyLook ? `base-${baseHash}` : `combo-${comboHash}`;
   const baseCacheKey = `base-${baseHash}`;
 
-  const buildFallbackResult = (fallbackReason) => ({
+  const buildFallbackResult = (fallbackReason, actualLayout = layout) => ({
     ok: true,
     mode: VTON_MODE,
     stylePreset: normalizedProfile.styleMode,
     styleMode: normalizedProfile.styleMode,
     weatherMood: normalizedProfile.weatherMood.key,
-    layout,
+    layout: actualLayout,
     provider: 'flatlay-fallback',
     model: null,
     geminiUsed: false,
@@ -1882,7 +2064,7 @@ export async function synthesizeVtonLook(params = {}) {
   }
 
   // 2. Check Gemini / Vertex AI configuration
-  const apiKey = resolveGeminiApiKey();
+  const apiKey = resolveGeminiApiKey(params.geminiApiKey);
   const vertexCfg = resolveVertexAiConfig();
   if (!apiKey && !vertexCfg.enabled) {
     return buildFallbackResult('gemini_api_key_not_configured');
@@ -1906,7 +2088,7 @@ export async function synthesizeVtonLook(params = {}) {
         !forceRefresh && includeBaseModel ? getCacheEntry(baseCacheKey) : null;
 
       if (isBaseOnlyLook) {
-        const baseGen = existingCombo
+        let baseGen = existingCombo
           ? { ok: true, model: existingCombo.model, dataUrl: existingCombo.dataUrl, cached: true }
           : await generateWithGeminiModelChain(
               buildBaseModelParts(normalizedProfile),
@@ -1914,13 +2096,37 @@ export async function synthesizeVtonLook(params = {}) {
               modelChain,
               vertexCfg
             );
+        let finalLayout = layout;
+        let finalBaseCacheKey = baseCacheKey;
+
+        if (
+          (!baseGen.ok || !baseGen.dataUrl) &&
+          normalizedProfile.turnaroundSheet &&
+          !isFatalCredentialReason(baseGen.reason)
+        ) {
+          const singleProfile = { ...normalizedProfile, turnaroundSheet: false };
+          const singleHashes = computeVtonHashes(singleProfile, resolvedSlots);
+          finalBaseCacheKey = `base-${singleHashes.baseHash}`;
+          const cachedSingle = !forceRefresh ? getCacheEntry(finalBaseCacheKey) : null;
+          baseGen = cachedSingle
+            ? { ok: true, model: cachedSingle.model, dataUrl: cachedSingle.dataUrl, cached: true }
+            : await generateWithGeminiModelChain(
+                buildBaseModelParts(singleProfile),
+                apiKey,
+                modelChain,
+                vertexCfg
+              );
+          if (baseGen.ok && baseGen.dataUrl) {
+            finalLayout = 'single';
+          }
+        }
 
         if (!baseGen.ok || !baseGen.dataUrl) {
           return buildFallbackResult(baseGen.reason || 'gemini_synthesis_failed');
         }
 
-        if (!existingCombo) {
-          setCacheEntry(baseCacheKey, {
+        if (!baseGen.cached) {
+          setCacheEntry(finalBaseCacheKey, {
             kind: 'base',
             model: baseGen.model,
             dataUrl: baseGen.dataUrl,
@@ -1933,11 +2139,11 @@ export async function synthesizeVtonLook(params = {}) {
           stylePreset: normalizedProfile.styleMode,
           styleMode: normalizedProfile.styleMode,
           weatherMood: normalizedProfile.weatherMood.key,
-          layout,
+          layout: finalLayout,
           provider: 'gemini-vton',
           model: baseGen.model,
           geminiUsed: true,
-          cached: Boolean(existingCombo),
+          cached: Boolean(baseGen.cached),
           comboHash,
           baseHash,
           viewAngleDeg: normalizedProfile.viewAngleDeg,
@@ -1979,14 +2185,51 @@ export async function synthesizeVtonLook(params = {}) {
               vertexCfg
             );
 
-      const [comboRes, baseRes] = await Promise.all([comboPromise, basePromise]);
+      const [initialComboRes, baseRes] = await Promise.all([comboPromise, basePromise]);
+      let comboRes = initialComboRes;
+      let finalLayout = layout;
+      let finalComboCacheKey = comboCacheKey;
+
+      // Auto-recover from complex 2x2 turnaround grid to clean single-angle portrait if non-auth failure occurred
+      if (
+        (!comboRes || !comboRes.ok || !comboRes.dataUrl) &&
+        normalizedProfile.turnaroundSheet &&
+        !isFatalCredentialReason(comboRes?.reason)
+      ) {
+        const singleProfile = { ...normalizedProfile, turnaroundSheet: false };
+        const singleHashes = computeVtonHashes(singleProfile, resolvedSlots);
+        const singleKey = `combo-${singleHashes.comboHash}`;
+        const cachedSingle = !forceRefresh ? getCacheEntry(singleKey) : null;
+        if (cachedSingle) {
+          comboRes = {
+            ok: true,
+            model: cachedSingle.model,
+            dataUrl: cachedSingle.dataUrl,
+            fromCache: true,
+          };
+          finalLayout = 'single';
+          finalComboCacheKey = singleKey;
+        } else {
+          const retrySingle = await generateWithGeminiModelChain(
+            buildCompositeLookParts(singleProfile, resolvedSlots),
+            apiKey,
+            modelChain,
+            vertexCfg
+          );
+          if (retrySingle?.ok && retrySingle.dataUrl) {
+            comboRes = retrySingle;
+            finalLayout = 'single';
+            finalComboCacheKey = singleKey;
+          }
+        }
+      }
 
       if (!comboRes || !comboRes.ok || !comboRes.dataUrl) {
         return buildFallbackResult(comboRes?.reason || 'gemini_synthesis_failed');
       }
 
       if (!comboRes.fromCache) {
-        setCacheEntry(comboCacheKey, {
+        setCacheEntry(finalComboCacheKey, {
           kind: 'combo',
           model: comboRes.model,
           dataUrl: comboRes.dataUrl,
@@ -2011,7 +2254,7 @@ export async function synthesizeVtonLook(params = {}) {
         stylePreset: normalizedProfile.styleMode,
         styleMode: normalizedProfile.styleMode,
         weatherMood: normalizedProfile.weatherMood.key,
-        layout,
+        layout: finalLayout,
         provider: 'gemini-vton',
         model: comboRes.model,
         geminiUsed: true,

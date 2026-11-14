@@ -783,6 +783,108 @@ export async function sliceTurnaround2x2Sheet(
   });
 }
 
+export const CLIENT_GEMINI_API_KEY_STORAGE = 'ainventory_gemini_api_key';
+
+const DIRECT_GEMINI_MODEL_CHAIN = [
+  'gemini-3.1-flash-image',
+  'gemini-3.1-flash-lite-image',
+  'gemini-3-pro-image',
+] as const;
+
+function sanitizeGeminiKeyToken(rawKey: unknown): string {
+  if (typeof rawKey !== 'string') return '';
+  const trimmed = rawKey.trim();
+  if (trimmed.length < 12 || trimmed.length > 256 || /[\r\n\s]/.test(trimmed)) {
+    return '';
+  }
+  return trimmed;
+}
+
+export function getStoredClientGeminiApiKey(): string {
+  if (typeof window === 'undefined' || !window.localStorage) return '';
+  try {
+    return sanitizeGeminiKeyToken(
+      window.localStorage.getItem(CLIENT_GEMINI_API_KEY_STORAGE)
+    );
+  } catch {
+    return '';
+  }
+}
+
+export function setStoredClientGeminiApiKey(rawKey: string | null | undefined): string {
+  if (typeof window === 'undefined' || !window.localStorage) return '';
+  const cleaned = sanitizeGeminiKeyToken(rawKey);
+  try {
+    if (cleaned) {
+      window.localStorage.setItem(CLIENT_GEMINI_API_KEY_STORAGE, cleaned);
+    } else {
+      window.localStorage.removeItem(CLIENT_GEMINI_API_KEY_STORAGE);
+    }
+  } catch {
+    // ignore storage write error
+  }
+  return cleaned;
+}
+
+export function resolveClientGeminiApiKey(): string {
+  const stored = getStoredClientGeminiApiKey();
+  if (stored) return stored;
+  const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
+  return (
+    sanitizeGeminiKeyToken(envBag.VITE_GEMINI_API_KEY) ||
+    sanitizeGeminiKeyToken(envBag.VITE_GOOGLE_API_KEY) ||
+    sanitizeGeminiKeyToken(envBag.VITE_VTON_API_KEY) ||
+    ''
+  );
+}
+
+async function downscaleLargeImageBlob(blob: Blob): Promise<string | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') return null;
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const nw = img.naturalWidth || img.width;
+          const nh = img.naturalHeight || img.height;
+          if (!nw || !nh) {
+            resolve(null);
+            return;
+          }
+          const maxEdge = 768;
+          const scale = Math.min(1, maxEdge / Math.max(nw, nh));
+          const targetW = Math.max(16, Math.round(nw * scale));
+          const targetH = Math.max(16, Math.round(nh * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const webp = canvas.toDataURL('image/webp', 0.86);
+          if (webp.startsWith('data:image/webp')) {
+            resolve(webp);
+            return;
+          }
+          resolve(canvas.toDataURL('image/jpeg', 0.86));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | null> {
   if (!srcUrl) return null;
   if (srcUrl.startsWith('data:image/')) return srcUrl;
@@ -792,7 +894,13 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
     const res = await fetch(srcUrl, { credentials: 'same-origin' });
     if (!res.ok) return null;
     const blob = await res.blob();
-    if (!blob || blob.size === 0 || blob.size > 4.5 * 1024 * 1024) return null;
+    if (!blob || blob.size === 0 || blob.size > 6 * 1024 * 1024) return null;
+
+    if (blob.size > 450 * 1024) {
+      const compressed = await downscaleLargeImageBlob(blob);
+      if (compressed) return compressed;
+    }
+
     return await new Promise<string | null>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -815,8 +923,6 @@ async function buildMultimodalSlotsPayload(
   await Promise.all(
     equippedGarments.map(async ({ slotKey, garment }) => {
       const canonicalUrl = resolveGarmentCanonicalImageUrl(garment);
-      // Always attach Base64 inlineData (`packshotDataUrl`) when readable from same-origin/blob
-      // so both backend Gemini & custom endpoints receive every real cutout photograph!
       const inlineDataUrl = await encodeImageUrlToInlineDataUrl(canonicalUrl);
       payload[slotKey] = {
         id: garment.id,
@@ -837,11 +943,216 @@ async function buildMultimodalSlotsPayload(
   return payload;
 }
 
+function parseDataUrlInlinePart(
+  dataUrl: string | null | undefined
+): { mimeType: string; data: string } | null {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return null;
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return null;
+  return {
+    mimeType: match[1].toLowerCase(),
+    data: match[2].replace(/\s+/g, ''),
+  };
+}
+
+function buildDirectClientGeminiParts(params: {
+  profile: NormalizedVtonProfile;
+  styleMode: VtonStyleMode;
+  weatherMood: WeatherMoodKey;
+  angleDeg: TurnaroundAngleDeg;
+  turnaroundSheet: boolean;
+  serializedSlots: Record<string, Record<string, unknown>>;
+}): Array<Record<string, unknown>> {
+  const { profile, styleMode, weatherMood, angleDeg, turnaroundSheet, serializedSlots } = params;
+  const spec = profile.avatarSpec;
+  const anthro = spec.anthropometrics;
+  const app = spec.appearance;
+  const isStylized = styleMode === 'stylized_isometric';
+
+  const header = isStylized
+    ? 'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On studio lookbook image (charming dimensional character modeling, natural hair clusters, relaxed fingers, and authentic real-fabric texture fidelity — ZERO crude flat 2D vector polygons).'
+    : 'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS studio campaign photography, medium-format 85mm lens, realistic skin texture, natural hair, relaxed hands, and hyper-accurate real garment drape).';
+
+  const cameraLine = turnaroundSheet
+    ? 'Compose a borderless 2x2 Grid Turnaround Studio Sheet (4 equal 50%x50% quadrants on solid #F5F5F7 background, ZERO grid lines or text) showing the EXACT SAME PERSON in the EXACT SAME OUTFIT at: Top-Left 0° Front, Top-Right 45° Quarter View, Bottom-Left 90° Side Profile (full side cranial depth, hair volume, relaxed hand, lateral garment folds), and Bottom-Right 180° Full Rear Back.'
+    : `Compose a full-body head-to-toe studio portrait at ${angleDeg}° camera angle on a clean solid #F5F5F7 studio background with soft floor contact shadow and ZERO text.`;
+
+  const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
+  const bodyLock = `Casting & Proportion Lock: Height ${profile.heightCm} cm, Weight ${profile.weightKg} kg (BMI ${bmi}), presentation=${spec.framePreset}, archetype=${spec.archetypePreset}, chestLine=${anthro.chestForm}, skinTone=${profile.skinToneHex} (MST-${app.mstLevel}, ${app.mstUndertone} undertone), hairStyle=${app.hairStyle} (${app.hairColorHex}), facialHair=${app.facialHair}, weatherLighting=${weatherMood}. Reflect BMI ${bmi} faithfully across face/cheeks/jawline, neck, arms, wrists/hands/fingers, torso, hips, legs, and feet without fashion-mannequin slimming.`;
+
+  const parts: Array<Record<string, unknown>> = [
+    { text: [header, cameraLine, bodyLock].join('\n\n') },
+  ];
+
+  const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
+  if (portraitPart) {
+    parts.push({
+      text: `Preserve this person's facial identity and hair consistently in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}:`,
+    });
+    parts.push({ inlineData: portraitPart });
+  }
+
+  const entries = Object.entries(serializedSlots);
+  for (const [slotKey, item] of entries) {
+    const name = String(item.name || slotKey);
+    const colorHex = String(item.color_hex || '#8E8E93');
+    const fabric = String(item.fabric || 'cotton');
+    const inline = parseDataUrlInlinePart(
+      typeof item.packshotDataUrl === 'string' ? item.packshotDataUrl : null
+    );
+    parts.push({
+      text: `[EQUIPPED ${slotKey.toUpperCase()}]: "${name}" (${String(item.category || slotKey)} / ${String(item.subcategory || '')}, color ${colorHex}, fabric ${fabric}). Reproduce this exact garment naturally worn on the model:`,
+    });
+    if (inline) {
+      parts.push({ inlineData: inline });
+    }
+  }
+
+  parts.push({
+    text: 'Dress the model simultaneously in all equipped garments above on #F5F5F7 background. Output ONLY the final image directly without asking follow-up questions.',
+  });
+
+  return parts;
+}
+
+async function synthesizeDirectBrowserGeminiVton(params: {
+  apiKey: string;
+  profile: NormalizedVtonProfile;
+  styleMode: VtonStyleMode;
+  weatherMood: WeatherMoodKey;
+  angleDeg: TurnaroundAngleDeg;
+  useTurnaroundSheet: boolean;
+  serializedSlots: Record<string, Record<string, unknown>>;
+  signal?: AbortSignal;
+}): Promise<VtonServerResponse> {
+  const {
+    apiKey,
+    profile,
+    styleMode,
+    weatherMood,
+    angleDeg,
+    useTurnaroundSheet,
+    serializedSlots,
+    signal,
+  } = params;
+
+  const sheetModes = useTurnaroundSheet ? [true, false] : [false];
+  let lastReason = 'gemini_no_image_generated';
+
+  for (const turnaroundSheet of sheetModes) {
+    const parts = buildDirectClientGeminiParts({
+      profile,
+      styleMode,
+      weatherMood,
+      angleDeg,
+      turnaroundSheet,
+      serializedSlots,
+    });
+
+    for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
+      if (signal?.aborted) {
+        return { ok: false, fallbackReason: 'aborted', compositeImageUrl: null };
+      }
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+              generationConfig: {
+                responseModalities: ['TEXT', 'IMAGE'],
+              },
+            }),
+          }
+        );
+
+        if (!res.ok) {
+          const errJson = (await res.json().catch(() => null)) as
+            | { error?: { message?: string; status?: string } }
+            | null;
+          const msg = `${errJson?.error?.status || ''} ${errJson?.error?.message || ''}`.toLowerCase();
+          if (
+            res.status === 400 &&
+            (msg.includes('api key not valid') || msg.includes('api_key_invalid'))
+          ) {
+            return {
+              ok: false,
+              fallbackReason: 'gemini_invalid_api_key',
+              compositeImageUrl: null,
+            };
+          }
+          if (res.status === 401 || res.status === 403) {
+            return {
+              ok: false,
+              fallbackReason: msg.includes('billing')
+                ? 'gemini_billing_required'
+                : `gemini_http_${res.status}`,
+              compositeImageUrl: null,
+            };
+          }
+          lastReason = `gemini_http_${res.status}`;
+          continue;
+        }
+
+        const payload = (await res.json()) as {
+          candidates?: Array<{
+            finishReason?: string;
+            content?: {
+              parts?: Array<{
+                inlineData?: { mimeType?: string; data?: string };
+                inline_data?: { mime_type?: string; data?: string };
+              }>;
+            };
+          }>;
+        };
+
+        for (const cand of payload.candidates || []) {
+          for (const part of cand.content?.parts || []) {
+            const b64 = (part.inlineData?.data || part.inline_data?.data)?.replace(/\s+/g, '');
+            const mime = part.inlineData?.mimeType || part.inline_data?.mime_type || 'image/png';
+            if (b64 && mime.startsWith('image/')) {
+              return {
+                ok: true,
+                cached: false,
+                provider: 'gemini-vton',
+                model,
+                layout: turnaroundSheet ? 'turnaround_2x2' : 'single',
+                styleMode,
+                weatherMood,
+                geminiUsed: true,
+                compositeImageUrl: `data:${mime};base64,${b64}`,
+              };
+            }
+          }
+        }
+        const finish = payload.candidates?.[0]?.finishReason;
+        lastReason = finish
+          ? `gemini_empty_image_${finish.toLowerCase()}`
+          : 'gemini_empty_image_part';
+      } catch (err) {
+        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          return { ok: false, fallbackReason: 'aborted', compositeImageUrl: null };
+        }
+        lastReason = 'gemini_network_error';
+      }
+    }
+  }
+
+  return { ok: false, fallbackReason: lastReason, compositeImageUrl: null };
+}
+
 /**
  * 100% Gemini Multimodal Multi-Angle Virtual Try-On Dispatcher.
  * - Zero procedural drawing or mathematical 2D mesh warping under ANY circumstance.
  * - Checks L1 Memory + L2 IndexedDB (`avatarConfigHash + outfitComboId + styleMode + angleDeg`) first for 0ms hits.
- * - Requests a 2x2 Turnaround Studio Sheet (`0°`, `45°`, `90°`, `180°`) from `/api/vton/synthesize`,
+ * - Requests a 2x2 Turnaround Studio Sheet (`0°`, `45°`, `90°`, `180°`) from `/api/vton/synthesize`
+ *   (with automatic direct browser Gemini fallback when running standalone/APK with a client key),
  *   slices all 4 angles, and caches all 4 slices permanently in IndexedDB.
  * - On missing API key or synthesis failure, returns `fallbackToFlatLay: true` (`imageUrl: null`)
  *   so the viewer preserves the Editorial Flat-Lay Board and displays a clean toast.
@@ -952,12 +1263,18 @@ export async function synthesizeGeminiMultiAngleVton(
         };
       }
 
-      const json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+      const clientGeminiKey = resolveClientGeminiApiKey();
+      const reqHeaders: Record<string, string> = {
+        'X-Demo-Mode': 'sample',
+      };
+      if (clientGeminiKey) {
+        reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+      }
+
+      let json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
         method: 'POST',
         signal: request.signal,
-        headers: {
-          'X-Demo-Mode': 'sample',
-        },
+        headers: reqHeaders,
         body: JSON.stringify({
           mode,
           styleMode,
@@ -987,15 +1304,37 @@ export async function synthesizeGeminiMultiAngleVton(
         }),
       });
 
-      const rawComposite = sanitizeImageCandidate(
+      let rawComposite = sanitizeImageCandidate(
         json?.compositeImageUrl ?? json?.afterImageUrl ?? null
       );
+
+      if (
+        !rawComposite &&
+        !json?.panelImages &&
+        clientGeminiKey &&
+        (json?.fallbackReason === 'backend_unavailable' ||
+          json?.fallbackReason === 'gemini_api_key_not_configured')
+      ) {
+        json = await synthesizeDirectBrowserGeminiVton({
+          apiKey: clientGeminiKey,
+          profile,
+          styleMode,
+          weatherMood,
+          angleDeg,
+          useTurnaroundSheet,
+          serializedSlots,
+          signal: request.signal,
+        });
+        rawComposite = sanitizeImageCandidate(
+          json?.compositeImageUrl ?? json?.afterImageUrl ?? null
+        );
+      }
 
       if (!rawComposite && !json?.panelImages) {
         return {
           ok: false,
           fallbackToFlatLay: true,
-          reason: json.fallbackReason || 'gemini_api_key_not_configured',
+          reason: json?.fallbackReason || 'gemini_api_key_not_configured',
           mode,
           provider: 'flatlay-lookbook',
           styleMode,
@@ -1016,9 +1355,12 @@ export async function synthesizeGeminiMultiAngleVton(
       }
 
       const now = Date.now();
-      const modelName = String(json.model || 'gemini-2.5-flash-image');
+      const modelName = String(json.model || 'gemini-3.1-flash-image');
       const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
       const entriesToPersist: CachedAiVtonSlice[] = [];
+      const isTurnaroundResponse = json.layout
+        ? json.layout === 'turnaround_2x2'
+        : useTurnaroundSheet;
 
       if (json.panelImages && typeof json.panelImages === 'object') {
         for (const a of TURNAROUND_ANGLES) {
@@ -1044,7 +1386,7 @@ export async function synthesizeGeminiMultiAngleVton(
             });
           }
         }
-      } else if (rawComposite && (json.layout === 'turnaround_2x2' || useTurnaroundSheet)) {
+      } else if (rawComposite && isTurnaroundResponse) {
         const sliced = await sliceTurnaround2x2Sheet(rawComposite);
         for (const a of TURNAROUND_ANGLES) {
           const sliceUrl = sliced[a] || rawComposite;
@@ -1135,10 +1477,21 @@ export async function synthesizeGeminiMultiAngleVton(
       const isAbort =
         Boolean(request.signal?.aborted) ||
         (err instanceof Error && err.name === 'AbortError');
+      const status =
+        err && typeof err === 'object' && 'status' in err
+          ? Number((err as { status?: number }).status)
+          : 0;
+      const reason = isAbort
+        ? 'aborted'
+        : status === 413
+          ? 'payload_too_large'
+          : status > 0
+            ? `http_${status}`
+            : 'network_or_runtime_error';
       return {
         ok: false,
         fallbackToFlatLay: true,
-        reason: isAbort ? 'aborted' : 'network_or_runtime_error',
+        reason,
         mode,
         provider: 'flatlay-lookbook',
         styleMode,

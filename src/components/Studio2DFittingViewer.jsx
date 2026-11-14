@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Columns2,
+  KeyRound,
   LayoutGrid,
   Palette,
+  RefreshCw,
   RotateCcw,
   RotateCw,
   SlidersHorizontal,
@@ -23,11 +25,13 @@ import {
   TURNAROUND_ANGLES,
   buildAiVtonCacheKey,
   computeOutfitComboId,
+  getStoredClientGeminiApiKey,
   normalizeTurnaroundAngleDeg,
   normalizeViewerMode,
   normalizeVtonStyleMode,
   normalizeWeatherMoodKey,
   peekMemoryAiVtonSlice,
+  setStoredClientGeminiApiKey,
   synthesizeGeminiMultiAngleVton,
   trackFlatLayComboVisit,
 } from '../services/vton2DService.ts';
@@ -114,6 +118,17 @@ function getTurnaroundAngleMeta(angleDeg, lang) {
   };
 }
 
+function isKeyActionableReason(reason) {
+  return (
+    reason === 'gemini_api_key_not_configured' ||
+    reason === 'backend_unavailable' ||
+    reason === 'gemini_invalid_api_key' ||
+    reason === 'gemini_billing_required' ||
+    reason === 'gemini_http_401' ||
+    reason === 'gemini_http_403'
+  );
+}
+
 function formatFallbackToastMessage(reason, lang) {
   const isEn = lang === 'en';
   if (reason === 'empty_outfit') {
@@ -121,10 +136,30 @@ function formatFallbackToastMessage(reason, lang) {
       ? 'Select at least one garment from your wardrobe before running AI Try-On.'
       : 'AI 가상 피팅을 실행하려면 옷장에서 의류를 1개 이상 선택해 주세요.';
   }
-  if (reason === 'gemini_api_key_not_configured') {
+  if (reason === 'gemini_api_key_not_configured' || reason === 'backend_unavailable') {
     return isEn
-      ? 'Gemini API key is not configured — keeping Editorial Flat-Lay Board.'
-      : 'Gemini API 키가 설정되지 않아 에디토리얼 플랫레이 보드를 유지합니다.';
+      ? 'Gemini API key is not configured — showing Editorial Flat-Lay Board.'
+      : 'Gemini API 키가 설정되지 않아 에디토리얼 플랫레이 보드를 표시합니다.';
+  }
+  if (reason === 'gemini_invalid_api_key') {
+    return isEn
+      ? 'Invalid Gemini API key — please check your key.'
+      : '유효하지 않은 Gemini API 키입니다 — 키를 다시 확인해 주세요.';
+  }
+  if (reason === 'gemini_billing_required') {
+    return isEn
+      ? 'Gemini image generation requires an API key with billing enabled.'
+      : 'Gemini 이미지 생성은 결제(유료 티어)가 연결된 API 키가 필요합니다.';
+  }
+  if (reason === 'gemini_http_401' || reason === 'gemini_http_403') {
+    return isEn
+      ? 'Gemini API permission denied — please verify your API key.'
+      : 'Gemini API 키 권한을 확인해 주세요 (플랫레이 보드 유지).';
+  }
+  if (reason === 'gemini_http_429') {
+    return isEn
+      ? 'Gemini API rate limit reached (429) — please retry in a moment.'
+      : 'Gemini API 요청 한도(429)에 도달했습니다 — 잠시 후 재시도해 주세요.';
   }
   return isEn
     ? 'AI virtual try-on could not be generated — keeping Editorial Flat-Lay Board.'
@@ -133,9 +168,10 @@ function formatFallbackToastMessage(reason, lang) {
 
 /**
  * Dual-Mode High-Fashion Outfits Central Viewer (Zero Procedural Human Drawing):
- * ① Default Instant Mode: `Editorial Flat-Lay Board` (0ms latency, 100% original aspect ratio & fabric detail)
- * ② AI Try-On Mode: `100% Gemini Multimodal Image Generation VTON` (`0° / 45° / 90° / 180°` turnaround sheet,
- *    `[Photorealistic | Stylized Isometric]` style toggle, IndexedDB 0ms cache, glassmorphism shimmer overlay)
+ * ① Default Primary Mode: `AI Try-On ('ai-vton')` — `100% Gemini Multimodal Image Generation VTON`
+ *    (`0° / 45° / 90° / 180°` turnaround sheet, `[Photorealistic | Stylized Isometric]` style toggle,
+ *    IndexedDB 0ms cache, glassmorphism shimmer overlay over Flat-Lay while generating)
+ * ② Instant Lookbook Mode: `Editorial Flat-Lay Board ('flatlay')` — 0ms latency, 100% original aspect ratio
  */
 const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   slots,
@@ -218,11 +254,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [viewAngleDeg, handleViewAngleChange]
   );
 
-  const [stageMode, setStageMode] = useState('flatlay');
+  const [stageMode, setStageMode] = useState('ai-vton');
   const [styleMode, setStyleMode] = useState('photorealistic');
   const [aiState, setAiState] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [statusToast, setStatusToast] = useState(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [keyPopoverOpen, setKeyPopoverOpen] = useState(false);
+  const [draftApiKey, setDraftApiKey] = useState(() => getStoredClientGeminiApiKey());
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -231,15 +270,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const abortControllerRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const manualTriggerRef = useRef(false);
+  const configBlockedRef = useRef(false);
 
-  const showToast = useCallback((reason, message) => {
+  const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
     }
-    setStatusToast({ reason, message, ts: Date.now() });
+    setStatusToast({ reason, ts: Date.now() });
     toastTimerRef.current = setTimeout(() => {
       setStatusToast(null);
-    }, 4800);
+    }, 6000);
   }, []);
 
   useEffect(() => {
@@ -346,7 +387,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   });
 
-  // Execute Gemini Multimodal VTON synthesis when AI Try-On stage is active
+  // Execute Gemini Multimodal VTON synthesis when AI Try-On stage is active (default!)
   useEffect(() => {
     abortControllerRef.current?.abort();
 
@@ -357,19 +398,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     if (equippedCount === 0) {
       setAiLoading(false);
-      setStageMode('flatlay');
       return undefined;
     }
 
     const snap = latestInputsRef.current;
-    const syncHit = !snap.forceRefresh
-      ? peekMemoryAiVtonSlice({
-          avatarConfigHash: snap.resolvedAvatarHash,
-          outfitComboId,
-          styleMode: snap.styleMode,
-          angleDeg: snap.viewAngleDeg,
-        })
-      : null;
+    const isExplicitRetry = manualTriggerRef.current;
+    manualTriggerRef.current = false;
+
+    const syncHit =
+      !snap.forceRefresh && !isExplicitRetry
+        ? peekMemoryAiVtonSlice({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            angleDeg: snap.viewAngleDeg,
+          })
+        : null;
 
     if (syncHit) {
       setAiState({
@@ -382,84 +426,151 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       return undefined;
     }
 
+    if (configBlockedRef.current && !isExplicitRetry && !snap.forceRefresh) {
+      setAiLoading(false);
+      return undefined;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setAiLoading(true);
+    const delayMs = isExplicitRetry ? 0 : 110;
 
-    synthesizeGeminiMultiAngleVton({
-      slots: snap.slots,
-      skinProfile: snap.skinProfile,
-      bodySpec: snap.bodySpec,
-      user: snap.user,
-      avatarSpec: snap.resolvedAvatarSpec,
-      avatarConfigHash: snap.resolvedAvatarHash,
-      viewAngleDeg: snap.viewAngleDeg,
-      styleMode: snap.styleMode,
-      weather: snap.weather,
-      turnaroundSheet: true,
-      theme: snap.resolvedTheme,
-      legacyMode: snap.rawLegacyMode,
-      forceRefresh: snap.forceRefresh,
-      signal: controller.signal,
-    })
-      .then((outcome) => {
-        if (controller.signal.aborted) return;
-        setAiLoading(false);
+    const startSynthesis = () => {
+      if (controller.signal.aborted) return;
+      const liveSnap = latestInputsRef.current;
+      setAiLoading(true);
 
-        if (outcome.ok && outcome.imageUrl) {
-          setAiState({
-            cacheKey: currentAiCacheKey,
-            imageUrl: outcome.imageUrl,
-            fromCache: outcome.fromCache,
-            provider: 'gemini-vton',
-          });
-          setStatusToast(null);
-          return;
-        }
-
-        if (outcome.reason !== 'aborted') {
-          setStageMode('flatlay');
-          showToast(
-            outcome.reason || 'gemini_unavailable',
-            formatFallbackToastMessage(outcome.reason, latestInputsRef.current.resolvedLang)
-          );
-        }
+      synthesizeGeminiMultiAngleVton({
+        slots: liveSnap.slots,
+        skinProfile: liveSnap.skinProfile,
+        bodySpec: liveSnap.bodySpec,
+        user: liveSnap.user,
+        avatarSpec: liveSnap.resolvedAvatarSpec,
+        avatarConfigHash: liveSnap.resolvedAvatarHash,
+        viewAngleDeg: liveSnap.viewAngleDeg,
+        styleMode: liveSnap.styleMode,
+        weather: liveSnap.weather,
+        turnaroundSheet: true,
+        theme: liveSnap.resolvedTheme,
+        legacyMode: liveSnap.rawLegacyMode,
+        forceRefresh: Boolean(liveSnap.forceRefresh || isExplicitRetry),
+        signal: controller.signal,
       })
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        setAiLoading(false);
-        setStageMode('flatlay');
-        showToast(
-          'network_or_runtime_error',
-          formatFallbackToastMessage(
-            'network_or_runtime_error',
-            latestInputsRef.current.resolvedLang
-          )
-        );
-      });
+        .then((outcome) => {
+          if (controller.signal.aborted) return;
+          setAiLoading(false);
 
+          if (outcome.ok && outcome.imageUrl) {
+            configBlockedRef.current = false;
+            setAiState({
+              cacheKey: currentAiCacheKey,
+              imageUrl: outcome.imageUrl,
+              fromCache: outcome.fromCache,
+              provider: 'gemini-vton',
+            });
+            setStatusToast(null);
+            return;
+          }
+
+          if (outcome.reason !== 'aborted') {
+            if (isKeyActionableReason(outcome.reason)) {
+              configBlockedRef.current = true;
+            }
+            showToast(outcome.reason || 'gemini_unavailable');
+          }
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setAiLoading(false);
+          showToast('network_or_runtime_error');
+        });
+    };
+
+    if (delayMs === 0) {
+      startSynthesis();
+      return () => {
+        controller.abort();
+      };
+    }
+
+    const timerId = setTimeout(startSynthesis, delayMs);
     return () => {
+      clearTimeout(timerId);
       controller.abort();
     };
-  }, [stageMode, currentAiCacheKey, outfitComboId, weatherMoodKey, equippedCount, showToast]);
+  }, [
+    stageMode,
+    currentAiCacheKey,
+    outfitComboId,
+    weatherMoodKey,
+    equippedCount,
+    retryNonce,
+    showToast,
+  ]);
+
+  const handleRetryAiSynthesis = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (equippedCount === 0) {
+        showToast('empty_outfit');
+        return;
+      }
+      configBlockedRef.current = false;
+      setStatusToast(null);
+      manualTriggerRef.current = true;
+      setStageMode('ai-vton');
+      setRetryNonce((n) => n + 1);
+    },
+    [equippedCount, showToast]
+  );
+
+  const handleSaveApiKeyAndRetry = useCallback(
+    (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      setStoredClientGeminiApiKey(draftApiKey);
+      configBlockedRef.current = false;
+      setKeyPopoverOpen(false);
+      setStatusToast(null);
+      if (equippedCount > 0) {
+        manualTriggerRef.current = true;
+        setStageMode('ai-vton');
+        setRetryNonce((n) => n + 1);
+      }
+    },
+    [draftApiKey, equippedCount]
+  );
+
+  const handleClearApiKey = useCallback((e) => {
+    e?.stopPropagation?.();
+    setDraftApiKey('');
+    setStoredClientGeminiApiKey('');
+  }, []);
 
   const handleSelectStageMode = useCallback(
     (nextMode) => {
       if (nextMode === 'flatlay') {
         abortControllerRef.current?.abort();
         setAiLoading(false);
+        setStatusToast(null);
         setStageMode('flatlay');
         return;
       }
       if (equippedCount === 0) {
-        setStageMode('flatlay');
-        showToast('empty_outfit', formatFallbackToastMessage('empty_outfit', resolvedLang));
+        setStageMode('ai-vton');
+        showToast('empty_outfit');
         return;
       }
+      configBlockedRef.current = false;
       setStatusToast(null);
-      setStageMode('ai-vton');
+      manualTriggerRef.current = true;
+      if (stageMode === 'ai-vton') {
+        setRetryNonce((n) => n + 1);
+      } else {
+        setStageMode('ai-vton');
+      }
     },
-    [equippedCount, resolvedLang, showToast]
+    [equippedCount, showToast, stageMode]
   );
 
   const handleSelectStyleMode = useCallback((nextRawStyle) => {
@@ -727,7 +838,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       />
 
       {/* Status Toast when Gemini API key is missing or synthesis falls back to Flat-Lay Board */}
-      {statusToast && (
+      {!effectiveCompareActive && !keyPopoverOpen && statusToast && (
         <div
           className="studio-vton-status-toast"
           data-vton-status-toast="true"
@@ -740,7 +851,102 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           }}
         >
           <span className="studio-vton-toast-dot" aria-hidden="true" />
-          <span className="studio-vton-toast-text">{statusToast.message}</span>
+          <span className="studio-vton-toast-text">
+            {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
+          </span>
+          <span className="studio-vton-toast-actions">
+            {isKeyActionableReason(statusToast.reason) && (
+              <button
+                type="button"
+                data-vton-open-key-btn="true"
+                className="studio-vton-toast-action"
+                aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDraftApiKey(getStoredClientGeminiApiKey());
+                  setKeyPopoverOpen(true);
+                  setStatusToast(null);
+                }}
+              >
+                <KeyRound size={11} />
+                <span>{isEn ? 'API Key' : '키 설정'}</span>
+              </button>
+            )}
+            {statusToast.reason !== 'empty_outfit' && (
+              <button
+                type="button"
+                data-vton-retry-btn="true"
+                className="studio-vton-toast-action"
+                aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 재시도'}
+                onClick={handleRetryAiSynthesis}
+              >
+                <RefreshCw size={11} />
+                <span>{isEn ? 'Retry' : '재시도'}</span>
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Compact Inline Gemini API Key Popover for Browser / Standalone Environments */}
+      {keyPopoverOpen && (
+        <div
+          className="studio-vton-key-popover"
+          data-vton-key-popover="true"
+          role="dialog"
+          aria-label={isEn ? 'Gemini API key settings' : 'Gemini API 키 설정'}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="studio-vton-key-popover-head">
+            <span className="studio-vton-key-popover-title">
+              {isEn ? 'Gemini API Key (AI Try-On)' : 'Gemini API 키 설정 (AI 피팅)'}
+            </span>
+            <button
+              type="button"
+              data-vton-close-key-btn="true"
+              className="studio-vton-key-close"
+              aria-label={isEn ? 'Close API key settings' : 'API 키 설정 닫기'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setKeyPopoverOpen(false);
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+          <p className="studio-vton-key-popover-desc">
+            {isEn
+              ? 'Stored locally in your browser to power multi-angle Gemini VTON.'
+              : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다.'}
+          </p>
+          <form className="studio-vton-key-form" onSubmit={handleSaveApiKeyAndRetry}>
+            <input
+              type="password"
+              data-vton-key-input="true"
+              className="studio-vton-key-input"
+              value={draftApiKey}
+              onChange={(e) => setDraftApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              autoComplete="off"
+              aria-label={isEn ? 'Gemini API key' : 'Gemini API 키 입력'}
+            />
+            <div className="studio-vton-key-btn-row">
+              <button
+                type="button"
+                className="studio-vton-key-clear-btn"
+                onClick={handleClearApiKey}
+              >
+                {isEn ? 'Clear' : '초기화'}
+              </button>
+              <button
+                type="submit"
+                data-vton-save-key-btn="true"
+                className="studio-vton-key-save-btn"
+              >
+                {isEn ? 'Save & Try-On' : '저장 후 AI 피팅'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -798,30 +1004,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Mode Switcher + AI Style Toggle + 4-Direction Turnaround Angle Quick Rail */}
+      {/* Mode Switcher (AI Try-On Default First) + AI Style Toggle + 4-Direction Turnaround Angle Quick Rail */}
       <div
         className="studio-vton-mode-rail"
         role="toolbar"
         aria-label={
           isEn
-            ? 'Lookbook board and AI virtual try-on controls'
-            : '플랫레이 보드 및 AI 가상 피팅 제어'
+            ? 'AI virtual try-on and lookbook board controls'
+            : 'AI 가상 피팅 및 플랫레이 보드 제어'
         }
       >
         <div className="studio-vton-segmented-pill" role="group">
-          <button
-            type="button"
-            data-viewer-stage-btn="flatlay"
-            aria-pressed={stageMode === 'flatlay'}
-            className={`studio-vton-seg-btn ${stageMode === 'flatlay' ? 'is-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSelectStageMode('flatlay');
-            }}
-          >
-            <LayoutGrid size={12} />
-            <span>{isEn ? 'Flat-Lay' : '플랫레이'}</span>
-          </button>
           <button
             type="button"
             data-viewer-stage-btn="ai-vton"
@@ -834,6 +1027,19 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           >
             <Sparkles size={12} />
             <span>{isEn ? 'AI Try-On' : 'AI 피팅'}</span>
+          </button>
+          <button
+            type="button"
+            data-viewer-stage-btn="flatlay"
+            aria-pressed={stageMode === 'flatlay'}
+            className={`studio-vton-seg-btn ${stageMode === 'flatlay' ? 'is-active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSelectStageMode('flatlay');
+            }}
+          >
+            <LayoutGrid size={12} />
+            <span>{isEn ? 'Flat-Lay' : '플랫레이'}</span>
           </button>
         </div>
 

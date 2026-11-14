@@ -249,7 +249,8 @@ export function createVtonRouter() {
     }
 
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json(getVtonServiceStatus());
+    const headerApiKey = String(req.headers?.['x-gemini-api-key'] || '').trim();
+    return res.status(200).json(getVtonServiceStatus({ geminiApiKey: headerApiKey }));
   });
 
   router.post('/synthesize', requireVtonSessionOrSample, async (req, res) => {
@@ -397,6 +398,9 @@ export function createVtonRouter() {
         payload.includeBaseModel ?? payload.synthesizeBaseModel ?? false
       ),
       forceRefresh: Boolean(payload.forceRefresh ?? payload.bypassCache ?? false),
+      geminiApiKey: String(
+        req.headers?.['x-gemini-api-key'] || payload.geminiApiKey || ''
+      ).trim(),
       authorizedClosets: req.vtonAuth.authorizedClosets,
       isSampleGuest: req.vtonAuth.isSampleGuest,
       isAuthenticated: req.vtonAuth.isAuthenticated,

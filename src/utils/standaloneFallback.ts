@@ -988,5 +988,25 @@ export async function handleStandaloneApiFallback(
     return { lists: [] };
   }
 
+  if (pathname === '/vton/status' && method === 'GET') {
+    return {
+      ok: true,
+      mode: '2d-vton',
+      geminiConfigured: false,
+      vertexConfigured: false,
+      fallbackReason: 'backend_unavailable',
+    };
+  }
+
+  if (pathname === '/vton/synthesize' && method === 'POST') {
+    return {
+      ok: true,
+      mode: '2d-vton',
+      provider: 'flatlay-fallback',
+      compositeImageUrl: null,
+      fallbackReason: 'backend_unavailable',
+    };
+  }
+
   return { ok: true };
 }

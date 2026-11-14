@@ -144,7 +144,7 @@ function setRangeSliderValue(page: Page, sliderSelector: string, nextValue: numb
 }
 
 test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal Multi-Angle VTON', () => {
-  test('1. Zero procedural drawing (<canvas>/polygon human = 0), default Editorial Flat-Lay Board, and 4-angle controls (0°/45°/90°/180°)', async ({
+  test('1. Zero procedural drawing (<canvas>/polygon human = 0), default AI Try-On mode with Flat-Lay fallback, and 4-angle controls (0°/45°/90°/180°)', async ({
     page,
   }) => {
     await page.goto('/outfits');
@@ -158,12 +158,26 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('canvas')).toHaveCount(0);
     await expect(studioCanvas.locator('.character-25d-fallback-svg')).toHaveCount(0);
 
-    // Default view is Editorial Flat-Lay Board at 45°
-    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
-    await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'flatlay-lookbook');
+    // Default view mode is AI Try-On (`ai-vton`) at 45°, with AI Try-On button first in the rail
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
+    await expect(
+      studioCanvas.locator('.studio-vton-mode-rail .studio-vton-seg-btn').first()
+    ).toHaveAttribute('data-viewer-stage-btn', 'ai-vton');
+    await expect(studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
     await expect(modelStage).toHaveAttribute('data-view-angle', '45');
+    // Editorial Flat-Lay Board remains cleanly visible underneath while loading or without server key
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+
+    // Instant switch to Flat-Lay Board and back to AI Try-On
+    await studioCanvas.locator('[data-viewer-stage-btn="flatlay"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
+    await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'flatlay-lookbook');
+    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
 
     // Step clockwise through all 4 canonical turnaround angles (45 -> 90 -> 180 -> 0 -> 45)
     const cwBtn = studioCanvas.locator('[data-iso-rotate-btn="cw"]');
@@ -322,7 +336,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="onepiece"]')).toHaveCount(0);
   });
 
-  test('4. 100% Gemini Multimodal VTON: missing-key Flat-Lay toast fallback, 2x2 turnaround slicing (0°/45°/90°/180°), IndexedDB 0ms cache, and Style toggle', async ({
+  test('4. 100% Gemini Multimodal VTON: default auto-run with API-key popover fallback, 2x2 turnaround slicing (0°/45°/90°/180°), IndexedDB 0ms cache, and Style toggle', async ({
     page,
   }) => {
     await page.goto('/outfits');
@@ -334,16 +348,19 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     ).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
-    // Part A: Without API key configured on local test server, clicking AI Try-On NEVER draws a polygon human;
-    // it preserves the Editorial Flat-Lay Board and shows a clean status toast!
-    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
+    // Part A: AI Try-On runs automatically by default on load! Without API key configured on CI server,
+    // it NEVER draws a polygon human; it keeps `ai-vton` stage mode with Editorial Flat-Lay Board visible
+    // underneath and surfaces a status toast with API Key & Retry actions!
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
     await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
-    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
     await expect(studioCanvas.locator('canvas')).toHaveCount(0);
 
-    // Dismiss toast
-    await studioCanvas.locator('[data-vton-status-toast="true"]').click();
+    // Open inline Gemini API Key popover from toast action, inspect, and close
+    await studioCanvas.locator('[data-vton-open-key-btn="true"]').click();
+    await expect(studioCanvas.locator('[data-vton-key-popover="true"]')).toBeVisible();
+    await studioCanvas.locator('[data-vton-close-key-btn="true"]').click();
+    await expect(studioCanvas.locator('[data-vton-key-popover="true"]')).toHaveCount(0);
 
     // Part B: Mock Gemini `/api/vton/synthesize` returning a 2x2 Turnaround Studio Sheet
     const sheetPhoto = buildMockTurnaround2x2PngDataUrl(10);
@@ -364,7 +381,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           cached: false,
           mode: '2d-vton',
           provider: 'gemini-vton',
-          model: 'gemini-2.5-flash-image',
+          model: 'gemini-3.1-flash-image',
           layout: 'turnaround_2x2',
           styleMode: requestedStyle,
           geminiUsed: true,
