@@ -6,6 +6,7 @@ import {
   resolveStudioSeedUrl,
 } from '../shared/garmentTaxonomy.js';
 import { localizeGarmentName } from '../utils/i18n.ts';
+import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 
 function rgbDist(a, b) {
   return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -449,16 +450,16 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
           canvas.width = 0;
           canvas.height = 0;
         }
-        resolve(srcUrl);
+        resolve(withPublicBaseUrl(srcUrl));
       } finally {
         PENDING_TINTS.delete(key);
       }
     };
     img.onerror = () => {
       PENDING_TINTS.delete(key);
-      resolve(srcUrl);
+      resolve(withPublicBaseUrl(srcUrl));
     };
-    img.src = srcUrl;
+    img.src = withPublicBaseUrl(srcUrl);
   });
 
   PENDING_TINTS.set(key, job);
@@ -559,7 +560,8 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   const computedSrc = !needsCanvasProcessing
     ? resolvedSrc
     : cachedUrl || (asyncTinted?.key === cacheKey ? asyncTinted.url : resolvedSrc);
-  const displaySrc = failedKey === cacheKey ? fallbackSeedSrc : computedSrc;
+  const rawDisplaySrc = failedKey === cacheKey ? fallbackSeedSrc : computedSrc;
+  const displaySrc = withPublicBaseUrl(rawDisplaySrc);
 
   const [loadedSrc, setLoadedSrc] = useState(null);
   const isReady =
@@ -599,7 +601,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
         decoding="async"
         onLoad={() => setLoadedSrc(displaySrc)}
         onError={() => {
-          if (displaySrc !== fallbackSeedSrc) {
+          if (rawDisplaySrc !== fallbackSeedSrc) {
             setFailedKey(cacheKey);
           } else {
             setLoadedSrc(displaySrc);

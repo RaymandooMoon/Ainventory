@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
+import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 
 /**
  * Curated transparent RGBA studio garment cutouts (`/seed/*.webp`)
@@ -126,7 +127,10 @@ const WARDROBE_STREAM_ITEMS = [
     src: '/seed/studio-watch.webp',
     hangerType: 'hook',
   },
-];
+].map((item) => ({
+  ...item,
+  src: withPublicBaseUrl(item.src),
+}));
 
 const INITIAL_INVENTORY_SLOTS = [
   WARDROBE_STREAM_ITEMS[4],

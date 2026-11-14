@@ -285,3 +285,54 @@ export function setBiometricConsent(granted = true): void {
 
 export const getStoredThemePreference = getThemePreference;
 export const acknowledgeCameraNotice = setAcknowledgedCameraNotice;
+
+const RAW_PUBLIC_BASE_URL = String(import.meta.env?.BASE_URL || '/');
+const PUBLIC_BASE_PREFIX =
+  RAW_PUBLIC_BASE_URL === '/' ? '' : RAW_PUBLIC_BASE_URL.replace(/\/+$/, '');
+
+/**
+ * Resolves root-relative public static assets (`/seed/...`, `/uploads/...`, `/icon.svg`)
+ * against Vite's `BASE_URL` (e.g. `/Ainventory/` on GitHub Pages) while staying a zero-overhead
+ * identity function when `BASE_URL === '/'`.
+ */
+export function withPublicBaseUrl(rawUrl: string | null | undefined): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  if (!PUBLIC_BASE_PREFIX) return rawUrl;
+  if (
+    rawUrl.startsWith('data:') ||
+    rawUrl.startsWith('blob:') ||
+    rawUrl.startsWith('http://') ||
+    rawUrl.startsWith('https://') ||
+    rawUrl === PUBLIC_BASE_PREFIX ||
+    rawUrl.startsWith(`${PUBLIC_BASE_PREFIX}/`)
+  ) {
+    return rawUrl;
+  }
+  if (rawUrl.startsWith('/')) {
+    return `${PUBLIC_BASE_PREFIX}${rawUrl}`;
+  }
+  return rawUrl;
+}
+
+function prefixSubpathRouteUrl(url: string | URL | null | undefined): string | URL | null | undefined {
+  if (!PUBLIC_BASE_PREFIX || !url || typeof url !== 'string') return url;
+  if (!url.startsWith('/') || url.startsWith('//')) return url;
+  if (url === PUBLIC_BASE_PREFIX || url.startsWith(`${PUBLIC_BASE_PREFIX}/`)) return url;
+  return `${PUBLIC_BASE_PREFIX}${url}`;
+}
+
+if (PUBLIC_BASE_PREFIX && typeof window !== 'undefined' && window.history) {
+  const win = window as Window & { __ainventoryBasePatched?: boolean };
+  if (!win.__ainventoryBasePatched) {
+    win.__ainventoryBasePatched = true;
+    const origPushState = window.history.pushState.bind(window.history);
+    const origReplaceState = window.history.replaceState.bind(window.history);
+    window.history.pushState = (data: unknown, unused: string, url?: string | URL | null) => {
+      origPushState(data, unused, prefixSubpathRouteUrl(url));
+    };
+    window.history.replaceState = (data: unknown, unused: string, url?: string | URL | null) => {
+      origReplaceState(data, unused, prefixSubpathRouteUrl(url));
+    };
+  }
+}
+

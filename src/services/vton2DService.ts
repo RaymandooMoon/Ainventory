@@ -1,6 +1,7 @@
 import type { GarmentRecord } from '../contracts/carbonDesignContract.ts';
 import { getStudioSeedImageForGarment, resolveStudioSeedUrl } from '../shared/garmentTaxonomy.js';
 import { apiFetch } from '../utils/api.ts';
+import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import {
   type AvatarSpec,
   bridgeLegacyPropsToAvatarSpec,
@@ -891,7 +892,7 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
   if (typeof fetch === 'undefined' || typeof FileReader === 'undefined') return null;
 
   try {
-    const res = await fetch(srcUrl, { credentials: 'same-origin' });
+    const res = await fetch(withPublicBaseUrl(srcUrl), { credentials: 'same-origin' });
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob || blob.size === 0 || blob.size > 6 * 1024 * 1024) return null;

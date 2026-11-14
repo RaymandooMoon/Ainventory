@@ -32,6 +32,7 @@ import {
   normalizeVtonStyleMode,
   normalizeWeatherMoodKey,
   peekMemoryAiVtonSlice,
+  resolveClientGeminiApiKey,
   setStoredClientGeminiApiKey,
   synthesizeGeminiMultiAngleVton,
   trackFlatLayComboVisit,
@@ -1222,7 +1223,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           <KeyRound size={12} />
           <span>{isEn ? 'API Key' : '키 설정'}</span>
-          {hasSavedClientKey && (
+          {(hasSavedClientKey || Boolean(resolveClientGeminiApiKey())) && (
             <span className="studio-vton-key-saved-dot" aria-hidden="true" />
           )}
         </button>

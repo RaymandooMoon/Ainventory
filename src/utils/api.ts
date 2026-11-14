@@ -123,10 +123,19 @@ function markSampleDemoMutated(): void {
   }
 }
 
+const STATIC_STANDALONE_BUILD =
+  import.meta.env?.VITE_STATIC_STANDALONE === '1' && !import.meta.env?.VITE_API_BASE_URL;
+
 async function rawNetworkFetch(
   path: string,
   options: ApiRequestOptions = {}
 ): Promise<Record<string, unknown>> {
+  if (STATIC_STANDALONE_BUILD) {
+    throw new ApiError('Static standalone host', {
+      status: 0,
+      isBackendUnavailable: true,
+    });
+  }
   const token = getStoredToken();
   const sampleDemo = isSampleDemoMode();
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;

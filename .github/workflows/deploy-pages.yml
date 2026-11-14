@@ -1,0 +1,75 @@
+name: Deploy Ainventory to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy Web Atelier to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies & build standalone web bundle
+        shell: bash
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          VITE_STATIC_STANDALONE: '1'
+        run: |
+          set -euo pipefail
+          npm ci
+          npx vite build --base=/Ainventory/
+          node -e '
+            const fs = require("fs");
+            const manifestPath = "dist/manifest.webmanifest";
+            if (fs.existsSync(manifestPath)) {
+              const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+              manifest.id = "/Ainventory/";
+              manifest.start_url = "/Ainventory/";
+              manifest.scope = "/Ainventory/";
+              if (Array.isArray(manifest.icons)) {
+                manifest.icons = manifest.icons.map((icon) => ({
+                  ...icon,
+                  src: icon.src === "/icon.svg" ? "/Ainventory/icon.svg" : icon.src,
+                }));
+              }
+              fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+            }
+          '
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
