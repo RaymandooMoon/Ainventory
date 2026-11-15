@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -e
+echo "[Pre-Push] Running Ainventory quick verification (lint + typecheck)..."
+npm run verify:quick

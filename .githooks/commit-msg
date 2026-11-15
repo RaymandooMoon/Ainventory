@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+set -e
+node .agent/hooks/commit-msg-check.mjs "$1"

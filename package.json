@@ -11,7 +11,15 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "cap:sync": "vite build && cap sync android",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:console": "node .agent/hooks/check-console-log.mjs",
+    "verify:docs": "node .agent/hooks/check-doc-hygiene.mjs",
+    "verify:secrets": "node .agent/hooks/pre-commit-quality.mjs --secrets-only",
+    "verify:staged": "node .agent/hooks/pre-commit-quality.mjs",
+    "verify:quick": "npm run lint && npm run typecheck",
+    "verify": "npm run lint && npm run typecheck && npm run build",
+    "verify:full": "npm run verify && npm run test:e2e",
+    "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/* .agent/hooks/*.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

@@ -1,0 +1,43 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@1.10.1"
+      ],
+      "description": "Live Chrome DevTools inspection for React 19 UI, WebGL/Three.js canvas, and network waterfall"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp",
+        "--browser",
+        "chrome"
+      ],
+      "description": "Interactive Playwright browser automation complementing npm run test:e2e"
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "description": "Up-to-date official docs lookup for React 19, Vite 8, Three.js, MediaPipe, and Capacitor 8"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "description": "Structured multi-step architectural reasoning"
+    }
+  },
+  "_comments": {
+    "antigravity_native_note": "Antigravity natively provides GitHub (gh plugin), Google Drive/Calendar plugins, filesystem tools (view_file/replace_file_content), and web search (google_search/browse). Do not enable duplicate MCP servers.",
+    "context_budget_note": "Keep total enabled MCP servers under 10 to preserve context window and avoid payload bloat.",
+    "full_catalog": "See .agent/mcp/mcp-servers.catalog.json for all 34 verbatim ECC MCP configurations."
+  }
+}
