@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarPlus,
   Check,
+  ChevronLeft,
   Cloud,
   CloudRain,
   CloudSun,
+  Filter,
   Flame,
+  Layers,
   LocateFixed,
   Moon,
   Plus,
@@ -52,8 +55,11 @@ import {
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
+import OutfitCategorySilhouetteRail from './OutfitCategorySilhouetteRail.tsx';
 import Studio25DCanvas from './Studio25DCanvas.jsx';
 import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
+import '../styles/atelierTokens.css';
+import './OutfitWardrobeDrawer.css';
 
 const DEFAULT_CITIES = [
   { key: 'seoul', name: '서울' },
@@ -104,6 +110,81 @@ const DEFAULT_SCENARIOS = [
   { key: 'summer_heatwave', label: '폭염' },
   { key: 'winter_cold', label: '한파' },
 ];
+
+const STUDIO_OCCASION_TABS = [
+  { key: 'all', ko: '전체', en: 'All' },
+  { key: 'daily', ko: '데일리', en: 'Daily' },
+  { key: 'office', ko: '오피스', en: 'Office' },
+  { key: 'formal', ko: '포멀', en: 'Formal' },
+];
+
+const DAILY_KEYWORDS_RE =
+  /daily|casual|sport|tshirt|t-shirt|tee|hood|sweat|denim|jean|short|sneaker|sandal|flip_flop|cap|beanie|bucket|windbreaker|parka|padding|puffer|cardigan|knit|tote|backpack|swim|bikini|rashguard|데일리|캐주얼|티셔츠|데님|청바지|스니커즈|후드|맨투맨|패딩|볼캡|비니|버킷햇|윈드브레이커|가디건|니트|토트|수영복/i;
+
+const OFFICE_KEYWORDS_RE =
+  /office|smart|business|shirt|blouse|slacks|trouser|blazer|trench|coat|loafer|derby|oxford|heel|pump|briefcase|shoulder|watch|belt|eyewear|glasses|scarf|cardigan|skirt|pleat|dress|onepiece|오피스|출근|셔츠|블라우스|슬랙스|블레이저|트렌치|코트|로퍼|브리프케이스|숄더백|안경|아이웨어|시계|벨트|스커트|원피스/i;
+
+const FORMAL_KEYWORDS_RE =
+  /formal|ceremony|evening|suit|blazer|coat|dress|onepiece|silk|cashmere|wool|necktie|tie|oxford|derby|heel|pump|boot|clutch|briefcase|pearl|diamond|gold|silver|platinum|brooch|necklace|earring|ring|bracelet|watch|포멀|정장|수트|하객|블레이저|핸드메이드|실크|캐시미어|타이|넥타이|옥스포드|더비|힐|부츠|원피스|브로치|목걸이|귀걸이|반지|진주|골드|실버/i;
+
+function doesGarmentMatchOccasion(garment, occasionFilter) {
+  if (!occasionFilter || occasionFilter === 'all') return true;
+  if (!garment) return false;
+
+  const formality = String(garment.formality || '')
+    .trim()
+    .toLowerCase();
+  const occasionRaw = String(garment.occasion || '')
+    .trim()
+    .toLowerCase();
+  const blob = [
+    garment.occasion,
+    garment.subcategory,
+    garment.name,
+    garment.name_en,
+    garment.fabric,
+    garment.brand,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  if (occasionFilter === 'daily') {
+    if (formality === 'casual' || formality === 'sport') return true;
+    if (occasionRaw.includes('daily') || occasionRaw.includes('데일리') || occasionRaw.includes('casual')) {
+      return true;
+    }
+    if (DAILY_KEYWORDS_RE.test(blob)) return true;
+    return !formality && !FORMAL_KEYWORDS_RE.test(blob);
+  }
+
+  if (occasionFilter === 'office') {
+    if (formality === 'smart') return true;
+    if (
+      occasionRaw.includes('office') ||
+      occasionRaw.includes('오피스') ||
+      occasionRaw.includes('business') ||
+      occasionRaw.includes('출근')
+    ) {
+      return true;
+    }
+    return OFFICE_KEYWORDS_RE.test(blob);
+  }
+
+  if (occasionFilter === 'formal') {
+    if (formality === 'formal') return true;
+    if (
+      occasionRaw.includes('formal') ||
+      occasionRaw.includes('포멀') ||
+      occasionRaw.includes('하객') ||
+      occasionRaw.includes('정장')
+    ) {
+      return true;
+    }
+    return FORMAL_KEYWORDS_RE.test(blob);
+  }
+
+  return true;
+}
 
 const STUDIO_SEASON_FILTERS = [
   { key: 'all', ko: '사계절 전체', en: 'All Seasons' },
@@ -356,8 +437,10 @@ export default function OutfitStudioView({
   const [activeSlotKey, setActiveSlotKey] = useState(() =>
     preEquippedGarment ? mapGarmentToDefaultSubSlot(preEquippedGarment) : 'top'
   );
+  const [occasionFilter, setOccasionFilter] = useState('all');
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [hoveredGarment, setHoveredGarment] = useState(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [renderResult, setRenderResult] = useState(null);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
@@ -391,6 +474,7 @@ export default function OutfitStudioView({
 
   const handleSelectTopFittingTab = useCallback((tabKey) => {
     triggerHaptic('selection');
+    setHoveredGarment(null);
     if (tabKey === 'accessory') {
       setActiveSlotKey((prev) => (isAccessorySlotKey(prev) ? prev : 'accessory'));
     } else if (tabKey === 'jewelry') {
@@ -399,6 +483,12 @@ export default function OutfitStudioView({
       setActiveSlotKey(tabKey);
     }
   }, []);
+
+  const handleStepPrevFittingTab = useCallback(() => {
+    const curIdx = FITTING_SLOTS.findIndex((s) => s.key === activeParentTab);
+    const prevIdx = curIdx > 0 ? curIdx - 1 : FITTING_SLOTS.length - 1;
+    handleSelectTopFittingTab(FITTING_SLOTS[prevIdx].key);
+  }, [activeParentTab, handleSelectTopFittingTab]);
 
   const handleOpenBodyModal = useCallback(() => {
     if (onOpenBodyProfile) {
@@ -733,6 +823,7 @@ export default function OutfitStudioView({
     return garments.filter((g) => {
       if (!isWearableStudioGarment(g)) return false;
       if (!doesGarmentMatchSubSlot(g, activeSlotKey)) return false;
+      if (!doesGarmentMatchOccasion(g, occasionFilter)) return false;
       if (seasonFilter !== 'all' && !parseSeasons(g.seasons).includes(seasonFilter)) {
         return false;
       }
@@ -751,7 +842,7 @@ export default function OutfitStudioView({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [garments, activeSlotKey, seasonFilter, searchQuery, lang]);
+  }, [garments, activeSlotKey, occasionFilter, seasonFilter, searchQuery, lang]);
 
   const equippedItems = useMemo(() => {
     return ALL_EQUIPPABLE_SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
@@ -1206,13 +1297,114 @@ export default function OutfitStudioView({
     );
   };
 
+  const activeSlotCategoryTitle = useMemo(() => {
+    const subMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
+    if (subMeta) {
+      return lang === 'en' ? subMeta.labelEn : subMeta.labelKo;
+    }
+    const activeDef = FITTING_SLOTS.find((s) => s.key === activeParentTab);
+    if (!activeDef) return tx(lang, '아이템 선택', 'Select Item');
+    return lang === 'en' ? activeDef.label : activeDef.labelKo;
+  }, [activeSlotKey, activeParentTab, lang]);
+
+  const focusedDrawerTitle = useMemo(() => {
+    if (hoveredGarment && doesGarmentMatchSubSlot(hoveredGarment, activeSlotKey)) {
+      return resolveGarmentDisplayName(hoveredGarment, lang);
+    }
+    const equippedInActive = slots[activeSlotKey];
+    if (equippedInActive) {
+      return resolveGarmentDisplayName(equippedInActive, lang);
+    }
+    if (activeParentTab === 'top' && slots.onepiece) {
+      return resolveGarmentDisplayName(slots.onepiece, lang);
+    }
+    return activeSlotCategoryTitle;
+  }, [hoveredGarment, activeSlotKey, slots, activeParentTab, activeSlotCategoryTitle, lang]);
+
+  const hasActiveDrawerFilter =
+    occasionFilter !== 'all' || seasonFilter !== 'all' || searchQuery.trim().length > 0;
+
+  const renderDrawerHeader = (isMobileSheet, inputRef) => (
+    <div className="atelier-drawer-header">
+      <div className="atelier-drawer-title-group">
+        <button
+          type="button"
+          className="atelier-drawer-nav-btn"
+          aria-label={
+            isMobileSheet
+              ? tx(lang, '옷장 서랍 닫기', 'Close wardrobe drawer')
+              : tx(lang, '이전 카테고리', 'Previous category')
+          }
+          onClick={() => {
+            if (isMobileSheet) {
+              triggerHaptic('selection');
+              setMobileSheetOpen(false);
+            } else {
+              handleStepPrevFittingTab();
+            }
+          }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <span
+          className="atelier-drawer-focused-title"
+          data-drawer-focused-title="true"
+          title={focusedDrawerTitle}
+        >
+          {focusedDrawerTitle}
+        </span>
+      </div>
+      <button
+        type="button"
+        className={`atelier-drawer-filter-btn ${hasActiveDrawerFilter ? 'has-active-filter' : ''}`.trim()}
+        aria-label={tx(lang, '의류 검색 및 필터 포커스', 'Focus search and filters')}
+        title={tx(lang, '검색 및 필터', 'Search & Filters')}
+        onClick={() => {
+          triggerHaptic('selection');
+          inputRef?.current?.focus?.();
+        }}
+      >
+        <Filter size={15} />
+        {hasActiveDrawerFilter && <span className="atelier-drawer-filter-dot" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+
+  const renderOccasionTabs = () => (
+    <div
+      className="atelier-occasion-tabs"
+      role="tablist"
+      aria-label={tx(lang, '무드 및 상황 필터', 'Mood & Occasion Filter')}
+    >
+      {STUDIO_OCCASION_TABS.map((tab) => {
+        const active = occasionFilter === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            data-outfit-occasion-tab={tab.key}
+            aria-selected={active}
+            className={`atelier-occasion-tab ${active ? 'is-active' : ''}`.trim()}
+            onClick={() => {
+              triggerHaptic('selection');
+              setOccasionFilter(tab.key);
+            }}
+          >
+            <span>{tx(lang, tab.ko, tab.en)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const renderSlotInventoryGrid = (closeOnPick = false) => {
     const oppositeSlotKey = getOppositeSideSubSlot(activeSlotKey);
     const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
     const showMaterialBadge =
       isAccessorySlotKey(activeSlotKey) || isJewelrySlotKey(activeSlotKey);
     const hasFilterOrSearch =
-      seasonFilter !== 'all' || searchQuery.trim().length > 0;
+      occasionFilter !== 'all' || seasonFilter !== 'all' || searchQuery.trim().length > 0;
     const isFilterEmptyOnly = rawSlotGarmentCount > 0 && hasFilterOrSearch;
 
     return slotGarments.length === 0 ? (
@@ -1221,8 +1413,8 @@ export default function OutfitStudioView({
           {isFilterEmptyOnly
             ? tx(
                 lang,
-                '검색어 또는 계절 필터에 맞는 의류가 없습니다.',
-                'No garments match the current search or season filter.'
+                '검색어 또는 필터 조건에 맞는 의류가 없습니다.',
+                'No garments match the current search or filter.'
               )
             : totalWearableCount === 0
               ? tx(
@@ -1256,6 +1448,7 @@ export default function OutfitStudioView({
             className="studio-empty-cta-btn"
             onClick={() => {
               triggerHaptic('selection');
+              setOccasionFilter('all');
               setSeasonFilter('all');
               setSearchQuery('');
             }}
@@ -1290,14 +1483,22 @@ export default function OutfitStudioView({
               type="button"
               data-slot-garment-id={item.id}
               aria-pressed={isEquipped}
-              className={`studio-mini-garment-card ${isEquipped ? 'is-equipped' : ''}`}
+              className={`studio-mini-garment-card atelier-packshot-card ${isEquipped ? 'is-equipped' : ''}`.trim()}
+              onMouseEnter={() => setHoveredGarment(item)}
+              onMouseLeave={() =>
+                setHoveredGarment((prev) => (prev?.id === item.id ? null : prev))
+              }
+              onFocus={() => setHoveredGarment(item)}
+              onBlur={() =>
+                setHoveredGarment((prev) => (prev?.id === item.id ? null : prev))
+              }
               onClick={() => {
                 handleToggleEquip(item);
                 if (closeOnPick) setMobileSheetOpen(false);
               }}
             >
               <div className="studio-mini-squircle">
-                <GarmentObject25D item={item} alt={displayName} padding="11%" />
+                <GarmentObject25D item={item} alt={displayName} padding="10%" />
                 {isEquipped && (
                   <span className="studio-equipped-badge" aria-hidden="true">
                     <Check size={12} strokeWidth={2.6} />
@@ -1307,7 +1508,7 @@ export default function OutfitStudioView({
                   <span className="studio-opposite-side-badge">{oppositeBadgeLabel}</span>
                 )}
               </div>
-              <span className="hig-garment-name" title={displayName}>
+              <span className="hig-garment-name atelier-packshot-tooltip" title={displayName}>
                 {displayName}
               </span>
               {showMaterialBadge && item.fabric && (
@@ -1324,7 +1525,7 @@ export default function OutfitStudioView({
 
   return (
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
-      <header className="hig-top-bar">
+      <header id="hig-top-bar" className="hig-top-bar atelier-top-bar">
         <div className="hig-top-bar-titles">
           <h1 className="hig-screen-title">OUTFITS</h1>
           <span className="hig-item-count tabular-nums">{equippedItems.length} ACTIVE</span>
@@ -1541,7 +1742,7 @@ export default function OutfitStudioView({
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
               setActiveSlotKey(slotKey);
-              if (window.innerWidth < 700) {
+              if (window.innerWidth < 600) {
                 setMobileSheetOpen(true);
               }
             }}
@@ -1554,7 +1755,28 @@ export default function OutfitStudioView({
             onOpenBodyModal={handleOpenBodyModal}
           />
 
-          {/* Mobile Slot Dock (< 700px) */}
+          {/* Narrow Mobile (< 600px) Floating Smoked-Glass Drawer Trigger + Slot Bar */}
+          <div className="atelier-mobile-drawer-trigger-row">
+            <button
+              type="button"
+              data-mobile-wardrobe-trigger="true"
+              className="atelier-mobile-drawer-open-btn"
+              onClick={() => {
+                triggerHaptic('selection');
+                setMobileSheetOpen(true);
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Layers size={15} />
+                <span>{focusedDrawerTitle}</span>
+              </span>
+              <span className="atelier-mobile-drawer-open-meta tabular-nums">
+                {tx(lang, '옷장 서랍 열기', 'Open Wardrobe')}
+              </span>
+            </button>
+          </div>
+
+          {/* Mobile Slot Dock (< 600px) */}
           <div className="studio-mobile-slot-bar">
             {FITTING_SLOTS.map((slot) => {
               const count = equippedCountByParentTab[slot.key] || 0;
@@ -1585,45 +1807,31 @@ export default function OutfitStudioView({
           </div>
         </div>
 
-        {/* Right Side (>= 700px): Minimal Slot Inventory Grid */}
+        {/* Right Side (>= 600px): 42% Dark Smoked-Glass Wardrobe Drawer */}
         <aside id={CARBON_DOM_CONTRACT.studioSlotPickerId} className="studio-desktop-picker-col">
-          <div
-            className="hig-pill-rail studio-slot-tabs"
-            role="tablist"
-            aria-label={tx(lang, '코디 슬롯', 'Outfit Slots')}
-          >
-            {FITTING_SLOTS.map((slot) => {
-              const active = activeParentTab === slot.key;
-              const count = equippedCountByParentTab[slot.key] || 0;
-              const slotText = lang === 'en' ? slot.label : slot.labelKo;
-              return (
-                <button
-                  key={slot.key}
-                  type="button"
-                  role="tab"
-                  data-outfit-slot-tab={slot.key}
-                  aria-selected={active}
-                  className={`hig-filter-pill ${active ? 'active' : ''}`}
-                  onClick={() => handleSelectTopFittingTab(slot.key)}
-                >
-                  <span>{slotText}</span>
-                  {count > 1 ? (
-                    <span className="studio-slot-count-badge">{count}</span>
-                  ) : count === 1 ? (
-                    <span className="studio-slot-dot" />
-                  ) : null}
-                </button>
-              );
-            })}
+          {renderDrawerHeader(false, desktopSearchInputRef)}
+
+          {renderOccasionTabs()}
+
+          <div className="atelier-filter-strip">
+            {renderSlotSearchBar(desktopSearchInputRef)}
+            {renderSeasonFilterRail()}
           </div>
 
           {renderSubTreePanel()}
 
-          {renderSlotSearchBar(desktopSearchInputRef)}
-
-          {renderSeasonFilterRail()}
-
-          <div className="studio-desktop-inventory-scroll">{renderSlotInventoryGrid(false)}</div>
+          <div className="atelier-drawer-body">
+            <OutfitCategorySilhouetteRail
+              activeParentTab={activeParentTab}
+              equippedCountByParentTab={equippedCountByParentTab}
+              lang={lang}
+              isDesktopDrawer={true}
+              onSelectTab={handleSelectTopFittingTab}
+            />
+            <div className="atelier-drawer-grid-col">
+              <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(false)}</div>
+            </div>
+          </div>
 
           <form onSubmit={handleSaveOutfit} className="studio-save-bar">
             <div className="studio-clearable-input-wrap">
@@ -1697,7 +1905,7 @@ export default function OutfitStudioView({
         </aside>
       </div>
 
-      {/* Mobile Save Bar */}
+      {/* Mobile Save Bar (< 600px) */}
       <form onSubmit={handleSaveOutfit} className="studio-mobile-save-row">
         <div className="studio-clearable-input-wrap">
           <input
@@ -1737,41 +1945,34 @@ export default function OutfitStudioView({
         </button>
       </form>
 
-      {/* Mobile Bottom Sheet Mini Inventory Picker */}
+      {/* Mobile Narrow-Viewport (< 600px) Dark Smoked-Glass Wardrobe Sheet */}
       <ResponsiveSheetModal
+        id="outfit-mobile-wardrobe-sheet"
         open={mobileSheetOpen}
         onClose={() => setMobileSheetOpen(false)}
         lang={lang}
-        title={(() => {
-          const subMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
-          if (subMeta) {
-            return lang === 'en' ? subMeta.labelEn : subMeta.labelKo;
-          }
-          const activeDef = FITTING_SLOTS.find((s) => s.key === activeParentTab);
-          if (!activeDef) return tx(lang, '아이템 선택', 'Select Item');
-          return lang === 'en' ? activeDef.label : activeDef.labelKo;
-        })()}
+        title={activeSlotCategoryTitle}
         maxWidth={520}
       >
-        <div className="hig-pill-rail studio-sheet-slot-rail" style={{ marginBottom: 10 }}>
-          {FITTING_SLOTS.map((slot) => (
-            <button
-              key={slot.key}
-              type="button"
-              className={`hig-filter-pill ${activeParentTab === slot.key ? 'active' : ''}`}
-              onClick={() => handleSelectTopFittingTab(slot.key)}
-            >
-              {activeParentTab === slot.key && (
-                <Check size={12} strokeWidth={2.6} aria-hidden="true" />
-              )}
-              <span>{lang === 'en' ? slot.label : slot.labelKo}</span>
-            </button>
-          ))}
+        {renderDrawerHeader(true, mobileSearchInputRef)}
+        {renderOccasionTabs()}
+        <div className="atelier-filter-strip">
+          {renderSlotSearchBar(mobileSearchInputRef)}
+          {renderSeasonFilterRail()}
         </div>
         {renderSubTreePanel()}
-        <div style={{ marginBottom: 10 }}>{renderSlotSearchBar(mobileSearchInputRef)}</div>
-        <div style={{ marginBottom: 14 }}>{renderSeasonFilterRail()}</div>
-        {renderSlotInventoryGrid(true)}
+        <div className="atelier-drawer-body">
+          <OutfitCategorySilhouetteRail
+            activeParentTab={activeParentTab}
+            equippedCountByParentTab={equippedCountByParentTab}
+            lang={lang}
+            isDesktopDrawer={false}
+            onSelectTab={handleSelectTopFittingTab}
+          />
+          <div className="atelier-drawer-grid-col">
+            <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(true)}</div>
+          </div>
+        </div>
       </ResponsiveSheetModal>
     </section>
   );

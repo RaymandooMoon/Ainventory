@@ -1,8 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
-  Columns2,
+  Cloud,
+  CloudRain,
+  CloudSun,
   ExternalLink,
+  Flame,
   History,
   KeyRound,
   LayoutGrid,
@@ -10,9 +13,12 @@ import {
   RefreshCw,
   RotateCcw,
   RotateCw,
+  Scan,
   SlidersHorizontal,
+  Snowflake,
   Sparkles,
   Trash2,
+  Wind,
   X,
   Zap,
   ZoomIn,
@@ -53,9 +59,11 @@ import {
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName, tr } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
+import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-import WeatherForegroundCanvas from './WeatherForegroundCanvas.tsx';
+import WeatherCanvasOverlay from './WeatherCanvasOverlay.tsx';
+import '../styles/atelierTokens.css';
 import './Studio2DFittingViewer.css';
 
 const AUTOGEN_STORAGE_KEY = 'ainventory_vton_autogen_v1';
@@ -162,6 +170,27 @@ const TURNAROUND_ANGLE_LABELS = {
     fullEn: '180° Back View',
   },
 };
+
+const WEATHER_CAPSULE_SHORT_LABELS = {
+  rain: { ko: '비', en: 'Rain' },
+  snow: { ko: '눈', en: 'Snow' },
+  coldwave: { ko: '한파', en: 'Coldwave' },
+  heatwave: { ko: '폭염', en: 'Heatwave' },
+  wind: { ko: '강풍', en: 'Windy' },
+  cloudy: { ko: '흐림', en: 'Cloudy' },
+  clear: { ko: '맑음', en: 'Clear' },
+};
+
+function renderWeatherCapsuleIcon(effectiveWeather) {
+  if (effectiveWeather === 'rain') return <CloudRain size={15} />;
+  if (effectiveWeather === 'snow' || effectiveWeather === 'coldwave') {
+    return <Snowflake size={15} />;
+  }
+  if (effectiveWeather === 'heatwave') return <Flame size={15} />;
+  if (effectiveWeather === 'wind') return <Wind size={15} />;
+  if (effectiveWeather === 'cloudy') return <Cloud size={15} />;
+  return <CloudSun size={15} />;
+}
 
 function formatZoomLabel(zoomValue) {
   const rounded = Math.round((Number(zoomValue) || 1) * 10) / 10;
@@ -1209,6 +1238,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const displayWeightKg =
     bodySpec?.weightKg ?? resolvedAvatarSpec?.anthropometrics?.weightKg;
 
+  const capsuleTempC = useMemo(() => {
+    if (typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)) {
+      return Math.round(weather.avgTemp);
+    }
+    if (typeof weather?.tempMin === 'number' && typeof weather?.tempMax === 'number') {
+      return Math.round((weather.tempMin + weather.tempMax) / 2);
+    }
+    if (effectiveWeather === 'coldwave') return -7;
+    if (effectiveWeather === 'snow') return -1;
+    if (effectiveWeather === 'heatwave') return 31;
+    if (effectiveWeather === 'rain') return 11;
+    return 12;
+  }, [weather, effectiveWeather]);
+
+  const capsuleStatusWord = useMemo(() => {
+    const pair =
+      WEATHER_CAPSULE_SHORT_LABELS[effectiveWeather] || WEATHER_CAPSULE_SHORT_LABELS.clear;
+    return isEn ? pair.en : pair.ko;
+  }, [effectiveWeather, isEn]);
+
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
@@ -1225,9 +1274,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-view-angle={viewAngleDeg}
       data-avatar-hash={resolvedAvatarHash}
     >
-      {/* Stage Base (z-0): Responsive Light/Dark Keylight + Weather Ambient Tint */}
+      {/* Stage Base (z-0..2): Warm Beige / Obsidian Showroom Backdrop + Sunlight Gobos */}
       <div aria-hidden="true" className="studio-25d-keylight" />
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
+      <FittingAtelierBackdrop effectiveWeather={effectiveWeather} theme={resolvedTheme} />
 
       {/* Layer 1A (z-10): Perspective Ground Horizon Deck + Real-Time Wet Mirror Reflection + Contact AO Shadow */}
       <StageGroundDeck
@@ -1273,105 +1323,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Layer 4 (z-40+): Top HUD Controls & Weather Curation Pill Badge */}
+      {/* Layer 4 (z-55+): Top HUD — Editorial Brand + Weather Capsule Badge (Left) & Saved/Profile (Right) */}
       <div className="studio-stage-top-hud">
-        <div className="studio-vton-hud-left">
-          <div
-            className="studio-vton-zoom-bar"
-            role="group"
-            aria-label={isEn ? 'Zoom controls' : '확대 및 축소'}
-          >
-            <button
-              type="button"
-              data-vton-zoom-out="true"
-              className="studio-vton-zoom-btn"
-              disabled={zoom <= 1.01}
-              aria-label={isEn ? 'Zoom out' : '축소'}
-              onClick={handleZoomOut}
-            >
-              <ZoomOut size={14} />
-            </button>
-            <button
-              type="button"
-              data-vton-zoom-level="true"
-              className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
-              aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
-              onClick={handleZoomCycleOrReset}
-            >
-              {formatZoomLabel(zoom)}
-            </button>
-            <button
-              type="button"
-              data-vton-zoom-in="true"
-              className="studio-vton-zoom-btn"
-              disabled={zoom >= 2.99}
-              aria-label={isEn ? 'Zoom in' : '확대'}
-              onClick={handleZoomIn}
-            >
-              <ZoomIn size={14} />
-            </button>
+        <div className="atelier-stage-brand-cluster" aria-hidden="true">
+          <div className="atelier-stage-title-lockup" data-atelier-stage-header="true">
+            <span className="atelier-stage-title-main">Outfits</span>
+            <span className="atelier-stage-title-sub">Virtual Studio</span>
           </div>
-
-          <div
-            className="studio-iso-rotate-bar"
-            role="group"
-            aria-label={isEn ? 'View angle controls' : '뷰 각도 회전'}
-          >
-            <button
-              type="button"
-              data-iso-rotate-btn="ccw"
-              className="studio-iso-rotate-btn"
-              aria-label={isEn ? 'Rotate counter-clockwise' : '반시계 방향 회전'}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleStepAngle(-1);
-              }}
-            >
-              <RotateCcw size={13} />
-            </button>
-            <button
-              type="button"
-              data-iso-angle-badge={viewAngleDeg}
-              title={angleMeta.fullLabel}
-              aria-label={angleMeta.resetAriaLabel}
-              className={`studio-iso-angle-badge tabular-nums ${viewAngleDeg !== DEFAULT_TURNAROUND_ANGLE ? 'is-rotated' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleViewAngleChange(DEFAULT_TURNAROUND_ANGLE);
-              }}
-            >
-              <span className="studio-iso-angle-deg">{angleMeta.angleDeg}°</span>
-              <span className="studio-iso-angle-word">{angleMeta.word}</span>
-            </button>
-            <button
-              type="button"
-              data-iso-rotate-btn="cw"
-              className="studio-iso-rotate-btn"
-              aria-label={isEn ? 'Rotate clockwise' : '시계 방향 회전'}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleStepAngle(1);
-              }}
-            >
-              <RotateCw size={13} />
-            </button>
+          <div className="atelier-weather-capsule" data-atelier-weather-capsule="true">
+            <span className="atelier-weather-capsule-icon">
+              {renderWeatherCapsuleIcon(effectiveWeather)}
+            </span>
+            <div className="atelier-weather-capsule-metrics">
+              <strong className="atelier-weather-capsule-temp tabular-nums">
+                {capsuleTempC}°C
+              </strong>
+              <span className="atelier-weather-capsule-sub tabular-nums">
+                {capsuleTempC}°C / {capsuleStatusWord}
+              </span>
+            </div>
           </div>
-
-          <button
-            id="toggle-vton-compare-btn"
-            type="button"
-            data-vton-compare-btn="true"
-            disabled={equippedCount === 0}
-            aria-pressed={effectiveCompareActive}
-            aria-label={
-              isEn ? 'Toggle before and after outfit comparison' : '착장 전후 분할 비교'
-            }
-            className={`studio-vton-compare-btn ${effectiveCompareActive ? 'is-active' : ''}`}
-            onClick={handleToggleCompare}
-          >
-            <Columns2 size={14} />
-            <span className="studio-vton-compare-label">B/A</span>
-          </button>
         </div>
 
         <div className="studio-vton-hud-right">
@@ -1421,6 +1392,108 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </span>
           </button>
         </div>
+      </div>
+
+      {/* Left-Upper Floating Smoked-Glass Circular Controls (Zoom + Scan/Split Compare) */}
+      <div className="atelier-stage-left-controls">
+        <div
+          className="studio-vton-zoom-bar"
+          role="group"
+          aria-label={isEn ? 'Zoom controls' : '확대 및 축소'}
+        >
+          <button
+            type="button"
+            data-vton-zoom-in="true"
+            className="studio-vton-zoom-btn"
+            disabled={zoom >= 2.99}
+            aria-label={isEn ? 'Zoom in' : '확대'}
+            onClick={handleZoomIn}
+          >
+            <ZoomIn size={14} />
+          </button>
+          <button
+            type="button"
+            data-vton-zoom-level="true"
+            className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
+            aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
+            onClick={handleZoomCycleOrReset}
+          >
+            {formatZoomLabel(zoom)}
+          </button>
+          <button
+            type="button"
+            data-vton-zoom-out="true"
+            className="studio-vton-zoom-btn"
+            disabled={zoom <= 1.01}
+            aria-label={isEn ? 'Zoom out' : '축소'}
+            onClick={handleZoomOut}
+          >
+            <ZoomOut size={14} />
+          </button>
+        </div>
+
+        <button
+          id="toggle-vton-compare-btn"
+          type="button"
+          data-vton-compare-btn="true"
+          disabled={equippedCount === 0}
+          aria-pressed={effectiveCompareActive}
+          aria-label={
+            isEn ? 'Toggle before and after outfit comparison' : '착장 전후 분할 비교'
+          }
+          title={isEn ? 'Before / After Split Compare' : '착장 전후 비교'}
+          className={`studio-vton-compare-btn ${effectiveCompareActive ? 'is-active' : ''}`}
+          onClick={handleToggleCompare}
+        >
+          <Scan size={15} />
+          <span className="studio-vton-compare-label">B/A</span>
+        </button>
+      </div>
+
+      {/* Bottom-Left Floating Circular/Capsule Undo & Turnaround Rotate Control */}
+      <div
+        className="studio-iso-rotate-bar atelier-bottom-left-rotate"
+        role="group"
+        aria-label={isEn ? 'View angle controls' : '뷰 각도 회전'}
+      >
+        <button
+          type="button"
+          data-iso-rotate-btn="ccw"
+          className="studio-iso-rotate-btn"
+          aria-label={isEn ? 'Rotate counter-clockwise' : '반시계 방향 회전'}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStepAngle(-1);
+          }}
+        >
+          <RotateCcw size={14} />
+        </button>
+        <button
+          type="button"
+          data-iso-angle-badge={viewAngleDeg}
+          title={angleMeta.fullLabel}
+          aria-label={angleMeta.resetAriaLabel}
+          className={`studio-iso-angle-badge tabular-nums ${viewAngleDeg !== DEFAULT_TURNAROUND_ANGLE ? 'is-rotated' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleViewAngleChange(DEFAULT_TURNAROUND_ANGLE);
+          }}
+        >
+          <span className="studio-iso-angle-deg">{angleMeta.angleDeg}°</span>
+          <span className="studio-iso-angle-word">{angleMeta.word}</span>
+        </button>
+        <button
+          type="button"
+          data-iso-rotate-btn="cw"
+          className="studio-iso-rotate-btn"
+          aria-label={isEn ? 'Rotate clockwise' : '시계 방향 회전'}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStepAngle(1);
+          }}
+        >
+          <RotateCw size={14} />
+        </button>
       </div>
 
       {/* Weather Curation Pill Badge (e.g. `비 · 우산 코디 | 비 9°/13°`, `한파 · 방한 코디 | 한파 -10°/-4°`) */}
@@ -1477,8 +1550,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         lang={resolvedLang}
       />
 
-      {/* Layer 3 (z-30 Foreground Weather Physics Engine — pointer-events: none) */}
-      <WeatherForegroundCanvas
+      {/* Layer 3 (z-30 Standalone Weather Environment Overlay — pointer-events: none) */}
+      <WeatherCanvasOverlay
         weather={effectiveWeather}
         isDark={resolvedTheme === 'dark'}
         umbrellaCollisionEnabled={

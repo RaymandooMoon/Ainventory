@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, RotateCcw } from 'lucide-react';
 import {
   AVATAR_ARCHETYPE_OPTIONS,
@@ -60,6 +61,292 @@ function getMstBaseLevelName(level, lang = 'ko') {
 }
 
 /**
+ * Piecewise linear interpolation for Body Volume Slider (`0% -> 0.80`, `50% -> 1.00`, `100% -> 1.30`).
+ */
+function bodyPctToScale(pct) {
+  const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
+  return safePct <= 50
+    ? 0.8 + (safePct / 50) * 0.2
+    : 1.0 + ((safePct - 50) / 50) * 0.3;
+}
+
+/**
+ * Inverse piecewise mapping (`0.80 -> 0%`, `1.00 -> 50%`, `1.30 -> 100%`).
+ */
+function bodyScaleToPct(scale) {
+  const s = Number(scale) || 1.0;
+  return s <= 1.0
+    ? Math.round(Math.max(0, Math.min(50, ((s - 0.8) / 0.2) * 50)))
+    : Math.round(Math.max(50, Math.min(100, 50 + ((s - 1.0) / 0.3) * 50)));
+}
+
+/**
+ * Buffered White-Track / Circular-Handle Atelier Slider:
+ * - Tracks `isPointerDraggingRef` so active pointer drags update 60fps local state & `--slider-fill-pct`
+ *   while trailing-debouncing store commits by 150ms, then immediately flushes on pointer/touch/mouse/key release.
+ * - When `isPointerDraggingRef.current === false` (keyboard arrow keys OR Playwright's `setRangeSliderValue`),
+ *   commits synchronously in 0ms!
+ */
+export function BufferedAtelierSlider({
+  label,
+  ariaLabel,
+  sliderKey,
+  min,
+  max,
+  step = 1,
+  value,
+  formatValue,
+  onCommit,
+  variant = 'default',
+}) {
+  const numericProp = Number(value);
+  const safePropVal = Math.min(
+    max,
+    Math.max(min, Number.isFinite(numericProp) ? numericProp : min)
+  );
+
+  const [localVal, setLocalVal] = useState(safePropVal);
+  const [isDraggingUI, setIsDraggingUI] = useState(false);
+
+  const isPointerDraggingRef = useRef(false);
+  const latestValRef = useRef(safePropVal);
+  const timerRef = useRef(null);
+  const onCommitRef = useRef(onCommit);
+
+  useEffect(() => {
+    onCommitRef.current = onCommit;
+  }, [onCommit]);
+
+  const clearPendingTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const flushCommit = useCallback(
+    (nextVal) => {
+      clearPendingTimer();
+      latestValRef.current = nextVal;
+      onCommitRef.current?.(nextVal);
+    },
+    [clearPendingTimer]
+  );
+
+  const handlePointerStart = useCallback(() => {
+    isPointerDraggingRef.current = true;
+    latestValRef.current = safePropVal;
+    setLocalVal(safePropVal);
+    setIsDraggingUI(true);
+  }, [safePropVal]);
+
+  const handlePointerFinish = useCallback(() => {
+    if (!isPointerDraggingRef.current && timerRef.current === null) return;
+    isPointerDraggingRef.current = false;
+    setIsDraggingUI(false);
+    flushCommit(latestValRef.current);
+  }, [flushCommit]);
+
+  useEffect(() => {
+    if (!isDraggingUI) return undefined;
+    const onGlobalRelease = () => {
+      if (!isPointerDraggingRef.current && timerRef.current === null) return;
+      isPointerDraggingRef.current = false;
+      setIsDraggingUI(false);
+      flushCommit(latestValRef.current);
+    };
+    window.addEventListener('pointerup', onGlobalRelease);
+    window.addEventListener('pointercancel', onGlobalRelease);
+    window.addEventListener('mouseup', onGlobalRelease);
+    window.addEventListener('touchend', onGlobalRelease);
+    return () => {
+      window.removeEventListener('pointerup', onGlobalRelease);
+      window.removeEventListener('pointercancel', onGlobalRelease);
+      window.removeEventListener('mouseup', onGlobalRelease);
+      window.removeEventListener('touchend', onGlobalRelease);
+    };
+  }, [isDraggingUI, flushCommit]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleChange = (e) => {
+    const parsed = Number(e.target.value);
+    const clamped = Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : min));
+    latestValRef.current = clamped;
+    setLocalVal(clamped);
+
+    if (!isPointerDraggingRef.current) {
+      flushCommit(clamped);
+      return;
+    }
+
+    clearPendingTimer();
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      onCommitRef.current?.(latestValRef.current);
+    }, 150);
+  };
+
+  const displayVal = isDraggingUI ? localVal : safePropVal;
+  const span = Math.max(1e-6, max - min);
+  const fillPct = Math.max(0, Math.min(100, ((displayVal - min) / span) * 100));
+  const formattedReadout = formatValue ? formatValue(displayVal) : String(displayVal);
+
+  return (
+    <label
+      className={`avatar-slider-item atelier-buffered-slider tabular-nums ${
+        variant === 'editorial' ? 'is-editorial-primary' : ''
+      }`}
+    >
+      <div className="avatar-slider-head">
+        <span>{label}</span>
+        <strong>{formattedReadout}</strong>
+      </div>
+      <input
+        type="range"
+        data-avatar-slider={sliderKey}
+        min={min}
+        max={max}
+        step={step}
+        value={displayVal}
+        aria-label={ariaLabel || label}
+        style={{ '--slider-fill-pct': `${fillPct.toFixed(2)}%` }}
+        onPointerDown={handlePointerStart}
+        onMouseDown={handlePointerStart}
+        onTouchStart={handlePointerStart}
+        onPointerUp={handlePointerFinish}
+        onPointerCancel={handlePointerFinish}
+        onMouseUp={handlePointerFinish}
+        onTouchEnd={handlePointerFinish}
+        onBlur={handlePointerFinish}
+        onKeyUp={handlePointerFinish}
+        onChange={handleChange}
+      />
+    </label>
+  );
+}
+
+/**
+ * Reusable 3 Primary White-Track / Circular-Handle Sliders:
+ * 1) 신장 (cm) [140..200]
+ * 2) 몸무게 (kg) [35..150]
+ * 3) 체형 슬라이더 [0..100] with exact `50% === 1.00x` piecewise interpolation
+ */
+export function PrimaryBodyAtelierSliders({
+  lang = 'ko',
+  draftSpec,
+  onChangeDraftSpec,
+}) {
+  const anthro = draftSpec.anthropometrics;
+  const clampedHeightCm = Math.min(200, Math.max(140, Math.round(anthro.heightCm || 170)));
+  const clampedWeightKg = Math.min(150, Math.max(35, Math.round(anthro.weightKg || 64)));
+  const avgScale =
+    ((anthro.shoulderScale || 1) +
+      (anthro.chestScale || 1) +
+      (anthro.waistScale || 1) +
+      (anthro.hipScale || 1)) /
+    4;
+  const bodyVolumePct = bodyScaleToPct(avgScale);
+
+  const handleCommitHeight = useCallback(
+    (nextHeight) => {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            heightCm: Math.round(nextHeight),
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
+
+  const handleCommitWeight = useCallback(
+    (nextWeight) => {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            weightKg: Math.round(nextWeight),
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
+
+  const handleCommitBodyVolume = useCallback(
+    (nextPct) => {
+      const nextScale = Number(bodyPctToScale(nextPct).toFixed(3));
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            shoulderScale: nextScale,
+            chestScale: nextScale,
+            waistScale: nextScale,
+            hipScale: nextScale,
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
+
+  return (
+    <div className="atelier-primary-sliders-stack">
+      <BufferedAtelierSlider
+        variant="editorial"
+        sliderKey="heightCm"
+        label={tx(lang, '신장 (cm)', 'Height (cm)')}
+        ariaLabel={tx(lang, '신장 cm', 'Height cm')}
+        min={140}
+        max={200}
+        step={1}
+        value={clampedHeightCm}
+        formatValue={(val) => `${Math.round(val)} cm`}
+        onCommit={handleCommitHeight}
+      />
+      <BufferedAtelierSlider
+        variant="editorial"
+        sliderKey="weightKg"
+        label={tx(lang, '몸무게 (kg)', 'Weight (kg)')}
+        ariaLabel={tx(lang, '몸무게 kg', 'Weight kg')}
+        min={35}
+        max={150}
+        step={1}
+        value={clampedWeightKg}
+        formatValue={(val) => `${Math.round(val)} kg`}
+        onCommit={handleCommitWeight}
+      />
+      <BufferedAtelierSlider
+        variant="editorial"
+        sliderKey="bodyVolumePct"
+        label={tx(lang, '체형 슬라이더', 'Body Volume')}
+        ariaLabel={tx(lang, '체형 볼륨 %', 'Body Volume %')}
+        min={0}
+        max={100}
+        step={1}
+        value={bodyVolumePct}
+        formatValue={(val) => `${Math.round(val)}%`}
+        onCommit={handleCommitBodyVolume}
+      />
+    </div>
+  );
+}
+
+/**
  * Tab 1 — Manual Monk Skin Tone Scale (1–10) & 4 Undertone Calibration.
  * Hair, facial hair, and facial morphology are separated into Tab 2 (`HairAndFacialFeaturesControls`).
  */
@@ -68,6 +355,7 @@ export function MstSkinToneControls({
   draftSpec,
   onChangeDraftSpec,
   onSelectMstSwatch,
+  showMstCodeBadge = false,
 }) {
   const appearance = draftSpec.appearance;
   const resolvedMstSwatch = getMstSwatch(appearance.mstLevel, appearance.mstUndertone);
@@ -99,28 +387,44 @@ export function MstSkinToneControls({
     onSelectMstSwatch?.(swatch);
   };
 
+  const mstHelpText = tx(
+    lang,
+    'Monk 피부톤 스펙트럼(1~10단계)과 4가지 언더톤을 조합해 포용적인 피부 명도와 온도를 정밀 보정합니다.',
+    'Calibrate skin luminance across Monk Skin Tone levels 1–10 combined with 4 undertones.'
+  );
+
   return (
     <div className="avatar-studio-stack">
-      <div className="avatar-studio-card">
+      <div className="avatar-studio-card is-mst-spectrum-card">
         <div className="avatar-studio-card-head">
-          <span className="avatar-studio-card-title">
-            {tx(lang, 'Monk 1–10 피부톤 스펙트럼', 'Monk Skin Tone Scale (1–10)')}
-          </span>
-          <span
-            className="avatar-mst-code-pill tabular-nums"
-            data-mst-code-badge={resolvedMstSwatch.code}
-          >
-            {friendlyToneBadge} · {baseLevelName}
-          </span>
+          <div className="atelier-section-title-group">
+            <span className="avatar-studio-card-title">
+              {tx(lang, 'Monk 피부톤 스펙트럼 (MST 1-10)', 'Monk Skin Tone Spectrum (MST 1-10)')}
+            </span>
+          </div>
+          <div className="atelier-mst-head-right">
+            {showMstCodeBadge ? (
+              <span
+                className="avatar-mst-code-pill tabular-nums"
+                data-mst-code-badge={resolvedMstSwatch.code}
+              >
+                {friendlyToneBadge} · {baseLevelName}
+              </span>
+            ) : (
+              <span className="atelier-mst-subtle-caption tabular-nums">
+                {friendlyToneBadge} · {baseLevelName}
+              </span>
+            )}
+            <span
+              className="atelier-info-qmark"
+              role="img"
+              aria-label={mstHelpText}
+              title={mstHelpText}
+            >
+              ?
+            </span>
+          </div>
         </div>
-
-        <p className="avatar-studio-hint">
-          {tx(
-            lang,
-            '밝기(1~10호)와 언더톤(쿨·뉴트럴·웜·올리브)을 조합해 가장 가까운 피부톤을 미세 조정하세요.',
-            'Combine luminance (Tone 1–10) and undertone (Cool, Neutral, Warm, Olive) for accurate calibration.'
-          )}
-        </p>
 
         <div
           className="avatar-mst-level-grid"
@@ -130,7 +434,7 @@ export function MstSkinToneControls({
           {MST_BASE_LEVELS.map((lvlItem) => {
             const cellSwatch = getMstSwatch(lvlItem.level, appearance.mstUndertone);
             const selected = appearance.mstLevel === lvlItem.level;
-            const checkStroke = isDarkSwatch(cellSwatch.hex) ? '#FFFFFF' : '#1D1D1F';
+            const darkChip = isDarkSwatch(cellSwatch.hex);
             const levelWord = tx(lang, `${lvlItem.level}호`, `Tone ${lvlItem.level}`);
             const baseLabel = lang === 'en' ? lvlItem.labelEn : lvlItem.labelKo;
 
@@ -142,22 +446,17 @@ export function MstSkinToneControls({
                 aria-pressed={selected}
                 aria-label={`${levelWord} · ${baseLabel} (${cellSwatch.hex})`}
                 title={`${levelWord} · ${baseLabel} (${cellSwatch.hex})`}
-                className={`avatar-mst-level-btn ${selected ? 'is-selected' : ''}`}
+                style={{ backgroundColor: cellSwatch.hex }}
+                className={`avatar-mst-level-btn ${darkChip ? 'is-dark-swatch' : 'is-light-swatch'} ${
+                  selected ? 'is-active is-selected' : ''
+                }`}
                 onClick={() => handlePickMstCell(lvlItem.level, appearance.mstUndertone)}
               >
-                <span
-                  className="avatar-mst-swatch-dot"
-                  style={{ backgroundColor: cellSwatch.hex }}
-                >
-                  {selected && <Check size={14} strokeWidth={3} color={checkStroke} aria-hidden="true" />}
-                </span>
-                <span className="avatar-mst-level-code tabular-nums">{levelWord}</span>
+                <span className="avatar-mst-level-num tabular-nums">{lvlItem.level}</span>
               </button>
             );
           })}
         </div>
-
-        <div className="avatar-studio-section-divider" aria-hidden="true" />
 
         <div className="avatar-studio-subhead">
           <span>{tx(lang, '언더톤 세부 선택', 'Undertone Calibration')}</span>
@@ -181,7 +480,7 @@ export function MstSkinToneControls({
                 data-mst-undertone={ut.key}
                 aria-pressed={selected}
                 title={lang === 'en' ? ut.labelEn : ut.labelKo}
-                className={`avatar-mst-undertone-pill ${selected ? 'is-selected' : ''}`}
+                className={`avatar-mst-undertone-pill ${selected ? 'is-selected is-active' : ''}`}
                 onClick={() => handlePickMstCell(appearance.mstLevel, ut.key)}
               >
                 <span
@@ -190,7 +489,7 @@ export function MstSkinToneControls({
                   aria-hidden="true"
                 />
                 <span>{lang === 'en' ? ut.shortEn : ut.shortKo}</span>
-                {selected && <Check size={14} strokeWidth={2.8} aria-hidden="true" />}
+                {selected && <Check size={13} strokeWidth={2.8} aria-hidden="true" />}
               </button>
             );
           })}
@@ -210,17 +509,20 @@ export function HairAndFacialFeaturesControls({
 }) {
   const appearance = draftSpec.appearance;
 
-  const patchAppearance = (partialApp) => {
-    onChangeDraftSpec((prev) =>
-      sanitizeAvatarSpec({
-        ...prev,
-        appearance: {
-          ...prev.appearance,
-          ...partialApp,
-        },
-      })
-    );
-  };
+  const patchAppearance = useCallback(
+    (partialApp) => {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          appearance: {
+            ...prev.appearance,
+            ...partialApp,
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
 
   const handleResetFacialProportions = () => {
     triggerHaptic('selection');
@@ -487,24 +789,18 @@ export function HairAndFacialFeaturesControls({
           ].map((ctrl) => {
             const val = Number(appearance[ctrl.key] ?? 1);
             return (
-              <label key={ctrl.key} className="avatar-slider-item tabular-nums">
-                <div className="avatar-slider-head">
-                  <span>{ctrl.label}</span>
-                  <small>{Math.round(val * 100)}%</small>
-                </div>
-                <input
-                  type="range"
-                  data-avatar-slider={ctrl.key}
-                  min={ctrl.min}
-                  max={ctrl.max}
-                  step={0.02}
-                  value={val}
-                  aria-label={`${ctrl.label} %`}
-                  onChange={(e) =>
-                    patchAppearance({ [ctrl.key]: Number(e.target.value) })
-                  }
-                />
-              </label>
+              <BufferedAtelierSlider
+                key={ctrl.key}
+                sliderKey={ctrl.key}
+                label={ctrl.label}
+                ariaLabel={`${ctrl.label} %`}
+                min={ctrl.min}
+                max={ctrl.max}
+                step={0.02}
+                value={val}
+                formatValue={(v) => `${Math.round(v * 100)}%`}
+                onCommit={(nextVal) => patchAppearance({ [ctrl.key]: nextVal })}
+              />
             );
           })}
         </div>
@@ -529,6 +825,7 @@ export function MstSkinAndAppearanceControls({
         draftSpec={draftSpec}
         onChangeDraftSpec={onChangeDraftSpec}
         onSelectMstSwatch={onSelectMstSwatch}
+        showMstCodeBadge
       />
       <HairAndFacialFeaturesControls
         lang={lang}
@@ -556,29 +853,35 @@ export function InclusiveBodyMorphControls({
     AVATAR_FRAME_OPTIONS.find((f) => f.key === draftSpec.framePreset) ||
     AVATAR_FRAME_OPTIONS[2];
 
-  const patchAnthropometrics = (partialAnthro) => {
-    onChangeDraftSpec((prev) =>
-      sanitizeAvatarSpec({
-        ...prev,
-        anthropometrics: {
-          ...prev.anthropometrics,
-          ...partialAnthro,
-        },
-      })
-    );
-  };
+  const patchAnthropometrics = useCallback(
+    (partialAnthro) => {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            ...partialAnthro,
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
 
-  const patchSoftTissue = (partialSoft) => {
-    onChangeDraftSpec((prev) =>
-      sanitizeAvatarSpec({
-        ...prev,
-        coupledSoftTissue: {
-          ...prev.coupledSoftTissue,
-          ...partialSoft,
-        },
-      })
-    );
-  };
+  const patchSoftTissue = useCallback(
+    (partialSoft) => {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          coupledSoftTissue: {
+            ...prev.coupledSoftTissue,
+            ...partialSoft,
+          },
+        })
+      );
+    },
+    [onChangeDraftSpec]
+  );
 
   const handleSelectFrame = (frameKey) => {
     triggerHaptic('selection');
@@ -748,7 +1051,7 @@ export function InclusiveBodyMorphControls({
         </div>
       </div>
 
-      {/* 3. Primary Anthropometrics: Height, Weight, Live BMI, Chest Contour & Regional Scales */}
+      {/* 3. Primary Anthropometrics: Height, Weight, Body Volume Slider, Live BMI, Chest Contour & Regional Scales */}
       <div className="avatar-studio-card">
         <div className="avatar-studio-card-head">
           <span className="avatar-studio-card-title">
@@ -759,45 +1062,11 @@ export function InclusiveBodyMorphControls({
           </span>
         </div>
 
-        <div className="avatar-anthro-primary-grid">
-          <label className="avatar-slider-item tabular-nums">
-            <div className="avatar-slider-head">
-              <span>{tx(lang, '신장', 'Height')}</span>
-              <strong>{anthro.heightCm} cm</strong>
-            </div>
-            <input
-              type="range"
-              data-avatar-slider="heightCm"
-              min={140}
-              max={205}
-              step={1}
-              value={anthro.heightCm}
-              aria-label={tx(lang, '신장 cm', 'Height cm')}
-              onChange={(e) =>
-                patchAnthropometrics({ heightCm: Number(e.target.value) })
-              }
-            />
-          </label>
-
-          <label className="avatar-slider-item tabular-nums">
-            <div className="avatar-slider-head">
-              <span>{tx(lang, '체중', 'Weight')}</span>
-              <strong>{anthro.weightKg} kg</strong>
-            </div>
-            <input
-              type="range"
-              data-avatar-slider="weightKg"
-              min={35}
-              max={160}
-              step={1}
-              value={anthro.weightKg}
-              aria-label={tx(lang, '체중 kg', 'Weight kg')}
-              onChange={(e) =>
-                patchAnthropometrics({ weightKg: Number(e.target.value) })
-              }
-            />
-          </label>
-        </div>
+        <PrimaryBodyAtelierSliders
+          lang={lang}
+          draftSpec={draftSpec}
+          onChangeDraftSpec={onChangeDraftSpec}
+        />
 
         <div className="avatar-studio-section-divider" aria-hidden="true" />
 
@@ -831,24 +1100,17 @@ export function InclusiveBodyMorphControls({
           })}
         </div>
 
-        <label className="avatar-slider-item tabular-nums">
-          <div className="avatar-slider-head">
-            <span>{tx(lang, '가슴 · 흉곽 볼륨', 'Chest Volume')}</span>
-            <small>{Math.round((anthro.chestScale || 1) * 100)}%</small>
-          </div>
-          <input
-            type="range"
-            data-avatar-slider="chestScale"
-            min={0.75}
-            max={1.4}
-            step={0.02}
-            value={anthro.chestScale || 1}
-            aria-label={tx(lang, '가슴 볼륨 %', 'Chest Volume %')}
-            onChange={(e) =>
-              patchAnthropometrics({ chestScale: Number(e.target.value) })
-            }
-          />
-        </label>
+        <BufferedAtelierSlider
+          sliderKey="chestScale"
+          label={tx(lang, '가슴 · 흉곽 볼륨', 'Chest Volume')}
+          ariaLabel={tx(lang, '가슴 볼륨 %', 'Chest Volume %')}
+          min={0.75}
+          max={1.4}
+          step={0.02}
+          value={anthro.chestScale || 1}
+          formatValue={(v) => `${Math.round(v * 100)}%`}
+          onCommit={(nextVal) => patchAnthropometrics({ chestScale: nextVal })}
+        />
 
         <div className="avatar-studio-section-divider" aria-hidden="true" />
 
@@ -868,24 +1130,18 @@ export function InclusiveBodyMorphControls({
           {regionalSliders.map((ctrl) => {
             const val = Number(anthro[ctrl.key] ?? 1);
             return (
-              <label key={ctrl.key} className="avatar-slider-item tabular-nums">
-                <div className="avatar-slider-head">
-                  <span>{ctrl.label}</span>
-                  <small>{Math.round(val * 100)}%</small>
-                </div>
-                <input
-                  type="range"
-                  data-avatar-slider={ctrl.key}
-                  min={ctrl.min}
-                  max={ctrl.max}
-                  step={0.02}
-                  value={val}
-                  aria-label={`${ctrl.label} %`}
-                  onChange={(e) =>
-                    patchAnthropometrics({ [ctrl.key]: Number(e.target.value) })
-                  }
-                />
-              </label>
+              <BufferedAtelierSlider
+                key={ctrl.key}
+                sliderKey={ctrl.key}
+                label={ctrl.label}
+                ariaLabel={`${ctrl.label} %`}
+                min={ctrl.min}
+                max={ctrl.max}
+                step={0.02}
+                value={val}
+                formatValue={(v) => `${Math.round(v * 100)}%`}
+                onCommit={(nextVal) => patchAnthropometrics({ [ctrl.key]: nextVal })}
+              />
             );
           })}
         </div>
@@ -970,24 +1226,18 @@ export function InclusiveBodyMorphControls({
           ].map((ctrl) => {
             const val = Number(soft[ctrl.key] ?? 0);
             return (
-              <label key={ctrl.key} className="avatar-slider-item tabular-nums">
-                <div className="avatar-slider-head">
-                  <span>{ctrl.label}</span>
-                  <small>{formatSignedBiasPct(val)}</small>
-                </div>
-                <input
-                  type="range"
-                  data-avatar-slider={ctrl.key}
-                  min={ctrl.min}
-                  max={ctrl.max}
-                  step={0.05}
-                  value={val}
-                  aria-label={ctrl.label}
-                  onChange={(e) =>
-                    patchSoftTissue({ [ctrl.key]: Number(e.target.value) })
-                  }
-                />
-              </label>
+              <BufferedAtelierSlider
+                key={ctrl.key}
+                sliderKey={ctrl.key}
+                label={ctrl.label}
+                ariaLabel={ctrl.label}
+                min={ctrl.min}
+                max={ctrl.max}
+                step={0.05}
+                value={val}
+                formatValue={(v) => formatSignedBiasPct(v)}
+                onCommit={(nextVal) => patchSoftTissue({ [ctrl.key]: nextVal })}
+              />
             );
           })}
         </div>

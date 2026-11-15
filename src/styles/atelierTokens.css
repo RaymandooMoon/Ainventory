@@ -1,0 +1,63 @@
+/* ==========================================================================
+   Atelier Design Tokens — Scoped Common Variables for Profile & Outfits Studio
+   Does NOT mutate global Closets/Calendar/Stats defaults in src/index.css.
+   ========================================================================== */
+
+:root {
+  /* 1. Core Obsidian & Charcoal Surfaces (Profile Sheet & Dark Drawer) */
+  --atelier-obsidian-bg: #141413;
+  --atelier-obsidian-elevated: #1c1c1a;
+  --atelier-obsidian-card: #21201e;
+  --atelier-obsidian-subtle: #2a2926;
+  --atelier-hairline: rgba(255, 255, 255, 0.09);
+  --atelier-hairline-strong: rgba(255, 255, 255, 0.18);
+
+  /* 2. Smoked Glassmorphism Drawer (Outfits Right 42% Drawer) */
+  --atelier-drawer-glass-bg: rgba(20, 20, 19, 0.8);
+  --atelier-drawer-glass-surface: rgba(30, 29, 27, 0.72);
+  --atelier-drawer-glass-border: rgba(255, 255, 255, 0.12);
+  --atelier-drawer-blur: blur(24px) saturate(135%);
+
+  /* 3. Warm Beige Studio Viewport (Outfits Left 58% Viewport)
+     Guaranteed Light-Mode Luminance >= 225 safety margin (E2E threshold > 220):
+     #f4f0e8 -> Lum 240.3 | #ece7dd -> Lum 231.9 | #e6e0d5 -> Lum 225.4 */
+  --atelier-stage-warm-base: #f4f0e8;
+  --atelier-stage-warm-mid: #ece7dd;
+  --atelier-stage-warm-shadow: #e6e0d5;
+  --atelier-stage-dark-base: #141413;
+  --atelier-stage-dark-mid: #1b1a18;
+
+  /* Strictly activated ONLY when weather === 'rain' */
+  --atelier-stage-rain-tint: rgba(14, 16, 20, 0.22);
+
+  /* 4. Crisp White Packshot Cards & Floating Studio Controls */
+  --atelier-packshot-card-bg: #f7f7f5;
+  --atelier-packshot-card-active: #ffffff;
+  --atelier-packshot-border: rgba(20, 20, 19, 0.08);
+  --atelier-packshot-focus-ring: #d8c3a5;
+  --atelier-packshot-focus-outer: #ffffff;
+  --atelier-tooltip-bg: rgba(20, 20, 19, 0.92);
+  --atelier-tooltip-border: rgba(255, 255, 255, 0.16);
+  --atelier-floating-btn-bg: rgba(24, 24, 22, 0.56);
+  --atelier-floating-btn-hover: rgba(24, 24, 22, 0.76);
+  --atelier-floating-btn-border: rgba(255, 255, 255, 0.22);
+
+  /* 5. White Track Sliders, MST Double Ring & Facial Landmark Mesh */
+  --atelier-slider-fill: #ffffff;
+  --atelier-slider-rail: rgba(255, 255, 255, 0.2);
+  --atelier-slider-thumb-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --atelier-mesh-gold: rgba(232, 208, 169, 0.86);
+  --atelier-mesh-gold-soft: rgba(232, 208, 169, 0.34);
+  --atelier-mesh-white: rgba(255, 255, 255, 0.74);
+
+  /* 6. Editorial Typography & Ink Tokens */
+  --atelier-font-sans:
+    'Pretendard Variable', 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --atelier-font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, ui-monospace, monospace;
+  --atelier-ink-on-dark: #f7f7f5;
+  --atelier-ink-secondary-on-dark: rgba(247, 247, 245, 0.72);
+  --atelier-ink-muted-on-dark: rgba(247, 247, 245, 0.5);
+  --atelier-ink-on-light: #1d1c1a;
+  --atelier-ink-secondary-on-light: rgba(29, 28, 26, 0.68);
+}

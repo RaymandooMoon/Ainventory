@@ -267,14 +267,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(page.locator('.body-spec-account-badge')).toHaveCount(0);
     await expect(page.locator('[data-skin-metrics-popover="true"]')).toHaveCount(0);
     await expect(page.locator('[data-lighting-mode]')).toHaveCount(0);
-    await expect(page.locator('[data-manual-skin-toggle="true"]')).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
-    await expect(page.locator('[data-mst-level="10"]')).toHaveCount(0);
+    await expect(page.locator('[data-mst-level]')).toHaveCount(10);
 
-    // Expand Section 2 accordion -> test MST-10 deep tone, Hair (type4_coily_afro) & Beard
-    await page.locator('[data-manual-skin-toggle="true"]').click();
+    // Select MST-10 deep tone directly from visible Monk 1-10 spectrum
     await page.locator('[data-mst-level="10"]').click();
     await page.locator('[data-mst-undertone="warm"]').click();
     const unifiedBadge = page.locator('[data-unified-tone-badge="true"]');

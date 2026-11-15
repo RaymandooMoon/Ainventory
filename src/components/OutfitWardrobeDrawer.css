@@ -1,0 +1,801 @@
+/* ==========================================================================
+   Atelier Outfits 58% : 42% Split Studio & Smoked-Glass Wardrobe Drawer Styles
+   Scoped strictly to .hig-outfits-screen and #outfit-mobile-wardrobe-sheet
+   ========================================================================== */
+
+/* 1. Compact Slim Atelier Top Utility Bar & Weather Curation Strip */
+.hig-outfits-screen .hig-top-bar.atelier-top-bar {
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  min-height: 44px;
+}
+
+.hig-outfits-screen .hig-top-bar.atelier-top-bar .hig-screen-title {
+  font-family: var(--atelier-font-sans);
+  font-size: 1.24rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.hig-outfits-screen .weather-recommend-panel {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  gap: 6px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--elevation-xs);
+}
+
+.hig-outfits-screen .weather-minimal-top {
+  gap: 6px;
+}
+
+.hig-outfits-screen .weather-scenario-rail {
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.hig-outfits-screen .weather-scenario-rail .hig-filter-pill {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+}
+
+.hig-outfits-screen .weather-look-pill {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 11px;
+  font-size: 0.72rem;
+}
+
+.hig-outfits-screen .weather-city-select {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 11px;
+  font-size: 0.75rem;
+}
+
+.hig-outfits-screen .weather-icon-btn {
+  width: 36px;
+  height: 36px;
+}
+
+/* 2. Responsive Split Architecture:
+      - Desktop / Tablet / Unfolded Foldable (>= 600px): 58% Stage : 42% Smoked-Glass Drawer
+      - Narrow Mobile (< 600px, incl. 375px~393px): 100% Stage + Smoked-Glass Bottom Sheet */
+@media (min-width: 600px) {
+  .hig-outfits-screen .studio-25d-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 58fr) minmax(272px, 42fr);
+    gap: 0;
+    align-items: stretch;
+    border-radius: 26px;
+    overflow: hidden;
+    border: 1px solid var(--squircle-border);
+    box-shadow: var(--elevation-md);
+    background-color: var(--atelier-stage-warm-base, #f4f0e8);
+  }
+
+  [data-theme='dark'] .hig-outfits-screen .studio-25d-layout {
+    background-color: var(--atelier-stage-dark-base, #141413);
+    border-color: var(--atelier-drawer-glass-border);
+  }
+
+  .hig-outfits-screen .studio-25d-stage-col {
+    position: relative;
+    top: auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .hig-outfits-screen .studio-25d-canvas.studio-2d-vton-viewer {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    height: 100%;
+    min-height: 584px;
+    aspect-ratio: auto;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .hig-outfits-screen .studio-desktop-picker-col {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 14px 10px 14px;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--atelier-drawer-glass-border);
+    background: var(--atelier-drawer-glass-bg);
+    backdrop-filter: var(--atelier-drawer-blur);
+    -webkit-backdrop-filter: var(--atelier-drawer-blur);
+    color: var(--atelier-ink-on-dark);
+    box-shadow: -14px 0 36px rgba(0, 0, 0, 0.18);
+    font-family: var(--atelier-font-sans);
+  }
+
+  .hig-outfits-screen .studio-mobile-slot-bar,
+  .hig-outfits-screen .studio-mobile-save-row,
+  .hig-outfits-screen .atelier-mobile-drawer-trigger-row {
+    display: none !important;
+  }
+}
+
+@media (max-width: 599px) {
+  .hig-outfits-screen .studio-25d-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .hig-outfits-screen .studio-desktop-picker-col {
+    display: none !important;
+  }
+
+  .hig-outfits-screen .studio-25d-canvas.studio-2d-vton-viewer {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    min-height: 536px;
+    border-radius: 24px;
+  }
+
+  .hig-outfits-screen .atelier-mobile-drawer-trigger-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .hig-outfits-screen .atelier-mobile-drawer-open-btn {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 14px;
+    background: var(--atelier-drawer-glass-bg);
+    backdrop-filter: var(--atelier-drawer-blur);
+    -webkit-backdrop-filter: var(--atelier-drawer-blur);
+    border: 1px solid var(--atelier-drawer-glass-border);
+    color: var(--atelier-ink-on-dark);
+    font-family: var(--atelier-font-sans);
+    font-size: 0.82rem;
+    font-weight: 660;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-shadow: var(--elevation-sm);
+  }
+
+  .hig-outfits-screen .atelier-mobile-drawer-open-meta {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--atelier-ink-secondary-on-dark);
+  }
+}
+
+/* 3. Mobile Narrow-Viewport Smoked-Glass Wardrobe Sheet (#outfit-mobile-wardrobe-sheet) */
+#outfit-mobile-wardrobe-sheet.ui-sheet-box {
+  background: var(--atelier-drawer-glass-bg) !important;
+  backdrop-filter: var(--atelier-drawer-blur) !important;
+  -webkit-backdrop-filter: var(--atelier-drawer-blur) !important;
+  border: 1px solid var(--atelier-drawer-glass-border) !important;
+  color: var(--atelier-ink-on-dark) !important;
+  font-family: var(--atelier-font-sans);
+}
+
+#outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
+  background: rgba(255, 255, 255, 0.28) !important;
+}
+
+#outfit-mobile-wardrobe-sheet .modal-header {
+  display: none !important;
+}
+
+#outfit-mobile-wardrobe-sheet .ui-sheet-content {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 4. Smoked-Glass Drawer Header (< Focused/Equipped Garment Name | Filter Icon) */
+.atelier-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 2px;
+}
+
+.atelier-drawer-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.atelier-drawer-nav-btn,
+.atelier-drawer-filter-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--atelier-ink-secondary-on-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.atelier-drawer-nav-btn:hover,
+.atelier-drawer-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--atelier-ink-on-dark);
+}
+
+.atelier-drawer-filter-btn.has-active-filter {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--atelier-hairline-strong);
+}
+
+.atelier-drawer-filter-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--atelier-packshot-focus-ring, #d8c3a5);
+}
+
+.atelier-drawer-focused-title {
+  font-size: 0.92rem;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  color: var(--atelier-ink-on-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 5. Top Mood / Occasion Horizontal Underline Tabs (전체 / 데일리 / 오피스 / 포멀) */
+.atelier-occasion-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  border-bottom: 1px solid var(--atelier-hairline);
+  margin: 0 -2px;
+}
+
+.atelier-occasion-tab {
+  position: relative;
+  min-height: 38px;
+  padding: 0 4px 4px;
+  background: transparent;
+  border: none;
+  color: var(--atelier-ink-muted-on-dark);
+  font-family: var(--atelier-font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+
+.atelier-occasion-tab:hover:not(.is-active) {
+  color: var(--atelier-ink-secondary-on-dark);
+}
+
+.atelier-occasion-tab.is-active {
+  color: #ffffff;
+  font-weight: 720;
+}
+
+.atelier-occasion-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: #ffffff;
+}
+
+/* 6. Compact Smoked-Glass Search Bar & Season Filter Strip */
+.atelier-filter-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#studio-slot-picker .studio-slot-search-wrap,
+#outfit-mobile-wardrobe-sheet .studio-slot-search-wrap {
+  margin: 0;
+}
+
+#studio-slot-picker .studio-slot-search-icon,
+#outfit-mobile-wardrobe-sheet .studio-slot-search-icon {
+  left: 11px;
+  color: var(--atelier-ink-muted-on-dark);
+}
+
+#studio-slot-picker .studio-slot-search-input,
+#outfit-mobile-wardrobe-sheet .studio-slot-search-input {
+  min-height: 36px !important;
+  height: 36px !important;
+  padding-left: 34px !important;
+  padding-right: 34px !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid var(--atelier-hairline) !important;
+  color: var(--atelier-ink-on-dark) !important;
+  font-size: 0.76rem !important;
+}
+
+#studio-slot-picker .studio-slot-search-input::placeholder,
+#outfit-mobile-wardrobe-sheet .studio-slot-search-input::placeholder {
+  color: var(--atelier-ink-muted-on-dark) !important;
+}
+
+#studio-slot-picker .studio-slot-search-input:focus,
+#outfit-mobile-wardrobe-sheet .studio-slot-search-input:focus {
+  border-color: var(--atelier-hairline-strong) !important;
+  background: rgba(255, 255, 255, 0.11) !important;
+}
+
+#studio-slot-picker .studio-input-clear-btn,
+#outfit-mobile-wardrobe-sheet .studio-input-clear-btn {
+  width: 30px;
+  height: 30px;
+  color: var(--atelier-ink-secondary-on-dark);
+}
+
+#studio-slot-picker .studio-season-filter-rail,
+#outfit-mobile-wardrobe-sheet .studio-season-filter-rail {
+  margin: 0;
+  gap: 5px;
+  padding-bottom: 1px;
+}
+
+#studio-slot-picker .studio-season-filter-rail .hig-filter-pill,
+#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 10px !important;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--atelier-hairline);
+  color: var(--atelier-ink-secondary-on-dark);
+  font-size: 0.71rem !important;
+  font-weight: 620;
+  box-shadow: none;
+}
+
+#studio-slot-picker .studio-season-filter-rail .hig-filter-pill:hover:not(.active),
+#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ffffff;
+}
+
+#studio-slot-picker .studio-season-filter-rail .hig-filter-pill.active,
+#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill.active {
+  background: #ffffff !important;
+  color: #141413 !important;
+  border-color: #ffffff !important;
+  font-weight: 740;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+}
+
+/* 7. Dual-Zone Body: [46px Left Vertical Silhouette Rail + Right 2-Column #F7F7F5 Packshot Grid] */
+.atelier-drawer-body {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.atelier-category-rail {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.atelier-category-rail-btn {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(247, 247, 245, 0.56);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.14s ease,
+    box-shadow 0.18s ease;
+}
+
+.atelier-category-rail-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f7f7f5;
+}
+
+.atelier-category-rail-btn:active {
+  transform: scale(0.94);
+}
+
+.atelier-category-rail-btn.is-active {
+  background: #ffffff !important;
+  color: #141413 !important;
+  border-color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+.atelier-category-rail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.atelier-rail-equipped-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--atelier-packshot-focus-ring, #d8c3a5);
+}
+
+.atelier-category-rail-btn.is-active .atelier-rail-equipped-dot {
+  background: #141413;
+}
+
+.atelier-rail-count-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--atelier-packshot-focus-ring, #d8c3a5);
+  color: #141413;
+  font-size: 0.56rem;
+  font-weight: 780;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.atelier-category-rail-btn.is-active .atelier-rail-count-badge {
+  background: #141413;
+  color: #ffffff;
+}
+
+/* Right Scrollable 2-Column #F7F7F5 Packshot Card Area */
+.atelier-drawer-grid-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.atelier-drawer-grid-scroll {
+  max-height: 396px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 3px 3px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+#outfit-mobile-wardrobe-sheet .atelier-drawer-grid-scroll {
+  max-height: min(52vh, 390px);
+}
+
+#studio-slot-picker .studio-mini-inventory-grid,
+#outfit-mobile-wardrobe-sheet .studio-mini-inventory-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(68px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+/* Crisp #F7F7F5 Rounded-Square Packshot Cards + Point Border + Smoked-Glass Tooltip */
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card {
+  position: relative;
+  aspect-ratio: 1 / 1.06;
+  padding: 0;
+  gap: 0;
+  border-radius: 14px;
+  background-color: var(--atelier-packshot-card-bg, #f7f7f5) !important;
+  border: 1.5px solid var(--atelier-packshot-border, rgba(20, 20, 19, 0.08));
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card .studio-mini-squircle,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card .studio-mini-squircle {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 13px;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card:hover,
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card:focus-visible,
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card.is-equipped,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card:hover,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card:focus-visible,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card.is-equipped {
+  background-color: var(--atelier-packshot-card-active, #ffffff) !important;
+  border: 1.5px solid var(--atelier-packshot-focus-ring, #d8c3a5) !important;
+  box-shadow:
+    0 0 0 1.5px var(--atelier-packshot-focus-outer, #ffffff),
+    0 8px 20px rgba(0, 0, 0, 0.32) !important;
+}
+
+#studio-slot-picker .atelier-packshot-card .studio-equipped-badge,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card .studio-equipped-badge {
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  background: #141413;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Floating Dark Smoked-Glass Tooltip Pill — ALWAYS in DOM for Playwright hasText & screen readers */
+#studio-slot-picker .atelier-packshot-card .hig-garment-name.atelier-packshot-tooltip,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card .hig-garment-name.atelier-packshot-tooltip {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  z-index: 6;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: var(--atelier-tooltip-bg, rgba(20, 20, 19, 0.92));
+  border: 1px solid var(--atelier-tooltip-border, rgba(255, 255, 255, 0.16));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #f7f7f5 !important;
+  font-size: 0.66rem !important;
+  font-weight: 640 !important;
+  line-height: 1.28 !important;
+  min-height: 0 !important;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+#studio-slot-picker .atelier-packshot-card:hover .hig-garment-name.atelier-packshot-tooltip,
+#studio-slot-picker .atelier-packshot-card:focus-visible .hig-garment-name.atelier-packshot-tooltip,
+#studio-slot-picker .atelier-packshot-card.is-equipped .hig-garment-name.atelier-packshot-tooltip,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card:hover .hig-garment-name.atelier-packshot-tooltip,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card:focus-visible .hig-garment-name.atelier-packshot-tooltip,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card.is-equipped .hig-garment-name.atelier-packshot-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#studio-slot-picker .atelier-packshot-card .studio-mini-material-tag,
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card .studio-mini-material-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  margin: 0;
+  max-width: calc(100% - 34px);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(20, 20, 19, 0.72);
+  color: #f7f7f5 !important;
+  font-size: 0.56rem !important;
+  font-weight: 640;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+/* 8. Accessory & Jewelry Sub-Tree Panel, Empty State & Bottom Save Bar in Smoked Glass */
+#studio-slot-picker .studio-subtree-panel,
+#outfit-mobile-wardrobe-sheet .studio-subtree-panel {
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--atelier-hairline);
+  gap: 6px;
+}
+
+#studio-slot-picker .studio-subtree-branch-label,
+#outfit-mobile-wardrobe-sheet .studio-subtree-branch-label {
+  color: var(--atelier-ink-muted-on-dark);
+}
+
+#studio-slot-picker .studio-subtree-pill,
+#outfit-mobile-wardrobe-sheet .studio-subtree-pill {
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--atelier-hairline);
+  color: var(--atelier-ink-secondary-on-dark);
+  font-size: 0.7rem !important;
+  box-shadow: none;
+}
+
+#studio-slot-picker .studio-subtree-pill:hover:not(.active),
+#outfit-mobile-wardrobe-sheet .studio-subtree-pill:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ffffff;
+}
+
+#studio-slot-picker .studio-subtree-pill.active,
+#outfit-mobile-wardrobe-sheet .studio-subtree-pill.active {
+  background: #ffffff !important;
+  color: #141413 !important;
+  border-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+#studio-slot-picker .studio-subtree-pill.is-equipped:not(.active),
+#outfit-mobile-wardrobe-sheet .studio-subtree-pill.is-equipped:not(.active) {
+  border-color: var(--atelier-packshot-focus-ring);
+  color: #ffffff;
+}
+
+#studio-slot-picker .studio-subtree-active-hint,
+#outfit-mobile-wardrobe-sheet .studio-subtree-active-hint {
+  border-top-color: var(--atelier-hairline);
+  color: var(--atelier-ink-secondary-on-dark);
+}
+
+#studio-slot-picker .studio-subtree-active-hint strong,
+#outfit-mobile-wardrobe-sheet .studio-subtree-active-hint strong {
+  color: #ffffff;
+}
+
+#studio-slot-picker .studio-subtree-unequip-btn,
+#outfit-mobile-wardrobe-sheet .studio-subtree-unequip-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--atelier-hairline-strong);
+  color: #ffffff;
+}
+
+#studio-slot-picker .studio-slot-empty-state,
+#outfit-mobile-wardrobe-sheet .studio-slot-empty-state {
+  padding: 22px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed var(--atelier-hairline-strong);
+}
+
+#studio-slot-picker .studio-slot-empty-title,
+#outfit-mobile-wardrobe-sheet .studio-slot-empty-title {
+  color: var(--atelier-ink-on-dark);
+  font-size: 0.82rem;
+}
+
+#studio-slot-picker .studio-slot-empty-desc,
+#outfit-mobile-wardrobe-sheet .studio-slot-empty-desc {
+  color: var(--atelier-ink-secondary-on-dark);
+  font-size: 0.72rem;
+}
+
+#studio-slot-picker .studio-empty-cta-btn,
+#outfit-mobile-wardrobe-sheet .studio-empty-cta-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #141413;
+  border-color: transparent;
+  font-size: 0.75rem;
+}
+
+/* Bottom Save Outfit Form & Saved Outfits Chips in Dark Glass */
+#studio-slot-picker .studio-save-bar {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--atelier-hairline);
+  gap: 6px;
+}
+
+#studio-slot-picker .studio-save-bar .hig-native-input {
+  min-height: 38px !important;
+  height: 38px !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid var(--atelier-hairline) !important;
+  color: var(--atelier-ink-on-dark) !important;
+  font-size: 0.76rem !important;
+}
+
+#studio-slot-picker .studio-save-bar .hig-native-input::placeholder {
+  color: var(--atelier-ink-muted-on-dark) !important;
+}
+
+#studio-slot-picker .studio-save-submit {
+  min-height: 38px !important;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 11px;
+  background: #ffffff !important;
+  color: #141413 !important;
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+#studio-slot-picker .studio-save-submit:disabled {
+  opacity: 0.4;
+}
+
+#studio-slot-picker .studio-saved-looks-rail {
+  gap: 6px;
+}
+
+#studio-slot-picker .studio-saved-look-chip {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--atelier-hairline);
+}
+
+#studio-slot-picker .studio-saved-look-select {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  color: var(--atelier-ink-on-dark);
+}
+
+#studio-slot-picker .studio-saved-look-del {
+  color: var(--atelier-ink-muted-on-dark);
+  padding: 0 8px 0 2px;
+}
+
+#studio-slot-picker .studio-saved-look-del:hover {
+  color: #ffffff;
+}

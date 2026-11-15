@@ -63,15 +63,58 @@ export function StageGroundDeck({
     ? Math.max(8, Math.min(92, compareSplitPct))
     : 50;
 
-  const clipStyle: React.CSSProperties | undefined =
-    compareActive && hasModelImage
+  const isDark = theme === 'dark';
+  const isWetPavement = deckVariant === 'wet-pavement';
+
+  const rootStyle: React.CSSProperties = {
+    pointerEvents: 'none',
+    ...(compareActive && hasModelImage
       ? { clipPath: `inset(0 0 0 ${safeSplit.toFixed(2)}%)` }
-      : undefined;
+      : {}),
+  };
 
   const cameraTransform =
     safeZoom > 1.001
       ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
       : undefined;
+
+  const wetPlaneSurfaceStyle: React.CSSProperties = isWetPavement
+    ? {
+        top: '83.5%',
+        pointerEvents: 'none',
+        background: isDark
+          ? 'linear-gradient(180deg, rgba(24, 30, 40, 0.56) 0%, rgba(15, 20, 28, 0.88) 28%, rgba(8, 11, 16, 0.97) 100%)'
+          : 'linear-gradient(180deg, rgba(164, 162, 156, 0.22) 0%, rgba(126, 130, 136, 0.44) 28%, rgba(92, 98, 106, 0.62) 100%)',
+      }
+    : { pointerEvents: 'none' };
+
+  const wetHorizonStyle: React.CSSProperties = isWetPavement
+    ? {
+        height: '1px',
+        pointerEvents: 'none',
+        background: isDark
+          ? 'linear-gradient(90deg, transparent 4%, rgba(148, 197, 255, 0.22) 26%, rgba(224, 242, 254, 0.42) 50%, rgba(148, 197, 255, 0.22) 74%, transparent 96%)'
+          : 'linear-gradient(90deg, transparent 4%, rgba(226, 232, 240, 0.36) 26%, rgba(255, 255, 255, 0.62) 50%, rgba(226, 232, 240, 0.36) 74%, transparent 96%)',
+      }
+    : { pointerEvents: 'none' };
+
+  const wetSheenStyle: React.CSSProperties = isWetPavement
+    ? {
+        pointerEvents: 'none',
+        background: isDark
+          ? 'radial-gradient(ellipse 74% 68% at 50% 42%, rgba(148, 197, 255, 0.16) 0%, rgba(30, 58, 138, 0.07) 56%, transparent 86%)'
+          : 'radial-gradient(ellipse 74% 68% at 50% 42%, rgba(255, 255, 255, 0.28) 0%, rgba(186, 214, 242, 0.12) 54%, transparent 86%)',
+      }
+    : { pointerEvents: 'none' };
+
+  const wetReflectionViewportStyle: React.CSSProperties = {
+    pointerEvents: 'none',
+    clipPath: 'inset(84% 0 0 0)',
+    WebkitMaskImage:
+      'linear-gradient(180deg, transparent 83.5%, rgba(0, 0, 0, 0.82) 86.5%, rgba(0, 0, 0, 0.4) 93.5%, transparent 99%)',
+    maskImage:
+      'linear-gradient(180deg, transparent 83.5%, rgba(0, 0, 0, 0.82) 86.5%, rgba(0, 0, 0, 0.4) 93.5%, transparent 99%)',
+  };
 
   return (
     <div
@@ -81,14 +124,22 @@ export function StageGroundDeck({
       data-ground-weather={effectiveWeather}
       data-ground-theme={theme}
       className={`studio-stage-ground-deck is-${deckVariant} is-weather-${effectiveWeather} is-theme-${theme} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
-      style={clipStyle}
+      style={rootStyle}
     >
-      {/* Perspective Ground Deck Surface (bottom 22% of stage; horizon line at 78% height) */}
-      <div className="studio-ground-plane-surface">
-        <div className="studio-ground-horizon-line" />
-        <div className="studio-ground-perspective-sheen" />
-        {deckVariant === 'wet-pavement' && <div className="studio-ground-wet-streaks" />}
-        {deckVariant === 'frost-snow' && <div className="studio-ground-frost-glaze" />}
+      {/* Perspective Ground Deck Surface (wet-pavement aligned with bottom-15% ripple zone) */}
+      <div className="studio-ground-plane-surface" style={wetPlaneSurfaceStyle}>
+        <div className="studio-ground-horizon-line" style={wetHorizonStyle} />
+        <div className="studio-ground-perspective-sheen" style={wetSheenStyle} />
+        {isWetPavement && (
+          <div
+            className="studio-ground-wet-streaks"
+            data-wet-ripple-zone-sheen="true"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+        {deckVariant === 'frost-snow' && (
+          <div className="studio-ground-frost-glaze" style={{ pointerEvents: 'none' }} />
+        )}
       </div>
 
       {/* Real-time Wet Pavement Mirror Reflection (`rain` mode + transparent cutout model) */}
@@ -96,17 +147,22 @@ export function StageGroundDeck({
         <div
           data-wet-mirror-reflection="true"
           className="studio-ground-wet-reflection-viewport"
+          style={wetReflectionViewportStyle}
         >
-          <div className="studio-ground-wet-reflection-box">
+          <div className="studio-ground-wet-reflection-box" style={{ pointerEvents: 'none' }}>
             <div
               className="studio-ground-wet-reflection-camera"
-              style={cameraTransform ? { transform: cameraTransform } : undefined}
+              style={{
+                pointerEvents: 'none',
+                ...(cameraTransform ? { transform: cameraTransform } : {}),
+              }}
             >
               <img
                 src={modelImageUrl}
                 alt=""
                 draggable={false}
                 className="studio-wet-mirror-reflection-img"
+                style={{ pointerEvents: 'none' }}
               />
             </div>
           </div>
@@ -118,7 +174,10 @@ export function StageGroundDeck({
         <div
           data-ground-ao-shadow="true"
           className="studio-ground-contact-ao-shadow"
-          style={cameraTransform ? { transform: cameraTransform } : undefined}
+          style={{
+            pointerEvents: 'none',
+            ...(cameraTransform ? { transform: cameraTransform } : {}),
+          }}
         />
       )}
     </div>

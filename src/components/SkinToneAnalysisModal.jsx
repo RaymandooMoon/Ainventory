@@ -4,12 +4,10 @@ import {
   AlertTriangle,
   Camera,
   Check,
-  ChevronDown,
-  ChevronUp,
+  ChevronLeft,
   Loader2,
   Palette,
   RotateCcw,
-  ScanFace,
   SlidersHorizontal,
   Sparkles,
   Upload,
@@ -34,11 +32,7 @@ import {
   sanitizeAvatarSpec,
   setAvatarSpec,
 } from '../services/avatarSpecStore.ts';
-import {
-  MST_BASE_LEVELS,
-  findClosestMstFromHex,
-  getMstSwatch,
-} from '../services/monkSkinTone.ts';
+import { findClosestMstFromHex, getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   LIGHTING_CALIBRATION_MODES,
   SEASON_BEST_SWATCHES,
@@ -47,15 +41,20 @@ import {
   createSyntheticSamplePortrait,
   findClosestSkinPreset,
   normalizeSeasonKey,
+  translateSubTypeLabel,
 } from '../services/skinToneAnalyzer.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   HairAndFacialFeaturesControls,
   InclusiveBodyMorphControls,
+  MstSkinToneControls,
+  PrimaryBodyAtelierSliders,
 } from './AvatarStudioControls.jsx';
 import Character25DMannequin from './Character25DMannequin.jsx';
+import FaceLandmarkMeshOverlay from './FaceLandmarkMeshOverlay.tsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import '../styles/atelierTokens.css';
 import './AvatarStudioModal.css';
 
 const SAMPLE_PORTRAIT_BUTTONS = [
@@ -63,19 +62,6 @@ const SAMPLE_PORTRAIT_BUTTONS = [
   { key: 'summer_cool', ko: '여름 쿨', en: 'Summer' },
   { key: 'autumn_warm', ko: '가을 웜', en: 'Autumn' },
   { key: 'winter_cool', ko: '겨울 쿨', en: 'Winter' },
-];
-
-const UNDERTONE_SEGMENT_OPTIONS = [
-  { key: 'warm', ko: '웜톤', en: 'Warm' },
-  { key: 'neutral', ko: '뉴트럴', en: 'Neutral' },
-  { key: 'cool', ko: '쿨톤', en: 'Cool' },
-];
-
-const SEASON_REP_PRESETS = [
-  { season: 'spring_warm', presetKey: 'spring_ivory', ko: '봄 웜', en: 'Spring Warm' },
-  { season: 'summer_cool', presetKey: 'summer_rose', ko: '여름 쿨', en: 'Summer Cool' },
-  { season: 'autumn_warm', presetKey: 'autumn_beige', ko: '가을 웜', en: 'Autumn Warm' },
-  { season: 'winter_cool', presetKey: 'winter_neutral', ko: '겨울 쿨', en: 'Winter Cool' },
 ];
 
 const LIGHTING_SEGMENT_LABELS = {
@@ -139,10 +125,11 @@ function ProfileModalContent({
   user,
   skinProfile,
   bodySpec,
-  theme = 'light',
+  theme = 'dark',
   onApplySkinProfile,
   onApplyBodySpec,
 }) {
+  void theme;
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const manualToneSectionRef = useRef(null);
@@ -210,8 +197,7 @@ function ProfileModalContent({
   const [errorMsg, setErrorMsg] = useState('');
   const [isSampleSource, setIsSampleSource] = useState(false);
 
-  // Progressive disclosure UI states
-  const [manualSkinOpen, setManualSkinOpen] = useState(false);
+  // Progressive disclosure states for detailed L*a*b* metrics & sample preset rail
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [sampleRailOpen, setSampleRailOpen] = useState(false);
 
@@ -240,12 +226,18 @@ function ProfileModalContent({
   );
 
   const isFacePhotoActive = Boolean(draftFacePhotoUrl);
-  const effectiveFaceThumb = draftFacePhotoUrl || candidateFaceUrl || '';
+  const effectiveFaceThumb =
+    draftFacePhotoUrl ||
+    candidateFaceUrl ||
+    analysisResult?.previewDataUrl ||
+    sourceImageUrl ||
+    '';
   const hasCandidatePortrait = Boolean(effectiveFaceThumb);
   const hasPhotoForLighting = Boolean(sourceImageUrl || draftFacePhotoUrl);
   const hasPhotoForEmptyCheck = Boolean(
     sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl || analysisResult?.previewDataUrl
   );
+  const hasHeroStagePhoto = Boolean(analysisResult?.previewDataUrl || draftFacePhotoUrl);
   const showFaceNotDetectedWarning =
     !analyzing &&
     !errorMsg &&
@@ -517,21 +509,13 @@ function ProfileModalContent({
 
   const handleJumpToManualSkinTone = () => {
     triggerHaptic('selection');
-    setManualSkinOpen(true);
-    const focusAfterOpen = () => {
-      const target = manualToneSectionRef.current;
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        const firstControl = target.querySelector('[data-mst-level], button, input');
-        if (firstControl instanceof HTMLElement) {
-          firstControl.focus({ preventScroll: true });
-        }
+    const target = manualToneSectionRef.current;
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const firstFocusable = target.querySelector('[data-mst-level], button, input');
+      if (firstFocusable instanceof HTMLElement) {
+        firstFocusable.focus({ preventScroll: true });
       }
-    };
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => requestAnimationFrame(focusAfterOpen));
-    } else {
-      setTimeout(focusAfterOpen, 20);
     }
   };
 
@@ -552,12 +536,13 @@ function ProfileModalContent({
   };
 
   const handlePreviewTapFocus = (e) => {
-    if (!sourceImageUrl || !analysisResult?.cropSourceRect || analyzing) return;
+    const cropRect = analysisResult?.cropSourceRect || analysisResult?.cropRect;
+    if (!sourceImageUrl || !cropRect || analyzing) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const relX = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
     const relY = Math.max(0.05, Math.min(0.95, (e.clientY - rect.top) / rect.height));
-    const { sx, sy, side, srcW, srcH } = analysisResult.cropSourceRect;
+    const { sx, sy, side, srcW, srcH } = cropRect;
     const fullX = Math.max(0.04, Math.min(0.96, (sx + relX * side) / Math.max(1, srcW)));
     const fullY = Math.max(0.04, Math.min(0.96, (sy + relY * side) / Math.max(1, srcH)));
     void runAnalysis(
@@ -568,7 +553,7 @@ function ProfileModalContent({
         isUserUpload: !isSampleSource && Boolean(draftFacePhotoUrl),
         updateFacePhoto: false,
         skipNeuralDetector: isSampleSource,
-        previousCropRect: analysisResult.cropSourceRect,
+        previousCropRect: cropRect,
       }
     );
   };
@@ -592,26 +577,6 @@ function ProfileModalContent({
     );
   };
 
-  const handlePickMstCell = (nextLevel, nextUndertone) => {
-    triggerHaptic('selection');
-    const swatch = getMstSwatch(nextLevel, nextUndertone);
-    const closest = findClosestSkinPreset(swatch.hex, swatch.personalColor);
-    setDraftPresetKey(closest.key);
-    setDraftSubType(closest.subTypeLabelKo);
-    setDraftSpec((prev) =>
-      sanitizeAvatarSpec({
-        ...prev,
-        appearance: {
-          ...prev.appearance,
-          mstLevel: swatch.level,
-          mstUndertone: swatch.undertone,
-          skinToneHex: swatch.hex,
-          personalColor: swatch.personalColor,
-        },
-      })
-    );
-  };
-
   const handleCustomHexChange = (e) => {
     const hex = String(e.target.value || '').toUpperCase();
     if (!/^#[0-9A-F]{6}$/.test(hex)) return;
@@ -630,6 +595,12 @@ function ProfileModalContent({
         },
       })
     );
+  };
+
+  const handleSelectMstSwatch = (swatch) => {
+    const closest = findClosestSkinPreset(swatch.hex, swatch.personalColor);
+    setDraftPresetKey(closest.key);
+    setDraftSubType(closest.subTypeLabelKo);
   };
 
   const commitAvatarStudioChanges = (primarySource) => {
@@ -691,12 +662,20 @@ function ProfileModalContent({
     lang === 'en' ? activeSeasonMeta.labelEn : activeSeasonMeta.labelKo;
   const humanToneLabel = formatHumanToneLabel(draftMstLevel, draftMstUndertone, lang);
   const unifiedToneBadgeText = `${humanToneLabel} · ${localizedSeasonLabel}`;
-  const recommendedThreeColors = activeSeasonMeta.colors.slice(0, 3);
+  const bestPaletteSwatches = useMemo(
+    () => (SEASON_BEST_SWATCHES[draftSeason]?.colors || activeSeasonMeta.colors).slice(0, 5),
+    [draftSeason, activeSeasonMeta.colors]
+  );
+  const localizedSubType =
+    lang === 'en'
+      ? translateSubTypeLabel(draftSubType, draftSeason)
+      : draftSubType;
 
   const activeAngleMeta =
     ISO_VIEW_ANGLE_OPTIONS.find((item) => item.angleDeg === previewAngleDeg) ||
     ISO_VIEW_ANGLE_OPTIONS[0];
-  const shortAngleLabel = lang === 'en' ? activeAngleMeta.shortEn : activeAngleMeta.shortKo;
+  const localizedAngleLabel =
+    lang === 'en' ? activeAngleMeta.labelEn : activeAngleMeta.labelKo;
 
   const previewSkinProfile = useMemo(
     () => ({
@@ -717,7 +696,7 @@ function ProfileModalContent({
     ]
   );
 
-  // Derived labels for Tab 2 (Hair & Face) & Tab 3 (Body Profile)
+  // Derived labels for Tab 2 & Tab 3 compact summaries
   const activeHairLabel = findOptionLabel(
     HAIR_STYLE_OPTIONS,
     draftSpec.appearance.hairStyle,
@@ -783,6 +762,21 @@ function ProfileModalContent({
             source: 'skin',
           };
 
+  const headerBackAction = (
+    <button
+      type="button"
+      className="atelier-header-back-btn"
+      onClick={() => {
+        triggerHaptic('selection');
+        onClose?.();
+      }}
+      aria-label={tx(lang, '닫기', 'Close')}
+      title={tx(lang, '닫기', 'Close')}
+    >
+      <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" />
+    </button>
+  );
+
   const applyFooter = (
     <button
       id={primaryCtaConfig.id}
@@ -802,11 +796,12 @@ function ProfileModalContent({
       onClose={onClose}
       lang={lang}
       title={tx(lang, '프로필 · 피부톤 & 체형', 'Profile · Skin Tone & Body')}
+      actions={headerBackAction}
       maxWidth={580}
       footer={applyFooter}
     >
       <div className="skin-modal-body" data-active-tab={activeTab}>
-        {/* 3-Way Sticky Segmented Navigation */}
+        {/* Sleek Dark-Charcoal 3-Way Editorial Tabs */}
         <div className="profile-modal-tabs-sticky">
           <div
             className="profile-modal-tabs"
@@ -824,7 +819,7 @@ function ProfileModalContent({
                 setActiveTab('skin');
               }}
             >
-              <Palette size={15} aria-hidden="true" />
+              <Palette size={14} aria-hidden="true" />
               <span>{tx(lang, '사진 · 피부톤', 'Photo & Skin')}</span>
             </button>
             <button
@@ -839,7 +834,7 @@ function ProfileModalContent({
                 setActiveTab('hair');
               }}
             >
-              <UserRound size={15} aria-hidden="true" />
+              <UserRound size={14} aria-hidden="true" />
               <span>{tx(lang, '헤어 · 얼굴형', 'Hair & Face')}</span>
             </button>
             <button
@@ -854,302 +849,44 @@ function ProfileModalContent({
                 setActiveTab('body');
               }}
             >
-              <SlidersHorizontal size={15} aria-hidden="true" />
+              <SlidersHorizontal size={14} aria-hidden="true" />
               <span>{tx(lang, '체형 설정', 'Body Profile')}</span>
             </button>
           </div>
         </div>
 
-        {/* [Section 1] Top Unified Compact 2-Column Preview & Summary Header */}
-        <div className="skin-modal-preview-grid">
-          <div className="skin-modal-character-box">
-            <div className="skin-modal-character-stage">
-              <Character25DMannequin
-                avatarSpec={draftSpec}
-                viewAngleDeg={previewAngleDeg}
-                skinToneHex={draftHex}
-                personalColor={draftSeason}
-                skinProfile={previewSkinProfile}
-                bodySpec={liveLegacyBodySpec}
-                personReferenceUrl={draftFacePhotoUrl}
-                theme={theme}
-                lang={lang}
-                compact
-              />
-            </div>
-
-            <div
-              className="avatar-iso-rotate-bar"
-              role="group"
-              aria-label={tx(lang, '아바타 프리뷰 회전', 'Avatar Preview Rotation')}
-            >
-              <button
-                type="button"
-                data-iso-rotate-btn="ccw"
-                className="avatar-iso-rotate-btn"
-                aria-label={tx(lang, '반시계 방향 45° 회전', 'Rotate 45 degrees counter-clockwise')}
-                title={tx(lang, '반시계 방향 45° 회전', 'Rotate 45 degrees counter-clockwise')}
-                onClick={() => handleStepPreviewAngle('ccw')}
-              >
-                ↺
-              </button>
-              <button
-                type="button"
-                data-iso-angle-badge={previewAngleDeg}
-                className="avatar-iso-angle-pill tabular-nums"
-                title={tx(lang, '클릭하여 45° 기본 각도로 복귀', 'Click to reset to 45 degree quarter view')}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setPreviewAngleDeg(DEFAULT_ISO_VIEW_ANGLE);
-                }}
-              >
-                {shortAngleLabel}
-              </button>
-              <button
-                type="button"
-                data-iso-rotate-btn="cw"
-                className="avatar-iso-rotate-btn"
-                aria-label={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
-                title={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
-                onClick={() => handleStepPreviewAngle('cw')}
-              >
-                ↻
-              </button>
-            </div>
-          </div>
-
-          <div className="skin-modal-summary-box">
-            {activeTab === 'skin' && (
-              <>
-                {analysisResult?.previewDataUrl && !analyzing && !errorMsg ? (
-                  <div className="skin-crop-summary-group">
-                    <div
-                      className="skin-portrait-pin-frame is-clickable"
-                      data-detector-engine={analysisResult.detectorEngine || ''}
-                      onClick={handlePreviewTapFocus}
-                      title={tx(
-                        lang,
-                        '얼굴 영역을 탭하여 피부톤을 다시 추출할 수 있습니다',
-                        'Tap the face area to resample skin tone'
-                      )}
-                    >
-                      <img
-                        src={analysisResult.previewDataUrl}
-                        alt={tx(lang, '얼굴 피부톤 샘플링 프리뷰', 'Face skin sampling preview')}
-                        className="skin-portrait-pin-img"
-                      />
-                      {analysisResult.faceBoxPreview && (
-                        <div
-                          className="skin-face-box-guide"
-                          aria-hidden="true"
-                          style={{
-                            left: `${analysisResult.faceBoxPreview.x * 100}%`,
-                            top: `${analysisResult.faceBoxPreview.y * 100}%`,
-                            width: `${(analysisResult.faceBoxPreview.w ?? analysisResult.faceBoxPreview.width ?? 0) * 100}%`,
-                            height: `${(analysisResult.faceBoxPreview.h ?? analysisResult.faceBoxPreview.height ?? 0) * 100}%`,
-                          }}
-                        />
-                      )}
-                      <div
-                        className={`hig-optical-scan-overlay ${analyzing ? 'is-scanning' : ''}`}
-                        aria-hidden="true"
-                      >
-                        <span className="wardrobe-scanner-corner is-tl" />
-                        <span className="wardrobe-scanner-corner is-tr" />
-                        <span className="wardrobe-scanner-corner is-bl" />
-                        <span className="wardrobe-scanner-corner is-br" />
-                      </div>
-                      {analysisResult.pins.map((pin) => (
-                        <span
-                          key={pin.id}
-                          data-skin-pin-id={pin.id}
-                          className="skin-sample-pin"
-                          title={`${lang === 'en' ? pin.labelEn : pin.labelKo}: ${pin.hex}`}
-                          style={{
-                            left: `${pin.x * 100}%`,
-                            top: `${pin.y * 100}%`,
-                            backgroundColor: pin.hex,
-                          }}
-                        />
-                      ))}
-                      <span
-                        className={`skin-face-detected-badge ${
-                          analysisResult.faceDetected ? '' : 'is-fallback'
-                        }`}
-                      >
-                        {analysisResult.faceDetected
-                          ? tx(lang, '얼굴 인식됨', 'Face Detected')
-                          : tx(lang, '직접 지정 가능', 'Tap Face')}
-                      </span>
-                    </div>
-                    <span className="skin-tap-hint">
-                      {tx(lang, '얼굴을 탭해 피부톤 재추출', 'Tap face to resample')}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="skin-summary-kicker">
-                    {isFacePhotoActive
-                      ? tx(lang, '얼굴 사진 반영 · 피부톤 진단', 'Face Photo · Skin Tone')
-                      : tx(lang, '현재 아바타 피부톤 진단', 'Active Skin Tone Diagnosis')}
-                  </span>
-                )}
-
-                <div className="skin-unified-result-block">
-                  <div className="skin-unified-result-row">
-                    <span
-                      className="skin-tone-result-swatch"
-                      style={{ backgroundColor: draftHex }}
-                      aria-hidden="true"
-                    />
-                    <span
-                      className="skin-unified-tone-pill"
-                      data-unified-tone-badge="true"
-                      data-mst-code={resolvedMstSwatch.code}
-                    >
-                      {unifiedToneBadgeText}
-                    </span>
-                    <button
-                      type="button"
-                      data-skin-metrics-toggle="true"
-                      aria-expanded={metricsOpen}
-                      aria-label={tx(lang, '피부톤 상세 수치', 'Color Metrics')}
-                      title={tx(lang, '상세 수치 보기', 'View Color Metrics')}
-                      className={`skin-metrics-info-btn ${metricsOpen ? 'is-active' : ''}`}
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        setMetricsOpen((prev) => !prev);
-                      }}
-                    >
-                      ?
-                    </button>
-                  </div>
-
-                  {metricsOpen && (
-                    <div
-                      className="skin-lab-metrics skin-metrics-popover tabular-nums"
-                      data-skin-metrics-popover="true"
-                      role="region"
-                      aria-label={tx(lang, '피부톤 상세 측정 수치', 'Detailed Skin Tone Metrics')}
-                    >
-                      <span>
-                        {tx(lang, '추출 색상', 'Color')}{' '}
-                        <strong>{analysisResult ? analysisResult.skinToneHex : draftHex}</strong>
-                      </span>
-                      <span>{resolvedMstSwatch.code}</span>
-                      {analysisResult && (
-                        <>
-                          <span>
-                            L* {analysisResult.lab.L} · a* {analysisResult.lab.a} · b*{' '}
-                            {analysisResult.lab.b}
-                          </span>
-                          <span>
-                            ITA° {analysisResult.lab.itaDeg}° · {tx(lang, '신뢰도', 'Confidence')}{' '}
-                            {analysisResult.confidence}%
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div
-                  className="skin-best-drape-row"
-                  aria-label={tx(lang, '어울리는 추천 컬러', 'Recommended Matching Colors')}
-                >
-                  {recommendedThreeColors.map((sw) => (
-                    <div
-                      key={sw.hex}
-                      className="skin-best-drape-chip"
-                      title={lang === 'en' ? sw.nameEn : sw.name}
-                    >
-                      <span style={{ backgroundColor: sw.hex }} aria-hidden="true" />
-                      <small>{lang === 'en' ? sw.nameEn : sw.name}</small>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {activeTab === 'hair' && (
-              <div className="studio-tab-summary-card">
-                <div className="skin-tone-hero-badge">
-                  <span
-                    className="skin-tone-large-swatch"
-                    style={{ backgroundColor: draftSpec.appearance.hairColorHex }}
-                    aria-hidden="true"
-                  />
-                  <div className="skin-tone-hero-text">
-                    <strong className="skin-tone-diagnosis-title">{activeHairLabel}</strong>
-                    <span className="skin-tone-hex-code">
-                      {activeHairColorLabel} · {tx(lang, '수염', 'Beard')} {activeFacialHairLabel}
-                    </span>
-                  </div>
-                </div>
-                <div className="studio-summary-metrics-strip">
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '얼굴형', 'Face')} · {activeHeadShapeLabel}
-                  </span>
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '눈매', 'Eyes')} · {activeEyeShapeLabel}
-                  </span>
-                </div>
-                <p className="avatar-studio-hint">
-                  {tx(
-                    lang,
-                    '헤어스타일, 컬러 및 이목구비 비율은 AI 피팅 아바타에 즉시 반영됩니다.',
-                    'Hairstyle, color, and facial proportions sync directly with your AI Try-On avatar.'
-                  )}
-                </p>
-              </div>
-            )}
-
-            {activeTab === 'body' && (
-              <div className="body-summary-right-card">
-                <div className="body-summary-right-head">
-                  <span className="body-summary-kicker">
-                    {tx(lang, '가상 피팅 체형 프로필', 'Active Body Spec')}
-                  </span>
-                  <strong className="body-summary-title">
-                    {lang === 'en' ? activeFrameMeta.shortEn : activeFrameMeta.shortKo} ·{' '}
-                    {lang === 'en' ? activeArchetypeMeta.shortEn : activeArchetypeMeta.shortKo}
-                  </strong>
-                </div>
-                <span className="body-spec-account-badge tabular-nums">
-                  {draftSpec.anthropometrics.heightCm}cm · {draftSpec.anthropometrics.weightKg}kg ·
-                  BMI {liveBodyMetrics.bmi.toFixed(1)}
-                </span>
-                <div className="studio-summary-metrics-strip tabular-nums">
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '가슴 윤곽', 'Chest')} · {activeChestFormLabel}
-                  </span>
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '어깨', 'Sh')}{' '}
-                    {Math.round(draftSpec.anthropometrics.shoulderScale * 100)}%
-                  </span>
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '허리', 'Wa')}{' '}
-                    {Math.round(draftSpec.anthropometrics.waistScale * 100)}%
-                  </span>
-                </div>
-                <div className="body-summary-tone-mini">
-                  <span
-                    className="skin-mini-dot"
-                    style={{ backgroundColor: draftHex }}
-                    aria-hidden="true"
-                  />
-                  <span>{unifiedToneBadgeText}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* TAB 1: Photo & Skin Tone (Focused purely on face reflection & skin tone) */}
+        {/* TAB 1: Unified Editorial Photo Analysis Hero + 3 White-Track Sliders + Monk 1-10 Spectrum */}
         {activeTab === 'skin' && (
           <>
-            <div className="skin-core-action-card">
-              <div className="skin-modal-section-head">
-                <span>{tx(lang, '얼굴 사진 자동 맞춤', 'Auto Match from Photo')}</span>
+            <section
+              className="atelier-face-hero-section"
+              data-face-analysis-state={
+                !analyzing && !errorMsg && !hasPhotoForEmptyCheck ? 'empty' : undefined
+              }
+            >
+              <div className="atelier-section-head">
+                <div className="atelier-section-title-group">
+                  <span className="atelier-section-title">
+                    {tx(lang, '얼굴 사진 분석', 'Face Photo Analysis')}
+                  </span>
+                  <button
+                    type="button"
+                    data-skin-metrics-toggle="true"
+                    aria-expanded={metricsOpen}
+                    aria-label={tx(lang, '피부톤 상세 수치', 'Color Metrics')}
+                    title={tx(lang, '상세 수치 보기', 'View Color Metrics')}
+                    className={`atelier-info-qmark skin-metrics-info-btn ${
+                      metricsOpen ? 'is-active' : ''
+                    }`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setMetricsOpen((prev) => !prev);
+                    }}
+                  >
+                    ?
+                  </button>
+                </div>
+
                 <div className="skin-head-right-actions">
                   {analyzing && (
                     <span className="skin-analyzing-tag">
@@ -1167,9 +904,45 @@ function ProfileModalContent({
                     }}
                   >
                     <Sparkles size={12} aria-hidden="true" />
-                    <span>{tx(lang, '샘플 테스트', 'Try Sample')}</span>
+                    <span>{tx(lang, '샘플 체험', 'Try Sample')}</span>
                   </button>
                 </div>
+
+                {metricsOpen && (
+                  <div
+                    className="skin-lab-metrics skin-metrics-popover tabular-nums"
+                    data-skin-metrics-popover="true"
+                    role="region"
+                    aria-label={tx(lang, '피부톤 상세 측정 수치', 'Detailed Skin Tone Metrics')}
+                  >
+                    <span>
+                      {tx(lang, '추출 색상', 'Color')}{' '}
+                      <strong>{draftHex.toUpperCase()}</strong>
+                    </span>
+                    <span>{resolvedMstSwatch.code}</span>
+                    {analysisResult ? (
+                      <>
+                        <span>
+                          L* {analysisResult.lab.L.toFixed(1)} · a*{' '}
+                          {analysisResult.lab.a.toFixed(1)} · b*{' '}
+                          {analysisResult.lab.b.toFixed(1)}
+                        </span>
+                        <span>
+                          ITA° {analysisResult.lab.itaDeg.toFixed(1)}° ·{' '}
+                          {tx(lang, '신뢰도', 'Confidence')} {analysisResult.confidence}%
+                        </span>
+                      </>
+                    ) : (
+                      <span>
+                        {tx(
+                          lang,
+                          'D65 자연광 보정 기반 피부톤 수치',
+                          'D65-calibrated skin tone metrics'
+                        )}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <input
@@ -1190,27 +963,160 @@ function ProfileModalContent({
                 onChange={handleFileChange}
               />
 
-              <div className="skin-upload-btn-row">
-                <button
-                  type="button"
-                  className="hig-secondary-btn skin-action-btn"
-                  onClick={handleOpenGallery}
-                  disabled={analyzing}
-                >
-                  <Upload size={15} aria-hidden="true" />
-                  <span>{tx(lang, '사진 업로드', 'Upload Photo')}</span>
-                </button>
-                <button
-                  type="button"
-                  className="hig-secondary-btn skin-action-btn"
-                  onClick={handleOpenCamera}
-                  disabled={analyzing}
-                >
-                  <Camera size={15} aria-hidden="true" />
-                  <span>{tx(lang, '카메라 촬영', 'Camera')}</span>
-                </button>
+              <div className="atelier-face-hero-grid">
+                {/* Left Column: Square Rounded Portrait Container + AvatarSpec Card + Pin Frame + SVG Landmark Mesh */}
+                <div className="atelier-face-hero-left">
+                  <div
+                    className={`skin-modal-character-stage is-hero-portrait-stage ${
+                      hasHeroStagePhoto ? 'has-portrait-photo' : 'is-idle-portrait'
+                    }`}
+                  >
+                    <Character25DMannequin
+                      avatarSpec={draftSpec}
+                      viewAngleDeg={previewAngleDeg}
+                      skinToneHex={draftHex}
+                      personalColor={draftSeason}
+                      skinProfile={previewSkinProfile}
+                      bodySpec={liveLegacyBodySpec}
+                      personReferenceUrl={draftFacePhotoUrl}
+                      theme="dark"
+                      lang={lang}
+                      compact
+                    />
+
+                    {analysisResult?.previewDataUrl && !errorMsg && (
+                      <div
+                        className="skin-portrait-pin-frame is-clickable"
+                        data-detector-engine={analysisResult.detectorEngine || ''}
+                        onClick={handlePreviewTapFocus}
+                        title={tx(
+                          lang,
+                          '얼굴 영역을 탭하여 피부톤을 다시 추출할 수 있습니다',
+                          'Tap the face area to resample skin tone'
+                        )}
+                      >
+                        <img
+                          src={analysisResult.previewDataUrl}
+                          alt={tx(lang, '얼굴 피부톤 샘플링 프리뷰', 'Face skin sampling preview')}
+                          className="skin-portrait-pin-img"
+                        />
+                        {analysisResult.faceBoxPreview && (
+                          <div
+                            className="skin-face-box-guide"
+                            aria-hidden="true"
+                            style={{
+                              left: `${analysisResult.faceBoxPreview.x * 100}%`,
+                              top: `${analysisResult.faceBoxPreview.y * 100}%`,
+                              width: `${(analysisResult.faceBoxPreview.w ?? analysisResult.faceBoxPreview.width ?? 0) * 100}%`,
+                              height: `${(analysisResult.faceBoxPreview.h ?? analysisResult.faceBoxPreview.height ?? 0) * 100}%`,
+                            }}
+                          />
+                        )}
+                        {analysisResult.pins.map((pin) => (
+                          <span
+                            key={pin.id}
+                            data-skin-pin-id={pin.id}
+                            className="skin-sample-pin"
+                            title={`${lang === 'en' ? pin.labelEn : pin.labelKo}: ${pin.hex}`}
+                            style={{
+                              left: `${pin.x * 100}%`,
+                              top: `${pin.y * 100}%`,
+                              backgroundColor: pin.hex,
+                            }}
+                          />
+                        ))}
+                        <span
+                          className={`skin-face-detected-badge ${
+                            analysisResult.faceDetected ? '' : 'is-fallback'
+                          }`}
+                        >
+                          {analysisResult.faceDetected
+                            ? tx(lang, '얼굴 인식됨', 'Face Detected')
+                            : tx(lang, '직접 지정 가능', 'Tap Face')}
+                        </span>
+                      </div>
+                    )}
+
+                    <FaceLandmarkMeshOverlay
+                      faceBox={analysisResult?.faceBoxPreview ?? null}
+                      hasPhoto={hasHeroStagePhoto}
+                    />
+                  </div>
+
+                  <div className="atelier-portrait-quick-actions">
+                    <button
+                      type="button"
+                      className="atelier-compact-action-btn"
+                      onClick={handleOpenGallery}
+                      disabled={analyzing}
+                    >
+                      <Upload size={14} aria-hidden="true" />
+                      <span>{tx(lang, '업로드', 'Upload')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="atelier-compact-action-btn"
+                      onClick={handleOpenCamera}
+                      disabled={analyzing}
+                    >
+                      <Camera size={14} aria-hidden="true" />
+                      <span>{tx(lang, '촬영', 'Camera')}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Column: Separate Monospace MST Code, Human-Friendly Unified Badge, Subtype & 5-Chip Palette */}
+                <div className="atelier-face-hero-right">
+                  <span
+                    className="atelier-mst-code-mono tabular-nums"
+                    data-mst-code-badge={resolvedMstSwatch.code}
+                  >
+                    {resolvedMstSwatch.code}
+                  </span>
+
+                  <div className="skin-unified-result-row">
+                    <span
+                      className="skin-tone-result-swatch"
+                      style={{ backgroundColor: draftHex }}
+                      aria-hidden="true"
+                    />
+                    <strong
+                      className="atelier-diagnosis-headline skin-unified-tone-pill"
+                      data-unified-tone-badge="true"
+                      data-mst-code={resolvedMstSwatch.code}
+                    >
+                      {unifiedToneBadgeText}
+                    </strong>
+                  </div>
+
+                  <span className="atelier-subtype-hex-sub tabular-nums">
+                    {localizedSubType} ({draftHex.toUpperCase()})
+                  </span>
+
+                  <div className="atelier-palette-block">
+                    <span className="atelier-palette-heading">
+                      {tx(lang, '베스트 매칭 팔레트', 'Best Matching Palette')}
+                    </span>
+                    <div
+                      className="atelier-best-palette-strip"
+                      role="group"
+                      aria-label={tx(lang, '베스트 매칭 팔레트', 'Best Matching Palette')}
+                    >
+                      {bestPaletteSwatches.map((sw, idx) => (
+                        <span
+                          key={sw.hex}
+                          className={`atelier-palette-chip ${idx === 0 ? 'is-primary' : ''}`}
+                          style={{ backgroundColor: sw.hex }}
+                          title={lang === 'en' ? sw.nameEn : sw.name}
+                          aria-label={lang === 'en' ? sw.nameEn : sw.name}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
 
+              {/* Collapsible Sample Portrait Rail (Zero WASM pure_ts_integral presets) */}
               {sampleRailOpen && (
                 <div className="skin-sample-test-rail">
                   {SAMPLE_PORTRAIT_BUTTONS.map((btn) => (
@@ -1237,7 +1143,7 @@ function ProfileModalContent({
                   aria-live="polite"
                 >
                   <div className="skin-loading-row">
-                    <Loader2 size={20} className="skin-spin-icon" aria-hidden="true" />
+                    <Loader2 size={18} className="skin-spin-icon" aria-hidden="true" />
                     <div className="skin-state-copy">
                       <strong>
                         {tx(
@@ -1246,18 +1152,7 @@ function ProfileModalContent({
                           'Detecting face and extracting skin tone...'
                         )}
                       </strong>
-                      <p className="skin-loading-sub">
-                        {tx(
-                          lang,
-                          '광원 편차를 보정하고 이마·양볼·턱의 피부 픽셀을 정밀 분석 중입니다.',
-                          'Normalizing illumination and sampling forehead, cheeks, and chin pixels.'
-                        )}
-                      </p>
                     </div>
-                  </div>
-                  <div className="skin-skeleton-lines" aria-hidden="true">
-                    <span className="skin-skeleton-bar" style={{ width: '78%' }} />
-                    <span className="skin-skeleton-bar" style={{ width: '54%' }} />
                   </div>
                 </div>
               )}
@@ -1270,7 +1165,7 @@ function ProfileModalContent({
                   role="alert"
                 >
                   <div className="skin-state-header">
-                    <AlertTriangle size={19} className="skin-state-icon-danger" aria-hidden="true" />
+                    <AlertTriangle size={18} className="skin-state-icon-danger" aria-hidden="true" />
                     <div className="skin-state-copy">
                       <strong>
                         {tx(
@@ -1303,7 +1198,7 @@ function ProfileModalContent({
                 </div>
               )}
 
-              {/* Soft Face-Not-Detected Warning & Recovery */}
+              {/* Soft Face-Not-Detected Warning */}
               {showFaceNotDetectedWarning && (
                 <div
                   className="skin-analysis-state-card is-warning"
@@ -1323,300 +1218,345 @@ function ProfileModalContent({
                       <p className="skin-error-desc">
                         {tx(
                           lang,
-                          '상단 프리뷰의 얼굴 위치를 직접 탭하거나 다른 사진 선택 · 수동 피부톤 선택을 이용해 주세요.',
+                          '프리뷰의 얼굴 위치를 직접 탭하거나 아래 버튼으로 다시 선택해 주세요.',
                           'Tap directly on the preview face or choose a recovery option below.'
                         )}
                       </p>
                     </div>
                   </div>
-                  <div className="skin-recovery-actions">
-                    <button
-                      type="button"
-                      className="hig-secondary-btn skin-recovery-btn"
-                      onClick={handleOpenGallery}
-                    >
-                      <RotateCcw size={14} aria-hidden="true" />
-                      <span>{tx(lang, '다른 사진 다시 선택', 'Choose Another Photo')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="hig-secondary-btn skin-recovery-btn"
-                      onClick={handleJumpToManualSkinTone}
-                    >
-                      <Palette size={14} aria-hidden="true" />
-                      <span>{tx(lang, '수동 피부톤 선택으로 이동', 'Select Skin Tone Manually')}</span>
-                    </button>
-                  </div>
                 </div>
               )}
 
-              {/* Exception State 3: Compact Empty Guidance */}
-              {!analyzing && !errorMsg && !hasPhotoForEmptyCheck && (
+              {/* Loaded Portrait Banner (Active Toggle & Reset) */}
+              {!errorMsg && hasPhotoForEmptyCheck && (
                 <div
-                  className="skin-analysis-state-card is-empty is-compact-banner"
-                  data-face-analysis-state="empty"
+                  className="avatar-face-photo-row"
+                  data-user-face-active={isFacePhotoActive ? 'true' : 'false'}
                 >
-                  <div className="skin-empty-illustration" aria-hidden="true">
-                    <ScanFace size={20} />
-                  </div>
-                  <div className="skin-state-copy">
-                    <strong>
-                      {tx(lang, '등록된 얼굴 사진이 없어요', 'No face photo uploaded yet')}
-                    </strong>
-                    <p className="skin-empty-desc">
-                      {tx(
-                        lang,
-                        '정면 사진을 올리면 피부톤을 자동 추출하며, 아래에서 직접 선택할 수도 있어요.',
-                        'Upload a front-lit portrait for auto extraction, or customize manually below.'
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Unified Face Photo ON/OFF Switch Card + Text Reset Button */}
-              <div
-                className="avatar-face-photo-row"
-                data-user-face-active={isFacePhotoActive ? 'true' : 'false'}
-              >
-                <div className="avatar-face-photo-info">
-                  {effectiveFaceThumb ? (
-                    <img
-                      src={effectiveFaceThumb}
-                      alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
-                      className="avatar-face-photo-thumb"
-                    />
-                  ) : (
-                    <span className="avatar-face-photo-placeholder" aria-hidden="true">
-                      <User size={15} />
-                    </span>
-                  )}
-                  <div className="avatar-face-photo-text">
-                    <strong>
-                      {tx(lang, '내 얼굴 사진 반영', 'Use My Face Photo')}
-                    </strong>
-                    <small>
-                      {isFacePhotoActive
-                        ? tx(
-                            lang,
-                            'AI 피팅 시 내 얼굴·헤어로 생성됨',
-                            'AI Try-On uses your face & hair'
-                          )
-                        : hasCandidatePortrait
+                  <div className="avatar-face-photo-info">
+                    {effectiveFaceThumb ? (
+                      <img
+                        src={effectiveFaceThumb}
+                        alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
+                        className="avatar-face-photo-thumb"
+                      />
+                    ) : (
+                      <span className="avatar-face-photo-placeholder" aria-hidden="true">
+                        <User size={15} />
+                      </span>
+                    )}
+                    <div className="avatar-face-photo-text">
+                      <strong>
+                        {isFacePhotoActive
+                          ? tx(lang, '내 얼굴 사진 반영 ON', 'My Face Photo Active')
+                          : tx(
+                              lang,
+                              '얼굴 사진 분석 완료 (일러스트 모드)',
+                              'Portrait Analyzed (Stylized Mode)'
+                            )}
+                      </strong>
+                      <small>
+                        {isFacePhotoActive
                           ? tx(
                               lang,
-                              '꺼짐 · 기본 아바타 톤 사용 중',
-                              'OFF · Using default avatar look'
+                              'AI 피팅 시 업로드한 본인 얼굴·헤어로 생성됩니다',
+                              'AI Try-On uses your uploaded face & hair likeness'
                             )
                           : tx(
                               lang,
-                              '사진 올려 얼굴 반영',
-                              'Upload to apply face'
+                              '피부톤만 추출되었으며 아바타는 일러스트로 표시됩니다',
+                              'Extracted tone applied; avatar uses stylized features'
                             )}
-                    </small>
+                      </small>
+                    </div>
                   </div>
-                </div>
-
-                <div className="avatar-face-photo-controls">
-                  {(hasCandidatePortrait || isFacePhotoActive || Boolean(analysisResult)) && (
+                  <div className="avatar-face-photo-actions">
                     <button
                       type="button"
                       data-reset-face-photo-btn="true"
-                      className="skin-text-reset-btn"
+                      className="avatar-switch-btn is-subtle"
                       onClick={handleResetFacePhoto}
                     >
                       {tx(lang, '초기화', 'Reset')}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isFacePhotoActive}
-                    aria-label={tx(lang, '내 얼굴 사진 반영 ON/OFF', 'Toggle My Face Photo ON/OFF')}
-                    data-face-photo-toggle="true"
-                    disabled={!hasCandidatePortrait && !isFacePhotoActive}
-                    className={`skin-switch-control ${isFacePhotoActive ? 'is-on' : ''}`}
-                    onClick={handleToggleFacePhoto}
-                  >
-                    <span className="skin-switch-track" aria-hidden="true">
-                      <span className="skin-switch-thumb" />
-                    </span>
-                    <span className="skin-switch-state-text tabular-nums">
-                      {isFacePhotoActive ? 'ON' : 'OFF'}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isFacePhotoActive}
+                      aria-label={tx(
+                        lang,
+                        '업로드한 얼굴 사진을 아바타에 연결 전환',
+                        'Toggle portrait photo attachment on avatar'
+                      )}
+                      data-face-photo-toggle="true"
+                      disabled={!hasCandidatePortrait && !isFacePhotoActive}
+                      className={`avatar-switch-btn ${isFacePhotoActive ? 'is-on' : ''}`}
+                      onClick={handleToggleFacePhoto}
+                    >
+                      {isFacePhotoActive ? tx(lang, '연결됨', 'ON') : tx(lang, '해제', 'OFF')}
+                    </button>
+                  </div>
                 </div>
+              )}
+
+              {/* Conditional Lighting Calibration Chips: ONLY rendered when a photo/sample has been loaded */}
+              {hasPhotoForLighting && !errorMsg && (
+                <div className="skin-lighting-bar-wrap">
+                  <span className="skin-sample-rail-label">
+                    {tx(lang, '촬영 조명 보정', 'Lighting Calibration')}
+                  </span>
+                  <div
+                    className="skin-lighting-segment"
+                    role="group"
+                    aria-label={tx(lang, '촬영 조명 보정', 'Lighting Calibration')}
+                  >
+                    {LIGHTING_CALIBRATION_MODES.map((m) => {
+                      const labels = LIGHTING_SEGMENT_LABELS[m.key];
+                      const active = lightingMode === m.key;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          data-lighting-mode={m.key}
+                          aria-pressed={active}
+                          className={`skin-lighting-seg-btn ${active ? 'is-active' : ''}`}
+                          onClick={() => handleChangeLighting(m.key)}
+                        >
+                          {lang === 'en' ? labels?.en || m.shortEn : labels?.ko || m.shortKo}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 3 Minimalist White-Track / Circular-Handle Sliders */}
+            <section
+              className="atelier-overview-sliders-section"
+              aria-label={tx(lang, '기본 신체 및 체형 슬라이더', 'Primary Body Sliders')}
+            >
+              <PrimaryBodyAtelierSliders
+                lang={lang}
+                draftSpec={draftSpec}
+                onChangeDraftSpec={setDraftSpec}
+              />
+            </section>
+
+            {/* Monk Skin Tone Spectrum (MST 1-10) + Double-Border Highlight + 4 Undertone Chips */}
+            <div ref={manualToneSectionRef} tabIndex={-1} className="skin-modal-section">
+              <MstSkinToneControls
+                lang={lang}
+                draftSpec={draftSpec}
+                onChangeDraftSpec={setDraftSpec}
+                onSelectMstSwatch={handleSelectMstSwatch}
+                showMstCodeBadge={false}
+              />
+            </div>
+
+            {/* Season & Tone Presets + Custom Picker */}
+            <div
+              className="skin-modal-section"
+              aria-label={tx(lang, '수동 피부톤 프리셋 선택', 'Manual Skin Tone Preset Selection')}
+            >
+              <div className="skin-modal-section-head">
+                <span>{tx(lang, '피부톤 프리셋', 'Skin Tone Presets')}</span>
+                <label className="skin-custom-color-label">
+                  <span>{tx(lang, '직접 선택', 'Custom')}</span>
+                  <input
+                    type="color"
+                    value={draftHex}
+                    onChange={handleCustomHexChange}
+                    aria-label={tx(lang, '피부톤 색상 미세조정', 'Custom skin tone color')}
+                  />
+                </label>
               </div>
 
-              {/* Conditional Lighting Calibration Chips: ONLY shown when a photo exists */}
-              {hasPhotoForLighting && (
-                <div
-                  className="skin-lighting-segment"
-                  role="group"
-                  aria-label={tx(lang, '광원 보정', 'Lighting Calibration')}
-                >
-                  {LIGHTING_CALIBRATION_MODES.map((m) => {
-                    const labels = LIGHTING_SEGMENT_LABELS[m.key];
-                    const active = lightingMode === m.key;
-                    return (
-                      <button
-                        key={m.key}
-                        type="button"
-                        data-lighting-mode={m.key}
-                        aria-pressed={active}
-                        className={`skin-lighting-seg-btn ${active ? 'is-active' : ''}`}
-                        onClick={() => handleChangeLighting(m.key)}
+              <div className="skin-preset-grid">
+                {SKIN_TONE_MANNEQUIN_PRESETS.map((preset) => {
+                  const selected =
+                    draftPresetKey === preset.key && draftHex === preset.skinToneHex;
+                  const checkStroke = isDarkSwatch(preset.skinToneHex) ? '#FFFFFF' : '#1D1D1F';
+                  return (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      data-skin-preset={preset.key}
+                      aria-pressed={selected}
+                      className={`skin-preset-card ${selected ? 'is-selected' : ''}`}
+                      onClick={() => handlePickPreset(preset)}
+                    >
+                      <span
+                        className="skin-preset-swatch"
+                        style={{ backgroundColor: preset.skinToneHex }}
                       >
-                        {lang === 'en' ? labels?.en || m.shortEn : labels?.ko || m.shortKo}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* [Section 2] Collapsible Manual Skin Tone Accordion (Collapsed by default) */}
-            <div ref={manualToneSectionRef} className="skin-manual-accordion">
-              <button
-                type="button"
-                data-manual-skin-toggle="true"
-                aria-expanded={manualSkinOpen}
-                className="skin-manual-accordion-trigger"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setManualSkinOpen((prev) => !prev);
-                }}
-              >
-                <span className="skin-manual-accordion-title">
-                  {tx(lang, '피부톤 직접 변경하기', 'Customize Skin Tone')}
-                </span>
-                <span className="skin-manual-accordion-meta">
-                  <span
-                    className="skin-mini-dot"
-                    style={{ backgroundColor: draftHex }}
-                    aria-hidden="true"
-                  />
-                  {manualSkinOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </span>
-              </button>
-
-              {manualSkinOpen && (
-                <div className="skin-manual-accordion-body">
-                  {/* 1. 1-Row Horizontal MST 1~10 Spectrum Bar + Top-Right Custom Color Chip */}
-                  <div className="skin-manual-subhead">
-                    <span>{tx(lang, '피부 밝기 스펙트럼', 'Skin Brightness Scale')}</span>
-                    <label className="skin-custom-color-chip">
-                      <span>{tx(lang, '직접 선택', 'Custom')}</span>
-                      <input
-                        type="color"
-                        value={draftHex}
-                        onChange={handleCustomHexChange}
-                        aria-label={tx(lang, '피부톤 색상 직접 선택', 'Custom skin tone color')}
-                      />
-                    </label>
-                  </div>
-
-                  <div
-                    className="skin-spectrum-bar"
-                    role="group"
-                    aria-label={tx(lang, '피부 밝기 10단계 선택', '10-Step Skin Luminance Spectrum')}
-                  >
-                    {MST_BASE_LEVELS.map((lvlItem) => {
-                      const cellSwatch = getMstSwatch(lvlItem.level, draftMstUndertone);
-                      const selected = draftMstLevel === lvlItem.level;
-                      const checkStroke = isDarkSwatch(cellSwatch.hex) ? '#FFFFFF' : '#1D1D1F';
-                      const tierWord =
-                        HUMAN_TONE_TIERS[lvlItem.level]?.[lang === 'en' ? 'en' : 'ko'] ||
-                        String(lvlItem.level);
-
-                      return (
-                        <button
-                          key={lvlItem.level}
-                          type="button"
-                          data-mst-level={lvlItem.level}
-                          aria-pressed={selected}
-                          aria-label={`${tierWord} (${lvlItem.level}/10)`}
-                          title={`${tierWord} (${cellSwatch.hex})`}
-                          className={`skin-spectrum-dot-btn ${selected ? 'is-selected' : ''}`}
-                          onClick={() => handlePickMstCell(lvlItem.level, draftMstUndertone)}
-                        >
-                          <span
-                            className="skin-spectrum-dot-fill"
-                            style={{ backgroundColor: cellSwatch.hex }}
-                          >
-                            {selected && (
-                              <Check size={12} strokeWidth={3} color={checkStroke} aria-hidden="true" />
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* 2. Integrated Undertone 3-Segment (웜톤 | 뉴트럴 | 쿨톤) */}
-                  <div
-                    className="skin-undertone-seg"
-                    role="group"
-                    aria-label={tx(lang, '피부 언더톤 선택', 'Skin Undertone')}
-                  >
-                    {UNDERTONE_SEGMENT_OPTIONS.map((ut) => {
-                      const previewSwatch = getMstSwatch(draftMstLevel, ut.key);
-                      const selected = draftMstUndertone === ut.key;
-                      return (
-                        <button
-                          key={ut.key}
-                          type="button"
-                          data-mst-undertone={ut.key}
-                          aria-pressed={selected}
-                          className={`skin-undertone-seg-btn ${selected ? 'is-selected' : ''}`}
-                          onClick={() => handlePickMstCell(draftMstLevel, ut.key)}
-                        >
-                          <span
-                            className="skin-undertone-seg-dot"
-                            style={{ backgroundColor: previewSwatch.hex }}
-                            aria-hidden="true"
-                          />
-                          <span>{lang === 'en' ? ut.en : ut.ko}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* 3. Crisp 4-Season Personal Color Presets (Zero Ellipsis) */}
-                  <div
-                    className="skin-season-preset-row"
-                    role="group"
-                    aria-label={tx(lang, '퍼스널 컬러 4계절 프리셋', 'Personal Color Season Presets')}
-                  >
-                    {SEASON_REP_PRESETS.map((item) => {
-                      const preset =
-                        SKIN_TONE_MANNEQUIN_PRESETS.find((p) => p.key === item.presetKey) ||
-                        SKIN_TONE_MANNEQUIN_PRESETS[0];
-                      const selected = draftSeason === item.season;
-                      return (
-                        <button
-                          key={item.season}
-                          type="button"
-                          data-skin-preset={preset.key}
-                          data-season-preset={item.season}
-                          aria-pressed={selected}
-                          className={`skin-season-preset-btn ${selected ? 'is-selected' : ''}`}
-                          onClick={() => handlePickPreset(preset)}
-                        >
-                          <span
-                            className="skin-season-preset-dot"
-                            style={{ backgroundColor: preset.skinToneHex }}
-                            aria-hidden="true"
-                          />
-                          <span>{lang === 'en' ? item.en : item.ko}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                        {selected && (
+                          <Check size={14} strokeWidth={3} color={checkStroke} aria-hidden="true" />
+                        )}
+                      </span>
+                      <div className="skin-preset-meta">
+                        <strong>{lang === 'en' ? preset.shortEn : preset.shortKo}</strong>
+                        <small>
+                          {lang === 'en' ? preset.subTypeLabelEn : preset.subTypeLabelKo}
+                        </small>
+                      </div>
+                      {selected && (
+                        <span className="skin-preset-selected-check" aria-hidden="true">
+                          <Check size={15} strokeWidth={2.8} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </>
+        )}
+
+        {/* Compact Preview Header for Hair & Body Tabs (preserves [data-avatar-spec-card="true"] & angle controls) */}
+        {activeTab !== 'skin' && (
+          <div className="skin-modal-preview-grid">
+            <div className="skin-modal-character-box">
+              <div className="skin-modal-character-stage">
+                <Character25DMannequin
+                  avatarSpec={draftSpec}
+                  viewAngleDeg={previewAngleDeg}
+                  skinToneHex={draftHex}
+                  personalColor={draftSeason}
+                  skinProfile={previewSkinProfile}
+                  bodySpec={liveLegacyBodySpec}
+                  personReferenceUrl={draftFacePhotoUrl}
+                  theme="dark"
+                  lang={lang}
+                  compact
+                />
+                <FaceLandmarkMeshOverlay
+                  faceBox={analysisResult?.faceBoxPreview ?? null}
+                  hasPhoto={Boolean(draftFacePhotoUrl)}
+                />
+              </div>
+
+              <div
+                className="avatar-iso-rotate-bar"
+                role="group"
+                aria-label={tx(lang, '아바타 프리뷰 회전', 'Avatar Preview Rotation')}
+              >
+                <button
+                  type="button"
+                  data-iso-rotate-btn="ccw"
+                  className="avatar-iso-rotate-btn"
+                  aria-label={tx(
+                    lang,
+                    '반시계 방향 45° 회전',
+                    'Rotate 45 degrees counter-clockwise'
+                  )}
+                  title={tx(lang, '반시계 방향 45° 회전', 'Rotate 45 degrees counter-clockwise')}
+                  onClick={() => handleStepPreviewAngle('ccw')}
+                >
+                  ↺
+                </button>
+                <button
+                  type="button"
+                  data-iso-angle-badge={previewAngleDeg}
+                  className="avatar-iso-angle-pill tabular-nums"
+                  title={tx(
+                    lang,
+                    '클릭하여 45° 기본 각도로 복귀',
+                    'Click to reset to 45 degree quarter view'
+                  )}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setPreviewAngleDeg(DEFAULT_ISO_VIEW_ANGLE);
+                  }}
+                >
+                  {localizedAngleLabel}
+                </button>
+                <button
+                  type="button"
+                  data-iso-rotate-btn="cw"
+                  className="avatar-iso-rotate-btn"
+                  aria-label={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
+                  title={tx(lang, '시계 방향 45° 회전', 'Rotate 45 degrees clockwise')}
+                  onClick={() => handleStepPreviewAngle('cw')}
+                >
+                  ↻
+                </button>
+              </div>
+
+              {activeTab === 'body' && (
+                <span className="atelier-body-metrics-pill tabular-nums">
+                  {draftSpec.anthropometrics.heightCm}cm · {draftSpec.anthropometrics.weightKg}kg ·
+                  BMI {liveBodyMetrics.bmi.toFixed(1)}
+                </span>
+              )}
+            </div>
+
+            <div className="skin-modal-summary-box">
+              {activeTab === 'hair' && (
+                <div className="studio-tab-summary-card">
+                  <div className="skin-tone-hero-badge">
+                    <span
+                      className="skin-tone-large-swatch"
+                      style={{ backgroundColor: draftSpec.appearance.hairColorHex }}
+                      aria-hidden="true"
+                    />
+                    <div className="skin-tone-hero-text">
+                      <strong className="skin-tone-diagnosis-title">{activeHairLabel}</strong>
+                      <span className="skin-tone-hex-code">
+                        {activeHairColorLabel} · {tx(lang, '수염', 'Beard')} {activeFacialHairLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="studio-summary-metrics-strip">
+                    <span className="studio-summary-metric-pill">
+                      {tx(lang, '얼굴형', 'Face')} · {activeHeadShapeLabel}
+                    </span>
+                    <span className="studio-summary-metric-pill">
+                      {tx(lang, '눈매', 'Eyes')} · {activeEyeShapeLabel}
+                    </span>
+                  </div>
+                  <p className="avatar-studio-hint">
+                    {tx(
+                      lang,
+                      '헤어스타일, 컬러 및 이목구비 비율은 AI 피팅 아바타의 외형 생성에 즉시 반영됩니다.',
+                      'Hairstyle, color, and facial proportions sync directly with your AI Try-On avatar.'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'body' && (
+                <div className="studio-tab-summary-card">
+                  <div className="studio-summary-headline-group">
+                    <strong className="skin-tone-diagnosis-title">
+                      {lang === 'en' ? activeFrameMeta.labelEn : activeFrameMeta.labelKo} ·{' '}
+                      {lang === 'en' ? activeArchetypeMeta.shortEn : activeArchetypeMeta.shortKo}
+                    </strong>
+                    <span className="skin-tone-hex-code">
+                      {tx(lang, '가슴 윤곽', 'Chest')} · {activeChestFormLabel}
+                    </span>
+                  </div>
+                  <div className="studio-summary-metrics-strip tabular-nums">
+                    <span className="studio-summary-metric-pill">
+                      {tx(lang, '어깨', 'Shoulder')}{' '}
+                      {Math.round(draftSpec.anthropometrics.shoulderScale * 100)}%
+                    </span>
+                    <span className="studio-summary-metric-pill">
+                      {tx(lang, '허리', 'Waist')}{' '}
+                      {Math.round(draftSpec.anthropometrics.waistScale * 100)}%
+                    </span>
+                    <span className="studio-summary-metric-pill">
+                      {tx(lang, '힙', 'Hip')}{' '}
+                      {Math.round(draftSpec.anthropometrics.hipScale * 100)}%
+                    </span>
+                  </div>
+                  <p className="avatar-studio-hint">
+                    {lang === 'en' ? activeArchetypeMeta.descEn : activeArchetypeMeta.descKo}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* TAB 2: Dedicated Hair & Facial Features */}
@@ -1637,7 +1577,7 @@ function ProfileModalContent({
                     <small>
                       {tx(
                         lang,
-                        '헤어·이목구비를 미리 보려면 일시 해제할 수 있습니다',
+                        '일러스트로 헤어·이목구비를 미리 보려면 일시 해제할 수 있습니다',
                         'Pause photo overlay temporarily to preview stylized hair & facial proportions'
                       )}
                     </small>
