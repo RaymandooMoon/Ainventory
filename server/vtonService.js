@@ -235,7 +235,7 @@ const MAX_PACKSHOT_FILE_BYTES = 4 * 1024 * 1024; // 4MB max for disk garment pac
 const MAX_DATA_URL_BYTES = 5 * 1024 * 1024; // 5MB max for inline data URLs
 const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
-const MAX_MEM_CACHE = 96;
+const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
 const CACHE_SCHEMA_VERSION = 'v4-hole-aware-fullbody-360';
 const CUTOUT_STAGE_HEX = '#94A3B8';
@@ -1474,11 +1474,11 @@ function sweepDiskCache() {
     }
 
     if (jsonFiles.length > MAX_DISK_CACHE) {
-      jsonFiles.sort((a, b) => a.mtimeMs - b.mtimeMs);
-      const excessCount = jsonFiles.length - MAX_DISK_CACHE;
+      const sortedFiles = [...jsonFiles].sort((a, b) => a.mtimeMs - b.mtimeMs);
+      const excessCount = sortedFiles.length - MAX_DISK_CACHE;
       for (let i = 0; i < excessCount; i += 1) {
         try {
-          fs.unlinkSync(jsonFiles[i].fullPath);
+          fs.unlinkSync(sortedFiles[i].fullPath);
         } catch {
           // ignore unlink race
         }

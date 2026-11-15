@@ -15,6 +15,7 @@ const EXCLUDED_PATTERNS = [
   /\.test\.[jt]sx?$/,
   /\.spec\.[jt]sx?$/,
   /\.config\.[jt]s$/,
+  /^public\//,
   /^scripts\//,
   /^tools\//,
   /^tests\//,
@@ -24,12 +25,34 @@ const EXCLUDED_PATTERNS = [
   /__mocks__\//,
 ];
 
-function getModifiedCodeFiles() {
+const args = new Set(process.argv.slice(2));
+const scanAll = args.has('--all') || Boolean(process.env.CI);
+const strictMode = args.has('--strict');
+
+function getTargetCodeFiles() {
+  if (scanAll) {
+    const tracked = spawnSync('git', ['ls-files'], { encoding: 'utf8' });
+    const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard'], {
+      encoding: 'utf8',
+    });
+    const allSet = new Set([
+      ...(tracked.status === 0 ? tracked.stdout.split('\n') : []),
+      ...(untracked.status === 0 ? untracked.stdout.split('\n') : []),
+    ]);
+    return [...allSet]
+      .map((f) => f.trim())
+      .filter((f) => f && /\.(ts|tsx|js|jsx)$/.test(f))
+      .filter((f) => !EXCLUDED_PATTERNS.some((re) => re.test(f)))
+      .filter((f) => fs.existsSync(path.resolve(f)));
+  }
+
+  const staged = spawnSync('git', ['diff', '--cached', '--name-only'], { encoding: 'utf8' });
   const unstaged = spawnSync('git', ['diff', '--name-only', 'HEAD'], { encoding: 'utf8' });
   const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard'], {
     encoding: 'utf8',
   });
   const combined = new Set([
+    ...(staged.status === 0 ? staged.stdout.split('\n') : []),
     ...(unstaged.status === 0 ? unstaged.stdout.split('\n') : []),
     ...(untracked.status === 0 ? untracked.stdout.split('\n') : []),
   ]);
@@ -41,7 +64,7 @@ function getModifiedCodeFiles() {
     .filter((f) => fs.existsSync(path.resolve(f)));
 }
 
-const files = getModifiedCodeFiles();
+const files = getTargetCodeFiles();
 let count = 0;
 
 for (const file of files) {
@@ -61,7 +84,14 @@ for (const file of files) {
 }
 
 if (count > 0) {
-  console.warn(`[Console Audit] ${count} console.log statement(s) found in modified files. Remove debug logs before committing.`);
+  console.warn(
+    `[Console Audit] ${count} console.log statement(s) found across ${files.length} file(s). Remove debug logs before committing.`
+  );
+  if (strictMode) {
+    process.exitCode = 1;
+  }
 } else {
-  console.log(`[Console Audit] Clean (${files.length} modified code file(s) checked).`);
+  console.log(
+    `[Console Audit] Clean (${files.length} ${scanAll ? 'tracked' : 'modified'} code file(s) checked).`
+  );
 }

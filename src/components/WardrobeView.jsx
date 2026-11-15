@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, RotateCcw, Search, X } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
   WARDROBE_PILL_FILTERS,
@@ -42,6 +42,12 @@ const JEWELRY_WARDROBE_SUBPARTS = [
   { key: 'brooch', ko: '브로치', en: 'Brooch' },
 ];
 
+const SORT_OPTIONS = [
+  { key: 'recent', ko: '최신순', en: 'Recent' },
+  { key: 'worn', ko: '착용순', en: 'Most Worn' },
+  { key: 'name', ko: '이름순', en: 'A–Z' },
+];
+
 /**
  * MY WARDROBE — Apple HIG Inventory-First Closet Screen
  */
@@ -59,10 +65,12 @@ export default function WardrobeView({
 }) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeSubPart, setActiveSubPart] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('recent');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const ensuredSeedRef = useRef(new Set());
 
-  const filteredGarments = useMemo(() => {
+  const categoryFilteredGarments = useMemo(() => {
     if (activeCategory === 'all') return garments;
     if (activeCategory === 'jewelry') {
       return garments.filter((item) => {
@@ -85,11 +93,49 @@ export default function WardrobeView({
     );
   }, [garments, activeCategory, activeSubPart]);
 
+  const filteredGarments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const searched = q
+      ? categoryFilteredGarments.filter((item) => {
+          const hay = [
+            item.name,
+            item.name_en,
+            localizeGarmentName(item.name, lang),
+            item.brand,
+            localizeBrandName(item.brand, lang),
+            item.color_name,
+            item.fabric,
+            item.subcategory,
+            item.memo,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return hay.includes(q);
+        })
+      : categoryFilteredGarments;
+
+    if (sortBy === 'worn') {
+      return [...searched].sort(
+        (a, b) => Number(b.wear_count || 0) - Number(a.wear_count || 0)
+      );
+    }
+    if (sortBy === 'name') {
+      return [...searched].sort((a, b) =>
+        localizeGarmentName(a.name, lang).localeCompare(
+          localizeGarmentName(b.name, lang),
+          lang === 'en' ? 'en' : 'ko'
+        )
+      );
+    }
+    return searched;
+  }, [categoryFilteredGarments, searchQuery, sortBy, lang]);
+
   // Auto-seed 5 material items when user opens Jewelry or a specific Accessory/Jewelry sub-part that has 0 items
   useEffect(() => {
     if (loading) return;
     if (activeCategory !== 'jewelry' && activeCategory !== 'accessory') return;
-    if (filteredGarments.length > 0) return;
+    if (categoryFilteredGarments.length > 0) return;
 
     const closetKey = activeCloset || 'sample';
     const guardKey = `${closetKey}:${activeCategory}:${activeSubPart}`;
@@ -113,7 +159,14 @@ export default function WardrobeView({
     return () => {
       cancelled = true;
     };
-  }, [activeCategory, activeSubPart, filteredGarments.length, loading, activeCloset, onGarmentRegistered]);
+  }, [
+    activeCategory,
+    activeSubPart,
+    categoryFilteredGarments.length,
+    loading,
+    activeCloset,
+    onGarmentRegistered,
+  ]);
 
   const activeSubPartOptions =
     activeCategory === 'jewelry'
@@ -121,6 +174,9 @@ export default function WardrobeView({
       : activeCategory === 'accessory'
         ? ACCESSORY_WARDROBE_SUBPARTS
         : null;
+
+  const hasActiveFilterOrSearch =
+    activeCategory !== 'all' || activeSubPart !== 'all' || searchQuery.trim().length > 0;
 
   return (
     <section className="hig-screen-container hig-closet-screen" aria-label="MY WARDROBE">
@@ -161,6 +217,59 @@ export default function WardrobeView({
           />
         </div>
       </header>
+
+      {/* Instant Search + Quick Sort Toolbar (Apple HIG Monochrome) */}
+      <div className="hig-wardrobe-toolbar">
+        <div className="hig-wardrobe-search-wrap">
+          <Search size={15} className="hig-wardrobe-search-icon" aria-hidden="true" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={tx(
+              lang,
+              '아이템명, 브랜드, 소재 검색...',
+              'Search name, brand, material...'
+            )}
+            aria-label={tx(lang, '옷장 아이템 검색', 'Search wardrobe items')}
+            className="hig-wardrobe-search-input"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="hig-wardrobe-search-clear"
+              aria-label={tx(lang, '검색어 지우기', 'Clear search')}
+              onClick={() => setSearchQuery('')}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div
+          className="hig-wardrobe-sort-group"
+          role="group"
+          aria-label={tx(lang, '정렬 기준', 'Sort order')}
+        >
+          {SORT_OPTIONS.map((opt) => {
+            const active = sortBy === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                aria-pressed={active}
+                className={`hig-wardrobe-sort-pill ${active ? 'active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setSortBy(opt.key);
+                }}
+              >
+                {tx(lang, opt.ko, opt.en)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Horizontal Scrollable Pill Category Filter */}
       <nav
@@ -246,7 +355,35 @@ export default function WardrobeView({
         <div id={CARBON_DOM_CONTRACT.wardrobeGridId} className="hig-wardrobe-grid">
           {filteredGarments.length === 0 ? (
             <div className="hig-minimal-empty" style={{ gridColumn: '1 / -1' }}>
-              <span>{tx(lang, '등록된 의류가 없습니다', 'No Items')}</span>
+              <span>
+                {searchQuery.trim()
+                  ? tx(lang, '검색 조건에 맞는 의류가 없습니다', 'No matching items found')
+                  : tx(lang, '등록된 의류가 없습니다', 'No Items')}
+              </span>
+              <div className="hig-empty-actions">
+                {hasActiveFilterOrSearch && (
+                  <button
+                    type="button"
+                    className="hig-pill-action-btn"
+                    onClick={() => {
+                      setActiveCategory('all');
+                      setActiveSubPart('all');
+                      setSearchQuery('');
+                    }}
+                  >
+                    <RotateCcw size={15} />
+                    <span>{tx(lang, '필터 초기화', 'Reset Filters')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="hig-pill-action-btn"
+                  onClick={() => setAddModalOpen(true)}
+                >
+                  <Plus size={15} />
+                  <span>{tx(lang, '+ 옷 등록', '+ Add Item')}</span>
+                </button>
+              </div>
             </div>
           ) : (
             filteredGarments.map((item, idx) => {
@@ -261,6 +398,7 @@ export default function WardrobeView({
               const materialText =
                 isAccOrJwl && item.fabric ? localizeMaterialLabel(item.fabric, lang) : '';
               const subtitle = [displayBrand, materialText].filter(Boolean).join(' · ');
+              const wearCount = Number(item.wear_count || 0);
 
               return (
                 <button
@@ -276,6 +414,11 @@ export default function WardrobeView({
                 >
                   <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
                     <GarmentObject25D item={item} alt={displayName} padding="13%" />
+                    {wearCount > 0 && (
+                      <span className="hig-card-wear-badge tabular-nums">
+                        {tx(lang, `${wearCount}회`, `${wearCount}×`)}
+                      </span>
+                    )}
                   </div>
                   <div className="hig-garment-meta">
                     <span className="hig-garment-name">{displayName}</span>

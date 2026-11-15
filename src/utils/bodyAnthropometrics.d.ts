@@ -1,3 +1,7 @@
+import type { BodyShapeKey } from '../contracts/carbonDesignContract.ts';
+
+export type { BodyShapeKey };
+
 export type CanonicalBodyShapeKey =
   | 'ectomorph_thin'
   | 'skinny_fat'

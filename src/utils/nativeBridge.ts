@@ -33,7 +33,7 @@ const THEME_KEY = 'ainventory_theme_pref';
 const CAMERA_NOTICE_KEY = 'ainventory_camera_rationale_ack';
 const BIOMETRIC_CONSENT_KEY = 'ainventory_biometric_consent_ack';
 
-const backHandlers: BackHandlerFn[] = [];
+let backHandlers: readonly BackHandlerFn[] = [];
 let capBackListenerBound = false;
 let capBackBindingInFlight: Promise<void> | null = null;
 const statusListeners = new Set<StatusCapsuleListener>();
@@ -103,12 +103,12 @@ export async function initNativeBackBridge(): Promise<void> {
       }
       const { App: CapApp } = await import('@capacitor/app');
       await CapApp.addListener('backButton', ({ canGoBack }) => {
-        // Drain LIFO back handler stack (modals -> sheets -> drawers -> sub-tabs)
+        // Drain LIFO back handler stack immutably (modals -> sheets -> drawers -> sub-tabs)
         while (backHandlers.length > 0) {
           const topFn = backHandlers[backHandlers.length - 1];
           const handled = topFn?.();
           if (handled !== false) return;
-          backHandlers.pop();
+          backHandlers = backHandlers.slice(0, -1);
         }
         if (canGoBack) {
           window.history.back();
@@ -128,10 +128,12 @@ export async function initNativeBackBridge(): Promise<void> {
 }
 
 export function pushBackHandler(handlerFn: BackHandlerFn): () => void {
-  backHandlers.push(handlerFn);
+  backHandlers = [...backHandlers, handlerFn];
   return () => {
     const idx = backHandlers.lastIndexOf(handlerFn);
-    if (idx >= 0) backHandlers.splice(idx, 1);
+    if (idx >= 0) {
+      backHandlers = [...backHandlers.slice(0, idx), ...backHandlers.slice(idx + 1)];
+    }
   };
 }
 

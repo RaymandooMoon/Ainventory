@@ -251,8 +251,7 @@ function mapScenarioTokenToWeatherMode(token: string): WeatherMode | null {
   return null;
 }
 
-// oxlint-disable-next-line typescript/no-explicit-any
-export function normalizeRawWeatherToContext(rawWeather?: any): WeatherContextInput {
+export function normalizeRawWeatherToContext(rawWeather?: unknown): WeatherContextInput {
   if (!rawWeather) {
     return { mode: 'clear', temperature: 16 };
   }
@@ -275,17 +274,14 @@ export function normalizeRawWeatherToContext(rawWeather?: any): WeatherContextIn
     return { mode: 'realtime', temperature: 16, liveCondition: inferred };
   }
 
-  if (typeof rawWeather === 'object') {
-    const explicitToken = String(
-      rawWeather.mode ?? rawWeather.scenarioKey ?? rawWeather.scenario ?? ''
-    );
+  if (typeof rawWeather === 'object' && rawWeather !== null) {
+    const rec = rawWeather as Record<string, unknown>;
+    const explicitToken = String(rec.mode ?? rec.scenarioKey ?? rec.scenario ?? '');
     const explicitMode = mapScenarioTokenToWeatherMode(explicitToken);
 
-    const tempMin = Number(rawWeather.tempMin ?? rawWeather.temperatureMin ?? NaN);
-    const tempMax = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? NaN);
-    const directTemp = Number(
-      rawWeather.temperature ?? rawWeather.avgTemp ?? rawWeather.temp ?? NaN
-    );
+    const tempMin = Number(rec.tempMin ?? rec.temperatureMin ?? NaN);
+    const tempMax = Number(rec.tempMax ?? rec.temperatureMax ?? NaN);
+    const directTemp = Number(rec.temperature ?? rec.avgTemp ?? rec.temp ?? NaN);
     const temperature = Number.isFinite(directTemp)
       ? directTemp
       : Number.isFinite(tempMin) && Number.isFinite(tempMax)
@@ -301,15 +297,15 @@ export function normalizeRawWeatherToContext(rawWeather?: any): WeatherContextIn
             ? tempMax
             : 16;
 
-    const rawFeels = Number(rawWeather.feelsLike ?? rawWeather.apparentTemp ?? NaN);
-    const windSpeed = Number(rawWeather.windSpeed ?? 0);
+    const rawFeels = Number(rec.feelsLike ?? rec.apparentTemp ?? NaN);
+    const windSpeed = Number(rec.windSpeed ?? 0);
     const feelsLike = Number.isFinite(rawFeels)
       ? rawFeels
       : temperature <= 5 && windSpeed >= 20
         ? Math.round(temperature - Math.min(8, windSpeed * 0.22))
         : undefined;
 
-    const liveCondition = inferLiveConditionFromRaw(rawWeather as Record<string, unknown>);
+    const liveCondition = inferLiveConditionFromRaw(rec);
 
     if (explicitMode) {
       return {
@@ -321,10 +317,10 @@ export function normalizeRawWeatherToContext(rawWeather?: any): WeatherContextIn
     }
 
     // Direct flags when scenarioKey was omitted
-    if (rawWeather.isSnowy || rawWeather.isSnowing) {
+    if (Boolean(rec.isSnowy) || Boolean(rec.isSnowing)) {
       return { mode: 'snow', temperature, feelsLike, liveCondition: 'snow' };
     }
-    if (rawWeather.isRainy || rawWeather.isRaining) {
+    if (Boolean(rec.isRainy) || Boolean(rec.isRaining)) {
       return { mode: 'rain', temperature, feelsLike, liveCondition: 'rain' };
     }
 

@@ -679,6 +679,8 @@ export default function CalendarSlideOverDrawer({
 }) {
   const headingId = useId();
   const onCloseRef = useRef(onClose);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -686,6 +688,26 @@ export default function CalendarSlideOverDrawer({
 
   useEffect(() => {
     if (!open) return undefined;
+    previousFocusRef.current =
+      typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const focusTimer = setTimeout(() => {
+      const container = dialogRef.current;
+      if (!container) return;
+      if (!container.contains(document.activeElement)) {
+        const firstFocusable = container.querySelector(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (firstFocusable instanceof HTMLElement) {
+          firstFocusable.focus({ preventScroll: true });
+        } else {
+          container.focus({ preventScroll: true });
+        }
+      }
+    }, 0);
+
     const popBack = pushBackHandler(() => {
       onCloseRef.current?.();
       return true;
@@ -694,12 +716,46 @@ export default function CalendarSlideOverDrawer({
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current?.();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const container = dialogRef.current;
+        if (!container) return;
+        const focusable = Array.from(
+          container.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(
+          (el) =>
+            el instanceof HTMLElement &&
+            (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0)
+        );
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || !container.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (document.activeElement === last || !container.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
+      clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKeyDown);
       popBack();
+      const prev = previousFocusRef.current;
+      if (prev && typeof prev.focus === 'function' && document.contains(prev)) {
+        prev.focus({ preventScroll: true });
+      }
     };
   }, [open]);
 
@@ -714,6 +770,8 @@ export default function CalendarSlideOverDrawer({
 
   const drawerNode = (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className="cal-ed-drawer-backdrop"
       onClick={() => onClose?.()}
       data-testid="calendar-slideover-backdrop"

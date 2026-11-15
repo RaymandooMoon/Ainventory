@@ -819,10 +819,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       matchText: /롱부츠|스노우|방한|Boots/i,
     });
 
-    await page.waitForTimeout(300);
-    expect(synthCalls).toBe(callsAfterInitial);
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-staged-bar="true"]')).toBeVisible();
+    expect(synthCalls).toBe(callsAfterInitial);
     const generateBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
     await expect(generateBtn).toBeVisible();
 
@@ -1047,9 +1046,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const colorCounts180 = await aiImg.evaluate(async (el) => {
       const img = el as HTMLImageElement;
       if (!img.complete) {
-        await new Promise<void>((res) => {
+        await new Promise<void>((res, rej) => {
           img.onload = () => res();
-          img.onerror = () => res();
+          img.onerror = () => rej(new Error('Failed to load 180-degree VTON slice image'));
         });
       }
       const c = document.createElement('canvas');
@@ -1424,9 +1423,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const alphaAudit = await aiImg.evaluate(async (el) => {
       const img = el as HTMLImageElement;
       if (!img.complete) {
-        await new Promise<void>((res) => {
+        await new Promise<void>((res, rej) => {
           img.onload = () => res();
-          img.onerror = () => res();
+          img.onerror = () => rej(new Error('Failed to load V4 hole-aware VTON cutout image'));
         });
       }
       const c = document.createElement('canvas');

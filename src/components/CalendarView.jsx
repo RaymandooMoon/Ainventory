@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Plus } from 'lucide-react';
 import { apiFetch, getStoredToken } from '../utils/api.ts';
 import {
@@ -78,6 +78,17 @@ export default function CalendarView({
   const [drawerEntryId, setDrawerEntryId] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const reloadSeqRef = useRef(0);
+  const icsRevokeTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (icsRevokeTimerRef.current) {
+        clearTimeout(icsRevokeTimerRef.current);
+      }
+    };
+  }, []);
+
   const fetchCalendarData = useCallback(async () => {
     const q = encodeURIComponent(activeCloset || 'sample');
     const [calRes, outRes] = await Promise.all([
@@ -91,39 +102,47 @@ export default function CalendarView({
   }, [activeCloset]);
 
   const reloadCalendar = useCallback(async () => {
+    const seq = ++reloadSeqRef.current;
     try {
       const { nextLogs, nextOutfits } = await fetchCalendarData();
-      setLogs(nextLogs);
-      setOutfits(nextOutfits);
+      if (seq === reloadSeqRef.current) {
+        setLogs(nextLogs);
+        setOutfits(nextOutfits);
+      }
       return nextLogs;
     } catch (err) {
-      showToast?.(
-        localizeApiMessage(err?.message, lang) ||
-          tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
-      );
+      if (seq === reloadSeqRef.current) {
+        showToast?.(
+          localizeApiMessage(err?.message, lang) ||
+            tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
+        );
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (seq === reloadSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [fetchCalendarData, lang, showToast]);
 
   useEffect(() => {
     let cancelled = false;
+    const seq = ++reloadSeqRef.current;
     (async () => {
       try {
         const { nextLogs, nextOutfits } = await fetchCalendarData();
-        if (cancelled) return;
+        if (cancelled || seq !== reloadSeqRef.current) return;
         setLogs(nextLogs);
         setOutfits(nextOutfits);
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && seq === reloadSeqRef.current) {
           showToast?.(
             localizeApiMessage(err?.message, lang) ||
               tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
           );
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && seq === reloadSeqRef.current) {
           setLoading(false);
         }
       }
@@ -298,7 +317,13 @@ export default function CalendarView({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 800);
+    if (icsRevokeTimerRef.current) {
+      clearTimeout(icsRevokeTimerRef.current);
+    }
+    icsRevokeTimerRef.current = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      icsRevokeTimerRef.current = null;
+    }, 800);
   };
 
   return (

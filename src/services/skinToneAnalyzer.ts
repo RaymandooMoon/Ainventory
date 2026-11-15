@@ -828,6 +828,18 @@ interface MediaPipeLandmarkerLike {
 
 let mpLandmarkerPromise: Promise<MediaPipeLandmarkerLike | null> | null = null;
 
+export async function disposeMediaPipeLandmarker(): Promise<void> {
+  const activePromise = mpLandmarkerPromise;
+  mpLandmarkerPromise = null;
+  if (!activePromise) return;
+  try {
+    const instance = await activePromise;
+    instance?.close?.();
+  } catch {
+    // Ignore WASM teardown errors
+  }
+}
+
 async function getMediaPipeLandmarker(): Promise<MediaPipeLandmarkerLike | null> {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null;
   if (!mpLandmarkerPromise) {

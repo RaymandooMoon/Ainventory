@@ -122,14 +122,14 @@ function samplePerimeterBackground(data: Uint8ClampedArray, w: number, h: number
     return { r: 245, g: 245, b: 247, alreadyTransparent: true };
   }
 
-  samplesR.sort((a, b) => a - b);
-  samplesG.sort((a, b) => a - b);
-  samplesB.sort((a, b) => a - b);
-  const mid = Math.floor(samplesR.length / 2);
+  const sortedR = [...samplesR].sort((a, b) => a - b);
+  const sortedG = [...samplesG].sort((a, b) => a - b);
+  const sortedB = [...samplesB].sort((a, b) => a - b);
+  const mid = Math.floor(sortedR.length / 2);
   return {
-    r: samplesR[mid],
-    g: samplesG[mid],
-    b: samplesB[mid],
+    r: sortedR[mid],
+    g: sortedG[mid],
+    b: sortedB[mid],
     alreadyTransparent,
   };
 }

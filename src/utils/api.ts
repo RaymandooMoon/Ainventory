@@ -157,12 +157,18 @@ async function rawNetworkFetch(
   const contentType = String(res.headers?.get?.('content-type') || '').toLowerCase();
   const isJson = contentType.includes('application/json');
 
-  // Static hosts / SPA routers / Capacitor WebViews return text/html or non-JSON 404/405 when no API server is running
+  // Static hosts / SPA routers / Capacitor WebViews return text/html or non-JSON 200/404/405/5xx when no API server is running.
+  // Never treat non-JSON 400/401/403/413/429 gateway rejections as "backend unavailable" so auth/rate-limit errors surface!
   if (!isJson) {
-    throw new ApiError(`API 서버 미연결 (${res.status})`, {
-      status: res.status,
-      isBackendUnavailable: true,
-    });
+    const isStaticOrGatewayDown =
+      res.status === 200 || res.status === 404 || res.status === 405 || res.status >= 500;
+    throw new ApiError(
+      isStaticOrGatewayDown ? `API 서버 미연결 (${res.status})` : `요청 거부 (${res.status})`,
+      {
+        status: res.status,
+        isBackendUnavailable: isStaticOrGatewayDown,
+      }
+    );
   }
 
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -215,6 +221,10 @@ function isNetworkOrBackendUnavailable(err: unknown): boolean {
   return !candidate.status || Boolean(candidate.isBackendUnavailable);
 }
 
+function coerceApiPayload<T>(payload: Record<string, unknown>): T {
+  return payload as T;
+}
+
 /**
  * Offline-First + Sample Demo + Standalone Fallback API Client
  * - Mirrors GET responses into IndexedDB (`ainventory_offline_v1`) with user-scope isolation
@@ -222,8 +232,7 @@ function isNetworkOrBackendUnavailable(err: unknown): boolean {
  * - Flushes pending offline mutations BEFORE refreshing online GET caches to prevent clobbering
  * - Falls back to `handleStandaloneApiFallback` on Capacitor APK / static hosts without Express backend
  */
-// oxlint-disable-next-line typescript/no-explicit-any
-export async function apiFetch<T = Record<string, any>>(
+export async function apiFetch<T = Record<string, unknown>>(
   path: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
@@ -266,7 +275,9 @@ export async function apiFetch<T = Record<string, any>>(
       }
     }
     markSampleDemoMutated();
-    return (await applyOptimisticLocalMutation(path, method, options.body, false)) as unknown as T;
+    return coerceApiPayload<T>(
+      await applyOptimisticLocalMutation(path, method, options.body, false)
+    );
   }
 
   const isBrowserOffline = isEffectivelyOffline();
@@ -276,15 +287,15 @@ export async function apiFetch<T = Record<string, any>>(
     if (sampleDemo && isSampleDemoMutated()) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
       if (mutatedCached) {
-        return mutatedCached as unknown as T;
+        return coerceApiPayload<T>(mutatedCached);
       }
     }
     if (isBrowserOffline) {
       const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-      if (cached) return { ...cached, _fromOfflineCache: true } as unknown as T;
+      if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
       const localData = await handleStandaloneApiFallback(path, options);
       await writeCachedResponse(cacheKey, localData).catch(() => {});
-      return { ...localData, _fromOfflineCache: true } as unknown as T;
+      return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });
     }
     try {
       // Flush any queued offline mutations BEFORE fetching & overwriting GET cache
@@ -296,15 +307,15 @@ export async function apiFetch<T = Record<string, any>>(
       }
       const data = await rawNetworkFetch(path, options);
       writeCachedResponse(cacheKey, data).catch(() => {});
-      return data as unknown as T;
+      return coerceApiPayload<T>(data);
     } catch (err) {
       // Network failure or missing backend fallback (never swallow genuine HTTP 401/4xx JSON API errors)
       if (isNetworkOrBackendUnavailable(err)) {
         const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-        if (cached) return { ...cached, _fromOfflineCache: true } as unknown as T;
+        if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
         const localData = await handleStandaloneApiFallback(path, options);
         await writeCachedResponse(cacheKey, localData).catch(() => {});
-        return { ...localData, _fromOfflineCache: true } as unknown as T;
+        return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });
       }
       throw err;
     }
@@ -314,13 +325,13 @@ export async function apiFetch<T = Record<string, any>>(
   // never enqueue into mutation_queue; fall back to local vision/similarity compute when offline
   if (isStatelessCompute) {
     if (isBrowserOffline) {
-      return (await handleStandaloneApiFallback(path, options)) as unknown as T;
+      return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
     }
     try {
-      return (await rawNetworkFetch(path, options)) as unknown as T;
+      return coerceApiPayload<T>(await rawNetworkFetch(path, options));
     } catch (err) {
       if (isNetworkOrBackendUnavailable(err)) {
-        return (await handleStandaloneApiFallback(path, options)) as unknown as T;
+        return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
       }
       throw err;
     }
@@ -328,12 +339,14 @@ export async function apiFetch<T = Record<string, any>>(
 
   // Write / Auth operations (POST / PATCH / DELETE)
   if (!isAuthEndpoint && isBrowserOffline) {
-    return (await applyOptimisticLocalMutation(path, method, options.body, true)) as unknown as T;
+    return coerceApiPayload<T>(
+      await applyOptimisticLocalMutation(path, method, options.body, true)
+    );
   }
 
   try {
     const data = await rawNetworkFetch(path, options);
-    return data as unknown as T;
+    return coerceApiPayload<T>(data);
   } catch (err) {
     if (isNetworkOrBackendUnavailable(err)) {
       if (isAuthEndpoint || path === '/garments/import-samples') {
@@ -345,9 +358,11 @@ export async function apiFetch<T = Record<string, any>>(
             garments: res.garments,
           }).catch(() => {});
         }
-        return res as unknown as T;
+        return coerceApiPayload<T>(res);
       }
-      return (await applyOptimisticLocalMutation(path, method, options.body, true)) as unknown as T;
+      return coerceApiPayload<T>(
+        await applyOptimisticLocalMutation(path, method, options.body, true)
+      );
     }
     throw err;
   }

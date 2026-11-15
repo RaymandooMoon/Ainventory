@@ -654,20 +654,22 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           const dx = (drop.vx / drop.vy) * drop.len;
           const tailX = drop.x - dx;
           const tailY = drop.y - drop.len;
-          const grad = ctx.createLinearGradient(tailX, tailY, drop.x, drop.y);
-          if (isDark) {
-            grad.addColorStop(0, 'rgba(148, 197, 255, 0)');
-            grad.addColorStop(0.55, `rgba(186, 222, 255, ${drop.alpha * 0.48})`);
-            grad.addColorStop(1, `rgba(232, 244, 255, ${drop.alpha})`);
-          } else {
-            grad.addColorStop(0, 'rgba(90, 122, 158, 0)');
-            grad.addColorStop(0.52, `rgba(116, 148, 184, ${drop.alpha * 0.56})`);
-            grad.addColorStop(1, `rgba(244, 250, 255, ${Math.min(0.88, drop.alpha * 1.16)})`);
-          }
-          ctx.strokeStyle = grad;
+          const midX = tailX + dx * 0.54;
+          const midY = tailY + drop.len * 0.54;
           ctx.lineWidth = drop.thickness;
+          ctx.strokeStyle = isDark
+            ? `rgba(186, 222, 255, ${(drop.alpha * 0.34).toFixed(3)})`
+            : `rgba(116, 148, 184, ${(drop.alpha * 0.42).toFixed(3)})`;
           ctx.beginPath();
           ctx.moveTo(tailX, tailY);
+          ctx.lineTo(midX, midY);
+          ctx.stroke();
+
+          ctx.strokeStyle = isDark
+            ? `rgba(232, 244, 255, ${drop.alpha.toFixed(3)})`
+            : `rgba(244, 250, 255, ${Math.min(0.88, drop.alpha * 1.16).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.moveTo(midX, midY);
           ctx.lineTo(drop.x, drop.y);
           ctx.stroke();
         }
@@ -787,20 +789,26 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
             ctx.stroke();
           } else {
             const norm = Math.hypot(sh.vx, sh.vy) || 1;
-            const tx = sh.x - (sh.vx / norm) * sh.len;
-            const ty = sh.y - (sh.vy / norm) * sh.len;
-            const grad = ctx.createLinearGradient(tx, ty, sh.x, sh.y);
-            if (isDark) {
-              grad.addColorStop(0, 'rgba(186, 230, 253, 0)');
-              grad.addColorStop(1, `rgba(240, 249, 255, ${sh.alpha})`);
-            } else {
-              grad.addColorStop(0, 'rgba(59, 130, 246, 0)');
-              grad.addColorStop(1, `rgba(37, 99, 235, ${Math.min(0.85, sh.alpha * 1.05)})`);
-            }
-            ctx.strokeStyle = grad;
+            const dx = (sh.vx / norm) * sh.len;
+            const dy = (sh.vy / norm) * sh.len;
+            const tx = sh.x - dx;
+            const ty = sh.y - dy;
+            const mx = tx + dx * 0.5;
+            const my = ty + dy * 0.5;
             ctx.lineWidth = 1.35;
+            ctx.strokeStyle = isDark
+              ? `rgba(186, 230, 253, ${(sh.alpha * 0.36).toFixed(3)})`
+              : `rgba(59, 130, 246, ${(sh.alpha * 0.38).toFixed(3)})`;
             ctx.beginPath();
             ctx.moveTo(tx, ty);
+            ctx.lineTo(mx, my);
+            ctx.stroke();
+
+            ctx.strokeStyle = isDark
+              ? `rgba(240, 249, 255, ${sh.alpha.toFixed(3)})`
+              : `rgba(37, 99, 235, ${Math.min(0.85, sh.alpha * 1.05).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(mx, my);
             ctx.lineTo(sh.x, sh.y);
             ctx.stroke();
           }
@@ -1029,8 +1037,10 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
+    let isVisibleInViewport = true;
+    const syncPauseState = () => {
+      const nextPaused = (typeof document !== 'undefined' && document.hidden) || !isVisibleInViewport;
+      if (nextPaused) {
         isPaused = true;
         if (rafId) {
           window.cancelAnimationFrame(rafId);
@@ -1039,11 +1049,30 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       } else if (isPaused) {
         isPaused = false;
         lastTs = performance.now();
-        if (isAnimatedWeather) {
+        if (isAnimatedWeather && !rafId) {
           rafId = window.requestAnimationFrame(renderFrame);
         }
       }
     };
+
+    const handleVisibilityChange = () => {
+      syncPauseState();
+    };
+
+    const intersectionObserver =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(
+            (entries) => {
+              const entry = entries[0];
+              if (entry) {
+                isVisibleInViewport = entry.isIntersecting;
+                syncPauseState();
+              }
+            },
+            { threshold: 0.01 }
+          )
+        : null;
+    intersectionObserver?.observe(container);
 
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
@@ -1069,6 +1098,7 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       if (rafId) {
         window.cancelAnimationFrame(rafId);
       }
+      intersectionObserver?.disconnect();
       resizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

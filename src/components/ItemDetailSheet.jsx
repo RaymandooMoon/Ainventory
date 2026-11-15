@@ -12,6 +12,7 @@ import {
   localizeColorName,
   localizeGarmentMemo,
   localizeGarmentName,
+  localizeMaterialLabel,
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
@@ -106,6 +107,13 @@ function ItemDetailContent({
     }
   };
 
+  const wearCount = Math.max(0, Number(garment.wear_count || 0));
+  const purchasePrice = Number(garment.purchase_price || 0);
+  const cpwText =
+    purchasePrice > 0
+      ? `₩${Math.round(purchasePrice / Math.max(1, wearCount)).toLocaleString('ko-KR')}`
+      : garment.season || tx(lang, '사계절', 'All-Season');
+
   return (
     <div className="hig-item-detail-body">
       {/* Interactive Tilt-Responsive Zoomed Garment View */}
@@ -127,6 +135,34 @@ function ItemDetailContent({
             <span>{localizeColorName(garment.color_name, lang) || garment.color_hex}</span>
           </div>
         )}
+      </div>
+
+      {/* Monochrome Editorial Readout Strip (tabular-nums) */}
+      <div className="hig-detail-kpi-strip tabular-nums">
+        <div className="hig-detail-kpi-cell">
+          <span className="hig-detail-kpi-label">
+            {tx(lang, '착용 횟수', 'WEARS')}
+          </span>
+          <span className="hig-detail-kpi-value">
+            {tx(lang, `${wearCount}회`, `${wearCount}×`)}
+          </span>
+        </div>
+        <div className="hig-detail-kpi-cell">
+          <span className="hig-detail-kpi-label">
+            {purchasePrice > 0
+              ? tx(lang, '1회 착용가', 'COST / WEAR')
+              : tx(lang, '시즌', 'SEASON')}
+          </span>
+          <span className="hig-detail-kpi-value">{cpwText}</span>
+        </div>
+        <div className="hig-detail-kpi-cell">
+          <span className="hig-detail-kpi-label">
+            {tx(lang, '소재', 'MATERIAL')}
+          </span>
+          <span className="hig-detail-kpi-value">
+            {localizeMaterialLabel(garment.fabric, lang)}
+          </span>
+        </div>
       </div>
 
       {/* Primary Action: Try in Outfits */}

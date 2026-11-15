@@ -195,8 +195,26 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       <div
         id={CARBON_DOM_CONTRACT.addGarmentPreviewId}
         className="hig-add-preview-squircle"
+        role={!processedAsset && !processing ? 'button' : undefined}
+        tabIndex={!processedAsset && !processing ? 0 : undefined}
+        aria-label={
+          !processedAsset && !processing
+            ? tx(lang, '의류 사진 선택하기', 'Select garment photo')
+            : undefined
+        }
         onClick={() => {
           if (!processedAsset && !processing) {
+            galleryInputRef.current?.click();
+          }
+        }}
+        onKeyDown={(ev) => {
+          if (
+            !processedAsset &&
+            !processing &&
+            (ev.key === 'Enter' || ev.key === ' ') &&
+            ev.target === ev.currentTarget
+          ) {
+            ev.preventDefault();
             galleryInputRef.current?.click();
           }
         }}
@@ -212,7 +230,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         </div>
 
         {processing ? (
-          <div className="hig-add-upload-prompt">
+          <div className="hig-add-upload-prompt" role="status" aria-live="polite">
             <Loader2 size={28} className="hig-spin" />
             <span>
               {tx(lang, '배경 제거 및 스튜디오 보정 중...', 'Studio Cutout Normalization...')}

@@ -6,6 +6,13 @@ export {
   ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
   type AccessoryJewelryCatalogItem,
 } from './accessoryJewelryCatalog.js';
+export {
+  SEASONAL_120_BY_IMAGE_URL,
+  SEASONAL_120_BY_SEASON,
+  SEASONAL_120_CATALOG,
+  SEASONAL_120_NATIVE_HEX_MAP,
+  type Seasonal120CatalogItem,
+} from './seasonal120Catalog.js';
 
 export interface WearSlotDefinition {
   key: WearSlotKey;

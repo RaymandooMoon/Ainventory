@@ -13,6 +13,7 @@ import {
   SEASONAL_120_CATALOG,
 } from '../src/shared/seasonal120Catalog.js';
 import db, {
+  DATA_DIR,
   DB_PATH,
   OUTBOX_DIR,
   SQLITE_DRIVER,
@@ -93,6 +94,10 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_DISPATCH_PER_WINDOW = 5;
 const MAX_VERIFY_FAILS_PER_WINDOW = 5;
 const MAX_AUTH_ATTEMPTS_PER_WINDOW = 15;
+const MAX_GARMENT_WRITES_PER_WINDOW = 60;
+const MAX_SHOPPING_ANALYSES_PER_WINDOW = 45;
+const MAX_WARDROBE_REGEN_PER_WINDOW = 10;
+const MAX_ANALYTICS_READS_PER_WINDOW = 120;
 const MAX_MAP_ENTRIES = 2000;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MIN_PASSWORD_LEN = 6;
@@ -101,7 +106,11 @@ const MAX_PASSWORD_LEN = 128;
 let appleJwksCache = { fetchedAt: 0, keys: [] };
 
 function isDevOtpPreviewAllowed() {
-  return process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP_PREVIEW === 'true';
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_PREVIEW === 'true';
+}
+
+function isMockAppleAuthAllowed() {
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_MOCK_APPLE_AUTH === 'true';
 }
 
 function sweepBoundedMap(map, ttlMs = WINDOW_MS) {
@@ -360,8 +369,10 @@ function unlinkUploadIfUnreferenced(imageUrl) {
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
     }
-  } catch {
-    // ignore unlink error
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code !== 'ENOENT') {
+      console.warn('[Uploads] Failed to unlink orphaned upload:', safeBase, err.code);
+    }
   }
 }
 
@@ -1563,14 +1574,13 @@ export function createApiRouter() {
     } = req.body || {};
 
     const rawIdToken = String(id_token || idToken || '').trim();
-    const isProduction = process.env.NODE_ENV === 'production';
-    const allowMockApple = process.env.ALLOW_MOCK_APPLE_AUTH === 'true';
+    const allowMockApple = isMockAppleAuthAllowed();
     const appleClientId = String(process.env.APPLE_CLIENT_ID || '').trim();
 
     let resolvedSub = '';
     let resolvedEmail = '';
 
-    if (isProduction && !allowMockApple) {
+    if (!allowMockApple) {
       if (!appleClientId) {
         return res.status(503).json({
           error: 'Apple 로그인 서버 설정(APPLE_CLIENT_ID)이 구성되지 않았습니다.',
@@ -1594,7 +1604,7 @@ export function createApiRouter() {
         });
       }
     } else {
-      // Non-production / explicit mock sandbox: isolate strictly to apple_sub, NEVER trust unverified email to link accounts!
+      // Explicit non-production mock sandbox: isolate strictly to apple_sub, NEVER trust unverified email to link accounts!
       if (rawIdToken && appleClientId) {
         try {
           const claims = await verifyAppleIdentityToken(rawIdToken, appleClientId);
@@ -1707,6 +1717,13 @@ export function createApiRouter() {
 
   // 4c. Immediate Account & Personal Data Permanent Purge (Requirement 10.a: App Store & Play Store compliance)
   router.delete('/auth/account', requireStrictUserAuth, (req, res) => {
+    if (req.body?.confirmPermanentDelete !== true) {
+      return res.status(400).json({
+        error: '계정 영구 삭제를 위해 확인 플래그(confirmPermanentDelete: true)가 필요합니다.',
+        code: 'CONFIRMATION_REQUIRED',
+      });
+    }
+
     const userId = req.user.id;
     const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     if (!userRow) {
@@ -1762,6 +1779,26 @@ export function createApiRouter() {
     // Unlink physical uploaded photos on disk after DB commit (only if unreferenced)
     for (const url of uploadUrlsToCleanup) {
       unlinkUploadIfUnreferenced(url);
+    }
+
+    // Purge user-scoped VTON cache artifacts if present
+    if (isDedicatedCloset) {
+      const vtonCacheDir = path.resolve(DATA_DIR, 'vton-cache');
+      const safeOwnerPrefix = sanitizeOwnerPrefix(closetKey);
+      try {
+        if (fs.existsSync(vtonCacheDir)) {
+          for (const entry of fs.readdirSync(vtonCacheDir)) {
+            if (entry.toLowerCase().startsWith(`${safeOwnerPrefix}-`)) {
+              const target = path.resolve(vtonCacheDir, entry);
+              if (target.startsWith(`${vtonCacheDir}${path.sep}`)) {
+                fs.rmSync(target, { force: true });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[AccountPurge] Failed to sweep vton-cache:', err?.message || err);
+      }
     }
 
     // Remove verification outbox files matching both username and email local-part
@@ -1829,6 +1866,19 @@ export function createApiRouter() {
   // 6. Styling Basic Info + Body Shapes + Personal Color setup (transactional + unlinks old uploads on regenerate)
   const handleProfileSetup = (req, res) => {
     const body = req.body || {};
+    if (body.regenerate_wardrobe || body.regenerateWardrobe) {
+      const regenRate = checkRateLimit(
+        `regen:${req.user?.id || req.ip || 'local'}`,
+        MAX_WARDROBE_REGEN_PER_WINDOW
+      );
+      if (!regenRate.allowed) {
+        return res.status(429).json({
+          error: `옷장 재생성 요청이 너무 많습니다. ${regenRate.retryAfterSec}초 후 다시 시도해주세요.`,
+          code: 'RATE_LIMITED',
+          retryAfterSec: regenRate.retryAfterSec,
+        });
+      }
+    }
 
     const parseOptNum = (v, min, max) => {
       if (v === null || v === undefined || v === '') return null;
@@ -2159,6 +2209,17 @@ export function createApiRouter() {
   });
 
   router.post('/garments', requireStrictUserAuth, (req, res) => {
+    const writeRate = checkRateLimit(
+      `garmentwrite:${req.user?.id || req.ip || 'local'}`,
+      MAX_GARMENT_WRITES_PER_WINDOW
+    );
+    if (!writeRate.allowed) {
+      return res.status(429).json({
+        error: `아이템 등록 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: writeRate.retryAfterSec,
+      });
+    }
     const {
       closet_owner = req.user.defaultCloset,
       name,
@@ -2376,6 +2437,17 @@ export function createApiRouter() {
 
   // Offline Shopping Assistant (Supports both authenticated users AND read-only X-Demo-Mode: sample!)
   router.post('/shopping/analyze', (req, res) => {
+    const shopRate = checkRateLimit(
+      `shopanalyze:${req.user?.id || req.ip || 'local'}`,
+      MAX_SHOPPING_ANALYSES_PER_WINDOW
+    );
+    if (!shopRate.allowed) {
+      return res.status(429).json({
+        error: `중복 판독 요청이 너무 많습니다. ${shopRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: shopRate.retryAfterSec,
+      });
+    }
     const isSampleGuestMode = Boolean(
       req.isSampleGuest || req.isSampleDemo || req.headers['x-demo-mode'] === 'sample'
     );
@@ -3058,6 +3130,17 @@ export function createApiRouter() {
 
   // Wardrobe Insights & CPW Dashboard (Requirement 7.c & 12.d)
   router.get('/analytics', (req, res) => {
+    const analyticsRate = checkRateLimit(
+      `analytics:${req.user?.id || req.ip || 'local'}`,
+      MAX_ANALYTICS_READS_PER_WINDOW
+    );
+    if (!analyticsRate.allowed) {
+      return res.status(429).json({
+        error: `통계 조회 요청이 너무 많습니다. ${analyticsRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: analyticsRate.retryAfterSec,
+      });
+    }
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
     if (!authz.ok) {
       return res.status(authz.status).json({ error: authz.error });
@@ -3236,14 +3319,44 @@ export function createApiRouter() {
         vHash
       );
       res.status(201).json({ ok: true });
-    } catch {
-      res.status(409).json({ error: '이미 존재하는 아이디입니다.' });
+    } catch (err) {
+      const msg = String(err?.message || '');
+      if (/UNIQUE constraint failed/i.test(msg)) {
+        res.status(409).json({ error: '이미 존재하는 아이디입니다.' });
+        return;
+      }
+      console.error('[Admin] Failed to create user:', msg);
+      res.status(500).json({ error: '사용자 생성 중 서버 오류가 발생했습니다.' });
     }
   });
 
   router.post('/admin/reset-demo', requireStrictUserAuth, requireAdmin, (_req, res) => {
     seedIfEmpty(true);
     res.json({ ok: true });
+  });
+
+  router.use((err, _req, res, _next) => {
+    const status = Number(err?.status || err?.statusCode) || 500;
+    if (status === 400 && (err?.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
+      res.status(400).json({ error: '잘못된 JSON 요청 본문입니다.', code: 'INVALID_JSON' });
+      return;
+    }
+    if (status === 413) {
+      res.status(413).json({
+        error: '요청 본문 크기가 허용 한도를 초과했습니다.',
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+      return;
+    }
+    if (status >= 500) {
+      console.error('[API] Unhandled route error:', err?.message || err);
+    }
+    res.status(status).json({
+      error:
+        status >= 500
+          ? '서버 내부 오류가 발생했습니다.'
+          : String(err?.message || '요청을 처리할 수 없습니다.'),
+    });
   });
 
   return router;

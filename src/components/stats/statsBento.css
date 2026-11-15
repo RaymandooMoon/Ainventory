@@ -771,6 +771,18 @@
   }
 }
 
+@media (max-width: 420px) {
+  .stats-hero-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-comp-row {
+    grid-template-columns: 8px 68px minmax(0, 1fr) 54px;
+    gap: 6px;
+    padding: 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stats-bento-card,
   .hig-stats-skin-card.stats-bento-profile,

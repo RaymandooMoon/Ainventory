@@ -18,10 +18,13 @@ export const ROOT_DIR = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(ROOT_DIR, 'data');
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 export const OUTBOX_DIR = path.join(DATA_DIR, 'outbox');
-export const DB_PATH = path.join(DATA_DIR, 'ainventory.db');
+export const DB_PATH = process.env.AINVENTORY_DB_PATH
+  ? path.resolve(process.env.AINVENTORY_DB_PATH)
+  : path.join(DATA_DIR, 'ainventory.db');
 
 const MAX_PASSWORD_LENGTH = 256;
 
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(OUTBOX_DIR, { recursive: true });
 
@@ -77,7 +80,25 @@ async function createDatabase(dbPath) {
         }
       };
 
-      return { db: nativeDb, driver: 'node:sqlite' };
+      let closed = false;
+      const closeAndFlush = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          nativeDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+        } catch {
+          // ignore checkpoint error during shutdown
+        }
+        try {
+          if (typeof nativeDb.close === 'function') {
+            nativeDb.close();
+          }
+        } catch {
+          // ignore close error if already closed
+        }
+      };
+
+      return { db: nativeDb, driver: 'node:sqlite', closeAndFlush };
     } catch {
       // Fall through to pure-WASM sql.js for environments without node:sqlite
     }
@@ -90,15 +111,17 @@ async function createDatabase(dbPath) {
   wasmDb.exec('PRAGMA foreign_keys = ON;');
 
   let txDepth = 0;
+  let closed = false;
   const flushToDiskAtomically = () => {
+    if (closed) return;
     const buf = Buffer.from(wasmDb.export());
-    const tmpPath = `${dbPath}.tmp`;
+    const tmpPath = `${dbPath}.tmp.${process.pid}.${Date.now()}-${crypto.randomInt(1000, 9999)}`;
     fs.writeFileSync(tmpPath, buf);
     fs.renameSync(tmpPath, dbPath);
   };
 
   const persist = () => {
-    if (txDepth > 0) return;
+    if (txDepth > 0 || closed) return;
     flushToDiskAtomically();
   };
 
@@ -182,11 +205,29 @@ async function createDatabase(dbPath) {
     },
   };
 
-  return { db: wasmWrapper, driver: 'sql.js' };
+  const closeAndFlush = () => {
+    if (closed) return;
+    try {
+      flushToDiskAtomically();
+    } catch {
+      // ignore flush error during shutdown
+    }
+    closed = true;
+    try {
+      wasmDb.close();
+    } catch {
+      // ignore close error
+    }
+  };
+
+  return { db: wasmWrapper, driver: 'sql.js', closeAndFlush };
 }
 
-const { db, driver } = await createDatabase(DB_PATH);
+const { db, driver, closeAndFlush } = await createDatabase(DB_PATH);
 export const SQLITE_DRIVER = driver;
+export function closeAndFlushDatabase() {
+  closeAndFlush();
+}
 
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const raw = typeof password === 'string' ? password : String(password ?? '');

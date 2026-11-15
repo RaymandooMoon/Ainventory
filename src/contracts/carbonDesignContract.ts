@@ -173,11 +173,13 @@ export type PersonalColorKey =
   | 'winter_dark';
 
 export type BodyShapeKey =
+  | 'ectomorph_thin'
   | 'slim_lean'
   | 'skinny_fat'
   | 'standard_balanced'
   | 'upper_developed'
   | 'lower_developed'
+  | 'muscular_athletic'
   | 'athletic_muscular'
   | 'plus_curvy';
 

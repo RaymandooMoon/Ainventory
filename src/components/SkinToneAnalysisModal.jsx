@@ -40,6 +40,7 @@ import {
   SKIN_TONE_MANNEQUIN_PRESETS,
   analyzePortraitSkinTone,
   createSyntheticSamplePortrait,
+  disposeMediaPipeLandmarker,
   findClosestSkinPreset,
   normalizeSeasonKey,
   translateSubTypeLabel,
@@ -137,6 +138,16 @@ function ProfileModalContent({
   const heightInputRef = useRef(null);
   const errorConfirmBtnRef = useRef(null);
   const analysisSeqRef = useRef(0);
+  const fileReaderRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      fileReaderRef.current?.abort?.();
+      fileReaderRef.current = null;
+      void disposeMediaPipeLandmarker();
+    },
+    []
+  );
   const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
   const accountFallbackGender =
@@ -448,8 +459,11 @@ function ProfileModalContent({
       return;
     }
 
+    fileReaderRef.current?.abort?.();
     const reader = new FileReader();
+    fileReaderRef.current = reader;
     reader.onerror = () => {
+      if (fileReaderRef.current !== reader) return;
       analysisSeqRef.current += 1;
       setAnalyzing(false);
       setAnalysisResult(null);

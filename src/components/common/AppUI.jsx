@@ -120,6 +120,9 @@ export function ResponsiveSheetModal({
 }) {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const suppressTimerRef = useRef(null);
   const startYRef = useRef(0);
   const dragYRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -134,6 +137,9 @@ export function ResponsiveSheetModal({
 
   useEffect(() => {
     if (!open) return undefined;
+    if (typeof document !== 'undefined') {
+      previousFocusRef.current = document.activeElement;
+    }
     const popBack = pushBackHandler(() => {
       onCloseRef.current?.();
       return true;
@@ -142,6 +148,24 @@ export function ResponsiveSheetModal({
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current?.();
+        return;
+      }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     const handleWindowMove = (e) => {
@@ -163,8 +187,10 @@ export function ResponsiveSheetModal({
         onCloseRef.current?.();
       } else {
         suppressBackdropClickRef.current = true;
-        setTimeout(() => {
+        if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = setTimeout(() => {
           suppressBackdropClickRef.current = false;
+          suppressTimerRef.current = null;
         }, 0);
       }
     };
@@ -183,12 +209,20 @@ export function ResponsiveSheetModal({
       window.removeEventListener('touchmove', handleWindowMove);
       window.removeEventListener('touchend', handleWindowEnd);
       window.removeEventListener('touchcancel', handleWindowEnd);
+      if (suppressTimerRef.current) {
+        clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
       popBack();
       dragYRef.current = 0;
       isDraggingRef.current = false;
       suppressBackdropClickRef.current = false;
       setDragY(0);
       setIsDragging(false);
+      const prevEl = previousFocusRef.current;
+      if (prevEl && typeof prevEl.focus === 'function' && document.contains(prevEl)) {
+        prevEl.focus();
+      }
     };
   }, [open]);
 
@@ -213,6 +247,7 @@ export function ResponsiveSheetModal({
     >
       <div
         id={id}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? headingId : undefined}

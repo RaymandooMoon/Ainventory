@@ -57,7 +57,7 @@
   --atelier-font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, ui-monospace, monospace;
   --atelier-ink-on-dark: #f7f7f5;
   --atelier-ink-secondary-on-dark: rgba(247, 247, 245, 0.72);
-  --atelier-ink-muted-on-dark: rgba(247, 247, 245, 0.5);
+  --atelier-ink-muted-on-dark: rgba(247, 247, 245, 0.62);
   --atelier-ink-on-light: #1d1c1a;
   --atelier-ink-secondary-on-light: rgba(29, 28, 26, 0.68);
 }

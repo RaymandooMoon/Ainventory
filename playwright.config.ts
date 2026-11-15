@@ -35,7 +35,7 @@ export default defineConfig({
   },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
   reporter: 'list',
   webServer: {
     command:
@@ -44,14 +44,17 @@ export default defineConfig({
     env: {
       ...process.env,
       PORT: String(PORT),
+      ALLOW_MOCK_APPLE_AUTH: 'true',
+      ALLOW_DEV_OTP_PREVIEW: 'true',
+      AINVENTORY_DB_PATH: process.env.AINVENTORY_DB_PATH || '/tmp/ainventory-e2e.sqlite',
     },
     url: `${BASE_URL}/api/health`,
-    reuseExistingServer: true,
+    reuseExistingServer: Boolean(process.env.PLAYWRIGHT_REUSE_SERVER),
     timeout: 60000,
   },
   use: {
     baseURL: BASE_URL,
-    trace: 'off',
+    trace: 'on-first-retry',
     launchOptions: {
       ...(hasSystemChromium ? { executablePath: systemChromium } : {}),
       args: useHeadlessSwiftShader

@@ -17,7 +17,7 @@ function smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-const MAX_TINTED_LRU_ENTRIES = 64;
+const MAX_TINTED_LRU_ENTRIES = 32;
 const TINTED_URL_CACHE = new Map();
 const PENDING_TINTS = new Map();
 

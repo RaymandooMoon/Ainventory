@@ -1,3 +1,5 @@
 #!/usr/bin/env sh
 set -e
 node .agent/hooks/pre-commit-quality.mjs
+npm run test:unit
+

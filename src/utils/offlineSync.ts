@@ -12,6 +12,7 @@ import {
   getStudioSeedImageForGarment,
   resolveManifestSlotAndGlb,
 } from '../shared/garmentTaxonomy.js';
+import { emitStatusCapsule } from './nativeBridge.ts';
 
 const DB_NAME = 'ainventory_offline_v1';
 const DB_VERSION = 1;
@@ -19,11 +20,13 @@ const STORE_CACHE = 'kv_cache';
 const STORE_QUEUE = 'mutation_queue';
 const DEAD_LETTER_KEY = '__dead_letter_mutations__';
 const USER_SCOPE_STORAGE_KEY = 'ainventory_offline_user_scope';
+const MAX_MUTATION_RETRIES = 5;
 
 export interface SyncStateSnapshot {
   isOnline: boolean;
   queuedCount: number;
   flushed?: number;
+  deadLettered?: number;
 }
 
 export type SyncStateListener = (state: SyncStateSnapshot) => void;
@@ -56,6 +59,7 @@ interface QueuedMutationRecord {
   method: string;
   body: Record<string, unknown>;
   tempId?: number;
+  retryCount?: number;
   userScope: string;
   createdAt: number;
 }
@@ -63,6 +67,9 @@ interface QueuedMutationRecord {
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 const syncListeners = new Set<SyncStateListener>();
 let memoryUserScope = '';
+const memoryCacheStore = new Map<string, CacheRow>();
+const memoryQueueStore = new Map<number, QueuedMutationRecord>();
+let memoryQueueAutoId = 1;
 
 function readInitialUserScope(): string {
   if (memoryUserScope) return memoryUserScope;
@@ -153,10 +160,25 @@ function openOfflineDb(): Promise<IDBDatabase | null> {
 export async function readCachedResponse<T = Record<string, unknown>>(
   key: string
 ): Promise<T | null> {
-  const idb = await openOfflineDb();
-  if (!idb) return null;
   const isDemoKey = key.startsWith('demo:');
   const activeScope = getOfflineUserScope();
+  const idb = await openOfflineDb();
+
+  if (!idb) {
+    const row = memoryCacheStore.get(key);
+    if (!row || row.data === undefined) return null;
+    if (
+      key !== DEAD_LETTER_KEY &&
+      !isDemoKey &&
+      row.userScope &&
+      row.userScope !== 'default' &&
+      activeScope !== 'default' &&
+      row.userScope !== activeScope
+    ) {
+      return null;
+    }
+    return row.data as T;
+  }
 
   return new Promise<T | null>((resolve) => {
     try {
@@ -192,21 +214,44 @@ export async function writeCachedResponse(
   key: string,
   data: unknown
 ): Promise<void> {
-  const idb = await openOfflineDb();
-  if (!idb) return;
   const isDemoKey = key.startsWith('demo:');
   const userScope =
     key === DEAD_LETTER_KEY ? 'system' : isDemoKey ? 'demo' : getOfflineUserScope();
+  const row: CacheRow = {
+    key,
+    data: (data && typeof data === 'object' ? data : { value: data }) as Record<string, unknown>,
+    userScope,
+    updatedAt: Date.now(),
+  };
+
+  const idb = await openOfflineDb();
+  if (!idb) {
+    memoryCacheStore.set(key, row);
+    return;
+  }
 
   return new Promise<void>((resolve) => {
     try {
       const tx = idb.transaction(STORE_CACHE, 'readwrite');
-      tx.objectStore(STORE_CACHE).put({
-        key,
-        data: (data && typeof data === 'object' ? data : { value: data }) as Record<string, unknown>,
-        userScope,
-        updatedAt: Date.now(),
-      } satisfies CacheRow);
+      tx.objectStore(STORE_CACHE).put(row);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function deleteCachedResponseKey(key: string): Promise<void> {
+  const idb = await openOfflineDb();
+  if (!idb) {
+    memoryCacheStore.delete(key);
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = idb.transaction(STORE_CACHE, 'readwrite');
+      tx.objectStore(STORE_CACHE).delete(key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     } catch {
@@ -221,7 +266,15 @@ export async function writeCachedResponse(
  */
 export async function clearUserSessionOfflineCache(specificScope?: string): Promise<void> {
   const idb = await openOfflineDb();
-  if (!idb) return;
+  if (!idb) {
+    for (const [k, row] of memoryCacheStore.entries()) {
+      if (k.startsWith('demo:') || k === DEAD_LETTER_KEY) continue;
+      if (!specificScope || !row.userScope || row.userScope === specificScope) {
+        memoryCacheStore.delete(k);
+      }
+    }
+    return;
+  }
   await new Promise<void>((resolve) => {
     try {
       const tx = idb.transaction(STORE_CACHE, 'readwrite');
@@ -260,9 +313,28 @@ async function listCacheEntriesByPrefix(
   isDemo = false,
   targetCloset?: string
 ): Promise<CacheRow[]> {
-  const idb = await openOfflineDb();
-  if (!idb) return [];
   const activeScope = getOfflineUserScope();
+  const filterRow = (row: CacheRow): boolean => {
+    const k = String(row.key || '');
+    if (isDemo) {
+      return k.startsWith(`demo:${prefix}`) && matchesTargetClosetQuery(k, targetCloset);
+    }
+    if (!k.startsWith(prefix)) return false;
+    if (
+      row.userScope &&
+      row.userScope !== 'default' &&
+      activeScope !== 'default' &&
+      row.userScope !== activeScope
+    ) {
+      return false;
+    }
+    return matchesTargetClosetQuery(k, targetCloset);
+  };
+
+  const idb = await openOfflineDb();
+  if (!idb) {
+    return Array.from(memoryCacheStore.values()).filter(filterRow);
+  }
 
   return new Promise<CacheRow[]>((resolve) => {
     try {
@@ -270,24 +342,7 @@ async function listCacheEntriesByPrefix(
       const req = tx.objectStore(STORE_CACHE).getAll();
       req.onsuccess = () => {
         const all = (Array.isArray(req.result) ? req.result : []) as CacheRow[];
-        resolve(
-          all.filter((row) => {
-            const k = String(row.key || '');
-            if (isDemo) {
-              return k.startsWith(`demo:${prefix}`) && matchesTargetClosetQuery(k, targetCloset);
-            }
-            if (!k.startsWith(prefix)) return false;
-            if (
-              row.userScope &&
-              row.userScope !== 'default' &&
-              activeScope !== 'default' &&
-              row.userScope !== activeScope
-            ) {
-              return false;
-            }
-            return matchesTargetClosetQuery(k, targetCloset);
-          })
-        );
+        resolve(all.filter(filterRow));
       };
       req.onerror = () => resolve([]);
     } catch {
@@ -296,33 +351,57 @@ async function listCacheEntriesByPrefix(
   });
 }
 
+function resolveCachePrefixForMutationPath(mutationPath: string): string | null {
+  if (mutationPath.startsWith('/garments')) return '/garments';
+  if (mutationPath.startsWith('/outfits')) return '/outfits';
+  if (mutationPath.startsWith('/wear-logs')) return '/wear-logs';
+  if (mutationPath.startsWith('/packing-lists')) return '/packing-lists';
+  if (mutationPath.startsWith('/shopping')) return '/shopping/history';
+  return null;
+}
+
+async function invalidateOptimisticCacheForPath(mutationPath: string): Promise<void> {
+  const prefix = resolveCachePrefixForMutationPath(mutationPath);
+  if (!prefix) return;
+  const entries = await listCacheEntriesByPrefix(prefix, false);
+  for (const row of entries) {
+    await deleteCachedResponseKey(row.key);
+  }
+}
+
 export async function enqueueOfflineMutation(entry: {
   path: string;
   method: string;
   body: Record<string, unknown>;
   tempId?: number;
 }): Promise<void> {
-  const idb = await openOfflineDb();
-  if (!idb) return;
   const record: QueuedMutationRecord = {
     path: entry.path,
     method: entry.method,
     body: entry.body,
     tempId: entry.tempId,
+    retryCount: 0,
     userScope: getOfflineUserScope(),
     createdAt: Date.now(),
   };
 
-  await new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-      tx.objectStore(STORE_QUEUE).add(record);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  const idb = await openOfflineDb();
+  if (!idb) {
+    const assignedId = memoryQueueAutoId;
+    memoryQueueAutoId += 1;
+    memoryQueueStore.set(assignedId, { ...record, id: assignedId });
+  } else {
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+        tx.objectStore(STORE_QUEUE).add(record);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  }
   const count = await getQueuedMutationCount();
   const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
   notifySyncListeners({ isOnline: onlineNow, queuedCount: count });
@@ -330,7 +409,7 @@ export async function enqueueOfflineMutation(entry: {
 
 export async function getQueuedMutationCount(): Promise<number> {
   const idb = await openOfflineDb();
-  if (!idb) return 0;
+  if (!idb) return memoryQueueStore.size;
   return new Promise<number>((resolve) => {
     try {
       const tx = idb.transaction(STORE_QUEUE, 'readonly');
@@ -366,19 +445,22 @@ function rewriteBodyWithIdMap(
   if (Array.isArray(cloned.item_ids)) {
     cloned.item_ids = cloned.item_ids.map((rawId) => {
       const n = Number(rawId);
-      return idMap.has(n) ? idMap.get(n)! : rawId;
+      const mapped = idMap.get(n);
+      return mapped !== undefined ? mapped : rawId;
     });
   }
   if (cloned.outfit_id !== undefined && cloned.outfit_id !== null) {
     const oid = Number(cloned.outfit_id);
-    if (idMap.has(oid)) {
-      cloned.outfit_id = idMap.get(oid)!;
+    const mapped = idMap.get(oid);
+    if (mapped !== undefined) {
+      cloned.outfit_id = mapped;
     }
   }
   if (cloned.checkId !== undefined && cloned.checkId !== null) {
     const cid = Number(cloned.checkId);
-    if (idMap.has(cid)) {
-      cloned.checkId = idMap.get(cid)!;
+    const mapped = idMap.get(cid);
+    if (mapped !== undefined) {
+      cloned.checkId = mapped;
     }
   }
   return cloned;
@@ -409,10 +491,47 @@ async function appendDeadLetterMutation(
       createdAt: item.createdAt,
       failedAt: Date.now(),
       status,
+      retryCount: item.retryCount ?? 0,
       error: errorMessage,
     },
   ];
   await writeCachedResponse(DEAD_LETTER_KEY, { items: nextItems });
+}
+
+async function deleteQueueRecord(idb: IDBDatabase | null, recordId: number): Promise<void> {
+  if (!idb) {
+    memoryQueueStore.delete(recordId);
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+      tx.objectStore(STORE_QUEUE).delete(recordId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function putQueueRecord(idb: IDBDatabase | null, record: QueuedMutationRecord): Promise<void> {
+  if (!idb) {
+    if (record.id !== undefined) {
+      memoryQueueStore.set(record.id, record);
+    }
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+      tx.objectStore(STORE_QUEUE).put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
 }
 
 let flushing = false;
@@ -425,25 +544,27 @@ export async function flushOfflineQueue(
   if (flushing || isOffline) return 0;
 
   const idb = await openOfflineDb();
-  if (!idb) return 0;
 
   flushing = true;
   let flushed = 0;
+  let deadLettered = 0;
   const idMap = new Map<number, number>();
   const activeScope = getOfflineUserScope();
 
   try {
-    const items = await new Promise<QueuedMutationRecord[]>((resolve) => {
-      try {
-        const tx = idb.transaction(STORE_QUEUE, 'readonly');
-        const req = tx.objectStore(STORE_QUEUE).getAll();
-        req.onsuccess = () =>
-          resolve((Array.isArray(req.result) ? req.result : []) as QueuedMutationRecord[]);
-        req.onerror = () => resolve([]);
-      } catch {
-        resolve([]);
-      }
-    });
+    const items = !idb
+      ? Array.from(memoryQueueStore.values()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+      : await new Promise<QueuedMutationRecord[]>((resolve) => {
+          try {
+            const tx = idb.transaction(STORE_QUEUE, 'readonly');
+            const req = tx.objectStore(STORE_QUEUE).getAll();
+            req.onsuccess = () =>
+              resolve((Array.isArray(req.result) ? req.result : []) as QueuedMutationRecord[]);
+            req.onerror = () => resolve([]);
+          } catch {
+            resolve([]);
+          }
+        });
 
     for (const item of items) {
       if (
@@ -470,16 +591,7 @@ export async function flushOfflineQueue(
         }
 
         if (item.id !== undefined) {
-          await new Promise<void>((resolve) => {
-            try {
-              const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-              tx.objectStore(STORE_QUEUE).delete(item.id!);
-              tx.oncomplete = () => resolve();
-              tx.onerror = () => resolve();
-            } catch {
-              resolve();
-            }
-          });
+          await deleteQueueRecord(idb, item.id);
         }
         flushed += 1;
       } catch (err) {
@@ -494,43 +606,48 @@ export async function flushOfflineQueue(
           status !== 401 &&
           status !== 408 &&
           status !== 429;
+        const nextRetryCount = (item.retryCount ?? 0) + 1;
+        const exceededRetryCap =
+          !isBackendUnavailable && status !== 401 && nextRetryCount >= MAX_MUTATION_RETRIES;
 
-        if (isPermanentClientError && item.id !== undefined) {
+        if ((isPermanentClientError || exceededRetryCap) && item.id !== undefined) {
           const message = err instanceof Error ? err.message : String(err);
-          await appendDeadLetterMutation(item, status, message);
-          await new Promise<void>((resolve) => {
-            try {
-              const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-              tx.objectStore(STORE_QUEUE).delete(item.id!);
-              tx.oncomplete = () => resolve();
-              tx.onerror = () => resolve();
-            } catch {
-              resolve();
-            }
+          await appendDeadLetterMutation(
+            { ...item, retryCount: nextRetryCount },
+            status,
+            message
+          );
+          await deleteQueueRecord(idb, item.id);
+          await invalidateOptimisticCacheForPath(resolvedPath);
+          deadLettered += 1;
+          emitStatusCapsule({
+            icon: 'alert',
+            haptic: 'warning',
+            message: '일부 오프라인 변경사항을 동기화하지 못해 서버 상태로 복구했습니다.',
           });
           continue;
+        }
+
+        if (item.id !== undefined) {
+          await putQueueRecord(idb, {
+            ...item,
+            path: resolvedPath,
+            body: resolvedBody || item.body,
+            retryCount: nextRetryCount,
+          });
         }
 
         // Persist any tempId->serverId rewrites onto remaining queued mutations before stopping
         if (idMap.size > 0) {
           for (const pendingItem of items) {
-            if (pendingItem.id === undefined || pendingItem.id < (item.id ?? 0)) continue;
+            if (pendingItem.id === undefined || pendingItem.id <= (item.id ?? 0)) continue;
             const nextPath = rewritePathWithIdMap(pendingItem.path, idMap);
             const nextBody = rewriteBodyWithIdMap(pendingItem.body, idMap) || pendingItem.body;
             if (nextPath !== pendingItem.path || nextBody !== pendingItem.body) {
-              await new Promise<void>((resolve) => {
-                try {
-                  const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-                  tx.objectStore(STORE_QUEUE).put({
-                    ...pendingItem,
-                    path: nextPath,
-                    body: nextBody,
-                  });
-                  tx.oncomplete = () => resolve();
-                  tx.onerror = () => resolve();
-                } catch {
-                  resolve();
-                }
+              await putQueueRecord(idb, {
+                ...pendingItem,
+                path: nextPath,
+                body: nextBody,
               });
             }
           }
@@ -543,7 +660,12 @@ export async function flushOfflineQueue(
   }
 
   const remaining = await getQueuedMutationCount();
-  notifySyncListeners({ isOnline: true, queuedCount: remaining, flushed });
+  notifySyncListeners({
+    isOnline: true,
+    queuedCount: remaining,
+    flushed,
+    ...(deadLettered > 0 ? { deadLettered } : {}),
+  });
   return flushed;
 }
 
@@ -1036,6 +1158,9 @@ export async function applyOptimisticLocalMutation(
  */
 export async function purgeAllLocalUserData(): Promise<void> {
   memoryUserScope = 'default';
+  memoryCacheStore.clear();
+  memoryQueueStore.clear();
+  memoryQueueAutoId = 1;
   try {
     const idb = await openOfflineDb();
     if (idb) {

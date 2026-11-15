@@ -553,7 +553,7 @@ function computeStandaloneShoppingAnalysis(
     verdict = 'consider';
     confidenceLabel = '비슷한 무드 1벌 보유 · 디테일 비교 권장';
     headline = `비슷한 계열의 옷이 1벌 있습니다 (유사도 ${maxSimilarity}%)`;
-    summary = `보유 중인 '${similarItems[0].name}'과 같은 계열이지만 소재나 두께감이 다르다면 교차 착용용으로 고려해볼 만합니다.`;
+    summary = `보유 중인 '${similarItems[0]?.name || '보유 의류'}'과 같은 계열이지만 소재나 두께감이 다르다면 교차 착용용으로 고려해볼 만합니다.`;
   }
 
   const pairingPool = closetItems.filter((g) => g.category !== category).slice(0, 3);

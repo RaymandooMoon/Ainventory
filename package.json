@@ -11,13 +11,16 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "cap:sync": "vite build && cap sync android",
+    "test:unit": "node --experimental-strip-types --test 'tests/unit/**/*.test.ts'",
+    "test:api": "node --experimental-strip-types --test 'tests/api/**/*.test.ts'",
+    "test": "npm run test:unit && npm run test:api",
     "test:e2e": "playwright test",
-    "verify:console": "node .agent/hooks/check-console-log.mjs",
+    "verify:console": "node .agent/hooks/check-console-log.mjs --all",
     "verify:docs": "node .agent/hooks/check-doc-hygiene.mjs",
     "verify:secrets": "node .agent/hooks/pre-commit-quality.mjs --secrets-only",
     "verify:staged": "node .agent/hooks/pre-commit-quality.mjs",
-    "verify:quick": "npm run lint && npm run typecheck",
-    "verify": "npm run lint && npm run typecheck && npm run build",
+    "verify:quick": "npm run lint && npm run typecheck && npm run test:unit",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
     "verify:full": "npm run verify && npm run test:e2e",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/* .agent/hooks/*.mjs"
   },
@@ -46,5 +49,8 @@
     "oxlint": "^1.90.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"
+  },
+  "overrides": {
+    "zod": "^4.6.7"
   }
 }

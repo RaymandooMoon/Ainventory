@@ -522,7 +522,11 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     }
     weatherCache.set(cacheKey, { fetchedAt: Date.now(), data });
     return data;
-  } catch {
+  } catch (err) {
+    console.warn(
+      '[Weather] Open-Meteo forecast fetch degraded to local fallback:',
+      err instanceof Error ? err.message : String(err)
+    );
     return {
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
@@ -536,6 +540,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       humidity: 50,
       isSimulated: false,
       fallbackUsed: true,
+      weatherUnavailable: true,
       recommendedMotion: 'idle',
     };
   }

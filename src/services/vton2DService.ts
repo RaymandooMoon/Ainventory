@@ -213,9 +213,9 @@ interface VtonServerResponse {
 const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_slices';
-const L1_MAX_ENTRIES = 128;
+const L1_MAX_ENTRIES = 24;
 const L2_MAX_ENTRIES = 240;
-const PACKSHOT_CACHE_MAX = 160;
+const PACKSHOT_CACHE_MAX = 40;
 
 const ORDERED_OUTFIT_SLOTS = [
   'headwear',

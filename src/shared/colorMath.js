@@ -1,6 +1,13 @@
+// @ts-check
 /**
  * Isomorphic LUT-Accelerated sRGB / Hex / CIELAB Color Math & Canonical Garment Palette
  * Shared across Node Express backend (`server/*`) and browser/WebWorker pipelines (`src/*`).
+ */
+
+/**
+ * @typedef {{ r: number, g: number, b: number }} RgbColor
+ * @typedef {{ L: number, a: number, b: number }} CieLabColor
+ * @typedef {{ name: string, hex: string, lab?: CieLabColor }} PaletteEntry
  */
 
 const SRGB_TO_LINEAR_LUT = new Float32Array(256);
@@ -9,6 +16,7 @@ for (let i = 0; i < 256; i += 1) {
   SRGB_TO_LINEAR_LUT[i] = s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
 }
 
+/** @type {PaletteEntry[]} */
 export const COLOR_PALETTE = [
   { name: '블랙', hex: '#1D1D1F' },
   { name: '차콜', hex: '#373A40' },
@@ -29,6 +37,10 @@ export const COLOR_PALETTE = [
   { name: '라벤더 그레이', hex: '#ABA9BC' },
 ];
 
+/**
+ * @param {string | null | undefined} [hex]
+ * @returns {RgbColor}
+ */
 export function hexToRgb(hex = '#8E9299') {
   const clean = String(hex || '#8E9299').replace('#', '').trim();
   const full =
@@ -49,7 +61,14 @@ export function hexToRgb(hex = '#8E9299') {
   };
 }
 
+/**
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {string}
+ */
 export function rgbToHex(r, g, b) {
+  /** @param {number} v */
   const clampByte = (v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0)));
   return `#${[clampByte(r), clampByte(g), clampByte(b)]
     .map((x) => x.toString(16).padStart(2, '0'))
@@ -57,14 +76,20 @@ export function rgbToHex(r, g, b) {
     .toUpperCase()}`;
 }
 
+/**
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {CieLabColor}
+ */
 export function rgbToCieLab(r, g, b) {
   const ri = Math.max(0, Math.min(255, r | 0));
   const gi = Math.max(0, Math.min(255, g | 0));
   const bi = Math.max(0, Math.min(255, b | 0));
 
-  const lr = SRGB_TO_LINEAR_LUT[ri];
-  const lg = SRGB_TO_LINEAR_LUT[gi];
-  const lb = SRGB_TO_LINEAR_LUT[bi];
+  const lr = SRGB_TO_LINEAR_LUT[ri] ?? 0;
+  const lg = SRGB_TO_LINEAR_LUT[gi] ?? 0;
+  const lb = SRGB_TO_LINEAR_LUT[bi] ?? 0;
 
   const x = (lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375) / 0.95047;
   const y = lr * 0.2126729 + lg * 0.7151522 + lb * 0.072175;
@@ -81,6 +106,11 @@ export function rgbToCieLab(r, g, b) {
   };
 }
 
+/**
+ * @param {CieLabColor} lab1
+ * @param {CieLabColor} lab2
+ * @returns {number}
+ */
 export function deltaE76(lab1, lab2) {
   const dL = lab1.L - lab2.L;
   const da = lab1.a - lab2.a;
@@ -88,6 +118,11 @@ export function deltaE76(lab1, lab2) {
   return Math.sqrt(dL * dL + da * da + db * db);
 }
 
+/**
+ * @param {string} hexA
+ * @param {string} hexB
+ * @returns {number}
+ */
 export function colorSimilarityScore(hexA, hexB) {
   const a = hexToRgb(hexA);
   const b = hexToRgb(hexB);
@@ -95,11 +130,17 @@ export function colorSimilarityScore(hexA, hexB) {
   return Math.max(0, Math.min(100, Math.round(100 - de * 1.45)));
 }
 
+/** @type {PaletteEntry[]} */
 const PALETTE_WITH_LAB = COLOR_PALETTE.map((entry) => {
   const rgb = hexToRgb(entry.hex);
   return { ...entry, lab: rgbToCieLab(rgb.r, rgb.g, rgb.b) };
 });
 
+/**
+ * @param {string | Partial<RgbColor> | null | undefined} hexOrRgb
+ * @param {ReadonlyArray<PaletteEntry>} [palette]
+ * @returns {{ name: string, hex: string }}
+ */
 export function matchClosestPaletteColor(hexOrRgb, palette = PALETTE_WITH_LAB) {
   const rgb =
     typeof hexOrRgb === 'string'
@@ -111,13 +152,15 @@ export function matchClosestPaletteColor(hexOrRgb, palette = PALETTE_WITH_LAB) {
         };
   const targetLab = rgbToCieLab(rgb.r, rgb.g, rgb.b);
 
-  let best = COLOR_PALETTE[0];
+  let best = { name: COLOR_PALETTE[0]?.name || '블랙', hex: COLOR_PALETTE[0]?.hex || '#1D1D1F' };
   let bestDist = Number.POSITIVE_INFINITY;
   for (const item of palette) {
-    const itemLab = item.lab || (() => {
-      const c = hexToRgb(item.hex);
-      return rgbToCieLab(c.r, c.g, c.b);
-    })();
+    const itemLab =
+      item.lab ||
+      (() => {
+        const c = hexToRgb(item.hex);
+        return rgbToCieLab(c.r, c.g, c.b);
+      })();
     const dist = deltaE76(targetLab, itemLab);
     if (dist < bestDist) {
       bestDist = dist;

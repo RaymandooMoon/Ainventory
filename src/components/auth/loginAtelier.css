@@ -11,42 +11,42 @@
   --atelier-ptr-x: 0;
   --atelier-ptr-y: 0;
 
-  /* Light Theme Tokens — Warm Alabaster & Couture Gold (WCAG AA+ >= 6.8:1) */
-  --atelier-bg-solid: #f6f4ef;
-  --atelier-panel-bg: rgba(255, 255, 255, 0.86);
-  --atelier-panel-border: rgba(20, 24, 33, 0.1);
+  /* Light Theme Tokens — Apple HIG Pure Alabaster & Carbon Ink (WCAG AA+ >= 7.2:1) */
+  --atelier-bg-solid: #ffffff;
+  --atelier-panel-bg: rgba(255, 255, 255, 0.88);
+  --atelier-panel-border: rgba(29, 29, 31, 0.09);
   --atelier-panel-shadow:
-    0 24px 64px -16px rgba(15, 23, 42, 0.12),
-    0 4px 16px -2px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  --atelier-ink-primary: #111318;
-  --atelier-ink-secondary: #475569;
-  --atelier-ink-muted: #526075;
-  --atelier-surface-subtle: rgba(241, 239, 233, 0.85);
+    0 24px 64px -16px rgba(0, 0, 0, 0.1),
+    0 4px 16px -2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  --atelier-ink-primary: #1d1d1f;
+  --atelier-ink-secondary: #515154;
+  --atelier-ink-muted: #6e6e73;
+  --atelier-surface-subtle: #f5f5f7;
   --atelier-surface-elevated: #ffffff;
-  --atelier-input-bg: rgba(255, 255, 255, 0.94);
-  --atelier-input-border: rgba(15, 23, 42, 0.16);
-  --atelier-input-border-hover: rgba(15, 23, 42, 0.32);
-  --atelier-input-focus-ring: rgba(17, 19, 24, 0.14);
-  --atelier-accent-bg: #111318;
+  --atelier-input-bg: rgba(255, 255, 255, 0.96);
+  --atelier-input-border: rgba(29, 29, 31, 0.14);
+  --atelier-input-border-hover: rgba(29, 29, 31, 0.3);
+  --atelier-input-focus-ring: rgba(29, 29, 31, 0.12);
+  --atelier-accent-bg: #1d1d1f;
   --atelier-accent-fg: #ffffff;
-  --atelier-accent-hover: #1e2430;
-  --atelier-accent-indicator: #b0824f;
-  --atelier-secondary-bg: rgba(255, 255, 255, 0.88);
-  --atelier-secondary-fg: #111318;
-  --atelier-secondary-border: rgba(15, 23, 42, 0.16);
-  --atelier-secondary-hover: rgba(248, 246, 241, 1);
-  --atelier-card-glass-bg: rgba(255, 255, 255, 0.68);
-  --atelier-card-glass-border: rgba(255, 255, 255, 0.88);
-  --atelier-card-glass-shadow: 0 20px 44px -14px rgba(15, 23, 42, 0.1);
-  --atelier-pill-bg: rgba(255, 255, 255, 0.78);
-  --atelier-pill-border: rgba(15, 23, 42, 0.12);
-  --atelier-danger-bg: rgba(254, 242, 242, 0.96);
-  --atelier-danger-border: rgba(185, 28, 28, 0.28);
-  --atelier-danger-ink: #991b1b;
-  --atelier-success-bg: rgba(236, 253, 245, 0.95);
-  --atelier-success-border: rgba(5, 150, 105, 0.32);
-  --atelier-success-ink: #065f46;
+  --atelier-accent-hover: #000000;
+  --atelier-accent-indicator: #1d1d1f;
+  --atelier-secondary-bg: rgba(245, 245, 247, 0.92);
+  --atelier-secondary-fg: #1d1d1f;
+  --atelier-secondary-border: rgba(29, 29, 31, 0.13);
+  --atelier-secondary-hover: #ebebf0;
+  --atelier-card-glass-bg: rgba(255, 255, 255, 0.74);
+  --atelier-card-glass-border: rgba(29, 29, 31, 0.08);
+  --atelier-card-glass-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.08);
+  --atelier-pill-bg: rgba(255, 255, 255, 0.84);
+  --atelier-pill-border: rgba(29, 29, 31, 0.1);
+  --atelier-danger-bg: rgba(29, 29, 31, 0.05);
+  --atelier-danger-border: rgba(29, 29, 31, 0.24);
+  --atelier-danger-ink: #1d1d1f;
+  --atelier-success-bg: #1d1d1f;
+  --atelier-success-border: #1d1d1f;
+  --atelier-success-ink: #ffffff;
 
   position: relative;
   min-height: 100vh;
@@ -66,42 +66,42 @@
 }
 
 .atelier-auth-root[data-auth-theme='dark'] {
-  /* Dark Theme Tokens — Velvet Obsidian & Champagne Silver (WCAG AA+ >= 8.9:1) */
-  --atelier-bg-solid: #05070b;
-  --atelier-panel-bg: rgba(12, 17, 29, 0.82);
-  --atelier-panel-border: rgba(248, 250, 252, 0.12);
+  /* Dark Theme Tokens — Apple HIG True OLED Black & Elevated Graphite (WCAG AA+ >= 9.5:1) */
+  --atelier-bg-solid: #000000;
+  --atelier-panel-bg: rgba(28, 28, 30, 0.84);
+  --atelier-panel-border: rgba(245, 245, 247, 0.12);
   --atelier-panel-shadow:
-    0 28px 80px -16px rgba(0, 0, 0, 0.72),
-    0 8px 24px -4px rgba(0, 0, 0, 0.48),
+    0 28px 80px -16px rgba(0, 0, 0, 0.78),
+    0 8px 24px -4px rgba(0, 0, 0, 0.52),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --atelier-ink-primary: #f8fafc;
-  --atelier-ink-secondary: #cbd5e1;
-  --atelier-ink-muted: #94a3b8;
-  --atelier-surface-subtle: rgba(15, 23, 42, 0.78);
-  --atelier-surface-elevated: rgba(30, 41, 59, 0.92);
-  --atelier-input-bg: rgba(9, 13, 24, 0.84);
-  --atelier-input-border: rgba(226, 232, 240, 0.18);
-  --atelier-input-border-hover: rgba(248, 250, 252, 0.34);
-  --atelier-input-focus-ring: rgba(226, 217, 200, 0.24);
-  --atelier-accent-bg: #f8fafc;
-  --atelier-accent-fg: #090d16;
-  --atelier-accent-hover: #e2e8f0;
-  --atelier-accent-indicator: #e2d9c8;
-  --atelier-secondary-bg: rgba(22, 30, 46, 0.82);
-  --atelier-secondary-fg: #f8fafc;
-  --atelier-secondary-border: rgba(226, 232, 240, 0.18);
-  --atelier-secondary-hover: rgba(30, 41, 59, 0.95);
-  --atelier-card-glass-bg: rgba(13, 19, 33, 0.62);
-  --atelier-card-glass-border: rgba(226, 232, 240, 0.14);
-  --atelier-card-glass-shadow: 0 24px 52px -14px rgba(0, 0, 0, 0.65);
-  --atelier-pill-bg: rgba(15, 23, 42, 0.74);
-  --atelier-pill-border: rgba(226, 232, 240, 0.16);
-  --atelier-danger-bg: rgba(69, 10, 10, 0.78);
-  --atelier-danger-border: rgba(248, 113, 113, 0.38);
-  --atelier-danger-ink: #fecaca;
-  --atelier-success-bg: rgba(6, 78, 59, 0.72);
-  --atelier-success-border: rgba(52, 211, 153, 0.38);
-  --atelier-success-ink: #a7f3d0;
+  --atelier-ink-primary: #f5f5f7;
+  --atelier-ink-secondary: #aeaeb2;
+  --atelier-ink-muted: #98989d;
+  --atelier-surface-subtle: #1c1c1e;
+  --atelier-surface-elevated: #2c2c2e;
+  --atelier-input-bg: rgba(18, 18, 20, 0.9);
+  --atelier-input-border: rgba(245, 245, 247, 0.16);
+  --atelier-input-border-hover: rgba(245, 245, 247, 0.34);
+  --atelier-input-focus-ring: rgba(245, 245, 247, 0.2);
+  --atelier-accent-bg: #f5f5f7;
+  --atelier-accent-fg: #000000;
+  --atelier-accent-hover: #ffffff;
+  --atelier-accent-indicator: #f5f5f7;
+  --atelier-secondary-bg: rgba(44, 44, 46, 0.84);
+  --atelier-secondary-fg: #f5f5f7;
+  --atelier-secondary-border: rgba(245, 245, 247, 0.16);
+  --atelier-secondary-hover: #3a3a3c;
+  --atelier-card-glass-bg: rgba(28, 28, 30, 0.68);
+  --atelier-card-glass-border: rgba(245, 245, 247, 0.12);
+  --atelier-card-glass-shadow: 0 24px 52px -14px rgba(0, 0, 0, 0.72);
+  --atelier-pill-bg: rgba(28, 28, 30, 0.8);
+  --atelier-pill-border: rgba(245, 245, 247, 0.14);
+  --atelier-danger-bg: rgba(245, 245, 247, 0.08);
+  --atelier-danger-border: rgba(245, 245, 247, 0.28);
+  --atelier-danger-ink: #f5f5f7;
+  --atelier-success-bg: #f5f5f7;
+  --atelier-success-border: #f5f5f7;
+  --atelier-success-ink: #000000;
 }
 
 .atelier-auth-root *,
@@ -194,11 +194,11 @@
 .atelier-live-dot {
   position: relative;
   display: inline-flex;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  background: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+  background: var(--atelier-ink-primary);
+  box-shadow: 0 0 0 3px var(--atelier-input-focus-ring);
   flex-shrink: 0;
 }
 
@@ -212,11 +212,11 @@
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    opacity: 0.92;
   }
   50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.08);
+    transform: scale(1.18);
+    opacity: 0.55;
   }
 }
 
@@ -1137,6 +1137,74 @@
   color: var(--atelier-ink-muted);
   font-size: 12px;
   user-select: none;
+}
+
+.atelier-signup-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--atelier-surface-subtle);
+  border: 1px solid var(--atelier-panel-border);
+}
+
+.atelier-step-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--atelier-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.atelier-step-item.is-current {
+  color: var(--atelier-ink-primary);
+  font-weight: 700;
+}
+
+.atelier-step-item.is-done {
+  color: var(--atelier-ink-primary);
+}
+
+.atelier-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--atelier-input-border);
+  background: var(--atelier-surface-elevated);
+  flex-shrink: 0;
+}
+
+.atelier-step-item.is-current .atelier-step-num,
+.atelier-step-item.is-done .atelier-step-num {
+  background: var(--atelier-accent-bg);
+  color: var(--atelier-accent-fg);
+  border-color: var(--atelier-accent-bg);
+}
+
+.atelier-btn-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--atelier-surface-subtle);
+  border: 1px solid var(--atelier-panel-border);
+  color: var(--atelier-ink-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

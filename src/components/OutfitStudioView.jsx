@@ -41,7 +41,6 @@ import {
   isWearableStudioGarment,
   mapGarmentToDefaultSubSlot,
   mapGarmentToFittingSlot,
-  renderOutfitFitting,
   resolveParentFittingTab,
 } from '../services/fittingRenderer.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
@@ -442,7 +441,6 @@ export default function OutfitStudioView({
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredGarment, setHoveredGarment] = useState(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
-  const [renderResult, setRenderResult] = useState(null);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
   const [vtonRefreshNonce, setVtonRefreshNonce] = useState(0);
 
@@ -792,18 +790,6 @@ export default function OutfitStudioView({
 
     return next;
   }, [rawSlots, hasExplicitSlotState, garments, isRainyWeatherActive, manualRainUmbrellaCleared]);
-
-  useEffect(() => {
-    let cancelled = false;
-    renderOutfitFitting({ slots, theme }).then((res) => {
-      if (!cancelled) {
-        setRenderResult(res);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [slots, theme]);
 
   const totalWearableCount = useMemo(
     () => garments.filter((g) => isWearableStudioGarment(g)).length,
@@ -1164,8 +1150,11 @@ export default function OutfitStudioView({
     try {
       await apiFetch(`/outfits/${outfitId}`, { method: 'DELETE' });
       await reloadOutfits();
-    } catch {
-      // ignore
+    } catch (err) {
+      showToast?.(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '코디 삭제에 실패했습니다.', 'Failed to delete outfit.')
+      );
     }
   };
 
@@ -1757,7 +1746,6 @@ export default function OutfitStudioView({
         <div className="studio-25d-stage-col">
           <Studio25DCanvas
             slots={slots}
-            renderResult={renderResult}
             theme={theme}
             lang={lang}
             user={user}

@@ -30,7 +30,11 @@ function ainventoryBackendPlugin(): Plugin {
 
   return {
     name: 'ainventory-backend',
-    configureServer: mountApi,
+    configureServer: async (server) => {
+      process.env.ALLOW_MOCK_APPLE_AUTH ??= 'true';
+      process.env.ALLOW_DEV_OTP_PREVIEW ??= 'true';
+      await mountApi(server);
+    },
     configurePreviewServer: mountApi,
   };
 }
@@ -80,6 +84,12 @@ export default defineConfig(({ mode }) => {
               normId.includes('node_modules/onnxruntime-web/')
             ) {
               return 'vendor-imgly';
+            }
+            if (normId.includes('node_modules/@mediapipe/')) {
+              return 'vendor-mediapipe';
+            }
+            if (normId.includes('node_modules/three/')) {
+              return 'vendor-three';
             }
             return undefined;
           },

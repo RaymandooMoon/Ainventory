@@ -230,7 +230,7 @@ function normalizeSynthesisMode(rawMode) {
 
 export function createVtonRouter() {
   const router = express.Router();
-  router.use(express.json({ limit: '30mb' }));
+  const vtonJsonParser = express.json({ limit: '15mb' });
 
   router.get('/status', requireVtonSessionOrSample, (req, res) => {
     const ipRate = checkIpRateLimit(`vton:status:${resolveClientIp(req)}`, MAX_STATUS_PER_WINDOW);
@@ -253,7 +253,7 @@ export function createVtonRouter() {
     return res.status(200).json(getVtonServiceStatus({ geminiApiKey: headerApiKey }));
   });
 
-  router.post('/synthesize', requireVtonSessionOrSample, async (req, res) => {
+  router.post('/synthesize', requireVtonSessionOrSample, vtonJsonParser, async (req, res) => {
     const ipRate = checkIpRateLimit(
       `vton:synth:${resolveClientIp(req)}`,
       MAX_SYNTHESES_PER_WINDOW
@@ -417,7 +417,7 @@ export function createVtonRouter() {
   router.use((err, _req, res, _next) => {
     if (err?.type === 'entity.too.large' || err?.status === 413) {
       return res.status(413).json({
-        error: '요청 데이터 크기가 허용 한도(30MB)를 초과했습니다.',
+        error: '요청 데이터 크기가 허용 한도(15MB)를 초과했습니다.',
       });
     }
     if (err instanceof SyntaxError && 'body' in err) {

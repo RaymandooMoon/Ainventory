@@ -1,8 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, Calendar, Layers, LayoutGrid } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
-import ItemDetailSheet from './components/ItemDetailSheet.jsx';
-import WardrobeView from './components/WardrobeView.jsx';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
 import { BottomTabBar } from './components/ui/BottomTabBar.tsx';
 import {
@@ -39,6 +37,8 @@ import {
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
+const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
+const ItemDetailSheet = lazy(() => import('./components/ItemDetailSheet.jsx'));
 const OutfitStudioView = lazy(() => import('./components/OutfitStudioView.jsx'));
 const CalendarView = lazy(() => import('./components/CalendarView.jsx'));
 const StatsView = lazy(() => import('./components/StatsView.jsx'));
@@ -497,6 +497,67 @@ export default function App() {
     }
   }, []);
 
+  const handleGarmentRegistered = useCallback((created) => {
+    if (created) {
+      garmentsMutationSeqRef.current += 1;
+      setGarments((prev) => [
+        created,
+        ...prev.filter((g) => Number(g.id) !== Number(created.id)),
+      ]);
+    } else {
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+
+  const handleGarmentUpdated = useCallback((updated) => {
+    if (!updated) return;
+    garmentsMutationSeqRef.current += 1;
+    setGarments((prev) =>
+      prev.map((g) => (Number(g.id) === Number(updated.id) ? { ...g, ...updated } : g))
+    );
+  }, []);
+
+  const handleGarmentDeleted = useCallback((deletedId) => {
+    garmentsMutationSeqRef.current += 1;
+    setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
+    setSelectedItemId(null);
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
+      window.history.pushState({}, '', '/');
+    }
+  }, []);
+
+  const handleClosetUpdated = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleConsumePreEquipped = useCallback(() => {
+    setPreEquippedGarment(null);
+  }, []);
+
+  const handleOpenSkinToneModal = useCallback(() => {
+    handleOpenProfileModal('skin');
+  }, [handleOpenProfileModal]);
+
+  const handleOpenBodyProfileModal = useCallback(() => {
+    handleOpenProfileModal('body');
+  }, [handleOpenProfileModal]);
+
+  const handleCloseProfileModal = useCallback(() => {
+    setProfileModalOpen(false);
+  }, []);
+
+  const handleCloseAccountSheet = useCallback(() => {
+    setAccountSheetOpen(false);
+  }, []);
+
+  const handleOpenSampleImport = useCallback(() => {
+    setSampleImportOpen(true);
+  }, []);
+
+  const handleCloseSampleImport = useCallback(() => {
+    setSampleImportOpen(false);
+  }, []);
+
   if (!authReady) {
     return <div className="hig-boot-screen" aria-busy="true" />;
   }
@@ -524,32 +585,22 @@ export default function App() {
       <StatusCapsule />
 
       <main className="hig-native-viewport">
-        {activeTab === 'closet' && (
-          <WardrobeView
-            activeCloset={activeCloset}
-            garments={garments}
-            loading={garmentsLoading}
-            lang={lang}
-            skinProfile={skinProfile}
-            onOpenProfile={handleOpenProfileModal}
-            onOpenAccount={handleOpenAccountSheet}
-            onSelectGarment={handleOpenGarmentDetail}
-            onGarmentRegistered={(created) => {
-              if (created) {
-                garmentsMutationSeqRef.current += 1;
-                setGarments((prev) => [
-                  created,
-                  ...prev.filter((g) => Number(g.id) !== Number(created.id)),
-                ]);
-              } else {
-                setRefreshKey((k) => k + 1);
-              }
-            }}
-            showToast={showToast}
-          />
-        )}
-
         <Suspense fallback={<div className="hig-screen-container" aria-busy="true" />}>
+          {activeTab === 'closet' && (
+            <WardrobeView
+              activeCloset={activeCloset}
+              garments={garments}
+              loading={garmentsLoading}
+              lang={lang}
+              skinProfile={skinProfile}
+              onOpenProfile={handleOpenProfileModal}
+              onOpenAccount={handleOpenAccountSheet}
+              onSelectGarment={handleOpenGarmentDetail}
+              onGarmentRegistered={handleGarmentRegistered}
+              showToast={showToast}
+            />
+          )}
+
           {activeTab === 'outfits' && (
             <OutfitStudioView
               key={studioSessionKey}
@@ -564,11 +615,11 @@ export default function App() {
               onToggleTheme={handleToggleTheme}
               onOpenProfile={handleOpenProfileModal}
               onOpenAccount={handleOpenAccountSheet}
-              onOpenSkinToneModal={() => handleOpenProfileModal('skin')}
-              onOpenBodyProfile={() => handleOpenProfileModal('body')}
+              onOpenSkinToneModal={handleOpenSkinToneModal}
+              onOpenBodyProfile={handleOpenBodyProfileModal}
               preEquippedGarment={preEquippedGarment}
-              onConsumePreEquipped={() => setPreEquippedGarment(null)}
-              onClosetUpdated={() => setRefreshKey((k) => k + 1)}
+              onConsumePreEquipped={handleConsumePreEquipped}
+              onClosetUpdated={handleClosetUpdated}
               showToast={showToast}
             />
           )}
@@ -582,7 +633,7 @@ export default function App() {
               onOpenProfile={handleOpenProfileModal}
               onOpenAccount={handleOpenAccountSheet}
               refreshKey={refreshKey}
-              onClosetUpdated={() => setRefreshKey((k) => k + 1)}
+              onClosetUpdated={handleClosetUpdated}
               showToast={showToast}
             />
           )}
@@ -595,7 +646,7 @@ export default function App() {
               skinProfile={skinProfile}
               bodySpec={bodySpec}
               onOpenProfile={handleOpenProfileModal}
-              onOpenSkinToneModal={() => handleOpenProfileModal('skin')}
+              onOpenSkinToneModal={handleOpenSkinToneModal}
               onToggleTheme={handleToggleTheme}
               onOpenAccount={handleOpenAccountSheet}
               onSelectGarment={handleOpenGarmentDetail}
@@ -614,29 +665,20 @@ export default function App() {
       />
 
       {/* Item Detail Route Sheet (`/item/:id`) */}
-      <ItemDetailSheet
-        garment={selectedGarment}
-        open={Boolean(selectedGarment)}
-        lang={lang}
-        onClose={handleCloseGarmentDetail}
-        onUpdated={(updated) => {
-          if (!updated) return;
-          garmentsMutationSeqRef.current += 1;
-          setGarments((prev) =>
-            prev.map((g) => (Number(g.id) === Number(updated.id) ? { ...g, ...updated } : g))
-          );
-        }}
-        onDeleted={(deletedId) => {
-          garmentsMutationSeqRef.current += 1;
-          setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
-          setSelectedItemId(null);
-          if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
-            window.history.pushState({}, '', '/');
-          }
-        }}
-        onTryInOutfits={handleTryInOutfits}
-        showToast={showToast}
-      />
+      {selectedGarment && (
+        <Suspense fallback={null}>
+          <ItemDetailSheet
+            garment={selectedGarment}
+            open={Boolean(selectedGarment)}
+            lang={lang}
+            onClose={handleCloseGarmentDetail}
+            onUpdated={handleGarmentUpdated}
+            onDeleted={handleGarmentDeleted}
+            onTryInOutfits={handleTryInOutfits}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Unified Portrait Skin-Tone Analyzer & Body Profile Modal */}
       {profileModalOpen && (
@@ -645,7 +687,7 @@ export default function App() {
             open={profileModalOpen}
             initialTab={profileModalTab}
             lang={lang}
-            onClose={() => setProfileModalOpen(false)}
+            onClose={handleCloseProfileModal}
             user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
@@ -660,14 +702,14 @@ export default function App() {
         <Suspense fallback={null}>
           <AccountSettingsSheet
             open={accountSheetOpen}
-            onClose={() => setAccountSheetOpen(false)}
+            onClose={handleCloseAccountSheet}
             user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
             lang={lang}
             onChangeLang={handleChangeLang}
             onOpenProfile={handleOpenProfileModal}
-            onOpenSampleImport={() => setSampleImportOpen(true)}
+            onOpenSampleImport={handleOpenSampleImport}
             onLogout={handleLogout}
             onAccountDeleted={handleAccountDeleted}
           />
@@ -677,9 +719,9 @@ export default function App() {
       <SampleImportSheet
         open={sampleImportOpen}
         lang={lang}
-        onClose={() => setSampleImportOpen(false)}
+        onClose={handleCloseSampleImport}
         targetOwner={activeCloset}
-        onImported={() => setRefreshKey((k) => k + 1)}
+        onImported={handleClosetUpdated}
       />
     </div>
   );

@@ -461,12 +461,17 @@ export default function LoginView({
             aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
           >
             {/* 2-Way Segmented Control: Sign In | Sign Up */}
-            <div className="atelier-segmented" role="tablist">
+            <div
+              className="atelier-segmented"
+              role="tablist"
+              aria-label={isEn ? 'Authentication mode' : '인증 방식 선택'}
+            >
               <button
                 id={CARBON_DOM_CONTRACT.authTabLoginId}
                 type="button"
                 role="tab"
                 aria-selected={authMode === 'login'}
+                aria-controls="auth-panel-login"
                 className={`atelier-seg-tab ${authMode === 'login' ? 'is-active' : ''}`}
                 onClick={() => {
                   setAuthMode('login');
@@ -482,6 +487,7 @@ export default function LoginView({
                 type="button"
                 role="tab"
                 aria-selected={authMode === 'register'}
+                aria-controls="auth-panel-register"
                 className={`atelier-seg-tab ${authMode === 'register' ? 'is-active' : ''}`}
                 onClick={() => {
                   setAuthMode('register');
@@ -529,7 +535,14 @@ export default function LoginView({
 
             {/* Mode 1: Minimal Sign-In Form */}
             {authMode === 'login' && (
-              <form onSubmit={handleLoginSubmit} noValidate className="atelier-form">
+              <form
+                id="auth-panel-login"
+                role="tabpanel"
+                aria-labelledby={CARBON_DOM_CONTRACT.authTabLoginId}
+                onSubmit={handleLoginSubmit}
+                noValidate
+                className="atelier-form"
+              >
                 <AuthFieldInput
                   ref={usernameRef}
                   id="login-username"
@@ -620,7 +633,52 @@ export default function LoginView({
 
             {/* Mode 2: Progressive Sign-Up Form with Anthropometric Avatar Setup */}
             {authMode === 'register' && (
-              <form onSubmit={handleCompleteRegister} noValidate className="atelier-form">
+              <form
+                id="auth-panel-register"
+                role="tabpanel"
+                aria-labelledby={CARBON_DOM_CONTRACT.authTabRegisterId}
+                onSubmit={handleCompleteRegister}
+                noValidate
+                className="atelier-form"
+              >
+                <ol
+                  className="atelier-signup-stepper"
+                  aria-label={isEn ? 'Sign-up progress' : '회원가입 단계'}
+                >
+                  <li
+                    className={`atelier-signup-step ${
+                      otpVerified ? 'is-done' : 'is-current'
+                    }`}
+                  >
+                    <span className="atelier-signup-step-num">01</span>
+                    <span>{isEn ? 'Verify Email' : '이메일 인증'}</span>
+                  </li>
+                  <li
+                    className={`atelier-signup-step ${
+                      otpVerified && Boolean(regDisplayName.trim() || regHeightCm)
+                        ? 'is-done'
+                        : otpVerified
+                          ? 'is-current'
+                          : ''
+                    }`}
+                  >
+                    <span className="atelier-signup-step-num">02</span>
+                    <span>{isEn ? 'Fit Profile' : '피팅 프로필'}</span>
+                  </li>
+                  <li
+                    className={`atelier-signup-step ${
+                      regPassword.length >= 4
+                        ? 'is-done'
+                        : otpVerified
+                          ? 'is-current'
+                          : ''
+                    }`}
+                  >
+                    <span className="atelier-signup-step-num">03</span>
+                    <span>{isEn ? 'Password' : '비밀번호'}</span>
+                  </li>
+                </ol>
+
                 <div className="atelier-inline-row">
                   <AuthFieldInput
                     ref={regEmailRef}
@@ -864,6 +922,9 @@ export default function LoginView({
                 <span>
                   {isEn ? 'Sample Closet Demo Mode' : '샘플 옷장 체험 모드'}
                 </span>
+                <span className="atelier-btn-meta-badge" aria-hidden="true">
+                  AI Studio · 120+
+                </span>
               </button>
 
               {(isDev || hasAppleClientId) && (
@@ -876,8 +937,19 @@ export default function LoginView({
                   aria-busy={loadingAction === 'apple'}
                   onClick={handleAppleSignIn}
                 >
-                  {loadingAction === 'apple' && (
+                  {loadingAction === 'apple' ? (
                     <Loader2 size={16} className="atelier-spin" />
+                  ) : (
+                    <svg
+                      width="15"
+                      height="18"
+                      viewBox="0 0 170 202"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      style={{ flexShrink: 0, marginTop: -2 }}
+                    >
+                      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.92.22-9.84-1.95-14.75-6.52-3.13-2.73-7.04-7.41-11.73-14.04-5.03-7.08-9.17-15.29-12.41-24.65-3.47-10.11-5.2-19.9-5.2-29.38 0-10.86 2.71-20.22 8.13-28.07 4.25-6.27 9.91-11.22 16.99-14.84 7.08-3.62 14.72-5.49 22.92-5.61 4.48 0 10.35 1.39 17.61 4.14 7.26 2.75 11.94 4.17 14.04 4.26 1.56 0 6.84-1.64 15.83-4.91 8.49-3.04 15.65-4.3 21.48-3.8 15.87 1.28 27.79 7.55 35.75 18.8-14.2 8.6-21.22 20.62-21.05 36.06.17 12.02 4.49 22.02 12.96 29.99 3.86 3.67 8.47 6.5 13.84 8.5-1.11 3.24-2.29 6.32-3.54 9.24zM119.22 31.01c0 9.42-3.44 18.21-10.31 26.36-8.28 9.69-18.31 15.27-29.21 14.37-.14-1.13-.22-2.32-.22-3.58 0-9.04 3.93-18.71 10.92-26.64 3.49-4.01 7.93-7.34 13.32-10 5.38-2.62 10.48-4.07 15.29-4.35.14 1.3.21 2.58.21 3.84z" />
+                    </svg>
                   )}
                   <span>
                     {loadingAction === 'apple'

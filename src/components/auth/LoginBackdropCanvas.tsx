@@ -54,12 +54,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 68,
     twistPhase: 0.9,
     parallaxDepth: 0.95,
-    darkPrimary: { r: 226, g: 217, b: 200 }, // Champagne Silver
-    darkSecondary: { r: 99, g: 102, b: 241 }, // Royal Indigo
-    lightPrimary: { r: 198, g: 156, b: 109 }, // Couture Warm Gold
-    lightSecondary: { r: 148, g: 163, b: 184 }, // Pearl Shadow
-    alphaDark: 0.16,
-    alphaLight: 0.18,
+    darkPrimary: { r: 245, g: 245, b: 247 }, // Apple Alabaster Silk
+    darkSecondary: { r: 142, g: 142, b: 147 }, // Brushed Titanium
+    lightPrimary: { r: 29, g: 29, b: 31 }, // Carbon Ink
+    lightSecondary: { r: 142, g: 142, b: 147 }, // Neutral Pewter
+    alphaDark: 0.14,
+    alphaLight: 0.08,
   },
   {
     yRatio: 0.38,
@@ -72,12 +72,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 84,
     twistPhase: 1.6,
     parallaxDepth: 0.72,
-    darkPrimary: { r: 99, g: 102, b: 241 }, // Royal Indigo
-    darkSecondary: { r: 56, g: 189, b: 248 }, // Sapphire Glow
-    lightPrimary: { r: 51, g: 65, b: 85 }, // Slate Ink
-    lightSecondary: { r: 198, g: 156, b: 109 }, // Warm Gold
-    alphaDark: 0.14,
-    alphaLight: 0.11,
+    darkPrimary: { r: 174, g: 174, b: 178 }, // Silver Mist
+    darkSecondary: { r: 99, g: 99, b: 102 }, // Architectural Graphite
+    lightPrimary: { r: 58, g: 58, b: 60 }, // Charcoal Weave
+    lightSecondary: { r: 174, g: 174, b: 178 }, // Platinum Shadow
+    alphaDark: 0.12,
+    alphaLight: 0.07,
   },
   {
     yRatio: 0.52,
@@ -90,12 +90,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 56,
     twistPhase: 2.3,
     parallaxDepth: 1.15,
-    darkPrimary: { r: 56, g: 189, b: 248 }, // Sapphire Glow
-    darkSecondary: { r: 226, g: 217, b: 200 }, // Champagne Silver
-    lightPrimary: { r: 180, g: 142, b: 98 }, // Cashmere Gold
-    lightSecondary: { r: 100, g: 116, b: 139 }, // Cool Slate
-    alphaDark: 0.13,
-    alphaLight: 0.15,
+    darkPrimary: { r: 229, g: 229, b: 234 }, // Satin White
+    darkSecondary: { r: 110, g: 110, b: 115 }, // Neutral Slate
+    lightPrimary: { r: 110, g: 110, b: 115 }, // Neutral Slate
+    lightSecondary: { r: 209, g: 209, b: 214 }, // Silver Hairline
+    alphaDark: 0.12,
+    alphaLight: 0.09,
   },
   {
     yRatio: 0.66,
@@ -108,12 +108,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 76,
     twistPhase: 3.1,
     parallaxDepth: 0.84,
-    darkPrimary: { r: 139, g: 92, b: 246 }, // Violet Silk
-    darkSecondary: { r: 56, g: 189, b: 248 }, // Sapphire Glow
-    lightPrimary: { r: 148, g: 163, b: 184 }, // Pearl Shadow
-    lightSecondary: { r: 51, g: 65, b: 85 }, // Slate Ink
-    alphaDark: 0.12,
-    alphaLight: 0.12,
+    darkPrimary: { r: 142, g: 142, b: 147 }, // Brushed Titanium
+    darkSecondary: { r: 72, g: 72, b: 74 }, // Deep Carbon
+    lightPrimary: { r: 142, g: 142, b: 147 }, // Brushed Titanium
+    lightSecondary: { r: 44, g: 44, b: 46 }, // Graphite Ink
+    alphaDark: 0.11,
+    alphaLight: 0.07,
   },
   {
     yRatio: 0.79,
@@ -126,12 +126,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 62,
     twistPhase: 0.5,
     parallaxDepth: 0.64,
-    darkPrimary: { r: 226, g: 217, b: 200 }, // Champagne Silver
-    darkSecondary: { r: 99, g: 102, b: 241 }, // Royal Indigo
-    lightPrimary: { r: 198, g: 156, b: 109 }, // Warm Gold
-    lightSecondary: { r: 148, g: 163, b: 184 }, // Pearl Shadow
-    alphaDark: 0.13,
-    alphaLight: 0.16,
+    darkPrimary: { r: 245, g: 245, b: 247 }, // Apple Alabaster Silk
+    darkSecondary: { r: 110, g: 110, b: 115 }, // Neutral Slate
+    lightPrimary: { r: 72, g: 72, b: 74 }, // Deep Carbon
+    lightSecondary: { r: 174, g: 174, b: 178 }, // Silver Mist
+    alphaDark: 0.12,
+    alphaLight: 0.08,
   },
   {
     yRatio: 0.46,
@@ -144,14 +144,32 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 40,
     twistPhase: 1.9,
     parallaxDepth: 1.25,
-    darkPrimary: { r: 241, g: 245, b: 249 }, // Luminous Silk Thread
-    darkSecondary: { r: 226, g: 217, b: 200 }, // Champagne Silver
-    lightPrimary: { r: 166, g: 128, b: 86 }, // Brushed Bronze
-    lightSecondary: { r: 71, g: 85, b: 105 }, // Deep Slate
+    darkPrimary: { r: 255, g: 255, b: 255 }, // Pure Specular Filament
+    darkSecondary: { r: 199, g: 199, b: 204 }, // Platinum Thread
+    lightPrimary: { r: 29, g: 29, b: 31 }, // Carbon Filament
+    lightSecondary: { r: 110, g: 110, b: 115 }, // Neutral Slate
     alphaDark: 0.11,
-    alphaLight: 0.12,
+    alphaLight: 0.07,
   },
 ];
+
+function createBokehSprite(rgb: RgbTuple): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const size = 32;
+  const off = document.createElement('canvas');
+  off.width = size;
+  off.height = size;
+  const octx = off.getContext('2d');
+  if (!octx) return null;
+  const half = size * 0.5;
+  const grad = octx.createRadialGradient(half, half, 0, half, half, half);
+  grad.addColorStop(0, rgbaStr(rgb, 1));
+  grad.addColorStop(0.45, rgbaStr(rgb, 0.35));
+  grad.addColorStop(1, rgbaStr(rgb, 0));
+  octx.fillStyle = grad;
+  octx.fillRect(0, 0, size, size);
+  return off;
+}
 
 function createInitialMotes(count: number): BokehMote[] {
   const motes: BokehMote[] = [];
@@ -191,10 +209,10 @@ function rgbaStr(c: RgbTuple, alpha: number): string {
 }
 
 /**
- * Kinetic AI Wardrobe Atelier Fullscreen Backdrop
- * - Layer A: Pure TypeScript HTML5 Canvas 2D Silk/Cashmere Aurora Ribbons + Spatial Bokeh
+ * Kinetic AI Wardrobe Atelier Fullscreen Backdrop (Apple HIG Monochrome Edition)
+ * - Layer A: Pure TypeScript HTML5 Canvas 2D Platinum/Graphite Silk Ribbons + Pre-baked Bokeh Sprites
  * - Layer B: Adaptive 3D Parallax Frosted-Glass Couture Curation Cards (Desktop Safe Flanks)
- * - Zero <video>, zero external libs, zero hairline borders, SVG feTurbulence anti-banding dither
+ * - Zero <video>, zero external libs, visibility-aware RAF suspension, anti-banding dither
  */
 const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   effectiveTheme = 'light',
@@ -235,6 +253,10 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     syncSize();
+
+    // Pre-rendered offscreen bokeh sprites (eliminates 30 RadialGradient allocations per frame)
+    const lightBokehSprite = createBokehSprite({ r: 110, g: 110, b: 115 });
+    const darkBokehSprite = createBokehSprite({ r: 245, g: 245, b: 247 });
 
     // Spring-damped pointer state (-1..1 range)
     let pointerActive = false;
@@ -287,10 +309,10 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       stage.style.setProperty('--atelier-ptr-x', currentPtrX.toFixed(4));
       stage.style.setProperty('--atelier-ptr-y', currentPtrY.toFixed(4));
 
-      // 1. Seamless Full-Bleed Velvet Black / Warm Alabaster Base Gradient
-      const topBg = mixRgb({ r: 248, g: 247, b: 244 }, { r: 5, g: 7, b: 11 }, currentDarkMix);
-      const midBg = mixRgb({ r: 244, g: 241, b: 235 }, { r: 8, g: 12, b: 22 }, currentDarkMix);
-      const botBg = mixRgb({ r: 239, g: 236, b: 230 }, { r: 11, g: 17, b: 32 }, currentDarkMix);
+      // 1. Seamless Full-Bleed OLED Black (#000000) / Pure Alabaster (#FFFFFF -> #F5F5F7) Base Gradient
+      const topBg = mixRgb({ r: 255, g: 255, b: 255 }, { r: 0, g: 0, b: 0 }, currentDarkMix);
+      const midBg = mixRgb({ r: 247, g: 247, b: 249 }, { r: 12, g: 12, b: 14 }, currentDarkMix);
+      const botBg = mixRgb({ r: 242, g: 242, b: 246 }, { r: 24, g: 24, b: 27 }, currentDarkMix);
 
       const bgGrad = ctx.createLinearGradient(0, 0, width * 0.35, height);
       bgGrad.addColorStop(0, rgbaStr(topBg, 1));
@@ -299,13 +321,13 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Soft Ambient Couture Aura Glows (responds gently to spring pointer)
+      // 2. Soft Architectural Monochrome Key/Rim Light Auras (responds gently to spring pointer)
       const aura1CenterX = width * (0.28 + currentPtrX * 0.06);
       const aura1CenterY = height * (0.26 + currentPtrY * 0.06);
       const aura1Radius = Math.max(width, height) * 0.58;
       const aura1Color = mixRgb(
-        { r: 198, g: 156, b: 109 },
-        { r: 67, g: 76, b: 178 },
+        { r: 209, g: 209, b: 214 },
+        { r: 142, g: 142, b: 147 },
         currentDarkMix
       );
       const aura1 = ctx.createRadialGradient(
@@ -316,8 +338,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         aura1CenterY,
         aura1Radius
       );
-      aura1.addColorStop(0, rgbaStr(aura1Color, 0.11 + currentDarkMix * 0.04));
-      aura1.addColorStop(0.6, rgbaStr(aura1Color, 0.03));
+      aura1.addColorStop(0, rgbaStr(aura1Color, 0.14 + currentDarkMix * 0.02));
+      aura1.addColorStop(0.6, rgbaStr(aura1Color, 0.035));
       aura1.addColorStop(1, rgbaStr(aura1Color, 0));
       ctx.fillStyle = aura1;
       ctx.fillRect(0, 0, width, height);
@@ -326,8 +348,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       const aura2CenterY = height * (0.72 - currentPtrY * 0.05);
       const aura2Radius = Math.max(width, height) * 0.54;
       const aura2Color = mixRgb(
-        { r: 148, g: 163, b: 184 },
-        { r: 42, g: 120, b: 178 },
+        { r: 174, g: 174, b: 178 },
+        { r: 99, g: 99, b: 102 },
         currentDarkMix
       );
       const aura2 = ctx.createRadialGradient(
@@ -344,7 +366,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       ctx.fillStyle = aura2;
       ctx.fillRect(0, 0, width, height);
 
-      // 3. Layer A — Flowing Couture Silk/Cashmere Ribbons (Harmonic Bezier Envelopes)
+      // 3. Layer A — Flowing Monochrome Silk/Cashmere Ribbons (Harmonic Bezier Envelopes)
       const segments = 24;
       const bleedX = 80;
       const spanW = width + bleedX * 2;
@@ -448,31 +470,32 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         ctx.stroke();
       }
 
-      // 4. Spatial Bokeh Dust Motes
-      for (let i = 0; i < motes.length; i += 1) {
-        const m = motes[i];
-        if (!prefersReducedMotion) {
-          m.xNorm = (m.xNorm + m.vx * dtSec + 1) % 1;
-          m.yNorm = (m.yNorm + m.vy * dtSec + 1) % 1;
+      // 4. Spatial Bokeh Dust Motes (drawn from pre-baked offscreen sprite — zero per-frame gradient GC)
+      const activeSprite = currentDarkMix > 0.5 ? darkBokehSprite : lightBokehSprite;
+      if (activeSprite) {
+        const prevAlpha = ctx.globalAlpha;
+        for (let i = 0; i < motes.length; i += 1) {
+          const m = motes[i];
+          if (!prefersReducedMotion) {
+            m.xNorm = (m.xNorm + m.vx * dtSec + 1) % 1;
+            m.yNorm = (m.yNorm + m.vy * dtSec + 1) % 1;
+          }
+          const mx = m.xNorm * width + currentPtrX * 18 * m.depth;
+          const my = m.yNorm * height + currentPtrY * 14 * m.depth;
+          const shimmer = 0.55 + 0.45 * Math.sin(timeSec * 1.4 + m.phase);
+          const alpha = (0.1 + currentDarkMix * 0.14) * shimmer;
+          const drawRadius = m.radius * (1 + m.depth * 0.5) * 3.2;
+
+          ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+          ctx.drawImage(
+            activeSprite,
+            mx - drawRadius,
+            my - drawRadius,
+            drawRadius * 2,
+            drawRadius * 2
+          );
         }
-        const mx = m.xNorm * width + currentPtrX * 18 * m.depth;
-        const my = m.yNorm * height + currentPtrY * 14 * m.depth;
-        const shimmer = 0.55 + 0.45 * Math.sin(timeSec * 1.4 + m.phase);
-        const moteRgb = m.warmTint
-          ? mixRgb({ r: 186, g: 146, b: 98 }, { r: 226, g: 217, b: 200 }, currentDarkMix)
-          : mixRgb({ r: 100, g: 116, b: 139 }, { r: 125, g: 211, b: 252 }, currentDarkMix);
-        const alpha = (0.12 + currentDarkMix * 0.14) * shimmer;
-
-        const r = m.radius * (1 + m.depth * 0.5);
-        const moteGrad = ctx.createRadialGradient(mx, my, 0, mx, my, r * 3.2);
-        moteGrad.addColorStop(0, rgbaStr(moteRgb, alpha));
-        moteGrad.addColorStop(0.45, rgbaStr(moteRgb, alpha * 0.35));
-        moteGrad.addColorStop(1, rgbaStr(moteRgb, 0));
-
-        ctx.fillStyle = moteGrad;
-        ctx.beginPath();
-        ctx.arc(mx, my, r * 3.2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.globalAlpha = prevAlpha;
       }
 
       ctx.restore();
@@ -484,8 +507,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
 
     const tick = (nowTs: number) => {
       if (document.visibilityState === 'hidden') {
-        prevTs = nowTs;
-        rafId = window.requestAnimationFrame(tick);
+        rafId = 0;
         return;
       }
       const dtSec = Math.min(0.05, Math.max(0.001, (nowTs - prevTs) / 1000));
@@ -499,9 +521,22 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     };
 
     const startLoopIfNeeded = () => {
-      if (rafId === 0) {
+      if (rafId === 0 && document.visibilityState !== 'hidden') {
         prevTs = performance.now();
         rafId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+      } else if (!prefersReducedMotion) {
+        startLoopIfNeeded();
+      } else {
+        drawFrame(2.4, 0);
       }
     };
 
@@ -525,6 +560,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('visibilitychange', onVisibilityChange);
     reducedMotionQuery?.addEventListener?.('change', onMotionPrefChange);
 
     if (prefersReducedMotion) {
@@ -537,9 +573,18 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       if (rafId !== 0) {
         window.cancelAnimationFrame(rafId);
       }
+      if (lightBokehSprite) {
+        lightBokehSprite.width = 0;
+        lightBokehSprite.height = 0;
+      }
+      if (darkBokehSprite) {
+        darkBokehSprite.width = 0;
+        darkBokehSprite.height = 0;
+      }
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       reducedMotionQuery?.removeEventListener?.('change', onMotionPrefChange);
     };
   }, []);
@@ -615,23 +660,23 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
           </div>
         </article>
 
-        {/* Card 2 (Bottom-Left): Personal Color Harmony */}
+        {/* Card 2 (Bottom-Left): Tonal Value Balance */}
         <article className="atelier-curation-card atelier-curation-card--bl">
           <div className="atelier-card-head">
             <span className="atelier-card-badge">98% HARMONY</span>
           </div>
           <div className="atelier-card-art">
             <div className="atelier-swatch-cluster">
-              <span className="atelier-swatch-orb" style={{ background: '#E5D5C3' }} />
-              <span className="atelier-swatch-orb" style={{ background: '#C69C6D' }} />
-              <span className="atelier-swatch-orb" style={{ background: '#64748B' }} />
-              <span className="atelier-swatch-orb" style={{ background: '#1E293B' }} />
+              <span className="atelier-swatch-orb" style={{ background: '#F5F5F7' }} />
+              <span className="atelier-swatch-orb" style={{ background: '#D1D1D6' }} />
+              <span className="atelier-swatch-orb" style={{ background: '#6E6E73' }} />
+              <span className="atelier-swatch-orb" style={{ background: '#1D1D1F' }} />
             </div>
           </div>
           <div>
-            <p className="atelier-card-title">{isEn ? 'Color Harmony' : '퍼스널 컬러 조화'}</p>
+            <p className="atelier-card-title">{isEn ? 'Tonal Harmony' : '명도·퍼스널 조화'}</p>
             <p className="atelier-card-meta">
-              {isEn ? 'Skin-tone L*a*b* balance' : '피부톤 L*a*b* 팔레트 매칭'}
+              {isEn ? 'Skin-tone L*a*b* balance' : '피부톤 L*a*b* 밸런스 매칭'}
             </p>
           </div>
         </article>

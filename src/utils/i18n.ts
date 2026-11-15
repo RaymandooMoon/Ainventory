@@ -1,13 +1,40 @@
-import { ACCESSORY_JEWELRY_CATALOG } from '../shared/accessoryJewelryCatalog.js';
-import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
-
 export type LangCode = 'ko' | 'en';
 
 const LANG_STORAGE_KEY = 'ainventory_lang';
 const HANGUL_REGEX = /[\uAC00-\uD7A3\u3131-\u318E]/;
 
+const CATALOG_GARMENT_KO_TO_EN: Record<string, string> = {};
+let catalogLoadPromise: Promise<void> | null = null;
+
+export function preloadCatalogTranslations(): Promise<void> {
+  if (catalogLoadPromise) return catalogLoadPromise;
+  catalogLoadPromise = Promise.all([
+    import('../shared/seasonal120Catalog.js'),
+    import('../shared/accessoryJewelryCatalog.js'),
+  ])
+    .then(([seasonalMod, accessoryMod]) => {
+      for (const item of seasonalMod.SEASONAL_120_CATALOG || []) {
+        if (item.name && item.name_en) {
+          CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+        }
+      }
+      for (const item of accessoryMod.ACCESSORY_JEWELRY_CATALOG || []) {
+        if (item.name && item.name_en) {
+          CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+        }
+      }
+    })
+    .catch(() => {
+      catalogLoadPromise = null;
+    });
+  return catalogLoadPromise;
+}
+
 export function syncDocumentLang(lang: string): LangCode {
   const next: LangCode = lang === 'en' ? 'en' : 'ko';
+  if (next === 'en') {
+    void preloadCatalogTranslations();
+  }
   if (typeof document !== 'undefined') {
     document.documentElement.lang = next;
   }
@@ -215,22 +242,9 @@ const COLOR_KO_TO_EN: Readonly<Record<string, string>> = {
   샴페인: 'Champagne',
 };
 
-const COLOR_PREFIXES_SORTED = Object.keys(COLOR_KO_TO_EN).sort((a, b) => b.length - a.length);
-
-const CATALOG_GARMENT_KO_TO_EN: Record<string, string> = {};
-for (const item of SEASONAL_120_CATALOG) {
-  if (item.name && item.name_en) {
-    CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
-  }
-}
-for (const item of ACCESSORY_JEWELRY_CATALOG) {
-  if (item.name && item.name_en) {
-    CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
-  }
-}
+const COLOR_PREFIXES_SORTED = [...Object.keys(COLOR_KO_TO_EN)].sort((a, b) => b.length - a.length);
 
 const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
-  ...CATALOG_GARMENT_KO_TO_EN,
   // Sample closet & Sample capsule catalog (`server/db.js`, `server/api.js`, `standaloneFallback.ts`)
   '발수 코튼 개버딘 트렌치코트': 'Water-Repellent Cotton Gabardine Trench Coat',
   '발수 코튼 싱글 맥 트렌치코트': 'Water-Repellent Cotton Single Mac Trench Coat',
@@ -800,9 +814,16 @@ export function localizeGarmentName(
   const raw = String(name ?? '').trim();
   if (!raw || lang !== 'en' || !HANGUL_REGEX.test(raw)) return raw;
 
+  if (!catalogLoadPromise) {
+    void preloadCatalogTranslations();
+  }
+
   // 1. Exact seed/catalog match
   if (Object.hasOwn(EXACT_GARMENT_KO_TO_EN, raw)) {
     return EXACT_GARMENT_KO_TO_EN[raw];
+  }
+  if (Object.hasOwn(CATALOG_GARMENT_KO_TO_EN, raw)) {
+    return CATALOG_GARMENT_KO_TO_EN[raw];
   }
 
   // 2. Statistical wardrobe generator pattern: `${swatch.name} ${tpl.nameKo}`
@@ -810,13 +831,14 @@ export function localizeGarmentName(
     if (raw.startsWith(`${colorKo} `)) {
       const rest = raw.slice(colorKo.length + 1).trim();
       const colorEn = COLOR_KO_TO_EN[colorKo];
-      if (Object.hasOwn(EXACT_GARMENT_KO_TO_EN, rest)) {
-        const restEn = EXACT_GARMENT_KO_TO_EN[rest];
-        // Avoid duplicate leading color word if template already starts with it
-        if (restEn.toLowerCase().startsWith(colorEn.toLowerCase())) {
-          return restEn;
+      const exactRestEn =
+        (Object.hasOwn(EXACT_GARMENT_KO_TO_EN, rest) && EXACT_GARMENT_KO_TO_EN[rest]) ||
+        (Object.hasOwn(CATALOG_GARMENT_KO_TO_EN, rest) && CATALOG_GARMENT_KO_TO_EN[rest]);
+      if (exactRestEn) {
+        if (exactRestEn.toLowerCase().startsWith(colorEn.toLowerCase())) {
+          return exactRestEn;
         }
-        return `${colorEn} ${restEn}`;
+        return `${colorEn} ${exactRestEn}`;
       }
       return `${colorEn} ${replaceKoreanPhrasesAndRomanize(rest)}`.replace(/\s+/g, ' ').trim();
     }

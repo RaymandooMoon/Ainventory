@@ -33,7 +33,10 @@ const CORNER_ALPHA_OPAQUE_THRESHOLD = 15;
 const SCANLINE_BORDER_STRIP_PX = 6;
 const SOBEL_EDGE_BARRIER_THRESHOLD = 19;
 
-let imglyCircuitBroken = false;
+const IMGLY_MAX_CONSECUTIVE_FAILURES = 3;
+const IMGLY_CIRCUIT_COOLDOWN_MS = 60_000;
+let imglyFailureCount = 0;
+let imglyCircuitOpenUntil = 0;
 
 function clampByte(value: number): number {
   return value < 0 ? 0 : value > 255 ? 255 : Math.round(value);
@@ -1123,7 +1126,7 @@ async function tryImglySemanticCutout(
   canvas: HTMLCanvasElement,
   timeoutMs = DEFAULT_AI_TIMEOUT_MS
 ): Promise<Blob | null> {
-  if (imglyCircuitBroken) return null;
+  if (Date.now() < imglyCircuitOpenUntil) return null;
   if (typeof navigator !== 'undefined' && navigator.webdriver) return null;
   // Skip ONNX model download on tiny synthetic test fixtures (<160px)
   if (canvas.width < 160 || canvas.height < 160) return null;
@@ -1165,13 +1168,19 @@ async function tryImglySemanticCutout(
 
     const outBlob = await Promise.race([removalTask, timeoutTask]);
     if (outBlob && outBlob.size > 0) {
+      imglyFailureCount = 0;
+      imglyCircuitOpenUntil = 0;
       return outBlob;
     }
     return null;
   } catch {
-    // Memoize unavailability so GitHub Pages subpath (/Ainventory/), offline, or WASM-constrained
-    // environments fall back instantaneously to the V4 Pure-JS Hole-Aware Matting Engine.
-    imglyCircuitBroken = true;
+    // Open cooldown circuit after repeated failures so subpath/offline/WASM-constrained
+    // environments fall back instantaneously to the V4 Pure-JS Hole-Aware Matting Engine,
+    // while still recovering automatically after IMGLY_CIRCUIT_COOLDOWN_MS.
+    imglyFailureCount += 1;
+    if (imglyFailureCount >= IMGLY_MAX_CONSECUTIVE_FAILURES) {
+      imglyCircuitOpenUntil = Date.now() + IMGLY_CIRCUIT_COOLDOWN_MS;
+    }
     return null;
   } finally {
     if (timerId) clearTimeout(timerId);

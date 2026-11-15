@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 /**
@@ -23,24 +23,53 @@ const GarmentObject25D = memo(function GarmentObject25D({
   style = {},
 }) {
   const stageRef = useRef(null);
+  const rafRef = useRef(0);
+  const pendingCoordsRef = useRef(null);
   const [tilt, setTilt] = useState({ nx: 0, ny: 0, active: false });
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+  }, []);
+
+  const flushTiltCoords = useCallback(() => {
+    rafRef.current = 0;
+    const coords = pendingCoordsRef.current;
+    const el = stageRef.current;
+    if (!coords || !el) return;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const rawX = ((coords.x - rect.left) / rect.width) * 2 - 1;
+    const rawY = ((coords.y - rect.top) / rect.height) * 2 - 1;
+    const nx = Math.max(-1, Math.min(1, rawX));
+    const ny = Math.max(-1, Math.min(1, rawY));
+    setTilt({ nx: Number(nx.toFixed(3)), ny: Number(ny.toFixed(3)), active: true });
+  }, []);
 
   const updateTiltFromClientXY = useCallback(
     (clientX, clientY) => {
-      const el = stageRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const rawX = ((clientX - rect.left) / rect.width) * 2 - 1;
-      const rawY = ((clientY - rect.top) / rect.height) * 2 - 1;
-      const nx = Math.max(-1, Math.min(1, rawX));
-      const ny = Math.max(-1, Math.min(1, rawY));
-      setTilt({ nx: Number(nx.toFixed(3)), ny: Number(ny.toFixed(3)), active: true });
+      pendingCoordsRef.current = { x: clientX, y: clientY };
+      if (typeof requestAnimationFrame !== 'function') {
+        flushTiltCoords();
+        return;
+      }
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(flushTiltCoords);
+      }
     },
-    []
+    [flushTiltCoords]
   );
 
   const resetTilt = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+    pendingCoordsRef.current = null;
     setTilt({ nx: 0, ny: 0, active: false });
   }, []);
 

@@ -929,12 +929,12 @@ export class Studio25DFittingRenderer implements FittingRenderer {
       });
     }
 
-    layers.sort((a, b) => a.zIndex - b.zIndex);
+    const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
 
     return {
       mode: resolvedMode,
       rendererId: this.id,
-      layers,
+      layers: sortedLayers,
       compositeImageUrl: null,
       lighting: {
         backdropGradient: 'var(--squircle-illumination, var(--bg-surface))',
@@ -972,15 +972,15 @@ export class VtonApiFittingRenderer implements FittingRenderer {
 
       const serializedSlots = Object.fromEntries(
         Object.entries(request.slots)
-          .filter(([, item]) => Boolean(item))
+          .filter((entry): entry is [string, GarmentRecord] => Boolean(entry[1]))
           .map(([slot, item]) => [
             slot,
             {
-              id: item!.id,
-              name: item!.name,
-              category: item!.category,
-              image_url: item!.image_url,
-              color_hex: item!.color_hex,
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              image_url: item.image_url,
+              color_hex: item.color_hex,
             },
           ])
       );
