@@ -549,6 +549,7 @@ export default function App() {
               skinProfile={skinProfile}
               bodySpec={bodySpec}
               onUpdateSkinProfile={handleApplySkinProfile}
+              onToggleTheme={handleToggleTheme}
               onOpenProfile={handleOpenProfileModal}
               onOpenAccount={handleOpenAccountSheet}
               onOpenSkinToneModal={() => handleOpenProfileModal('skin')}

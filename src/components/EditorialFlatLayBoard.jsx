@@ -392,6 +392,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   styleMode = 'photorealistic',
   aiImageUrl = null,
   aiLoading = false,
+  effectiveWeather = 'clear',
+  theme = 'light',
   skinToneHex,
   personalColor,
   skinProfile = null,
@@ -687,6 +689,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
+      data-effective-weather={effectiveWeather}
+      data-stage-theme={theme}
       data-vton-style={resolvedStyleMode}
       data-skin-hex={resolvedSkinHex}
       data-personal-color={resolvedPersonalColor}
@@ -704,22 +708,30 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       onPointerCancel={finishStagePointer}
     >
       <div className="studio-2d-viewport">
-        {/* Primary After Layer: either Gemini AI VTON image or Editorial Flat-Lay Board */}
+        {/* Primary After Layer: Layer 1 Floor Contact Shadow + Layer 2 RGBA Model (or Editorial Flat-Lay Board) */}
         <div className="studio-2d-layer studio-2d-layer-after">
           {hasAiImage ? (
-            <img
-              src={aiImageUrl}
-              alt={
-                isEn
-                  ? `Gemini AI virtual try-on (${safeAngleDeg}°)`
-                  : `Gemini AI 가상 피팅 (${safeAngleDeg}°)`
-              }
-              data-vton-after-img="true"
-              data-ai-vton-img="true"
-              className="studio-2d-media-el editorial-ai-vton-img"
-              draggable={false}
-              style={mediaTransformStyle}
-            />
+            <>
+              <div
+                aria-hidden="true"
+                data-floor-contact-shadow="true"
+                className="studio-floor-contact-shadow"
+                style={mediaTransformStyle}
+              />
+              <img
+                src={aiImageUrl}
+                alt={
+                  isEn
+                    ? `Gemini AI virtual try-on (${safeAngleDeg}°)`
+                    : `Gemini AI 가상 피팅 (${safeAngleDeg}°)`
+                }
+                data-vton-after-img="true"
+                data-ai-vton-img="true"
+                className="studio-2d-media-el editorial-ai-vton-img"
+                draggable={false}
+                style={mediaTransformStyle}
+              />
+            </>
           ) : (
             <FlatLayLookbookSurface
               placements={placements}
@@ -821,8 +833,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             </div>
             <p className="editorial-vton-shimmer-title">
               {isEn
-                ? `Generating Gemini Multi-Angle Try-On (${safeAngleDeg}°)`
-                : `Gemini 멀티모달 다각도 AI 피팅 생성 중 (${safeAngleDeg}°)`}
+                ? `Generating Weather Pose & RGBA Cutout (${safeAngleDeg}°)`
+                : `날씨 맞춤 포즈 생성 및 투명 배경제거 중 (${safeAngleDeg}°)`}
             </p>
             <p className="editorial-vton-shimmer-sub">
               {styleLabel} · {resolvedHeightCm}cm / {resolvedWeightKg}kg · {mstSwatch.code}

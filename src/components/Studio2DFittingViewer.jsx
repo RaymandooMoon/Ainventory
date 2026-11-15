@@ -46,9 +46,14 @@ import {
   synthesizeGeminiMultiAngleVton,
   trackFlatLayComboVisit,
 } from '../services/vton2DService.ts';
+import {
+  getWeatherStageBadgeMeta,
+  resolveEffectiveWeatherFromRaw,
+} from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName, tr } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+import WeatherForegroundCanvas from './WeatherForegroundCanvas.tsx';
 import './Studio2DFittingViewer.css';
 
 const AUTOGEN_STORAGE_KEY = 'ainventory_vton_autogen_v1';
@@ -265,6 +270,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onOpenBodyModal,
   lang,
   forceRefresh = false,
+  forceRefreshNonce = 0,
   mode,
   viewMode,
   renderMode,
@@ -440,6 +446,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const equippedCount = layers.length;
   const effectiveCompareActive = compareActive && equippedCount > 0;
 
+  const effectiveWeather = useMemo(
+    () => resolveEffectiveWeatherFromRaw(weather),
+    [weather]
+  );
+  const weatherBadgeMeta = useMemo(
+    () => getWeatherStageBadgeMeta(weather, resolvedLang),
+    [weather, resolvedLang]
+  );
+
   const { outfitComboId } = useMemo(() => computeOutfitComboId(slots), [slots]);
   const activeFacePhotoUrl =
     skinProfile?.portraitDataUrl ||
@@ -447,6 +462,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     null;
   const prevFacePhotoRef = useRef(activeFacePhotoUrl);
   const pendingFacePhotoApproveRef = useRef(null);
+  const prevEffectiveWeatherRef = useRef(effectiveWeather);
+  const pendingWeatherApproveRef = useRef(null);
+  const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
 
   // Changing garments in the wardrobe returns focus from pinned history back to live outfit
@@ -463,12 +481,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         avatarConfigHash: resolvedAvatarHash,
         outfitComboId,
         styleMode,
+        effectiveWeather,
         angleDeg: viewAngleDeg,
       }),
-    [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg]
+    [resolvedAvatarHash, outfitComboId, styleMode, effectiveWeather, viewAngleDeg]
   );
 
-  // Instant 0ms L1 memory slice lookup when switching angles, styles, or revisiting outfits
+  // Instant 0ms L1 memory slice lookup when switching angles, styles, weather, or revisiting outfits
   const historyCount = historyItems.length;
   const memorySlice = useMemo(() => {
     void historyCount;
@@ -477,9 +496,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       avatarConfigHash: resolvedAvatarHash,
       outfitComboId,
       styleMode,
+      effectiveWeather,
       angleDeg: viewAngleDeg,
     });
-  }, [resolvedAvatarHash, outfitComboId, styleMode, viewAngleDeg, forceRefresh, historyCount]);
+  }, [
+    resolvedAvatarHash,
+    outfitComboId,
+    styleMode,
+    effectiveWeather,
+    viewAngleDeg,
+    forceRefresh,
+    historyCount,
+  ]);
 
   const demoSliceUrl = useMemo(
     () =>
@@ -493,9 +521,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const flatLayCached = useMemo(
     () =>
       trackFlatLayComboVisit(
-        `flatlay::${resolvedAvatarHash}::${outfitComboId}::${viewAngleDeg}`
+        `flatlay::${resolvedAvatarHash}::${outfitComboId}::${effectiveWeather}::${viewAngleDeg}`
       ),
-    [resolvedAvatarHash, outfitComboId, viewAngleDeg]
+    [resolvedAvatarHash, outfitComboId, effectiveWeather, viewAngleDeg]
   );
 
   const latestInputsRef = useRef({
@@ -508,6 +536,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     viewAngleDeg,
     styleMode,
     weather,
+    effectiveWeather,
     resolvedTheme,
     rawLegacyMode,
     forceRefresh,
@@ -525,6 +554,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       viewAngleDeg,
       styleMode,
       weather,
+      effectiveWeather,
       resolvedTheme,
       rawLegacyMode,
       forceRefresh,
@@ -532,11 +562,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   });
 
-  // Smart Credit-Saver Gemini Multimodal VTON Pipeline:
+  // Smart Credit-Saver Gemini Multimodal VTON Pipeline (Weather-Pose + RGBA Cutout v2):
   // 1) L1 Memory (0ms) + L2 IndexedDB (~3ms) automatic reuse with 0 AI credits
-  // 2) Auto-runs once on initial entry (and immediately when user applies a new face photo);
-  //    stages subsequent uncached garment edits at 0ms on Flat-Lay until the user clicks
-  //    [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
+  // 2) Auto-runs on initial entry, when user uploads a new face photo, or when user switches weather tabs;
+  //    stages subsequent manual garment edits within the same weather mode at 0ms on Flat-Lay until
+  //    the user clicks [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
   useEffect(() => {
     abortControllerRef.current?.abort();
 
@@ -552,6 +582,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       activeFacePhotoUrl && pendingFacePhotoApproveRef.current === activeFacePhotoUrl
     );
 
+    if (prevEffectiveWeatherRef.current !== effectiveWeather) {
+      prevEffectiveWeatherRef.current = effectiveWeather;
+      pendingWeatherApproveRef.current = effectiveWeather;
+      setPinnedHistoryItem(null);
+    }
+    const weatherTabJustChanged = Boolean(
+      pendingWeatherApproveRef.current === effectiveWeather
+    );
+
     if (stageMode !== 'ai-vton' || equippedCount === 0) {
       setAiLoading(false);
       setStagedNeedsApply(false);
@@ -560,10 +599,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     if (
       !facePhotoJustApplied &&
+      !weatherTabJustChanged &&
       pinnedHistoryItem &&
       (pinnedHistoryItem.outfitComboId !== outfitComboId ||
         pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
-        pinnedHistoryItem.styleMode !== styleMode)
+        pinnedHistoryItem.styleMode !== styleMode ||
+        (pinnedHistoryItem.effectiveWeather &&
+          pinnedHistoryItem.effectiveWeather !== effectiveWeather))
     ) {
       setAiLoading(false);
       setStagedNeedsApply(false);
@@ -573,7 +615,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const snap = latestInputsRef.current;
     const isForceBypass = Boolean(snap.forceRefresh || forceBypassCacheRef.current);
     const isUserApproved = Boolean(
-      isForceBypass || userApprovedGenRef.current || facePhotoJustApplied
+      isForceBypass ||
+        userApprovedGenRef.current ||
+        facePhotoJustApplied ||
+        weatherTabJustChanged
     );
     forceBypassCacheRef.current = false;
     userApprovedGenRef.current = false;
@@ -583,12 +628,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           avatarConfigHash: snap.resolvedAvatarHash,
           outfitComboId,
           styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
           angleDeg: snap.viewAngleDeg,
         })
       : null;
 
     if (syncHit) {
       pendingFacePhotoApproveRef.current = null;
+      pendingWeatherApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
       setAiState({
@@ -609,6 +656,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       );
       if (cachedDemoUrl) {
         pendingFacePhotoApproveRef.current = null;
+        pendingWeatherApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
         setStagedNeedsApply(false);
         setAiState({
@@ -636,6 +684,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           avatarConfigHash: snap.resolvedAvatarHash,
           outfitComboId,
           styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
           angleDeg: snap.viewAngleDeg,
         });
         if (controller.signal.aborted) return;
@@ -648,11 +697,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 avatarConfigHash: snap.resolvedAvatarHash,
                 outfitComboId,
                 styleMode: snap.styleMode,
+                effectiveWeather: snap.effectiveWeather,
                 angleDeg: deg,
               });
             }
           }
           pendingFacePhotoApproveRef.current = null;
+          pendingWeatherApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
           setStagedNeedsApply(false);
           setAiState({
@@ -684,19 +735,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       if (
         configBlockedRef.current &&
         !demoShowcaseEnabled &&
-        !isUserApproved &&
+        !isForceBypass &&
+        !facePhotoJustApplied &&
         !isDirectDemoClick
       ) {
+        pendingWeatherApproveRef.current = null;
         setAiLoading(false);
         return;
       }
 
       const delayMs =
-        isUserApproved || isDirectDemoClick
-          ? 0
-          : autoGenEnabled && hasInitialAutoRunRef.current
-            ? 850
-            : 110;
+        weatherTabJustChanged && !isForceBypass
+          ? 210
+          : isUserApproved || isDirectDemoClick
+            ? 0
+            : autoGenEnabled && hasInitialAutoRunRef.current
+              ? 850
+              : 110;
 
       if (delayMs > 0) {
         await new Promise((resolve) => {
@@ -706,6 +761,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       if (controller.signal.aborted) return;
 
       hasInitialAutoRunRef.current = true;
+      pendingWeatherApproveRef.current = null;
       setStagedNeedsApply(false);
       const liveSnap = latestInputsRef.current;
 
@@ -820,6 +876,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     outfitComboId,
     resolvedAvatarHash,
     activeFacePhotoUrl,
+    effectiveWeather,
     styleMode,
     equippedCount,
     retryNonce,
@@ -869,7 +926,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast]
   );
 
-  // Explicit regeneration / retry (bypasses cache when user explicitly clicks Retry)
+  // Explicit regeneration / retry (bypasses cache when user clicks top Refresh or Retry)
   const handleRetryAiSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
@@ -889,6 +946,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     },
     [equippedCount, showToast]
   );
+
+  // Top Header `새로고침` (`forceRefreshNonce`) -> bypasses local & server cache and regenerates immediately
+  useEffect(() => {
+    if (forceRefreshNonce > 0 && forceRefreshNonce !== prevRefreshNonceRef.current) {
+      prevRefreshNonceRef.current = forceRefreshNonce;
+      handleRetryAiSynthesis();
+    }
+  }, [forceRefreshNonce, handleRetryAiSynthesis]);
 
   const handleToggleAutoGen = useCallback((e) => {
     e?.stopPropagation?.();
@@ -924,7 +989,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       if (
         item.outfitComboId === outfitComboId &&
-        item.avatarConfigHash === resolvedAvatarHash
+        item.avatarConfigHash === resolvedAvatarHash &&
+        (!item.effectiveWeather || item.effectiveWeather === effectiveWeather)
       ) {
         setPinnedHistoryItem(null);
       } else {
@@ -932,7 +998,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       setHistoryOpen(false);
     },
-    [outfitComboId, resolvedAvatarHash]
+    [outfitComboId, resolvedAvatarHash, effectiveWeather]
   );
 
   const handleDeleteHistoryItem = useCallback(
@@ -942,6 +1008,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         avatarConfigHash: item.avatarConfigHash,
         outfitComboId: item.outfitComboId,
         styleMode: item.styleMode,
+        effectiveWeather: item.effectiveWeather || null,
       }).then(() => {
         setPinnedHistoryItem((prev) =>
           prev?.groupKey === item.groupKey ? null : prev
@@ -1075,16 +1142,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount]
   );
 
-  const isRainy = Boolean(
-    weather?.isRainy ||
-      weather?.isRaining ||
-      weather?.scenarioKey === 'rainy_cool' ||
-      String(weather?.condition || weather?.conditionKo || '')
-        .toLowerCase()
-        .includes('rain') ||
-      String(weather?.condition || weather?.conditionKo || '').includes('비')
-  );
-  const isWindy = Boolean(weather?.isWindy);
+  const isRainy = effectiveWeather === 'rain';
+  const isWindy = effectiveWeather === 'wind' || effectiveWeather === 'coldwave';
   const angleMeta = getTurnaroundAngleMeta(viewAngleDeg, resolvedLang);
 
   const isShowingPinnedHistory = Boolean(
@@ -1092,7 +1151,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pinnedHistoryItem &&
       (pinnedHistoryItem.outfitComboId !== outfitComboId ||
         pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
-        pinnedHistoryItem.styleMode !== styleMode)
+        pinnedHistoryItem.styleMode !== styleMode ||
+        (pinnedHistoryItem.effectiveWeather &&
+          pinnedHistoryItem.effectiveWeather !== effectiveWeather))
   );
 
   const pinnedHistorySliceUrl = isShowingPinnedHistory
@@ -1132,9 +1193,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
-      className={`studio-25d-canvas studio-2d-vton-viewer ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
+      className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
+      data-stage-theme={resolvedTheme}
+      data-effective-weather={effectiveWeather}
       data-vton-style={styleMode}
       data-equipped-count={equippedCount}
       data-vton-provider={activeProvider}
@@ -1143,21 +1206,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-view-angle={viewAngleDeg}
       data-avatar-hash={resolvedAvatarHash}
     >
-      {/* Subtle Top Key Illumination */}
+      {/* Stage Base (z-0): Responsive Light/Dark Keylight + Weather Ambient Tint */}
       <div aria-hidden="true" className="studio-25d-keylight" />
-
-      {/* Studio Cyclorama Horizon Reflection */}
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
-
-      {/* Weather Ambient Stage Cues */}
-      {isRainy && (
-        <div
-          aria-hidden="true"
-          data-studio-rain-layer="true"
-          className="studio-25d-rain-layer"
-        />
-      )}
-      {isWindy && <div aria-hidden="true" className="studio-25d-wind-layer" />}
 
       {/* Top Synthesis Progress Line during Gemini AI VTON Generation */}
       {aiLoading && (
@@ -1166,7 +1217,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Top HUD: Zoom Pill Bar + 4-Direction Angle HUD + Before/After Compare + Body Spec */}
+      {/* Layer 4 (z-40+): Top HUD Controls & Weather Curation Pill Badge */}
       <div className="studio-stage-top-hud">
         <div className="studio-vton-hud-left">
           <div
@@ -1316,7 +1367,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       </div>
 
-      {/* Zero-Procedural-Drawing Central Stage: Editorial Flat-Lay Board + Gemini AI VTON */}
+      {/* Weather Curation Pill Badge (e.g. `비 · 우산 코디 | 비 9°/13°`, `한파 · 방한 코디 | 한파 -10°/-4°`) */}
+      <div
+        className="studio-weather-curation-badge tabular-nums"
+        data-weather-stage-badge={effectiveWeather}
+        aria-hidden="true"
+      >
+        <span className="studio-weather-curation-dot" />
+        <span className="studio-weather-curation-text">{weatherBadgeMeta.fullText}</span>
+      </div>
+
+      {/* Layer 1 (z-10 Floor Contact Shadow) + Layer 2 (z-20 RGBA Transparent Model / Flat-Lay Board) */}
       <EditorialFlatLayBoard
         slots={slots}
         layers={layers}
@@ -1326,6 +1387,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         styleMode={styleMode}
         aiImageUrl={resolvedAiImageUrl}
         aiLoading={aiLoading}
+        effectiveWeather={effectiveWeather}
+        theme={resolvedTheme}
         skinToneHex={
           skinProfile?.skinToneHex ||
           resolvedAvatarSpec?.appearance?.skinToneHex ||
@@ -1356,6 +1419,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         onPanChange={setPan}
         legacyMode={viewerMode}
         lang={resolvedLang}
+      />
+
+      {/* Layer 3 (z-30 Foreground Weather Physics Engine — pointer-events: none) */}
+      <WeatherForegroundCanvas
+        weather={effectiveWeather}
+        isDark={resolvedTheme === 'dark'}
+        umbrellaCollisionEnabled={
+          stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
+        }
       />
 
       {/* Smart Credit-Saver Staged CTA Bar: Lets user swap multiple garments at 0ms & 0 credits before generating */}

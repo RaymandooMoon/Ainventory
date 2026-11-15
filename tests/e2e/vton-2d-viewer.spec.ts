@@ -144,7 +144,12 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(studioCanvas.locator('canvas')).toHaveCount(0);
+    await expect(
+      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+    ).toHaveCount(0);
+    await expect(
+      studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
+    ).toHaveCSS('pointer-events', 'none');
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
     const lightLum = await studioCanvas.evaluate((el) => {

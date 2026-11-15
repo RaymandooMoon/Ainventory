@@ -81,7 +81,7 @@ const PROMPT_SLOT_ORDER = Object.freeze([
 const ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES = Object.freeze({
   accessory: 'carried naturally in hand or slung cleanly over the shoulder',
   acc_umbrella:
-    'held gracefully in the model’s hand (open rain canopy held over the shoulder on rainy weather, or poised upright walking umbrella)',
+    'WIDE-OPEN full-canopy umbrella held high above the model’s head with one hand and tilted ~15° backward so the entire face, hairstyle, and full-body outfit remain 100% unobstructed and brightly lit (NEVER hold a closed, folded, or rolled-up umbrella; keep >=14% headroom clearance above the open canopy top)',
   acc_belt: 'threaded neatly through the waist belt loops at the natural waistline',
   acc_head: 'worn naturally atop the crown of the head',
   acc_eyes: 'worn cleanly across the bridge of the nose and eyes',
@@ -237,7 +237,8 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'vton-multimodal-v4';
+const CACHE_SCHEMA_VERSION = 'v2-rgba-weather-pose';
+const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
 const SAFE_SEED_REL_RE = /^(?:[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -293,93 +294,183 @@ export function normalizeVtonStyleMode(rawStyle) {
   return 'photorealistic';
 }
 
+const WEATHER_POSE_DIRECTIVES = Object.freeze({
+  rain: {
+    key: 'rainy',
+    effectiveWeather: 'rain',
+    description:
+      'cool overcast rainy-day editorial softbox illumination (6200K) with fine rainwater droplets beaded atop the open umbrella canopy and a subtle damp water-repellent sheen on outerwear shoulders',
+    poseBlock: [
+      'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, hairstyle, and full-body outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain >=14% headroom clearance above the top dome/tip of the open umbrella so the open umbrella is NEVER cropped.',
+      'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves.',
+      'STRICT RAIN NEGATIVE: NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER shadow/obscure the face, and NEVER draw falling rain streaks in the #94A3B8 background.',
+    ].join('\n'),
+  },
+  coldwave: {
+    key: 'cold',
+    effectiveWeather: 'coldwave',
+    description:
+      'crisp sub-zero (-10°C) winter key lighting (6500K) with natural cold-flushed cheeks/nose tip and visible white snow crystals and icy frost accumulated on winter hat/beanie and coat shoulders',
+    poseBlock: [
+      'BITING SUB-ZERO COLDWAVE POSE (-10°C FREEZING ARCTIC WIND): Render an authentic cold-bracing winter stance — shoulders slightly hunched/drawn inward against freezing sub-zero wind, chin tucked slightly down toward the warm scarf/high coat collar, and hands tucked into coat pockets or clasping the coat lapels/muffler snugly close to the chest for warmth.',
+      'COLDWAVE SNOW & FROST TRACE (MANDATORY ON HAT & SHOULDERS): Render distinct white snow crystals and fine icy frost visibly accumulated on the crown/cuff/brim of the beanie or winter hat, along the upper folds of the scarf/muffler, and across both coat/puffer shoulders ("snow crystals and frost accumulated on beanie and shoulders"), plus a subtle natural cold-flushed rosiness on the cheeks and tip of the nose.',
+      'STRICT COLDWAVE NEGATIVE: NEVER generate a warm relaxed indoor studio pose, NEVER leave the winter hat/beanie or coat shoulders completely clean and free of snow crystals/frost, and NEVER draw flying blizzard streaks across the #94A3B8 background.',
+    ].join('\n'),
+  },
+  snow: {
+    key: 'snowy',
+    effectiveWeather: 'snow',
+    description:
+      'soft 6000K winter snowfall daylight with fluffy white snow visibly settled atop the hat/hair crown and upper coat shoulders',
+    poseBlock: [
+      'WINTER SNOWFALL POSE: Natural cozy winter lookbook full-body stance (one hand relaxed in coat pocket or lightly near scarf) with calm winter expression.',
+      'SNOW PHYSICAL TRACE (MANDATORY ON HAT & SHOULDERS): Render soft, fluffy white snow visibly settled and accumulated atop the hat/beanie/hair crown and across the upper coat shoulders ("fluffy white snow settled on hat/hair and coat shoulders").',
+      'STRICT SNOW NEGATIVE: NEVER draw airborne snowflakes or snow streaks in the #94A3B8 background air.',
+    ].join('\n'),
+  },
+  wind: {
+    key: 'windy',
+    effectiveWeather: 'wind',
+    description:
+      'crisp directional daylight studio key light with dynamic lateral wind physics across outer hems, scarf ends, and outer hair strands',
+    poseBlock: [
+      'STRONG WINDY GALE POSE: Dynamic wind-bracing editorial full-body stance — one hand lightly steadying the hat brim, hair, or coat lapel while maintaining poised balance against a brisk lateral gust.',
+      'WIND PHYSICAL TRACE: Render realistic lateral wind physics with the coat hem, muffler/scarf ends, and outer hair strands visibly billowing and sweeping consistently to one side without covering the face.',
+      'STRICT WIND NEGATIVE: NEVER obscure the face with hair and NEVER draw dust clouds or flying debris on the #94A3B8 background.',
+    ].join('\n'),
+  },
+  heatwave: {
+    key: 'heatwave',
+    effectiveWeather: 'heatwave',
+    description:
+      'bright crisp high-summer sunlit highlights (5200K) with vibrant warm skin luminosity and airy summer fabric clarity',
+    poseBlock: [
+      'MIDSUMMER HEATWAVE POSE: Breezy, breathable high-summer lookbook full-body stance (lightly shading the brow from bright overhead sunlight or relaxed airy summer posture).',
+      'HEATWAVE PHYSICAL TRACE: Bright crisp sunlit highlights (5200K) along hair and shoulders with crisp breathable summer fabric texture.',
+      'STRICT HEATWAVE NEGATIVE: NEVER draw lens flare circles or sun orbs on the #94A3B8 background.',
+    ].join('\n'),
+  },
+  cloudy: {
+    key: 'cloudy',
+    effectiveWeather: 'cloudy',
+    description:
+      'soft diffused overcast 5800K illumination with gentle wrap-around tonal transitions',
+    poseBlock: [
+      'OVERCAST CLOUDY POSE: Calm, composed editorial lookbook full-body stance with natural relaxed posture under soft 5800K diffused overcast illumination.',
+      'STRICT CLOUDY NEGATIVE: NEVER draw fog or clouds on the #94A3B8 background.',
+    ].join('\n'),
+  },
+  clear: {
+    key: 'clear',
+    effectiveWeather: 'clear',
+    description:
+      'crisp natural 5400K daylight illumination showcasing true-to-life garment color and silhouette',
+    poseBlock: [
+      'CLEAR DAYLIGHT POSE: Confident, clean full-body editorial lookbook stance under crisp 5400K natural daylight.',
+      'STRICT CLEAR NEGATIVE: NEVER draw cast floor shadows or cyclorama gradients on the #94A3B8 background.',
+    ].join('\n'),
+  },
+});
+
 export function normalizeWeatherMood(rawWeather) {
   if (!rawWeather) {
-    return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+    return WEATHER_POSE_DIRECTIVES.clear;
   }
   if (typeof rawWeather === 'string') {
     const token = rawWeather.trim().toLowerCase();
-    if (token.includes('rain') || token.includes('비')) {
-      return {
-        key: 'rainy',
-        description: 'cool overcast rainy-day editorial softbox illumination (6200K) with calm diffused atmospheric contrast',
-      };
-    }
-    if (token.includes('wind') || token.includes('강풍')) {
-      return {
-        key: 'windy',
-        description: 'crisp directional daylight studio key light with subtle natural breeze movement in outer hems and hair ends',
-      };
-    }
+    if (token.includes('rain') || token.includes('비')) return WEATHER_POSE_DIRECTIVES.rain;
     if (token.includes('cold') || token.includes('freeze') || token.includes('한파')) {
-      return {
-        key: 'cold',
-        description: 'crisp high-clarity winter daylight studio lighting (6000K) accentuating cozy wool, knit, and down loft',
-      };
+      return WEATHER_POSE_DIRECTIVES.coldwave;
     }
-    if (token.includes('warm') || token.includes('mild') || token.includes('포근')) {
-      return {
-        key: 'mild',
-        description: 'warm-balanced golden spring/autumn daylight bounce (5000K) with gentle soft studio fill',
-      };
+    if (token.includes('snow') || token.includes('눈')) return WEATHER_POSE_DIRECTIVES.snow;
+    if (token.includes('wind') || token.includes('강풍') || token.includes('바람')) {
+      return WEATHER_POSE_DIRECTIVES.wind;
     }
-    if (token.includes('clear') || token.includes('sun') || token.includes('맑음')) {
-      return {
-        key: 'clear',
-        description: 'bright crisp sunlit studio daylight (5600K) with clean soft floor contact shadow',
-      };
+    if (token.includes('heat') || token.includes('hot') || token.includes('폭염')) {
+      return WEATHER_POSE_DIRECTIVES.heatwave;
     }
-    return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+    if (token.includes('cloud') || token.includes('overcast') || token.includes('흐림')) {
+      return WEATHER_POSE_DIRECTIVES.cloudy;
+    }
+    return WEATHER_POSE_DIRECTIVES.clear;
   }
 
   if (typeof rawWeather === 'object') {
-    const isRainy = Boolean(rawWeather.isRainy || rawWeather.isRaining);
-    const isWindy = Boolean(rawWeather.isWindy);
-    const scenario = String(rawWeather.scenarioKey || rawWeather.condition || rawWeather.mood || '').toLowerCase();
-    const maxTemp = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? rawWeather.temp);
+    const scenario = String(
+      rawWeather.mode || rawWeather.scenarioKey || rawWeather.condition || rawWeather.mood || ''
+    ).toLowerCase();
+    const minTemp = Number(rawWeather.tempMin ?? rawWeather.temperatureMin ?? NaN);
+    const maxTemp = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? rawWeather.temp ?? NaN);
+    const directTemp = Number(rawWeather.temperature ?? rawWeather.avgTemp ?? NaN);
+    const feelsLike = Number(rawWeather.feelsLike ?? NaN);
+    const code = Number(rawWeather.weatherCode ?? rawWeather.code ?? NaN);
 
-    if (isRainy || scenario.includes('rain') || scenario.includes('비')) {
-      return {
-        key: 'rainy',
-        description: 'cool overcast rainy-day editorial softbox illumination (6200K) with calm diffused atmospheric contrast',
-      };
+    if (scenario === 'coldwave' || scenario === 'winter_cold' || scenario.includes('한파') || scenario.includes('강추위')) {
+      return WEATHER_POSE_DIRECTIVES.coldwave;
     }
-    if (isWindy || scenario.includes('wind') || scenario.includes('강풍')) {
-      return {
-        key: 'windy',
-        description: 'crisp directional daylight studio key light with subtle natural breeze movement in outer hems and hair ends',
-      };
+    if (scenario === 'heatwave' || scenario === 'summer_heatwave' || scenario.includes('폭염')) {
+      return WEATHER_POSE_DIRECTIVES.heatwave;
     }
     if (
-      scenario.includes('cold') ||
-      scenario.includes('한파') ||
-      (Number.isFinite(maxTemp) && maxTemp <= 4)
+      rawWeather.isSnowy ||
+      rawWeather.isSnowing ||
+      scenario === 'snow' ||
+      scenario === 'snowy_winter' ||
+      scenario.includes('눈') ||
+      (Number.isFinite(code) && ((code >= 71 && code <= 77) || code === 85 || code === 86))
     ) {
-      return {
-        key: 'cold',
-        description: 'crisp high-clarity winter daylight studio lighting (6000K) accentuating cozy wool, knit, and down loft',
-      };
+      return WEATHER_POSE_DIRECTIVES.snow;
     }
     if (
-      scenario.includes('warm') ||
-      scenario.includes('mild') ||
-      scenario.includes('포근') ||
-      (Number.isFinite(maxTemp) && maxTemp >= 18 && maxTemp <= 25)
+      rawWeather.isRainy ||
+      rawWeather.isRaining ||
+      scenario.includes('rain') ||
+      scenario.includes('비') ||
+      (Number.isFinite(code) && ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95))
     ) {
-      return {
-        key: 'mild',
-        description: 'warm-balanced golden spring/autumn daylight bounce (5000K) with gentle soft studio fill',
-      };
+      return WEATHER_POSE_DIRECTIVES.rain;
     }
-    if (scenario.includes('clear') || scenario.includes('sun') || scenario.includes('맑음')) {
-      return {
-        key: 'clear',
-        description: 'bright crisp sunlit studio daylight (5600K) with clean soft floor contact shadow',
-      };
+
+    // Realtime sub-zero / heatwave temperature escalation
+    if (
+      (Number.isFinite(minTemp) && minTemp <= -5) ||
+      (Number.isFinite(directTemp) && directTemp <= -5) ||
+      (Number.isFinite(feelsLike) && feelsLike <= -10) ||
+      (Number.isFinite(maxTemp) && maxTemp <= 0)
+    ) {
+      return WEATHER_POSE_DIRECTIVES.coldwave;
+    }
+    if (
+      (Number.isFinite(maxTemp) && maxTemp >= 31) ||
+      (Number.isFinite(directTemp) && directTemp >= 31) ||
+      (Number.isFinite(feelsLike) && feelsLike >= 33)
+    ) {
+      return WEATHER_POSE_DIRECTIVES.heatwave;
+    }
+
+    if (
+      rawWeather.isWindy ||
+      Number(rawWeather.windSpeed) >= 25 ||
+      scenario.includes('wind') ||
+      scenario.includes('강풍') ||
+      scenario.includes('바람')
+    ) {
+      return WEATHER_POSE_DIRECTIVES.wind;
+    }
+    if (
+      code === 3 ||
+      code === 45 ||
+      code === 48 ||
+      scenario.includes('cloud') ||
+      scenario.includes('overcast') ||
+      scenario.includes('흐림') ||
+      scenario.includes('안개')
+    ) {
+      return WEATHER_POSE_DIRECTIVES.cloudy;
     }
   }
 
-  return { key: 'studio_neutral', description: 'balanced 5500K neutral studio cyclorama daylight' };
+  return WEATHER_POSE_DIRECTIVES.clear;
 }
 
 /**
@@ -1202,7 +1293,10 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
     ? 'turnaround_2x2'
     : `single_${normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}`;
   const styleMode = normalizedProfile.styleMode || VTON_STYLE_PRESET;
-  const weatherKey = normalizedProfile.weatherMood?.key || 'studio_neutral';
+  const weatherKey =
+    normalizedProfile.weatherMood?.effectiveWeather ||
+    normalizedProfile.weatherMood?.key ||
+    'clear';
 
   const basePayload = {
     v: CACHE_SCHEMA_VERSION,
@@ -1488,23 +1582,23 @@ function describeIsoCameraAngle(viewAngleDeg) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
-      return '45° Quarter-Front Right Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned 45° toward viewer-right so BOTH the front torso/face AND the viewer-left side depth plane are simultaneously visible, standing centered on a subtle warm-minimal diamond architectural plinth tile)';
+      return '45° Quarter-Front Right Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned 45° toward viewer-right so BOTH the front torso/face AND the viewer-left side depth plane are simultaneously visible on a flat #94A3B8 backdrop with zero floor plinth)';
     case 0:
-      return '0° Direct Front Isometric-Editorial View (18° gentle studio camera elevation; figure facing directly forward 0° with symmetrical front face, chest, waist, and front shoe vamps centered on a subtle diamond plinth tile)';
+      return '0° Direct Front Isometric-Editorial View (18° gentle studio camera elevation; figure facing directly forward 0° with symmetrical front face, chest, waist, and front shoe vamps on a flat #94A3B8 backdrop with zero floor plinth)';
     case -45:
-      return '-45° Quarter-Front Left Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned -45° toward viewer-left so BOTH the front torso/face AND the viewer-right side depth plane are simultaneously visible on a subtle diamond plinth tile)';
+      return '-45° Quarter-Front Left Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned -45° toward viewer-left so BOTH the front torso/face AND the viewer-right side depth plane are simultaneously visible on a flat #94A3B8 backdrop)';
     case 90:
-      return '90° Strict Right-Facing Lateral Side Profile View (18° studio elevation; figure turned 90° sideways facing viewer-right, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a subtle diamond plinth tile)';
+      return '90° Strict Right-Facing Lateral Side Profile View (18° studio elevation; figure turned 90° sideways facing viewer-right, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a flat #94A3B8 backdrop)';
     case -90:
-      return '-90° Strict Left-Facing Lateral Side Profile View (18° studio elevation; figure turned -90° sideways facing viewer-left, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a subtle diamond plinth tile)';
+      return '-90° Strict Left-Facing Lateral Side Profile View (18° studio elevation; figure turned -90° sideways facing viewer-left, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a flat #94A3B8 backdrop)';
     case 135:
-      return '135° Back-Quarter Right Isometric View (18° studio elevation; rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a subtle diamond plinth tile)';
+      return '135° Back-Quarter Right Isometric View (18° studio elevation; rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
     case -135:
-      return '-135° Back-Quarter Left Isometric View (18° studio elevation; rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a subtle diamond plinth tile)';
+      return '-135° Back-Quarter Left Isometric View (18° studio elevation; rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
     case 180:
-      return '180° Strict Full Rear Back View (18° studio elevation; figure facing 180° directly away from camera showing ONLY the back of the head/hair/neck, rear shoulders, center-back garment seams/vents/back pockets, calves, and shoe heels on a subtle diamond plinth tile — render ZERO front facial features)';
+      return '180° Strict Full Rear Back View (18° studio elevation; figure facing 180° directly away from camera showing ONLY the back of the head/hair/neck, rear shoulders, center-back garment seams/vents/back pockets, calves, and shoe heels on a flat #94A3B8 backdrop — render ZERO front facial features)';
     default:
-      return '45° Quarter-Front Right Isometric Turn-Based Simulation View on a subtle diamond plinth tile';
+      return '45° Quarter-Front Right Isometric Turn-Based Simulation View on a flat #94A3B8 backdrop';
   }
 }
 
@@ -1526,7 +1620,7 @@ function describeMstLightingDirective(profile) {
   }
   return [
     `Monk Skin Tone MST-${mst} (${undertone} undertone), exact base hex ${profile.skinToneHex} — FAIR-LUMINANCE EDGE LOCK:`,
-    `Preserve delicate fair/light complexion (${profile.skinToneHex}) with subtle natural undertone warmth/coolness while keeping crisp charcoal-ink contour separation so skin never washes out into the #F5F5F7 studio background.`,
+    `Preserve delicate fair/light complexion (${profile.skinToneHex}) with subtle natural undertone warmth/coolness while keeping crisp contour separation against the flat ${CUTOUT_STAGE_HEX} studio backdrop.`,
   ].join(' ');
 }
 
@@ -1575,7 +1669,7 @@ function isResolvedSwimwearItem(item) {
   return /수영복|비키니|래시가드|스윔|swim|bikini|rashguard/i.test(name);
 }
 
-function buildEditorialStyleAndBodyPrompt(profile) {
+function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) {
   const pcDesc =
     PERSONAL_COLOR_DESCRIPTIONS[profile.personalColor] ||
     PERSONAL_COLOR_DESCRIPTIONS.autumn_warm;
@@ -1596,9 +1690,13 @@ function buildEditorialStyleAndBodyPrompt(profile) {
   const mstLightingLock = describeMstLightingDirective(profile);
   const softTissueLock = describeCoupledSoftTissueDirective(profile);
   const isStylizedIso = profile.styleMode === 'stylized_isometric';
-  const weatherDesc =
-    profile.weatherMood?.description ||
-    'balanced 5500K neutral studio cyclorama daylight';
+  const resolvedMood =
+    hasEquippedUmbrella &&
+    (!profile.weatherMood || profile.weatherMood.effectiveWeather === 'clear')
+      ? WEATHER_POSE_DIRECTIVES.rain
+      : profile.weatherMood || WEATHER_POSE_DIRECTIVES.clear;
+  const weatherDesc = resolvedMood.description;
+  const weatherPoseBlock = resolvedMood.poseBlock || WEATHER_POSE_DIRECTIVES.clear.poseBlock;
 
   const styleHeader = isStylizedIso
     ? [
@@ -1610,27 +1708,25 @@ function buildEditorialStyleAndBodyPrompt(profile) {
         '- Render a real, lifelike adult fashion model matching the exact casting profile below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
       ];
 
-  const isRainyMood = profile.weatherMood?.key === 'rainy';
-
   const cameraBlock = profile.turnaroundSheet
     ? [
-        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — STRICT SINGLE-SUBJECT RULE):',
-        '- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a seamless solid #F5F5F7 studio cyclorama background.',
+        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
+        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat, uniform solid neutral mid-slate gray (${CUTOUT_STAGE_HEX}, RGB 148,163,184) backdrop with ZERO gradients, ZERO floor plinths, ZERO cast shadows, ZERO horizon lines, and ZERO airborne rain/snow/dust particles in the background.`,
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 4 quadrants, render EXACTLY ONE (1) solitary person centered horizontally in that quadrant. NEVER place two models side-by-side in a quadrant, NEVER duplicate or mirror a figure, NEVER render background extras or reflections, and NEVER generate a 1x4 or 2x4 multi-person lineup.',
-        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT at identical head-to-toe scale in each of the 4 quadrants:',
+        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical compact head-to-toe scale (~78–84% quadrant height so open umbrellas, winter hats, and shoes have generous #94A3B8 margin on all four sides) in each of the 4 quadrants:',
         '  * [Top-Left Quadrant — 0° Direct Front]: ONE solitary full-body person facing 0° straight toward the camera; symmetrical front garment fit, collar, torso, front trousers/skirt, and front shoe vamps.',
         '  * [Top-Right Quadrant — 45° Quarter View]: ONE solitary full-body person turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
-        '  * [Bottom-Left Quadrant — 90° True Side Profile]: ONE solitary full-body person turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, natural relaxed arm/wrist/hand posture at the side, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile]: ONE solitary full-body person turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
         '  * [Bottom-Right Quadrant — 180° Full Rear Back]: ONE solitary full-body person facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features and ZERO second figure).',
-        '- Keep generous head-to-toe margin inside each of the 4 quadrants so neither hair nor shoe soles touch quadrant edges. Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
+        '- Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
-        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (STRICT SINGLE-SUBJECT RULE):',
+        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
-        '- Full-body poised standing pose framed 100% from the top of the hair/headwear down to the complete soles of the shoes with clean studio margin above head and below feet (NEVER crop head, hands, or feet).',
+        '- Full-body poised stance framed 100% from the top of the open umbrella / headwear / hair down to the complete soles of the shoes (~80–85% frame height) with generous #94A3B8 margin on all sides (NEVER crop open umbrella canopy, head, hands, or feet).',
         '- For 90° lateral side views, ensure authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
-        '- Solid, clean neutral studio background in exact hex #F5F5F7 with natural soft floor contact shadow. Include ZERO text, ZERO angle numbers, ZERO UI labels, and ZERO extra figures.',
+        `- CRITICAL RGBA CUTOUT BACKDROP RULE: Render the ENTIRE background behind and beneath the model as a 100% flat, uniform solid neutral mid-slate gray (${CUTOUT_STAGE_HEX}, RGB 148,163,184) with ZERO gradients, ZERO cast floor shadows, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
       ];
 
   return [
@@ -1638,8 +1734,9 @@ function buildEditorialStyleAndBodyPrompt(profile) {
     '',
     ...cameraBlock,
     '',
-    'STUDIO WEATHER & LIGHTING MOOD:',
-    `- Active Weather Lighting Mood (${profile.weatherMood?.key || 'studio_neutral'}): Illuminate the model and fabrics with ${weatherDesc}, while keeping background studio cyclorama clean (#F5F5F7) and garment colors true.${isRainyMood ? ' Subtle cool rainy-day sheen on outerwear/leather/umbrella surfaces and crisp wet-weather editorial lighting.' : ''}`,
+    `WEATHER-ADAPTIVE POSE, GARMENT PHYSICAL TRACES & LIGHTING (${resolvedMood.effectiveWeather.toUpperCase()}):`,
+    `- Lighting: ${weatherDesc} while keeping the ${CUTOUT_STAGE_HEX} background 100% flat and shadow-free ( high ΔE contrast from both pure white snow/sneakers #FFFFFF and black coats #111111 ).`,
+    weatherPoseBlock,
     '',
     'INCLUSIVE CASTING, PROPORTION & COMPLEXION LOCK (ZERO MODEL BIAS):',
     `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
@@ -1721,7 +1818,9 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     return buildBaseModelParts(profile);
   }
 
-  const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
+  const hasEquippedUmbrella = Boolean(resolvedSlots.acc_umbrella);
+  const effectiveWeather = profile.weatherMood?.effectiveWeather || 'clear';
+  const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella) }];
   appendPortraitParts(parts, profile);
 
   const onepieceItem = resolvedSlots.onepiece || resolvedSlots.dress || null;
@@ -1744,7 +1843,9 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const layeringRules = [
     `[OUTFIT LAYERING, MULTI-PART ACCESSORIES/JEWELRY & REAL PHOTO FIDELITY — ${viewScopeText}]:`,
     '- Dress the model in ALL of the equipped garments, body-part accessories, and fine jewelry items attached below simultaneously, reproducing each attached photograph\'s exact cut, material sheen (leather, fabric, wool, cashmere, 18K yellow gold, 925 sterling silver, bronze/copper, pearl/platinum), construction details, and exact hex color.',
-    '- Render ONLY the equipped items listed below — NEVER hallucinate unequipped coats, hats, or residual items.',
+    effectiveWeather === 'rain' && !hasEquippedUmbrella
+      ? '- Render ONLY the equipped garments listed below plus a clean neutral minimal WIDE-OPEN overhead rain umbrella held high above the head tilted ~15° backward so face and outfit remain 100% visible (NEVER closed/folded).'
+      : '- Render ONLY the equipped items listed below — NEVER hallucinate unequipped coats, hats, or residual items.',
   ];
 
   if (hasLeftRightAsymmetry) {

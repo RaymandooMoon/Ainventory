@@ -9,6 +9,11 @@ import {
   sanitizeAvatarSpec,
 } from './avatarSpecStore.ts';
 import {
+  applyCornerBfsCutoutOnCanvas,
+  ensureTransparentCutoutDataUrl,
+  removeModelBackgroundToPng,
+} from './cutoutService.ts';
+import {
   type BodyShapeKey,
   getStoredBodySpec,
   normalizeBodyShape,
@@ -19,6 +24,13 @@ import {
   getStoredSkinProfile,
   normalizeSeasonKey,
 } from './skinToneAnalyzer.ts';
+import {
+  CUTOUT_PIPELINE_VERSION,
+  CUTOUT_STAGE_BACKDROP_HEX,
+  type EffectiveWeatherMode,
+  buildWeatherPosePromptDirectives,
+  resolveEffectiveWeatherFromRaw,
+} from './weatherPromptBuilder.ts';
 
 export type CanonicalViewerMode = '2d-vton';
 
@@ -38,10 +50,14 @@ export type VtonCacheLayer = 'memory' | 'indexeddb' | 'server' | 'fresh' | 'flat
 
 export type WeatherMoodKey =
   | 'clear'
+  | 'cloudy'
   | 'windy'
   | 'rainy'
+  | 'snowy'
   | 'mild'
+  | 'heatwave'
   | 'cold'
+  | 'coldwave'
   | 'studio_neutral';
 
 export interface NormalizedVtonProfile {
@@ -107,6 +123,7 @@ export interface CachedAiVtonSlice {
   styleMode: VtonStyleMode;
   angleDeg: TurnaroundAngleDeg;
   weatherMood: WeatherMoodKey;
+  effectiveWeather?: EffectiveWeatherMode;
   imageUrl: string;
   sheetImageUrl?: string | null;
   outfitLabel?: string;
@@ -121,6 +138,7 @@ export interface AiVtonHistoryEntry {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
+  effectiveWeather?: EffectiveWeatherMode;
   outfitLabel: string;
   garmentLabels: string[];
   equippedCount: number;
@@ -139,6 +157,7 @@ export interface AiVtonSynthesisOutcome {
   styleMode: VtonStyleMode;
   angleDeg: TurnaroundAngleDeg;
   weatherMood: WeatherMoodKey;
+  effectiveWeather: EffectiveWeatherMode;
   avatarConfigHash: string;
   outfitComboId: string;
   cacheKey: string;
@@ -299,40 +318,47 @@ export function normalizeTurnaroundAngleDeg(
 // oxlint-disable-next-line typescript/no-explicit-any
 export function normalizeWeatherMoodKey(rawWeather?: any): WeatherMoodKey {
   if (!rawWeather) return 'studio_neutral';
-  if (typeof rawWeather === 'string') {
-    const s = rawWeather.toLowerCase();
-    if (s.includes('rain') || s.includes('비')) return 'rainy';
-    if (s.includes('wind') || s.includes('강풍')) return 'windy';
-    if (s.includes('cold') || s.includes('한파')) return 'cold';
-    if (s.includes('warm') || s.includes('mild') || s.includes('포근')) return 'mild';
-    if (s.includes('clear') || s.includes('sun') || s.includes('맑음')) return 'clear';
-    return 'studio_neutral';
+  const effective = resolveEffectiveWeatherFromRaw(rawWeather);
+  switch (effective) {
+    case 'rain':
+      return 'rainy';
+    case 'snow':
+      return 'snowy';
+    case 'coldwave':
+      return 'coldwave';
+    case 'heatwave':
+      return 'heatwave';
+    case 'wind':
+      return 'windy';
+    case 'cloudy':
+      return 'cloudy';
+    case 'clear': {
+      if (typeof rawWeather === 'string') {
+        const s = rawWeather.toLowerCase();
+        if (s.includes('warm') || s.includes('mild') || s.includes('포근')) return 'mild';
+        if (s.includes('clear') || s.includes('sun') || s.includes('맑음')) return 'clear';
+        return 'studio_neutral';
+      }
+      if (typeof rawWeather === 'object') {
+        const cond = String(
+          rawWeather.scenarioKey || rawWeather.condition || rawWeather.mood || ''
+        ).toLowerCase();
+        const maxT = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? rawWeather.temp);
+        if (
+          cond.includes('warm') ||
+          cond.includes('mild') ||
+          cond.includes('포근') ||
+          (Number.isFinite(maxT) && maxT >= 18 && maxT <= 25)
+        ) {
+          return 'mild';
+        }
+        return 'clear';
+      }
+      return 'studio_neutral';
+    }
+    default:
+      return 'studio_neutral';
   }
-  if (typeof rawWeather === 'object') {
-    if (rawWeather.isRainy || rawWeather.isRaining) return 'rainy';
-    if (rawWeather.isWindy) return 'windy';
-    const cond = String(
-      rawWeather.scenarioKey || rawWeather.condition || rawWeather.mood || ''
-    ).toLowerCase();
-    if (cond.includes('rain') || cond.includes('비')) return 'rainy';
-    if (cond.includes('wind') || cond.includes('강풍')) return 'windy';
-    const maxT = Number(rawWeather.tempMax ?? rawWeather.temperatureMax ?? rawWeather.temp);
-    if (cond.includes('cold') || cond.includes('한파') || (Number.isFinite(maxT) && maxT <= 4)) {
-      return 'cold';
-    }
-    if (
-      cond.includes('warm') ||
-      cond.includes('mild') ||
-      cond.includes('포근') ||
-      (Number.isFinite(maxT) && maxT >= 18 && maxT <= 25)
-    ) {
-      return 'mild';
-    }
-    if (cond.includes('clear') || cond.includes('sun') || cond.includes('맑음')) {
-      return 'clear';
-    }
-  }
-  return 'studio_neutral';
 }
 
 function sanitizeImageCandidate(raw: unknown): string | null {
@@ -604,16 +630,21 @@ export function resolveGarmentCanonicalImageUrl(garment?: Partial<GarmentRecord>
 }
 
 /**
- * Deterministic IndexedDB cache key per architectural specification:
- * `(avatarConfigHash + 착장조합ID + 화풍 + 각도)`
+ * Deterministic IndexedDB cache key per 3-Layer Weather + RGBA Cutout specification:
+ * `(CUTOUT_PIPELINE_VERSION + avatarConfigHash + outfitComboId + styleMode + effectiveWeather + angleDeg)`
  */
 export function buildAiVtonCacheKey(params: {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
   angleDeg: TurnaroundAngleDeg;
+  effectiveWeather?: EffectiveWeatherMode | null;
+  weather?: unknown;
 }): string {
-  return `vton3::${params.avatarConfigHash}::${params.outfitComboId}::${params.styleMode}::${params.angleDeg}`;
+  const ew: EffectiveWeatherMode =
+    params.effectiveWeather ||
+    (params.weather ? resolveEffectiveWeatherFromRaw(params.weather) : 'clear');
+  return `${CUTOUT_PIPELINE_VERSION}::${params.avatarConfigHash}::${params.outfitComboId}::${params.styleMode}::${ew}::${params.angleDeg}`;
 }
 
 export function trackFlatLayComboVisit(comboKey: string): boolean {
@@ -640,6 +671,8 @@ export function peekMemoryAiVtonSlice(params: {
   outfitComboId: string;
   styleMode: VtonStyleMode;
   angleDeg: TurnaroundAngleDeg;
+  effectiveWeather?: EffectiveWeatherMode | null;
+  weather?: unknown;
 }): CachedAiVtonSlice | null {
   const key = buildAiVtonCacheKey(params);
   const hit = l1SliceCache.get(key);
@@ -678,6 +711,8 @@ export async function readCachedAiVtonSlice(params: {
   outfitComboId: string;
   styleMode: VtonStyleMode;
   angleDeg: TurnaroundAngleDeg;
+  effectiveWeather?: EffectiveWeatherMode | null;
+  weather?: unknown;
 }): Promise<{ slice: CachedAiVtonSlice; layer: 'memory' | 'indexeddb' } | null> {
   const mem = peekMemoryAiVtonSlice(params);
   if (mem) {
@@ -688,15 +723,14 @@ export async function readCachedAiVtonSlice(params: {
   if (!db) return null;
 
   const cacheKey = buildAiVtonCacheKey(params);
-  return new Promise((resolve) => {
+  const rawRecord = await new Promise<CachedAiVtonSlice | null>((resolve) => {
     try {
       const tx = db.transaction(VTON_IDB_STORE, 'readonly');
       const req = tx.objectStore(VTON_IDB_STORE).get(cacheKey);
       req.onsuccess = () => {
         const rec = req.result as CachedAiVtonSlice | undefined;
         if (rec && typeof rec.imageUrl === 'string' && rec.imageUrl.startsWith('data:image/')) {
-          setL1Slice(rec);
-          resolve({ slice: rec, layer: 'indexeddb' });
+          resolve(rec);
         } else {
           resolve(null);
         }
@@ -706,6 +740,22 @@ export async function readCachedAiVtonSlice(params: {
       resolve(null);
     }
   });
+
+  if (!rawRecord) return null;
+
+  // Upgrade any non-PNG or opaque cached slice to RGBA transparent PNG without AI credit cost
+  if (!rawRecord.imageUrl.startsWith('data:image/png')) {
+    const upgradedUrl = await ensureTransparentCutoutDataUrl(rawRecord.imageUrl);
+    const upgradedRec: CachedAiVtonSlice = {
+      ...rawRecord,
+      imageUrl: upgradedUrl,
+    };
+    await persistAiVtonSlices([upgradedRec]);
+    return { slice: upgradedRec, layer: 'indexeddb' };
+  }
+
+  setL1Slice(rawRecord);
+  return { slice: rawRecord, layer: 'indexeddb' };
 }
 
 async function persistAiVtonSlices(entries: CachedAiVtonSlice[]): Promise<void> {
@@ -755,7 +805,10 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
   const seenKeys = new Set<string>();
 
   for (const memSlice of l1SliceCache.values()) {
-    if (memSlice?.cacheKey && memSlice.imageUrl?.startsWith('data:image/')) {
+    if (
+      memSlice?.cacheKey?.startsWith(`${CUTOUT_PIPELINE_VERSION}::`) &&
+      memSlice.imageUrl?.startsWith('data:image/')
+    ) {
       seenKeys.add(memSlice.cacheKey);
       allRecords.push(memSlice);
     }
@@ -776,7 +829,11 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
     });
 
     for (const rec of dbRecords) {
-      if (rec?.cacheKey && !seenKeys.has(rec.cacheKey) && rec.imageUrl?.startsWith('data:image/')) {
+      if (
+        rec?.cacheKey?.startsWith(`${CUTOUT_PIPELINE_VERSION}::`) &&
+        !seenKeys.has(rec.cacheKey) &&
+        rec.imageUrl?.startsWith('data:image/')
+      ) {
         seenKeys.add(rec.cacheKey);
         allRecords.push(rec);
         setL1Slice(rec);
@@ -786,7 +843,8 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
 
   const grouped = new Map<string, AiVtonHistoryEntry>();
   for (const rec of allRecords) {
-    const groupKey = `${rec.avatarConfigHash}::${rec.outfitComboId}::${rec.styleMode}`;
+    const ew: EffectiveWeatherMode = rec.effectiveWeather || 'clear';
+    const groupKey = `${rec.avatarConfigHash}::${rec.outfitComboId}::${rec.styleMode}::${ew}`;
     let group = grouped.get(groupKey);
     if (!group) {
       const labels = Array.isArray(rec.garmentLabels) ? rec.garmentLabels.filter(Boolean) : [];
@@ -795,6 +853,7 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
         avatarConfigHash: rec.avatarConfigHash,
         outfitComboId: rec.outfitComboId,
         styleMode: rec.styleMode,
+        effectiveWeather: ew,
         outfitLabel:
           rec.outfitLabel ||
           (labels.length > 0 ? labels.slice(0, 2).join(' · ') : '저장된 AI 피팅'),
@@ -833,15 +892,26 @@ export async function deleteCachedAiVtonOutfit(params: {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
+  effectiveWeather?: EffectiveWeatherMode | null;
 }): Promise<void> {
-  const keysToDelete = TURNAROUND_ANGLES.map((angleDeg) =>
-    buildAiVtonCacheKey({
-      avatarConfigHash: params.avatarConfigHash,
-      outfitComboId: params.outfitComboId,
-      styleMode: params.styleMode,
-      angleDeg,
-    })
-  );
+  const weatherModesToClear: EffectiveWeatherMode[] = params.effectiveWeather
+    ? [params.effectiveWeather]
+    : ['clear', 'cloudy', 'rain', 'snow', 'wind', 'heatwave', 'coldwave'];
+
+  const keysToDelete: string[] = [];
+  for (const ew of weatherModesToClear) {
+    for (const angleDeg of TURNAROUND_ANGLES) {
+      keysToDelete.push(
+        buildAiVtonCacheKey({
+          avatarConfigHash: params.avatarConfigHash,
+          outfitComboId: params.outfitComboId,
+          styleMode: params.styleMode,
+          effectiveWeather: ew,
+          angleDeg,
+        })
+      );
+    }
+  }
 
   for (const key of keysToDelete) {
     l1SliceCache.delete(key);
@@ -869,7 +939,8 @@ export async function deleteCachedAiVtonOutfit(params: {
 /**
  * Pure raster single-subject isolator for VTON turnaround quadrants.
  * Detects if Gemini accidentally rendered 2 side-by-side twin/duplicate models inside a wide slice
- * (separated by studio background `#F5F5F7`) and cleanly crops & centers the single primary figure.
+ * (separated by transparent alpha or studio backdrop `#94A3B8` / `#F5F5F7`) and cleanly crops &
+ * centers the single primary figure while preserving RGBA transparency.
  */
 function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasElement {
   const cw = srcCanvas.width;
@@ -887,10 +958,12 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   }
   const data = imgData.data;
 
-  // Estimate studio cyclorama background RGB from 4 corners
+  // Estimate studio backdrop RGB + transparency from 4 corners
   const rSamples: number[] = [];
   const gSamples: number[] = [];
   const bSamples: number[] = [];
+  let transparentCornerSamples = 0;
+  let totalCornerSamples = 0;
   const patch = Math.max(2, Math.min(8, Math.floor(Math.min(cw, ch) * 0.06)));
   const cornerCoords = [
     [1, 1],
@@ -902,19 +975,26 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
     for (let dy = 0; dy < patch; dy += 2) {
       for (let dx = 0; dx < patch; dx += 2) {
         const idx = ((cy + dy) * cw + (cx + dx)) * 4;
-        rSamples.push(data[idx]);
-        gSamples.push(data[idx + 1]);
-        bSamples.push(data[idx + 2]);
+        totalCornerSamples += 1;
+        if (data[idx + 3] < 24) {
+          transparentCornerSamples += 1;
+        } else {
+          rSamples.push(data[idx]);
+          gSamples.push(data[idx + 1]);
+          bSamples.push(data[idx + 2]);
+        }
       }
     }
   }
+  const alreadyTransparent =
+    totalCornerSamples > 0 && transparentCornerSamples / totalCornerSamples >= 0.5;
   rSamples.sort((a, b) => a - b);
   gSamples.sort((a, b) => a - b);
   bSamples.sort((a, b) => a - b);
   const midIdx = Math.floor(rSamples.length / 2);
-  const bgR = rSamples[midIdx] ?? 245;
-  const bgG = gSamples[midIdx] ?? 245;
-  const bgB = bSamples[midIdx] ?? 247;
+  const bgR = rSamples[midIdx] ?? 148;
+  const bgG = gSamples[midIdx] ?? 163;
+  const bgB = bSamples[midIdx] ?? 184;
 
   const yStart = Math.floor(ch * 0.08);
   const yEnd = Math.max(yStart + 1, Math.floor(ch * 0.92));
@@ -925,11 +1005,16 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
     let fgCount = 0;
     for (let y = yStart; y < yEnd; y += 2) {
       const idx = (y * cw + x) * 4;
-      const diff =
-        Math.abs(data[idx] - bgR) +
-        Math.abs(data[idx + 1] - bgG) +
-        Math.abs(data[idx + 2] - bgB);
-      if (diff > 36) fgCount += 1;
+      const alpha = data[idx + 3];
+      if (alreadyTransparent) {
+        if (alpha > 40) fgCount += 1;
+      } else if (alpha > 40) {
+        const diff =
+          Math.abs(data[idx] - bgR) +
+          Math.abs(data[idx + 1] - bgG) +
+          Math.abs(data[idx + 2] - bgB);
+        if (diff > 36) fgCount += 1;
+      }
     }
     rawColFg[x] = fgCount / Math.max(1, Math.ceil(bandH / 2));
   }
@@ -1053,21 +1138,24 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   const cleanCtx = cleanCanvas.getContext('2d');
   if (!cleanCtx) return srcCanvas;
 
-  cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
-  cleanCtx.fillRect(0, 0, outW, ch);
+  cleanCtx.clearRect(0, 0, outW, ch);
+  if (!alreadyTransparent) {
+    cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+    cleanCtx.fillRect(0, 0, outW, ch);
+  }
   const dx = Math.round((outW - subW) * 0.5);
   cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
   return cleanCanvas;
 }
 
 /**
- * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual angle images:
+ * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual RGBA PNG angle images:
  * - Top-Left     -> `0°` (Front)
  * - Top-Right    -> `45°` (Quarter)
  * - Bottom-Left  -> `90°` (Side Profile)
  * - Bottom-Right -> `180°` (Back)
- * Also runs `isolateSingleSubjectInSlice` to eliminate duplicate/twin models if an LLM generated two figures side-by-side.
- * Pure raster image crop of the AI photograph — ZERO procedural drawing!
+ * Runs `removeModelBackgroundToPng` + `isolateSingleSubjectInSlice` + `applyCornerBfsCutoutOnCanvas`
+ * so EVERY slice is a true RGBA transparent PNG (`data:image/png;base64,...`) with ZERO opaque white box.
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string
@@ -1081,6 +1169,8 @@ export async function sliceTurnaround2x2Sheet(
     };
   }
 
+  const preCutSheetUrl = await removeModelBackgroundToPng(sheetDataUrl);
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -1089,11 +1179,15 @@ export async function sliceTurnaround2x2Sheet(
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
         if (w < 32 || h < 32) {
-          resolve({ 0: sheetDataUrl, 45: sheetDataUrl, 90: sheetDataUrl, 180: sheetDataUrl });
+          resolve({
+            0: preCutSheetUrl,
+            45: preCutSheetUrl,
+            90: preCutSheetUrl,
+            180: preCutSheetUrl,
+          });
           return;
         }
 
-        const useCompactJpeg = w > 256 && h > 256;
         const isHorizontal1x4Strip = w / h >= 2.15;
 
         let quadrants: Array<{
@@ -1136,30 +1230,42 @@ export async function sliceTurnaround2x2Sheet(
           const cropCanvas = document.createElement('canvas');
           cropCanvas.width = q.cw;
           cropCanvas.height = q.ch;
-          const ctx = cropCanvas.getContext('2d');
+          const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) {
-            out[q.angle] = sheetDataUrl;
+            out[q.angle] = preCutSheetUrl;
             continue;
           }
-          if (useCompactJpeg) {
-            ctx.fillStyle = '#F5F5F7';
-            ctx.fillRect(0, 0, q.cw, q.ch);
-          }
+          ctx.clearRect(0, 0, q.cw, q.ch);
           ctx.drawImage(img, q.sx, q.sy, q.cw, q.ch, 0, 0, q.cw, q.ch);
           const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
-          out[q.angle] = useCompactJpeg
-            ? finalCanvas.toDataURL('image/jpeg', 0.9)
-            : finalCanvas.toDataURL('image/png');
+          applyCornerBfsCutoutOnCanvas(finalCanvas);
+          out[q.angle] = finalCanvas.toDataURL('image/png');
+          if (finalCanvas !== cropCanvas) {
+            finalCanvas.width = 0;
+            finalCanvas.height = 0;
+          }
+          cropCanvas.width = 0;
+          cropCanvas.height = 0;
         }
         resolve(out);
       } catch {
-        resolve({ 0: sheetDataUrl, 45: sheetDataUrl, 90: sheetDataUrl, 180: sheetDataUrl });
+        resolve({
+          0: preCutSheetUrl,
+          45: preCutSheetUrl,
+          90: preCutSheetUrl,
+          180: preCutSheetUrl,
+        });
       }
     };
     img.onerror = () => {
-      resolve({ 0: sheetDataUrl, 45: sheetDataUrl, 90: sheetDataUrl, 180: sheetDataUrl });
+      resolve({
+        0: preCutSheetUrl,
+        45: preCutSheetUrl,
+        90: preCutSheetUrl,
+        180: preCutSheetUrl,
+      });
     };
-    img.src = sheetDataUrl;
+    img.src = preCutSheetUrl;
   });
 }
 
@@ -1457,32 +1563,42 @@ function buildDirectClientGeminiParts(params: {
   profile: NormalizedVtonProfile;
   styleMode: VtonStyleMode;
   weatherMood: WeatherMoodKey;
+  weather?: unknown;
   angleDeg: TurnaroundAngleDeg;
   turnaroundSheet: boolean;
   serializedSlots: Record<string, Record<string, unknown>>;
 }): Array<Record<string, unknown>> {
-  const { profile, styleMode, weatherMood, angleDeg, turnaroundSheet, serializedSlots } = params;
+  const {
+    profile,
+    styleMode,
+    weatherMood,
+    weather,
+    angleDeg,
+    turnaroundSheet,
+    serializedSlots,
+  } = params;
   const spec = profile.avatarSpec;
   const anthro = spec.anthropometrics;
   const app = spec.appearance;
   const isStylized = styleMode === 'stylized_isometric';
+  const hasUmbrella = Boolean(serializedSlots.acc_umbrella || serializedSlots.umbrella);
+
+  const weatherBundle = buildWeatherPosePromptDirectives({
+    weather: weather ?? { mood: weatherMood },
+    hasEquippedUmbrella: hasUmbrella,
+    turnaroundSheet,
+  });
 
   const header = isStylized
     ? 'Stylized Isometric Simulation Character VTON lookbook (dimensional character, natural hair/hands, authentic fabric texture, zero flat vector polygons).'
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? 'SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on solid #F5F5F7, zero lines/text) of the EXACT SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back. STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).'
-    : `Full-body studio portrait at ${angleDeg}° on solid #F5F5F7 background, soft floor shadow, zero text. STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
-
-  const hasUmbrella = Boolean(serializedSlots.acc_umbrella || serializedSlots.umbrella);
-  const weatherSceneLine =
-    weatherMood === 'rainy' || hasUmbrella
-      ? `Rainy-day editorial mood: cool overcast 6200K lighting with delicate atmospheric rain droplets${hasUmbrella ? ', with the model naturally holding the equipped umbrella' : ''}.`
-      : `Studio weather lighting mood: ${weatherMood}.`;
+    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat uniform solid ${CUTOUT_STAGE_BACKDROP_HEX} mid-slate gray backdrop, ZERO gradients, ZERO cast shadows, ZERO floor plinth, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back. ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
+    : `Full-body studio portrait at ${angleDeg}° on 100% flat uniform solid ${CUTOUT_STAGE_BACKDROP_HEX} mid-slate gray backdrop, ZERO cast shadows, ZERO floor plinth, ZERO airborne weather particles, zero text. ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
-  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}. ${weatherSceneLine}`;
+  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${weatherBundle.combinedPrompt}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
@@ -1499,7 +1615,9 @@ function buildDirectClientGeminiParts(params: {
   const slotPlacementPrompts: Record<string, string> = {
     accessory: 'carried naturally on shoulder or in hand as main bag/tote/briefcase',
     acc_umbrella:
-      'held naturally by the model (open overhead canopy on rainy days or poised stylishly by handle)',
+      weatherBundle.effectiveWeather === 'rain'
+        ? 'MUST BE WIDE-OPEN FULL DOME CANOPY held high above the head with one hand and tilted ~15° backward so the face, hair, and entire outfit remain 100% visible (NEVER closed, folded, rolled, or used as a walking cane)'
+        : 'held open overhead or poised stylishly by handle according to weather directive',
     acc_belt: 'fastened cleanly around the waist belt loops with visible buckle hardware',
     acc_head: 'worn naturally on top of the head fitting crown and hair volume',
     acc_eyes: 'worn cleanly across the nose bridge and ears as eyewear/glasses/sunglasses',
@@ -1536,7 +1654,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: 'Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts on #F5F5F7. Strictly ONE solitary person per panel. Return image only.',
+    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat uniform ${CUTOUT_STAGE_BACKDROP_HEX} backdrop (ZERO floor shadows, ZERO gradients, ZERO airborne rain/snow streaks in background). Strictly ONE solitary person per panel. Return image only.`,
   });
 
   return parts;
@@ -1547,6 +1665,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   profile: NormalizedVtonProfile;
   styleMode: VtonStyleMode;
   weatherMood: WeatherMoodKey;
+  weather?: unknown;
   angleDeg: TurnaroundAngleDeg;
   useTurnaroundSheet: boolean;
   serializedSlots: Record<string, Record<string, unknown>>;
@@ -1556,6 +1675,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
     profile,
     styleMode,
     weatherMood,
+    weather,
     angleDeg,
     useTurnaroundSheet,
     serializedSlots,
@@ -1579,6 +1699,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
       profile,
       styleMode,
       weatherMood,
+      weather,
       angleDeg,
       turnaroundSheet,
       serializedSlots,
@@ -1777,14 +1898,13 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
 
 /**
- * 100% Gemini Multimodal Multi-Angle Virtual Try-On Dispatcher.
+ * 100% Gemini Multimodal Multi-Angle Virtual Try-On Dispatcher (Weather-Pose + RGBA Cutout v2).
  * - Zero procedural drawing or mathematical 2D mesh warping under ANY circumstance.
- * - Checks L1 Memory + L2 IndexedDB (`avatarConfigHash + outfitComboId + styleMode + angleDeg`) first for 0ms hits.
- * - Requests a 2x2 Turnaround Studio Sheet (`0°`, `45°`, `90°`, `180°`) from `/api/vton/synthesize`
+ * - Checks L1 Memory + L2 IndexedDB (`CUTOUT_PIPELINE_VERSION + avatarConfigHash + outfitComboId + styleMode + effectiveWeather + angleDeg`) first for 0ms hits.
+ * - Requests a 2x2 Turnaround Studio Sheet (`0°`, `45°`, `90°`, `180°`) on flat `#94A3B8` from `/api/vton/synthesize`
  *   (or directly via browser Gemini REST API when running standalone or when backend proxy is unavailable),
- *   slices all 4 angles, and caches all 4 slices permanently in IndexedDB.
- * - On missing API key or synthesis failure, returns `fallbackToFlatLay: true` (`imageUrl: null`)
- *   so the viewer preserves the Editorial Flat-Lay Board and displays a clean toast.
+ *   cuts out true RGBA transparency (`removeModelBackgroundToPng` + `applyCornerBfsCutoutOnCanvas`),
+ *   slices all 4 angles as `image/png`, and caches all 4 slices permanently in IndexedDB.
  */
 export async function synthesizeGeminiMultiAngleVton(
   request: AiVtonSynthesisRequest
@@ -1793,6 +1913,7 @@ export async function synthesizeGeminiMultiAngleVton(
   const styleMode = normalizeVtonStyleMode(request.styleMode);
   const angleDeg = normalizeTurnaroundAngleDeg(request.viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
   const weatherMood = normalizeWeatherMoodKey(request.weather);
+  const effectiveWeather = resolveEffectiveWeatherFromRaw(request.weather);
   const profile = normalizeGenderNeutralProfile(request);
   const { outfitComboId, equippedSlotKeys, equippedGarments } = computeOutfitComboId(
     request.slots
@@ -1802,6 +1923,7 @@ export async function synthesizeGeminiMultiAngleVton(
     avatarConfigHash: profile.avatarConfigHash,
     outfitComboId,
     styleMode,
+    effectiveWeather,
     angleDeg,
   });
 
@@ -1810,6 +1932,7 @@ export async function synthesizeGeminiMultiAngleVton(
       avatarConfigHash: profile.avatarConfigHash,
       outfitComboId,
       styleMode,
+      effectiveWeather,
       angleDeg,
     });
     if (cachedHit) {
@@ -1823,6 +1946,7 @@ export async function synthesizeGeminiMultiAngleVton(
             avatarConfigHash: profile.avatarConfigHash,
             outfitComboId,
             styleMode,
+            effectiveWeather,
             angleDeg: candidateAngle,
           });
           if (other) {
@@ -1839,6 +1963,7 @@ export async function synthesizeGeminiMultiAngleVton(
         styleMode,
         angleDeg,
         weatherMood,
+        effectiveWeather,
         avatarConfigHash: profile.avatarConfigHash,
         outfitComboId,
         cacheKey,
@@ -1855,7 +1980,7 @@ export async function synthesizeGeminiMultiAngleVton(
   }
 
   const useTurnaroundSheet = request.turnaroundSheet !== false;
-  const flightKey = `${profile.avatarConfigHash}::${outfitComboId}::${styleMode}::${weatherMood}::${useTurnaroundSheet ? 'sheet' : angleDeg}`;
+  const flightKey = `${CUTOUT_PIPELINE_VERSION}::${profile.avatarConfigHash}::${outfitComboId}::${styleMode}::${effectiveWeather}::${useTurnaroundSheet ? 'sheet' : angleDeg}`;
 
   if (!request.forceRefresh && inFlightAiRequests.has(flightKey)) {
     const shared = await inFlightAiRequests.get(flightKey)!;
@@ -1878,6 +2003,7 @@ export async function synthesizeGeminiMultiAngleVton(
       styleMode,
       angleDeg,
       weatherMood,
+      effectiveWeather,
       avatarConfigHash: profile.avatarConfigHash,
       outfitComboId,
       cacheKey,
@@ -1935,7 +2061,7 @@ export async function synthesizeGeminiMultiAngleVton(
               styleMode,
               viewAngleDeg: angleDeg,
               turnaroundSheet: useTurnaroundSheet,
-              weather: request.weather ?? { mood: weatherMood },
+              weather: request.weather ?? { mood: weatherMood, effectiveWeather },
               avatarSpec: effectiveProfile.avatarSpec,
               avatarConfigHash: effectiveProfile.avatarConfigHash,
               portraitDataUrl: effectivePortraitUrl,
@@ -1993,6 +2119,7 @@ export async function synthesizeGeminiMultiAngleVton(
             profile: effectiveProfile,
             styleMode,
             weatherMood,
+            weather: request.weather,
             angleDeg,
             useTurnaroundSheet,
             serializedSlots,
@@ -2018,6 +2145,7 @@ export async function synthesizeGeminiMultiAngleVton(
           styleMode,
           angleDeg,
           weatherMood,
+          effectiveWeather,
           avatarConfigHash: profile.avatarConfigHash,
           outfitComboId,
           cacheKey,
@@ -2049,14 +2177,16 @@ export async function synthesizeGeminiMultiAngleVton(
 
       if (json.panelImages && typeof json.panelImages === 'object') {
         for (const a of TURNAROUND_ANGLES) {
-          const candidate = sanitizeImageCandidate(json.panelImages[String(a)]);
-          if (candidate) {
+          const rawCandidate = sanitizeImageCandidate(json.panelImages[String(a)]);
+          if (rawCandidate) {
+            const candidate = await removeModelBackgroundToPng(rawCandidate);
             angleSlices[a] = candidate;
             entriesToPersist.push({
               cacheKey: buildAiVtonCacheKey({
                 avatarConfigHash: profile.avatarConfigHash,
                 outfitComboId,
                 styleMode,
+                effectiveWeather,
                 angleDeg: a,
               }),
               avatarConfigHash: profile.avatarConfigHash,
@@ -2064,6 +2194,7 @@ export async function synthesizeGeminiMultiAngleVton(
               styleMode,
               angleDeg: a,
               weatherMood,
+              effectiveWeather,
               imageUrl: candidate,
               sheetImageUrl: null,
               outfitLabel,
@@ -2077,13 +2208,14 @@ export async function synthesizeGeminiMultiAngleVton(
       } else if (rawComposite && isTurnaroundResponse) {
         const sliced = await sliceTurnaround2x2Sheet(rawComposite);
         for (const a of TURNAROUND_ANGLES) {
-          const sliceUrl = sliced[a] || rawComposite;
+          const sliceUrl = sliced[a] || (await removeModelBackgroundToPng(rawComposite));
           angleSlices[a] = sliceUrl;
           entriesToPersist.push({
             cacheKey: buildAiVtonCacheKey({
               avatarConfigHash: profile.avatarConfigHash,
               outfitComboId,
               styleMode,
+              effectiveWeather,
               angleDeg: a,
             }),
             avatarConfigHash: profile.avatarConfigHash,
@@ -2091,6 +2223,7 @@ export async function synthesizeGeminiMultiAngleVton(
             styleMode,
             angleDeg: a,
             weatherMood,
+            effectiveWeather,
             imageUrl: sliceUrl,
             sheetImageUrl: null,
             outfitLabel,
@@ -2101,7 +2234,8 @@ export async function synthesizeGeminiMultiAngleVton(
           });
         }
       } else if (rawComposite) {
-        angleSlices[angleDeg] = rawComposite;
+        const cutoutComposite = await removeModelBackgroundToPng(rawComposite);
+        angleSlices[angleDeg] = cutoutComposite;
         entriesToPersist.push({
           cacheKey,
           avatarConfigHash: profile.avatarConfigHash,
@@ -2109,7 +2243,8 @@ export async function synthesizeGeminiMultiAngleVton(
           styleMode,
           angleDeg,
           weatherMood,
-          imageUrl: rawComposite,
+          effectiveWeather,
+          imageUrl: cutoutComposite,
           sheetImageUrl: null,
           outfitLabel,
           garmentLabels,
@@ -2121,7 +2256,7 @@ export async function synthesizeGeminiMultiAngleVton(
 
       await persistAiVtonSlices(entriesToPersist);
 
-      const finalImg = angleSlices[angleDeg] || rawComposite || null;
+      const finalImg = angleSlices[angleDeg] || null;
       if (!finalImg) {
         return {
           ok: false,
@@ -2132,6 +2267,7 @@ export async function synthesizeGeminiMultiAngleVton(
           styleMode,
           angleDeg,
           weatherMood,
+          effectiveWeather,
           avatarConfigHash: profile.avatarConfigHash,
           outfitComboId,
           cacheKey,
@@ -2155,6 +2291,7 @@ export async function synthesizeGeminiMultiAngleVton(
         styleMode,
         angleDeg,
         weatherMood,
+        effectiveWeather,
         avatarConfigHash: profile.avatarConfigHash,
         outfitComboId,
         cacheKey,
@@ -2191,6 +2328,7 @@ export async function synthesizeGeminiMultiAngleVton(
         styleMode,
         angleDeg,
         weatherMood,
+        effectiveWeather,
         avatarConfigHash: profile.avatarConfigHash,
         outfitComboId,
         cacheKey,

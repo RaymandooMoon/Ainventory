@@ -28,6 +28,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onOpenBodyModal,
   lang,
   forceRefresh = false,
+  forceRefreshNonce = 0,
   mode,
   viewMode,
   renderMode,
@@ -60,6 +61,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       onOpenBodyModal={onOpenBodyModal}
       lang={lang}
       forceRefresh={forceRefresh}
+      forceRefreshNonce={forceRefreshNonce}
       legacyMode={normalizedMode}
       cameraPreset={cameraPreset}
       presetNonce={presetNonce}

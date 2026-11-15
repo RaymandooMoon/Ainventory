@@ -2,11 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarPlus,
   Check,
+  Cloud,
   CloudRain,
   CloudSun,
+  Flame,
   LocateFixed,
+  Moon,
   Plus,
+  RefreshCw,
   RotateCcw,
+  Snowflake,
   Sun,
   Trash2,
   Wind,
@@ -77,18 +82,24 @@ const CITY_EN_NAMES = {
 const SHORT_SCENARIO_LABELS = {
   live: { ko: '예보', en: 'Live' },
   crisp_autumn: { ko: '맑음', en: 'Clear' },
+  cloudy_overcast: { ko: '흐림', en: 'Cloudy' },
   rainy_cool: { ko: '비', en: 'Rain' },
+  snowy_winter: { ko: '눈', en: 'Snow' },
   windy_gale: { ko: '강풍', en: 'Windy' },
   warm_spring: { ko: '포근', en: 'Mild' },
-  winter_cold: { ko: '한파', en: 'Cold' },
+  summer_heatwave: { ko: '폭염', en: 'Heatwave' },
+  winter_cold: { ko: '한파', en: 'Coldwave' },
 };
 
 const DEFAULT_SCENARIOS = [
   { key: 'live', label: '예보' },
   { key: 'crisp_autumn', label: '맑음' },
+  { key: 'cloudy_overcast', label: '흐림' },
   { key: 'rainy_cool', label: '비' },
+  { key: 'snowy_winter', label: '눈' },
   { key: 'windy_gale', label: '강풍' },
   { key: 'warm_spring', label: '포근' },
+  { key: 'summer_heatwave', label: '폭염' },
   { key: 'winter_cold', label: '한파' },
 ];
 
@@ -307,6 +318,7 @@ export default function OutfitStudioView({
   skinProfile,
   bodySpec,
   onUpdateSkinProfile,
+  onToggleTheme,
   onOpenProfile,
   onOpenAccount,
   onOpenSkinToneModal,
@@ -346,6 +358,7 @@ export default function OutfitStudioView({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [renderResult, setRenderResult] = useState(null);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
+  const [vtonRefreshNonce, setVtonRefreshNonce] = useState(0);
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
@@ -459,10 +472,12 @@ export default function OutfitStudioView({
           (forceAutoApplyWeatherRef.current || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
-          const effectiveW =
-            scenarioKey === 'rainy_cool'
-              ? { ...(data?.weather || {}), scenarioKey: 'rainy_cool', isRainy: true, isRaining: true }
-              : data?.weather;
+          const effectiveW = {
+            ...(data?.weather || {}),
+            scenarioKey,
+            ...(scenarioKey === 'rainy_cool' ? { isRainy: true, isRaining: true } : {}),
+            ...(scenarioKey === 'snowy_winter' ? { isSnowy: true } : {}),
+          };
           setSlots(mapWeatherRecToSlots(chosenRec, garments, effectiveW));
           setHasExplicitSlotState(true);
           activeRecIdRef.current = chosenRec.id;
@@ -491,20 +506,117 @@ export default function OutfitStudioView({
 
   const weather = useMemo(() => {
     const raw = weatherPayload?.weather || null;
+    const rawMatchesScenario = Boolean(raw && (!raw.scenarioKey || raw.scenarioKey === scenarioKey));
+
     if (scenarioKey === 'rainy_cool') {
       return {
-        ...(raw || {
-          tempMin: 9,
-          tempMax: 13,
-          avgTemp: 11,
-          cityName: '서울',
-        }),
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: 9,
+              tempMax: 13,
+              avgTemp: 11,
+              cityName: raw?.cityName || '서울',
+            }),
         scenarioKey: 'rainy_cool',
         isRainy: true,
         isRaining: true,
+        isSnowy: false,
       };
     }
-    return raw;
+    if (scenarioKey === 'winter_cold') {
+      return {
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: -10,
+              tempMax: -4,
+              avgTemp: -7,
+              windSpeed: 28,
+              cityName: raw?.cityName || '서울',
+            }),
+        scenarioKey: 'winter_cold',
+        isRainy: false,
+        isSnowy: false,
+        isWindy: true,
+      };
+    }
+    if (scenarioKey === 'snowy_winter') {
+      return {
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: -3,
+              tempMax: 1,
+              avgTemp: -1,
+              cityName: raw?.cityName || '서울',
+            }),
+        scenarioKey: 'snowy_winter',
+        isRainy: false,
+        isSnowy: true,
+      };
+    }
+    if (scenarioKey === 'cloudy_overcast') {
+      return {
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: 11,
+              tempMax: 16,
+              avgTemp: 13.5,
+              cityName: raw?.cityName || '서울',
+            }),
+        scenarioKey: 'cloudy_overcast',
+        isRainy: false,
+        isSnowy: false,
+      };
+    }
+    if (scenarioKey === 'windy_gale') {
+      return {
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: 6,
+              tempMax: 14,
+              avgTemp: 10,
+              windSpeed: 31,
+              cityName: raw?.cityName || '서울',
+            }),
+        scenarioKey: 'windy_gale',
+        isWindy: true,
+        isRainy: false,
+        isSnowy: false,
+      };
+    }
+    if (scenarioKey === 'summer_heatwave') {
+      return {
+        ...(rawMatchesScenario
+          ? raw
+          : {
+              tempMin: 26,
+              tempMax: 34,
+              avgTemp: 31,
+              cityName: raw?.cityName || '서울',
+            }),
+        scenarioKey: 'summer_heatwave',
+        isRainy: false,
+        isSnowy: false,
+      };
+    }
+    if (scenarioKey === 'crisp_autumn' || scenarioKey === 'warm_spring') {
+      return rawMatchesScenario
+        ? { ...raw, scenarioKey, isRainy: false, isSnowy: false }
+        : {
+            tempMin: scenarioKey === 'warm_spring' ? 14 : 8,
+            tempMax: scenarioKey === 'warm_spring' ? 23 : 17,
+            avgTemp: scenarioKey === 'warm_spring' ? 18.5 : 12.5,
+            cityName: raw?.cityName || '서울',
+            scenarioKey,
+            isRainy: false,
+            isSnowy: false,
+          };
+    }
+    return raw ? { ...raw, scenarioKey } : null;
   }, [weatherPayload, scenarioKey]);
 
   const isRainyWeatherActive = Boolean(
@@ -1078,16 +1190,52 @@ export default function OutfitStudioView({
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
             extraActions={
-              equippedItems.length > 0 ? (
-                <button
-                  type="button"
-                  className="hig-circle-icon-btn is-subtle"
-                  onClick={handleClearAll}
-                  aria-label={tx(lang, '착장 초기화', 'Reset Outfit')}
-                >
-                  <RotateCcw size={17} />
-                </button>
-              ) : null
+              <>
+                {onToggleTheme && (
+                  <button
+                    type="button"
+                    data-outfit-theme-toggle="true"
+                    className="hig-circle-icon-btn is-subtle"
+                    onClick={onToggleTheme}
+                    aria-label={
+                      theme === 'dark'
+                        ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
+                        : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
+                    }
+                  >
+                    {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+                  </button>
+                )}
+                {equippedItems.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      data-outfit-vton-refresh="true"
+                      className="hig-circle-icon-btn is-subtle"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setVtonRefreshNonce((n) => n + 1);
+                      }}
+                      title={tx(
+                        lang,
+                        '날씨 포즈·투명 배경제거 새로고침',
+                        'Regenerate Weather Pose & Cutout'
+                      )}
+                      aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="hig-circle-icon-btn is-subtle"
+                      onClick={handleClearAll}
+                      aria-label={tx(lang, '착장 초기화', 'Reset Outfit')}
+                    >
+                      <RotateCcw size={17} />
+                    </button>
+                  </>
+                )}
+              </>
             }
           />
         </div>
@@ -1104,6 +1252,12 @@ export default function OutfitStudioView({
             <span className="weather-tomorrow-chip">
               {weather?.isRainy ? (
                 <CloudRain size={13} />
+              ) : weather?.isSnowy || scenarioKey === 'winter_cold' ? (
+                <Snowflake size={13} />
+              ) : scenarioKey === 'summer_heatwave' ? (
+                <Flame size={13} />
+              ) : scenarioKey === 'cloudy_overcast' ? (
+                <Cloud size={13} />
               ) : weather?.isWindy ? (
                 <Wind size={13} />
               ) : weather ? (
@@ -1236,6 +1390,7 @@ export default function OutfitStudioView({
             avatarSpec={bridgedAvatar.spec}
             avatarConfigHash={bridgedAvatar.avatarConfigHash}
             weather={weather}
+            forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
               setActiveSlotKey(slotKey);

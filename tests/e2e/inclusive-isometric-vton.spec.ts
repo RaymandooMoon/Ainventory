@@ -1,6 +1,10 @@
 import zlib from 'node:zlib';
 import { expect, type Page, test } from '@playwright/test';
 import { CARBON_DOM_CONTRACT } from '../../src/contracts/carbonDesignContract.ts';
+import {
+  buildWeatherPosePromptDirectives,
+  resolveEffectiveWeather,
+} from '../../src/services/weatherPromptBuilder.ts';
 
 /**
  * Builds a valid RGBA PNG data URL (`128x128`) divided into 4 distinct solid-color quadrants
@@ -154,8 +158,14 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
     await expect(modelStage).toBeVisible();
 
-    // Strictly ZERO <canvas> or procedural SVG human fallback elements on stage
-    await expect(studioCanvas.locator('canvas')).toHaveCount(0);
+    // Strictly ZERO procedural human <canvas> or SVG human fallback elements on stage;
+    // Layer 3 foreground weather physics canvas is present with pointer-events: none
+    await expect(
+      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+    ).toHaveCount(0);
+    await expect(
+      studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
+    ).toHaveCSS('pointer-events', 'none');
     await expect(studioCanvas.locator('.character-25d-fallback-svg')).toHaveCount(0);
 
     // Default view mode is AI Try-On (`ai-vton`) at 45°, with AI Try-On button first in the rail
@@ -186,7 +196,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       await cwBtn.click();
       await expect(studioCanvas).toHaveAttribute('data-view-angle', expectedDeg);
       await expect(modelStage).toHaveAttribute('data-view-angle', expectedDeg);
-      await expect(studioCanvas.locator('canvas')).toHaveCount(0);
+      await expect(
+        studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+      ).toHaveCount(0);
     }
 
     // Direct 4-angle quick pills & reset badge
@@ -355,7 +367,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('[data-vton-hud-key-btn="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
-    await expect(studioCanvas.locator('canvas')).toHaveCount(0);
+    await expect(
+      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+    ).toHaveCount(0);
 
     // Open inline Gemini API Key popover from permanent HUD button, verify AI Studio link, and close
     await studioCanvas.locator('[data-vton-hud-key-btn="true"]').click();
@@ -1134,7 +1148,264 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
     expect(hangulLeaks).toEqual([]);
   });
+
+  test('11. 3-Layer Weather Fitting Room Architecture: wide-open umbrella rain physics, sub-zero coldwave frost/snow-on-beanie directives, true RGBA cutout (#94A3B8 -> alpha 0) across Light/Dark stage, and top Refresh cache-bypass', async ({
+    page,
+  }) => {
+    // (A) Unit-verify weather prompt builder & realtime normalization rules
+    expect(
+      resolveEffectiveWeather({
+        selectedMode: 'realtime',
+        temperature: -8,
+        feelsLike: -13,
+        liveCondition: 'clear',
+      })
+    ).toBe('coldwave');
+    expect(
+      resolveEffectiveWeather({
+        selectedMode: 'realtime',
+        temperature: 32,
+        feelsLike: 35,
+        liveCondition: 'clear',
+      })
+    ).toBe('heatwave');
+
+    const rainDirectives = buildWeatherPosePromptDirectives('rain');
+    expect(rainDirectives.poseDirective).toContain('WIDE-OPEN');
+    expect(rainDirectives.negativeDirective).toContain('NEVER closed/folded umbrella');
+    expect(rainDirectives.backdropDirective).toContain('#94A3B8');
+
+    const coldwaveDirectives = buildWeatherPosePromptDirectives('coldwave');
+    expect(coldwaveDirectives.physicalTraceDirective).toContain(
+      'snow crystals and frost accumulated on beanie and shoulders'
+    );
+    expect(coldwaveDirectives.poseDirective).toContain('-10°C');
+
+    // (B) Build a 256x256 2x2 studio sheet on #94A3B8 (148, 163, 184) neutral mid-slate backdrop
+    // with pure white snow cap (#FFFFFF) on top of beanie and deep dark coat (#181C24) on torso
+    // to prove BFS cutout removes #94A3B8 -> alpha 0 while protecting #FFFFFF snow AND #181C24 coat!
+    const buildSlateStudio2x2SheetPng = (variantOffset = 0): string => {
+      const width = 256;
+      const height = 256;
+      const raw = Buffer.alloc((width * 4 + 1) * height);
+      for (let y = 0; y < height; y += 1) {
+        const rowOffset = y * (width * 4 + 1);
+        raw[rowOffset] = 0;
+        const localY = y % 128;
+        for (let x = 0; x < width; x += 1) {
+          const localX = x % 128;
+          const px = rowOffset + 1 + x * 4;
+          // Uniform #94A3B8 studio backdrop
+          let r = 148;
+          let g = 163;
+          let b = 184;
+          if (localY >= 18 && localY <= 26 && localX >= 52 && localX <= 76) {
+            // Pure white snow crystals accumulated on beanie crown (#FFFFFF)
+            r = 255;
+            g = 255;
+            b = 255;
+          } else if (localY >= 27 && localY <= 40 && localX >= 50 && localX <= 78) {
+            // Warm beanie / face silhouette
+            r = (210 + variantOffset) % 245;
+            g = 172;
+            b = 145;
+          } else if (localY >= 41 && localY <= 108 && localX >= 42 && localX <= 86) {
+            // Deep obsidian winter coat (#181C24)
+            r = 24 + (variantOffset % 15);
+            g = 28;
+            b = 36;
+          }
+          raw[px] = r;
+          raw[px + 1] = g;
+          raw[px + 2] = b;
+          raw[px + 3] = 255;
+        }
+      }
+      const crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xffffffff;
+        for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+        return (c ^ 0xffffffff) >>> 0;
+      };
+      const makeChunk = (type: string, data: Buffer): Buffer => {
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+      };
+      const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(width, 0);
+      ihdr.writeUInt32BE(height, 4);
+      ihdr[8] = 8;
+      ihdr[9] = 6;
+      const png = Buffer.concat([
+        sig,
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', zlib.deflateSync(raw)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ]);
+      return `data:image/png;base64,${png.toString('base64')}`;
+    };
+
+    const capturedPayloads: Array<{
+      forceRefresh?: boolean;
+      weather?: Record<string, unknown> | null;
+    }> = [];
+    let callIdx = 0;
+
+    await page.route('**/api/vton/synthesize', async (route) => {
+      callIdx += 1;
+      const body = JSON.parse(route.request().postData() || '{}') as {
+        forceRefresh?: boolean;
+        weather?: Record<string, unknown> | null;
+      };
+      capturedPayloads.push(body);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image-preview',
+          layout: 'turnaround_2x2',
+          styleMode: 'photorealistic',
+          geminiUsed: true,
+          compositeImageUrl: buildSlateStudio2x2SheetPng(callIdx * 5),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    const imgSrc = (await aiImg.getAttribute('src')) || '';
+    expect(imgSrc.startsWith('data:image/png;base64,')).toBe(true);
+
+    // (C) Verify true RGBA alpha === 0 on corners while preserving pure white snow (#FFFFFF) & dark coat!
+    const alphaAudit = await aiImg.evaluate(async (el) => {
+      const img = el as HTMLImageElement;
+      if (!img.complete) {
+        await new Promise<void>((res) => {
+          img.onload = () => res();
+          img.onerror = () => res();
+        });
+      }
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      const cornerAlpha = d[(1 * c.width + 1) * 4 + 3];
+      let whiteSnowOpaquePixels = 0;
+      let darkCoatOpaquePixels = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 240 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) {
+          whiteSnowOpaquePixels += 1;
+        }
+        if (d[i + 3] > 240 && d[i] < 50 && d[i + 1] < 40 && d[i + 2] < 50) {
+          darkCoatOpaquePixels += 1;
+        }
+      }
+      return { cornerAlpha, whiteSnowOpaquePixels, darkCoatOpaquePixels };
+    });
+    expect(alphaAudit.cornerAlpha).toBe(0);
+    expect(alphaAudit.whiteSnowOpaquePixels).toBeGreaterThan(80);
+    expect(alphaAudit.darkCoatOpaquePixels).toBeGreaterThan(800);
+
+    // (D) Verify 4-Layer stage z-stack & pointer-events: none on Contact Shadow + Foreground Canvas
+    const contactShadow = studioCanvas.locator('[data-floor-contact-shadow="true"]');
+    await expect(contactShadow).toHaveCount(1);
+    await expect(contactShadow).toHaveCSS('pointer-events', 'none');
+
+    const fgCanvas = studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]');
+    await expect(fgCanvas).toHaveCount(1);
+    await expect(fgCanvas).toHaveCSS('pointer-events', 'none');
+    const fgZIndex = await fgCanvas.evaluate((el) =>
+      Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
+    );
+    expect(fgZIndex).toBeGreaterThanOrEqual(30);
+
+    // (E) Toggle Dark Mode -> verify dark responsive stage (luminance < 40) & zero white box behind model
+    await page.getByRole('button', { name: '다크 모드로 전환' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect
+      .poll(async () => {
+        return studioCanvas.evaluate((el) => {
+          const cs = window.getComputedStyle(el);
+          const m = cs.backgroundColor.match(/\d+/g) || ['0', '0', '0'];
+          const [r, g, b] = m.map(Number);
+          return 0.299 * r + 0.587 * g + 0.114 * b;
+        });
+      })
+      .toBeLessThan(40);
+    const darkImgBg = await studioCanvas.evaluate((el) => {
+      const imgEl = el.querySelector('[data-ai-vton-img="true"]') as HTMLElement | null;
+      return imgEl ? window.getComputedStyle(imgEl).backgroundColor : '';
+    });
+    expect(darkImgBg).toBe('rgba(0, 0, 0, 0)');
+
+    // Switch back to Light Mode -> verify bright responsive stage (luminance > 220)
+    await page.getByRole('button', { name: '라이트 모드로 전환' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // (F) Switch to `비` (`rainy_cool`) -> verify rain foreground mode + umbrella curation badge
+    await page.locator('[data-weather-scenario="rainy_cool"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
+    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'rain');
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-weather-stage-badge="rain"]')).toContainText(
+      '우산 코디'
+    );
+
+    // (G) Switch to `한파` (`winter_cold`) -> verify coldwave foreground mode + sub-zero `-10°/-4°` badge + VTON trigger
+    await page.locator('[data-weather-scenario="winter_cold"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'coldwave');
+    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'coldwave');
+    await expect(studioCanvas.locator('[data-weather-stage-badge="coldwave"]')).toContainText(
+      '방한 코디'
+    );
+    await expect(studioCanvas.locator('[data-weather-stage-badge="coldwave"]')).toContainText(
+      '-10°/-4°'
+    );
+    await expect
+      .poll(() => capturedPayloads.some((p) => Number(p.weather?.tempMin) <= -5))
+      .toBe(true);
+
+    // (H) Verify `눈` (`snowy_winter`), `흐림` (`cloudy_overcast`), and `폭염` (`summer_heatwave`) tabs
+    await page.locator('[data-weather-scenario="snowy_winter"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'snow');
+    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'snow');
+
+    await page.locator('[data-weather-scenario="cloudy_overcast"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'cloudy');
+
+    await page.locator('[data-weather-scenario="summer_heatwave"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'heatwave');
+
+    // (I) Click Top `새로고침` (`[data-outfit-vton-refresh="true"]`) -> verify cache-bypass `forceRefresh: true`
+    const refreshBtn = page.locator('[data-outfit-vton-refresh="true"]');
+    await expect(refreshBtn).toBeVisible();
+    await refreshBtn.click();
+    await expect
+      .poll(() => capturedPayloads.some((p) => p.forceRefresh === true))
+      .toBe(true);
+  });
 });
+
 
 
 

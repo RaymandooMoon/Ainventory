@@ -45,37 +45,46 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), ainventoryBackendPlugin()],
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    strictPort: true,
-    allowedHosts: ['localhost', '127.0.0.1'],
-  },
-  preview: {
-    host: '0.0.0.0',
-    port: 4173,
-    allowedHosts: ['localhost', '127.0.0.1'],
-  },
-  build: {
-    chunkSizeWarningLimit: 750,
-    rollupOptions: {
-      output: {
-        manualChunks(id: string): string | undefined {
-          const normId = id.replace(/\\/g, '/');
-          if (
-            normId.includes('node_modules/react/') ||
-            normId.includes('node_modules/react-dom/') ||
-            normId.includes('node_modules/scheduler/')
-          ) {
-            return 'vendor-react';
-          }
-          if (normId.includes('node_modules/lucide-react/')) {
-            return 'vendor-icons';
-          }
-          return undefined;
+    optimizeDeps: {
+      exclude: ['@imgly/background-removal', 'onnxruntime-web'],
+    },
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      strictPort: true,
+      allowedHosts: ['localhost', '127.0.0.1'],
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 4173,
+      allowedHosts: ['localhost', '127.0.0.1'],
+    },
+    build: {
+      chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks(id: string): string | undefined {
+            const normId = id.replace(/\\/g, '/');
+            if (
+              normId.includes('node_modules/react/') ||
+              normId.includes('node_modules/react-dom/') ||
+              normId.includes('node_modules/scheduler/')
+            ) {
+              return 'vendor-react';
+            }
+            if (normId.includes('node_modules/lucide-react/')) {
+              return 'vendor-icons';
+            }
+            if (
+              normId.includes('node_modules/@imgly/') ||
+              normId.includes('node_modules/onnxruntime-web/')
+            ) {
+              return 'vendor-imgly';
+            }
+            return undefined;
+          },
         },
       },
     },
-  },
   };
 });

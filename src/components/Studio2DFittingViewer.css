@@ -5,16 +5,36 @@
    ========================================================================== */
 
 .studio-25d-canvas.studio-2d-vton-viewer,
-[data-theme='light'] .studio-25d-canvas.studio-2d-vton-viewer,
-[data-theme='dark'] .studio-25d-canvas.studio-2d-vton-viewer {
+[data-theme='light'] .studio-25d-canvas.studio-2d-vton-viewer {
   box-sizing: border-box;
   background-color: var(--squircle-bg-color);
-  background-image: var(--squircle-illumination);
+  background-image: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.94) 0%,
+    rgba(241, 245, 249, 0.74) 58%,
+    rgba(226, 232, 240, 0.88) 100%
+  );
   border: 1px solid var(--squircle-border);
   box-shadow: var(--squircle-inset-rim), var(--elevation-sm);
   color: var(--ink-primary);
-  transition: background-color 0.3s var(--spring-ease), border-color 0.3s var(--spring-ease),
-    box-shadow 0.3s var(--spring-ease);
+  transition: background-color 0.3s var(--spring-ease), background-image 0.3s var(--spring-ease),
+    border-color 0.3s var(--spring-ease), box-shadow 0.3s var(--spring-ease);
+}
+
+[data-theme='dark'] .studio-25d-canvas.studio-2d-vton-viewer {
+  box-sizing: border-box;
+  background-color: #0b1120;
+  background-image: radial-gradient(
+    circle at 50% 24%,
+    rgba(30, 41, 59, 0.78) 0%,
+    rgba(15, 23, 42, 0.92) 56%,
+    rgba(2, 6, 23, 0.98) 100%
+  );
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--squircle-inset-rim), var(--elevation-sm);
+  color: var(--ink-primary);
+  transition: background-color 0.3s var(--spring-ease), background-image 0.3s var(--spring-ease),
+    border-color 0.3s var(--spring-ease), box-shadow 0.3s var(--spring-ease);
 }
 
 @media (max-width: 699px) {
@@ -27,18 +47,96 @@
 }
 
 .studio-2d-vton-viewer .studio-25d-keylight {
+  z-index: 0;
   background: var(--garment-studio-glow);
+  transition: background 0.35s var(--spring-ease), opacity 0.35s var(--spring-ease);
+}
+
+/* Weather-Responsive Stage Ambient Tint (5~14% subtle atmospheric tone) */
+.studio-2d-vton-viewer[data-effective-weather='rain'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 18%,
+    rgba(96, 165, 250, 0.14) 0%,
+    rgba(71, 85, 105, 0.08) 55%,
+    transparent 82%
+  );
+}
+
+.studio-2d-vton-viewer[data-effective-weather='coldwave'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 16%,
+    rgba(56, 189, 248, 0.15) 0%,
+    rgba(147, 197, 253, 0.09) 52%,
+    transparent 82%
+  );
+}
+
+.studio-2d-vton-viewer[data-effective-weather='snow'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 18%,
+    rgba(186, 230, 253, 0.14) 0%,
+    rgba(148, 163, 184, 0.06) 54%,
+    transparent 80%
+  );
+}
+
+.studio-2d-vton-viewer[data-effective-weather='heatwave'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 72% 14%,
+    rgba(251, 191, 36, 0.15) 0%,
+    rgba(249, 115, 22, 0.06) 50%,
+    transparent 80%
+  );
+}
+
+.studio-2d-vton-viewer[data-effective-weather='clear'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 66% 16%,
+    rgba(253, 224, 71, 0.09) 0%,
+    rgba(186, 230, 253, 0.05) 52%,
+    transparent 78%
+  );
+}
+
+.studio-2d-vton-viewer[data-effective-weather='cloudy'] .studio-25d-keylight,
+.studio-2d-vton-viewer[data-effective-weather='wind'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 20%,
+    rgba(148, 163, 184, 0.12) 0%,
+    rgba(100, 116, 139, 0.05) 54%,
+    transparent 80%
+  );
 }
 
 .studio-2d-vton-viewer .studio-25d-cyclorama-floor,
-[data-theme='light'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor,
-[data-theme='dark'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor {
+[data-theme='light'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor {
+  z-index: 1;
   background: var(--silhouette-fill);
 }
 
+[data-theme='dark'] .studio-2d-vton-viewer .studio-25d-cyclorama-floor {
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0) 0%,
+    rgba(15, 23, 42, 0.36) 58%,
+    rgba(2, 6, 23, 0.65) 100%
+  );
+}
+
 /* ==========================================================================
-   0. FOREGROUND RAINY WEATHER ATMOSPHERE OVERLAY (VISIBLE OVER VTON & FLAT-LAY)
+   0. FOREGROUND WEATHER PHYSICS CANVAS LAYER (z-index: 30, pointer-events: none)
    ========================================================================== */
+.studio-weather-foreground-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 30;
+  pointer-events: none !important;
+  display: block;
+}
+
 .studio-2d-vton-viewer .studio-25d-rain-layer {
   position: absolute;
   inset: 0;
@@ -52,6 +150,18 @@
     rgba(110, 144, 184, 0.05) 38%,
     rgba(92, 126, 168, 0.1) 100%
   );
+}
+
+.studio-2d-vton-viewer .studio-25d-rain-layer.is-canvas-rain,
+[data-theme='dark'] .studio-2d-vton-viewer .studio-25d-rain-layer.is-canvas-rain {
+  background: transparent !important;
+}
+
+.studio-2d-vton-viewer .studio-25d-rain-layer.is-canvas-rain::before,
+.studio-2d-vton-viewer .studio-25d-rain-layer.is-canvas-rain::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
 }
 
 .studio-2d-vton-viewer .studio-25d-rain-layer::before,
@@ -118,7 +228,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 12;
+  z-index: 20;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -258,6 +368,11 @@
   will-change: clip-path;
 }
 
+/* Extra top headroom in AI VTON stage so wide-open umbrellas never clip at top */
+.studio-2d-model-stage.is-ai-stage .studio-2d-layer {
+  padding: 44px 12px 86px;
+}
+
 .studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-2d-layer {
   padding-left: 60px;
 }
@@ -267,8 +382,40 @@
 }
 
 .studio-2d-layer-before {
-  z-index: 3;
+  z-index: 25;
   will-change: clip-path;
+}
+
+/* Layer 1 (z-index: 10): Elliptical Floor Contact Shadow grounding RGBA model feet */
+.studio-floor-contact-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  width: min(56%, 224px);
+  height: 34px;
+  margin-left: calc(min(56%, 224px) * -0.5);
+  z-index: 10;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(15, 23, 42, 0.24) 0%,
+    rgba(15, 23, 42, 0.09) 48%,
+    rgba(15, 23, 42, 0) 76%
+  );
+  filter: blur(4px);
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+[data-theme='dark'] .studio-floor-contact-shadow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0) 78%
+  );
+  filter: blur(5px);
 }
 
 .studio-2d-media-el {
@@ -282,12 +429,99 @@
   -webkit-user-drag: none;
 }
 
+/* Layer 2 (z-index: 20): True RGBA Transparent Model Image — zero opaque backdrop */
 .editorial-ai-vton-img {
-  border-radius: 18px;
-  filter: var(--garment-cutout-shadow);
+  position: relative;
+  z-index: 20;
+  background: transparent !important;
+  border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16));
+}
+
+[data-theme='dark'] .editorial-ai-vton-img {
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56));
+}
+
+/* Layer 4 (z-index: 42): Compact Weather Curation Pill Badge */
+.studio-weather-curation-badge {
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  z-index: 42;
+  height: 24px;
+  padding: 0 9px;
+  max-width: calc(100% - 76px);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-xs);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-secondary);
+  font-size: 0.61rem;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.studio-weather-curation-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: #38bdf8;
+  flex-shrink: 0;
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='rain'] .studio-weather-curation-dot {
+  background: #3b82f6;
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='coldwave'] .studio-weather-curation-dot {
+  background: #67e8f9;
+  box-shadow: 0 0 6px rgba(103, 232, 249, 0.65);
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='snow'] .studio-weather-curation-dot {
+  background: #bae6fd;
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='heatwave'] .studio-weather-curation-dot {
+  background: #f59e0b;
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='clear'] .studio-weather-curation-dot {
+  background: #facc15;
+}
+
+.studio-weather-curation-badge[data-weather-stage-badge='cloudy'] .studio-weather-curation-dot,
+.studio-weather-curation-badge[data-weather-stage-badge='wind'] .studio-weather-curation-dot {
+  background: #94a3b8;
+}
+
+.studio-weather-curation-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1060px) {
+  .studio-weather-curation-badge {
+    top: 48px;
+    right: 10px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 0.58rem;
+  }
 }
 
 .studio-2d-model-stage:not(.is-panning) .studio-2d-media-el,
+.studio-2d-model-stage:not(.is-panning) .studio-floor-contact-shadow,
 .studio-2d-model-stage:not(.is-panning) .editorial-flatlay-board,
 .studio-2d-model-stage:not(.is-panning) .editorial-spec-compare-sheet {
   transition: transform 0.24s var(--spring-ease), opacity 0.22s var(--spring-ease);
