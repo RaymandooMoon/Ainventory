@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { normalizeWardrobeCategoryKey } from '../../contracts/carbonDesignContract.ts';
 import { formatKRW } from '../../utils/api.ts';
 import { localizeColorName, tx } from '../../utils/i18n.ts';
@@ -32,6 +32,7 @@ export function WardrobeHeroSummaryCard({
   garments = [],
   activeOutfitCount = 0,
   wearLogCount = 0,
+  periodLabel = '',
   lang = 'ko',
   bentoIndex = 0,
 }) {
@@ -88,14 +89,16 @@ export function WardrobeHeroSummaryCard({
       <div className="stats-card-head">
         <div className="stats-title-stack">
           <span className="stats-eyebrow">
-            {tx(lang, '옷장 핵심 요약 인포그래픽', 'WARDROBE VITALITY OVERVIEW')}
+            {periodLabel
+              ? `${tx(lang, '옷장 핵심 요약', 'WARDROBE OVERVIEW')} · ${periodLabel}`
+              : tx(lang, '옷장 핵심 요약 인포그래픽', 'WARDROBE VITALITY OVERVIEW')}
           </span>
           <h2 className="stats-card-title">
             {tx(lang, '캡슐 아카이브 활용률', 'Archive Utilization & Velocity')}
           </h2>
         </div>
         <span className="stats-glass-pill">
-          <Sparkles size={12} />
+          <Sparkles size={12} aria-hidden="true" />
           <span>{statusBadge}</span>
         </span>
       </div>
@@ -356,7 +359,10 @@ export function InteractiveCompositionWidget({
               setDimension('category');
             }}
           >
-            {tx(lang, '카테고리', 'Category')}
+            {dimension === 'category' && (
+              <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+            )}
+            <span>{tx(lang, '카테고리', 'Category')}</span>
           </button>
           <button
             type="button"
@@ -369,7 +375,10 @@ export function InteractiveCompositionWidget({
               setDimension('season');
             }}
           >
-            {tx(lang, '계절 분포', 'Season')}
+            {dimension === 'season' && (
+              <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+            )}
+            <span>{tx(lang, '계절 분포', 'Season')}</span>
           </button>
         </div>
       </div>
@@ -457,6 +466,7 @@ export function InteractiveCompositionWidget({
               <button
                 key={row.key}
                 type="button"
+                aria-pressed={isHovered}
                 className={`stats-comp-row ${isHovered ? 'is-hovered' : ''}`}
                 onMouseEnter={() => setHoveredKey(row.key)}
                 onMouseLeave={() => setHoveredKey(null)}
@@ -484,6 +494,7 @@ export function InteractiveCompositionWidget({
                   />
                 </div>
                 <span className="stats-comp-metric">
+                  {isHovered && <Check size={13} strokeWidth={2.6} aria-hidden="true" />}
                   {totalUnits > 0
                     ? `${row.count} · ${row.pct}%`
                     : tx(lang, `권장 ${row.guidePct}%`, `Rec ${row.guidePct}%`)}
@@ -592,28 +603,19 @@ export function ColorSpectrumWidget({
         <div className="stats-spectrum-shell">
           <div
             className="stats-spectrum-bar"
-            role="group"
+            role="img"
             aria-label={tx(lang, '의류 색상 비율 스펙트럼 바', 'Garment Color Spectrum Bar')}
           >
             {swatches.map((sw) => {
               const isSelected = activeSwatchKey === sw.key;
               const isDimmed = activeSwatchKey !== null && !isSelected;
               return (
-                <button
+                <span
                   key={sw.key}
-                  type="button"
                   className={`stats-spectrum-seg ${isSelected ? 'is-active' : ''} ${isDimmed ? 'is-dimmed' : ''}`}
                   style={{
                     flexGrow: Math.max(1, sw.count),
                     background: sw.hex,
-                  }}
-                  aria-label={`${sw.name} (${sw.count}, ${sw.pct}%)`}
-                  title={`${sw.name} · ${sw.pct}%`}
-                  onMouseEnter={() => setActiveSwatchKey(sw.key)}
-                  onMouseLeave={() => setActiveSwatchKey(null)}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setActiveSwatchKey((prev) => (prev === sw.key ? null : sw.key));
                   }}
                 />
               );
@@ -633,6 +635,7 @@ export function ColorSpectrumWidget({
                 <button
                   key={sw.key}
                   type="button"
+                  aria-pressed={isSelected}
                   className={`stats-swatch-chip ${isSelected ? 'is-active' : ''}`}
                   onMouseEnter={() => setActiveSwatchKey(sw.key)}
                   onMouseLeave={() => setActiveSwatchKey(null)}
@@ -650,6 +653,7 @@ export function ColorSpectrumWidget({
                     <span className="stats-swatch-name">{sw.name}</span>
                   </span>
                   <span className="stats-swatch-pct">
+                    {isSelected && <Check size={13} strokeWidth={2.6} aria-hidden="true" />}
                     {sw.count} · {sw.pct}%
                   </span>
                 </button>

@@ -9,6 +9,7 @@ import {
   CloudSun,
   Layers,
   Plus,
+  Search,
   Shirt,
   Snowflake,
   Sun,
@@ -24,6 +25,7 @@ import {
   tx,
 } from '../../utils/i18n.ts';
 import { pushBackHandler, triggerHaptic } from '../../utils/nativeBridge.ts';
+import { ClearableField, ExclusiveErrorCard } from '../ExclusiveViewPrimitives.jsx';
 import GarmentObject25D from '../GarmentObject25D.jsx';
 import { StackedGarmentPreview } from './CalendarLookbookGrid.jsx';
 import {
@@ -73,6 +75,7 @@ function getCategoryDisplayLabel(rawCategory, lang = 'ko') {
 function buildInitialDrawerState({
   selectedDate,
   initialEntryId,
+  weatherSeed,
   dateEntries,
   outfits,
   garments,
@@ -80,6 +83,22 @@ function buildInitialDrawerState({
   lang,
   todayStr,
 }) {
+  if (weatherSeed && (weatherSeed.forceNew || dateEntries.length === 0)) {
+    return {
+      activeEntryKey: 'new',
+      status: selectedDate > todayStr ? 'planned' : 'worn',
+      weatherKey: weatherSeed.weatherKey || 'clear',
+      tempInput: weatherSeed.tempInput ?? '',
+      noteInput: weatherSeed.noteInput ?? '',
+      selectedOutfitId: '',
+      selectedItemIds:
+        Array.isArray(weatherSeed.itemIds) && weatherSeed.itemIds.length > 0
+          ? weatherSeed.itemIds
+          : garments.slice(0, 2).map((g) => Number(g.id)),
+      pickerTab: 'pieces',
+    };
+  }
+
   let targetEntry = null;
   if (initialEntryId !== null && initialEntryId !== undefined) {
     targetEntry = dateEntries.find((e) => Number(e.id) === Number(initialEntryId)) || null;
@@ -141,6 +160,9 @@ function SlideOverDrawerSession({
   onClose,
   selectedDate,
   initialEntryId,
+  weatherSeed,
+  drawerError,
+  onClearDrawerError,
   onChangeDate,
   todayStr,
   dateEntries,
@@ -157,6 +179,7 @@ function SlideOverDrawerSession({
       buildInitialDrawerState({
         selectedDate,
         initialEntryId,
+        weatherSeed,
         dateEntries,
         outfits,
         garments,
@@ -164,7 +187,17 @@ function SlideOverDrawerSession({
         lang,
         todayStr,
       }),
-    [selectedDate, initialEntryId, dateEntries, outfits, garments, garmentMap, lang, todayStr]
+    [
+      selectedDate,
+      initialEntryId,
+      weatherSeed,
+      dateEntries,
+      outfits,
+      garments,
+      garmentMap,
+      lang,
+      todayStr,
+    ]
   );
 
   const [activeEntryKey, setActiveEntryKey] = useState(initialState.activeEntryKey);
@@ -175,14 +208,34 @@ function SlideOverDrawerSession({
   const [selectedOutfitId, setSelectedOutfitId] = useState(initialState.selectedOutfitId);
   const [selectedItemIds, setSelectedItemIds] = useState(initialState.selectedItemIds);
   const [pickerTab, setPickerTab] = useState(initialState.pickerTab);
+  const [pieceSearch, setPieceSearch] = useState('');
+  const [lastAction, setLastAction] = useState('save');
 
   const activeEntry = useMemo(() => {
     if (activeEntryKey === 'new') return null;
     return dateEntries.find((e) => String(e.id) === String(activeEntryKey)) || null;
   }, [activeEntryKey, dateEntries]);
 
+  const filteredGarments = useMemo(() => {
+    const q = pieceSearch.trim().toLowerCase();
+    if (!q) return garments;
+    return garments.filter((item) => {
+      const displayName = localizeGarmentName(item.name, lang).toLowerCase();
+      const displayBrand = localizeBrandName(item.brand, lang).toLowerCase();
+      const rawName = String(item.name || '').toLowerCase();
+      const rawBrand = String(item.brand || '').toLowerCase();
+      return (
+        displayName.includes(q) ||
+        displayBrand.includes(q) ||
+        rawName.includes(q) ||
+        rawBrand.includes(q)
+      );
+    });
+  }, [garments, lang, pieceSearch]);
+
   const selectExistingTab = (entry) => {
     triggerHaptic('selection');
+    onClearDrawerError?.();
     setActiveEntryKey(String(entry.id));
     setStatus(entry.status === 'planned' ? 'planned' : 'worn');
     setWeatherKey(inferWeatherKey(entry.weather_summary));
@@ -200,6 +253,7 @@ function SlideOverDrawerSession({
 
   const selectNewTab = () => {
     triggerHaptic('selection');
+    onClearDrawerError?.();
     setActiveEntryKey('new');
     setStatus(selectedDate > todayStr ? 'planned' : 'worn');
     setWeatherKey('clear');
@@ -246,8 +300,8 @@ function SlideOverDrawerSession({
     return `${selectedDate.replace(/-/g, '. ')} · ${dow}`;
   }, [lang, selectedDate]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitCurrentEntry = async () => {
+    setLastAction('save');
     const chosenPreset = WEATHER_PRESETS.find((w) => w.key === weatherKey);
     const weatherSummary = chosenPreset ? (lang === 'en' ? chosenPreset.en : chosenPreset.ko) : '';
     const parsedTemp =
@@ -265,6 +319,16 @@ function SlideOverDrawerSession({
       temp_c: parsedTemp,
       note: noteInput.trim(),
     });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await submitCurrentEntry();
+  };
+
+  const triggerDelete = async (entryId) => {
+    setLastAction('delete');
+    await onDeleteEntry?.(entryId);
   };
 
   return (
@@ -295,7 +359,7 @@ function SlideOverDrawerSession({
             }}
             aria-label={tx(lang, '이전 날짜', 'Previous Day')}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -306,7 +370,7 @@ function SlideOverDrawerSession({
             }}
             aria-label={tx(lang, '다음 날짜', 'Next Day')}
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -314,12 +378,27 @@ function SlideOverDrawerSession({
             onClick={() => onClose?.()}
             aria-label={tx(lang, '드로어 닫기', 'Close Drawer')}
           >
-            <X size={17} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
       </header>
 
       <form id="calendar-drawer-form" onSubmit={handleSubmit} className="cal-ed-drawer-body">
+        {drawerError && (
+          <ExclusiveErrorCard
+            lang={lang}
+            compact
+            title={tx(lang, '작업 처리 중 오류가 발생했습니다', 'Calendar Action Failed')}
+            message={drawerError}
+            onRetry={() =>
+              lastAction === 'delete' && activeEntry
+                ? triggerDelete(activeEntry.id)
+                : submitCurrentEntry()
+            }
+            retrying={saving}
+          />
+        )}
+
         {dateEntries.length > 0 && (
           <div className="cal-ed-entry-tabs">
             {dateEntries.map((entry, idx) => {
@@ -328,19 +407,26 @@ function SlideOverDrawerSession({
                 <button
                   key={entry.id}
                   type="button"
+                  aria-pressed={isSelected}
                   className={`cal-ed-entry-tab ${isSelected ? 'is-active' : ''}`}
                   onClick={() => selectExistingTab(entry)}
                 >
+                  {isSelected && <Check size={13} strokeWidth={2.6} aria-hidden="true" />}
                   <span>{tx(lang, `룩 #${idx + 1}`, `Look 0${idx + 1}`)}</span>
                 </button>
               );
             })}
             <button
               type="button"
+              aria-pressed={activeEntryKey === 'new'}
               className={`cal-ed-entry-tab ${activeEntryKey === 'new' ? 'is-active' : ''}`}
               onClick={selectNewTab}
             >
-              <Plus size={13} />
+              {activeEntryKey === 'new' ? (
+                <Check size={13} strokeWidth={2.6} aria-hidden="true" />
+              ) : (
+                <Plus size={14} aria-hidden="true" />
+              )}
               <span>{tx(lang, '새 착장 추가', 'Add New')}</span>
             </button>
           </div>
@@ -386,7 +472,7 @@ function SlideOverDrawerSession({
               </>
             ) : (
               <div className="cal-ed-week-empty-frame" style={{ height: 96 }}>
-                <Shirt size={18} />
+                <Shirt size={18} aria-hidden="true" />
                 <span>
                   {tx(
                     lang,
@@ -423,29 +509,33 @@ function SlideOverDrawerSession({
               <span className="cal-ed-seg-thumb" aria-hidden="true" />
               <button
                 type="button"
+                aria-pressed={status === 'worn'}
                 className={`cal-ed-seg-btn ${status === 'worn' ? 'is-active' : ''}`}
                 onClick={() => {
                   triggerHaptic('selection');
                   setStatus('worn');
                 }}
               >
-                {tx(lang, '착용', 'Worn')}
+                {status === 'worn' && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                <span>{tx(lang, '착용', 'Worn')}</span>
               </button>
               <button
                 type="button"
+                aria-pressed={status === 'planned'}
                 className={`cal-ed-seg-btn ${status === 'planned' ? 'is-active' : ''}`}
                 onClick={() => {
                   triggerHaptic('selection');
                   setStatus('planned');
                 }}
               >
-                {tx(lang, '예정', 'Planned')}
+                {status === 'planned' && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                <span>{tx(lang, '예정', 'Planned')}</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* 3. Weather Badge & Temperature */}
+        {/* 3. Weather Badge & Temperature with 48x48px Clear Buttons */}
         <div className="cal-ed-drawer-section">
           <span className="cal-ed-section-label">
             {tx(lang, '날씨 · 기온 기록', 'WEATHER & TEMPERATURE')}
@@ -458,13 +548,18 @@ function SlideOverDrawerSession({
                 <button
                   key={preset.key}
                   type="button"
+                  aria-pressed={active}
                   className={`cal-ed-weather-chip ${active ? 'is-active' : ''}`}
                   onClick={() => {
                     triggerHaptic('selection');
                     setWeatherKey((prev) => (prev === preset.key ? '' : preset.key));
                   }}
                 >
-                  <Icon size={13} />
+                  {active ? (
+                    <Check size={13} strokeWidth={2.6} aria-hidden="true" />
+                  ) : (
+                    <Icon size={14} aria-hidden="true" />
+                  )}
                   <span>{lang === 'en' ? preset.en : preset.ko}</span>
                 </button>
               );
@@ -472,7 +567,7 @@ function SlideOverDrawerSession({
           </div>
 
           <div className="cal-ed-inline-inputs" style={{ marginTop: 4 }}>
-            <input
+            <ClearableField
               id="calendar-note-input"
               type="text"
               className="hig-native-input"
@@ -482,16 +577,19 @@ function SlideOverDrawerSession({
                 'Wear memo (e.g. Office / Gallery)'
               )}
               aria-label={tx(lang, '착용 메모', 'Wear Memo')}
+              clearLabel={tx(lang, '착용 메모 지우기', 'Clear wear memo')}
               value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               maxLength={140}
             />
-            <input
+            <ClearableField
               id="calendar-temp-input"
               type="number"
+              inputMode="numeric"
               className="hig-native-input tabular-nums"
               placeholder={tx(lang, '기온 (°C)', 'Temp (°C)')}
               aria-label={tx(lang, '기온 섭씨', 'Temperature Celsius')}
+              clearLabel={tx(lang, '기온 지우기', 'Clear temperature')}
               value={tempInput}
               onChange={(e) => setTempInput(e.target.value)}
               min={-30}
@@ -515,26 +613,36 @@ function SlideOverDrawerSession({
             <span className="cal-ed-seg-thumb" aria-hidden="true" />
             <button
               type="button"
+              aria-pressed={pickerTab === 'outfits'}
               className={`cal-ed-seg-btn ${pickerTab === 'outfits' ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
                 setPickerTab('outfits');
               }}
             >
-              <Layers size={13} />
+              {pickerTab === 'outfits' ? (
+                <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              ) : (
+                <Layers size={14} aria-hidden="true" />
+              )}
               <span>
                 {tx(lang, '저장된 코디', 'Saved Outfits')} ({outfits.length})
               </span>
             </button>
             <button
               type="button"
+              aria-pressed={pickerTab === 'pieces'}
               className={`cal-ed-seg-btn ${pickerTab === 'pieces' ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
                 setPickerTab('pieces');
               }}
             >
-              <Shirt size={13} />
+              {pickerTab === 'pieces' ? (
+                <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              ) : (
+                <Shirt size={14} aria-hidden="true" />
+              )}
               <span>
                 {tx(lang, '옷장 직접 선택', 'Closet Pieces')} ({garments.length})
               </span>
@@ -554,6 +662,7 @@ function SlideOverDrawerSession({
                     <button
                       key={outfit.id}
                       type="button"
+                      aria-pressed={isSelected}
                       className={`cal-ed-outfit-option ${isSelected ? 'is-selected' : ''}`}
                       onClick={() => handleChooseOutfit(outfit)}
                     >
@@ -585,7 +694,10 @@ function SlideOverDrawerSession({
                 })}
               </div>
             ) : (
-              <div className="cal-ed-week-empty-frame" style={{ height: 84 }}>
+              <div
+                className="cal-ed-week-empty-frame"
+                style={{ minHeight: 88, height: 'auto', padding: '16px 14px' }}
+              >
                 <span>
                   {tx(
                     lang,
@@ -596,32 +708,70 @@ function SlideOverDrawerSession({
               </div>
             )
           ) : garments.length > 0 ? (
-            <div className="cal-ed-garment-picker-grid">
-              {garments.map((item) => {
-                const picked = selectedItemIds.includes(Number(item.id));
-                const name = localizeGarmentName(item.name, lang);
-                return (
+            <>
+              <ClearableField
+                id="calendar-piece-search-input"
+                type="text"
+                inputMode="search"
+                className="hig-native-input"
+                leadingIcon={<Search size={17} strokeWidth={2.1} />}
+                placeholder={tx(lang, '의류 이름 또는 브랜드 검색', 'Search piece or brand')}
+                aria-label={tx(lang, '착장 의류 검색', 'Search closet pieces')}
+                clearLabel={tx(lang, '검색어 지우기', 'Clear search')}
+                value={pieceSearch}
+                onChange={(e) => setPieceSearch(e.target.value)}
+                maxLength={60}
+              />
+
+              {filteredGarments.length > 0 ? (
+                <div className="cal-ed-garment-picker-grid">
+                  {filteredGarments.map((item) => {
+                    const picked = selectedItemIds.includes(Number(item.id));
+                    const name = localizeGarmentName(item.name, lang);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={picked}
+                        className={`cal-ed-garment-pick-tile ${picked ? 'is-selected' : ''}`}
+                        onClick={() => handleToggleGarmentPiece(item.id)}
+                      >
+                        {picked && (
+                          <span className="cal-ed-pick-check" aria-hidden="true">
+                            <Check size={12} strokeWidth={2.8} />
+                          </span>
+                        )}
+                        <div className="cal-ed-garment-pick-thumb">
+                          <GarmentObject25D item={item} alt={name} padding="11%" />
+                        </div>
+                        <span className="cal-ed-garment-pick-name">{name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div
+                  className="cal-ed-week-empty-frame"
+                  style={{ minHeight: 112, height: 'auto', padding: '16px 14px' }}
+                >
+                  <span>
+                    {tx(lang, '검색 결과에 맞는 의류가 없습니다.', 'No pieces match your search.')}
+                  </span>
                   <button
-                    key={item.id}
                     type="button"
-                    className={`cal-ed-garment-pick-tile ${picked ? 'is-selected' : ''}`}
-                    onClick={() => handleToggleGarmentPiece(item.id)}
+                    className="ux-state-cta-btn is-secondary"
+                    onClick={() => setPieceSearch('')}
                   >
-                    {picked && (
-                      <span className="cal-ed-pick-check" aria-hidden="true">
-                        <Check size={11} strokeWidth={2.8} />
-                      </span>
-                    )}
-                    <div className="cal-ed-garment-pick-thumb">
-                      <GarmentObject25D item={item} alt={name} padding="11%" />
-                    </div>
-                    <span className="cal-ed-garment-pick-name">{name}</span>
+                    <span>{tx(lang, '검색 초기화', 'Reset Search')}</span>
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              )}
+            </>
           ) : (
-            <div className="cal-ed-week-empty-frame" style={{ height: 84 }}>
+            <div
+              className="cal-ed-week-empty-frame"
+              style={{ minHeight: 88, height: 'auto', padding: '16px 14px' }}
+            >
               <span>
                 {tx(lang, '옷장에 등록된 아이템이 없습니다.', 'No garments in your closet yet.')}
               </span>
@@ -636,10 +786,10 @@ function SlideOverDrawerSession({
             type="button"
             className="cal-ed-delete-btn"
             disabled={saving}
-            onClick={() => onDeleteEntry?.(activeEntry.id)}
+            onClick={() => triggerDelete(activeEntry.id)}
             aria-label={tx(lang, '일정 삭제', 'Delete Entry')}
           >
-            <Trash2 size={16} />
+            <Trash2 size={16} aria-hidden="true" />
             <span>{tx(lang, '삭제', 'Delete')}</span>
           </button>
         )}
@@ -649,7 +799,7 @@ function SlideOverDrawerSession({
           className="cal-ed-save-btn"
           disabled={saving}
         >
-          <Check size={17} />
+          <Check size={17} aria-hidden="true" />
           <span>
             {activeEntry
               ? tx(lang, '착장 업데이트', 'Update Look')
@@ -666,6 +816,9 @@ export default function CalendarSlideOverDrawer({
   onClose,
   selectedDate,
   initialEntryId = null,
+  weatherSeed = null,
+  drawerError = null,
+  onClearDrawerError,
   onChangeDate,
   todayStr,
   logs = [],
@@ -710,7 +863,7 @@ export default function CalendarSlideOverDrawer({
 
   if (!open) return null;
 
-  const sessionKey = `${selectedDate}::${initialEntryId ?? 'auto'}::${dateEntries.map((e) => e.id).join(',')}`;
+  const sessionKey = `${selectedDate}::${initialEntryId ?? 'auto'}::${weatherSeed ? 'seed' : 'plain'}::${dateEntries.map((e) => e.id).join(',')}`;
 
   const drawerNode = (
     <div
@@ -724,6 +877,9 @@ export default function CalendarSlideOverDrawer({
         onClose={onClose}
         selectedDate={selectedDate}
         initialEntryId={initialEntryId}
+        weatherSeed={weatherSeed}
+        drawerError={drawerError}
+        onClearDrawerError={onClearDrawerError}
         onChangeDate={onChangeDate}
         todayStr={todayStr}
         dateEntries={dateEntries}

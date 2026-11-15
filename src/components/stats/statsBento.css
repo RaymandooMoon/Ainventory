@@ -1,6 +1,6 @@
 /* ==========================================================================
    Stats Bento Infographic Dashboard — Scoped Stylesheet
-   Inherits 100% of theme tokens from index.css (Light & Dark Auto-Adaptive)
+   Inherits theme tokens from index.css & enforces WCAG AA + 48px targets
    ========================================================================== */
 
 @keyframes statsBentoFadeIn {
@@ -23,6 +23,131 @@
   }
 }
 
+.hig-stats-screen {
+  --ink-secondary: #48484D;
+  --ink-muted: #595960;
+  line-height: 1.5;
+}
+
+[data-theme='dark'] .hig-stats-screen {
+  --ink-secondary: #C7C7CC;
+  --ink-muted: #AEAEB2;
+  --danger-ink: #FF6961;
+}
+
+/* ---------- Scoped Top Bar & Action Buttons (>= 48px & 8px gap) ---------- */
+.hig-stats-screen .hig-top-bar {
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.hig-stats-screen .hig-top-bar-actions,
+.hig-stats-screen .hig-top-right-utility-group {
+  gap: 8px;
+}
+
+.hig-stats-screen .hig-circle-icon-btn,
+.hig-stats-screen .hig-profile-quick-pill {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.hig-stats-screen .hig-circle-icon-btn {
+  width: 48px;
+  height: 48px;
+}
+
+.hig-stats-screen .hig-item-count {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.hig-stats-screen .hig-stats-skin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hig-stats-screen .hig-secondary-btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 16px;
+  gap: 8px;
+  line-height: 1.5;
+  border: 1.5px solid var(--card-border);
+}
+
+/* ---------- Inline Period Selector Chips (5 options, zero <select>) ---------- */
+.stats-period-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.stats-period-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.stats-period-chip {
+  position: relative;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--ink-secondary);
+  font-size: 0.84rem;
+  font-weight: 640;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--spring-ease),
+    color 0.2s var(--spring-ease),
+    border-color 0.2s var(--spring-ease),
+    transform 0.15s var(--spring-ease);
+}
+
+.stats-period-chip:hover:not(.is-active) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.stats-period-chip.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas), var(--elevation-xs);
+  font-weight: 720;
+}
+
+.stats-period-chip.is-active::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.stats-period-chip:active {
+  transform: scale(0.96);
+}
+
 .stats-bento-grid {
   --stats-tone-0: var(--ink-primary);
   --stats-tone-1: color-mix(in srgb, var(--ink-primary) 72%, var(--card-bg));
@@ -38,7 +163,7 @@
 
 .stats-bento-card {
   background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   box-shadow: var(--elevation-xs);
@@ -58,9 +183,13 @@
 @media (hover: hover) {
   .stats-bento-card:hover {
     transform: translateY(-2px);
-    border-color: var(--squircle-border-hover);
+    border-color: var(--ink-secondary);
     box-shadow: var(--elevation-sm);
   }
+}
+
+.stats-span-12 {
+  grid-column: span 12;
 }
 
 .stats-span-7 {
@@ -94,9 +223,10 @@
 .stats-eyebrow {
   font-size: var(--type-micro);
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-muted);
+  line-height: 1.5;
 }
 
 .stats-card-title {
@@ -104,13 +234,15 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink-primary);
+  line-height: 1.4;
   margin: 0;
 }
 
 .stats-card-sub {
   font-size: var(--type-caption);
-  font-weight: 400;
+  font-weight: 500;
   color: var(--ink-secondary);
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -118,64 +250,78 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
-  background: var(--glass-bg);
-  backdrop-filter: var(--vibrancy-filter-subtle);
-  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-specular);
+  background: var(--bg-surface);
+  border: 1px solid var(--card-border);
   color: var(--ink-primary);
   font-size: var(--type-micro);
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
-/* ---------- Sliding Segmented Tab Switcher ---------- */
+/* ---------- Segmented Tab Switcher (>= 48px & >= 8px gap) ---------- */
 .stats-seg-track {
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 3px;
+  gap: 8px;
+  padding: 4px;
   border-radius: var(--radius-pill);
   background: var(--bg-surface);
-  border: 1px solid var(--card-border);
-  min-width: 196px;
+  border: 1.5px solid var(--card-border);
+  min-width: 224px;
 }
 
 .stats-seg-thumb {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
-  border-radius: var(--radius-pill);
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--elevation-xs);
-  transform: translateX(calc(var(--seg-idx, 0) * 100%));
-  transition: transform 0.34s var(--spring-ease);
-  pointer-events: none;
+  display: none;
 }
 
 .stats-seg-btn {
   position: relative;
   z-index: 1;
-  height: 30px;
-  padding: 0 var(--space-3);
-  border: none;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid transparent;
   background: transparent;
   color: var(--ink-secondary);
-  font-size: var(--type-caption);
-  font-weight: 600;
+  font-size: 0.84rem;
+  font-weight: 640;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
-  transition: color 0.2s var(--spring-ease);
+  transition:
+    color 0.2s var(--spring-ease),
+    background-color 0.2s var(--spring-ease),
+    border-color 0.2s var(--spring-ease);
 }
 
 .stats-seg-btn.is-active {
-  color: var(--ink-primary);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas);
+  font-weight: 720;
+}
+
+.stats-seg-btn.is-active::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 5px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
 }
 
 /* ---------- Widget 1: Hero Summary + Utilization Gauge Ring ---------- */
@@ -234,29 +380,30 @@
   letter-spacing: -0.03em;
   color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.05;
+  line-height: 1.1;
 }
 
 .stats-gauge-caption {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-muted);
   margin-top: 3px;
+  line-height: 1.4;
 }
 
 .stats-hero-kpi-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: 8px;
 }
 
 .stats-kpi-tile {
-  padding: var(--space-3) var(--space-4);
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   background: var(--card-subtle);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -265,33 +412,39 @@
 
 .stats-kpi-label {
   font-size: var(--type-micro);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-muted);
+  line-height: 1.5;
 }
 
 .stats-kpi-value {
-  font-size: 1.32rem;
-  font-weight: 700;
+  font-size: 1.28rem;
+  font-weight: 750;
   letter-spacing: -0.02em;
   color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .stats-kpi-note {
   font-size: var(--type-micro);
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
 }
 
 /* ---------- Widget 2: Personal Atelier Profile Bento Override ---------- */
+/* Preserve var(--card-bg) (rgb(255, 255, 255) in Light Mode) for E2E contract */
 .hig-stats-skin-card.stats-bento-profile {
   background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   box-shadow: var(--elevation-xs);
@@ -303,21 +456,27 @@
   animation: statsBentoFadeIn 0.46s var(--spring-ease) calc(var(--bento-idx, 1) * 55ms) both;
 }
 
+.hig-stats-skin-card.stats-bento-profile .hig-stats-skin-sub {
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
 .stats-profile-specs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .stats-spec-chip {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
   background: var(--card-subtle);
   border: 1px solid var(--card-border);
   font-size: var(--type-micro);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
 }
 
 /* ---------- Widget 3: Interactive Donut & Bar Composition Chart ---------- */
@@ -373,13 +532,14 @@
 .stats-donut-center-lbl {
   font-size: var(--type-micro);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-muted);
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .stats-donut-center-val {
@@ -388,14 +548,15 @@
   letter-spacing: -0.03em;
   color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .stats-donut-center-pct {
   font-size: var(--type-caption);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .stats-comp-bars {
@@ -406,14 +567,15 @@
 }
 
 .stats-comp-row {
+  min-height: 48px;
   display: grid;
-  grid-template-columns: 10px 92px minmax(0, 1fr) 68px;
+  grid-template-columns: 10px minmax(64px, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--card-border);
+  background: var(--card-subtle);
   text-align: left;
   cursor: pointer;
   transition:
@@ -424,24 +586,27 @@
 
 .stats-comp-row.is-hovered,
 .stats-comp-row:hover {
-  background: var(--card-subtle);
-  border-color: var(--card-border);
+  background: var(--card-bg);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas);
   transform: translateX(2px);
 }
 
 .stats-comp-swatch {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: var(--radius-pill);
 }
 
 .stats-comp-name {
   font-size: var(--type-label);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
 }
 
 .stats-comp-track {
@@ -449,6 +614,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-tertiary);
   overflow: hidden;
+  min-width: 48px;
 }
 
 .stats-comp-fill {
@@ -461,11 +627,15 @@
 
 .stats-comp-metric {
   font-size: var(--type-caption);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
   text-align: right;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ---------- Widget 4: Color Palette Spectrum Bar ---------- */
@@ -480,20 +650,19 @@
   border-radius: var(--radius-pill);
   padding: 3px;
   background: var(--bg-surface);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   display: flex;
   align-items: stretch;
-  gap: 3px;
+  gap: 4px;
   overflow: hidden;
 }
 
 .stats-spectrum-seg {
+  display: block;
   height: 100%;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-pill);
-  cursor: pointer;
   min-width: 14px;
-  padding: 0;
   transition:
     transform 0.22s var(--spring-bounce),
     opacity 0.22s var(--spring-ease);
@@ -503,46 +672,55 @@
   opacity: 0.48;
 }
 
-.stats-spectrum-seg.is-active,
-.stats-spectrum-seg:hover {
+.stats-spectrum-seg.is-active {
   transform: scaleY(1.12);
+  border-color: var(--ink-primary);
 }
 
 .stats-spectrum-aura {
   height: 6px;
   border-radius: var(--radius-pill);
-  opacity: 0.78;
+  opacity: 0.82;
   border: 1px solid var(--card-border);
 }
 
 .stats-swatch-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .stats-swatch-chip {
+  position: relative;
+  min-height: 48px;
+  min-width: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   background: var(--card-subtle);
   cursor: pointer;
   text-align: left;
+  line-height: 1.5;
   transition:
     border-color 0.2s var(--spring-ease),
     background-color 0.2s var(--spring-ease),
     transform 0.2s var(--spring-ease);
 }
 
-.stats-swatch-chip.is-active,
 .stats-swatch-chip:hover {
   background: var(--card-bg);
-  border-color: var(--squircle-border-hover);
+  border-color: var(--ink-secondary);
   transform: translateY(-1px);
+}
+
+.stats-swatch-chip.is-active {
+  background: var(--card-bg);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas);
 }
 
 .stats-swatch-left {
@@ -562,11 +740,14 @@
 
 .stats-swatch-name {
   font-size: var(--type-caption);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .stats-swatch-pct {
@@ -574,24 +755,29 @@
   font-weight: 700;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ---------- Widgets 5 & 6: Editorial Ranking Cards ---------- */
 .stats-rank-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .stats-rank-row {
+  min-height: 68px;
   display: grid;
   grid-template-columns: 24px 50px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--card-border);
+  border: 1.5px solid var(--card-border);
   background: var(--card-subtle);
   text-align: left;
   cursor: pointer;
@@ -606,16 +792,17 @@
   .stats-rank-row:hover {
     transform: translateY(-1px);
     background: var(--card-bg);
-    border-color: var(--squircle-border-hover);
+    border-color: var(--ink-secondary);
     box-shadow: var(--elevation-xs);
   }
 }
 
 .stats-rank-idx {
   font-size: var(--type-caption);
-  font-weight: 700;
+  font-weight: 750;
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
 }
 
 .stats-rank-thumb {
@@ -632,34 +819,41 @@
 .stats-rank-info {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
 .stats-rank-name-line {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  column-gap: 6px;
   min-width: 0;
 }
 
 .stats-rank-name {
   font-size: var(--type-label);
-  font-weight: 600;
+  font-weight: 660;
   color: var(--ink-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .stats-rank-brand {
   font-size: var(--type-micro);
+  font-weight: 560;
   color: var(--ink-muted);
-  white-space: nowrap;
+  line-height: 1.5;
+  white-space: normal;
 }
 
 .stats-rank-progress-track {
-  height: 5px;
+  height: 6px;
   width: 100%;
   border-radius: var(--radius-pill);
   background: var(--bg-tertiary);
@@ -688,32 +882,35 @@
 
 .stats-rank-primary-val {
   font-size: var(--type-label);
-  font-weight: 700;
+  font-weight: 720;
   color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
 }
 
 .stats-rank-sub-val {
   font-size: var(--type-micro);
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
 }
 
 /* ---------- Zero / Low-Data Editorial Guide State ---------- */
 .stats-zero-guide {
   padding: var(--space-5);
   border-radius: var(--radius-squircle);
-  border: 1px dashed var(--card-border);
+  border: 1.5px dashed var(--card-border);
   background: var(--card-subtle);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .stats-zero-title {
   font-size: var(--type-label);
-  font-weight: 700;
+  font-weight: 720;
   color: var(--ink-primary);
+  line-height: 1.5;
 }
 
 .stats-zero-desc {
@@ -721,6 +918,20 @@
   color: var(--ink-secondary);
   line-height: 1.5;
   margin: 0;
+}
+
+/* ---------- CLS-Safe Stats Skeletons ---------- */
+.stats-skeleton-card {
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  background-image: linear-gradient(
+    90deg,
+    var(--card-bg) 0%,
+    var(--shimmer-base) 50%,
+    var(--card-bg) 100%
+  );
+  min-height: 280px;
 }
 
 /* ---------- Responsive Bento Collapse ---------- */
@@ -746,9 +957,9 @@
   }
 
   .stats-comp-row {
-    grid-template-columns: 9px 78px minmax(0, 1fr) 62px;
+    grid-template-columns: 9px minmax(56px, auto) minmax(0, 1fr) auto;
     gap: 8px;
-    padding: 6px 8px;
+    padding: 8px 10px;
   }
 
   .stats-swatch-grid {
@@ -757,8 +968,8 @@
 
   .stats-rank-row {
     grid-template-columns: 20px 44px minmax(0, 1fr) auto;
-    gap: var(--space-2);
-    padding: 9px 10px;
+    gap: 8px;
+    padding: 10px;
   }
 
   .stats-rank-thumb {
@@ -768,6 +979,13 @@
 
   .stats-seg-track {
     width: 100%;
+    min-width: 0;
+  }
+
+  .stats-seg-btn {
+    white-space: normal;
+    text-align: center;
+    padding: 6px 10px;
   }
 }
 

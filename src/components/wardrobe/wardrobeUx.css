@@ -1,0 +1,704 @@
+/* ==========================================================================
+   Closet (WardrobeView · AddGarmentModal · ItemDetailSheet) Mobile UX & WCAG AA
+   Strictly scoped to `.hig-closet-screen`, `.wd-ux-add-form`, `.wd-ux-detail-body`
+   ========================================================================== */
+
+/* High-Contrast Tokens (>= 4.5:1 Light & Dark) + 150% Line Height */
+.hig-closet-screen,
+.wd-ux-add-form,
+.wd-ux-detail-body {
+  --ink-secondary: #48484D;
+  --ink-muted: #595960;
+  line-height: 1.5;
+}
+
+[data-theme='dark'] .hig-closet-screen,
+[data-theme='dark'] .wd-ux-add-form,
+[data-theme='dark'] .wd-ux-detail-body {
+  --ink-secondary: #C7C7CC;
+  --ink-muted: #AEAEB2;
+  --danger-ink: #FF6961;
+}
+
+/* ---------- Scoped Top Bar 48x48 Touch Targets & 8px Grid ---------- */
+.hig-closet-screen .hig-top-bar {
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.hig-closet-screen .hig-top-bar-actions,
+.hig-closet-screen .hig-top-right-utility-group {
+  gap: 8px;
+}
+
+.hig-closet-screen .hig-circle-icon-btn,
+.hig-closet-screen .hig-profile-quick-pill {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.hig-closet-screen .hig-circle-icon-btn {
+  width: 48px;
+  height: 48px;
+}
+
+.hig-closet-screen .hig-item-count {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+/* ---------- Closet Controls Stack: Search + Category + Season + Subtree ---------- */
+.wd-ux-controls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.wd-ux-search-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- Clearable Input Primitive (Closet + Forms) ---------- */
+.ux-clearable-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.ux-clearable-wrap.is-textarea {
+  align-items: flex-start;
+}
+
+.ux-field-leading-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ux-field-control.hig-native-input {
+  min-height: 48px;
+  height: 48px;
+  line-height: 1.5;
+  padding: 0 16px;
+}
+
+.ux-field-control.hig-native-input.has-leading-icon {
+  padding-left: 44px;
+}
+
+.ux-field-control.hig-native-input.has-clear-btn {
+  padding-right: 52px;
+}
+
+.ux-field-control.hig-native-textarea {
+  min-height: 88px;
+  line-height: 1.5;
+  padding: 12px 16px;
+}
+
+.ux-field-control.hig-native-textarea.has-clear-btn {
+  padding-right: 52px;
+}
+
+.ux-field-control[type='number']::-webkit-inner-spin-button,
+.ux-field-control[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.ux-field-control[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.ux-clear-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  color: var(--ink-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: color 0.18s var(--spring-ease), transform 0.15s var(--spring-ease);
+}
+
+.ux-clear-btn.is-textarea {
+  top: 0;
+  transform: none;
+}
+
+.ux-clear-btn:hover {
+  color: var(--ink-primary);
+}
+
+.ux-clear-btn:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.ux-clear-btn.is-textarea:active {
+  transform: scale(0.92);
+}
+
+.wd-ux-search-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wd-ux-result-summary {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.wd-ux-reset-inline-btn {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--ink-primary);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wd-ux-reset-inline-btn:hover {
+  border-color: var(--ink-primary);
+}
+
+/* ---------- 48x48px Filter Rails & Structural Active States ---------- */
+.hig-closet-screen .hig-pill-rail {
+  gap: 8px;
+  padding: 4px 2px 6px;
+  margin-bottom: 0;
+}
+
+.hig-closet-screen .hig-filter-pill,
+.wd-ux-add-form .hig-filter-pill,
+.wd-ux-detail-body .hig-filter-pill {
+  position: relative;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 18px;
+  border: 1.5px solid var(--card-border);
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-size: 0.86rem;
+  font-weight: 640;
+  line-height: 1.5;
+}
+
+.hig-closet-screen .hig-filter-pill.active,
+.wd-ux-add-form .hig-filter-pill.active,
+.wd-ux-detail-body .hig-filter-pill.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas), 0 6px 14px rgba(15, 23, 42, 0.14);
+  font-weight: 720;
+}
+
+.hig-closet-screen .hig-filter-pill.active::after,
+.wd-ux-add-form .hig-filter-pill.active::after,
+.wd-ux-detail-body .hig-filter-pill.active::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 5px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+/* Inline Season & Sub-Part Filter Chips (>= 48px & >= 8px gap) */
+.wd-ux-season-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-ux-season-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin-right: 4px;
+  line-height: 1.5;
+}
+
+.wd-ux-inline-chip {
+  position: relative;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  color: var(--ink-secondary);
+  font-size: 0.84rem;
+  font-weight: 620;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background-color 0.18s var(--spring-ease),
+    color 0.18s var(--spring-ease),
+    border-color 0.18s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+.wd-ux-inline-chip:hover:not(.active) {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.wd-ux-inline-chip.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas), 0 4px 12px rgba(15, 23, 42, 0.12);
+  font-weight: 720;
+}
+
+.wd-ux-inline-chip.active::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.wd-ux-inline-chip:active {
+  transform: scale(0.96);
+}
+
+.hig-closet-screen .hig-wardrobe-subtree-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.hig-closet-screen .hig-wardrobe-sub-pill {
+  position: relative;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  border: 1.5px solid var(--card-border);
+  color: var(--ink-secondary);
+  font-size: 0.82rem;
+  font-weight: 640;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hig-closet-screen .hig-wardrobe-sub-pill.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas);
+  font-weight: 720;
+}
+
+.hig-closet-screen .hig-wardrobe-sub-pill.active::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.hig-closet-screen .hig-wardrobe-subtree-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--card-border);
+  margin: 0 4px;
+}
+
+/* ---------- Wardrobe Grid & Non-Truncated Item Readability ---------- */
+.hig-closet-screen .hig-wardrobe-grid {
+  gap: 20px 16px;
+}
+
+.hig-closet-screen .hig-garment-meta {
+  padding: 10px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hig-closet-screen .hig-garment-name {
+  font-size: 0.9rem;
+  font-weight: 660;
+  color: var(--ink-primary);
+  line-height: 1.5;
+  white-space: normal;
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.hig-closet-screen .hig-garment-brand {
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--ink-muted);
+  line-height: 1.5;
+  white-space: normal;
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* ---------- CLS-Safe Skeleton Wardrobe Card ---------- */
+.wd-ux-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wd-ux-skeleton-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.wd-ux-skeleton-line {
+  height: 14px;
+  border-radius: 8px;
+  background: var(--shimmer-base);
+}
+
+.wd-ux-skeleton-line.is-short {
+  width: 62%;
+  height: 12px;
+}
+
+/* ---------- Shared Loading / Empty / Error State Card (Closet & Forms) ---------- */
+.ux-state-card {
+  grid-column: 1 / -1;
+  padding: 28px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  box-shadow: var(--elevation-xs);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.ux-state-card.is-compact {
+  padding: 16px;
+  border-radius: var(--radius-squircle);
+  gap: 10px;
+}
+
+.ux-state-card.is-error {
+  border: 2px solid var(--danger-border);
+  background: var(--card-bg);
+}
+
+.ux-state-icon-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--card-border);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ux-state-icon-badge.is-error {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger-ink);
+}
+
+.ux-state-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 440px;
+}
+
+.ux-state-title {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 720;
+  line-height: 1.5;
+  color: var(--ink-primary);
+}
+
+.ux-state-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.ux-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ux-state-cta-btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  font-size: 0.88rem;
+  font-weight: 680;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    transform 0.16s var(--spring-ease),
+    background-color 0.2s var(--spring-ease),
+    border-color 0.2s var(--spring-ease);
+}
+
+.ux-state-cta-btn.is-primary {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: var(--elevation-xs);
+}
+
+.ux-state-cta-btn.is-secondary {
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border: 1.5px solid var(--card-border);
+}
+
+.ux-state-cta-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ---------- AddGarmentModal & ItemDetailSheet Specific UX ---------- */
+.wd-ux-add-form,
+.wd-ux-detail-body {
+  gap: 16px;
+}
+
+.wd-ux-add-form .hig-field-group,
+.wd-ux-detail-body .hig-field-group {
+  gap: 8px;
+}
+
+.wd-ux-add-form .hig-field-label,
+.wd-ux-detail-body .hig-field-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.wd-ux-add-form .hig-pill-row,
+.wd-ux-detail-body .hig-pill-row {
+  gap: 8px;
+}
+
+.wd-ux-add-form .hig-pill-action-btn,
+.wd-ux-add-form .hig-reselect-photo-chip {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 18px;
+}
+
+.wd-ux-accordion {
+  border-radius: var(--radius-squircle);
+  border: 1.5px solid var(--card-border);
+  background: var(--card-subtle);
+  overflow: hidden;
+}
+
+.wd-ux-accordion-trigger {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  color: var(--ink-primary);
+  font-size: 0.88rem;
+  font-weight: 680;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.wd-ux-accordion-trigger:hover {
+  background: var(--bg-surface);
+}
+
+.wd-ux-accordion-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wd-ux-accordion-sub {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.wd-ux-accordion-chevron {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.22s var(--spring-ease);
+}
+
+.wd-ux-accordion-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.wd-ux-accordion-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wd-ux-detail-body .hig-size-selector-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.wd-ux-detail-body .hig-size-input {
+  width: 100%;
+}
+
+.wd-ux-detail-body .hig-quick-size-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wd-ux-detail-body .hig-mini-chip,
+.wd-ux-add-form .hig-mini-chip {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--card-border);
+  color: var(--ink-secondary);
+  font-size: 0.82rem;
+  font-weight: 660;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.wd-ux-detail-body .hig-mini-chip.active,
+.wd-ux-add-form .hig-mini-chip.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--bg-canvas);
+}
+
+.wd-ux-detail-body .hig-detail-footer-actions {
+  gap: 8px;
+}
+
+.wd-ux-detail-body .hig-danger-outline-btn,
+.wd-ux-detail-body .hig-secondary-save-btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 18px;
+  line-height: 1.5;
+}
+
+.wd-ux-price-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .hig-closet-screen .hig-wardrobe-grid {
+    gap: 16px 12px;
+  }
+
+  .ux-state-card {
+    padding: 24px 16px;
+  }
+}
