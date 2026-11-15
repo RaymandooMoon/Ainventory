@@ -270,6 +270,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       'MST-10-WARM'
     );
 
+    // Switch to Hair & Face tab -> test Hair (type4_coily_afro) & Beard
+    await page.locator('#profile-tab-hair').click();
     await page.locator('[data-hair-style-btn="type4_coily_afro"]').click();
     await page.locator('[data-facial-hair-btn="short_boxed_beard"]').click();
 
