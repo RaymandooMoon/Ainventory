@@ -58,7 +58,7 @@ export function MostWornRankingCard({
         </div>
 
         <span className="stats-glass-pill">
-          <Award size={13} />
+          <Award size={13} aria-hidden="true" />
           <span>
             {!isLowData
               ? tx(lang, `TOP ${rankedWorn.length}`, `TOP ${rankedWorn.length}`)
@@ -87,8 +87,8 @@ export function MostWornRankingCard({
               <p className="stats-zero-desc">
                 {tx(
                   lang,
-                  '아직 누적 착용 기록이 없습니다. 아래 보유 아이템을 캘린더에 첫 배정해 활용률을 깨워보세요.',
-                  'No wear logs recorded yet. Assign any piece below on the Calendar to start tracking wear velocity.'
+                  '아직 선택 기간에 누적된 착용 기록이 없습니다. 아래 보유 아이템을 캘린더에 배정해 활용률을 깨워보세요.',
+                  'No wear logs recorded in this period yet. Assign any piece below on the Calendar to track wear velocity.'
                 )}
               </p>
             </div>
@@ -191,7 +191,7 @@ export function UnwornSleeperCard({
         </div>
 
         <span className="stats-glass-pill">
-          <Clock size={13} />
+          <Clock size={13} aria-hidden="true" />
           <span>
             {garments.length === 0
               ? tx(lang, '스캔 대기', 'STANDBY')

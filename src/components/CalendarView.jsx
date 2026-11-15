@@ -8,6 +8,7 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { ExclusiveErrorBoundary, ExclusiveErrorCard } from './ExclusiveViewPrimitives.jsx';
 import CalendarLookbookGrid from './calendar/CalendarLookbookGrid.jsx';
 import {
   formatIsoDateLocal,
@@ -16,6 +17,7 @@ import {
 } from './calendar/calendarHelpers.js';
 import CalendarSlideOverDrawer from './calendar/CalendarSlideOverDrawer.jsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
+import './wardrobe/wardrobeUx.css';
 import './calendar/calendarEditorial.css';
 
 function escapeIcsField(value) {
@@ -55,7 +57,18 @@ function buildIcsText(logs, outfits, lang = 'ko') {
   return lines.join('\r\n');
 }
 
-export default function CalendarView({
+function mapApiWeatherToKey(weatherObj) {
+  if (weatherObj?.isSnowy) return 'snow';
+  if (weatherObj?.isRainy) return 'rain';
+  const raw = String(weatherObj?.condition || '').toLowerCase();
+  if (/눈|snow|sleet/.test(raw)) return 'snow';
+  if (/비|소나기|rain|shower|drizzle/.test(raw)) return 'rain';
+  if (/구름\s*조금|구름조금|partly/.test(raw)) return 'partly';
+  if (/흐림|구름|안개|cloud|overcast|fog/.test(raw)) return 'cloudy';
+  return 'clear';
+}
+
+function CalendarViewContent({
   activeCloset,
   garments = [],
   lang = 'ko',
@@ -69,7 +82,13 @@ export default function CalendarView({
   const [logs, setLogs] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  const [seedingWeather, setSeedingWeather] = useState(false);
+  const [drawerWeatherSeed, setDrawerWeatherSeed] = useState(null);
+  const [drawerError, setDrawerError] = useState(null);
 
   const [todayStr] = useState(() => formatIsoDateLocal(new Date()));
   const [viewMode, setViewMode] = useState('month');
@@ -95,12 +114,14 @@ export default function CalendarView({
       const { nextLogs, nextOutfits } = await fetchCalendarData();
       setLogs(nextLogs);
       setOutfits(nextOutfits);
+      setLoadError(null);
       return nextLogs;
     } catch (err) {
-      showToast?.(
+      const msg =
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
-      );
+        tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.');
+      setLoadError(msg);
+      showToast?.(msg);
       return [];
     } finally {
       setLoading(false);
@@ -109,18 +130,22 @@ export default function CalendarView({
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     (async () => {
       try {
         const { nextLogs, nextOutfits } = await fetchCalendarData();
         if (cancelled) return;
         setLogs(nextLogs);
         setOutfits(nextOutfits);
+        setLoadError(null);
       } catch (err) {
         if (!cancelled) {
-          showToast?.(
+          const msg =
             localizeApiMessage(err?.message, lang) ||
-              tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.')
-          );
+            tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.');
+          setLoadError(msg);
+          showToast?.(msg);
         }
       } finally {
         if (!cancelled) {
@@ -132,6 +157,26 @@ export default function CalendarView({
       cancelled = true;
     };
   }, [fetchCalendarData, refreshKey, lang, showToast]);
+
+  const handleRetryLoad = useCallback(async () => {
+    triggerHaptic('selection');
+    setRetrying(true);
+    setLoadError(null);
+    try {
+      const { nextLogs, nextOutfits } = await fetchCalendarData();
+      setLogs(nextLogs);
+      setOutfits(nextOutfits);
+      setLoadError(null);
+    } catch (err) {
+      const msg =
+        localizeApiMessage(err?.message, lang) ||
+        tx(lang, '캘린더를 불러오지 못했습니다.', 'Failed to load calendar.');
+      setLoadError(msg);
+    } finally {
+      setRetrying(false);
+      setLoading(false);
+    }
+  }, [fetchCalendarData, lang]);
 
   const garmentMap = useMemo(
     () => new Map(garments.map((g) => [Number(g.id), g])),
@@ -156,6 +201,8 @@ export default function CalendarView({
     setSelectedDate(dateStr);
     setCursorDate(dateStr);
     setDrawerEntryId(entryId);
+    setDrawerWeatherSeed(null);
+    setDrawerError(null);
     setDrawerOpen(true);
   }, []);
 
@@ -163,7 +210,50 @@ export default function CalendarView({
     setSelectedDate(nextDate);
     setCursorDate(nextDate);
     setDrawerEntryId(null);
+    setDrawerWeatherSeed(null);
+    setDrawerError(null);
   }, []);
+
+  const handleLogTodayWeatherOutfit = useCallback(async () => {
+    triggerHaptic('selection');
+    setSeedingWeather(true);
+    setDrawerError(null);
+    let weatherKey = 'clear';
+    let tempInput = '18';
+    let itemIds = garments.slice(0, 2).map((g) => Number(g.id)).filter(Boolean);
+
+    try {
+      const q = encodeURIComponent(activeCloset || 'sample');
+      const res = await apiFetch(`/weather/recommendations?city=seoul&closet=${q}`);
+      if (res?.weather) {
+        weatherKey = mapApiWeatherToKey(res.weather);
+        const rawTemp = res.weather.avgTemp ?? res.weather.tempC;
+        if (Number.isFinite(Number(rawTemp))) {
+          tempInput = String(Math.round(Number(rawTemp)));
+        }
+      }
+      const topRecItems = res?.recommendations?.[0]?.items;
+      if (Array.isArray(topRecItems) && topRecItems.length > 0) {
+        itemIds = topRecItems.map((g) => Number(g.id)).filter(Boolean);
+      }
+    } catch {
+      // Fallback gracefully with default clear/garments seed
+    } finally {
+      setSeedingWeather(false);
+    }
+
+    setCursorDate(todayStr);
+    setSelectedDate(todayStr);
+    setDrawerEntryId(null);
+    setDrawerWeatherSeed({
+      weatherKey,
+      tempInput,
+      noteInput: tx(lang, '오늘의 날씨 코디', "Today's Weather Outfit"),
+      itemIds,
+      forceNew: true,
+    });
+    setDrawerOpen(true);
+  }, [activeCloset, garments, lang, todayStr]);
 
   const handleSaveDrawerEntry = async ({
     existingEntry,
@@ -176,6 +266,7 @@ export default function CalendarView({
     note,
   }) => {
     setSaving(true);
+    setDrawerError(null);
     try {
       const fallbackItemIds =
         Array.isArray(item_ids) && item_ids.length > 0
@@ -238,12 +329,15 @@ export default function CalendarView({
       triggerHaptic('selection');
       await reloadCalendar();
       onClosetUpdated?.();
+      setDrawerWeatherSeed(null);
+      setDrawerError(null);
       setDrawerOpen(false);
     } catch (err) {
-      showToast?.(
+      const msg =
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '일정 저장에 실패했습니다.', 'Failed to save calendar entry.')
-      );
+        tx(lang, '일정 저장에 실패했습니다.', 'Failed to save calendar entry.');
+      setDrawerError(msg);
+      showToast?.(msg);
     } finally {
       setSaving(false);
     }
@@ -251,6 +345,7 @@ export default function CalendarView({
 
   const handleDeleteDrawerEntry = async (logId) => {
     setSaving(true);
+    setDrawerError(null);
     try {
       await apiFetch(`/calendar/${logId}`, { method: 'DELETE' });
       triggerHaptic('selection');
@@ -265,10 +360,11 @@ export default function CalendarView({
         setDrawerEntryId(remainingForDay[0].id);
       }
     } catch (err) {
-      showToast?.(
+      const msg =
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.')
-      );
+        tx(lang, '삭제에 실패했습니다.', 'Failed to delete entry.');
+      setDrawerError(msg);
+      showToast?.(msg);
     } finally {
       setSaving(false);
     }
@@ -301,8 +397,10 @@ export default function CalendarView({
     setTimeout(() => URL.revokeObjectURL(url), 800);
   };
 
+  const isBusyLoading = loading || retrying;
+
   return (
-    <section className="hig-screen-container" aria-label="Calendar">
+    <section className="hig-screen-container hig-calendar-screen" aria-label="Calendar">
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
           <h1 className="hig-screen-title">CALENDAR</h1>
@@ -325,7 +423,7 @@ export default function CalendarView({
                     onClick={handleExportIcs}
                     aria-label={tx(lang, '캘린더 내보내기', 'Export Calendar (.ics)')}
                   >
-                    <Download size={18} />
+                    <Download size={18} aria-hidden="true" />
                   </button>
                 )}
                 <button
@@ -334,11 +432,13 @@ export default function CalendarView({
                   onClick={() => {
                     triggerHaptic('selection');
                     setDrawerEntryId(null);
+                    setDrawerWeatherSeed(null);
+                    setDrawerError(null);
                     setDrawerOpen(true);
                   }}
                   aria-label={tx(lang, '착용 일정 추가', 'Add Outfit Entry')}
                 >
-                  <Plus size={20} strokeWidth={2.2} />
+                  <Plus size={20} strokeWidth={2.2} aria-hidden="true" />
                 </button>
               </>
             }
@@ -346,12 +446,32 @@ export default function CalendarView({
         </div>
       </header>
 
-      {loading ? (
-        <div className="hig-wardrobe-grid">
-          {[1, 2, 3, 4].map((k) => (
-            <div key={k} className="hig-squircle-skeleton" />
-          ))}
+      {isBusyLoading ? (
+        <div
+          className="cal-ed-skeleton-wrap"
+          aria-busy="true"
+          aria-label={tx(lang, '캘린더 불러오는 중', 'Loading calendar')}
+        >
+          <div className="cal-ed-skeleton-bento">
+            <div className="cal-ed-skeleton-bar-card" />
+            <div className="cal-ed-skeleton-bar-card" />
+          </div>
+          <div className="cal-ed-skeleton-matrix">
+            <div className="cal-ed-skeleton-grid">
+              {Array.from({ length: 35 }).map((_, k) => (
+                <div key={k} className="cal-ed-skeleton-cell" />
+              ))}
+            </div>
+          </div>
         </div>
+      ) : loadError ? (
+        <ExclusiveErrorCard
+          lang={lang}
+          title={tx(lang, '캘린더를 불러오지 못했습니다', 'Unable to Load Calendar')}
+          message={loadError}
+          onRetry={handleRetryLoad}
+          retrying={retrying}
+        />
       ) : (
         <CalendarLookbookGrid
           logs={logs}
@@ -363,17 +483,26 @@ export default function CalendarView({
           cursorDate={cursorDate}
           selectedDate={selectedDate}
           todayStr={todayStr}
+          seedingWeather={seedingWeather}
           onNavigatePeriod={handleNavigatePeriod}
           onJumpToday={handleJumpToday}
           onSelectDate={handleSelectDate}
+          onLogTodayWeatherOutfit={handleLogTodayWeatherOutfit}
         />
       )}
 
       <CalendarSlideOverDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerWeatherSeed(null);
+          setDrawerError(null);
+        }}
         selectedDate={selectedDate}
         initialEntryId={drawerEntryId}
+        weatherSeed={drawerWeatherSeed}
+        drawerError={drawerError}
+        onClearDrawerError={() => setDrawerError(null)}
         onChangeDate={handleDrawerChangeDate}
         todayStr={todayStr}
         logs={logs}
@@ -386,5 +515,19 @@ export default function CalendarView({
         onDeleteEntry={handleDeleteDrawerEntry}
       />
     </section>
+  );
+}
+
+export default function CalendarView(props) {
+  return (
+    <ExclusiveErrorBoundary
+      lang={props.lang}
+      screenClassName="hig-calendar-screen"
+      screenLabel="Calendar"
+      errorTitle={tx(props.lang, '캘린더 화면 오류', 'Calendar Screen Error')}
+      onRetry={() => props.onClosetUpdated?.()}
+    >
+      <CalendarViewContent {...props} />
+    </ExclusiveErrorBoundary>
   );
 }

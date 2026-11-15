@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import {
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
+  CloudSun,
   Columns3,
   Plus,
   Sparkles,
@@ -91,9 +93,11 @@ export default function CalendarLookbookGrid({
   cursorDate,
   selectedDate,
   todayStr,
+  seedingWeather = false,
   onNavigatePeriod,
   onJumpToday,
   onSelectDate,
+  onLogTodayWeatherOutfit,
 }) {
   const logsByDate = useMemo(() => {
     const map = new Map();
@@ -181,8 +185,20 @@ export default function CalendarLookbookGrid({
     const plannedTotal = logs.filter((l) => l.status === 'planned').length;
     const activeCells = viewMode === 'week' ? weekCells : monthCells.filter((c) => c.isCurrentMonth);
     const activeDays = activeCells.filter((c) => c.entries.length > 0).length;
-    return { wornTotal, plannedTotal, activeDays };
+    const periodEntriesCount = activeCells.reduce((sum, c) => sum + c.entries.length, 0);
+    return { wornTotal, plannedTotal, activeDays, periodEntriesCount };
   }, [logs, monthCells, viewMode, weekCells]);
+
+  const isViewingTodayPeriod = useMemo(() => {
+    const todayDt = parseIsoDateLocal(todayStr);
+    if (viewMode === 'week') {
+      return weekCells.some((c) => c.isToday);
+    }
+    return (
+      cursorDt.getFullYear() === todayDt.getFullYear() &&
+      cursorDt.getMonth() === todayDt.getMonth()
+    );
+  }, [cursorDt, todayStr, viewMode, weekCells]);
 
   const recentArchive = useMemo(() => {
     return [...logs]
@@ -216,7 +232,7 @@ export default function CalendarLookbookGrid({
               }}
               aria-label={tx(lang, '이전 기간', 'Previous Period')}
             >
-              <ChevronLeft size={17} />
+              <ChevronLeft size={18} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -237,7 +253,7 @@ export default function CalendarLookbookGrid({
               }}
               aria-label={tx(lang, '다음 기간', 'Next Period')}
             >
-              <ChevronRight size={17} />
+              <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -281,7 +297,11 @@ export default function CalendarLookbookGrid({
                 onChangeViewMode?.('month');
               }}
             >
-              <CalendarDays size={14} />
+              {viewMode === 'month' ? (
+                <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              ) : (
+                <CalendarDays size={14} aria-hidden="true" />
+              )}
               <span>{tx(lang, '월간 캘린더', 'Monthly')}</span>
             </button>
             <button
@@ -294,100 +314,166 @@ export default function CalendarLookbookGrid({
                 onChangeViewMode?.('week');
               }}
             >
-              <Columns3 size={14} />
+              {viewMode === 'week' ? (
+                <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              ) : (
+                <Columns3 size={14} aria-hidden="true" />
+              )}
               <span>{tx(lang, '주간 룩북', 'Weekly Strip')}</span>
             </button>
           </div>
         </div>
       </div>
 
+      {/* Exception State 2: Empty Month / Week Guidance Card with Immediate CTA */}
+      {kpiSummary.periodEntriesCount === 0 && (
+        <div className="ux-state-card is-compact" role="status" data-calendar-empty-state="true">
+          <div className="ux-state-icon-badge" aria-hidden="true">
+            <CloudSun size={22} strokeWidth={2.1} />
+          </div>
+          <div className="ux-state-copy">
+            <h2 className="ux-state-title">
+              {viewMode === 'month'
+                ? tx(lang, '이번 달에 기록된 코디가 없습니다', 'No Outfits Logged This Month')
+                : tx(lang, '이번 주에 기록된 코디가 없습니다', 'No Outfits Logged This Week')}
+            </h2>
+            <p className="ux-state-desc">
+              {tx(
+                lang,
+                '원하는 날짜를 눌러 직접 코디를 기록하거나, 오늘 날씨에 맞춘 추천 코디로 첫 착장을 바로 남겨보세요.',
+                'Tap any date below to schedule a look, or start immediately by logging a weather-matched outfit for today.'
+              )}
+            </p>
+          </div>
+          <div className="ux-state-actions">
+            <button
+              type="button"
+              className="ux-state-cta-btn is-primary"
+              data-calendar-weather-cta="true"
+              disabled={seedingWeather}
+              onClick={() => onLogTodayWeatherOutfit?.()}
+            >
+              <Sparkles size={17} strokeWidth={2.2} aria-hidden="true" />
+              <span>
+                {seedingWeather
+                  ? tx(lang, '오늘의 날씨 확인 중...', 'Fetching Today’s Weather...')
+                  : tx(lang, '오늘의 날씨 코디 기록하기', "Log Today's Weather Outfit")}
+              </span>
+            </button>
+            {!isViewingTodayPeriod && (
+              <button
+                type="button"
+                className="ux-state-cta-btn is-secondary"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onJumpToday?.();
+                }}
+              >
+                <span>{tx(lang, '오늘 날짜로 이동', 'Jump to Today')}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main View: Monthly Editorial Calendar vs Weekly Lookbook Strip */}
       {viewMode === 'month' ? (
         <div className="cal-ed-month-bento">
-          <div className="cal-ed-dow-grid" aria-hidden="true">
-            {dowHeaders.map((lbl, idx) => (
-              <span key={lbl} className={`cal-ed-dow-cell ${idx === 0 ? 'is-sun' : ''}`}>
-                {lbl}
-              </span>
-            ))}
-          </div>
+          <div className="cal-ed-month-scroll">
+            <div className="cal-ed-dow-grid" aria-hidden="true">
+              {dowHeaders.map((lbl, idx) => (
+                <span key={lbl} className={`cal-ed-dow-cell ${idx === 0 ? 'is-sun' : ''}`}>
+                  {lbl}
+                </span>
+              ))}
+            </div>
 
-          <div className="cal-ed-month-grid">
-            {monthCells.map((cell, idx) => {
-              const primaryEntry = cell.entries[0] || null;
-              const previewItems = resolveEntryItems(primaryEntry, outfits, garmentMap);
-              const weatherInfo = resolveWeatherVisual(primaryEntry, lang);
-              const WeatherIcon = weatherInfo?.IconComp || null;
-              const lookTitle = primaryEntry ? resolveEntryTitle(primaryEntry, outfits, lang) : '';
+            <div className="cal-ed-month-grid">
+              {monthCells.map((cell, idx) => {
+                const primaryEntry = cell.entries[0] || null;
+                const previewItems = resolveEntryItems(primaryEntry, outfits, garmentMap);
+                const weatherInfo = resolveWeatherVisual(primaryEntry, lang);
+                const WeatherIcon = weatherInfo?.IconComp || null;
+                const lookTitle = primaryEntry ? resolveEntryTitle(primaryEntry, outfits, lang) : '';
 
-              const ariaText = primaryEntry
-                ? `${cell.dateStr} · ${lookTitle}`
-                : `${cell.dateStr} · ${tx(lang, '착장 추가', 'Add Outfit')}`;
+                const ariaText = primaryEntry
+                  ? `${cell.dateStr} · ${lookTitle}`
+                  : `${cell.dateStr} · ${tx(lang, '착장 추가', 'Add Outfit')}`;
 
-              return (
-                <button
-                  key={cell.dateStr}
-                  type="button"
-                  data-calendar-date={cell.dateStr}
-                  style={{ '--cell-idx': idx }}
-                  aria-label={ariaText}
-                  className={[
-                    'cal-ed-day-cell',
-                    cell.entries.length > 0 ? 'has-entry' : '',
-                    !cell.isCurrentMonth ? 'is-outside' : '',
-                    cell.isToday ? 'is-today' : '',
-                    cell.isSelected ? 'is-selected' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    onSelectDate?.(cell.dateStr);
-                  }}
-                >
-                  <div className="cal-ed-day-top">
-                    <span className="cal-ed-day-num">{cell.dayNum}</span>
-                    {weatherInfo && (
-                      <span className="cal-ed-weather-pill">
-                        {WeatherIcon ? <WeatherIcon size={10} /> : null}
-                        {weatherInfo.tempLabel ? (
-                          <span>{weatherInfo.tempLabel}</span>
-                        ) : (
-                          <span className="cal-ed-weather-txt">{weatherInfo.condLabel}</span>
+                return (
+                  <button
+                    key={cell.dateStr}
+                    type="button"
+                    data-calendar-date={cell.dateStr}
+                    style={{ '--cell-idx': idx }}
+                    aria-label={ariaText}
+                    aria-pressed={cell.isSelected}
+                    aria-current={cell.isToday ? 'date' : undefined}
+                    className={[
+                      'cal-ed-day-cell',
+                      cell.entries.length > 0 ? 'has-entry' : '',
+                      !cell.isCurrentMonth ? 'is-outside' : '',
+                      cell.isToday ? 'is-today' : '',
+                      cell.isSelected ? 'is-selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onSelectDate?.(cell.dateStr);
+                    }}
+                  >
+                    <div className="cal-ed-day-top">
+                      <span className="cal-ed-day-num-wrap">
+                        <span className="cal-ed-day-num">{cell.dayNum}</span>
+                        {cell.isSelected && (
+                          <span className="cal-ed-selected-badge" aria-hidden="true">
+                            <Check size={11} strokeWidth={2.8} />
+                          </span>
                         )}
                       </span>
-                    )}
-                  </div>
-
-                  {previewItems.length > 0 ? (
-                    <StackedGarmentPreview items={previewItems} lang={lang} />
-                  ) : primaryEntry ? (
-                    <div className="cal-ed-empty-plus" style={{ opacity: 0.72 }}>
-                      <Sparkles size={13} />
-                    </div>
-                  ) : (
-                    <div className="cal-ed-empty-plus" aria-hidden="true">
-                      <Plus size={13} />
-                    </div>
-                  )}
-
-                  {primaryEntry ? (
-                    <div className="cal-ed-day-foot">
-                      <span
-                        className={`cal-ed-status-dot ${primaryEntry.status === 'planned' ? 'is-planned' : ''}`}
-                        aria-hidden="true"
-                      />
-                      <span className="cal-ed-day-look-title">{lookTitle}</span>
-                      {cell.entries.length > 1 && (
-                        <span className="cal-ed-multi-count">+{cell.entries.length - 1}</span>
+                      {weatherInfo && (
+                        <span className="cal-ed-weather-pill">
+                          {WeatherIcon ? <WeatherIcon size={10} aria-hidden="true" /> : null}
+                          {weatherInfo.tempLabel ? (
+                            <span>{weatherInfo.tempLabel}</span>
+                          ) : (
+                            <span className="cal-ed-weather-txt">{weatherInfo.condLabel}</span>
+                          )}
+                        </span>
                       )}
                     </div>
-                  ) : (
-                    <span aria-hidden="true" />
-                  )}
-                </button>
-              );
-            })}
+
+                    {previewItems.length > 0 ? (
+                      <StackedGarmentPreview items={previewItems} lang={lang} />
+                    ) : primaryEntry ? (
+                      <div className="cal-ed-empty-plus" style={{ opacity: 0.72 }} aria-hidden="true">
+                        <Sparkles size={13} />
+                      </div>
+                    ) : (
+                      <div className="cal-ed-empty-plus" aria-hidden="true">
+                        <Plus size={13} />
+                      </div>
+                    )}
+
+                    {primaryEntry ? (
+                      <div className="cal-ed-day-foot">
+                        <span
+                          className={`cal-ed-status-dot ${primaryEntry.status === 'planned' ? 'is-planned' : ''}`}
+                          aria-hidden="true"
+                        />
+                        <span className="cal-ed-day-look-title">{lookTitle}</span>
+                        {cell.entries.length > 1 && (
+                          <span className="cal-ed-multi-count">+{cell.entries.length - 1}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : (
@@ -405,6 +491,8 @@ export default function CalendarLookbookGrid({
                 key={cell.dateStr}
                 type="button"
                 data-calendar-date={cell.dateStr}
+                aria-pressed={cell.isSelected}
+                aria-current={cell.isToday ? 'date' : undefined}
                 style={{ '--cell-idx': idx }}
                 className={[
                   'cal-ed-week-card',
@@ -434,9 +522,14 @@ export default function CalendarLookbookGrid({
                     <span
                       className={`cal-ed-status-pill ${primaryEntry.status === 'planned' ? 'is-planned' : ''}`}
                     >
+                      {cell.isSelected && <Check size={11} strokeWidth={2.8} aria-hidden="true" />}
                       {primaryEntry.status === 'planned'
                         ? tx(lang, '예정', 'PLANNED')
                         : tx(lang, '착용', 'WORN')}
+                    </span>
+                  ) : cell.isSelected ? (
+                    <span className="cal-ed-selected-badge" aria-hidden="true">
+                      <Check size={11} strokeWidth={2.8} />
                     </span>
                   ) : null}
                 </div>

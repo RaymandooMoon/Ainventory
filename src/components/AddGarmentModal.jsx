@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Camera, Check, ImagePlus, Loader2 } from 'lucide-react';
+import { Camera, Check, ChevronDown, ImagePlus, Loader2 } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
   WARDROBE_CATEGORY_OPTIONS,
@@ -13,8 +13,10 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { ClearableField, ExclusiveErrorCard } from './ExclusiveViewPrimitives.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import './wardrobe/wardrobeUx.css';
 
 const ACCESSORY_SUBTYPE_OPTIONS = [
   { key: 'bag', ko: '가방 · 휴대', en: 'Bag / Carry' },
@@ -34,6 +36,17 @@ const JEWELRY_SUBTYPE_OPTIONS = [
   { key: 'ring', ko: '반지 · 링', en: 'Ring' },
   { key: 'brooch', ko: '브로치 · 코사지', en: 'Brooch' },
 ];
+
+const SEASON_CHIP_OPTIONS = [
+  { key: '봄', ko: '봄', en: 'Spring' },
+  { key: '여름', ko: '여름', en: 'Summer' },
+  { key: '가을', ko: '가을', en: 'Autumn' },
+  { key: '겨울', ko: '겨울', en: 'Winter' },
+  { key: '사계절', ko: '사계절', en: 'All Seasons' },
+];
+
+const ALL_FOUR_SEASONS = ['봄', '여름', '가을', '겨울'];
+const QUICK_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'FREE'];
 
 const MATERIAL_OPTIONS = [
   { key: 'Leather', ko: '가죽', en: 'Leather' },
@@ -55,9 +68,17 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const [processedAsset, setProcessedAsset] = useState(null);
   const [category, setCategory] = useState('top');
   const [subpart, setSubpart] = useState('bag');
-  const [material, setMaterial] = useState('Fabric');
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
+
+  // Optional metadata collapsed by default under '선택 입력 더보기'
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [seasons, setSeasons] = useState(ALL_FOUR_SEASONS);
+  const [material, setMaterial] = useState('Fabric');
+  const [size, setSize] = useState('');
+  const [price, setPrice] = useState('');
+  const [memo, setMemo] = useState('');
+  const [formError, setFormError] = useState(null);
 
   const categoryOptions = [
     ...WARDROBE_CATEGORY_OPTIONS,
@@ -67,6 +88,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       defaultSubcategory: 'necklace',
     },
   ];
+
+  const isAllSeasons = ALL_FOUR_SEASONS.every((s) => seasons.includes(s));
 
   const handleSelectCategory = (nextCat) => {
     setCategory(nextCat);
@@ -79,12 +102,33 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
     }
   };
 
+  const handleToggleSeasonChip = (chipKey) => {
+    triggerHaptic('selection');
+    if (chipKey === '사계절') {
+      setSeasons(ALL_FOUR_SEASONS);
+      return;
+    }
+    if (isAllSeasons) {
+      setSeasons([chipKey]);
+      return;
+    }
+    setSeasons((prev) => {
+      if (prev.includes(chipKey)) {
+        const next = prev.filter((s) => s !== chipKey);
+        return next.length > 0 ? next : ALL_FOUR_SEASONS;
+      }
+      const next = [...prev, chipKey];
+      return ALL_FOUR_SEASONS.every((s) => next.includes(s)) ? ALL_FOUR_SEASONS : next;
+    });
+  };
+
   const handleSelectFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
 
     setProcessing(true);
+    setFormError(null);
     try {
       const asset = await processGarmentUpload(file, {
         targetSizePx: 640,
@@ -102,17 +146,17 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       );
       triggerHaptic('selection');
     } catch (err) {
-      showToast?.(
+      const errMsg =
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '이미지를 처리하지 못했습니다.', 'Failed to process image.')
-      );
+        tx(lang, '이미지를 처리하지 못했습니다. 다른 사진으로 다시 시도해 주세요.', 'Failed to process image. Please try another photo.');
+      setFormError(errMsg);
+      showToast?.(errMsg);
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitGarment = async () => {
     if (!processedAsset?.cutoutDataUrl) {
       showToast?.(
         tx(lang, '의류 사진을 먼저 선택해주세요.', 'Please select a garment photo first.')
@@ -126,6 +170,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
     }
 
     setSubmitting(true);
+    setFormError(null);
     try {
       const catOption =
         categoryOptions.find((opt) => opt.key === category) || categoryOptions[0];
@@ -134,6 +179,10 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           ? subpart
           : catOption.defaultSubcategory;
       const targetOwner = !activeCloset || activeCloset === 'all' ? 'sample' : activeCloset;
+      const numericPrice = price.trim() !== '' && Number.isFinite(Number(price))
+        ? Math.max(0, Math.round(Number(price)))
+        : 0;
+      const trimmedMemo = memo.trim();
 
       const res = await apiFetch('/garments', {
         method: 'POST',
@@ -143,7 +192,12 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           brand: brand.trim(),
           category: catOption.key,
           subcategory: resolvedSubcategory,
+          seasons,
           fabric: material,
+          size: size.trim(),
+          price: numericPrice,
+          memo: trimmedMemo,
+          notes: trimmedMemo,
           color_hex: processedAsset.dominantColorHex,
           color_name: processedAsset.dominantColorName,
           image_data: processedAsset.cutoutDataUrl,
@@ -155,13 +209,19 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       onRegistered?.(res?.garment);
       onClose?.();
     } catch (err) {
-      showToast?.(
+      const errMsg =
         localizeApiMessage(err?.message, lang) ||
-          tx(lang, '등록 중 오류가 발생했습니다.', 'Failed to save item.')
-      );
+        tx(lang, '등록 중 오류가 발생했습니다.', 'Failed to save item.');
+      setFormError(errMsg);
+      showToast?.(errMsg);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await submitGarment();
   };
 
   const subtypeOptions =
@@ -171,8 +231,22 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         ? JEWELRY_SUBTYPE_OPTIONS
         : null;
 
+  const activeSeasonSummary = isAllSeasons
+    ? tx(lang, '사계절', 'All Seasons')
+    : seasons
+        .map((s) => {
+          const found = SEASON_CHIP_OPTIONS.find((opt) => opt.key === s);
+          return found ? tx(lang, found.ko, found.en) : s;
+        })
+        .join(' · ');
+
+  const activeMaterialOption = MATERIAL_OPTIONS.find((m) => m.key === material);
+  const activeMaterialLabel = activeMaterialOption
+    ? tx(lang, activeMaterialOption.ko, activeMaterialOption.en)
+    : material;
+
   return (
-    <form onSubmit={handleSubmit} className="hig-add-garment-form">
+    <form onSubmit={handleSubmit} className="hig-add-garment-form wd-ux-add-form">
       <input
         id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
         ref={galleryInputRef}
@@ -190,6 +264,17 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         onChange={handleSelectFile}
         className="sr-only-input"
       />
+
+      {formError && (
+        <ExclusiveErrorCard
+          lang={lang}
+          compact
+          title={tx(lang, '등록 처리 중 오류가 발생했습니다', 'Registration Error')}
+          message={formError}
+          onRetry={processedAsset?.cutoutDataUrl ? submitGarment : () => galleryInputRef.current?.click()}
+          retrying={submitting || processing}
+        />
+      )}
 
       {/* 1:1 Normalized Studio Preview Stage + Optical Scan Viewfinder */}
       <div
@@ -213,7 +298,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
 
         {processing ? (
           <div className="hig-add-upload-prompt">
-            <Loader2 size={28} className="hig-spin" />
+            <Loader2 size={28} className="hig-spin" aria-hidden="true" />
             <span>
               {tx(lang, '배경 제거 및 스튜디오 보정 중...', 'Studio Cutout Normalization...')}
             </span>
@@ -238,7 +323,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   galleryInputRef.current?.click();
                 }}
               >
-                <ImagePlus size={18} />
+                <ImagePlus size={18} aria-hidden="true" />
                 <span>{tx(lang, '사진 보관함', 'Photo Library')}</span>
               </button>
               <button
@@ -249,7 +334,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   cameraInputRef.current?.click();
                 }}
               >
-                <Camera size={18} />
+                <Camera size={18} aria-hidden="true" />
                 <span>{tx(lang, '카메라 촬영', 'Camera')}</span>
               </button>
             </div>
@@ -283,10 +368,10 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         )}
       </div>
 
-      {/* Category Pill Selector */}
+      {/* Essential Property 1: Category Pill Selector */}
       <div className="hig-field-group">
-        <label className="hig-field-label">{tx(lang, '카테고리', 'Category')}</label>
-        <div className="hig-pill-row" role="radiogroup" aria-label="Category">
+        <label className="hig-field-label">{tx(lang, '카테고리 (필수)', 'Category (Required)')}</label>
+        <div className="hig-pill-row" role="radiogroup" aria-label={tx(lang, '카테고리', 'Category')}>
           {categoryOptions.map((opt) => {
             const selected = category === opt.key;
             return (
@@ -298,6 +383,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 className={`hig-filter-pill ${selected ? 'active' : ''}`}
                 onClick={() => handleSelectCategory(opt.key)}
               >
+                {selected && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
                 {opt.label}
               </button>
             );
@@ -305,7 +391,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         </div>
       </div>
 
-      {/* Sub-Part Selector for Accessories & Jewelry */}
+      {/* Essential Sub-Part Selector for Accessories & Jewelry */}
       {subtypeOptions && (
         <div className="hig-field-group">
           <label className="hig-field-label">
@@ -328,7 +414,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   className={`hig-filter-pill ${selected ? 'active' : ''}`}
                   onClick={() => setSubpart(opt.key)}
                 >
-                  {tx(lang, opt.ko, opt.en)}
+                  {selected && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                  <span>{tx(lang, opt.ko, opt.en)}</span>
                 </button>
               );
             })}
@@ -336,44 +423,18 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         </div>
       )}
 
-      {/* Material Selector */}
-      <div className="hig-field-group">
-        <label className="hig-field-label">{tx(lang, '소재', 'Material')}</label>
-        <div
-          className="hig-pill-row"
-          role="group"
-          data-add-material-group="true"
-          aria-label={tx(lang, '소재', 'Material')}
-        >
-          {MATERIAL_OPTIONS.map((mat) => {
-            const selected = material === mat.key;
-            return (
-              <button
-                key={mat.key}
-                type="button"
-                data-add-material-btn={mat.key}
-                aria-pressed={selected}
-                className={`hig-filter-pill ${selected ? 'active' : ''}`}
-                onClick={() => setMaterial(mat.key)}
-              >
-                {tx(lang, mat.ko, mat.en)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Minimal Tags: Name & Brand */}
+      {/* Essential Properties 2 & 3: Name & Brand with 48x48px Clear Buttons */}
       <div className="hig-field-grid-2">
         <div className="hig-field-group">
           <label htmlFor="add-garment-name-input" className="hig-field-label">
-            {tx(lang, '아이템명', 'Name')}
+            {tx(lang, '아이템명 (필수)', 'Name (Required)')}
           </label>
-          <input
+          <ClearableField
             id="add-garment-name-input"
             type="text"
             className="hig-native-input"
             placeholder={tx(lang, '캐시미어 크루넥', 'Cashmere Crewneck')}
+            clearLabel={tx(lang, '아이템명 지우기', 'Clear item name')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={120}
@@ -385,16 +446,185 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           <label htmlFor="add-garment-brand-input" className="hig-field-label">
             {tx(lang, '브랜드', 'Brand')}
           </label>
-          <input
+          <ClearableField
             id="add-garment-brand-input"
             type="text"
             className="hig-native-input"
             placeholder="Lemaire"
+            clearLabel={tx(lang, '브랜드 지우기', 'Clear brand')}
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
             maxLength={80}
           />
         </div>
+      </div>
+
+      {/* Progressive Disclosure: Collapsible Optional Metadata Accordion */}
+      <div className="wd-ux-accordion">
+        <button
+          type="button"
+          className="wd-ux-accordion-trigger"
+          aria-expanded={detailsExpanded}
+          aria-controls="add-garment-optional-panel"
+          onClick={() => {
+            triggerHaptic('selection');
+            setDetailsExpanded((prev) => !prev);
+          }}
+        >
+          <span className="wd-ux-accordion-summary">
+            <span>{tx(lang, '선택 입력 더보기', 'More Optional Details')}</span>
+            <span className="wd-ux-accordion-sub">
+              {tx(
+                lang,
+                `${activeSeasonSummary} · ${activeMaterialLabel} · 사이즈/구매가/세탁 메모`,
+                `${activeSeasonSummary} · ${activeMaterialLabel} · Size, Price & Care Notes`
+              )}
+            </span>
+          </span>
+          <span
+            className={`wd-ux-accordion-chevron ${detailsExpanded ? 'is-open' : ''}`}
+            aria-hidden="true"
+          >
+            <ChevronDown size={17} strokeWidth={2.2} />
+          </span>
+        </button>
+
+        {detailsExpanded && (
+          <div id="add-garment-optional-panel" className="wd-ux-accordion-body">
+            {/* Inline 5-Chip Season Selector (zero <select>) */}
+            <div className="hig-field-group">
+              <label className="hig-field-label">{tx(lang, '착용 계절', 'Season')}</label>
+              <div
+                className="hig-pill-row"
+                role="group"
+                aria-label={tx(lang, '착용 계절 선택', 'Select Season')}
+              >
+                {SEASON_CHIP_OPTIONS.map((chip) => {
+                  const active =
+                    chip.key === '사계절'
+                      ? isAllSeasons
+                      : !isAllSeasons && seasons.includes(chip.key);
+                  return (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      data-add-season-chip={chip.key}
+                      aria-pressed={active}
+                      className={`hig-filter-pill ${active ? 'active' : ''}`}
+                      onClick={() => handleToggleSeasonChip(chip.key)}
+                    >
+                      {active && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                      <span>{tx(lang, chip.ko, chip.en)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Inline Material Selector */}
+            <div className="hig-field-group">
+              <label className="hig-field-label">{tx(lang, '소재', 'Material')}</label>
+              <div
+                className="hig-pill-row"
+                role="group"
+                data-add-material-group="true"
+                aria-label={tx(lang, '소재', 'Material')}
+              >
+                {MATERIAL_OPTIONS.map((mat) => {
+                  const selected = material === mat.key;
+                  return (
+                    <button
+                      key={mat.key}
+                      type="button"
+                      data-add-material-btn={mat.key}
+                      aria-pressed={selected}
+                      className={`hig-filter-pill ${selected ? 'active' : ''}`}
+                      onClick={() => setMaterial(mat.key)}
+                    >
+                      {selected && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                      <span>{tx(lang, mat.ko, mat.en)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Size & Price */}
+            <div className="hig-field-grid-2">
+              <div className="hig-field-group">
+                <label htmlFor="add-garment-size-input" className="hig-field-label">
+                  {tx(lang, '사이즈', 'Size')}
+                </label>
+                <ClearableField
+                  id="add-garment-size-input"
+                  type="text"
+                  className="hig-native-input"
+                  placeholder="M / 100 / 270"
+                  clearLabel={tx(lang, '사이즈 지우기', 'Clear size')}
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  maxLength={32}
+                />
+                <div className="hig-quick-size-chips">
+                  {QUICK_SIZES.map((sz) => {
+                    const active = size === sz;
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        aria-pressed={active}
+                        className={`hig-mini-chip ${active ? 'active' : ''}`}
+                        onClick={() => setSize(sz)}
+                      >
+                        {active && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
+                        <span>{sz}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="hig-field-group">
+                <label htmlFor="add-garment-price-input" className="hig-field-label">
+                  {tx(lang, '구매가 (원)', 'Purchase Price (KRW)')}
+                </label>
+                <ClearableField
+                  id="add-garment-price-input"
+                  type="number"
+                  inputMode="numeric"
+                  className="hig-native-input tabular-nums"
+                  placeholder="189000"
+                  clearLabel={tx(lang, '구매가 지우기', 'Clear price')}
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  min={0}
+                />
+              </div>
+            </div>
+
+            {/* Care / Styling Memo */}
+            <div className="hig-field-group">
+              <label htmlFor="add-garment-memo-input" className="hig-field-label">
+                {tx(lang, '세탁 · 스타일링 메모', 'Care & Styling Notes')}
+              </label>
+              <ClearableField
+                as="textarea"
+                id="add-garment-memo-input"
+                className="hig-native-textarea"
+                rows={2}
+                placeholder={tx(
+                  lang,
+                  '드라이클리닝 권장, 봄·가을 출근룩 레이어드용',
+                  'Dry clean recommended, great for layered office looks'
+                )}
+                clearLabel={tx(lang, '메모 지우기', 'Clear memo')}
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                maxLength={500}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <button
@@ -403,7 +633,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         className="hig-primary-cta-btn"
         disabled={processing || submitting || !processedAsset}
       >
-        <Check size={18} />
+        <Check size={18} aria-hidden="true" />
         <span>
           {submitting
             ? tx(lang, '저장 중...', 'Saving...')
