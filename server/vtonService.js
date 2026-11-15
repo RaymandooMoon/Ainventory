@@ -233,8 +233,8 @@ const BODY_SHAPE_DESCRIPTIONS = Object.freeze({
 
 const MAX_PACKSHOT_FILE_BYTES = 4 * 1024 * 1024; // 4MB max for disk garment packshots
 const MAX_DATA_URL_BYTES = 5 * 1024 * 1024; // 5MB max for inline data URLs
-const GEMINI_TIMEOUT_MS = 45000;
-const MAX_TOTAL_SYNTHESIS_MS = 75000;
+const GEMINI_TIMEOUT_MS = 60000;
+const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
 const CACHE_SCHEMA_VERSION = 'vton-multimodal-v4';

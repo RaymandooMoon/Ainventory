@@ -14,6 +14,7 @@ dist-ssr
 data/
 .env
 .env.*
+!.env.example
 
 # Capacitor Android build cache & machine-local properties only (track android/ source)
 android/.gradle/

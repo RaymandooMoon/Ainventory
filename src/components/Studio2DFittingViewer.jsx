@@ -30,6 +30,7 @@ import {
   buildAiVtonCacheKey,
   computeOutfitComboId,
   deleteCachedAiVtonOutfit,
+  fetchServerGeminiConfigured,
   getStoredClientGeminiApiKey,
   isDemoVtonShowcaseActive,
   listCachedAiVtonOutfits,
@@ -345,6 +346,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
     Boolean(getStoredClientGeminiApiKey())
   );
+  const [hasServerConfiguredKey, setHasServerConfiguredKey] = useState(false);
 
   // Smart Credit-Saver & Persistent History Gallery state
   const [autoGenEnabled, setAutoGenEnabled] = useState(() => readStoredAutoGenEnabled());
@@ -378,6 +380,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   useEffect(() => {
     refreshHistoryList();
+    let mounted = true;
+    fetchServerGeminiConfigured()
+      .then((configured) => {
+        if (mounted) {
+          setHasServerConfiguredKey(Boolean(configured));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, [refreshHistoryList]);
 
   const showToast = useCallback((reason) => {
@@ -1664,8 +1677,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
           <p className="studio-vton-key-popover-desc">
             {isEn
-              ? 'Stored locally in your browser to power multi-angle Gemini VTON.'
-              : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다.'}
+              ? 'Stored locally in your browser for multi-angle Gemini VTON. (On local dev, paste here or set GEMINI_API_KEY in .env.local — GitHub Secrets are not pulled via git.)'
+              : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다. (로컬 서버는 보안상 GitHub Secrets가 git pull로 내려오지 않으므로 이곳에 붙여넣거나 .env.local에 GEMINI_API_KEY를 설정하세요)'}
           </p>
           <div className="studio-vton-key-links">
             <a
@@ -1968,7 +1981,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           <KeyRound size={12} />
           <span>{isEn ? 'API Key' : '키 설정'}</span>
-          {(hasSavedClientKey || Boolean(resolveClientGeminiApiKey())) && (
+          {(hasSavedClientKey ||
+            hasServerConfiguredKey ||
+            Boolean(resolveClientGeminiApiKey())) && (
             <span className="studio-vton-key-saved-dot" aria-hidden="true" />
           )}
         </button>

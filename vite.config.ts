@@ -1,5 +1,11 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
+import {
+  defineConfig,
+  loadEnv,
+  type Plugin,
+  type PreviewServer,
+  type ViteDevServer,
+} from 'vite';
 
 function ainventoryBackendPlugin(): Plugin {
   const mountApi = async (server: ViteDevServer | PreviewServer): Promise<void> => {
@@ -11,6 +17,11 @@ function ainventoryBackendPlugin(): Plugin {
         import('./server/db.js'),
       ]);
     const app = express();
+    app.disable('x-powered-by');
+    app.get('/api/build-info', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ architecture: 'hig-2.5d', version: '2.5.0' });
+    });
     app.use('/api/vton', createVtonRouter());
     app.use('/api', createApiRouter());
     app.use('/uploads', express.static(UPLOADS_DIR));
@@ -24,8 +35,16 @@ function ainventoryBackendPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), ainventoryBackendPlugin()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  for (const [key, val] of Object.entries(env)) {
+    if (process.env[key] === undefined && typeof val === 'string' && val.trim()) {
+      process.env[key] = val.trim();
+    }
+  }
+
+  return {
+    plugins: [react(), ainventoryBackendPlugin()],
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -58,4 +77,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

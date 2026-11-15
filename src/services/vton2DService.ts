@@ -1297,6 +1297,22 @@ export function resolveClientGeminiApiKey(): string {
   return resolveCandidateClientGeminiApiKeys()[0] || '';
 }
 
+export async function fetchServerGeminiConfigured(): Promise<boolean> {
+  const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
+  if (String(envBag.VITE_STATIC_STANDALONE || '') === '1') {
+    return false;
+  }
+  try {
+    const status = await apiFetch<{ geminiConfigured?: boolean }>('/vton/status', {
+      method: 'GET',
+      headers: { 'X-Demo-Mode': 'sample' },
+    });
+    return Boolean(status?.geminiConfigured);
+  } catch {
+    return false;
+  }
+}
+
 async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | null> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') return null;
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
