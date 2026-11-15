@@ -10,6 +10,7 @@ import {
   isMstLevel,
   normalizeMstUndertone,
 } from './monkSkinTone.ts';
+import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 
 export type { MstLevel, MstSwatch, MstUndertone };
 
@@ -72,6 +73,7 @@ export interface SkinToneAnalysisResult {
   confidence: number;
   lightingMode: LightingCalibrationKey;
   faceDetected: boolean;
+  detectorEngine?: string;
   faceBoxPreview: {
     x: number;
     y: number;
@@ -741,12 +743,12 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
 
 /**
  * Physiological human skin likelihood score in [0, 1].
- * Strictly rejects green/mint/cyan/blue garments, neutral gray/white walls,
- * dark hair/eyebrows, and oversaturated clothing.
+ * Supports fair MST 1 through deep MST 10 skin tones while rejecting green/mint/cyan/blue
+ * garments, neutral gray/white walls, dark muted hair/eyebrows, and oversaturated clothing.
  */
 function computeSkinLikelihood(r: number, g: number, b: number): number {
   const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  if (lum < 32 || r < 44 || g < 26 || b < 18) return 0;
+  if (lum < 18 || r < 30 || g < 16 || b < 10) return 0;
   if (r > 251 && g > 248 && b > 246) return 0;
 
   // Human skin hemoglobin/melanin always satisfies R > G and R >= B
@@ -759,9 +761,9 @@ function computeSkinLikelihood(r: number, g: number, b: number): number {
   const span = maxC - minC;
   if (span < 10) return 0;
 
-  // Reject oversaturated neon/dyed fabrics
+  // Reject oversaturated neon/dyed fabrics and near-achromatic grays
   const sat = span / Math.max(1, maxC);
-  if (sat > 0.68 || sat < 0.045) return 0;
+  if (sat > 0.7 || sat < 0.04) return 0;
 
   const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
   const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
@@ -770,11 +772,28 @@ function computeSkinLikelihood(r: number, g: number, b: number): number {
   // Reject cool/greenish casts where G exceeds physiological ratio to R & B
   if (g > r * 0.965) return 0;
 
+  // For very dark pixels (lum < 50), keep genuine deep melanin (MST 9-10) and reject muted black/brown hair
+  if (lum < 50 && (sat < 0.3 || rbDiff < 14 || cb > 129 || cr < 134)) {
+    return 0;
+  }
+
   const cbDist = Math.abs(cb - 108) / 28;
   const crDist = Math.abs(cr - 147) / 26;
   const chromaFit = clamp(1 - (cbDist * 0.48 + crDist * 0.52), 0.15, 1);
   return chromaFit;
 }
+
+interface LandmarkPointNorm {
+  x: number;
+  y: number;
+}
+
+type FaceDetectorEngineKind =
+  | 'mediapipe_face_landmarker'
+  | 'native_face_detector'
+  | 'pure_ts_integral'
+  | 'manual_focus'
+  | 'fallback';
 
 interface DetectedFaceBox {
   cx: number;
@@ -782,6 +801,219 @@ interface DetectedFaceBox {
   w: number;
   h: number;
   detected: boolean;
+  engine: FaceDetectorEngineKind;
+  landmarks?: LandmarkPointNorm[];
+}
+
+interface CropSourceRect {
+  sx: number;
+  sy: number;
+  side: number;
+  srcW: number;
+  srcH: number;
+}
+
+interface DetectFaceOptions {
+  skipNeuralDetector?: boolean;
+  focusPoint?: { x: number; y: number };
+  previousCropRect?: CropSourceRect;
+}
+
+interface MediaPipeLandmarkerLike {
+  detect: (image: HTMLCanvasElement) => {
+    faceLandmarks?: Array<Array<{ x: number; y: number; z?: number }>>;
+  };
+  close?: () => void;
+}
+
+let mpLandmarkerPromise: Promise<MediaPipeLandmarkerLike | null> | null = null;
+
+async function getMediaPipeLandmarker(): Promise<MediaPipeLandmarkerLike | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return null;
+  if (!mpLandmarkerPromise) {
+    mpLandmarkerPromise = (async () => {
+      try {
+        const initTask = (async () => {
+          const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
+          const wasmBase = withPublicBaseUrl('/mediapipe/wasm');
+          const modelPath = withPublicBaseUrl('/mediapipe/face_landmarker.task');
+          const vision = await FilesetResolver.forVisionTasks(wasmBase);
+          return await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: modelPath,
+              delegate: 'CPU',
+            },
+            runningMode: 'IMAGE',
+            numFaces: 5,
+            minFaceDetectionConfidence: 0.24,
+            minFacePresenceConfidence: 0.24,
+          });
+        })();
+        const timeoutTask = new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 9000);
+        });
+        const instance = await Promise.race([initTask, timeoutTask]);
+        if (!instance) {
+          mpLandmarkerPromise = null;
+          return null;
+        }
+        return instance;
+      } catch {
+        mpLandmarkerPromise = null;
+        return null;
+      }
+    })();
+  }
+  return mpLandmarkerPromise;
+}
+
+function buildDetectedFaceFromLandmarks(
+  rawLms: ReadonlyArray<{ x: number; y: number }>,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  srcW: number,
+  srcH: number
+): DetectedFaceBox | null {
+  if (!Array.isArray(rawLms) || rawLms.length < 400) return null;
+
+  let minX = 1;
+  let maxX = 0;
+  let minY = 1;
+  let maxY = 0;
+  const mapped: LandmarkPointNorm[] = new Array(rawLms.length);
+
+  for (let i = 0; i < rawLms.length; i++) {
+    const pt = rawLms[i];
+    const gx = clamp((sx + pt.x * sw) / srcW, 0, 1);
+    const gy = clamp((sy + pt.y * sh) / srcH, 0, 1);
+    mapped[i] = { x: gx, y: gy };
+    if (gx < minX) minX = gx;
+    if (gx > maxX) maxX = gx;
+    if (gy < minY) minY = gy;
+    if (gy > maxY) maxY = gy;
+  }
+
+  const rawW = (maxX - minX) * srcW;
+  const rawH = (maxY - minY) * srcH;
+  if (rawW < 10 || rawH < 10) return null;
+
+  // Landmark 10 sits just below the upper hairline; add modest forehead headroom for full face framing
+  const padTop = rawH * 0.11;
+  const padBottom = rawH * 0.04;
+  const padSide = rawW * 0.06;
+  const x0 = clamp(minX * srcW - padSide, 0, srcW - 1);
+  const y0 = clamp(minY * srcH - padTop, 0, srcH - 1);
+  const x1 = clamp(maxX * srcW + padSide, x0 + 8, srcW);
+  const y1 = clamp(maxY * srcH + padBottom, y0 + 8, srcH);
+
+  const w = x1 - x0;
+  const h = y1 - y0;
+  return {
+    cx: x0 + w * 0.5,
+    cy: y0 + h * 0.5,
+    w,
+    h,
+    detected: true,
+    engine: 'mediapipe_face_landmarker',
+    landmarks: mapped,
+  };
+}
+
+function runMediaPipeOnRoi(
+  landmarker: MediaPipeLandmarkerLike,
+  img: HTMLImageElement,
+  srcW: number,
+  srcH: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+  maxDim: number
+): DetectedFaceBox[] {
+  const sx = clamp(Math.floor(rx), 0, Math.max(0, srcW - 1));
+  const sy = clamp(Math.floor(ry), 0, Math.max(0, srcH - 1));
+  const sw = clamp(Math.round(rw), 1, srcW - sx);
+  const sh = clamp(Math.round(rh), 1, srcH - sy);
+  if (sw < 24 || sh < 24) return [];
+
+  const maxSide = Math.max(sw, sh);
+  const scale =
+    maxSide < 192 ? Math.min(2.5, 320 / maxSide) : Math.min(1, maxDim / maxSide);
+  const cw = Math.max(48, Math.round(sw * scale));
+  const ch = Math.max(48, Math.round(sh * scale));
+
+  const roiCanvas = document.createElement('canvas');
+  roiCanvas.width = cw;
+  roiCanvas.height = ch;
+  const roiCtx = roiCanvas.getContext('2d');
+  if (!roiCtx) {
+    roiCanvas.width = 0;
+    roiCanvas.height = 0;
+    return [];
+  }
+
+  try {
+    roiCtx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+    const detection = landmarker.detect(roiCanvas);
+    const faces = detection?.faceLandmarks;
+    if (!Array.isArray(faces) || faces.length === 0) return [];
+    const results: DetectedFaceBox[] = [];
+    for (const lms of faces) {
+      const built = buildDetectedFaceFromLandmarks(lms, sx, sy, sw, sh, srcW, srcH);
+      if (built) results.push(built);
+    }
+    return results;
+  } catch {
+    return [];
+  } finally {
+    roiCanvas.width = 0;
+    roiCanvas.height = 0;
+  }
+}
+
+function selectBestMediaPipeFace(
+  candidates: ReadonlyArray<DetectedFaceBox>,
+  srcW: number,
+  srcH: number,
+  focusPoint?: { x: number; y: number }
+): DetectedFaceBox | null {
+  if (!candidates.length) return null;
+
+  if (focusPoint) {
+    const focusPx = clamp(focusPoint.x, 0.02, 0.98) * srcW;
+    const focusPy = clamp(focusPoint.y, 0.02, 0.98) * srcH;
+    let bestNear: DetectedFaceBox | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const face of candidates) {
+      const dx = face.cx - focusPx;
+      const dy = face.cy - focusPy;
+      const dist = Math.hypot(dx, dy);
+      const insideExpanded =
+        Math.abs(dx) <= face.w * 0.72 && Math.abs(dy) <= face.h * 0.72;
+      if (insideExpanded && dist < bestDist) {
+        bestDist = dist;
+        bestNear = face;
+      }
+    }
+    if (bestNear) return bestNear;
+  }
+
+  let best = candidates[0];
+  let bestRank = -1;
+  for (const face of candidates) {
+    const yNorm = face.cy / Math.max(1, srcH);
+    const xNorm = face.cx / Math.max(1, srcW);
+    const area = face.w * face.h;
+    const rank =
+      area * (1.28 - 0.32 * yNorm) * (1.14 - 0.22 * Math.abs(xNorm - 0.5));
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = face;
+    }
+  }
+  return best;
 }
 
 function buildIntegralTable(values: Float32Array, w: number, h: number): Float64Array {
@@ -824,18 +1056,13 @@ function queryIntegralMean(
   return sum / area;
 }
 
-/**
- * Detects the human face bounding box on the FULL uncropped portrait before cropping.
- * Uses native `FaceDetector` when supported by the browser, with a pure-TS multi-scale
- * integral-image face/head/eye-symmetry detector fallback (zero WASM / zero network).
- */
-async function detectFaceOnFullPortrait(
+function detectFacePureTSFromImage(
   img: HTMLImageElement,
   gains: { r: number; g: number; b: number }
-): Promise<DetectedFaceBox> {
+): DetectedFaceBox {
   const srcW = img.naturalWidth || img.width || 320;
   const srcH = img.naturalHeight || img.height || 320;
-  const maxDim = 360;
+  const maxDim = 320;
   const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
   const detW = Math.max(64, Math.round(srcW * scale));
   const detH = Math.max(64, Math.round(srcH * scale));
@@ -845,60 +1072,20 @@ async function detectFaceOnFullPortrait(
   detCanvas.height = detH;
   const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
   if (!detCtx) {
-    return { cx: srcW * 0.5, cy: srcH * 0.36, w: srcW * 0.36, h: srcH * 0.36, detected: false };
+    return {
+      cx: srcW * 0.5,
+      cy: srcH * 0.34,
+      w: srcW * 0.36,
+      h: srcH * 0.36,
+      detected: false,
+      engine: 'fallback',
+    };
   }
   detCtx.drawImage(img, 0, 0, detW, detH);
   const imgData = detCtx.getImageData(0, 0, detW, detH).data;
-
-  // 1. Try native platform FaceDetector API when available
-  if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-    try {
-      const FaceDetectorCtor = (
-        window as unknown as {
-          FaceDetector: new (opts?: { fastMode?: boolean; maxDetectedFaces?: number }) => {
-            detect: (
-              source: HTMLCanvasElement
-            ) => Promise<
-              Array<{ boundingBox: { x: number; y: number; width: number; height: number } }>
-            >;
-          };
-        }
-      ).FaceDetector;
-      const detector = new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 5 });
-      const faces = await detector.detect(detCanvas);
-      if (Array.isArray(faces) && faces.length > 0) {
-        let bestFace = faces[0].boundingBox;
-        let bestRank = -1;
-        for (const item of faces) {
-          const b = item.boundingBox;
-          const yNorm = (b.y + b.height * 0.5) / detH;
-          const rank = b.width * b.height * (1.25 - 0.35 * yNorm);
-          if (rank > bestRank) {
-            bestRank = rank;
-            bestFace = b;
-          }
-        }
-        if (bestFace.width >= 12 && bestFace.height >= 12) {
-          detCanvas.width = 0;
-          detCanvas.height = 0;
-          return {
-            cx: (bestFace.x + bestFace.width * 0.5) / scale,
-            cy: (bestFace.y + bestFace.height * 0.5) / scale,
-            w: bestFace.width / scale,
-            h: bestFace.height / scale,
-            detected: true,
-          };
-        }
-      }
-    } catch {
-      // Fallback to multi-scale integral-image face detector below
-    }
-  }
-
   detCanvas.width = 0;
   detCanvas.height = 0;
 
-  // 2. Pure-TS Multi-Scale Integral-Image Face & Head Detector
   const nPixels = detW * detH;
   const skinBuf = new Float32Array(nPixels);
   const darkBuf = new Float32Array(nPixels);
@@ -910,8 +1097,10 @@ async function detectFaceOnFullPortrait(
     const g = clampByte(imgData[p + 1] * gains.g);
     const b = clampByte(imgData[p + 2] * gains.b);
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    skinBuf[i] = computeSkinLikelihood(r, g, b);
-    darkBuf[i] = lum < 0.29 ? 1 : 0;
+    const skinScore = computeSkinLikelihood(r, g, b);
+    skinBuf[i] = skinScore;
+    // Do not misclassify genuine deep MST 9-10 skin as dark hair
+    darkBuf[i] = lum < 0.28 && skinScore < 0.25 ? 1 : 0;
     lumBuf[i] = lum;
   }
 
@@ -920,7 +1109,7 @@ async function detectFaceOnFullPortrait(
   const lumSAT = buildIntegralTable(lumBuf, detW, detH);
 
   const minSide = Math.min(detW, detH);
-  const widthFractions = [0.11, 0.14, 0.18, 0.23, 0.29, 0.36, 0.45, 0.55, 0.66];
+  const widthFractions = [0.12, 0.16, 0.21, 0.27, 0.34, 0.43, 0.54, 0.65];
 
   let bestScore = -1;
   let bestBox: { x: number; y: number; w: number; h: number } | null = null;
@@ -935,7 +1124,11 @@ async function detectFaceOnFullPortrait(
     const maxY = Math.max(1, Math.min(detH - fh, Math.round(detH * 0.78 - fh * 0.5)));
 
     for (let fy = Math.round(detH * 0.02); fy <= maxY; fy += stepY) {
-      for (let fx = Math.round(detW * 0.04); fx <= detW - fw - Math.round(detW * 0.04); fx += stepX) {
+      for (
+        let fx = Math.round(detW * 0.04);
+        fx <= detW - fw - Math.round(detW * 0.04);
+        fx += stepX
+      ) {
         const coreSkin = queryIntegralMean(
           skinSAT,
           detW,
@@ -945,7 +1138,7 @@ async function detectFaceOnFullPortrait(
           fx + fw * 0.85,
           fy + fh * 0.88
         );
-        if (coreSkin < 0.35) continue;
+        if (coreSkin < 0.32) continue;
 
         const leftCheek = queryIntegralMean(
           skinSAT,
@@ -965,7 +1158,9 @@ async function detectFaceOnFullPortrait(
           fx + fw * 0.86,
           fy + fh * 0.76
         );
-        if (leftCheek < 0.3 || rightCheek < 0.3) continue;
+        if (Math.max(leftCheek, rightCheek) < 0.32 || (leftCheek + rightCheek) * 0.5 < 0.24) {
+          continue;
+        }
 
         const forehead = queryIntegralMean(
           skinSAT,
@@ -985,7 +1180,7 @@ async function detectFaceOnFullPortrait(
           fx + fw * 0.72,
           fy + fh * 0.94
         );
-        if (forehead < 0.2 && chin < 0.25) continue;
+        if (forehead < 0.18 && chin < 0.24) continue;
 
         const symmetry = 1 - Math.abs(leftCheek - rightCheek);
 
@@ -996,7 +1191,7 @@ async function detectFaceOnFullPortrait(
                 skinSAT,
                 detW,
                 detH,
-                fx - fw * 0.32,
+                fx - fw * 0.3,
                 fy + fh * 0.12,
                 fx - fw * 0.03,
                 fy + fh * 0.84
@@ -1010,7 +1205,7 @@ async function detectFaceOnFullPortrait(
                 detH,
                 fx + fw * 1.03,
                 fy + fh * 0.12,
-                fx + fw * 1.32,
+                fx + fw * 1.3,
                 fy + fh * 0.84
               )
             : 0;
@@ -1020,16 +1215,49 @@ async function detectFaceOnFullPortrait(
                 skinSAT,
                 detW,
                 detH,
-                fx + fw * 0.12,
-                fy - fh * 0.28,
-                fx + fw * 0.88,
+                fx + fw * 0.14,
+                fy - fh * 0.26,
+                fx + fw * 0.86,
                 fy - fh * 0.02
               )
             : 0;
-        const outerSkin = (leftOuter + rightOuter + topOuter) / 3;
-        const boundaryContrast = Math.max(0, coreSkin - outerSkin);
 
-        // Hair crown + eye/brow luminance signature
+        // Check lateral bands immediately below the box (around the narrower neck column):
+        // A real chin sits above background/collar; a forehead-only box sits right above wide eyes/cheeks!
+        const botLeft =
+          fy + fh < detH - fh * 0.14
+            ? queryIntegralMean(
+                skinSAT,
+                detW,
+                detH,
+                fx + fw * 0.04,
+                fy + fh * 1.02,
+                fx + fw * 0.32,
+                fy + fh * 1.24
+              )
+            : 0;
+        const botRight =
+          fy + fh < detH - fh * 0.14
+            ? queryIntegralMean(
+                skinSAT,
+                detW,
+                detH,
+                fx + fw * 0.68,
+                fy + fh * 1.02,
+                fx + fw * 0.96,
+                fy + fh * 1.24
+              )
+            : 0;
+        const bottomLateralSkin = (botLeft + botRight) * 0.5;
+
+        const outerSkin = (leftOuter + rightOuter + topOuter + bottomLateralSkin) / 4;
+        const boundaryContrast = Math.max(0, coreSkin - outerSkin);
+        const continuationPenalty = topOuter * 0.72 + bottomLateralSkin * 1.05;
+
+        // Cap coreSkin benefit above 0.66 so small featureless forehead squares do not outscore whole faces
+        const effectiveCore = Math.min(0.66, coreSkin) + Math.max(0, coreSkin - 0.66) * 0.12;
+
+        // Hair crown + relative eye/cheek luminance signature
         const hairCrown = queryIntegralMean(
           darkSAT,
           detW,
@@ -1037,7 +1265,7 @@ async function detectFaceOnFullPortrait(
           fx - fw * 0.12,
           fy - fh * 0.26,
           fx + fw * 1.12,
-          fy + fh * 0.22
+          fy + fh * 0.2
         );
         const eyeDark = queryIntegralMean(
           darkSAT,
@@ -1066,27 +1294,57 @@ async function detectFaceOnFullPortrait(
           fx + fw * 0.82,
           fy + fh * 0.72
         );
+        const coreLum = queryIntegralMean(
+          lumSAT,
+          detW,
+          detH,
+          fx + fw * 0.2,
+          fy + fh * 0.25,
+          fx + fw * 0.8,
+          fy + fh * 0.78
+        );
+        const outerTopLum =
+          fy > fh * 0.12
+            ? queryIntegralMean(
+                lumSAT,
+                detW,
+                detH,
+                fx + fw * 0.1,
+                fy - fh * 0.26,
+                fx + fw * 0.9,
+                fy - fh * 0.02
+              )
+            : coreLum;
+        const lumCrownContrast = clamp((coreLum - outerTopLum) * 1.35, 0, 0.24);
+        const relEyeContrast = clamp(
+          (cheekLum - eyeLum) / Math.max(0.18, cheekLum),
+          0,
+          0.38
+        );
         const featureBonus =
-          Math.min(0.28, hairCrown * 0.55) +
-          Math.max(0, cheekLum - eyeLum) * 1.35 +
-          Math.min(0.2, eyeDark * 0.45);
+          Math.min(0.24, hairCrown * 0.45) +
+          lumCrownContrast +
+          relEyeContrast +
+          Math.min(0.16, eyeDark * 0.4);
 
-        // Strong anatomical preference for upper-frame head over lower-frame hands/arms
         const yNorm = (fy + fh * 0.5) / detH;
         const upperBonus =
           yNorm <= 0.54
-            ? 0.26 * (1 - Math.abs(yNorm - 0.31) / 0.46)
+            ? 0.24 * (1 - Math.abs(yNorm - 0.31) / 0.46)
             : -0.42 * (yNorm - 0.54);
         const xNorm = (fx + fw * 0.5) / detW;
-        const centerBonus = 0.09 * (1 - Math.min(1, Math.abs(xNorm - 0.5) * 2.1));
+        const centerBonus = 0.08 * (1 - Math.min(1, Math.abs(xNorm - 0.5) * 2.1));
+        const scaleBonus = frac >= 0.21 && frac <= 0.56 ? 0.08 : frac >= 0.16 ? 0.03 : 0;
 
         const score =
-          coreSkin * 1.15 +
-          boundaryContrast * 0.95 +
-          symmetry * 0.28 +
+          effectiveCore * 1.12 +
+          boundaryContrast * 0.95 -
+          continuationPenalty +
+          symmetry * 0.26 +
           featureBonus +
           upperBonus +
-          centerBonus;
+          centerBonus +
+          scaleBonus;
 
         if (score > bestScore) {
           bestScore = score;
@@ -1103,10 +1361,10 @@ async function detectFaceOnFullPortrait(
       w: bestBox.w / scale,
       h: bestBox.h / scale,
       detected: true,
+      engine: 'pure_ts_integral',
     };
   }
 
-  // Fallback: upper-portrait center
   const fallbackSide = Math.min(srcW, srcH) * 0.38;
   return {
     cx: srcW * 0.5,
@@ -1114,7 +1372,206 @@ async function detectFaceOnFullPortrait(
     w: fallbackSide,
     h: fallbackSide * 1.2,
     detected: false,
+    engine: 'fallback',
   };
+}
+
+/**
+ * Detects the human face & 478 landmarks on the FULL uncropped portrait before cropping.
+ * - Real photos use lazy-loaded local MediaPipe FaceLandmarker with progressive ROI stages
+ *   (handles close-up selfies, tilted portraits, bangs, and full-body shots).
+ * - Falls back seamlessly to native FaceDetector or the pure-TS multi-scale integral-image
+ *   detector when skipped (synthetic presets), offline, or on extreme 90° profiles.
+ */
+async function detectFaceOnFullPortrait(
+  img: HTMLImageElement,
+  gains: { r: number; g: number; b: number },
+  options: DetectFaceOptions = {}
+): Promise<DetectedFaceBox> {
+  const srcW = img.naturalWidth || img.width || 320;
+  const srcH = img.naturalHeight || img.height || 320;
+  const minSrcSide = Math.min(srcW, srcH);
+
+  let mpLandmarker: MediaPipeLandmarkerLike | null = null;
+  if (!options.skipNeuralDetector) {
+    mpLandmarker = await getMediaPipeLandmarker();
+    if (mpLandmarker) {
+      // Stage 1: Full-frame landmark detection
+      const stage1Faces = runMediaPipeOnRoi(mpLandmarker, img, srcW, srcH, 0, 0, srcW, srcH, 640);
+      if (options.focusPoint) {
+        const focusedStage1 = selectBestMediaPipeFace(
+          stage1Faces,
+          srcW,
+          srcH,
+          options.focusPoint
+        );
+        if (focusedStage1) {
+          const dist = Math.hypot(
+            focusedStage1.cx - options.focusPoint.x * srcW,
+            focusedStage1.cy - options.focusPoint.y * srcH
+          );
+          if (dist <= Math.max(focusedStage1.w, focusedStage1.h) * 0.72) {
+            return focusedStage1;
+          }
+        }
+        // Stage 2 (Focus Zoom): crop generously around the user's tap point
+        const prevSide = options.previousCropRect?.side;
+        const roiSide = clamp(
+          Math.round(prevSide ? Math.max(prevSide * 1.9, minSrcSide * 0.38) : minSrcSide * 0.56),
+          Math.round(minSrcSide * 0.3),
+          minSrcSide
+        );
+        const rx = clamp(
+          options.focusPoint.x * srcW - roiSide * 0.5,
+          0,
+          Math.max(0, srcW - roiSide)
+        );
+        const ry = clamp(
+          options.focusPoint.y * srcH - roiSide * 0.5,
+          0,
+          Math.max(0, srcH - roiSide)
+        );
+        const focusFaces = runMediaPipeOnRoi(
+          mpLandmarker,
+          img,
+          srcW,
+          srcH,
+          rx,
+          ry,
+          roiSide,
+          roiSide,
+          512
+        );
+        const focused = selectBestMediaPipeFace(focusFaces, srcW, srcH, options.focusPoint);
+        if (focused) return focused;
+      } else {
+        const bestStage1 = selectBestMediaPipeFace(stage1Faces, srcW, srcH);
+        if (bestStage1) return bestStage1;
+
+        // Stage 2 (Progressive Zoom for full-body / distant subjects)
+        const stage2Rois: Array<{
+          sx: number;
+          sy: number;
+          sw: number;
+          sh: number;
+          maxDim: number;
+        }> = [
+          { sx: srcW * 0.12, sy: 0, sw: srcW * 0.76, sh: srcH * 0.52, maxDim: 512 },
+          { sx: 0, sy: 0, sw: srcW, sh: srcH * 0.56, maxDim: 560 },
+          { sx: srcW * 0.22, sy: 0, sw: srcW * 0.56, sh: srcH * 0.38, maxDim: 480 },
+          { sx: srcW * 0.1, sy: srcH * 0.22, sw: srcW * 0.8, sh: srcH * 0.56, maxDim: 512 },
+          ...(srcW >= srcH * 0.85
+            ? [
+                { sx: 0, sy: 0, sw: srcW * 0.52, sh: srcH * 0.56, maxDim: 512 },
+                { sx: srcW * 0.48, sy: 0, sw: srcW * 0.52, sh: srcH * 0.56, maxDim: 512 },
+              ]
+            : []),
+        ];
+        for (const roi of stage2Rois) {
+          const faces = runMediaPipeOnRoi(
+            mpLandmarker,
+            img,
+            srcW,
+            srcH,
+            roi.sx,
+            roi.sy,
+            roi.sw,
+            roi.sh,
+            roi.maxDim
+          );
+          const picked = selectBestMediaPipeFace(faces, srcW, srcH);
+          if (picked) return picked;
+        }
+      }
+    }
+  }
+
+  // Stage 3: Pure-TS multi-scale integral-image face detector
+  const pureTsCandidate = detectFacePureTSFromImage(img, gains);
+
+  // If MediaPipe is available and Pure-TS spotted a candidate region missed in Stages 1-2, verify with Stage 3 zoom
+  if (mpLandmarker && !options.skipNeuralDetector && pureTsCandidate.detected) {
+    const zoomSide = clamp(
+      Math.round(Math.max(pureTsCandidate.w, pureTsCandidate.h) * 2.4),
+      Math.round(minSrcSide * 0.28),
+      minSrcSide
+    );
+    const zx = clamp(pureTsCandidate.cx - zoomSide * 0.5, 0, Math.max(0, srcW - zoomSide));
+    const zy = clamp(pureTsCandidate.cy - zoomSide * 0.5, 0, Math.max(0, srcH - zoomSide));
+    const zoomFaces = runMediaPipeOnRoi(
+      mpLandmarker,
+      img,
+      srcW,
+      srcH,
+      zx,
+      zy,
+      zoomSide,
+      zoomSide,
+      480
+    );
+    const picked = selectBestMediaPipeFace(zoomFaces, srcW, srcH, options.focusPoint);
+    if (picked) return picked;
+  }
+
+  // Stage 4: Native platform FaceDetector API when available & earlier stages missed
+  if (!options.skipNeuralDetector && typeof window !== 'undefined' && 'FaceDetector' in window) {
+    try {
+      const scale = Math.min(1, 480 / Math.max(srcW, srcH));
+      const detW = Math.max(64, Math.round(srcW * scale));
+      const detH = Math.max(64, Math.round(srcH * scale));
+      const detCanvas = document.createElement('canvas');
+      detCanvas.width = detW;
+      detCanvas.height = detH;
+      const detCtx = detCanvas.getContext('2d');
+      if (detCtx) {
+        detCtx.drawImage(img, 0, 0, detW, detH);
+        const FaceDetectorCtor = (
+          window as unknown as {
+            FaceDetector: new (opts?: { fastMode?: boolean; maxDetectedFaces?: number }) => {
+              detect: (
+                source: HTMLCanvasElement
+              ) => Promise<
+                Array<{ boundingBox: { x: number; y: number; width: number; height: number } }>
+              >;
+            };
+          }
+        ).FaceDetector;
+        const detector = new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 5 });
+        const faces = await detector.detect(detCanvas);
+        detCanvas.width = 0;
+        detCanvas.height = 0;
+        if (Array.isArray(faces) && faces.length > 0) {
+          let bestFace = faces[0].boundingBox;
+          let bestRank = -1;
+          for (const item of faces) {
+            const b = item.boundingBox;
+            const yNorm = (b.y + b.height * 0.5) / detH;
+            const rank = b.width * b.height * (1.25 - 0.35 * yNorm);
+            if (rank > bestRank) {
+              bestRank = rank;
+              bestFace = b;
+            }
+          }
+          if (bestFace.width >= 12 && bestFace.height >= 12) {
+            return {
+              cx: (bestFace.x + bestFace.width * 0.5) / scale,
+              cy: (bestFace.y + bestFace.height * 0.5) / scale,
+              w: bestFace.width / scale,
+              h: bestFace.height / scale,
+              detected: true,
+              engine: 'native_face_detector',
+            };
+          }
+        }
+      }
+      detCanvas.width = 0;
+      detCanvas.height = 0;
+    } catch {
+      // Ignore native FaceDetector unavailability errors
+    }
+  }
+
+  return pureTsCandidate;
 }
 
 /**
@@ -1181,6 +1638,8 @@ interface SampledSkinPatch {
   r: number;
   g: number;
   b: number;
+  lum: number;
+  meanSkinLikelihood: number;
   validCount: number;
 }
 
@@ -1193,7 +1652,8 @@ function sampleBestAnatomicalPatch(
   searchRx: number,
   searchRy: number,
   gains: { r: number; g: number; b: number },
-  excludeLipSpikes: boolean
+  excludeLipSpikes: boolean,
+  minSkinLum: number = 0
 ): SampledSkinPatch {
   const radius = 8;
   let bestCx = clamp(Math.round(targetX * W), radius + 2, W - radius - 3);
@@ -1217,7 +1677,15 @@ function sampleBestAnatomicalPatch(
           const r = clampByte(rawData[idx] * gains.r);
           const g = clampByte(rawData[idx + 1] * gains.g);
           const b = clampByte(rawData[idx + 2] * gains.b);
-          if (excludeLipSpikes && r - g > 46 && r - b > 44) continue;
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (minSkinLum > 0 && lum < minSkinLum) {
+            count += 1;
+            continue;
+          }
+          if (excludeLipSpikes && r - g > 46 && r - b > 44) {
+            count += 1;
+            continue;
+          }
           skinSum += computeSkinLikelihood(r, g, b);
           count += 1;
         }
@@ -1235,22 +1703,34 @@ function sampleBestAnatomicalPatch(
     }
   }
 
-  const pixels: Array<{ r: number; g: number; b: number; lum: number }> = [];
+  const pixels: Array<{ r: number; g: number; b: number; lum: number; lik: number }> = [];
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const idx = ((bestCy + dy) * W + (bestCx + dx)) * 4;
       const r = clampByte(rawData[idx] * gains.r);
       const g = clampByte(rawData[idx + 1] * gains.g);
       const b = clampByte(rawData[idx + 2] * gains.b);
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (minSkinLum > 0 && lum < minSkinLum) continue;
       if (excludeLipSpikes && r - g > 46 && r - b > 44) continue;
-      if (computeSkinLikelihood(r, g, b) >= 0.3) {
-        pixels.push({ r, g, b, lum: 0.299 * r + 0.587 * g + 0.114 * b });
+      const lik = computeSkinLikelihood(r, g, b);
+      if (lik >= 0.28) {
+        pixels.push({ r, g, b, lum, lik });
       }
     }
   }
 
   if (pixels.length === 0) {
-    return { px: bestCx, py: bestCy, r: 223, g: 186, b: 155, validCount: 0 };
+    return {
+      px: bestCx,
+      py: bestCy,
+      r: 223,
+      g: 186,
+      b: 155,
+      lum: 193,
+      meanSkinLikelihood: 0,
+      validCount: 0,
+    };
   }
 
   // Sort by luminance and trim darkest 25% (shadows/hair/pores) & brightest 15% (specular shine)
@@ -1262,35 +1742,135 @@ function sampleBestAnatomicalPatch(
   let rSum = 0;
   let gSum = 0;
   let bSum = 0;
+  let likSum = 0;
   for (const px of trimmed) {
     rSum += px.r;
     gSum += px.g;
     bSum += px.b;
+    likSum += px.lik;
   }
 
+  const outR = Math.round(rSum / trimmed.length);
+  const outG = Math.round(gSum / trimmed.length);
+  const outB = Math.round(bSum / trimmed.length);
   return {
     px: bestCx,
     py: bestCy,
-    r: Math.round(rSum / trimmed.length),
-    g: Math.round(gSum / trimmed.length),
-    b: Math.round(bSum / trimmed.length),
+    r: outR,
+    g: outG,
+    b: outB,
+    lum: 0.299 * outR + 0.587 * outG + 0.114 * outB,
+    meanSkinLikelihood: likSum / trimmed.length,
     validCount: pixels.length,
   };
 }
 
+interface PatchCandidateSpec {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+  priorityBonus: number;
+}
+
+function sampleBestCandidateList(
+  rawData: Uint8ClampedArray,
+  W: number,
+  H: number,
+  candidates: ReadonlyArray<PatchCandidateSpec>,
+  gains: { r: number; g: number; b: number },
+  excludeLipSpikes: boolean,
+  minSkinLum: number,
+  refLum: number
+): SampledSkinPatch {
+  let bestPatch = sampleBestAnatomicalPatch(
+    rawData,
+    W,
+    H,
+    candidates[0].x,
+    candidates[0].y,
+    candidates[0].rx,
+    candidates[0].ry,
+    gains,
+    excludeLipSpikes,
+    minSkinLum
+  );
+  let bestScore = -999;
+
+  for (const c of candidates) {
+    const patch = sampleBestAnatomicalPatch(
+      rawData,
+      W,
+      H,
+      c.x,
+      c.y,
+      c.rx,
+      c.ry,
+      gains,
+      excludeLipSpikes,
+      minSkinLum
+    );
+    const coverage = clamp(patch.validCount / 140, 0, 1);
+    const lumMatch =
+      refLum > 0
+        ? 1 - clamp(Math.abs(patch.lum - refLum) / Math.max(45, refLum * 0.75), 0, 0.85)
+        : 0.5;
+    const score =
+      (patch.validCount >= 10 ? 1.0 : coverage * 0.45) +
+      patch.meanSkinLikelihood * 0.6 +
+      coverage * 0.45 +
+      lumMatch * 0.35 +
+      c.priorityBonus;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestPatch = patch;
+    }
+  }
+
+  return bestPatch;
+}
+
+function mapLandmarksToPreviewCentroid(
+  landmarks: ReadonlyArray<LandmarkPointNorm>,
+  indices: ReadonlyArray<number>,
+  sx: number,
+  sy: number,
+  cropSide: number,
+  srcW: number,
+  srcH: number
+): { x: number; y: number } {
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (const idx of indices) {
+    const pt = landmarks[idx];
+    if (!pt) continue;
+    sumX += (pt.x * srcW - sx) / cropSide;
+    sumY += (pt.y * srcH - sy) / cropSide;
+    count += 1;
+  }
+  if (count === 0) return { x: 0.5, y: 0.5 };
+  return {
+    x: clamp(sumX / count, 0.06, 0.94),
+    y: clamp(sumY / count, 0.06, 0.94),
+  };
+}
+
 /**
- * Pure 2D-Canvas Portrait Face-Detecting Skin-Tone & Personal-Color Analyzer
- * (Zero WASM / Zero Network Calls)
- * - Detects the actual face on the FULL uncropped portrait first (prevents sampling shirts/chests)
- * - Crops tightly around the detected face and snaps 4 anatomical pins to pure facial skin
- * - Extracts trimmed-median CIE L*a*b*, ITA° angle, skinToneHex, and 4-season / 8-subtype Personal Color
+ * Portrait Face-Detecting Skin-Tone & Personal-Color Analyzer
+ * - Uses lazy-loaded local MediaPipe FaceLandmarker (CPU WASM) for real uploaded portraits
+ *   and pure-TS integral-image detection for synthetic presets and extreme profile fallbacks
+ * - Crops squarely around the full detected face and snaps 4 anatomical pins to pure skin
+ * - Extracts trimmed-median CIE L*a*b*, ITA° angle, skinToneHex, and 4-season Personal Color
  */
 export async function analyzePortraitSkinTone(
   imageSource: string,
   options: {
     lightingMode?: LightingCalibrationKey;
     focusPoint?: { x: number; y: number };
-    previousCropRect?: { sx: number; sy: number; side: number; srcW: number; srcH: number };
+    previousCropRect?: CropSourceRect;
+    skipNeuralDetector?: boolean;
   } = {}
 ): Promise<SkinToneAnalysisResult> {
   const lightingMode = options.lightingMode || 'auto_d65';
@@ -1301,44 +1881,69 @@ export async function analyzePortraitSkinTone(
   const img = await loadImageElement(imageSource);
   const srcW = img.naturalWidth || img.width || 320;
   const srcH = img.naturalHeight || img.height || 320;
+  const minSrcSide = Math.min(srcW, srcH);
 
   // 1. Compute calibrated white-balance gains BEFORE face detection
   const gains = modeSpec.gains.autoGreyWorld
     ? estimateNeutralWhiteBalanceGains(img)
     : { r: modeSpec.gains.r, g: modeSpec.gains.g, b: modeSpec.gains.b };
 
-  // 2. Detect face on full uncropped portrait (or use user's manual tap focusPoint)
-  let detectedFace = await detectFaceOnFullPortrait(img, gains);
+  // 2. Detect face on full uncropped portrait (passing optional user focusPoint)
+  let detectedFace = await detectFaceOnFullPortrait(img, gains, {
+    skipNeuralDetector: options.skipNeuralDetector,
+    focusPoint: options.focusPoint,
+    previousCropRect: options.previousCropRect,
+  });
 
   if (options.focusPoint) {
-    const fx = clamp(options.focusPoint.x, 0.08, 0.92);
-    const fy = clamp(options.focusPoint.y, 0.08, 0.92);
-    if (options.previousCropRect) {
-      const prev = options.previousCropRect;
-      detectedFace = {
-        cx: prev.sx + fx * prev.side,
-        cy: prev.sy + fy * prev.side,
-        w: detectedFace.w || prev.side * 0.48,
-        h: detectedFace.h || prev.side * 0.58,
-        detected: true,
-      };
+    const focusPx = clamp(options.focusPoint.x, 0.04, 0.96) * srcW;
+    const focusPy = clamp(options.focusPoint.y, 0.04, 0.96) * srcH;
+
+    if (detectedFace.detected && detectedFace.landmarks) {
+      const dist = Math.hypot(focusPx - detectedFace.cx, focusPy - detectedFace.cy);
+      if (dist <= Math.max(detectedFace.w, detectedFace.h) * 0.72) {
+        // User tapped inside the detected face: preserve 478 landmarks and face box size cleanly
+        detectedFace = {
+          ...detectedFace,
+          cx: detectedFace.cx * 0.72 + focusPx * 0.28,
+          cy: detectedFace.cy * 0.72 + focusPy * 0.28,
+        };
+      } else {
+        const manualW = options.previousCropRect
+          ? clamp(options.previousCropRect.side * 0.56, minSrcSide * 0.24, minSrcSide * 0.72)
+          : minSrcSide * 0.36;
+        detectedFace = {
+          cx: focusPx,
+          cy: focusPy,
+          w: manualW,
+          h: manualW * 1.24,
+          detected: true,
+          engine: 'manual_focus',
+        };
+      }
     } else {
+      const manualW = detectedFace.detected
+        ? detectedFace.w
+        : options.previousCropRect
+          ? clamp(options.previousCropRect.side * 0.56, minSrcSide * 0.24, minSrcSide * 0.72)
+          : minSrcSide * 0.36;
+      const manualH = detectedFace.detected ? detectedFace.h : manualW * 1.24;
       detectedFace = {
-        cx: fx * srcW,
-        cy: fy * srcH,
-        w: Math.min(srcW, srcH) * 0.34,
-        h: Math.min(srcW, srcH) * 0.42,
+        cx: focusPx,
+        cy: focusPy,
+        w: manualW,
+        h: manualH,
         detected: true,
+        engine: 'manual_focus',
       };
     }
   }
 
-  // 3. Crop square 320x320 studio frame tightly centered on the detected face
+  // 3. Crop square 320x320 studio frame centered on the detected face
   const W = 320;
   const H = 320;
-  const minSrcSide = Math.min(srcW, srcH);
-  const desiredCropSide = Math.round(Math.max(detectedFace.w, detectedFace.h) * 1.72);
-  const cropSide = clamp(desiredCropSide, Math.round(minSrcSide * 0.24), minSrcSide);
+  const desiredCropSide = Math.round(Math.max(detectedFace.w, detectedFace.h) * 1.82);
+  const cropSide = clamp(desiredCropSide, Math.round(minSrcSide * 0.22), minSrcSide);
   const sx = clamp(Math.round(detectedFace.cx - cropSide * 0.5), 0, Math.max(0, srcW - cropSide));
   const sy = clamp(Math.round(detectedFace.cy - cropSide * 0.5), 0, Math.max(0, srcH - cropSide));
 
@@ -1357,80 +1962,307 @@ export async function analyzePortraitSkinTone(
   canvas.height = 0;
 
   // Map detected face box into normalized [0..1] preview coordinates
-  const faceCxNorm = clamp((detectedFace.cx - sx) / cropSide, 0.25, 0.75);
-  const faceCyNorm = clamp((detectedFace.cy - sy) / cropSide, 0.25, 0.75);
-  const faceWNorm = clamp(detectedFace.w / cropSide, 0.32, 0.76);
-  const faceHNorm = clamp(detectedFace.h / cropSide, 0.38, 0.84);
+  const faceCxNorm = clamp((detectedFace.cx - sx) / cropSide, 0.22, 0.78);
+  const faceCyNorm = clamp((detectedFace.cy - sy) / cropSide, 0.22, 0.78);
+  const faceWNorm = clamp(detectedFace.w / cropSide, 0.26, 0.8);
+  const faceHNorm = clamp(detectedFace.h / cropSide, 0.3, 0.86);
 
   const faceBoxPreview = {
-    x: Number(clamp(faceCxNorm - faceWNorm * 0.5, 0.06, 0.86).toFixed(3)),
-    y: Number(clamp(faceCyNorm - faceHNorm * 0.5, 0.05, 0.86).toFixed(3)),
-    w: Number(clamp(faceWNorm, 0.24, 0.88).toFixed(3)),
-    h: Number(clamp(faceHNorm, 0.28, 0.9).toFixed(3)),
+    x: Number(clamp(faceCxNorm - faceWNorm * 0.5, 0.05, 0.88).toFixed(3)),
+    y: Number(clamp(faceCyNorm - faceHNorm * 0.5, 0.04, 0.88).toFixed(3)),
+    w: Number(clamp(faceWNorm, 0.22, 0.9).toFixed(3)),
+    h: Number(clamp(faceHNorm, 0.26, 0.92).toFixed(3)),
   };
 
-  // 4. Sample Left & Right Cheeks first to establish verified facial skin reference
-  const leftCheekTarget = {
-    x: clamp(faceCxNorm - faceWNorm * 0.24, 0.16, 0.84),
-    y: clamp(faceCyNorm + faceHNorm * 0.07, 0.2, 0.82),
-  };
-  const rightCheekTarget = {
-    x: clamp(faceCxNorm + faceWNorm * 0.24, 0.16, 0.84),
-    y: clamp(faceCyNorm + faceHNorm * 0.07, 0.2, 0.82),
-  };
-  const foreheadTarget = {
-    x: faceCxNorm,
-    y: clamp(faceCyNorm - faceHNorm * 0.26, 0.12, 0.72),
-  };
-  const chinTarget = {
-    x: faceCxNorm,
-    y: clamp(faceCyNorm + faceHNorm * 0.31, 0.28, 0.88),
-  };
+  // 4. Sample Left & Right Cheeks first to establish verified skin reference & luminance guard
+  const lms = detectedFace.landmarks;
+  let leftWeight = 0.32;
+  let rightWeight = 0.32;
+  let leftCheekSample: SampledSkinPatch;
+  let rightCheekSample: SampledSkinPatch;
 
-  const leftCheekSample = sampleBestAnatomicalPatch(
-    rawData,
-    W,
-    H,
-    leftCheekTarget.x,
-    leftCheekTarget.y,
-    faceWNorm * 0.09,
-    faceHNorm * 0.09,
-    gains,
-    false
-  );
-  const rightCheekSample = sampleBestAnatomicalPatch(
-    rawData,
-    W,
-    H,
-    rightCheekTarget.x,
-    rightCheekTarget.y,
-    faceWNorm * 0.09,
-    faceHNorm * 0.09,
-    gains,
-    false
-  );
-  const foreheadSample = sampleBestAnatomicalPatch(
-    rawData,
-    W,
-    H,
-    foreheadTarget.x,
-    foreheadTarget.y,
-    faceWNorm * 0.12,
-    faceHNorm * 0.1,
-    gains,
-    false
-  );
-  const chinSample = sampleBestAnatomicalPatch(
-    rawData,
-    W,
-    H,
-    chinTarget.x,
-    chinTarget.y,
-    faceWNorm * 0.1,
-    faceHNorm * 0.08,
-    gains,
-    true
-  );
+  if (lms && lms.length >= 468) {
+    const nose = lms[1] || lms[4];
+    const leftEdge = lms[234];
+    const rightEdge = lms[454];
+    const leftSpan = Math.max(0.002, nose.x - leftEdge.x);
+    const rightSpan = Math.max(0.002, rightEdge.x - nose.x);
+    const totalSpan = Math.max(0.01, leftSpan + rightSpan);
+    const leftRatio = clamp(leftSpan / totalSpan, 0.1, 0.9);
+    const rightRatio = clamp(rightSpan / totalSpan, 0.1, 0.9);
+
+    const lcPrimary = mapLandmarksToPreviewCentroid(
+      lms,
+      [50, 101, 118, 205],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const lcLower = mapLandmarksToPreviewCentroid(
+      lms,
+      [187, 205, 207, 147],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const lcRx = clamp(faceWNorm * 0.075 * clamp(leftRatio * 2, 0.32, 1.15), 0.018, 0.085);
+    const lcRy = clamp(faceHNorm * 0.07, 0.024, 0.08);
+    leftCheekSample = sampleBestCandidateList(
+      rawData,
+      W,
+      H,
+      [
+        { x: lcPrimary.x, y: lcPrimary.y, rx: lcRx, ry: lcRy, priorityBonus: 0.12 },
+        { x: lcLower.x, y: lcLower.y, rx: lcRx, ry: lcRy, priorityBonus: 0.04 },
+      ],
+      gains,
+      false,
+      0,
+      0
+    );
+
+    const rcPrimary = mapLandmarksToPreviewCentroid(
+      lms,
+      [280, 330, 347, 425],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const rcLower = mapLandmarksToPreviewCentroid(
+      lms,
+      [411, 425, 427, 376],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const rcRx = clamp(faceWNorm * 0.075 * clamp(rightRatio * 2, 0.32, 1.15), 0.018, 0.085);
+    const rcRy = clamp(faceHNorm * 0.07, 0.024, 0.08);
+    rightCheekSample = sampleBestCandidateList(
+      rawData,
+      W,
+      H,
+      [
+        { x: rcPrimary.x, y: rcPrimary.y, rx: rcRx, ry: rcRy, priorityBonus: 0.12 },
+        { x: rcLower.x, y: rcLower.y, rx: rcRx, ry: rcRy, priorityBonus: 0.04 },
+      ],
+      gains,
+      false,
+      0,
+      0
+    );
+
+    // Emphasize broader camera-facing cheek when head turns 35°–60°
+    if (leftRatio < 0.36 && rightCheekSample.validCount >= 10) {
+      leftWeight = 0.16;
+      rightWeight = 0.48;
+    } else if (rightRatio < 0.36 && leftCheekSample.validCount >= 10) {
+      leftWeight = 0.48;
+      rightWeight = 0.16;
+    }
+  } else {
+    const leftCheekTarget = {
+      x: clamp(faceCxNorm - faceWNorm * 0.22, 0.16, 0.84),
+      y: clamp(faceCyNorm + faceHNorm * 0.08, 0.2, 0.82),
+    };
+    const rightCheekTarget = {
+      x: clamp(faceCxNorm + faceWNorm * 0.22, 0.16, 0.84),
+      y: clamp(faceCyNorm + faceHNorm * 0.08, 0.2, 0.82),
+    };
+    leftCheekSample = sampleBestAnatomicalPatch(
+      rawData,
+      W,
+      H,
+      leftCheekTarget.x,
+      leftCheekTarget.y,
+      faceWNorm * 0.09,
+      faceHNorm * 0.09,
+      gains,
+      false
+    );
+    rightCheekSample = sampleBestAnatomicalPatch(
+      rawData,
+      W,
+      H,
+      rightCheekTarget.x,
+      rightCheekTarget.y,
+      faceWNorm * 0.09,
+      faceHNorm * 0.09,
+      gains,
+      false
+    );
+  }
+
+  // Establish verified cheek luminance so forehead/chin sampling excludes dark bangs, brows & facial hair
+  const validCheeks = [leftCheekSample, rightCheekSample].filter((s) => s.validCount >= 10);
+  const cheekRefLum =
+    validCheeks.length > 0
+      ? validCheeks.reduce((acc, s) => acc + s.lum, 0) / validCheeks.length
+      : 0;
+  const minSkinLumGuard = cheekRefLum >= 72 ? Math.min(84, cheekRefLum * 0.44) : 0;
+
+  let foreheadSample: SampledSkinPatch;
+  let chinSample: SampledSkinPatch;
+
+  if (lms && lms.length >= 468) {
+    const fMid = mapLandmarksToPreviewCentroid(lms, [151], sx, sy, cropSide, srcW, srcH);
+    const fGlabella = mapLandmarksToPreviewCentroid(
+      lms,
+      [9, 107, 336],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const fLeft = mapLandmarksToPreviewCentroid(
+      lms,
+      [108, 69, 105],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const fRight = mapLandmarksToPreviewCentroid(
+      lms,
+      [337, 299, 334],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const fBridge = mapLandmarksToPreviewCentroid(lms, [8, 168], sx, sy, cropSide, srcW, srcH);
+    const fRx = clamp(faceWNorm * 0.075, 0.022, 0.085);
+    const fRy = clamp(faceHNorm * 0.06, 0.02, 0.075);
+
+    foreheadSample = sampleBestCandidateList(
+      rawData,
+      W,
+      H,
+      [
+        { x: fMid.x, y: fMid.y, rx: fRx, ry: fRy, priorityBonus: 0.14 },
+        { x: fGlabella.x, y: fGlabella.y, rx: fRx * 0.85, ry: fRy * 0.8, priorityBonus: 0.11 },
+        { x: fLeft.x, y: fLeft.y, rx: fRx * 0.85, ry: fRy * 0.85, priorityBonus: 0.06 },
+        { x: fRight.x, y: fRight.y, rx: fRx * 0.85, ry: fRy * 0.85, priorityBonus: 0.06 },
+        { x: fBridge.x, y: fBridge.y, rx: fRx * 0.65, ry: fRy * 0.7, priorityBonus: 0.02 },
+      ],
+      gains,
+      false,
+      minSkinLumGuard,
+      cheekRefLum
+    );
+
+    const chinCenter = mapLandmarksToPreviewCentroid(
+      lms,
+      [199, 200, 175],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const chinLeft = mapLandmarksToPreviewCentroid(
+      lms,
+      [208, 211],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const chinRight = mapLandmarksToPreviewCentroid(
+      lms,
+      [428, 431],
+      sx,
+      sy,
+      cropSide,
+      srcW,
+      srcH
+    );
+    const cRx = clamp(faceWNorm * 0.07, 0.02, 0.08);
+    const cRy = clamp(faceHNorm * 0.055, 0.02, 0.07);
+
+    chinSample = sampleBestCandidateList(
+      rawData,
+      W,
+      H,
+      [
+        { x: chinCenter.x, y: chinCenter.y, rx: cRx, ry: cRy, priorityBonus: 0.14 },
+        { x: chinLeft.x, y: chinLeft.y, rx: cRx * 0.85, ry: cRy * 0.85, priorityBonus: 0.04 },
+        { x: chinRight.x, y: chinRight.y, rx: cRx * 0.85, ry: cRy * 0.85, priorityBonus: 0.04 },
+      ],
+      gains,
+      true,
+      minSkinLumGuard,
+      cheekRefLum
+    );
+  } else {
+    foreheadSample = sampleBestCandidateList(
+      rawData,
+      W,
+      H,
+      [
+        {
+          x: faceCxNorm,
+          y: clamp(faceCyNorm - faceHNorm * 0.25, 0.12, 0.72),
+          rx: faceWNorm * 0.11,
+          ry: faceHNorm * 0.085,
+          priorityBonus: 0.12,
+        },
+        {
+          x: faceCxNorm,
+          y: clamp(faceCyNorm - faceHNorm * 0.12, 0.16, 0.74),
+          rx: faceWNorm * 0.12,
+          ry: faceHNorm * 0.08,
+          priorityBonus: 0.07,
+        },
+        {
+          x: clamp(faceCxNorm - faceWNorm * 0.14, 0.14, 0.86),
+          y: clamp(faceCyNorm - faceHNorm * 0.2, 0.14, 0.72),
+          rx: faceWNorm * 0.09,
+          ry: faceHNorm * 0.08,
+          priorityBonus: 0.04,
+        },
+        {
+          x: clamp(faceCxNorm + faceWNorm * 0.14, 0.14, 0.86),
+          y: clamp(faceCyNorm - faceHNorm * 0.2, 0.14, 0.72),
+          rx: faceWNorm * 0.09,
+          ry: faceHNorm * 0.08,
+          priorityBonus: 0.04,
+        },
+      ],
+      gains,
+      false,
+      minSkinLumGuard,
+      cheekRefLum
+    );
+
+    const chinTarget = {
+      x: faceCxNorm,
+      y: clamp(faceCyNorm + faceHNorm * 0.3, 0.28, 0.88),
+    };
+    chinSample = sampleBestAnatomicalPatch(
+      rawData,
+      W,
+      H,
+      chinTarget.x,
+      chinTarget.y,
+      faceWNorm * 0.1,
+      faceHNorm * 0.08,
+      gains,
+      true,
+      minSkinLumGuard
+    );
+  }
 
   // Establish reliable reference skin RGB from verified facial zones (NEVER non-skin background/clothes!)
   const verifiedSamples = [
@@ -1443,15 +2275,16 @@ export async function analyzePortraitSkinTone(
   let refR = 223;
   let refG = 186;
   let refB = 155;
-  if (verifiedSamples.length > 0) {
+  const referencePool = validCheeks.length > 0 ? validCheeks : verifiedSamples;
+  if (referencePool.length > 0) {
     refR = Math.round(
-      verifiedSamples.reduce((acc, s) => acc + s.r, 0) / verifiedSamples.length
+      referencePool.reduce((acc, s) => acc + s.r, 0) / referencePool.length
     );
     refG = Math.round(
-      verifiedSamples.reduce((acc, s) => acc + s.g, 0) / verifiedSamples.length
+      referencePool.reduce((acc, s) => acc + s.g, 0) / referencePool.length
     );
     refB = Math.round(
-      verifiedSamples.reduce((acc, s) => acc + s.b, 0) / verifiedSamples.length
+      referencePool.reduce((acc, s) => acc + s.b, 0) / referencePool.length
     );
   } else {
     // Broad scan across entire face box if all 4 zones were tiny
@@ -1492,14 +2325,14 @@ export async function analyzePortraitSkinTone(
       labelKo: '왼쪽 볼',
       labelEn: 'Left Cheek',
       sample: leftCheekSample,
-      weight: 0.32,
+      weight: leftWeight,
     },
     {
       id: 'rightCheek',
       labelKo: '오른쪽 볼',
       labelEn: 'Right Cheek',
       sample: rightCheekSample,
-      weight: 0.32,
+      weight: rightWeight,
     },
     {
       id: 'chin',
@@ -1514,6 +2347,7 @@ export async function analyzePortraitSkinTone(
   let meanR = 0;
   let meanG = 0;
   let meanB = 0;
+  let totalWeight = 0;
 
   for (const spec of rawPinSpecs) {
     // If bangs or shadow occluded this specific pin, blend smoothly with verified cheek skin!
@@ -1530,6 +2364,7 @@ export async function analyzePortraitSkinTone(
       b: Number(labRaw.b.toFixed(1)),
     };
 
+    const effectiveWeight = hasCleanSkin ? spec.weight : spec.weight * 0.35;
     pins.push({
       id: spec.id,
       labelKo: spec.labelKo,
@@ -1540,14 +2375,16 @@ export async function analyzePortraitSkinTone(
       lab,
     });
 
-    meanR += rPin * spec.weight;
-    meanG += gPin * spec.weight;
-    meanB += bPin * spec.weight;
+    meanR += rPin * effectiveWeight;
+    meanG += gPin * effectiveWeight;
+    meanB += bPin * effectiveWeight;
+    totalWeight += effectiveWeight;
   }
 
-  const finalR = clampByte(meanR);
-  const finalG = clampByte(meanG);
-  const finalB = clampByte(meanB);
+  const normW = Math.max(0.01, totalWeight);
+  const finalR = clampByte(meanR / normW);
+  const finalG = clampByte(meanG / normW);
+  const finalB = clampByte(meanB / normW);
   const finalLab = rgbToCieLab(finalR, finalG, finalB);
 
   const L = Number(finalLab.L.toFixed(1));
@@ -1588,8 +2425,12 @@ export async function analyzePortraitSkinTone(
     Math.min(98, Math.round(74 + Math.min(10, Math.abs(warmthIndex - 9.2)) * 2.2))
   );
   const rawConfidence = Math.round(uniformity * 0.55 + separation * 0.45);
+  const engineBoost =
+    detectedFace.engine === 'mediapipe_face_landmarker' && verifiedSamples.length >= 2 ? 4 : 0;
   const confidence =
-    verifiedSamples.length > 0 ? rawConfidence : Math.min(62, rawConfidence);
+    verifiedSamples.length > 0
+      ? Math.min(99, rawConfidence + engineBoost)
+      : Math.min(62, rawConfidence);
 
   const matchedPreset = findClosestSkinPreset(skinToneHex, personalColor);
   const mstMatch = extractNormalizedMstFromSamples(pins, skinToneHex);
@@ -1610,6 +2451,7 @@ export async function analyzePortraitSkinTone(
     confidence,
     lightingMode,
     faceDetected: detectedFace.detected && verifiedSamples.length > 0,
+    detectorEngine: detectedFace.engine,
     faceBoxPreview,
     cropSourceRect: {
       sx,

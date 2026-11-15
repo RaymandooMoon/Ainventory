@@ -329,16 +329,25 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await studioCanvas.locator('[data-quick-skin-preset="deep_espresso"]').click();
     await expect(mannequin).toHaveAttribute('data-skin-hex', '#8E5C40');
 
-    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Apply (gender locked, zero 2.5D text)
+    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Apply (decluttered + popover metrics)
     await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
     await expect(page.locator('#profile-tab-skin')).toBeVisible();
     await expect(page.locator('#profile-tab-body')).toBeVisible();
     await expect(page.locator('.skin-gender-pill')).toHaveCount(0);
+    await expect(page.locator('.avatar-config-hash-badge')).toHaveCount(0);
+    await expect(page.locator('.body-spec-account-badge')).toHaveCount(0);
+    await expect(page.locator('[data-lighting-mode]')).toHaveCount(0);
+    await expect(page.locator('.skin-lab-metrics')).toHaveCount(0);
 
+    await page.locator('[data-sample-toggle="true"]').click();
     await page.locator('[data-sample-portrait="spring_warm"]').click();
 
     await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
-    await expect(page.locator('.skin-lab-metrics')).toContainText('ITA°');
+    await expect(page.locator('[data-lighting-mode]')).toHaveCount(4);
+    await expect(page.locator('.skin-lab-metrics')).toHaveCount(0);
+
+    await page.locator('[data-skin-metrics-toggle="true"]').click();
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toContainText('ITA°');
 
     await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
 
@@ -609,7 +618,13 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
     expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
 
-    const extractedText = await page.locator('.skin-lab-metrics strong').innerText();
+    await page.locator('[data-skin-metrics-toggle="true"]').click();
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toBeVisible();
+    expect(await page.locator('.ui-sheet-box').innerText()).not.toMatch(hangulRegex);
+
+    const extractedText = await page
+      .locator('[data-skin-metrics-popover="true"] strong')
+      .innerText();
     expect(extractedText).toMatch(/^#[0-9A-F]{6}$/);
     const hex = extractedText.trim();
     const r = Number.parseInt(hex.slice(1, 3), 16);
@@ -680,6 +695,248 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
     expect(await page.locator('body').innerText()).toMatch(hangulRegex);
   });
+
+  test('7. Neural Face Landmark Detection: full-body zoom, 45° portrait, tap-focus retention, MST-10 deep skin, and zero WASM on sample presets', async ({
+    page,
+  }) => {
+    const neuralRequests: string[] = [];
+    let trackSampleOnly = true;
+    page.on('request', (req) => {
+      const url = req.url().toLowerCase();
+      if (trackSampleOnly && (url.endsWith('.wasm') || url.endsWith('.task'))) {
+        neuralRequests.push(url);
+      }
+    });
+
+    await page.goto('/outfits');
+    await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    await expect(page.locator('#profile-tab-skin')).toBeVisible();
+    await expect(page.locator('[data-lighting-mode]')).toHaveCount(0);
+
+    // 1. Sample portrait must strictly use pure_ts_integral with ZERO .wasm/.task loads
+    await page.locator('[data-sample-toggle="true"]').click();
+    await page.locator('[data-sample-portrait="autumn_warm"]').click();
+    const pinFrame = page.locator('.skin-portrait-pin-frame');
+    await expect(pinFrame).toHaveAttribute('data-detector-engine', 'pure_ts_integral');
+    await expect(page.locator('.skin-face-detected-badge')).toHaveText('얼굴 인식됨');
+    await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
+    await expect(page.locator('[data-lighting-mode]')).toHaveCount(4);
+    expect(neuralRequests).toEqual([]);
+
+    trackSampleOnly = false;
+
+    // Extract realistic full-body front quadrant & 45° bust crop from bundled showcase image
+    const crops = await page.evaluate(async () => {
+      const img = new Image();
+      img.src = '/seed/vton-showcase-photoreal.jpg';
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = () => rej(new Error('Failed to load showcase portrait'));
+      });
+      const extract = (sx: number, sy: number, sw: number, sh: number, outW: number, outH: number) => {
+        const c = document.createElement('canvas');
+        c.width = outW;
+        c.height = outH;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+        return c.toDataURL('image/jpeg', 0.92).replace(/^data:image\/jpeg;base64,/, '');
+      };
+      return {
+        fullBodyFrontB64: extract(0, 0, 512, 512, 512, 512),
+        quarter45BustB64: extract(610, 0, 320, 260, 320, 260),
+      };
+    });
+
+    // 2. Upload full-body portrait -> progressive Stage 2 MediaPipe detects head cleanly
+    await page.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'fullbody-front.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(crops.fullBodyFrontB64, 'base64'),
+    });
+
+    await expect(pinFrame).toHaveAttribute('data-detector-engine', 'mediapipe_face_landmarker', {
+      timeout: 20000,
+    });
+    await expect(page.locator('.skin-face-detected-badge')).toHaveText('얼굴 인식됨');
+    await expect(page.locator('[data-user-face-active="true"]')).toBeVisible();
+    await expect(page.locator('.skin-sample-pin')).toHaveCount(4);
+
+    // Metrics hidden by default; open ? popover to read extracted hex & L*
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toHaveCount(0);
+    await page.locator('[data-skin-metrics-toggle="true"]').click();
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toBeVisible();
+
+    const fullBodyMetrics = await page.evaluate(() => {
+      const box = document.querySelector('.skin-face-box-guide') as HTMLElement | null;
+      const pin = (id: string) =>
+        document.querySelector(`.skin-sample-pin[data-skin-pin-id="${id}"]`) as HTMLElement | null;
+      const popover = document.querySelector('[data-skin-metrics-popover="true"]');
+      const hex = popover?.querySelector('strong')?.textContent?.trim() || '';
+      const labText = popover?.textContent || '';
+      const lMatch = labText.match(/L\*\s*([\d.]+)/);
+      return {
+        boxH: Number.parseFloat(box?.style.height || '0'),
+        boxW: Number.parseFloat(box?.style.width || '0'),
+        foreheadTop: Number.parseFloat(pin('forehead')?.style.top || '0'),
+        cheekTop: Number.parseFloat(pin('leftCheek')?.style.top || '0'),
+        chinTop: Number.parseFloat(pin('chin')?.style.top || '0'),
+        hex,
+        L: lMatch ? Number.parseFloat(lMatch[1]) : 0,
+      };
+    });
+
+    await page.locator('[data-skin-metrics-toggle="true"]').click();
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toHaveCount(0);
+
+    expect(fullBodyMetrics.boxH).toBeGreaterThanOrEqual(35);
+    expect(fullBodyMetrics.boxW).toBeGreaterThanOrEqual(28);
+    expect(fullBodyMetrics.foreheadTop).toBeLessThan(fullBodyMetrics.cheekTop);
+    expect(fullBodyMetrics.cheekTop).toBeLessThan(fullBodyMetrics.chinTop);
+    expect(fullBodyMetrics.hex).toMatch(/^#[0-9A-F]{6}$/);
+    expect(fullBodyMetrics.L).toBeGreaterThanOrEqual(55);
+    expect(fullBodyMetrics.L).toBeLessThanOrEqual(88);
+
+    // 3. Upload 45° rotated bust portrait & verify tap-focus preserves landmarks
+    const prevPreviewSrc = await page.locator('.skin-portrait-pin-img').getAttribute('src');
+    await page.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'quarter45-portrait.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(crops.quarter45BustB64, 'base64'),
+    });
+
+    await expect
+      .poll(async () => await page.locator('.skin-portrait-pin-img').getAttribute('src'))
+      .not.toBe(prevPreviewSrc);
+    await expect(pinFrame).toHaveAttribute('data-detector-engine', 'mediapipe_face_landmarker');
+    await expect(page.locator('.skin-analyzing-tag')).toHaveCount(0);
+
+    // Tap inside face center -> keeps mediapipe_face_landmarker & full-face box size
+    const pinFrameBox = await pinFrame.boundingBox();
+    expect(pinFrameBox).not.toBeNull();
+    if (pinFrameBox) {
+      await pinFrame.click({
+        position: {
+          x: Math.round(pinFrameBox.width * 0.5),
+          y: Math.round(pinFrameBox.height * 0.5),
+        },
+      });
+    }
+    await expect(page.locator('.skin-analyzing-tag')).toHaveCount(0);
+    await expect(pinFrame).toHaveAttribute('data-detector-engine', 'mediapipe_face_landmarker');
+    const afterTapBoxH = await page
+      .locator('.skin-face-box-guide')
+      .evaluate((el) => Number.parseFloat((el as HTMLElement).style.height || '0'));
+    expect(afterTapBoxH).toBeGreaterThanOrEqual(35);
+
+    // 4. Deep MST-10 skin tone portrait (#291711) -> detects face & preserves deep luminance
+    const w = 240;
+    const h = 300;
+    const raw = Buffer.alloc((w * 4 + 1) * h);
+    for (let y = 0; y < h; y += 1) {
+      const ro = y * (w * 4 + 1);
+      raw[ro] = 0;
+      for (let x = 0; x < w; x += 1) {
+        const px = ro + 1 + x * 4;
+        let r = 238;
+        let g = 240;
+        let b = 244;
+        if (y >= 200 && x >= 45 && x <= 195) {
+          r = 70;
+          g = 85;
+          b = 110;
+        }
+        if (y >= 158 && y < 208 && x >= 100 && x <= 140) {
+          r = 41;
+          g = 23;
+          b = 17;
+        }
+        const hdx = (x - 120) / 56;
+        const hdy = (y - 98) / 68;
+        if (hdx * hdx + hdy * hdy <= 1) {
+          r = 18;
+          g = 15;
+          b = 16;
+        }
+        const fdx = (x - 120) / 44;
+        const fdy = (y - 112) / 56;
+        if (fdx * fdx + fdy * fdy <= 1) {
+          r = 41;
+          g = 23;
+          b = 17;
+          if (Math.hypot(x - 96, y - 122) < 13 || Math.hypot(x - 144, y - 122) < 13) {
+            r = 52;
+            g = 29;
+            b = 21;
+          }
+          if (y >= 96 && y <= 104 && ((x >= 92 && x <= 108) || (x >= 132 && x <= 148))) {
+            r = 18;
+            g = 15;
+            b = 16;
+          }
+          if (y >= 108 && y <= 128 && x >= 117 && x <= 123) {
+            r = 31;
+            g = 15;
+            b = 10;
+          }
+          if (y >= 140 && y <= 146 && x >= 108 && x <= 132) {
+            r = 23;
+            g = 9;
+            b = 6;
+          }
+        }
+        raw[px] = r;
+        raw[px + 1] = g;
+        raw[px + 2] = b;
+        raw[px + 3] = 255;
+      }
+    }
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n += 1) {
+      let c = n;
+      for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+    const crc32 = (buf: Buffer): number => {
+      let c = 0xffffffff;
+      for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    };
+    const makeChunk = (type: string, data: Buffer): Buffer => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
+      const tb = Buffer.from(type, 'ascii');
+      const cb = Buffer.alloc(4);
+      cb.writeUInt32BE(crc32(Buffer.concat([tb, data])), 0);
+      return Buffer.concat([len, tb, data, cb]);
+    };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0);
+    ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 6;
+    const deepPortraitPng = Buffer.concat([
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      makeChunk('IHDR', ihdr),
+      makeChunk('IDAT', zlib.deflateSync(raw)),
+      makeChunk('IEND', Buffer.alloc(0)),
+    ]);
+
+    const prevPreviewBeforeDeep = await page.locator('.skin-portrait-pin-img').getAttribute('src');
+    await page.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'deep-mst10-portrait.png',
+      mimeType: 'image/png',
+      buffer: deepPortraitPng,
+    });
+    await expect
+      .poll(async () => await page.locator('.skin-portrait-pin-img').getAttribute('src'))
+      .not.toBe(prevPreviewBeforeDeep);
+    await expect(page.locator('.skin-analyzing-tag')).toHaveCount(0);
+    await expect(page.locator('.skin-face-detected-badge')).toHaveText('얼굴 인식됨');
+
+    const unifiedToneBadge = page.locator('[data-unified-tone-badge="true"]');
+    await expect(unifiedToneBadge).toHaveAttribute('data-mst-code', /^MST-(09|10)-/);
+    const badgeText = await unifiedToneBadge.innerText();
+    expect(badgeText).toMatch(/딥/);
+    expect(badgeText).not.toMatch(/MST-\d+/);
+  });
 });
-
-

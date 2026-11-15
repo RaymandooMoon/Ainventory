@@ -1,0 +1,223 @@
+/* ==========================================================================
+   Global Navigation Standards (BottomTabBar + Top Header Utility Group)
+   - BottomTabBar: Safe-area bottom padding, 48x48dp+ hit targets, >= 8px gaps,
+     WCAG AA >= 4.5:1 Light & Dark contrast, and morphological active cues
+     (top/bottom accent indicator bar + rim border/ring + icon stroke weight).
+   - HeaderUtilityGroup: 48x48dp+ minimum targets & >= 8px gap for all
+     top-right actions (theme toggle, profile, account settings, page actions).
+   ========================================================================== */
+
+:root,
+[data-theme='light'] {
+  --nav-dock-bg: rgba(255, 255, 255, 0.9);
+  --nav-dock-border: rgba(17, 24, 39, 0.18);
+  --nav-tab-inactive-ink: #374151; /* >= 9.5:1 on white/light glass */
+  --nav-tab-hover-bg: rgba(17, 24, 39, 0.08);
+  --nav-tab-active-bg: #18181b;
+  --nav-tab-active-ink: #ffffff; /* 17.7:1 on #18181B */
+  --nav-tab-active-border: #18181b;
+  --nav-tab-active-ring: rgba(29, 78, 216, 0.36);
+  --nav-tab-indicator: #60a5fa; /* High-luminance indicator pill inside #18181B */
+}
+
+[data-theme='dark'] {
+  --nav-dock-bg: rgba(22, 22, 26, 0.9);
+  --nav-dock-border: rgba(249, 250, 251, 0.22);
+  --nav-tab-inactive-ink: #e5e7eb; /* >= 12.5:1 on dark glass */
+  --nav-tab-hover-bg: rgba(249, 250, 251, 0.12);
+  --nav-tab-active-bg: #f9fafb;
+  --nav-tab-active-ink: #111827; /* 17.4:1 on #F9FAFB */
+  --nav-tab-active-border: #f9fafb;
+  --nav-tab-active-ring: rgba(96, 165, 250, 0.52);
+  --nav-tab-indicator: #1d4ed8; /* High-contrast indicator pill inside #F9FAFB */
+}
+
+/* Bottom Tab Bar Dock */
+nav.hig-floating-tabbar.ui-bottom-tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px));
+  transform: translateX(-50%);
+  z-index: 90;
+  max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px calc(6px + max(0px, env(safe-area-inset-bottom, 0px) * 0.15));
+  border-radius: 9999px;
+  background: var(--nav-dock-bg);
+  border: 1.5px solid var(--nav-dock-border);
+  box-shadow: var(--elevation-lg);
+  backdrop-filter: var(--vibrancy-filter, blur(24px) saturate(185%));
+  -webkit-backdrop-filter: var(--vibrancy-filter, blur(24px) saturate(185%));
+}
+
+nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn {
+  position: relative;
+  min-width: 68px;
+  min-height: 48px;
+  height: 52px;
+  padding: 4px 12px 8px;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--nav-tab-inactive-ink);
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn:hover:not(.active) {
+  color: var(--ui-ink-primary, #111827);
+  background: var(--nav-tab-hover-bg);
+}
+
+nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn:focus-visible {
+  outline: 2.5px solid var(--ui-focus-ring, #1d4ed8);
+  outline-offset: 2px;
+}
+
+/* Active state combines contrast (>=17:1) + outer ring/border + bottom indicator pill + heavy text/stroke */
+nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn.active {
+  background: var(--nav-tab-active-bg);
+  color: var(--nav-tab-active-ink);
+  border-color: var(--nav-tab-active-border);
+  font-weight: 760;
+  box-shadow:
+    0 0 0 2px var(--nav-tab-active-ring),
+    0 6px 16px rgba(15, 23, 42, 0.22);
+}
+
+[data-theme='dark']
+  nav.hig-floating-tabbar.ui-bottom-tabbar
+  .hig-floating-tab-btn.ui-bottom-tab-btn.active {
+  box-shadow:
+    0 0 0 2px var(--nav-tab-active-ring),
+    0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.ui-bottom-tab-label {
+  display: inline-block;
+  line-height: 1.15;
+}
+
+.ui-bottom-tab-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: var(--nav-tab-indicator);
+  pointer-events: none;
+}
+
+.ui-bottom-tab-badge {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background-color: #b91c1c;
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 750;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Narrow mobile widths (< 360px Galaxy Fold cover): never drop below 48x48px or 8px gap */
+@media (max-width: 359px) {
+  nav.hig-floating-tabbar.ui-bottom-tabbar {
+    gap: 8px;
+    padding: 5px 6px calc(5px + max(0px, env(safe-area-inset-bottom, 0px) * 0.15));
+  }
+
+  nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn {
+    min-width: 54px;
+    min-height: 48px;
+    height: 50px;
+    padding: 4px 8px 7px;
+    font-size: 0.65rem;
+  }
+}
+
+/* Top Header Utility Navigation Group (48x48dp min touch targets + >= 8px gap) */
+.ui-nav-utility-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ui-nav-utility-group .hig-circle-icon-btn {
+  min-width: 48px;
+  min-height: 48px;
+  width: 48px;
+  height: 48px;
+}
+
+.ui-nav-utility-group .hig-circle-icon-btn:focus-visible,
+.ui-nav-utility-group .hig-profile-quick-pill:focus-visible,
+.ui-nav-utility-group > button:focus-visible {
+  outline: 2.5px solid var(--ui-focus-ring, #1d4ed8);
+  outline-offset: 2px;
+}
+
+.ui-nav-utility-group .hig-profile-quick-pill {
+  min-width: 48px;
+  min-height: 48px;
+  height: 48px;
+  padding: 0 13px 0 10px;
+}
+
+.ui-nav-utility-group > button:not(.hig-profile-quick-pill) {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+@media (max-width: 390px) {
+  .ui-nav-utility-group {
+    gap: 8px;
+  }
+
+  .ui-nav-utility-group .hig-profile-quick-pill {
+    min-width: 48px;
+    min-height: 48px;
+    height: 48px;
+    padding: 0 10px;
+  }
+}
+
+/* PageHeaderNav container */
+.ui-header-nav {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.ui-header-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}

@@ -4,6 +4,7 @@ import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
 import ItemDetailSheet from './components/ItemDetailSheet.jsx';
 import WardrobeView from './components/WardrobeView.jsx';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
+import { BottomTabBar } from './components/ui/BottomTabBar.tsx';
 import {
   deriveBodySpecFromUser,
   getDefaultBodySpec,
@@ -593,28 +594,13 @@ export default function App() {
       </main>
 
       {/* Unified Bottom-Center Floating Glassmorphism Tab Bar */}
-      <nav
+      <BottomTabBar
         id={CARBON_DOM_CONTRACT.floatingTabBarId}
-        className="hig-floating-tabbar"
-        aria-label="Primary Navigation"
-      >
-        {FLOATING_TABS.map(({ key, label, Icon }) => {
-          const isActive = activeTab === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              data-nav-tab={key}
-              aria-current={isActive ? 'page' : undefined}
-              className={`hig-floating-tab-btn ${isActive ? 'active' : ''}`}
-              onClick={() => navigateTab(key)}
-            >
-              <Icon size={19} strokeWidth={isActive ? 2.3 : 1.85} />
-              <span>{label}</span>
-            </button>
-          );
-        })}
-      </nav>
+        tabs={FLOATING_TABS}
+        activeTab={activeTab}
+        lang={lang}
+        onSelectTab={navigateTab}
+      />
 
       {/* Item Detail Route Sheet (`/item/:id`) */}
       <ItemDetailSheet

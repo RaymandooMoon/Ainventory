@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   Camera,
   Check,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   Palette,
   RotateCcw,
@@ -11,6 +13,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Upload,
+  User,
   UserRound,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
@@ -25,15 +28,17 @@ import {
   HAIR_STYLE_OPTIONS,
   HEAD_SHAPE_OPTIONS,
   ISO_VIEW_ANGLE_OPTIONS,
-  MST_UNDERTONE_OPTIONS,
   avatarSpecToLegacyBodySpec,
   bridgeLegacyPropsToAvatarSpec,
-  computeAvatarConfigHash,
   resolveCoupledBodyMetrics,
   sanitizeAvatarSpec,
   setAvatarSpec,
 } from '../services/avatarSpecStore.ts';
-import { MST_BASE_LEVELS, findClosestMstFromHex, getMstSwatch } from '../services/monkSkinTone.ts';
+import {
+  MST_BASE_LEVELS,
+  findClosestMstFromHex,
+  getMstSwatch,
+} from '../services/monkSkinTone.ts';
 import {
   LIGHTING_CALIBRATION_MODES,
   SEASON_BEST_SWATCHES,
@@ -42,14 +47,12 @@ import {
   createSyntheticSamplePortrait,
   findClosestSkinPreset,
   normalizeSeasonKey,
-  translateSubTypeLabel,
 } from '../services/skinToneAnalyzer.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   HairAndFacialFeaturesControls,
   InclusiveBodyMorphControls,
-  MstSkinToneControls,
 } from './AvatarStudioControls.jsx';
 import Character25DMannequin from './Character25DMannequin.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
@@ -62,17 +65,54 @@ const SAMPLE_PORTRAIT_BUTTONS = [
   { key: 'winter_cool', ko: '겨울 쿨', en: 'Winter' },
 ];
 
-function formatFriendlyMstLabel(level, undertone, lang = 'ko') {
-  const utOpt =
-    MST_UNDERTONE_OPTIONS.find((u) => u.key === undertone) || MST_UNDERTONE_OPTIONS[1];
-  const utWord = lang === 'en' ? utOpt.shortEn : utOpt.shortKo;
-  return lang === 'en' ? `Tone ${level} ${utWord}` : `${level}호 ${utWord}`;
-}
+const UNDERTONE_SEGMENT_OPTIONS = [
+  { key: 'warm', ko: '웜톤', en: 'Warm' },
+  { key: 'neutral', ko: '뉴트럴', en: 'Neutral' },
+  { key: 'cool', ko: '쿨톤', en: 'Cool' },
+];
 
-function getMstBaseLevelName(level, lang = 'ko') {
-  const found =
-    MST_BASE_LEVELS.find((item) => item.level === Number(level)) || MST_BASE_LEVELS[3];
-  return lang === 'en' ? found.labelEn : found.labelKo;
+const SEASON_REP_PRESETS = [
+  { season: 'spring_warm', presetKey: 'spring_ivory', ko: '봄 웜', en: 'Spring Warm' },
+  { season: 'summer_cool', presetKey: 'summer_rose', ko: '여름 쿨', en: 'Summer Cool' },
+  { season: 'autumn_warm', presetKey: 'autumn_beige', ko: '가을 웜', en: 'Autumn Warm' },
+  { season: 'winter_cool', presetKey: 'winter_neutral', ko: '겨울 쿨', en: 'Winter Cool' },
+];
+
+const LIGHTING_SEGMENT_LABELS = {
+  auto_d65: { ko: '자연광(기본)', en: 'Daylight' },
+  studio_cool_fix: { ko: '형광등', en: 'Cool LED' },
+  indoor_warm_fix: { ko: '노란조명', en: 'Warm Lamp' },
+  raw_original: { ko: '원본', en: 'Original' },
+};
+
+const HUMAN_TONE_TIERS = {
+  1: { ko: '페어', en: 'Fair' },
+  2: { ko: '아이보리', en: 'Ivory' },
+  3: { ko: '라이트', en: 'Light' },
+  4: { ko: '내추럴', en: 'Natural' },
+  5: { ko: '미디엄', en: 'Medium' },
+  6: { ko: '골든 탠', en: 'Golden' },
+  7: { ko: '탠', en: 'Tan' },
+  8: { ko: '브론즈', en: 'Bronze' },
+  9: { ko: '딥', en: 'Deep' },
+  10: { ko: '딥 리치', en: 'Rich Deep' },
+};
+
+const HUMAN_UNDERTONE_WORDS = {
+  cool: { ko: '쿨', en: 'Cool' },
+  neutral: { ko: '뉴트럴', en: 'Neutral' },
+  warm: { ko: '웜', en: 'Warm' },
+  olive: { ko: '올리브', en: 'Olive' },
+};
+
+function formatHumanToneLabel(mstLevel, mstUndertone, lang = 'ko') {
+  const safeLevel = Math.max(1, Math.min(10, Math.round(Number(mstLevel) || 4)));
+  const tier = HUMAN_TONE_TIERS[safeLevel] || HUMAN_TONE_TIERS[4];
+  const ut = HUMAN_UNDERTONE_WORDS[mstUndertone] || HUMAN_UNDERTONE_WORDS.neutral;
+  if (lang === 'en') {
+    return `${tier.en} ${ut.en}`;
+  }
+  return `${tier.ko} ${ut.ko}`;
 }
 
 function isDarkSwatch(hex = '#DFBA9B') {
@@ -106,6 +146,7 @@ function ProfileModalContent({
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const manualToneSectionRef = useRef(null);
+  const analysisSeqRef = useRef(0);
   const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
   const accountFallbackGender =
@@ -159,10 +200,20 @@ function ProfileModalContent({
 
   const [lightingMode, setLightingMode] = useState('auto_d65');
   const [sourceImageUrl, setSourceImageUrl] = useState('');
+  const [candidateFaceUrl, setCandidateFaceUrl] = useState(
+    () =>
+      bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec.appearance
+        .facePhotoUrl || ''
+  );
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSampleSource, setIsSampleSource] = useState(false);
+
+  // Progressive disclosure UI states
+  const [manualSkinOpen, setManualSkinOpen] = useState(false);
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [sampleRailOpen, setSampleRailOpen] = useState(false);
 
   const fallbackGender =
     draftSpec.framePreset === 'feminine'
@@ -171,19 +222,36 @@ function ProfileModalContent({
         ? 'male'
         : accountFallbackGender;
 
-  const liveHash = useMemo(() => computeAvatarConfigHash(draftSpec), [draftSpec]);
   const liveBodyMetrics = useMemo(() => resolveCoupledBodyMetrics(draftSpec), [draftSpec]);
   const liveLegacyBodySpec = useMemo(
     () => avatarSpecToLegacyBodySpec(draftSpec, fallbackGender),
     [draftSpec, fallbackGender]
   );
-  const resolvedMstSwatch = useMemo(
-    () => getMstSwatch(draftSpec.appearance.mstLevel, draftSpec.appearance.mstUndertone),
-    [draftSpec.appearance.mstLevel, draftSpec.appearance.mstUndertone]
-  );
 
+  const draftMstLevel = draftSpec.appearance.mstLevel;
+  const draftMstUndertone = draftSpec.appearance.mstUndertone;
   const draftHex = draftSpec.appearance.skinToneHex;
   const draftSeason = normalizeSeasonKey(draftSpec.appearance.personalColor);
+  const draftFacePhotoUrl = draftSpec.appearance.facePhotoUrl;
+
+  const resolvedMstSwatch = useMemo(
+    () => getMstSwatch(draftMstLevel, draftMstUndertone),
+    [draftMstLevel, draftMstUndertone]
+  );
+
+  const isFacePhotoActive = Boolean(draftFacePhotoUrl);
+  const effectiveFaceThumb = draftFacePhotoUrl || candidateFaceUrl || '';
+  const hasCandidatePortrait = Boolean(effectiveFaceThumb);
+  const hasPhotoForLighting = Boolean(sourceImageUrl || draftFacePhotoUrl);
+  const hasPhotoForEmptyCheck = Boolean(
+    sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl || analysisResult?.previewDataUrl
+  );
+  const showFaceNotDetectedWarning =
+    !analyzing &&
+    !errorMsg &&
+    !isSampleSource &&
+    Boolean(analysisResult) &&
+    !analysisResult.faceDetected;
 
   const handleStepPreviewAngle = (direction) => {
     triggerHaptic('selection');
@@ -241,6 +309,9 @@ function ProfileModalContent({
   ) => {
     if (!imgSrc) return;
     const isUserUpload = Boolean(options.isUserUpload);
+    const updateFacePhoto = options.updateFacePhoto ?? isUserUpload;
+    const skipNeuralDetector = Boolean(options.skipNeuralDetector);
+    const requestSeq = ++analysisSeqRef.current;
     setAnalyzing(true);
     setErrorMsg('');
     try {
@@ -248,9 +319,12 @@ function ProfileModalContent({
         analyzePortraitSkinTone(imgSrc, {
           lightingMode: nextLighting,
           focusPoint,
+          previousCropRect: options.previousCropRect,
+          skipNeuralDetector,
         }),
-        isUserUpload ? downscaleUserPortrait(imgSrc) : Promise.resolve(null),
+        updateFacePhoto ? downscaleUserPortrait(imgSrc) : Promise.resolve(null),
       ]);
+      if (analysisSeqRef.current !== requestSeq) return;
       setAnalysisResult(res);
       setDraftSubType(res.subTypeLabelKo);
       setDraftPresetKey(res.matchedPresetKey);
@@ -258,6 +332,13 @@ function ProfileModalContent({
       const autoMst = findClosestMstFromHex(res.skinToneHex);
       const syncedMstLevel = res.mstLevel ?? autoMst.level;
       const syncedMstUndertone = res.mstUndertone ?? autoMst.undertone;
+      const resolvedFaceUrl = updateFacePhoto
+        ? compactPortraitUrl || res.previewDataUrl || imgSrc
+        : undefined;
+
+      if (resolvedFaceUrl) {
+        setCandidateFaceUrl(resolvedFaceUrl);
+      }
 
       setDraftSpec((prev) =>
         sanitizeAvatarSpec({
@@ -268,14 +349,16 @@ function ProfileModalContent({
             mstUndertone: syncedMstUndertone,
             skinToneHex: res.skinToneHex,
             personalColor: res.personalColor,
-            facePhotoUrl: isUserUpload
-              ? compactPortraitUrl || res.previewDataUrl || imgSrc
-              : prev.appearance.facePhotoUrl,
+            facePhotoUrl:
+              resolvedFaceUrl !== undefined
+                ? resolvedFaceUrl
+                : prev.appearance.facePhotoUrl,
           },
         })
       );
       triggerHaptic('light');
     } catch (err) {
+      if (analysisSeqRef.current !== requestSeq) return;
       setAnalysisResult(null);
       if (isUserUpload) {
         setSourceImageUrl('');
@@ -288,7 +371,9 @@ function ProfileModalContent({
       const localized = localizeApiMessage(err?.message, lang);
       setErrorMsg(localized || fallbackErr);
     } finally {
-      setAnalyzing(false);
+      if (analysisSeqRef.current === requestSeq) {
+        setAnalyzing(false);
+      }
     }
   };
 
@@ -299,8 +384,10 @@ function ProfileModalContent({
     setErrorMsg('');
 
     if (file.type && !file.type.startsWith('image/')) {
+      analysisSeqRef.current += 1;
       setAnalyzing(false);
       setAnalysisResult(null);
+      setSourceImageUrl('');
       setErrorMsg(
         tx(
           lang,
@@ -313,8 +400,10 @@ function ProfileModalContent({
 
     const reader = new FileReader();
     reader.onerror = () => {
+      analysisSeqRef.current += 1;
       setAnalyzing(false);
       setAnalysisResult(null);
+      setSourceImageUrl('');
       setErrorMsg(
         tx(
           lang,
@@ -326,6 +415,10 @@ function ProfileModalContent({
     reader.onload = () => {
       const dataUrl = String(reader.result || '');
       if (!dataUrl) {
+        analysisSeqRef.current += 1;
+        setAnalyzing(false);
+        setAnalysisResult(null);
+        setSourceImageUrl('');
         setErrorMsg(
           tx(
             lang,
@@ -337,7 +430,11 @@ function ProfileModalContent({
       }
       setIsSampleSource(false);
       setSourceImageUrl(dataUrl);
-      void runAnalysis(dataUrl, lightingMode, undefined, { isUserUpload: true });
+      void runAnalysis(dataUrl, lightingMode, undefined, {
+        isUserUpload: true,
+        updateFacePhoto: true,
+        skipNeuralDetector: false,
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -376,15 +473,37 @@ function ProfileModalContent({
     setErrorMsg('');
     setIsSampleSource(true);
     setSourceImageUrl(sampleUrl);
-    void runAnalysis(sampleUrl, lightingMode, undefined, { isUserUpload: false });
+    void runAnalysis(sampleUrl, lightingMode, undefined, {
+      isUserUpload: false,
+      updateFacePhoto: false,
+      skipNeuralDetector: true,
+    });
+  };
+
+  const handleToggleFacePhoto = () => {
+    if (!hasCandidatePortrait && !isFacePhotoActive) return;
+    triggerHaptic('selection');
+    setDraftSpec((prev) =>
+      sanitizeAvatarSpec({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          facePhotoUrl: isFacePhotoActive ? null : effectiveFaceThumb,
+        },
+      })
+    );
   };
 
   const handleResetFacePhoto = () => {
     triggerHaptic('selection');
+    analysisSeqRef.current += 1;
+    setAnalyzing(false);
+    setErrorMsg('');
     setIsSampleSource(false);
     setSourceImageUrl('');
+    setCandidateFaceUrl('');
     setAnalysisResult(null);
-    setErrorMsg('');
+    setMetricsOpen(false);
     setDraftSpec((prev) =>
       sanitizeAvatarSpec({
         ...prev,
@@ -396,42 +515,38 @@ function ProfileModalContent({
     );
   };
 
-  const handleToggleFacePhoto = () => {
-    const candidate =
-      analysisResult?.previewDataUrl || sourceImageUrl || draftSpec.appearance.facePhotoUrl || '';
-    const attached = Boolean(draftSpec.appearance.facePhotoUrl);
-    if (!candidate && !attached) return;
-    triggerHaptic('selection');
-    setDraftSpec((prev) =>
-      sanitizeAvatarSpec({
-        ...prev,
-        appearance: {
-          ...prev.appearance,
-          facePhotoUrl: attached ? null : candidate,
-        },
-      })
-    );
-  };
-
   const handleJumpToManualSkinTone = () => {
     triggerHaptic('selection');
-    const target = manualToneSectionRef.current;
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const firstFocusable = target.querySelector('button, input');
-      if (firstFocusable instanceof HTMLElement) {
-        firstFocusable.focus({ preventScroll: true });
+    setManualSkinOpen(true);
+    const focusAfterOpen = () => {
+      const target = manualToneSectionRef.current;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const firstControl = target.querySelector('[data-mst-level], button, input');
+        if (firstControl instanceof HTMLElement) {
+          firstControl.focus({ preventScroll: true });
+        }
       }
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(focusAfterOpen));
+    } else {
+      setTimeout(focusAfterOpen, 20);
     }
   };
 
   const handleChangeLighting = (nextMode) => {
     triggerHaptic('selection');
     setLightingMode(nextMode);
-    const activeTargetUrl = sourceImageUrl || draftSpec.appearance.facePhotoUrl;
-    if (activeTargetUrl) {
-      void runAnalysis(activeTargetUrl, nextMode, undefined, {
-        isUserUpload: !isSampleSource && Boolean(draftSpec.appearance.facePhotoUrl),
+    const lightingTargetUrl = sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl;
+    if (lightingTargetUrl) {
+      if (!sourceImageUrl) {
+        setSourceImageUrl(lightingTargetUrl);
+      }
+      void runAnalysis(lightingTargetUrl, nextMode, undefined, {
+        isUserUpload: !isSampleSource && Boolean(draftFacePhotoUrl),
+        updateFacePhoto: false,
+        skipNeuralDetector: isSampleSource,
       });
     }
   };
@@ -449,7 +564,12 @@ function ProfileModalContent({
       sourceImageUrl,
       lightingMode,
       { x: fullX, y: fullY },
-      { isUserUpload: !isSampleSource && Boolean(draftSpec.appearance.facePhotoUrl) }
+      {
+        isUserUpload: !isSampleSource && Boolean(draftFacePhotoUrl),
+        updateFacePhoto: false,
+        skipNeuralDetector: isSampleSource,
+        previousCropRect: analysisResult.cropSourceRect,
+      }
     );
   };
 
@@ -472,12 +592,33 @@ function ProfileModalContent({
     );
   };
 
+  const handlePickMstCell = (nextLevel, nextUndertone) => {
+    triggerHaptic('selection');
+    const swatch = getMstSwatch(nextLevel, nextUndertone);
+    const closest = findClosestSkinPreset(swatch.hex, swatch.personalColor);
+    setDraftPresetKey(closest.key);
+    setDraftSubType(closest.subTypeLabelKo);
+    setDraftSpec((prev) =>
+      sanitizeAvatarSpec({
+        ...prev,
+        appearance: {
+          ...prev.appearance,
+          mstLevel: swatch.level,
+          mstUndertone: swatch.undertone,
+          skinToneHex: swatch.hex,
+          personalColor: swatch.personalColor,
+        },
+      })
+    );
+  };
+
   const handleCustomHexChange = (e) => {
     const hex = String(e.target.value || '').toUpperCase();
     if (!/^#[0-9A-F]{6}$/.test(hex)) return;
     const closest = findClosestSkinPreset(hex, draftSeason);
     const mst = findClosestMstFromHex(hex);
     setDraftPresetKey(closest.key);
+    setDraftSubType(closest.subTypeLabelKo);
     setDraftSpec((prev) =>
       sanitizeAvatarSpec({
         ...prev,
@@ -489,12 +630,6 @@ function ProfileModalContent({
         },
       })
     );
-  };
-
-  const handleSelectMstSwatch = (swatch) => {
-    const closest = findClosestSkinPreset(swatch.hex, swatch.personalColor);
-    setDraftPresetKey(closest.key);
-    setDraftSubType(closest.subTypeLabelKo);
   };
 
   const commitAvatarStudioChanges = (primarySource) => {
@@ -552,58 +687,37 @@ function ProfileModalContent({
   };
 
   const activeSeasonMeta = SEASON_BEST_SWATCHES[draftSeason] || SEASON_BEST_SWATCHES.autumn_warm;
-  const localizedSubType =
-    lang === 'en'
-      ? translateSubTypeLabel(draftSubType, draftSeason)
-      : draftSubType;
   const localizedSeasonLabel =
     lang === 'en' ? activeSeasonMeta.labelEn : activeSeasonMeta.labelKo;
-  const friendlyToneLabel = formatFriendlyMstLabel(
-    draftSpec.appearance.mstLevel,
-    draftSpec.appearance.mstUndertone,
-    lang
-  );
-  const baseLevelName = getMstBaseLevelName(draftSpec.appearance.mstLevel, lang);
-  const unifiedToneBadgeLabel = `${localizedSubType} · ${friendlyToneLabel}`;
+  const humanToneLabel = formatHumanToneLabel(draftMstLevel, draftMstUndertone, lang);
+  const unifiedToneBadgeText = `${humanToneLabel} · ${localizedSeasonLabel}`;
+  const recommendedThreeColors = activeSeasonMeta.colors.slice(0, 3);
 
   const activeAngleMeta =
     ISO_VIEW_ANGLE_OPTIONS.find((item) => item.angleDeg === previewAngleDeg) ||
     ISO_VIEW_ANGLE_OPTIONS[0];
-  const localizedAngleLabel =
-    lang === 'en' ? activeAngleMeta.labelEn : activeAngleMeta.labelKo;
+  const shortAngleLabel = lang === 'en' ? activeAngleMeta.shortEn : activeAngleMeta.shortKo;
 
   const previewSkinProfile = useMemo(
     () => ({
       skinToneHex: draftHex,
       personalColor: draftSeason,
-      mstLevel: draftSpec.appearance.mstLevel,
-      mstUndertone: draftSpec.appearance.mstUndertone,
+      mstLevel: draftMstLevel,
+      mstUndertone: draftMstUndertone,
       mstCode: resolvedMstSwatch.code,
-      portraitDataUrl: draftSpec.appearance.facePhotoUrl,
+      portraitDataUrl: draftFacePhotoUrl,
     }),
     [
       draftHex,
       draftSeason,
-      draftSpec.appearance.mstLevel,
-      draftSpec.appearance.mstUndertone,
-      draftSpec.appearance.facePhotoUrl,
+      draftMstLevel,
+      draftMstUndertone,
+      draftFacePhotoUrl,
       resolvedMstSwatch.code,
     ]
   );
 
-  // Portrait & Face Analysis derived states
-  const portraitCandidateUrl =
-    analysisResult?.previewDataUrl || sourceImageUrl || draftSpec.appearance.facePhotoUrl || '';
-  const hasPhotoForAnalysis = Boolean(portraitCandidateUrl);
-  const isFacePhotoAttached = Boolean(draftSpec.appearance.facePhotoUrl);
-  const showFaceNotDetectedWarning =
-    !analyzing &&
-    !errorMsg &&
-    !isSampleSource &&
-    Boolean(analysisResult) &&
-    !analysisResult.faceDetected;
-
-  // Derived labels for Tab 2 & Tab 3 compact summaries
+  // Derived labels for Tab 2 (Hair & Face) & Tab 3 (Body Profile)
   const activeHairLabel = findOptionLabel(
     HAIR_STYLE_OPTIONS,
     draftSpec.appearance.hairStyle,
@@ -692,7 +806,7 @@ function ProfileModalContent({
       footer={applyFooter}
     >
       <div className="skin-modal-body" data-active-tab={activeTab}>
-        {/* 3-Way Segmented Navigation (Sticky, Immediately Visible, No Dropdown) */}
+        {/* 3-Way Sticky Segmented Navigation */}
         <div className="profile-modal-tabs-sticky">
           <div
             className="profile-modal-tabs"
@@ -721,6 +835,7 @@ function ProfileModalContent({
               className={`profile-modal-tab-btn ${activeTab === 'hair' ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
+                setMetricsOpen(false);
                 setActiveTab('hair');
               }}
             >
@@ -735,6 +850,7 @@ function ProfileModalContent({
               className={`profile-modal-tab-btn ${activeTab === 'body' ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
+                setMetricsOpen(false);
                 setActiveTab('body');
               }}
             >
@@ -744,7 +860,7 @@ function ProfileModalContent({
           </div>
         </div>
 
-        {/* Context-Focused Live Character Preview & Tab-Specific Summary */}
+        {/* [Section 1] Top Unified Compact 2-Column Preview & Summary Header */}
         <div className="skin-modal-preview-grid">
           <div className="skin-modal-character-box">
             <div className="skin-modal-character-stage">
@@ -755,7 +871,7 @@ function ProfileModalContent({
                 personalColor={draftSeason}
                 skinProfile={previewSkinProfile}
                 bodySpec={liveLegacyBodySpec}
-                personReferenceUrl={draftSpec.appearance.facePhotoUrl}
+                personReferenceUrl={draftFacePhotoUrl}
                 theme={theme}
                 lang={lang}
                 compact
@@ -787,7 +903,7 @@ function ProfileModalContent({
                   setPreviewAngleDeg(DEFAULT_ISO_VIEW_ANGLE);
                 }}
               >
-                {localizedAngleLabel}
+                {shortAngleLabel}
               </button>
               <button
                 type="button"
@@ -800,36 +916,21 @@ function ProfileModalContent({
                 ↻
               </button>
             </div>
-
-            {/* Body anthropometrics displayed ONLY in the Body Profile tab */}
-            {activeTab === 'body' && (
-              <span className="body-spec-account-badge tabular-nums">
-                {draftSpec.anthropometrics.heightCm}cm · {draftSpec.anthropometrics.weightKg}kg · BMI{' '}
-                {liveBodyMetrics.bmi.toFixed(1)}
-              </span>
-            )}
           </div>
 
           <div className="skin-modal-summary-box">
-            {/* Silent internal avatar hash anchor for telemetry without visual noise */}
-            <span
-              className="avatar-config-hash-badge"
-              data-avatar-config-hash={liveHash}
-              aria-hidden="true"
-              hidden
-            />
-
             {activeTab === 'skin' && (
               <>
                 {analysisResult?.previewDataUrl && !analyzing && !errorMsg ? (
-                  <>
+                  <div className="skin-crop-summary-group">
                     <div
                       className="skin-portrait-pin-frame is-clickable"
+                      data-detector-engine={analysisResult.detectorEngine || ''}
                       onClick={handlePreviewTapFocus}
                       title={tx(
                         lang,
-                        '얼굴 영역을 탭하여 분석 위치를 미세 조정할 수 있습니다',
-                        'Tap the face area to re-center skin sampling'
+                        '얼굴 영역을 탭하여 피부톤을 다시 추출할 수 있습니다',
+                        'Tap the face area to resample skin tone'
                       )}
                     >
                       <img
@@ -849,9 +950,19 @@ function ProfileModalContent({
                           }}
                         />
                       )}
+                      <div
+                        className={`hig-optical-scan-overlay ${analyzing ? 'is-scanning' : ''}`}
+                        aria-hidden="true"
+                      >
+                        <span className="wardrobe-scanner-corner is-tl" />
+                        <span className="wardrobe-scanner-corner is-tr" />
+                        <span className="wardrobe-scanner-corner is-bl" />
+                        <span className="wardrobe-scanner-corner is-br" />
+                      </div>
                       {analysisResult.pins.map((pin) => (
                         <span
                           key={pin.id}
+                          data-skin-pin-id={pin.id}
                           className="skin-sample-pin"
                           title={`${lang === 'en' ? pin.labelEn : pin.labelKo}: ${pin.hex}`}
                           style={{
@@ -872,58 +983,80 @@ function ProfileModalContent({
                       </span>
                     </div>
                     <span className="skin-tap-hint">
-                      {tx(
-                        lang,
-                        '사진 속 얼굴 부위를 탭하면 해당 피부톤으로 다시 잡습니다',
-                        'Tap directly on the face to refine skin sampling'
-                      )}
+                      {tx(lang, '얼굴을 탭해 피부톤 재추출', 'Tap face to resample')}
                     </span>
-
-                    <div className="skin-lab-metrics tabular-nums">
-                      <span>
-                        {tx(lang, '추출 피부톤', 'Extracted')} <strong>{analysisResult.skinToneHex}</strong>
-                      </span>
-                      <span>
-                        L* {analysisResult.lab.L} · a* {analysisResult.lab.a} · b* {analysisResult.lab.b}
-                      </span>
-                      <span>
-                        ITA° {analysisResult.lab.itaDeg}° · {tx(lang, '신뢰도', 'Confidence')}{' '}
-                        {analysisResult.confidence}%
-                      </span>
-                    </div>
-
-                    <div className="skin-unified-tone-pill">
-                      <span
-                        className="skin-unified-tone-dot"
-                        style={{ backgroundColor: draftHex }}
-                        aria-hidden="true"
-                      />
-                      <strong>{unifiedToneBadgeLabel}</strong>
-                    </div>
-                  </>
+                  </div>
                 ) : (
-                  <div className="skin-tone-hero-badge">
+                  <span className="skin-summary-kicker">
+                    {isFacePhotoActive
+                      ? tx(lang, '얼굴 사진 반영 · 피부톤 진단', 'Face Photo · Skin Tone')
+                      : tx(lang, '현재 아바타 피부톤 진단', 'Active Skin Tone Diagnosis')}
+                  </span>
+                )}
+
+                <div className="skin-unified-result-block">
+                  <div className="skin-unified-result-row">
                     <span
-                      className="skin-tone-large-swatch"
+                      className="skin-tone-result-swatch"
                       style={{ backgroundColor: draftHex }}
                       aria-hidden="true"
                     />
-                    <div className="skin-tone-hero-text">
-                      <strong className="skin-tone-diagnosis-title">
-                        {unifiedToneBadgeLabel}
-                      </strong>
-                      <span className="skin-tone-hex-code tabular-nums">
-                        {localizedSeasonLabel} · {baseLevelName} · {draftHex}
-                      </span>
-                    </div>
+                    <span
+                      className="skin-unified-tone-pill"
+                      data-unified-tone-badge="true"
+                      data-mst-code={resolvedMstSwatch.code}
+                    >
+                      {unifiedToneBadgeText}
+                    </span>
+                    <button
+                      type="button"
+                      data-skin-metrics-toggle="true"
+                      aria-expanded={metricsOpen}
+                      aria-label={tx(lang, '피부톤 상세 수치', 'Color Metrics')}
+                      title={tx(lang, '상세 수치 보기', 'View Color Metrics')}
+                      className={`skin-metrics-info-btn ${metricsOpen ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setMetricsOpen((prev) => !prev);
+                      }}
+                    >
+                      ?
+                    </button>
                   </div>
-                )}
+
+                  {metricsOpen && (
+                    <div
+                      className="skin-lab-metrics skin-metrics-popover tabular-nums"
+                      data-skin-metrics-popover="true"
+                      role="region"
+                      aria-label={tx(lang, '피부톤 상세 측정 수치', 'Detailed Skin Tone Metrics')}
+                    >
+                      <span>
+                        {tx(lang, '추출 색상', 'Color')}{' '}
+                        <strong>{analysisResult ? analysisResult.skinToneHex : draftHex}</strong>
+                      </span>
+                      <span>{resolvedMstSwatch.code}</span>
+                      {analysisResult && (
+                        <>
+                          <span>
+                            L* {analysisResult.lab.L} · a* {analysisResult.lab.a} · b*{' '}
+                            {analysisResult.lab.b}
+                          </span>
+                          <span>
+                            ITA° {analysisResult.lab.itaDeg}° · {tx(lang, '신뢰도', 'Confidence')}{' '}
+                            {analysisResult.confidence}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div
                   className="skin-best-drape-row"
-                  aria-label={tx(lang, '베스트 매칭 컬러', 'Best Matching Colors')}
+                  aria-label={tx(lang, '어울리는 추천 컬러', 'Recommended Matching Colors')}
                 >
-                  {activeSeasonMeta.colors.map((sw) => (
+                  {recommendedThreeColors.map((sw) => (
                     <div
                       key={sw.hex}
                       className="skin-best-drape-chip"
@@ -963,7 +1096,7 @@ function ProfileModalContent({
                 <p className="avatar-studio-hint">
                   {tx(
                     lang,
-                    '헤어스타일, 컬러 및 이목구비 비율은 AI 피팅 아바타의 외형 생성에 즉시 반영됩니다.',
+                    '헤어스타일, 컬러 및 이목구비 비율은 AI 피팅 아바타에 즉시 반영됩니다.',
                     'Hairstyle, color, and facial proportions sync directly with your AI Try-On avatar.'
                   )}
                 </p>
@@ -971,50 +1104,72 @@ function ProfileModalContent({
             )}
 
             {activeTab === 'body' && (
-              <div className="studio-tab-summary-card">
-                <div className="studio-summary-headline-group">
-                  <strong className="skin-tone-diagnosis-title">
-                    {lang === 'en' ? activeFrameMeta.labelEn : activeFrameMeta.labelKo} ·{' '}
+              <div className="body-summary-right-card">
+                <div className="body-summary-right-head">
+                  <span className="body-summary-kicker">
+                    {tx(lang, '가상 피팅 체형 프로필', 'Active Body Spec')}
+                  </span>
+                  <strong className="body-summary-title">
+                    {lang === 'en' ? activeFrameMeta.shortEn : activeFrameMeta.shortKo} ·{' '}
                     {lang === 'en' ? activeArchetypeMeta.shortEn : activeArchetypeMeta.shortKo}
                   </strong>
-                  <span className="skin-tone-hex-code">
-                    {tx(lang, '가슴 윤곽', 'Chest')} · {activeChestFormLabel}
-                  </span>
                 </div>
+                <span className="body-spec-account-badge tabular-nums">
+                  {draftSpec.anthropometrics.heightCm}cm · {draftSpec.anthropometrics.weightKg}kg ·
+                  BMI {liveBodyMetrics.bmi.toFixed(1)}
+                </span>
                 <div className="studio-summary-metrics-strip tabular-nums">
                   <span className="studio-summary-metric-pill">
-                    {tx(lang, '어깨', 'Shoulder')}{' '}
+                    {tx(lang, '가슴 윤곽', 'Chest')} · {activeChestFormLabel}
+                  </span>
+                  <span className="studio-summary-metric-pill">
+                    {tx(lang, '어깨', 'Sh')}{' '}
                     {Math.round(draftSpec.anthropometrics.shoulderScale * 100)}%
                   </span>
                   <span className="studio-summary-metric-pill">
-                    {tx(lang, '허리', 'Waist')}{' '}
+                    {tx(lang, '허리', 'Wa')}{' '}
                     {Math.round(draftSpec.anthropometrics.waistScale * 100)}%
                   </span>
-                  <span className="studio-summary-metric-pill">
-                    {tx(lang, '힙', 'Hip')}{' '}
-                    {Math.round(draftSpec.anthropometrics.hipScale * 100)}%
-                  </span>
                 </div>
-                <p className="avatar-studio-hint">
-                  {lang === 'en' ? activeArchetypeMeta.descEn : activeArchetypeMeta.descKo}
-                </p>
+                <div className="body-summary-tone-mini">
+                  <span
+                    className="skin-mini-dot"
+                    style={{ backgroundColor: draftHex }}
+                    aria-hidden="true"
+                  />
+                  <span>{unifiedToneBadgeText}</span>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* TAB 1: Photo & Skin Tone */}
+        {/* TAB 1: Photo & Skin Tone (Focused purely on face reflection & skin tone) */}
         {activeTab === 'skin' && (
           <>
-            {/* Section 1: Face Photo Analysis with Empty / Loading / Error & Recovery States */}
-            <div className="skin-modal-section">
+            <div className="skin-core-action-card">
               <div className="skin-modal-section-head">
-                <span>{tx(lang, '얼굴 사진 분석', 'Face Photo Analysis')}</span>
-                {analyzing && (
-                  <span className="skin-analyzing-tag">
-                    {tx(lang, '분석 중...', 'Analyzing...')}
-                  </span>
-                )}
+                <span>{tx(lang, '얼굴 사진 자동 맞춤', 'Auto Match from Photo')}</span>
+                <div className="skin-head-right-actions">
+                  {analyzing && (
+                    <span className="skin-analyzing-tag">
+                      {tx(lang, '얼굴 인식 중...', 'Detecting face...')}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    data-sample-toggle="true"
+                    aria-expanded={sampleRailOpen}
+                    className="skin-sample-toggle-link"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setSampleRailOpen((prev) => !prev);
+                    }}
+                  >
+                    <Sparkles size={12} aria-hidden="true" />
+                    <span>{tx(lang, '샘플 테스트', 'Try Sample')}</span>
+                  </button>
+                </div>
               </div>
 
               <input
@@ -1038,23 +1193,40 @@ function ProfileModalContent({
               <div className="skin-upload-btn-row">
                 <button
                   type="button"
-                  className="hig-secondary-btn"
+                  className="hig-secondary-btn skin-action-btn"
                   onClick={handleOpenGallery}
                   disabled={analyzing}
                 >
-                  <Upload size={16} aria-hidden="true" />
+                  <Upload size={15} aria-hidden="true" />
                   <span>{tx(lang, '사진 업로드', 'Upload Photo')}</span>
                 </button>
                 <button
                   type="button"
-                  className="hig-secondary-btn"
+                  className="hig-secondary-btn skin-action-btn"
                   onClick={handleOpenCamera}
                   disabled={analyzing}
                 >
-                  <Camera size={16} aria-hidden="true" />
+                  <Camera size={15} aria-hidden="true" />
                   <span>{tx(lang, '카메라 촬영', 'Camera')}</span>
                 </button>
               </div>
+
+              {sampleRailOpen && (
+                <div className="skin-sample-test-rail">
+                  {SAMPLE_PORTRAIT_BUTTONS.map((btn) => (
+                    <button
+                      key={btn.key}
+                      type="button"
+                      data-sample-portrait={btn.key}
+                      className="skin-sample-chip"
+                      onClick={() => handleSelectSamplePortrait(btn.key)}
+                    >
+                      <Sparkles size={12} aria-hidden="true" />
+                      <span>{lang === 'en' ? btn.en : btn.ko}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Exception State 1: Loading */}
               {analyzing && (
@@ -1065,7 +1237,7 @@ function ProfileModalContent({
                   aria-live="polite"
                 >
                   <div className="skin-loading-row">
-                    <Loader2 size={22} className="skin-spin-icon" aria-hidden="true" />
+                    <Loader2 size={20} className="skin-spin-icon" aria-hidden="true" />
                     <div className="skin-state-copy">
                       <strong>
                         {tx(
@@ -1098,7 +1270,7 @@ function ProfileModalContent({
                   role="alert"
                 >
                   <div className="skin-state-header">
-                    <AlertTriangle size={20} className="skin-state-icon-danger" aria-hidden="true" />
+                    <AlertTriangle size={19} className="skin-state-icon-danger" aria-hidden="true" />
                     <div className="skin-state-copy">
                       <strong>
                         {tx(
@@ -1116,7 +1288,7 @@ function ProfileModalContent({
                       className="hig-secondary-btn skin-recovery-btn"
                       onClick={handleOpenGallery}
                     >
-                      <RotateCcw size={15} aria-hidden="true" />
+                      <RotateCcw size={14} aria-hidden="true" />
                       <span>{tx(lang, '다른 사진 다시 선택', 'Choose Another Photo')}</span>
                     </button>
                     <button
@@ -1124,75 +1296,14 @@ function ProfileModalContent({
                       className="hig-secondary-btn skin-recovery-btn"
                       onClick={handleJumpToManualSkinTone}
                     >
-                      <Palette size={15} aria-hidden="true" />
+                      <Palette size={14} aria-hidden="true" />
                       <span>{tx(lang, '수동 피부톤 선택으로 이동', 'Select Skin Tone Manually')}</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Loaded Portrait Banner (with Active Toggle & Reset) */}
-              {!analyzing && !errorMsg && hasPhotoForAnalysis && (
-                <div
-                  className="avatar-face-photo-row"
-                  data-user-face-active={isFacePhotoAttached ? 'true' : undefined}
-                >
-                  <div className="avatar-face-photo-info">
-                    <img
-                      src={draftSpec.appearance.facePhotoUrl || portraitCandidateUrl}
-                      alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
-                      className="avatar-face-photo-thumb"
-                    />
-                    <div className="avatar-face-photo-text">
-                      <strong>
-                        {isFacePhotoAttached
-                          ? tx(lang, '내 얼굴 사진 반영 ON', 'My Face Photo Active')
-                          : tx(lang, '얼굴 사진 분석 완료 (일러스트 모드)', 'Portrait Analyzed (Stylized Mode)')}
-                      </strong>
-                      <small>
-                        {isFacePhotoAttached
-                          ? tx(
-                              lang,
-                              'AI 피팅 시 업로드한 본인 얼굴·헤어로 생성됩니다',
-                              'AI Try-On uses your uploaded face & hair likeness'
-                            )
-                          : tx(
-                              lang,
-                              '피부톤만 추출되었으며 아바타는 일러스트로 표시됩니다',
-                              'Extracted tone applied; avatar uses stylized features'
-                            )}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="avatar-face-photo-actions">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isFacePhotoAttached}
-                      aria-label={tx(
-                        lang,
-                        '업로드한 얼굴 사진을 아바타에 연결 전환',
-                        'Toggle portrait photo attachment on avatar'
-                      )}
-                      data-face-photo-toggle="true"
-                      className={`avatar-switch-btn ${isFacePhotoAttached ? 'is-on' : ''}`}
-                      onClick={handleToggleFacePhoto}
-                    >
-                      {isFacePhotoAttached ? tx(lang, '연결됨', 'ON') : tx(lang, '해제', 'OFF')}
-                    </button>
-                    <button
-                      type="button"
-                      data-reset-face-photo-btn="true"
-                      className="avatar-switch-btn"
-                      onClick={handleResetFacePhoto}
-                    >
-                      {tx(lang, '초기화', 'Reset')}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Soft Face-Not-Detected Error/Warning & Recovery State */}
+              {/* Soft Face-Not-Detected Warning & Recovery */}
               {showFaceNotDetectedWarning && (
                 <div
                   className="skin-analysis-state-card is-warning"
@@ -1200,7 +1311,7 @@ function ProfileModalContent({
                   role="status"
                 >
                   <div className="skin-state-header">
-                    <AlertCircle size={19} className="skin-state-icon-warning" aria-hidden="true" />
+                    <AlertCircle size={18} className="skin-state-icon-warning" aria-hidden="true" />
                     <div className="skin-state-copy">
                       <strong>
                         {tx(
@@ -1212,8 +1323,8 @@ function ProfileModalContent({
                       <p className="skin-error-desc">
                         {tx(
                           lang,
-                          '어두운 역광, 측면 각도, 또는 얼굴이 가려진 사진일 수 있습니다. 프리뷰의 얼굴 위치를 직접 탭하거나 아래 버튼으로 다시 선택해 주세요.',
-                          'Backlighting, side angles, or partial occlusion can limit detection. Tap directly on the preview face or choose a recovery option below.'
+                          '상단 프리뷰의 얼굴 위치를 직접 탭하거나 다른 사진 선택 · 수동 피부톤 선택을 이용해 주세요.',
+                          'Tap directly on the preview face or choose a recovery option below.'
                         )}
                       </p>
                     </div>
@@ -1224,7 +1335,7 @@ function ProfileModalContent({
                       className="hig-secondary-btn skin-recovery-btn"
                       onClick={handleOpenGallery}
                     >
-                      <RotateCcw size={15} aria-hidden="true" />
+                      <RotateCcw size={14} aria-hidden="true" />
                       <span>{tx(lang, '다른 사진 다시 선택', 'Choose Another Photo')}</span>
                     </button>
                     <button
@@ -1232,21 +1343,21 @@ function ProfileModalContent({
                       className="hig-secondary-btn skin-recovery-btn"
                       onClick={handleJumpToManualSkinTone}
                     >
-                      <Palette size={15} aria-hidden="true" />
+                      <Palette size={14} aria-hidden="true" />
                       <span>{tx(lang, '수동 피부톤 선택으로 이동', 'Select Skin Tone Manually')}</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Exception State 3: Empty (No Photo Registered) */}
-              {!analyzing && !errorMsg && !hasPhotoForAnalysis && (
+              {/* Exception State 3: Compact Empty Guidance */}
+              {!analyzing && !errorMsg && !hasPhotoForEmptyCheck && (
                 <div
-                  className="skin-analysis-state-card is-empty"
+                  className="skin-analysis-state-card is-empty is-compact-banner"
                   data-face-analysis-state="empty"
                 >
                   <div className="skin-empty-illustration" aria-hidden="true">
-                    <ScanFace size={26} />
+                    <ScanFace size={20} />
                   </div>
                   <div className="skin-state-copy">
                     <strong>
@@ -1255,54 +1366,249 @@ function ProfileModalContent({
                     <p className="skin-empty-desc">
                       {tx(
                         lang,
-                        '정면 얼굴 사진을 업로드하면 자연광 기준으로 4개 부위의 피부톤과 퍼스널 컬러를 자동 추출해 드립니다. 사진 없이 아래 프리셋으로 바로 선택할 수도 있어요.',
-                        'Upload a front-facing portrait to extract calibrated skin tone and personal color automatically, or choose a preset manually below.'
+                        '정면 사진을 올리면 피부톤을 자동 추출하며, 아래에서 직접 선택할 수도 있어요.',
+                        'Upload a front-lit portrait for auto extraction, or customize manually below.'
                       )}
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Sample Portrait Quick Trial Rail */}
-              <div className="skin-sample-group">
-                <span className="skin-sample-rail-label">
-                  {tx(lang, '샘플 얼굴로 체험', 'Try sample portrait')}
-                </span>
-                <div className="skin-sample-test-rail">
-                  {SAMPLE_PORTRAIT_BUTTONS.map((btn) => (
+              {/* Unified Face Photo ON/OFF Switch Card + Text Reset Button */}
+              <div
+                className="avatar-face-photo-row"
+                data-user-face-active={isFacePhotoActive ? 'true' : 'false'}
+              >
+                <div className="avatar-face-photo-info">
+                  {effectiveFaceThumb ? (
+                    <img
+                      src={effectiveFaceThumb}
+                      alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
+                      className="avatar-face-photo-thumb"
+                    />
+                  ) : (
+                    <span className="avatar-face-photo-placeholder" aria-hidden="true">
+                      <User size={15} />
+                    </span>
+                  )}
+                  <div className="avatar-face-photo-text">
+                    <strong>
+                      {tx(lang, '내 얼굴 사진 반영', 'Use My Face Photo')}
+                    </strong>
+                    <small>
+                      {isFacePhotoActive
+                        ? tx(
+                            lang,
+                            'AI 피팅 시 내 얼굴·헤어로 생성됨',
+                            'AI Try-On uses your face & hair'
+                          )
+                        : hasCandidatePortrait
+                          ? tx(
+                              lang,
+                              '꺼짐 · 기본 아바타 톤 사용 중',
+                              'OFF · Using default avatar look'
+                            )
+                          : tx(
+                              lang,
+                              '사진 올려 얼굴 반영',
+                              'Upload to apply face'
+                            )}
+                    </small>
+                  </div>
+                </div>
+
+                <div className="avatar-face-photo-controls">
+                  {(hasCandidatePortrait || isFacePhotoActive || Boolean(analysisResult)) && (
                     <button
-                      key={btn.key}
                       type="button"
-                      data-sample-portrait={btn.key}
-                      className="skin-sample-chip"
-                      onClick={() => handleSelectSamplePortrait(btn.key)}
+                      data-reset-face-photo-btn="true"
+                      className="skin-text-reset-btn"
+                      onClick={handleResetFacePhoto}
                     >
-                      <Sparkles size={14} aria-hidden="true" />
-                      <span>{lang === 'en' ? btn.en : btn.ko}</span>
+                      {tx(lang, '초기화', 'Reset')}
                     </button>
-                  ))}
+                  )}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isFacePhotoActive}
+                    aria-label={tx(lang, '내 얼굴 사진 반영 ON/OFF', 'Toggle My Face Photo ON/OFF')}
+                    data-face-photo-toggle="true"
+                    disabled={!hasCandidatePortrait && !isFacePhotoActive}
+                    className={`skin-switch-control ${isFacePhotoActive ? 'is-on' : ''}`}
+                    onClick={handleToggleFacePhoto}
+                  >
+                    <span className="skin-switch-track" aria-hidden="true">
+                      <span className="skin-switch-thumb" />
+                    </span>
+                    <span className="skin-switch-state-text tabular-nums">
+                      {isFacePhotoActive ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
                 </div>
               </div>
 
-              {/* Conditional Lighting Calibration Bar — Hidden unless a photo is uploaded or loaded */}
-              {hasPhotoForAnalysis && (
-                <div className="skin-lighting-bar-wrap">
-                  <span className="skin-sample-rail-label">
-                    {tx(lang, '촬영 조명 보정', 'Lighting Calibration')}
-                  </span>
-                  <div className="hig-pill-rail" style={{ marginBottom: 0 }}>
-                    {LIGHTING_CALIBRATION_MODES.map((m) => {
-                      const active = lightingMode === m.key;
+              {/* Conditional Lighting Calibration Chips: ONLY shown when a photo exists */}
+              {hasPhotoForLighting && (
+                <div
+                  className="skin-lighting-segment"
+                  role="group"
+                  aria-label={tx(lang, '광원 보정', 'Lighting Calibration')}
+                >
+                  {LIGHTING_CALIBRATION_MODES.map((m) => {
+                    const labels = LIGHTING_SEGMENT_LABELS[m.key];
+                    const active = lightingMode === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        data-lighting-mode={m.key}
+                        aria-pressed={active}
+                        className={`skin-lighting-seg-btn ${active ? 'is-active' : ''}`}
+                        onClick={() => handleChangeLighting(m.key)}
+                      >
+                        {lang === 'en' ? labels?.en || m.shortEn : labels?.ko || m.shortKo}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* [Section 2] Collapsible Manual Skin Tone Accordion (Collapsed by default) */}
+            <div ref={manualToneSectionRef} className="skin-manual-accordion">
+              <button
+                type="button"
+                data-manual-skin-toggle="true"
+                aria-expanded={manualSkinOpen}
+                className="skin-manual-accordion-trigger"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setManualSkinOpen((prev) => !prev);
+                }}
+              >
+                <span className="skin-manual-accordion-title">
+                  {tx(lang, '피부톤 직접 변경하기', 'Customize Skin Tone')}
+                </span>
+                <span className="skin-manual-accordion-meta">
+                  <span
+                    className="skin-mini-dot"
+                    style={{ backgroundColor: draftHex }}
+                    aria-hidden="true"
+                  />
+                  {manualSkinOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </span>
+              </button>
+
+              {manualSkinOpen && (
+                <div className="skin-manual-accordion-body">
+                  {/* 1. 1-Row Horizontal MST 1~10 Spectrum Bar + Top-Right Custom Color Chip */}
+                  <div className="skin-manual-subhead">
+                    <span>{tx(lang, '피부 밝기 스펙트럼', 'Skin Brightness Scale')}</span>
+                    <label className="skin-custom-color-chip">
+                      <span>{tx(lang, '직접 선택', 'Custom')}</span>
+                      <input
+                        type="color"
+                        value={draftHex}
+                        onChange={handleCustomHexChange}
+                        aria-label={tx(lang, '피부톤 색상 직접 선택', 'Custom skin tone color')}
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    className="skin-spectrum-bar"
+                    role="group"
+                    aria-label={tx(lang, '피부 밝기 10단계 선택', '10-Step Skin Luminance Spectrum')}
+                  >
+                    {MST_BASE_LEVELS.map((lvlItem) => {
+                      const cellSwatch = getMstSwatch(lvlItem.level, draftMstUndertone);
+                      const selected = draftMstLevel === lvlItem.level;
+                      const checkStroke = isDarkSwatch(cellSwatch.hex) ? '#FFFFFF' : '#1D1D1F';
+                      const tierWord =
+                        HUMAN_TONE_TIERS[lvlItem.level]?.[lang === 'en' ? 'en' : 'ko'] ||
+                        String(lvlItem.level);
+
                       return (
                         <button
-                          key={m.key}
+                          key={lvlItem.level}
                           type="button"
-                          aria-pressed={active}
-                          className={`hig-filter-pill ${active ? 'active' : ''}`}
-                          onClick={() => handleChangeLighting(m.key)}
+                          data-mst-level={lvlItem.level}
+                          aria-pressed={selected}
+                          aria-label={`${tierWord} (${lvlItem.level}/10)`}
+                          title={`${tierWord} (${cellSwatch.hex})`}
+                          className={`skin-spectrum-dot-btn ${selected ? 'is-selected' : ''}`}
+                          onClick={() => handlePickMstCell(lvlItem.level, draftMstUndertone)}
                         >
-                          {active && <Check size={14} strokeWidth={2.8} aria-hidden="true" />}
-                          <span>{lang === 'en' ? m.shortEn : m.shortKo}</span>
+                          <span
+                            className="skin-spectrum-dot-fill"
+                            style={{ backgroundColor: cellSwatch.hex }}
+                          >
+                            {selected && (
+                              <Check size={12} strokeWidth={3} color={checkStroke} aria-hidden="true" />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 2. Integrated Undertone 3-Segment (웜톤 | 뉴트럴 | 쿨톤) */}
+                  <div
+                    className="skin-undertone-seg"
+                    role="group"
+                    aria-label={tx(lang, '피부 언더톤 선택', 'Skin Undertone')}
+                  >
+                    {UNDERTONE_SEGMENT_OPTIONS.map((ut) => {
+                      const previewSwatch = getMstSwatch(draftMstLevel, ut.key);
+                      const selected = draftMstUndertone === ut.key;
+                      return (
+                        <button
+                          key={ut.key}
+                          type="button"
+                          data-mst-undertone={ut.key}
+                          aria-pressed={selected}
+                          className={`skin-undertone-seg-btn ${selected ? 'is-selected' : ''}`}
+                          onClick={() => handlePickMstCell(draftMstLevel, ut.key)}
+                        >
+                          <span
+                            className="skin-undertone-seg-dot"
+                            style={{ backgroundColor: previewSwatch.hex }}
+                            aria-hidden="true"
+                          />
+                          <span>{lang === 'en' ? ut.en : ut.ko}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 3. Crisp 4-Season Personal Color Presets (Zero Ellipsis) */}
+                  <div
+                    className="skin-season-preset-row"
+                    role="group"
+                    aria-label={tx(lang, '퍼스널 컬러 4계절 프리셋', 'Personal Color Season Presets')}
+                  >
+                    {SEASON_REP_PRESETS.map((item) => {
+                      const preset =
+                        SKIN_TONE_MANNEQUIN_PRESETS.find((p) => p.key === item.presetKey) ||
+                        SKIN_TONE_MANNEQUIN_PRESETS[0];
+                      const selected = draftSeason === item.season;
+                      return (
+                        <button
+                          key={item.season}
+                          type="button"
+                          data-skin-preset={preset.key}
+                          data-season-preset={item.season}
+                          aria-pressed={selected}
+                          className={`skin-season-preset-btn ${selected ? 'is-selected' : ''}`}
+                          onClick={() => handlePickPreset(preset)}
+                        >
+                          <span
+                            className="skin-season-preset-dot"
+                            style={{ backgroundColor: preset.skinToneHex }}
+                            aria-hidden="true"
+                          />
+                          <span>{lang === 'en' ? item.en : item.ko}</span>
                         </button>
                       );
                     })}
@@ -1310,86 +1616,17 @@ function ProfileModalContent({
                 </div>
               )}
             </div>
-
-            {/* Section 2: Wide 2-Column Skin Tone Presets + Custom Picker */}
-            <div
-              ref={manualToneSectionRef}
-              tabIndex={-1}
-              className="skin-modal-section"
-              aria-label={tx(lang, '수동 피부톤 프리셋 선택', 'Manual Skin Tone Preset Selection')}
-            >
-              <div className="skin-modal-section-head">
-                <span>{tx(lang, '피부톤 프리셋', 'Skin Tone Presets')}</span>
-                <label className="skin-custom-color-label">
-                  <span>{tx(lang, '직접 선택', 'Custom')}</span>
-                  <input
-                    type="color"
-                    value={draftHex}
-                    onChange={handleCustomHexChange}
-                    aria-label={tx(lang, '피부톤 색상 미세조정', 'Custom skin tone color')}
-                  />
-                </label>
-              </div>
-
-              <div className="skin-preset-grid">
-                {SKIN_TONE_MANNEQUIN_PRESETS.map((preset) => {
-                  const selected =
-                    draftPresetKey === preset.key && draftHex === preset.skinToneHex;
-                  const checkStroke = isDarkSwatch(preset.skinToneHex) ? '#FFFFFF' : '#1D1D1F';
-                  return (
-                    <button
-                      key={preset.key}
-                      type="button"
-                      data-skin-preset={preset.key}
-                      aria-pressed={selected}
-                      className={`skin-preset-card ${selected ? 'is-selected' : ''}`}
-                      onClick={() => handlePickPreset(preset)}
-                    >
-                      <span
-                        className="skin-preset-swatch"
-                        style={{ backgroundColor: preset.skinToneHex }}
-                      >
-                        {selected && (
-                          <Check size={14} strokeWidth={3} color={checkStroke} aria-hidden="true" />
-                        )}
-                      </span>
-                      <div className="skin-preset-meta">
-                        <strong>{lang === 'en' ? preset.shortEn : preset.shortKo}</strong>
-                        <small>
-                          {lang === 'en' ? preset.subTypeLabelEn : preset.subTypeLabelKo}
-                        </small>
-                      </div>
-                      {selected && (
-                        <span className="skin-preset-selected-check" aria-hidden="true">
-                          <Check size={15} strokeWidth={2.8} />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Section 3: Cleanly Separated Monk 1–10 Scale + 4 Undertone Direct Controls */}
-            <div className="skin-modal-section">
-              <MstSkinToneControls
-                lang={lang}
-                draftSpec={draftSpec}
-                onChangeDraftSpec={setDraftSpec}
-                onSelectMstSwatch={handleSelectMstSwatch}
-              />
-            </div>
           </>
         )}
 
         {/* TAB 2: Dedicated Hair & Facial Features */}
         {activeTab === 'hair' && (
           <div className="hair-face-sheet">
-            {isFacePhotoAttached && (
+            {isFacePhotoActive && (
               <div className="avatar-face-photo-row" data-user-face-active="true">
                 <div className="avatar-face-photo-info">
                   <img
-                    src={draftSpec.appearance.facePhotoUrl}
+                    src={draftFacePhotoUrl}
                     alt={tx(lang, '내 얼굴 레퍼런스', 'My face reference')}
                     className="avatar-face-photo-thumb"
                   />
@@ -1400,7 +1637,7 @@ function ProfileModalContent({
                     <small>
                       {tx(
                         lang,
-                        '일러스트로 헤어·이목구비를 미리 보려면 일시 해제할 수 있습니다',
+                        '헤어·이목구비를 미리 보려면 일시 해제할 수 있습니다',
                         'Pause photo overlay temporarily to preview stylized hair & facial proportions'
                       )}
                     </small>
@@ -1409,7 +1646,7 @@ function ProfileModalContent({
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={isFacePhotoAttached}
+                  aria-checked={isFacePhotoActive}
                   aria-label={tx(
                     lang,
                     '업로드한 얼굴 사진을 아바타에 연결 전환',

@@ -1,5 +1,4 @@
 import { memo, useMemo } from 'react';
-import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
   normalizeGenderNeutralProfile,
@@ -10,15 +9,15 @@ import { getStoredLang } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 
 const FRAME_LABELS = {
-  feminine: { ko: '여성형 프레임', en: 'Feminine Frame' },
-  masculine: { ko: '남성형 프레임', en: 'Masculine Frame' },
-  androgynous: { ko: '논바이너리·중성', en: 'Androgynous' },
-  custom: { ko: '커스텀 체형', en: 'Custom Spec' },
+  feminine: { ko: '여성형', en: 'Feminine' },
+  masculine: { ko: '남성형', en: 'Masculine' },
+  androgynous: { ko: '중성형', en: 'Androgynous' },
+  custom: { ko: '커스텀', en: 'Custom' },
 };
 
 /**
  * Zero-Procedural-Drawing Avatar & Fitting Stage Adapter.
- * - `compact={true}` (Profile Avatar Studio): Renders a non-procedural MST Swatch & AvatarSpec Identity Card
+ * - `compact={true}` (Profile Avatar Studio): Renders a non-procedural AvatarSpec Identity Card
  *   (or uploaded portrait photo) with zero `<canvas>` and zero polygon/vector human drawing.
  * - `compact={false}`: Delegates to `EditorialFlatLayBoard`.
  */
@@ -96,15 +95,6 @@ const Character25DMannequin = memo(function Character25DMannequin({
     ]
   );
 
-  const mstSwatch = useMemo(
-    () =>
-      getMstSwatch(
-        profile.avatarSpec.appearance.mstLevel,
-        profile.avatarSpec.appearance.mstUndertone
-      ),
-    [profile.avatarSpec.appearance.mstLevel, profile.avatarSpec.appearance.mstUndertone]
-  );
-
   if (compact) {
     const frameKey = profile.avatarSpec.framePreset || 'androgynous';
     const frameLabel =
@@ -142,11 +132,7 @@ const Character25DMannequin = memo(function Character25DMannequin({
         </div>
 
         <div className="avatar-spec-card-meta">
-          <span className="avatar-spec-mst-code tabular-nums">{mstSwatch.code}</span>
           <span className="avatar-spec-frame-tag">{frameLabel}</span>
-          <span className="avatar-spec-ai-note">
-            {isEn ? 'Gemini AI VTON Spec' : 'Gemini AI 피팅 연동'}
-          </span>
         </div>
       </div>
     );

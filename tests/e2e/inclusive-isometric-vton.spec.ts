@@ -261,14 +261,25 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       expect(Number.parseInt(m, 10)).toBeGreaterThan(105);
     }
 
-    // Switch to Photo & Skin tab -> test MST-10 deep tone, Hair (type4_coily_afro) & Beard
+    // Verify strict tab separation & decluttered UI on Skin tab
     await page.locator('#profile-tab-skin').click();
+    await expect(page.locator('.avatar-config-hash-badge')).toHaveCount(0);
+    await expect(page.locator('.body-spec-account-badge')).toHaveCount(0);
+    await expect(page.locator('[data-skin-metrics-popover="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-lighting-mode]')).toHaveCount(0);
+    await expect(page.locator('[data-manual-skin-toggle="true"]')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    await expect(page.locator('[data-mst-level="10"]')).toHaveCount(0);
+
+    // Expand Section 2 accordion -> test MST-10 deep tone, Hair (type4_coily_afro) & Beard
+    await page.locator('[data-manual-skin-toggle="true"]').click();
     await page.locator('[data-mst-level="10"]').click();
     await page.locator('[data-mst-undertone="warm"]').click();
-    await expect(page.locator('[data-mst-code-badge]')).toHaveAttribute(
-      'data-mst-code-badge',
-      'MST-10-WARM'
-    );
+    const unifiedBadge = page.locator('[data-unified-tone-badge="true"]');
+    await expect(unifiedBadge).toHaveAttribute('data-mst-code', 'MST-10-WARM');
+    await expect(unifiedBadge).toContainText(/딥 리치|Rich Deep/);
 
     // Switch to Hair & Face tab -> test Hair (type4_coily_afro) & Beard
     await page.locator('#profile-tab-hair').click();
@@ -276,8 +287,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.locator('[data-facial-hair-btn="short_boxed_beard"]').click();
 
     const modalLiveHash = await page
-      .locator('.avatar-config-hash-badge')
-      .getAttribute('data-avatar-config-hash');
+      .locator('.skin-modal-character-stage [data-avatar-spec-card="true"]')
+      .getAttribute('data-avatar-hash');
     expect(modalLiveHash).toMatch(/^av2_[0-9a-f]{16}$/);
     expect(modalLiveHash).not.toBe(initialHash);
 

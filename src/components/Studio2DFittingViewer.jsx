@@ -778,7 +778,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       if (controller.signal.aborted) return;
 
       hasInitialAutoRunRef.current = true;
-      pendingWeatherApproveRef.current = null;
       setStagedNeedsApply(false);
       const liveSnap = latestInputsRef.current;
 
@@ -791,6 +790,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           .then((slices) => {
             if (controller.signal.aborted) return;
             pendingFacePhotoApproveRef.current = null;
+            pendingWeatherApproveRef.current = null;
             setAiLoading(false);
             const targetUrl =
               slices?.[liveSnap.viewAngleDeg] || slices?.[45] || slices?.[0] || null;
@@ -810,6 +810,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           .catch(() => {
             if (controller.signal.aborted) return;
             pendingFacePhotoApproveRef.current = null;
+            pendingWeatherApproveRef.current = null;
             setAiLoading(false);
           });
       };
@@ -840,6 +841,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         });
         if (controller.signal.aborted) return;
         pendingFacePhotoApproveRef.current = null;
+        pendingWeatherApproveRef.current = null;
 
         if (outcome.ok && outcome.imageUrl) {
           setAiLoading(false);

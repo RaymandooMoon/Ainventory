@@ -1,0 +1,642 @@
+/* ==========================================================================
+   Zero-Lock-In UI Primitives (`src/components/ui/`)
+   WCAG AA (>= 4.5:1) Light & Dark Contrast + 48x48dp Physical Touch Targets
+   ========================================================================== */
+
+:root,
+[data-theme='light'] {
+  --ui-bg-canvas: #ffffff;
+  --ui-bg-subtle: #f3f4f6;
+  --ui-bg-muted: #e5e7eb;
+  --ui-ink-primary: #111827;
+  --ui-ink-secondary: #4b5563;
+  --ui-border-default: #6b7280;
+  --ui-border-subtle: rgba(17, 24, 39, 0.2);
+  --ui-accent-bg: #18181b;
+  --ui-accent-ink: #ffffff;
+  --ui-accent-hover: #27272a;
+  --ui-focus-ring: #1d4ed8;
+  --ui-ring-outer: rgba(29, 78, 216, 0.24);
+  --ui-danger-solid: #b91c1c;
+  --ui-danger-solid-hover: #991b1b;
+  --ui-danger-ink-on-solid: #ffffff;
+
+  /* Badge semantic pairs (Light — every text/bg >= 4.9:1, typically 6.2:1+) */
+  --ui-badge-neutral-bg: #f3f4f6;
+  --ui-badge-neutral-ink: #1f2937;
+  --ui-badge-neutral-border: #9ca3af;
+
+  --ui-badge-info-bg: #eff6ff;
+  --ui-badge-info-ink: #1d4ed8;
+  --ui-badge-info-border: #3b82f6;
+
+  --ui-badge-success-bg: #ecfdf5;
+  --ui-badge-success-ink: #065f46;
+  --ui-badge-success-border: #10b981;
+
+  --ui-badge-warning-bg: #fffbeb;
+  --ui-badge-warning-ink: #92400e;
+  --ui-badge-warning-border: #d97706;
+
+  --ui-badge-danger-bg: #fef2f2;
+  --ui-badge-danger-ink: #b91c1c;
+  --ui-badge-danger-border: #ef4444;
+
+  --ui-badge-accent-bg: #18181b;
+  --ui-badge-accent-ink: #ffffff;
+  --ui-badge-accent-border: #18181b;
+
+  --ui-skeleton-base: #e5e7eb;
+  --ui-skeleton-sheen: rgba(255, 255, 255, 0.72);
+}
+
+[data-theme='dark'] {
+  --ui-bg-canvas: #141417;
+  --ui-bg-subtle: #1e1e23;
+  --ui-bg-muted: #2a2a31;
+  --ui-ink-primary: #f9fafb;
+  --ui-ink-secondary: #d1d5db;
+  --ui-border-default: #8e929b;
+  --ui-border-subtle: rgba(249, 250, 251, 0.24);
+  --ui-accent-bg: #f9fafb;
+  --ui-accent-ink: #111827;
+  --ui-accent-hover: #e5e7eb;
+  --ui-focus-ring: #60a5fa;
+  --ui-ring-outer: rgba(96, 165, 250, 0.34);
+  --ui-danger-solid: #ef4444;
+  --ui-danger-solid-hover: #dc2626;
+  --ui-danger-ink-on-solid: #ffffff;
+
+  /* Badge semantic pairs (Dark — every text/bg >= 6.6:1) */
+  --ui-badge-neutral-bg: #27272a;
+  --ui-badge-neutral-ink: #f4f4f5;
+  --ui-badge-neutral-border: #71717a;
+
+  --ui-badge-info-bg: #172554;
+  --ui-badge-info-ink: #93c5fd;
+  --ui-badge-info-border: #3b82f6;
+
+  --ui-badge-success-bg: #064e3b;
+  --ui-badge-success-ink: #6ee7b7;
+  --ui-badge-success-border: #10b981;
+
+  --ui-badge-warning-bg: #451a03;
+  --ui-badge-warning-ink: #fcd34d;
+  --ui-badge-warning-border: #f59e0b;
+
+  --ui-badge-danger-bg: #450a0a;
+  --ui-badge-danger-ink: #fca5a5;
+  --ui-badge-danger-border: #ef4444;
+
+  --ui-badge-accent-bg: #f4f4f5;
+  --ui-badge-accent-ink: #111827;
+  --ui-badge-accent-border: #f4f4f5;
+
+  --ui-skeleton-base: #27272a;
+  --ui-skeleton-sheen: rgba(255, 255, 255, 0.12);
+}
+
+/* --------------------------------------------------------------------------
+   1. TouchButton & TouchButtonGroup (>= 48x48dp, gap >= 8px)
+   -------------------------------------------------------------------------- */
+.ui-touch-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.14s ease;
+}
+
+.ui-touch-btn:focus-visible {
+  outline: 2.5px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.ui-touch-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.ui-touch-btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.ui-touch-btn--lg {
+  min-height: 52px;
+  padding: 0 22px;
+  font-size: 1rem;
+}
+
+.ui-touch-btn--icon {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 9999px;
+}
+
+.ui-touch-btn--full {
+  width: 100%;
+}
+
+.ui-touch-btn--primary {
+  background-color: var(--ui-accent-bg);
+  color: var(--ui-accent-ink);
+  border-color: var(--ui-accent-bg);
+}
+
+.ui-touch-btn--primary:not(:disabled):hover {
+  background-color: var(--ui-accent-hover);
+}
+
+.ui-touch-btn--secondary {
+  background-color: var(--ui-bg-subtle);
+  color: var(--ui-ink-primary);
+  border-color: var(--ui-border-subtle);
+}
+
+.ui-touch-btn--secondary:not(:disabled):hover {
+  background-color: var(--ui-bg-muted);
+}
+
+.ui-touch-btn--outline {
+  background-color: var(--ui-bg-canvas);
+  color: var(--ui-ink-primary);
+  border-color: var(--ui-border-default);
+}
+
+.ui-touch-btn--outline:not(:disabled):hover {
+  background-color: var(--ui-bg-subtle);
+}
+
+.ui-touch-btn--ghost {
+  background-color: transparent;
+  color: var(--ui-ink-primary);
+  border-color: transparent;
+}
+
+.ui-touch-btn--ghost:not(:disabled):hover {
+  background-color: var(--ui-bg-subtle);
+}
+
+.ui-touch-btn--destructive {
+  background-color: var(--ui-danger-solid);
+  color: var(--ui-danger-ink-on-solid);
+  border-color: var(--ui-danger-solid);
+}
+
+.ui-touch-btn--destructive:not(:disabled):hover {
+  background-color: var(--ui-danger-solid-hover);
+}
+
+.ui-touch-btn-spinner {
+  animation: uiSpin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes uiSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ui-touch-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   2. ClearableInput (min-height >= 48px, line-height: 1.5, 48x48px Clear X)
+   -------------------------------------------------------------------------- */
+.ui-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.ui-input-label {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--ui-ink-primary);
+}
+
+.ui-input-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  width: 100%;
+  border-radius: 14px;
+  background-color: var(--ui-bg-canvas);
+  border: 1.5px solid var(--ui-border-default);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ui-input-shell:focus-within {
+  border-color: var(--ui-accent-bg);
+  box-shadow: 0 0 0 3px var(--ui-ring-outer);
+}
+
+.ui-input-shell.is-invalid {
+  border-color: var(--ui-badge-danger-ink);
+}
+
+.ui-input-shell.is-disabled {
+  opacity: 0.6;
+  background-color: var(--ui-bg-subtle);
+}
+
+.ui-input-leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 14px;
+  color: var(--ui-ink-secondary);
+  flex-shrink: 0;
+}
+
+.ui-input-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink-primary);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  outline: none;
+}
+
+.ui-input-control:focus-visible {
+  outline: none;
+}
+
+.ui-input-control.has-leading {
+  padding-left: 10px;
+}
+
+.ui-input-control.has-clear {
+  padding-right: 4px;
+}
+
+.ui-input-control::placeholder {
+  color: var(--ui-ink-secondary);
+  opacity: 1;
+}
+
+.ui-input-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  color: var(--ui-ink-secondary);
+  background: transparent;
+  border: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.ui-input-clear-btn:hover {
+  color: var(--ui-ink-primary);
+  background-color: var(--ui-bg-subtle);
+}
+
+.ui-input-clear-btn:focus-visible {
+  outline: 2.5px solid var(--ui-focus-ring);
+  outline-offset: -3px;
+}
+
+.ui-input-clear-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background-color: var(--ui-bg-muted);
+  color: var(--ui-ink-primary);
+}
+
+.ui-input-helper {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ui-ink-secondary);
+}
+
+.ui-input-error {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ui-badge-danger-ink);
+}
+
+/* --------------------------------------------------------------------------
+   3. InlineOptionGroup (<= 5 direct options, ring-2 + check + bottom bar)
+   -------------------------------------------------------------------------- */
+.ui-inline-option-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.ui-inline-option-group--vertical {
+  flex-direction: column;
+}
+
+.ui-inline-option-btn {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background-color: var(--ui-bg-subtle);
+  color: var(--ui-ink-primary);
+  border: 1.5px solid var(--ui-border-subtle);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.14s ease;
+}
+
+.ui-inline-option-btn:not(:disabled):hover {
+  background-color: var(--ui-bg-muted);
+}
+
+.ui-inline-option-btn:focus-visible {
+  outline: 2.5px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.ui-inline-option-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ui-inline-option-btn.is-selected {
+  background-color: var(--ui-accent-bg);
+  color: var(--ui-accent-ink);
+  border: 2px solid var(--ui-accent-bg);
+  box-shadow: 0 0 0 2px var(--ui-focus-ring);
+}
+
+.ui-inline-option-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.ui-inline-option-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.ui-inline-option-btn.is-selected .ui-inline-option-main {
+  font-weight: 750;
+}
+
+.ui-inline-option-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background-color: var(--ui-accent-ink);
+  color: var(--ui-accent-bg);
+  flex-shrink: 0;
+}
+
+.ui-inline-option-desc {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ui-ink-secondary);
+}
+
+.ui-inline-option-btn.is-selected .ui-inline-option-desc {
+  color: var(--ui-accent-ink);
+  opacity: 0.9;
+}
+
+.ui-inline-option-bar {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: var(--ui-focus-ring);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   4. AsyncStateBoundary (Loading Skeleton/Spinner, Empty CTA, Error Retry)
+   -------------------------------------------------------------------------- */
+.ui-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 28px 20px;
+  border-radius: 20px;
+  background-color: var(--ui-bg-subtle);
+  border: 1.5px solid var(--ui-border-subtle);
+  color: var(--ui-ink-primary);
+}
+
+.ui-state-box--error {
+  background-color: var(--ui-badge-danger-bg);
+  border-color: var(--ui-badge-danger-border);
+  color: var(--ui-badge-danger-ink);
+}
+
+.ui-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  background-color: var(--ui-bg-canvas);
+  color: var(--ui-ink-primary);
+  border: 1px solid var(--ui-border-subtle);
+}
+
+.ui-state-box--error .ui-state-icon {
+  color: var(--ui-badge-danger-ink);
+  border-color: var(--ui-badge-danger-border);
+}
+
+.ui-state-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: inherit;
+}
+
+.ui-state-desc {
+  margin: 0;
+  max-width: 380px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ui-ink-secondary);
+}
+
+.ui-state-box--error .ui-state-desc {
+  color: var(--ui-badge-danger-ink);
+}
+
+.ui-state-actions {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ui-skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ui-skeleton-line {
+  position: relative;
+  overflow: hidden;
+  height: 18px;
+  border-radius: 10px;
+  background-color: var(--ui-skeleton-base);
+}
+
+.ui-skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--ui-skeleton-sheen), transparent);
+  animation: uiShimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes uiShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. AccessibleBadge (WCAG AA >= 4.5:1 Dark & Light)
+   -------------------------------------------------------------------------- */
+.ui-accessible-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-accessible-badge--md {
+  padding: 5px 12px;
+  font-size: 0.8125rem;
+}
+
+.ui-accessible-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: currentColor;
+  flex-shrink: 0;
+}
+
+.ui-accessible-badge--neutral {
+  background-color: var(--ui-badge-neutral-bg);
+  color: var(--ui-badge-neutral-ink);
+  border-color: var(--ui-badge-neutral-border);
+}
+
+.ui-accessible-badge--info {
+  background-color: var(--ui-badge-info-bg);
+  color: var(--ui-badge-info-ink);
+  border-color: var(--ui-badge-info-border);
+}
+
+.ui-accessible-badge--success {
+  background-color: var(--ui-badge-success-bg);
+  color: var(--ui-badge-success-ink);
+  border-color: var(--ui-badge-success-border);
+}
+
+.ui-accessible-badge--warning {
+  background-color: var(--ui-badge-warning-bg);
+  color: var(--ui-badge-warning-ink);
+  border-color: var(--ui-badge-warning-border);
+}
+
+.ui-accessible-badge--danger {
+  background-color: var(--ui-badge-danger-bg);
+  color: var(--ui-badge-danger-ink);
+  border-color: var(--ui-badge-danger-border);
+}
+
+.ui-accessible-badge--accent {
+  background-color: var(--ui-badge-accent-bg);
+  color: var(--ui-badge-accent-ink);
+  border-color: var(--ui-badge-accent-border);
+}

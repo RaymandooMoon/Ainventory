@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Camera, Check, FileText, ShieldCheck, Sparkles, UserCog, X } from 'lucide-react';
-import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
+import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
 import StudioGarmentImage from '../StudioGarmentImage.jsx';
+import { HeaderUtilityNav, PageHeaderNav } from '../ui/HeaderNav.tsx';
 import { apiFetch, formatKRW } from '../../utils/api.ts';
 import { localizeApiMessage, localizeGarmentName, tx } from '../../utils/i18n.ts';
 import {
@@ -21,66 +21,41 @@ function isDocumentEnglish(lang) {
 
 /**
  * Persistent Top-Right Utility Controls rendered on EVERY screen (`Closet`, `Outfits`, `Calendar`, `Stats`):
- * - 1-tap Profile / Photo Skin-Tone / Body Profile button (`#open-profile-studio-btn`) with live skin swatch
- * - Optional screen-specific action (e.g. `+` Add Garment on Closet, Reset on Outfits, `.ics` on Calendar)
- * - Persistent Account Settings button (`#open-account-settings-btn`) always anchored at the top-right corner
+ * - Optional screen-specific action (`extraActions`)
+ * - Optional theme toggle button
+ * - 1-tap Profile / Photo Skin-Tone / Body Profile button (`#open-profile-studio-btn`)
+ * - Persistent Account Settings button (`#open-account-settings-btn`)
  */
 export function TopRightUtilityActions({
   skinProfile,
   lang = 'ko',
   onOpenProfile,
   onOpenAccount,
+  theme,
+  onToggleTheme,
   extraActions = null,
 }) {
-  const swatchHex = skinProfile?.skinToneHex || '#DFBA9B';
   return (
-    <div className="hig-top-right-utility-group">
-      {extraActions}
-      <button
-        id="open-profile-studio-btn"
-        type="button"
-        className="hig-profile-quick-pill"
-        aria-label={tx(lang, '사진·피부톤·체형 설정 열기', 'Open Photo, Skin Tone & Body Profile')}
-        title={tx(lang, '사진 · 피부톤 · 체형 설정', 'Photo, Skin Tone & Body Profile')}
-        onClick={() => {
-          triggerHaptic('selection');
-          onOpenProfile?.('skin');
-        }}
-      >
-        <span
-          className="hig-profile-quick-swatch"
-          style={{ backgroundColor: swatchHex }}
-          aria-hidden="true"
-        />
-        <span>{tx(lang, '프로필', 'Profile')}</span>
-      </button>
-      <button
-        id={CARBON_DOM_CONTRACT.openAccountSettingsBtnId}
-        type="button"
-        className="hig-circle-icon-btn is-subtle"
-        aria-label={tx(lang, '계정 설정', 'Account Settings')}
-        title={tx(lang, '계정 설정', 'Account Settings')}
-        onClick={() => {
-          triggerHaptic('selection');
-          onOpenAccount?.();
-        }}
-      >
-        <UserCog size={18} />
-      </button>
-    </div>
+    <HeaderUtilityNav
+      skinProfile={skinProfile}
+      lang={lang}
+      onOpenProfile={onOpenProfile}
+      onOpenAccount={onOpenAccount}
+      theme={theme}
+      onToggleTheme={onToggleTheme}
+      extraActions={extraActions}
+    />
   );
 }
 
 export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
-    <header className="ui-page-header" style={{ marginBottom: 16 }}>
-      <div className="ui-page-header-text">
-        {eyebrow && <div className="hig-caption" style={{ marginBottom: 4 }}>{eyebrow}</div>}
-        <h1 className="hig-large-title">{title}</h1>
-        {subtitle && <p className="hig-caption" style={{ marginTop: 4 }}>{subtitle}</p>}
-      </div>
-      {actions && <div className="ui-page-header-actions">{actions}</div>}
-    </header>
+    <PageHeaderNav
+      eyebrow={eyebrow}
+      title={title}
+      subtitle={subtitle}
+      actions={actions}
+    />
   );
 }
 
