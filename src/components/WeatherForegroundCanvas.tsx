@@ -395,16 +395,19 @@ const WeatherForegroundCanvas = memo(function WeatherForegroundCanvas({
             }
           }
 
-          // Floor impact -> spawn elliptical water ripple
-          const floorY = height * (0.885 + (i % 5) * 0.014);
+          // Perspective ground deck impact (strictly y >= height * 0.78) -> spawn 4.5:1 water ripple
+          const minGroundY = height * 0.78;
+          const depthNorm = ((i * 7 + 3) % 16) / 15;
+          const floorY = Math.max(minGroundY, height * (0.785 + depthNorm * 0.175));
           if (drop.y >= floorY) {
-            if (floorRipples.length < 22 && Math.random() < 0.38) {
+            if (floorRipples.length < 26 && Math.random() < 0.44) {
+              const perspectiveScale = 0.74 + depthNorm * 0.52;
               floorRipples.push({
                 x: drop.x,
                 y: floorY,
-                rx: 2,
-                maxRx: 14 + Math.random() * 14,
-                alpha: isDark ? 0.46 : 0.42,
+                rx: 2.2,
+                maxRx: (13 + Math.random() * 15) * perspectiveScale,
+                alpha: isDark ? 0.52 : 0.46,
               });
             }
             drop.x = Math.random() * (width * 1.25) - width * 0.05;
@@ -458,22 +461,36 @@ const WeatherForegroundCanvas = memo(function WeatherForegroundCanvas({
           ctx.fill();
         }
 
-        // Update & draw floor water ripples
+        // Update & draw perspective ground-plane water ripples (y >= height * 0.78, rx : ry = 4.5 : 1)
+        const minRippleY = height * 0.78;
         for (let i = floorRipples.length - 1; i >= 0; i -= 1) {
           const rp = floorRipples[i];
-          rp.rx += 0.72 * frameScale;
+          rp.rx += 0.76 * frameScale;
           if (rp.rx >= rp.maxRx) {
             floorRipples.splice(i, 1);
             continue;
           }
+          const clampedY = Math.max(minRippleY, rp.y);
+          const ry = rp.rx / 4.5;
           const fade = 1 - rp.rx / rp.maxRx;
           ctx.strokeStyle = isDark
             ? `rgba(186, 230, 253, ${rp.alpha * fade})`
             : `rgba(51, 95, 148, ${rp.alpha * fade})`;
-          ctx.lineWidth = 1.05;
+          ctx.lineWidth = 1.1;
           ctx.beginPath();
-          ctx.ellipse(rp.x, rp.y, rp.rx, rp.rx * 0.28, 0, 0, Math.PI * 2);
+          ctx.ellipse(rp.x, clampedY, rp.rx, ry, 0, 0, Math.PI * 2);
           ctx.stroke();
+
+          if (rp.rx > 6.5) {
+            const innerRx = rp.rx * 0.54;
+            ctx.strokeStyle = isDark
+              ? `rgba(224, 242, 254, ${rp.alpha * fade * 0.42})`
+              : `rgba(71, 118, 176, ${rp.alpha * fade * 0.42})`;
+            ctx.lineWidth = 0.75;
+            ctx.beginPath();
+            ctx.ellipse(rp.x, clampedY, innerRx, innerRx / 4.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
       } else if (weather === 'coldwave') {
         // 1) Perimeter Frost Vignette

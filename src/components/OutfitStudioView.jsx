@@ -11,10 +11,12 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Search,
   Snowflake,
   Sun,
   Trash2,
   Wind,
+  X,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -355,6 +357,7 @@ export default function OutfitStudioView({
     preEquippedGarment ? mapGarmentToDefaultSubSlot(preEquippedGarment) : 'top'
   );
   const [seasonFilter, setSeasonFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [renderResult, setRenderResult] = useState(null);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
@@ -363,6 +366,10 @@ export default function OutfitStudioView({
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
   const ensuredSeedClosetsRef = useRef(new Set());
+  const desktopTitleInputRef = useRef(null);
+  const mobileTitleInputRef = useRef(null);
+  const desktopSearchInputRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
 
   const [cityKey, setCityKey] = useState('seoul');
   const [scenarioKey, setScenarioKey] = useState('live');
@@ -708,14 +715,43 @@ export default function OutfitStudioView({
     };
   }, [slots, theme]);
 
+  const totalWearableCount = useMemo(
+    () => garments.filter((g) => isWearableStudioGarment(g)).length,
+    [garments]
+  );
+
+  const rawSlotGarmentCount = useMemo(
+    () =>
+      garments.filter(
+        (g) => isWearableStudioGarment(g) && doesGarmentMatchSubSlot(g, activeSlotKey)
+      ).length,
+    [garments, activeSlotKey]
+  );
+
   const slotGarments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return garments.filter((g) => {
       if (!isWearableStudioGarment(g)) return false;
       if (!doesGarmentMatchSubSlot(g, activeSlotKey)) return false;
-      if (seasonFilter === 'all') return true;
-      return parseSeasons(g.seasons).includes(seasonFilter);
+      if (seasonFilter !== 'all' && !parseSeasons(g.seasons).includes(seasonFilter)) {
+        return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        g.name,
+        g.name_en,
+        localizeGarmentName(g.name, lang),
+        g.brand,
+        g.color_name,
+        g.subcategory,
+        g.fabric,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
     });
-  }, [garments, activeSlotKey, seasonFilter]);
+  }, [garments, activeSlotKey, seasonFilter, searchQuery, lang]);
 
   const equippedItems = useMemo(() => {
     return ALL_EQUIPPABLE_SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
@@ -1014,6 +1050,54 @@ export default function OutfitStudioView({
     }
   };
 
+  const handleNavigateToCloset = useCallback(() => {
+    setMobileSheetOpen(false);
+    triggerHaptic('selection');
+    const closetTabBtn =
+      typeof document !== 'undefined'
+        ? document.querySelector('[data-nav-tab="closet"]')
+        : null;
+    if (closetTabBtn && typeof closetTabBtn.click === 'function') {
+      closetTabBtn.click();
+    }
+  }, []);
+
+  const renderSlotSearchBar = (inputRef) => (
+    <div className="studio-slot-search-wrap studio-clearable-input-wrap">
+      <Search size={15} className="studio-slot-search-icon" aria-hidden="true" />
+      <input
+        ref={inputRef}
+        type="text"
+        data-outfit-garment-search="true"
+        className="hig-native-input studio-slot-search-input has-clear-btn"
+        placeholder={tx(
+          lang,
+          '의류 이름 · 브랜드 · 색상 검색',
+          'Search item, brand, color...'
+        )}
+        aria-label={tx(lang, '코디 의류 검색', 'Search garments in slot')}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        maxLength={60}
+      />
+      {searchQuery.length > 0 && (
+        <button
+          type="button"
+          data-clear-outfit-search="true"
+          className="studio-input-clear-btn"
+          aria-label={tx(lang, '검색어 전체 지우기', 'Clear search text')}
+          onClick={() => {
+            triggerHaptic('selection');
+            setSearchQuery('');
+            inputRef?.current?.focus?.();
+          }}
+        >
+          <X size={15} />
+        </button>
+      )}
+    </div>
+  );
+
   const renderSeasonFilterRail = () => (
     <div
       className="hig-pill-rail studio-season-filter-rail"
@@ -1034,7 +1118,8 @@ export default function OutfitStudioView({
               setSeasonFilter(s.key);
             }}
           >
-            {tx(lang, s.ko, s.en)}
+            {active && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
+            <span>{tx(lang, s.ko, s.en)}</span>
           </button>
         );
       })}
@@ -1083,6 +1168,7 @@ export default function OutfitStudioView({
                       setActiveSlotKey(sub.key);
                     }}
                   >
+                    {isSelected && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
                     <span>{lang === 'en' ? sub.labelEn : sub.labelKo}</span>
                     {equippedInSub && <span className="studio-slot-dot" />}
                   </button>
@@ -1125,10 +1211,69 @@ export default function OutfitStudioView({
     const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
     const showMaterialBadge =
       isAccessorySlotKey(activeSlotKey) || isJewelrySlotKey(activeSlotKey);
+    const hasFilterOrSearch =
+      seasonFilter !== 'all' || searchQuery.trim().length > 0;
+    const isFilterEmptyOnly = rawSlotGarmentCount > 0 && hasFilterOrSearch;
 
     return slotGarments.length === 0 ? (
-      <div className="studio-slot-empty-state">
-        {tx(lang, '조건에 맞는 의류가 없습니다.', 'No matching garments in this slot.')}
+      <div className="studio-slot-empty-state" data-slot-empty-state="true">
+        <p className="studio-slot-empty-title">
+          {isFilterEmptyOnly
+            ? tx(
+                lang,
+                '검색어 또는 계절 필터에 맞는 의류가 없습니다.',
+                'No garments match the current search or season filter.'
+              )
+            : totalWearableCount === 0
+              ? tx(
+                  lang,
+                  '아직 옷장에 등록된 의류가 없습니다.',
+                  'Your closet has no garments yet.'
+                )
+              : tx(
+                  lang,
+                  '이 카테고리에 선택 가능한 의류가 없습니다.',
+                  'No selectable garments in this category yet.'
+                )}
+        </p>
+        <p className="studio-slot-empty-desc">
+          {isFilterEmptyOnly
+            ? tx(
+                lang,
+                '필터를 초기화하면 이 카테고리의 전체 의류를 다시 확인할 수 있습니다.',
+                'Reset filters to view all garments available in this slot.'
+              )
+            : tx(
+                lang,
+                '옷장에서 의류 사진을 등록하면 4각도 AI 가상 피팅과 날씨 코디에 즉시 활용됩니다.',
+                'Add garments in your Closet to try them on across 4 angles and weather scenes.'
+              )}
+        </p>
+        {isFilterEmptyOnly ? (
+          <button
+            type="button"
+            data-reset-outfit-filters="true"
+            className="studio-empty-cta-btn"
+            onClick={() => {
+              triggerHaptic('selection');
+              setSeasonFilter('all');
+              setSearchQuery('');
+            }}
+          >
+            <RotateCcw size={14} />
+            <span>{tx(lang, '필터·검색 초기화', 'Reset Search & Filter')}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-empty-go-closet-btn="true"
+            className="studio-empty-cta-btn is-primary"
+            onClick={handleNavigateToCloset}
+          >
+            <Plus size={15} />
+            <span>{tx(lang, '옷장에서 의류 추가하기', 'Add Garments in Closet')}</span>
+          </button>
+        )}
       </div>
     ) : (
       <div className="studio-mini-inventory-grid">
@@ -1162,7 +1307,9 @@ export default function OutfitStudioView({
                   <span className="studio-opposite-side-badge">{oppositeBadgeLabel}</span>
                 )}
               </div>
-              <span className="hig-garment-name">{displayName}</span>
+              <span className="hig-garment-name" title={displayName}>
+                {displayName}
+              </span>
               {showMaterialBadge && item.fabric && (
                 <span className="studio-mini-material-tag">
                   {localizeMaterialLabel(item.fabric, lang)}
@@ -1472,19 +1619,40 @@ export default function OutfitStudioView({
 
           {renderSubTreePanel()}
 
+          {renderSlotSearchBar(desktopSearchInputRef)}
+
           {renderSeasonFilterRail()}
 
           <div className="studio-desktop-inventory-scroll">{renderSlotInventoryGrid(false)}</div>
 
           <form onSubmit={handleSaveOutfit} className="studio-save-bar">
-            <input
-              type="text"
-              className="hig-native-input"
-              placeholder={tx(lang, '코디 이름', 'Outfit Name')}
-              value={outfitTitle}
-              onChange={(e) => setOutfitTitle(e.target.value)}
-              maxLength={80}
-            />
+            <div className="studio-clearable-input-wrap">
+              <input
+                ref={desktopTitleInputRef}
+                type="text"
+                className="hig-native-input has-clear-btn"
+                placeholder={tx(lang, '코디 이름', 'Outfit Name')}
+                aria-label={tx(lang, '코디 이름', 'Outfit Name')}
+                value={outfitTitle}
+                onChange={(e) => setOutfitTitle(e.target.value)}
+                maxLength={80}
+              />
+              {outfitTitle.length > 0 && (
+                <button
+                  type="button"
+                  data-clear-outfit-title="true"
+                  className="studio-input-clear-btn"
+                  aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setOutfitTitle('');
+                    desktopTitleInputRef.current?.focus?.();
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
             <button
               id={CARBON_DOM_CONTRACT.studioSaveOutfitBtnId}
               type="submit"
@@ -1531,14 +1699,33 @@ export default function OutfitStudioView({
 
       {/* Mobile Save Bar */}
       <form onSubmit={handleSaveOutfit} className="studio-mobile-save-row">
-        <input
-          type="text"
-          className="hig-native-input"
-          placeholder={tx(lang, '코디 이름', 'Outfit Name')}
-          value={outfitTitle}
-          onChange={(e) => setOutfitTitle(e.target.value)}
-          maxLength={80}
-        />
+        <div className="studio-clearable-input-wrap">
+          <input
+            ref={mobileTitleInputRef}
+            type="text"
+            className="hig-native-input has-clear-btn"
+            placeholder={tx(lang, '코디 이름', 'Outfit Name')}
+            aria-label={tx(lang, '코디 이름', 'Outfit Name')}
+            value={outfitTitle}
+            onChange={(e) => setOutfitTitle(e.target.value)}
+            maxLength={80}
+          />
+          {outfitTitle.length > 0 && (
+            <button
+              type="button"
+              data-clear-outfit-title="true"
+              className="studio-input-clear-btn"
+              aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
+              onClick={() => {
+                triggerHaptic('selection');
+                setOutfitTitle('');
+                mobileTitleInputRef.current?.focus?.();
+              }}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
         <button
           type="submit"
           data-testid="mobile-save-outfit-btn"
@@ -1566,7 +1753,7 @@ export default function OutfitStudioView({
         })()}
         maxWidth={520}
       >
-        <div className="hig-pill-rail" style={{ marginBottom: 10 }}>
+        <div className="hig-pill-rail studio-sheet-slot-rail" style={{ marginBottom: 10 }}>
           {FITTING_SLOTS.map((slot) => (
             <button
               key={slot.key}
@@ -1574,11 +1761,15 @@ export default function OutfitStudioView({
               className={`hig-filter-pill ${activeParentTab === slot.key ? 'active' : ''}`}
               onClick={() => handleSelectTopFittingTab(slot.key)}
             >
-              {lang === 'en' ? slot.label : slot.labelKo}
+              {activeParentTab === slot.key && (
+                <Check size={12} strokeWidth={2.6} aria-hidden="true" />
+              )}
+              <span>{lang === 'en' ? slot.label : slot.labelKo}</span>
             </button>
           ))}
         </div>
         {renderSubTreePanel()}
+        <div style={{ marginBottom: 10 }}>{renderSlotSearchBar(mobileSearchInputRef)}</div>
         <div style={{ marginBottom: 14 }}>{renderSeasonFilterRail()}</div>
         {renderSlotInventoryGrid(true)}
       </ResponsiveSheetModal>

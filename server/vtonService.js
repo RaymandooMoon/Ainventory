@@ -237,7 +237,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v2-rgba-weather-pose';
+const CACHE_SCHEMA_VERSION = 'v3-clean-cutout-front45-ground';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1582,23 +1582,23 @@ function describeIsoCameraAngle(viewAngleDeg) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
-      return '45° Quarter-Front Right Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned 45° toward viewer-right so BOTH the front torso/face AND the viewer-left side depth plane are simultaneously visible on a flat #94A3B8 backdrop with zero floor plinth)';
+      return 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
     case 0:
-      return '0° Direct Front Isometric-Editorial View (18° gentle studio camera elevation; figure facing directly forward 0° with symmetrical front face, chest, waist, and front shoe vamps on a flat #94A3B8 backdrop with zero floor plinth)';
+      return 'Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.';
     case -45:
-      return '-45° Quarter-Front Left Isometric Turn-Based Simulation View (18° gentle studio camera elevation; figure turned -45° toward viewer-left so BOTH the front torso/face AND the viewer-right side depth plane are simultaneously visible on a flat #94A3B8 backdrop)';
+      return 'FRONT-FACING -45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to viewer-left for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
     case 90:
-      return '90° Strict Right-Facing Lateral Side Profile View (18° studio elevation; figure turned 90° sideways facing viewer-right, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a flat #94A3B8 backdrop)';
+      return 'Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.';
     case -90:
-      return '-90° Strict Left-Facing Lateral Side Profile View (18° studio elevation; figure turned -90° sideways facing viewer-left, clearly showing true anterior-posterior chest, abdomen, and glute depth contour, side ear/jawline profile, side sleeve drape, and side shoe profile on a flat #94A3B8 backdrop)';
+      return 'Strict -90-degree lateral side-profile full-body view. Model facing cleanly left showing exact side profile of face, garment silhouette, and shoes.';
     case 135:
-      return '135° Back-Quarter Right Isometric View (18° studio elevation; rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
+      return '135° Back-Quarter Right Isometric View (rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
     case -135:
-      return '-135° Back-Quarter Left Isometric View (18° studio elevation; rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
+      return '-135° Back-Quarter Left Isometric View (rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
     case 180:
-      return '180° Strict Full Rear Back View (18° studio elevation; figure facing 180° directly away from camera showing ONLY the back of the head/hair/neck, rear shoulders, center-back garment seams/vents/back pockets, calves, and shoe heels on a flat #94A3B8 backdrop — render ZERO front facial features)';
+      return 'Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring.';
     default:
-      return '45° Quarter-Front Right Isometric Turn-Based Simulation View on a flat #94A3B8 backdrop';
+      return 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
   }
 }
 
@@ -1711,22 +1711,22 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
   const cameraBlock = profile.turnaroundSheet
     ? [
         'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
-        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat, uniform solid neutral mid-slate gray (${CUTOUT_STAGE_HEX}, RGB 148,163,184) backdrop with ZERO gradients, ZERO floor plinths, ZERO cast shadows, ZERO horizon lines, and ZERO airborne rain/snow/dust particles in the background.`,
+        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO floor plinths, and ZERO airborne rain/snow/dust particles in the background.`,
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 4 quadrants, render EXACTLY ONE (1) solitary person centered horizontally in that quadrant. NEVER place two models side-by-side in a quadrant, NEVER duplicate or mirror a figure, NEVER render background extras or reflections, and NEVER generate a 1x4 or 2x4 multi-person lineup.',
         '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical compact head-to-toe scale (~78–84% quadrant height so open umbrellas, winter hats, and shoes have generous #94A3B8 margin on all four sides) in each of the 4 quadrants:',
-        '  * [Top-Left Quadrant — 0° Direct Front]: ONE solitary full-body person facing 0° straight toward the camera; symmetrical front garment fit, collar, torso, front trousers/skirt, and front shoe vamps.',
-        '  * [Top-Right Quadrant — 45° Quarter View]: ONE solitary full-body person turned 45° three-quarter front-right; simultaneous front + side depth across shoulders, sleeves, torso, and footwear.',
-        '  * [Bottom-Left Quadrant — 90° True Side Profile]: ONE solitary full-body person turned 90° lateral side profile facing right — MUST exhibit natural side cranium & head depth, full hair volume sweeping naturally across crown and back of head, and true lateral garment thickness, side seams, lapel/hood profile, and natural fabric folds.',
-        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: ONE solitary full-body person facing 180° directly away — showing ONLY the back of the head & hair, rear collar/yoke, center-back seams/vents/pockets, rear trouser drape, and shoe heels (render ZERO front facial features and ZERO second figure).',
+        '  * [Top-Left Quadrant — 0° Direct Front]: Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.',
+        '  * [Top-Right Quadrant — 45° Quarter View (STRICT FRONT-FACING)]: FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.',
+        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring (render ZERO front facial features and ZERO second figure).',
         '- Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
         'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
-        `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}.`,
+        `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
         '- Full-body poised stance framed 100% from the top of the open umbrella / headwear / hair down to the complete soles of the shoes (~80–85% frame height) with generous #94A3B8 margin on all sides (NEVER crop open umbrella canopy, head, hands, or feet).',
         '- For 90° lateral side views, ensure authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
-        `- CRITICAL RGBA CUTOUT BACKDROP RULE: Render the ENTIRE background behind and beneath the model as a 100% flat, uniform solid neutral mid-slate gray (${CUTOUT_STAGE_HEX}, RGB 148,163,184) with ZERO gradients, ZERO cast floor shadows, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
+        `- CRITICAL RGBA CUTOUT BACKDROP RULE: Render the ENTIRE background behind and beneath the model as a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
       ];
 
   return [

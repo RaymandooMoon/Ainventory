@@ -10,7 +10,7 @@ import {
 } from './avatarSpecStore.ts';
 import {
   applyCornerBfsCutoutOnCanvas,
-  ensureTransparentCutoutDataUrl,
+  ensureTransparentCutout,
   removeModelBackgroundToPng,
 } from './cutoutService.ts';
 import {
@@ -28,6 +28,8 @@ import {
   CUTOUT_PIPELINE_VERSION,
   CUTOUT_STAGE_BACKDROP_HEX,
   type EffectiveWeatherMode,
+  buildTurnaround2x2SheetAngleDirectives,
+  buildTurnaroundAnglePromptDirective,
   buildWeatherPosePromptDirectives,
   resolveEffectiveWeatherFromRaw,
 } from './weatherPromptBuilder.ts';
@@ -654,6 +656,17 @@ export function trackFlatLayComboVisit(comboKey: string): boolean {
   return wasSeen;
 }
 
+const verifiedTransparentCacheKeys = new Set<string>();
+
+function markCacheKeyTransparentVerified(cacheKey: string): void {
+  if (!cacheKey) return;
+  if (verifiedTransparentCacheKeys.size >= 512) {
+    const oldest = verifiedTransparentCacheKeys.values().next().value;
+    if (oldest) verifiedTransparentCacheKeys.delete(oldest);
+  }
+  verifiedTransparentCacheKeys.add(cacheKey);
+}
+
 function setL1Slice(entry: CachedAiVtonSlice): void {
   if (l1SliceCache.has(entry.cacheKey)) {
     l1SliceCache.delete(entry.cacheKey);
@@ -716,6 +729,15 @@ export async function readCachedAiVtonSlice(params: {
 }): Promise<{ slice: CachedAiVtonSlice; layer: 'memory' | 'indexeddb' } | null> {
   const mem = peekMemoryAiVtonSlice(params);
   if (mem) {
+    if (!verifiedTransparentCacheKeys.has(mem.cacheKey)) {
+      const verifiedUrl = await ensureTransparentCutout(mem.imageUrl);
+      markCacheKeyTransparentVerified(mem.cacheKey);
+      if (verifiedUrl && verifiedUrl !== mem.imageUrl) {
+        const upgradedMem: CachedAiVtonSlice = { ...mem, imageUrl: verifiedUrl };
+        await persistAiVtonSlices([upgradedMem]);
+        return { slice: upgradedMem, layer: 'memory' };
+      }
+    }
     return { slice: mem, layer: 'memory' };
   }
 
@@ -743,12 +765,14 @@ export async function readCachedAiVtonSlice(params: {
 
   if (!rawRecord) return null;
 
-  // Upgrade any non-PNG or opaque cached slice to RGBA transparent PNG without AI credit cost
-  if (!rawRecord.imageUrl.startsWith('data:image/png')) {
-    const upgradedUrl = await ensureTransparentCutoutDataUrl(rawRecord.imageUrl);
+  // Enforce 4-corner alpha verification guard (`(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)`)
+  // on ALL cached records (including PNGs that previously retained an opaque studio wall/floor).
+  const verifiedUrl = await ensureTransparentCutout(rawRecord.imageUrl);
+  markCacheKeyTransparentVerified(rawRecord.cacheKey);
+  if (verifiedUrl && verifiedUrl !== rawRecord.imageUrl) {
     const upgradedRec: CachedAiVtonSlice = {
       ...rawRecord,
-      imageUrl: upgradedUrl,
+      imageUrl: verifiedUrl,
     };
     await persistAiVtonSlices([upgradedRec]);
     return { slice: upgradedRec, layer: 'indexeddb' };
@@ -1169,22 +1193,17 @@ export async function sliceTurnaround2x2Sheet(
     };
   }
 
-  const preCutSheetUrl = await removeModelBackgroundToPng(sheetDataUrl);
-
-  return new Promise((resolve) => {
+  const rawCropped = await new Promise<Record<TurnaroundAngleDeg, string> | null>((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (!sheetDataUrl.startsWith('data:') && !sheetDataUrl.startsWith('blob:')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
         if (w < 32 || h < 32) {
-          resolve({
-            0: preCutSheetUrl,
-            45: preCutSheetUrl,
-            90: preCutSheetUrl,
-            180: preCutSheetUrl,
-          });
+          resolve(null);
           return;
         }
 
@@ -1232,7 +1251,7 @@ export async function sliceTurnaround2x2Sheet(
           cropCanvas.height = q.ch;
           const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) {
-            out[q.angle] = preCutSheetUrl;
+            out[q.angle] = sheetDataUrl;
             continue;
           }
           ctx.clearRect(0, 0, q.cw, q.ch);
@@ -1249,24 +1268,31 @@ export async function sliceTurnaround2x2Sheet(
         }
         resolve(out);
       } catch {
-        resolve({
-          0: preCutSheetUrl,
-          45: preCutSheetUrl,
-          90: preCutSheetUrl,
-          180: preCutSheetUrl,
-        });
+        resolve(null);
       }
     };
-    img.onerror = () => {
-      resolve({
-        0: preCutSheetUrl,
-        45: preCutSheetUrl,
-        90: preCutSheetUrl,
-        180: preCutSheetUrl,
-      });
-    };
-    img.src = preCutSheetUrl;
+    img.onerror = () => resolve(null);
+    img.src = sheetDataUrl;
   });
+
+  if (!rawCropped) {
+    const fallbackCut = await ensureTransparentCutout(sheetDataUrl);
+    return {
+      0: fallbackCut,
+      45: fallbackCut,
+      90: fallbackCut,
+      180: fallbackCut,
+    };
+  }
+
+  // Run 4-corner alpha verification guard across ALL 4 turnaround angles (0°, 45°, 90°, 180°)
+  const verifiedOut = {} as Record<TurnaroundAngleDeg, string>;
+  await Promise.all(
+    TURNAROUND_ANGLES.map(async (angle) => {
+      verifiedOut[angle] = await ensureTransparentCutout(rawCropped[angle]);
+    })
+  );
+  return verifiedOut;
 }
 
 export const CLIENT_GEMINI_API_KEY_STORAGE = 'ainventory_gemini_api_key';
@@ -1594,11 +1620,11 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat uniform solid ${CUTOUT_STAGE_BACKDROP_HEX} mid-slate gray backdrop, ZERO gradients, ZERO cast shadows, ZERO floor plinth, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit: TL=0° Front, TR=45° Quarter, BL=90° Side Profile, BR=180° Back. ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
-    : `Full-body studio portrait at ${angleDeg}° on 100% flat uniform solid ${CUTOUT_STAGE_BACKDROP_HEX} mid-slate gray backdrop, ZERO cast shadows, ZERO floor plinth, ZERO airborne weather particles, zero text. ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
+    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround2x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
+    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
-  const bodyLock = `Model: ${profile.heightCm}cm/${profile.weightKg}kg (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${weatherBundle.combinedPrompt}`;
+  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${weatherBundle.combinedPrompt}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
@@ -1607,7 +1633,7 @@ function buildDirectClientGeminiParts(params: {
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Quarter, and 90° Side Profile (and matching rear hair silhouette on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
+      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, FRONT-FACING 45° Quarter (face, both eyes, nose, chin 100% visible), and 90° Side Profile (and matching rear hair silhouette ONLY on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
   }
@@ -1654,7 +1680,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat uniform ${CUTOUT_STAGE_BACKDROP_HEX} backdrop (ZERO floor shadows, ZERO gradients, ZERO airborne rain/snow streaks in background). Strictly ONE solitary person per panel. Return image only.`,
+    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per panel. Return image only.`,
   });
 
   return parts;
@@ -2179,16 +2205,20 @@ export async function synthesizeGeminiMultiAngleVton(
         for (const a of TURNAROUND_ANGLES) {
           const rawCandidate = sanitizeImageCandidate(json.panelImages[String(a)]);
           if (rawCandidate) {
-            const candidate = await removeModelBackgroundToPng(rawCandidate);
+            const candidate = await ensureTransparentCutout(
+              await removeModelBackgroundToPng(rawCandidate)
+            );
+            const entryCacheKey = buildAiVtonCacheKey({
+              avatarConfigHash: profile.avatarConfigHash,
+              outfitComboId,
+              styleMode,
+              effectiveWeather,
+              angleDeg: a,
+            });
+            markCacheKeyTransparentVerified(entryCacheKey);
             angleSlices[a] = candidate;
             entriesToPersist.push({
-              cacheKey: buildAiVtonCacheKey({
-                avatarConfigHash: profile.avatarConfigHash,
-                outfitComboId,
-                styleMode,
-                effectiveWeather,
-                angleDeg: a,
-              }),
+              cacheKey: entryCacheKey,
               avatarConfigHash: profile.avatarConfigHash,
               outfitComboId,
               styleMode,
@@ -2208,16 +2238,20 @@ export async function synthesizeGeminiMultiAngleVton(
       } else if (rawComposite && isTurnaroundResponse) {
         const sliced = await sliceTurnaround2x2Sheet(rawComposite);
         for (const a of TURNAROUND_ANGLES) {
-          const sliceUrl = sliced[a] || (await removeModelBackgroundToPng(rawComposite));
+          const sliceUrl =
+            sliced[a] ||
+            (await ensureTransparentCutout(await removeModelBackgroundToPng(rawComposite)));
+          const entryCacheKey = buildAiVtonCacheKey({
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather,
+            angleDeg: a,
+          });
+          markCacheKeyTransparentVerified(entryCacheKey);
           angleSlices[a] = sliceUrl;
           entriesToPersist.push({
-            cacheKey: buildAiVtonCacheKey({
-              avatarConfigHash: profile.avatarConfigHash,
-              outfitComboId,
-              styleMode,
-              effectiveWeather,
-              angleDeg: a,
-            }),
+            cacheKey: entryCacheKey,
             avatarConfigHash: profile.avatarConfigHash,
             outfitComboId,
             styleMode,
@@ -2234,7 +2268,10 @@ export async function synthesizeGeminiMultiAngleVton(
           });
         }
       } else if (rawComposite) {
-        const cutoutComposite = await removeModelBackgroundToPng(rawComposite);
+        const cutoutComposite = await ensureTransparentCutout(
+          await removeModelBackgroundToPng(rawComposite)
+        );
+        markCacheKeyTransparentVerified(cacheKey);
         angleSlices[angleDeg] = cutoutComposite;
         entriesToPersist.push({
           cacheKey,

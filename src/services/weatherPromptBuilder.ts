@@ -18,7 +18,7 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v2-rgba-weather-pose';
+export const CUTOUT_PIPELINE_VERSION = 'v3-clean-cutout-front45-ground';
 export const CUTOUT_STAGE_BACKDROP_HEX = '#94A3B8';
 
 export function resolveEffectiveWeather(
@@ -279,8 +279,31 @@ export interface WeatherPosePromptDirectives {
   combinedPromptBlock: string;
 }
 
-const CUTOUT_BACKDROP_DIRECTIVE =
-  'CRITICAL RGBA CUTOUT BACKDROP RULE (MANDATORY): Render the ENTIRE background behind and beneath the model as a 100% flat, uniform, solid neutral mid-slate gray (#94A3B8, RGB 148,163,184) studio backdrop from edge to edge with ZERO gradients, ZERO horizon lines, ZERO props, ZERO cast floor shadows, ZERO drop shadows, ZERO vignette, ZERO checkerboard pixels, and ZERO airborne rain/snow/mist/dust particles in the background air (all falling weather particles are rendered on a separate HTML5 Canvas foreground layer). Keep crisp, high-contrast edge separation between the #94A3B8 backdrop and both pure white garments/snow (#FFFFFF) and black coats/hats (#111111).';
+export const CUTOUT_BACKDROP_DIRECTIVE =
+  'CRITICAL RGBA CUTOUT BACKDROP RULE (MANDATORY): Render the ENTIRE background behind and beneath the model as a 100% flat solid uniform chromakey-free neutral mid-slate (#94A3B8) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO props, ZERO drop shadows, ZERO checkerboard pixels, and ZERO airborne rain/snow/mist/dust particles in the background air (all falling weather particles are rendered on a separate HTML5 Canvas foreground layer). Keep crisp, high-contrast edge separation between the #94A3B8 backdrop and both pure white garments/snow (#FFFFFF) and black coats/hats (#111111).';
+
+export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<0 | 45 | 90 | 180, string> = {
+  0: 'Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.',
+  45: 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].',
+  90: 'Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.',
+  180: 'Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring.',
+};
+
+export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
+  if (angleDeg === 0) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[0];
+  if (angleDeg === 90 || angleDeg === -90) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[90];
+  if (angleDeg === 180 || angleDeg === -180) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[180];
+  return CANONICAL_ANGLE_PROMPT_DIRECTIVES[45];
+}
+
+export function buildTurnaround2x2SheetAngleDirectives(): string {
+  return [
+    `  * [Top-Left Quadrant — 0° Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
+    `  * [Top-Right Quadrant — 45° Quarter (STRICT FRONT-FACING)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
+    `  * [Bottom-Left Quadrant — 90° Side Profile]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
+    `  * [Bottom-Right Quadrant — 180° Rear Back]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
+  ].join('\n');
+}
 
 export function buildWeatherPosePromptDirectives(
   params:

@@ -844,6 +844,59 @@
   color: var(--ink-secondary);
 }
 
+/* Step-by-Step Loading Progress Pill during AI VTON Synthesis */
+.studio-vton-step-status {
+  position: absolute;
+  top: 52px;
+  left: 58px;
+  right: 12px;
+  width: fit-content;
+  max-width: calc(100% - 70px);
+  margin-inline: auto;
+  z-index: 59;
+  height: 28px;
+  padding: 0 11px 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-dense);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--elevation-sm);
+  backdrop-filter: var(--vibrancy-filter-subtle);
+  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  color: var(--ink-primary);
+  font-size: 0.65rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.studio-2d-vton-viewer[data-equipped-count='0'] .studio-vton-step-status {
+  left: 12px;
+  max-width: calc(100% - 24px);
+}
+
+.studio-vton-step-badge {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-size: 0.58rem;
+  font-weight: 760;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.studio-vton-step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .studio-vton-status-toast {
   position: absolute;
   top: 52px;
@@ -853,21 +906,21 @@
   max-width: calc(100% - 70px);
   margin-inline: auto;
   z-index: 58;
-  padding: 6px 11px;
-  border-radius: 16px;
+  padding: 9px 12px;
+  border-radius: 18px;
   background: var(--glass-bg-dense);
   border: 1px solid var(--glass-border);
   box-shadow: var(--elevation-md);
   backdrop-filter: var(--vibrancy-filter-subtle);
   -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
   color: var(--ink-primary);
-  font-size: 0.66rem;
+  font-size: 0.69rem;
   font-weight: 650;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  cursor: default;
   box-sizing: border-box;
 }
 
@@ -876,45 +929,87 @@
   max-width: calc(100% - 24px);
 }
 
+.studio-vton-toast-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+
 .studio-vton-toast-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
   border-radius: var(--radius-pill);
-  background: var(--accent-mono);
+  background: var(--danger-ink, #d70015);
   flex-shrink: 0;
 }
 
 .studio-vton-toast-text {
-  line-height: 1.3;
-  flex: 1 1 130px;
+  line-height: 1.4;
+  flex: 1 1 auto;
   min-width: 0;
+  color: var(--ink-primary);
 }
 
-.studio-vton-toast-actions {
+.studio-vton-toast-dismiss {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px -4px 2px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-left: auto;
+  justify-content: center;
   flex-shrink: 0;
 }
 
+.studio-vton-toast-dismiss::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.studio-vton-toast-dismiss:hover {
+  background: var(--accent-soft-bg);
+  color: var(--ink-primary);
+}
+
+.studio-vton-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .studio-vton-toast-action {
-  height: 22px;
-  padding: 0 8px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
-  background: var(--accent-mono);
-  color: var(--accent-mono-ink);
-  font-size: 0.61rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border-hover);
+  color: var(--ink-primary);
+  font-size: 0.68rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 5px;
   white-space: nowrap;
-  transition: transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease);
+  transition: transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease),
+    background-color 0.16s var(--spring-ease);
+}
+
+.studio-vton-toast-action.is-primary-retry {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+  box-shadow: var(--elevation-xs);
 }
 
 .studio-vton-toast-action:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .studio-vton-toast-action:active {
@@ -2156,4 +2251,789 @@
   background: var(--squircle-border);
   margin: 0 2px;
 }
+
+/* ==========================================================================
+   10. PERSPECTIVE GROUND DECK & REAL-TIME WET MIRROR REFLECTION (z-index: 10)
+   ========================================================================== */
+.studio-stage-ground-deck {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Bottom 22% Perspective Studio / Street Ground Plane (Horizon at 78% height) */
+.studio-ground-plane-surface {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 78%;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.studio-ground-horizon-line {
+  position: absolute;
+  left: -4%;
+  right: -4%;
+  top: 0;
+  height: 1.5px;
+  pointer-events: none;
+}
+
+.studio-ground-perspective-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 10A. Default Luxury Runway Studio Matte-Satin Floor (Clear, Cloudy, Wind, Heatwave, Live) */
+.studio-stage-ground-deck.is-runway-studio .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(203, 213, 225, 0.28) 0%,
+    rgba(226, 232, 240, 0.52) 48%,
+    rgba(203, 213, 225, 0.68) 100%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-runway-studio .studio-ground-plane-surface,
+.studio-stage-ground-deck.is-runway-studio.is-theme-dark .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.52) 0%,
+    rgba(15, 23, 42, 0.78) 48%,
+    rgba(2, 6, 23, 0.94) 100%
+  );
+}
+
+.studio-stage-ground-deck.is-runway-studio .studio-ground-horizon-line {
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(100, 116, 139, 0.24) 24%,
+    rgba(100, 116, 139, 0.38) 50%,
+    rgba(100, 116, 139, 0.24) 76%,
+    transparent 98%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-runway-studio .studio-ground-horizon-line,
+.studio-stage-ground-deck.is-runway-studio.is-theme-dark .studio-ground-horizon-line {
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(148, 163, 184, 0.16) 24%,
+    rgba(226, 232, 240, 0.28) 50%,
+    rgba(148, 163, 184, 0.16) 76%,
+    transparent 98%
+  );
+}
+
+.studio-stage-ground-deck.is-runway-studio .studio-ground-perspective-sheen {
+  background: radial-gradient(
+    ellipse 68% 58% at 50% 8%,
+    rgba(255, 255, 255, 0.44) 0%,
+    transparent 74%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-runway-studio .studio-ground-perspective-sheen,
+.studio-stage-ground-deck.is-runway-studio.is-theme-dark .studio-ground-perspective-sheen {
+  background: radial-gradient(
+    ellipse 68% 58% at 50% 8%,
+    rgba(148, 163, 184, 0.12) 0%,
+    transparent 74%
+  );
+}
+
+/* 10B. Rain Mode: Wet Dark Asphalt / Slate Reflective Pavement + Real-Time Mirror Reflection */
+.studio-stage-ground-deck.is-wet-pavement .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.46) 0%,
+    rgba(100, 116, 139, 0.58) 46%,
+    rgba(71, 85, 105, 0.72) 100%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-wet-pavement .studio-ground-plane-surface,
+.studio-stage-ground-deck.is-wet-pavement.is-theme-dark .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.86) 0%,
+    rgba(15, 23, 42, 0.94) 44%,
+    rgba(2, 6, 23, 0.99) 100%
+  );
+}
+
+.studio-stage-ground-deck.is-wet-pavement .studio-ground-horizon-line {
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(186, 230, 253, 0.45) 22%,
+    rgba(224, 242, 254, 0.78) 50%,
+    rgba(186, 230, 253, 0.45) 78%,
+    transparent 98%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-wet-pavement .studio-ground-horizon-line,
+.studio-stage-ground-deck.is-wet-pavement.is-theme-dark .studio-ground-horizon-line {
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(96, 165, 250, 0.28) 22%,
+    rgba(186, 230, 253, 0.52) 50%,
+    rgba(96, 165, 250, 0.28) 78%,
+    transparent 98%
+  );
+}
+
+.studio-stage-ground-deck.is-wet-pavement .studio-ground-perspective-sheen {
+  background: radial-gradient(
+    ellipse 78% 64% at 52% 14%,
+    rgba(186, 230, 253, 0.28) 0%,
+    rgba(148, 163, 184, 0.1) 52%,
+    transparent 82%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-wet-pavement .studio-ground-perspective-sheen,
+.studio-stage-ground-deck.is-wet-pavement.is-theme-dark .studio-ground-perspective-sheen {
+  background: radial-gradient(
+    ellipse 78% 64% at 52% 14%,
+    rgba(96, 165, 250, 0.18) 0%,
+    rgba(30, 58, 138, 0.08) 54%,
+    transparent 82%
+  );
+}
+
+.studio-ground-wet-streaks {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.12) 0px,
+      rgba(255, 255, 255, 0.02) 2px,
+      transparent 7px
+    );
+  pointer-events: none;
+}
+
+[data-theme='dark'] .studio-ground-wet-streaks {
+  opacity: 0.34;
+  background-image:
+    repeating-linear-gradient(
+      180deg,
+      rgba(148, 197, 255, 0.12) 0px,
+      rgba(148, 197, 255, 0.02) 2px,
+      transparent 8px
+    );
+}
+
+/* Upside-Down Real-Time Wet Mirror Reflection of Cutout Model Boots & Hem */
+.studio-ground-wet-reflection-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  clip-path: inset(78% 0 0 0);
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 77.5%,
+    rgba(0, 0, 0, 0.88) 80.5%,
+    rgba(0, 0, 0, 0.42) 89%,
+    transparent 98.5%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 77.5%,
+    rgba(0, 0, 0, 0.88) 80.5%,
+    rgba(0, 0, 0, 0.42) 89%,
+    transparent 98.5%
+  );
+}
+
+.studio-ground-wet-reflection-box {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 44px 12px 86px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.studio-stage-ground-deck.has-left-rail .studio-ground-wet-reflection-box {
+  padding-left: 60px;
+}
+
+@media (max-width: 1060px) {
+  .studio-ground-wet-reflection-box {
+    padding: 48px 10px 86px;
+  }
+
+  .studio-stage-ground-deck.has-left-rail .studio-ground-wet-reflection-box {
+    padding-left: 54px;
+  }
+}
+
+.studio-ground-wet-reflection-camera {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.studio-wet-mirror-reflection-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  transform-origin: 50% 96.5%;
+  transform: scaleY(-0.32);
+  filter: blur(4px) saturate(0.86) brightness(0.84);
+  opacity: 0.46;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+[data-theme='dark'] .studio-wet-mirror-reflection-img,
+.studio-stage-ground-deck.is-theme-dark .studio-wet-mirror-reflection-img {
+  filter: blur(4px) saturate(0.9) brightness(0.92);
+  opacity: 0.56;
+}
+
+/* 10C. Coldwave / Snow Mode: Frosted Ice Glaze & Accumulated Fine Snowpack Deck */
+.studio-stage-ground-deck.is-frost-snow .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(224, 242, 254, 0.72) 0%,
+    rgba(240, 249, 255, 0.88) 46%,
+    rgba(219, 234, 254, 0.94) 100%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-frost-snow .studio-ground-plane-surface,
+.studio-stage-ground-deck.is-frost-snow.is-theme-dark .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(51, 65, 85, 0.72) 0%,
+    rgba(30, 41, 59, 0.88) 48%,
+    rgba(15, 23, 42, 0.96) 100%
+  );
+}
+
+.studio-stage-ground-deck.is-frost-snow .studio-ground-horizon-line {
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(125, 211, 252, 0.48) 24%,
+    rgba(255, 255, 255, 0.92) 50%,
+    rgba(125, 211, 252, 0.48) 76%,
+    transparent 98%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-frost-snow .studio-ground-horizon-line,
+.studio-stage-ground-deck.is-frost-snow.is-theme-dark .studio-ground-horizon-line {
+  background: linear-gradient(
+    90deg,
+    transparent 2%,
+    rgba(125, 211, 252, 0.34) 24%,
+    rgba(224, 242, 254, 0.68) 50%,
+    rgba(125, 211, 252, 0.34) 76%,
+    transparent 98%
+  );
+}
+
+.studio-ground-frost-glaze {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 72% 48% at 50% 18%, rgba(255, 255, 255, 0.62) 0%, transparent 72%),
+    radial-gradient(ellipse 46% 24% at 32% 62%, rgba(186, 230, 253, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+[data-theme='dark'] .studio-ground-frost-glaze,
+.studio-stage-ground-deck.is-theme-dark .studio-ground-frost-glaze {
+  background:
+    radial-gradient(ellipse 72% 48% at 50% 18%, rgba(186, 230, 253, 0.22) 0%, transparent 72%),
+    radial-gradient(ellipse 46% 24% at 64% 58%, rgba(125, 211, 252, 0.14) 0%, transparent 70%);
+}
+
+/* 10D. Grounded Contact AO Shadow beneath Model Shoes */
+.studio-ground-contact-ao-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  width: min(54%, 212px);
+  height: 28px;
+  margin-left: calc(min(54%, 212px) * -0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(15, 23, 42, 0.32) 0%,
+    rgba(15, 23, 42, 0.14) 46%,
+    rgba(15, 23, 42, 0) 76%
+  );
+  filter: blur(3.5px);
+  transform-origin: 50% 50%;
+}
+
+.studio-stage-ground-deck.has-left-rail .studio-ground-contact-ao-shadow {
+  left: calc(50% + 24px);
+}
+
+.studio-stage-ground-deck.is-wet-pavement .studio-ground-contact-ao-shadow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(2, 6, 23, 0.52) 0%,
+    rgba(15, 23, 42, 0.24) 48%,
+    rgba(15, 23, 42, 0) 78%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-wet-pavement .studio-ground-contact-ao-shadow,
+.studio-stage-ground-deck.is-wet-pavement.is-theme-dark .studio-ground-contact-ao-shadow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.86) 0%,
+    rgba(2, 6, 23, 0.48) 50%,
+    rgba(0, 0, 0, 0) 80%
+  );
+}
+
+.studio-stage-ground-deck.is-frost-snow .studio-ground-contact-ao-shadow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(51, 65, 85, 0.34) 0%,
+    rgba(100, 116, 139, 0.16) 48%,
+    rgba(100, 116, 139, 0) 76%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.is-frost-snow .studio-ground-contact-ao-shadow,
+.studio-stage-ground-deck.is-frost-snow.is-theme-dark .studio-ground-contact-ao-shadow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(2, 6, 23, 0.76) 0%,
+    rgba(15, 23, 42, 0.36) 50%,
+    rgba(0, 0, 0, 0) 78%
+  );
+}
+
+/* ==========================================================================
+   11. CLEARABLE TEXT INPUTS, GARMENT SEARCH BAR & EMPTY STATE CTA
+   ========================================================================== */
+.studio-clearable-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.studio-clearable-input-wrap .hig-native-input.has-clear-btn {
+  min-height: 46px;
+  height: 46px;
+  padding-right: 42px;
+}
+
+.studio-clearable-input-wrap.is-compact .studio-vton-key-input.has-clear-btn {
+  min-height: 38px;
+  height: 38px;
+  padding-right: 36px;
+}
+
+.studio-slot-search-wrap {
+  margin: 2px 0 4px;
+}
+
+.studio-slot-search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-secondary);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.studio-slot-search-input {
+  padding-left: 38px !important;
+}
+
+.studio-input-clear-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  transition: background-color 0.16s var(--spring-ease), color 0.16s var(--spring-ease),
+    transform 0.14s var(--spring-ease);
+}
+
+/* Expand touch hit box to full 48x48dp */
+.studio-input-clear-btn::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
+
+.studio-input-clear-btn.is-compact {
+  width: 30px;
+  height: 30px;
+  right: 3px;
+}
+
+.studio-input-clear-btn:hover {
+  background: var(--accent-soft-bg);
+  color: var(--ink-primary);
+}
+
+.studio-input-clear-btn:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.studio-slot-empty-state {
+  padding: 26px 18px;
+  border-radius: 18px;
+  background: var(--accent-soft-bg);
+  border: 1px dashed var(--squircle-border-hover);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.studio-slot-empty-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-primary);
+}
+
+.studio-slot-empty-desc {
+  margin: 0;
+  max-width: 280px;
+  font-size: 0.76rem;
+  font-weight: 540;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+}
+
+.studio-empty-cta-btn {
+  margin-top: 4px;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--squircle-border-hover);
+  color: var(--ink-primary);
+  font-size: 0.8rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: var(--elevation-xs);
+  transition: transform 0.18s var(--spring-ease), box-shadow 0.18s var(--spring-ease);
+}
+
+.studio-empty-cta-btn.is-primary {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border-color: transparent;
+}
+
+.studio-empty-cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-sm);
+}
+
+.studio-empty-cta-btn:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================================
+   12. /OUTFITS TOUCH HIT TARGETS (44-48DP), 8PX SPACING, MORPHOLOGICAL ACTIVE
+       INDICATORS (RING-2 + UNDERLINE/CHECK), & 2-LINE HIGH-CONTRAST ITEM NAMES
+   ========================================================================== */
+.hig-outfits-screen .studio-vton-mode-rail {
+  left: 8px;
+  right: 8px;
+  bottom: 56px;
+  gap: 8px;
+  justify-content: safe center;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 4px 4px;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+
+.hig-outfits-screen .studio-vton-mode-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.hig-outfits-screen .studio-vton-segmented-pill,
+.hig-outfits-screen .studio-vton-angle-pills {
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 3px;
+}
+
+.hig-outfits-screen .studio-vton-seg-btn,
+.hig-outfits-screen .studio-vton-angle-pill {
+  position: relative;
+  min-height: 38px;
+  height: 38px;
+  padding: 0 10px;
+  font-size: 0.68rem;
+  font-weight: 680;
+  border: 1.5px solid transparent;
+}
+
+/* Invisible touch target expansion ensuring >= 46px vertical & >= 44px horizontal hit area */
+.hig-outfits-screen .studio-vton-seg-btn::before,
+.hig-outfits-screen .studio-vton-angle-pill::before {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+
+.hig-outfits-screen .studio-vton-angle-pill {
+  min-width: 40px;
+  padding: 0 8px;
+}
+
+/* Morphological Active Indicator: Ring-2 + Bottom Indicator Bar (not color alone) */
+.hig-outfits-screen .studio-vton-seg-btn.is-active,
+.hig-outfits-screen .studio-vton-angle-pill.is-active {
+  font-weight: 760;
+  border-color: var(--accent-mono-ink);
+  box-shadow: 0 0 0 2px var(--ink-primary);
+}
+
+.hig-outfits-screen .studio-vton-angle-pill.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 12px;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+@media (max-width: 1060px) {
+  .hig-outfits-screen .studio-vton-mode-rail {
+    bottom: 52px;
+    gap: 8px;
+  }
+
+  .hig-outfits-screen .studio-vton-seg-btn,
+  .hig-outfits-screen .studio-vton-angle-pill {
+    min-height: 38px;
+    height: 38px;
+    padding: 0 9px;
+    font-size: 0.65rem;
+  }
+
+  .hig-outfits-screen .studio-vton-angle-pill {
+    min-width: 38px;
+    padding: 0 7px;
+  }
+}
+
+/* Top Stage HUD & Bottom Tone Dock 44px+ Hit Targets (Zero Horizontal Neighbor Overlap) */
+@media (min-width: 1061px) {
+  .hig-outfits-screen .studio-vton-zoom-btn,
+  .hig-outfits-screen .studio-iso-rotate-btn {
+    position: relative;
+    min-width: 36px;
+    min-height: 38px;
+  }
+
+  .hig-outfits-screen .studio-vton-compare-btn,
+  .hig-outfits-screen .studio-vton-history-pill-btn,
+  .hig-outfits-screen .studio-2d-vton-viewer .studio-body-pill-btn {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 1060px) {
+  .hig-outfits-screen .studio-vton-zoom-btn,
+  .hig-outfits-screen .studio-iso-rotate-btn {
+    position: relative;
+    min-width: 24px;
+    min-height: 34px;
+    padding: 0 4px;
+  }
+
+  .hig-outfits-screen .studio-vton-compare-btn,
+  .hig-outfits-screen .studio-vton-history-pill-btn,
+  .hig-outfits-screen .studio-2d-vton-viewer .studio-body-pill-btn {
+    position: relative;
+    min-height: 36px;
+  }
+}
+
+.hig-outfits-screen .studio-vton-zoom-btn::after,
+.hig-outfits-screen .studio-iso-rotate-btn::after,
+.hig-outfits-screen .studio-vton-compare-btn::after,
+.hig-outfits-screen .studio-vton-history-pill-btn::after,
+.hig-outfits-screen .studio-2d-vton-viewer .studio-body-pill-btn::after {
+  content: '';
+  position: absolute;
+  inset: -5px 0;
+}
+
+.hig-outfits-screen .studio-2d-vton-viewer .studio-tone-analyze-btn {
+  position: relative;
+  min-height: 36px;
+}
+
+.hig-outfits-screen .studio-2d-vton-viewer .studio-tone-analyze-btn::after {
+  content: '';
+  position: absolute;
+  inset: -5px 0;
+}
+
+/* Weather Chips, Category/Slot Tabs, Sub-Slot Chips & Season Filter Chips: 44px Hit Area + 8px Gap + Ring-2 Active */
+.hig-outfits-screen .weather-scenario-rail,
+.hig-outfits-screen .studio-slot-tabs,
+.hig-outfits-screen .studio-season-filter-rail,
+.hig-outfits-screen .studio-mobile-slot-bar,
+.hig-outfits-screen .studio-subtree-pills,
+.hig-outfits-screen .weather-look-pills,
+.hig-outfits-screen .weather-location-controls,
+.studio-sheet-slot-rail,
+.ui-sheet-box .studio-season-filter-rail,
+.ui-sheet-box .studio-subtree-pills {
+  gap: 8px;
+}
+
+.hig-outfits-screen .weather-scenario-rail .hig-filter-pill,
+.hig-outfits-screen .studio-slot-tabs .hig-filter-pill,
+.hig-outfits-screen .studio-season-filter-rail .hig-filter-pill,
+.hig-outfits-screen .studio-mobile-slot-pill,
+.studio-sheet-slot-rail .hig-filter-pill,
+.ui-sheet-box .studio-season-filter-rail .hig-filter-pill {
+  min-height: 44px;
+  padding: 0 15px;
+  font-size: 0.81rem;
+  border-width: 1.5px;
+}
+
+.hig-outfits-screen .studio-subtree-pill,
+.ui-sheet-box .studio-subtree-pill {
+  min-height: 44px;
+  padding: 0 13px;
+  font-size: 0.76rem;
+  border-width: 1.5px;
+}
+
+.hig-outfits-screen .weather-look-pill {
+  min-height: 40px;
+  height: 40px;
+  padding: 0 13px;
+}
+
+.hig-outfits-screen .weather-city-select {
+  min-height: 44px;
+  height: 44px;
+  padding: 0 14px;
+}
+
+.hig-outfits-screen .weather-icon-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.hig-outfits-screen .studio-save-submit {
+  min-height: 46px;
+}
+
+/* Morphological Selection Ring (`ring-2`) + Strong Contrast on Active Filter/Weather/Slot Pills */
+.hig-outfits-screen .weather-scenario-rail .hig-filter-pill.active,
+.hig-outfits-screen .studio-slot-tabs .hig-filter-pill.active,
+.hig-outfits-screen .studio-season-filter-rail .hig-filter-pill.active,
+.hig-outfits-screen .studio-mobile-slot-pill.active,
+.hig-outfits-screen .studio-subtree-pill.active,
+.hig-outfits-screen .weather-look-pill.is-selected,
+.studio-sheet-slot-rail .hig-filter-pill.active,
+.ui-sheet-box .studio-season-filter-rail .hig-filter-pill.active,
+.ui-sheet-box .studio-subtree-pill.active {
+  font-weight: 740;
+  border-color: var(--bg-elevated);
+  box-shadow: 0 0 0 2px var(--ink-primary), var(--elevation-xs);
+}
+
+.hig-outfits-screen .weather-scenario-rail .hig-filter-pill.active {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+
+.hig-outfits-screen .studio-mini-garment-card.is-equipped .studio-mini-squircle,
+.ui-sheet-box .studio-mini-garment-card.is-equipped .studio-mini-squircle {
+  border-width: 2px;
+  border-color: var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--accent-soft-bg), var(--elevation-xs);
+}
+
+/* Right-Side & Mobile Sheet Garment Grid Item Names: 2-Line Clamp, Line-Height 1.45, >= 4.5:1 Contrast */
+.hig-outfits-screen .studio-mini-garment-card .hig-garment-name,
+.ui-sheet-box .studio-mini-garment-card .hig-garment-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-size: 0.83rem;
+  font-weight: 650;
+  line-height: 1.45;
+  min-height: calc(2 * 1.45em);
+  color: var(--ink-primary);
+}
+
+.hig-outfits-screen .studio-mini-material-tag,
+.ui-sheet-box .studio-mini-material-tag {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
 

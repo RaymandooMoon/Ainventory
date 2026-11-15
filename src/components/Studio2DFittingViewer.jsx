@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
   Columns2,
   ExternalLink,
   History,
@@ -52,6 +53,7 @@ import {
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName, tr } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
+import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import WeatherForegroundCanvas from './WeatherForegroundCanvas.tsx';
 import './Studio2DFittingViewer.css';
@@ -342,8 +344,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [styleMode, setStyleMode] = useState('photorealistic');
   const [aiState, setAiState] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [loadingStepIdx, setLoadingStepIdx] = useState(0);
   const [statusToast, setStatusToast] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
+
+  useEffect(() => {
+    if (!aiLoading) {
+      setLoadingStepIdx(0);
+      return undefined;
+    }
+    setLoadingStepIdx(0);
+    const step2Timer = setTimeout(() => setLoadingStepIdx(1), 1400);
+    const step3Timer = setTimeout(() => setLoadingStepIdx(2), 3600);
+    return () => {
+      clearTimeout(step2Timer);
+      clearTimeout(step3Timer);
+    };
+  }, [aiLoading]);
   const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(() =>
     isDemoVtonShowcaseActive()
   );
@@ -1210,11 +1227,48 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       <div aria-hidden="true" className="studio-25d-keylight" />
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
 
-      {/* Top Synthesis Progress Line during Gemini AI VTON Generation */}
+      {/* Layer 1A (z-10): Perspective Ground Horizon Deck + Real-Time Wet Mirror Reflection + Contact AO Shadow */}
+      <StageGroundDeck
+        effectiveWeather={effectiveWeather}
+        theme={resolvedTheme}
+        modelImageUrl={resolvedAiImageUrl}
+        stageMode={stageMode}
+        equippedCount={equippedCount}
+        zoom={zoom}
+        pan={pan}
+        compareActive={effectiveCompareActive}
+        compareSplitPct={compareSplitPct}
+      />
+
+      {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
       {aiLoading && (
-        <div aria-hidden="true" className="studio-vton-progress-track">
-          <div className="studio-vton-progress-fill is-indeterminate" />
-        </div>
+        <>
+          <div aria-hidden="true" className="studio-vton-progress-track">
+            <div className="studio-vton-progress-fill is-indeterminate" />
+          </div>
+          <div
+            className="studio-vton-step-status tabular-nums"
+            data-vton-loading-steps="true"
+            data-loading-step={loadingStepIdx + 1}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="studio-vton-step-badge">{loadingStepIdx + 1}/3</span>
+            <span className="studio-vton-step-label">
+              {loadingStepIdx === 0
+                ? isEn
+                  ? 'Analyzing garments & body spec...'
+                  : '의류·체형 스펙 분석 중...'
+                : loadingStepIdx === 1
+                  ? isEn
+                    ? `Rendering ${viewAngleDeg}° front-safe weather pose...`
+                    : `${viewAngleDeg}° 날씨 포즈 AI 렌더링 중...`
+                  : isEn
+                    ? 'V3 horizon-free cutout & ground reflection...'
+                    : 'V3 투명 누끼 및 지면 반사 합성 중...'}
+            </span>
+          </div>
+        </>
       )}
 
       {/* Layer 4 (z-40+): Top HUD Controls & Weather Curation Pill Badge */}
@@ -1532,28 +1586,41 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             className="studio-vton-status-toast"
             data-vton-status-toast="true"
             data-toast-reason={statusToast.reason}
-            role="status"
+            role="alert"
             aria-live="polite"
             onClick={(e) => {
               e.stopPropagation();
-              setStatusToast(null);
             }}
           >
-            <span className="studio-vton-toast-dot" aria-hidden="true" />
-            <span className="studio-vton-toast-text">
-              {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
-            </span>
+            <div className="studio-vton-toast-head">
+              <span className="studio-vton-toast-dot" aria-hidden="true" />
+              <span className="studio-vton-toast-text">
+                {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
+              </span>
+              <button
+                type="button"
+                data-vton-dismiss-toast="true"
+                className="studio-vton-toast-dismiss"
+                aria-label={isEn ? 'Dismiss notice' : '안내 닫기'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStatusToast(null);
+                }}
+              >
+                <X size={13} />
+              </button>
+            </div>
             {statusToast.reason !== 'empty_outfit' && (
               <span className="studio-vton-toast-actions">
                 <button
                   type="button"
-                  data-vton-demo-btn="true"
-                  className="studio-vton-toast-action"
-                  aria-label={isEn ? 'Preview Sample AI Try-On' : '샘플 AI 피팅 체험'}
-                  onClick={handleEnableDemoShowcase}
+                  data-vton-retry-btn="true"
+                  className="studio-vton-toast-action is-primary-retry"
+                  aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 다시 시도'}
+                  onClick={handleRetryAiSynthesis}
                 >
-                  <Sparkles size={11} />
-                  <span>{isEn ? 'Sample Fit' : '샘플 피팅'}</span>
+                  <RefreshCw size={12} />
+                  <span>{isEn ? 'Retry Now' : '다시 시도'}</span>
                 </button>
                 <button
                   type="button"
@@ -1573,13 +1640,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 </button>
                 <button
                   type="button"
-                  data-vton-retry-btn="true"
+                  data-vton-demo-btn="true"
                   className="studio-vton-toast-action"
-                  aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 재시도'}
-                  onClick={handleRetryAiSynthesis}
+                  aria-label={isEn ? 'Preview Sample AI Try-On' : '샘플 AI 피팅 체험'}
+                  onClick={handleEnableDemoShowcase}
                 >
-                  <RefreshCw size={11} />
-                  <span>{isEn ? 'Retry' : '재시도'}</span>
+                  <Sparkles size={11} />
+                  <span>{isEn ? 'Sample Fit' : '샘플 피팅'}</span>
                 </button>
               </span>
             )}
@@ -1784,16 +1851,32 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </a>
           </div>
           <form className="studio-vton-key-form" onSubmit={handleSaveApiKeyAndRetry}>
-            <input
-              type="password"
-              data-vton-key-input="true"
-              className="studio-vton-key-input"
-              value={draftApiKey}
-              onChange={(e) => setDraftApiKey(e.target.value)}
-              placeholder="AIzaSy..."
-              autoComplete="off"
-              aria-label={isEn ? 'Gemini API key' : 'Gemini API 키 입력'}
-            />
+            <div className="studio-clearable-input-wrap is-compact">
+              <input
+                type="password"
+                data-vton-key-input="true"
+                className="studio-vton-key-input has-clear-btn"
+                value={draftApiKey}
+                onChange={(e) => setDraftApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                autoComplete="off"
+                aria-label={isEn ? 'Gemini API key' : 'Gemini API 키 입력'}
+              />
+              {draftApiKey.length > 0 && (
+                <button
+                  type="button"
+                  data-clear-vton-key-input="true"
+                  className="studio-input-clear-btn is-compact"
+                  aria-label={isEn ? 'Clear API key input' : 'API 키 입력 지우기'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDraftApiKey('');
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
             <div className="studio-vton-key-btn-row">
               <button
                 type="button"
@@ -1947,6 +2030,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               handleSelectStyleMode('photorealistic');
             }}
           >
+            {styleMode === 'photorealistic' && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
             <span>{isEn ? 'Photo' : '실사 모델'}</span>
           </button>
           <button
@@ -1964,6 +2048,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               handleSelectStyleMode('stylized_isometric');
             }}
           >
+            {styleMode === 'stylized_isometric' && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
             <span>{isEn ? 'Stylized' : '시뮬레이션'}</span>
           </button>
         </div>

@@ -1,13 +1,20 @@
 /**
- * RGBA Model Cutout Post-Processing Pipeline (`cutoutService.ts`)
- * - 1st Pass: `@imgly/background-removal` semantic AI segmentation (`isnet_fp16` -> `image/png`)
- *   with automatic circuit-breaker & timeout for offline / Capacitor WebView / restricted networks.
- * - 2nd Pass (Zero-Dependency Fallback & Perimeter Cleanup):
- *   Corner-Seeded `Int32Array` BFS Flood-Fill + Soft Alpha Feathering + Edge Color Decontamination
- *   (eliminates bright/slate rim halos on Dark Mode `#020617`–`#0F172A` stages while protecting
- *   interior `#FFFFFF` snow crystals/sneakers and `#111111` coats).
- * - Memory Safety: Caps working canvas resolution at `<= 2048px`, releases temporary canvases
- *   (`width = 0; height = 0`), and revokes all `Blob` object URLs in `finally`.
+ * RGBA Model Cutout Post-Processing Pipeline V3 (`cutoutService.ts`)
+ * - Guard (`ensureTransparentCutout`):
+ *   Inspects the 4 corner pixels `(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)` on an offscreen Canvas.
+ *   If ANY corner pixel has `alpha > 15` (or input is non-PNG), immediately executes the client
+ *   cutout pipeline and returns a clean RGBA transparent PNG (`data:image/png;base64,...`).
+ * - 1st Pass: Subpath-safe `@imgly/background-removal` semantic AI segmentation (`isnet_fp16`)
+ *   with GitHub Pages (`/Ainventory/`) safe URL handling, timeout race, and circuit-breaker.
+ * - 2nd Pass (V3 Horizon-Aware Pure-JS Matting Engine — 100% Deterministic Fallback & Halo Cleanup):
+ *   1) Row-wise Scanline Background Interpolation (`expectedBg(x, y)` from outer left 6px & right 6px
+ *      per row `y`, smoothed vertically with median outlier rejection so studio wall-to-floor
+ *      brightness jumps and horizon seams are tracked seamlessly).
+ *   2) 3x3 Background-Residual Sobel Edge Barrier (halts 4-border BFS immediately at crisp white
+ *      shirts, sneakers, snow crystals, hats, and umbrella canopies while crossing studio floor seams).
+ *   3) 1–2px Boundary Linear Alpha Matting + Color Decontamination / Color Unmixing
+ *      (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`) eliminating gray/white halos on
+ *      Dark Mode (`#020617`–`#0F172A`) stages.
  */
 
 export interface CutoutOptions {
@@ -21,7 +28,10 @@ export interface CutoutOptions {
 const DEFAULT_MAX_DIMENSION = 2048;
 const DEFAULT_TOLERANCE = 38;
 const DEFAULT_FEATHER_SPAN = 22;
-const DEFAULT_AI_TIMEOUT_MS = 4500;
+const DEFAULT_AI_TIMEOUT_MS = 4000;
+const CORNER_ALPHA_OPAQUE_THRESHOLD = 15;
+const SCANLINE_BORDER_STRIP_PX = 6;
+const SOBEL_EDGE_BARRIER_THRESHOLD = 19;
 
 let imglyCircuitBroken = false;
 
@@ -31,6 +41,35 @@ function clampByte(value: number): number {
 
 function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+function medianOfSortedOrSmall(values: number[], fallback: number): number {
+  if (values.length === 0) return fallback;
+  const copy = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(copy.length / 2);
+  return copy.length % 2 === 1 ? copy[mid] : (copy[mid - 1] + copy[mid]) * 0.5;
+}
+
+function resolveImglyPublicPath(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const envBag = ((import.meta as unknown as { env?: Record<string, string | undefined> })?.env ||
+    {}) as Record<string, string | undefined>;
+  const explicitPath = String(envBag.VITE_IMGLY_PUBLIC_PATH || '').trim();
+  if (!explicitPath) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(explicitPath)) {
+    return explicitPath.endsWith('/') ? explicitPath : `${explicitPath}/`;
+  }
+  const baseUrl = String(envBag.BASE_URL || '/');
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const cleanRel = explicitPath.replace(/^\/+/, '');
+  try {
+    const resolved = new URL(`${normalizedBase}${cleanRel}`, window.location.origin).href;
+    return resolved.endsWith('/') ? resolved : `${resolved}/`;
+  } catch {
+    return undefined;
+  }
 }
 
 async function decodeImageSourceToCanvas(
@@ -83,108 +122,360 @@ async function decodeImageSourceToCanvas(
   }
 }
 
-function estimateCornerAndPerimeterBackdrop(
+/**
+ * Inspects the 4 canonical corner pixels `(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)`
+ * and returns `true` ONLY when every corner has `alpha <= 15`.
+ */
+export function areFourCornersTransparent(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  maxOpaqueAlpha = CORNER_ALPHA_OPAQUE_THRESHOLD
+): boolean {
+  if (w < 1 || h < 1) return true;
+  const xL = Math.min(2, w - 1);
+  const xR = Math.max(0, w - 3);
+  const yT = Math.min(2, h - 1);
+  const yB = Math.max(0, h - 3);
+
+  const coords: Array<[number, number]> = [
+    [xL, yT],
+    [xR, yT],
+    [xL, yB],
+    [xR, yB],
+  ];
+
+  for (const [cx, cy] of coords) {
+    const alpha = data[(cy * w + cx) * 4 + 3];
+    if (alpha > maxOpaqueAlpha) {
+      return false;
+    }
+  }
+  return true;
+}
+
+interface ScanlineBackdropModel {
+  leftR: Float32Array;
+  leftG: Float32Array;
+  leftB: Float32Array;
+  rightR: Float32Array;
+  rightG: Float32Array;
+  rightB: Float32Array;
+  alreadyTransparent: boolean;
+  hasCoherentRowBackdrop: boolean;
+}
+
+/**
+ * Builds a row-by-row (`y = 0..h-1`) scanline background model from the outer 6px left & right
+ * border strips. Tracks vertical wall-to-floor studio brightness gradients and sharp horizon lines
+ * while rejecting synthetic non-studio 2x2 multi-color test swatches.
+ */
+function buildScanlineBackdropModel(
   data: Uint8ClampedArray,
   w: number,
   h: number
-): { r: number; g: number; b: number; alreadyTransparent: boolean; hasUniformBackdrop: boolean } {
-  const rSamples: number[] = [];
-  const gSamples: number[] = [];
-  const bSamples: number[] = [];
-  let transparentCount = 0;
-  let totalSampled = 0;
+): ScanlineBackdropModel {
+  const leftR = new Float32Array(h);
+  const leftG = new Float32Array(h);
+  const leftB = new Float32Array(h);
+  const rightR = new Float32Array(h);
+  const rightG = new Float32Array(h);
+  const rightB = new Float32Array(h);
 
-  const samplePixel = (x: number, y: number) => {
-    const clampedX = Math.max(0, Math.min(w - 1, x));
-    const clampedY = Math.max(0, Math.min(h - 1, y));
-    const idx = (clampedY * w + clampedX) * 4;
-    totalSampled += 1;
-    if (data[idx + 3] < 24) {
-      transparentCount += 1;
-      return;
+  if (areFourCornersTransparent(data, w, h, CORNER_ALPHA_OPAQUE_THRESHOLD)) {
+    let perimeterSamples = 0;
+    let perimeterTransparent = 0;
+    const stepX = Math.max(1, Math.floor(w / 24));
+    const stepY = Math.max(1, Math.floor(h / 24));
+    for (let x = 0; x < w; x += stepX) {
+      perimeterSamples += 2;
+      if (data[x * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) perimeterTransparent += 1;
+      if (data[((h - 1) * w + x) * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        perimeterTransparent += 1;
+      }
     }
-    rSamples.push(data[idx]);
-    gSamples.push(data[idx + 1]);
-    bSamples.push(data[idx + 2]);
-  };
+    for (let y = 0; y < h; y += stepY) {
+      perimeterSamples += 2;
+      if (data[y * w * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) perimeterTransparent += 1;
+      if (data[(y * w + (w - 1)) * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        perimeterTransparent += 1;
+      }
+    }
+    if (perimeterSamples > 0 && perimeterTransparent / perimeterSamples >= 0.5) {
+      return {
+        leftR,
+        leftG,
+        leftB,
+        rightR,
+        rightG,
+        rightB,
+        alreadyTransparent: true,
+        hasCoherentRowBackdrop: true,
+      };
+    }
+  }
 
-  // Priority weight on the 4 corner patches (least likely to intersect hair, umbrella, or shoes)
-  const patch = Math.max(2, Math.min(10, Math.floor(Math.min(w, h) * 0.05)));
-  const corners = [
-    [0, 0],
-    [Math.max(0, w - patch), 0],
-    [0, Math.max(0, h - patch)],
-    [Math.max(0, w - patch), Math.max(0, h - patch)],
-  ];
-  for (const [cx, cy] of corners) {
-    for (let dy = 0; dy < patch; dy += 1) {
-      for (let dx = 0; dx < patch; dx += 1) {
-        samplePixel(cx + dx, cy + dy);
+  const stripW = Math.max(1, Math.min(SCANLINE_BORDER_STRIP_PX, Math.floor(w * 0.12)));
+  const rawLR = new Float32Array(h);
+  const rawLG = new Float32Array(h);
+  const rawLB = new Float32Array(h);
+  const rawRR = new Float32Array(h);
+  const rawRG = new Float32Array(h);
+  const rawRB = new Float32Array(h);
+  const validL = new Uint8Array(h);
+  const validR = new Uint8Array(h);
+
+  const bufR: number[] = [];
+  const bufG: number[] = [];
+  const bufB: number[] = [];
+
+  let fallbackR = 148;
+  let fallbackG = 163;
+  let fallbackB = 184;
+  let haveFallback = false;
+
+  for (let y = 0; y < h; y += 1) {
+    bufR.length = 0;
+    bufG.length = 0;
+    bufB.length = 0;
+    for (let x = 0; x < stripW; x += 1) {
+      const idx = (y * w + x) * 4;
+      if (data[idx + 3] > CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        bufR.push(data[idx]);
+        bufG.push(data[idx + 1]);
+        bufB.push(data[idx + 2]);
+      }
+    }
+    if (bufR.length > 0) {
+      rawLR[y] = medianOfSortedOrSmall(bufR, fallbackR);
+      rawLG[y] = medianOfSortedOrSmall(bufG, fallbackG);
+      rawLB[y] = medianOfSortedOrSmall(bufB, fallbackB);
+      validL[y] = 1;
+      if (!haveFallback) {
+        fallbackR = rawLR[y];
+        fallbackG = rawLG[y];
+        fallbackB = rawLB[y];
+        haveFallback = true;
+      }
+    }
+
+    bufR.length = 0;
+    bufG.length = 0;
+    bufB.length = 0;
+    for (let x = Math.max(0, w - stripW); x < w; x += 1) {
+      const idx = (y * w + x) * 4;
+      if (data[idx + 3] > CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        bufR.push(data[idx]);
+        bufG.push(data[idx + 1]);
+        bufB.push(data[idx + 2]);
+      }
+    }
+    if (bufR.length > 0) {
+      rawRR[y] = medianOfSortedOrSmall(bufR, fallbackR);
+      rawRG[y] = medianOfSortedOrSmall(bufG, fallbackG);
+      rawRB[y] = medianOfSortedOrSmall(bufB, fallbackB);
+      validR[y] = 1;
+      if (!haveFallback) {
+        fallbackR = rawRR[y];
+        fallbackG = rawRG[y];
+        fallbackB = rawRB[y];
+        haveFallback = true;
       }
     }
   }
 
-  // Additional outer frame border samples
-  const stepX = Math.max(1, Math.floor(w / 32));
-  const stepY = Math.max(1, Math.floor(h / 32));
-  for (let x = 0; x < w; x += stepX) {
-    samplePixel(x, 0);
-    samplePixel(x, h - 1);
-  }
-  for (let y = 0; y < h; y += stepY) {
-    samplePixel(0, y);
-    samplePixel(w - 1, y);
-  }
-
-  const alreadyTransparent =
-    totalSampled > 0 && transparentCount / totalSampled >= 0.65;
-  if (rSamples.length === 0) {
-    return { r: 148, g: 163, b: 184, alreadyTransparent: true, hasUniformBackdrop: true };
-  }
-
-  rSamples.sort((a, b) => a - b);
-  gSamples.sort((a, b) => a - b);
-  bSamples.sort((a, b) => a - b);
-  const mid = Math.floor(rSamples.length / 2);
-  const medR = rSamples[mid];
-  const medG = gSamples[mid];
-  const medB = bSamples[mid];
-
-  // Verify at least 3 of the 4 outer corners match the studio backdrop color
-  // (protects synthetic multi-color test grids while allowing a shoe/umbrella near 1 corner)
-  const cornerCheckCoords = [
-    [1, 1],
-    [Math.max(0, w - 2), 1],
-    [1, Math.max(0, h - 2)],
-    [Math.max(0, w - 2), Math.max(0, h - 2)],
-  ];
-  let matchingCorners = 0;
-  for (const [cx, cy] of cornerCheckCoords) {
-    const cIdx = (cy * w + cx) * 4;
-    if (data[cIdx + 3] < 24) {
-      matchingCorners += 1;
-      continue;
+  // Fill any transparent border rows from nearest valid scanline
+  let lastLR = fallbackR;
+  let lastLG = fallbackG;
+  let lastLB = fallbackB;
+  let lastRR = fallbackR;
+  let lastRG = fallbackG;
+  let lastRB = fallbackB;
+  for (let y = 0; y < h; y += 1) {
+    if (validL[y]) {
+      lastLR = rawLR[y];
+      lastLG = rawLG[y];
+      lastLB = rawLB[y];
+    } else if (validR[y]) {
+      rawLR[y] = rawRR[y];
+      rawLG[y] = rawRG[y];
+      rawLB[y] = rawRB[y];
+    } else {
+      rawLR[y] = lastLR;
+      rawLG[y] = lastLG;
+      rawLB[y] = lastLB;
     }
-    const cDist = Math.hypot(data[cIdx] - medR, data[cIdx + 1] - medG, data[cIdx + 2] - medB);
-    if (cDist <= 34) {
-      matchingCorners += 1;
+
+    if (validR[y]) {
+      lastRR = rawRR[y];
+      lastRG = rawRG[y];
+      lastRB = rawRB[y];
+    } else if (validL[y]) {
+      rawRR[y] = rawLR[y];
+      rawRG[y] = rawLG[y];
+      rawRB[y] = rawLB[y];
+    } else {
+      rawRR[y] = lastRR;
+      rawRG[y] = lastRG;
+      rawRB[y] = lastRB;
     }
   }
+
+  // Verify horizontal scanline coherence: in a studio backdrop (even with a sharp horizontal
+  // wall-to-floor horizon step!), left & right borders at the same row share similar studio lighting,
+  // whereas an un-sliced 2x2 multi-color synthetic quadrant swatch has discontinuous L/R jumps everywhere.
+  let coherentRows = 0;
+  for (let y = 0; y < h; y += 1) {
+    const lrDist = Math.hypot(rawLR[y] - rawRR[y], rawLG[y] - rawRG[y], rawLB[y] - rawRB[y]);
+    if (lrDist <= 52) {
+      coherentRows += 1;
+    }
+  }
+  const coherentFraction = h > 0 ? coherentRows / h : 0;
+
+  // Also check if top-half border has a sharp vertical seam in the middle of X (e.g. un-sliced 2x2 grid)
+  const midX = Math.floor(w / 2);
+  let verticalCenterSeamHits = 0;
+  const seamSampleRows = Math.min(16, h);
+  for (let s = 0; s < seamSampleRows; s += 1) {
+    const sy = Math.min(h - 1, Math.floor(((s + 0.5) * h) / seamSampleRows));
+    if (midX >= 2 && midX < w - 2) {
+      const iL = (sy * w + (midX - 1)) * 4;
+      const iR = (sy * w + midX) * 4;
+      const jump = Math.hypot(
+        data[iL] - data[iR],
+        data[iL + 1] - data[iR + 1],
+        data[iL + 2] - data[iR + 2]
+      );
+      const stepOuter = Math.hypot(
+        data[iL] - data[(sy * w + Math.max(0, midX - 2)) * 4],
+        data[iL + 1] - data[(sy * w + Math.max(0, midX - 2)) * 4 + 1],
+        data[iL + 2] - data[(sy * w + Math.max(0, midX - 2)) * 4 + 2]
+      );
+      if (jump >= 26 && stepOuter <= 4) {
+        verticalCenterSeamHits += 1;
+      }
+    }
+  }
+  const isUnslicedColorGrid = seamSampleRows >= 8 && verticalCenterSeamHits / seamSampleRows >= 0.75;
+
+  // Reject isolated border outliers (e.g., an umbrella tip or sleeve touching 1 side border on a few rows)
+  // and apply a 5-tap vertical median filter (preserves sharp horizontal floor seams 100% intact!).
+  const anchorTopR = (rawLR[Math.min(2, h - 1)] + rawRR[Math.min(2, h - 1)]) * 0.5;
+  const anchorTopG = (rawLG[Math.min(2, h - 1)] + rawRG[Math.min(2, h - 1)]) * 0.5;
+  const anchorTopB = (rawLB[Math.min(2, h - 1)] + rawRB[Math.min(2, h - 1)]) * 0.5;
+  const anchorBotR = (rawLR[Math.max(0, h - 3)] + rawRR[Math.max(0, h - 3)]) * 0.5;
+  const anchorBotG = (rawLG[Math.max(0, h - 3)] + rawRG[Math.max(0, h - 3)]) * 0.5;
+  const anchorBotB = (rawLB[Math.max(0, h - 3)] + rawRB[Math.max(0, h - 3)]) * 0.5;
+
+  for (let y = 0; y < h; y += 1) {
+    const lrDist = Math.hypot(rawLR[y] - rawRR[y], rawLG[y] - rawRG[y], rawLB[y] - rawRB[y]);
+    if (lrDist > 46) {
+      const refR = y < h * 0.65 ? anchorTopR : anchorBotR;
+      const refG = y < h * 0.65 ? anchorTopG : anchorBotG;
+      const refB = y < h * 0.65 ? anchorTopB : anchorBotB;
+      const distL = Math.hypot(rawLR[y] - refR, rawLG[y] - refG, rawLB[y] - refB);
+      const distR = Math.hypot(rawRR[y] - refR, rawRG[y] - refG, rawRB[y] - refB);
+      if (distL <= distR) {
+        rawRR[y] = rawLR[y];
+        rawRG[y] = rawLG[y];
+        rawRB[y] = rawLB[y];
+      } else {
+        rawLR[y] = rawRR[y];
+        rawLG[y] = rawRG[y];
+        rawLB[y] = rawRB[y];
+      }
+    }
+  }
+
+  const win = 2;
+  const medBuf: number[] = [];
+  const smoothChannel = (src: Float32Array, dst: Float32Array) => {
+    for (let y = 0; y < h; y += 1) {
+      medBuf.length = 0;
+      const y0 = Math.max(0, y - win);
+      const y1 = Math.min(h - 1, y + win);
+      for (let yy = y0; yy <= y1; yy += 1) {
+        medBuf.push(src[yy]);
+      }
+      dst[y] = medianOfSortedOrSmall(medBuf, src[y]);
+    }
+  };
+
+  smoothChannel(rawLR, leftR);
+  smoothChannel(rawLG, leftG);
+  smoothChannel(rawLB, leftB);
+  smoothChannel(rawRR, rightR);
+  smoothChannel(rawRG, rightG);
+  smoothChannel(rawRB, rightB);
 
   return {
-    r: medR,
-    g: medG,
-    b: medB,
-    alreadyTransparent,
-    hasUniformBackdrop: matchingCorners >= 3,
+    leftR,
+    leftG,
+    leftB,
+    rightR,
+    rightG,
+    rightB,
+    alreadyTransparent: false,
+    hasCoherentRowBackdrop: coherentFraction >= 0.45 && !isUnslicedColorGrid,
   };
 }
 
 /**
- * Applies Corner/Edge-Seeded BFS Flood-Fill + Soft Alpha Feathering + Color Decontamination
- * directly in-place onto a decoded `HTMLCanvasElement`.
+ * Computes 3x3 Sobel gradient magnitude on background-residual RGB (`pixel(x,y) - expectedBg(x,y)`).
+ * Because horizontal studio wall-to-floor horizon lines exist in `expectedBg(x,y)` as well, their
+ * residual gradient is ~0 (allowing BFS to erase the studio floor cleanly), whereas true foreground
+ * contours (white shirts, white sneakers, umbrella canopies, hats) create strong Sobel barriers!
  */
-export function applyCornerBfsCutoutOnCanvas(
+function computeResidualSobelBarrier(
+  resR: Float32Array,
+  resG: Float32Array,
+  resB: Float32Array,
+  w: number,
+  h: number
+): Float32Array {
+  const sobel = new Float32Array(w * h);
+  if (w < 3 || h < 3) return sobel;
+
+  for (let y = 1; y < h - 1; y += 1) {
+    const rowPrev = (y - 1) * w;
+    const rowCur = y * w;
+    const rowNext = (y + 1) * w;
+    for (let x = 1; x < w - 1; x += 1) {
+      const tl = rowPrev + x - 1;
+      const tc = rowPrev + x;
+      const tr = rowPrev + x + 1;
+      const ml = rowCur + x - 1;
+      const mr = rowCur + x + 1;
+      const bl = rowNext + x - 1;
+      const bc = rowNext + x;
+      const br = rowNext + x + 1;
+
+      const gxR = (-resR[tl] + resR[tr] - 2 * resR[ml] + 2 * resR[mr] - resR[bl] + resR[br]) * 0.25;
+      const gyR = (-resR[tl] - 2 * resR[tc] - resR[tr] + resR[bl] + 2 * resR[bc] + resR[br]) * 0.25;
+
+      const gxG = (-resG[tl] + resG[tr] - 2 * resG[ml] + 2 * resG[mr] - resG[bl] + resG[br]) * 0.25;
+      const gyG = (-resG[tl] - 2 * resG[tc] - resG[tr] + resG[bl] + 2 * resG[bc] + resG[br]) * 0.25;
+
+      const gxB = (-resB[tl] + resB[tr] - 2 * resB[ml] + 2 * resB[mr] - resB[bl] + resB[br]) * 0.25;
+      const gyB = (-resB[tl] - 2 * resB[tc] - resB[tr] + resB[bl] + 2 * resB[bc] + resB[br]) * 0.25;
+
+      const magR = Math.hypot(gxR, gyR);
+      const magG = Math.hypot(gxG, gyG);
+      const magB = Math.hypot(gxB, gyB);
+      sobel[rowCur + x] = Math.max(magR, magG, magB);
+    }
+  }
+  return sobel;
+}
+
+/**
+ * V3 Pure-JS Matting Engine:
+ * - Row-wise Scanline Linear Background Interpolation `expectedBg(x, y)`
+ * - 4-Border 8-Connected BFS with Sobel Edge Barrier + Residual Step-Delta Protection
+ * - 1–2px Boundary Soft Alpha Ramp + Linear Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+ */
+export function applyV3ScanlineMattingOnCanvas(
   canvas: HTMLCanvasElement,
   options: CutoutOptions = {}
 ): HTMLCanvasElement {
@@ -197,24 +488,51 @@ export function applyCornerBfsCutoutOnCanvas(
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
-  const bg = estimateCornerAndPerimeterBackdrop(d, w, h);
-  if (bg.alreadyTransparent || !bg.hasUniformBackdrop) {
+  const bgModel = buildScanlineBackdropModel(d, w, h);
+  if (bgModel.alreadyTransparent || !bgModel.hasCoherentRowBackdrop) {
     return canvas;
   }
 
-  const bgR = bg.r;
-  const bgG = bg.g;
-  const bgB = bg.b;
-  const bgLum = Math.max(1, 0.299 * bgR + 0.587 * bgG + 0.114 * bgB);
-  const bgRn = bgR / bgLum;
-  const bgGn = bgG / bgLum;
-  const bgBn = bgB / bgLum;
+  const nPx = w * h;
+  const expRArr = new Float32Array(nPx);
+  const expGArr = new Float32Array(nPx);
+  const expBArr = new Float32Array(nPx);
+  const resR = new Float32Array(nPx);
+  const resG = new Float32Array(nPx);
+  const resB = new Float32Array(nPx);
+
+  const invW = w > 1 ? 1 / (w - 1) : 0;
+  for (let y = 0; y < h; y += 1) {
+    const lR = bgModel.leftR[y];
+    const lG = bgModel.leftG[y];
+    const lB = bgModel.leftB[y];
+    const dR = bgModel.rightR[y] - lR;
+    const dG = bgModel.rightG[y] - lG;
+    const dB = bgModel.rightB[y] - lB;
+    const rowOff = y * w;
+    for (let x = 0; x < w; x += 1) {
+      const t = x * invW;
+      const p = rowOff + x;
+      const i = p * 4;
+      const eR = lR + dR * t;
+      const eG = lG + dG * t;
+      const eB = lB + dB * t;
+      expRArr[p] = eR;
+      expGArr[p] = eG;
+      expBArr[p] = eB;
+      resR[p] = d[i] - eR;
+      resG[p] = d[i + 1] - eG;
+      resB[p] = d[i + 2] - eB;
+    }
+  }
+
+  const sobel = computeResidualSobelBarrier(resR, resG, resB, w, h);
 
   const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
   const featherSpan = options.featherSpan ?? DEFAULT_FEATHER_SPAN;
-  const stepLimit = Math.max(18, Math.round(tolerance * 0.62));
+  const stepLimit = Math.max(16, Math.round(tolerance * 0.58));
+  const strictBgPassDist = Math.max(8, tolerance * 0.28);
 
-  const nPx = w * h;
   const bgMask = new Uint8Array(nPx);
   const queue = new Int32Array(nPx);
   let head = 0;
@@ -224,45 +542,65 @@ export function applyCornerBfsCutoutOnCanvas(
     if (bgMask[p]) return;
     const i = p * 4;
     const a = d[i + 3];
-    if (a < 20) {
+    if (a <= CORNER_ALPHA_OPAQUE_THRESHOLD) {
       bgMask[p] = 1;
       queue[tail++] = p;
       return;
     }
 
-    const r = d[i];
-    const g = d[i + 1];
-    const b = d[i + 2];
+    const rr = resR[p];
+    const rg = resG[p];
+    const rb = resB[p];
+    const bgDist = Math.hypot(rr, rg, rb);
+
+    // Sobel Edge Barrier: halt immediately at crisp garment/shoe/umbrella/hat contours
+    // so white shirts (#FFFFFF), white sneakers, and dark coats are never eroded.
+    if (sobel[p] >= SOBEL_EDGE_BARRIER_THRESHOLD && bgDist > strictBgPassDist) {
+      return;
+    }
 
     if (fromP >= 0) {
-      const fi = fromP * 4;
-      const stepDist = Math.hypot(r - d[fi], g - d[fi + 1], b - d[fi + 2]);
-      if (stepDist > stepLimit) return;
+      const stepDelta = Math.hypot(rr - resR[fromP], rg - resG[fromP], rb - resB[fromP]);
+      if (stepDelta > stepLimit) {
+        return;
+      }
     }
 
-    const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
-    if (dist <= tolerance) {
+    if (bgDist <= tolerance) {
       bgMask[p] = 1;
       queue[tail++] = p;
       return;
     }
 
-    // Also absorb subtle studio floor contact shadows cast onto uniform #94A3B8 / #F5F5F7 backdrops
-    // while strictly protecting pure white snow (#FFFFFF) and dark garments (#111111)
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    if (lum >= bgLum - 48 && lum <= bgLum + 14 && lum > 38 && lum < 248) {
-      const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      if (sat <= 42) {
-        const chromaDist = Math.hypot(r / lum - bgRn, g / lum - bgGn, b / lum - bgBn);
-        if (chromaDist <= 0.068) {
-          bgMask[p] = 1;
-          queue[tail++] = p;
+    // Absorb subtle neutral studio cast shadows on the floor/wall when chroma matches local
+    // expectedBg(x, y) AND Sobel barrier is quiet, while strictly protecting white & black clothing.
+    if (sobel[p] < SOBEL_EDGE_BARRIER_THRESHOLD * 0.72) {
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const eR = expRArr[p];
+      const eG = expGArr[p];
+      const eB = expBArr[p];
+      const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
+      if (lum >= expLum - 52 && lum <= expLum + 16 && lum > 40 && lum < 244) {
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        if (sat <= 40) {
+          const chromaDist = Math.hypot(
+            r / lum - eR / expLum,
+            g / lum - eG / expLum,
+            b / lum - eB / expLum
+          );
+          if (chromaDist <= 0.068) {
+            bgMask[p] = 1;
+            queue[tail++] = p;
+          }
         }
       }
     }
   };
 
-  // Seed all 4 outer borders (corners + edges)
+  // Seed BFS from all 4 outer borders (top, bottom, left, right)
   for (let x = 0; x < w; x += 1) {
     tryAccept(x, -1);
     tryAccept((h - 1) * w + x, -1);
@@ -272,7 +610,7 @@ export function applyCornerBfsCutoutOnCanvas(
     tryAccept(y * w + (w - 1), -1);
   }
 
-  // 8-connected BFS flood fill for smooth diagonal silhouette traversal
+  // 8-connected BFS traversal
   while (head < tail) {
     const p = queue[head++];
     const x = p % w;
@@ -288,31 +626,32 @@ export function applyCornerBfsCutoutOnCanvas(
   }
 
   const fgCount = nPx - tail;
-  // Guard: if >96% of the frame flooded (e.g. a synthetic solid-color swatch with no subject),
-  // preserve original pixels rather than returning an empty transparent canvas.
+  // Guard: preserve synthetic solid-color test swatches that contain no human subject
   if (tail === 0 || tail / nPx > 0.96 || fgCount < 32) {
     return canvas;
   }
 
-  // Build 2-ring boundary mask around flooded background for soft alpha feathering & defringing
+  // Construct 1–2px foreground boundary rings adjacent to flooded background
   const edgeRing = new Uint8Array(nPx);
   for (let y = 0; y < h; y += 1) {
+    const rowOff = y * w;
     for (let x = 0; x < w; x += 1) {
-      const p = y * w + x;
+      const p = rowOff + x;
       if (bgMask[p]) continue;
-      let adjBg = 0;
-      if (x > 0 && bgMask[p - 1]) adjBg += 1;
-      if (x < w - 1 && bgMask[p + 1]) adjBg += 1;
-      if (y > 0 && bgMask[p - w]) adjBg += 1;
-      if (y < h - 1 && bgMask[p + w]) adjBg += 1;
-      if (adjBg > 0) {
+      if (
+        (x > 0 && bgMask[p - 1]) ||
+        (x < w - 1 && bgMask[p + 1]) ||
+        (y > 0 && bgMask[p - w]) ||
+        (y < h - 1 && bgMask[p + w])
+      ) {
         edgeRing[p] = 1;
       }
     }
   }
   for (let y = 1; y < h - 1; y += 1) {
+    const rowOff = y * w;
     for (let x = 1; x < w - 1; x += 1) {
-      const p = y * w + x;
+      const p = rowOff + x;
       if (bgMask[p] || edgeRing[p]) continue;
       if (
         edgeRing[p - 1] === 1 ||
@@ -325,55 +664,111 @@ export function applyCornerBfsCutoutOnCanvas(
     }
   }
 
-  const innerTol = Math.max(10, tolerance * 0.65);
+  const innerTol = Math.max(9, tolerance * 0.55);
   const outerTol = tolerance + featherSpan;
 
-  for (let p = 0; p < nPx; p += 1) {
-    const i = p * 4;
-    if (bgMask[p]) {
-      d[i] = 0;
-      d[i + 1] = 0;
-      d[i + 2] = 0;
-      d[i + 3] = 0;
-      continue;
+  // Helper to locate nearest clean interior foreground pixel (1–3px inward) for linear alpha projection
+  const sampleInteriorForeground = (x: number, y: number): [number, number, number] | null => {
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let count = 0;
+    const y0 = Math.max(0, y - 2);
+    const y1 = Math.min(h - 1, y + 2);
+    const x0 = Math.max(0, x - 2);
+    const x1 = Math.min(w - 1, x + 2);
+    for (let yy = y0; yy <= y1; yy += 1) {
+      const rOff = yy * w;
+      for (let xx = x0; xx <= x1; xx += 1) {
+        const q = rOff + xx;
+        if (!bgMask[q] && edgeRing[q] === 0 && d[q * 4 + 3] > 200) {
+          const qi = q * 4;
+          sumR += d[qi];
+          sumG += d[qi + 1];
+          sumB += d[qi + 2];
+          count += 1;
+        }
+      }
     }
+    if (count === 0) return null;
+    const inv = 1 / count;
+    return [sumR * inv, sumG * inv, sumB * inv];
+  };
 
-    const ring = edgeRing[p];
-    if (ring === 0) continue;
+  for (let y = 0; y < h; y += 1) {
+    const rowOff = y * w;
+    for (let x = 0; x < w; x += 1) {
+      const p = rowOff + x;
+      const i = p * 4;
+      if (bgMask[p]) {
+        d[i] = 0;
+        d[i + 1] = 0;
+        d[i + 2] = 0;
+        d[i + 3] = 0;
+        continue;
+      }
 
-    const r = d[i];
-    const g = d[i + 1];
-    const b = d[i + 2];
-    const origAlpha = d[i + 3] / 255;
-    const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
+      const ring = edgeRing[p];
+      if (ring === 0) continue;
 
-    let alphaFactor = 1;
-    if (dist < outerTol) {
-      const ramp = clamp01((dist - innerTol) / Math.max(1, outerTol - innerTol));
-      alphaFactor = ring === 1 ? ramp * 0.9 : Math.max(0.55, ramp);
-    } else if (ring === 1) {
-      alphaFactor = 0.92;
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      const origAlpha = d[i + 3] / 255;
+      const cBgR = expRArr[p];
+      const cBgG = expGArr[p];
+      const cBgB = expBArr[p];
+      const dist = Math.hypot(r - cBgR, g - cBgG, b - cBgB);
+
+      let alphaFactor = 1;
+      const fgSample = sampleInteriorForeground(x, y);
+      let usedLinearMatting = false;
+
+      if (fgSample) {
+        const vFgR = fgSample[0] - cBgR;
+        const vFgG = fgSample[1] - cBgG;
+        const vFgB = fgSample[2] - cBgB;
+        const fgBgSq = vFgR * vFgR + vFgG * vFgG + vFgB * vFgB;
+        if (fgBgSq >= 625) {
+          const vPxR = r - cBgR;
+          const vPxG = g - cBgG;
+          const vPxB = b - cBgB;
+          const rawProj = (vPxR * vFgR + vPxG * vFgG + vPxB * vFgB) / fgBgSq;
+          if (rawProj >= 0 && rawProj < 0.95) {
+            const perpSq = Math.max(0, dist * dist - rawProj * rawProj * fgBgSq);
+            if (perpSq <= 784) {
+              alphaFactor = ring === 1 ? clamp01(rawProj) : Math.max(0.55, clamp01(rawProj));
+              usedLinearMatting = true;
+            }
+          }
+        }
+      }
+
+      if (!usedLinearMatting && dist < outerTol) {
+        const ramp = clamp01((dist - innerTol) / Math.max(1, outerTol - innerTol));
+        alphaFactor = ring === 1 ? ramp * 0.9 : Math.max(0.58, ramp);
+      }
+
+      const alpha = clamp01(origAlpha * alphaFactor);
+      const outAlpha = clampByte(alpha * 255);
+      if (outAlpha <= 5) {
+        d[i] = 0;
+        d[i + 1] = 0;
+        d[i + 2] = 0;
+        d[i + 3] = 0;
+        continue;
+      }
+
+      // Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+      // Removes mixed studio backdrop color from 1–2px boundary pixels so zero white/slate halo remains
+      if (alpha < 0.985) {
+        const safeAlpha = Math.max(0.14, alpha);
+        d[i] = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
+        d[i + 1] = clampByte((g - (1 - safeAlpha) * cBgG) / safeAlpha);
+        d[i + 2] = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
+      }
+      d[i + 3] = outAlpha;
     }
-
-    const finalAlphaNorm = clamp01(origAlpha * alphaFactor);
-    const outAlpha = clampByte(finalAlphaNorm * 255);
-    if (outAlpha <= 4) {
-      d[i] = 0;
-      d[i + 1] = 0;
-      d[i + 2] = 0;
-      d[i + 3] = 0;
-      continue;
-    }
-
-    // Color decontamination (unmix studio backdrop spill from semi-transparent edge pixels)
-    // so zero light/slate halo appears when composited onto Dark Mode (#020617 / #0F172A)!
-    if (finalAlphaNorm < 0.98) {
-      const safeA = Math.max(0.22, finalAlphaNorm);
-      d[i] = clampByte((r - (1 - safeA) * bgR) / safeA);
-      d[i + 1] = clampByte((g - (1 - safeA) * bgG) / safeA);
-      d[i + 2] = clampByte((b - (1 - safeA) * bgB) / safeA);
-    }
-    d[i + 3] = outAlpha;
   }
 
   ctx.putImageData(imgData, 0, 0);
@@ -381,7 +776,18 @@ export function applyCornerBfsCutoutOnCanvas(
 }
 
 /**
- * Zero-dependency Corner-Seeded BFS Flood-Fill + Soft Alpha Feathering cutout returning RGBA PNG DataURL.
+ * Backward-compatible entry point used across VTON turnaround slicing and cache cleanup,
+ * backed by the V3 Scanline-Interpolated + Sobel Barrier + Color Unmixing matting engine.
+ */
+export function applyCornerBfsCutoutOnCanvas(
+  canvas: HTMLCanvasElement,
+  options: CutoutOptions = {}
+): HTMLCanvasElement {
+  return applyV3ScanlineMattingOnCanvas(canvas, options);
+}
+
+/**
+ * Zero-dependency V3 Scanline Flood-Fill + Sobel Edge Barrier + Color Unmixing cutout returning RGBA PNG DataURL.
  */
 export async function cornerBfsFloodFillCutout(
   imageSource: string | Blob,
@@ -392,7 +798,7 @@ export async function cornerBfsFloodFillCutout(
     options.maxDimension ?? DEFAULT_MAX_DIMENSION
   );
   try {
-    applyCornerBfsCutoutOnCanvas(canvas, options);
+    applyV3ScanlineMattingOnCanvas(canvas, options);
     return canvas.toDataURL('image/png');
   } finally {
     canvas.width = 0;
@@ -420,6 +826,7 @@ async function tryImglySemanticCutout(
 
   let timerId: ReturnType<typeof setTimeout> | null = null;
   try {
+    const publicPath = resolveImglyPublicPath();
     const removalTask = (async () => {
       const mod = await import('@imgly/background-removal');
       const removeFn = mod.removeBackground ?? mod.default;
@@ -428,6 +835,8 @@ async function tryImglySemanticCutout(
       }
       return removeFn(inputBlob, {
         model: 'isnet_fp16',
+        device: 'cpu',
+        ...(publicPath ? { publicPath } : {}),
         output: {
           format: 'image/png',
           quality: 0.92,
@@ -447,7 +856,8 @@ async function tryImglySemanticCutout(
     }
     return null;
   } catch {
-    // Memoize unavailability so offline / proxy-sandboxed environments do not stall repeatedly
+    // Memoize unavailability so GitHub Pages subpath (/Ainventory/), offline, or WASM-constrained
+    // environments fall back instantaneously to the V3 Pure-JS Scanline Matting Engine.
     imglyCircuitBroken = true;
     return null;
   } finally {
@@ -458,9 +868,10 @@ async function tryImglySemanticCutout(
 /**
  * Primary Model Background Removal Service:
  * 1) Downscales `> 2048px` inputs to prevent mobile/WebView OOM.
- * 2) Runs `@imgly/background-removal` (`isnet_fp16`) semantic segmentation when available.
- * 3) Runs Corner-Seeded BFS Flood-Fill + Soft Alpha Feathering + Color Decontamination
- *    as zero-dependency fallback (and perimeter halo cleanup), returning an RGBA `data:image/png;base64,...`.
+ * 2) Attempts subpath-safe `@imgly/background-removal` (`isnet_fp16`) semantic segmentation.
+ * 3) Enforces V3 Scanline-Interpolated BFS + Sobel Edge Barrier + Color Unmixing whenever
+ *    `@imgly` is unavailable or leaves any opaque corner (`alpha > 15`) or perimeter halo,
+ *    returning a clean RGBA `data:image/png;base64,...`.
  */
 export async function removeModelBackgroundToPng(
   imageSource: string | Blob,
@@ -482,14 +893,26 @@ export async function removeModelBackgroundToPng(
         options.aiTimeoutMs ?? DEFAULT_AI_TIMEOUT_MS
       );
       if (aiBlob) {
-        const { canvas: aiCanvas } = await decodeImageSourceToCanvas(
+        const { canvas: aiCanvas, ctx: aiCtx } = await decodeImageSourceToCanvas(
           aiBlob,
           options.maxDimension ?? DEFAULT_MAX_DIMENSION
         );
         try {
-          // Run lightweight perimeter check in case any corner pixel remained semi-opaque
-          applyCornerBfsCutoutOnCanvas(aiCanvas, options);
-          return aiCanvas.toDataURL('image/png');
+          const aiData = aiCtx.getImageData(0, 0, aiCanvas.width, aiCanvas.height).data;
+          let opaquePixels = 0;
+          for (let i = 3; i < aiData.length; i += 16) {
+            if (aiData[i] > 32) opaquePixels += 1;
+          }
+          const totalSampled = Math.max(1, Math.floor(aiData.length / 16));
+          const opaqueRatio = opaquePixels / totalSampled;
+
+          // Ensure AI segmentation did not wipe the entire subject and cleaned all 4 corners
+          if (opaqueRatio >= 0.025 && opaqueRatio <= 0.97) {
+            if (!areFourCornersTransparent(aiData, aiCanvas.width, aiCanvas.height)) {
+              applyV3ScanlineMattingOnCanvas(aiCanvas, options);
+            }
+            return aiCanvas.toDataURL('image/png');
+          }
         } finally {
           aiCanvas.width = 0;
           aiCanvas.height = 0;
@@ -497,7 +920,7 @@ export async function removeModelBackgroundToPng(
       }
     }
 
-    applyCornerBfsCutoutOnCanvas(canvas, options);
+    applyV3ScanlineMattingOnCanvas(canvas, options);
     return canvas.toDataURL('image/png');
   } catch {
     return typeof imageSource === 'string' ? imageSource : '';
@@ -508,46 +931,75 @@ export async function removeModelBackgroundToPng(
 }
 
 /**
- * Inspects whether a `data:image/...` string is a legacy opaque JPEG or has opaque backdrop corners,
- * upgrading it in-place to a true RGBA transparent PNG without consuming Gemini API credits.
+ * Alpha Verification Guard (`ensureTransparentCutout`):
+ * Inspects the 4 corner pixels `(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)` on an offscreen Canvas
+ * across both newly generated and cached images (`0°`, `45°`, `90°`, `180°`).
+ * If ANY corner pixel has `alpha > 15` (or the source is non-PNG), immediately runs the V3 cutout
+ * pipeline and returns a transparent PNG DataURL (`data:image/png;base64,...`).
  */
-export async function ensureTransparentCutoutDataUrl(
-  dataUrl: string,
+export async function ensureTransparentCutout(
+  imageSource: string | Blob,
   options: CutoutOptions = {}
 ): Promise<string> {
-  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
-    return dataUrl;
-  }
-  if (typeof document === 'undefined' || typeof Image === 'undefined') {
-    return dataUrl;
-  }
-
-  // Fast check: JPEG never has an alpha channel -> always upgrade
-  if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) {
-    return removeModelBackgroundToPng(dataUrl, options);
+  if (!imageSource) return '';
+  if (typeof imageSource === 'string') {
+    if (!imageSource.startsWith('data:image/') && !imageSource.startsWith('blob:') && !imageSource.startsWith('/') && !/^https?:\/\//i.test(imageSource)) {
+      return imageSource;
+    }
+    if (typeof document === 'undefined' || typeof Image === 'undefined') {
+      return imageSource;
+    }
+    // Non-PNG data URLs (JPEG/WebP) cannot hold alpha -> always run full cutout
+    if (
+      imageSource.startsWith('data:image/') &&
+      !imageSource.startsWith('data:image/png')
+    ) {
+      return removeModelBackgroundToPng(imageSource, options);
+    }
+  } else if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return '';
   }
 
   try {
     const { canvas, ctx } = await decodeImageSourceToCanvas(
-      dataUrl,
+      imageSource,
       options.maxDimension ?? DEFAULT_MAX_DIMENSION
     );
     try {
       const w = canvas.width;
       const h = canvas.height;
-      if (w < 16 || h < 16) return dataUrl;
-      const d = ctx.getImageData(0, 0, w, h).data;
-      const bg = estimateCornerAndPerimeterBackdrop(d, w, h);
-      if (bg.alreadyTransparent) {
-        return dataUrl;
+      if (w < 16 || h < 16) {
+        return typeof imageSource === 'string' ? imageSource : canvas.toDataURL('image/png');
       }
-      applyCornerBfsCutoutOnCanvas(canvas, options);
-      return canvas.toDataURL('image/png');
+      const d = ctx.getImageData(0, 0, w, h).data;
+      if (
+        typeof imageSource === 'string' &&
+        imageSource.startsWith('data:image/png') &&
+        areFourCornersTransparent(d, w, h, CORNER_ALPHA_OPAQUE_THRESHOLD)
+      ) {
+        return imageSource;
+      }
+
+      // At least one corner had `alpha > 15` -> run full cutout pipeline!
+      canvas.width = 0;
+      canvas.height = 0;
+      return removeModelBackgroundToPng(imageSource, options);
     } finally {
       canvas.width = 0;
       canvas.height = 0;
     }
   } catch {
-    return dataUrl;
+    return typeof imageSource === 'string' ? imageSource : '';
   }
+}
+
+/**
+ * Backward-compatible alias for `ensureTransparentCutout` accepting `data:image/...` strings.
+ */
+export async function ensureTransparentCutoutDataUrl(
+  dataUrl: string,
+  options: CutoutOptions = {}
+): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+  return ensureTransparentCutout(dataUrl, options);
 }
