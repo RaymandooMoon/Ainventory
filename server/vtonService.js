@@ -44,7 +44,7 @@ export const VTON_SLOTS = Object.freeze([
 const VTON_SLOT_SET = new Set(VTON_SLOTS);
 
 export const ALL_ISO_VIEW_ANGLES = Object.freeze([45, 0, -45, -90, -135, 180, 135, 90]);
-export const DEFAULT_ISO_VIEW_ANGLE = 45;
+export const DEFAULT_ISO_VIEW_ANGLE = 0;
 
 // Layering order for prompt clarity (from head/inner to outer/extremities/jewelry)
 const PROMPT_SLOT_ORDER = Object.freeze([
@@ -237,7 +237,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 96;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v3-clean-cutout-front45-ground';
+const CACHE_SCHEMA_VERSION = 'v4-hole-aware-fullbody-360';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -929,7 +929,7 @@ export function normalizeVtonProfile(
   );
 
   const heightCm = roundToStep(
-    clampNumber(src.heightCm ?? src.height_cm ?? anthro.heightCm, 140, 205, 172),
+    clampNumber(src.heightCm ?? src.height_cm ?? anthro.heightCm, 100, 230, 172),
     0.5
   );
   const weightKg = roundToStep(
@@ -1582,23 +1582,23 @@ function describeIsoCameraAngle(viewAngleDeg) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
-      return 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
+      return 'Strict FRONT-FACING 45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].';
     case 0:
-      return 'Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.';
+      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.';
     case -45:
-      return 'FRONT-FACING -45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to viewer-left for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
+      return 'Strict FRONT-FACING -45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally to viewer-left on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].';
     case 90:
-      return 'Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.';
+      return 'Strict 90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly sideways showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.';
     case -90:
-      return 'Strict -90-degree lateral side-profile full-body view. Model facing cleanly left showing exact side profile of face, garment silhouette, and shoes.';
+      return 'Strict -90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly left showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.';
     case 135:
-      return '135° Back-Quarter Right Isometric View (rear 3/4 view angled away toward back-right, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
+      return '135° Back-Quarter Right Full-Body View (eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 10% bottom margin showing back of head/hair, shoulder blades, rear garment construction, and full shoes on a flat #94A3B8 backdrop)';
     case -135:
-      return '-135° Back-Quarter Left Isometric View (rear 3/4 view angled away toward back-left, showing back of head/hair, shoulder blades, rear garment construction/back drape, glute/hamstring contour, and subtle outer cheek/jaw edge WITHOUT front eyes or mouth on a flat #94A3B8 backdrop)';
+      return '-135° Back-Quarter Left Full-Body View (eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 10% bottom margin showing back of head/hair, shoulder blades, rear garment construction, and full shoes on a flat #94A3B8 backdrop)';
     case 180:
-      return 'Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring.';
+      return 'Direct 180-degree rear back-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing directly away from camera showing the back of hair, back shoulders, rear garment tailoring, and full shoes with 10% bottom margin.';
     default:
-      return 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].';
+      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.';
   }
 }
 
@@ -1710,23 +1710,24 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
 
   const cameraBlock = profile.turnaroundSheet
     ? [
-        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
-        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO floor plinths, and ZERO airborne rain/snow/dust particles in the background.`,
+        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
+        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap (underneath the open umbrella canopy between shaft and head/shoulders, between bent arms and waist/torso, between legs/ankles, and inside bag handles/straps) — STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO floor plinths, and ZERO airborne rain/snow/dust particles in the background.`,
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 4 quadrants (0°, 45°, 90°, 180°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (~78–82% quadrant height).',
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 4 quadrants, render EXACTLY ONE (1) solitary person centered horizontally in that quadrant. NEVER place two models side-by-side in a quadrant, NEVER duplicate or mirror a figure, NEVER render background extras or reflections, and NEVER generate a 1x4 or 2x4 multi-person lineup.',
-        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical compact head-to-toe scale (~78–84% quadrant height so open umbrellas, winter hats, and shoes have generous #94A3B8 margin on all four sides) in each of the 4 quadrants:',
-        '  * [Top-Left Quadrant — 0° Direct Front]: Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.',
-        '  * [Top-Right Quadrant — 45° Quarter View (STRICT FRONT-FACING)]: FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].',
-        '  * [Bottom-Left Quadrant — 90° True Side Profile]: Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.',
-        '  * [Bottom-Right Quadrant — 180° Full Rear Back]: Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring (render ZERO front facial features and ZERO second figure).',
+        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical head-to-toe scale and identical floor baseline in each of the 4 quadrants:',
+        '  * [Top-Left Quadrant — 0° Direct Front Full-Body]: Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.',
+        '  * [Top-Right Quadrant — 45° Horizontal-Yaw Front-Quarter Full-Body (ZERO TILT, FULL FEET VISIBLE)]: Strict FRONT-FACING 45-degree horizontal-yaw full-body view at the EXACT SAME eye-to-waist horizontal camera height and zero tilt as 0°, 90°, and 180°. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].',
+        '  * [Bottom-Left Quadrant — 90° True Side Profile Full-Body]: Strict 90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly sideways showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.',
+        '  * [Bottom-Right Quadrant — 180° Full Rear Back Full-Body]: Direct 180-degree rear back-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing directly away from camera showing the back of hair, back shoulders, rear garment tailoring, and full shoes with 10% bottom margin (render ZERO front facial features and ZERO second figure).',
         '- Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
-        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (STRICT SINGLE-SUBJECT & RGBA CUTOUT BACKDROP RULE):',
+        'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (~80–84% frame height).',
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
-        '- Full-body poised stance framed 100% from the top of the open umbrella / headwear / hair down to the complete soles of the shoes (~80–85% frame height) with generous #94A3B8 margin on all sides (NEVER crop open umbrella canopy, head, hands, or feet).',
         '- For 90° lateral side views, ensure authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.',
-        `- CRITICAL RGBA CUTOUT BACKDROP RULE: Render the ENTIRE background behind and beneath the model as a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
+        `- CRITICAL RGBA CUTOUT & ENCLOSED-HOLE BACKDROP RULE: Render the ENTIRE background behind, beneath, AND inside every enclosed negative-space gap of the model (underneath the open umbrella canopy around the shaft/head/shoulders, between bent arms and waist, between legs/ankles, and inside bag handles/straps) as a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
       ];
 
   return [

@@ -24,6 +24,68 @@ import {
 
 export const AVATAR_SPEC_STORAGE_KEY = 'ainventory_avatar_spec_v2';
 
+export const MIN_AVATAR_HEIGHT_CM = 100;
+export const MAX_AVATAR_HEIGHT_CM = 230;
+
+export type HeightValidationResult =
+  | { valid: true; heightCm: number }
+  | {
+      valid: false;
+      reason: 'empty' | 'non_numeric' | 'out_of_range';
+      title: string;
+      message: string;
+    };
+
+export function validateHeightCmInput(
+  rawText: unknown,
+  lang: string = 'ko'
+): HeightValidationResult {
+  const isEn = lang === 'en';
+  const trimmed = String(rawText ?? '').trim();
+  if (!trimmed) {
+    return {
+      valid: false,
+      reason: 'empty',
+      title: isEn ? 'Height Input Required' : '신장(키) 입력 오류',
+      message: isEn
+        ? 'Please enter your height in cm (valid range: 100cm – 230cm).'
+        : '신장(키) 값을 입력해 주세요. (입력 가능 범위: 100cm ~ 230cm)',
+    };
+  }
+
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(trimmed)) {
+    return {
+      valid: false,
+      reason: 'non_numeric',
+      title: isEn ? 'Invalid Height Format' : '신장(키) 형식 오류',
+      message: isEn
+        ? 'Please enter a valid numeric height in cm. Letters or special characters are not allowed.'
+        : '숫자 형식의 올바른 신장(cm)을 입력해 주세요. 문자나 특수문자는 사용할 수 없습니다.',
+    };
+  }
+
+  const parsed = Number(trimmed);
+  if (
+    !Number.isFinite(parsed) ||
+    parsed < MIN_AVATAR_HEIGHT_CM ||
+    parsed > MAX_AVATAR_HEIGHT_CM
+  ) {
+    return {
+      valid: false,
+      reason: 'out_of_range',
+      title: isEn ? 'Height Out of Range' : '신장(키) 허용 범위 초과',
+      message: isEn
+        ? `Entered height (${trimmed}cm) is outside the valid range (100cm – 230cm). Please enter a value between 100 and 230.`
+        : `입력하신 신장(${trimmed}cm)이 허용 범위(100cm ~ 230cm)를 벗어났습니다. 100에서 230 사이의 값을 입력해 주세요.`,
+    };
+  }
+
+  return {
+    valid: true,
+    heightCm: Math.round(parsed),
+  };
+}
+
 export type AvatarFramePreset = 'feminine' | 'masculine' | 'androgynous' | 'custom';
 
 export type AvatarArchetypePreset =
@@ -996,7 +1058,7 @@ export function sanitizeAvatarSpec(raw?: unknown): AvatarSpec {
       : {};
 
   const heightCm = Math.round(
-    sanitizeFiniteNumber(rawAnthro.heightCm ?? obj.heightCm, base.anthropometrics.heightCm, 140, 205, 0)
+    sanitizeFiniteNumber(rawAnthro.heightCm ?? obj.heightCm, base.anthropometrics.heightCm, 100, 230, 0)
   );
   const weightKg = Math.round(
     sanitizeFiniteNumber(rawAnthro.weightKg ?? obj.weightKg, base.anthropometrics.weightKg, 35, 160, 0)
@@ -1854,7 +1916,10 @@ function ensureSnapshotInitialized(): AvatarSpecSnapshot {
   return cachedSnapshot;
 }
 
-function persistAndPublishSpec(nextCleanSpec: AvatarSpec): AvatarSpec {
+function persistAndPublishSpec(
+  nextCleanSpec: AvatarSpec,
+  options?: { throwOnStorageError?: boolean }
+): AvatarSpec {
   const nextHash = computeAvatarConfigHash(nextCleanSpec);
   hasPersistedV2Spec = true;
   legacyBaselineAtV2Commit = captureCurrentLegacyStorageBaseline();
@@ -1862,8 +1927,11 @@ function persistAndPublishSpec(nextCleanSpec: AvatarSpec): AvatarSpec {
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem(AVATAR_SPEC_STORAGE_KEY, JSON.stringify(nextCleanSpec));
-    } catch {
-      // Ignore quota errors
+    } catch (err) {
+      if (options?.throwOnStorageError) {
+        throw err;
+      }
+      // Ignore quota errors by default
     }
   }
 
@@ -1925,11 +1993,12 @@ export function subscribeAvatarSpec(listener: () => void): () => void {
 }
 
 export function setAvatarSpec(
-  nextOrUpdater: AvatarSpec | ((prev: AvatarSpec) => AvatarSpec)
+  nextOrUpdater: AvatarSpec | ((prev: AvatarSpec) => AvatarSpec),
+  options?: { throwOnStorageError?: boolean }
 ): AvatarSpec {
   const prev = ensureSnapshotInitialized().spec;
   const rawNext = typeof nextOrUpdater === 'function' ? nextOrUpdater(prev) : nextOrUpdater;
-  return persistAndPublishSpec(sanitizeAvatarSpec(rawNext));
+  return persistAndPublishSpec(sanitizeAvatarSpec(rawNext), options);
 }
 
 function mergeAvatarSpecPatch(prev: AvatarSpec, patch: AvatarSpecPatch): AvatarSpec {
@@ -2190,7 +2259,7 @@ export function bridgeLegacyPropsToAvatarSpec(
   const propHeightRaw = bodySpec?.heightCm ?? realUser?.heightCm;
   const propHeight =
     propHeightRaw !== null && propHeightRaw !== undefined && Number.isFinite(Number(propHeightRaw))
-      ? clamp(Math.round(Number(propHeightRaw)), 140, 205)
+      ? clamp(Math.round(Number(propHeightRaw)), 100, 230)
       : null;
   const heightCm =
     propHeight !== null && (!baseline || propHeight !== baseline.heightCm)

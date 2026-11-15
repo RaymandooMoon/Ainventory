@@ -325,11 +325,12 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(0);
 
-    // 3. Quick 1-Tap Skin-Tone Swatch on Studio Canvas changes model tone immediately
-    await studioCanvas.locator('[data-quick-skin-preset="deep_espresso"]').click();
-    await expect(mannequin).toHaveAttribute('data-skin-hex', '#8E5C40');
+    // 3. Bottom skin/height controls must be removed from /outfits stage and unified in Top Profile modal
+    await expect(studioCanvas.locator('[data-quick-skin-preset]')).toHaveCount(0);
+    await expect(studioCanvas.locator('#open-body-spec-btn')).toHaveCount(0);
+    await expect(studioCanvas.locator('.studio-25d-tone-dock')).toHaveCount(0);
 
-    // 4. Portrait Skin-Tone Analyzer Modal -> 4-pin L*a*b* extraction -> Apply (decluttered + popover metrics)
+    // 4. Unified Top Profile Modal -> Portrait Skin-Tone Analyzer + Height Validation Error Modal + Body Shape
     await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
     await expect(page.locator('#profile-tab-skin')).toBeVisible();
     await expect(page.locator('#profile-tab-body')).toBeVisible();
@@ -338,6 +339,22 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page.locator('.body-spec-account-badge')).toHaveCount(0);
     await expect(page.locator('[data-lighting-mode]')).toHaveCount(0);
     await expect(page.locator('.skin-lab-metrics')).toHaveCount(0);
+
+    // Direct height input validation: out-of-range value triggers centered role="alertdialog" error modal
+    const heightInput = page.locator('[data-height-cm-input="true"]');
+    await expect(heightInput).toBeVisible();
+    await heightInput.fill('260');
+    await heightInput.press('Enter');
+    const errorModal = page.locator('[data-profile-error-modal="true"]');
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('role', 'alertdialog');
+    await expect(errorModal.locator('[data-profile-error-message="true"]')).toContainText(
+      /100cm ~ 230cm|100cm – 230cm/
+    );
+    await errorModal.locator('[data-profile-error-confirm="true"]').click();
+    await expect(errorModal).toHaveCount(0);
+
+    await heightInput.fill('178');
 
     await page.locator('[data-sample-toggle="true"]').click();
     await page.locator('[data-sample-portrait="spring_warm"]').click();
@@ -349,24 +366,23 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('[data-skin-metrics-toggle="true"]').click();
     await expect(page.locator('[data-skin-metrics-popover="true"]')).toContainText('ITA°');
 
-    await page.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+    await page.locator('#profile-tab-body').click();
+    await expect(page.locator('[data-body-gender-btn]')).toHaveCount(0);
+    await page.locator('[data-body-shape-btn="muscular"]').click();
+    await page.locator('#apply-body-spec-btn').click();
 
     await expect(mannequin).toHaveAttribute('data-personal-color', 'spring_warm');
-    const updatedHex = await mannequin.getAttribute('data-skin-hex');
-    expect(updatedHex).not.toBe('#8E5C40');
+    await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
+    await expect(mannequin).toHaveAttribute('data-height-cm', '178');
 
-    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, 2D zoom & body shape morph)
+    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero angle buttons, 2D zoom)
     await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
     await studioCanvas.locator('[data-vton-zoom-in="true"]').click();
     await expect(mannequin).not.toHaveAttribute('data-zoom', '1.00');
     await studioCanvas.locator('[data-vton-zoom-level="true"]').click();
     await expect(mannequin).toHaveAttribute('data-zoom', '1.00');
-
-    await studioCanvas.locator('#open-body-spec-btn').click();
-    await expect(page.locator('[data-body-gender-btn]')).toHaveCount(0);
-    await page.locator('[data-body-shape-btn="muscular"]').click();
-    await page.locator('#apply-body-spec-btn').click();
-    await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
 
     // Unequipping Tops leaves an unbroken 2D editorial base model
     await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();

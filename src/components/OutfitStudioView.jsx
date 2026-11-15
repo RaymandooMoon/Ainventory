@@ -1132,6 +1132,34 @@ export default function OutfitStudioView({
     setSlots(next);
   };
 
+  const handleRestoreHistorySlots = useCallback(
+    (slotGarmentIds) => {
+      if (!slotGarmentIds || typeof slotGarmentIds !== 'object') return false;
+      const entries = Object.entries(slotGarmentIds);
+      if (entries.length === 0) return false;
+      const byId = new Map(garments.map((g) => [Number(g.id), g]));
+      const next = { ...EMPTY_STUDIO_SLOTS };
+      let matchedCount = 0;
+      for (const [slotKey, rawId] of entries) {
+        const g = byId.get(Number(rawId));
+        if (!g || !isWearableStudioGarment(g)) continue;
+        if (ALL_EQUIPPABLE_SLOT_KEYS.includes(slotKey)) {
+          next[slotKey] = g;
+          matchedCount += 1;
+        }
+      }
+      if (matchedCount === 0) return false;
+      userModifiedSlotsRef.current = true;
+      setActiveRecId(null);
+      setHasExplicitSlotState(true);
+      setManualRainUmbrellaCleared(!next.acc_umbrella);
+      triggerHaptic('selection');
+      setSlots(next);
+      return true;
+    },
+    [garments]
+  );
+
   const handleDeleteSavedOutfit = async (outfitId) => {
     try {
       await apiFetch(`/outfits/${outfitId}`, { method: 'DELETE' });
@@ -1738,6 +1766,7 @@ export default function OutfitStudioView({
             avatarSpec={bridgedAvatar.spec}
             avatarConfigHash={bridgedAvatar.avatarConfigHash}
             weather={weather}
+            scenarioKey={scenarioKey}
             forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -1747,6 +1776,7 @@ export default function OutfitStudioView({
               }
             }}
             onUnequipSlot={handleUnequipSlot}
+            onRestoreHistorySlots={handleRestoreHistorySlots}
             onQuickSelectPreset={handleQuickSelectSkinPreset}
             onOpenSkinToneModal={() => {
               if (onOpenSkinToneModal) onOpenSkinToneModal();

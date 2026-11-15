@@ -260,8 +260,8 @@ export function resolveAnatomicalProfile(rawProfile = {}) {
   const defaultWeight = isFemale ? 54 : isMale ? 70 : 62;
 
   const heightCm = Math.max(
-    135,
-    Math.min(210, Number(rawProfile.height_cm ?? rawProfile.heightCm) || defaultHeight)
+    100,
+    Math.min(230, Number(rawProfile.height_cm ?? rawProfile.heightCm) || defaultHeight)
   );
   const weightKg = Math.max(
     35,

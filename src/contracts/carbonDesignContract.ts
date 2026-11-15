@@ -128,7 +128,7 @@ export const CARBON_DOM_CONTRACT = {
   studioSaveOutfitBtnId: 'studio-save-outfit-btn',
   character25dMannequinId: 'character-25d-mannequin',
   weatherRecommendPanelId: 'weather-recommend-panel',
-  openSkinToneModalBtnId: 'open-skin-tone-modal-btn',
+  openSkinToneModalBtnId: 'open-profile-studio-btn',
   skinToneApplyBtnId: 'skin-tone-apply-btn',
   openAccountSettingsBtnId: 'open-account-settings-btn',
   initiateDeleteAccountBtnId: 'initiate-delete-account-btn',

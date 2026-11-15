@@ -9,14 +9,11 @@ import {
   History,
   KeyRound,
   LayoutGrid,
-  Palette,
   RefreshCw,
-  RotateCcw,
-  RotateCw,
   Scan,
-  SlidersHorizontal,
   Snowflake,
   Sparkles,
+  Sun,
   Trash2,
   Wind,
   X,
@@ -30,7 +27,6 @@ import {
   computeAvatarConfigHash,
   useAvatarSpec,
 } from '../services/avatarSpecStore.ts';
-import { SKIN_TONE_MANNEQUIN_PRESETS } from '../services/skinToneAnalyzer.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
   TURNAROUND_ANGLES,
@@ -42,22 +38,24 @@ import {
   isDemoVtonShowcaseActive,
   listCachedAiVtonOutfits,
   loadShowcaseDemoVtonSlices,
-  normalizeTurnaroundAngleDeg,
+  normalizeTurnaround360Angle,
   normalizeViewerMode,
   normalizeVtonStyleMode,
   peekMemoryAiVtonSlice,
   peekShowcaseDemoVtonSlice,
   readCachedAiVtonSlice,
+  resolve360AngleRenderSpec,
   resolveClientGeminiApiKey,
   setStoredClientGeminiApiKey,
   synthesizeGeminiMultiAngleVton,
   trackFlatLayComboVisit,
 } from '../services/vton2DService.ts';
+import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
 import {
   getWeatherStageBadgeMeta,
   resolveEffectiveWeatherFromRaw,
 } from '../services/weatherPromptBuilder.ts';
-import { getStoredLang, localizeGarmentName, tr } from '../utils/i18n.ts';
+import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
@@ -93,7 +91,16 @@ function writeStoredAutoGenEnabled(enabled) {
   }
 }
 
-import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
+function preloadImageUrls(urls) {
+  if (typeof Image === 'undefined' || !Array.isArray(urls)) return;
+  for (const url of urls) {
+    if (typeof url === 'string' && url.length > 0) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
+  }
+}
 
 const ORDERED_SLOT_KEYS = [
   'acc_head',
@@ -124,53 +131,6 @@ const ORDERED_SLOT_KEYS = [
   'acc_umbrella',
 ];
 
-const QUICK_SKIN_PRESETS = [
-  SKIN_TONE_MANNEQUIN_PRESETS[0],
-  SKIN_TONE_MANNEQUIN_PRESETS[1],
-  SKIN_TONE_MANNEQUIN_PRESETS[2],
-  SKIN_TONE_MANNEQUIN_PRESETS[4],
-  SKIN_TONE_MANNEQUIN_PRESETS[6],
-  SKIN_TONE_MANNEQUIN_PRESETS[7],
-];
-
-const PRESET_LABEL_EN = {
-  porcelain_cool: 'Porcelain Cool',
-  spring_ivory: 'Spring Ivory',
-  summer_rose: 'Summer Rose',
-  warm_vanilla: 'Warm Vanilla',
-  autumn_beige: 'Autumn Beige',
-  winter_neutral: 'Winter Neutral',
-  honey_tan: 'Honey Bronze',
-  deep_espresso: 'Deep Espresso',
-};
-
-const TURNAROUND_ANGLE_LABELS = {
-  0: {
-    wordKo: '정면',
-    wordEn: 'Front',
-    fullKo: '0° 정면 뷰',
-    fullEn: '0° Front View',
-  },
-  45: {
-    wordKo: '쿼터뷰',
-    wordEn: 'Quarter',
-    fullKo: '45° 쿼터뷰',
-    fullEn: '45° Quarter View',
-  },
-  90: {
-    wordKo: '측면',
-    wordEn: 'Side',
-    fullKo: '90° 측면 뷰',
-    fullEn: '90° Side Profile',
-  },
-  180: {
-    wordKo: '후면',
-    wordEn: 'Back',
-    fullKo: '180° 후면 뷰',
-    fullEn: '180° Back View',
-  },
-};
-
 const WEATHER_CAPSULE_SHORT_LABELS = {
   rain: { ko: '비', en: 'Rain' },
   snow: { ko: '눈', en: 'Snow' },
@@ -179,9 +139,10 @@ const WEATHER_CAPSULE_SHORT_LABELS = {
   wind: { ko: '강풍', en: 'Windy' },
   cloudy: { ko: '흐림', en: 'Cloudy' },
   clear: { ko: '맑음', en: 'Clear' },
+  mild: { ko: '포근', en: 'Mild' },
 };
 
-function renderWeatherCapsuleIcon(effectiveWeather) {
+function renderWeatherCapsuleIcon(effectiveWeather, scenarioKey) {
   if (effectiveWeather === 'rain') return <CloudRain size={15} />;
   if (effectiveWeather === 'snow' || effectiveWeather === 'coldwave') {
     return <Snowflake size={15} />;
@@ -189,26 +150,13 @@ function renderWeatherCapsuleIcon(effectiveWeather) {
   if (effectiveWeather === 'heatwave') return <Flame size={15} />;
   if (effectiveWeather === 'wind') return <Wind size={15} />;
   if (effectiveWeather === 'cloudy') return <Cloud size={15} />;
+  if (scenarioKey === 'crisp_autumn') return <Sun size={15} />;
   return <CloudSun size={15} />;
 }
 
 function formatZoomLabel(zoomValue) {
   const rounded = Math.round((Number(zoomValue) || 1) * 10) / 10;
   return `${rounded.toFixed(1)}×`;
-}
-
-function getTurnaroundAngleMeta(angleDeg, lang) {
-  const safeAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
-  const meta = TURNAROUND_ANGLE_LABELS[safeAngle] || TURNAROUND_ANGLE_LABELS[45];
-  const isEn = lang === 'en';
-  return {
-    angleDeg: safeAngle,
-    word: isEn ? meta.wordEn : meta.wordKo,
-    fullLabel: isEn ? meta.fullEn : meta.fullKo,
-    resetAriaLabel: isEn
-      ? `${meta.fullEn} — Reset to 45° quarter view`
-      : `${meta.fullKo} — 45° 쿼터뷰 초기화`,
-  };
 }
 
 function isKeyActionableReason(reason) {
@@ -275,11 +223,11 @@ function formatFallbackToastMessage(reason, lang) {
 }
 
 /**
- * Dual-Mode High-Fashion Outfits Central Viewer (Zero Procedural Human Drawing):
+ * Dual-Mode High-Fashion Outfits Central Viewer:
  * ① Default Primary Mode: `AI Try-On ('ai-vton')` — `100% Gemini Multimodal Image Generation VTON`
- *    (`0° / 45° / 90° / 180°` turnaround sheet, `[Photorealistic | Stylized Isometric]` style toggle,
- *    IndexedDB 0ms cache, glassmorphism shimmer overlay over Flat-Lay while generating)
- * ② Instant Lookbook Mode: `Editorial Flat-Lay Board ('flatlay')` — 0ms latency, 100% original aspect ratio
+ *    (Default `0°` front view, 8-angle `0°..315°` velocity-sensitive swipe rotation, Top-Center
+ *    `[실사 모델 | 시뮬레이션]` toggle, working Top-Right `기록` drawer, V4 hole-aware matting).
+ * ② Instant Lookbook Mode: `Editorial Flat-Lay Board ('flatlay')` — 0ms latency, 100% original aspect ratio.
  */
 const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   slots,
@@ -293,12 +241,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   viewAngleDeg: controlledViewAngleDeg,
   onViewAngleChange,
   weather,
+  scenarioKey = 'live',
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
-  onQuickSelectPreset,
-  onOpenSkinToneModal,
-  onOpenBodyModal,
+  onRestoreHistorySlots,
+  onQuickSelectPreset: _legacyQuickSelectPreset,
+  onOpenSkinToneModal: _legacyOpenSkinToneModal,
+  onOpenBodyModal: _legacyOpenBodyModal,
   lang,
   forceRefresh = false,
   forceRefreshNonce = 0,
@@ -312,6 +262,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onUserOrbit: _legacyOnUserOrbit,
   gender: _legacyGender,
 }) {
+  void _legacyQuickSelectPreset;
+  void _legacyOpenSkinToneModal;
+  void _legacyOpenBodyModal;
   void _legacyCameraPreset;
   void _legacyPresetNonce;
   void _legacyOnUserOrbit;
@@ -343,30 +296,83 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return bridgedAvatar.avatarConfigHash;
   }, [avatarConfigHash, avatarSpec, bridgedAvatar.avatarConfigHash]);
 
+  // Default 0° Front View + 8-step 360° swipe rotation ring (0, 45, 90, 135, 180, 225, 270, 315)
   const [internalViewAngleDeg, setInternalViewAngleDeg] = useState(DEFAULT_TURNAROUND_ANGLE);
   const viewAngleDeg =
     controlledViewAngleDeg !== undefined
-      ? normalizeTurnaroundAngleDeg(controlledViewAngleDeg, DEFAULT_TURNAROUND_ANGLE)
+      ? normalizeTurnaround360Angle(controlledViewAngleDeg, DEFAULT_TURNAROUND_ANGLE)
       : internalViewAngleDeg;
 
-  const handleViewAngleChange = useCallback(
+  const viewAngleRef = useRef(viewAngleDeg);
+  useEffect(() => {
+    viewAngleRef.current = viewAngleDeg;
+  }, [viewAngleDeg]);
+
+  const angleSpec = useMemo(
+    () => resolve360AngleRenderSpec(viewAngleDeg),
+    [viewAngleDeg]
+  );
+  const canonicalSliceAngle = angleSpec.canonicalSliceAngle;
+
+  const spinTimersRef = useRef([]);
+  const swipeBadgeTimerRef = useRef(null);
+  const [swipeHudBadgeVisible, setSwipeHudBadgeVisible] = useState(false);
+
+  const clearSpinTimers = useCallback(() => {
+    for (const id of spinTimersRef.current) {
+      clearTimeout(id);
+    }
+    spinTimersRef.current = [];
+  }, []);
+
+  const flashSwipeAngleBadge = useCallback(() => {
+    setSwipeHudBadgeVisible(true);
+    if (swipeBadgeTimerRef.current) {
+      clearTimeout(swipeBadgeTimerRef.current);
+    }
+    swipeBadgeTimerRef.current = setTimeout(() => {
+      setSwipeHudBadgeVisible(false);
+    }, 1350);
+  }, []);
+
+  const commitAngleDeg = useCallback(
     (nextRawAngle) => {
-      const normalized = normalizeTurnaroundAngleDeg(nextRawAngle, DEFAULT_TURNAROUND_ANGLE);
+      const normalized = normalizeTurnaround360Angle(
+        nextRawAngle,
+        DEFAULT_TURNAROUND_ANGLE
+      );
+      viewAngleRef.current = normalized;
       setInternalViewAngleDeg(normalized);
       onViewAngleChange?.(normalized);
     },
     [onViewAngleChange]
   );
 
-  const handleStepAngle = useCallback(
-    (stepDelta) => {
-      const idx = TURNAROUND_ANGLES.indexOf(viewAngleDeg);
-      const curIdx = idx >= 0 ? idx : 1;
-      const len = TURNAROUND_ANGLES.length;
-      const nextAngle = TURNAROUND_ANGLES[(curIdx + stepDelta + len) % len];
-      handleViewAngleChange(nextAngle);
+  const handleSwipeRotate = useCallback(
+    ({ stepSign, fastFlick }) => {
+      clearSpinTimers();
+      const sign = stepSign >= 0 ? 1 : -1;
+      const startAngle = viewAngleRef.current;
+      flashSwipeAngleBadge();
+
+      if (!fastFlick) {
+        commitAngleDeg(startAngle + sign * 45);
+        return;
+      }
+
+      // Fast flick (velocity >= 0.8 px/ms): rapid 4-step 180° opposite-view spin
+      const step1 = normalizeTurnaround360Angle(startAngle + sign * 45);
+      const step2 = normalizeTurnaround360Angle(startAngle + sign * 90);
+      const step3 = normalizeTurnaround360Angle(startAngle + sign * 135);
+      const step4Opposite = normalizeTurnaround360Angle(startAngle + 180);
+
+      commitAngleDeg(step1);
+      const t2 = setTimeout(() => commitAngleDeg(step2), 28);
+      const t3 = setTimeout(() => commitAngleDeg(step3), 56);
+      const t4 = setTimeout(() => commitAngleDeg(step4Opposite), 84);
+      spinTimersRef.current = [t2, t3, t4];
     },
-    [viewAngleDeg, handleViewAngleChange]
+    [clearSpinTimers, commitAngleDeg, flashSwipeAngleBadge]
   );
 
   const [stageMode, setStageMode] = useState('ai-vton');
@@ -390,6 +396,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearTimeout(step3Timer);
     };
   }, [aiLoading]);
+
   const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(() =>
     isDemoVtonShowcaseActive()
   );
@@ -419,9 +426,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const forceBypassCacheRef = useRef(false);
   const manualDemoRef = useRef(false);
   const configBlockedRef = useRef(false);
+  const restoringFromHistoryRef = useRef(false);
 
   const refreshHistoryList = useCallback(() => {
-    listCachedAiVtonOutfits(20)
+    listCachedAiVtonOutfits(24)
       .then((items) => {
         setHistoryItems(items);
       })
@@ -445,13 +453,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   }, [refreshHistoryList]);
 
+  // Dismiss open `기록` or `API 키` popover cleanly on Escape key
+  useEffect(() => {
+    if (!historyOpen && !keyPopoverOpen) return undefined;
+    const handleKeyDown = (ev) => {
+      if (ev.key === 'Escape') {
+        ev.stopPropagation();
+        setHistoryOpen(false);
+        setKeyPopoverOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyOpen, keyPopoverOpen]);
+
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
     setStatusToast({ reason, ts: Date.now() });
-    // Keep missing/invalid API key banner pinned until user configures key or dismisses it
     if (!isKeyActionableReason(reason)) {
       toastTimerRef.current = setTimeout(() => {
         setStatusToast(null);
@@ -461,12 +482,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   useEffect(() => {
     return () => {
+      clearSpinTimers();
+      if (swipeBadgeTimerRef.current) {
+        clearTimeout(swipeBadgeTimerRef.current);
+      }
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
       abortControllerRef.current?.abort();
     };
-  }, []);
+  }, [clearSpinTimers]);
 
   const layers = useMemo(() => {
     if (slots && typeof slots === 'object') {
@@ -496,6 +521,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     () => resolveEffectiveWeatherFromRaw(weather),
     [weather]
   );
+  const weatherOverlayMode = useMemo(() => {
+    if (scenarioKey === 'warm_spring') return 'mild';
+    if (scenarioKey === 'live' && effectiveWeather === 'clear') return 'forecast';
+    return effectiveWeather;
+  }, [scenarioKey, effectiveWeather]);
+
   const weatherBadgeMeta = useMemo(
     () => getWeatherStageBadgeMeta(weather, resolvedLang),
     [weather, resolvedLang]
@@ -513,11 +544,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
 
-  // Changing garments in the wardrobe returns focus from pinned history back to live outfit
+  // Manual garment changes in the wardrobe unpin history (unless triggered by history slot restoration)
   useEffect(() => {
     if (prevOutfitComboRef.current !== outfitComboId) {
       prevOutfitComboRef.current = outfitComboId;
-      setPinnedHistoryItem(null);
+      if (restoringFromHistoryRef.current) {
+        restoringFromHistoryRef.current = false;
+      } else {
+        setPinnedHistoryItem(null);
+      }
     }
   }, [outfitComboId]);
 
@@ -528,12 +563,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         outfitComboId,
         styleMode,
         effectiveWeather,
-        angleDeg: viewAngleDeg,
+        angleDeg: canonicalSliceAngle,
       }),
-    [resolvedAvatarHash, outfitComboId, styleMode, effectiveWeather, viewAngleDeg]
+    [resolvedAvatarHash, outfitComboId, styleMode, effectiveWeather, canonicalSliceAngle]
   );
 
-  // Instant 0ms L1 memory slice lookup when switching angles, styles, weather, or revisiting outfits
   const historyCount = historyItems.length;
   const memorySlice = useMemo(() => {
     void historyCount;
@@ -543,14 +577,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       outfitComboId,
       styleMode,
       effectiveWeather,
-      angleDeg: viewAngleDeg,
+      angleDeg: canonicalSliceAngle,
     });
   }, [
     resolvedAvatarHash,
     outfitComboId,
     styleMode,
     effectiveWeather,
-    viewAngleDeg,
+    canonicalSliceAngle,
     forceRefresh,
     historyCount,
   ]);
@@ -558,12 +592,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const demoSliceUrl = useMemo(
     () =>
       demoShowcaseEnabled
-        ? peekShowcaseDemoVtonSlice(styleMode, viewAngleDeg)
+        ? peekShowcaseDemoVtonSlice(styleMode, canonicalSliceAngle)
         : null,
-    [demoShowcaseEnabled, styleMode, viewAngleDeg]
+    [demoShowcaseEnabled, styleMode, canonicalSliceAngle]
   );
 
-  // Track Flat-Lay combination visits for deterministic revisit state
   const flatLayCached = useMemo(
     () =>
       trackFlatLayComboVisit(
@@ -579,7 +612,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     user,
     resolvedAvatarSpec,
     resolvedAvatarHash,
-    viewAngleDeg,
+    canonicalSliceAngle,
     styleMode,
     weather,
     effectiveWeather,
@@ -597,7 +630,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       user,
       resolvedAvatarSpec,
       resolvedAvatarHash,
-      viewAngleDeg,
+      canonicalSliceAngle,
       styleMode,
       weather,
       effectiveWeather,
@@ -608,11 +641,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   });
 
-  // Smart Credit-Saver Gemini Multimodal VTON Pipeline (Weather-Pose + RGBA Cutout v2):
-  // 1) L1 Memory (0ms) + L2 IndexedDB (~3ms) automatic reuse with 0 AI credits
-  // 2) Auto-runs on initial entry, when user uploads a new face photo, or when user switches weather tabs;
-  //    stages subsequent manual garment edits within the same weather mode at 0ms on Flat-Lay until
-  //    the user clicks [✨ 이 코디 AI 피팅 생성] (unless Auto-Gen is explicitly enabled)
+  // Smart Credit-Saver Gemini Multimodal VTON Pipeline (V4 Hole-Aware Cutout + Full-Body Floor Lock)
   useEffect(() => {
     abortControllerRef.current?.abort();
 
@@ -675,7 +704,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           outfitComboId,
           styleMode: snap.styleMode,
           effectiveWeather: snap.effectiveWeather,
-          angleDeg: snap.viewAngleDeg,
+          angleDeg: snap.canonicalSliceAngle,
         })
       : null;
 
@@ -698,7 +727,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     if (demoShowcaseEnabled && !isForceBypass) {
       const cachedDemoUrl = peekShowcaseDemoVtonSlice(
         snap.styleMode,
-        snap.viewAngleDeg
+        snap.canonicalSliceAngle
       );
       if (cachedDemoUrl) {
         pendingFacePhotoApproveRef.current = null;
@@ -724,30 +753,35 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     let delayTimerId = null;
 
     const runPipeline = async () => {
-      // Step A: Fast ~3ms IndexedDB lookup before deciding whether to stage or call Gemini
       if (!isForceBypass) {
         const idbHit = await readCachedAiVtonSlice({
           avatarConfigHash: snap.resolvedAvatarHash,
           outfitComboId,
           styleMode: snap.styleMode,
           effectiveWeather: snap.effectiveWeather,
-          angleDeg: snap.viewAngleDeg,
+          angleDeg: snap.canonicalSliceAngle,
         });
         if (controller.signal.aborted) return;
 
         if (idbHit) {
-          // Warm all sibling turnaround angles into L1 memory in background
-          for (const deg of TURNAROUND_ANGLES) {
-            if (deg !== snap.viewAngleDeg) {
-              void readCachedAiVtonSlice({
-                avatarConfigHash: snap.resolvedAvatarHash,
-                outfitComboId,
-                styleMode: snap.styleMode,
-                effectiveWeather: snap.effectiveWeather,
-                angleDeg: deg,
-              });
-            }
-          }
+          const siblingPromises = TURNAROUND_ANGLES.filter(
+            (deg) => deg !== snap.canonicalSliceAngle
+          ).map((deg) =>
+            readCachedAiVtonSlice({
+              avatarConfigHash: snap.resolvedAvatarHash,
+              outfitComboId,
+              styleMode: snap.styleMode,
+              effectiveWeather: snap.effectiveWeather,
+              angleDeg: deg,
+            })
+          );
+          void Promise.all(siblingPromises).then((hits) => {
+            preloadImageUrls([
+              idbHit.slice.imageUrl,
+              ...hits.map((h) => h?.slice?.imageUrl).filter(Boolean),
+            ]);
+          });
+
           pendingFacePhotoApproveRef.current = null;
           pendingWeatherApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
@@ -764,7 +798,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         }
       }
 
-      // Step B: Credit-Saver Staged Gate — after initial entry, do NOT burn credits on every garment tap!
       if (
         !isUserApproved &&
         !isDirectDemoClick &&
@@ -821,8 +854,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             pendingFacePhotoApproveRef.current = null;
             pendingWeatherApproveRef.current = null;
             setAiLoading(false);
+            if (slices) {
+              preloadImageUrls(Object.values(slices));
+            }
             const targetUrl =
-              slices?.[liveSnap.viewAngleDeg] || slices?.[45] || slices?.[0] || null;
+              slices?.[liveSnap.canonicalSliceAngle] ||
+              slices?.[0] ||
+              slices?.[45] ||
+              null;
             if (targetUrl) {
               configBlockedRef.current = false;
               setAiState({
@@ -859,7 +898,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           user: liveSnap.user,
           avatarSpec: liveSnap.resolvedAvatarSpec,
           avatarConfigHash: liveSnap.resolvedAvatarHash,
-          viewAngleDeg: liveSnap.viewAngleDeg,
+          viewAngleDeg: liveSnap.canonicalSliceAngle,
           styleMode: liveSnap.styleMode,
           weather: liveSnap.weather,
           turnaroundSheet: true,
@@ -873,6 +912,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pendingWeatherApproveRef.current = null;
 
         if (outcome.ok && outcome.imageUrl) {
+          if (outcome.angleSlices) {
+            preloadImageUrls(Object.values(outcome.angleSlices));
+          }
           setAiLoading(false);
           configBlockedRef.current = false;
           setStagedNeedsApply(false);
@@ -954,7 +996,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast]
   );
 
-  // Explicit 1-click generation for a newly staged outfit (uses cache if hit, calls Gemini if new)
   const handleApproveStagedSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
@@ -974,7 +1015,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast]
   );
 
-  // Explicit regeneration / retry (bypasses cache when user clicks top Refresh or Retry)
   const handleRetryAiSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
@@ -995,7 +1035,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [equippedCount, showToast]
   );
 
-  // Top Header `새로고침` (`forceRefreshNonce`) -> bypasses local & server cache and regenerates immediately
   useEffect(() => {
     if (forceRefreshNonce > 0 && forceRefreshNonce !== prevRefreshNonceRef.current) {
       prevRefreshNonceRef.current = forceRefreshNonce;
@@ -1014,6 +1053,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleToggleHistoryPopover = useCallback(
     (e) => {
+      e?.preventDefault?.();
       e?.stopPropagation?.();
       setHistoryOpen((prev) => {
         const next = !prev;
@@ -1035,18 +1075,43 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStagedNeedsApply(false);
       setStyleMode(item.styleMode);
       setStageMode('ai-vton');
+
+      if (item.angleSlices) {
+        preloadImageUrls(Object.values(item.angleSlices));
+      }
+
+      // Restore equipped wardrobe slots when garment IDs are recorded on this history entry
+      let restoredLiveCombo = false;
       if (
-        item.outfitComboId === outfitComboId &&
-        item.avatarConfigHash === resolvedAvatarHash &&
-        (!item.effectiveWeather || item.effectiveWeather === effectiveWeather)
+        item.slotGarmentIds &&
+        Object.keys(item.slotGarmentIds).length > 0 &&
+        onRestoreHistorySlots
       ) {
+        restoringFromHistoryRef.current = true;
+        restoredLiveCombo = Boolean(onRestoreHistorySlots(item.slotGarmentIds));
+        if (!restoredLiveCombo) {
+          restoringFromHistoryRef.current = false;
+        }
+      }
+
+      const matchesLiveState =
+        (item.outfitComboId === outfitComboId || restoredLiveCombo) &&
+        item.avatarConfigHash === resolvedAvatarHash &&
+        (!item.effectiveWeather || item.effectiveWeather === effectiveWeather);
+
+      if (matchesLiveState) {
         setPinnedHistoryItem(null);
       } else {
         setPinnedHistoryItem(item);
       }
       setHistoryOpen(false);
     },
-    [outfitComboId, resolvedAvatarHash, effectiveWeather]
+    [
+      outfitComboId,
+      resolvedAvatarHash,
+      effectiveWeather,
+      onRestoreHistorySlots,
+    ]
   );
 
   const handleDeleteHistoryItem = useCallback(
@@ -1126,7 +1191,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
       setStatusToast(null);
-      // Approve synthesis ONLY if uncached — NEVER force-bypass existing L1/IndexedDB cache!
       userApprovedGenRef.current = true;
       forceBypassCacheRef.current = false;
       if (stageMode === 'ai-vton') {
@@ -1192,7 +1256,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const isRainy = effectiveWeather === 'rain';
   const isWindy = effectiveWeather === 'wind' || effectiveWeather === 'coldwave';
-  const angleMeta = getTurnaroundAngleMeta(viewAngleDeg, resolvedLang);
 
   const isShowingPinnedHistory = Boolean(
     stageMode === 'ai-vton' &&
@@ -1205,9 +1268,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const pinnedHistorySliceUrl = isShowingPinnedHistory
-    ? pinnedHistoryItem.angleSlices?.[viewAngleDeg] ||
-      pinnedHistoryItem.angleSlices?.[45] ||
+    ? pinnedHistoryItem.angleSlices?.[canonicalSliceAngle] ||
       pinnedHistoryItem.angleSlices?.[0] ||
+      pinnedHistoryItem.angleSlices?.[45] ||
       pinnedHistoryItem.thumbnailUrl ||
       null
     : null;
@@ -1228,16 +1291,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ? Boolean(isShowingPinnedHistory || memorySlice || aiState?.fromCache || demoSliceUrl)
       : flatLayCached;
 
-  const activeSkinHex = (
-    skinProfile?.skinToneHex ||
-    resolvedAvatarSpec?.appearance?.skinToneHex ||
-    ''
-  ).toUpperCase();
-  const displayHeightCm =
-    bodySpec?.heightCm ?? resolvedAvatarSpec?.anthropometrics?.heightCm;
-  const displayWeightKg =
-    bodySpec?.weightKg ?? resolvedAvatarSpec?.anthropometrics?.weightKg;
-
   const capsuleTempC = useMemo(() => {
     if (typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)) {
       return Math.round(weather.avgTemp);
@@ -1249,14 +1302,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     if (effectiveWeather === 'snow') return -1;
     if (effectiveWeather === 'heatwave') return 31;
     if (effectiveWeather === 'rain') return 11;
+    if (scenarioKey === 'warm_spring') return 19;
     return 12;
-  }, [weather, effectiveWeather]);
+  }, [weather, effectiveWeather, scenarioKey]);
 
   const capsuleStatusWord = useMemo(() => {
+    if (scenarioKey === 'warm_spring') {
+      return isEn ? WEATHER_CAPSULE_SHORT_LABELS.mild.en : WEATHER_CAPSULE_SHORT_LABELS.mild.ko;
+    }
     const pair =
       WEATHER_CAPSULE_SHORT_LABELS[effectiveWeather] || WEATHER_CAPSULE_SHORT_LABELS.clear;
     return isEn ? pair.en : pair.ko;
-  }, [effectiveWeather, isEn]);
+  }, [effectiveWeather, scenarioKey, isEn]);
+
+  const hasConfiguredGeminiKey =
+    hasSavedClientKey ||
+    hasServerConfiguredKey ||
+    Boolean(resolveClientGeminiApiKey());
 
   return (
     <div
@@ -1266,6 +1328,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-stage-mode={stageMode}
       data-stage-theme={resolvedTheme}
       data-effective-weather={effectiveWeather}
+      data-weather-scenario={scenarioKey}
       data-vton-style={styleMode}
       data-equipped-count={equippedCount}
       data-vton-provider={activeProvider}
@@ -1274,18 +1337,24 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-view-angle={viewAngleDeg}
       data-avatar-hash={resolvedAvatarHash}
     >
-      {/* Stage Base (z-0..2): Warm Beige / Obsidian Showroom Backdrop + Sunlight Gobos */}
+      {/* Stage Base (z-0..2): 3D Architectural Showroom Backdrop + Sunlight Gobos */}
       <div aria-hidden="true" className="studio-25d-keylight" />
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
-      <FittingAtelierBackdrop effectiveWeather={effectiveWeather} theme={resolvedTheme} />
+      <FittingAtelierBackdrop
+        effectiveWeather={effectiveWeather}
+        scenarioKey={scenarioKey}
+        theme={resolvedTheme}
+      />
 
       {/* Layer 1A (z-10): Perspective Ground Horizon Deck + Real-Time Wet Mirror Reflection + Contact AO Shadow */}
       <StageGroundDeck
         effectiveWeather={effectiveWeather}
+        scenarioKey={scenarioKey}
         theme={resolvedTheme}
         modelImageUrl={resolvedAiImageUrl}
         stageMode={stageMode}
         equippedCount={equippedCount}
+        mirrorX={angleSpec.mirrorX}
         zoom={zoom}
         pan={pan}
         compareActive={effectiveCompareActive}
@@ -1313,17 +1382,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   : '의류·체형 스펙 분석 중...'
                 : loadingStepIdx === 1
                   ? isEn
-                    ? `Rendering ${viewAngleDeg}° front-safe weather pose...`
-                    : `${viewAngleDeg}° 날씨 포즈 AI 렌더링 중...`
+                    ? `Rendering ${canonicalSliceAngle}° full-body weather pose...`
+                    : `${canonicalSliceAngle}° 전신 날씨 포즈 AI 렌더링 중...`
                   : isEn
-                    ? 'V3 horizon-free cutout & ground reflection...'
-                    : 'V3 투명 누끼 및 지면 반사 합성 중...'}
+                    ? 'V4 hole-aware cutout & floor reflection...'
+                    : 'V4 내부 홀 투명 누끼 및 지면 접지 합성 중...'}
             </span>
           </div>
         </>
       )}
 
-      {/* Layer 4 (z-55+): Top HUD — Editorial Brand + Weather Capsule Badge (Left) & Saved/Profile (Right) */}
+      {/* Layer 4 (z-55+): Top 3-Zone HUD — Left Brand/Weather | Top-Center [실사 모델 | 시뮬레이션] | Right [기록] */}
       <div className="studio-stage-top-hud">
         <div className="atelier-stage-brand-cluster" aria-hidden="true">
           <div className="atelier-stage-title-lockup" data-atelier-stage-header="true">
@@ -1332,7 +1401,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
           <div className="atelier-weather-capsule" data-atelier-weather-capsule="true">
             <span className="atelier-weather-capsule-icon">
-              {renderWeatherCapsuleIcon(effectiveWeather)}
+              {renderWeatherCapsuleIcon(effectiveWeather, scenarioKey)}
             </span>
             <div className="atelier-weather-capsule-metrics">
               <strong className="atelier-weather-capsule-temp tabular-nums">
@@ -1345,20 +1414,72 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
         </div>
 
+        {/* Top-Center Floating Segmented Control: [실사 모델 | 시뮬레이션] */}
+        <div className="studio-hud-center-toggle-wrap">
+          <div
+            className="studio-vton-segmented-pill studio-hud-style-segmented"
+            data-hud-style-segmented="true"
+            role="group"
+            aria-label={isEn ? 'AI generation style' : 'AI 생성 화풍 선택'}
+          >
+            <button
+              type="button"
+              data-vton-style-toggle="photorealistic"
+              aria-pressed={styleMode === 'photorealistic'}
+              title={
+                isEn
+                  ? 'Photorealistic Studio Model'
+                  : '스튜디오 실사 모델 (Photorealistic)'
+              }
+              className={`studio-vton-seg-btn ${styleMode === 'photorealistic' ? 'is-active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectStyleMode('photorealistic');
+              }}
+            >
+              {styleMode === 'photorealistic' && (
+                <Check size={11} strokeWidth={2.6} aria-hidden="true" />
+              )}
+              <span>{isEn ? 'Photo' : '실사 모델'}</span>
+            </button>
+            <button
+              type="button"
+              data-vton-style-toggle="stylized_isometric"
+              aria-pressed={styleMode === 'stylized_isometric'}
+              title={
+                isEn
+                  ? 'Stylized Isometric Simulation'
+                  : '감성 시뮬레이션 캐릭터 (Stylized Isometric)'
+              }
+              className={`studio-vton-seg-btn ${styleMode === 'stylized_isometric' ? 'is-active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectStyleMode('stylized_isometric');
+              }}
+            >
+              {styleMode === 'stylized_isometric' && (
+                <Check size={11} strokeWidth={2.6} aria-hidden="true" />
+              )}
+              <span>{isEn ? 'Stylized' : '시뮬레이션'}</span>
+            </button>
+          </div>
+        </div>
+
         <div className="studio-vton-hud-right">
           <button
             type="button"
             data-vton-history-btn="true"
+            aria-haspopup="dialog"
             aria-expanded={historyOpen}
             aria-label={
               isEn
                 ? `Saved AI Try-On outfits (${historyItems.length})`
-                : `이전 AI 피팅 보관함 (${historyItems.length})`
+                : `이전 AI 피팅 기록 (${historyItems.length})`
             }
             title={
               isEn
                 ? 'Reuse previously generated AI outfits (0 credits)'
-                : '이전에 생성한 AI 피팅 즉시 불러오기 (크레딧 차감 0)'
+                : '이전에 생성한 AI 피팅 기록 즉시 불러오기 (크레딧 차감 0)'
             }
             className={`studio-vton-history-pill-btn tabular-nums ${historyOpen ? 'is-active' : ''}`}
             onClick={handleToggleHistoryPopover}
@@ -1369,32 +1490,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               <span className="studio-vton-history-count">{historyItems.length}</span>
             )}
           </button>
-
-          <button
-            id="open-body-spec-btn"
-            type="button"
-            className="studio-body-pill-btn tabular-nums"
-            aria-label={tr(
-              resolvedLang,
-              'editProfileBtn',
-              isEn ? 'Body & Personal Color' : '체형 설정 열기'
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenBodyModal?.();
-            }}
-          >
-            <SlidersHorizontal size={12} />
-            <span>
-              {displayHeightCm && displayWeightKg
-                ? `${displayHeightCm}·${displayWeightKg}`
-                : tr(resolvedLang, 'profileBtn', 'Profile')}
-            </span>
-          </button>
         </div>
       </div>
 
-      {/* Left-Upper Floating Smoked-Glass Circular Controls (Zoom + Scan/Split Compare) */}
+      {/* Left-Upper Floating Smoked-Glass Circular Controls (Zoom + Scan/Split Compare + API Key Icon) */}
       <div className="atelier-stage-left-controls">
         <div
           className="studio-vton-zoom-bar"
@@ -1448,55 +1547,25 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <Scan size={15} />
           <span className="studio-vton-compare-label">B/A</span>
         </button>
-      </div>
 
-      {/* Bottom-Left Floating Circular/Capsule Undo & Turnaround Rotate Control */}
-      <div
-        className="studio-iso-rotate-bar atelier-bottom-left-rotate"
-        role="group"
-        aria-label={isEn ? 'View angle controls' : '뷰 각도 회전'}
-      >
         <button
+          id="open-vton-api-key-btn"
           type="button"
-          data-iso-rotate-btn="ccw"
-          className="studio-iso-rotate-btn"
-          aria-label={isEn ? 'Rotate counter-clockwise' : '반시계 방향 회전'}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleStepAngle(-1);
-          }}
+          data-vton-hud-key-btn="true"
+          aria-expanded={keyPopoverOpen}
+          aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
+          title={isEn ? 'Gemini API Key' : 'Gemini API 키 설정'}
+          className={`studio-vton-compare-btn studio-vton-key-circle-btn ${keyPopoverOpen ? 'is-active' : ''}`}
+          onClick={handleToggleKeyPopover}
         >
-          <RotateCcw size={14} />
-        </button>
-        <button
-          type="button"
-          data-iso-angle-badge={viewAngleDeg}
-          title={angleMeta.fullLabel}
-          aria-label={angleMeta.resetAriaLabel}
-          className={`studio-iso-angle-badge tabular-nums ${viewAngleDeg !== DEFAULT_TURNAROUND_ANGLE ? 'is-rotated' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleViewAngleChange(DEFAULT_TURNAROUND_ANGLE);
-          }}
-        >
-          <span className="studio-iso-angle-deg">{angleMeta.angleDeg}°</span>
-          <span className="studio-iso-angle-word">{angleMeta.word}</span>
-        </button>
-        <button
-          type="button"
-          data-iso-rotate-btn="cw"
-          className="studio-iso-rotate-btn"
-          aria-label={isEn ? 'Rotate clockwise' : '시계 방향 회전'}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleStepAngle(1);
-          }}
-        >
-          <RotateCw size={14} />
+          <KeyRound size={14} />
+          {hasConfiguredGeminiKey && (
+            <span className="studio-vton-key-circle-dot" aria-hidden="true" />
+          )}
         </button>
       </div>
 
-      {/* Weather Curation Pill Badge (e.g. `비 · 우산 코디 | 비 9°/13°`, `한파 · 방한 코디 | 한파 -10°/-4°`) */}
+      {/* Weather Curation Pill Badge */}
       <div
         className="studio-weather-curation-badge tabular-nums"
         data-weather-stage-badge={effectiveWeather}
@@ -1505,6 +1574,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         <span className="studio-weather-curation-dot" />
         <span className="studio-weather-curation-text">{weatherBadgeMeta.fullText}</span>
       </div>
+
+      {/* Transient Non-Interactive 360° Swipe Angle Feedback Pill (fades out automatically) */}
+      {swipeHudBadgeVisible && (
+        <div
+          className="studio-swipe-angle-feedback tabular-nums"
+          data-swipe-angle-feedback={viewAngleDeg}
+          aria-hidden="true"
+        >
+          <span>{isEn ? angleSpec.fullEn : angleSpec.fullKo}</span>
+        </div>
+      )}
 
       {/* Layer 1 (z-10 Floor Contact Shadow) + Layer 2 (z-20 RGBA Transparent Model / Flat-Lay Board) */}
       <EditorialFlatLayBoard
@@ -1539,6 +1619,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           null
         }
         viewAngleDeg={viewAngleDeg}
+        onSwipeRotate={handleSwipeRotate}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
         onCompareSplitChange={setCompareSplitPct}
@@ -1552,14 +1633,28 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       {/* Layer 3 (z-30 Standalone Weather Environment Overlay — pointer-events: none) */}
       <WeatherCanvasOverlay
-        weather={effectiveWeather}
+        weather={weatherOverlayMode}
         isDark={resolvedTheme === 'dark'}
         umbrellaCollisionEnabled={
           stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
         }
       />
 
-      {/* Smart Credit-Saver Staged CTA Bar: Lets user swap multiple garments at 0ms & 0 credits before generating */}
+      {/* Click-outside dismiss scrim for open `기록` or `API 키` popover */}
+      {(historyOpen || keyPopoverOpen) && (
+        <div
+          aria-hidden="true"
+          data-vton-popover-backdrop="true"
+          className="studio-popover-dismiss-scrim"
+          onClick={(e) => {
+            e.stopPropagation();
+            setHistoryOpen(false);
+            setKeyPopoverOpen(false);
+          }}
+        />
+      )}
+
+      {/* Smart Credit-Saver Staged CTA Bar */}
       {!effectiveCompareActive &&
         !keyPopoverOpen &&
         !historyOpen &&
@@ -1711,7 +1806,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   }}
                 >
                   <KeyRound size={11} />
-                  <span>{isEn ? 'API Key' : '키 설정'}</span>
+                  <span>{isEn ? 'API Key' : 'API 키'}</span>
                 </button>
                 <button
                   type="button"
@@ -1728,20 +1823,21 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
         )}
 
-      {/* Persistent IndexedDB AI Fitting History Popover (0ms / 0-credit reuse) */}
+      {/* Persistent IndexedDB AI Fitting History Drawer / Popover (Top-Right anchored, 0ms / 0-credit reuse) */}
       {historyOpen && (
         <div
           className="studio-vton-history-popover"
           data-vton-history-popover="true"
           role="dialog"
-          aria-label={isEn ? 'Saved AI Try-On history' : '이전 AI 피팅 보관함'}
+          aria-modal="false"
+          aria-label={isEn ? 'Saved AI Try-On history' : '이전 AI 피팅 기록 보관함'}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="studio-vton-key-popover-head">
             <span className="studio-vton-key-popover-title">
               {isEn
                 ? `Saved AI Fittings (${historyItems.length})`
-                : `이전 AI 피팅 보관함 (${historyItems.length})`}
+                : `이전 AI 피팅 기록 (${historyItems.length})`}
             </span>
             <div className="studio-vton-history-head-actions">
               <button
@@ -1774,15 +1870,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
           <p className="studio-vton-key-popover-desc">
             {isEn
-              ? 'Tap any previously generated look to view all 4 angles instantly with 0 AI credits.'
-              : '생성했던 코디는 브라우저에 자동 보관되어 크레딧 소모 없이 0초 만에 불러옵니다.'}
+              ? 'Select any previously generated look to restore it across 360° angles instantly with 0 AI credits.'
+              : '생성했던 코디 기록을 클릭하면 크레딧 소모 없이 360° 전 각도를 즉시 불러옵니다.'}
           </p>
 
           {historyItems.length === 0 ? (
-            <div className="studio-vton-history-empty">
+            <div className="studio-vton-history-empty" data-vton-history-empty="true">
               {isEn
                 ? 'No saved AI fittings yet. Generated outfits will appear here automatically.'
-                : '아직 보관된 AI 피팅이 없습니다. 코디를 AI 피팅으로 생성하면 이곳에 자동 저장됩니다.'}
+                : '아직 저장된 AI 피팅 기록이 없습니다. 코디를 AI 피팅으로 생성하면 이곳에 자동 기록됩니다.'}
             </div>
           ) : (
             <div className="studio-vton-history-list">
@@ -1794,7 +1890,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     item.styleMode === styleMode &&
                     Boolean(resolvedAiImageUrl);
                 const thumbSrc =
-                  item.angleSlices?.[viewAngleDeg] ||
+                  item.angleSlices?.[canonicalSliceAngle] ||
+                  item.angleSlices?.[0] ||
                   item.angleSlices?.[45] ||
                   item.thumbnailUrl;
                 return (
@@ -1833,11 +1930,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                               : '실사 모델'}
                         </span>
                         <span>·</span>
-                        <span>
-                          {isEn
-                            ? `${item.availableAngles.length} angles`
-                            : `${item.availableAngles.length}각도`}
-                        </span>
+                        <span>{isEn ? '360° Swipe' : '360° 회전'}</span>
                         <span>·</span>
                         <span>{isEn ? '0 Credit' : '0 크레딧'}</span>
                       </span>
@@ -1863,7 +1956,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Compact Inline Gemini API Key Popover for Browser / Standalone Environments */}
+      {/* Compact Inline Gemini API Key Popover */}
       {keyPopoverOpen && (
         <div
           className="studio-vton-key-popover"
@@ -1891,8 +1984,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
           <p className="studio-vton-key-popover-desc">
             {isEn
-              ? 'Stored locally in your browser for multi-angle Gemini VTON. (On local dev, paste here or set GEMINI_API_KEY in .env.local — GitHub Secrets are not pulled via git.)'
-              : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다. (로컬 서버는 보안상 GitHub Secrets가 git pull로 내려오지 않으므로 이곳에 붙여넣거나 .env.local에 GEMINI_API_KEY를 설정하세요)'}
+              ? 'Stored locally in your browser for multi-angle Gemini VTON. (On local dev, paste here or set GEMINI_API_KEY in .env.local.)'
+              : '브라우저에 안전하게 저장되어 다각도 Gemini AI 피팅에 사용됩니다. (로컬 개발 시 이곳에 붙여넣거나 .env.local에 GEMINI_API_KEY를 설정하세요)'}
           </p>
           <div className="studio-vton-key-links">
             <a
@@ -1914,6 +2007,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               href="https://aistudio.google.com/billing"
               target="_blank"
               rel="noopener noreferrer"
+              data-vton-billing-link="true"
               className="studio-vton-key-ext-link"
               aria-label={
                 isEn
@@ -1972,7 +2066,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Left Worn-Slot Chips Dock: Always visible whenever layers.length > 0 */}
+      {/* Left Worn-Slot Chips Dock */}
       {equippedCount > 0 && (
         <div
           className="studio-worn-slots-dock"
@@ -2046,14 +2140,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Mode Switcher (AI Try-On Default First) + AI Style Toggle + 4-Direction Turnaround Angle Quick Rail */}
+      {/* Compact Non-Intrusive Bottom-Left Stage View Switcher ([AI 피팅 | 플랫레이]) — leaves center floor 100% clear */}
       <div
-        className="studio-vton-mode-rail"
+        className="studio-vton-mode-rail is-bottom-left-compact"
         role="toolbar"
         aria-label={
           isEn
-            ? 'AI virtual try-on and lookbook board controls'
-            : 'AI 가상 피팅 및 플랫레이 보드 제어'
+            ? 'AI virtual try-on and lookbook board switcher'
+            : 'AI 가상 피팅 및 플랫레이 보드 전환'
         }
       >
         <div className="studio-vton-segmented-pill" role="group">
@@ -2084,141 +2178,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             <span>{isEn ? 'Flat-Lay' : '플랫레이'}</span>
           </button>
         </div>
-
-        <div
-          className="studio-vton-segmented-pill"
-          role="group"
-          aria-label={isEn ? 'AI generation style' : 'AI 생성 화풍 선택'}
-        >
-          <button
-            type="button"
-            data-vton-style-toggle="photorealistic"
-            aria-pressed={styleMode === 'photorealistic'}
-            title={
-              isEn
-                ? 'Photorealistic Studio Model'
-                : '스튜디오 실사 모델 (Photorealistic)'
-            }
-            className={`studio-vton-seg-btn ${styleMode === 'photorealistic' ? 'is-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSelectStyleMode('photorealistic');
-            }}
-          >
-            {styleMode === 'photorealistic' && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
-            <span>{isEn ? 'Photo' : '실사 모델'}</span>
-          </button>
-          <button
-            type="button"
-            data-vton-style-toggle="stylized_isometric"
-            aria-pressed={styleMode === 'stylized_isometric'}
-            title={
-              isEn
-                ? 'Stylized Isometric Character'
-                : '감성 시뮬레이션 캐릭터 (Stylized Isometric)'
-            }
-            className={`studio-vton-seg-btn ${styleMode === 'stylized_isometric' ? 'is-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSelectStyleMode('stylized_isometric');
-            }}
-          >
-            {styleMode === 'stylized_isometric' && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
-            <span>{isEn ? 'Stylized' : '시뮬레이션'}</span>
-          </button>
-        </div>
-
-        <div
-          className="studio-vton-angle-pills"
-          role="group"
-          aria-label={isEn ? '4-direction turnaround angles' : '4방향 다각도 선택'}
-        >
-          {TURNAROUND_ANGLES.map((deg) => {
-            const isSelected = viewAngleDeg === deg;
-            const meta = TURNAROUND_ANGLE_LABELS[deg];
-            return (
-              <button
-                key={deg}
-                type="button"
-                data-vton-angle-btn={deg}
-                aria-pressed={isSelected}
-                title={isEn ? meta.fullEn : meta.fullKo}
-                className={`studio-vton-angle-pill tabular-nums ${isSelected ? 'is-active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleViewAngleChange(deg);
-                }}
-              >
-                {deg}°
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Bottom Minimal Skin-Tone Swatch Dock */}
-      <div
-        className="studio-25d-tone-dock"
-        aria-label={isEn ? 'Model skin tone' : '모델 피부톤 변경'}
-      >
-        <div className="studio-25d-tone-swatches">
-          {QUICK_SKIN_PRESETS.map((preset) => {
-            const active = activeSkinHex === preset.skinToneHex.toUpperCase();
-            const labelText = isEn
-              ? PRESET_LABEL_EN[preset.key] || preset.key
-              : preset.shortKo;
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                data-quick-skin-preset={preset.key}
-                title={labelText}
-                aria-label={
-                  isEn
-                    ? `Apply ${labelText} skin tone`
-                    : `${preset.shortKo} 마네킹 톤 적용`
-                }
-                className={`studio-tone-dot ${active ? 'is-active' : ''}`}
-                style={{ backgroundColor: preset.skinToneHex }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickSelectPreset?.(preset);
-                }}
-              />
-            );
-          })}
-        </div>
-        <button
-          id={CARBON_DOM_CONTRACT.openSkinToneModalBtnId}
-          type="button"
-          className="studio-tone-analyze-btn"
-          aria-label={isEn ? 'Open skin tone analysis' : '피부톤 분석 열기'}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenSkinToneModal?.();
-          }}
-        >
-          <Palette size={12} />
-          <span>{isEn ? 'Tone' : '피부톤'}</span>
-        </button>
-        <button
-          id="open-vton-api-key-btn"
-          type="button"
-          data-vton-hud-key-btn="true"
-          aria-expanded={keyPopoverOpen}
-          aria-label={isEn ? 'Configure Gemini API key' : 'Gemini API 키 설정'}
-          title={isEn ? 'Gemini API Key Settings' : 'Gemini API 키 설정'}
-          className={`studio-tone-analyze-btn studio-vton-key-dock-btn ${keyPopoverOpen ? 'is-active' : ''}`}
-          onClick={handleToggleKeyPopover}
-        >
-          <KeyRound size={12} />
-          <span>{isEn ? 'API Key' : '키 설정'}</span>
-          {(hasSavedClientKey ||
-            hasServerConfiguredKey ||
-            Boolean(resolveClientGeminiApiKey())) && (
-            <span className="studio-vton-key-saved-dot" aria-hidden="true" />
-          )}
-        </button>
       </div>
     </div>
   );

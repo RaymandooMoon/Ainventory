@@ -114,7 +114,7 @@ export function sanitizeBodySpec(partial?: Partial<BodyMorphSpec> | null): BodyM
 
   return {
     gender,
-    heightCm: Number.isFinite(h) && h > 0 ? clamp(Math.round(h), 140, 205) : def.heightCm,
+    heightCm: Number.isFinite(h) && h > 0 ? clamp(Math.round(h), 100, 230) : def.heightCm,
     weightKg: Number.isFinite(w) && w > 0 ? clamp(Math.round(w), 35, 160) : def.weightKg,
     bodyShape: normalizeBodyShape(partial?.bodyShape),
     shoulderScale: Number.isFinite(sh) && sh > 0 ? clamp(Number(sh.toFixed(2)), 0.75, 1.35) : 1,
@@ -134,13 +134,19 @@ export function getStoredBodySpec(): BodyMorphSpec {
   }
 }
 
-export function saveStoredBodySpec(spec: Partial<BodyMorphSpec>): BodyMorphSpec {
+export function saveStoredBodySpec(
+  spec: Partial<BodyMorphSpec>,
+  options?: { throwOnError?: boolean }
+): BodyMorphSpec {
   const clean = sanitizeBodySpec(spec);
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(BODY_STORAGE_KEY, JSON.stringify(clean));
-    } catch {
-      // ignore storage quota
+    } catch (err) {
+      if (options?.throwOnError) {
+        throw err;
+      }
+      // ignore storage quota by default
     }
   }
   return clean;

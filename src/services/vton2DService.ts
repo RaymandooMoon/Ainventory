@@ -28,10 +28,12 @@ import {
   CUTOUT_PIPELINE_VERSION,
   CUTOUT_STAGE_BACKDROP_HEX,
   type EffectiveWeatherMode,
+  LEGACY_CUTOUT_PIPELINE_VERSIONS,
   buildTurnaround2x2SheetAngleDirectives,
   buildTurnaroundAnglePromptDirective,
   buildWeatherPosePromptDirectives,
   resolveEffectiveWeatherFromRaw,
+  selectOptimalStudioKeyHex,
 } from './weatherPromptBuilder.ts';
 
 export type CanonicalViewerMode = '2d-vton';
@@ -42,9 +44,26 @@ export type VtonStyleMode = 'photorealistic' | 'stylized_isometric';
 
 export type TurnaroundAngleDeg = 0 | 45 | 90 | 180;
 
+export type Turnaround360AngleDeg = 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315;
+
 export const TURNAROUND_ANGLES: readonly TurnaroundAngleDeg[] = [0, 45, 90, 180] as const;
 
-export const DEFAULT_TURNAROUND_ANGLE: TurnaroundAngleDeg = 45;
+export const TURNAROUND_360_ANGLES: readonly Turnaround360AngleDeg[] = [
+  0, 45, 90, 135, 180, 225, 270, 315,
+] as const;
+
+export const DEFAULT_TURNAROUND_ANGLE: TurnaroundAngleDeg = 0;
+
+export interface Turnaround360RenderSpec {
+  angleDeg: Turnaround360AngleDeg;
+  canonicalSliceAngle: TurnaroundAngleDeg;
+  mirrorX: boolean;
+  perspectiveYawDeg: number;
+  shortKo: string;
+  shortEn: string;
+  fullKo: string;
+  fullEn: string;
+}
 
 export type VtonProviderId = 'flatlay-lookbook' | 'gemini-vton';
 
@@ -130,6 +149,7 @@ export interface CachedAiVtonSlice {
   sheetImageUrl?: string | null;
   outfitLabel?: string;
   garmentLabels?: string[];
+  slotGarmentIds?: Record<string, number | string>;
   equippedCount?: number;
   model: string;
   updatedAt: number;
@@ -143,6 +163,7 @@ export interface AiVtonHistoryEntry {
   effectiveWeather?: EffectiveWeatherMode;
   outfitLabel: string;
   garmentLabels: string[];
+  slotGarmentIds?: Record<string, number | string>;
   equippedCount: number;
   thumbnailUrl: string;
   angleSlices: Partial<Record<TurnaroundAngleDeg, string>>;
@@ -298,6 +319,114 @@ export function normalizeVtonStyleMode(raw?: unknown): VtonStyleMode {
 }
 
 /**
+ * Normalizes any numeric degree onto the 8-angle 360° studio ring:
+ * `0°`, `45°`, `90°`, `135°`, `180°`, `225°`, `270°`, `315°`.
+ */
+export function normalizeTurnaround360Angle(
+  rawAngle?: unknown,
+  fallback: Turnaround360AngleDeg = DEFAULT_TURNAROUND_ANGLE
+): Turnaround360AngleDeg {
+  if (rawAngle === null || rawAngle === undefined || rawAngle === '') {
+    return fallback;
+  }
+  const n = Number(rawAngle);
+  if (!Number.isFinite(n)) return fallback;
+  const wrapped = ((n % 360) + 360) % 360;
+  const snapped = (Math.round(wrapped / 45) * 45) % 360;
+  return (TURNAROUND_360_ANGLES.includes(snapped as Turnaround360AngleDeg)
+    ? snapped
+    : fallback) as Turnaround360AngleDeg;
+}
+
+const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
+  0: {
+    angleDeg: 0,
+    canonicalSliceAngle: 0,
+    mirrorX: false,
+    perspectiveYawDeg: 0,
+    shortKo: '정면',
+    shortEn: 'Front',
+    fullKo: '0° 정면',
+    fullEn: '0° Front',
+  },
+  45: {
+    angleDeg: 45,
+    canonicalSliceAngle: 45,
+    mirrorX: false,
+    perspectiveYawDeg: 0,
+    shortKo: '우측 45°',
+    shortEn: '45° R',
+    fullKo: '45° 우측 쿼터',
+    fullEn: '45° Front-Right',
+  },
+  90: {
+    angleDeg: 90,
+    canonicalSliceAngle: 90,
+    mirrorX: false,
+    perspectiveYawDeg: 0,
+    shortKo: '우측면',
+    shortEn: 'Right',
+    fullKo: '90° 우측면',
+    fullEn: '90° Right Side',
+  },
+  135: {
+    angleDeg: 135,
+    canonicalSliceAngle: 180,
+    mirrorX: false,
+    perspectiveYawDeg: -10,
+    shortKo: '우후면',
+    shortEn: '135° R',
+    fullKo: '135° 우측 후면',
+    fullEn: '135° Back-Right',
+  },
+  180: {
+    angleDeg: 180,
+    canonicalSliceAngle: 180,
+    mirrorX: false,
+    perspectiveYawDeg: 0,
+    shortKo: '후면',
+    shortEn: 'Back',
+    fullKo: '180° 후면',
+    fullEn: '180° Back',
+  },
+  225: {
+    angleDeg: 225,
+    canonicalSliceAngle: 180,
+    mirrorX: true,
+    perspectiveYawDeg: 10,
+    shortKo: '좌후면',
+    shortEn: '225° L',
+    fullKo: '225° 좌측 후면',
+    fullEn: '225° Back-Left',
+  },
+  270: {
+    angleDeg: 270,
+    canonicalSliceAngle: 90,
+    mirrorX: true,
+    perspectiveYawDeg: 0,
+    shortKo: '좌측면',
+    shortEn: 'Left',
+    fullKo: '270° 좌측면',
+    fullEn: '270° Left Side',
+  },
+  315: {
+    angleDeg: 315,
+    canonicalSliceAngle: 45,
+    mirrorX: true,
+    perspectiveYawDeg: 0,
+    shortKo: '좌측 45°',
+    shortEn: '315° L',
+    fullKo: '315° 좌측 쿼터',
+    fullEn: '315° Front-Left',
+  },
+};
+
+export function resolve360AngleRenderSpec(rawAngle?: unknown): Turnaround360RenderSpec {
+  const angle360 = normalizeTurnaround360Angle(rawAngle, DEFAULT_TURNAROUND_ANGLE);
+  return TURNAROUND_360_SPEC_MAP[angle360];
+}
+
+/**
  * Normalizes any numeric degree onto the 4 canonical turnaround angles:
  * `0°` (Front), `45°` (Quarter), `90°` (Side Profile), `180°` (Back).
  */
@@ -310,11 +439,7 @@ export function normalizeTurnaroundAngleDeg(
   }
   const n = Number(rawAngle);
   if (!Number.isFinite(n)) return fallback;
-  const wrapped = (((n % 360) + 360) % 360);
-  if (wrapped <= 22 || wrapped >= 338) return 0;
-  if (wrapped >= 135 && wrapped <= 225) return 180;
-  if ((wrapped >= 68 && wrapped < 135) || (wrapped > 225 && wrapped <= 292)) return 90;
-  return 45;
+  return resolve360AngleRenderSpec(n).canonicalSliceAngle;
 }
 
 // oxlint-disable-next-line typescript/no-explicit-any
@@ -471,8 +596,8 @@ export function normalizeGenderNeutralProfile(
           172
       ) || 172
     ),
-    140,
-    205
+    100,
+    230
   );
   const weightKg = clamp(
     Math.round(
@@ -639,14 +764,15 @@ export function buildAiVtonCacheKey(params: {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
-  angleDeg: TurnaroundAngleDeg;
+  angleDeg: number;
   effectiveWeather?: EffectiveWeatherMode | null;
   weather?: unknown;
 }): string {
   const ew: EffectiveWeatherMode =
     params.effectiveWeather ||
     (params.weather ? resolveEffectiveWeatherFromRaw(params.weather) : 'clear');
-  return `${CUTOUT_PIPELINE_VERSION}::${params.avatarConfigHash}::${params.outfitComboId}::${params.styleMode}::${ew}::${params.angleDeg}`;
+  const canonicalAngle = normalizeTurnaroundAngleDeg(params.angleDeg, DEFAULT_TURNAROUND_ANGLE);
+  return `${CUTOUT_PIPELINE_VERSION}::${params.avatarConfigHash}::${params.outfitComboId}::${params.styleMode}::${ew}::${canonicalAngle}`;
 }
 
 export function trackFlatLayComboVisit(comboKey: string): boolean {
@@ -683,7 +809,7 @@ export function peekMemoryAiVtonSlice(params: {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
-  angleDeg: TurnaroundAngleDeg;
+  angleDeg: number;
   effectiveWeather?: EffectiveWeatherMode | null;
   weather?: unknown;
 }): CachedAiVtonSlice | null {
@@ -723,7 +849,7 @@ export async function readCachedAiVtonSlice(params: {
   avatarConfigHash: string;
   outfitComboId: string;
   styleMode: VtonStyleMode;
-  angleDeg: TurnaroundAngleDeg;
+  angleDeg: number;
   effectiveWeather?: EffectiveWeatherMode | null;
   weather?: unknown;
 }): Promise<{ slice: CachedAiVtonSlice; layer: 'memory' | 'indexeddb' } | null> {
@@ -765,8 +891,7 @@ export async function readCachedAiVtonSlice(params: {
 
   if (!rawRecord) return null;
 
-  // Enforce 4-corner alpha verification guard (`(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)`)
-  // on ALL cached records (including PNGs that previously retained an opaque studio wall/floor).
+  // Enforce 4-corner + enclosed-hole alpha verification guard on ALL cached records
   const verifiedUrl = await ensureTransparentCutout(rawRecord.imageUrl);
   markCacheKeyTransparentVerified(rawRecord.cacheKey);
   if (verifiedUrl && verifiedUrl !== rawRecord.imageUrl) {
@@ -824,13 +949,21 @@ async function persistAiVtonSlices(entries: CachedAiVtonSlice[]): Promise<void> 
   });
 }
 
+function isSupportedHistoryCacheKey(cacheKey?: string | null): boolean {
+  if (!cacheKey || typeof cacheKey !== 'string') return false;
+  if (cacheKey.startsWith(`${CUTOUT_PIPELINE_VERSION}::`)) return true;
+  return LEGACY_CUTOUT_PIPELINE_VERSIONS.some((legacyVer) =>
+    cacheKey.startsWith(`${legacyVer}::`)
+  );
+}
+
 export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistoryEntry[]> {
   const allRecords: CachedAiVtonSlice[] = [];
   const seenKeys = new Set<string>();
 
   for (const memSlice of l1SliceCache.values()) {
     if (
-      memSlice?.cacheKey?.startsWith(`${CUTOUT_PIPELINE_VERSION}::`) &&
+      isSupportedHistoryCacheKey(memSlice?.cacheKey) &&
       memSlice.imageUrl?.startsWith('data:image/')
     ) {
       seenKeys.add(memSlice.cacheKey);
@@ -854,7 +987,7 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
 
     for (const rec of dbRecords) {
       if (
-        rec?.cacheKey?.startsWith(`${CUTOUT_PIPELINE_VERSION}::`) &&
+        isSupportedHistoryCacheKey(rec?.cacheKey) &&
         !seenKeys.has(rec.cacheKey) &&
         rec.imageUrl?.startsWith('data:image/')
       ) {
@@ -864,6 +997,9 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
       }
     }
   }
+
+  // Sort oldest-to-newest before grouping so newer V4 slices always win over older V3 slices
+  allRecords.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
 
   const grouped = new Map<string, AiVtonHistoryEntry>();
   for (const rec of allRecords) {
@@ -882,6 +1018,7 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
           rec.outfitLabel ||
           (labels.length > 0 ? labels.slice(0, 2).join(' · ') : '저장된 AI 피팅'),
         garmentLabels: labels,
+        ...(rec.slotGarmentIds ? { slotGarmentIds: { ...rec.slotGarmentIds } } : {}),
         equippedCount: rec.equippedCount || labels.length || 1,
         thumbnailUrl: rec.imageUrl,
         angleSlices: {},
@@ -902,9 +1039,12 @@ export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistory
       if (Array.isArray(rec.garmentLabels) && rec.garmentLabels.length > 0) {
         group.garmentLabels = rec.garmentLabels;
       }
+      if (rec.slotGarmentIds && Object.keys(rec.slotGarmentIds).length > 0) {
+        group.slotGarmentIds = { ...rec.slotGarmentIds };
+      }
     }
     group.thumbnailUrl =
-      group.angleSlices[45] || group.angleSlices[0] || group.thumbnailUrl || rec.imageUrl;
+      group.angleSlices[0] || group.angleSlices[45] || group.thumbnailUrl || rec.imageUrl;
   }
 
   return [...grouped.values()]
@@ -921,19 +1061,16 @@ export async function deleteCachedAiVtonOutfit(params: {
   const weatherModesToClear: EffectiveWeatherMode[] = params.effectiveWeather
     ? [params.effectiveWeather]
     : ['clear', 'cloudy', 'rain', 'snow', 'wind', 'heatwave', 'coldwave'];
+  const allVersions = [CUTOUT_PIPELINE_VERSION, ...LEGACY_CUTOUT_PIPELINE_VERSIONS];
 
   const keysToDelete: string[] = [];
-  for (const ew of weatherModesToClear) {
-    for (const angleDeg of TURNAROUND_ANGLES) {
-      keysToDelete.push(
-        buildAiVtonCacheKey({
-          avatarConfigHash: params.avatarConfigHash,
-          outfitComboId: params.outfitComboId,
-          styleMode: params.styleMode,
-          effectiveWeather: ew,
-          angleDeg,
-        })
-      );
+  for (const ver of allVersions) {
+    for (const ew of weatherModesToClear) {
+      for (const angleDeg of TURNAROUND_ANGLES) {
+        keysToDelete.push(
+          `${ver}::${params.avatarConfigHash}::${params.outfitComboId}::${params.styleMode}::${ew}::${angleDeg}`
+        );
+      }
     }
   }
 
@@ -1172,14 +1309,148 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   return cleanCanvas;
 }
 
+function measureOpaqueVerticalBounds(
+  canvas: HTMLCanvasElement
+): { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number } | null {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 16 || ch < 16) return null;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  const data = ctx.getImageData(0, 0, cw, ch).data;
+
+  let minY = ch;
+  let maxY = -1;
+  let minX = cw;
+  let maxX = -1;
+  let fgPixels = 0;
+
+  for (let y = 0; y < ch; y += 1) {
+    const rowOff = y * cw;
+    for (let x = 0; x < cw; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 48) {
+        fgPixels += 1;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+  }
+
+  if (fgPixels < 16 || maxY < minY) return null;
+  return { minY, maxY, minX, maxX, fgPixels };
+}
+
+/**
+ * Ensures all 4 sliced turnaround angles (`0°`, `45°`, `90°`, `180°`) stand on a unified
+ * bottom floor baseline with generous shoe clearance and consistent full-body height so
+ * `45°` never appears high-angle, zoomed-in, or cropped at the feet relative to `0°/90°/180°`.
+ * Preserves bit-exact pixels (zero resampling) when slices already share an aligned baseline.
+ */
+function normalizeTurnaroundCanvasesToFloorBaseline(
+  canvases: Record<TurnaroundAngleDeg, HTMLCanvasElement>
+): void {
+  const boundsByAngle = {} as Record<
+    TurnaroundAngleDeg,
+    ReturnType<typeof measureOpaqueVerticalBounds>
+  >;
+  const heights: number[] = [];
+  const bottoms: number[] = [];
+
+  for (const angle of TURNAROUND_ANGLES) {
+    const b = measureOpaqueVerticalBounds(canvases[angle]);
+    boundsByAngle[angle] = b;
+    if (b) {
+      heights.push(b.maxY - b.minY + 1);
+      bottoms.push(b.maxY);
+    }
+  }
+
+  if (heights.length < 2) return;
+
+  const sortedH = heights.slice().sort((a, b) => a - b);
+  const medianFgH = sortedH[Math.floor(sortedH.length / 2)];
+  const sortedBottoms = bottoms.slice().sort((a, b) => a - b);
+  const medianBottom = sortedBottoms[Math.floor(sortedBottoms.length / 2)];
+
+  for (const angle of TURNAROUND_ANGLES) {
+    const c = canvases[angle];
+    const b = boundsByAngle[angle];
+    if (!c || !b) continue;
+    const cw = c.width;
+    const ch = c.height;
+    if (ch < 64) continue;
+
+    const fgH = b.maxY - b.minY + 1;
+    const targetMaxAllowedH = Math.round(ch * 0.865);
+    const canonicalFloorY = Math.min(
+      Math.round(ch * 0.94),
+      Math.max(Math.round(ch * 0.85), medianBottom)
+    );
+    const targetFloorY =
+      medianBottom > Math.round(ch * 0.955) ? Math.round(ch * 0.935) : canonicalFloorY;
+
+    const heightDiffRatio = medianFgH > 0 ? Math.abs(fgH - medianFgH) / medianFgH : 0;
+    const needsScaleNormalization =
+      ch >= 180 && (fgH > Math.round(ch * 0.895) || heightDiffRatio > 0.075);
+    const bottomDelta = targetFloorY - b.maxY;
+
+    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 3) {
+      continue;
+    }
+
+    const scratch = document.createElement('canvas');
+    scratch.width = cw;
+    scratch.height = ch;
+    const sCtx = scratch.getContext('2d');
+    const cCtx = c.getContext('2d', { willReadFrequently: true });
+    if (!sCtx || !cCtx) {
+      scratch.width = 0;
+      scratch.height = 0;
+      continue;
+    }
+
+    sCtx.clearRect(0, 0, cw, ch);
+    sCtx.drawImage(c, 0, 0);
+    cCtx.clearRect(0, 0, cw, ch);
+    cCtx.imageSmoothingEnabled = true;
+    cCtx.imageSmoothingQuality = 'high';
+
+    if (needsScaleNormalization) {
+      const desiredFgH = Math.min(targetMaxAllowedH, medianFgH);
+      const scale = clamp(desiredFgH / Math.max(1, fgH), 0.76, 1.14);
+      const fgW = b.maxX - b.minX + 1;
+      const srcCx = b.minX + fgW * 0.5;
+      const dstW = Math.round(cw * scale);
+      const dstH = Math.round(ch * scale);
+      const dstX = Math.round(cw * 0.5 - srcCx * scale);
+      const dstY = Math.round(targetFloorY - b.maxY * scale);
+      cCtx.drawImage(scratch, 0, 0, cw, ch, dstX, dstY, dstW, dstH);
+    } else {
+      // Pure integer vertical translation — zero pixel resampling blur!
+      const clampedDy = clamp(
+        Math.round(bottomDelta),
+        Math.round(ch * 0.03) - b.minY,
+        ch - 2 - b.maxY
+      );
+      cCtx.drawImage(scratch, 0, clampedDy);
+    }
+
+    scratch.width = 0;
+    scratch.height = 0;
+  }
+}
+
 /**
  * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual RGBA PNG angle images:
  * - Top-Left     -> `0°` (Front)
  * - Top-Right    -> `45°` (Quarter)
  * - Bottom-Left  -> `90°` (Side Profile)
  * - Bottom-Right -> `180°` (Back)
- * Runs `removeModelBackgroundToPng` + `isolateSingleSubjectInSlice` + `applyCornerBfsCutoutOnCanvas`
- * so EVERY slice is a true RGBA transparent PNG (`data:image/png;base64,...`) with ZERO opaque white box.
+ * Runs `isolateSingleSubjectInSlice` + V4 hole-aware `applyCornerBfsCutoutOnCanvas` +
+ * `normalizeTurnaroundCanvasesToFloorBaseline` so EVERY slice is a true RGBA transparent PNG
+ * (`data:image/png;base64,...`) with zero enclosed backdrop islands and aligned full-body feet!
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string
@@ -1245,6 +1516,9 @@ export async function sliceTurnaround2x2Sheet(
         }
 
         const out = {} as Record<TurnaroundAngleDeg, string>;
+        const cutCanvases = {} as Record<TurnaroundAngleDeg, HTMLCanvasElement>;
+        const extraCanvases: HTMLCanvasElement[] = [];
+
         for (const q of quadrants) {
           const cropCanvas = document.createElement('canvas');
           cropCanvas.width = q.cw;
@@ -1257,14 +1531,33 @@ export async function sliceTurnaround2x2Sheet(
           ctx.clearRect(0, 0, q.cw, q.ch);
           ctx.drawImage(img, q.sx, q.sy, q.cw, q.ch, 0, 0, q.cw, q.ch);
           const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
-          applyCornerBfsCutoutOnCanvas(finalCanvas);
-          out[q.angle] = finalCanvas.toDataURL('image/png');
           if (finalCanvas !== cropCanvas) {
-            finalCanvas.width = 0;
-            finalCanvas.height = 0;
+            extraCanvases.push(cropCanvas);
           }
-          cropCanvas.width = 0;
-          cropCanvas.height = 0;
+          applyCornerBfsCutoutOnCanvas(finalCanvas);
+          cutCanvases[q.angle] = finalCanvas;
+        }
+
+        if (
+          cutCanvases[0] &&
+          cutCanvases[45] &&
+          cutCanvases[90] &&
+          cutCanvases[180]
+        ) {
+          normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
+        }
+
+        for (const angle of TURNAROUND_ANGLES) {
+          const c = cutCanvases[angle];
+          if (c) {
+            out[angle] = c.toDataURL('image/png');
+            c.width = 0;
+            c.height = 0;
+          }
+        }
+        for (const extra of extraCanvases) {
+          extra.width = 0;
+          extra.height = 0;
         }
         resolve(out);
       } catch {
@@ -1285,7 +1578,7 @@ export async function sliceTurnaround2x2Sheet(
     };
   }
 
-  // Run 4-corner alpha verification guard across ALL 4 turnaround angles (0°, 45°, 90°, 180°)
+  // Run 4-corner + enclosed-hole alpha verification guard across ALL 4 turnaround angles
   const verifiedOut = {} as Record<TurnaroundAngleDeg, string>;
   await Promise.all(
     TURNAROUND_ANGLES.map(async (angle) => {
@@ -1319,7 +1612,7 @@ const showcaseInFlight: Partial<
 
 export function peekShowcaseDemoVtonSlice(
   styleMode: VtonStyleMode,
-  angleDeg: TurnaroundAngleDeg
+  angleDeg: number
 ): string | null {
   const normalizedStyle = normalizeVtonStyleMode(styleMode);
   const normalizedAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
@@ -1609,10 +1902,16 @@ function buildDirectClientGeminiParts(params: {
   const isStylized = styleMode === 'stylized_isometric';
   const hasUmbrella = Boolean(serializedSlots.acc_umbrella || serializedSlots.umbrella);
 
+  const equippedColorHexes = Object.values(serializedSlots).map((it) =>
+    typeof it.color_hex === 'string' ? it.color_hex : null
+  );
+  const optimalBackdropHex = selectOptimalStudioKeyHex(equippedColorHexes);
+
   const weatherBundle = buildWeatherPosePromptDirectives({
     weather: weather ?? { mood: weatherMood },
     hasEquippedUmbrella: hasUmbrella,
     turnaroundSheet,
+    equippedColorHexes,
   });
 
   const header = isStylized
@@ -1620,8 +1919,8 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround2x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
-    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
+    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround2x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
+    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
   const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${weatherBundle.combinedPrompt}`;
@@ -2191,6 +2490,12 @@ export async function synthesizeGeminiMultiAngleVton(
       const garmentLabels = equippedGarments
         .map(({ garment }) => String(garment.name || '').trim())
         .filter(Boolean);
+      const slotGarmentIds: Record<string, number | string> = {};
+      for (const { slotKey, garment } of equippedGarments) {
+        if (garment?.id !== undefined && garment?.id !== null) {
+          slotGarmentIds[slotKey] = garment.id;
+        }
+      }
       const outfitLabel =
         garmentLabels.length > 2
           ? `${garmentLabels.slice(0, 2).join(' · ')} 외 ${garmentLabels.length - 2}`
@@ -2229,6 +2534,7 @@ export async function synthesizeGeminiMultiAngleVton(
               sheetImageUrl: null,
               outfitLabel,
               garmentLabels,
+              slotGarmentIds,
               equippedCount: equippedGarments.length,
               model: modelName,
               updatedAt: now,
@@ -2262,6 +2568,7 @@ export async function synthesizeGeminiMultiAngleVton(
             sheetImageUrl: null,
             outfitLabel,
             garmentLabels,
+            slotGarmentIds,
             equippedCount: equippedGarments.length,
             model: modelName,
             updatedAt: now,
@@ -2285,6 +2592,7 @@ export async function synthesizeGeminiMultiAngleVton(
           sheetImageUrl: null,
           outfitLabel,
           garmentLabels,
+          slotGarmentIds,
           equippedCount: equippedGarments.length,
           model: modelName,
           updatedAt: now,

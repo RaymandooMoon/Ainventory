@@ -147,8 +147,66 @@ function setRangeSliderValue(page: Page, sliderSelector: string, nextValue: numb
   }, nextValue);
 }
 
+/**
+ * Dispatches a synthetic pointer horizontal drag on `[data-flatlay-board="true"]` (or stage)
+ * with deterministic elapsed duration so velocity is strictly `< 0.8 px/ms` (`slow` -> ±45°)
+ * or `>= 0.8 px/ms` (`fast` -> 180° opposite spin).
+ */
+async function performStageSwipe(
+  page: Page,
+  stageLocator: ReturnType<Page['locator']>,
+  direction: 'left' | 'right',
+  speed: 'slow' | 'fast'
+) {
+  const target = stageLocator.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  expect(box).toBeTruthy();
+  const startX = Math.round(box!.x + box!.width * 0.52);
+  const startY = Math.round(box!.y + box!.height * 0.72);
+  const deltaPx = speed === 'fast' ? 180 : 76;
+  const endX = direction === 'right' ? startX + deltaPx : startX - deltaPx;
+
+  if (speed === 'slow') {
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    await page.mouse.move(Math.round((startX + endX) / 2), startY, { steps: 3 });
+    await page.waitForTimeout(150);
+    await page.mouse.move(endX, startY, { steps: 3 });
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+  } else {
+    // Dispatch rapid pointerdown -> pointermove -> pointerup in-page (~4ms elapsed, v >= 0.8 px/ms)
+    await target.evaluate(
+      (el, coords) => {
+        const mkInit = (clientX: number, buttons: number): PointerEventInit => ({
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerId: 1,
+          pointerType: 'touch',
+          isPrimary: true,
+          clientX,
+          clientY: coords.y,
+          button: 0,
+          buttons,
+        });
+        el.dispatchEvent(new PointerEvent('pointerdown', mkInit(coords.x0, 1)));
+        el.dispatchEvent(
+          new PointerEvent('pointermove', mkInit(Math.round((coords.x0 + coords.x1) / 2), 1))
+        );
+        el.dispatchEvent(new PointerEvent('pointerup', mkInit(coords.x1, 0)));
+      },
+      { x0: startX, x1: endX, y: startY }
+    );
+    // Allow 4-step 28ms 180° spin animation to settle
+    await page.waitForTimeout(160);
+  }
+}
+
 test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal Multi-Angle VTON', () => {
-  test('1. Zero procedural drawing (<canvas>/polygon human = 0), default AI Try-On mode with Flat-Lay fallback, and 4-angle controls (0°/45°/90°/180°)', async ({
+  test('1. Zero procedural drawing (<canvas>/polygon human = 0), default 0° Front AI Try-On, Top-Center style toggle, zero angle buttons, and 360° slow/fast swipe rotation', async ({
     page,
   }) => {
     await page.goto('/outfits');
@@ -158,7 +216,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
     await expect(modelStage).toBeVisible();
 
-    // Strictly ZERO procedural human <canvas> or SVG human fallback elements on stage;
+    // Strictly ZERO procedural drawing <canvas> or SVG human fallback elements on stage;
     // Layer 3 foreground weather physics canvas is present with pointer-events: none
     await expect(
       studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
@@ -167,8 +225,36 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
     ).toHaveCSS('pointer-events', 'none');
     await expect(studioCanvas.locator('.character-25d-fallback-svg')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-atelier-backdrop="true"]')).toBeVisible();
 
-    // Default view mode is AI Try-On (`ai-vton`) at 45°, with AI Try-On button first in the rail
+    // Zero angle buttons & zero bottom tone/height dock in /outfits
+    await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-iso-angle-badge]')).toHaveCount(0);
+    await expect(studioCanvas.locator('.studio-25d-tone-dock')).toHaveCount(0);
+    await expect(studioCanvas.locator('#open-body-spec-btn')).toHaveCount(0);
+    await expect(studioCanvas.locator('#open-skin-tone-modal-btn')).toHaveCount(0);
+
+    // Top-Center style segmented control ([실사 모델 | 시뮬레이션]) inside Top HUD without neighbor overlap
+    const topStyleSeg = studioCanvas.locator(
+      '.studio-hud-center-toggle-wrap [data-hud-style-segmented="true"]'
+    );
+    await expect(topStyleSeg).toBeVisible();
+    await expect(
+      topStyleSeg.locator('[data-vton-style-toggle="photorealistic"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+    const hudNonOverlapping = await studioCanvas.evaluate((root) => {
+      const left = root.querySelector('.atelier-stage-brand-cluster')?.getBoundingClientRect();
+      const center = root.querySelector('[data-hud-style-segmented="true"]')?.getBoundingClientRect();
+      const right = root.querySelector('[data-vton-history-btn="true"]')?.getBoundingClientRect();
+      if (!left || !center || !right) return false;
+      const overlaps = (a: DOMRect, b: DOMRect) =>
+        !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+      return !overlaps(left, center) && !overlaps(center, right);
+    });
+    expect(hudNonOverlapping).toBe(true);
+
+    // Default view mode is AI Try-On (`ai-vton`) at 0° Front, with AI Try-On button first in bottom-left rail
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
     await expect(
       studioCanvas.locator('.studio-vton-mode-rail .studio-vton-seg-btn').first()
@@ -177,9 +263,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       'aria-pressed',
       'true'
     );
-    await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
-    await expect(modelStage).toHaveAttribute('data-view-angle', '45');
-    // Editorial Flat-Lay Board remains cleanly visible underneath while loading or without server key
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
+    await expect(modelStage).toHaveAttribute('data-view-angle', '0');
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
     // Instant switch to Flat-Lay Board and back to AI Try-On
@@ -189,11 +274,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
 
-    // Step clockwise through all 4 canonical turnaround angles (45 -> 90 -> 180 -> 0 -> 45)
-    const cwBtn = studioCanvas.locator('[data-iso-rotate-btn="cw"]');
-    const ccwBtn = studioCanvas.locator('[data-iso-rotate-btn="ccw"]');
-    for (const expectedDeg of ['90', '180', '0', '45']) {
-      await cwBtn.click();
+    // Slow horizontal swipe right steps +45° across the full 8-angle 360° ring
+    for (const expectedDeg of ['45', '90', '135', '180', '225', '270', '315', '0']) {
+      await performStageSwipe(page, studioCanvas, 'right', 'slow');
       await expect(studioCanvas).toHaveAttribute('data-view-angle', expectedDeg);
       await expect(modelStage).toHaveAttribute('data-view-angle', expectedDeg);
       await expect(
@@ -201,13 +284,16 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       ).toHaveCount(0);
     }
 
-    // Direct 4-angle quick pills & reset badge
-    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
-    await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
-    await studioCanvas.locator('[data-iso-angle-badge]').click();
-    await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
+    // Slow swipe left steps -45° (0° -> 315°), then slow swipe right returns to 0°
+    await performStageSwipe(page, studioCanvas, 'left', 'slow');
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '315');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
 
-    await ccwBtn.click();
+    // Fast horizontal flick spins 180° opposite (0° -> 180° -> 0°)
+    await performStageSwipe(page, studioCanvas, 'right', 'fast');
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
+    await performStageSwipe(page, studioCanvas, 'left', 'fast');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
   });
 
@@ -440,25 +526,28 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const topSlotPayload = firstPayload.slots?.top;
     expect(topSlotPayload?.packshotDataUrl).toMatch(/^data:image\//);
 
-    const slice45 = await aiImg.getAttribute('src');
-    expect(slice45).toMatch(/^data:image\/png;base64,/);
+    const slice0 = await aiImg.getAttribute('src');
+    expect(slice0).toMatch(/^data:image\/png;base64,/);
 
-    // Switch to 90° Side Profile & 180° Back -> 0ms IndexedDB/Memory slice hit with ZERO extra API calls!
-    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
+    // Swipe to 90° Side Profile (two +45° slow swipes) & 180° Back -> 0ms IndexedDB/Memory slice hit with ZERO extra API calls!
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     const slice90 = await aiImg.getAttribute('src');
-    expect(slice90).not.toBe(slice45);
+    expect(slice90).not.toBe(slice0);
     expect(capturedBodies.length).toBe(1);
 
-    await studioCanvas.locator('[data-vton-angle-btn="180"]').click();
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     const slice180 = await aiImg.getAttribute('src');
     expect(slice180).not.toBe(slice90);
     expect(capturedBodies.length).toBe(1);
 
-    // Toggle style to Stylized Isometric -> triggers Gemini with `stylized_isometric` prompt
+    // Toggle style via Top-Center segmented pill to Stylized Isometric -> triggers Gemini with `stylized_isometric` prompt
     await studioCanvas.locator('[data-vton-style-toggle="stylized_isometric"]').click();
     await expect.poll(() => capturedBodies.length).toBe(2);
     expect(capturedBodies[1].styleMode).toBe('stylized_isometric');
@@ -557,14 +646,15 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
 
-    const src45 = await aiImg.getAttribute('src');
-    expect(src45).toMatch(/^data:image\//);
+    const src0 = await aiImg.getAttribute('src');
+    expect(src0).toMatch(/^data:image\//);
 
-    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
     const src90 = await aiImg.getAttribute('src');
     expect(src90).toMatch(/^data:image\//);
-    expect(src90).not.toBe(src45);
+    expect(src90).not.toBe(src0);
 
     await studioCanvas.locator('[data-vton-style-toggle="stylized_isometric"]').click();
     await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
@@ -667,14 +757,15 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(capturedApiKeyHeader).toBe('test-paid-tier1-gemini-key-9876543210');
     expect(seenModalities).toEqual(['TEXT,IMAGE', 'IMAGE']);
 
-    const slice45 = await aiImg.getAttribute('src');
-    await studioCanvas.locator('[data-vton-angle-btn="90"]').click();
+    const slice0 = await aiImg.getAttribute('src');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
+    await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
     const slice90 = await aiImg.getAttribute('src');
-    expect(slice90).not.toBe(slice45);
+    expect(slice90).not.toBe(slice0);
   });
 
-  test('8. Smart Credit-Saver staging (0 API calls during multi-garment edits), automatic cache reuse, and Saved AI Fittings History gallery', async ({
+  test('8. Smart Credit-Saver staging (0 API calls during multi-garment edits), automatic cache reuse, and Top-Right Saved AI Fittings History popover (Escape + click-outside + 1-click slot restore)', async ({
     page,
   }) => {
     const sheetLookA = buildMockTurnaround2x2PngDataUrl(15);
@@ -714,8 +805,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     const callsAfterInitial = synthCalls;
     expect(callsAfterInitial).toBe(1);
-    const lookASrc45 = await aiImg.getAttribute('src');
-    expect(lookASrc45).toMatch(/^data:image\//);
+    const lookASrc0 = await aiImg.getAttribute('src');
+    expect(lookASrc0).toMatch(/^data:image\//);
 
     // 2. Perform 3 consecutive garment changes -> Credit-Saver stages edits on Flat-Lay with ZERO API calls!
     await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
@@ -739,8 +830,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await generateBtn.click();
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     expect(synthCalls).toBe(callsAfterInitial + 1);
-    const lookBSrc45 = await aiImg.getAttribute('src');
-    expect(lookBSrc45).not.toBe(lookASrc45);
+    const lookBSrc0 = await aiImg.getAttribute('src');
+    expect(lookBSrc0).not.toBe(lookASrc0);
 
     // 4. Switch back to Look 1 -> automatic 0ms cache reuse with ZERO extra API calls!
     await page
@@ -749,7 +840,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .click();
     await expect(aiImg).toBeVisible();
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
-    expect(await aiImg.getAttribute('src')).toBe(lookASrc45);
+    expect(await aiImg.getAttribute('src')).toBe(lookASrc0);
     expect(synthCalls).toBe(callsAfterInitial + 1);
 
     // Toggling Flat-Lay <-> AI Try-On also preserves cache with ZERO extra API calls!
@@ -760,21 +851,33 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     expect(synthCalls).toBe(callsAfterInitial + 1);
 
-    // 5. Open Saved AI Fittings History gallery ([기록 2]) and reuse Look B in 0ms with ZERO extra API calls!
+    // 5. Open Top-Right Saved AI Fittings History ([기록 2]), test Escape + click-outside dismiss, and 1-click restore!
     const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
     await expect(historyBtn).toContainText('2');
     await historyBtn.click();
 
     const historyPopover = studioCanvas.locator('[data-vton-history-popover="true"]');
     await expect(historyPopover).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(historyPopover).toHaveCount(0);
+
+    await historyBtn.click();
+    await expect(historyPopover).toBeVisible();
+    await studioCanvas
+      .locator('[data-vton-popover-backdrop="true"]')
+      .click({ position: { x: 24, y: 120 } });
+    await expect(historyPopover).toHaveCount(0);
+
+    await historyBtn.click();
+    await expect(historyPopover).toBeVisible();
     const cards = historyPopover.locator('[data-vton-history-card]');
     await expect(cards).toHaveCount(2);
 
-    // Click the non-active card (Look B)
+    // Click the non-active card (Look B) -> restores Look B image AND its equipped winter outer/shoes slots!
     await historyPopover.locator('.studio-vton-history-card:not(.is-active)').first().click();
     await expect(historyPopover).toHaveCount(0);
-    await expect(studioCanvas.locator('[data-vton-pinned-banner="true"]')).toBeVisible();
-    expect(await aiImg.getAttribute('src')).toBe(lookBSrc45);
+    expect(await aiImg.getAttribute('src')).toBe(lookBSrc0);
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
     expect(synthCalls).toBe(callsAfterInitial + 1);
   });
 
@@ -938,8 +1041,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
 
-    // (1) Verify 180° quadrant twin-figure CV isolation removes the duplicate blue twin figure!
-    await studioCanvas.locator('[data-vton-angle-btn="180"]').click();
+    // (1) Verify 180° quadrant twin-figure CV isolation removes the duplicate blue twin figure via fast flick!
+    await performStageSwipe(page, studioCanvas, 'right', 'fast');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
     const colorCounts180 = await aiImg.evaluate(async (el) => {
       const img = el as HTMLImageElement;
@@ -1157,10 +1260,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(hangulLeaks).toEqual([]);
   });
 
-  test('11. 3-Layer Weather Fitting Room Architecture: wide-open umbrella rain physics, sub-zero coldwave frost/snow-on-beanie directives, true RGBA cutout (#94A3B8 -> alpha 0) across Light/Dark stage, and top Refresh cache-bypass', async ({
+  test('11. 3-Layer Weather Fitting Room & V4 Hole-Aware Cutout: 45° horizontal camera lock, wide-open umbrella rain physics, enclosed interior hole (#94A3B8 -> alpha 0) matting, and top Refresh cache-bypass', async ({
     page,
   }) => {
-    // (A) Unit-verify weather prompt builder & realtime normalization rules
+    // (A) Unit-verify weather prompt builder, 45° horizontal full-body camera lock & realtime normalization rules
     expect(
       resolveEffectiveWeather({
         selectedMode: 'realtime',
@@ -1182,6 +1285,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(rainDirectives.poseDirective).toContain('WIDE-OPEN');
     expect(rainDirectives.negativeDirective).toContain('NEVER closed/folded umbrella');
     expect(rainDirectives.backdropDirective).toContain('#94A3B8');
+    expect(rainDirectives.headroomPrompt).toContain(
+      'Eye-to-waist level, straight-on horizontal camera, zero tilt'
+    );
+    expect(rainDirectives.headroomPrompt).toContain(
+      'Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles'
+    );
 
     const coldwaveDirectives = buildWeatherPosePromptDirectives('coldwave');
     expect(coldwaveDirectives.physicalTraceDirective).toContain(
@@ -1190,8 +1299,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(coldwaveDirectives.poseDirective).toContain('-10°C');
 
     // (B) Build a 256x256 2x2 studio sheet on #94A3B8 (148, 163, 184) neutral mid-slate backdrop
-    // with pure white snow cap (#FFFFFF) on top of beanie and deep dark coat (#181C24) on torso
-    // to prove BFS cutout removes #94A3B8 -> alpha 0 while protecting #FFFFFF snow AND #181C24 coat!
+    // with pure white snow cap (#FFFFFF) on top of beanie, deep dark coat (#181C24) on torso,
+    // AND a completely enclosed interior #94A3B8 hole (arm/umbrella-gap island) inside the coat
+    // to prove V4 cutout removes both outer #94A3B8 AND enclosed interior #94A3B8 holes -> alpha 0
+    // while protecting #FFFFFF snow AND #181C24 coat!
     const buildSlateStudio2x2SheetPng = (variantOffset = 0): string => {
       const width = 256;
       const height = 256;
@@ -1217,6 +1328,11 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
             r = (210 + variantOffset) % 245;
             g = 172;
             b = 145;
+          } else if (localY >= 64 && localY <= 74 && localX >= 58 && localX <= 70) {
+            // Enclosed interior #94A3B8 hole completely surrounded on all 4 sides by the dark coat!
+            r = 148;
+            g = 163;
+            b = 184;
           } else if (localY >= 41 && localY <= 108 && localX >= 42 && localX <= 86) {
             // Deep obsidian winter coat (#181C24)
             r = 24 + (variantOffset % 15);
@@ -1299,10 +1415,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(aiImg).toHaveCSS('object-fit', 'contain');
     const imgSrc = (await aiImg.getAttribute('src')) || '';
     expect(imgSrc.startsWith('data:image/png;base64,')).toBe(true);
 
-    // (C) Verify true RGBA alpha === 0 on corners while preserving pure white snow (#FFFFFF) & dark coat!
+    // (C) Verify true RGBA alpha === 0 on BOTH outer corners AND enclosed interior hole,
+    // while preserving pure white snow (#FFFFFF) & dark coat!
     const alphaAudit = await aiImg.evaluate(async (el) => {
       const img = el as HTMLImageElement;
       if (!img.complete) {
@@ -1320,19 +1438,37 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       const cornerAlpha = d[(1 * c.width + 1) * 4 + 3];
       let whiteSnowOpaquePixels = 0;
       let darkCoatOpaquePixels = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i + 3] > 240 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) {
-          whiteSnowOpaquePixels += 1;
-        }
-        if (d[i + 3] > 240 && d[i] < 50 && d[i + 1] < 40 && d[i + 2] < 50) {
-          darkCoatOpaquePixels += 1;
+      let coatMinY = c.height;
+      let coatMaxY = 0;
+      for (let y = 0; y < c.height; y += 1) {
+        for (let x = 0; x < c.width; x += 1) {
+          const i = (y * c.width + x) * 4;
+          if (d[i + 3] > 240 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) {
+            whiteSnowOpaquePixels += 1;
+          }
+          if (d[i + 3] > 240 && d[i] < 50 && d[i + 1] < 40 && d[i + 2] < 50) {
+            darkCoatOpaquePixels += 1;
+            if (y < coatMinY) coatMinY = y;
+            if (y > coatMaxY) coatMaxY = y;
+          }
         }
       }
-      return { cornerAlpha, whiteSnowOpaquePixels, darkCoatOpaquePixels };
+      // Coat top is localY=41 and enclosed hole center is (localX=64, localY=69 -> coatMinY + 28)
+      const holeCenterY = Math.min(c.height - 1, coatMinY + 28);
+      const holeCenterX = 64;
+      const enclosedHoleAlpha = d[(holeCenterY * c.width + holeCenterX) * 4 + 3];
+      return {
+        cornerAlpha,
+        enclosedHoleAlpha,
+        whiteSnowOpaquePixels,
+        darkCoatOpaquePixels,
+        coatMaxY,
+      };
     });
     expect(alphaAudit.cornerAlpha).toBe(0);
+    expect(alphaAudit.enclosedHoleAlpha).toBe(0);
     expect(alphaAudit.whiteSnowOpaquePixels).toBeGreaterThan(80);
-    expect(alphaAudit.darkCoatOpaquePixels).toBeGreaterThan(800);
+    expect(alphaAudit.darkCoatOpaquePixels).toBeGreaterThan(600);
 
     // (D) Verify 4-Layer stage z-stack & pointer-events: none on Contact Shadow + Foreground Canvas
     const contactShadow = studioCanvas.locator('[data-floor-contact-shadow="true"]');
@@ -1412,8 +1548,85 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .poll(() => capturedPayloads.some((p) => p.forceRefresh === true))
       .toBe(true);
   });
+
+  test('12. Unified Profile Height Direct Input & Error Modal Popup: validates empty/NaN/out-of-range (<100, >230) and storage/save failures via alertdialog modal', async ({
+    page,
+  }) => {
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    // Open unified Profile modal from header
+    await page.locator('#open-profile-studio-btn').click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await expect(profileSheet).toBeVisible();
+
+    const heightInput = profileSheet.locator('[data-height-cm-input="true"]');
+    await expect(heightInput).toBeVisible();
+
+    const applyBtn = profileSheet.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`);
+    const errorModal = page.locator('[data-profile-error-modal="true"]');
+    const confirmBtn = page.locator('[data-profile-error-confirm="true"]');
+
+    // (1) Empty height input -> Error Modal Popup (`empty`)
+    await heightInput.fill('');
+    await applyBtn.click();
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('role', 'alertdialog');
+    await expect(errorModal).toHaveAttribute('aria-modal', 'true');
+    await expect(errorModal).toHaveAttribute('data-profile-error-code', 'empty');
+    await confirmBtn.click();
+    await expect(errorModal).toHaveCount(0);
+
+    // (2) Non-numeric height input -> Error Modal Popup (`non_numeric`)
+    await heightInput.fill('abc');
+    await applyBtn.click();
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('data-profile-error-code', 'non_numeric');
+    await confirmBtn.click();
+    await expect(errorModal).toHaveCount(0);
+
+    // (3) Below minimum (< 100cm) -> Error Modal Popup (`out_of_range`)
+    await heightInput.fill('85');
+    await applyBtn.click();
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('data-profile-error-code', 'out_of_range');
+    await confirmBtn.click();
+    await expect(errorModal).toHaveCount(0);
+
+    // (4) Above maximum (> 230cm) -> Error Modal Popup (`out_of_range`)
+    await heightInput.fill('250');
+    await applyBtn.click();
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('data-profile-error-code', 'out_of_range');
+    await confirmBtn.click();
+    await expect(errorModal).toHaveCount(0);
+
+    // (5) Storage/Save failure -> Error Modal Popup (`save_error`) instead of silent failure
+    await heightInput.fill('192');
+    await page.evaluate(() => {
+      const origSetItem = Storage.prototype.setItem;
+      let blockedOnce = false;
+      Storage.prototype.setItem = function patchedSetItem(key: string, val: string) {
+        if (!blockedOnce && key === 'ainventory_avatar_spec_v2') {
+          blockedOnce = true;
+          Storage.prototype.setItem = origSetItem;
+          throw new DOMException('Simulated storage quota exceeded', 'QuotaExceededError');
+        }
+        return origSetItem.call(this, key, val);
+      };
+    });
+    await applyBtn.click();
+    await expect(errorModal).toBeVisible();
+    await expect(errorModal).toHaveAttribute('data-profile-error-code', 'save_error');
+    await confirmBtn.click();
+    await expect(errorModal).toHaveCount(0);
+
+    // (6) Valid height within [100, 230] (e.g. 215cm) -> saves cleanly & updates stage model height!
+    await heightInput.fill('215');
+    await applyBtn.click();
+    await expect(profileSheet).toBeHidden();
+    const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    await expect(modelStage).toHaveAttribute('data-height-cm', '215');
+  });
 });
-
-
-
-

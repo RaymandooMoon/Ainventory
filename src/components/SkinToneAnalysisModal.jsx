@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -31,6 +31,7 @@ import {
   resolveCoupledBodyMetrics,
   sanitizeAvatarSpec,
   setAvatarSpec,
+  validateHeightCmInput,
 } from '../services/avatarSpecStore.ts';
 import { findClosestMstFromHex, getMstSwatch } from '../services/monkSkinTone.ts';
 import {
@@ -133,6 +134,8 @@ function ProfileModalContent({
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const manualToneSectionRef = useRef(null);
+  const heightInputRef = useRef(null);
+  const errorConfirmBtnRef = useRef(null);
   const analysisSeqRef = useRef(0);
   const isSignedAccount = Boolean(user && !user.isSampleDemo);
 
@@ -153,6 +156,61 @@ function ProfileModalContent({
   const [draftSpec, setDraftSpec] = useState(
     () => bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec
   );
+
+  const [heightInputText, setHeightInputText] = useState(() =>
+    String(
+      bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec.anthropometrics
+        .heightCm
+    )
+  );
+  const [profileErrorModal, setProfileErrorModal] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const handleHeightValidationError = useCallback((check) => {
+    if (!check || check.valid) return;
+    setProfileErrorModal({
+      title: check.title,
+      message: check.message,
+      code: check.reason || 'validation_error',
+    });
+  }, []);
+
+  const handleDismissProfileErrorModal = useCallback(() => {
+    triggerHaptic('selection');
+    setProfileErrorModal(null);
+    const check = validateHeightCmInput(heightInputText, lang);
+    if (!check.valid) {
+      setHeightInputText(String(draftSpec.anthropometrics.heightCm));
+    }
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        if (heightInputRef.current && typeof heightInputRef.current.focus === 'function') {
+          heightInputRef.current.focus();
+          if (typeof heightInputRef.current.select === 'function') {
+            heightInputRef.current.select();
+          }
+        }
+      });
+    }
+  }, [draftSpec.anthropometrics.heightCm, heightInputText, lang]);
+
+  useEffect(() => {
+    if (!profileErrorModal) return undefined;
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        errorConfirmBtnRef.current?.focus?.();
+      });
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleDismissProfileErrorModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [profileErrorModal, handleDismissProfileErrorModal]);
 
   const [previewAngleDeg, setPreviewAngleDeg] = useState(DEFAULT_ISO_VIEW_ANGLE);
 
@@ -603,8 +661,23 @@ function ProfileModalContent({
     setDraftSubType(closest.subTypeLabelKo);
   };
 
-  const commitAvatarStudioChanges = (primarySource) => {
-    const cleanedSpec = sanitizeAvatarSpec(draftSpec);
+  const commitAvatarStudioChanges = async (primarySource) => {
+    if (savingProfile) return;
+
+    const heightCheck = validateHeightCmInput(heightInputText, lang);
+    if (!heightCheck.valid) {
+      triggerHaptic('warning');
+      handleHeightValidationError(heightCheck);
+      return;
+    }
+
+    const cleanedSpec = sanitizeAvatarSpec({
+      ...draftSpec,
+      anthropometrics: {
+        ...draftSpec.anthropometrics,
+        heightCm: heightCheck.heightCm,
+      },
+    });
     const app = cleanedSpec.appearance;
     const seasonKey = normalizeSeasonKey(app.personalColor);
     const seasonInfo = SEASON_BEST_SWATCHES[seasonKey] || SEASON_BEST_SWATCHES.autumn_warm;
@@ -639,22 +712,42 @@ function ProfileModalContent({
       bodySpec?.waistScale !== legacyBody.waistScale ||
       bodySpec?.hipScale !== legacyBody.hipScale;
 
-    triggerHaptic('medium');
+    setSavingProfile(true);
+    try {
+      setAvatarSpec(cleanedSpec, { throwOnStorageError: true });
 
-    if (primarySource === 'body') {
-      if (skinChanged) {
-        onApplySkinProfile?.(skinPayload);
+      if (primarySource === 'body') {
+        if (skinChanged) {
+          await Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }));
+        }
+        await Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }));
+      } else {
+        if (bodyChanged) {
+          await Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }));
+        }
+        await Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }));
       }
-      onApplyBodySpec?.(legacyBody);
-    } else {
-      if (bodyChanged) {
-        onApplyBodySpec?.(legacyBody);
-      }
-      onApplySkinProfile?.(skinPayload);
+
+      triggerHaptic('medium');
+      onClose?.();
+    } catch (err) {
+      triggerHaptic('warning');
+      const rawMessage = err instanceof Error ? err.message : '';
+      const localized = rawMessage ? localizeApiMessage(rawMessage, lang) : '';
+      setProfileErrorModal({
+        title: tx(lang, '프로필 설정 저장 실패', 'Failed to Save Profile Settings'),
+        message:
+          localized ||
+          tx(
+            lang,
+            '프로필 설정을 저장하는 중 오류가 발생했습니다. 네트워크 또는 저장소 상태를 확인한 뒤 다시 시도해 주세요.',
+            'An error occurred while saving your profile settings. Please check your connection or storage and try again.'
+          ),
+        code: 'save_error',
+      });
+    } finally {
+      setSavingProfile(false);
     }
-
-    setAvatarSpec(cleanedSpec);
-    onClose?.();
   };
 
   const activeSeasonMeta = SEASON_BEST_SWATCHES[draftSeason] || SEASON_BEST_SWATCHES.autumn_warm;
@@ -762,13 +855,21 @@ function ProfileModalContent({
             source: 'skin',
           };
 
+  const handleSheetClose = () => {
+    if (profileErrorModal) {
+      handleDismissProfileErrorModal();
+      return;
+    }
+    onClose?.();
+  };
+
   const headerBackAction = (
     <button
       type="button"
       className="atelier-header-back-btn"
       onClick={() => {
         triggerHaptic('selection');
-        onClose?.();
+        handleSheetClose();
       }}
       aria-label={tx(lang, '닫기', 'Close')}
       title={tx(lang, '닫기', 'Close')}
@@ -782,9 +883,14 @@ function ProfileModalContent({
       id={primaryCtaConfig.id}
       type="button"
       className="hig-primary-cta-btn"
+      disabled={savingProfile}
       onClick={() => commitAvatarStudioChanges(primaryCtaConfig.source)}
     >
-      <Check size={17} aria-hidden="true" />
+      {savingProfile ? (
+        <Loader2 size={17} className="skin-spin-icon" aria-hidden="true" />
+      ) : (
+        <Check size={17} aria-hidden="true" />
+      )}
       <span>{primaryCtaConfig.label}</span>
     </button>
   );
@@ -793,7 +899,7 @@ function ProfileModalContent({
     <ResponsiveSheetModal
       id="profile-studio-sheet"
       open={open}
-      onClose={onClose}
+      onClose={handleSheetClose}
       lang={lang}
       title={tx(lang, '프로필 · 피부톤 & 체형', 'Profile · Skin Tone & Body')}
       actions={headerBackAction}
@@ -1340,6 +1446,10 @@ function ProfileModalContent({
                 lang={lang}
                 draftSpec={draftSpec}
                 onChangeDraftSpec={setDraftSpec}
+                heightInputText={heightInputText}
+                onHeightInputChange={setHeightInputText}
+                onHeightValidationError={handleHeightValidationError}
+                heightInputRef={heightInputRef}
               />
             </section>
 
@@ -1616,10 +1726,60 @@ function ProfileModalContent({
               lang={lang}
               draftSpec={draftSpec}
               onChangeDraftSpec={setDraftSpec}
+              heightInputText={heightInputText}
+              onHeightInputChange={setHeightInputText}
+              onHeightValidationError={handleHeightValidationError}
+              heightInputRef={heightInputRef}
             />
           </div>
         )}
       </div>
+
+      {profileErrorModal && (
+        <div
+          className="profile-error-modal-backdrop"
+          data-profile-error-backdrop="true"
+          onClick={handleDismissProfileErrorModal}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="profile-error-modal-title"
+            aria-describedby="profile-error-modal-desc"
+            data-profile-error-modal="true"
+            data-profile-error-code={profileErrorModal.code || 'validation_error'}
+            className="profile-error-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="profile-error-modal-header">
+              <span className="profile-error-modal-icon" aria-hidden="true">
+                <AlertTriangle size={18} strokeWidth={2.2} />
+              </span>
+              <h3 id="profile-error-modal-title" className="profile-error-modal-title">
+                {profileErrorModal.title}
+              </h3>
+            </div>
+            <p
+              id="profile-error-modal-desc"
+              data-profile-error-message="true"
+              className="profile-error-modal-desc"
+            >
+              {profileErrorModal.message}
+            </p>
+            <div className="profile-error-modal-actions">
+              <button
+                ref={errorConfirmBtnRef}
+                type="button"
+                data-profile-error-confirm="true"
+                className="profile-error-confirm-btn"
+                onClick={handleDismissProfileErrorModal}
+              >
+                {tx(lang, '확인', 'Confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ResponsiveSheetModal>
   );
 }

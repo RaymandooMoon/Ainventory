@@ -470,33 +470,330 @@ function computeResidualSobelBarrier(
 }
 
 /**
- * V3 Pure-JS Matting Engine:
- * - Row-wise Scanline Linear Background Interpolation `expectedBg(x, y)`
- * - 4-Border 8-Connected BFS with Sobel Edge Barrier + Residual Step-Delta Protection
- * - 1–2px Boundary Soft Alpha Ramp + Linear Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+ * Purges topologically enclosed studio-backdrop islands (e.g., under an open umbrella canopy
+ * between the shaft and head/shoulder, between bent arms and torso, between legs/ankles, or inside
+ * bag handles/straps) while strictly protecting skin tones (MST 1–10), eye sclera, dark hair/coats,
+ * white snow/shirts, and textured grey garments.
+ *
+ * Returns the number of newly purged interior background pixels (`bgMask[p]` set from `0` to `2`).
  */
-export function applyV3ScanlineMattingOnCanvas(
+function purgeEnclosedBackdropHoles(
+  d: Uint8ClampedArray,
+  w: number,
+  h: number,
+  bgMask: Uint8Array,
+  expRArr: Float32Array,
+  expGArr: Float32Array,
+  expBArr: Float32Array,
+  tolerance: number
+): number {
+  const nPx = w * h;
+  if (nPx < 256) return 0;
+
+  const holePixelTol = Math.min(30, Math.max(20, tolerance * 0.72));
+  const candidate = new Uint8Array(nPx);
+  let candidateTotal = 0;
+
+  for (let p = 0; p < nPx; p += 1) {
+    if (bgMask[p]) continue;
+    const i = p * 4;
+    if (d[i + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
+
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    const eR = expRArr[p];
+    const eG = expGArr[p];
+    const eB = expBArr[p];
+
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
+
+    // Guard 1A: Protect pure highlights (white shirts, sneakers, snow crystals, eye sclera)
+    // and deep darks (obsidian coats, dark hair, pupils) against mid-tone studio backdrops.
+    if (expLum >= 58 && expLum <= 212) {
+      if (lum >= 224 || lum <= 44) continue;
+    }
+
+    // Guard 1B: Protect human skin chromaticity locus (MST 1–10 warm/peach/tan/olive/melanin)
+    // whenever the studio backdrop itself is not warm skin-colored.
+    const backdropIsWarm = eR > eG + 8 && eG > eB + 8;
+    if (!backdropIsWarm) {
+      if (r > g && g >= b - 3 && r - b >= 14 && r >= 68) continue;
+      if (r > b + 16 && g > b + 8 && lum < 155) continue;
+    }
+
+    const bgDist = Math.hypot(r - eR, g - eG, b - eB);
+    if (bgDist <= holePixelTol) {
+      candidate[p] = 1;
+      candidateTotal += 1;
+      continue;
+    }
+
+    // Also catch enclosed gaps slightly shaded by surrounding limbs/umbrella canopy (~10–30 lum darker)
+    // that still retain the exact studio backdrop chromaticity (e.g. cool slate #94A3B8).
+    if (lum >= expLum - 32 && lum <= expLum + 12 && lum > 52 && lum < 218) {
+      const sat = Math.max(r, g, b) - Math.min(r, g, b);
+      const expSat = Math.max(eR, eG, eB) - Math.min(eR, eG, eB);
+      if (Math.abs(sat - expSat) <= 15 && sat <= 52) {
+        const chromaDist = Math.hypot(
+          r / lum - eR / expLum,
+          g / lum - eG / expLum,
+          b / lum - eB / expLum
+        );
+        if (chromaDist <= 0.052) {
+          candidate[p] = 1;
+          candidateTotal += 1;
+        }
+      }
+    }
+  }
+
+  if (candidateTotal < 4) return 0;
+
+  const visited = new Uint8Array(nPx);
+  const compQueue = new Int32Array(Math.min(nPx, candidateTotal + 16));
+  const minArea = Math.max(4, Math.round(nPx * 0.000035));
+  const maxArea = Math.round(nPx * 0.16);
+  let purgedPixels = 0;
+
+  for (let seed = 0; seed < nPx; seed += 1) {
+    if (!candidate[seed] || visited[seed]) continue;
+
+    let qHead = 0;
+    let qTail = 0;
+    visited[seed] = 1;
+    compQueue[qTail++] = seed;
+
+    let minX = w;
+    let maxX = 0;
+    let minY = h;
+    let maxY = 0;
+    let sumDistToBg = 0;
+    let sumStepDiff = 0;
+    let stepPairs = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let perimeterFgCount = 0;
+    let sharpBoundaryCount = 0;
+    let touchesOuterBg = false;
+
+    while (qHead < qTail) {
+      const p = compQueue[qHead++];
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+
+      const pi = p * 4;
+      const pr = d[pi];
+      const pg = d[pi + 1];
+      const pb = d[pi + 2];
+      sumR += pr;
+      sumG += pg;
+      sumB += pb;
+      sumDistToBg += Math.hypot(pr - expRArr[p], pg - expGArr[p], pb - expBArr[p]);
+
+      // Inspect 4-connected neighbors
+      const neighbors: number[] = [];
+      if (x > 0) neighbors.push(p - 1);
+      if (x < w - 1) neighbors.push(p + 1);
+      if (y > 0) neighbors.push(p - w);
+      if (y < h - 1) neighbors.push(p + w);
+
+      for (let ni = 0; ni < neighbors.length; ni += 1) {
+        const q = neighbors[ni];
+        if (bgMask[q]) {
+          touchesOuterBg = true;
+          continue;
+        }
+        if (candidate[q]) {
+          if (q > p) {
+            const qi = q * 4;
+            sumStepDiff += Math.hypot(pr - d[qi], pg - d[qi + 1], pb - d[qi + 2]);
+            stepPairs += 1;
+          }
+          if (!visited[q]) {
+            visited[q] = 1;
+            compQueue[qTail++] = q;
+          }
+        } else {
+          const qi = q * 4;
+          if (d[qi + 3] > 80) {
+            perimeterFgCount += 1;
+            const edgeJump = Math.hypot(pr - d[qi], pg - d[qi + 1], pb - d[qi + 2]);
+            if (edgeJump >= 19) {
+              sharpBoundaryCount += 1;
+            }
+          }
+        }
+      }
+    }
+
+    const area = qTail;
+    if (area < minArea || area > maxArea) continue;
+
+    const meanR = sumR / area;
+    const meanB = sumB / area;
+    const meanDistToBg = sumDistToBg / area;
+    const meanStepDiff = stepPairs > 0 ? sumStepDiff / stepPairs : 0;
+
+    // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
+    // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
+    if (meanStepDiff > 10.5) continue;
+
+    // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
+    // unless the island unmistakably matches cool slate studio key (#94A3B8: B - R >= 20).
+    const cx = (minX + maxX) * 0.5;
+    const cy = (minY + maxY) * 0.5;
+    const inFaceCore =
+      cx >= w * 0.36 && cx <= w * 0.64 && cy >= h * 0.08 && cy <= h * 0.27;
+    if (inFaceCore && area < Math.max(18, Math.round(nPx * 0.0018))) {
+      if (!(meanB - meanR >= 20 && meanDistToBg <= 15)) {
+        continue;
+      }
+    }
+
+    // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
+    const maxAllowedMeanDist = touchesOuterBg
+      ? Math.min(28, holePixelTol * 0.95)
+      : Math.min(24, holePixelTol * 0.85);
+    if (meanDistToBg > maxAllowedMeanDist) continue;
+
+    const sharpRatio = perimeterFgCount > 0 ? sharpBoundaryCount / perimeterFgCount : 0;
+    if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < 0.56)) continue;
+
+    for (let idx = 0; idx < area; idx += 1) {
+      bgMask[compQueue[idx]] = 2;
+    }
+    purgedPixels += area;
+  }
+
+  return purgedPixels;
+}
+
+/**
+ * V4 Global Hole-Aware Pure-JS Matting Engine:
+ * - Pass 1: Row-wise Scanline Background Interpolation `expectedBg(x, y)` + 4-Border 8-Connected BFS with Sobel Edge Barrier
+ * - Pass 2: Enclosed Interior Hole Connected-Component Detection & Purge (`alpha = 0` inside umbrella/arm/leg/strap loops)
+ * - Pass 3 & 4: 1–2px Boundary Soft Alpha Ramp + Linear Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+ */
+export function applyV4HoleAwareMattingOnCanvas(
   canvas: HTMLCanvasElement,
   options: CutoutOptions = {}
-): HTMLCanvasElement {
+): { canvas: HTMLCanvasElement; modified: boolean; purgedHolePixels: number } {
   const w = canvas.width;
   const h = canvas.height;
-  if (w < 16 || h < 16) return canvas;
+  if (w < 16 || h < 16) return { canvas, modified: false, purgedHolePixels: 0 };
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return canvas;
+  if (!ctx) return { canvas, modified: false, purgedHolePixels: 0 };
 
   const imgData = ctx.getImageData(0, 0, w, h);
   const d = imgData.data;
   const bgModel = buildScanlineBackdropModel(d, w, h);
-  if (bgModel.alreadyTransparent || !bgModel.hasCoherentRowBackdrop) {
-    return canvas;
+  if (!bgModel.alreadyTransparent && !bgModel.hasCoherentRowBackdrop) {
+    return { canvas, modified: false, purgedHolePixels: 0 };
   }
 
   const nPx = w * h;
   const expRArr = new Float32Array(nPx);
   const expGArr = new Float32Array(nPx);
   const expBArr = new Float32Array(nPx);
+  const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
+  const featherSpan = options.featherSpan ?? DEFAULT_FEATHER_SPAN;
+  const bgMask = new Uint8Array(nPx);
+
+  if (bgModel.alreadyTransparent) {
+    // Outer perimeter is already transparent (e.g., cached V3 slice or @imgly output),
+    // but enclosed interior #94A3B8 studio backdrop islands may still be trapped inside!
+    let transparentCount = 0;
+    for (let p = 0; p < nPx; p += 1) {
+      expRArr[p] = 148;
+      expGArr[p] = 163;
+      expBArr[p] = 184;
+      if (d[p * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        bgMask[p] = 1;
+        transparentCount += 1;
+      }
+    }
+    if (transparentCount === 0 || transparentCount / nPx > 0.98) {
+      return { canvas, modified: false, purgedHolePixels: 0 };
+    }
+    const purgedHolePixels = purgeEnclosedBackdropHoles(
+      d,
+      w,
+      h,
+      bgMask,
+      expRArr,
+      expGArr,
+      expBArr,
+      tolerance
+    );
+    if (purgedHolePixels === 0) {
+      return { canvas, modified: false, purgedHolePixels: 0 };
+    }
+
+    // Feather & decontaminate ONLY the 1–2px ring around newly purged interior holes (`bgMask === 2`)
+    const holeRing = new Uint8Array(nPx);
+    for (let y = 0; y < h; y += 1) {
+      const rowOff = y * w;
+      for (let x = 0; x < w; x += 1) {
+        const p = rowOff + x;
+        if (bgMask[p]) continue;
+        if (
+          (x > 0 && bgMask[p - 1] === 2) ||
+          (x < w - 1 && bgMask[p + 1] === 2) ||
+          (y > 0 && bgMask[p - w] === 2) ||
+          (y < h - 1 && bgMask[p + w] === 2)
+        ) {
+          holeRing[p] = 1;
+        }
+      }
+    }
+    const innerTol = Math.max(9, tolerance * 0.55);
+    const outerTol = tolerance + featherSpan;
+    for (let p = 0; p < nPx; p += 1) {
+      const i = p * 4;
+      if (bgMask[p] === 2) {
+        d[i] = 0;
+        d[i + 1] = 0;
+        d[i + 2] = 0;
+        d[i + 3] = 0;
+        continue;
+      }
+      if (holeRing[p] === 1) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+        const origAlpha = d[i + 3] / 255;
+        const dist = Math.hypot(r - 148, g - 163, b - 184);
+        if (dist < outerTol) {
+          const ramp = clamp01((dist - innerTol) / Math.max(1, outerTol - innerTol));
+          const alpha = clamp01(origAlpha * Math.max(0.2, ramp * 0.9));
+          const outAlpha = clampByte(alpha * 255);
+          if (outAlpha <= 5) {
+            d[i] = 0;
+            d[i + 1] = 0;
+            d[i + 2] = 0;
+            d[i + 3] = 0;
+          } else {
+            const safeAlpha = Math.max(0.15, alpha);
+            d[i] = clampByte((r - (1 - safeAlpha) * 148) / safeAlpha);
+            d[i + 1] = clampByte((g - (1 - safeAlpha) * 163) / safeAlpha);
+            d[i + 2] = clampByte((b - (1 - safeAlpha) * 184) / safeAlpha);
+            d[i + 3] = outAlpha;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return { canvas, modified: true, purgedHolePixels };
+  }
+
   const resR = new Float32Array(nPx);
   const resG = new Float32Array(nPx);
   const resB = new Float32Array(nPx);
@@ -528,12 +825,9 @@ export function applyV3ScanlineMattingOnCanvas(
 
   const sobel = computeResidualSobelBarrier(resR, resG, resB, w, h);
 
-  const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
-  const featherSpan = options.featherSpan ?? DEFAULT_FEATHER_SPAN;
   const stepLimit = Math.max(16, Math.round(tolerance * 0.58));
   const strictBgPassDist = Math.max(8, tolerance * 0.28);
 
-  const bgMask = new Uint8Array(nPx);
   const queue = new Int32Array(nPx);
   let head = 0;
   let tail = 0;
@@ -628,10 +922,22 @@ export function applyV3ScanlineMattingOnCanvas(
   const fgCount = nPx - tail;
   // Guard: preserve synthetic solid-color test swatches that contain no human subject
   if (tail === 0 || tail / nPx > 0.96 || fgCount < 32) {
-    return canvas;
+    return { canvas, modified: false, purgedHolePixels: 0 };
   }
 
-  // Construct 1–2px foreground boundary rings adjacent to flooded background
+  // Pass 2: Purge topologically enclosed studio-backdrop islands (umbrella/arm/leg/strap holes)
+  const purgedHolePixels = purgeEnclosedBackdropHoles(
+    d,
+    w,
+    h,
+    bgMask,
+    expRArr,
+    expGArr,
+    expBArr,
+    tolerance
+  );
+
+  // Pass 3: Construct 1–2px foreground boundary rings adjacent to outer AND inner flooded background
   const edgeRing = new Uint8Array(nPx);
   for (let y = 0; y < h; y += 1) {
     const rowOff = y * w;
@@ -759,8 +1065,8 @@ export function applyV3ScanlineMattingOnCanvas(
         continue;
       }
 
-      // Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
-      // Removes mixed studio backdrop color from 1–2px boundary pixels so zero white/slate halo remains
+      // Pass 4: Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+      // Removes mixed studio backdrop color from 1–2px outer & inner hole boundary pixels
       if (alpha < 0.985) {
         const safeAlpha = Math.max(0.14, alpha);
         d[i] = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
@@ -772,22 +1078,29 @@ export function applyV3ScanlineMattingOnCanvas(
   }
 
   ctx.putImageData(imgData, 0, 0);
-  return canvas;
+  return { canvas, modified: true, purgedHolePixels };
+}
+
+export function applyV3ScanlineMattingOnCanvas(
+  canvas: HTMLCanvasElement,
+  options: CutoutOptions = {}
+): HTMLCanvasElement {
+  return applyV4HoleAwareMattingOnCanvas(canvas, options).canvas;
 }
 
 /**
  * Backward-compatible entry point used across VTON turnaround slicing and cache cleanup,
- * backed by the V3 Scanline-Interpolated + Sobel Barrier + Color Unmixing matting engine.
+ * backed by the V4 Scanline-Interpolated + Enclosed-Hole Purge + Color Unmixing matting engine.
  */
 export function applyCornerBfsCutoutOnCanvas(
   canvas: HTMLCanvasElement,
   options: CutoutOptions = {}
 ): HTMLCanvasElement {
-  return applyV3ScanlineMattingOnCanvas(canvas, options);
+  return applyV4HoleAwareMattingOnCanvas(canvas, options).canvas;
 }
 
 /**
- * Zero-dependency V3 Scanline Flood-Fill + Sobel Edge Barrier + Color Unmixing cutout returning RGBA PNG DataURL.
+ * Zero-dependency V4 Scanline Flood-Fill + Enclosed-Hole Purge + Color Unmixing cutout returning RGBA PNG DataURL.
  */
 export async function cornerBfsFloodFillCutout(
   imageSource: string | Blob,
@@ -798,7 +1111,7 @@ export async function cornerBfsFloodFillCutout(
     options.maxDimension ?? DEFAULT_MAX_DIMENSION
   );
   try {
-    applyV3ScanlineMattingOnCanvas(canvas, options);
+    applyV4HoleAwareMattingOnCanvas(canvas, options);
     return canvas.toDataURL('image/png');
   } finally {
     canvas.width = 0;
@@ -857,7 +1170,7 @@ async function tryImglySemanticCutout(
     return null;
   } catch {
     // Memoize unavailability so GitHub Pages subpath (/Ainventory/), offline, or WASM-constrained
-    // environments fall back instantaneously to the V3 Pure-JS Scanline Matting Engine.
+    // environments fall back instantaneously to the V4 Pure-JS Hole-Aware Matting Engine.
     imglyCircuitBroken = true;
     return null;
   } finally {
@@ -869,9 +1182,8 @@ async function tryImglySemanticCutout(
  * Primary Model Background Removal Service:
  * 1) Downscales `> 2048px` inputs to prevent mobile/WebView OOM.
  * 2) Attempts subpath-safe `@imgly/background-removal` (`isnet_fp16`) semantic segmentation.
- * 3) Enforces V3 Scanline-Interpolated BFS + Sobel Edge Barrier + Color Unmixing whenever
- *    `@imgly` is unavailable or leaves any opaque corner (`alpha > 15`) or perimeter halo,
- *    returning a clean RGBA `data:image/png;base64,...`.
+ * 3) Always enforces V4 Scanline BFS + Enclosed-Hole Purge + Color Unmixing so neither
+ *    outer corners nor trapped interior gaps (under umbrellas, between limbs/straps) remain opaque.
  */
 export async function removeModelBackgroundToPng(
   imageSource: string | Blob,
@@ -906,11 +1218,10 @@ export async function removeModelBackgroundToPng(
           const totalSampled = Math.max(1, Math.floor(aiData.length / 16));
           const opaqueRatio = opaquePixels / totalSampled;
 
-          // Ensure AI segmentation did not wipe the entire subject and cleaned all 4 corners
+          // Ensure AI segmentation did not wipe the subject, and run V4 hole-aware cleanup
+          // to guarantee zero residual opaque corners OR trapped interior holes!
           if (opaqueRatio >= 0.025 && opaqueRatio <= 0.97) {
-            if (!areFourCornersTransparent(aiData, aiCanvas.width, aiCanvas.height)) {
-              applyV3ScanlineMattingOnCanvas(aiCanvas, options);
-            }
+            applyV4HoleAwareMattingOnCanvas(aiCanvas, options);
             return aiCanvas.toDataURL('image/png');
           }
         } finally {
@@ -920,7 +1231,7 @@ export async function removeModelBackgroundToPng(
       }
     }
 
-    applyV3ScanlineMattingOnCanvas(canvas, options);
+    applyV4HoleAwareMattingOnCanvas(canvas, options);
     return canvas.toDataURL('image/png');
   } catch {
     return typeof imageSource === 'string' ? imageSource : '';
@@ -931,11 +1242,11 @@ export async function removeModelBackgroundToPng(
 }
 
 /**
- * Alpha Verification Guard (`ensureTransparentCutout`):
- * Inspects the 4 corner pixels `(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)` on an offscreen Canvas
- * across both newly generated and cached images (`0°`, `45°`, `90°`, `180°`).
- * If ANY corner pixel has `alpha > 15` (or the source is non-PNG), immediately runs the V3 cutout
- * pipeline and returns a transparent PNG DataURL (`data:image/png;base64,...`).
+ * Alpha & Enclosed-Hole Verification Guard (`ensureTransparentCutout`):
+ * Inspects the 4 corner pixels `(2,2)`, `(w-3,2)`, `(2,h-3)`, `(w-3,h-3)` AND checks for
+ * trapped interior studio-backdrop holes across newly generated and cached images.
+ * If ANY corner pixel has `alpha > 15` (or interior holes were purged, or source is non-PNG),
+ * returns a clean RGBA PNG DataURL (`data:image/png;base64,...`).
  */
 export async function ensureTransparentCutout(
   imageSource: string | Blob,
@@ -943,17 +1254,19 @@ export async function ensureTransparentCutout(
 ): Promise<string> {
   if (!imageSource) return '';
   if (typeof imageSource === 'string') {
-    if (!imageSource.startsWith('data:image/') && !imageSource.startsWith('blob:') && !imageSource.startsWith('/') && !/^https?:\/\//i.test(imageSource)) {
+    if (
+      !imageSource.startsWith('data:image/') &&
+      !imageSource.startsWith('blob:') &&
+      !imageSource.startsWith('/') &&
+      !/^https?:\/\//i.test(imageSource)
+    ) {
       return imageSource;
     }
     if (typeof document === 'undefined' || typeof Image === 'undefined') {
       return imageSource;
     }
     // Non-PNG data URLs (JPEG/WebP) cannot hold alpha -> always run full cutout
-    if (
-      imageSource.startsWith('data:image/') &&
-      !imageSource.startsWith('data:image/png')
-    ) {
+    if (imageSource.startsWith('data:image/') && !imageSource.startsWith('data:image/png')) {
       return removeModelBackgroundToPng(imageSource, options);
     }
   } else if (typeof document === 'undefined' || typeof Image === 'undefined') {
@@ -977,6 +1290,11 @@ export async function ensureTransparentCutout(
         imageSource.startsWith('data:image/png') &&
         areFourCornersTransparent(d, w, h, CORNER_ALPHA_OPAQUE_THRESHOLD)
       ) {
+        // Even when outer corners are already transparent, purge any trapped enclosed holes!
+        const holeSweep = applyV4HoleAwareMattingOnCanvas(canvas, options);
+        if (holeSweep.modified && holeSweep.purgedHolePixels > 0) {
+          return canvas.toDataURL('image/png');
+        }
         return imageSource;
       }
 

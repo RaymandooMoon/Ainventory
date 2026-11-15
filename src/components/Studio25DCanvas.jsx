@@ -20,9 +20,11 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   viewAngleDeg,
   onViewAngleChange,
   weather,
+  scenarioKey,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
+  onRestoreHistorySlots,
   onQuickSelectPreset,
   onOpenSkinToneModal,
   onOpenBodyModal,
@@ -53,9 +55,11 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       viewAngleDeg={viewAngleDeg}
       onViewAngleChange={onViewAngleChange}
       weather={weather}
+      scenarioKey={scenarioKey}
       activeSlotKey={activeSlotKey}
       onSelectSlot={onSelectSlot}
       onUnequipSlot={onUnequipSlot}
+      onRestoreHistorySlots={onRestoreHistorySlots}
       onQuickSelectPreset={onQuickSelectPreset}
       onOpenSkinToneModal={onOpenSkinToneModal}
       onOpenBodyModal={onOpenBodyModal}

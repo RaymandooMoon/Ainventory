@@ -270,7 +270,7 @@ export default function App() {
   }, [garments, selectedItemId]);
 
   const handleApplySkinProfile = useCallback(
-    (nextProfile) => {
+    async (nextProfile, options = {}) => {
       const lockedGender =
         user && !user.isSampleDemo
           ? user.gender === 'female'
@@ -310,14 +310,18 @@ export default function App() {
       );
 
       if (user && !user.isSampleDemo) {
-        apiFetch('/auth/profile', {
-          method: 'POST',
-          body: JSON.stringify({
-            personal_color: saved.personalColor,
-            skin_tone_hex: saved.skinToneHex,
-            gender: lockedGender,
-          }),
-        }).catch(() => {});
+        try {
+          await apiFetch('/auth/profile', {
+            method: 'POST',
+            body: JSON.stringify({
+              personal_color: saved.personalColor,
+              skin_tone_hex: saved.skinToneHex,
+              gender: lockedGender,
+            }),
+          });
+        } catch (err) {
+          if (options?.throwOnError) throw err;
+        }
       }
 
       showToast(tx(lang, '피부톤 적용됨', 'Skin tone applied'));
@@ -326,7 +330,7 @@ export default function App() {
   );
 
   const handleUpdateBodySpec = useCallback(
-    (nextSpec) => {
+    async (nextSpec, options = {}) => {
       const lockedGender =
         user && !user.isSampleDemo
           ? user.gender === 'female'
@@ -336,10 +340,13 @@ export default function App() {
             ? 'female'
             : 'male';
 
-      const savedBody = saveStoredBodySpec({
-        ...nextSpec,
-        gender: lockedGender,
-      });
+      const savedBody = saveStoredBodySpec(
+        {
+          ...nextSpec,
+          gender: lockedGender,
+        },
+        { throwOnError: Boolean(options?.throwOnError) }
+      );
       setBodySpec(savedBody);
 
       setSkinProfile((prev) => {
@@ -360,15 +367,19 @@ export default function App() {
       );
 
       if (user && !user.isSampleDemo) {
-        apiFetch('/auth/profile', {
-          method: 'POST',
-          body: JSON.stringify({
-            gender: lockedGender,
-            height_cm: savedBody.heightCm,
-            weight_kg: savedBody.weightKg,
-            body_shape: savedBody.bodyShape,
-          }),
-        }).catch(() => {});
+        try {
+          await apiFetch('/auth/profile', {
+            method: 'POST',
+            body: JSON.stringify({
+              gender: lockedGender,
+              height_cm: savedBody.heightCm,
+              weight_kg: savedBody.weightKg,
+              body_shape: savedBody.bodyShape,
+            }),
+          });
+        } catch (err) {
+          if (options?.throwOnError) throw err;
+        }
       }
 
       showToast(tx(lang, '체형 반영됨', 'Body profile applied'));

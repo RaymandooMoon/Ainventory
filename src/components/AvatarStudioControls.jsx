@@ -9,9 +9,12 @@ import {
   HAIR_COLOR_SWATCHES,
   HAIR_STYLE_OPTIONS,
   HEAD_SHAPE_OPTIONS,
+  MAX_AVATAR_HEIGHT_CM,
+  MIN_AVATAR_HEIGHT_CM,
   MST_UNDERTONE_OPTIONS,
   resolveCoupledBodyMetrics,
   sanitizeAvatarSpec,
+  validateHeightCmInput,
 } from '../services/avatarSpecStore.ts';
 import { MST_BASE_LEVELS, getMstSwatch } from '../services/monkSkinTone.ts';
 import { tx } from '../utils/i18n.ts';
@@ -71,7 +74,7 @@ function bodyPctToScale(pct) {
 }
 
 /**
- * Inverse piecewise mapping (`0.80 -> 0%`, `1.00 -> 50%`, `1.30 -> 100%`).
+ * Inverse piecewise mapping (`0.80 -> 0%`, `1.00 -> 50%`, `100% -> 1.30`).
  */
 function bodyScaleToPct(scale) {
   const s = Number(scale) || 1.0;
@@ -98,6 +101,7 @@ export function BufferedAtelierSlider({
   formatValue,
   onCommit,
   variant = 'default',
+  headerRightSlot = null,
 }) {
   const numericProp = Number(value);
   const safePropVal = Math.min(
@@ -198,16 +202,17 @@ export function BufferedAtelierSlider({
   const span = Math.max(1e-6, max - min);
   const fillPct = Math.max(0, Math.min(100, ((displayVal - min) / span) * 100));
   const formattedReadout = formatValue ? formatValue(displayVal) : String(displayVal);
+  const RootTag = headerRightSlot ? 'div' : 'label';
 
   return (
-    <label
+    <RootTag
       className={`avatar-slider-item atelier-buffered-slider tabular-nums ${
         variant === 'editorial' ? 'is-editorial-primary' : ''
       }`}
     >
       <div className="avatar-slider-head">
         <span>{label}</span>
-        <strong>{formattedReadout}</strong>
+        {headerRightSlot || <strong>{formattedReadout}</strong>}
       </div>
       <input
         type="range"
@@ -229,13 +234,13 @@ export function BufferedAtelierSlider({
         onKeyUp={handlePointerFinish}
         onChange={handleChange}
       />
-    </label>
+    </RootTag>
   );
 }
 
 /**
  * Reusable 3 Primary White-Track / Circular-Handle Sliders:
- * 1) 신장 (cm) [140..200]
+ * 1) 신장 (cm) — Direct Input [100..230cm] + Slider [140..200cm]
  * 2) 몸무게 (kg) [35..150]
  * 3) 체형 슬라이더 [0..100] with exact `50% === 1.00x` piecewise interpolation
  */
@@ -243,10 +248,34 @@ export function PrimaryBodyAtelierSliders({
   lang = 'ko',
   draftSpec,
   onChangeDraftSpec,
+  heightInputText,
+  onHeightInputChange,
+  onHeightValidationError,
+  heightInputRef,
 }) {
   const anthro = draftSpec.anthropometrics;
-  const clampedHeightCm = Math.min(200, Math.max(140, Math.round(anthro.heightCm || 170)));
+  const currentHeightCm = Math.min(
+    MAX_AVATAR_HEIGHT_CM,
+    Math.max(MIN_AVATAR_HEIGHT_CM, Math.round(anthro.heightCm || 170))
+  );
+  const clampedSliderHeightCm = Math.min(200, Math.max(140, currentHeightCm));
   const clampedWeightKg = Math.min(150, Math.max(35, Math.round(anthro.weightKg || 64)));
+
+  const [fallbackHeightText, setFallbackHeightText] = useState(() => String(currentHeightCm));
+  const isControlledHeightText = typeof heightInputText === 'string';
+  const effectiveHeightText = isControlledHeightText ? heightInputText : fallbackHeightText;
+
+  const updateHeightText = useCallback(
+    (nextText) => {
+      if (onHeightInputChange) {
+        onHeightInputChange(nextText);
+      } else {
+        setFallbackHeightText(nextText);
+      }
+    },
+    [onHeightInputChange]
+  );
+
   const avgScale =
     ((anthro.shoulderScale || 1) +
       (anthro.chestScale || 1) +
@@ -257,17 +286,96 @@ export function PrimaryBodyAtelierSliders({
 
   const handleCommitHeight = useCallback(
     (nextHeight) => {
+      const rounded = Math.round(nextHeight);
+      updateHeightText(String(rounded));
       onChangeDraftSpec((prev) =>
         sanitizeAvatarSpec({
           ...prev,
           anthropometrics: {
             ...prev.anthropometrics,
-            heightCm: Math.round(nextHeight),
+            heightCm: rounded,
           },
         })
       );
     },
-    [onChangeDraftSpec]
+    [onChangeDraftSpec, updateHeightText]
+  );
+
+  const handleDirectHeightChange = (e) => {
+    const raw = e.target.value;
+    updateHeightText(raw);
+    const check = validateHeightCmInput(raw, lang);
+    if (check.valid) {
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            heightCm: check.heightCm,
+          },
+        })
+      );
+    }
+  };
+
+  const triggerHeightValidation = useCallback(
+    (rawValue) => {
+      const check = validateHeightCmInput(rawValue, lang);
+      if (!check.valid) {
+        triggerHaptic('warning');
+        onHeightValidationError?.(check);
+        return false;
+      }
+      const normalized = String(check.heightCm);
+      if (rawValue !== normalized) {
+        updateHeightText(normalized);
+      }
+      onChangeDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          anthropometrics: {
+            ...prev.anthropometrics,
+            heightCm: check.heightCm,
+          },
+        })
+      );
+      return true;
+    },
+    [lang, onChangeDraftSpec, onHeightValidationError, updateHeightText]
+  );
+
+  const handleDirectHeightKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerHeightValidation(effectiveHeightText);
+    }
+  };
+
+  const isHeightTextInvalid = !validateHeightCmInput(effectiveHeightText, lang).valid;
+
+  const heightDirectInputSlot = (
+    <div className="atelier-height-direct-field">
+      <input
+        ref={heightInputRef}
+        type="text"
+        inputMode="decimal"
+        data-height-cm-input="true"
+        aria-invalid={isHeightTextInvalid ? 'true' : 'false'}
+        aria-label={tx(
+          lang,
+          '신장 직접 입력 (100~230cm)',
+          'Direct height input (100 to 230 cm)'
+        )}
+        placeholder="170"
+        value={effectiveHeightText}
+        className={`atelier-height-cm-input tabular-nums ${
+          isHeightTextInvalid ? 'is-invalid' : ''
+        }`}
+        onChange={handleDirectHeightChange}
+        onKeyDown={handleDirectHeightKeyDown}
+      />
+      <span className="atelier-height-cm-unit">cm</span>
+    </div>
   );
 
   const handleCommitWeight = useCallback(
@@ -314,8 +422,9 @@ export function PrimaryBodyAtelierSliders({
         min={140}
         max={200}
         step={1}
-        value={clampedHeightCm}
+        value={clampedSliderHeightCm}
         formatValue={(val) => `${Math.round(val)} cm`}
+        headerRightSlot={heightDirectInputSlot}
         onCommit={handleCommitHeight}
       />
       <BufferedAtelierSlider
@@ -843,6 +952,10 @@ export function InclusiveBodyMorphControls({
   lang = 'ko',
   draftSpec,
   onChangeDraftSpec,
+  heightInputText,
+  onHeightInputChange,
+  onHeightValidationError,
+  heightInputRef,
 }) {
   const anthro = draftSpec.anthropometrics;
   const soft = draftSpec.coupledSoftTissue;
@@ -1066,6 +1179,10 @@ export function InclusiveBodyMorphControls({
           lang={lang}
           draftSpec={draftSpec}
           onChangeDraftSpec={onChangeDraftSpec}
+          heightInputText={heightInputText}
+          onHeightInputChange={onHeightInputChange}
+          onHeightValidationError={onHeightValidationError}
+          heightInputRef={heightInputRef}
         />
 
         <div className="avatar-studio-section-divider" aria-hidden="true" />

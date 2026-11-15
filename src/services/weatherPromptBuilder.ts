@@ -18,8 +18,84 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v3-clean-cutout-front45-ground';
+export const CUTOUT_PIPELINE_VERSION = 'v4-hole-aware-fullbody-360';
+export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v3-clean-cutout-front45-ground',
+] as const;
 export const CUTOUT_STAGE_BACKDROP_HEX = '#94A3B8';
+
+const COLLISION_SAFE_STUDIO_KEY_CANDIDATES = [
+  '#94A3B8',
+  '#7E9A86',
+  '#9A8B7E',
+  '#858FA8',
+] as const;
+
+function parseRgbFromHex(rawHex?: string | null): [number, number, number] | null {
+  if (typeof rawHex !== 'string') return null;
+  const clean = rawHex.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
+    return [
+      Number.parseInt(clean.slice(1, 3), 16),
+      Number.parseInt(clean.slice(3, 5), 16),
+      Number.parseInt(clean.slice(5, 7), 16),
+    ];
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
+    return [
+      Number.parseInt(`${clean[1]}${clean[1]}`, 16),
+      Number.parseInt(`${clean[2]}${clean[2]}`, 16),
+      Number.parseInt(`${clean[3]}${clean[3]}`, 16),
+    ];
+  }
+  return null;
+}
+
+/**
+ * Selects a flat, shadowless studio key backdrop hex that maximizes RGB separation
+ * from all equipped garment colors. Defaults to `#94A3B8` unless an equipped item is
+ * visually close to `#94A3B8` (`ΔRGB < 42`).
+ */
+export function selectOptimalStudioKeyHex(
+  equippedColorHexes?: Array<string | null | undefined>
+): string {
+  if (!Array.isArray(equippedColorHexes) || equippedColorHexes.length === 0) {
+    return CUTOUT_STAGE_BACKDROP_HEX;
+  }
+  const parsedEquipped = equippedColorHexes
+    .map((hex) => parseRgbFromHex(hex))
+    .filter((rgb): rgb is [number, number, number] => Boolean(rgb));
+  if (parsedEquipped.length === 0) {
+    return CUTOUT_STAGE_BACKDROP_HEX;
+  }
+
+  const defaultRgb: [number, number, number] = [148, 163, 184];
+  const minDistToDefault = Math.min(
+    ...parsedEquipped.map(([r, g, b]) =>
+      Math.hypot(r - defaultRgb[0], g - defaultRgb[1], b - defaultRgb[2])
+    )
+  );
+  if (minDistToDefault >= 42) {
+    return CUTOUT_STAGE_BACKDROP_HEX;
+  }
+
+  let bestHex: string = CUTOUT_STAGE_BACKDROP_HEX;
+  let bestMinDist = minDistToDefault;
+  for (const candidateHex of COLLISION_SAFE_STUDIO_KEY_CANDIDATES) {
+    const cRgb = parseRgbFromHex(candidateHex);
+    if (!cRgb) continue;
+    const minDist = Math.min(
+      ...parsedEquipped.map(([r, g, b]) =>
+        Math.hypot(r - cRgb[0], g - cRgb[1], b - cRgb[2])
+      )
+    );
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist;
+      bestHex = candidateHex;
+    }
+  }
+  return bestHex;
+}
 
 export function resolveEffectiveWeather(
   input: WeatherContextInput
@@ -279,14 +355,22 @@ export interface WeatherPosePromptDirectives {
   combinedPromptBlock: string;
 }
 
-export const CUTOUT_BACKDROP_DIRECTIVE =
-  'CRITICAL RGBA CUTOUT BACKDROP RULE (MANDATORY): Render the ENTIRE background behind and beneath the model as a 100% flat solid uniform chromakey-free neutral mid-slate (#94A3B8) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO gradients, ZERO props, ZERO drop shadows, ZERO checkerboard pixels, and ZERO airborne rain/snow/mist/dust particles in the background air (all falling weather particles are rendered on a separate HTML5 Canvas foreground layer). Keep crisp, high-contrast edge separation between the #94A3B8 backdrop and both pure white garments/snow (#FFFFFF) and black coats/hats (#111111).';
+export function buildCutoutBackdropDirective(
+  backdropHex: string = CUTOUT_STAGE_BACKDROP_HEX
+): string {
+  return `CRITICAL RGBA CUTOUT & ENCLOSED-HOLE BACKDROP RULE (MANDATORY): Render the ENTIRE background behind, beneath, AND inside every enclosed negative-space loop of the model (including underneath the open umbrella canopy between the shaft and head/shoulders, between bent arms and waist/torso, between legs/thighs/ankles, and inside bag handles/straps) as a 100% flat solid uniform chromakey-free studio backdrop (${backdropHex}), STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading/ambient occlusion inside arm-body or leg gaps, ZERO gradients, ZERO props, ZERO drop shadows, ZERO checkerboard pixels, and ZERO airborne rain/snow/mist/dust particles in the background air (all falling weather particles are rendered on a separate HTML5 Canvas foreground layer). Keep crisp, high-contrast edge separation between the ${backdropHex} backdrop and pure white garments/snow (#FFFFFF), skin tones, and black coats/hats (#111111).`;
+}
+
+export const CUTOUT_BACKDROP_DIRECTIVE = buildCutoutBackdropDirective(CUTOUT_STAGE_BACKDROP_HEX);
+
+export const HORIZONTAL_FULL_BODY_CAMERA_LOCK =
+  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 180°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles.';
 
 export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<0 | 45 | 90 | 180, string> = {
-  0: 'Strict 0-degree direct front-facing full-body view. Camera directly in front of model; symmetrical frontal stance, full face and entire front of outfit 100% visible.',
-  45: 'FRONT-FACING 45-degree three-quarter fashion lookbook view. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and the FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible, while the torso and feet are angled 35-45 degrees slightly to the side for 3D depth. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER show a back view, NEVER rear view, NEVER facing away from the camera, NEVER show the back of the head, NEVER over-the-shoulder from behind].',
-  90: 'Strict 90-degree lateral side-profile full-body view. Model facing cleanly left or right showing exact side profile of face, garment silhouette, and shoes.',
-  180: 'Direct 180-degree rear back-facing full-body view. Model facing directly away from camera showing the back of hair, back shoulders, and rear garment tailoring.',
+  0: 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.',
+  45: 'Strict FRONT-FACING 45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].',
+  90: 'Strict 90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly sideways showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.',
+  180: 'Direct 180-degree rear back-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing directly away from camera showing back of hair, back shoulders, rear garment tailoring, and full heels/soles of shoes with 10% bottom margin.',
 };
 
 export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
@@ -298,10 +382,11 @@ export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
 
 export function buildTurnaround2x2SheetAngleDirectives(): string {
   return [
-    `  * [Top-Left Quadrant — 0° Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
-    `  * [Top-Right Quadrant — 45° Quarter (STRICT FRONT-FACING)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
-    `  * [Bottom-Left Quadrant — 90° Side Profile]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
-    `  * [Bottom-Right Quadrant — 180° Rear Back]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
+    `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
+    `  * [Top-Left Quadrant — 0° Front Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
+    `  * [Top-Right Quadrant — 45° Horizontal-Yaw Front-Quarter Full-Body (ZERO TILT, FULL FEET VISIBLE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
+    `  * [Bottom-Left Quadrant — 90° Side Profile Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
+    `  * [Bottom-Right Quadrant — 180° Rear Back Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
   ].join('\n');
 }
 
@@ -313,6 +398,7 @@ export function buildWeatherPosePromptDirectives(
         weather?: any;
         hasEquippedUmbrella?: boolean;
         turnaroundSheet?: boolean;
+        equippedColorHexes?: Array<string | null | undefined>;
       }
 ): WeatherPosePromptDirectives {
   const normalizedParams =
@@ -326,6 +412,9 @@ export function buildWeatherPosePromptDirectives(
       ? 'rain'
       : effectiveWeather;
 
+  const backdropHex = selectOptimalStudioKeyHex(normalizedParams.equippedColorHexes);
+  const activeBackdropDirective = buildCutoutBackdropDirective(backdropHex);
+
   let poseDirective = '';
   let physicalTraceDirective = '';
   let negativeDirective = '';
@@ -333,11 +422,11 @@ export function buildWeatherPosePromptDirectives(
   switch (effectiveMode) {
     case 'rain': {
       poseDirective =
-        'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, hairstyle, and full-body outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain generous 14% headroom clearance above the top dome/tip of the open umbrella and full toe clearance at the bottom so the open umbrella canopy is NEVER cropped or cut off by the frame or quadrant boundary.';
+        'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, hairstyle, and full-body outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain generous 14% headroom clearance above the top dome/tip of the open umbrella and >=10% bottom margin below both shoes so neither the open umbrella canopy nor the feet are EVER cropped by the frame or quadrant boundary.';
       physicalTraceDirective =
         'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves.';
       negativeDirective =
-        'STRICT RAIN NEGATIVE (NEVER closed/folded umbrella): NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER crop the top canopy of the umbrella, NEVER obscure or shadow the model’s face, and NEVER draw falling rain streaks in the #94A3B8 background.';
+        'STRICT RAIN NEGATIVE (NEVER closed/folded umbrella): NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER crop the top canopy of the umbrella or the bottom of the shoes, NEVER obscure or shadow the model’s face, NEVER fill the gap under the umbrella canopy around the shaft/shoulders with dark grey shadow (keep enclosed gaps flat #94A3B8), and NEVER draw falling rain streaks in the #94A3B8 background.';
       break;
     }
     case 'coldwave': {
@@ -397,17 +486,22 @@ export function buildWeatherPosePromptDirectives(
     }
   }
 
+  if (backdropHex !== CUTOUT_STAGE_BACKDROP_HEX) {
+    negativeDirective = negativeDirective.replaceAll(CUTOUT_STAGE_BACKDROP_HEX, backdropHex);
+  }
+
   const framingGuard = normalizedParams.turnaroundSheet
-    ? 'FRAME & HEADROOM GUARD: Inside each quadrant of the 2x2 turnaround sheet, scale the full-body figure slightly compactly (approx. 78–84% quadrant height) so the feet AND any overhead open umbrella or winter hat have generous flat #94A3B8 margin on all four sides.'
-    : 'FRAME & HEADROOM GUARD: Scale the full-body figure with generous head-to-toe margin (approx. 80–85% frame height) so the shoes AND any overhead open umbrella or winter hat are 100% inside the frame surrounded by flat #94A3B8.';
+    ? `FRAME, FLOOR BASELINE & HEADROOM GUARD: Eye-to-waist level, straight-on horizontal camera, zero tilt across all 4 quadrants. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (approx. 78–82% quadrant height) so both shoes AND any overhead open umbrella or winter hat sit 100% inside the quadrant surrounded by flat ${backdropHex} on all four sides.`
+    : `FRAME, FLOOR BASELINE & HEADROOM GUARD: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (approx. 80–84% frame height) surrounded by flat ${backdropHex}.`;
 
   const combinedPromptBlock = [
     `[EFFECTIVE WEATHER POSE & TRACE MODE: ${effectiveMode.toUpperCase()}]`,
+    HORIZONTAL_FULL_BODY_CAMERA_LOCK,
     poseDirective,
     physicalTraceDirective,
     negativeDirective,
     framingGuard,
-    CUTOUT_BACKDROP_DIRECTIVE,
+    activeBackdropDirective,
   ].join('\n');
 
   return {
@@ -415,7 +509,7 @@ export function buildWeatherPosePromptDirectives(
     poseDirective,
     physicalTraceDirective,
     negativeDirective,
-    backdropDirective: CUTOUT_BACKDROP_DIRECTIVE,
+    backdropDirective: activeBackdropDirective,
     headroomPrompt: framingGuard,
     combinedPrompt: combinedPromptBlock,
     combinedPromptBlock,

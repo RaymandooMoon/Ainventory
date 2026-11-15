@@ -1845,7 +1845,27 @@ export function createApiRouter() {
           ? normalizeAgeGroupKey(null, age)
           : 'unspecified';
 
-    const heightCm = parseOptNum(body.height_cm ?? body.heightCm, 120, 220);
+    const rawHeightInput = body.height_cm ?? body.heightCm;
+    if (
+      req.path === '/auth/profile' &&
+      rawHeightInput !== undefined &&
+      rawHeightInput !== null
+    ) {
+      const trimmedHeight = String(rawHeightInput).trim();
+      const numericHeight = Number(trimmedHeight);
+      if (!trimmedHeight || !Number.isFinite(numericHeight)) {
+        return res.status(400).json({
+          error: '숫자 형식의 올바른 신장(cm)을 입력해 주세요. (100cm ~ 230cm)',
+        });
+      }
+      if (numericHeight < 100 || numericHeight > 230) {
+        return res.status(400).json({
+          error: '입력 가능한 신장 범위(100cm ~ 230cm)를 벗어났습니다.',
+        });
+      }
+    }
+
+    const heightCm = parseOptNum(rawHeightInput, 100, 230);
     const weightKg = parseOptNum(body.weight_kg ?? body.weightKg, 30, 180);
     const gender = String(body.gender || 'unspecified').trim().slice(0, 24);
     const personalColor = String(body.personal_color || body.personalColor || 'autumn_warm')

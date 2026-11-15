@@ -343,15 +343,47 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           phase: Math.random() * Math.PI * 2,
         });
       }
-    } else if (weather === 'clear') {
-      for (let i = 0; i < 24; i += 1) {
+    } else if (weather === 'clear' || weather === 'forecast' || weather === 'realtime') {
+      const count = weather === 'clear' ? 24 : 16;
+      for (let i = 0; i < count; i += 1) {
         motes.push({
           x: Math.random() * width,
           y: Math.random() * height,
           vx: (Math.random() - 0.45) * 0.28,
           vy: -(0.18 + Math.random() * 0.34),
           radius: 1.5 + Math.random() * 2.8,
+          alpha: 0.2 + Math.random() * 0.26,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    } else if (weather === 'mild') {
+      for (let i = 0; i < 28; i += 1) {
+        motes.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: 0.24 + Math.random() * 0.38,
+          vy: -(0.12 + Math.random() * 0.26),
+          radius: 1.8 + Math.random() * 3.1,
           alpha: 0.22 + Math.random() * 0.28,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    if (weather === 'rain') {
+      // Subtle perimeter glass condensation micro-beads (upper/side glass edges, never covering model face)
+      for (let i = 0; i < 22; i += 1) {
+        const onLeftEdge = i % 2 === 0;
+        const edgeBand = onLeftEdge
+          ? Math.random() * (width * 0.16)
+          : width - Math.random() * (width * 0.16);
+        motes.push({
+          x: i < 8 ? Math.random() * width : edgeBand,
+          y: i < 8 ? Math.random() * (height * 0.14) : Math.random() * (height * 0.72),
+          vx: 0,
+          vy: 0.03 + Math.random() * 0.08,
+          radius: 1.1 + Math.random() * 1.9,
+          alpha: isDark ? 0.34 + Math.random() * 0.24 : 0.38 + Math.random() * 0.24,
           phase: Math.random() * Math.PI * 2,
         });
       }
@@ -364,7 +396,10 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       weather === 'wind' ||
       weather === 'heatwave' ||
       weather === 'cloudy' ||
-      weather === 'clear';
+      weather === 'clear' ||
+      weather === 'mild' ||
+      weather === 'forecast' ||
+      weather === 'realtime';
 
     const spawnBreathBurst = () => {
       const originX = width * 0.5 + 3;
@@ -656,6 +691,26 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2);
           ctx.fill();
         }
+
+        // 4) Subtle perimeter glass condensation micro-beads with specular pinpoint highlight
+        for (let i = 0; i < motes.length; i += 1) {
+          const bead = motes[i];
+          bead.y += bead.vy * frameScale * (0.35 + 0.65 * Math.max(0, Math.sin(elapsedSec * 0.9 + bead.phase)));
+          if (bead.y > height * 0.78) {
+            bead.y = Math.random() * (height * 0.14);
+          }
+          ctx.fillStyle = isDark
+            ? `rgba(203, 228, 255, ${bead.alpha * 0.65})`
+            : `rgba(255, 255, 255, ${bead.alpha * 0.78})`;
+          ctx.beginPath();
+          ctx.ellipse(bead.x, bead.y, bead.radius * 0.85, bead.radius * 1.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.95, bead.alpha * 1.15)})`;
+          ctx.beginPath();
+          ctx.arc(bead.x - bead.radius * 0.25, bead.y - bead.radius * 0.3, Math.max(0.45, bead.radius * 0.32), 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (weather === 'coldwave') {
         // 1) Perimeter Frost Vignette
         drawColdwaveFrostVignette();
@@ -894,13 +949,14 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           ctx.fill();
           ctx.restore();
         }
-      } else if (weather === 'clear') {
+      } else if (weather === 'clear' || weather === 'forecast' || weather === 'realtime') {
         // Subtle diagonal warm sunbeams from top-right + floating golden dust bokeh
         ctx.save();
+        const beamAlpha = weather === 'clear' ? 0.11 : 0.07;
         const beamGrad = ctx.createLinearGradient(width * 0.92, 0, width * 0.25, height * 0.72);
         beamGrad.addColorStop(
           0,
-          isDark ? 'rgba(253, 230, 138, 0.10)' : 'rgba(251, 191, 36, 0.11)'
+          isDark ? `rgba(253, 230, 138, ${beamAlpha})` : `rgba(251, 191, 36, ${beamAlpha})`
         );
         beamGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
         ctx.fillStyle = beamGrad;
@@ -929,6 +985,41 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
             : `rgba(217, 119, 6, ${m.alpha * 0.78 * twinkle})`;
           ctx.beginPath();
           ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (weather === 'mild') {
+        // Soft warm-spring champagne skylight glow + gentle drifting blossom/breeze bokeh
+        const springGlow = ctx.createRadialGradient(
+          width * 0.76,
+          height * 0.12,
+          6,
+          width * 0.76,
+          height * 0.12,
+          Math.min(width, height) * 0.54
+        );
+        springGlow.addColorStop(
+          0,
+          isDark ? 'rgba(254, 215, 170, 0.14)' : 'rgba(253, 186, 116, 0.14)'
+        );
+        springGlow.addColorStop(1, 'rgba(254, 215, 170, 0)');
+        ctx.fillStyle = springGlow;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < motes.length; i += 1) {
+          const m = motes[i];
+          m.x += (m.vx + Math.sin(elapsedSec * 1.4 + m.phase) * 0.16) * frameScale;
+          m.y += m.vy * frameScale;
+          if (m.y < -10) {
+            m.y = height + 10;
+            m.x = Math.random() * width;
+          }
+          if (m.x > width + 10) m.x = -10;
+          const pulse = 0.55 + 0.45 * Math.sin(elapsedSec * 1.8 + m.phase);
+          ctx.fillStyle = isDark
+            ? `rgba(255, 237, 213, ${m.alpha * pulse})`
+            : `rgba(234, 88, 12, ${m.alpha * 0.58 * pulse})`;
+          ctx.beginPath();
+          ctx.ellipse(m.x, m.y, m.radius * 1.25, m.radius * 0.85, m.phase * 0.3, 0, Math.PI * 2);
           ctx.fill();
         }
       }

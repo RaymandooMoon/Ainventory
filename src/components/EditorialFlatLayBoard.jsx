@@ -4,14 +4,18 @@ import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
+  computeOutfitComboId,
   normalizeGenderNeutralProfile,
-  normalizeTurnaroundAngleDeg,
+  normalizeTurnaround360Angle,
   normalizeViewerMode,
   normalizeVtonStyleMode,
-  computeOutfitComboId,
+  resolve360AngleRenderSpec,
 } from '../services/vton2DService.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+
+const SWIPE_MIN_DISTANCE_PX = 40;
+const SWIPE_FAST_FLICK_VELOCITY_PX_PER_MS = 0.8;
 
 const SLOT_EDITORIAL_PRIORITY = {
   outer: 1,
@@ -73,6 +77,12 @@ const SLOT_BADGE_LABELS = {
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
+}
+
+function nowMs() {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
 }
 
 /**
@@ -380,8 +390,8 @@ const CuratorialSpecSheet = memo(function CuratorialSpecSheet({
 /**
  * Zero-Procedural-Drawing Outfits Central Stage:
  * ① Editorial Flat-Lay Lookbook Board (0ms instant response, 100% original aspect ratio & fabric detail)
- * ② 100% Gemini Multimodal Multi-Angle Virtual Try-On Stage (`0° / 45° / 90° / 180°`)
- *    with glassmorphism shimmer loading overlay and Before/After split comparison.
+ * ② 100% Gemini Multimodal Multi-Angle Virtual Try-On Stage (`0°..315°` 360° swipe rotation,
+ *    velocity-sensitive `±45°` step vs `180°` fast flick, full-body floor baseline contact).
  */
 const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   slots = null,
@@ -403,6 +413,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   avatarConfigHash = null,
   personReferenceUrl = null,
   viewAngleDeg = DEFAULT_TURNAROUND_ANGLE,
+  onSwipeRotate,
   compareActive = false,
   compareSplitPct = 50,
   onCompareSplitChange,
@@ -415,7 +426,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
 }) {
   const viewerMode = normalizeViewerMode(legacyMode);
   const resolvedStyleMode = normalizeVtonStyleMode(styleMode);
-  const safeAngleDeg = normalizeTurnaroundAngleDeg(viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
+  const safeAngleDeg = normalizeTurnaround360Angle(viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
+  const angleSpec = useMemo(() => resolve360AngleRenderSpec(safeAngleDeg), [safeAngleDeg]);
   const resolvedLang = lang === 'en' || lang === 'ko' ? lang : getStoredLang();
   const isEn = resolvedLang === 'en';
 
@@ -456,11 +468,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const resolvedBodyShape =
     bodySpec?.bodyShape || user?.bodyShape || profile.bodyShape || 'standard';
 
-  const resolvedHeightCm =
-    bodySpec?.heightCm ?? profile.heightCm ?? 172;
-
-  const resolvedWeightKg =
-    bodySpec?.weightKg ?? profile.weightKg ?? 64;
+  const resolvedHeightCm = bodySpec?.heightCm ?? profile.heightCm ?? 172;
+  const resolvedWeightKg = bodySpec?.weightKg ?? profile.weightKg ?? 64;
 
   const mstSwatch = useMemo(
     () =>
@@ -497,15 +506,23 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
 
   const stageRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [isRotatingDrag, setIsRotatingDrag] = useState(false);
+  const [swipeDragPx, setSwipeDragPx] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
-  const panGestureRef = useRef({
+
+  const gestureRef = useRef({
     active: false,
+    mode: 'idle', // 'idle' | 'pan' | 'swipe-candidate' | 'swipe-rotate'
     pointerId: null,
     startX: 0,
     startY: 0,
+    startT: 0,
+    motionStartT: 0,
+    motionStarted: false,
     originPanX: 0,
     originPanY: 0,
     moved: false,
+    captured: false,
   });
 
   const clampPanOffset = useCallback((nextX, nextY, currentZoom) => {
@@ -543,58 +560,201 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       const target = e.target;
       if (
         target instanceof Element &&
-        target.closest('[data-vton-compare-slider], [data-flatlay-item-slot], button')
+        target.closest('[data-vton-compare-slider], button')
       ) {
         return;
       }
-      if (safeZoom <= 1.01) return;
 
-      panGestureRef.current = {
+      const tNow = nowMs();
+      if (safeZoom > 1.01) {
+        gestureRef.current = {
+          active: true,
+          mode: 'pan',
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          startT: tNow,
+          motionStartT: tNow,
+          motionStarted: true,
+          originPanX: safePanX,
+          originPanY: safePanY,
+          moved: false,
+          captured: true,
+        };
+        setIsPanning(true);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // Ignore synthetic pointer capture errors
+        }
+        return;
+      }
+
+      // Zoom === 1x: arm 360° horizontal swipe rotation candidate
+      gestureRef.current = {
         active: true,
+        mode: 'swipe-candidate',
         pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
-        originPanX: safePanX,
-        originPanY: safePanY,
+        startT: tNow,
+        motionStartT: tNow,
+        motionStarted: false,
+        originPanX: 0,
+        originPanY: 0,
         moved: false,
+        captured: false,
       };
-      setIsPanning(true);
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        // Ignore synthetic pointer capture errors
-      }
+      setSwipeDragPx(0);
     },
     [safeZoom, safePanX, safePanY]
   );
 
   const handleStagePointerMove = useCallback(
     (e) => {
-      const g = panGestureRef.current;
+      const g = gestureRef.current;
       if (!g.active || g.pointerId !== e.pointerId) return;
+
       const dx = e.clientX - g.startX;
       const dy = e.clientY - g.startY;
-      if (Math.hypot(dx, dy) > 3) {
-        g.moved = true;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (g.mode === 'pan') {
+        if (Math.hypot(dx, dy) > 3) {
+          g.moved = true;
+        }
+        if (onPanChange) {
+          onPanChange(clampPanOffset(g.originPanX + dx, g.originPanY + dy, safeZoom));
+        }
+        return;
       }
-      if (onPanChange) {
-        onPanChange(clampPanOffset(g.originPanX + dx, g.originPanY + dy, safeZoom));
+
+      if (!g.motionStarted && (absDx >= 6 || absDy >= 6)) {
+        g.motionStarted = true;
+        g.motionStartT = nowMs();
+      }
+
+      if (g.mode === 'swipe-candidate') {
+        // Yield cleanly to native vertical page scrolling if vertical motion dominates
+        if (absDy > 14 && absDy > absDx * 1.25) {
+          g.active = false;
+          g.mode = 'idle';
+          setIsRotatingDrag(false);
+          setSwipeDragPx(0);
+          return;
+        }
+        if (absDx > 10 && absDx > absDy * 1.1) {
+          g.mode = 'swipe-rotate';
+          g.moved = true;
+          setIsRotatingDrag(true);
+          if (!g.captured) {
+            g.captured = true;
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // Ignore synthetic pointer capture errors
+            }
+          }
+        }
+      }
+
+      if (g.mode === 'swipe-rotate') {
+        setSwipeDragPx(clamp(dx, -88, 88));
       }
     },
     [safeZoom, onPanChange, clampPanOffset]
   );
 
-  const finishStagePointer = useCallback((e) => {
-    const g = panGestureRef.current;
-    if (!g.active) return;
-    g.active = false;
-    setIsPanning(false);
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignore release errors
-    }
-  }, []);
+  const finishStagePointer = useCallback(
+    (e, isCancel = false) => {
+      const g = gestureRef.current;
+      if (!g.active) return;
+
+      const endT = nowMs();
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      const finalMode = g.mode;
+      const activeDt = Math.max(12, endT - (g.motionStarted ? g.motionStartT : g.startT));
+
+      g.active = false;
+      g.mode = 'idle';
+      setIsPanning(false);
+      setIsRotatingDrag(false);
+      setSwipeDragPx(0);
+
+      if (g.captured) {
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          // Ignore release errors
+        }
+      }
+
+      if (
+        !isCancel &&
+        (finalMode === 'swipe-rotate' ||
+          (finalMode === 'swipe-candidate' && absDx >= SWIPE_MIN_DISTANCE_PX && absDx > absDy * 1.1)) &&
+        absDx >= SWIPE_MIN_DISTANCE_PX &&
+        onSwipeRotate
+      ) {
+        const velocityPxPerMs = absDx / activeDt;
+        const fastFlick = velocityPxPerMs >= SWIPE_FAST_FLICK_VELOCITY_PX_PER_MS;
+        // Dragging right (dx > 0) steps +45°; dragging left (dx < 0) steps -45°
+        const stepSign = dx > 0 ? 1 : -1;
+        onSwipeRotate({
+          stepSign,
+          fastFlick,
+          velocityPxPerMs,
+          dx,
+        });
+      }
+    },
+    [onSwipeRotate]
+  );
+
+  const handleStagePointerUp = useCallback(
+    (e) => finishStagePointer(e, false),
+    [finishStagePointer]
+  );
+
+  const handleStagePointerCancel = useCallback(
+    (e) => finishStagePointer(e, true),
+    [finishStagePointer]
+  );
+
+  const handleStageKeyDown = useCallback(
+    (e) => {
+      if (!onSwipeRotate) return;
+      const target = e.target;
+      if (
+        target instanceof Element &&
+        target.closest('[data-vton-compare-slider], input, textarea, select, button')
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        onSwipeRotate({
+          stepSign: -1,
+          fastFlick: Boolean(e.shiftKey),
+          velocityPxPerMs: e.shiftKey ? 1.2 : 0.35,
+          dx: 60,
+        });
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        onSwipeRotate({
+          stepSign: 1,
+          fastFlick: Boolean(e.shiftKey),
+          velocityPxPerMs: e.shiftKey ? 1.2 : 0.35,
+          dx: -60,
+        });
+      }
+    },
+    [onSwipeRotate]
+  );
 
   const updateCompareFromClientX = useCallback(
     (clientX) => {
@@ -665,9 +825,55 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [safeSplit, onCompareSplitChange]
   );
 
-  const mediaTransformStyle = useMemo(
+  const flatLayTransformStyle = useMemo(
     () => ({
-      transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`,
+      transform:
+        safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0
+          ? `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
+          : undefined,
+    }),
+    [safePanX, safePanY, safeZoom]
+  );
+
+  const modelTransformStyle = useMemo(() => {
+    const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
+    const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
+    const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg;
+    const parts = [];
+    if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
+      parts.push(
+        `translate3d(${(safePanX + dragNudgeX).toFixed(1)}px, ${safePanY.toFixed(1)}px, 0)`
+      );
+    }
+    if (safeZoom > 1.001) {
+      parts.push(`scale(${safeZoom.toFixed(3)})`);
+    }
+    if (Math.abs(totalYawDeg) >= 0.05) {
+      parts.push(`perspective(980px) rotateY(${totalYawDeg.toFixed(1)}deg)`);
+    }
+    if (angleSpec.mirrorX) {
+      parts.push('scaleX(-1)');
+    }
+    return {
+      transformOrigin: '50% 93.5%',
+      transform: parts.length > 0 ? parts.join(' ') : 'none',
+    };
+  }, [
+    angleSpec.mirrorX,
+    angleSpec.perspectiveYawDeg,
+    isRotatingDrag,
+    swipeDragPx,
+    safePanX,
+    safePanY,
+    safeZoom,
+  ]);
+
+  const shadowTransformStyle = useMemo(
+    () => ({
+      transform:
+        safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0
+          ? `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
+          : undefined,
     }),
     [safePanX, safePanY, safeZoom]
   );
@@ -685,7 +891,13 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     <div
       ref={stageRef}
       id={CARBON_DOM_CONTRACT.character25dMannequinId}
-      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning ? 'is-panning' : ''}`.trim()}
+      tabIndex={0}
+      aria-label={
+        isEn
+          ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
+          : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
+      }
+      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
@@ -699,13 +911,17 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       data-height-cm={resolvedHeightCm}
       data-weight-kg={resolvedWeightKg}
       data-view-angle={safeAngleDeg}
+      data-canonical-slice-angle={angleSpec.canonicalSliceAngle}
+      data-angle-mirrored={angleSpec.mirrorX ? 'true' : 'false'}
       data-avatar-hash={profile.avatarConfigHash}
       data-outfit-combo={outfitComboId}
       onWheel={handleStageWheel}
+      onDragStart={(e) => e.preventDefault()}
       onPointerDown={handleStagePointerDown}
       onPointerMove={handleStagePointerMove}
-      onPointerUp={finishStagePointer}
-      onPointerCancel={finishStagePointer}
+      onPointerUp={handleStagePointerUp}
+      onPointerCancel={handleStagePointerCancel}
+      onKeyDown={handleStageKeyDown}
     >
       <div className="studio-2d-viewport">
         {/* Primary After Layer: Layer 1 Floor Contact Shadow + Layer 2 RGBA Model (or Editorial Flat-Lay Board) */}
@@ -716,20 +932,20 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 aria-hidden="true"
                 data-floor-contact-shadow="true"
                 className="studio-floor-contact-shadow"
-                style={mediaTransformStyle}
+                style={shadowTransformStyle}
               />
               <img
                 src={aiImageUrl}
                 alt={
                   isEn
-                    ? `Gemini AI virtual try-on (${safeAngleDeg}°)`
-                    : `Gemini AI 가상 피팅 (${safeAngleDeg}°)`
+                    ? `Gemini AI virtual try-on (${angleSpec.fullEn})`
+                    : `Gemini AI 가상 피팅 (${angleSpec.fullKo})`
                 }
                 data-vton-after-img="true"
                 data-ai-vton-img="true"
                 className="studio-2d-media-el editorial-ai-vton-img"
                 draggable={false}
-                style={mediaTransformStyle}
+                style={modelTransformStyle}
               />
             </>
           ) : (
@@ -743,7 +959,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               weightKg={resolvedWeightKg}
               angleDeg={safeAngleDeg}
               asPrimaryStageTarget
-              transformStyle={mediaTransformStyle}
+              transformStyle={flatLayTransformStyle}
             />
           )}
         </div>
@@ -765,7 +981,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 weightKg={resolvedWeightKg}
                 angleDeg={safeAngleDeg}
                 asPrimaryStageTarget={false}
-                transformStyle={mediaTransformStyle}
+                transformStyle={flatLayTransformStyle}
               />
             ) : (
               <CuratorialSpecSheet
@@ -773,7 +989,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 resolvedLang={resolvedLang}
                 mstSwatch={mstSwatch}
                 profile={profile}
-                transformStyle={mediaTransformStyle}
+                transformStyle={flatLayTransformStyle}
               />
             )}
           </div>
@@ -833,8 +1049,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             </div>
             <p className="editorial-vton-shimmer-title">
               {isEn
-                ? `Generating Weather Pose & RGBA Cutout (${safeAngleDeg}°)`
-                : `날씨 맞춤 포즈 생성 및 투명 배경제거 중 (${safeAngleDeg}°)`}
+                ? `Generating Weather Pose & V4 Cutout (${safeAngleDeg}°)`
+                : `날씨 맞춤 전신 포즈 및 V4 투명 누끼 생성 중 (${safeAngleDeg}°)`}
             </p>
             <p className="editorial-vton-shimmer-sub">
               {styleLabel} · {resolvedHeightCm}cm / {resolvedWeightKg}kg · {mstSwatch.code}
