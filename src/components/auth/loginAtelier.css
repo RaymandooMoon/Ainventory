@@ -1,0 +1,1154 @@
+/* ==========================================================================
+ * A inventory — Investor-Grade Adaptive Login & Kinetic Wardrobe Atelier CSS
+ * Exclusive Auth Track Stylesheet (Zero global side-effects, zero seams)
+ * ========================================================================== */
+
+.atelier-auth-root {
+  --atelier-font:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Pretendard Variable', 'Pretendard',
+    system-ui, sans-serif;
+  --atelier-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --atelier-ptr-x: 0;
+  --atelier-ptr-y: 0;
+
+  /* Light Theme Tokens — Warm Alabaster & Couture Gold (WCAG AA+ >= 6.8:1) */
+  --atelier-bg-solid: #f6f4ef;
+  --atelier-panel-bg: rgba(255, 255, 255, 0.86);
+  --atelier-panel-border: rgba(20, 24, 33, 0.1);
+  --atelier-panel-shadow:
+    0 24px 64px -16px rgba(15, 23, 42, 0.12),
+    0 4px 16px -2px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --atelier-ink-primary: #111318;
+  --atelier-ink-secondary: #475569;
+  --atelier-ink-muted: #526075;
+  --atelier-surface-subtle: rgba(241, 239, 233, 0.85);
+  --atelier-surface-elevated: #ffffff;
+  --atelier-input-bg: rgba(255, 255, 255, 0.94);
+  --atelier-input-border: rgba(15, 23, 42, 0.16);
+  --atelier-input-border-hover: rgba(15, 23, 42, 0.32);
+  --atelier-input-focus-ring: rgba(17, 19, 24, 0.14);
+  --atelier-accent-bg: #111318;
+  --atelier-accent-fg: #ffffff;
+  --atelier-accent-hover: #1e2430;
+  --atelier-accent-indicator: #b0824f;
+  --atelier-secondary-bg: rgba(255, 255, 255, 0.88);
+  --atelier-secondary-fg: #111318;
+  --atelier-secondary-border: rgba(15, 23, 42, 0.16);
+  --atelier-secondary-hover: rgba(248, 246, 241, 1);
+  --atelier-card-glass-bg: rgba(255, 255, 255, 0.68);
+  --atelier-card-glass-border: rgba(255, 255, 255, 0.88);
+  --atelier-card-glass-shadow: 0 20px 44px -14px rgba(15, 23, 42, 0.1);
+  --atelier-pill-bg: rgba(255, 255, 255, 0.78);
+  --atelier-pill-border: rgba(15, 23, 42, 0.12);
+  --atelier-danger-bg: rgba(254, 242, 242, 0.96);
+  --atelier-danger-border: rgba(185, 28, 28, 0.28);
+  --atelier-danger-ink: #991b1b;
+  --atelier-success-bg: rgba(236, 253, 245, 0.95);
+  --atelier-success-border: rgba(5, 150, 105, 0.32);
+  --atelier-success-ink: #065f46;
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  overflow-x: hidden;
+  background-color: var(--atelier-bg-solid);
+  color: var(--atelier-ink-primary);
+  font-family: var(--atelier-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+.atelier-auth-root[data-auth-theme='dark'] {
+  /* Dark Theme Tokens — Velvet Obsidian & Champagne Silver (WCAG AA+ >= 8.9:1) */
+  --atelier-bg-solid: #05070b;
+  --atelier-panel-bg: rgba(12, 17, 29, 0.82);
+  --atelier-panel-border: rgba(248, 250, 252, 0.12);
+  --atelier-panel-shadow:
+    0 28px 80px -16px rgba(0, 0, 0, 0.72),
+    0 8px 24px -4px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --atelier-ink-primary: #f8fafc;
+  --atelier-ink-secondary: #cbd5e1;
+  --atelier-ink-muted: #94a3b8;
+  --atelier-surface-subtle: rgba(15, 23, 42, 0.78);
+  --atelier-surface-elevated: rgba(30, 41, 59, 0.92);
+  --atelier-input-bg: rgba(9, 13, 24, 0.84);
+  --atelier-input-border: rgba(226, 232, 240, 0.18);
+  --atelier-input-border-hover: rgba(248, 250, 252, 0.34);
+  --atelier-input-focus-ring: rgba(226, 217, 200, 0.24);
+  --atelier-accent-bg: #f8fafc;
+  --atelier-accent-fg: #090d16;
+  --atelier-accent-hover: #e2e8f0;
+  --atelier-accent-indicator: #e2d9c8;
+  --atelier-secondary-bg: rgba(22, 30, 46, 0.82);
+  --atelier-secondary-fg: #f8fafc;
+  --atelier-secondary-border: rgba(226, 232, 240, 0.18);
+  --atelier-secondary-hover: rgba(30, 41, 59, 0.95);
+  --atelier-card-glass-bg: rgba(13, 19, 33, 0.62);
+  --atelier-card-glass-border: rgba(226, 232, 240, 0.14);
+  --atelier-card-glass-shadow: 0 24px 52px -14px rgba(0, 0, 0, 0.65);
+  --atelier-pill-bg: rgba(15, 23, 42, 0.74);
+  --atelier-pill-border: rgba(226, 232, 240, 0.16);
+  --atelier-danger-bg: rgba(69, 10, 10, 0.78);
+  --atelier-danger-border: rgba(248, 113, 113, 0.38);
+  --atelier-danger-ink: #fecaca;
+  --atelier-success-bg: rgba(6, 78, 59, 0.72);
+  --atelier-success-border: rgba(52, 211, 153, 0.38);
+  --atelier-success-ink: #a7f3d0;
+}
+
+.atelier-auth-root *,
+.atelier-auth-root *::before,
+.atelier-auth-root *::after {
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+ * Unified Seamless Fullscreen Canvas & Dithering Backdrop (Zero Seams)
+ * ========================================================================== */
+
+.atelier-backdrop-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.atelier-silk-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0 !important;
+  outline: none !important;
+  pointer-events: none;
+}
+
+/* Inline feTurbulence micro-dither eliminates 8-bit dark gradient banding */
+.atelier-dither-veil {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0 !important;
+  outline: none !important;
+  opacity: 0.025;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* ==========================================================================
+ * Ambient AI Wardrobe Live Status Capsule (Mobile + Desktop Safe Zone)
+ * ========================================================================== */
+
+.atelier-live-capsule-wrap {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  left: 50%;
+  transform: translate3d(-50%, 0, 0);
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  max-width: calc(100vw - 32px);
+}
+
+.atelier-live-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--atelier-pill-bg);
+  border: 1px solid var(--atelier-pill-border);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  color: var(--atelier-ink-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.16);
+}
+
+.atelier-live-dot {
+  position: relative;
+  display: inline-flex;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .atelier-live-dot {
+    animation: atelierPulseDot 2.8s ease-in-out infinite;
+  }
+}
+
+@keyframes atelierPulseDot {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.08);
+  }
+}
+
+@media (max-width: 767px) {
+  .atelier-live-capsule-wrap {
+    /* On mobile, tuck neatly below the top utility bar via clean optical alpha */
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    opacity: 0.92;
+  }
+
+  .atelier-live-capsule {
+    font-size: 11px;
+    padding: 5px 12px;
+  }
+}
+
+/* ==========================================================================
+ * Layer B — 3D Parallax Couture Curation Glass Cards (Desktop Flanks Only)
+ * Strictly hidden below 1180px so 0px ever collides with 440px Auth Card
+ * ========================================================================== */
+
+.atelier-flank-cards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  perspective: 1100px;
+}
+
+.atelier-curation-card {
+  position: absolute;
+  width: clamp(210px, 16.5vw, 248px);
+  max-width: calc(50vw - 264px);
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--atelier-card-glass-bg);
+  border: 1px solid var(--atelier-card-glass-border);
+  box-shadow: var(--atelier-card-glass-shadow);
+  backdrop-filter: blur(22px) saturate(175%);
+  -webkit-backdrop-filter: blur(22px) saturate(175%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  will-change: transform, opacity;
+  transition:
+    opacity 0.45s var(--atelier-ease-spring),
+    visibility 0.45s var(--atelier-ease-spring);
+}
+
+.atelier-curation-card--tl {
+  top: clamp(108px, 15vh, 176px);
+  left: clamp(24px, 4.8vw, 96px);
+  transform: translate3d(
+      calc(var(--atelier-ptr-x, 0) * -14px),
+      calc(var(--atelier-ptr-y, 0) * -10px),
+      0
+    )
+    rotateX(calc(var(--atelier-ptr-y, 0) * 4deg))
+    rotateY(calc(var(--atelier-ptr-x, 0) * -5deg));
+}
+
+.atelier-curation-card--bl {
+  bottom: clamp(96px, 14vh, 168px);
+  left: clamp(32px, 5.8vw, 118px);
+  transform: translate3d(
+      calc(var(--atelier-ptr-x, 0) * -20px),
+      calc(var(--atelier-ptr-y, 0) * -14px),
+      0
+    )
+    rotateX(calc(var(--atelier-ptr-y, 0) * 3.5deg))
+    rotateY(calc(var(--atelier-ptr-x, 0) * -4.5deg));
+}
+
+.atelier-curation-card--tr {
+  top: clamp(116px, 16vh, 184px);
+  right: clamp(24px, 4.8vw, 96px);
+  transform: translate3d(
+      calc(var(--atelier-ptr-x, 0) * -16px),
+      calc(var(--atelier-ptr-y, 0) * -11px),
+      0
+    )
+    rotateX(calc(var(--atelier-ptr-y, 0) * 4deg))
+    rotateY(calc(var(--atelier-ptr-x, 0) * -5deg));
+}
+
+.atelier-curation-card--br {
+  bottom: clamp(92px, 13.5vh, 164px);
+  right: clamp(32px, 5.8vw, 118px);
+  transform: translate3d(
+      calc(var(--atelier-ptr-x, 0) * -12px),
+      calc(var(--atelier-ptr-y, 0) * -9px),
+      0
+    )
+    rotateX(calc(var(--atelier-ptr-y, 0) * 3deg))
+    rotateY(calc(var(--atelier-ptr-x, 0) * -4deg));
+}
+
+@media (max-width: 1179px) {
+  .atelier-flank-cards {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (max-width: 767px) {
+  .atelier-flank-cards {
+    display: none;
+  }
+}
+
+.atelier-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.atelier-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--atelier-surface-subtle);
+  color: var(--atelier-ink-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.atelier-card-art {
+  height: 76px;
+  border-radius: 14px;
+  background: var(--atelier-surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--atelier-ink-primary);
+}
+
+.atelier-card-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--atelier-ink-primary);
+  line-height: 1.35;
+}
+
+.atelier-card-meta {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--atelier-ink-secondary);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.atelier-swatch-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.atelier-swatch-orb {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 2px solid var(--atelier-surface-elevated);
+  margin-left: -8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.atelier-swatch-orb:first-child {
+  margin-left: 0;
+}
+
+/* ==========================================================================
+ * Centered Single-Column Adaptive Auth Stage
+ * ========================================================================== */
+
+.atelier-auth-stage {
+  position: relative;
+  z-index: 3;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(16px, env(safe-area-inset-top, 16px))
+    clamp(16px, 4vw, 32px)
+    max(52px, calc(env(safe-area-inset-bottom, 16px) + 40px));
+}
+
+.atelier-auth-column {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Top Utility Bar (Brand Kicker + 48x48px Theme & Language Switches) */
+.atelier-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.atelier-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--atelier-ink-secondary);
+}
+
+.atelier-brand-gem {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: var(--atelier-accent-indicator);
+}
+
+.atelier-utility-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atelier-utility-btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--atelier-pill-border);
+  background: var(--atelier-pill-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  color: var(--atelier-ink-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.atelier-utility-btn:hover {
+  background: var(--atelier-secondary-hover);
+  border-color: var(--atelier-input-border-hover);
+}
+
+.atelier-utility-btn:active {
+  transform: scale(0.97);
+}
+
+.atelier-utility-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
+/* Hero Typography */
+.atelier-hero {
+  text-align: center;
+  padding: 4px 4px 2px;
+}
+
+.atelier-hero-title {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.18;
+  color: var(--atelier-ink-primary);
+}
+
+.atelier-hero-subtitle {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--atelier-ink-secondary);
+  word-break: keep-all;
+}
+
+/* ==========================================================================
+ * Frosted Glass Monolith Panel
+ * ========================================================================== */
+
+.atelier-monolith {
+  width: 100%;
+  padding: clamp(20px, 5vw, 28px);
+  border-radius: 28px;
+  background: var(--atelier-panel-bg);
+  border: 1px solid var(--atelier-panel-border);
+  box-shadow: var(--atelier-panel-shadow);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@keyframes atelierMicroShake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  18% {
+    transform: translate3d(-6px, 0, 0);
+  }
+  36% {
+    transform: translate3d(5px, 0, 0);
+  }
+  54% {
+    transform: translate3d(-4px, 0, 0);
+  }
+  72% {
+    transform: translate3d(3px, 0, 0);
+  }
+}
+
+.atelier-monolith.is-shaking {
+  animation: atelierMicroShake 0.36s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* ==========================================================================
+ * 2-Way Segmented Control (Sign In | Sign Up) & Gender Radiogroup
+ * Elevated surface + 1.5px crisp border + bottom accent bar + bold 700
+ * ========================================================================== */
+
+.atelier-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--atelier-surface-subtle);
+  border: 1px solid var(--atelier-panel-border);
+}
+
+.atelier-seg-tab {
+  position: relative;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 13px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  color: var(--atelier-ink-secondary);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    background-color 0.22s var(--atelier-ease-spring),
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.atelier-seg-tab:hover:not(.is-active) {
+  color: var(--atelier-ink-primary);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.atelier-seg-tab.is-active {
+  background: var(--atelier-surface-elevated);
+  color: var(--atelier-ink-primary);
+  font-weight: 700;
+  border-color: var(--atelier-input-border-hover);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.18);
+}
+
+.atelier-seg-tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 28%;
+  right: 28%;
+  height: 2.5px;
+  border-radius: 999px;
+  background: var(--atelier-accent-indicator);
+}
+
+.atelier-seg-tab:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+ * Form Layout & Accessible Input Wrapper (Clear X + Show/Hide Password)
+ * ========================================================================== */
+
+.atelier-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.atelier-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.atelier-input-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.atelier-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border-radius: 15px;
+  border: 1.5px solid var(--atelier-input-border);
+  background: var(--atelier-input-bg);
+  color: var(--atelier-ink-primary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.atelier-input::placeholder {
+  color: var(--atelier-ink-muted);
+  font-weight: 400;
+}
+
+.atelier-input:hover {
+  border-color: var(--atelier-input-border-hover);
+}
+
+.atelier-input:focus {
+  outline: none;
+  border-color: var(--atelier-ink-primary);
+  box-shadow: 0 0 0 3.5px var(--atelier-input-focus-ring);
+}
+
+.atelier-input[aria-invalid='true'] {
+  border-color: var(--atelier-danger-border);
+}
+
+.atelier-input.has-one-action {
+  padding-right: 56px;
+}
+
+.atelier-input.has-two-actions {
+  padding-right: 112px;
+}
+
+.atelier-input.is-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right-side 48x48px Touch Action Rail inside Input */
+.atelier-input-actions {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atelier-icon-action-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--atelier-ink-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.atelier-icon-action-btn:hover {
+  color: var(--atelier-ink-primary);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.atelier-icon-action-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: -2px;
+}
+
+.atelier-field-error {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--atelier-danger-ink);
+  word-break: keep-all;
+}
+
+/* Inline Input + Button Row (Email + Send Code, OTP + Verify) */
+.atelier-inline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 389px) {
+  .atelier-inline-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.atelier-inline-btn {
+  min-height: 52px;
+  min-width: 112px;
+  padding: 0 16px;
+  border-radius: 15px;
+  border: 1.5px solid var(--atelier-secondary-border);
+  background: var(--atelier-secondary-bg);
+  color: var(--atelier-secondary-fg);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.15s ease;
+}
+
+.atelier-inline-btn:hover:not(:disabled) {
+  background: var(--atelier-secondary-hover);
+  border-color: var(--atelier-input-border-hover);
+}
+
+.atelier-inline-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.atelier-inline-btn.is-verified {
+  background: var(--atelier-success-bg);
+  border-color: var(--atelier-success-border);
+  color: var(--atelier-success-ink);
+  opacity: 1;
+}
+
+.atelier-dev-otp-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--atelier-surface-subtle);
+  color: var(--atelier-ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Anthropometric Grid (Nickname + Height cm + Weight kg) */
+.atelier-anthro-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 430px) {
+  .atelier-anthro-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atelier-anthro-grid > .atelier-field-block:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.atelier-unit-suffix {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--atelier-ink-muted);
+  pointer-events: none;
+}
+
+.atelier-input.has-unit {
+  padding-right: 38px;
+}
+
+/* ==========================================================================
+ * Primary, Secondary & Quick Showcase Buttons (All >= 48px Touch Target)
+ * ========================================================================== */
+
+.atelier-primary-btn {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 16px;
+  border: 0;
+  background: var(--atelier-accent-bg);
+  color: var(--atelier-accent-fg);
+  font-family: inherit;
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.15s ease,
+    opacity 0.2s ease;
+}
+
+.atelier-primary-btn:hover:not(:disabled) {
+  background: var(--atelier-accent-hover);
+}
+
+.atelier-primary-btn:active:not(:disabled) {
+  transform: scale(0.988);
+}
+
+.atelier-primary-btn:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.atelier-primary-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
+.atelier-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--atelier-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.atelier-divider::before,
+.atelier-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--atelier-panel-border);
+}
+
+.atelier-quick-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.atelier-secondary-btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 15px;
+  border: 1.5px solid var(--atelier-secondary-border);
+  background: var(--atelier-secondary-bg);
+  color: var(--atelier-secondary-fg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.atelier-secondary-btn:hover:not(:disabled) {
+  background: var(--atelier-secondary-hover);
+  border-color: var(--atelier-input-border-hover);
+}
+
+.atelier-secondary-btn:active:not(:disabled) {
+  transform: scale(0.988);
+}
+
+.atelier-secondary-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.atelier-secondary-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
+/* Dev Seed Quick-Fill Bar (>= 48px touch target & 8px gap) */
+.atelier-seed-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 14px;
+  background: var(--atelier-surface-subtle);
+}
+
+.atelier-seed-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--atelier-ink-secondary);
+  line-height: 1.5;
+}
+
+.atelier-seed-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atelier-seed-pill {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 12px;
+  border-radius: 11px;
+  border: 1px solid var(--atelier-secondary-border);
+  background: var(--atelier-surface-elevated);
+  color: var(--atelier-ink-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.atelier-seed-pill:hover {
+  border-color: var(--atelier-input-border-hover);
+}
+
+/* ==========================================================================
+ * High-Contrast Error Banner + Immediate Recovery Actions (>= 48px)
+ * ========================================================================== */
+
+.atelier-error-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--atelier-danger-bg);
+  border: 1.5px solid var(--atelier-danger-border);
+  color: var(--atelier-danger-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.atelier-error-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.atelier-error-msg {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  word-break: keep-all;
+  flex: 1;
+}
+
+.atelier-recovery-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.atelier-recovery-btn {
+  flex: 1 1 140px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--atelier-danger-border);
+  background: var(--atelier-surface-elevated);
+  color: var(--atelier-ink-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.atelier-recovery-btn:hover {
+  border-color: var(--atelier-input-border-hover);
+}
+
+/* Spinner Animation */
+@keyframes atelierSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.atelier-spin {
+  animation: atelierSpin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+ * Store Compliance Legal Footer (>= 48px Hit Area, >= 8px Gap)
+ * ========================================================================== */
+
+.atelier-legal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.atelier-legal-btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--atelier-ink-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.18s ease;
+}
+
+.atelier-legal-btn:hover {
+  color: var(--atelier-ink-primary);
+}
+
+.atelier-legal-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 2px;
+}
+
+.atelier-legal-dot {
+  color: var(--atelier-ink-muted);
+  font-size: 12px;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atelier-monolith.is-shaking,
+  .atelier-spin,
+  .atelier-live-dot {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .atelier-curation-card {
+    transform: none !important;
+    transition: none !important;
+  }
+}
