@@ -329,7 +329,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(weatherPanel).toBeVisible();
     await weatherPanel.evaluate(async (el) => {
       await Promise.all(
-        el.getAnimations({ subtree: true }).map((anim) => anim.finished.catch(() => {}))
+        el
+            .getAnimations({ subtree: true })
+            .filter((anim) => Number.isFinite(anim.effect?.getComputedTiming().iterations ?? 1))
+            .map((anim) => anim.finished.catch(() => {}))
       );
     });
     const vpSize = page.viewportSize();
