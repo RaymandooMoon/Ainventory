@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -134,6 +134,48 @@ function findOptionLabel(options, key, lang, useShort = true) {
   return lang === 'en' ? found.labelEn : found.labelKo;
 }
 
+function readDocumentTheme() {
+  if (typeof document === 'undefined') return null;
+  const raw = document.documentElement.getAttribute('data-theme');
+  return raw === 'dark' || raw === 'light' ? raw : null;
+}
+
+function resolveProfileTheme(themeProp) {
+  if (themeProp === 'dark' || themeProp === 'light') {
+    return themeProp;
+  }
+  return readDocumentTheme() || 'light';
+}
+
+function useResolvedProfileTheme(themeProp) {
+  const [domMutation, setDomMutation] = useState({
+    forProp: themeProp,
+    mutated: false,
+    domTheme: null,
+  });
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
+      return undefined;
+    }
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setDomMutation({
+        forProp: themeProp,
+        mutated: true,
+        domTheme: readDocumentTheme(),
+      });
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, [themeProp]);
+
+  if (domMutation.mutated && domMutation.forProp === themeProp) {
+    return domMutation.domTheme || resolveProfileTheme(themeProp);
+  }
+  return resolveProfileTheme(themeProp);
+}
+
 function ProfileModalContent({
   open,
   initialTab = 'skin',
@@ -142,11 +184,12 @@ function ProfileModalContent({
   user,
   skinProfile,
   bodySpec,
-  theme = 'dark',
+  theme,
   onApplySkinProfile,
   onApplyBodySpec,
 }) {
-  void theme;
+  const resolvedTheme = useResolvedProfileTheme(theme);
+  const modalBodyRef = useRef(null);
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const faceHeroSectionRef = useRef(null);
@@ -158,6 +201,16 @@ function ProfileModalContent({
   const apiKeySavedTimerRef = useRef(null);
   const analysisSeqRef = useRef(0);
   const fileReaderRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const sheetEl =
+      modalBodyRef.current?.closest('#profile-studio-sheet') ||
+      document.getElementById('profile-studio-sheet');
+    if (sheetEl) {
+      sheetEl.setAttribute('data-profile-theme', resolvedTheme);
+    }
+  }, [open, resolvedTheme]);
 
   useEffect(
     () => () => {
@@ -1147,8 +1200,13 @@ function ProfileModalContent({
       maxWidth={580}
       footer={applyFooter}
     >
-      <div className="skin-modal-body" data-active-tab={activeTab}>
-        {/* Sleek Dark-Charcoal 3-Way Editorial Tabs */}
+      <div
+        ref={modalBodyRef}
+        className="skin-modal-body"
+        data-active-tab={activeTab}
+        data-profile-theme={resolvedTheme}
+      >
+        {/* Apple HIG 3-Way Profile Settings Tabs */}
         <div className="profile-modal-tabs-sticky">
           <div
             className="profile-modal-tabs"
@@ -1543,7 +1601,7 @@ function ProfileModalContent({
                       skinProfile={previewSkinProfile}
                       bodySpec={liveLegacyBodySpec}
                       personReferenceUrl={draftFacePhotoUrl}
-                      theme="dark"
+                      theme={resolvedTheme}
                       lang={lang}
                       compact
                     />
@@ -1994,7 +2052,7 @@ function ProfileModalContent({
                   skinProfile={previewSkinProfile}
                   bodySpec={liveLegacyBodySpec}
                   personReferenceUrl={draftFacePhotoUrl}
-                  theme="dark"
+                  theme={resolvedTheme}
                   lang={lang}
                   compact
                 />
@@ -2197,6 +2255,7 @@ function ProfileModalContent({
         <div
           className="profile-error-modal-backdrop"
           data-profile-error-backdrop="true"
+          data-profile-theme={resolvedTheme}
           onClick={handleDismissProfileErrorModal}
         >
           <div
@@ -2206,6 +2265,7 @@ function ProfileModalContent({
             aria-describedby="profile-error-modal-desc"
             data-profile-error-modal="true"
             data-profile-error-code={profileErrorModal.code || 'validation_error'}
+            data-profile-theme={resolvedTheme}
             className="profile-error-modal-card"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2242,6 +2302,7 @@ function ProfileModalContent({
         <div
           className="profile-error-modal-backdrop"
           data-photo-guide-backdrop="true"
+          data-profile-theme={resolvedTheme}
           onClick={handleDismissPhotoGuideModal}
         >
           <div
@@ -2250,6 +2311,7 @@ function ProfileModalContent({
             aria-labelledby="profile-photo-guide-title"
             aria-describedby="profile-photo-guide-desc"
             data-photo-guide-modal="true"
+            data-profile-theme={resolvedTheme}
             className="profile-error-modal-card profile-photo-guide-card"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2303,7 +2365,7 @@ export default function SkinToneAnalysisModal({
   user,
   skinProfile,
   bodySpec,
-  theme = 'light',
+  theme,
   onApplySkinProfile,
   onApplyBodySpec,
 }) {

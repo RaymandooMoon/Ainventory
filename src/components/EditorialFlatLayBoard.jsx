@@ -440,14 +440,39 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const safeSplit = clamp(Number(compareSplitPct) || 50, 5, 95);
 
   const hasAiImage = Boolean(stageMode === 'ai-vton' && aiImageUrl);
+  const canPinchZoom = Boolean(
+    stageMode === 'ai-vton' && hasAiImage && !compareActive && onZoomChange
+  );
 
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [aiImgAspect, setAiImgAspect] = useState(0.76);
   const [isPanning, setIsPanning] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
   const [isRotatingDrag, setIsRotatingDrag] = useState(false);
   const [swipeDragPx, setSwipeDragPx] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
+
+  const recenterTimerRef = useRef(null);
+  const pinchPointersRef = useRef(new Map());
+  const pinchSessionRef = useRef(null);
+  const liveZoomRef = useRef(safeZoom);
+  liveZoomRef.current = safeZoom;
+
+  const clearRecenterTimer = useCallback(() => {
+    if (recenterTimerRef.current) {
+      clearTimeout(recenterTimerRef.current);
+      recenterTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canPinchZoom) {
+      pinchPointersRef.current.clear();
+      pinchSessionRef.current = null;
+      setIsPinching(false);
+    }
+  }, [canPinchZoom]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -493,70 +518,153 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     onIdealScaleChange?.(idealBaseScale);
   }, [idealBaseScale, onIdealScaleChange]);
 
-  // Auto-recenter mannequin position to dead-center (`{ x: 0, y: 0 }`) 1,000ms (1 second) after pan release
+  // Auto-recenter mannequin position to dead-center (`{ x: 0, y: 0 }`) 1,000ms (1 second) after pan/pinch release
   useEffect(() => {
-    if (!hasAiImage || isPanning || !onPanChange) return undefined;
+    clearRecenterTimer();
+    if (!hasAiImage || isPanning || isPinching || !onPanChange) return undefined;
     if (Math.abs(safePanX) < 0.5 && Math.abs(safePanY) < 0.5) return undefined;
-    const timerId = setTimeout(() => {
+    recenterTimerRef.current = setTimeout(() => {
+      recenterTimerRef.current = null;
       onPanChange({ x: 0, y: 0 });
     }, 1000);
-    return () => clearTimeout(timerId);
-  }, [hasAiImage, isPanning, safePanX, safePanY, onPanChange]);
+    return clearRecenterTimer;
+  }, [hasAiImage, isPanning, isPinching, safePanX, safePanY, onPanChange, clearRecenterTimer]);
 
-  const gestureRef = useRef({
-    active: false,
-    mode: 'idle', // 'idle' | 'pan' | 'swipe-candidate' | 'swipe-rotate'
-    pointerId: null,
-    startX: 0,
-    startY: 0,
-    startT: 0,
-    motionStartT: 0,
-    motionStarted: false,
-    originPanX: 0,
-    originPanY: 0,
-    moved: false,
-    captured: false,
-  });
+  const gestureRef = useRef(null);
 
-  const clampPanOffset = useCallback(
-    (nextX, nextY, currentZoom) => {
-      if (currentZoom <= 1.01) return { x: 0, y: 0 };
-      const el = stageRef.current;
-      const width = el?.clientWidth || 380;
-      const height = el?.clientHeight || 480;
-      const effectiveZoom = Math.max(currentZoom, currentZoom * idealBaseScale);
-      const maxX = Math.max(24, ((effectiveZoom - 1) * width) / 2);
-      const maxY = Math.max(24, ((effectiveZoom - 1) * height) / 2);
-      return {
-        x: clamp(nextX, -maxX, maxX),
-        y: clamp(nextY, -maxY, maxY),
-      };
-    },
-    [idealBaseScale]
-  );
+  const clampPanOffset = useCallback((nextX, nextY, currentZoom) => {
+    if (currentZoom <= 1.01) return { x: 0, y: 0 };
+    const el = stageRef.current;
+    const width = el?.clientWidth || 380;
+    const height = el?.clientHeight || 480;
+    const maxX = Math.max(24, ((currentZoom - 1) * width) / 2);
+    const maxY = Math.max(24, ((currentZoom - 1) * height) / 2);
+    return {
+      x: clamp(nextX, -maxX, maxX),
+      y: clamp(nextY, -maxY, maxY),
+    };
+  }, []);
 
   const handleStageWheel = useCallback(
     (e) => {
       // Zoom applies strictly ONLY to the AI character — never zoom the Flat-Lay board!
-      if (!hasAiImage || !onZoomChange) return;
+      if (!hasAiImage || compareActive || !onZoomChange) return;
       e.preventDefault();
-      const delta = e.deltaY < 0 ? 0.22 : -0.22;
-      const nextZoom = clamp(Number((safeZoom + delta).toFixed(2)), 1, 3);
-      onZoomChange(nextZoom);
-      if (nextZoom <= 1.01) {
+      clearRecenterTimer();
+      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const rawNext = clamp(Number((safeZoom * factor).toFixed(2)), 1, 3);
+      const next = rawNext <= 1.01 ? 1 : rawNext;
+      liveZoomRef.current = next;
+      onZoomChange(next);
+      if (next <= 1.01) {
         onPanChange?.({ x: 0, y: 0 });
       } else if (onPanChange) {
-        onPanChange(clampPanOffset(safePanX, safePanY, nextZoom));
+        onPanChange(clampPanOffset(safePanX, safePanY, next));
       }
     },
-    [hasAiImage, safeZoom, safePanX, safePanY, onZoomChange, onPanChange, clampPanOffset]
+    [
+      hasAiImage,
+      compareActive,
+      safeZoom,
+      safePanX,
+      safePanY,
+      onZoomChange,
+      onPanChange,
+      clampPanOffset,
+      clearRecenterTimer,
+    ]
   );
 
   const suppressNextClickRef = useRef(false);
 
+  // Safari / iOS / Android WebView 2-touch pinch fallback (prevents native browser page pinch-zoom)
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || !canPinchZoom) return undefined;
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length !== 2) return;
+      const target = e.target;
+      if (target instanceof Element && target.closest('[data-vton-compare-slider], button')) {
+        return;
+      }
+      e.preventDefault();
+      gestureRef.current = null;
+      clearRecenterTimer();
+      suppressNextClickRef.current = true;
+      setIsPanning(false);
+      setIsRotatingDrag(false);
+      setSwipeDragPx(0);
+      setIsPinching(true);
+      if (pinchPointersRef.current.size < 2) {
+        const [t1, t2] = e.touches;
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        pinchSessionRef.current = {
+          startDist: Math.max(24, dist),
+          startZoom: liveZoomRef.current,
+          source: 'touch',
+        };
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      if (pinchPointersRef.current.size >= 2 && pinchSessionRef.current?.source === 'pointer') {
+        return;
+      }
+      gestureRef.current = null;
+      clearRecenterTimer();
+      suppressNextClickRef.current = true;
+      const [t1, t2] = e.touches;
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      if (!pinchSessionRef.current) {
+        pinchSessionRef.current = {
+          startDist: Math.max(24, dist),
+          startZoom: liveZoomRef.current,
+          source: 'touch',
+        };
+        setIsPinching(true);
+      }
+      const { startDist, startZoom } = pinchSessionRef.current;
+      const nextZoom = clamp(Number((startZoom * (dist / startDist)).toFixed(3)), 1, 3);
+      liveZoomRef.current = nextZoom;
+      onZoomChange?.(nextZoom);
+      if (nextZoom <= 1.01) {
+        onPanChange?.({ x: 0, y: 0 });
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (e.touches.length >= 2) return;
+      if (pinchSessionRef.current?.source === 'touch') {
+        pinchSessionRef.current = null;
+        gestureRef.current = null;
+        suppressNextClickRef.current = true;
+        setIsPinching(false);
+        if (liveZoomRef.current <= 1.02) {
+          liveZoomRef.current = 1;
+          onZoomChange?.(1);
+          onPanChange?.({ x: 0, y: 0 });
+        }
+      }
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEnd);
+    el.addEventListener('touchcancel', handleTouchEnd);
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+      el.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [canPinchZoom, clearRecenterTimer, onZoomChange, onPanChange]);
+
   const handleStagePointerDown = useCallback(
     (e) => {
-      if (e.button !== undefined && e.button !== 0) return;
+      if (e.pointerType === 'mouse' && e.button !== undefined && e.button !== 0) return;
       suppressNextClickRef.current = false;
       const target = e.target;
       if (
@@ -566,8 +674,43 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         return;
       }
 
+      if (canPinchZoom) {
+        pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinchPointersRef.current.size >= 2) {
+          const prevGesture = gestureRef.current;
+          if (prevGesture?.captured && prevGesture.pointerId !== null) {
+            try {
+              e.currentTarget.releasePointerCapture(prevGesture.pointerId);
+            } catch {
+              // Ignore release errors
+            }
+          }
+          gestureRef.current = null;
+          clearRecenterTimer();
+          suppressNextClickRef.current = true;
+          setIsPanning(false);
+          setIsRotatingDrag(false);
+          setSwipeDragPx(0);
+          setIsPinching(true);
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore synthetic pointer capture errors
+          }
+          const [p1, p2] = Array.from(pinchPointersRef.current.values());
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          pinchSessionRef.current = {
+            startDist: Math.max(24, dist),
+            startZoom: liveZoomRef.current,
+            source: 'pointer',
+          };
+          return;
+        }
+      }
+
       const tNow = nowMs();
       if (hasAiImage && safeZoom > 1.01) {
+        clearRecenterTimer();
         gestureRef.current = {
           active: true,
           mode: 'pan',
@@ -608,13 +751,42 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       };
       setSwipeDragPx(0);
     },
-    [hasAiImage, safeZoom, safePanX, safePanY]
+    [canPinchZoom, hasAiImage, safeZoom, safePanX, safePanY, clearRecenterTimer]
   );
 
   const handleStagePointerMove = useCallback(
     (e) => {
+      if (pinchPointersRef.current.has(e.pointerId)) {
+        pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+      if (canPinchZoom && pinchPointersRef.current.size >= 2) {
+        gestureRef.current = null;
+        clearRecenterTimer();
+        suppressNextClickRef.current = true;
+        const [p1, p2] = Array.from(pinchPointersRef.current.values());
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        if (!pinchSessionRef.current) {
+          pinchSessionRef.current = {
+            startDist: Math.max(24, dist),
+            startZoom: liveZoomRef.current,
+            source: 'pointer',
+          };
+          setIsPinching(true);
+        }
+        const { startDist, startZoom } = pinchSessionRef.current;
+        const nextZoom = clamp(Number((startZoom * (dist / startDist)).toFixed(3)), 1, 3);
+        liveZoomRef.current = nextZoom;
+        onZoomChange?.(nextZoom);
+        if (nextZoom <= 1.01) {
+          onPanChange?.({ x: 0, y: 0 });
+        } else if (onPanChange && (safePanX !== 0 || safePanY !== 0)) {
+          onPanChange(clampPanOffset(safePanX, safePanY, nextZoom));
+        }
+        return;
+      }
+
       const g = gestureRef.current;
-      if (!g.active || g.pointerId !== e.pointerId) return;
+      if (!g || !g.active || g.pointerId !== e.pointerId) return;
 
       const dx = e.clientX - g.startX;
       const dy = e.clientY - g.startY;
@@ -667,13 +839,52 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         setSwipeDragPx(clamp(dx, -88, 88));
       }
     },
-    [safeZoom, onPanChange, clampPanOffset]
+    [
+      canPinchZoom,
+      safeZoom,
+      safePanX,
+      safePanY,
+      onZoomChange,
+      onPanChange,
+      clampPanOffset,
+      clearRecenterTimer,
+    ]
   );
 
   const finishStagePointer = useCallback(
     (e, isCancel = false) => {
+      const wasTrackedInPinch = pinchPointersRef.current.delete(e.pointerId);
+      if (wasTrackedInPinch) {
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          // Ignore release errors
+        }
+      }
+
+      if (pinchSessionRef.current && pinchPointersRef.current.size < 2) {
+        pinchSessionRef.current = null;
+        gestureRef.current = null;
+        suppressNextClickRef.current = true;
+        setIsPinching(false);
+        setIsPanning(false);
+        setIsRotatingDrag(false);
+        setSwipeDragPx(0);
+        if (liveZoomRef.current <= 1.02) {
+          liveZoomRef.current = 1;
+          onZoomChange?.(1);
+          onPanChange?.({ x: 0, y: 0 });
+        }
+        return;
+      }
+
       const g = gestureRef.current;
-      if (!g.active) return;
+      if (!g || !g.active) {
+        if (pinchPointersRef.current.size === 0) {
+          setIsPinching(false);
+        }
+        return;
+      }
 
       const endT = nowMs();
       const dx = e.clientX - g.startX;
@@ -688,8 +899,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         suppressNextClickRef.current = true;
       }
 
-      g.active = false;
-      g.mode = 'idle';
+      gestureRef.current = null;
       setIsPanning(false);
       setIsRotatingDrag(false);
       setSwipeDragPx(0);
@@ -721,7 +931,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         });
       }
     },
-    [onSwipeRotate]
+    [onSwipeRotate, onZoomChange, onPanChange]
   );
 
   const handleStagePointerUp = useCallback(
@@ -733,6 +943,12 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     (e) => finishStagePointer(e, true),
     [finishStagePointer]
   );
+
+  const handleStagePointerLeave = useCallback((e) => {
+    if (e.pointerType === 'mouse' && !e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      pinchPointersRef.current.delete(e.pointerId);
+    }
+  }, []);
 
   const handleStageClick = useCallback(
     (e) => {
@@ -891,8 +1107,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
     const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
     const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
-    const restBaseScale = safeZoom <= 1.001 ? 1 : idealBaseScale;
-    const effectiveScale = safeZoom * restBaseScale;
+    const effectiveScale = safeZoom;
     const parts = [];
     if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
       parts.push(
@@ -909,13 +1124,12 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       parts.push('scaleX(-1)');
     }
     return {
-      transformOrigin: '50% 92%',
+      transformOrigin: '50% 50%',
       transform: parts.length > 0 ? parts.join(' ') : 'none',
     };
   }, [
     effectiveMirrorX,
     angleSpec.perspectiveYawDeg,
-    idealBaseScale,
     isRotatingDrag,
     swipeDragPx,
     safeScrollResidualYaw,
@@ -925,8 +1139,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   ]);
 
   const shadowTransformStyle = useMemo(() => {
-    const restBaseScale = safeZoom <= 1.001 ? 1 : idealBaseScale;
-    const shadowScale = safeZoom * (1 + (restBaseScale - 1) * 0.55);
+    const shadowScale = 1 + (safeZoom - 1) * 0.55;
     const hasTranslation = safePanX !== 0 || safePanY !== 0;
     if (!hasTranslation && Math.abs(shadowScale - 1) <= 0.005) {
       return undefined;
@@ -934,7 +1147,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     return {
       transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${shadowScale.toFixed(3)})`,
     };
-  }, [idealBaseScale, safePanX, safePanY, safeZoom]);
+  }, [safePanX, safePanY, safeZoom]);
 
   const styleLabel =
     resolvedStyleMode === 'stylized_isometric'
@@ -959,7 +1172,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
             : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
       }
-      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${hasAiImage && safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
+      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${hasAiImage && safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isPinching || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
@@ -985,6 +1198,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       onPointerMove={handleStagePointerMove}
       onPointerUp={handleStagePointerUp}
       onPointerCancel={handleStagePointerCancel}
+      onPointerLeave={handleStagePointerLeave}
       onClick={handleStageClick}
       onKeyDown={handleStageKeyDown}
     >

@@ -493,6 +493,21 @@ function purgeEnclosedBackdropHoles(
   const nPx = w * h;
   if (nPx < 256) return 0;
 
+  let subjectTopY = h;
+  let subjectBottomY = -1;
+  for (let p = 0; p < nPx; p += 1) {
+    if (bgMask[p]) continue;
+    if (d[p * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
+    const x = p % w;
+    const y = (p - x) / w;
+    if (y < subjectTopY) subjectTopY = y;
+    if (y > subjectBottomY) subjectBottomY = y;
+  }
+  if (subjectBottomY < subjectTopY) return 0;
+  const subjectHeight = Math.max(1, subjectBottomY - subjectTopY);
+  const subjectFootwearBandY = subjectTopY + 0.78 * subjectHeight;
+  const canvasFootwearBandY = h * 0.78;
+
   const holePixelTol = Math.min(30, Math.max(20, tolerance * 0.72));
   const candidate = new Uint8Array(nPx);
   let candidateTotal = 0;
@@ -644,14 +659,20 @@ function purgeEnclosedBackdropHoles(
     const meanDistToBg = sumDistToBg / area;
     const meanStepDiff = stepPairs > 0 ? sumStepDiff / stepPairs : 0;
 
+    // Guard 5 (Footwear Zone Guard): Protect shoe tongues, grey suede panels, laces, and white
+    // sneaker interiors in the lower shoe/foot band from ever being punched out as backdrop holes.
+    const cx = (minX + maxX) * 0.5;
+    const cy = (minY + maxY) * 0.5;
+    if (cy >= subjectFootwearBandY || cy >= canvasFootwearBandY) {
+      continue;
+    }
+
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
     if (meanStepDiff > 10.5) continue;
 
     // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
     // unless the island unmistakably matches cool slate studio key (#94A3B8: B - R >= 20).
-    const cx = (minX + maxX) * 0.5;
-    const cy = (minY + maxY) * 0.5;
     const inFaceCore =
       cx >= w * 0.36 && cx <= w * 0.64 && cy >= h * 0.08 && cy <= h * 0.27;
     if (inFaceCore && area < Math.max(18, Math.round(nPx * 0.0018))) {
@@ -679,27 +700,22 @@ function purgeEnclosedBackdropHoles(
 }
 
 /**
- * V4 Global Hole-Aware Pure-JS Matting Engine:
- * - Pass 1: Row-wise Scanline Background Interpolation `expectedBg(x, y)` + 4-Border 8-Connected BFS with Sobel Edge Barrier
- * - Pass 2: Enclosed Interior Hole Connected-Component Detection & Purge (`alpha = 0` inside umbrella/arm/leg/strap loops)
- * - Pass 3 & 4: 1–2px Boundary Soft Alpha Ramp + Linear Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+ * Pure RGBA buffer implementation of the V4 Global Hole-Aware Studio Matting Engine
+ * (usable directly in Node unit tests and delegated to by `applyV4HoleAwareMattingOnCanvas`).
  */
-export function applyV4HoleAwareMattingOnCanvas(
-  canvas: HTMLCanvasElement,
+export function cutoutStudioBackdropToRgba(
+  d: Uint8ClampedArray,
+  w: number,
+  h: number,
   options: CutoutOptions = {}
-): { canvas: HTMLCanvasElement; modified: boolean; purgedHolePixels: number } {
-  const w = canvas.width;
-  const h = canvas.height;
-  if (w < 16 || h < 16) return { canvas, modified: false, purgedHolePixels: 0 };
+): { modified: boolean; purgedHolePixels: number } {
+  if (w < 16 || h < 16 || d.length < w * h * 4) {
+    return { modified: false, purgedHolePixels: 0 };
+  }
 
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return { canvas, modified: false, purgedHolePixels: 0 };
-
-  const imgData = ctx.getImageData(0, 0, w, h);
-  const d = imgData.data;
   const bgModel = buildScanlineBackdropModel(d, w, h);
   if (!bgModel.alreadyTransparent && !bgModel.hasCoherentRowBackdrop) {
-    return { canvas, modified: false, purgedHolePixels: 0 };
+    return { modified: false, purgedHolePixels: 0 };
   }
 
   const nPx = w * h;
@@ -724,7 +740,7 @@ export function applyV4HoleAwareMattingOnCanvas(
       }
     }
     if (transparentCount === 0 || transparentCount / nPx > 0.98) {
-      return { canvas, modified: false, purgedHolePixels: 0 };
+      return { modified: false, purgedHolePixels: 0 };
     }
     const purgedHolePixels = purgeEnclosedBackdropHoles(
       d,
@@ -737,7 +753,7 @@ export function applyV4HoleAwareMattingOnCanvas(
       tolerance
     );
     if (purgedHolePixels === 0) {
-      return { canvas, modified: false, purgedHolePixels: 0 };
+      return { modified: false, purgedHolePixels: 0 };
     }
 
     // Feather & decontaminate ONLY the 1–2px ring around newly purged interior holes (`bgMask === 2`)
@@ -793,8 +809,7 @@ export function applyV4HoleAwareMattingOnCanvas(
         }
       }
     }
-    ctx.putImageData(imgData, 0, 0);
-    return { canvas, modified: true, purgedHolePixels };
+    return { modified: true, purgedHolePixels };
   }
 
   const resR = new Float32Array(nPx);
@@ -925,7 +940,7 @@ export function applyV4HoleAwareMattingOnCanvas(
   const fgCount = nPx - tail;
   // Guard: preserve synthetic solid-color test swatches that contain no human subject
   if (tail === 0 || tail / nPx > 0.96 || fgCount < 32) {
-    return { canvas, modified: false, purgedHolePixels: 0 };
+    return { modified: false, purgedHolePixels: 0 };
   }
 
   // Pass 2: Purge topologically enclosed studio-backdrop islands (umbrella/arm/leg/strap holes)
@@ -1080,8 +1095,32 @@ export function applyV4HoleAwareMattingOnCanvas(
     }
   }
 
-  ctx.putImageData(imgData, 0, 0);
-  return { canvas, modified: true, purgedHolePixels };
+  return { modified: true, purgedHolePixels };
+}
+
+/**
+ * V4 Global Hole-Aware Pure-JS Matting Engine:
+ * - Pass 1: Row-wise Scanline Background Interpolation `expectedBg(x, y)` + 4-Border 8-Connected BFS with Sobel Edge Barrier
+ * - Pass 2: Enclosed Interior Hole Connected-Component Detection & Purge (`alpha = 0` inside umbrella/arm/leg/strap loops, protecting footwear zone)
+ * - Pass 3 & 4: 1–2px Boundary Soft Alpha Ramp + Linear Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+ */
+export function applyV4HoleAwareMattingOnCanvas(
+  canvas: HTMLCanvasElement,
+  options: CutoutOptions = {}
+): { canvas: HTMLCanvasElement; modified: boolean; purgedHolePixels: number } {
+  const w = canvas.width;
+  const h = canvas.height;
+  if (w < 16 || h < 16) return { canvas, modified: false, purgedHolePixels: 0 };
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { canvas, modified: false, purgedHolePixels: 0 };
+
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const result = cutoutStudioBackdropToRgba(imgData.data, w, h, options);
+  if (result.modified) {
+    ctx.putImageData(imgData, 0, 0);
+  }
+  return { canvas, modified: result.modified, purgedHolePixels: result.purgedHolePixels };
 }
 
 export function applyV3ScanlineMattingOnCanvas(

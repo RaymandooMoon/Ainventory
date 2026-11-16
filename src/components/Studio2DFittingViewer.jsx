@@ -15,8 +15,6 @@ import {
   Wind,
   X,
   Zap,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -156,9 +154,18 @@ function renderWeatherCapsuleIcon(effectiveWeather, scenarioKey) {
   return <CloudSun size={15} />;
 }
 
+const ZOOM_STEPS = [1, 1.2, 1.5];
+
 function formatZoomLabel(zoomValue) {
   const rounded = Math.round((Number(zoomValue) || 1) * 10) / 10;
   return `${rounded.toFixed(1)}×`;
+}
+
+function getLocalDayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function isKeyActionableReason(reason) {
@@ -515,9 +522,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [historyItems, setHistoryItems] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
+  const [dayKey, setDayKey] = useState(() => getLocalDayKey());
 
   const [zoom, setZoom] = useState(1);
-  const [idealBaseScale, setIdealBaseScale] = useState(1.14);
+  const [idealBaseScale, setIdealBaseScale] = useState(1);
+  void idealBaseScale;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
   const [compareSplitPct, setCompareSplitPct] = useState(50);
@@ -532,7 +541,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const restoringFromHistoryRef = useRef(false);
 
   const refreshHistoryList = useCallback(() => {
-    listCachedAiVtonOutfits(24)
+    listCachedAiVtonOutfits(120)
       .then((items) => {
         setHistoryItems(items);
       })
@@ -540,6 +549,62 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         // Ignore IndexedDB enumeration errors
       });
   }, []);
+
+  useEffect(() => {
+    let midnightTimerId = null;
+
+    const scheduleNextMidnight = () => {
+      if (midnightTimerId) {
+        clearTimeout(midnightTimerId);
+      }
+      const now = new Date();
+      const nextMidnightMs = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        0,
+        50
+      ).getTime();
+      const waitMs = Math.max(250, nextMidnightMs - Date.now());
+      midnightTimerId = setTimeout(() => {
+        setDayKey(getLocalDayKey());
+        scheduleNextMidnight();
+      }, waitMs);
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        const currentKey = getLocalDayKey();
+        setDayKey((prev) => (prev === currentKey ? prev : currentKey));
+      }
+    };
+
+    scheduleNextMidnight();
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    return () => {
+      if (midnightTimerId) {
+        clearTimeout(midnightTimerId);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, []);
+
+  const localDayStartMs = useMemo(() => {
+    void dayKey;
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  }, [dayKey]);
+
+  const todayHistoryItems = useMemo(
+    () => historyItems.filter((it) => (it.updatedAt || 0) >= localDayStartMs),
+    [historyItems, localDayStartMs]
+  );
+
+  const dailyHistoryBadgeCount = Math.min(99, todayHistoryItems.length);
 
   useEffect(() => {
     refreshHistoryList();
@@ -1506,33 +1571,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     setStageMode('ai-vton');
   }, []);
 
-  const handleZoomOut = useCallback((e) => {
-    e.stopPropagation();
-    setZoom((prev) => {
-      if (prev > 2.55) return 2.5;
-      if (prev > 1.8) return 1.75;
-      setPan({ x: 0, y: 0 });
-      return 1;
-    });
-  }, []);
-
   const handleZoomCycleOrReset = useCallback((e) => {
     e.stopPropagation();
     setZoom((prev) => {
-      if (prev > 1.01) {
+      const current = Number(prev) || 1;
+      const matchedIdx = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) <= 0.015);
+      if (matchedIdx === -1 || matchedIdx === ZOOM_STEPS.length - 1) {
         setPan({ x: 0, y: 0 });
         return 1;
       }
-      return 1.75;
-    });
-  }, []);
-
-  const handleZoomIn = useCallback((e) => {
-    e.stopPropagation();
-    setZoom((prev) => {
-      if (prev < 1.7) return 1.75;
-      if (prev < 2.45) return 2.5;
-      return Math.min(3, Number((prev + 0.5).toFixed(2)));
+      return ZOOM_STEPS[matchedIdx + 1];
     });
   }, []);
 
@@ -1716,7 +1764,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         equippedCount={equippedCount}
         mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
         zoom={zoom}
-        idealBaseScale={idealBaseScale}
+        idealBaseScale={1}
         pan={pan}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
@@ -1753,9 +1801,27 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Layer 4 (z-55+): Clean Slim Top HUD — Left Spacer | Top-Center Weather + Location Capsule | Right [기록] */}
+      {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [1.0×] Slot | Top-Center Weather Capsule | Right [History⁰] */}
       <div className="studio-stage-top-hud">
-        <div className="studio-hud-left-spacer" aria-hidden="true" />
+        <div className="studio-hud-left-slot">
+          {showCharacterZoomBar && (
+            <button
+              type="button"
+              data-vton-zoom-level="true"
+              className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
+              aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
+              title={
+                isEn
+                  ? 'Tap to cycle zoom or pinch with two fingers on character'
+                  : '터치하여 확대 배율 전환 (캐릭터 두 손가락 핀치 확대 지원)'
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleZoomCycleOrReset}
+            >
+              {formatZoomLabel(zoom)}
+            </button>
+          )}
+        </div>
 
         <div className="atelier-stage-brand-cluster">
           <button
@@ -1810,66 +1876,30 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             aria-expanded={historyOpen}
             aria-label={
               isEn
-                ? `Saved AI Try-On outfits (${historyItems.length})`
-                : `이전 AI 피팅 기록 (${historyItems.length})`
+                ? `Saved AI Try-On outfits (today ${dailyHistoryBadgeCount})`
+                : `이전 AI 피팅 기록 (오늘 ${dailyHistoryBadgeCount})`
             }
             title={
               isEn
-                ? 'Reuse previously generated AI outfits (0 credits)'
-                : '이전에 생성한 AI 피팅 기록 즉시 불러오기 (크레딧 차감 0)'
+                ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits (0 credits)`
+                : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 이전 기록 즉시 불러오기 (0 크레딧)`
             }
             className={`studio-vton-history-pill-btn tabular-nums ${historyOpen ? 'is-active' : ''}`}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={handleToggleHistoryPopover}
           >
-            <History size={13} />
-            <span className="studio-vton-history-word">{isEn ? 'Saved' : '기록'}</span>
-            {historyItems.length > 0 && (
-              <span className="studio-vton-history-count">{historyItems.length}</span>
-            )}
+            <span className="studio-vton-history-icon-wrap">
+              <History size={15} strokeWidth={2.1} aria-hidden="true" />
+              <sup
+                className="studio-vton-history-sup tabular-nums"
+                data-vton-history-count={dailyHistoryBadgeCount}
+              >
+                {dailyHistoryBadgeCount}
+              </sup>
+            </span>
           </button>
         </div>
       </div>
-
-      {/* Left-Upper Character-Only Zoom Controls (hidden when Flat-Lay Lookbook is active) */}
-      {showCharacterZoomBar && (
-        <div className="atelier-stage-left-controls">
-          <div
-            className="studio-vton-zoom-bar"
-            role="group"
-            aria-label={isEn ? 'Character zoom controls' : '캐릭터 확대 및 축소'}
-          >
-            <button
-              type="button"
-              data-vton-zoom-in="true"
-              className="studio-vton-zoom-btn"
-              disabled={zoom >= 2.99}
-              aria-label={isEn ? 'Zoom in' : '확대'}
-              onClick={handleZoomIn}
-            >
-              <ZoomIn size={14} />
-            </button>
-            <button
-              type="button"
-              data-vton-zoom-level="true"
-              className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
-              aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
-              onClick={handleZoomCycleOrReset}
-            >
-              {formatZoomLabel(zoom)}
-            </button>
-            <button
-              type="button"
-              data-vton-zoom-out="true"
-              className="studio-vton-zoom-btn"
-              disabled={zoom <= 1.01}
-              aria-label={isEn ? 'Zoom out' : '축소'}
-              onClick={handleZoomOut}
-            >
-              <ZoomOut size={14} />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Transient Non-Interactive 360° Swipe Angle Feedback Pill (fades out automatically) */}
       {swipeHudBadgeVisible && (
@@ -1995,20 +2025,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   : `자동 ${autoGenEnabled ? 'ON' : 'OFF'}`}
               </span>
             </button>
-            {historyItems.length > 0 && (
-              <button
-                type="button"
-                className="studio-vton-autogen-btn"
-                onClick={handleToggleHistoryPopover}
-              >
-                <History size={11} />
-                <span>
-                  {isEn
-                    ? `Saved (${historyItems.length})`
-                    : `이전 피팅 (${historyItems.length})`}
-                </span>
-              </button>
-            )}
           </div>
         )}
 

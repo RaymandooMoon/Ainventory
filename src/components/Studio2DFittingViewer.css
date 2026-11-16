@@ -556,6 +556,10 @@
   touch-action: pan-y pinch-zoom;
 }
 
+.studio-2d-model-stage.is-ai-stage.is-zoomable {
+  touch-action: pan-y;
+}
+
 .studio-2d-model-stage.is-zoomed {
   cursor: grab;
   touch-action: none;
@@ -695,6 +699,7 @@
 
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-worn-slots-dock,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .atelier-stage-left-controls,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-vton-zoom-level='true'],
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-weather-look-dock {
   opacity: 0;
   pointer-events: none;
@@ -1743,8 +1748,8 @@
 }
 
 /* ==========================================================================
-   5. TOP SLIM HUD (TOP-CENTER UNIFIED WEATHER CAPSULE | RIGHT SAVED HISTORY)
-      + LEFT FLOATING CIRCULAR CONTROLS + WORN SLOTS + BOTTOM ANGLE SCROLLBAR
+   5. TOP SLIM HUD (LEFT 1.0× ZOOM SLOT | TOP-CENTER WEATHER CAPSULE | RIGHT HISTORY⁰)
+      + WORN SLOTS + BOTTOM ANGLE SCROLLBAR
    ========================================================================== */
 .studio-2d-vton-viewer .studio-stage-top-hud {
   position: absolute;
@@ -1752,28 +1757,37 @@
   left: 12px;
   right: 12px;
   z-index: 62;
-  display: grid;
-  grid-template-columns: minmax(76px, 1fr) minmax(0, auto) minmax(76px, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   pointer-events: none;
 }
 
-.studio-hud-left-spacer {
-  grid-column: 1;
-  min-width: 0;
+.studio-hud-left-slot,
+.studio-vton-hud-right {
+  position: relative;
+  z-index: 8;
+  width: 42px;
+  height: 36px;
+  flex: 0 0 42px;
+  min-width: 42px;
+  max-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   pointer-events: none;
 }
 
 .atelier-stage-brand-cluster {
-  grid-column: 2;
-  justify-self: center;
+  flex: 0 1 auto;
+  max-width: calc(100% - 100px);
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-width: 0;
-  max-width: 100%;
   pointer-events: none;
 }
 
@@ -1927,8 +1941,6 @@
 
 /* Top-Center Floating Segmented Control: [실사 모델 | 시뮬레이션] */
 .studio-hud-center-toggle-wrap {
-  grid-column: 2;
-  justify-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1969,88 +1981,94 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
-/* Left-Upper Floating Smoked-Glass Circular Controls (Zoom) */
-.atelier-stage-left-controls {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 56;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  pointer-events: none;
-}
-
-.atelier-stage-left-controls .studio-vton-zoom-bar {
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  width: 40px;
-  padding: 4px 3px;
-  border-radius: 999px;
-  background: rgba(34, 33, 30, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+/* Mirror-Twin Smoked-Glass Squircle Badges: Top-Left [1.0×] & Top-Right [History⁰] */
+.studio-2d-vton-viewer [data-vton-zoom-level='true'],
+.studio-2d-vton-viewer [data-vton-history-btn='true'] {
+  pointer-events: auto !important;
+  cursor: pointer;
+  position: relative;
+  z-index: 8;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: rgba(34, 33, 30, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-sizing: border-box;
-}
-
-.studio-vton-zoom-btn {
-  min-width: 32px;
-  min-height: 28px;
-  padding: 0 4px;
-  border-radius: var(--radius-pill);
   color: #f7f7f5;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    transform 0.14s var(--spring-ease), opacity 0.18s var(--spring-ease);
-}
-
-.studio-vton-zoom-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.studio-vton-zoom-btn:active:not(:disabled) {
-  transform: scale(0.92);
-}
-
-.studio-vton-zoom-btn:disabled {
-  opacity: 0.36;
-  cursor: not-allowed;
-}
-
-.studio-vton-zoom-level-btn {
-  width: 34px;
-  min-width: 34px;
-  min-height: 24px;
-  padding: 0 2px;
-  border-radius: var(--radius-pill);
-  color: #ffffff;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 740;
   letter-spacing: -0.02em;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease);
+  outline: none;
+  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease),
+    box-shadow 0.18s var(--spring-ease);
 }
 
-.studio-vton-zoom-level-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+.studio-2d-vton-viewer [data-vton-zoom-level='true']::after,
+.studio-2d-vton-viewer [data-vton-history-btn='true']::after {
+  content: '';
+  position: absolute;
+  inset: -5px -3px;
 }
 
-.studio-vton-zoom-level-btn.is-zoomed {
+.studio-2d-vton-viewer [data-vton-zoom-level='true']:hover:not(.is-zoomed),
+.studio-2d-vton-viewer [data-vton-history-btn='true']:hover:not(.is-active) {
+  background: rgba(34, 33, 30, 0.84);
+  border-color: rgba(255, 255, 255, 0.36);
+}
+
+.studio-2d-vton-viewer [data-vton-zoom-level='true']:active,
+.studio-2d-vton-viewer [data-vton-history-btn='true']:active {
+  transform: scale(0.95);
+}
+
+.studio-2d-vton-viewer [data-vton-zoom-level='true']:focus-visible,
+.studio-2d-vton-viewer [data-vton-history-btn='true']:focus-visible {
+  border-color: rgba(255, 255, 255, 0.54);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.studio-2d-vton-viewer [data-vton-zoom-level='true'].is-zoomed,
+.studio-2d-vton-viewer [data-vton-history-btn='true'].is-active {
   background: #ffffff;
   color: #141413;
+  border-color: #ffffff;
+}
+
+.studio-vton-history-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-2.5px);
+  line-height: 1;
+}
+
+.studio-vton-history-sup {
+  position: absolute;
+  top: -4px;
+  left: calc(100% - 0.5px);
+  margin: 0;
+  padding: 0;
+  vertical-align: baseline;
+  font-size: 0.54rem;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: currentColor;
+  pointer-events: none;
 }
 
 .studio-vton-compare-btn {
@@ -2117,79 +2135,6 @@
   cursor: not-allowed;
 }
 
-/* Top-Right Interactive `기록` (`Saved`) Pill Button */
-.studio-vton-hud-right {
-  grid-column: 3;
-  justify-self: end;
-  position: relative;
-  z-index: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  pointer-events: auto;
-}
-
-.studio-vton-history-pill-btn {
-  position: relative;
-  z-index: 8;
-  pointer-events: auto !important;
-  cursor: pointer;
-  min-width: 38px;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: rgba(34, 33, 30, 0.64);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  color: #f7f7f5;
-  font-size: 0.7rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  white-space: nowrap;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease);
-}
-
-.studio-vton-history-pill-btn:hover:not(.is-active) {
-  background: rgba(34, 33, 30, 0.84);
-  border-color: rgba(255, 255, 255, 0.36);
-}
-
-.studio-vton-history-pill-btn:active {
-  transform: scale(0.96);
-}
-
-.studio-vton-history-pill-btn.is-active {
-  background: #ffffff;
-  color: #141413;
-  border-color: #ffffff;
-}
-
-.studio-vton-history-count {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--radius-pill);
-  background: #ffffff;
-  color: #141413;
-  font-size: 0.59rem;
-  font-weight: 760;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.studio-vton-history-pill-btn.is-active .studio-vton-history-count {
-  background: #141413;
-  color: #ffffff;
-}
-
 /* Smart Credit-Saver Staged Bar & Pinned History Banner */
 .studio-vton-staged-bar,
 .studio-vton-pinned-banner {
@@ -2215,6 +2160,11 @@
   justify-content: center;
   gap: 5px;
   box-sizing: border-box;
+}
+
+.studio-vton-staged-bar {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .studio-vton-generate-cta-btn {
@@ -2476,7 +2426,7 @@
 
 .studio-2d-vton-viewer .studio-worn-slots-dock {
   pointer-events: auto;
-  top: 114px;
+  top: 56px;
   bottom: 64px;
   left: 12px;
   z-index: 64;
@@ -2492,7 +2442,7 @@
 }
 
 .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
-  top: 52px;
+  top: 56px;
 }
 
 .studio-2d-vton-viewer .studio-worn-slot-chip {
@@ -2895,8 +2845,20 @@
     top: 10px;
     left: 10px;
     right: 10px;
-    grid-template-columns: minmax(66px, 1fr) minmax(0, auto) minmax(66px, 1fr);
     gap: 6px;
+  }
+
+  .studio-hud-left-slot,
+  .studio-vton-hud-right {
+    width: 38px;
+    height: 34px;
+    flex: 0 0 38px;
+    min-width: 38px;
+    max-width: 38px;
+  }
+
+  .atelier-stage-brand-cluster {
+    max-width: calc(100% - 88px);
   }
 
   .atelier-weather-capsule {
@@ -2922,29 +2884,13 @@
     font-size: 0.52rem;
   }
 
-  .atelier-stage-left-controls {
-    top: 10px;
-    left: 10px;
-    gap: 6px;
+  .studio-2d-vton-viewer [data-vton-zoom-level='true'],
+  .studio-2d-vton-viewer [data-vton-history-btn='true'] {
+    font-size: 0.61rem;
   }
 
-  .atelier-stage-left-controls .studio-vton-zoom-bar {
-    width: 38px;
-    padding: 3px 2px;
-    gap: 2px;
-  }
-
-  .studio-vton-zoom-btn {
-    min-width: 28px;
-    min-height: 27px;
-    padding: 0 3px;
-  }
-
-  .studio-vton-zoom-level-btn {
-    width: 32px;
-    min-width: 32px;
-    min-height: 22px;
-    font-size: 0.58rem;
+  .studio-vton-history-sup {
+    font-size: 0.51rem;
   }
 
   .studio-vton-compare-btn {
@@ -2953,13 +2899,6 @@
     height: 38px;
     min-height: 38px;
     padding: 0;
-  }
-
-  .studio-vton-history-pill-btn {
-    min-width: 36px;
-    min-height: 34px;
-    padding: 0 10px;
-    gap: 4px;
   }
 
   .editorial-vton-shimmer-overlay {
@@ -3015,7 +2954,7 @@
   }
 
   .studio-2d-vton-viewer .studio-worn-slots-dock {
-    top: 104px;
+    top: 52px;
     bottom: 60px;
     left: 10px;
     max-height: none;
@@ -3024,7 +2963,7 @@
   }
 
   .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
-    top: 48px;
+    top: 52px;
   }
 
   .studio-2d-layer {
@@ -3080,13 +3019,11 @@
 
 @media (max-width: 400px) {
   .studio-2d-vton-viewer .studio-stage-top-hud {
-    grid-template-columns: minmax(58px, 1fr) minmax(0, auto) minmax(58px, 1fr);
     gap: 5px;
   }
 
-  .studio-vton-history-pill-btn {
-    padding: 0 9px;
-    font-size: 0.66rem;
+  .atelier-stage-brand-cluster {
+    max-width: calc(100% - 86px);
   }
 }
 
@@ -3834,33 +3771,26 @@
   }
 }
 
-/* Top Stage HUD & Floating Action Hit Targets (Zero Neighbor Overlap) */
+/* Top Stage HUD & Floating Action Hit Targets (Zero Neighbor Overlap, 1:1 Mirror Symmetry) */
 @media (min-width: 1061px) {
-  .hig-outfits-screen .studio-vton-zoom-btn {
-    position: relative;
-    min-width: 34px;
-    min-height: 28px;
-  }
-
   .hig-outfits-screen .studio-vton-compare-btn {
     width: 40px;
     height: 40px;
     min-height: 40px;
   }
 
-  .hig-outfits-screen .studio-vton-history-pill-btn {
-    min-height: 36px;
+  .hig-outfits-screen [data-vton-zoom-level='true'],
+  .hig-outfits-screen [data-vton-history-btn='true'] {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
   }
 }
 
 @media (max-width: 1060px) {
-  .hig-outfits-screen .studio-vton-zoom-btn {
-    position: relative;
-    min-width: 32px;
-    min-height: 26px;
-    padding: 0 2px;
-  }
-
   .hig-outfits-screen .studio-vton-compare-btn {
     position: relative;
     width: 38px;
@@ -3868,20 +3798,25 @@
     min-height: 38px;
   }
 
-  .hig-outfits-screen .studio-vton-history-pill-btn {
+  .hig-outfits-screen [data-vton-zoom-level='true'],
+  .hig-outfits-screen [data-vton-history-btn='true'] {
     position: relative;
-    min-height: 34px;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
   }
 }
 
-.hig-outfits-screen .studio-vton-zoom-btn::after {
+.hig-outfits-screen [data-vton-zoom-level='true']::after,
+.hig-outfits-screen [data-vton-history-btn='true']::after {
   content: '';
   position: absolute;
-  inset: 0 -4px;
+  inset: -5px -3px;
 }
 
 .hig-outfits-screen .studio-vton-compare-btn::after,
-.hig-outfits-screen .studio-vton-history-pill-btn::after,
 .hig-outfits-screen .studio-vton-hud-icon-btn::after {
   content: '';
   position: absolute;

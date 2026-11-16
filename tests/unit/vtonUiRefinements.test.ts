@@ -4,26 +4,37 @@ import {
   buildGeminiTryOnPrompt,
   normalizeVtonProfile,
 } from '../../server/vtonService.js';
+import { cutoutStudioBackdropToRgba } from '../../src/services/cutoutService.ts';
 import {
   CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY,
   angle360ToSignedScrollDeg,
+  buildDirectClientGeminiParts,
   buildTurnaround3x2LayoutGuideDataUrl,
   computeCharacterIdentityAnchorKey,
   computeIdealDeviceMannequinScale,
   detectLateralFacingDirectionInBuffer,
+  detectRowHeadClustersInBuffer,
   eraseSheetGridDividerLinesInBuffer,
   getShowcaseDemoSheetUrl,
+  measureRowCenterForegroundDensityInBuffer,
   normalizeGenderNeutralProfile,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
+  resolveTurnaroundSheetGridDecisionInBuffer,
   scrubCutoutArtifactsInBuffer,
+  splitTouchingTwinSilhouettesInBuffer,
 } from '../../src/services/vton2DService.ts';
 import {
   CANONICAL_ANGLE_PROMPT_DIRECTIVES,
   CUTOUT_PIPELINE_VERSION,
+  CUTOUT_STAGE_BACKDROP_HEX,
+  FOOTWEAR_PAIR_SYMMETRY_LOCK,
+  SOLO_SINGLE_PERSON_PER_CELL_LOCK,
   buildCanonicalCharacterIdentityPromptBlock,
+  buildTurnaround3x2SheetAngleDirectives,
   buildWeatherPosePromptDirectives,
+  selectOptimalStudioKeyHex,
 } from '../../src/services/weatherPromptBuilder.ts';
 
 describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', () => {
@@ -101,7 +112,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v8-consistent-avatar-3x2-cyclorama');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v9-solo-avatar-symmetric-shoes');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
@@ -182,9 +193,9 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       skinToneHex: '#DFBA9B',
     });
     assert.equal(normalizedClientProfile.gender, 'male');
-    assert.equal(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY, 'ainventory_char_identity_anchor_v8');
+    assert.equal(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY, 'ainventory_char_identity_anchor_v9');
     const anchorKey = computeCharacterIdentityAnchorKey(normalizedClientProfile);
-    assert.match(anchorKey, /^v8:male:176:70:standard_balanced:#DFBA9B:/);
+    assert.match(anchorKey, /^v9:male:176:70:standard_balanced:#DFBA9B:/);
 
     // Verify Node-safe behavior when document is undefined
     if (typeof document === 'undefined') {
@@ -368,6 +379,293 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       stageHeight: 512,
       imageAspectRatio: 0.74,
     });
-    assert.ok(foldableWide >= 1.05 && foldableWide <= 1.14);
+    assert.ok(foldableWide >= 1.05 && mobilePortraitSlice > 0 && foldableWide <= 1.14);
+  });
+
+  it('(a) keeps 3x2 grid active on square sheets when sleeves touch via head-cluster & x=0.50w center-column discriminators, and splits touching side-by-side twins via DP head-valley seam while sparing solo umbrella silhouettes', () => {
+    // 1. Square 600x600 turnaround_3x2 sheet where adjacent sleeves/coats touch across x = 200 (1/3 w) and x = 400 (2/3 w)
+    const sw = 600;
+    const sh = 600;
+    const rowH = 300;
+    const sheet3x2 = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < sw * sh; i += 1) {
+      sheet3x2[i * 4] = 148;
+      sheet3x2[i * 4 + 1] = 163;
+      sheet3x2[i * 4 + 2] = 184;
+      sheet3x2[i * 4 + 3] = 255;
+    }
+
+    const fillRect = (
+      buf: Uint8ClampedArray,
+      w: number,
+      x0: number,
+      x1: number,
+      y0: number,
+      y1: number,
+      r: number,
+      g: number,
+      b: number,
+      a = 255
+    ) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * w + x) * 4;
+          buf[idx] = r;
+          buf[idx + 1] = g;
+          buf[idx + 2] = b;
+          buf[idx + 3] = a;
+        }
+      }
+    };
+
+    for (const rowTop of [0, 300]) {
+      // 3 distinct heads at x=100, x=300 (0.50w), x=500 in head-crown band (0.04..0.24 * rowH)
+      for (const cx of [100, 300, 500]) {
+        fillRect(sheet3x2, sw, cx - 18, cx + 18, rowTop + 20, rowTop + 56, 214, 174, 146);
+        // Legs & feet
+        fillRect(sheet3x2, sw, cx - 26, cx + 26, rowTop + 190, rowTop + 272, 42, 46, 56);
+      }
+      // Wide coats bridging across x=200 and x=400 at mid-body so full-row clustering merges into 1 giant run!
+      fillRect(sheet3x2, sw, 64, 536, rowTop + 72, rowTop + 189, 52, 44, 38);
+    }
+
+    const topRowBuf = sheet3x2.subarray(0, rowH * sw * 4);
+    const headSpans = detectRowHeadClustersInBuffer(topRowBuf, sw, rowH);
+    assert.equal(headSpans.length, 3);
+    const centerDensity = measureRowCenterForegroundDensityInBuffer(topRowBuf, sw, rowH);
+    assert.ok(centerDensity > 0.25);
+
+    const decision3x2 = resolveTurnaroundSheetGridDecisionInBuffer(sheet3x2, sw, sh, {
+      layout: 'turnaround_3x2',
+    });
+    assert.equal(decision3x2.use3x2Grid, true);
+    assert.ok(decision3x2.topClusters.length <= 2);
+    assert.equal(decision3x2.topHeadClusters.length, 3);
+
+    // Contrast: a true 2x2 sheet (figures at x=150 and x=450, empty central gutter at x=300) resolves use3x2Grid === false
+    const sheet2x2 = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < sw * sh; i += 1) {
+      sheet2x2[i * 4] = 148;
+      sheet2x2[i * 4 + 1] = 163;
+      sheet2x2[i * 4 + 2] = 184;
+      sheet2x2[i * 4 + 3] = 255;
+    }
+    for (const rowTop of [0, 300]) {
+      for (const cx of [150, 450]) {
+        fillRect(sheet2x2, sw, cx - 22, cx + 22, rowTop + 20, rowTop + 58, 214, 174, 146);
+        fillRect(sheet2x2, sw, cx - 44, cx + 44, rowTop + 59, rowTop + 270, 52, 44, 38);
+      }
+    }
+    const decision2x2 = resolveTurnaroundSheetGridDecisionInBuffer(sheet2x2, sw, sh, {
+      layout: 'turnaround_3x2',
+    });
+    assert.equal(decision2x2.use3x2Grid, false);
+    assert.equal(decision2x2.topCenterDensity, 0);
+
+    // 2. Touching-Twin Head-Valley DP Seam Splitter on a 240x320 transparent slice
+    const cw = 240;
+    const ch = 320;
+    const twinSlice = new Uint8ClampedArray(cw * ch * 4);
+    // Primary figure (closer to slice center x=120): crimson coat (#C83C3C)
+    fillRect(twinSlice, cw, 84, 112, 32, 66, 200, 60, 60, 255); // head
+    fillRect(twinSlice, cw, 70, 130, 67, 210, 200, 60, 60, 255); // coat
+    fillRect(twinSlice, cw, 76, 118, 211, 290, 200, 60, 60, 255); // legs
+    // Secondary twin on right with touching coat sleeve at x=126..136, y=118..168: royal blue (#2850DC)
+    fillRect(twinSlice, cw, 158, 186, 32, 66, 40, 80, 220, 255); // twin head
+    fillRect(twinSlice, cw, 128, 202, 67, 210, 40, 80, 220, 255); // touching twin coat
+    fillRect(twinSlice, cw, 150, 192, 211, 290, 40, 80, 220, 255); // twin legs
+
+    const splitRes = splitTouchingTwinSilhouettesInBuffer(twinSlice, cw, ch);
+    assert.equal(splitRes.modified, true);
+    assert.equal(splitRes.keptSide, 'left');
+
+    let crimsonOpaque = 0;
+    let blueHeadOrLegOpaque = 0;
+    for (let y = 0; y < ch; y += 1) {
+      for (let x = 0; x < cw; x += 1) {
+        const idx = (y * cw + x) * 4;
+        if (twinSlice[idx + 3] === 0) continue;
+        if (twinSlice[idx] === 200 && twinSlice[idx + 2] === 60) crimsonOpaque += 1;
+        if (
+          twinSlice[idx] === 40 &&
+          twinSlice[idx + 2] === 220 &&
+          (y <= 66 || y >= 211 || x >= 150)
+        ) {
+          blueHeadOrLegOpaque += 1;
+        }
+      }
+    }
+    assert.ok(crimsonOpaque > 8000);
+    assert.equal(blueHeadOrLegOpaque, 0);
+
+    // 3. Solo figure holding a wide overhead rain umbrella MUST NOT trigger twin splitting
+    const umbrellaSlice = new Uint8ClampedArray(cw * ch * 4);
+    fillRect(umbrellaSlice, cw, 52, 188, 20, 50, 48, 56, 68, 255); // wide dome umbrella (> 0.34*cw)
+    fillRect(umbrellaSlice, cw, 104, 136, 56, 90, 218, 180, 154, 255); // solo head
+    fillRect(umbrellaSlice, cw, 88, 152, 91, 290, 42, 44, 50, 255); // solo body
+    const umbrellaRes = splitTouchingTwinSilhouettesInBuffer(umbrellaSlice, cw, ch);
+    assert.equal(umbrellaRes.modified, false);
+  });
+
+  it('(b) switches studio backdrop key hex away from #94A3B8 when grey/white/slate shoes or garments are equipped, while keeping #94A3B8 by default and enforcing footwear symmetry + solo cell locks', () => {
+    // Default / empty slots keep #94A3B8 for backward compatibility
+    assert.equal(selectOptimalStudioKeyHex(), CUTOUT_STAGE_BACKDROP_HEX);
+    assert.equal(selectOptimalStudioKeyHex([]), '#94A3B8');
+    assert.match(buildWeatherPosePromptDirectives('rain').backdropDirective, /#94A3B8/);
+
+    // Grey, slate, silver, charcoal, white, ivory, oatmeal shoes/garments switch away from #94A3B8
+    const greyShoeHex = selectOptimalStudioKeyHex([
+      { slot: 'shoes', colorHex: '#9CA3AF', colorName: '그레이 스웨이드 스니커즈' },
+    ]);
+    assert.notEqual(greyShoeHex, '#94A3B8');
+
+    const whiteShoeHex = selectOptimalStudioKeyHex([
+      { slot: 'shoes', colorHex: '#FFFFFF', colorName: '화이트 가죽 스니커즈' },
+    ]);
+    assert.notEqual(whiteShoeHex, '#94A3B8');
+
+    assert.notEqual(
+      selectOptimalStudioKeyHex([{ slot: 'shoes', colorName: 'ivory cream runner' }]),
+      '#94A3B8'
+    );
+    assert.notEqual(selectOptimalStudioKeyHex(['그레이']), '#94A3B8');
+    assert.notEqual(selectOptimalStudioKeyHex(['흰색']), '#94A3B8');
+    assert.notEqual(selectOptimalStudioKeyHex(['slate']), '#94A3B8');
+
+    // Multi-collision safety: if grey shoes + sage-green jacket (#5E9C7E) are both worn, picks another distinct key
+    const multiSafeHex = selectOptimalStudioKeyHex([
+      { slot: 'shoes', colorHex: '#D1D5DB', colorName: '실버 그레이' },
+      { slot: 'outer', colorHex: '#5E9C7E', colorName: '세이지 그린' },
+    ]);
+    assert.notEqual(multiSafeHex, '#94A3B8');
+    assert.notEqual(multiSafeHex, '#5E9C7E');
+
+    // Prompt lock verification across weatherPromptBuilder, client vton2DService, and server vtonService
+    assert.match(buildTurnaround3x2SheetAngleDirectives(), /SOLO SINGLE PERSON PER CELL LOCK/);
+    assert.ok(SOLO_SINGLE_PERSON_PER_CELL_LOCK.includes('20% empty solid backdrop gutter'));
+    assert.ok(FOOTWEAR_PAIR_SYMMETRY_LOCK.includes('IDENTICAL MATCHED PAIR'));
+
+    const clientProfile = normalizeGenderNeutralProfile({
+      heightCm: 176,
+      weightKg: 70,
+      bodySpec: { gender: 'male', heightCm: 176, weightKg: 70, bodyShape: 'standard_balanced' },
+      skinToneHex: '#DFBA9B',
+    });
+    const clientParts = buildDirectClientGeminiParts({
+      profile: clientProfile,
+      styleMode: 'stylized_isometric',
+      weatherMood: 'clear',
+      angleDeg: 0,
+      turnaroundSheet: true,
+      serializedSlots: {
+        shoes: {
+          name: '화이트 러닝 스니커즈',
+          category: 'shoes',
+          subcategory: '스니커즈',
+          color_name: '화이트',
+          color_hex: '#F8FAFC',
+        },
+      },
+    });
+    const clientJoinedText = clientParts
+      .map((p) => (typeof p.text === 'string' ? p.text : ''))
+      .join('\n');
+    assert.match(clientJoinedText, /FOOTWEAR PAIR SYMMETRY LOCK/);
+    assert.match(clientJoinedText, /SOLO SINGLE PERSON PER CELL LOCK/);
+    assert.doesNotMatch(clientJoinedText, /\(#94A3B8\)/);
+
+    const serverProfile = normalizeVtonProfile({
+      gender: 'male',
+      heightCm: 176,
+      weightKg: 70,
+      skinToneHex: '#DFBA9B',
+      styleMode: 'stylized_isometric',
+      turnaroundSheet: true,
+      weather: 'clear',
+    });
+    const serverPrompt = buildGeminiTryOnPrompt(serverProfile, {
+      shoes: {
+        name: '그레이 러닝화',
+        category: 'shoes',
+        color_name: '그레이',
+        color_hex: '#9CA3AF',
+      },
+    });
+    assert.match(serverPrompt, /FOOTWEAR PAIR SYMMETRY LOCK/);
+    assert.match(serverPrompt, /SOLO SINGLE PERSON PER CELL LOCK/);
+    assert.doesNotMatch(serverPrompt, /\(#94A3B8\)/);
+  });
+
+  it('(c) punches enclosed #94A3B8 torso holes (~0.54*h) to alpha === 0 while protecting grey/slate shoe interiors in the footwear zone (>= 0.82*h)', () => {
+    const w = 128;
+    const h = 160;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    // Fill entire studio frame with #94A3B8 (148, 163, 184, 255)
+    for (let i = 0; i < w * h; i += 1) {
+      rgba[i * 4] = 148;
+      rgba[i * 4 + 1] = 163;
+      rgba[i * 4 + 2] = 184;
+      rgba[i * 4 + 3] = 255;
+    }
+
+    // Draw dark navy figure silhouette from y=20..126, x=40..88
+    for (let y = 20; y <= 126; y += 1) {
+      for (let x = 40; x <= 88; x += 1) {
+        const idx = (y * w + x) * 4;
+        rgba[idx] = 28;
+        rgba[idx + 1] = 34;
+        rgba[idx + 2] = 46;
+        rgba[idx + 3] = 255;
+      }
+    }
+
+    // Punch an enclosed #94A3B8 arm-torso gap hole at x=56..72, y=80..92 (cy = 86 ~ 0.538*h)
+    for (let y = 80; y <= 92; y += 1) {
+      for (let x = 56; x <= 72; x += 1) {
+        const idx = (y * w + x) * 4;
+        rgba[idx] = 148;
+        rgba[idx + 1] = 163;
+        rgba[idx + 2] = 184;
+        rgba[idx + 3] = 255;
+      }
+    }
+
+    // Draw matched left & right shoes at y=127..144 (0.794*h .. 0.90*h) with dark outsoles/uppers
+    // enclosing cool slate-grey (#94A3B8-identical!) suede tongue/interior panels at y=131..140 (0.82*h .. 0.875*h)
+    for (const [sx0, sx1] of [
+      [41, 59],
+      [69, 87],
+    ] as const) {
+      for (let y = 127; y <= 144; y += 1) {
+        for (let x = sx0; x <= sx1; x += 1) {
+          const isShoeInterior = x >= sx0 + 3 && x <= sx1 - 3 && y >= 131 && y <= 140;
+          const idx = (y * w + x) * 4;
+          if (isShoeInterior) {
+            rgba[idx] = 148;
+            rgba[idx + 1] = 163;
+            rgba[idx + 2] = 184;
+            rgba[idx + 3] = 255;
+          } else {
+            rgba[idx] = 32;
+            rgba[idx + 1] = 36;
+            rgba[idx + 2] = 44;
+            rgba[idx + 3] = 255;
+          }
+        }
+      }
+    }
+
+    cutoutStudioBackdropToRgba(rgba, w, h);
+
+    // Outer studio background is keyed to alpha === 0
+    assert.equal(rgba[(2 * w + 2) * 4 + 3], 0);
+    assert.equal(rgba[(155 * w + 125) * 4 + 3], 0);
+
+    // Enclosed torso #94A3B8 hole at (64, 86) (~0.54*h) IS cleanly punched to alpha === 0
+    assert.equal(rgba[(86 * w + 64) * 4 + 3], 0);
+
+    // Grey/slate shoe interiors at y = 135 (0.844*h >= 0.82*h) on BOTH feet remain 100% opaque (alpha === 255)
+    assert.equal(rgba[(135 * w + 50) * 4 + 3], 255);
+    assert.equal(rgba[(135 * w + 78) * 4 + 3], 255);
   });
 });

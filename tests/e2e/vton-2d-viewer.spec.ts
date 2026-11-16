@@ -176,10 +176,12 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       .poll(async () => studioCanvas.getAttribute('data-vton-loading'), { timeout: 15000 })
       .not.toBe('true');
 
-    // 1) Split Flat-Lay button (`[data-vton-compare-btn]`) is permanently removed,
-    //    and zoom controls do NOT appear while fallback Flat-Lay is displayed
+    // 1) Split Flat-Lay button (`[data-vton-compare-btn]`) & +/- buttons are permanently removed,
+    //    and zoom badge (`[data-vton-zoom-level="true"]`) does NOT appear while fallback Flat-Lay is displayed
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
 
     // 2) Left worn-slots dock is unclipped, pointer-interactive, and vertically scrollable
     const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
@@ -204,6 +206,8 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
 
     const centerAndScale = await modelStage.evaluate((stageEl) => {
       const imgEl = stageEl.querySelector('[data-ai-vton-img="true"]');
@@ -219,14 +223,63 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(centerAndScale.idealScale).toBeGreaterThanOrEqual(1);
     expect(centerAndScale.centerDeltaPx).toBeLessThanOrEqual(4);
 
-    // 4) Zoom in (`1.8x`), pan character off-center, release -> auto-recenters to `0,0` after ~1s!
-    const zoomInBtn = studioCanvas.locator('[data-vton-zoom-in]');
-    const zoomLevelBtn = studioCanvas.locator('[data-vton-zoom-level]');
-    await expect(zoomInBtn).toBeVisible();
+    // 4) Top HUD 1:1 Symmetry (Zoom Badge vs Icon-Only History Button) + Smooth `1.0x -> 1.2x -> 1.5x` Step + 2-Finger Pinch
+    const zoomLevelBtn = studioCanvas.locator(
+      '.studio-hud-left-slot [data-vton-zoom-level="true"]'
+    );
+    const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
+    await expect(zoomLevelBtn).toBeVisible();
     await expect(zoomLevelBtn).toContainText('1.0');
+    await expect(historyBtn).toBeVisible();
 
-    await zoomInBtn.click();
-    await expect(zoomLevelBtn).not.toContainText('1.0');
+    const historyText = (await historyBtn.innerText()).trim();
+    expect(historyText).not.toMatch(/기록|Saved/i);
+    const historySup = historyBtn.locator('sup[data-vton-history-count]');
+    await expect(historySup).toBeVisible();
+    const supCountNum = Number(await historySup.getAttribute('data-vton-history-count'));
+    expect(supCountNum).toBeGreaterThanOrEqual(0);
+    expect(supCountNum).toBeLessThanOrEqual(99);
+
+    const [canvasBox, zoomBox, histBox] = await Promise.all([
+      studioCanvas.boundingBox(),
+      zoomLevelBtn.boundingBox(),
+      historyBtn.boundingBox(),
+    ]);
+    expect(canvasBox).not.toBeNull();
+    expect(zoomBox).not.toBeNull();
+    expect(histBox).not.toBeNull();
+    expect(Math.abs(zoomBox!.width - histBox!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(zoomBox!.height - histBox!.height)).toBeLessThanOrEqual(1);
+    const leftInset = zoomBox!.x - canvasBox!.x;
+    const rightInset = canvasBox!.x + canvasBox!.width - (histBox!.x + histBox!.width);
+    expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(2);
+
+    const imgBox10 = await aiImg.boundingBox();
+    expect(imgBox10).not.toBeNull();
+
+    // First click: smooth `1.0x -> 1.2x` (zero abrupt jump)
+    await zoomLevelBtn.click();
+    await expect(zoomLevelBtn).toContainText('1.2');
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.20');
+    await expect
+      .poll(
+        async () => {
+          const box = await aiImg.boundingBox();
+          return box ? box.width / imgBox10!.width : 0;
+        },
+        { timeout: 2500 }
+      )
+      .toBeGreaterThanOrEqual(1.15);
+    const imgBox12 = await aiImg.boundingBox();
+    expect(imgBox12).not.toBeNull();
+    const scale12Ratio = imgBox12!.width / imgBox10!.width;
+    expect(scale12Ratio).toBeGreaterThanOrEqual(1.15);
+    expect(scale12Ratio).toBeLessThanOrEqual(1.25);
+
+    // Second click: `1.2x -> 1.5x`, then pan character off-center & verify ~1s auto-recenter to `0,0`
+    await zoomLevelBtn.click();
+    await expect(zoomLevelBtn).toContainText('1.5');
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.50');
 
     const stageBox = await modelStage.boundingBox();
     expect(stageBox).toBeTruthy();
@@ -243,21 +296,82 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       .poll(async () => modelStage.getAttribute('data-pan-offset'), { timeout: 3000 })
       .toBe('0,0');
 
-    // 5) Tap zoomed character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides zoom bar
+    // 5) Tap zoomed character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides zoom badge
     await aiImg.click();
     const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
     await expect(flatLayBoard).toBeVisible();
-    await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
     const flatLayTransform = await flatLayBoard.evaluate(
       (el) => window.getComputedStyle(el).transform
     );
     expect(flatLayTransform).toBe('none');
 
-    // Close Flat-Lay Lookbook -> returns to character & reset zoom to 1.0x
+    // Close Flat-Lay Lookbook -> returns to character & 3rd click cycles `1.5x -> 1.0x`
     await flatLayBoard.locator('[data-flatlay-close-btn="true"]').click();
     await expect(aiImg).toBeVisible();
     await zoomLevelBtn.click();
     await expect(zoomLevelBtn).toContainText('1.0');
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
+
+    // Continuous 2-finger pinch-to-zoom (`touchstart` -> `touchmove` 1.18x -> 1.35x -> `touchend`) without discrete jumps
+    const pinchZoomTrail = await modelStage.evaluate((stageEl) => {
+      const rect = stageEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const midY = rect.top + rect.height / 2;
+      const emitTwoFingerTouch = (
+        type: 'touchstart' | 'touchmove' | 'touchend',
+        halfSpanPx: number | null
+      ) => {
+        const pts =
+          halfSpanPx === null
+            ? []
+            : [
+                { id: 1, x: midX - halfSpanPx, y: midY },
+                { id: 2, x: midX + halfSpanPx, y: midY },
+              ];
+        let ev: Event;
+        if (typeof Touch === 'function' && typeof TouchEvent === 'function') {
+          const touchList = pts.map(
+            (p) =>
+              new Touch({
+                identifier: p.id,
+                target: stageEl,
+                clientX: p.x,
+                clientY: p.y,
+                pageX: p.x,
+                pageY: p.y,
+              })
+          );
+          ev = new TouchEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            touches: touchList,
+            targetTouches: touchList,
+            changedTouches: touchList,
+          });
+        } else {
+          ev = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(ev, 'touches', {
+            value: pts.map((p) => ({ clientX: p.x, clientY: p.y })),
+          });
+        }
+        stageEl.dispatchEvent(ev);
+      };
+
+      emitTwoFingerTouch('touchstart', 50); // initial distance = 100px
+      emitTwoFingerTouch('touchmove', 59); // intermediate distance = 118px -> 1.18x
+      const midAttr = stageEl.getAttribute('data-zoom');
+      emitTwoFingerTouch('touchmove', 67.5); // expanded distance = 135px -> 1.35x
+      emitTwoFingerTouch('touchend', null);
+      return { midAttr };
+    });
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.35');
+    expect(pinchZoomTrail.midAttr === '1.18' || pinchZoomTrail.midAttr === '1.00').toBe(true);
+
+    // Reset continuous pinch zoom back to 1.0x via single tap on zoom badge
+    await zoomLevelBtn.click();
+    await expect(zoomLevelBtn).toContainText('1.0');
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
 
     // 6) Gaze-aligned angle scrollbar: left (-45) mirrors left (`scaleX(-)`), right (+45) faces right (`scaleX(+)`),
     //    ±135° (`우후면`/`좌후면`) show dedicated rear-quarter slices (`!== 180°`), and outer zone (-165) snaps to `180° 뒷모습`!
@@ -471,35 +585,52 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       )
     ).toBeLessThanOrEqual(20);
 
-    // Open Weather Capsule Popup while `예보` (`live`) is selected -> assert all 9 scenarios + Look 1 & Look 2 presets
+    // Open Weather Capsule Popup while `예보` (`live`) is selected -> assert unclipped bounds, Open-Meteo source, live + 8 dropdown scenarios, & compact Look 1/2 selects
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
-    await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(9);
-    for (const scKey of ALL_WEATHER_SCENARIOS) {
-      await expect(weatherPanel.locator(`[data-weather-scenario="${scKey}"]`)).toBeVisible();
+    await weatherPanel.evaluate(async (el) => {
+      await Promise.all(
+        el.getAnimations({ subtree: true }).map((anim) => anim.finished.catch(() => {}))
+      );
+    });
+    const vpBounds = page.viewportSize();
+    const panelBox = await weatherPanel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    if (panelBox && vpBounds) {
+      expect(panelBox.y).toBeGreaterThanOrEqual(0);
+      expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(vpBounds.height + 1);
     }
-    await expect(weatherPanel.locator('[data-weather-scenario="live"]')).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    await expect(weatherPanel.locator('[data-weather-look-card="1"]')).toContainText(
-      /비즈니스 캐주얼|Business Casual/
-    );
-    await expect(weatherPanel.locator('[data-weather-look-card="2"]')).toContainText(
-      /편한 캐주얼|Comfortable Casual/
+    await expect(weatherPanel.locator('[data-weather-source-caption="true"]')).toBeVisible();
+    await expect(weatherPanel.locator('[data-weather-source-caption="true"]')).toContainText(
+      'Open-Meteo'
     );
 
-    // Switch to `맑음` (`crisp_autumn`) -> verify all 9 scenarios remain rendered when `맑음` is active, then return to `예보` (`live`)
-    await weatherPanel.locator('[data-weather-scenario="crisp_autumn"]').click();
-    await expect(weatherPanel.locator('[data-weather-scenario="crisp_autumn"]')).toHaveAttribute(
-      'aria-selected',
-      'true'
+    const liveScenarioBtn = weatherPanel.locator('button[data-weather-scenario="live"]');
+    const scenarioSelect = weatherPanel.locator('select[data-weather-scenario-select="true"]');
+    await expect(liveScenarioBtn).toBeVisible();
+    await expect(liveScenarioBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(scenarioSelect).toBeVisible();
+    await expect(scenarioSelect.locator('option[data-weather-scenario]')).toHaveCount(
+      ALL_WEATHER_SCENARIOS.length - 1
     );
-    await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(9);
-    for (const scKey of ALL_WEATHER_SCENARIOS) {
-      await expect(weatherPanel.locator(`[data-weather-scenario="${scKey}"]`)).toBeVisible();
-    }
-    await weatherPanel.locator('[data-weather-scenario="live"]').click();
+
+    await expect(weatherPanel.locator('select[data-look-style-select="1"]')).toHaveValue(
+      'business_casual'
+    );
+    await expect(weatherPanel.locator('select[data-look-style-select="2"]')).toHaveValue(
+      'comfortable_casual'
+    );
+    await expect(weatherPanel.locator('.weather-popup-look-items')).toHaveCount(0);
+
+    // Switch to `맑음` (`crisp_autumn`) via dropdown -> verify all 8 dropdown options + `live` button remain available, then return to `예보` (`live`)
+    await scenarioSelect.selectOption('crisp_autumn');
+    await expect(scenarioSelect).toHaveValue('crisp_autumn');
+    await expect(liveScenarioBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(scenarioSelect.locator('option[data-weather-scenario]')).toHaveCount(
+      ALL_WEATHER_SCENARIOS.length - 1
+    );
+    await liveScenarioBtn.click();
+    await expect(liveScenarioBtn).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
 
@@ -556,10 +687,14 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const liveCustomCombo = await modelStage.getAttribute('data-outfit-combo');
     expect(liveCustomCombo).toBeTruthy();
 
+    const stagedBar = studioCanvas.locator('[data-vton-staged-bar="true"]');
     const genBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
-    if (await genBtn.isVisible()) {
-      await genBtn.click();
-    }
+    await expect(stagedBar).toBeVisible({ timeout: 5000 });
+    await expect(stagedBar.locator('[data-vton-history-btn]')).toHaveCount(0);
+    expect(await stagedBar.innerText()).not.toMatch(/이전 피팅|Saved\s*\(/i);
+
+    await expect(genBtn).toBeVisible({ timeout: 5000 });
+    await genBtn.click();
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     const liveCustomImgSrc = await aiImg.getAttribute('src');
     expect(liveCustomImgSrc).toMatch(/^data:image\/png;base64,/);
@@ -567,7 +702,9 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     // Switch to `맑음` (`crisp_autumn`) -> applies fresh `맑음` outfit (with `top` equipped)
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
-    await weatherPanel.locator('[data-weather-scenario="crisp_autumn"]').click();
+    await weatherPanel
+      .locator('select[data-weather-scenario-select="true"]')
+      .selectOption('crisp_autumn');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas).toHaveAttribute('data-weather-scenario', 'crisp_autumn');
@@ -579,7 +716,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     // Switch back to `예보` (`live`) -> preserves `예보` customized slots (`top` still absent) AND `liveCustomImgSrc`!
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
-    await weatherPanel.locator('[data-weather-scenario="live"]').click();
+    await weatherPanel.locator('button[data-weather-scenario="live"]').click();
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas).toHaveAttribute('data-weather-scenario', 'live');
@@ -623,6 +760,151 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
         page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`)
       ).toBeVisible();
     }
+  });
+
+  test('5. Wardrobe outer category header ("외투"), sticky top equipped card on scroll with unclipped full item metadata, and Profile modal Light/Dark theme surface parity', async ({
+    page,
+  }) => {
+    await page.goto('/outfits');
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    await expect(studioCanvas).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+
+    // Switch to `rainy_cool` so `outer` ("발수 코튼 개버딘 트렌치코트") is deterministically equipped
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel
+      .locator('select[data-weather-scenario-select="true"]')
+      .selectOption('rainy_cool');
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+
+    const vp = page.viewportSize();
+    const isMobileViewport = Boolean(vp && vp.width < 600);
+    const drawerRoot = isMobileViewport
+      ? page.locator('#outfit-mobile-wardrobe-sheet')
+      : page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
+
+    if (isMobileViewport) {
+      await page.locator('[data-mobile-slot-btn="outer"]').click();
+      await expect(drawerRoot).toBeVisible();
+      await drawerRoot.evaluate(async (el) => {
+        await Promise.all(
+          el.getAnimations({ subtree: true }).map((anim) => anim.finished.catch(() => {}))
+        );
+      });
+    } else {
+      await expect(drawerRoot).toBeVisible();
+      await drawerRoot.locator('[data-outfit-slot-tab="outer"]').click();
+    }
+
+    // Item 9: Selecting `outer` category displays `'외투'` (NOT garment name `'발수 코튼 개버딘 트렌치코트'`)
+    const drawerTitle = drawerRoot.locator('[data-drawer-focused-title="true"]');
+    await expect(drawerTitle).toBeVisible();
+    await expect(drawerTitle).toHaveText('외투');
+    await expect(drawerTitle).not.toContainText('발수 코튼 개버딘 트렌치코트');
+
+    // Item 4: Pinned equipped card sits above `.atelier-drawer-grid-scroll`, stays fixed on scroll, & shows unclipped metadata
+    const pinnedCard = drawerRoot.locator('[data-pinned-equipped-card]');
+    const gridScroll = drawerRoot.locator('.atelier-drawer-grid-scroll');
+    await expect(pinnedCard).toBeVisible();
+    await expect(gridScroll).toBeVisible();
+
+    const [pinnedBefore, scrollBox] = await Promise.all([
+      pinnedCard.boundingBox(),
+      gridScroll.boundingBox(),
+    ]);
+    expect(pinnedBefore).not.toBeNull();
+    expect(scrollBox).not.toBeNull();
+    expect(pinnedBefore!.y + pinnedBefore!.height).toBeLessThanOrEqual(scrollBox!.y + 8);
+
+    const specMetrics = await pinnedCard.evaluate((cardEl) => {
+      const nameEl = cardEl.querySelector('.atelier-spec-item-name');
+      const brandEl = cardEl.querySelector('.atelier-spec-brand-line');
+      const colorDot = cardEl.querySelector('.atelier-spec-color-dot');
+      const pills = Array.from(cardEl.querySelectorAll('.atelier-spec-meta-pill')).map((p) =>
+        (p.textContent || '').trim()
+      );
+      const nameStyle = nameEl ? window.getComputedStyle(nameEl) : null;
+      return {
+        itemName: (nameEl?.textContent || '').trim(),
+        whiteSpace: nameStyle?.whiteSpace || '',
+        textOverflow: nameStyle?.textOverflow || '',
+        brandText: (brandEl?.textContent || '').trim(),
+        hasColorDot: Boolean(colorDot),
+        pillTexts: pills.filter((t) => t.length > 0),
+      };
+    });
+    expect(specMetrics.itemName).toContain('발수 코튼 개버딘 트렌치코트');
+    expect(specMetrics.whiteSpace).toBe('normal');
+    expect(specMetrics.textOverflow).not.toBe('ellipsis');
+    expect(specMetrics.brandText.length).toBeGreaterThan(0);
+    expect(specMetrics.hasColorDot).toBe(true);
+    expect(specMetrics.pillTexts.length).toBeGreaterThanOrEqual(3);
+
+    const unfoldedGridSpecStyle = await gridScroll
+      .locator('.atelier-unfolded-spec-card.is-equipped .atelier-spec-item-name')
+      .evaluate((el) => {
+        const cs = window.getComputedStyle(el);
+        return { whiteSpace: cs.whiteSpace, textOverflow: cs.textOverflow };
+      });
+    expect(unfoldedGridSpecStyle.whiteSpace).toBe('normal');
+    expect(unfoldedGridSpecStyle.textOverflow).not.toBe('ellipsis');
+
+    const scrolledTop = await gridScroll.evaluate((el) => {
+      el.scrollTop = 300;
+      el.dispatchEvent(new Event('scroll', { bubbles: true }));
+      return el.scrollTop;
+    });
+    expect(scrolledTop).toBeGreaterThan(0);
+
+    await expect(pinnedCard).toBeVisible();
+    const pinnedAfter = await pinnedCard.boundingBox();
+    expect(pinnedAfter).not.toBeNull();
+    expect(Math.abs(pinnedAfter!.y - pinnedBefore!.y)).toBeLessThanOrEqual(1);
+
+    if (isMobileViewport) {
+      await page.keyboard.press('Escape');
+      await expect(drawerRoot).toHaveCount(0);
+    }
+
+    // Item 7: `#profile-studio-sheet` Light (`luminance > 220`) & Dark (`luminance < 45`) Theme Surface Parity
+    const readSheetLuminance = async () =>
+      page.locator('#profile-studio-sheet').evaluate((el) => {
+        const cs = window.getComputedStyle(el);
+        const m = cs.backgroundColor.match(/\d+/g);
+        if (!m || m.length < 3) return -1;
+        const [r, g, b] = m.map(Number);
+        return 0.299 * r + 0.587 * g + 0.114 * b;
+      });
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await expect(profileSheet).toBeVisible();
+    await expect(profileSheet.locator('[data-profile-theme]')).toHaveAttribute(
+      'data-profile-theme',
+      'light'
+    );
+    expect(await readSheetLuminance()).toBeGreaterThan(220);
+
+    await page.keyboard.press('Escape');
+    await expect(profileSheet).toHaveCount(0);
+
+    await page.locator('[data-outfit-theme-toggle="true"]').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
+    await expect(profileSheet).toBeVisible();
+    await expect(profileSheet.locator('[data-profile-theme]')).toHaveAttribute(
+      'data-profile-theme',
+      'dark'
+    );
+    expect(await readSheetLuminance()).toBeLessThan(45);
   });
 });
 

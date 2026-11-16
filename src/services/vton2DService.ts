@@ -29,7 +29,10 @@ import {
   CUTOUT_STAGE_BACKDROP_HEX,
   type CanonicalAvatarGender,
   type EffectiveWeatherMode,
+  FOOTWEAR_PAIR_SYMMETRY_LOCK,
   LEGACY_CUTOUT_PIPELINE_VERSIONS,
+  SOLO_SINGLE_PERSON_PER_CELL_LOCK,
+  type StudioKeyColorInput,
   buildCanonicalCharacterIdentityPromptBlock,
   buildTurnaround3x2SheetAngleDirectives,
   buildTurnaroundAnglePromptDirective,
@@ -221,7 +224,7 @@ const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_slices';
 const L1_MAX_ENTRIES = 36;
-const L2_MAX_ENTRIES = 240;
+const L2_MAX_ENTRIES = 360;
 const PACKSHOT_CACHE_MAX = 40;
 
 const ORDERED_OUTFIT_SLOTS = [
@@ -1137,7 +1140,7 @@ function isSupportedHistoryCacheKey(cacheKey?: string | null): boolean {
   );
 }
 
-export async function listCachedAiVtonOutfits(limit = 20): Promise<AiVtonHistoryEntry[]> {
+export async function listCachedAiVtonOutfits(limit = 120): Promise<AiVtonHistoryEntry[]> {
   const allRecords: CachedAiVtonSlice[] = [];
   const seenKeys = new Set<string>();
 
@@ -1277,29 +1280,18 @@ export async function deleteCachedAiVtonOutfit(params: {
   });
 }
 
-/**
- * Pure raster single-subject isolator for VTON turnaround quadrants.
- * Detects if Gemini accidentally rendered 2 side-by-side twin/duplicate models inside a wide slice
- * (separated by transparent alpha or studio backdrop `#94A3B8` / `#F5F5F7`) and cleanly crops &
- * centers the single primary figure while preserving RGBA transparency.
- */
-function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasElement {
-  const cw = srcCanvas.width;
-  const ch = srcCanvas.height;
-  if (cw < 80 || ch < 72) return srcCanvas;
+export interface TouchingTwinSplitResult {
+  modified: boolean;
+  keptSide: 'left' | 'right' | null;
+  valleyX: number | null;
+  keptBounds: { minX: number; maxX: number } | null;
+}
 
-  const ctx = srcCanvas.getContext('2d');
-  if (!ctx) return srcCanvas;
-
-  let imgData: ImageData;
-  try {
-    imgData = ctx.getImageData(0, 0, cw, ch);
-  } catch {
-    return srcCanvas;
-  }
-  const data = imgData.data;
-
-  // Estimate studio backdrop RGB + transparency from 4 corners
+function sampleSliceCornerBackdrop(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number
+): { alreadyTransparent: boolean; bgR: number; bgG: number; bgB: number } {
   const rSamples: number[] = [];
   const gSamples: number[] = [];
   const bSamples: number[] = [];
@@ -1333,9 +1325,445 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   gSamples.sort((a, b) => a - b);
   bSamples.sort((a, b) => a - b);
   const midIdx = Math.floor(rSamples.length / 2);
-  const bgR = rSamples[midIdx] ?? 148;
-  const bgG = gSamples[midIdx] ?? 163;
-  const bgB = bSamples[midIdx] ?? 184;
+  return {
+    alreadyTransparent,
+    bgR: rSamples[midIdx] ?? 148,
+    bgG: gSamples[midIdx] ?? 163,
+    bgB: bSamples[midIdx] ?? 184,
+  };
+}
+
+/**
+ * Multi-Head / Touching-Twin Seam Splitter:
+ * When two adjacent side-by-side figures touch at mid-body sleeves/coats (`mergedWidth > 0.46 * cw`),
+ * inspects the upper head-crown band (`subjectTopY .. subjectTopY + 0.22 * subjectHeight`) and
+ * lower-leg band (`subjectTopY + 0.68 * subjectHeight .. subjectBottomY`). If 2+ realistic head
+ * clusters (`width <= 0.28 * cw` each, ruling out wide overhead umbrellas) are separated by a
+ * genuine near-zero vertical valley (`alpha == 0` / pure backdrop through `0..0.18 * subjectHeight`
+ * at `valleyX`), computes the minimum-alpha vertical DP seam `x*(y)` (`±1 px/row` within
+ * `[valleyX - 0.08*cw, valleyX + 0.08*cw]`) and wipes the secondary twin's side of `x*(y)`.
+ */
+export function splitTouchingTwinSilhouettesInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number
+): TouchingTwinSplitResult {
+  if (cw < 64 || ch < 64 || data.length < cw * ch * 4) {
+    return { modified: false, keptSide: null, valleyX: null, keptBounds: null };
+  }
+
+  const { alreadyTransparent, bgR, bgG, bgB } = sampleSliceCornerBackdrop(data, cw, ch);
+
+  const isFgPixel = (idx: number): boolean => {
+    const a = data[idx + 3];
+    if (alreadyTransparent) {
+      return a > 32;
+    }
+    if (a <= 40) return false;
+    const diff =
+      Math.abs(data[idx] - bgR) +
+      Math.abs(data[idx + 1] - bgG) +
+      Math.abs(data[idx + 2] - bgB);
+    return diff > 36;
+  };
+
+  const isPureValleyPixel = (idx: number): boolean => {
+    const a = data[idx + 3];
+    if (alreadyTransparent) {
+      return a === 0;
+    }
+    if (a === 0) return true;
+    const diff =
+      Math.abs(data[idx] - bgR) +
+      Math.abs(data[idx + 1] - bgG) +
+      Math.abs(data[idx + 2] - bgB);
+    return diff <= 28;
+  };
+
+  const seamForegroundCost = (idx: number): number => {
+    const a = data[idx + 3];
+    if (alreadyTransparent) {
+      return a;
+    }
+    if (a <= 16) return 0;
+    const diff =
+      Math.abs(data[idx] - bgR) +
+      Math.abs(data[idx + 1] - bgG) +
+      Math.abs(data[idx + 2] - bgB);
+    return diff <= 28 ? 0 : Math.min(255, diff);
+  };
+
+  let subjectTopY = ch;
+  let subjectBottomY = -1;
+  let subjectMinX = cw;
+  let subjectMaxX = -1;
+  for (let y = 0; y < ch; y += 1) {
+    const rowOff = y * cw;
+    for (let x = 0; x < cw; x += 1) {
+      if (isFgPixel((rowOff + x) * 4)) {
+        if (y < subjectTopY) subjectTopY = y;
+        if (y > subjectBottomY) subjectBottomY = y;
+        if (x < subjectMinX) subjectMinX = x;
+        if (x > subjectMaxX) subjectMaxX = x;
+      }
+    }
+  }
+
+  const subjectHeight = subjectBottomY - subjectTopY + 1;
+  const subjectWidth = subjectMaxX - subjectMinX + 1;
+  if (
+    subjectBottomY < subjectTopY ||
+    subjectHeight < ch * 0.34 ||
+    subjectWidth <= cw * 0.46
+  ) {
+    return { modified: false, keptSide: null, valleyX: null, keptBounds: null };
+  }
+
+  interface HeadSpan {
+    start: number;
+    end: number;
+    mass: number;
+  }
+
+  const legY0 = Math.min(ch - 1, Math.round(subjectTopY + 0.68 * subjectHeight));
+  const legY1 = subjectBottomY;
+  const minHeadW = Math.max(6, Math.round(cw * 0.06));
+  const maxHeadW = Math.ceil(cw * 0.28);
+  const headGapBridge = Math.max(2, Math.round(cw * 0.012));
+  const minValleyWidth = Math.max(4, Math.round(cw * 0.035));
+  const minHeadCenterDist = cw * 0.22;
+
+  let chosenPair: {
+    leftHead: HeadSpan;
+    rightHead: HeadSpan;
+    valleyX: number;
+    strictCrownY1: number;
+  } | null = null;
+
+  // Check pure 7.5-head cranium/face band (0..0.13*H, strictly above shoulder/coat contact!)
+  // first, then fall back to 0..0.22*H if two unequal-height figures touch lower at mid-torso.
+  const crownBands: ReadonlyArray<{ bandEndFrac: number; strictZeroFrac: number }> = [
+    { bandEndFrac: 0.13, strictZeroFrac: 0.125 },
+    { bandEndFrac: 0.22, strictZeroFrac: 0.18 },
+  ];
+
+  for (const { bandEndFrac, strictZeroFrac } of crownBands) {
+    const headY0 = subjectTopY;
+    const headY1 = Math.min(ch - 1, Math.round(subjectTopY + bandEndFrac * subjectHeight));
+    const bandStrictCrownY1 = Math.min(
+      ch - 1,
+      Math.round(subjectTopY + strictZeroFrac * subjectHeight)
+    );
+    const headRows = Math.max(1, headY1 - headY0 + 1);
+
+    const headDensity = new Float32Array(cw);
+    for (let x = 0; x < cw; x += 1) {
+      let fg = 0;
+      for (let y = headY0; y <= headY1; y += 1) {
+        if (isFgPixel((y * cw + x) * 4)) fg += 1;
+      }
+      headDensity[x] = fg / headRows;
+    }
+
+    const rawHeads: HeadSpan[] = [];
+    let inHead = false;
+    let hStart = 0;
+    let hGap = 0;
+    for (let x = 0; x < cw; x += 1) {
+      if (headDensity[x] > 0.08) {
+        if (!inHead) {
+          inHead = true;
+          hStart = x;
+        }
+        hGap = 0;
+      } else if (inHead) {
+        hGap += 1;
+        if (hGap > headGapBridge) {
+          rawHeads.push({ start: hStart, end: x - hGap, mass: 0 });
+          inHead = false;
+          hGap = 0;
+        }
+      }
+    }
+    if (inHead) {
+      rawHeads.push({ start: hStart, end: cw - 1 - hGap, mass: 0 });
+    }
+
+    let sawWideCanopy = false;
+    for (const hSpan of rawHeads) {
+      const wSpan = hSpan.end - hSpan.start + 1;
+      // Guard: wide continuous upper canopy (> 0.34 * cw) in top crown band is an overhead rain umbrella!
+      if (bandEndFrac <= 0.14 && wSpan > Math.ceil(cw * 0.34)) {
+        return { modified: false, keptSide: null, valleyX: null, keptBounds: null };
+      }
+      if (wSpan > Math.ceil(cw * 0.34)) {
+        sawWideCanopy = true;
+        break;
+      }
+      let m = 0;
+      for (let x = hSpan.start; x <= hSpan.end; x += 1) {
+        m += headDensity[x];
+      }
+      hSpan.mass = m;
+    }
+    if (sawWideCanopy) continue;
+
+    const headClusters = rawHeads.filter((hSpan) => {
+      const wSpan = hSpan.end - hSpan.start + 1;
+      return wSpan >= minHeadW && wSpan <= maxHeadW;
+    });
+    if (headClusters.length < 2) continue;
+
+    for (let i = 0; i < headClusters.length - 1; i += 1) {
+      const leftHead = headClusters[i];
+      const rightHead = headClusters[i + 1];
+      const leftCenter = (leftHead.start + leftHead.end) * 0.5;
+      const rightCenter = (rightHead.start + rightHead.end) * 0.5;
+      if (rightCenter - leftCenter < minHeadCenterDist) continue;
+
+      const vStart = leftHead.end + 1;
+      const vEnd = rightHead.start - 1;
+      if (vEnd - vStart + 1 < minValleyWidth) continue;
+
+      let bestRunStart = -1;
+      let bestRunEnd = -1;
+      let curStart = -1;
+      for (let x = vStart; x <= vEnd; x += 1) {
+        if (headDensity[x] <= 0.08) {
+          if (curStart < 0) curStart = x;
+          if (x - curStart > bestRunEnd - bestRunStart) {
+            bestRunStart = curStart;
+            bestRunEnd = x;
+          }
+        } else {
+          curStart = -1;
+        }
+      }
+      if (bestRunStart < 0 || bestRunEnd - bestRunStart + 1 < minValleyWidth) continue;
+
+      const midValley = Math.round((bestRunStart + bestRunEnd) * 0.5);
+      let cleanValleyX = -1;
+      for (let offset = 0; offset <= bestRunEnd - bestRunStart; offset += 1) {
+        const candidates =
+          offset === 0 ? [midValley] : [midValley - offset, midValley + offset];
+        for (const cxCandidate of candidates) {
+          if (cxCandidate < bestRunStart || cxCandidate > bestRunEnd) continue;
+          let allZeroInCrown = true;
+          for (let y = subjectTopY; y <= bandStrictCrownY1; y += 1) {
+            if (!isPureValleyPixel((y * cw + cxCandidate) * 4)) {
+              allZeroInCrown = false;
+              break;
+            }
+          }
+          if (allZeroInCrown) {
+            cleanValleyX = cxCandidate;
+            break;
+          }
+        }
+        if (cleanValleyX >= 0) break;
+      }
+      if (cleanValleyX < 0) continue;
+
+      // Confirm both sides also carry lower-leg silhouette mass in [0.68..1.00 * subjectHeight]
+      let leftLegPx = 0;
+      let rightLegPx = 0;
+      const minLegPx = Math.max(8, Math.round((legY1 - legY0 + 1) * 2));
+      for (let y = legY0; y <= legY1; y += 1) {
+        const rOff = y * cw;
+        for (
+          let x = Math.max(0, leftHead.start - Math.round(cw * 0.14));
+          x < cleanValleyX;
+          x += 1
+        ) {
+          if (isFgPixel((rOff + x) * 4)) leftLegPx += 1;
+        }
+        for (
+          let x = cleanValleyX + 1;
+          x <= Math.min(cw - 1, rightHead.end + Math.round(cw * 0.14));
+          x += 1
+        ) {
+          if (isFgPixel((rOff + x) * 4)) rightLegPx += 1;
+        }
+      }
+      if (leftLegPx < minLegPx || rightLegPx < minLegPx) continue;
+
+      chosenPair = {
+        leftHead,
+        rightHead,
+        valleyX: cleanValleyX,
+        strictCrownY1: bandStrictCrownY1,
+      };
+      break;
+    }
+
+    if (chosenPair) break;
+  }
+
+  if (!chosenPair) {
+    return { modified: false, keptSide: null, valleyX: null, keptBounds: null };
+  }
+
+  const { leftHead, rightHead, valleyX, strictCrownY1 } = chosenPair;
+
+  // Score primary vs secondary twin using full-height body mass weighted by proximity to slice center
+  let leftBodyMass = 0;
+  let rightBodyMass = 0;
+  for (let y = subjectTopY; y <= subjectBottomY; y += 2) {
+    const rOff = y * cw;
+    for (let x = 0; x < valleyX; x += 1) {
+      if (isFgPixel((rOff + x) * 4)) leftBodyMass += 1;
+    }
+    for (let x = valleyX + 1; x < cw; x += 1) {
+      if (isFgPixel((rOff + x) * 4)) rightBodyMass += 1;
+    }
+  }
+  const leftHeadCenter = (leftHead.start + leftHead.end) * 0.5;
+  const rightHeadCenter = (rightHead.start + rightHead.end) * 0.5;
+  const leftCenterDistNorm = Math.abs(leftHeadCenter - cw * 0.5) / (cw * 0.5);
+  const rightCenterDistNorm = Math.abs(rightHeadCenter - cw * 0.5) / (cw * 0.5);
+  const leftScore = leftBodyMass * (1 - 0.42 * leftCenterDistNorm);
+  const rightScore = rightBodyMass * (1 - 0.42 * rightCenterDistNorm);
+  const keptSide: 'left' | 'right' = leftScore >= rightScore ? 'left' : 'right';
+
+  // Dynamic Programming minimum-alpha vertical seam x*(y) within [valleyX - 0.08*cw, valleyX + 0.08*cw]
+  const bandHalf = Math.max(4, Math.round(cw * 0.08));
+  const seamMinX = Math.max(1, valleyX - bandHalf);
+  const seamMaxX = Math.min(cw - 2, valleyX + bandHalf);
+  const bandW = seamMaxX - seamMinX + 1;
+  const backtrack = new Int8Array(ch * bandW);
+  let prevCost = new Float64Array(bandW);
+  let currCost = new Float64Array(bandW);
+
+  for (let bx = 0; bx < bandW; bx += 1) {
+    const x = seamMinX + bx;
+    prevCost[bx] = seamForegroundCost(x * 4) * 12 + Math.abs(x - valleyX) * 30;
+  }
+
+  for (let y = 1; y < ch; y += 1) {
+    const rowOff = y * cw;
+    const crownTether = y <= strictCrownY1 ? 28 : 1.25;
+    for (let bx = 0; bx < bandW; bx += 1) {
+      let bestPrevBx = bx;
+      let bestPrevVal = prevCost[bx];
+      if (bx > 0 && prevCost[bx - 1] + 1.5 < bestPrevVal) {
+        bestPrevVal = prevCost[bx - 1] + 1.5;
+        bestPrevBx = bx - 1;
+      }
+      if (bx + 1 < bandW && prevCost[bx + 1] + 1.5 < bestPrevVal) {
+        bestPrevVal = prevCost[bx + 1] + 1.5;
+        bestPrevBx = bx + 1;
+      }
+      const x = seamMinX + bx;
+      const pxCost =
+        seamForegroundCost((rowOff + x) * 4) * 12 + Math.abs(x - valleyX) * crownTether;
+      currCost[bx] = bestPrevVal + pxCost;
+      backtrack[y * bandW + bx] = bestPrevBx - bx;
+    }
+    const tmp = prevCost;
+    prevCost = currCost;
+    currCost = tmp;
+  }
+
+  let endBx = 0;
+  let minEndCost = prevCost[0];
+  for (let bx = 1; bx < bandW; bx += 1) {
+    if (prevCost[bx] < minEndCost) {
+      minEndCost = prevCost[bx];
+      endBx = bx;
+    }
+  }
+
+  const seamX = new Int32Array(ch);
+  let traceBx = endBx;
+  for (let y = ch - 1; y >= 0; y -= 1) {
+    seamX[y] = seamMinX + traceBx;
+    if (y > 0) {
+      traceBx += backtrack[y * bandW + traceBx];
+    }
+  }
+
+  // Zero out RGBA (or restore solid backdrop if pre-cutout) on the secondary twin's side of seamX[y]
+  let keptMinX = cw;
+  let keptMaxX = -1;
+  for (let y = 0; y < ch; y += 1) {
+    const rowOff = y * cw;
+    const cutX = seamX[y];
+    if (keptSide === 'left') {
+      for (let x = cutX; x < cw; x += 1) {
+        const pIdx = (rowOff + x) * 4;
+        if (alreadyTransparent) {
+          data[pIdx] = 0;
+          data[pIdx + 1] = 0;
+          data[pIdx + 2] = 0;
+          data[pIdx + 3] = 0;
+        } else {
+          data[pIdx] = bgR;
+          data[pIdx + 1] = bgG;
+          data[pIdx + 2] = bgB;
+          data[pIdx + 3] = 255;
+        }
+      }
+      for (let x = 0; x < cutX; x += 1) {
+        if (isFgPixel((rowOff + x) * 4)) {
+          if (x < keptMinX) keptMinX = x;
+          if (x > keptMaxX) keptMaxX = x;
+        }
+      }
+    } else {
+      for (let x = 0; x <= cutX; x += 1) {
+        const pIdx = (rowOff + x) * 4;
+        if (alreadyTransparent) {
+          data[pIdx] = 0;
+          data[pIdx + 1] = 0;
+          data[pIdx + 2] = 0;
+          data[pIdx + 3] = 0;
+        } else {
+          data[pIdx] = bgR;
+          data[pIdx + 1] = bgG;
+          data[pIdx + 2] = bgB;
+          data[pIdx + 3] = 255;
+        }
+      }
+      for (let x = cutX + 1; x < cw; x += 1) {
+        if (isFgPixel((rowOff + x) * 4)) {
+          if (x < keptMinX) keptMinX = x;
+          if (x > keptMaxX) keptMaxX = x;
+        }
+      }
+    }
+  }
+
+  return {
+    modified: true,
+    keptSide,
+    valleyX,
+    keptBounds: keptMaxX >= keptMinX ? { minX: keptMinX, maxX: keptMaxX } : null,
+  };
+}
+
+/**
+ * Pure raster single-subject isolator for VTON turnaround quadrants.
+ * Detects if Gemini accidentally rendered 2 side-by-side twin/duplicate models inside a slice
+ * (either disconnected OR touching across sleeves/coats via `splitTouchingTwinSilhouettesInBuffer`)
+ * and cleanly isolates & centers the single primary figure while preserving RGBA transparency.
+ */
+export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasElement {
+  const cw = srcCanvas.width;
+  const ch = srcCanvas.height;
+  if (cw < 80 || ch < 72) return srcCanvas;
+
+  const ctx = srcCanvas.getContext('2d');
+  if (!ctx) return srcCanvas;
+
+  let imgData: ImageData;
+  try {
+    imgData = ctx.getImageData(0, 0, cw, ch);
+  } catch {
+    return srcCanvas;
+  }
+  const data = imgData.data;
+
+  const { alreadyTransparent, bgR, bgG, bgB } = sampleSliceCornerBackdrop(data, cw, ch);
 
   const yStart = Math.floor(ch * 0.08);
   const yEnd = Math.max(yStart + 1, Math.floor(ch * 0.92));
@@ -1391,7 +1819,7 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   if (inRun) {
     rawRuns.push({ start: runStart, end: cw - 1, mass: 0, peak: 0 });
   }
-  if (rawRuns.length < 2) return srcCanvas;
+  if (rawRuns.length === 0) return srcCanvas;
 
   // Merge tiny intra-body gaps (e.g., arm-to-waist space <= 3% of slice width)
   const maxIntraGap = Math.max(2, Math.round(cw * 0.03));
@@ -1452,9 +1880,49 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
     if (wipedNarrowArtifact) {
       ctx.putImageData(imgData, 0, 0);
     }
-    return srcCanvas;
   }
-  if (humanIslands.length < 2) return srcCanvas;
+
+  const tryRecenterTouchingTwinSplit = (): HTMLCanvasElement => {
+    const primarySpanW =
+      humanIslands.length === 1
+        ? humanIslands[0].end - humanIslands[0].start + 1
+        : merged[0].end - merged[0].start + 1;
+    if (primarySpanW <= cw * 0.46) {
+      return srcCanvas;
+    }
+    const splitRes = splitTouchingTwinSilhouettesInBuffer(data, cw, ch);
+    if (!splitRes.modified || !splitRes.keptBounds) {
+      return srcCanvas;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    if (typeof document === 'undefined') return srcCanvas;
+
+    const keptW = splitRes.keptBounds.maxX - splitRes.keptBounds.minX + 1;
+    const padX = Math.max(6, Math.round(keptW * 0.22));
+    const sx = Math.max(0, splitRes.keptBounds.minX - padX);
+    const ex = Math.min(cw, splitRes.keptBounds.maxX + 1 + padX);
+    const subW = Math.max(16, ex - sx);
+    const outW = Math.max(subW, Math.min(cw, Math.round(ch * 0.82)));
+
+    const cleanCanvas = document.createElement('canvas');
+    cleanCanvas.width = outW;
+    cleanCanvas.height = ch;
+    const cleanCtx = cleanCanvas.getContext('2d');
+    if (!cleanCtx) return srcCanvas;
+
+    cleanCtx.clearRect(0, 0, outW, ch);
+    if (!alreadyTransparent) {
+      cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+      cleanCtx.fillRect(0, 0, outW, ch);
+    }
+    const dx = Math.round((outW - subW) * 0.5);
+    cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
+    return cleanCanvas;
+  };
+
+  if (humanIslands.length < 2) {
+    return tryRecenterTouchingTwinSplit();
+  }
 
   // Verify genuine background valley between adjacent human islands
   let hasTrueSeparation = false;
@@ -1472,7 +1940,9 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
       }
     }
   }
-  if (!hasTrueSeparation) return srcCanvas;
+  if (!hasTrueSeparation) {
+    return tryRecenterTouchingTwinSplit();
+  }
 
   // Pick the primary model closest to center weighted by silhouette mass
   let bestIdx = 0;
@@ -2364,25 +2834,38 @@ function detectLateralCanvasFacingDirection(
   }
 }
 
-interface HorizontalSpan {
+export interface HorizontalSpan {
   x0: number;
   x1: number;
 }
 
-function detectRowSubjectClusters(
-  sheetCtx: CanvasRenderingContext2D,
+function estimateRowMedianEdgeBackdropRgb(
+  data: Uint8ClampedArray,
   w: number,
-  y0: number,
-  y1: number
-): HorizontalSpan[] {
-  const rowH = y1 - y0;
-  if (w < 240 || rowH < 120) return [];
-  let data: Uint8ClampedArray;
-  try {
-    data = sheetCtx.getImageData(0, y0, w, rowH).data;
-  } catch {
-    return [];
+  rowOff: number,
+  edgeXs: number[]
+): [number, number, number] {
+  const rs: number[] = [];
+  const gs: number[] = [];
+  const bs: number[] = [];
+  for (const ex of edgeXs) {
+    const idx = rowOff + ex * 4;
+    rs.push(data[idx]);
+    gs.push(data[idx + 1]);
+    bs.push(data[idx + 2]);
   }
+  rs.sort((a, b) => a - b);
+  gs.sort((a, b) => a - b);
+  bs.sort((a, b) => a - b);
+  return [(rs[1] + rs[2]) * 0.5, (gs[1] + gs[2]) * 0.5, (bs[1] + bs[2]) * 0.5];
+}
+
+export function detectRowSubjectClustersInBuffer(
+  data: Uint8ClampedArray,
+  w: number,
+  rowH: number
+): HorizontalSpan[] {
+  if (w < 240 || rowH < 120 || data.length < w * rowH * 4) return [];
 
   const colHits = new Uint16Array(w);
   const yStart = Math.max(2, Math.round(rowH * 0.04));
@@ -2391,21 +2874,7 @@ function detectRowSubjectClusters(
 
   for (let y = yStart; y < yEnd; y += 2) {
     const rowOff = y * w * 4;
-    const rs: number[] = [];
-    const gs: number[] = [];
-    const bs: number[] = [];
-    for (const ex of edgeXs) {
-      const idx = rowOff + ex * 4;
-      rs.push(data[idx]);
-      gs.push(data[idx + 1]);
-      bs.push(data[idx + 2]);
-    }
-    rs.sort((a, b) => a - b);
-    gs.sort((a, b) => a - b);
-    bs.sort((a, b) => a - b);
-    const bgR = (rs[1] + rs[2]) * 0.5;
-    const bgG = (gs[1] + gs[2]) * 0.5;
-    const bgB = (bs[1] + bs[2]) * 0.5;
+    const [bgR, bgG, bgB] = estimateRowMedianEdgeBackdropRgb(data, w, rowOff, edgeXs);
 
     for (let x = 2; x < w - 2; x += 1) {
       const idx = rowOff + x * 4;
@@ -2456,13 +2925,306 @@ function detectRowSubjectClusters(
   return spans;
 }
 
+function detectRowSubjectClusters(
+  sheetCtx: CanvasRenderingContext2D,
+  w: number,
+  y0: number,
+  y1: number
+): HorizontalSpan[] {
+  const rowH = y1 - y0;
+  if (w < 240 || rowH < 120) return [];
+  try {
+    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
+    return detectRowSubjectClustersInBuffer(data, w, rowH);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Scans ONLY the upper head/crown band (`y = rowTop + 0.04*rowH .. rowTop + 0.24*rowH`)
+ * with tight `gapBridgePx = Math.max(3, Math.round(w * 0.006))` where heads never touch
+ * even when adjacent sleeves or coats touch at mid-body (`x = 1/3 w` or `x = 2/3 w`).
+ */
+export function detectRowHeadClustersInBuffer(
+  data: Uint8ClampedArray,
+  w: number,
+  rowH: number
+): HorizontalSpan[] {
+  if (w < 240 || rowH < 120 || data.length < w * rowH * 4) return [];
+
+  const colHits = new Uint16Array(w);
+  const yStart = Math.max(2, Math.round(rowH * 0.04));
+  const yEnd = Math.min(rowH - 2, Math.round(rowH * 0.24));
+  if (yEnd <= yStart + 2) return [];
+  const edgeXs = [2, Math.min(8, w - 1), Math.max(0, w - 9), Math.max(0, w - 3)];
+
+  for (let y = yStart; y < yEnd; y += 1) {
+    const rowOff = y * w * 4;
+    const [bgR, bgG, bgB] = estimateRowMedianEdgeBackdropRgb(data, w, rowOff, edgeXs);
+
+    for (let x = 2; x < w - 2; x += 1) {
+      const idx = rowOff + x * 4;
+      if (data[idx + 3] < 40) continue;
+      const dr = data[idx] - bgR;
+      const dg = data[idx + 1] - bgG;
+      const db = data[idx + 2] - bgB;
+      if (dr * dr + dg * dg + db * db > 324) {
+        colHits[x] += 1;
+      }
+    }
+  }
+
+  const minColHits = Math.max(2, Math.round((yEnd - yStart) * 0.06));
+  const gapBridgePx = Math.max(3, Math.round(w * 0.006));
+  const minClusterWidth = Math.max(10, Math.round(w * 0.018));
+  const spans: HorizontalSpan[] = [];
+
+  let inSpan = false;
+  let startX = 0;
+  let gapRun = 0;
+  for (let x = 0; x < w; x += 1) {
+    if (colHits[x] >= minColHits) {
+      if (!inSpan) {
+        inSpan = true;
+        startX = x;
+      }
+      gapRun = 0;
+    } else if (inSpan) {
+      gapRun += 1;
+      if (gapRun > gapBridgePx) {
+        const endX = x - gapRun;
+        if (endX - startX + 1 >= minClusterWidth) {
+          spans.push({ x0: startX, x1: endX });
+        }
+        inSpan = false;
+        gapRun = 0;
+      }
+    }
+  }
+  if (inSpan) {
+    const endX = w - 1 - gapRun;
+    if (endX - startX + 1 >= minClusterWidth) {
+      spans.push({ x0: startX, x1: endX });
+    }
+  }
+
+  return spans;
+}
+
+export function detectRowHeadClusters(
+  sheetCtx: CanvasRenderingContext2D,
+  w: number,
+  y0: number,
+  y1: number
+): HorizontalSpan[] {
+  const rowH = y1 - y0;
+  if (w < 240 || rowH < 120) return [];
+  try {
+    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
+    return detectRowHeadClustersInBuffer(data, w, rowH);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Measures foreground density in the central `[0.45w .. 0.55w]` band of a row.
+ * In a true `2x2` sheet, `x = 0.50w` is an empty central gutter (`density ~ 0`),
+ * whereas in a `3x2` sheet `x = 0.50w` is the exact body center of Column 1 (`45°` / `180°`).
+ */
+export function measureRowCenterForegroundDensityInBuffer(
+  data: Uint8ClampedArray,
+  w: number,
+  rowH: number
+): number {
+  if (w < 240 || rowH < 120 || data.length < w * rowH * 4) return 0;
+
+  const yStart = Math.max(2, Math.round(rowH * 0.06));
+  const yEnd = Math.min(rowH - 2, Math.round(rowH * 0.92));
+  const xStart = Math.max(2, Math.floor(w * 0.45));
+  const xEnd = Math.min(w - 3, Math.ceil(w * 0.55));
+  if (yEnd <= yStart || xEnd < xStart) return 0;
+
+  const edgeXs = [2, Math.min(8, w - 1), Math.max(0, w - 9), Math.max(0, w - 3)];
+  let fgPixels = 0;
+  let totalPixels = 0;
+
+  for (let y = yStart; y < yEnd; y += 2) {
+    const rowOff = y * w * 4;
+    const [bgR, bgG, bgB] = estimateRowMedianEdgeBackdropRgb(data, w, rowOff, edgeXs);
+    for (let x = xStart; x <= xEnd; x += 1) {
+      totalPixels += 1;
+      const idx = rowOff + x * 4;
+      if (data[idx + 3] < 40) continue;
+      const dr = data[idx] - bgR;
+      const dg = data[idx + 1] - bgG;
+      const db = data[idx + 2] - bgB;
+      if (dr * dr + dg * dg + db * db > 324) {
+        fgPixels += 1;
+      }
+    }
+  }
+
+  return totalPixels > 0 ? fgPixels / totalPixels : 0;
+}
+
+function measureRowCenterForegroundDensity(
+  sheetCtx: CanvasRenderingContext2D,
+  w: number,
+  y0: number,
+  y1: number
+): number {
+  const rowH = y1 - y0;
+  if (w < 240 || rowH < 120) return 0;
+  try {
+    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
+    return measureRowCenterForegroundDensityInBuffer(data, w, rowH);
+  } catch {
+    return 0;
+  }
+}
+
+export interface TurnaroundSheetGridDecision {
+  use3x2Grid: boolean;
+  topClusters: HorizontalSpan[];
+  botClusters: HorizontalSpan[];
+  topHeadClusters: HorizontalSpan[];
+  botHeadClusters: HorizontalSpan[];
+  topCenterDensity: number;
+  botCenterDensity: number;
+}
+
+function evaluateTurnaroundGridDecisionFromStats(params: {
+  w: number;
+  h: number;
+  layout?: string;
+  topClusters: HorizontalSpan[];
+  botClusters: HorizontalSpan[];
+  topHeadClusters: HorizontalSpan[];
+  botHeadClusters: HorizontalSpan[];
+  topCenterDensity: number;
+  botCenterDensity: number;
+}): boolean {
+  const {
+    w,
+    h,
+    layout,
+    topClusters,
+    botClusters,
+    topHeadClusters,
+    botHeadClusters,
+    topCenterDensity,
+    botCenterDensity,
+  } = params;
+
+  const isExplicit2x2 = layout === 'turnaround_2x2' || w < 256 || h < 256;
+  const isHorizontal1x6Strip = !isExplicit2x2 && w / h >= 3.15;
+  const isHorizontal1x4Strip = !isHorizontal1x6Strip && w / h >= 2.15;
+  if (isExplicit2x2 || isHorizontal1x6Strip || isHorizontal1x4Strip) {
+    return false;
+  }
+
+  const hasThreeOrMoreClusters =
+    topClusters.length >= 3 ||
+    botClusters.length >= 3 ||
+    topHeadClusters.length >= 3 ||
+    botHeadClusters.length >= 3;
+  const hasCenterSubjectMass = topCenterDensity >= 0.035 || botCenterDensity >= 0.035;
+  const strictlyConfirmed2x2 =
+    topClusters.length > 0 &&
+    botClusters.length > 0 &&
+    topClusters.length <= 2 &&
+    botClusters.length <= 2 &&
+    topHeadClusters.length <= 2 &&
+    botHeadClusters.length <= 2 &&
+    !hasCenterSubjectMass;
+
+  if (layout === 'turnaround_3x2') {
+    // Default to 3x2 unless BOTH full-row AND head-band clusters strictly confirm <= 2 subjects
+    // in BOTH rows AND no subject mass exists near the central 0.50w column!
+    return !strictlyConfirmed2x2;
+  }
+
+  if (hasThreeOrMoreClusters) {
+    return true;
+  }
+  if (strictlyConfirmed2x2) {
+    return false;
+  }
+  return hasCenterSubjectMass || w / h >= 1.15;
+}
+
+export function resolveTurnaroundSheetGridDecisionInBuffer(
+  sheetRgba: Uint8ClampedArray,
+  w: number,
+  h: number,
+  options?: { layout?: string }
+): TurnaroundSheetGridDecision {
+  const halfH = Math.floor(h / 2);
+  const botH = h - halfH;
+  const isExplicit2x2 = options?.layout === 'turnaround_2x2' || w < 256 || h < 256;
+  const isHorizontalStrip = !isExplicit2x2 && w / h >= 2.15;
+
+  let topClusters: HorizontalSpan[] = [];
+  let botClusters: HorizontalSpan[] = [];
+  let topHeadClusters: HorizontalSpan[] = [];
+  let botHeadClusters: HorizontalSpan[] = [];
+  let topCenterDensity = 0;
+  let botCenterDensity = 0;
+
+  if (!isExplicit2x2 && !isHorizontalStrip && sheetRgba.length >= w * h * 4) {
+    const topData = sheetRgba.subarray(0, halfH * w * 4);
+    const botData = sheetRgba.subarray(halfH * w * 4, h * w * 4);
+    topClusters = detectRowSubjectClustersInBuffer(topData, w, halfH);
+    botClusters = detectRowSubjectClustersInBuffer(botData, w, botH);
+    topHeadClusters = detectRowHeadClustersInBuffer(topData, w, halfH);
+    botHeadClusters = detectRowHeadClustersInBuffer(botData, w, botH);
+    topCenterDensity = measureRowCenterForegroundDensityInBuffer(topData, w, halfH);
+    botCenterDensity = measureRowCenterForegroundDensityInBuffer(botData, w, botH);
+  }
+
+  const use3x2Grid = evaluateTurnaroundGridDecisionFromStats({
+    w,
+    h,
+    layout: options?.layout,
+    topClusters,
+    botClusters,
+    topHeadClusters,
+    botHeadClusters,
+    topCenterDensity,
+    botCenterDensity,
+  });
+
+  return {
+    use3x2Grid,
+    topClusters,
+    botClusters,
+    topHeadClusters,
+    botHeadClusters,
+    topCenterDensity,
+    botCenterDensity,
+  };
+}
+
 function resolveThreeColumnCropSpans(
   clusters: HorizontalSpan[],
+  headClusters: HorizontalSpan[],
   w: number
 ): [HorizontalSpan, HorizontalSpan, HorizontalSpan] {
   if (clusters.length === 3) {
     const m01 = Math.round((clusters[0].x1 + clusters[1].x0) * 0.5);
     const m12 = Math.round((clusters[1].x1 + clusters[2].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, w - 3) },
+    ];
+  }
+  if (headClusters.length === 3) {
+    // Coats/sleeves touched at mid-body bridging full-row clusters into 2, so split at head-band midpoints!
+    const m01 = Math.round((headClusters[0].x1 + headClusters[1].x0) * 0.5);
+    const m12 = Math.round((headClusters[1].x1 + headClusters[2].x0) * 0.5);
     return [
       { x0: 2, x1: Math.max(18, m01 - 1) },
       { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
@@ -2495,8 +3257,8 @@ function resolveThreeColumnCropSpans(
  * - Row 1: `0°` (Front), `45°` (Front-Right), `90°` (Right Side)
  * - Row 2: `135°` (Back-Right `우후면`), `180°` (Straight Back `후면`), `225°` (Back-Left `좌후면`)
  * Runs pre-crop sheet divider-line erasing + `isolateSingleSubjectInSlice` + V4 hole-aware
- * `applyCornerBfsCutoutOnCanvas` + `scrubCutoutArtifactsOnCanvas` + gaze-direction normalization +
- * `normalizeTurnaroundCanvasesToFloorBaseline`.
+ * `applyCornerBfsCutoutOnCanvas` + `scrubCutoutArtifactsOnCanvas` + post-cutout touching-twin
+ * `isolateSingleSubjectInSlice` + gaze-direction normalization + `normalizeTurnaroundCanvasesToFloorBaseline`.
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string,
@@ -2553,26 +3315,32 @@ export async function sliceTurnaround2x2Sheet(
 
         let topClusters: HorizontalSpan[] = [];
         let botClusters: HorizontalSpan[] = [];
+        let topHeadClusters: HorizontalSpan[] = [];
+        let botHeadClusters: HorizontalSpan[] = [];
+        let topCenterDensity = 0;
+        let botCenterDensity = 0;
         const halfH = Math.floor(h / 2);
 
         if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip && sheetCtx) {
           topClusters = detectRowSubjectClusters(sheetCtx, w, 0, halfH);
           botClusters = detectRowSubjectClusters(sheetCtx, w, halfH, h);
+          topHeadClusters = detectRowHeadClusters(sheetCtx, w, 0, halfH);
+          botHeadClusters = detectRowHeadClusters(sheetCtx, w, halfH, h);
+          topCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, 0, halfH);
+          botCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, halfH, h);
         }
 
-        const hasThreeOrMoreRowClusters = topClusters.length >= 3 || botClusters.length >= 3;
-        const isSquare2x2Fallback =
-          !hasThreeOrMoreRowClusters &&
-          topClusters.length <= 2 &&
-          botClusters.length <= 2 &&
-          w / h < 1.15;
-
-        const use3x2Grid =
-          !isExplicit2x2 &&
-          !isHorizontal1x6Strip &&
-          !isHorizontal1x4Strip &&
-          (hasThreeOrMoreRowClusters ||
-            (!isSquare2x2Fallback && (options?.layout === 'turnaround_3x2' || w / h >= 1.15)));
+        const use3x2Grid = evaluateTurnaroundGridDecisionFromStats({
+          w,
+          h,
+          layout: options?.layout,
+          topClusters,
+          botClusters,
+          topHeadClusters,
+          botHeadClusters,
+          topCenterDensity,
+          botCenterDensity,
+        });
 
         let panels: Array<{
           angle: TurnaroundAngleDeg;
@@ -2598,8 +3366,8 @@ export async function sliceTurnaround2x2Sheet(
         } else if (use3x2Grid) {
           const trimY = Math.max(2, Math.round(halfH * 0.016));
           const ch = Math.max(16, halfH - trimY * 2);
-          const topSpans = resolveThreeColumnCropSpans(topClusters, w);
-          const botSpans = resolveThreeColumnCropSpans(botClusters, w);
+          const topSpans = resolveThreeColumnCropSpans(topClusters, topHeadClusters, w);
+          const botSpans = resolveThreeColumnCropSpans(botClusters, botHeadClusters, w);
           const topAngles: [TurnaroundAngleDeg, TurnaroundAngleDeg, TurnaroundAngleDeg] = [
             0, 45, 90,
           ];
@@ -2664,12 +3432,16 @@ export async function sliceTurnaround2x2Sheet(
           }
           ctx.clearRect(0, 0, p.cw, p.ch);
           ctx.drawImage(cropSource, p.sx, p.sy, p.cw, p.ch, 0, 0, p.cw, p.ch);
-          const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
-          if (finalCanvas !== cropCanvas) {
+          const preCutIsolated = isolateSingleSubjectInSlice(cropCanvas);
+          if (preCutIsolated !== cropCanvas) {
             extraCanvases.push(cropCanvas);
           }
-          applyCornerBfsCutoutOnCanvas(finalCanvas);
-          scrubCutoutArtifactsOnCanvas(finalCanvas);
+          applyCornerBfsCutoutOnCanvas(preCutIsolated);
+          scrubCutoutArtifactsOnCanvas(preCutIsolated);
+          const finalCanvas = isolateSingleSubjectInSlice(preCutIsolated);
+          if (finalCanvas !== preCutIsolated) {
+            extraCanvases.push(preCutIsolated);
+          }
 
           // Normalize canonical gaze: `45°`, `90°`, `135°` face screen-right; `225°` faces screen-left!
           if (forceFlipSet.has(p.angle)) {
@@ -3103,19 +3875,29 @@ function drawGuideSilhouetteMannequin(
   ctx: CanvasRenderingContext2D,
   params: {
     cx: number;
+    rowTop: number;
+    cellW: number;
+    cellH: number;
     headTopY: number;
     footSoleY: number;
     bmiScale: number;
     angleDeg: TurnaroundAngleDeg;
   }
 ): void {
-  const { cx, headTopY, footSoleY, bmiScale, angleDeg } = params;
+  const { cx, rowTop, cellW, cellH, headTopY, footSoleY, bmiScale, angleDeg } = params;
   const figH = Math.max(120, footSoleY - headTopY);
   const headH = figH / 7.5;
-  const frontHeadW = headH * 0.72;
-  const frontShoulderW = headH * 1.88 * bmiScale;
-  const frontWaistW = headH * 1.32 * bmiScale;
-  const frontHipW = headH * 1.54 * bmiScale;
+
+  // Keep silhouettes compactly centered inside the middle 54% of each 448px cell
+  // (leaving >= 23% empty solid backdrop gutters on BOTH sides of every cell boundary!)
+  const maxAllowedSpan = cellW * 0.54;
+  const rawMaxArmSpan = headH * (1.88 * bmiScale + 0.28 + 0.224 * bmiScale);
+  const widthCompact = Math.min(0.88, maxAllowedSpan / Math.max(1, rawMaxArmSpan));
+
+  const frontHeadW = headH * 0.72 * Math.max(0.9, widthCompact);
+  const frontShoulderW = headH * 1.88 * bmiScale * widthCompact;
+  const frontWaistW = headH * 1.32 * bmiScale * widthCompact;
+  const frontHipW = headH * 1.54 * bmiScale * widthCompact;
 
   const neckTopY = headTopY + headH * 0.96;
   const shoulderY = headTopY + headH * 1.32;
@@ -3124,6 +3906,11 @@ function drawGuideSilhouetteMannequin(
   const crotchY = headTopY + figH * 0.51;
   const kneeY = headTopY + figH * 0.74;
   const ankleY = footSoleY - headH * 0.32;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(Math.round(cx - cellW * 0.27), rowTop, Math.round(cellW * 0.54), cellH);
+  ctx.clip();
 
   if (angleDeg === 90) {
     // Narrow pure lateral side-profile silhouette facing screen-right (`->`), 55% of front shoulder width
@@ -3155,7 +3942,7 @@ function drawGuideSilhouetteMannequin(
     ctx.fill();
 
     // Upright neck
-    const neckW = headH * 0.36 * bmiScale;
+    const neckW = headH * 0.36 * bmiScale * widthCompact;
     ctx.fillRect(
       Math.round(headCx - neckW * 0.52),
       Math.round(neckTopY),
@@ -3198,7 +3985,7 @@ function drawGuideSilhouetteMannequin(
 
     // Clear rightward shoe-toe profile (`->`) resting flat on footSoleY
     const heelX = cx - ankleW * 0.58;
-    const toeX = cx + headH * 0.62;
+    const toeX = cx + headH * 0.62 * widthCompact;
     ctx.beginPath();
     ctx.moveTo(heelX, ankleY - 2);
     ctx.lineTo(cx + ankleW * 0.5, ankleY - 2);
@@ -3207,6 +3994,7 @@ function drawGuideSilhouetteMannequin(
     ctx.lineTo(heelX, footSoleY);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
     return;
   }
 
@@ -3243,7 +4031,7 @@ function drawGuideSilhouetteMannequin(
   }
 
   // Neck
-  const neckW = headH * 0.38 * bmiScale;
+  const neckW = headH * 0.38 * bmiScale * widthCompact;
   ctx.fillRect(
     Math.round(cx - neckW * 0.5),
     Math.round(neckTopY),
@@ -3263,11 +4051,11 @@ function drawGuideSilhouetteMannequin(
   ctx.fill();
 
   // Left & right arms with clean air gap beside waist
-  const armW = headH * 0.28 * bmiScale;
+  const armW = headH * 0.28 * bmiScale * widthCompact;
   const wristY = crotchY + headH * 0.25;
   for (const side of [-1, 1] as const) {
     const shX = cx + side * (shoulderW * 0.5 - armW * 0.25);
-    const wrX = cx + side * (shoulderW * 0.5 + headH * 0.14);
+    const wrX = cx + side * (shoulderW * 0.5 + headH * 0.14 * widthCompact);
     ctx.beginPath();
     ctx.moveTo(shX - armW * 0.5, shoulderY + 2);
     ctx.lineTo(shX + armW * 0.5, shoulderY + 2);
@@ -3293,8 +4081,8 @@ function drawGuideSilhouetteMannequin(
 
     const toeShift =
       facingDir !== 0 && side === facingDir
-        ? facingDir * headH * 0.26
-        : facingDir * headH * 0.1;
+        ? facingDir * headH * 0.26 * widthCompact
+        : facingDir * headH * 0.1 * widthCompact;
     ctx.beginPath();
     ctx.moveTo(legCx - ankleW * 0.55, ankleY - 2);
     ctx.lineTo(legCx + ankleW * 0.55, ankleY - 2);
@@ -3303,13 +4091,16 @@ function drawGuideSilhouetteMannequin(
     ctx.closePath();
     ctx.fill();
   }
+
+  ctx.restore();
 }
 
 /**
  * Builds a `1344x896` (`3:2` landscape) spatial turnaround template filled with `backdropHex`
- * and 6 subtle `±11 RGB` silhouette mannequins (`[0°, 45°, 90°]` on Row 1 and `[135°, 180°, 225°]`
- * on Row 2) with ZERO grid divider lines, shared head-top `11%` & foot-sole `91%` baselines,
- * `7.5-head` adult proportions, BMI-scaled widths, and a narrow `55%`-width right side profile at `90°`.
+ * and 6 subtle `±15 RGB` silhouette mannequins (`[0°, 45°, 90°]` on Row 1 and `[135°, 180°, 225°]`
+ * on Row 2) compactly centered within the middle `54%` of each `448px` cell (leaving `>= 23%`
+ * empty solid backdrop gutters on both sides of every cell boundary), ZERO grid divider lines,
+ * shared head-top `11%` & foot-sole `91%` baselines, and `7.5-head` adult proportions.
  */
 export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   backdropHex: string;
@@ -3323,7 +4114,7 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   const safeW = clamp(Number(params.weightKg) || 64, 35, 160);
   const bmi = safeW / (safeH / 100) ** 2;
   const bmiScale = clamp(1 + (bmi - 22.0) * 0.022, 0.86, 1.24);
-  const memoKey = `${bgR},${bgG},${bgB}:${Math.round(bmiScale * 100)}`;
+  const memoKey = `v9:${bgR},${bgG},${bgB}:${Math.round(bmiScale * 100)}`;
   const cached = turnaround3x2GuideMemo.get(memoKey);
   if (cached) return cached;
 
@@ -3345,8 +4136,8 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
     ctx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
     ctx.fillRect(0, 0, W, H);
 
-    // Exact ±11 RGB delta from backdropHex so any unpainted guide pixels key out cleanly with zero Sobel barrier
-    const rgbDelta = bgR + bgG + bgB < 180 ? 11 : -11;
+    // ±15 RGB delta from backdropHex: clear solo-cell guidance for Gemini while still cleanly keyed out by chroma matte
+    const rgbDelta = bgR + bgG + bgB < 180 ? 15 : -15;
     const silR = clamp(bgR + rgbDelta, 0, 255);
     const silG = clamp(bgG + rgbDelta, 0, 255);
     const silB = clamp(bgB + rgbDelta, 0, 255);
@@ -3365,6 +4156,9 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
         const cx = Math.round(col * cellW + cellW * 0.5);
         drawGuideSilhouetteMannequin(ctx, {
           cx,
+          rowTop,
+          cellW,
+          cellH,
           headTopY,
           footSoleY,
           bmiScale,
@@ -3391,7 +4185,7 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   }
 }
 
-export const CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY = 'ainventory_char_identity_anchor_v8';
+export const CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY = 'ainventory_char_identity_anchor_v9';
 const CHARACTER_ANCHOR_MAX_BYTES = 180 * 1024;
 const characterIdentityAnchorMemory = new Map<string, string>();
 
@@ -3419,7 +4213,7 @@ export function computeCharacterIdentityAnchorKey(
   const hairHex = String(app.hairColorHex || '#2B211B')
     .trim()
     .toUpperCase();
-  return `v8:${gender}:${profile.heightCm}:${profile.weightKg}:${profile.bodyShape}:${skinHex}:${hairStyle}:${hairHex}`;
+  return `v9:${gender}:${profile.heightCm}:${profile.weightKg}:${profile.bodyShape}:${skinHex}:${hairStyle}:${hairHex}`;
 }
 
 export function getStoredCharacterIdentityAnchor(anchorKey: string): string | null {
@@ -3563,7 +4357,24 @@ async function saveCharacterIdentityAnchorFromZeroSlice(params: {
   });
 }
 
-function buildDirectClientGeminiParts(params: {
+function extractStudioKeyColorInputs(
+  serializedSlots: Record<string, Record<string, unknown>>
+): StudioKeyColorInput[] {
+  return Object.entries(serializedSlots).map(([slot, it]) => ({
+    slot,
+    category:
+      typeof it.subcategory === 'string'
+        ? it.subcategory
+        : typeof it.category === 'string'
+          ? it.category
+          : slot,
+    colorHex: typeof it.color_hex === 'string' ? it.color_hex : null,
+    colorName: typeof it.color_name === 'string' ? it.color_name : null,
+    name: typeof it.name === 'string' ? it.name : null,
+  }));
+}
+
+export function buildDirectClientGeminiParts(params: {
   profile: NormalizedVtonProfile;
   styleMode: VtonStyleMode;
   weatherMood: WeatherMoodKey;
@@ -3587,16 +4398,14 @@ function buildDirectClientGeminiParts(params: {
   const isStylized = styleMode === 'stylized_isometric';
   const hasUmbrella = Boolean(serializedSlots.acc_umbrella || serializedSlots.umbrella);
 
-  const equippedColorHexes = Object.values(serializedSlots).map((it) =>
-    typeof it.color_hex === 'string' ? it.color_hex : null
-  );
-  const optimalBackdropHex = selectOptimalStudioKeyHex(equippedColorHexes);
+  const equippedColorInputs = extractStudioKeyColorInputs(serializedSlots);
+  const optimalBackdropHex = selectOptimalStudioKeyHex(equippedColorInputs);
 
   const weatherBundle = buildWeatherPosePromptDirectives({
     weather: weather ?? { mood: weatherMood },
     hasEquippedUmbrella: hasUmbrella,
     turnaroundSheet,
-    equippedColorHexes,
+    equippedColorHexes: equippedColorInputs,
   });
 
   const header = isStylized
@@ -3604,8 +4413,8 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `3:2 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 invisible zones (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any zone, and NEVER draw vertical or horizontal panel separator lines).`
-    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
+    ? `3:2 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} ${SOLO_SINGLE_PERSON_PER_CELL_LOCK} ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`
+    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models). ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
   const canonicalCharacterBlock = buildCanonicalCharacterIdentityPromptBlock({
@@ -3638,7 +4447,7 @@ function buildDirectClientGeminiParts(params: {
     const layoutGuidePart = parseDataUrlInlinePart(layoutGuideDataUrl);
     if (layoutGuidePart) {
       parts.push({
-        text: `[SPATIAL 3x2 TURNAROUND CANVAS TEMPLATE — ZERO GRID LINES]: Paint the 6 full-body views of the EXACT SAME character directly over the 6 faint mannequin pose guides on this 3:2 solid ${optimalBackdropHex} canvas: Row 1 = [0° Front, 45° Front-Right, 90° Pure Orthographic Right Side Profile (NARROW SIDE VIEW, ONE EYE, ZERO BACK)] and Row 2 = [135° Back-Right Rear-Quarter, 180° Pure Back, 225° Back-Left Rear-Quarter]. Paint completely over the faint guides; keep identical head-top and foot-sole baselines across all 6 figures and NEVER draw divider lines.`,
+        text: `[SPATIAL 3x2 TURNAROUND CANVAS TEMPLATE — ZERO GRID LINES & >= 23% WIDE CELL GUTTERS]: Paint the 6 full-body views of the EXACT SAME character directly over the 6 compact faint mannequin pose guides on this 3:2 solid ${optimalBackdropHex} canvas: Row 1 = [0° Front, 45° Front-Right, 90° Pure Orthographic Right Side Profile (NARROW SIDE VIEW, ONE EYE, ZERO BACK)] and Row 2 = [135° Back-Right Rear-Quarter, 180° Pure Back, 225° Back-Left Rear-Quarter]. Paint completely over the faint guides; keep identical head-top and foot-sole baselines across all 6 figures, preserve wide empty ${optimalBackdropHex} gutters between cells, and NEVER draw divider lines. ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
       });
       parts.push({ inlineData: layoutGuidePart });
     }
@@ -3663,6 +4472,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   const slotPlacementPrompts: Record<string, string> = {
+    shoes: `worn cleanly on BOTH feet with full soles grounded on the floor. ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
     accessory: 'carried naturally on shoulder or in hand as main bag/tote/briefcase',
     acc_umbrella:
       weatherBundle.effectiveWeather === 'rain'
@@ -3704,7 +4514,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per zone. Return image only.`,
+    text: `Wear ALL equipped garments, footwear, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. ${turnaroundSheet ? SOLO_SINGLE_PERSON_PER_CELL_LOCK : 'Strictly ONE solitary person in frame.'} ${FOOTWEAR_PAIR_SYMMETRY_LOCK} Return image only.`,
   });
 
   return parts;
@@ -4371,10 +5181,9 @@ export async function synthesizeGeminiMultiAngleVton(
         angleSlices[0] &&
         (synthesisSource === 'browser-gemini' || synthesisSource === 'gemini')
       ) {
-        const equippedHexes = Object.values(serializedSlots).map((it) =>
-          typeof it.color_hex === 'string' ? it.color_hex : null
+        const anchorBackdropHex = selectOptimalStudioKeyHex(
+          extractStudioKeyColorInputs(serializedSlots)
         );
-        const anchorBackdropHex = selectOptimalStudioKeyHex(equippedHexes);
         await saveCharacterIdentityAnchorFromZeroSlice({
           anchorKey: characterAnchorKey,
           zeroSliceDataUrl: angleSlices[0],

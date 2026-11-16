@@ -3,8 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import db, { DATA_DIR, ROOT_DIR, UPLOADS_DIR } from './db.js';
 import {
+  FOOTWEAR_PAIR_SYMMETRY_LOCK,
+  SOLO_SINGLE_PERSON_PER_CELL_LOCK,
   buildCanonicalCharacterIdentityPromptBlock,
   normalizeCanonicalAvatarGender,
+  selectOptimalStudioKeyHex,
 } from '../src/services/weatherPromptBuilder.ts';
 
 export const VTON_MODE = '2d-vton';
@@ -83,6 +86,7 @@ const PROMPT_SLOT_ORDER = Object.freeze([
 ]);
 
 const ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES = Object.freeze({
+  shoes: `worn cleanly on BOTH feet with full soles visible on the floor. ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
   accessory: 'carried naturally in hand or slung cleanly over the shoulder',
   acc_umbrella:
     'WIDE-OPEN full-canopy umbrella held high above the model’s head with one hand and tilted ~15° backward so the entire face, hairstyle, and full-body outfit remain 100% unobstructed and brightly lit (NEVER hold a closed, folded, or rolled-up umbrella; keep >=14% headroom clearance above the open canopy top)',
@@ -241,7 +245,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v8-consistent-avatar-3x2-cyclorama';
+const CACHE_SCHEMA_VERSION = 'v9-solo-avatar-symmetric-shoes';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1388,12 +1392,23 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
       };
     });
 
+  const studioKeyHex = selectOptimalStudioKeyHex(
+    sortedSlotSignatures.map((sig) => ({
+      slot: sig.slot,
+      category: sig.category,
+      colorHex: sig.colorHex,
+      colorName: sig.colorName,
+      name: sig.name,
+    }))
+  );
+
   const comboHash = sha256Hex(
     JSON.stringify({
       v: CACHE_SCHEMA_VERSION,
       styleMode,
       weatherKey,
       layoutKey,
+      studioKeyHex,
       baseHash,
       slots: sortedSlotSignatures,
     })
@@ -1605,7 +1620,7 @@ const FACIAL_HAIR_DESCRIPTIONS = Object.freeze({
   full_beard: 'full, dense, well-shaped natural beard with dimensional volume',
 });
 
-function describeIsoCameraAngle(viewAngleDeg) {
+function describeIsoCameraAngle(viewAngleDeg, backdropHex = CUTOUT_STAGE_HEX) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
@@ -1619,9 +1634,9 @@ function describeIsoCameraAngle(viewAngleDeg) {
     case -90:
       return "Strict -90-degree PURE ORTHOGRAPHIC LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S LEFT (SCREEN-LEFT <-). Camera perpendicular (-90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE left eye, side nose bridge/tip protruding left, single left sleeve centered down torso dividing front chest edge on left from upper back on right, and both shoes in pure horizontal side profile pointing left with 10% bottom margin (NEVER show broad back of coat or center-back vent; NEVER rotate past -90° into a rear view).";
     case 135:
-      return "Diagonal 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW turned away toward BACK-RIGHT (VIEWER'S RIGHT / SCREEN-RIGHT -> — midway between 90° right profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-RIGHT, (2) rear back of outfit rotated 45 degrees diagonally with RIGHT SHOULDER and full outer RIGHT SLEEVE prominent in foreground, and (3) staggered shoes with RIGHT SHOE outer side & toe pointing away toward SCREEN-RIGHT on a flat #94A3B8 backdrop.";
+      return `Diagonal 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW turned away toward BACK-RIGHT (VIEWER'S RIGHT / SCREEN-RIGHT -> — midway between 90° right profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-RIGHT, (2) rear back of outfit rotated 45 degrees diagonally with RIGHT SHOULDER and full outer RIGHT SLEEVE prominent in foreground, and (3) staggered shoes with RIGHT SHOE outer side & toe pointing away toward SCREEN-RIGHT on a flat ${backdropHex} backdrop.`;
     case -135:
-      return "Diagonal 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW turned away toward BACK-LEFT (VIEWER'S LEFT / SCREEN-LEFT <- — midway between -90° left profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-LEFT, (2) rear back of outfit rotated 45 degrees diagonally with LEFT SHOULDER and full outer LEFT SLEEVE prominent in foreground (preserving exact anatomical left/right bag and watch placement), and (3) staggered shoes with LEFT SHOE outer side & toe pointing away toward SCREEN-LEFT on a flat #94A3B8 backdrop.";
+      return `Diagonal 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW turned away toward BACK-LEFT (VIEWER'S LEFT / SCREEN-LEFT <- — midway between -90° left profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-LEFT, (2) rear back of outfit rotated 45 degrees diagonally with LEFT SHOULDER and full outer LEFT SLEEVE prominent in foreground (preserving exact anatomical left/right bag and watch placement), and (3) staggered shoes with LEFT SHOE outer side & toe pointing away toward SCREEN-LEFT on a flat ${backdropHex} backdrop.`;
     case 180:
       return 'Strict symmetrical 180-degree PURE STRAIGHT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with perpendicular shoulders and back 100% turned directly toward camera (center-back seam vertical down spine) showing ONLY symmetrical back of hair, level back shoulders, rear garment tailoring, and straight rear heels of both shoes with 8–10% bottom margin (ZERO side cheek/jawline contour, ZERO shoe toe side-profile, ZERO front face).';
     default:
@@ -1629,7 +1644,7 @@ function describeIsoCameraAngle(viewAngleDeg) {
   }
 }
 
-function describeMstLightingDirective(profile) {
+function describeMstLightingDirective(profile, backdropHex = CUTOUT_STAGE_HEX) {
   const mst = profile.mstLevel ?? 5;
   const undertone = profile.mstUndertone || 'neutral';
   if (mst >= 8) {
@@ -1647,7 +1662,7 @@ function describeMstLightingDirective(profile) {
   }
   return [
     `Monk Skin Tone MST-${mst} (${undertone} undertone), exact base hex ${profile.skinToneHex} — FAIR-LUMINANCE EDGE LOCK:`,
-    `Preserve delicate fair/light complexion (${profile.skinToneHex}) with subtle natural undertone warmth/coolness while keeping crisp contour separation against the flat ${CUTOUT_STAGE_HEX} studio backdrop.`,
+    `Preserve delicate fair/light complexion (${profile.skinToneHex}) with subtle natural undertone warmth/coolness while keeping crisp contour separation against the flat ${backdropHex} studio backdrop.`,
   ].join(' ');
 }
 
@@ -1696,7 +1711,11 @@ function isResolvedSwimwearItem(item) {
   return /수영복|비키니|래시가드|스윔|swim|bikini|rashguard/i.test(name);
 }
 
-function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) {
+function buildEditorialStyleAndBodyPrompt(
+  profile,
+  hasEquippedUmbrella = false,
+  backdropHex = CUTOUT_STAGE_HEX
+) {
   const pcDesc =
     PERSONAL_COLOR_DESCRIPTIONS[profile.personalColor] ||
     PERSONAL_COLOR_DESCRIPTIONS.autumn_warm;
@@ -1713,8 +1732,8 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
         ? 'compact grounded vertical stature'
         : 'natural medium adult stature';
 
-  const cameraLock = describeIsoCameraAngle(profile.viewAngleDeg);
-  const mstLightingLock = describeMstLightingDirective(profile);
+  const cameraLock = describeIsoCameraAngle(profile.viewAngleDeg, backdropHex);
+  const mstLightingLock = describeMstLightingDirective(profile, backdropHex);
   const softTissueLock = describeCoupledSoftTissueDirective(profile);
   const isStylizedIso = profile.styleMode === 'stylized_isometric';
   const resolvedMood =
@@ -1723,7 +1742,11 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
       ? WEATHER_POSE_DIRECTIVES.rain
       : profile.weatherMood || WEATHER_POSE_DIRECTIVES.clear;
   const weatherDesc = resolvedMood.description;
-  const weatherPoseBlock = resolvedMood.poseBlock || WEATHER_POSE_DIRECTIVES.clear.poseBlock;
+  const rawWeatherPoseBlock = resolvedMood.poseBlock || WEATHER_POSE_DIRECTIVES.clear.poseBlock;
+  const weatherPoseBlock =
+    backdropHex !== CUTOUT_STAGE_HEX
+      ? rawWeatherPoseBlock.replaceAll(CUTOUT_STAGE_HEX, backdropHex)
+      : rawWeatherPoseBlock;
 
   const canonicalCharacterBlock = buildCanonicalCharacterIdentityPromptBlock({
     heightCm: profile.heightCm,
@@ -1754,8 +1777,10 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
   const cameraBlock = profile.turnaroundSheet
     ? [
         'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (3:2 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
-        `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
+        `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free studio (${backdropHex}) backdrop, including 100% flat shadowless ${backdropHex} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
         '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~80–82% of row height (head-top ~11%, foot-sole ~91%), shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
+        `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
+        `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
         '- TOP ROW = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
         '  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.',
@@ -1772,8 +1797,9 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
         '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles (~80–84% frame height).',
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
+        `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
         "- For 90° lateral side views, face cleanly toward VIEWER'S RIGHT (screen-right) with authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.",
-        `- CRITICAL RGBA CUTOUT & ENCLOSED-HOLE BACKDROP RULE: Render the ENTIRE background behind, beneath, AND inside every enclosed negative-space gap of the model (underneath the open umbrella canopy around the shaft/head/shoulders, between bent arms and waist, between legs/ankles, and inside bag handles/straps) as a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
+        `- CRITICAL RGBA CUTOUT & ENCLOSED-HOLE BACKDROP RULE: Render the ENTIRE background behind, beneath, AND inside every enclosed negative-space gap of the model (underneath the open umbrella canopy around the shaft/head/shoulders, between bent arms and waist, between legs/ankles, and inside bag handles/straps) as a 100% flat solid uniform chromakey-free studio (${backdropHex}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
       ];
 
   return [
@@ -1784,7 +1810,7 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
     ...cameraBlock,
     '',
     `WEATHER-ADAPTIVE POSE, GARMENT PHYSICAL TRACES & LIGHTING (${resolvedMood.effectiveWeather.toUpperCase()}):`,
-    `- Lighting: ${weatherDesc} while keeping the ${CUTOUT_STAGE_HEX} background 100% flat and shadow-free ( high ΔE contrast from both pure white snow/sneakers #FFFFFF and black coats #111111 ).`,
+    `- Lighting: ${weatherDesc} while keeping the ${backdropHex} background 100% flat and shadow-free ( high ΔE contrast from both pure white snow/sneakers #FFFFFF and black coats #111111 ).`,
     weatherPoseBlock,
     '',
     'INCLUSIVE CASTING, PROPORTION & COMPLEXION LOCK (ZERO MODEL BIAS):',
@@ -1865,6 +1891,7 @@ function buildBaseModelParts(profile) {
     text: [
       '[STUDIO BASE MODEL ATTIRE]:',
       `- Dress the figure (${viewLabel}) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
+      `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
       '- Keep the silhouette clean and unobstructed so authentic body proportions and MST complexion are unmistakably legible.',
       '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
     ].join('\n'),
@@ -1878,9 +1905,23 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     return buildBaseModelParts(profile);
   }
 
+  const equippedColorInputs = equippedKeys.map((slot) => {
+    const item = resolvedSlots[slot];
+    return {
+      slot,
+      category: item?.category ?? null,
+      colorHex: item?.colorHex ?? null,
+      colorName: item?.colorName ?? null,
+      name: item?.name ?? null,
+    };
+  });
+  const backdropHex = selectOptimalStudioKeyHex(equippedColorInputs);
+
   const hasEquippedUmbrella = Boolean(resolvedSlots.acc_umbrella);
   const effectiveWeather = profile.weatherMood?.effectiveWeather || 'clear';
-  const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella) }];
+  const parts = [
+    { text: buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella, backdropHex) },
+  ];
   appendPortraitParts(parts, profile);
 
   const onepieceItem = resolvedSlots.onepiece || resolvedSlots.dress || null;
@@ -1903,6 +1944,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const layeringRules = [
     `[OUTFIT LAYERING, MULTI-PART ACCESSORIES/JEWELRY & REAL PHOTO FIDELITY — ${viewScopeText}]:`,
     '- Dress the model in ALL of the equipped garments, body-part accessories, and fine jewelry items attached below simultaneously, reproducing each attached photograph\'s exact cut, material sheen (leather, fabric, wool, cashmere, 18K yellow gold, 925 sterling silver, bronze/copper, pearl/platinum), construction details, and exact hex color.',
+    `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
     effectiveWeather === 'rain' && !hasEquippedUmbrella
       ? '- Render ONLY the equipped garments listed below plus a clean neutral minimal WIDE-OPEN overhead rain umbrella held high above the head tilted ~15° backward so face and outfit remain 100% visible (NEVER closed/folded).'
       : '- Render ONLY the equipped items listed below — NEVER hallucinate unequipped coats, hats, or residual items.',

@@ -17,7 +17,7 @@
   letter-spacing: -0.02em;
 }
 
-.hig-outfits-screen .weather-recommend-panel {
+.hig-outfits-screen .weather-recommend-panel:not(.ui-sheet-box) {
   padding: 8px 12px;
   margin-bottom: 12px;
   gap: 6px;
@@ -313,7 +313,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--atelier-packshot-focus-ring, #d8c3a5);
+  background: #ffffff;
 }
 
 .atelier-drawer-focused-title {
@@ -539,11 +539,11 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--atelier-packshot-focus-ring, #d8c3a5);
+  background: #f5f5f7;
 }
 
 .atelier-category-rail-btn.is-active .atelier-rail-equipped-dot {
-  background: #141413;
+  background: #1c1c1e;
 }
 
 .atelier-rail-count-badge {
@@ -554,8 +554,8 @@
   height: 14px;
   padding: 0 3px;
   border-radius: 999px;
-  background: var(--atelier-packshot-focus-ring, #d8c3a5);
-  color: #141413;
+  background: #f5f5f7;
+  color: #1c1c1e;
   font-size: 0.56rem;
   font-weight: 780;
   display: inline-flex;
@@ -564,11 +564,11 @@
 }
 
 .atelier-category-rail-btn.is-active .atelier-rail-count-badge {
-  background: #141413;
+  background: #1c1c1e;
   color: #ffffff;
 }
 
-/* Right Scrollable 2-Column #F7F7F5 Packshot Card Area */
+/* Right Scrollable 2-Column #F5F5F7 / #FFFFFF Packshot Card Area + Pinned Top Comparison Dock */
 .atelier-drawer-grid-col {
   display: flex;
   flex-direction: column;
@@ -578,8 +578,16 @@
   gap: 8px;
 }
 
+.atelier-pinned-equipped-dock {
+  flex: 0 0 auto;
+  padding: 2px 3px 2px;
+  z-index: 4;
+}
+
 .atelier-drawer-grid-scroll {
-  max-height: 396px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 368px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 3px 3px 6px;
@@ -590,7 +598,7 @@
 #outfit-mobile-wardrobe-sheet .atelier-drawer-grid-scroll {
   flex: 1 1 auto;
   max-height: none;
-  min-height: 180px;
+  min-height: 150px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -604,7 +612,7 @@
   gap: 10px !important;
 }
 
-/* Crisp #F7F7F5 Rounded-Square Packshot Cards + Point Border + Smoked-Glass Tooltip */
+/* Crisp Apple HIG Monochrome Rounded-Square Packshot Cards */
 #studio-slot-picker .studio-mini-garment-card.atelier-packshot-card,
 #outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card {
   position: relative;
@@ -612,16 +620,19 @@
   padding: 0;
   gap: 0;
   border-radius: 14px;
-  background-color: var(--atelier-packshot-card-bg, #f7f7f5) !important;
-  border: 1.5px solid var(--atelier-packshot-border, rgba(20, 20, 19, 0.08));
+  background-color: #f5f5f7 !important;
+  border: 1.5px solid rgba(28, 28, 30, 0.1);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   outline: none;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
-    background-color 0.18s ease;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #studio-slot-picker .studio-mini-garment-card.atelier-packshot-card .studio-mini-squircle,
@@ -638,15 +649,245 @@
 
 #studio-slot-picker .studio-mini-garment-card.atelier-packshot-card:hover,
 #studio-slot-picker .studio-mini-garment-card.atelier-packshot-card:focus-visible,
-#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card.is-equipped,
 #outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card:hover,
-#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card:focus-visible,
-#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card.is-equipped {
-  background-color: var(--atelier-packshot-card-active, #ffffff) !important;
-  border: 1.5px solid var(--atelier-packshot-focus-ring, #d8c3a5) !important;
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card:focus-visible {
+  background-color: #ffffff !important;
+  border: 1.5px solid #1c1c1e !important;
   box-shadow:
-    0 0 0 1.5px var(--atelier-packshot-focus-outer, #ffffff),
-    0 8px 20px rgba(0, 0, 0, 0.32) !important;
+    0 0 0 1.5px #ffffff,
+    0 8px 20px rgba(0, 0, 0, 0.28) !important;
+}
+
+/* Fast-Unfolding Inventory Spec Card (Pinned Top Card & Equipped/Selected Grid Cards) */
+@keyframes atelierSpecCardUnfold {
+  from {
+    opacity: 0.88;
+    transform: translateY(-3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.atelier-inventory-spec-card.is-pinned,
+#studio-slot-picker .studio-mini-garment-card.atelier-unfolded-spec-card,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-unfolded-spec-card {
+  grid-column: 1 / -1 !important;
+  aspect-ratio: auto !important;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 11px !important;
+  border-radius: 16px !important;
+  background-color: #ffffff !important;
+  border: 1.5px solid #1c1c1e !important;
+  color: #1c1c1e !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.92),
+    0 8px 20px rgba(0, 0, 0, 0.26) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  overflow: visible !important;
+  text-align: left !important;
+  animation: atelierSpecCardUnfold 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#studio-slot-picker .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped),
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped) {
+  background-color: #f5f5f7 !important;
+  border-color: rgba(28, 28, 30, 0.34) !important;
+}
+
+.atelier-spec-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.atelier-spec-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 740;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.atelier-spec-status-pill.is-equipped {
+  background: #1c1c1e;
+  color: #ffffff;
+}
+
+.atelier-spec-status-pill.is-selected {
+  background: #ffffff;
+  color: #1c1c1e;
+  border: 1px solid rgba(28, 28, 30, 0.2);
+}
+
+.atelier-spec-unequip-btn {
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.14);
+  color: #1c1c1e;
+  font-family: var(--atelier-font-sans);
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.atelier-spec-unequip-btn:hover {
+  background: #1c1c1e;
+  color: #ffffff;
+  border-color: #1c1c1e;
+}
+
+.atelier-spec-opposite-chip {
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.12);
+  color: #1c1c1e;
+  font-size: 0.62rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+}
+
+.atelier-spec-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.atelier-spec-info-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+}
+
+.atelier-inventory-spec-card .atelier-spec-item-name,
+#studio-slot-picker .atelier-unfolded-spec-card .hig-garment-name.atelier-spec-item-name,
+#outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card .hig-garment-name.atelier-spec-item-name {
+  position: static !important;
+  inset: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #1c1c1e !important;
+  font-size: 0.81rem !important;
+  font-weight: 740 !important;
+  line-height: 1.3 !important;
+  min-height: 0 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: keep-all !important;
+  overflow-wrap: anywhere !important;
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+
+.atelier-spec-brand-line {
+  font-size: 0.69rem;
+  font-weight: 620;
+  line-height: 1.28;
+  color: #6e6e73;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.atelier-spec-meta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.atelier-spec-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.09);
+  color: #1c1c1e;
+  font-size: 0.64rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#studio-slot-picker .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-meta-pill,
+#outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-meta-pill {
+  background: #ffffff;
+}
+
+.atelier-spec-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(28, 28, 30, 0.22);
+  flex-shrink: 0;
+  forced-color-adjust: none;
+}
+
+.atelier-spec-thumb-squircle {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 14px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+#studio-slot-picker .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-thumb-squircle,
+#outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-thumb-squircle {
+  background: #ffffff;
 }
 
 #studio-slot-picker .atelier-packshot-card .studio-equipped-badge,
@@ -655,7 +896,7 @@
   right: 6px;
   width: 20px;
   height: 20px;
-  background: #141413;
+  background: #1c1c1e;
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
@@ -670,11 +911,11 @@
   z-index: 6;
   padding: 4px 7px;
   border-radius: 8px;
-  background: var(--atelier-tooltip-bg, rgba(20, 20, 19, 0.92));
-  border: 1px solid var(--atelier-tooltip-border, rgba(255, 255, 255, 0.16));
+  background: rgba(28, 28, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  color: #f7f7f5 !important;
+  color: #f5f5f7 !important;
   font-size: 0.66rem !important;
   font-weight: 640 !important;
   line-height: 1.28 !important;
@@ -693,10 +934,8 @@
 
 #studio-slot-picker .atelier-packshot-card:hover .hig-garment-name.atelier-packshot-tooltip,
 #studio-slot-picker .atelier-packshot-card:focus-visible .hig-garment-name.atelier-packshot-tooltip,
-#studio-slot-picker .atelier-packshot-card.is-equipped .hig-garment-name.atelier-packshot-tooltip,
 #outfit-mobile-wardrobe-sheet .atelier-packshot-card:hover .hig-garment-name.atelier-packshot-tooltip,
-#outfit-mobile-wardrobe-sheet .atelier-packshot-card:focus-visible .hig-garment-name.atelier-packshot-tooltip,
-#outfit-mobile-wardrobe-sheet .atelier-packshot-card.is-equipped .hig-garment-name.atelier-packshot-tooltip {
+#outfit-mobile-wardrobe-sheet .atelier-packshot-card:focus-visible .hig-garment-name.atelier-packshot-tooltip {
   opacity: 1;
   transform: translateY(0);
 }
@@ -711,8 +950,8 @@
   max-width: calc(100% - 34px);
   padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(20, 20, 19, 0.72);
-  color: #f7f7f5 !important;
+  background: rgba(28, 28, 30, 0.76);
+  color: #f5f5f7 !important;
   font-size: 0.56rem !important;
   font-weight: 640;
   line-height: 1.2;
@@ -755,14 +994,14 @@
 #studio-slot-picker .studio-subtree-pill.active,
 #outfit-mobile-wardrobe-sheet .studio-subtree-pill.active {
   background: #ffffff !important;
-  color: #141413 !important;
+  color: #1c1c1e !important;
   border-color: #ffffff !important;
   box-shadow: none !important;
 }
 
 #studio-slot-picker .studio-subtree-pill.is-equipped:not(.active),
 #outfit-mobile-wardrobe-sheet .studio-subtree-pill.is-equipped:not(.active) {
-  border-color: var(--atelier-packshot-focus-ring);
+  border-color: rgba(255, 255, 255, 0.56);
   color: #ffffff;
 }
 
@@ -875,3 +1114,287 @@
 #studio-slot-picker .studio-saved-look-del:hover {
   color: #ffffff;
 }
+
+/* ==========================================================================
+   9. Compact Weather · Open-Meteo Attribution · Dropdowns (#weather-recommend-panel)
+   Apple HIG Monochrome (html[data-theme='light'] & html[data-theme='dark'])
+   ========================================================================== */
+#weather-recommend-panel.ui-sheet-box {
+  max-height: min(86dvh, calc(100dvh - 32px));
+  background: #ffffff;
+  color: #1c1c1e;
+  border: 1px solid rgba(28, 28, 30, 0.1);
+}
+
+html[data-theme='dark'] #weather-recommend-panel.ui-sheet-box {
+  background: #1c1c1e;
+  color: #f5f5f7;
+  border-color: rgba(245, 245, 247, 0.14);
+}
+
+#weather-recommend-panel .modal-header {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+#weather-recommend-panel .ui-sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#weather-recommend-panel .weather-popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 4px;
+}
+
+#weather-recommend-panel .weather-popup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#weather-recommend-panel .weather-popup-section + .weather-popup-section {
+  padding-top: 10px;
+  border-top: 1px solid rgba(28, 28, 30, 0.08);
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-section + .weather-popup-section {
+  border-top-color: rgba(245, 245, 247, 0.12);
+}
+
+#weather-recommend-panel .weather-popup-summary-card {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-summary-card {
+  background: #2c2c2e;
+  border-color: rgba(245, 245, 247, 0.12);
+}
+
+#weather-recommend-panel .weather-popup-tip {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.4;
+  color: #1c1c1e;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-tip {
+  color: #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-source-caption {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid rgba(28, 28, 30, 0.06);
+  font-size: 0.68rem;
+  font-weight: 560;
+  line-height: 1.35;
+  color: #6e6e73;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-source-caption {
+  border-top-color: rgba(245, 245, 247, 0.1);
+  color: #aeaeb2;
+}
+
+/* 1-Row Weather Selector: [예보 / Live] Button + Compact Simulation Dropdown */
+#weather-recommend-panel .weather-popup-scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+#weather-recommend-panel .weather-popup-live-btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 15px;
+  border-radius: 12px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.12);
+  color: #1c1c1e;
+  font-family: var(--atelier-font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-live-btn {
+  background: #2c2c2e;
+  border-color: rgba(245, 245, 247, 0.14);
+  color: #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-live-btn.is-active {
+  background: #1c1c1e;
+  border-color: #1c1c1e;
+  color: #ffffff;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-live-btn.is-active {
+  background: #f5f5f7;
+  border-color: #f5f5f7;
+  color: #1c1c1e;
+}
+
+#weather-recommend-panel .weather-popup-scenario-select,
+#weather-recommend-panel .weather-popup-city-select,
+#weather-recommend-panel .weather-popup-look-select {
+  min-width: 0;
+  border-radius: 12px;
+  background-color: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.12);
+  color: #1c1c1e;
+  font-family: var(--atelier-font-sans);
+  font-weight: 640;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-scenario-select,
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-city-select,
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-select {
+  background-color: #2c2c2e;
+  border-color: rgba(245, 245, 247, 0.14);
+  color: #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-scenario-select:focus-visible,
+#weather-recommend-panel .weather-popup-city-select:focus-visible,
+#weather-recommend-panel .weather-popup-look-select:focus-visible {
+  border-color: #1c1c1e;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-scenario-select:focus-visible,
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-city-select:focus-visible,
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-select:focus-visible {
+  border-color: #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-scenario-select {
+  flex: 1 1 auto;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+}
+
+#weather-recommend-panel .weather-popup-city-select,
+#weather-recommend-panel .weather-popup-gps-btn {
+  min-height: 40px;
+  height: 40px;
+}
+
+/* Compact 1-Row Look 1 & Look 2 Style Dropdowns */
+#weather-recommend-panel .weather-popup-looks-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#weather-recommend-panel .weather-popup-look-card.weather-popup-look-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #f5f5f7;
+  border: 1px solid rgba(28, 28, 30, 0.1);
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-card.weather-popup-look-row {
+  background: #2c2c2e;
+  border-color: rgba(245, 245, 247, 0.14);
+}
+
+#weather-recommend-panel .weather-popup-look-card.weather-popup-look-row.is-active {
+  border-color: #1c1c1e;
+  box-shadow: inset 0 0 0 1px #1c1c1e;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-card.weather-popup-look-row.is-active {
+  border-color: #f5f5f7;
+  box-shadow: inset 0 0 0 1px #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-look-badge {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #1c1c1e;
+  color: #ffffff;
+  font-size: 0.67rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-badge {
+  background: #f5f5f7;
+  color: #1c1c1e;
+}
+
+#weather-recommend-panel .weather-popup-look-select {
+  flex: 1 1 auto;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background-color: #ffffff;
+  font-size: 0.76rem;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-select {
+  background-color: #1c1c1e;
+}
+
+#weather-recommend-panel .weather-popup-apply-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(28, 28, 30, 0.18);
+  color: #1c1c1e;
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-apply-btn {
+  background: #1c1c1e;
+  border-color: rgba(245, 245, 247, 0.22);
+  color: #f5f5f7;
+}
+
+#weather-recommend-panel .weather-popup-apply-btn.is-applied {
+  background: #1c1c1e;
+  border-color: #1c1c1e;
+  color: #ffffff;
+}
+
+html[data-theme='dark'] #weather-recommend-panel .weather-popup-apply-btn.is-applied {
+  background: #f5f5f7;
+  border-color: #f5f5f7;
+  color: #1c1c1e;
+}
+

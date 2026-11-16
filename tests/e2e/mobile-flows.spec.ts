@@ -326,16 +326,38 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     // 2. Open unified Weather · Location · Look 1/2 popup via capsule and switch Rainy Cool -> Warm Spring
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
+    await weatherPanel.evaluate(async (el) => {
+      await Promise.all(
+        el.getAnimations({ subtree: true }).map((anim) => anim.finished.catch(() => {}))
+      );
+    });
+    const vpSize = page.viewportSize();
+    const panelBox = await weatherPanel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    if (panelBox && vpSize) {
+      expect(panelBox.y).toBeGreaterThanOrEqual(0);
+      expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(vpSize.height + 1);
+    }
     await expect(weatherPanel).toContainText('내일 날씨 코디');
+    await expect(weatherPanel.locator('[data-weather-source-caption="true"]')).toContainText(
+      'Open-Meteo'
+    );
     await expect(weatherPanel.locator('select.weather-city-select')).toBeVisible();
-    await expect(weatherPanel.locator('[data-weather-look-card="1"]')).toContainText(
-      '비즈니스 캐주얼'
+    await expect(weatherPanel.locator('button[data-weather-scenario="live"]')).toBeVisible();
+    const weatherScenarioSelect = weatherPanel.locator(
+      'select[data-weather-scenario-select="true"]'
     );
-    await expect(weatherPanel.locator('[data-weather-look-card="2"]')).toContainText(
-      '편한 캐주얼'
+    await expect(weatherScenarioSelect).toBeVisible();
+    await expect(weatherScenarioSelect.locator('option[data-weather-scenario]')).toHaveCount(8);
+    await expect(weatherPanel.locator('select[data-look-style-select="1"]')).toHaveValue(
+      'business_casual'
     );
+    await expect(weatherPanel.locator('select[data-look-style-select="2"]')).toHaveValue(
+      'comfortable_casual'
+    );
+    await expect(weatherPanel.locator('.weather-popup-look-items')).toHaveCount(0);
 
-    await weatherPanel.locator('[data-weather-scenario="rainy_cool"]').click();
+    await weatherScenarioSelect.selectOption('rainy_cool');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
@@ -343,7 +365,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
-    await weatherPanel.locator('[data-weather-scenario="warm_spring"]').click();
+    await weatherPanel
+      .locator('select[data-weather-scenario-select="true"]')
+      .selectOption('warm_spring');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
@@ -399,19 +423,54 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
     await expect(mannequin).toHaveAttribute('data-height-cm', '178');
 
-    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero Flat-Lay split button, character-only zoom)
+    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero +/- zoom buttons, compact zoom badge)
     await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
-    await expect(studioCanvas.locator('[data-vton-zoom-in="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
 
     await page.getByRole('button', { name: /피팅 새로고침|Refresh/i }).click();
     await studioCanvas.locator('[data-vton-demo-btn="true"]').click();
-    await expect(studioCanvas.locator('[data-ai-vton-img="true"]')).toBeVisible();
-    await studioCanvas.locator('[data-vton-zoom-in="true"]').click();
-    await expect(mannequin).not.toHaveAttribute('data-zoom', '1.00');
-    await studioCanvas.locator('[data-vton-zoom-level="true"]').click();
+    const demoAiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(demoAiImg).toBeVisible();
+    await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
+
+    const zoomBadgeBtn = studioCanvas.locator(
+      '.studio-hud-left-slot [data-vton-zoom-level="true"]'
+    );
+    await expect(zoomBadgeBtn).toBeVisible();
+    await expect(zoomBadgeBtn).toContainText('1.0');
+    const box10 = await demoAiImg.boundingBox();
+    expect(box10).not.toBeNull();
+
+    await zoomBadgeBtn.click();
+    await expect(zoomBadgeBtn).toContainText('1.2');
+    await expect(mannequin).toHaveAttribute('data-zoom', '1.20');
+    await expect
+      .poll(
+        async () => {
+          const box = await demoAiImg.boundingBox();
+          return box ? box.width / box10!.width : 0;
+        },
+        { timeout: 2500 }
+      )
+      .toBeGreaterThanOrEqual(1.15);
+    const box12 = await demoAiImg.boundingBox();
+    expect(box12).not.toBeNull();
+    const stepScaleRatio = box12!.width / box10!.width;
+    expect(stepScaleRatio).toBeGreaterThanOrEqual(1.15);
+    expect(stepScaleRatio).toBeLessThanOrEqual(1.25);
+
+    await zoomBadgeBtn.click();
+    await expect(zoomBadgeBtn).toContainText('1.5');
+    await expect(mannequin).toHaveAttribute('data-zoom', '1.50');
+
+    await zoomBadgeBtn.click();
+    await expect(zoomBadgeBtn).toContainText('1.0');
     await expect(mannequin).toHaveAttribute('data-zoom', '1.00');
 
     // Unequipping Tops leaves an unbroken 2D editorial base model

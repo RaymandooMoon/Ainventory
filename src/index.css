@@ -1834,7 +1834,7 @@ img {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0;
+  padding: max(16px, calc(var(--safe-top) + 8px)) 0 0;
   animation: higScrimFade 0.22s ease both;
 }
 
@@ -1857,14 +1857,15 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   .modal-backdrop,
   .ui-sheet-backdrop {
     align-items: center;
-    padding: 24px;
+    padding: 16px 24px;
   }
 }
 
 .modal-box,
 .ui-sheet-box {
   width: 100%;
-  max-height: min(90dvh, calc(100dvh - var(--safe-top) - 12px));
+  max-height: min(86dvh, calc(100dvh - 32px));
+  margin: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--glass-border);
   border-radius: 30px 30px 0 0;
@@ -1901,8 +1902,13 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   .modal-box,
   .ui-sheet-box {
     border-radius: 30px;
-    padding: 12px 26px 26px;
+    padding: 12px 26px 22px;
   }
+}
+
+.ui-sheet-drag-zone,
+.modal-header {
+  flex-shrink: 0;
 }
 
 .ui-sheet-drag-zone {
@@ -1944,9 +1950,10 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
 }
 
 .ui-sheet-content {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding-right: 2px;
   overscroll-behavior: contain;
 }
@@ -3578,7 +3585,7 @@ html[data-vibrancy-fallback='solid'] .hig-auth-container {
 /* ==========================================================================
    13. TOMORROW WEATHER RECOMMENDATION BAR
    ========================================================================== */
-.weather-recommend-panel {
+.weather-recommend-panel:not(.ui-sheet-box) {
   background: var(--bg-surface);
   border: 1px solid var(--squircle-border);
   box-shadow: var(--elevation-xs);
@@ -4175,7 +4182,7 @@ img,
 .hig-stats-panel,
 .hig-sheet-card,
 .ui-kpi-card,
-.weather-recommend-panel,
+.weather-recommend-panel:not(.ui-sheet-box),
 .studio-desktop-picker-col,
 .hig-minimal-empty,
 .ui-empty-box {

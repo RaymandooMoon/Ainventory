@@ -18,8 +18,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v8-consistent-avatar-3x2-cyclorama';
+export const CUTOUT_PIPELINE_VERSION = 'v9-solo-avatar-symmetric-shoes';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v8-consistent-avatar-3x2-cyclorama',
   'v7-clean-6angle-cyclorama-360',
   'v6-true-3x2-rear-quarter-360',
   'v5-gaze-aligned-fullbody-360',
@@ -28,12 +29,29 @@ export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
 ] as const;
 export const CUTOUT_STAGE_BACKDROP_HEX = '#94A3B8';
 
-const COLLISION_SAFE_STUDIO_KEY_CANDIDATES = [
+export const COLLISION_SAFE_STUDIO_KEY_CANDIDATES = [
   '#94A3B8',
-  '#7E9A86',
-  '#9A8B7E',
-  '#858FA8',
+  '#5E9C7E',
+  '#B38368',
+  '#8E6F9E',
 ] as const;
+
+export interface StudioKeySlotColorDescriptor {
+  slot?: string | null;
+  category?: string | null;
+  colorHex?: string | null;
+  color_hex?: string | null;
+  colorName?: string | null;
+  color_name?: string | null;
+  color?: string | null;
+  name?: string | null;
+}
+
+export type StudioKeyColorInput =
+  | string
+  | StudioKeySlotColorDescriptor
+  | null
+  | undefined;
 
 function parseRgbFromHex(rawHex?: string | null): [number, number, number] | null {
   if (typeof rawHex !== 'string') return null;
@@ -55,37 +73,159 @@ function parseRgbFromHex(rawHex?: string | null): [number, number, number] | nul
   return null;
 }
 
+const NAMED_STUDIO_COLLISION_COLOR_RULES: ReadonlyArray<{
+  pattern: RegExp;
+  rgb: [number, number, number];
+  collidesWithCoolSlate: boolean;
+}> = [
+  {
+    pattern: /블루그레이|슬레이트|blue[\s_-]*gr[ae]y|slate/i,
+    rgb: [148, 163, 184],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /스카이\s*블루|sky\s*blue/i,
+    rgb: [135, 182, 219],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /그레이|회색|애쉬|\bgr[ae]y\b|\bash\b/i,
+    rgb: [156, 163, 175],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /실버|은색|\bsilver\b/i,
+    rgb: [192, 198, 206],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /차콜|\bcharcoal\b/i,
+    rgb: [64, 70, 78],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /화이트|흰색|백색|\bwhite\b/i,
+    rgb: [246, 248, 250],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /아이보리|\bivory\b/i,
+    rgb: [244, 241, 232],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /크림|\bcream\b/i,
+    rgb: [242, 237, 224],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /오트밀|\boatmeal\b/i,
+    rgb: [218, 210, 196],
+    collidesWithCoolSlate: true,
+  },
+  {
+    pattern: /세이지|그린|카키|올리브|민트|\bsage\b|\bgreen\b|\bkhaki\b|\bolive\b|\bmint\b|\bjade\b/i,
+    rgb: [94, 156, 126],
+    collidesWithCoolSlate: false,
+  },
+  {
+    pattern: /테라코타|브라운|카멜|탄색|\bterracotta\b|\bochre\b|\bbrown\b|\bcamel\b|\btan\b/i,
+    rgb: [179, 131, 104],
+    collidesWithCoolSlate: false,
+  },
+  {
+    pattern: /플럼|퍼플|보라|라벤더|모브|버건디|\bplum\b|\bmauve\b|\bpurple\b|\blavender\b|\bviolet\b|\bburgundy\b/i,
+    rgb: [142, 111, 158],
+    collidesWithCoolSlate: false,
+  },
+];
+
 /**
- * Selects a flat, shadowless studio key backdrop hex that maximizes RGB separation
- * from all equipped garment colors. Defaults to `#94A3B8` unless an equipped item is
- * visually close to `#94A3B8` (`ΔRGB < 42`).
+ * Selects a flat, shadowless studio key backdrop hex that maximizes RGB & chromatic separation
+ * from all equipped garment/footwear colors. Defaults to `#94A3B8` when `equippedColorInputs`
+ * is empty/undefined or free of grey/white/cool-slate collisions (`ΔRGB >= 78`), and switches
+ * to a chroma-safe muted studio backdrop (`#5E9C7E`, `#B38368`, `#8E6F9E`) whenever grey,
+ * white, ivory, cream, oatmeal, silver, charcoal, or cool-slate items are equipped.
  */
 export function selectOptimalStudioKeyHex(
-  equippedColorHexes?: Array<string | null | undefined>
+  equippedColorInputs?: Array<StudioKeyColorInput>
 ): string {
-  if (!Array.isArray(equippedColorHexes) || equippedColorHexes.length === 0) {
-    return CUTOUT_STAGE_BACKDROP_HEX;
-  }
-  const parsedEquipped = equippedColorHexes
-    .map((hex) => parseRgbFromHex(hex))
-    .filter((rgb): rgb is [number, number, number] => Boolean(rgb));
-  if (parsedEquipped.length === 0) {
+  if (!Array.isArray(equippedColorInputs) || equippedColorInputs.length === 0) {
     return CUTOUT_STAGE_BACKDROP_HEX;
   }
 
+  const parsedEquipped: Array<[number, number, number]> = [];
+  let collidesWithCoolSlate = false;
   const defaultRgb: [number, number, number] = [148, 163, 184];
-  const minDistToDefault = Math.min(
-    ...parsedEquipped.map(([r, g, b]) =>
-      Math.hypot(r - defaultRgb[0], g - defaultRgb[1], b - defaultRgb[2])
-    )
-  );
-  if (minDistToDefault >= 42) {
+
+  for (const rawEntry of equippedColorInputs) {
+    if (!rawEntry) continue;
+    const isDescriptorObject = typeof rawEntry === 'object';
+    const rawHexCandidate = isDescriptorObject
+      ? rawEntry.colorHex ?? rawEntry.color_hex ?? rawEntry.color ?? null
+      : rawEntry;
+    const textTokens = isDescriptorObject
+      ? [
+          rawEntry.colorName,
+          rawEntry.color_name,
+          rawEntry.color,
+          rawEntry.name,
+          rawEntry.colorHex,
+          rawEntry.color_hex,
+        ]
+          .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .join(' ')
+      : rawEntry;
+
+    // 1) Parse explicit #hex token (either exact string or embedded in text)
+    const directRgb = parseRgbFromHex(rawHexCandidate);
+    const embeddedHexMatch =
+      !directRgb && typeof textTokens === 'string'
+        ? textTokens.match(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/)
+        : null;
+    const hexRgb = directRgb ?? (embeddedHexMatch ? parseRgbFromHex(embeddedHexMatch[0]) : null);
+
+    if (hexRgb) {
+      parsedEquipped.push(hexRgb);
+      const [r, g, b] = hexRgb;
+      const distToDefault = Math.hypot(
+        r - defaultRgb[0],
+        g - defaultRgb[1],
+        b - defaultRgb[2]
+      );
+      const sat = Math.max(r, g, b) - Math.min(r, g, b);
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (distToDefault < 78) {
+        collidesWithCoolSlate = true;
+      } else if (sat <= 28 && lum >= 85 && (isDescriptorObject || lum < 254.5)) {
+        // Low-saturation neutral/grey/white garments & shoes shade into #94A3B8 under studio AO.
+        // Bare literal '#FFFFFF' string without slot metadata stays non-colliding for legacy hex-only callers.
+        collidesWithCoolSlate = true;
+      }
+    }
+
+    // 2) Parse Korean & English color names across all equipped slots (including shoes)
+    if (typeof textTokens === 'string' && textTokens.trim().length > 0) {
+      for (const rule of NAMED_STUDIO_COLLISION_COLOR_RULES) {
+        if (rule.pattern.test(textTokens)) {
+          parsedEquipped.push(rule.rgb);
+          if (rule.collidesWithCoolSlate) {
+            collidesWithCoolSlate = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (parsedEquipped.length === 0 || !collidesWithCoolSlate) {
     return CUTOUT_STAGE_BACKDROP_HEX;
   }
 
-  let bestHex: string = CUTOUT_STAGE_BACKDROP_HEX;
-  let bestMinDist = minDistToDefault;
+  let bestHex: string = COLLISION_SAFE_STUDIO_KEY_CANDIDATES[1];
+  let bestScore = -Infinity;
+
   for (const candidateHex of COLLISION_SAFE_STUDIO_KEY_CANDIDATES) {
+    if (candidateHex === CUTOUT_STAGE_BACKDROP_HEX) continue;
     const cRgb = parseRgbFromHex(candidateHex);
     if (!cRgb) continue;
     const minDist = Math.min(
@@ -93,8 +233,13 @@ export function selectOptimalStudioKeyHex(
         Math.hypot(r - cRgb[0], g - cRgb[1], b - cRgb[2])
       )
     );
-    if (minDist > bestMinDist) {
-      bestMinDist = minDist;
+    // Prefer cool-green/mauve studio keys over warm terracotta when garment clearance is healthy
+    // so human skin tones (R > G > B) maintain maximal chromatic separation during matting.
+    const candidateIsWarmSkinAdjacent = cRgb[0] > cRgb[1] + 8 && cRgb[1] > cRgb[2] + 8;
+    const skinSafetyBonus = candidateIsWarmSkinAdjacent ? 0 : 24;
+    const score = minDist + (minDist >= 64 ? skinSafetyBonus : 0);
+    if (score > bestScore) {
+      bestScore = score;
       bestHex = candidateHex;
     }
   }
@@ -388,9 +533,17 @@ export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
   return CANONICAL_ANGLE_PROMPT_DIRECTIVES[45];
 }
 
+export const SOLO_SINGLE_PERSON_PER_CELL_LOCK =
+  'SOLO SINGLE PERSON PER CELL LOCK: Each of the 6 cells MUST contain strictly ONE single solo figure centered inside its cell with at least 20% empty solid backdrop gutter between adjacent cells; sleeves, coats, bags, and shoes MUST NEVER cross cell boundaries or overlap an adjacent pose; NEVER render twins or two people inside one cell.';
+
+export const FOOTWEAR_PAIR_SYMMETRY_LOCK =
+  'FOOTWEAR PAIR SYMMETRY LOCK (MANDATORY): Left shoe and right shoe MUST be an IDENTICAL MATCHED PAIR in the exact same upper color, material, tongue, laces, and sole on BOTH feet — NEVER mismatch left and right shoe colors (e.g. never one black shoe and one grey/white shoe).';
+
 export function buildTurnaround3x2SheetAngleDirectives(): string {
   return [
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
+    `  * ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
+    `  * ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
     '  * STRICT 3x2 UNDIVIDED GRID TOPOLOGY (ZERO GRID/DIVIDER LINES): Arrange STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL on ONE continuous undivided solid background — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames!',
     '  * TOP ROW = FRONT & PURE 90° SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
     `    - [Top-Left (Row 1, Col 1) — 0° Direct Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
@@ -622,7 +775,7 @@ export function buildWeatherPosePromptDirectives(
         weather?: any;
         hasEquippedUmbrella?: boolean;
         turnaroundSheet?: boolean;
-        equippedColorHexes?: Array<string | null | undefined>;
+        equippedColorHexes?: Array<StudioKeyColorInput>;
       }
 ): WeatherPosePromptDirectives {
   const normalizedParams =
@@ -721,6 +874,8 @@ export function buildWeatherPosePromptDirectives(
   const combinedPromptBlock = [
     `[EFFECTIVE WEATHER POSE & TRACE MODE: ${effectiveMode.toUpperCase()}]`,
     HORIZONTAL_FULL_BODY_CAMERA_LOCK,
+    ...(normalizedParams.turnaroundSheet ? [SOLO_SINGLE_PERSON_PER_CELL_LOCK] : []),
+    FOOTWEAR_PAIR_SYMMETRY_LOCK,
     poseDirective,
     physicalTraceDirective,
     negativeDirective,

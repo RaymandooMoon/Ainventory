@@ -47,6 +47,8 @@ import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
   localizeApiMessage,
+  localizeBrandName,
+  localizeColorName,
   localizeGarmentName,
   localizeMaterialLabel,
   localizeOutfitTitle,
@@ -263,12 +265,221 @@ function parseSeasons(rawSeasons) {
   return [];
 }
 
+const HANGUL_CHAR_RE = /[\uAC00-\uD7A3\u3131-\u318E]/;
+
+const PARENT_CATEGORY_HEADER_LABELS = {
+  outer: { ko: '외투', en: 'Outerwear' },
+  top: { ko: '상의', en: 'Tops' },
+  bottom: { ko: '하의', en: 'Bottoms' },
+  onepiece: { ko: '원피스', en: 'Dresses' },
+  shoes: { ko: '신발', en: 'Shoes' },
+  bag: { ko: '가방', en: 'Bags' },
+  accessory: { ko: '액세서리', en: 'Accessories' },
+  jewelry: { ko: '주얼리', en: 'Jewelry' },
+};
+
+const SUBCATEGORY_DISPLAY_MAP = {
+  trench: { ko: '트렌치코트', en: 'Trench Coat' },
+  trench_coat: { ko: '트렌치코트', en: 'Trench Coat' },
+  coat: { ko: '코트', en: 'Coat' },
+  mac_coat: { ko: '맥코트', en: 'Mac Coat' },
+  blazer: { ko: '블레이저', en: 'Blazer' },
+  jacket: { ko: '자켓', en: 'Jacket' },
+  liner_jacket: { ko: '라이너 자켓', en: 'Liner Jacket' },
+  cardigan: { ko: '가디건', en: 'Cardigan' },
+  puffer: { ko: '패딩', en: 'Puffer' },
+  padding: { ko: '패딩', en: 'Puffer' },
+  parka: { ko: '파카', en: 'Parka' },
+  windbreaker: { ko: '윈드브레이커', en: 'Windbreaker' },
+  knit: { ko: '니트', en: 'Knitwear' },
+  sweater: { ko: '스웨터', en: 'Sweater' },
+  turtleneck: { ko: '터틀넥', en: 'Turtleneck' },
+  shirt: { ko: '셔츠', en: 'Shirt' },
+  blouse: { ko: '블라우스', en: 'Blouse' },
+  tshirt: { ko: '티셔츠', en: 'T-Shirt' },
+  't-shirt': { ko: '티셔츠', en: 'T-Shirt' },
+  tee: { ko: '티셔츠', en: 'T-Shirt' },
+  hoodie: { ko: '후드', en: 'Hoodie' },
+  sweatshirt: { ko: '맨투맨', en: 'Sweatshirt' },
+  innerwear: { ko: '이너웨어', en: 'Base Layer' },
+  base_layer: { ko: '이너웨어', en: 'Base Layer' },
+  slacks: { ko: '슬랙스', en: 'Slacks' },
+  trousers: { ko: '트라우저', en: 'Trousers' },
+  pants: { ko: '팬츠', en: 'Pants' },
+  denim: { ko: '데님 팬츠', en: 'Denim' },
+  jeans: { ko: '데님 팬츠', en: 'Jeans' },
+  chino: { ko: '치노 팬츠', en: 'Chinos' },
+  shorts: { ko: '쇼츠', en: 'Shorts' },
+  skirt: { ko: '스커트', en: 'Skirt' },
+  dress: { ko: '원피스', en: 'Dress' },
+  onepiece: { ko: '원피스', en: 'Dress' },
+  jumpsuit: { ko: '점프수트', en: 'Jumpsuit' },
+  swimwear: { ko: '수영복', en: 'Swimwear' },
+  sneakers: { ko: '스니커즈', en: 'Sneakers' },
+  loafers: { ko: '로퍼', en: 'Loafers' },
+  loafer: { ko: '로퍼', en: 'Loafers' },
+  boots: { ko: '부츠', en: 'Boots' },
+  heels: { ko: '힐', en: 'Heels' },
+  pumps: { ko: '펌프스', en: 'Pumps' },
+  sandals: { ko: '샌들', en: 'Sandals' },
+  derby: { ko: '더비 슈즈', en: 'Derby Shoes' },
+  oxford: { ko: '옥스포드 슈즈', en: 'Oxford Shoes' },
+  bag: { ko: '가방', en: 'Bag' },
+  tote: { ko: '토트백', en: 'Tote Bag' },
+  briefcase: { ko: '브리프케이스', en: 'Briefcase' },
+  crossbody: { ko: '크로스백', en: 'Crossbody Bag' },
+  shoulder_bag: { ko: '숄더백', en: 'Shoulder Bag' },
+  backpack: { ko: '백팩', en: 'Backpack' },
+  clutch: { ko: '클러치', en: 'Clutch' },
+  scarf: { ko: '스카프·머플러', en: 'Scarf' },
+  muffler: { ko: '머플러', en: 'Scarf' },
+  necktie: { ko: '넥타이', en: 'Necktie' },
+  tie: { ko: '넥타이', en: 'Tie' },
+  cap: { ko: '볼캡', en: 'Cap' },
+  beanie: { ko: '비니', en: 'Beanie' },
+  beret: { ko: '베레모', en: 'Beret' },
+  hat: { ko: '모자', en: 'Hat' },
+  bucket_hat: { ko: '버킷햇', en: 'Bucket Hat' },
+  gloves: { ko: '장갑', en: 'Gloves' },
+  glove: { ko: '장갑', en: 'Gloves' },
+  socks: { ko: '양말', en: 'Socks' },
+  watch: { ko: '시계', en: 'Watch' },
+  belt: { ko: '벨트', en: 'Belt' },
+  eyewear: { ko: '아이웨어', en: 'Eyewear' },
+  glasses: { ko: '안경', en: 'Glasses' },
+  sunglasses: { ko: '선글라스', en: 'Sunglasses' },
+  umbrella: { ko: '우산', en: 'Umbrella' },
+  necklace: { ko: '목걸이', en: 'Necklace' },
+  earring: { ko: '귀걸이', en: 'Earrings' },
+  earrings: { ko: '귀걸이', en: 'Earrings' },
+  bracelet: { ko: '팔찌', en: 'Bracelet' },
+  ring: { ko: '반지', en: 'Ring' },
+  brooch: { ko: '브로치', en: 'Brooch' },
+};
+
+const SEASON_DISPLAY_MAP = {
+  봄: { ko: '봄', en: 'Spring' },
+  여름: { ko: '여름', en: 'Summer' },
+  가을: { ko: '가을', en: 'Autumn' },
+  겨울: { ko: '겨울', en: 'Winter' },
+};
+
+function sanitizeZeroHangulEn(value, lang, fallbackEn = '') {
+  const str = String(value ?? '').trim();
+  if (!str) return fallbackEn;
+  if (lang !== 'en') return str;
+  if (!HANGUL_CHAR_RE.test(str)) return str;
+  const localized = localizeGarmentName(str, 'en');
+  if (localized && !HANGUL_CHAR_RE.test(localized)) return localized;
+  const stripped = str
+    .replace(/[\uAC00-\uD7A3\u3131-\u318E]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped || fallbackEn;
+}
+
 function resolveGarmentDisplayName(item, lang) {
   if (!item) return '';
   if (lang === 'en' && typeof item.name_en === 'string' && item.name_en.trim()) {
-    return item.name_en.trim();
+    const candidate = item.name_en.trim();
+    if (!HANGUL_CHAR_RE.test(candidate)) return candidate;
   }
-  return localizeGarmentName(item.name, lang);
+  const localized = localizeGarmentName(item.name, lang);
+  return sanitizeZeroHangulEn(localized, lang, 'Wardrobe Item');
+}
+
+function resolveInspectorSubcategoryLabel(item, lang) {
+  const rawSub = String(item?.subcategory ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (rawSub && SUBCATEGORY_DISPLAY_MAP[rawSub]) {
+    const pair = SUBCATEGORY_DISPLAY_MAP[rawSub];
+    return lang === 'en' ? pair.en : pair.ko;
+  }
+  const rawOriginal = String(item?.subcategory ?? '').trim();
+  if (rawOriginal) {
+    if (lang === 'en') {
+      if (!HANGUL_CHAR_RE.test(rawOriginal)) {
+        return rawOriginal
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (ch) => ch.toUpperCase());
+      }
+      return sanitizeZeroHangulEn(localizeGarmentName(rawOriginal, 'en'), 'en', 'Apparel');
+    }
+    return rawOriginal.replace(/_/g, ' ');
+  }
+  const slotKey = item ? mapGarmentToFittingSlot(item) : 'top';
+  const parentKey = resolveParentFittingTab(slotKey);
+  const parentPair = PARENT_CATEGORY_HEADER_LABELS[parentKey] || PARENT_CATEGORY_HEADER_LABELS.top;
+  return lang === 'en' ? parentPair.en : parentPair.ko;
+}
+
+function resolveInspectorMaterialLabel(rawFabric, lang) {
+  const s = String(rawFabric ?? '').trim().toLowerCase();
+  const isEn = lang === 'en';
+  if (!s) return isEn ? 'Cotton Blend' : '코튼 혼방';
+  if (/gabardine|개버딘/.test(s)) return isEn ? 'Cotton Gabardine' : '코튼 개버딘';
+  if (/supima|수피마/.test(s)) return isEn ? 'Supima Cotton' : '수피마 코튼';
+  if (/poplin|포플린/.test(s)) return isEn ? 'Cotton Poplin' : '포플린 코튼';
+  if (/oxford|옥스포드/.test(s)) return isEn ? 'Oxford Cotton' : '옥스포드 코튼';
+  if (/denim|selvedge|데님|셀비지/.test(s)) return isEn ? 'Denim' : '데님';
+  if (/linen|리넨|린넨/.test(s)) return isEn ? 'Linen' : '리넨';
+  if (/merino|메리노/.test(s)) return isEn ? 'Merino Wool' : '메리노 울';
+  if (/cashmere|캐시미어/.test(s)) return isEn ? 'Cashmere' : '캐시미어';
+  if (/goose|down|구스|다운/.test(s)) return isEn ? 'Goose Down' : '구스다운';
+  if (/suede|스웨이드/.test(s)) return isEn ? 'Suede' : '스웨이드';
+  if (/modal|모달/.test(s)) return isEn ? 'Modal' : '모달';
+  if (/nylon|나일론/.test(s)) return isEn ? 'Nylon' : '나일론';
+  if (/cotton|코튼|면/.test(s)) return isEn ? 'Cotton' : '코튼';
+  const fallback = localizeMaterialLabel(rawFabric, lang);
+  return sanitizeZeroHangulEn(fallback, lang, 'Fabric');
+}
+
+function resolveInspectorSeasonLabel(rawSeasons, lang) {
+  const tokens = parseSeasons(rawSeasons);
+  const unique = [];
+  for (const tk of tokens) {
+    if (SEASON_DISPLAY_MAP[tk] && !unique.includes(tk)) {
+      unique.push(tk);
+    }
+  }
+  if (unique.length === 0 || unique.length >= 4) {
+    return tx(lang, '사계절', 'All Seasons');
+  }
+  const labels = unique.map((tk) =>
+    lang === 'en' ? SEASON_DISPLAY_MAP[tk].en : SEASON_DISPLAY_MAP[tk].ko
+  );
+  return lang === 'en' ? labels.join('/') : labels.join('·');
+}
+
+function resolveGarmentInspectorSpecs(item, lang) {
+  const displayName = resolveGarmentDisplayName(item, lang);
+  const rawBrand = String(item?.brand ?? '').trim();
+  const brandLabel = rawBrand
+    ? sanitizeZeroHangulEn(localizeBrandName(rawBrand, lang), lang, 'Ainventory Closet')
+    : tx(lang, '개인 옷장', 'Ainventory Closet');
+  const subcategoryLabel = resolveInspectorSubcategoryLabel(item, lang);
+  const colorHex =
+    typeof item?.color_hex === 'string' && item.color_hex.trim()
+      ? item.color_hex.trim()
+      : '#8E8E93';
+  const rawColor = String(item?.color_name ?? '').trim();
+  const colorLabel = rawColor
+    ? sanitizeZeroHangulEn(localizeColorName(rawColor, lang), lang, 'Neutral')
+    : tx(lang, '모노톤', 'Neutral');
+  const materialLabel = resolveInspectorMaterialLabel(item?.fabric, lang);
+  const seasonLabel = resolveInspectorSeasonLabel(item?.seasons, lang);
+
+  return {
+    displayName,
+    brandLabel,
+    subcategoryLabel,
+    colorHex,
+    colorLabel,
+    materialLabel,
+    seasonLabel,
+  };
 }
 
 function mapWeatherRecToSlots(rec, allGarments, weather) {
@@ -731,7 +942,9 @@ export default function OutfitStudioView({
   const [occasionFilter, setOccasionFilter] = useState('all');
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [hoveredGarment, setHoveredGarment] = useState(null);
+  const [selectedInspectorId, setSelectedInspectorId] = useState(
+    () => preEquippedGarment?.id ?? null
+  );
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [weatherPopupOpen, setWeatherPopupOpen] = useState(false);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
@@ -767,7 +980,7 @@ export default function OutfitStudioView({
 
   const handleSelectTopFittingTab = useCallback((tabKey) => {
     triggerHaptic('selection');
-    setHoveredGarment(null);
+    setSelectedInspectorId(null);
     if (tabKey === 'accessory') {
       setActiveSlotKey((prev) => (isAccessorySlotKey(prev) ? prev : 'accessory'));
     } else if (tabKey === 'jewelry') {
@@ -1133,7 +1346,7 @@ export default function OutfitStudioView({
 
   const slotGarments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return garments.filter((g) => {
+    const filtered = garments.filter((g) => {
       if (!isWearableStudioGarment(g)) return false;
       if (!doesGarmentMatchSubSlot(g, activeSlotKey)) return false;
       if (!doesGarmentMatchOccasion(g, occasionFilter)) return false;
@@ -1155,7 +1368,21 @@ export default function OutfitStudioView({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [garments, activeSlotKey, occasionFilter, seasonFilter, searchQuery, lang]);
+
+    const equippedId = slots[activeSlotKey]?.id;
+    if (equippedId == null || filtered.length <= 1) return filtered;
+
+    const equippedFirst = [];
+    const others = [];
+    for (const item of filtered) {
+      if (item.id === equippedId) {
+        equippedFirst.push(item);
+      } else {
+        others.push(item);
+      }
+    }
+    return equippedFirst.length > 0 ? [...equippedFirst, ...others] : filtered;
+  }, [garments, activeSlotKey, occasionFilter, seasonFilter, searchQuery, lang, slots]);
 
   const equippedItems = useMemo(() => {
     return ALL_EQUIPPABLE_SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
@@ -1425,6 +1652,7 @@ export default function OutfitStudioView({
       : mapGarmentToDefaultSubSlot(item);
     const isUnequipping = slots[targetSlotKey]?.id === item.id;
 
+    setSelectedInspectorId(item?.id ?? null);
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
@@ -1457,6 +1685,10 @@ export default function OutfitStudioView({
   };
 
   const handleUnequipSlot = (slotKey) => {
+    const removedId = slots[slotKey]?.id;
+    if (removedId != null) {
+      setSelectedInspectorId((prev) => (prev === removedId ? null : prev));
+    }
     userModifiedSlotsRef.current = true;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
@@ -1472,6 +1704,7 @@ export default function OutfitStudioView({
     userModifiedSlotsRef.current = true;
     activeRecIdRef.current = null;
     setActiveRecId(null);
+    setSelectedInspectorId(null);
     setHasExplicitSlotState(true);
     setManualRainUmbrellaCleared(true);
     triggerHaptic('selection');
@@ -1699,6 +1932,7 @@ export default function OutfitStudioView({
                     className={`studio-subtree-pill ${isSelected ? 'active' : ''} ${equippedInSub ? 'is-equipped' : ''}`}
                     onClick={() => {
                       triggerHaptic('selection');
+                      setSelectedInspectorId(null);
                       setActiveSlotKey(sub.key);
                     }}
                   >
@@ -1741,28 +1975,37 @@ export default function OutfitStudioView({
   };
 
   const activeSlotCategoryTitle = useMemo(() => {
+    const parentPair = PARENT_CATEGORY_HEADER_LABELS[activeParentTab];
+    const parentLabel = parentPair
+      ? tx(lang, parentPair.ko, parentPair.en)
+      : tx(lang, '아이템 선택', 'Select Item');
     const subMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
-    if (subMeta) {
-      return lang === 'en' ? subMeta.labelEn : subMeta.labelKo;
+    if (subMeta && activeSlotKey !== 'accessory') {
+      const subShort = lang === 'en' ? subMeta.shortEn : subMeta.shortKo;
+      return `${parentLabel} · ${subShort}`;
     }
-    const activeDef = FITTING_SLOTS.find((s) => s.key === activeParentTab);
-    if (!activeDef) return tx(lang, '아이템 선택', 'Select Item');
-    return lang === 'en' ? activeDef.label : activeDef.labelKo;
+    return parentLabel;
   }, [activeSlotKey, activeParentTab, lang]);
 
-  const focusedDrawerTitle = useMemo(() => {
-    if (hoveredGarment && doesGarmentMatchSubSlot(hoveredGarment, activeSlotKey)) {
-      return resolveGarmentDisplayName(hoveredGarment, lang);
-    }
-    const equippedInActive = slots[activeSlotKey];
-    if (equippedInActive) {
-      return resolveGarmentDisplayName(equippedInActive, lang);
+  const focusedDrawerTitle = activeSlotCategoryTitle;
+
+  const pinnedSlotInfo = useMemo(() => {
+    if (slots[activeSlotKey]) {
+      return {
+        item: slots[activeSlotKey],
+        slotKey: activeSlotKey,
+        isOnepieceFallback: false,
+      };
     }
     if (activeParentTab === 'top' && slots.onepiece) {
-      return resolveGarmentDisplayName(slots.onepiece, lang);
+      return {
+        item: slots.onepiece,
+        slotKey: 'onepiece',
+        isOnepieceFallback: true,
+      };
     }
-    return activeSlotCategoryTitle;
-  }, [hoveredGarment, activeSlotKey, slots, activeParentTab, activeSlotCategoryTitle, lang]);
+    return null;
+  }, [slots, activeSlotKey, activeParentTab]);
 
   const hasActiveDrawerFilter =
     occasionFilter !== 'all' || seasonFilter !== 'all' || searchQuery.trim().length > 0;
@@ -1841,6 +2084,66 @@ export default function OutfitStudioView({
     </div>
   );
 
+  const renderPinnedEquippedCard = () => {
+    if (!pinnedSlotInfo?.item) return null;
+    const equippedItem = pinnedSlotInfo.item;
+    const specs = resolveGarmentInspectorSpecs(equippedItem, lang);
+    const statusLabel = pinnedSlotInfo.isOnepieceFallback
+      ? tx(lang, '착용 중 · 원피스', 'Equipped · Dress')
+      : tx(lang, '착용 중', 'Equipped');
+
+    return (
+      <div className="atelier-pinned-equipped-dock">
+        <div
+          className="atelier-inventory-spec-card is-pinned"
+          data-pinned-equipped-card={equippedItem.id}
+          role="region"
+          aria-label={tx(lang, '현재 착용 중인 아이템', 'Currently equipped item')}
+        >
+          <div className="atelier-spec-status-bar">
+            <span className="atelier-spec-status-pill is-equipped">
+              <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+              <span>{statusLabel}</span>
+            </span>
+            <button
+              type="button"
+              data-pinned-unequip-btn="true"
+              className="atelier-spec-unequip-btn"
+              onClick={() => handleUnequipSlot(pinnedSlotInfo.slotKey)}
+            >
+              {tx(lang, '해제', 'Remove')}
+            </button>
+          </div>
+
+          <div className="atelier-spec-main-row">
+            <div className="atelier-spec-info-col">
+              <span className="atelier-spec-item-name">{specs.displayName}</span>
+              <span className="atelier-spec-brand-line">
+                {`${specs.brandLabel} · ${specs.subcategoryLabel}`}
+              </span>
+              <div className="atelier-spec-meta-pills">
+                <span className="atelier-spec-meta-pill">
+                  <span
+                    className="atelier-spec-color-dot"
+                    style={{ backgroundColor: specs.colorHex }}
+                    aria-hidden="true"
+                  />
+                  <span>{specs.colorLabel}</span>
+                </span>
+                <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
+                <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
+              </div>
+            </div>
+
+            <div className="atelier-spec-thumb-squircle">
+              <GarmentObject25D item={equippedItem} alt={specs.displayName} padding="8%" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderSlotInventoryGrid = (closeOnPick = false) => {
     const oppositeSlotKey = getOppositeSideSubSlot(activeSlotKey);
     const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
@@ -1915,26 +2218,85 @@ export default function OutfitStudioView({
       <div className="studio-mini-inventory-grid">
         {slotGarments.map((item) => {
           const isEquipped = slots[activeSlotKey]?.id === item.id;
+          const isExpanded = !isEquipped && selectedInspectorId === item.id;
+          const isUnfolded = isEquipped || isExpanded;
           const isEquippedOpposite = Boolean(oppositeItem && oppositeItem.id === item.id);
-          const displayName = resolveGarmentDisplayName(item, lang);
           const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
             ? tx(lang, 'L 착용', 'Worn L')
             : tx(lang, 'R 착용', 'Worn R');
+
+          if (isUnfolded) {
+            const specs = resolveGarmentInspectorSpecs(item, lang);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                data-slot-garment-id={item.id}
+                aria-pressed={isEquipped}
+                className={`studio-mini-garment-card atelier-packshot-card atelier-unfolded-spec-card ${
+                  isEquipped ? 'is-equipped' : ''
+                } ${isExpanded ? 'is-expanded' : ''}`.trim()}
+                onClick={() => {
+                  handleToggleEquip(item);
+                  if (closeOnPick) setMobileSheetOpen(false);
+                }}
+              >
+                <div className="atelier-spec-status-bar">
+                  <span
+                    className={`atelier-spec-status-pill ${
+                      isEquipped ? 'is-equipped' : 'is-selected'
+                    }`}
+                  >
+                    {isEquipped && <Check size={11} strokeWidth={2.8} aria-hidden="true" />}
+                    <span>
+                      {isEquipped
+                        ? tx(lang, '착용 중', 'Equipped')
+                        : tx(lang, '선택됨', 'Selected')}
+                    </span>
+                  </span>
+                  {isEquippedOpposite && (
+                    <span className="atelier-spec-opposite-chip">{oppositeBadgeLabel}</span>
+                  )}
+                </div>
+
+                <div className="atelier-spec-main-row">
+                  <div className="atelier-spec-info-col">
+                    <span className="hig-garment-name atelier-spec-item-name">
+                      {specs.displayName}
+                    </span>
+                    <span className="atelier-spec-brand-line">
+                      {`${specs.brandLabel} · ${specs.subcategoryLabel}`}
+                    </span>
+                    <div className="atelier-spec-meta-pills">
+                      <span className="atelier-spec-meta-pill">
+                        <span
+                          className="atelier-spec-color-dot"
+                          style={{ backgroundColor: specs.colorHex }}
+                          aria-hidden="true"
+                        />
+                        <span>{specs.colorLabel}</span>
+                      </span>
+                      <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
+                      <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className="atelier-spec-thumb-squircle">
+                    <GarmentObject25D item={item} alt={specs.displayName} padding="8%" />
+                  </div>
+                </div>
+              </button>
+            );
+          }
+
+          const displayName = resolveGarmentDisplayName(item, lang);
           return (
             <button
               key={item.id}
               type="button"
               data-slot-garment-id={item.id}
               aria-pressed={isEquipped}
-              className={`studio-mini-garment-card atelier-packshot-card ${isEquipped ? 'is-equipped' : ''}`.trim()}
-              onMouseEnter={() => setHoveredGarment(item)}
-              onMouseLeave={() =>
-                setHoveredGarment((prev) => (prev?.id === item.id ? null : prev))
-              }
-              onFocus={() => setHoveredGarment(item)}
-              onBlur={() =>
-                setHoveredGarment((prev) => (prev?.id === item.id ? null : prev))
-              }
+              className="studio-mini-garment-card atelier-packshot-card"
               onClick={() => {
                 handleToggleEquip(item);
                 if (closeOnPick) setMobileSheetOpen(false);
@@ -1942,11 +2304,6 @@ export default function OutfitStudioView({
             >
               <div className="studio-mini-squircle">
                 <GarmentObject25D item={item} alt={displayName} padding="10%" />
-                {isEquipped && (
-                  <span className="studio-equipped-badge" aria-hidden="true">
-                    <Check size={12} strokeWidth={2.6} />
-                  </span>
-                )}
                 {isEquippedOpposite && (
                   <span className="studio-opposite-side-badge">{oppositeBadgeLabel}</span>
                 )}
@@ -1956,7 +2313,7 @@ export default function OutfitStudioView({
               </span>
               {showMaterialBadge && item.fabric && (
                 <span className="studio-mini-material-tag">
-                  {localizeMaterialLabel(item.fabric, lang)}
+                  {resolveInspectorMaterialLabel(item.fabric, lang)}
                 </span>
               )}
             </button>
@@ -2056,6 +2413,7 @@ export default function OutfitStudioView({
             forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
+              setSelectedInspectorId(null);
               setActiveSlotKey(slotKey);
               if (window.innerWidth < 600) {
                 setMobileSheetOpen(true);
@@ -2105,7 +2463,12 @@ export default function OutfitStudioView({
             {FITTING_SLOTS.map((slot) => {
               const count = equippedCountByParentTab[slot.key] || 0;
               const isSelected = activeParentTab === slot.key;
-              const slotText = lang === 'en' ? slot.label : slot.labelKo;
+              const labelPair = PARENT_CATEGORY_HEADER_LABELS[slot.key];
+              const slotText = labelPair
+                ? tx(lang, labelPair.ko, labelPair.en)
+                : lang === 'en'
+                  ? slot.label
+                  : slot.labelKo;
               return (
                 <button
                   key={slot.key}
@@ -2156,6 +2519,7 @@ export default function OutfitStudioView({
               onSelectTab={handleSelectTopFittingTab}
             />
             <div className="atelier-drawer-grid-col">
+              {renderPinnedEquippedCard()}
               <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(false)}</div>
             </div>
           </div>
@@ -2287,7 +2651,7 @@ export default function OutfitStudioView({
         maxWidth={480}
       >
         <div className="weather-popup-content">
-          {/* 1) 내일의 날씨 정보 & 9종 시뮬레이션 선택 */}
+          {/* 1) 내일의 날씨 정보 & 시뮬레이션 선택 */}
           <div className="weather-popup-section">
             <div className="weather-popup-section-head">
               <span className="weather-popup-section-title">
@@ -2360,46 +2724,76 @@ export default function OutfitStudioView({
               </div>
 
               <p className="weather-popup-tip">
-                {(weather?.weatherTip && localizeApiMessage(weather.weatherTip, lang)) ||
-                  tx(
-                    lang,
-                    isRainyWeatherActive
-                      ? '비 예보에 맞춰 생활 방수 아우터와 우산 코디를 우선 추천합니다.'
-                      : '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 내일 코디입니다.',
-                    isRainyWeatherActive
-                      ? 'Water-resistant outerwear and umbrella styling prioritized for rain.'
-                      : 'Balanced layering curated for tomorrow’s temperature range.'
-                  )}
+                {weather?.weatherTip &&
+                (lang !== 'en' || !HANGUL_CHAR_RE.test(String(weather.weatherTip)))
+                  ? String(weather.weatherTip).trim()
+                  : tx(
+                      lang,
+                      isRainyWeatherActive
+                        ? '비 예보에 맞춰 생활 방수 아우터와 우산 코디를 우선 추천합니다.'
+                        : '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 내일 코디입니다.',
+                      isRainyWeatherActive
+                        ? 'Water-resistant outerwear and umbrella styling prioritized for rain.'
+                        : 'Balanced layering curated for tomorrow’s temperature range.'
+                    )}
+              </p>
+
+              <p className="weather-popup-source-caption" data-weather-source-caption="true">
+                {tx(
+                  lang,
+                  '기상 정보 출처: Open-Meteo 예보 API (기상청·글로벌 수치예보 연동)',
+                  'Weather source: Open-Meteo Forecast API (KMA & Global NWP)'
+                )}
               </p>
             </div>
 
             <div
-              className="weather-popup-scenario-grid weather-scenario-rail"
-              role="tablist"
+              className="weather-popup-scenario-row"
+              role="group"
               aria-label={tx(lang, '날씨', 'Weather Conditions')}
             >
-              {scenarios.map((sc) => {
-                const active = scenarioKey === sc.key;
-                const pair = SHORT_SCENARIO_LABELS[sc.key];
-                const shortLabel = pair
-                  ? lang === 'en'
-                    ? pair.en
-                    : pair.ko
-                  : localizeOutfitTitle(sc.label, lang);
-                return (
-                  <button
-                    key={sc.key}
-                    type="button"
-                    role="tab"
-                    data-weather-scenario={sc.key}
-                    aria-selected={active}
-                    className={`hig-filter-pill weather-popup-scenario-chip ${active ? 'active' : ''}`}
-                    onClick={() => handleSelectScenario(sc.key)}
-                  >
-                    {shortLabel}
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                data-weather-scenario="live"
+                aria-pressed={scenarioKey === 'live'}
+                className={`weather-popup-live-btn ${scenarioKey === 'live' ? 'is-active' : ''}`.trim()}
+                onClick={() => handleSelectScenario('live')}
+              >
+                {tx(lang, '예보', 'Live')}
+              </button>
+
+              <select
+                data-weather-scenario-select="true"
+                aria-label={tx(lang, '날씨 시뮬레이션 선택', 'Select Weather Simulation')}
+                className="weather-popup-scenario-select"
+                value={scenarioKey === 'live' ? '' : scenarioKey}
+                onChange={(e) => {
+                  if (e.target.value) handleSelectScenario(e.target.value);
+                }}
+              >
+                <option value="" disabled>
+                  {tx(
+                    lang,
+                    '날씨 시뮬레이션 (맑음·비·눈·한파...)',
+                    'Simulate Weather (Sunny, Rain, Snow...)'
+                  )}
+                </option>
+                {scenarios
+                  .filter((sc) => sc.key !== 'live')
+                  .map((sc) => {
+                    const pair = SHORT_SCENARIO_LABELS[sc.key];
+                    const shortLabel = pair
+                      ? lang === 'en'
+                        ? pair.en
+                        : pair.ko
+                      : sanitizeZeroHangulEn(localizeOutfitTitle(sc.label, lang), lang, sc.key);
+                    return (
+                      <option key={sc.key} value={sc.key} data-weather-scenario={sc.key}>
+                        {shortLabel}
+                      </option>
+                    );
+                  })}
+              </select>
             </div>
           </div>
 
@@ -2426,7 +2820,8 @@ export default function OutfitStudioView({
                   const koName = c.name.split('·')[0].trim();
                   const label =
                     lang === 'en'
-                      ? CITY_EN_NAMES[c.key] || localizeOutfitTitle(koName, 'en')
+                      ? CITY_EN_NAMES[c.key] ||
+                        sanitizeZeroHangulEn(localizeOutfitTitle(koName, 'en'), 'en', c.key)
                       : koName;
                   return (
                     <option key={c.key} value={c.key}>
@@ -2467,86 +2862,48 @@ export default function OutfitStudioView({
                   lookIdx === 0 ? lookStyleConfig.look1Style : lookStyleConfig.look2Style;
                 const rec = recommendations[lookIdx] || null;
                 const isLookActive = Boolean(rec && activeRecId === rec.id);
-                const selectedPreset =
-                  LOOK_STYLE_PRESETS.find((p) => p.key === selectedStyleKey) ||
-                  LOOK_STYLE_PRESETS[0];
-                const itemSummary =
-                  rec?.items?.length > 0
-                    ? rec.items
-                        .slice(0, 4)
-                        .map((it) => resolveGarmentDisplayName(it, lang))
-                        .filter(Boolean)
-                        .join(' · ')
-                    : tx(
-                        lang,
-                        '옷장에 등록된 의류로 자동 조합됩니다.',
-                        'Automatically curated from your wardrobe.'
-                      );
 
                 return (
                   <div
                     key={`popup-look-card-${lookIdx + 1}`}
                     data-weather-look-card={lookIdx + 1}
-                    className={`weather-popup-look-card ${isLookActive ? 'is-active' : ''}`}
+                    className={`weather-popup-look-card weather-popup-look-row ${
+                      isLookActive ? 'is-active' : ''
+                    }`.trim()}
                   >
-                    <div className="weather-popup-look-head">
-                      <div className="weather-popup-look-title-wrap">
-                        <span className="weather-popup-look-badge tabular-nums">
-                          {`Look ${lookIdx + 1}`}
-                        </span>
-                        <strong className="weather-popup-look-preset-name">
-                          {lang === 'en' ? selectedPreset.en : selectedPreset.ko}
-                        </strong>
-                      </div>
+                    <span className="weather-popup-look-badge tabular-nums">
+                      {`Look ${lookIdx + 1}`}
+                    </span>
 
-                      <button
-                        type="button"
-                        data-popup-apply-look={String(lookIdx)}
-                        aria-pressed={isLookActive}
-                        disabled={!rec}
-                        className={`weather-popup-apply-btn ${isLookActive ? 'is-applied' : ''}`}
-                        onClick={() => {
-                          if (rec) {
-                            handleApplyRecommendation(rec);
-                          }
-                        }}
-                      >
-                        {isLookActive && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
-                        <span>
-                          {tx(
-                            lang,
-                            `Look ${lookIdx + 1} 적용`,
-                            `Apply Look ${lookIdx + 1}`
-                          )}
-                        </span>
-                      </button>
-                    </div>
-
-                    <div
-                      className="weather-popup-preset-pills"
-                      role="group"
+                    <select
+                      data-look-style-select={String(lookIdx + 1)}
                       aria-label={`Look ${lookIdx + 1} style preset`}
+                      className="weather-popup-look-select"
+                      value={selectedStyleKey}
+                      onChange={(e) => handleChangeLookStyle(lookIdx, e.target.value)}
                     >
-                      {LOOK_STYLE_PRESETS.map((preset) => {
-                        const isPresetSelected = selectedStyleKey === preset.key;
-                        return (
-                          <button
-                            key={preset.key}
-                            type="button"
-                            data-look-preset={`${lookIdx + 1}:${preset.key}`}
-                            aria-pressed={isPresetSelected}
-                            className={`weather-popup-preset-pill ${
-                              isPresetSelected ? 'is-selected' : ''
-                            }`}
-                            onClick={() => handleChangeLookStyle(lookIdx, preset.key)}
-                          >
-                            {lang === 'en' ? preset.en : preset.ko}
-                          </button>
-                        );
-                      })}
-                    </div>
+                      {LOOK_STYLE_PRESETS.map((preset) => (
+                        <option key={preset.key} value={preset.key}>
+                          {lang === 'en' ? preset.en : preset.ko}
+                        </option>
+                      ))}
+                    </select>
 
-                    <p className="weather-popup-look-items">{itemSummary}</p>
+                    <button
+                      type="button"
+                      data-popup-apply-look={String(lookIdx)}
+                      aria-pressed={isLookActive}
+                      disabled={!rec}
+                      className={`weather-popup-apply-btn ${isLookActive ? 'is-applied' : ''}`.trim()}
+                      onClick={() => {
+                        if (rec) {
+                          handleApplyRecommendation(rec);
+                        }
+                      }}
+                    >
+                      {isLookActive && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
+                      <span>{tx(lang, '적용', 'Apply')}</span>
+                    </button>
                   </div>
                 );
               })}
@@ -2581,6 +2938,7 @@ export default function OutfitStudioView({
             onSelectTab={handleSelectTopFittingTab}
           />
           <div className="atelier-drawer-grid-col">
+            {renderPinnedEquippedCard()}
             <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(true)}</div>
           </div>
         </div>

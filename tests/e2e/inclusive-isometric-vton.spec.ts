@@ -274,13 +274,18 @@ async function selectWeatherScenarioViaCapsulePopup(
     await page.locator('[data-atelier-weather-capsule="true"]').click();
   }
   await expect(weatherPanel).toBeVisible();
-  await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(
-    ALL_WEATHER_SCENARIO_KEYS.length
+  const liveBtn = weatherPanel.locator('button[data-weather-scenario="live"]');
+  const scenarioSelect = weatherPanel.locator('select[data-weather-scenario-select="true"]');
+  await expect(liveBtn).toBeVisible();
+  await expect(scenarioSelect).toBeVisible();
+  await expect(scenarioSelect.locator('option[data-weather-scenario]')).toHaveCount(
+    ALL_WEATHER_SCENARIO_KEYS.length - 1
   );
-  for (const key of ALL_WEATHER_SCENARIO_KEYS) {
-    await expect(weatherPanel.locator(`[data-weather-scenario="${key}"]`)).toBeVisible();
+  if (scenarioKey === 'live') {
+    await liveBtn.click();
+  } else {
+    await scenarioSelect.selectOption(scenarioKey);
   }
-  await weatherPanel.locator(`[data-weather-scenario="${scenarioKey}"]`).click();
   if (await weatherPanel.isVisible()) {
     await page.keyboard.press('Escape');
   }
@@ -512,9 +517,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
     const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
-    if (await resetBtn.isVisible()) {
-      await resetBtn.click();
-    }
+    await expect(resetBtn).toBeVisible();
+    await resetBtn.click();
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
     await expect(studioCanvas.locator('[data-flatlay-empty="true"]')).toBeVisible();
 
@@ -824,9 +828,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
     const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
-    if (await resetBtn.isVisible()) {
-      await resetBtn.click();
-    }
+    await expect(resetBtn).toBeVisible();
+    await resetBtn.click();
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
 
     await selectStudioSlotAndPickItem(page, 'outer', {
@@ -1053,7 +1056,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
 
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
-    await expect(studioCanvas.locator('[data-vton-staged-bar="true"]')).toBeVisible();
+    const stagedBar = studioCanvas.locator('[data-vton-staged-bar="true"]');
+    await expect(stagedBar).toBeVisible();
+    await expect(stagedBar.locator('[data-vton-history-btn]')).toHaveCount(0);
+    expect(await stagedBar.innerText()).not.toMatch(/이전 피팅|Saved\s*\(/i);
     expect(synthCalls).toBe(callsAfterInitial);
     const generateBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
     await expect(generateBtn).toBeVisible();
@@ -1080,9 +1086,11 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     expect(synthCalls).toBe(callsAfterInitial + 1);
 
-    // 5. Open Top-Right Saved AI Fittings History ([기록 2]), test Escape + click-outside dismiss, and 1-click restore!
+    // 5. Open Top-Right Icon-Only Saved AI Fittings History (`<sup data-vton-history-count="2">`), test Escape + click-outside dismiss, and 1-click restore!
     const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
-    await expect(historyBtn).toContainText('2');
+    await expect(historyBtn).toBeVisible();
+    expect((await historyBtn.innerText()).trim()).not.toMatch(/기록|Saved/i);
+    await expect(historyBtn.locator('sup[data-vton-history-count="2"]')).toHaveText('2');
     await historyBtn.click();
 
     const historyPopover = studioCanvas.locator('[data-vton-history-popover="true"]');
