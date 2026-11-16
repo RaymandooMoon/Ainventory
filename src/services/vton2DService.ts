@@ -1398,6 +1398,38 @@ function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLCanvasEl
   const humanIslands = merged.filter(
     (r) => r.end - r.start + 1 >= cw * 0.1 && r.peak >= 0.16 && r.mass >= maxMass * 0.38
   );
+  if (humanIslands.length === 1 && merged.length >= 2) {
+    const primary = humanIslands[0];
+    let wipedNarrowArtifact = false;
+    for (const run of merged) {
+      if (run === primary) continue;
+      const runW = run.end - run.start + 1;
+      const separatedLeft = run.end <= primary.start - 4;
+      const separatedRight = run.start >= primary.end + 4;
+      if (runW <= Math.max(12, Math.round(cw * 0.055)) && (separatedLeft || separatedRight)) {
+        const wipeX0 = Math.max(0, run.start - 1);
+        const wipeX1 = Math.min(cw - 1, run.end + 1);
+        for (let y = 0; y < ch; y += 1) {
+          for (let x = wipeX0; x <= wipeX1; x += 1) {
+            const pIdx = (y * cw + x) * 4;
+            if (alreadyTransparent) {
+              data[pIdx + 3] = 0;
+            } else {
+              data[pIdx] = bgR;
+              data[pIdx + 1] = bgG;
+              data[pIdx + 2] = bgB;
+              data[pIdx + 3] = 255;
+            }
+          }
+        }
+        wipedNarrowArtifact = true;
+      }
+    }
+    if (wipedNarrowArtifact) {
+      ctx.putImageData(imgData, 0, 0);
+    }
+    return srcCanvas;
+  }
   if (humanIslands.length < 2) return srcCanvas;
 
   // Verify genuine background valley between adjacent human islands
@@ -1696,36 +1728,489 @@ function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
 }
 
 /**
- * Detects whether a lateral or oblique (`45°`, `90°`, `135°`, `225°`) cutout human silhouette faces
- * screen-left or screen-right by comparing forefoot/toe overhang against ankle/lower-shin alignment
- * (immune to overhead umbrellas, hats, or shoulder bags), with a head facial/ear skin-centroid fallback
- * when floor-length coats or dresses cover the ankles.
+ * Pre-crop full-sheet divider line eraser: detects thin vertical/horizontal grid lines drawn by
+ * image models along panel boundaries (`0`, `w/3`, `w/2`, `2w/3`, `w-1`, `h/2`) and replaces them
+ * with the median studio backdrop color so cluster detection and panel crops never inherit white poles.
  */
-function detectLateralCanvasFacingDirection(
-  canvas: HTMLCanvasElement
-): 'left' | 'right' | 'neutral' {
-  const cw = canvas.width;
-  const ch = canvas.height;
-  if (cw < 180 || ch < 180) return 'neutral';
-  const bounds = measureOpaqueVerticalBounds(canvas);
-  if (!bounds) return 'neutral';
-  const fgH = bounds.maxY - bounds.minY + 1;
-  const fgW = bounds.maxX - bounds.minX + 1;
-  if (fgH < 96 || fgW < 24) return 'neutral';
+export function eraseSheetGridDividerLinesInBuffer(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number
+): void {
+  if (w < 120 || h < 120) return;
 
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return 'neutral';
-  let data: Uint8ClampedArray;
-  try {
-    data = ctx.getImageData(0, 0, cw, ch).data;
-  } catch {
-    return 'neutral';
+  const rSamples: number[] = [];
+  const gSamples: number[] = [];
+  const bSamples: number[] = [];
+  const sampleYs = [4, Math.floor(h * 0.25), Math.floor(h * 0.75), h - 5];
+  const sampleXs = [
+    Math.floor(w * 0.06),
+    Math.floor(w * 0.16),
+    Math.floor(w * 0.84),
+    Math.floor(w * 0.94),
+  ];
+  for (const sy of sampleYs) {
+    if (sy < 0 || sy >= h) continue;
+    for (const sx of sampleXs) {
+      if (sx < 0 || sx >= w) continue;
+      const idx = (sy * w + sx) * 4;
+      if (data[idx + 3] >= 180) {
+        rSamples.push(data[idx]);
+        gSamples.push(data[idx + 1]);
+        bSamples.push(data[idx + 2]);
+      }
+    }
+  }
+  if (rSamples.length === 0) return;
+  rSamples.sort((a, b) => a - b);
+  gSamples.sort((a, b) => a - b);
+  bSamples.sort((a, b) => a - b);
+  const mid = Math.floor(rSamples.length / 2);
+  const bgR = rSamples[mid];
+  const bgG = gSamples[mid];
+  const bgB = bSamples[mid];
+
+  const isNearVerticalGridZone = (x: number): boolean => {
+    const nx = x / w;
+    return (
+      nx <= 0.035 ||
+      nx >= 0.965 ||
+      Math.abs(nx - 1 / 3) <= 0.085 ||
+      Math.abs(nx - 0.5) <= 0.065 ||
+      Math.abs(nx - 2 / 3) <= 0.085 ||
+      Math.abs(nx - 0.25) <= 0.045 ||
+      Math.abs(nx - 0.75) <= 0.045
+    );
+  };
+
+  const isVerticalRuleCol = new Uint8Array(w);
+  const yStep = Math.max(1, Math.floor(h / 180));
+  const totalSampleRows = Math.max(1, Math.ceil(h / yStep));
+
+  for (let x = 0; x < w; x += 1) {
+    if (!isNearVerticalGridZone(x)) continue;
+    let nonBgCount = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    for (let y = 0; y < h; y += yStep) {
+      const idx = (y * w + x) * 4;
+      const diff =
+        Math.abs(data[idx] - bgR) +
+        Math.abs(data[idx + 1] - bgG) +
+        Math.abs(data[idx + 2] - bgB);
+      if (diff > 26) {
+        nonBgCount += 1;
+        sumR += data[idx];
+        sumG += data[idx + 1];
+        sumB += data[idx + 2];
+      }
+    }
+    if (nonBgCount / totalSampleRows < 0.46) continue;
+
+    const meanR = sumR / nonBgCount;
+    const meanG = sumG / nonBgCount;
+    const meanB = sumB / nonBgCount;
+    let consistentCount = 0;
+    for (let y = 0; y < h; y += yStep) {
+      const idx = (y * w + x) * 4;
+      const diffBg =
+        Math.abs(data[idx] - bgR) +
+        Math.abs(data[idx + 1] - bgG) +
+        Math.abs(data[idx + 2] - bgB);
+      if (diffBg <= 26) continue;
+      const diffMean =
+        Math.abs(data[idx] - meanR) +
+        Math.abs(data[idx + 1] - meanG) +
+        Math.abs(data[idx + 2] - meanB);
+      if (diffMean <= 44) {
+        consistentCount += 1;
+      }
+    }
+    if (consistentCount / nonBgCount >= 0.72) {
+      isVerticalRuleCol[x] = 1;
+    }
   }
 
-  const ankleY0 = Math.max(bounds.minY, bounds.maxY - Math.round(fgH * 0.21));
-  const ankleY1 = Math.max(ankleY0, bounds.maxY - Math.round(fgH * 0.105));
-  const footY0 = Math.max(ankleY1 + 1, bounds.maxY - Math.round(fgH * 0.072));
-  const footY1 = bounds.maxY;
+  const maxRuleW = Math.max(12, Math.round(w * 0.022));
+  let vx = 0;
+  while (vx < w) {
+    if (!isVerticalRuleCol[vx]) {
+      vx += 1;
+      continue;
+    }
+    let vxEnd = vx;
+    while (vxEnd + 1 < w && isVerticalRuleCol[vxEnd + 1]) {
+      vxEnd += 1;
+    }
+    if (vxEnd - vx + 1 <= maxRuleW) {
+      const wipeX0 = Math.max(0, vx - 1);
+      const wipeX1 = Math.min(w - 1, vxEnd + 1);
+      for (let y = 0; y < h; y += 1) {
+        const leftRefX = Math.max(0, wipeX0 - 2);
+        const rightRefX = Math.min(w - 1, wipeX1 + 2);
+        const lIdx = (y * w + leftRefX) * 4;
+        const rIdx = (y * w + rightRefX) * 4;
+        const lDiff =
+          Math.abs(data[lIdx] - bgR) +
+          Math.abs(data[lIdx + 1] - bgG) +
+          Math.abs(data[lIdx + 2] - bgB);
+        const rDiff =
+          Math.abs(data[rIdx] - bgR) +
+          Math.abs(data[rIdx + 1] - bgG) +
+          Math.abs(data[rIdx + 2] - bgB);
+        // Only overwrite rows where at least one side of the rule is background (protects crossing sleeves!)
+        if (lDiff <= 38 || rDiff <= 38) {
+          const fillR = lDiff <= rDiff ? data[lIdx] : data[rIdx];
+          const fillG = lDiff <= rDiff ? data[lIdx + 1] : data[rIdx + 1];
+          const fillB = lDiff <= rDiff ? data[lIdx + 2] : data[rIdx + 2];
+          const useFill = Math.min(lDiff, rDiff) <= 38;
+          for (let x = wipeX0; x <= wipeX1; x += 1) {
+            const pIdx = (y * w + x) * 4;
+            data[pIdx] = useFill ? fillR : bgR;
+            data[pIdx + 1] = useFill ? fillG : bgG;
+            data[pIdx + 2] = useFill ? fillB : bgB;
+            data[pIdx + 3] = 255;
+          }
+        }
+      }
+    }
+    vx = vxEnd + 1;
+  }
+
+  // Horizontal divider row scan near top, middle (h/2), and bottom borders
+  const isHorizontalRuleRow = new Uint8Array(h);
+  const xStep = Math.max(1, Math.floor(w / 180));
+  const totalSampleCols = Math.max(1, Math.ceil(w / xStep));
+  for (let y = 0; y < h; y += 1) {
+    const ny = y / h;
+    if (!(ny <= 0.035 || ny >= 0.965 || Math.abs(ny - 0.5) <= 0.075)) continue;
+    let nonBgCount = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    for (let x = 0; x < w; x += xStep) {
+      const idx = (y * w + x) * 4;
+      const diff =
+        Math.abs(data[idx] - bgR) +
+        Math.abs(data[idx + 1] - bgG) +
+        Math.abs(data[idx + 2] - bgB);
+      if (diff > 26) {
+        nonBgCount += 1;
+        sumR += data[idx];
+        sumG += data[idx + 1];
+        sumB += data[idx + 2];
+      }
+    }
+    if (nonBgCount / totalSampleCols < 0.46) continue;
+    const meanR = sumR / nonBgCount;
+    const meanG = sumG / nonBgCount;
+    const meanB = sumB / nonBgCount;
+    let consistentCount = 0;
+    for (let x = 0; x < w; x += xStep) {
+      const idx = (y * w + x) * 4;
+      const diffBg =
+        Math.abs(data[idx] - bgR) +
+        Math.abs(data[idx + 1] - bgG) +
+        Math.abs(data[idx + 2] - bgB);
+      if (diffBg <= 26) continue;
+      const diffMean =
+        Math.abs(data[idx] - meanR) +
+        Math.abs(data[idx + 1] - meanG) +
+        Math.abs(data[idx + 2] - meanB);
+      if (diffMean <= 44) consistentCount += 1;
+    }
+    if (consistentCount / nonBgCount >= 0.72) {
+      isHorizontalRuleRow[y] = 1;
+    }
+  }
+
+  const maxRuleH = Math.max(12, Math.round(h * 0.024));
+  let hy = 0;
+  while (hy < h) {
+    if (!isHorizontalRuleRow[hy]) {
+      hy += 1;
+      continue;
+    }
+    let hyEnd = hy;
+    while (hyEnd + 1 < h && isHorizontalRuleRow[hyEnd + 1]) {
+      hyEnd += 1;
+    }
+    if (hyEnd - hy + 1 <= maxRuleH) {
+      const wipeY0 = Math.max(0, hy - 1);
+      const wipeY1 = Math.min(h - 1, hyEnd + 1);
+      for (let x = 0; x < w; x += 1) {
+        const topRefY = Math.max(0, wipeY0 - 2);
+        const botRefY = Math.min(h - 1, wipeY1 + 2);
+        const tIdx = (topRefY * w + x) * 4;
+        const bIdx = (botRefY * w + x) * 4;
+        const tDiff =
+          Math.abs(data[tIdx] - bgR) +
+          Math.abs(data[tIdx + 1] - bgG) +
+          Math.abs(data[tIdx + 2] - bgB);
+        const bDiff =
+          Math.abs(data[bIdx] - bgR) +
+          Math.abs(data[bIdx + 1] - bgG) +
+          Math.abs(data[bIdx + 2] - bgB);
+        if (tDiff <= 38 || bDiff <= 38) {
+          for (let y = wipeY0; y <= wipeY1; y += 1) {
+            const pIdx = (y * w + x) * 4;
+            data[pIdx] = bgR;
+            data[pIdx + 1] = bgG;
+            data[pIdx + 2] = bgB;
+            data[pIdx + 3] = 255;
+          }
+        }
+      }
+    }
+    hy = hyEnd + 1;
+  }
+}
+
+/**
+ * Post-cutout RGBA artifact scrubber:
+ * 1) Removes outer-margin vertical poles & horizontal border lines even if a sleeve/hem grazed them.
+ * 2) Runs 8-connected component filtering to keep the primary human silhouette while purging detached
+ *    panel divider lines, edge bars, and stray floating specks (`alpha = 0`).
+ */
+export function scrubCutoutArtifactsInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number
+): void {
+  if (cw < 48 || ch < 48) return;
+
+  // Pass 1: Margin vertical pole / divider-line scrubber (outer 22% left & right margins)
+  const leftMarginMax = Math.floor(cw * 0.22);
+  const rightMarginMin = Math.ceil(cw * 0.78);
+  const colOpaqueSpan = new Uint8Array(cw);
+
+  for (let x = 0; x < cw; x += 1) {
+    if (x > leftMarginMax && x < rightMarginMin) continue;
+    let minY = ch;
+    let maxY = -1;
+    let count = 0;
+    for (let y = 0; y < ch; y += 1) {
+      if (data[(y * cw + x) * 4 + 3] >= 24) {
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        count += 1;
+      }
+    }
+    const span = maxY - minY + 1;
+    if (count >= Math.round(ch * 0.26) && span >= Math.round(ch * 0.3) && count / span >= 0.55) {
+      colOpaqueSpan[x] = 1;
+    }
+  }
+
+  const maxPoleW = Math.max(10, Math.round(cw * 0.048));
+  let px = 0;
+  while (px < cw) {
+    if (!colOpaqueSpan[px]) {
+      px += 1;
+      continue;
+    }
+    let pxEnd = px;
+    while (pxEnd + 1 < cw && colOpaqueSpan[pxEnd + 1]) {
+      pxEnd += 1;
+    }
+    if (pxEnd - px + 1 <= maxPoleW) {
+      let isolatedRows = 0;
+      let activeRows = 0;
+      const probeL = px - 2;
+      const probeR = pxEnd + 2;
+      for (let y = 0; y < ch; y += 1) {
+        let hasRowPixel = false;
+        for (let x = px; x <= pxEnd; x += 1) {
+          if (data[(y * cw + x) * 4 + 3] >= 24) {
+            hasRowPixel = true;
+            break;
+          }
+        }
+        if (!hasRowPixel) continue;
+        activeRows += 1;
+        const leftClear = probeL < 0 || data[(y * cw + probeL) * 4 + 3] < 28;
+        const rightClear = probeR >= cw || data[(y * cw + probeR) * 4 + 3] < 28;
+        if (leftClear && rightClear) {
+          isolatedRows += 1;
+        }
+      }
+      if (activeRows > 0 && isolatedRows / activeRows >= 0.65) {
+        const eraseX0 = Math.max(0, px - 1);
+        const eraseX1 = Math.min(cw - 1, pxEnd + 1);
+        for (let y = 0; y < ch; y += 1) {
+          const leftClear = probeL < 0 || data[(y * cw + probeL) * 4 + 3] < 28;
+          const rightClear = probeR >= cw || data[(y * cw + probeR) * 4 + 3] < 28;
+          if (leftClear && rightClear) {
+            for (let x = eraseX0; x <= eraseX1; x += 1) {
+              data[(y * cw + x) * 4 + 3] = 0;
+            }
+          }
+        }
+      }
+    }
+    px = pxEnd + 1;
+  }
+
+  // Pass 2: 8-connected component filter on opaque foreground (`alpha >= 20`)
+  const totalPx = cw * ch;
+  const labels = new Int32Array(totalPx);
+  const queue = new Int32Array(totalPx);
+  interface CompStats {
+    id: number;
+    area: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    sumX: number;
+  }
+  const comps: CompStats[] = [];
+  let nextId = 1;
+
+  for (let p = 0; p < totalPx; p += 1) {
+    if (labels[p] !== 0 || data[p * 4 + 3] < 20) continue;
+    const id = nextId;
+    nextId += 1;
+    labels[p] = id;
+    let qHead = 0;
+    let qTail = 0;
+    queue[qTail++] = p;
+
+    let area = 0;
+    let minX = cw;
+    let maxX = -1;
+    let minY = ch;
+    let maxY = -1;
+    let sumX = 0;
+
+    while (qHead < qTail) {
+      const cur = queue[qHead++];
+      const cy = Math.floor(cur / cw);
+      const cx = cur - cy * cw;
+      area += 1;
+      sumX += cx;
+      if (cx < minX) minX = cx;
+      if (cx > maxX) maxX = cx;
+      if (cy < minY) minY = cy;
+      if (cy > maxY) maxY = cy;
+
+      const y0 = cy > 0 ? cy - 1 : 0;
+      const y1 = cy + 1 < ch ? cy + 1 : ch - 1;
+      const x0 = cx > 0 ? cx - 1 : 0;
+      const x1 = cx + 1 < cw ? cx + 1 : cw - 1;
+      for (let ny = y0; ny <= y1; ny += 1) {
+        const rowOff = ny * cw;
+        for (let nx = x0; nx <= x1; nx += 1) {
+          const np = rowOff + nx;
+          if (labels[np] === 0 && data[np * 4 + 3] >= 20) {
+            labels[np] = id;
+            queue[qTail++] = np;
+          }
+        }
+      }
+    }
+
+    comps.push({ id, area, minX, maxX, minY, maxY, sumX });
+  }
+
+  if (comps.length <= 1) return;
+
+  let primaryComp = comps[0];
+  let bestScore = -1;
+  for (const c of comps) {
+    const meanX = c.sumX / Math.max(1, c.area);
+    const centerDist = Math.abs(meanX - cw * 0.5) / (cw * 0.5);
+    const score = c.area * (1 - 0.35 * Math.min(1, centerDist));
+    if (score > bestScore) {
+      bestScore = score;
+      primaryComp = c;
+    }
+  }
+
+  const eraseIds = new Uint8Array(nextId);
+  for (const c of comps) {
+    if (c.id === primaryComp.id) continue;
+    const compW = c.maxX - c.minX + 1;
+    const compH = c.maxY - c.minY + 1;
+    const isTallThinLine =
+      compH / Math.max(1, compW) >= 4.2 && compW <= Math.max(12, Math.round(cw * 0.055));
+    const isWideThinLine =
+      compW / Math.max(1, compH) >= 5.2 && compH <= Math.max(12, Math.round(ch * 0.045));
+    const outsideHumanSpan =
+      c.maxX < primaryComp.minX - 4 || c.minX > primaryComp.maxX + 4;
+    const tinySpeck = c.area < Math.max(18, Math.round(primaryComp.area * 0.002));
+
+    if (isTallThinLine || isWideThinLine || outsideHumanSpan || tinySpeck) {
+      eraseIds[c.id] = 1;
+    }
+  }
+
+  for (let p = 0; p < totalPx; p += 1) {
+    const lid = labels[p];
+    if (lid > 0 && eraseIds[lid]) {
+      data[p * 4 + 3] = 0;
+    }
+  }
+}
+
+function scrubCutoutArtifactsOnCanvas(canvas: HTMLCanvasElement): void {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 48 || ch < 48) return;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+  try {
+    const imgData = ctx.getImageData(0, 0, cw, ch);
+    scrubCutoutArtifactsInBuffer(imgData.data, cw, ch);
+    ctx.putImageData(imgData, 0, 0);
+  } catch {
+    // Ignore tainted canvas read errors
+  }
+}
+
+/**
+ * Pure buffer implementation of lateral/oblique (`45°`, `90°`, `135°`, `225°`) gaze & foot facing
+ * direction detection:
+ * 1) Primary signal: lower-shin/ankle vs shoe-sole toe overhang & centroid shift.
+ * 2) Secondary signal (when coats/dresses or symmetric stance obscure ankle overhang): head facial/ear
+ *    skin centroid vs darker hair mass, using adaptive head-luminance contrast so warm brown/auburn
+ *    hair never masquerades as facial skin.
+ */
+export function detectLateralFacingDirectionInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number
+): 'left' | 'right' | 'neutral' {
+  if (cw < 120 || ch < 120) return 'neutral';
+
+  let minY = ch;
+  let maxY = -1;
+  let minX = cw;
+  let maxX = -1;
+  let fgPixels = 0;
+  for (let y = 0; y < ch; y += 1) {
+    const rowOff = y * cw;
+    for (let x = 0; x < cw; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 48) {
+        fgPixels += 1;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+  }
+  if (fgPixels < 64 || maxY < minY) return 'neutral';
+
+  const fgH = maxY - minY + 1;
+  const fgW = maxX - minX + 1;
+  if (fgH < 96 || fgW < 24) return 'neutral';
+
+  const ankleY0 = Math.max(minY, maxY - Math.round(fgH * 0.21));
+  const ankleY1 = Math.max(ankleY0, maxY - Math.round(fgH * 0.105));
+  const footY0 = Math.max(ankleY1 + 1, maxY - Math.round(fgH * 0.072));
+  const footY1 = maxY;
 
   let ankleMinX = cw;
   let ankleMaxX = -1;
@@ -1734,7 +2219,7 @@ function detectLateralCanvasFacingDirection(
 
   for (let y = ankleY0; y <= ankleY1; y += 1) {
     const row = y * cw * 4;
-    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
       if (data[row + x * 4 + 3] >= 120) {
         if (x < ankleMinX) ankleMinX = x;
         if (x > ankleMaxX) ankleMaxX = x;
@@ -1751,7 +2236,7 @@ function detectLateralCanvasFacingDirection(
 
   for (let y = footY0; y <= footY1; y += 1) {
     const row = y * cw * 4;
-    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
       if (data[row + x * 4 + 3] >= 120) {
         if (x < footMinX) footMinX = x;
         if (x > footMaxX) footMaxX = x;
@@ -1780,41 +2265,79 @@ function detectLateralCanvasFacingDirection(
     }
   }
 
-  // Fallback for ankle-length coats/dresses: warm skin centroid in head band vs head opaque midpoint
-  const headY0 = Math.min(bounds.maxY, bounds.minY + Math.round(fgH * 0.035));
-  const headY1 = Math.min(bounds.maxY, bounds.minY + Math.round(fgH * 0.115));
+  // Fallback for long coats/dresses or compact stances: head facial/ear skin vs hair mass
+  const headY0 = Math.min(maxY, minY + Math.round(fgH * 0.035));
+  const headY1 = Math.min(maxY, minY + Math.round(fgH * 0.135));
   let headMinX = cw;
   let headMaxX = -1;
-  let skinSumX = 0;
-  let skinCount = 0;
+  let headLumSum = 0;
+  let headMaxLum = 0;
+  let headOpaqueCount = 0;
 
   for (let y = headY0; y <= headY1; y += 1) {
     const row = y * cw * 4;
-    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
       const idx = row + x * 4;
       if (data[idx + 3] < 150) continue;
       if (x < headMinX) headMinX = x;
       if (x > headMaxX) headMaxX = x;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      if (r >= 95 && r > g + 8 && g > b + 4) {
-        skinSumX += x;
-        skinCount += 1;
-      }
+      const lum = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+      headLumSum += lum;
+      if (lum > headMaxLum) headMaxLum = lum;
+      headOpaqueCount += 1;
     }
   }
 
   const headW = headMaxX - headMinX + 1;
-  if (skinCount >= 16 && headW >= 14) {
-    const headMidX = (headMinX + headMaxX) * 0.5;
-    const skinOffset = skinSumX / skinCount - headMidX;
-    const minSkinShift = Math.max(2.5, headW * 0.07);
-    if (skinOffset < -minSkinShift) return 'left';
-    if (skinOffset > minSkinShift) return 'right';
+  if (headOpaqueCount >= 24 && headW >= 14) {
+    const headMeanLum = headLumSum / headOpaqueCount;
+    const minSkinLum =
+      headMaxLum >= 140 ? Math.max(122, headMeanLum + 10) : Math.max(48, headMeanLum + 5);
+
+    let skinSumX = 0;
+    let skinCount = 0;
+    for (let y = headY0; y <= headY1; y += 1) {
+      const row = y * cw * 4;
+      for (let x = headMinX; x <= headMaxX; x += 1) {
+        const idx = row + x * 4;
+        if (data[idx + 3] < 150) continue;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (lum >= minSkinLum && r > g + 6 && g >= b - 2 && r - b >= 12) {
+          skinSumX += x;
+          skinCount += 1;
+        }
+      }
+    }
+
+    if (skinCount >= 12) {
+      const headMidX = (headMinX + headMaxX) * 0.5;
+      const skinOffset = skinSumX / skinCount - headMidX;
+      const minSkinShift = Math.max(2.2, headW * 0.065);
+      if (skinOffset < -minSkinShift) return 'left';
+      if (skinOffset > minSkinShift) return 'right';
+    }
   }
 
   return 'neutral';
+}
+
+function detectLateralCanvasFacingDirection(
+  canvas: HTMLCanvasElement
+): 'left' | 'right' | 'neutral' {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 120 || ch < 120) return 'neutral';
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return 'neutral';
+  try {
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    return detectLateralFacingDirectionInBuffer(data, cw, ch);
+  } catch {
+    return 'neutral';
+  }
 }
 
 interface HorizontalSpan {
@@ -1934,7 +2457,7 @@ function resolveThreeColumnCropSpans(
     ];
   }
   const colW = Math.floor(w / 3);
-  const trimX = Math.max(1, Math.round(colW * 0.012));
+  const trimX = Math.max(2, Math.round(colW * 0.018));
   return [
     { x0: trimX, x1: colW - trimX },
     { x0: colW + trimX, x1: colW * 2 - trimX },
@@ -1947,8 +2470,9 @@ function resolveThreeColumnCropSpans(
  * — or a legacy/mock 2x2 sheet (`0°, 45°, 90°, 180°`) — into 6 individual RGBA PNG angle slices:
  * - Row 1: `0°` (Front), `45°` (Front-Right), `90°` (Right Side)
  * - Row 2: `135°` (Back-Right `우후면`), `180°` (Straight Back `후면`), `225°` (Back-Left `좌후면`)
- * Runs `isolateSingleSubjectInSlice` + V4 hole-aware `applyCornerBfsCutoutOnCanvas` +
- * gaze-direction normalization + `normalizeTurnaroundCanvasesToFloorBaseline`.
+ * Runs pre-crop sheet divider-line erasing + `isolateSingleSubjectInSlice` + V4 hole-aware
+ * `applyCornerBfsCutoutOnCanvas` + `scrubCutoutArtifactsOnCanvas` + gaze-direction normalization +
+ * `normalizeTurnaroundCanvasesToFloorBaseline`.
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string,
@@ -1981,6 +2505,24 @@ export async function sliceTurnaround2x2Sheet(
           return;
         }
 
+        // Draw sheet onto a working canvas and erase any model-drawn grid divider lines BEFORE clustering/cropping
+        const sheetCanvas = document.createElement('canvas');
+        sheetCanvas.width = w;
+        sheetCanvas.height = h;
+        const sheetCtx = sheetCanvas.getContext('2d', { willReadFrequently: true });
+        if (sheetCtx) {
+          sheetCtx.drawImage(img, 0, 0);
+          if (w >= 256 && h >= 256) {
+            try {
+              const sheetImgData = sheetCtx.getImageData(0, 0, w, h);
+              eraseSheetGridDividerLinesInBuffer(sheetImgData.data, w, h);
+              sheetCtx.putImageData(sheetImgData, 0, 0);
+            } catch {
+              // Ignore cross-origin read errors if any
+            }
+          }
+        }
+
         const isExplicit2x2 = options?.layout === 'turnaround_2x2' || w < 256 || h < 256;
         const isHorizontal1x6Strip = !isExplicit2x2 && w / h >= 3.15;
         const isHorizontal1x4Strip = !isHorizontal1x6Strip && w / h >= 2.15;
@@ -1989,24 +2531,19 @@ export async function sliceTurnaround2x2Sheet(
         let botClusters: HorizontalSpan[] = [];
         const halfH = Math.floor(h / 2);
 
-        if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip) {
-          const probeCanvas = document.createElement('canvas');
-          probeCanvas.width = w;
-          probeCanvas.height = h;
-          const probeCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
-          if (probeCtx) {
-            probeCtx.drawImage(img, 0, 0);
-            topClusters = detectRowSubjectClusters(probeCtx, w, 0, halfH);
-            botClusters = detectRowSubjectClusters(probeCtx, w, halfH, h);
-          }
-          probeCanvas.width = 0;
-          probeCanvas.height = 0;
+        if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip && sheetCtx) {
+          topClusters = detectRowSubjectClusters(sheetCtx, w, 0, halfH);
+          botClusters = detectRowSubjectClusters(sheetCtx, w, halfH, h);
         }
+
+        const detectedPure2x2OnSquare =
+          topClusters.length === 2 && botClusters.length === 2 && w / h < 1.15;
 
         const use3x2Grid =
           !isExplicit2x2 &&
           !isHorizontal1x6Strip &&
           !isHorizontal1x4Strip &&
+          !detectedPure2x2OnSquare &&
           (options?.layout === 'turnaround_3x2' ||
             topClusters.length >= 3 ||
             botClusters.length >= 3 ||
@@ -2034,7 +2571,7 @@ export async function sliceTurnaround2x2Sheet(
             ch,
           }));
         } else if (use3x2Grid) {
-          const trimY = Math.max(1, Math.round(halfH * 0.012));
+          const trimY = Math.max(2, Math.round(halfH * 0.016));
           const ch = Math.max(16, halfH - trimY * 2);
           const topSpans = resolveThreeColumnCropSpans(topClusters, w);
           const botSpans = resolveThreeColumnCropSpans(botClusters, w);
@@ -2074,8 +2611,8 @@ export async function sliceTurnaround2x2Sheet(
           ];
         } else {
           const halfW = Math.floor(w / 2);
-          const trimX = Math.max(1, Math.round(halfW * 0.012));
-          const trimY = Math.max(1, Math.round(halfH * 0.012));
+          const trimX = Math.max(2, Math.round(halfW * 0.016));
+          const trimY = Math.max(2, Math.round(halfH * 0.016));
           const cw = Math.max(16, halfW - trimX * 2);
           const ch = Math.max(16, halfH - trimY * 2);
           panels = [
@@ -2088,7 +2625,8 @@ export async function sliceTurnaround2x2Sheet(
 
         const out = {} as Record<TurnaroundAngleDeg, string>;
         const cutCanvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
-        const extraCanvases: HTMLCanvasElement[] = [];
+        const extraCanvases: HTMLCanvasElement[] = [sheetCanvas];
+        const cropSource: CanvasImageSource = sheetCtx ? sheetCanvas : img;
 
         for (const p of panels) {
           const cropCanvas = document.createElement('canvas');
@@ -2100,12 +2638,13 @@ export async function sliceTurnaround2x2Sheet(
             continue;
           }
           ctx.clearRect(0, 0, p.cw, p.ch);
-          ctx.drawImage(img, p.sx, p.sy, p.cw, p.ch, 0, 0, p.cw, p.ch);
+          ctx.drawImage(cropSource, p.sx, p.sy, p.cw, p.ch, 0, 0, p.cw, p.ch);
           const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
           if (finalCanvas !== cropCanvas) {
             extraCanvases.push(cropCanvas);
           }
           applyCornerBfsCutoutOnCanvas(finalCanvas);
+          scrubCutoutArtifactsOnCanvas(finalCanvas);
 
           // Normalize canonical gaze: `45°`, `90°`, `135°` face screen-right; `225°` faces screen-left!
           if (forceFlipSet.has(p.angle)) {
@@ -2127,6 +2666,25 @@ export async function sliceTurnaround2x2Sheet(
 
         normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
 
+        // If slicing a 4-panel 2x2 sheet (e.g. square fallback), synthesize distinct left-facing 225° from 90°!
+        if (!cutCanvases[135] && cutCanvases[90]) {
+          out[135] = cutCanvases[90].toDataURL('image/png');
+        }
+        if (!cutCanvases[225] && cutCanvases[90]) {
+          const mirror225 = document.createElement('canvas');
+          mirror225.width = cutCanvases[90].width;
+          mirror225.height = cutCanvases[90].height;
+          const mCtx = mirror225.getContext('2d');
+          if (mCtx) {
+            mCtx.translate(mirror225.width, 0);
+            mCtx.scale(-1, 1);
+            mCtx.drawImage(cutCanvases[90], 0, 0);
+            out[225] = mirror225.toDataURL('image/png');
+          }
+          mirror225.width = 0;
+          mirror225.height = 0;
+        }
+
         for (const angle of TURNAROUND_ANGLES) {
           const c = cutCanvases[angle];
           if (c) {
@@ -2135,7 +2693,6 @@ export async function sliceTurnaround2x2Sheet(
             c.height = 0;
           }
         }
-        // Populate rear-quarter keys cleanly when slicing legacy/mock 4-panel 2x2 sheets
         if (!out[135]) {
           out[135] = out[90] || out[180] || out[0] || sheetDataUrl;
         }
@@ -2528,7 +3085,7 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `4:3 Borderless 3x2 Turnaround Sheet (STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 panels (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any panel).`
+    ? `4:3 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 invisible zones (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any zone, and NEVER draw vertical or horizontal panel separator lines).`
     : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
@@ -2541,7 +3098,7 @@ function buildDirectClientGeminiParts(params: {
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (facing VIEWER'S RIGHT); on 135° Back-Right (Row 2 Left) and 225° Back-Left (Row 2 Right) render the matching rear-quarter hairstyle, ear, and lost-profile cheek/jawline contour facing diagonally away (rightward on 135°, leftward on 225°); and on Row 2 Center 180° Straight Back render ONLY the symmetrical back of the head & rear hair silhouette (STRICTLY ZERO front face on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
+      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (pure lateral side profile facing VIEWER'S RIGHT showing ONLY ONE eye and ZERO back view); on 135° Back-Right (Row 2 Left) and 225° Back-Left (Row 2 Right) render the matching rear-quarter hairstyle, ear, and lost-profile cheek/jawline contour facing diagonally away (rightward on 135°, leftward on 225°); and on Row 2 Center 180° Straight Back render ONLY the symmetrical back of the head & rear hair silhouette (STRICTLY ZERO front face on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
   }
@@ -2588,7 +3145,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per panel. Return image only.`,
+    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per zone. Return image only.`,
   });
 
   return parts;
@@ -2622,6 +3179,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   }> = [
     { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true },
     { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false },
+    { responseModalities: ['IMAGE'], useAspectConfig: true },
     { responseModalities: ['IMAGE'], useAspectConfig: false },
   ];
   let lastReason = 'gemini_no_image_generated';

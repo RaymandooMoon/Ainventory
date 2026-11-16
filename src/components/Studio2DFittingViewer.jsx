@@ -1376,6 +1376,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     );
   }, [hasPinnedHistoryOverride, pinnedHistoryItem, canonicalSliceAngle]);
 
+  const pinnedHistoryForceMirrorX = Boolean(
+    stageMode === 'ai-vton' &&
+      hasPinnedHistoryOverride &&
+      pinnedHistoryItem &&
+      canonicalSliceAngle === 225 &&
+      !pinnedHistoryItem.angleSlices?.[225] &&
+      (pinnedHistoryItem.angleSlices?.[90] || pinnedHistoryItem.angleSlices?.[45])
+  );
+
   const availableAiImageUrl =
     pinnedHistorySliceUrl ||
     memorySlice?.imageUrl ||
@@ -1474,7 +1483,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-angle-scroll={angleScrollDeg}
       data-avatar-hash={resolvedAvatarHash}
     >
-      {/* Stage Base (z-0..2): 3D Architectural Showroom Backdrop + Sunlight Gobos */}
+      {/* Stage Base (z-0..2): Seamless Infinity-Cove Cyclorama Photography Studio */}
       <div aria-hidden="true" className="studio-25d-keylight" />
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
       <FittingAtelierBackdrop
@@ -1483,7 +1492,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         theme={resolvedTheme}
       />
 
-      {/* Layer 1A (z-10): Perspective Ground Horizon Deck + Real-Time Wet Mirror Reflection + Contact AO Shadow */}
+      {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection + Contact AO Shadow */}
       <StageGroundDeck
         effectiveWeather={effectiveWeather}
         scenarioKey={scenarioKey}
@@ -1491,7 +1500,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         modelImageUrl={resolvedAiImageUrl}
         stageMode={stageMode}
         equippedCount={equippedCount}
-        mirrorX={angleSpec.mirrorX}
+        mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
         zoom={zoom}
         idealBaseScale={idealBaseScale}
         pan={pan}
@@ -1523,26 +1532,38 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     ? `Rendering ${canonicalSliceAngle}° full-body weather pose...`
                     : `${canonicalSliceAngle}° 전신 날씨 포즈 AI 렌더링 중...`
                   : isEn
-                    ? 'V4 hole-aware cutout & floor reflection...'
-                    : 'V4 내부 홀 투명 누끼 및 지면 접지 합성 중...'}
+                    ? 'V7 clean cutout & cyclorama grounding...'
+                    : 'V7 투명 누끼 및 호리존 스튜디오 접지 중...'}
             </span>
           </div>
         </>
       )}
 
-      {/* Layer 4 (z-55+): Clean Slim Top HUD — Left Weather Capsule | Right [기록] */}
+      {/* Layer 4 (z-55+): Clean Slim Top HUD — Left Spacer | Top-Center Weather Capsule | Right [기록] */}
       <div className="studio-stage-top-hud">
+        <div className="studio-hud-left-spacer" aria-hidden="true" />
+
         <div className="atelier-stage-brand-cluster" aria-hidden="true">
-          <div className="atelier-weather-capsule" data-atelier-weather-capsule="true">
+          <div
+            className="atelier-weather-capsule is-top-center tabular-nums"
+            data-atelier-weather-capsule="true"
+            data-weather-stage-badge={effectiveWeather}
+          >
             <span className="atelier-weather-capsule-icon">
               {renderWeatherCapsuleIcon(effectiveWeather, scenarioKey)}
             </span>
             <div className="atelier-weather-capsule-metrics">
-              <strong className="atelier-weather-capsule-temp tabular-nums">
-                {capsuleTempC}°C
-              </strong>
-              <span className="atelier-weather-capsule-sub tabular-nums">
-                {capsuleTempC}°C / {capsuleStatusWord}
+              <div className="atelier-weather-capsule-primary-row">
+                <strong className="atelier-weather-capsule-temp">
+                  {capsuleTempC}°C
+                </strong>
+                <span className="studio-weather-curation-dot" />
+                <span className="atelier-weather-capsule-curation">
+                  {weatherBadgeMeta.curationLabel}
+                </span>
+              </div>
+              <span className="atelier-weather-capsule-sub">
+                {weatherBadgeMeta.tempText} · {capsuleStatusWord}
               </span>
             </div>
           </div>
@@ -1617,16 +1638,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Weather Curation Pill Badge */}
-      <div
-        className="studio-weather-curation-badge tabular-nums"
-        data-weather-stage-badge={effectiveWeather}
-        aria-hidden="true"
-      >
-        <span className="studio-weather-curation-dot" />
-        <span className="studio-weather-curation-text">{weatherBadgeMeta.fullText}</span>
-      </div>
-
       {/* Transient Non-Interactive 360° Swipe Angle Feedback Pill (fades out automatically) */}
       {swipeHudBadgeVisible && (
         <div
@@ -1668,6 +1679,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         personReferenceUrl={activeFacePhotoUrl}
         viewAngleDeg={viewAngleDeg}
         scrollResidualYawDeg={scrollResidualYawDeg}
+        forceMirrorX={pinnedHistoryForceMirrorX}
         onSwipeRotate={handleSwipeRotate}
         onTapCharacter={handleTapCharacter}
         onCloseFlatLay={handleCloseFlatLay}

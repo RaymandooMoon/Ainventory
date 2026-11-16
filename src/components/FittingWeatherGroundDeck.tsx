@@ -80,32 +80,32 @@ export function StageGroundDeck({
       ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${effectiveCameraScale.toFixed(3)})`
       : undefined;
 
+  const featheredFloorMask =
+    'linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.42) 32%, rgba(0, 0, 0, 0.86) 66%, #000 100%)';
+
   const wetPlaneSurfaceStyle: React.CSSProperties = isWetPavement
     ? {
-        top: '77.5%',
+        top: '76%',
         pointerEvents: 'none',
+        WebkitMaskImage: featheredFloorMask,
+        maskImage: featheredFloorMask,
         background: isDark
-          ? 'linear-gradient(180deg, rgba(28, 33, 42, 0.34) 0%, rgba(19, 24, 32, 0.68) 42%, rgba(11, 14, 20, 0.88) 100%)'
-          : 'linear-gradient(180deg, rgba(168, 166, 158, 0.18) 0%, rgba(132, 138, 146, 0.36) 44%, rgba(98, 106, 116, 0.52) 100%)',
+          ? 'linear-gradient(180deg, rgba(24, 30, 40, 0.28) 0%, rgba(18, 23, 31, 0.62) 48%, rgba(11, 14, 20, 0.86) 100%)'
+          : 'linear-gradient(180deg, rgba(176, 184, 194, 0.16) 0%, rgba(142, 152, 164, 0.30) 50%, rgba(112, 122, 136, 0.44) 100%)',
       }
-    : { top: '77.5%', pointerEvents: 'none' };
-
-  const wetHorizonStyle: React.CSSProperties = isWetPavement
-    ? {
-        height: '1px',
+    : {
+        top: '76%',
         pointerEvents: 'none',
-        background: isDark
-          ? 'linear-gradient(90deg, transparent 4%, rgba(186, 220, 255, 0.18) 28%, rgba(255, 244, 214, 0.34) 62%, rgba(186, 220, 255, 0.18) 86%, transparent 98%)'
-          : 'linear-gradient(90deg, transparent 4%, rgba(226, 232, 240, 0.34) 28%, rgba(255, 250, 235, 0.62) 62%, rgba(226, 232, 240, 0.32) 86%, transparent 98%)',
-      }
-    : { pointerEvents: 'none' };
+        WebkitMaskImage: featheredFloorMask,
+        maskImage: featheredFloorMask,
+      };
 
   const wetSheenStyle: React.CSSProperties = isWetPavement
     ? {
         pointerEvents: 'none',
         background: isDark
-          ? 'radial-gradient(ellipse 76% 64% at 56% 36%, rgba(255, 228, 174, 0.14) 0%, rgba(148, 197, 255, 0.10) 46%, transparent 84%)'
-          : 'radial-gradient(ellipse 76% 64% at 56% 36%, rgba(255, 246, 222, 0.30) 0%, rgba(186, 214, 242, 0.14) 50%, transparent 84%)',
+          ? 'radial-gradient(ellipse 76% 64% at 50% 38%, rgba(226, 232, 240, 0.10) 0%, rgba(148, 197, 255, 0.08) 48%, transparent 84%)'
+          : 'radial-gradient(ellipse 76% 64% at 50% 38%, rgba(255, 255, 255, 0.34) 0%, rgba(186, 214, 242, 0.12) 52%, transparent 84%)',
       }
     : { pointerEvents: 'none' };
 
@@ -113,9 +113,9 @@ export function StageGroundDeck({
     pointerEvents: 'none',
     clipPath: 'inset(85.5% 0 0 0)',
     WebkitMaskImage:
-      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.84) 88.5%, rgba(0, 0, 0, 0.38) 94.5%, transparent 99.5%)',
+      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.78) 88.5%, rgba(0, 0, 0, 0.34) 94.5%, transparent 99.5%)',
     maskImage:
-      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.84) 88.5%, rgba(0, 0, 0, 0.38) 94.5%, transparent 99.5%)',
+      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.78) 88.5%, rgba(0, 0, 0, 0.34) 94.5%, transparent 99.5%)',
   };
 
   return (
@@ -129,9 +129,8 @@ export function StageGroundDeck({
       className={`studio-stage-ground-deck is-${deckVariant} is-weather-${effectiveWeather} is-theme-${theme} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
       style={rootStyle}
     >
-      {/* Perspective Ground Deck Surface */}
+      {/* Seamless Curved Cyclorama Floor Deck Surface (zero hard horizon line) */}
       <div className="studio-ground-plane-surface" style={wetPlaneSurfaceStyle}>
-        <div className="studio-ground-horizon-line" style={wetHorizonStyle} />
         <div className="studio-ground-perspective-sheen" style={wetSheenStyle} />
         {isWetPavement && (
           <div

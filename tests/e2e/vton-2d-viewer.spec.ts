@@ -258,6 +258,26 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     });
     expect(lightLum).toBeGreaterThan(220);
 
+    // Weather HUD is unified and horizontally centered at the top of the stage
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    await expect(weatherCapsule).toBeVisible();
+    const [stageRect, weatherRect] = await Promise.all([
+      studioCanvas.boundingBox(),
+      weatherCapsule.boundingBox(),
+    ]);
+    expect(stageRect).not.toBeNull();
+    expect(weatherRect).not.toBeNull();
+    if (stageRect && weatherRect) {
+      const stageCenterX = stageRect.x + stageRect.width / 2;
+      const weatherCenterX = weatherRect.x + weatherRect.width / 2;
+      expect(Math.abs(weatherCenterX - stageCenterX)).toBeLessThanOrEqual(20);
+      expect(weatherRect.y - stageRect.y).toBeLessThanOrEqual(24);
+    }
+
+    // Seamless Infinity-Cove Cyclorama studio backdrop (zero cartoon furniture vector props)
+    await expect(studioCanvas.locator('[data-backdrop-style="infinity-cyclorama"]')).toBeVisible();
+    await expect(studioCanvas.locator('.atelier-backdrop-props-svg')).toHaveCount(0);
+
     // Compact preview in Skin-Tone Modal uses non-procedural Avatar Spec Card with zero <canvas>
     await page.locator(`#${CARBON_DOM_CONTRACT.openSkinToneModalBtnId}`).click();
     await expect(page.locator('.skin-modal-character-stage canvas')).toHaveCount(0);

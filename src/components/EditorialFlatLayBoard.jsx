@@ -342,6 +342,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   personReferenceUrl = null,
   viewAngleDeg = DEFAULT_TURNAROUND_ANGLE,
   scrollResidualYawDeg = 0,
+  forceMirrorX = false,
   onSwipeRotate,
   onTapCharacter,
   onCloseFlatLay,
@@ -361,6 +362,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const resolvedStyleMode = normalizeVtonStyleMode(styleMode);
   const safeAngleDeg = normalizeTurnaround360Angle(viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
   const angleSpec = useMemo(() => resolve360AngleRenderSpec(safeAngleDeg), [safeAngleDeg]);
+  const effectiveMirrorX = Boolean(angleSpec.mirrorX || forceMirrorX);
   const resolvedLang = lang === 'en' || lang === 'ko' ? lang : getStoredLang();
   const isEn = resolvedLang === 'en';
 
@@ -900,7 +902,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     if (Math.abs(totalYawDeg) >= 0.05) {
       parts.push(`perspective(980px) rotateY(${totalYawDeg.toFixed(1)}deg)`);
     }
-    if (angleSpec.mirrorX) {
+    if (effectiveMirrorX) {
       parts.push('scaleX(-1)');
     }
     return {
@@ -908,7 +910,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       transform: parts.length > 0 ? parts.join(' ') : 'none',
     };
   }, [
-    angleSpec.mirrorX,
+    effectiveMirrorX,
     angleSpec.perspectiveYawDeg,
     idealBaseScale,
     isRotatingDrag,

@@ -319,52 +319,15 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           phase: Math.random() * Math.PI * 2,
         });
       }
-    } else if (weather === 'heatwave') {
-      for (let i = 0; i < 36; i += 1) {
-        motes.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.5) * 0.4,
-          vy: -(0.55 + Math.random() * 1.15),
-          radius: 1.8 + Math.random() * 3.2,
-          alpha: 0.22 + Math.random() * 0.3,
-          phase: Math.random() * Math.PI * 2,
-        });
-      }
     } else if (weather === 'cloudy') {
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < 5; i += 1) {
         motes.push({
           x: Math.random() * width,
-          y: height * (0.08 + i * 0.13),
-          vx: 0.28 + Math.random() * 0.32,
+          y: height * (0.08 + i * 0.14),
+          vx: 0.24 + Math.random() * 0.28,
           vy: 0,
-          radius: Math.max(90, width * (0.34 + Math.random() * 0.22)),
-          alpha: 0.08 + Math.random() * 0.06,
-          phase: Math.random() * Math.PI * 2,
-        });
-      }
-    } else if (weather === 'clear' || weather === 'forecast' || weather === 'realtime') {
-      const count = weather === 'clear' ? 24 : 16;
-      for (let i = 0; i < count; i += 1) {
-        motes.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.45) * 0.28,
-          vy: -(0.18 + Math.random() * 0.34),
-          radius: 1.5 + Math.random() * 2.8,
-          alpha: 0.2 + Math.random() * 0.26,
-          phase: Math.random() * Math.PI * 2,
-        });
-      }
-    } else if (weather === 'mild') {
-      for (let i = 0; i < 28; i += 1) {
-        motes.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: 0.24 + Math.random() * 0.38,
-          vy: -(0.12 + Math.random() * 0.26),
-          radius: 1.8 + Math.random() * 3.1,
-          alpha: 0.22 + Math.random() * 0.28,
+          radius: Math.max(90, width * (0.36 + Math.random() * 0.22)),
+          alpha: 0.05 + Math.random() * 0.04,
           phase: Math.random() * Math.PI * 2,
         });
       }
@@ -372,18 +335,18 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
 
     if (weather === 'rain') {
       // Subtle perimeter glass condensation micro-beads (upper/side glass edges, never covering model face)
-      for (let i = 0; i < 22; i += 1) {
+      for (let i = 0; i < 18; i += 1) {
         const onLeftEdge = i % 2 === 0;
         const edgeBand = onLeftEdge
-          ? Math.random() * (width * 0.16)
-          : width - Math.random() * (width * 0.16);
+          ? Math.random() * (width * 0.14)
+          : width - Math.random() * (width * 0.14);
         motes.push({
-          x: i < 8 ? Math.random() * width : edgeBand,
-          y: i < 8 ? Math.random() * (height * 0.14) : Math.random() * (height * 0.72),
+          x: i < 6 ? Math.random() * width : edgeBand,
+          y: i < 6 ? Math.random() * (height * 0.12) : Math.random() * (height * 0.68),
           vx: 0,
-          vy: 0.03 + Math.random() * 0.08,
-          radius: 1.1 + Math.random() * 1.9,
-          alpha: isDark ? 0.34 + Math.random() * 0.24 : 0.38 + Math.random() * 0.24,
+          vy: 0.03 + Math.random() * 0.07,
+          radius: 1.0 + Math.random() * 1.6,
+          alpha: isDark ? 0.28 + Math.random() * 0.2 : 0.3 + Math.random() * 0.2,
           phase: Math.random() * Math.PI * 2,
         });
       }
@@ -394,12 +357,7 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       weather === 'coldwave' ||
       weather === 'snow' ||
       weather === 'wind' ||
-      weather === 'heatwave' ||
-      weather === 'cloudy' ||
-      weather === 'clear' ||
-      weather === 'mild' ||
-      weather === 'forecast' ||
-      weather === 'realtime';
+      weather === 'cloudy';
 
     const spawnBreathBurst = () => {
       const originX = width * 0.5 + 3;

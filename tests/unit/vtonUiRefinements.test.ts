@@ -3,11 +3,17 @@ import { describe, it } from 'node:test';
 import {
   angle360ToSignedScrollDeg,
   computeIdealDeviceMannequinScale,
+  detectLateralFacingDirectionInBuffer,
+  eraseSheetGridDividerLinesInBuffer,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
+  scrubCutoutArtifactsInBuffer,
 } from '../../src/services/vton2DService.ts';
-import { CANONICAL_ANGLE_PROMPT_DIRECTIVES } from '../../src/services/weatherPromptBuilder.ts';
+import {
+  CANONICAL_ANGLE_PROMPT_DIRECTIVES,
+  CUTOUT_PIPELINE_VERSION,
+} from '../../src/services/weatherPromptBuilder.ts';
 
 describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', () => {
   it('enforces Character Simulation (stylized_isometric) whenever no user portrait photo is registered', () => {
@@ -79,9 +85,12 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(spec225.mirrorX, false);
   });
 
-  it('aligns slider direction with head/gaze direction across front-quarter, side, and rear-quarter views', () => {
+  it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v7-clean-6angle-cyclorama-360');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /NEVER rotate past 90/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[135], /BACK-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[135], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[180], /NEVER show front face/i);
@@ -115,6 +124,130 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(angle360ToSignedScrollDeg(270, 0), -90);
     assert.equal(angle360ToSignedScrollDeg(180, -135), -180);
     assert.equal(angle360ToSignedScrollDeg(180, 135), 180);
+  });
+
+  it('erases tall vertical & horizontal panel grid divider lines both pre-crop and post-cutout while keeping the human silhouette intact', () => {
+    // 1) Pre-crop 3x2 sheet buffer with #94A3B8 background + 4px #FFFFFF vertical divider lines at x=199..202 & x=399..402
+    const sw = 600;
+    const sh = 400;
+    const sheet = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < sw * sh; i += 1) {
+      sheet[i * 4] = 148;
+      sheet[i * 4 + 1] = 163;
+      sheet[i * 4 + 2] = 184;
+      sheet[i * 4 + 3] = 255;
+    }
+    // Draw human torso block in panel 0 (x=70..130, y=40..360)
+    for (let y = 40; y < 360; y += 1) {
+      for (let x = 70; x < 130; x += 1) {
+        const idx = (y * sw + x) * 4;
+        sheet[idx] = 196;
+        sheet[idx + 1] = 158;
+        sheet[idx + 2] = 112;
+        sheet[idx + 3] = 255;
+      }
+    }
+    // Draw full-height 4px white vertical grid divider line at x=198..201 and horizontal line at y=199..201
+    for (let y = 0; y < sh; y += 1) {
+      for (let x = 198; x <= 201; x += 1) {
+        const idx = (y * sw + x) * 4;
+        sheet[idx] = 255;
+        sheet[idx + 1] = 255;
+        sheet[idx + 2] = 255;
+        sheet[idx + 3] = 255;
+      }
+    }
+    for (let y = 199; y <= 201; y += 1) {
+      for (let x = 0; x < sw; x += 1) {
+        const idx = (y * sw + x) * 4;
+        sheet[idx] = 255;
+        sheet[idx + 1] = 255;
+        sheet[idx + 2] = 255;
+        sheet[idx + 3] = 255;
+      }
+    }
+
+    eraseSheetGridDividerLinesInBuffer(sheet, sw, sh);
+    // White vertical divider at (x=200, y=100) is overwritten with ~#94A3B8 background
+    const divIdx = (100 * sw + 200) * 4;
+    assert.ok(sheet[divIdx] < 180 && sheet[divIdx + 2] > 165);
+    // Human torso at (x=100, y=100) remains untouched
+    const humanIdx = (100 * sw + 100) * 4;
+    assert.equal(sheet[humanIdx], 196);
+
+    // 2) Post-cutout RGBA slice (240x360) with opaque white vertical pole at x=14..17 (even grazing sleeve for 6px!)
+    const cw = 240;
+    const ch = 360;
+    const slice = new Uint8ClampedArray(cw * ch * 4);
+    // Main human silhouette at x=80..165, y=35..330
+    for (let y = 35; y < 330; y += 1) {
+      for (let x = 80; x < 165; x += 1) {
+        const idx = (y * cw + x) * 4;
+        slice[idx] = 198;
+        slice[idx + 1] = 160;
+        slice[idx + 2] = 114;
+        slice[idx + 3] = 255;
+      }
+    }
+    // Tall 4px white vertical line artifact on left margin x=14..17, y=4..352
+    for (let y = 4; y < 352; y += 1) {
+      for (let x = 14; x <= 17; x += 1) {
+        const idx = (y * cw + x) * 4;
+        slice[idx] = 255;
+        slice[idx + 1] = 255;
+        slice[idx + 2] = 255;
+        slice[idx + 3] = 255;
+      }
+    }
+
+    scrubCutoutArtifactsInBuffer(slice, cw, ch);
+
+    // Every pixel of the tall white vertical line MUST be transparent (alpha === 0)
+    let remainingLineOpaque = 0;
+    for (let y = 4; y < 352; y += 1) {
+      for (let x = 14; x <= 17; x += 1) {
+        if (slice[(y * cw + x) * 4 + 3] > 0) remainingLineOpaque += 1;
+      }
+    }
+    assert.equal(remainingLineOpaque, 0);
+    // Main human center remains 100% opaque
+    assert.equal(slice[(180 * cw + 120) * 4 + 3], 255);
+  });
+
+  it('detects right-facing lateral direction accurately even when cel-shaded warm brown hair occupies the back-left of the head', () => {
+    const cw = 240;
+    const ch = 360;
+    const buf = new Uint8ClampedArray(cw * ch * 4);
+    // Head from y=40..76, x=96..144: left 2/3 warm brown hair (#6A4B3A), right 1/3 peach cheek/ear skin (#E8C0AE)
+    for (let y = 40; y <= 76; y += 1) {
+      for (let x = 96; x <= 144; x += 1) {
+        const idx = (y * cw + x) * 4;
+        if (x <= 128) {
+          buf[idx] = 106;
+          buf[idx + 1] = 75;
+          buf[idx + 2] = 58;
+          buf[idx + 3] = 255;
+        } else {
+          buf[idx] = 232;
+          buf[idx + 1] = 192;
+          buf[idx + 2] = 174;
+          buf[idx + 3] = 255;
+        }
+      }
+    }
+    // Coat & symmetric-width legs from y=77..330, x=88..152 so fallback head detector is exercised
+    for (let y = 77; y <= 330; y += 1) {
+      for (let x = 88; x <= 152; x += 1) {
+        const idx = (y * cw + x) * 4;
+        buf[idx] = 185;
+        buf[idx + 1] = 148;
+        buf[idx + 2] = 104;
+        buf[idx + 3] = 255;
+      }
+    }
+
+    const dir = detectLateralFacingDirectionInBuffer(buf, cw, ch);
+    assert.equal(dir, 'right');
   });
 
   it('computes device-adaptive ideal 1.0x mannequin base scale across phone, foldable, and desktop viewports', () => {
