@@ -799,6 +799,58 @@ export async function handleStandaloneApiFallback(
     return { ok: true, token: `standalone_apple_${Date.now()}`, user: appleUser };
   }
 
+  if (pathname === '/auth/google' && method === 'POST') {
+    const credential = String(body.credential || '').trim();
+    let sub = '';
+    let email = '';
+    let displayName = 'Google 사용자';
+
+    if (credential) {
+      try {
+        const parts = credential.split('.');
+        if (parts.length === 3) {
+          const payloadJson = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+          const payload = JSON.parse(payloadJson);
+          if (payload && payload.sub) {
+            sub = String(payload.sub).trim();
+            if (payload.email) email = String(payload.email).trim();
+            if (payload.name) displayName = String(payload.name).trim();
+          }
+        }
+      } catch {
+        // Fallback to synthetic sub
+      }
+    }
+
+    if (!sub) {
+      sub = String(body.googleSub || body.sub || 'google_atelier_member_01').trim();
+    }
+    const subSuffix = (await sha256Hex(sub)).slice(0, 8);
+    const googleUsername = `google_${subSuffix}`;
+    const googleEmail = email || `${googleUsername}@gmail.com`;
+
+    const googleUser: UserProfile = {
+      id: 88,
+      username: googleUsername,
+      email: googleEmail,
+      displayName,
+      role: 'member',
+      defaultCloset: `closet_${googleUsername}`,
+      closetName: '내 옷장',
+      profileCompleted: true,
+      emailVerified: true,
+      personalColor: 'autumn_warm',
+      personalColorLabelKo: '가을 웜톤',
+      personalColorLabelEn: 'Autumn Warm',
+      gender: 'unspecified',
+      heightCm: 172,
+      weightKg: 64,
+      bodyShape: 'standard_balanced',
+    };
+    setActiveSessionUser(googleUser);
+    return { ok: true, token: `standalone_google_${Date.now()}`, user: googleUser };
+  }
+
   if (pathname === '/auth/send-verification' && method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

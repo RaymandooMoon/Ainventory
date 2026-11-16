@@ -807,9 +807,79 @@ async function verifyAppleIdentityToken(idToken, expectedClientId) {
   return payload;
 }
 
-export function createApiRouter() {
+/**
+ * Verifies a Google ID Token (credential JWT) via Google's tokeninfo API.
+ * Validates audience, issuer, expiration, email_verified, and subject.
+ */
+export async function verifyGoogleIdToken(credential, expectedClientId) {
+  if (!credential || typeof credential !== 'string') {
+    throw new Error('Missing Google identity token');
+  }
+  if (credential.length > 4096) {
+    throw new Error('Google credential exceeds maximum allowed length');
+  }
+  const parts = credential.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Malformed Google identity token');
+  }
+
+  const endpoint = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const res = await fetch(endpoint, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`Google tokeninfo endpoint returned status ${res.status}`);
+    }
+    const claims = await res.json();
+    clearTimeout(timer);
+
+    if (!claims || typeof claims !== 'object') {
+      throw new Error('Invalid response from Google tokeninfo');
+    }
+
+    // Verify audience
+    const aud = String(claims.aud || '').trim();
+    if (!expectedClientId || aud !== expectedClientId) {
+      throw new Error('Google token audience mismatch');
+    }
+
+    // Verify issuer
+    const allowedIssuers = ['accounts.google.com', 'https://accounts.google.com'];
+    if (!allowedIssuers.includes(String(claims.iss || ''))) {
+      throw new Error('Invalid Google token issuer');
+    }
+
+    // Verify expiry
+    const nowSec = Math.floor(Date.now() / 1000);
+    const exp = Number(claims.exp || 0);
+    if (!exp || exp <= nowSec) {
+      throw new Error('Google identity token has expired');
+    }
+
+    // Verify email_verified
+    const isEmailVerified = claims.email_verified === true || claims.email_verified === 'true';
+    if (!isEmailVerified) {
+      throw new Error('Google email is not verified');
+    }
+
+    // Verify subject
+    if (!claims.sub || typeof claims.sub !== 'string') {
+      throw new Error('Google token missing subject');
+    }
+
+    return claims;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+export function createApiRouter(options = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '10mb' }));
+  const googleVerifier = options.verifyGoogleIdToken || verifyGoogleIdToken;
 
   // Health check
   router.get('/health', (_req, res) => {
@@ -1687,6 +1757,136 @@ export function createApiRouter() {
         );
         return db
           .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'apple'")
+          .get(resolvedSub);
+      });
+    }
+
+    const token = issueUserSession(req, res, user);
+    res.json({
+      ok: true,
+      token,
+      user: formatUserPayload(user),
+    });
+  });
+
+  // 4c. Sign in with Google (OAuth 2.0 OpenID Connect ID Token verification)
+  router.post('/auth/google', async (req, res) => {
+    const rate = checkRateLimit(`google:${req.ip || 'local'}`, MAX_AUTH_ATTEMPTS_PER_WINDOW);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const { credential = '' } = req.body || {};
+    const rawCredential = String(credential || '').trim();
+
+    if (!rawCredential || typeof rawCredential !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '유효한 Google Credential(ID 토큰)이 필요합니다.',
+        code: 'INVALID_CREDENTIAL',
+      });
+    }
+
+    if (rawCredential.length > 4096 || rawCredential.split('.').length !== 3) {
+      return res.status(400).json({
+        success: false,
+        error: '잘못된 형식의 Google 인증 토큰입니다.',
+        code: 'MALFORMED_CREDENTIAL',
+      });
+    }
+
+    const googleClientId = String(
+      process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || ''
+    ).trim();
+
+    if (!googleClientId) {
+      return res.status(503).json({
+        success: false,
+        error: 'google_sign_in_not_configured',
+        code: 'GOOGLE_AUTH_NOT_CONFIGURED',
+      });
+    }
+
+    let claims;
+    try {
+      claims = await googleVerifier(rawCredential, googleClientId);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        error: '유효하지 않거나 만료된 Google 인증 토큰입니다.',
+        code: 'INVALID_GOOGLE_TOKEN',
+      });
+    }
+
+    const resolvedSub = String(claims.sub || '').trim();
+    const resolvedEmail = String(claims.email || '').trim().toLowerCase();
+    const displayName = String(claims.name || '').trim().slice(0, 60) || 'Google 사용자';
+
+    if (!resolvedSub || resolvedSub.length > 128) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 Google 계정 식별자입니다.',
+      });
+    }
+
+    // Match strictly by apple_sub column storing social sub or matching google email
+    let user = db
+      .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'google'")
+      .get(resolvedSub);
+
+    if (user && user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: '어드민 계정은 소셜 로그인 연동이 허용되지 않습니다.',
+      });
+    }
+
+    if (!user) {
+      const emailOwner = db
+        .prepare('SELECT id, role, auth_provider FROM users WHERE lower(email) = ?')
+        .get(resolvedEmail);
+      if (emailOwner) {
+        return res.status(409).json({
+          success: false,
+          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해주세요.',
+          code: 'ACCOUNT_EMAIL_CONFLICT',
+        });
+      }
+
+      const shortHash = crypto.createHash('sha256').update(resolvedSub).digest('hex').slice(0, 10);
+      let username = `google_${shortHash}`;
+      while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
+        username = `google_${shortHash}_${crypto.randomInt(100, 999)}`;
+      }
+      const closetKey = `closet_${username}`;
+      const nowIso = new Date().toISOString();
+      const vHash = computeVerificationHash(username, resolvedEmail, nowIso);
+
+      user = db.transaction(() => {
+        db.prepare(`
+          INSERT INTO users (
+            username, email, password_hash, display_name, role, default_closet,
+            closet_name, verified_at, verification_hash, profile_completed,
+            apple_sub, auth_provider
+          ) VALUES (?, ?, ?, ?, 'member', ?, ?, ?, ?, 1, ?, 'google')
+        `).run(
+          username,
+          resolvedEmail,
+          hashPassword(crypto.randomBytes(24).toString('hex')),
+          displayName,
+          closetKey,
+          '내 옷장',
+          nowIso,
+          vHash,
+          resolvedSub
+        );
+        return db
+          .prepare("SELECT * FROM users WHERE apple_sub = ? AND auth_provider = 'google'")
           .get(resolvedSub);
       });
     }

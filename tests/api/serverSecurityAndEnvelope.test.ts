@@ -235,4 +235,21 @@ describe('Server API Security, JSON Error Envelope & Persistence', () => {
     });
     assert.equal(unauthMalformedRes.status, 401);
   });
+
+  it('fails safely with 503 google_sign_in_not_configured on /api/auth/google when client ID is missing', async () => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.VITE_GOOGLE_CLIENT_ID;
+
+    const res = await fetch(`${baseUrl}/api/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: 'part1.part2.part3' }),
+    });
+
+    assert.equal(res.status, 503);
+    const body = (await res.json()) as { success?: boolean; error?: string };
+    assert.equal(body.success, false);
+    assert.equal(body.error, 'google_sign_in_not_configured');
+  });
 });
+

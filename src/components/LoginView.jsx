@@ -7,9 +7,7 @@ import {
   Loader2,
   Mail,
   Moon,
-  Play,
   RotateCcw,
-  Sparkles,
   Sun,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
@@ -17,9 +15,14 @@ import { apiFetch, setStoredToken } from '../utils/api.ts';
 import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
+import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
+import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
 import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
+import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
 import './auth/loginAtelier.css';
+
+const GOOGLE_SIGN_IN_BTN_ID = 'google-sign-in-btn';
 
 /**
  * Investor-Grade Adaptive Login & Kinetic AI Wardrobe Atelier Entry Screen
@@ -62,12 +65,13 @@ export default function LoginView({
   const [cooldownSec, setCooldownSec] = useState(0);
 
   // Exception UX States: Loading Action, Inline Validation Errors, Server Alert & Micro-Shake
-  const [loadingAction, setLoadingAction] = useState(null); // 'login' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | 'sample' | null
+  const [loadingAction, setLoadingAction] = useState(null); // 'login' | 'google' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | 'sample' | null
   const [error, setError] = useState('');
-  const [lastAttempt, setLastAttempt] = useState(null); // 'login' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | null
+  const [lastAttempt, setLastAttempt] = useState(null); // 'login' | 'google' | 'apple' | 'otp-send' | 'otp-verify' | 'register' | null
   const [fieldErrors, setFieldErrors] = useState({});
   const [isShaking, setIsShaking] = useState(false);
   const [legalModalDoc, setLegalModalDoc] = useState(null); // null | 'privacy' | 'terms'
+  const [googleFallbackOpen, setGoogleFallbackOpen] = useState(false);
 
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
@@ -188,6 +192,40 @@ export default function LoginView({
     triggerHaptic('light');
     try {
       onEnterSampleDemo?.();
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (loading) return;
+    setError('');
+    setFieldErrors({});
+
+    // If Google Client ID is not configured (e.g. GitHub Pages static demo), surface fallback modal
+    if (!isGoogleSignInConfigured()) {
+      setGoogleFallbackOpen(true);
+      return;
+    }
+
+    setLastAttempt('google');
+    setLoadingAction('google');
+    try {
+      const credential = await requestGoogleIdToken();
+      const data = await apiFetch('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ credential }),
+      });
+      setStoredToken(data.token);
+      triggerHaptic('light');
+      onLoginSuccess(data.user);
+    } catch (err) {
+      if (err?.reason === 'not_configured') {
+        setGoogleFallbackOpen(true);
+      } else if (err?.reason !== 'dismissed') {
+        setError(localizeApiMessage(err.message, lang));
+        triggerValidationShake();
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -383,6 +421,10 @@ export default function LoginView({
       executeLogin();
       return;
     }
+    if (lastAttempt === 'google') {
+      handleGoogleSignIn();
+      return;
+    }
     if (lastAttempt === 'apple') {
       handleAppleSignIn();
       return;
@@ -460,6 +502,60 @@ export default function LoginView({
             className={`atelier-monolith ${isShaking ? 'is-shaking' : ''}`}
             aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
           >
+            {/* Top Priority: Google Sign-in and Apple Sign-in Stack */}
+            <div className="atelier-social-stack">
+              <GoogleSignInButton
+                id={GOOGLE_SIGN_IN_BTN_ID}
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                loading={loadingAction === 'google'}
+                lang={lang}
+              />
+
+              <button
+                id={CARBON_DOM_CONTRACT.appleSignInBtnId}
+                type="button"
+                aria-label="Sign in with Apple"
+                className="atelier-secondary-btn"
+                disabled={loading}
+                aria-busy={loadingAction === 'apple'}
+                onClick={handleAppleSignIn}
+              >
+                {loadingAction === 'apple' ? (
+                  <Loader2 size={16} className="atelier-spin" />
+                ) : (
+                  <svg
+                    width="15"
+                    height="18"
+                    viewBox="0 0 170 202"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    style={{ flexShrink: 0, marginTop: -2 }}
+                  >
+                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.92.22-9.84-1.95-14.75-6.52-3.13-2.73-7.04-7.41-11.73-14.04-5.03-7.08-9.17-15.29-12.41-24.65-3.47-10.11-5.2-19.9-5.2-29.38 0-10.86 2.71-20.22 8.13-28.07 4.25-6.27 9.91-11.22 16.99-14.84 7.08-3.62 14.72-5.49 22.92-5.61 4.48 0 10.35 1.39 17.61 4.14 7.26 2.75 11.94 4.17 14.04 4.26 1.56 0 6.84-1.64 15.83-4.91 8.49-3.04 15.65-4.3 21.48-3.8 15.87 1.28 27.79 7.55 35.75 18.8-14.2 8.6-21.22 20.62-21.05 36.06.17 12.02 4.49 22.02 12.96 29.99 3.86 3.67 8.47 6.5 13.84 8.5-1.11 3.24-2.29 6.32-3.54 9.24zM119.22 31.01c0 9.42-3.44 18.21-10.31 26.36-8.28 9.69-18.31 15.27-29.21 14.37-.14-1.13-.22-2.32-.22-3.58 0-9.04 3.93-18.71 10.92-26.64 3.49-4.01 7.93-7.34 13.32-10 5.38-2.62 10.48-4.07 15.29-4.35.14 1.3.21 2.58.21 3.84z" />
+                  </svg>
+                )}
+                <span>
+                  {loadingAction === 'apple'
+                    ? isEn
+                      ? 'Connecting with Apple...'
+                      : 'Apple 계정 연결 중...'
+                    : isEn
+                      ? hasAppleClientId
+                        ? 'Continue with Apple'
+                        : 'Continue with Apple (Sandbox)'
+                      : hasAppleClientId
+                        ? 'Apple로 계속하기'
+                        : 'Apple로 계속하기 (개발 샌드박스)'}
+                </span>
+              </button>
+            </div>
+
+            {/* '또는' Divider */}
+            <div className="atelier-divider">
+              <span>{isEn ? 'or with account' : '또는'}</span>
+            </div>
+
             {/* 2-Way Segmented Control: Sign In | Sign Up */}
             <div
               className="atelier-segmented"
@@ -498,40 +594,6 @@ export default function LoginView({
                 <span>{isEn ? 'Sign Up' : '회원가입'}</span>
               </button>
             </div>
-
-            {/* High-Contrast Error Banner + Immediate Recovery Actions */}
-            {error && (
-              <div role="alert" className="atelier-error-card">
-                <div className="atelier-error-head">
-                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                  <p className="atelier-error-msg">{error}</p>
-                </div>
-
-                <div className="atelier-recovery-row">
-                  <button
-                    type="button"
-                    className="atelier-recovery-btn"
-                    disabled={loading}
-                    onClick={handleRetryAfterError}
-                  >
-                    <RotateCcw size={14} />
-                    <span>{isEn ? 'Try Again' : '다시 시도'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="atelier-recovery-btn"
-                    disabled={loading}
-                    onClick={handleEnterSampleDemo}
-                  >
-                    <Sparkles size={14} />
-                    <span>
-                      {isEn ? 'Try Sample Closet Now' : '샘플 옷장으로 바로 체험하기'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Mode 1: Minimal Sign-In Form */}
             {authMode === 'login' && (
@@ -609,6 +671,25 @@ export default function LoginView({
                         {tr(lang, 'closetWife')}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Slim Inline System Note at bottom of form (role="status", aria-live="polite") */}
+                {error && (
+                  <div role="status" aria-live="polite" className="atelier-inline-note">
+                    <div className="atelier-inline-note-main">
+                      <AlertCircle size={14} className="atelier-inline-note-icon" />
+                      <p className="atelier-inline-note-text">{error}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="atelier-inline-note-retry-btn"
+                      disabled={loading}
+                      onClick={handleRetryAfterError}
+                    >
+                      <RotateCcw size={12} />
+                      <span>{isEn ? 'Retry' : '다시 시도'}</span>
+                    </button>
                   </div>
                 )}
 
@@ -877,6 +958,25 @@ export default function LoginView({
                   disabled={loading}
                 />
 
+                {/* Slim Inline System Note at bottom of register form */}
+                {error && (
+                  <div role="status" aria-live="polite" className="atelier-inline-note">
+                    <div className="atelier-inline-note-main">
+                      <AlertCircle size={14} className="atelier-inline-note-icon" />
+                      <p className="atelier-inline-note-text">{error}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="atelier-inline-note-retry-btn"
+                      disabled={loading}
+                      onClick={handleRetryAfterError}
+                    >
+                      <RotateCcw size={12} />
+                      <span>{isEn ? 'Retry' : '다시 시도'}</span>
+                    </button>
+                  </div>
+                )}
+
                 <button
                   id="complete-register-btn"
                   type="submit"
@@ -896,76 +996,22 @@ export default function LoginView({
               </form>
             )}
 
-            {/* Quick Experience & Social Entry Actions */}
-            <div className="atelier-divider">
-              <span>{isEn ? 'Instant Showcase' : '가입 없이 둘러보기'}</span>
-            </div>
-
-            <div className="atelier-quick-stack">
+            {/* Secondary Text Button: Experience with Sample Closet (DESIGN.md v3) */}
+            <div className="atelier-sample-demo-row">
               <button
                 id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
                 type="button"
                 aria-label={
                   isEn
-                    ? 'Enter Sample Closet Demo Mode'
+                    ? 'Experience with Sample Closet'
                     : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
                 }
-                className="atelier-secondary-btn"
+                className="atelier-text-btn"
                 disabled={loading}
                 onClick={handleEnterSampleDemo}
               >
-                {loadingAction === 'sample' ? (
-                  <Loader2 size={16} className="atelier-spin" />
-                ) : (
-                  <Play size={15} />
-                )}
-                <span>
-                  {isEn ? 'Sample Closet Demo Mode' : '샘플 옷장 체험 모드'}
-                </span>
-                <span className="atelier-btn-meta-badge" aria-hidden="true">
-                  AI Studio · 120+
-                </span>
+                <span>{isEn ? 'Explore with Sample Closet' : '샘플 옷장으로 체험하기'}</span>
               </button>
-
-              {(isDev || hasAppleClientId) && (
-                <button
-                  id={CARBON_DOM_CONTRACT.appleSignInBtnId}
-                  type="button"
-                  aria-label="Sign in with Apple"
-                  className="atelier-secondary-btn"
-                  disabled={loading}
-                  aria-busy={loadingAction === 'apple'}
-                  onClick={handleAppleSignIn}
-                >
-                  {loadingAction === 'apple' ? (
-                    <Loader2 size={16} className="atelier-spin" />
-                  ) : (
-                    <svg
-                      width="15"
-                      height="18"
-                      viewBox="0 0 170 202"
-                      fill="currentColor"
-                      aria-hidden="true"
-                      style={{ flexShrink: 0, marginTop: -2 }}
-                    >
-                      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.92.22-9.84-1.95-14.75-6.52-3.13-2.73-7.04-7.41-11.73-14.04-5.03-7.08-9.17-15.29-12.41-24.65-3.47-10.11-5.2-19.9-5.2-29.38 0-10.86 2.71-20.22 8.13-28.07 4.25-6.27 9.91-11.22 16.99-14.84 7.08-3.62 14.72-5.49 22.92-5.61 4.48 0 10.35 1.39 17.61 4.14 7.26 2.75 11.94 4.17 14.04 4.26 1.56 0 6.84-1.64 15.83-4.91 8.49-3.04 15.65-4.3 21.48-3.8 15.87 1.28 27.79 7.55 35.75 18.8-14.2 8.6-21.22 20.62-21.05 36.06.17 12.02 4.49 22.02 12.96 29.99 3.86 3.67 8.47 6.5 13.84 8.5-1.11 3.24-2.29 6.32-3.54 9.24zM119.22 31.01c0 9.42-3.44 18.21-10.31 26.36-8.28 9.69-18.31 15.27-29.21 14.37-.14-1.13-.22-2.32-.22-3.58 0-9.04 3.93-18.71 10.92-26.64 3.49-4.01 7.93-7.34 13.32-10 5.38-2.62 10.48-4.07 15.29-4.35.14 1.3.21 2.58.21 3.84z" />
-                    </svg>
-                  )}
-                  <span>
-                    {loadingAction === 'apple'
-                      ? isEn
-                        ? 'Connecting with Apple...'
-                        : 'Apple 계정 연결 중...'
-                      : isEn
-                        ? hasAppleClientId
-                          ? 'Continue with Apple'
-                          : 'Continue with Apple (Sandbox)'
-                        : hasAppleClientId
-                          ? 'Apple로 계속하기'
-                          : 'Apple로 계속하기 (개발 샌드박스)'}
-                  </span>
-                </button>
-              )}
             </div>
           </section>
 
@@ -993,6 +1039,17 @@ export default function LoginView({
           </footer>
         </div>
       </main>
+
+      <GoogleSignInFallbackModal
+        open={googleFallbackOpen}
+        onClose={() => setGoogleFallbackOpen(false)}
+        onSampleDemo={handleEnterSampleDemo}
+        onContinueWithEmail={() => {
+          setAuthMode('login');
+          usernameRef.current?.focus();
+        }}
+        lang={lang}
+      />
 
       <LegalDisclosureModal
         open={Boolean(legalModalDoc)}
