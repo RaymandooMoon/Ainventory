@@ -18,8 +18,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v4-hole-aware-fullbody-360';
+export const CUTOUT_PIPELINE_VERSION = 'v5-gaze-aligned-fullbody-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v4-hole-aware-fullbody-360',
   'v3-clean-cutout-front45-ground',
 ] as const;
 export const CUTOUT_STAGE_BACKDROP_HEX = '#94A3B8';
@@ -360,13 +361,13 @@ export function buildCutoutBackdropDirective(
 export const CUTOUT_BACKDROP_DIRECTIVE = buildCutoutBackdropDirective(CUTOUT_STAGE_BACKDROP_HEX);
 
 export const HORIZONTAL_FULL_BODY_CAMERA_LOCK =
-  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 180°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles.';
+  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 180°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, filling ~82–85% of vertical frame height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.';
 
 export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<0 | 45 | 90 | 180, string> = {
-  0: 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.',
-  45: 'Strict FRONT-FACING 45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].',
-  90: 'Strict 90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly sideways showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.',
-  180: 'Direct 180-degree rear back-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing directly away from camera showing back of hair, back shoulders, rear garment tailoring, and full heels/soles of shoes with 10% bottom margin.',
+  0: 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible on the floor with 8–10% bottom margin.',
+  45: "Strict FRONT-FACING 45-degree horizontal-yaw full-body view turned toward VIEWER'S RIGHT (SCREEN-RIGHT) at the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° (NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles. The model MUST turn 40–45 degrees to face toward the RIGHT side of the frame (VIEWER'S RIGHT) so the FACE, BOTH EYES, NOSE, CHIN, GAZE, FRONT CHEST/LAPELS, and front shoe toes angle clearly toward SCREEN-RIGHT (NEVER facing screen-left, NEVER show a back view).",
+  90: "Strict 90-degree lateral side-profile full-body view facing toward VIEWER'S RIGHT (SCREEN-RIGHT). Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly toward the RIGHT edge of the frame so the nose, eyes, chin, chest, and shoe toes point strictly to SCREEN-RIGHT (NEVER facing screen-left), with full garment side silhouette and full shoes completely visible on the floor with 8–10% bottom margin.",
+  180: 'Direct 180-degree STRICT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with their back 100% turned directly toward the camera showing ONLY the back of the head/hair, nape/back collar, back shoulders, full rear back silhouette/vent/seams of the outfit, and rear heels of both shoes completely visible on the floor with 8–10% bottom margin. [ABSOLUTE NEGATIVE CONSTRAINT ON 180° BACK: NEVER show front face, eyes, nose, lips, chin, or front chest/lapels; NEVER turn head over the shoulder].',
 };
 
 export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
@@ -380,9 +381,9 @@ export function buildTurnaround2x2SheetAngleDirectives(): string {
   return [
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
     `  * [Top-Left Quadrant — 0° Front Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
-    `  * [Top-Right Quadrant — 45° Horizontal-Yaw Front-Quarter Full-Body (ZERO TILT, FULL FEET VISIBLE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
-    `  * [Bottom-Left Quadrant — 90° Side Profile Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
-    `  * [Bottom-Right Quadrant — 180° Rear Back Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
+    `  * [Top-Right Quadrant — 45° Screen-Right Front-Quarter Full-Body (FACING VIEWER'S RIGHT, ZERO TILT, FULL FEET VISIBLE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
+    `  * [Bottom-Left Quadrant — 90° Screen-Right Side Profile Full-Body (FACING VIEWER'S RIGHT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
+    `  * [Bottom-Right Quadrant — 180° Strict Rear Back Full-Body (100% BACK OF HEAD & OUTFIT, ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
   ].join('\n');
 }
 

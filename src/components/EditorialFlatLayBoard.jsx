@@ -1,9 +1,10 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, MoveHorizontal, Sparkles } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
+  computeIdealDeviceMannequinScale,
   computeOutfitComboId,
   normalizeGenderNeutralProfile,
   normalizeTurnaround360Angle,
@@ -352,6 +353,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   pan = { x: 0, y: 0 },
   onZoomChange,
   onPanChange,
+  onIdealScaleChange,
   legacyMode,
   lang,
 }) {
@@ -436,10 +438,66 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const hasAiImage = Boolean(stageMode === 'ai-vton' && aiImageUrl);
 
   const stageRef = useRef(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+  const [aiImgAspect, setAiImgAspect] = useState(0.76);
   const [isPanning, setIsPanning] = useState(false);
   const [isRotatingDrag, setIsRotatingDrag] = useState(false);
   const [swipeDragPx, setSwipeDragPx] = useState(0);
   const [isSliderDragging, setIsSliderDragging] = useState(false);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return undefined;
+    const syncSize = () => {
+      const nextW = Math.round(el.clientWidth || 0);
+      const nextH = Math.round(el.clientHeight || 0);
+      setStageSize((prev) =>
+        prev.width === nextW && prev.height === nextH ? prev : { width: nextW, height: nextH }
+      );
+    };
+    syncSize();
+    if (typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(syncSize);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', syncSize);
+    return () => window.removeEventListener('resize', syncSize);
+  }, []);
+
+  const handleAiImageLoad = useCallback((e) => {
+    const img = e.currentTarget;
+    const nw = img?.naturalWidth || 0;
+    const nh = img?.naturalHeight || 0;
+    if (nw >= 16 && nh >= 16) {
+      const ratio = Math.round((nw / nh) * 1000) / 1000;
+      setAiImgAspect((prev) => (Math.abs(prev - ratio) < 0.005 ? prev : ratio));
+    }
+  }, []);
+
+  const idealBaseScale = useMemo(
+    () =>
+      computeIdealDeviceMannequinScale({
+        stageWidth: stageSize.width,
+        stageHeight: stageSize.height,
+        imageAspectRatio: aiImgAspect,
+      }),
+    [stageSize.width, stageSize.height, aiImgAspect]
+  );
+
+  useEffect(() => {
+    onIdealScaleChange?.(idealBaseScale);
+  }, [idealBaseScale, onIdealScaleChange]);
+
+  // Auto-recenter mannequin position to dead-center (`{ x: 0, y: 0 }`) 1,000ms (1 second) after pan release
+  useEffect(() => {
+    if (!hasAiImage || isPanning || !onPanChange) return undefined;
+    if (Math.abs(safePanX) < 0.5 && Math.abs(safePanY) < 0.5) return undefined;
+    const timerId = setTimeout(() => {
+      onPanChange({ x: 0, y: 0 });
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [hasAiImage, isPanning, safePanX, safePanY, onPanChange]);
 
   const gestureRef = useRef({
     active: false,
@@ -456,22 +514,27 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     captured: false,
   });
 
-  const clampPanOffset = useCallback((nextX, nextY, currentZoom) => {
-    if (currentZoom <= 1.01) return { x: 0, y: 0 };
-    const el = stageRef.current;
-    const width = el?.clientWidth || 380;
-    const height = el?.clientHeight || 480;
-    const maxX = ((currentZoom - 1) * width) / 2;
-    const maxY = ((currentZoom - 1) * height) / 2;
-    return {
-      x: clamp(nextX, -maxX, maxX),
-      y: clamp(nextY, -maxY, maxY),
-    };
-  }, []);
+  const clampPanOffset = useCallback(
+    (nextX, nextY, currentZoom) => {
+      if (currentZoom <= 1.01) return { x: 0, y: 0 };
+      const el = stageRef.current;
+      const width = el?.clientWidth || 380;
+      const height = el?.clientHeight || 480;
+      const effectiveZoom = Math.max(currentZoom, currentZoom * idealBaseScale);
+      const maxX = Math.max(24, ((effectiveZoom - 1) * width) / 2);
+      const maxY = Math.max(24, ((effectiveZoom - 1) * height) / 2);
+      return {
+        x: clamp(nextX, -maxX, maxX),
+        y: clamp(nextY, -maxY, maxY),
+      };
+    },
+    [idealBaseScale]
+  );
 
   const handleStageWheel = useCallback(
     (e) => {
-      if (!onZoomChange) return;
+      // Zoom applies strictly ONLY to the AI character — never zoom the Flat-Lay board!
+      if (!hasAiImage || !onZoomChange) return;
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.22 : -0.22;
       const nextZoom = clamp(Number((safeZoom + delta).toFixed(2)), 1, 3);
@@ -482,7 +545,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         onPanChange(clampPanOffset(safePanX, safePanY, nextZoom));
       }
     },
-    [safeZoom, safePanX, safePanY, onZoomChange, onPanChange, clampPanOffset]
+    [hasAiImage, safeZoom, safePanX, safePanY, onZoomChange, onPanChange, clampPanOffset]
   );
 
   const suppressNextClickRef = useRef(false);
@@ -500,7 +563,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       }
 
       const tNow = nowMs();
-      if (safeZoom > 1.01) {
+      if (hasAiImage && safeZoom > 1.01) {
         gestureRef.current = {
           active: true,
           mode: 'pan',
@@ -541,7 +604,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       };
       setSwipeDragPx(0);
     },
-    [safeZoom, safePanX, safePanY]
+    [hasAiImage, safeZoom, safePanX, safePanY]
   );
 
   const handleStagePointerMove = useCallback(
@@ -815,16 +878,6 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [safeSplit, onCompareSplitChange]
   );
 
-  const flatLayTransformStyle = useMemo(
-    () => ({
-      transform:
-        safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0
-          ? `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
-          : undefined,
-    }),
-    [safePanX, safePanY, safeZoom]
-  );
-
   const safeScrollResidualYaw = Number.isFinite(scrollResidualYawDeg)
     ? clamp(scrollResidualYawDeg, -12, 12)
     : 0;
@@ -834,14 +887,15 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
     const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
     const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
+    const effectiveScale = safeZoom * idealBaseScale;
     const parts = [];
     if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
       parts.push(
         `translate3d(${(safePanX + dragNudgeX).toFixed(1)}px, ${safePanY.toFixed(1)}px, 0)`
       );
     }
-    if (safeZoom > 1.001) {
-      parts.push(`scale(${safeZoom.toFixed(3)})`);
+    if (Math.abs(effectiveScale - 1) > 0.002) {
+      parts.push(`scale(${effectiveScale.toFixed(3)})`);
     }
     if (Math.abs(totalYawDeg) >= 0.05) {
       parts.push(`perspective(980px) rotateY(${totalYawDeg.toFixed(1)}deg)`);
@@ -850,12 +904,13 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       parts.push('scaleX(-1)');
     }
     return {
-      transformOrigin: '50% 93.5%',
+      transformOrigin: '50% 94%',
       transform: parts.length > 0 ? parts.join(' ') : 'none',
     };
   }, [
     angleSpec.mirrorX,
     angleSpec.perspectiveYawDeg,
+    idealBaseScale,
     isRotatingDrag,
     swipeDragPx,
     safeScrollResidualYaw,
@@ -864,15 +919,16 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     safeZoom,
   ]);
 
-  const shadowTransformStyle = useMemo(
-    () => ({
-      transform:
-        safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0
-          ? `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
-          : undefined,
-    }),
-    [safePanX, safePanY, safeZoom]
-  );
+  const shadowTransformStyle = useMemo(() => {
+    const shadowScale = safeZoom * (1 + (idealBaseScale - 1) * 0.55);
+    const hasTranslation = safePanX !== 0 || safePanY !== 0;
+    if (!hasTranslation && Math.abs(shadowScale - 1) <= 0.005) {
+      return undefined;
+    }
+    return {
+      transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${shadowScale.toFixed(3)})`,
+    };
+  }, [idealBaseScale, safePanX, safePanY, safeZoom]);
 
   const styleLabel =
     resolvedStyleMode === 'stylized_isometric'
@@ -897,7 +953,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
             : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
       }
-      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
+      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${hasAiImage && safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
@@ -906,7 +962,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       data-vton-style={resolvedStyleMode}
       data-skin-hex={resolvedSkinHex}
       data-personal-color={resolvedPersonalColor}
-      data-zoom={safeZoom.toFixed(2)}
+      data-zoom={(hasAiImage ? safeZoom : 1).toFixed(2)}
+      data-ideal-scale={idealBaseScale.toFixed(3)}
+      data-pan-offset={`${Math.round(hasAiImage ? safePanX : 0)},${Math.round(hasAiImage ? safePanY : 0)}`}
       data-body-shape={resolvedBodyShape}
       data-height-cm={resolvedHeightCm}
       data-weight-kg={resolvedWeightKg}
@@ -937,6 +995,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               />
               <img
                 src={aiImageUrl}
+                onLoad={handleAiImageLoad}
                 alt={
                   isEn
                     ? `Gemini AI virtual try-on (${angleSpec.fullEn})`
@@ -971,7 +1030,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               weightKg={resolvedWeightKg}
               angleDeg={safeAngleDeg}
               asPrimaryStageTarget
-              transformStyle={flatLayTransformStyle}
+              transformStyle={undefined}
             />
           )}
         </div>
@@ -993,7 +1052,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 weightKg={resolvedWeightKg}
                 angleDeg={safeAngleDeg}
                 asPrimaryStageTarget={false}
-                transformStyle={flatLayTransformStyle}
+                transformStyle={undefined}
               />
             ) : (
               <CuratorialSpecSheet
@@ -1001,7 +1060,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 resolvedLang={resolvedLang}
                 mstSwatch={mstSwatch}
                 profile={profile}
-                transformStyle={flatLayTransformStyle}
+                transformStyle={undefined}
               />
             )}
           </div>

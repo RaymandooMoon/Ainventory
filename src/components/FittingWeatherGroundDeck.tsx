@@ -10,6 +10,7 @@ export interface StageGroundDeckProps {
   equippedCount?: number;
   mirrorX?: boolean;
   zoom?: number;
+  idealBaseScale?: number;
   pan?: { x: number; y: number } | null;
   compareActive?: boolean;
   compareSplitPct?: number;
@@ -19,7 +20,7 @@ export interface StageGroundDeckProps {
  * Perspective Studio Floor Deck, Contact AO Shadow & Real-Time Wet Mirror Reflection (`StageGroundDeck`)
  * - Positioned across the perspective floor zone (`top: 76% -> 100%`, `z-index: 10`, `pointer-events: none`),
  *   directly behind the RGBA cutout model (`z-20`) and beneath the foreground weather canvas (`z-30`).
- * - Aligns horizon & dual-layer Contact AO Shadow with the normalized `93.5%` shoe sole baseline so all
+ * - Aligns horizon & dual-layer Contact AO Shadow with the normalized `94%` shoe sole baseline so all
  *   8 swipe angles (`0°..315°`) ground naturally onto the studio floor plane without floating or clipping.
  * - `rain`: Wet reflective stone/slate floor + upside-down `scaleY(-0.30)` real-time mirror reflection
  *   (syncing `mirrorX` when viewing mirrored angles) + dense sole Contact AO Shadow.
@@ -35,6 +36,7 @@ export function StageGroundDeck({
   equippedCount = 0,
   mirrorX = false,
   zoom = 1,
+  idealBaseScale = 1,
   pan = null,
   compareActive = false,
   compareSplitPct = 50,
@@ -53,8 +55,11 @@ export function StageGroundDeck({
         : 'runway-studio';
 
   const safeZoom = Number.isFinite(zoom) ? Math.max(1, Math.min(3, zoom)) : 1;
-  const panX = safeZoom > 1.001 && pan && Number.isFinite(pan.x) ? pan.x : 0;
-  const panY = safeZoom > 1.001 && pan && Number.isFinite(pan.y) ? pan.y : 0;
+  const safeBaseScale = Number.isFinite(idealBaseScale)
+    ? Math.max(1, Math.min(1.5, idealBaseScale))
+    : 1;
+  const panX = pan && Number.isFinite(pan.x) ? pan.x : 0;
+  const panY = pan && Number.isFinite(pan.y) ? pan.y : 0;
   const safeSplit = Number.isFinite(compareSplitPct)
     ? Math.max(8, Math.min(92, compareSplitPct))
     : 50;
@@ -69,9 +74,10 @@ export function StageGroundDeck({
       : {}),
   };
 
+  const effectiveCameraScale = safeZoom * safeBaseScale;
   const cameraTransform =
-    safeZoom > 1.001
-      ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${safeZoom.toFixed(3)})`
+    Math.abs(effectiveCameraScale - 1) > 0.002 || panX !== 0 || panY !== 0
+      ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${effectiveCameraScale.toFixed(3)})`
       : undefined;
 
   const wetPlaneSurfaceStyle: React.CSSProperties = isWetPavement

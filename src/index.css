@@ -3354,11 +3354,12 @@ html[data-vibrancy-fallback='solid'] .hig-auth-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .studio-worn-slot-chip {
   pointer-events: auto;
+  flex: 0 0 auto;
   position: relative;
   width: 42px;
   height: 42px;

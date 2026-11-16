@@ -638,13 +638,15 @@
   will-change: clip-path;
 }
 
-/* Full-body floor-plane alignment: top headroom for umbrellas + feet grounded cleanly above bottom angle scrollbar */
+/* Full-body floor-plane alignment: exact 50% horizontal dead-center + generous headroom & grounded feet */
 .studio-2d-model-stage.is-ai-stage .studio-2d-layer {
-  padding: 50px 16px 52px;
+  padding: 38px 12px 50px;
   align-items: flex-end;
 }
 
-.studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-2d-layer {
+.studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+  .studio-2d-model-stage.is-flatlay-stage
+  .studio-2d-layer {
   padding-left: 58px;
 }
 
@@ -673,7 +675,7 @@
   will-change: clip-path;
 }
 
-/* Layer 1 (z-index: 10): Elliptical Floor Contact Shadow grounding RGBA model feet */
+/* Layer 1 (z-index: 10): Elliptical Floor Contact Shadow grounding RGBA model feet at exact 50% center */
 .studio-floor-contact-shadow {
   position: absolute;
   left: 50%;
@@ -693,10 +695,6 @@
   filter: blur(4px);
   transform-origin: 50% 50%;
   will-change: transform;
-}
-
-.studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-floor-contact-shadow {
-  left: calc(50% + 22px);
 }
 
 [data-theme='dark'] .studio-floor-contact-shadow {
@@ -847,7 +845,7 @@
 .studio-2d-model-stage:not(.is-panning) .studio-floor-contact-shadow,
 .studio-2d-model-stage:not(.is-panning) .editorial-flatlay-board,
 .studio-2d-model-stage:not(.is-panning) .editorial-spec-compare-sheet {
-  transition: transform 0.24s var(--spring-ease), opacity 0.22s var(--spring-ease);
+  transition: transform 0.28s var(--spring-ease), opacity 0.22s var(--spring-ease);
 }
 
 /* ==========================================================================
@@ -2372,14 +2370,30 @@
 }
 
 .studio-2d-vton-viewer .studio-worn-slots-dock {
-  top: 214px;
+  pointer-events: auto;
+  top: 158px;
+  bottom: 64px;
   left: 12px;
   z-index: 64;
-  max-height: calc(100% - 282px);
+  max-height: none;
   overflow-y: auto;
-  overflow-x: visible;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   scrollbar-width: none;
-  padding-right: 4px;
+  padding: 6px 7px 10px 2px;
+  box-sizing: border-box;
+}
+
+.studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
+  top: 56px;
+}
+
+.studio-2d-vton-viewer .studio-worn-slot-chip {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
 }
 
 .studio-2d-vton-viewer .studio-worn-slots-dock::-webkit-scrollbar {
@@ -2809,10 +2823,16 @@
   }
 
   .studio-2d-vton-viewer .studio-worn-slots-dock {
-    top: 196px;
+    top: 146px;
+    bottom: 60px;
     left: 10px;
-    max-height: calc(100% - 260px);
-    gap: 6px;
+    max-height: none;
+    gap: 7px;
+    padding: 6px 7px 10px 2px;
+  }
+
+  .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
+    top: 50px;
   }
 
   .studio-2d-layer {
@@ -2820,11 +2840,13 @@
   }
 
   .studio-2d-model-stage.is-ai-stage .studio-2d-layer {
-    padding: 48px 12px 50px;
+    padding: 34px 8px 48px;
     align-items: flex-end;
   }
 
-  .studio-2d-vton-viewer:not([data-equipped-count='0']) .studio-2d-layer {
+  .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+    .studio-2d-model-stage.is-flatlay-stage
+    .studio-2d-layer {
     padding-left: 54px;
   }
 
@@ -3259,7 +3281,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: 50px 16px 52px;
+  padding: 38px 12px 50px;
   box-sizing: border-box;
   display: flex;
   align-items: flex-end;
@@ -3267,17 +3289,9 @@
   pointer-events: none;
 }
 
-.studio-stage-ground-deck.has-left-rail .studio-ground-wet-reflection-box {
-  padding-left: 58px;
-}
-
 @media (max-width: 1060px) {
   .studio-ground-wet-reflection-box {
-    padding: 48px 12px 50px;
-  }
-
-  .studio-stage-ground-deck.has-left-rail .studio-ground-wet-reflection-box {
-    padding-left: 54px;
+    padding: 34px 8px 48px;
   }
 }
 
@@ -3286,6 +3300,7 @@
   height: 100%;
   transform-origin: 50% 50%;
   will-change: transform;
+  transition: transform 0.28s var(--spring-ease);
 }
 
 .studio-wet-mirror-reflection-img {
@@ -3368,7 +3383,7 @@
     radial-gradient(ellipse 46% 24% at 64% 58%, rgba(125, 211, 252, 0.14) 0%, transparent 70%);
 }
 
-/* 10D. Grounded Contact AO Shadow beneath Model Shoes */
+/* 10D. Grounded Contact AO Shadow beneath Model Shoes at exact 50% dead-center */
 .studio-ground-contact-ao-shadow {
   position: absolute;
   left: 50%;
@@ -3386,10 +3401,7 @@
   );
   filter: blur(3.5px);
   transform-origin: 50% 50%;
-}
-
-.studio-stage-ground-deck.has-left-rail .studio-ground-contact-ao-shadow {
-  left: calc(50% + 22px);
+  transition: transform 0.28s var(--spring-ease);
 }
 
 .studio-stage-ground-deck.is-wet-pavement .studio-ground-contact-ao-shadow {

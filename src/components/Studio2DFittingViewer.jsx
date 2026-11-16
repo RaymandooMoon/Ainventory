@@ -3,7 +3,6 @@ import {
   Cloud,
   CloudRain,
   CloudSun,
-  Columns2,
   Flame,
   History,
   KeyRound,
@@ -311,12 +310,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
   const [scrollResidualYawDeg, setScrollResidualYawDeg] = useState(0);
   const isScrubbingScrollRef = useRef(false);
+  const angleScrollRef = useRef(angleScrollDeg);
 
   const viewAngleRef = useRef(viewAngleDeg);
   useEffect(() => {
     viewAngleRef.current = viewAngleDeg;
     if (!isScrubbingScrollRef.current) {
-      setAngleScrollDeg((prev) => angle360ToSignedScrollDeg(viewAngleDeg, prev));
+      setAngleScrollDeg((prev) => {
+        const next = angle360ToSignedScrollDeg(viewAngleDeg, prev);
+        angleScrollRef.current = next;
+        return next;
+      });
       setScrollResidualYawDeg(0);
     }
   }, [viewAngleDeg]);
@@ -396,6 +400,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       const rawVal = Number(e.target.value);
       const nextScroll = resolveSignedAngleScrollState(rawVal);
       isScrubbingScrollRef.current = true;
+      angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
       setScrollResidualYawDeg(nextScroll.residualYawDeg);
       if (viewAngleRef.current !== nextScroll.angle360) {
@@ -408,6 +413,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleAngleScrollRelease = useCallback(() => {
     isScrubbingScrollRef.current = false;
+    if (Math.abs(angleScrollRef.current) >= 138) {
+      const snappedEnd = angleScrollRef.current < 0 ? -180 : 180;
+      angleScrollRef.current = snappedEnd;
+      setAngleScrollDeg(snappedEnd);
+      setScrollResidualYawDeg(0);
+    }
   }, []);
 
   const handleJumpAngleScroll = useCallback(
@@ -415,6 +426,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearSpinTimers();
       isScrubbingScrollRef.current = false;
       const nextScroll = resolveSignedAngleScrollState(targetSignedDeg);
+      angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
       setScrollResidualYawDeg(0);
       commitAngleDeg(nextScroll.angle360);
@@ -478,6 +490,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
 
   const [zoom, setZoom] = useState(1);
+  const [idealBaseScale, setIdealBaseScale] = useState(1.14);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
   const [compareSplitPct, setCompareSplitPct] = useState(50);
@@ -694,6 +707,31 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [demoShowcaseEnabled, styleMode, canonicalSliceAngle]
   );
 
+  const fallbackSameComboMemorySlice = useMemo(() => {
+    void historyCount;
+    if (forceRefresh) return null;
+    const fallbackOrder = [0, 45, 90, 180].filter((deg) => deg !== canonicalSliceAngle);
+    for (const deg of fallbackOrder) {
+      const hit = peekMemoryAiVtonSlice({
+        avatarConfigHash: resolvedAvatarHash,
+        outfitComboId,
+        styleMode,
+        effectiveWeather,
+        angleDeg: deg,
+      });
+      if (hit?.imageUrl) return hit;
+    }
+    return null;
+  }, [
+    resolvedAvatarHash,
+    outfitComboId,
+    styleMode,
+    effectiveWeather,
+    canonicalSliceAngle,
+    forceRefresh,
+    historyCount,
+  ]);
+
   const flatLayCached = useMemo(
     () =>
       trackFlatLayComboVisit(
@@ -900,9 +938,24 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         }
       }
 
+      const hasSiblingComboSlice = TURNAROUND_ANGLES.some(
+        (deg) =>
+          deg !== snap.canonicalSliceAngle &&
+          Boolean(
+            peekMemoryAiVtonSlice({
+              avatarConfigHash: snap.resolvedAvatarHash,
+              outfitComboId,
+              styleMode: snap.styleMode,
+              effectiveWeather: snap.effectiveWeather,
+              angleDeg: deg,
+            })
+          )
+      );
+
       if (
         !isUserApproved &&
         !isDirectDemoClick &&
+        !hasSiblingComboSlice &&
         hasInitialAutoRunRef.current &&
         !autoGenEnabled &&
         !demoShowcaseEnabled
@@ -1280,15 +1333,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     });
   }, []);
 
-  const handleToggleCompare = useCallback(
-    (e) => {
-      e.stopPropagation();
-      if (equippedCount === 0) return;
-      setCompareActive((prev) => !prev);
-    },
-    [equippedCount]
-  );
-
   const isRainy = effectiveWeather === 'rain';
   const isWindy = effectiveWeather === 'wind' || effectiveWeather === 'coldwave';
 
@@ -1318,9 +1362,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     memorySlice?.imageUrl ||
     (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
     demoSliceUrl ||
+    fallbackSameComboMemorySlice?.imageUrl ||
     null;
 
   const resolvedAiImageUrl = stageMode === 'ai-vton' ? availableAiImageUrl : null;
+  const showCharacterZoomBar = Boolean(stageMode === 'ai-vton' && resolvedAiImageUrl);
   const canReturnToCharacter = stageMode === 'flatlay' && Boolean(availableAiImageUrl);
 
   useEffect(() => {
@@ -1340,7 +1386,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const isCachedHit =
     stageMode === 'ai-vton' && resolvedAiImageUrl
-      ? Boolean(isShowingPinnedHistory || memorySlice || aiState?.fromCache || demoSliceUrl)
+      ? Boolean(
+          isShowingPinnedHistory ||
+            memorySlice ||
+            fallbackSameComboMemorySlice ||
+            aiState?.fromCache ||
+            demoSliceUrl
+        )
       : flatLayCached;
 
   const capsuleTempC = useMemo(() => {
@@ -1389,6 +1441,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
+      data-has-zoom-bar={showCharacterZoomBar ? 'true' : 'false'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
       data-effective-weather={effectiveWeather}
@@ -1421,6 +1474,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         equippedCount={equippedCount}
         mirrorX={angleSpec.mirrorX}
         zoom={zoom}
+        idealBaseScale={idealBaseScale}
         pan={pan}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
@@ -1503,61 +1557,46 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       </div>
 
-      {/* Left-Upper Floating Smoked-Glass Circular Controls (Zoom + B/A Split Compare) */}
-      <div className="atelier-stage-left-controls">
-        <div
-          className="studio-vton-zoom-bar"
-          role="group"
-          aria-label={isEn ? 'Zoom controls' : '확대 및 축소'}
-        >
-          <button
-            type="button"
-            data-vton-zoom-in="true"
-            className="studio-vton-zoom-btn"
-            disabled={zoom >= 2.99}
-            aria-label={isEn ? 'Zoom in' : '확대'}
-            onClick={handleZoomIn}
+      {/* Left-Upper Character-Only Zoom Controls (hidden when Flat-Lay Lookbook is active) */}
+      {showCharacterZoomBar && (
+        <div className="atelier-stage-left-controls">
+          <div
+            className="studio-vton-zoom-bar"
+            role="group"
+            aria-label={isEn ? 'Character zoom controls' : '캐릭터 확대 및 축소'}
           >
-            <ZoomIn size={14} />
-          </button>
-          <button
-            type="button"
-            data-vton-zoom-level="true"
-            className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
-            aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
-            onClick={handleZoomCycleOrReset}
-          >
-            {formatZoomLabel(zoom)}
-          </button>
-          <button
-            type="button"
-            data-vton-zoom-out="true"
-            className="studio-vton-zoom-btn"
-            disabled={zoom <= 1.01}
-            aria-label={isEn ? 'Zoom out' : '축소'}
-            onClick={handleZoomOut}
-          >
-            <ZoomOut size={14} />
-          </button>
+            <button
+              type="button"
+              data-vton-zoom-in="true"
+              className="studio-vton-zoom-btn"
+              disabled={zoom >= 2.99}
+              aria-label={isEn ? 'Zoom in' : '확대'}
+              onClick={handleZoomIn}
+            >
+              <ZoomIn size={14} />
+            </button>
+            <button
+              type="button"
+              data-vton-zoom-level="true"
+              className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
+              aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
+              onClick={handleZoomCycleOrReset}
+            >
+              {formatZoomLabel(zoom)}
+            </button>
+            <button
+              type="button"
+              data-vton-zoom-out="true"
+              className="studio-vton-zoom-btn"
+              disabled={zoom <= 1.01}
+              aria-label={isEn ? 'Zoom out' : '축소'}
+              onClick={handleZoomOut}
+            >
+              <ZoomOut size={14} />
+            </button>
+          </div>
         </div>
-
-        <button
-          id="toggle-vton-compare-btn"
-          type="button"
-          data-vton-compare-btn="true"
-          disabled={equippedCount === 0}
-          aria-pressed={effectiveCompareActive}
-          aria-label={
-            isEn ? 'Toggle before and after outfit comparison' : '착장 전후 분할 비교'
-          }
-          title={isEn ? 'Before / After Split Compare' : '착장 전후 비교'}
-          className={`studio-vton-compare-btn ${effectiveCompareActive ? 'is-active' : ''}`}
-          onClick={handleToggleCompare}
-        >
-          <Columns2 size={15} />
-          <span className="studio-vton-compare-label">B/A</span>
-        </button>
-      </div>
+      )}
 
       {/* Weather Curation Pill Badge */}
       <div
@@ -1621,6 +1660,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pan={pan}
         onZoomChange={setZoom}
         onPanChange={setPan}
+        onIdealScaleChange={setIdealBaseScale}
         legacyMode={viewerMode}
         lang={resolvedLang}
       />
@@ -1946,11 +1986,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Left Worn-Slot Chips Dock */}
+      {/* Left Vertically Scrollable Worn-Slot Chips Dock */}
       {equippedCount > 0 && (
         <div
           className="studio-worn-slots-dock"
+          data-worn-slots-dock="true"
           aria-label={isEn ? 'Equipped garments' : '착용 아이템'}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           {layers.map((layer) => {
             const isSelectedSlot = activeSlotKey === layer.slotKey;
@@ -2030,7 +2075,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="left-back"
-            className={`studio-angle-end-label ${angleScrollDeg <= -158 ? 'is-active' : ''}`}
+            className={`studio-angle-end-label ${angleScrollDeg <= -138 ? 'is-active' : ''}`}
             onClick={() => handleJumpAngleScroll(-180)}
           >
             {isEn ? 'Back' : '뒷모습'}
@@ -2051,7 +2096,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="right-back"
-            className={`studio-angle-end-label ${angleScrollDeg >= 158 ? 'is-active' : ''}`}
+            className={`studio-angle-end-label ${angleScrollDeg >= 138 ? 'is-active' : ''}`}
             onClick={() => handleJumpAngleScroll(180)}
           >
             {isEn ? 'Back' : '뒷모습'}

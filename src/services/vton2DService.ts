@@ -436,16 +436,59 @@ export function resolveSignedAngleScrollState(rawScrollDeg: unknown): {
 } {
   const n = Number(rawScrollDeg);
   const clampedScrollDeg = Number.isFinite(n) ? clamp(n, -180, 180) : 0;
-  const snappedScrollDeg = clamp(Math.round(clampedScrollDeg / 45) * 45, -180, 180);
+  // Widen the outer ±180° back-view zone ([±138..±180]) so `180° 뒷모습` is effortlessly reachable at both ends
+  const snappedScrollDeg =
+    Math.abs(clampedScrollDeg) >= 138
+      ? clampedScrollDeg < 0
+        ? -180
+        : 180
+      : clamp(Math.round(clampedScrollDeg / 45) * 45, -180, 180);
   const angle360 = normalizeTurnaround360Angle(snappedScrollDeg, DEFAULT_TURNAROUND_ANGLE);
   const deltaDeg = clampedScrollDeg - snappedScrollDeg;
-  const residualYawDeg = Math.round(clamp(deltaDeg * 0.42, -9.5, 9.5) * 10) / 10;
+  const yawFactor = Math.abs(snappedScrollDeg) === 180 ? 0.16 : 0.42;
+  const residualYawDeg = Math.round(clamp(deltaDeg * yawFactor, -9.5, 9.5) * 10) / 10;
   return {
     clampedScrollDeg,
     snappedScrollDeg,
     angle360,
     residualYawDeg,
   };
+}
+
+/**
+ * Computes the ideal device-adaptive base display scale for `1.0x` zoom so the mannequin fills
+ * ~80–84% of the stage height comfortably on narrow portrait phones, foldables, tablets, and desktops
+ * without width-choking `1:1` quadrant slices or clipping head/umbrellas/shoes.
+ */
+export function computeIdealDeviceMannequinScale(params?: {
+  stageWidth?: number;
+  stageHeight?: number;
+  imageAspectRatio?: number;
+}): number {
+  const sw = Number(params?.stageWidth) || 0;
+  const sh = Number(params?.stageHeight) || 0;
+  if (sw < 120 || sh < 160) {
+    return 1.14;
+  }
+  const isCompact = sw <= 1060;
+  const topPad = isCompact ? 34 : 38;
+  const bottomPad = isCompact ? 48 : 50;
+  const sidePad = isCompact ? 8 : 12;
+  const availW = Math.max(120, sw - sidePad * 2);
+  const availH = Math.max(160, sh - topPad - bottomPad);
+  const rawAspect = Number(params?.imageAspectRatio);
+  const imgAspect =
+    Number.isFinite(rawAspect) && rawAspect > 0.25 ? clamp(rawAspect, 0.45, 1.45) : 0.76;
+
+  const renderedBoxH = Math.min(availH, availW / imgAspect);
+  const widthChokeCompensation = availH / Math.max(1, renderedBoxH);
+  const stageAspect = sw / sh;
+  const presenceBoost = stageAspect < 0.85 ? 1.11 : stageAspect < 1.25 ? 1.09 : 1.08;
+
+  const renderedBoxW = renderedBoxH * imgAspect;
+  const maxHorizontalScale = (sw * 0.94) / Math.max(1, renderedBoxW * 0.62);
+  const rawIdeal = widthChokeCompensation * presenceBoost;
+  return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.05, 1.44) * 1000) / 1000;
 }
 
 const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
@@ -483,7 +526,7 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
     angleDeg: 135,
     canonicalSliceAngle: 180,
     mirrorX: false,
-    perspectiveYawDeg: -10,
+    perspectiveYawDeg: -7,
     shortKo: '우후면',
     shortEn: '135° R',
     fullKo: '135° 우측 후면',
@@ -502,8 +545,8 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
   225: {
     angleDeg: 225,
     canonicalSliceAngle: 180,
-    mirrorX: true,
-    perspectiveYawDeg: 10,
+    mirrorX: false,
+    perspectiveYawDeg: 7,
     shortKo: '좌후면',
     shortEn: '225° L',
     fullKo: '225° 좌측 후면',
@@ -1493,20 +1536,31 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     if (ch < 64) continue;
 
     const fgH = b.maxY - b.minY + 1;
-    const targetMaxAllowedH = Math.round(ch * 0.865);
+    const targetIdealH = Math.round(ch * 0.855);
+    const targetMaxAllowedH = Math.round(ch * 0.885);
     const canonicalFloorY = Math.min(
-      Math.round(ch * 0.94),
-      Math.max(Math.round(ch * 0.85), medianBottom)
+      Math.round(ch * 0.95),
+      Math.max(Math.round(ch * 0.88), medianBottom)
     );
     const targetFloorY =
-      medianBottom > Math.round(ch * 0.955) ? Math.round(ch * 0.935) : canonicalFloorY;
+      ch >= 180
+        ? Math.round(ch * 0.948)
+        : medianBottom > Math.round(ch * 0.955)
+          ? Math.round(ch * 0.935)
+          : canonicalFloorY;
 
     const heightDiffRatio = medianFgH > 0 ? Math.abs(fgH - medianFgH) / medianFgH : 0;
+    const isUndersizedFullBody = ch >= 180 && medianFgH < Math.round(ch * 0.81);
     const needsScaleNormalization =
-      ch >= 180 && (fgH > Math.round(ch * 0.895) || heightDiffRatio > 0.075);
+      ch >= 180 &&
+      (fgH > Math.round(ch * 0.895) || heightDiffRatio > 0.065 || isUndersizedFullBody);
     const bottomDelta = targetFloorY - b.maxY;
 
-    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 3) {
+    const fgW = b.maxX - b.minX + 1;
+    const srcCx = b.minX + fgW * 0.5;
+    const horizOffsetPx = Math.abs(cw * 0.5 - srcCx);
+
+    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 3 && horizOffsetPx <= 4) {
       continue;
     }
 
@@ -1528,42 +1582,214 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     cCtx.imageSmoothingQuality = 'high';
 
     if (needsScaleNormalization) {
-      const desiredFgH = Math.min(targetMaxAllowedH, medianFgH);
-      const scale = clamp(desiredFgH / Math.max(1, fgH), 0.76, 1.14);
-      const fgW = b.maxX - b.minX + 1;
-      const srcCx = b.minX + fgW * 0.5;
+      const uniformDesiredFgH = isUndersizedFullBody
+        ? Math.min(targetMaxAllowedH, Math.max(medianFgH, targetIdealH))
+        : Math.min(targetMaxAllowedH, medianFgH);
+      const maxTopSafeScale =
+        (targetFloorY - Math.round(ch * 0.035)) / Math.max(1, fgH);
+      const maxWidthSafeScale = (cw * 0.92) / Math.max(1, fgW);
+      const scale = clamp(
+        Math.min(uniformDesiredFgH / Math.max(1, fgH), maxTopSafeScale, maxWidthSafeScale),
+        0.76,
+        1.22
+      );
       const dstW = Math.round(cw * scale);
       const dstH = Math.round(ch * scale);
       const dstX = Math.round(cw * 0.5 - srcCx * scale);
       const dstY = Math.round(targetFloorY - b.maxY * scale);
       cCtx.drawImage(scratch, 0, 0, cw, ch, dstX, dstY, dstW, dstH);
     } else {
-      // Pure integer vertical translation — zero pixel resampling blur!
+      // Pure integer translation centering X & grounding Y — zero pixel resampling blur!
+      const clampedDx = Math.round(cw * 0.5 - srcCx);
       const clampedDy = clamp(
         Math.round(bottomDelta),
         Math.round(ch * 0.03) - b.minY,
         ch - 2 - b.maxY
       );
-      cCtx.drawImage(scratch, 0, clampedDy);
+      cCtx.drawImage(scratch, clampedDx, clampedDy);
     }
 
     scratch.width = 0;
     scratch.height = 0;
   }
+
+  // Trim excess horizontal square transparent margins symmetrically to a ~3:4 portrait canvas
+  // so narrow mobile viewports (`object-fit: contain`) never width-choke full-body characters!
+  let maxPostFgW = 0;
+  let minCanvasW = Infinity;
+  let refCanvasH = 0;
+  for (const angle of TURNAROUND_ANGLES) {
+    const c = canvases[angle];
+    if (!c || c.height < 180 || c.width < 180) {
+      minCanvasW = 0;
+      break;
+    }
+    refCanvasH = c.height;
+    minCanvasW = Math.min(minCanvasW, c.width);
+    const postB = measureOpaqueVerticalBounds(c);
+    if (postB) {
+      const symmetricSpan =
+        Math.max(Math.abs(postB.minX - c.width * 0.5), Math.abs(postB.maxX - c.width * 0.5)) * 2;
+      maxPostFgW = Math.max(maxPostFgW, symmetricSpan);
+    }
+  }
+
+  if (minCanvasW >= 180 && refCanvasH >= 180 && maxPostFgW > 0) {
+    const desiredPortraitW = Math.max(
+      Math.round(refCanvasH * 0.74),
+      Math.ceil(maxPostFgW + refCanvasH * 0.08)
+    );
+    if (desiredPortraitW < minCanvasW - 16) {
+      for (const angle of TURNAROUND_ANGLES) {
+        const c = canvases[angle];
+        if (!c) continue;
+        const oldW = c.width;
+        const oldH = c.height;
+        const cropX = Math.max(0, Math.round((oldW - desiredPortraitW) * 0.5));
+        const scratch = document.createElement('canvas');
+        scratch.width = desiredPortraitW;
+        scratch.height = oldH;
+        const sCtx = scratch.getContext('2d');
+        const cCtx = c.getContext('2d', { willReadFrequently: true });
+        if (sCtx && cCtx) {
+          sCtx.drawImage(c, cropX, 0, desiredPortraitW, oldH, 0, 0, desiredPortraitW, oldH);
+          c.width = desiredPortraitW;
+          c.height = oldH;
+          cCtx.clearRect(0, 0, desiredPortraitW, oldH);
+          cCtx.drawImage(scratch, 0, 0);
+        }
+        scratch.width = 0;
+        scratch.height = 0;
+      }
+    }
+  }
+}
+
+function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 4 || ch < 4) return;
+  const scratch = document.createElement('canvas');
+  scratch.width = cw;
+  scratch.height = ch;
+  const sCtx = scratch.getContext('2d');
+  const cCtx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!sCtx || !cCtx) {
+    scratch.width = 0;
+    scratch.height = 0;
+    return;
+  }
+  sCtx.drawImage(canvas, 0, 0);
+  cCtx.clearRect(0, 0, cw, ch);
+  cCtx.save();
+  cCtx.translate(cw, 0);
+  cCtx.scale(-1, 1);
+  cCtx.drawImage(scratch, 0, 0);
+  cCtx.restore();
+  scratch.width = 0;
+  scratch.height = 0;
+}
+
+/**
+ * Detects whether a lateral (`90°` or `45°`) cutout human silhouette faces screen-left or screen-right
+ * by comparing forefoot/toe overhang against ankle/lower-shin alignment at the bottom of the figure
+ * (100% immune to overhead umbrellas, hats, or shoulder bags).
+ */
+function detectLateralCanvasFacingDirection(
+  canvas: HTMLCanvasElement
+): 'left' | 'right' | 'neutral' {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 180 || ch < 180) return 'neutral';
+  const bounds = measureOpaqueVerticalBounds(canvas);
+  if (!bounds) return 'neutral';
+  const fgH = bounds.maxY - bounds.minY + 1;
+  const fgW = bounds.maxX - bounds.minX + 1;
+  if (fgH < 96 || fgW < 24) return 'neutral';
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return 'neutral';
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, cw, ch).data;
+  } catch {
+    return 'neutral';
+  }
+
+  const ankleY0 = Math.max(bounds.minY, bounds.maxY - Math.round(fgH * 0.21));
+  const ankleY1 = Math.max(ankleY0, bounds.maxY - Math.round(fgH * 0.105));
+  const footY0 = Math.max(ankleY1 + 1, bounds.maxY - Math.round(fgH * 0.072));
+  const footY1 = bounds.maxY;
+
+  let ankleMinX = cw;
+  let ankleMaxX = -1;
+  let ankleSumX = 0;
+  let ankleCount = 0;
+
+  for (let y = ankleY0; y <= ankleY1; y += 1) {
+    const row = y * cw * 4;
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      if (data[row + x * 4 + 3] >= 120) {
+        if (x < ankleMinX) ankleMinX = x;
+        if (x > ankleMaxX) ankleMaxX = x;
+        ankleSumX += x;
+        ankleCount += 1;
+      }
+    }
+  }
+
+  let footMinX = cw;
+  let footMaxX = -1;
+  let footSumX = 0;
+  let footCount = 0;
+
+  for (let y = footY0; y <= footY1; y += 1) {
+    const row = y * cw * 4;
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      if (data[row + x * 4 + 3] >= 120) {
+        if (x < footMinX) footMinX = x;
+        if (x > footMaxX) footMaxX = x;
+        footSumX += x;
+        footCount += 1;
+      }
+    }
+  }
+
+  if (ankleCount < 16 || footCount < 16 || ankleMaxX < ankleMinX || footMaxX < footMinX) {
+    return 'neutral';
+  }
+
+  const ankleMeanX = ankleSumX / ankleCount;
+  const footMeanX = footSumX / footCount;
+  const leftToeOverhang = ankleMinX - footMinX;
+  const rightToeOverhang = footMaxX - ankleMaxX;
+  const overhangDiff = rightToeOverhang - leftToeOverhang;
+  const meanShift = footMeanX - ankleMeanX;
+
+  const minOverhangPx = Math.max(4, fgW * 0.045);
+  const minMeanShiftPx = Math.max(2, fgW * 0.018);
+
+  if (overhangDiff < -minOverhangPx && meanShift < -minMeanShiftPx) {
+    return 'left';
+  }
+  if (overhangDiff > minOverhangPx && meanShift > minMeanShiftPx) {
+    return 'right';
+  }
+  return 'neutral';
 }
 
 /**
  * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual RGBA PNG angle images:
  * - Top-Left     -> `0°` (Front)
- * - Top-Right    -> `45°` (Quarter)
- * - Bottom-Left  -> `90°` (Side Profile)
+ * - Top-Right    -> `45°` (Quarter, normalized to face screen-right)
+ * - Bottom-Left  -> `90°` (Side Profile, normalized to face screen-right)
  * - Bottom-Right -> `180°` (Back)
  * Runs `isolateSingleSubjectInSlice` + V4 hole-aware `applyCornerBfsCutoutOnCanvas` +
- * `normalizeTurnaroundCanvasesToFloorBaseline` so EVERY slice is a true RGBA transparent PNG
- * (`data:image/png;base64,...`) with zero enclosed backdrop islands and aligned full-body feet!
+ * screen-right gaze normalization + `normalizeTurnaroundCanvasesToFloorBaseline`!
  */
 export async function sliceTurnaround2x2Sheet(
-  sheetDataUrl: string
+  sheetDataUrl: string,
+  options?: { forceFlipAngles?: TurnaroundAngleDeg[] }
 ): Promise<Record<TurnaroundAngleDeg, string>> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
     return {
@@ -1573,6 +1799,8 @@ export async function sliceTurnaround2x2Sheet(
       180: sheetDataUrl,
     };
   }
+
+  const forceFlipSet = new Set<TurnaroundAngleDeg>(options?.forceFlipAngles || []);
 
   const rawCropped = await new Promise<Record<TurnaroundAngleDeg, string> | null>((resolve) => {
     const img = new Image();
@@ -1645,6 +1873,17 @@ export async function sliceTurnaround2x2Sheet(
             extraCanvases.push(cropCanvas);
           }
           applyCornerBfsCutoutOnCanvas(finalCanvas);
+
+          // Ensure canonical `45°` & `90°` ALWAYS face screen-right so slider left = gaze left & slider right = gaze right!
+          if (forceFlipSet.has(q.angle)) {
+            flipCanvasHorizontallyInPlace(finalCanvas);
+          } else if (
+            (q.angle === 45 || q.angle === 90) &&
+            detectLateralCanvasFacingDirection(finalCanvas) === 'left'
+          ) {
+            flipCanvasHorizontallyInPlace(finalCanvas);
+          }
+
           cutCanvases[q.angle] = finalCanvas;
         }
 
@@ -1747,7 +1986,10 @@ export async function loadShowcaseDemoVtonSlices(
           ? '/seed/vton-showcase-stylized.jpg'
           : '/seed/vton-showcase-photoreal.jpg';
       const sheetUrl = withPublicBaseUrl(assetPath);
-      const sliced = await sliceTurnaround2x2Sheet(sheetUrl);
+      // Both static showcase sheets have 45° & 90° facing screen-left; flip them so canonical +45°/+90° face screen-right
+      const sliced = await sliceTurnaround2x2Sheet(sheetUrl, {
+        forceFlipAngles: [45, 90],
+      });
       showcaseMemorySlices[styleMode] = sliced;
       return sliced;
     } catch {
@@ -2049,7 +2291,7 @@ function buildDirectClientGeminiParts(params: {
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, FRONT-FACING 45° Quarter (face, both eyes, nose, chin 100% visible), and 90° Side Profile (and matching rear hair silhouette ONLY on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
+      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (facing VIEWER'S RIGHT), while on the Bottom-Right 180° Back view render ONLY the back of the head & rear hair silhouette (STRICTLY ZERO front face, eyes, nose, or front lapels on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
   }

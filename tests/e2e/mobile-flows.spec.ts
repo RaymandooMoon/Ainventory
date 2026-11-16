@@ -375,10 +375,16 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
     await expect(mannequin).toHaveAttribute('data-height-cm', '178');
 
-    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero angle buttons, 2D zoom)
+    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero Flat-Lay split button, character-only zoom)
     await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-in="true"]')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /피팅 새로고침|Refresh/i }).click();
+    await studioCanvas.locator('[data-vton-demo-btn="true"]').click();
+    await expect(studioCanvas.locator('[data-ai-vton-img="true"]')).toBeVisible();
     await studioCanvas.locator('[data-vton-zoom-in="true"]').click();
     await expect(mannequin).not.toHaveAttribute('data-zoom', '1.00');
     await studioCanvas.locator('[data-vton-zoom-level="true"]').click();
