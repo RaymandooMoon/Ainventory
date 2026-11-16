@@ -45,3 +45,8 @@ playwright/.cache/
 
 __pycache__/
 *.pyc
+
+# Local MCP server credentials (never commit real API keys!)
+.agent/mcp_config.json
+.agents/mcp_config.json
+.mcp.json

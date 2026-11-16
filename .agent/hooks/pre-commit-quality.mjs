@@ -63,15 +63,16 @@ const SECRET_PATTERNS = [
   { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/, name: 'Anthropic API key' },
   { pattern: /sk-[a-zA-Z0-9]{20,}/, name: 'OpenAI API key' },
   { pattern: /AIzaSy[A-Za-z0-9_-]{33}/, name: 'Google Gemini API key' },
+  { pattern: /AQ\.[A-Za-z0-9_-]{30,}/, name: 'Google Stitch API key' },
   { pattern: /ghp_[a-zA-Z0-9]{36}/, name: 'GitHub PAT' },
   { pattern: /AKIA[A-Z0-9]{16}/, name: 'AWS Access Key' },
   {
     pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
     name: 'PEM Private Key',
   },
-  { pattern: /api[_-]?key\s*[=:]\s*['"]([^'"]+)['"]/i, name: 'API key', valueGroup: 1 },
+  { pattern: /api[_-]?key['"]?\s*[=:]\s*['"]([^'"]+)['"]/i, name: 'API key', valueGroup: 1 },
   {
-    pattern: /api[_-]?key\s*[=:]\s*(?!['"])((?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{12,})/i,
+    pattern: /api[_-]?key['"]?\s*[=:]\s*(?!['"])((?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{12,})/i,
     name: 'API key',
     valueGroup: 1,
   },
@@ -128,10 +129,27 @@ function getStagedModifiedFiles() {
     .filter(Boolean);
 }
 
+function isAgentNonMcpDoc(filePath) {
+  if (!(filePath.startsWith('.agent/') || filePath.startsWith('.agents/'))) return false;
+  if (
+    filePath === '.agent/mcp_config.json' ||
+    filePath === '.agents/mcp_config.json' ||
+    filePath.startsWith('.agent/mcp/') ||
+    filePath.startsWith('.agents/mcp/')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function getTrackedScanFiles() {
-  const res = spawnSync('git', ['ls-files', 'src', 'server', 'tests', 'scripts', 'tools'], {
-    encoding: 'utf8',
-  });
+  const res = spawnSync(
+    'git',
+    ['ls-files', 'src', 'server', 'tests', 'scripts', 'tools', '.agent/mcp', '.stitch', '.env.example'],
+    {
+      encoding: 'utf8',
+    },
+  );
   if (res.status !== 0) return [];
   return res.stdout
     .trim()
@@ -238,7 +256,7 @@ if (secretsOnly) {
   const secretErrors = [];
 
   for (const file of targets) {
-    if (file.startsWith('.agent/') || file.startsWith('.agents/')) continue;
+    if (isAgentNonMcpDoc(file)) continue;
     const content = getFileContent(file, useStaged);
     for (const issue of scanContent(file, content)) {
       if (issue.severity === 'error') secretErrors.push(issue);
@@ -275,7 +293,7 @@ if (process.env.ALLOW_LINTER_CONFIG_EDIT !== '1') {
 const errors = [];
 const warnings = [];
 for (const file of stagedFiles) {
-  if (file.startsWith('.agent/') || file.startsWith('.agents/')) continue;
+  if (isAgentNonMcpDoc(file)) continue;
   const content = getFileContent(file, true);
   for (const issue of scanContent(file, content)) {
     if (issue.severity === 'error') errors.push(issue);
