@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ChevronDown,
   Cloud,
   CloudRain,
   CloudSun,
@@ -223,6 +224,25 @@ function formatFallbackToastMessage(reason, lang) {
     : `AI 가상 피팅 생성이 지연되어 에디토리얼 플랫레이 보드를 유지합니다.${codeSuffix}`;
 }
 
+const LOOK_STYLE_TITLE_LABELS = {
+  business_casual: {
+    ko: '직장생활을 위한 비즈니스 캐주얼',
+    en: 'Business Casual for Work',
+  },
+  comfortable_casual: {
+    ko: '편한 캐주얼',
+    en: 'Comfortable Casual',
+  },
+  formal_office: {
+    ko: '포멀 · 오피스 정장',
+    en: 'Formal Office',
+  },
+  minimal_daily: {
+    ko: '미니멀 데일리',
+    en: 'Minimal Daily',
+  },
+};
+
 /**
  * High-Fashion Outfits Central Viewer:
  * ① Default Primary Mode: `AI Try-On ('ai-vton')` — Gemini Multimodal Image Generation VTON
@@ -245,6 +265,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onViewAngleChange,
   weather,
   scenarioKey = 'live',
+  locationLabel,
+  onOpenWeatherPopup,
+  weatherPopupOpen = false,
+  recommendations = [],
+  activeRecId = null,
+  lookStyleConfig = null,
+  onApplyRecommendation,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
@@ -622,11 +649,38 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [weather, resolvedLang]
   );
 
+  const normalizedScenarioKey = scenarioKey || 'live';
   const { outfitComboId } = useMemo(() => computeOutfitComboId(slots), [slots]);
+  const scenarioVtonKey = `${normalizedScenarioKey}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
+  const scenarioVtonSnapshotsRef = useRef({});
+  const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
+
+  const recordScenarioVtonSnapshot = useCallback(
+    (targetKey, angleDeg, imageUrl, angleSlicesMap = null) => {
+      if (!targetKey || (!imageUrl && !angleSlicesMap)) return;
+      const prev = scenarioVtonSnapshotsRef.current[targetKey] || { angleSlices: {} };
+      const nextSlices = {
+        ...prev.angleSlices,
+        ...(angleSlicesMap || {}),
+      };
+      if (imageUrl && angleDeg !== undefined && angleDeg !== null) {
+        nextSlices[angleDeg] = imageUrl;
+      }
+      scenarioVtonSnapshotsRef.current[targetKey] = {
+        imageUrl: imageUrl || prev.imageUrl || nextSlices[0] || null,
+        angleSlices: nextSlices,
+      };
+      setScenarioSnapEpoch((n) => n + 1);
+    },
+    []
+  );
+
   const prevFacePhotoRef = useRef(activeFacePhotoUrl);
   const pendingFacePhotoApproveRef = useRef(null);
   const prevEffectiveWeatherRef = useRef(effectiveWeather);
   const pendingWeatherApproveRef = useRef(null);
+  const prevScenarioKeyRef = useRef(normalizedScenarioKey);
+  const pendingScenarioApproveRef = useRef(null);
   const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
 
@@ -668,15 +722,34 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const currentAiCacheKey = useMemo(
     () =>
-      buildAiVtonCacheKey({
+      `${buildAiVtonCacheKey({
         avatarConfigHash: resolvedAvatarHash,
         outfitComboId,
         styleMode,
         effectiveWeather,
         angleDeg: canonicalSliceAngle,
-      }),
-    [resolvedAvatarHash, outfitComboId, styleMode, effectiveWeather, canonicalSliceAngle]
+      })}|sc:${normalizedScenarioKey}`,
+    [
+      resolvedAvatarHash,
+      outfitComboId,
+      styleMode,
+      effectiveWeather,
+      canonicalSliceAngle,
+      normalizedScenarioKey,
+    ]
   );
+
+  const scenarioSnapSliceUrl = useMemo(() => {
+    void scenarioSnapEpoch;
+    if (forceRefresh) return null;
+    const entry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    if (!entry) return null;
+    return (
+      entry.angleSlices?.[canonicalSliceAngle] ||
+      (canonicalSliceAngle === 0 ? entry.imageUrl : null) ||
+      null
+    );
+  }, [scenarioVtonKey, canonicalSliceAngle, forceRefresh, scenarioSnapEpoch]);
 
   const historyCount = historyItems.length;
   const memorySlice = useMemo(() => {
@@ -709,6 +782,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const fallbackSameComboMemorySlice = useMemo(() => {
     void historyCount;
+    void scenarioSnapEpoch;
     if (forceRefresh) return null;
     const angularDist = (a, b) => {
       const diff = Math.abs(a - b) % 360;
@@ -717,6 +791,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const fallbackOrder = TURNAROUND_ANGLES.filter((deg) => deg !== canonicalSliceAngle).sort(
       (a, b) => angularDist(a, canonicalSliceAngle) - angularDist(b, canonicalSliceAngle)
     );
+    const snapEntry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    if (snapEntry?.angleSlices) {
+      for (const deg of fallbackOrder) {
+        if (snapEntry.angleSlices[deg]) {
+          return { imageUrl: snapEntry.angleSlices[deg] };
+        }
+      }
+    }
     for (const deg of fallbackOrder) {
       const hit = peekMemoryAiVtonSlice({
         avatarConfigHash: resolvedAvatarHash,
@@ -736,14 +818,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     canonicalSliceAngle,
     forceRefresh,
     historyCount,
+    scenarioVtonKey,
+    scenarioSnapEpoch,
   ]);
 
   const flatLayCached = useMemo(
     () =>
       trackFlatLayComboVisit(
-        `flatlay::${resolvedAvatarHash}::${outfitComboId}::${effectiveWeather}::${viewAngleDeg}`
+        `flatlay::${resolvedAvatarHash}::${outfitComboId}::${effectiveWeather}::${normalizedScenarioKey}::${viewAngleDeg}`
       ),
-    [resolvedAvatarHash, outfitComboId, effectiveWeather, viewAngleDeg]
+    [resolvedAvatarHash, outfitComboId, effectiveWeather, normalizedScenarioKey, viewAngleDeg]
   );
 
   const latestInputsRef = useRef({
@@ -757,6 +841,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     styleMode,
     weather,
     effectiveWeather,
+    normalizedScenarioKey,
+    scenarioVtonKey,
     resolvedTheme,
     rawLegacyMode,
     forceRefresh,
@@ -775,6 +861,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       styleMode,
       weather,
       effectiveWeather,
+      normalizedScenarioKey,
+      scenarioVtonKey,
       resolvedTheme,
       rawLegacyMode,
       forceRefresh,
@@ -804,8 +892,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingWeatherApproveRef.current = effectiveWeather;
       setPinnedHistoryItem(null);
     }
+    if (prevScenarioKeyRef.current !== normalizedScenarioKey) {
+      prevScenarioKeyRef.current = normalizedScenarioKey;
+      pendingScenarioApproveRef.current = normalizedScenarioKey;
+      setPinnedHistoryItem(null);
+    }
     const weatherTabJustChanged = Boolean(
-      pendingWeatherApproveRef.current === effectiveWeather
+      pendingWeatherApproveRef.current === effectiveWeather ||
+        pendingScenarioApproveRef.current === normalizedScenarioKey
     );
 
     if (stageMode !== 'ai-vton' || equippedCount === 0) {
@@ -831,12 +925,40 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     const snap = latestInputsRef.current;
     const isForceBypass = Boolean(snap.forceRefresh || forceBypassCacheRef.current);
+    if (isForceBypass) {
+      delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    }
     const isUserApproved = Boolean(
       isForceBypass ||
         userApprovedGenRef.current ||
         facePhotoJustApplied ||
         weatherTabJustChanged
     );
+
+    const scenarioExactUrl = !isForceBypass
+      ? scenarioVtonSnapshotsRef.current[scenarioVtonKey]?.angleSlices?.[
+          snap.canonicalSliceAngle
+        ] || null
+      : null;
+
+    if (scenarioExactUrl) {
+      forceBypassCacheRef.current = false;
+      userApprovedGenRef.current = false;
+      pendingFacePhotoApproveRef.current = null;
+      pendingWeatherApproveRef.current = null;
+      pendingScenarioApproveRef.current = null;
+      hasInitialAutoRunRef.current = true;
+      setStagedNeedsApply(false);
+      setAiState({
+        cacheKey: currentAiCacheKey,
+        imageUrl: scenarioExactUrl,
+        fromCache: true,
+        provider: 'gemini-vton',
+      });
+      setStatusToast(null);
+      setAiLoading(false);
+      return undefined;
+    }
 
     const syncHit = !isForceBypass
       ? peekMemoryAiVtonSlice({
@@ -849,10 +971,30 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       : null;
 
     if (syncHit) {
+      const siblingMap = {};
+      for (const deg of TURNAROUND_ANGLES) {
+        const mem = peekMemoryAiVtonSlice({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
+          angleDeg: deg,
+        });
+        if (mem?.imageUrl) {
+          siblingMap[deg] = mem.imageUrl;
+        }
+      }
+      recordScenarioVtonSnapshot(
+        scenarioVtonKey,
+        snap.canonicalSliceAngle,
+        syncHit.imageUrl,
+        siblingMap
+      );
       forceBypassCacheRef.current = false;
       userApprovedGenRef.current = false;
       pendingFacePhotoApproveRef.current = null;
       pendingWeatherApproveRef.current = null;
+      pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
       setAiState({
@@ -867,15 +1009,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     }
 
     if (demoShowcaseEnabled && !isForceBypass) {
+      const activeDemoStyle = normalizeVtonStyleMode(snap.styleMode);
       const cachedDemoUrl = peekShowcaseDemoVtonSlice(
-        snap.styleMode,
+        activeDemoStyle,
         snap.canonicalSliceAngle
       );
       if (cachedDemoUrl) {
+        recordScenarioVtonSnapshot(
+          scenarioVtonKey,
+          snap.canonicalSliceAngle,
+          cachedDemoUrl
+        );
         forceBypassCacheRef.current = false;
         userApprovedGenRef.current = false;
         pendingFacePhotoApproveRef.current = null;
         pendingWeatherApproveRef.current = null;
+        pendingScenarioApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
         setStagedNeedsApply(false);
         setAiState({
@@ -908,9 +1057,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         if (controller.signal.aborted) return;
 
         if (idbHit) {
-          const siblingPromises = TURNAROUND_ANGLES.filter(
+          const siblingAngles = TURNAROUND_ANGLES.filter(
             (deg) => deg !== snap.canonicalSliceAngle
-          ).map((deg) =>
+          );
+          const siblingPromises = siblingAngles.map((deg) =>
             readCachedAiVtonSlice({
               avatarConfigHash: snap.resolvedAvatarHash,
               outfitComboId,
@@ -919,7 +1069,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               angleDeg: deg,
             })
           );
+          recordScenarioVtonSnapshot(
+            scenarioVtonKey,
+            snap.canonicalSliceAngle,
+            idbHit.slice.imageUrl
+          );
           void Promise.all(siblingPromises).then((hits) => {
+            const siblingMap = {
+              [snap.canonicalSliceAngle]: idbHit.slice.imageUrl,
+            };
+            hits.forEach((h, idx) => {
+              if (h?.slice?.imageUrl) {
+                siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
+              }
+            });
+            recordScenarioVtonSnapshot(
+              scenarioVtonKey,
+              snap.canonicalSliceAngle,
+              idbHit.slice.imageUrl,
+              siblingMap
+            );
             preloadImageUrls([
               idbHit.slice.imageUrl,
               ...hits.map((h) => h?.slice?.imageUrl).filter(Boolean),
@@ -930,6 +1099,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           userApprovedGenRef.current = false;
           pendingFacePhotoApproveRef.current = null;
           pendingWeatherApproveRef.current = null;
+          pendingScenarioApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
           setStagedNeedsApply(false);
           setAiState({
@@ -947,15 +1117,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       const hasSiblingComboSlice = TURNAROUND_ANGLES.some(
         (deg) =>
           deg !== snap.canonicalSliceAngle &&
-          Boolean(
-            peekMemoryAiVtonSlice({
-              avatarConfigHash: snap.resolvedAvatarHash,
-              outfitComboId,
-              styleMode: snap.styleMode,
-              effectiveWeather: snap.effectiveWeather,
-              angleDeg: deg,
-            })
-          )
+          (Boolean(
+            scenarioVtonSnapshotsRef.current[scenarioVtonKey]?.angleSlices?.[deg]
+          ) ||
+            Boolean(
+              peekMemoryAiVtonSlice({
+                avatarConfigHash: snap.resolvedAvatarHash,
+                outfitComboId,
+                styleMode: snap.styleMode,
+                effectiveWeather: snap.effectiveWeather,
+                angleDeg: deg,
+              })
+            ))
       );
 
       if (
@@ -980,6 +1153,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         !isDirectDemoClick
       ) {
         pendingWeatherApproveRef.current = null;
+        pendingScenarioApproveRef.current = null;
         setAiLoading(false);
         return;
       }
@@ -1004,22 +1178,21 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       if (controller.signal.aborted) return;
 
-      forceBypassCacheRef.current = false;
-      userApprovedGenRef.current = false;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
       const liveSnap = latestInputsRef.current;
 
       const applyShowcaseDemoSlices = () => {
+        // Strictly load ONLY the active style mode so `stylized_isometric` NEVER fetches `vton-showcase-3x2-photoreal.jpg`
         const activeStyle = normalizeVtonStyleMode(liveSnap.styleMode);
-        const altStyle =
-          activeStyle === 'photorealistic' ? 'stylized_isometric' : 'photorealistic';
-        void loadShowcaseDemoVtonSlices(altStyle);
         loadShowcaseDemoVtonSlices(activeStyle)
           .then((slices) => {
             if (controller.signal.aborted) return;
+            forceBypassCacheRef.current = false;
+            userApprovedGenRef.current = false;
             pendingFacePhotoApproveRef.current = null;
             pendingWeatherApproveRef.current = null;
+            pendingScenarioApproveRef.current = null;
             setAiLoading(false);
             if (slices) {
               preloadImageUrls(Object.values(slices));
@@ -1030,6 +1203,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               slices?.[45] ||
               null;
             if (targetUrl) {
+              recordScenarioVtonSnapshot(
+                liveSnap.scenarioVtonKey,
+                liveSnap.canonicalSliceAngle,
+                targetUrl,
+                slices || null
+              );
               configBlockedRef.current = false;
               setAiState({
                 cacheKey: currentAiCacheKey,
@@ -1044,8 +1223,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           })
           .catch(() => {
             if (controller.signal.aborted) return;
+            forceBypassCacheRef.current = false;
+            userApprovedGenRef.current = false;
             pendingFacePhotoApproveRef.current = null;
             pendingWeatherApproveRef.current = null;
+            pendingScenarioApproveRef.current = null;
             setAiLoading(false);
           });
       };
@@ -1075,13 +1257,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
+        forceBypassCacheRef.current = false;
+        userApprovedGenRef.current = false;
         pendingFacePhotoApproveRef.current = null;
         pendingWeatherApproveRef.current = null;
+        pendingScenarioApproveRef.current = null;
 
         if (outcome.ok && outcome.imageUrl) {
           if (outcome.angleSlices) {
             preloadImageUrls(Object.values(outcome.angleSlices));
           }
+          recordScenarioVtonSnapshot(
+            liveSnap.scenarioVtonKey,
+            liveSnap.canonicalSliceAngle,
+            outcome.imageUrl,
+            outcome.angleSlices || null
+          );
           setAiLoading(false);
           configBlockedRef.current = false;
           setStagedNeedsApply(false);
@@ -1110,6 +1301,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         }
       } catch {
         if (controller.signal.aborted) return;
+        forceBypassCacheRef.current = false;
+        userApprovedGenRef.current = false;
         if (demoShowcaseEnabled) {
           applyShowcaseDemoSlices();
           return;
@@ -1130,6 +1323,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   }, [
     stageMode,
     currentAiCacheKey,
+    scenarioVtonKey,
+    normalizedScenarioKey,
     outfitComboId,
     resolvedAvatarHash,
     activeFacePhotoUrl,
@@ -1140,6 +1335,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     demoShowcaseEnabled,
     autoGenEnabled,
     pinnedHistoryItem,
+    recordScenarioVtonSnapshot,
     refreshHistoryList,
     showToast,
   ]);
@@ -1189,6 +1385,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         showToast('empty_outfit');
         return;
       }
+      delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
       configBlockedRef.current = false;
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
@@ -1199,7 +1396,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, showToast]
+    [equippedCount, scenarioVtonKey, showToast]
   );
 
   useEffect(() => {
@@ -1387,6 +1584,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const availableAiImageUrl =
     pinnedHistorySliceUrl ||
+    scenarioSnapSliceUrl ||
     memorySlice?.imageUrl ||
     (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
     demoSliceUrl ||
@@ -1416,12 +1614,28 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     stageMode === 'ai-vton' && resolvedAiImageUrl
       ? Boolean(
           isShowingPinnedHistory ||
+            scenarioSnapSliceUrl ||
             memorySlice ||
             fallbackSameComboMemorySlice ||
             aiState?.fromCache ||
             demoSliceUrl
         )
       : flatLayCached;
+
+  const resolvedLocationLabel = useMemo(() => {
+    if (typeof locationLabel === 'string' && locationLabel.trim()) {
+      return locationLabel.trim();
+    }
+    if (typeof weather?.cityName === 'string' && weather.cityName.trim()) {
+      return weather.cityName.trim();
+    }
+    return isEn ? 'Seoul' : '서울';
+  }, [locationLabel, weather?.cityName, isEn]);
+
+  const stageLookRecommendations = useMemo(
+    () => (Array.isArray(recommendations) ? recommendations.slice(0, 2) : []),
+    [recommendations]
+  );
 
   const capsuleTempC = useMemo(() => {
     if (typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)) {
@@ -1539,25 +1753,39 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Layer 4 (z-55+): Clean Slim Top HUD — Left Spacer | Top-Center Weather Capsule | Right [기록] */}
+      {/* Layer 4 (z-55+): Clean Slim Top HUD — Left Spacer | Top-Center Weather + Location Capsule | Right [기록] */}
       <div className="studio-stage-top-hud">
         <div className="studio-hud-left-spacer" aria-hidden="true" />
 
-        <div className="atelier-stage-brand-cluster" aria-hidden="true">
-          <div
-            className="atelier-weather-capsule is-top-center tabular-nums"
+        <div className="atelier-stage-brand-cluster">
+          <button
+            type="button"
+            className={`atelier-weather-capsule is-top-center tabular-nums ${weatherPopupOpen ? 'is-open' : ''}`}
             data-atelier-weather-capsule="true"
             data-weather-stage-badge={effectiveWeather}
+            aria-haspopup="dialog"
+            aria-expanded={Boolean(weatherPopupOpen)}
+            aria-label={
+              isEn
+                ? `${resolvedLocationLabel} ${capsuleTempC}°C, ${weatherBadgeMeta.curationLabel}. Open weather, location, and AI Look 1 & 2 settings`
+                : `${resolvedLocationLabel} ${capsuleTempC}°C, ${weatherBadgeMeta.curationLabel}. 날씨·위치 및 AI 코디 Look 1·2 설정 열기`
+            }
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setHistoryOpen(false);
+              onOpenWeatherPopup?.();
+            }}
           >
-            <span className="atelier-weather-capsule-icon">
+            <span className="atelier-weather-capsule-icon" aria-hidden="true">
               {renderWeatherCapsuleIcon(effectiveWeather, scenarioKey)}
             </span>
             <div className="atelier-weather-capsule-metrics">
               <div className="atelier-weather-capsule-primary-row">
                 <strong className="atelier-weather-capsule-temp">
-                  {capsuleTempC}°C
+                  {resolvedLocationLabel} · {capsuleTempC}°C
                 </strong>
-                <span className="studio-weather-curation-dot" />
+                <span className="studio-weather-curation-dot" aria-hidden="true" />
                 <span className="atelier-weather-capsule-curation">
                   {weatherBadgeMeta.curationLabel}
                 </span>
@@ -1566,7 +1794,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 {weatherBadgeMeta.tempText} · {capsuleStatusWord}
               </span>
             </div>
-          </div>
+            <ChevronDown
+              size={11}
+              className={`atelier-weather-capsule-chevron ${weatherPopupOpen ? 'is-open' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
         </div>
 
         <div className="studio-vton-hud-right">
@@ -2047,6 +2280,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             return (
               <div
                 key={`${layer.slotKey}-${layer.garment.id}`}
+                role="button"
+                tabIndex={0}
+                aria-label={slotFullTitle}
+                aria-pressed={isSelectedSlot}
                 data-studio-slot={layer.slotKey}
                 data-slot-side={slotSide || undefined}
                 className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''}`}
@@ -2054,6 +2291,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectSlot?.(layer.slotKey);
+                }}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSelectSlot?.(layer.slotKey);
+                  }
                 }}
               >
                 <StudioGarmentImage
@@ -2091,6 +2336,49 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   <X size={10} strokeWidth={2.6} />
                 </button>
               </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Bottom-Right AI Weather Curation Look 1 / Look 2 Dock (right above angle scrollbar) */}
+      {stageLookRecommendations.length > 0 && (
+        <div
+          className="studio-weather-look-dock"
+          data-weather-look-dock="true"
+          role="group"
+          aria-label={isEn ? 'AI weather outfit recommendations' : 'AI 날씨 추천 코디'}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {stageLookRecommendations.map((rec, idx) => {
+            const isSelected = activeRecId === rec.id;
+            const styleKey =
+              rec.presetKey ||
+              (idx === 0
+                ? lookStyleConfig?.look1Style || 'business_casual'
+                : lookStyleConfig?.look2Style || 'comfortable_casual');
+            const presetMeta =
+              LOOK_STYLE_TITLE_LABELS[styleKey] || LOOK_STYLE_TITLE_LABELS.business_casual;
+            const presetTitle = isEn
+              ? rec.presetLabelEn || presetMeta.en
+              : rec.presetLabelKo || presetMeta.ko;
+            return (
+              <button
+                key={rec.id || `look-${idx + 1}`}
+                type="button"
+                data-weather-rec-id={rec.id}
+                aria-pressed={isSelected}
+                aria-label={`Look ${idx + 1}: ${presetTitle}`}
+                title={`Look ${idx + 1} · ${presetTitle}`}
+                className={`studio-weather-look-pill tabular-nums ${isSelected ? 'is-selected' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApplyRecommendation?.(rec);
+                }}
+              >
+                {`Look ${idx + 1}`}
+              </button>
             );
           })}
         </div>

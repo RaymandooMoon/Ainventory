@@ -137,16 +137,36 @@
     gap: 10px;
   }
 
+  .hig-outfits-screen .studio-25d-stage-col {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-inline: 0;
+  }
+
   .hig-outfits-screen .studio-desktop-picker-col {
     display: none !important;
   }
 
+  .hig-outfits-screen .studio-25d-canvas,
   .hig-outfits-screen .studio-25d-canvas.studio-2d-vton-viewer {
     width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
     margin: 0;
+    margin-inline: 0;
     min-height: 536px;
     border-radius: 24px;
+  }
+
+  .hig-outfits-screen .atelier-mobile-drawer-trigger-row,
+  .hig-outfits-screen .studio-mobile-slot-bar,
+  .hig-outfits-screen .studio-mobile-save-row {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-inline: 0;
   }
 
   .hig-outfits-screen .atelier-mobile-drawer-trigger-row {
@@ -158,6 +178,8 @@
 
   .hig-outfits-screen .atelier-mobile-drawer-open-btn {
     width: 100%;
+    box-sizing: border-box;
+    margin-inline: 0;
     min-height: 44px;
     padding: 0 16px;
     border-radius: 14px;
@@ -185,12 +207,38 @@
 
 /* 3. Mobile Narrow-Viewport Smoked-Glass Wardrobe Sheet (#outfit-mobile-wardrobe-sheet) */
 #outfit-mobile-wardrobe-sheet.ui-sheet-box {
+  height: min(64dvh, 560px);
+  max-height: min(64dvh, 560px);
   background: var(--atelier-drawer-glass-bg) !important;
   backdrop-filter: var(--atelier-drawer-blur) !important;
   -webkit-backdrop-filter: var(--atelier-drawer-blur) !important;
   border: 1px solid var(--atelier-drawer-glass-border) !important;
   color: var(--atelier-ink-on-dark) !important;
   font-family: var(--atelier-font-sans);
+  transition:
+    height 0.36s cubic-bezier(0.32, 0.72, 0, 1),
+    max-height 0.36s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+#outfit-mobile-wardrobe-sheet.ui-sheet-box.is-expanded {
+  height: min(92dvh, calc(100dvh - var(--safe-top) - 8px));
+  max-height: min(92dvh, calc(100dvh - var(--safe-top) - 8px));
+}
+
+#outfit-mobile-wardrobe-sheet.ui-sheet-box.is-dragging:not(.is-expanded) {
+  height: min(
+    92dvh,
+    calc(min(64dvh, 560px) + var(--sheet-drag-expand, 0px))
+  );
+  max-height: min(
+    92dvh,
+    calc(min(64dvh, 560px) + var(--sheet-drag-expand, 0px))
+  );
+}
+
+#outfit-mobile-wardrobe-sheet.ui-sheet-box.is-dragging {
+  transition: none;
 }
 
 #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
@@ -202,6 +250,9 @@
 }
 
 #outfit-mobile-wardrobe-sheet .ui-sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   padding-top: 4px;
   display: flex;
   flex-direction: column;
@@ -418,6 +469,11 @@
   min-height: 0;
 }
 
+#outfit-mobile-wardrobe-sheet .atelier-drawer-body {
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .atelier-category-rail {
   width: 46px;
   display: flex;
@@ -425,6 +481,16 @@
   align-items: center;
   gap: 6px;
   padding: 2px 0;
+}
+
+#outfit-mobile-wardrobe-sheet .atelier-category-rail {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+#outfit-mobile-wardrobe-sheet .atelier-category-rail::-webkit-scrollbar {
+  display: none;
 }
 
 .atelier-category-rail-btn {
@@ -504,9 +570,11 @@
 
 /* Right Scrollable 2-Column #F7F7F5 Packshot Card Area */
 .atelier-drawer-grid-col {
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -520,7 +588,13 @@
 }
 
 #outfit-mobile-wardrobe-sheet .atelier-drawer-grid-scroll {
-  max-height: min(52vh, 390px);
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 180px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 #studio-slot-picker .studio-mini-inventory-grid,

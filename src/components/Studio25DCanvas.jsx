@@ -21,6 +21,13 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onViewAngleChange,
   weather,
   scenarioKey,
+  locationLabel,
+  onOpenWeatherPopup,
+  weatherPopupOpen = false,
+  recommendations = [],
+  activeRecId = null,
+  lookStyleConfig = null,
+  onApplyRecommendation,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
@@ -56,6 +63,13 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       onViewAngleChange={onViewAngleChange}
       weather={weather}
       scenarioKey={scenarioKey}
+      locationLabel={locationLabel}
+      onOpenWeatherPopup={onOpenWeatherPopup}
+      weatherPopupOpen={weatherPopupOpen}
+      recommendations={recommendations}
+      activeRecId={activeRecId}
+      lookStyleConfig={lookStyleConfig}
+      onApplyRecommendation={onApplyRecommendation}
       activeSlotKey={activeSlotKey}
       onSelectSlot={onSelectSlot}
       onUnequipSlot={onUnequipSlot}

@@ -27,11 +27,14 @@ import {
 import {
   CUTOUT_PIPELINE_VERSION,
   CUTOUT_STAGE_BACKDROP_HEX,
+  type CanonicalAvatarGender,
   type EffectiveWeatherMode,
   LEGACY_CUTOUT_PIPELINE_VERSIONS,
+  buildCanonicalCharacterIdentityPromptBlock,
   buildTurnaround3x2SheetAngleDirectives,
   buildTurnaroundAnglePromptDirective,
   buildWeatherPosePromptDirectives,
+  normalizeCanonicalAvatarGender,
   resolveEffectiveWeatherFromRaw,
   selectOptimalStudioKeyHex,
 } from './weatherPromptBuilder.ts';
@@ -86,6 +89,7 @@ export type WeatherMoodKey =
 export interface NormalizedVtonProfile {
   avatarSpec: AvatarSpec;
   avatarConfigHash: string;
+  gender?: CanonicalAvatarGender;
   skinToneHex: string;
   personalColor: PersonalColorSeasonKey;
   personalColorLabelKo: string;
@@ -112,6 +116,7 @@ export interface GenderNeutralProfileInput extends PortraitLookupSources {
   profile?: Partial<NormalizedVtonProfile> | null;
   avatarSpec?: AvatarSpec | null;
   avatarConfigHash?: string | null;
+  gender?: CanonicalAvatarGender | string | null;
   // oxlint-disable-next-line typescript/no-explicit-any
   bodySpec?: Record<string, any> | null;
   skinToneHex?: string | null;
@@ -471,22 +476,26 @@ export function computeIdealDeviceMannequinScale(params?: {
   const sw = Number(params?.stageWidth) || 0;
   const sh = Number(params?.stageHeight) || 0;
   if (sw < 120 || sh < 160) {
-    return 1.14;
+    return 1.12;
   }
   const isCompact = sw <= 1060;
-  const topPad = isCompact ? 34 : 38;
-  const bottomPad = isCompact ? 48 : 50;
+  const topPad = isCompact ? 54 : 58;
+  const bottomPad = isCompact ? 60 : 64;
   const sidePad = isCompact ? 8 : 12;
   const availW = Math.max(120, sw - sidePad * 2);
   const availH = Math.max(160, sh - topPad - bottomPad);
   const rawAspect = Number(params?.imageAspectRatio);
   const imgAspect =
-    Number.isFinite(rawAspect) && rawAspect > 0.25 ? clamp(rawAspect, 0.45, 1.45) : 0.76;
+    Number.isFinite(rawAspect) && rawAspect > 0.25 ? clamp(rawAspect, 0.45, 1.45) : 0.74;
 
   const renderedBoxH = Math.min(availH, availW / imgAspect);
-  const widthChokeCompensation = availH / Math.max(1, renderedBoxH);
+  const effectiveTargetH = sh - (topPad + bottomPad) * 0.68;
+  const widthChokeCompensation =
+    renderedBoxH < availH
+      ? Math.max(availH, effectiveTargetH) / Math.max(1, renderedBoxH)
+      : 1;
   const stageAspect = sw / sh;
-  const presenceBoost = stageAspect < 0.85 ? 1.11 : stageAspect < 1.25 ? 1.09 : 1.08;
+  const presenceBoost = stageAspect < 0.85 ? 1.115 : stageAspect < 1.25 ? 1.09 : 1.08;
 
   const renderedBoxW = renderedBoxH * imgAspect;
   const maxHorizontalScale = (sw * 0.94) / Math.max(1, renderedBoxW * 0.62);
@@ -724,6 +733,20 @@ export function normalizeGenderNeutralProfile(
   });
 
   const baseSpec = input?.avatarSpec ? sanitizeAvatarSpec(input.avatarSpec) : bridged.spec;
+  const rawGenderCandidate =
+    input?.gender ??
+    input?.profile?.gender ??
+    (input?.avatarSpec?.framePreset === 'feminine' ||
+    input?.avatarSpec?.framePreset === 'masculine'
+      ? input.avatarSpec.framePreset
+      : null) ??
+    input?.user?.gender ??
+    input?.bodySpec?.gender ??
+    input?.skinProfile?.gender ??
+    (baseSpec.framePreset !== 'androgynous' ? baseSpec.framePreset : null) ??
+    storedBody?.gender;
+  const gender = normalizeCanonicalAvatarGender(rawGenderCandidate, baseSpec.framePreset);
+
   const rawSkinHex =
     input?.skinToneHex ||
     input?.profile?.skinToneHex ||
@@ -835,6 +858,7 @@ export function normalizeGenderNeutralProfile(
   return {
     avatarSpec: syncedSpec,
     avatarConfigHash,
+    gender,
     skinToneHex: syncedSpec.appearance.skinToneHex,
     personalColor,
     personalColorLabelKo: closestPreset.labelKo,
@@ -1573,24 +1597,25 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     if (ch < 64) continue;
 
     const fgH = b.maxY - b.minY + 1;
-    const targetIdealH = Math.round(ch * 0.855);
-    const targetMaxAllowedH = Math.round(ch * 0.885);
+    const targetIdealH = Math.round(ch * 0.82);
+    const targetMaxAllowedH = Math.round(ch * 0.85);
+    const minTopPadPx = Math.round(ch * 0.09);
     const canonicalFloorY = Math.min(
-      Math.round(ch * 0.95),
+      Math.round(ch * 0.94),
       Math.max(Math.round(ch * 0.88), medianBottom)
     );
     const targetFloorY =
       ch >= 180
-        ? Math.round(ch * 0.948)
-        : medianBottom > Math.round(ch * 0.955)
+        ? Math.round(ch * 0.94)
+        : medianBottom > Math.round(ch * 0.945)
           ? Math.round(ch * 0.935)
           : canonicalFloorY;
 
     const heightDiffRatio = medianFgH > 0 ? Math.abs(fgH - medianFgH) / medianFgH : 0;
-    const isUndersizedFullBody = ch >= 180 && medianFgH < Math.round(ch * 0.81);
+    const isUndersizedFullBody = ch >= 180 && medianFgH < Math.round(ch * 0.77);
     const needsScaleNormalization =
       ch >= 180 &&
-      (fgH > Math.round(ch * 0.895) || heightDiffRatio > 0.065 || isUndersizedFullBody);
+      (fgH > targetMaxAllowedH || heightDiffRatio > 0.065 || isUndersizedFullBody);
     const bottomDelta = targetFloorY - b.maxY;
 
     const fgW = b.maxX - b.minX + 1;
@@ -1622,12 +1647,11 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
       const uniformDesiredFgH = isUndersizedFullBody
         ? Math.min(targetMaxAllowedH, Math.max(medianFgH, targetIdealH))
         : Math.min(targetMaxAllowedH, medianFgH);
-      const maxTopSafeScale =
-        (targetFloorY - Math.round(ch * 0.035)) / Math.max(1, fgH);
+      const maxTopSafeScale = (targetFloorY - minTopPadPx) / Math.max(1, fgH);
       const maxWidthSafeScale = (cw * 0.92) / Math.max(1, fgW);
       const scale = clamp(
         Math.min(uniformDesiredFgH / Math.max(1, fgH), maxTopSafeScale, maxWidthSafeScale),
-        0.76,
+        0.72,
         1.22
       );
       const dstW = Math.round(cw * scale);
@@ -1640,7 +1664,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
       const clampedDx = Math.round(cw * 0.5 - srcCx);
       const clampedDy = clamp(
         Math.round(bottomDelta),
-        Math.round(ch * 0.03) - b.minY,
+        minTopPadPx - b.minY,
         ch - 2 - b.maxY
       );
       cCtx.drawImage(scratch, clampedDx, clampedDy);
@@ -2397,7 +2421,7 @@ function detectRowSubjectClusters(
 
   const minColHits = Math.max(3, Math.round(((yEnd - yStart) / 2) * 0.025));
   const gapBridgePx = Math.max(6, Math.round(w * 0.014));
-  const minClusterWidth = Math.max(18, Math.round(w * 0.045));
+  const minClusterWidth = Math.max(16, Math.round(w * 0.026));
   const spans: HorizontalSpan[] = [];
 
   let inSpan = false;
@@ -2536,18 +2560,19 @@ export async function sliceTurnaround2x2Sheet(
           botClusters = detectRowSubjectClusters(sheetCtx, w, halfH, h);
         }
 
-        const detectedPure2x2OnSquare =
-          topClusters.length === 2 && botClusters.length === 2 && w / h < 1.15;
+        const hasThreeOrMoreRowClusters = topClusters.length >= 3 || botClusters.length >= 3;
+        const isSquare2x2Fallback =
+          !hasThreeOrMoreRowClusters &&
+          topClusters.length <= 2 &&
+          botClusters.length <= 2 &&
+          w / h < 1.15;
 
         const use3x2Grid =
           !isExplicit2x2 &&
           !isHorizontal1x6Strip &&
           !isHorizontal1x4Strip &&
-          !detectedPure2x2OnSquare &&
-          (options?.layout === 'turnaround_3x2' ||
-            topClusters.length >= 3 ||
-            botClusters.length >= 3 ||
-            (w / h >= 1.18 && !(topClusters.length === 2 && botClusters.length === 2)));
+          (hasThreeOrMoreRowClusters ||
+            (!isSquare2x2Fallback && (options?.layout === 'turnaround_3x2' || w / h >= 1.15)));
 
         let panels: Array<{
           angle: TurnaroundAngleDeg;
@@ -2764,11 +2789,26 @@ const showcaseInFlight: Partial<
   Record<VtonStyleMode, Promise<Record<TurnaroundAngleDeg, string> | null>>
 > = {};
 
+export function getShowcaseDemoSheetUrl(rawStyleMode?: string | null): string {
+  const token = String(rawStyleMode || '')
+    .trim()
+    .toLowerCase();
+  if (token === 'stylized_isometric' || token !== 'photorealistic') {
+    return withPublicBaseUrl('/seed/vton-showcase-3x2-stylized.jpg');
+  }
+  return withPublicBaseUrl('/seed/vton-showcase-3x2-photoreal.jpg');
+}
+
 export function peekShowcaseDemoVtonSlice(
   styleMode: VtonStyleMode,
   angleDeg: number
 ): string | null {
-  const normalizedStyle = normalizeVtonStyleMode(styleMode);
+  const normalizedStyle: VtonStyleMode =
+    String(styleMode || '')
+      .trim()
+      .toLowerCase() === 'photorealistic'
+      ? 'photorealistic'
+      : 'stylized_isometric';
   const normalizedAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
   return showcaseMemorySlices[normalizedStyle]?.[normalizedAngle] || null;
 }
@@ -2776,7 +2816,12 @@ export function peekShowcaseDemoVtonSlice(
 export async function loadShowcaseDemoVtonSlices(
   rawStyleMode?: string | null
 ): Promise<Record<TurnaroundAngleDeg, string> | null> {
-  const styleMode = normalizeVtonStyleMode(rawStyleMode);
+  const styleMode: VtonStyleMode =
+    String(rawStyleMode || '')
+      .trim()
+      .toLowerCase() === 'photorealistic'
+      ? 'photorealistic'
+      : 'stylized_isometric';
   if (showcaseMemorySlices[styleMode]) {
     return showcaseMemorySlices[styleMode]!;
   }
@@ -2786,11 +2831,7 @@ export async function loadShowcaseDemoVtonSlices(
 
   const job = (async (): Promise<Record<TurnaroundAngleDeg, string> | null> => {
     try {
-      const assetPath =
-        styleMode === 'stylized_isometric'
-          ? '/seed/vton-showcase-3x2-stylized.jpg'
-          : '/seed/vton-showcase-3x2-photoreal.jpg';
-      const sheetUrl = withPublicBaseUrl(assetPath);
+      const sheetUrl = getShowcaseDemoSheetUrl(styleMode);
       const forceFlipAngles: TurnaroundAngleDeg[] =
         styleMode === 'stylized_isometric' ? [45, 90, 135] : [45, 90];
       const sliced = await sliceTurnaround2x2Sheet(sheetUrl, {
@@ -3044,6 +3085,484 @@ function parseDataUrlInlinePart(
   };
 }
 
+function parseHexToRgbTriplet(rawHex: string): [number, number, number] {
+  const clean = String(rawHex || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
+    return [
+      Number.parseInt(clean.slice(1, 3), 16),
+      Number.parseInt(clean.slice(3, 5), 16),
+      Number.parseInt(clean.slice(5, 7), 16),
+    ];
+  }
+  return [148, 163, 184];
+}
+
+const turnaround3x2GuideMemo = new Map<string, string>();
+
+function drawGuideSilhouetteMannequin(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    cx: number;
+    headTopY: number;
+    footSoleY: number;
+    bmiScale: number;
+    angleDeg: TurnaroundAngleDeg;
+  }
+): void {
+  const { cx, headTopY, footSoleY, bmiScale, angleDeg } = params;
+  const figH = Math.max(120, footSoleY - headTopY);
+  const headH = figH / 7.5;
+  const frontHeadW = headH * 0.72;
+  const frontShoulderW = headH * 1.88 * bmiScale;
+  const frontWaistW = headH * 1.32 * bmiScale;
+  const frontHipW = headH * 1.54 * bmiScale;
+
+  const neckTopY = headTopY + headH * 0.96;
+  const shoulderY = headTopY + headH * 1.32;
+  const chestY = headTopY + headH * 2.05;
+  const waistY = headTopY + headH * 2.95;
+  const crotchY = headTopY + figH * 0.51;
+  const kneeY = headTopY + figH * 0.74;
+  const ankleY = footSoleY - headH * 0.32;
+
+  if (angleDeg === 90) {
+    // Narrow pure lateral side-profile silhouette facing screen-right (`->`), 55% of front shoulder width
+    const sideTorsoW = frontShoulderW * 0.55;
+    const sideHeadW = frontHeadW * 0.88;
+    const headCx = cx - headH * 0.03;
+
+    // Cranium
+    ctx.beginPath();
+    ctx.ellipse(
+      headCx,
+      headTopY + headH * 0.5,
+      sideHeadW * 0.5,
+      headH * 0.5,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Clear rightward nose & chin profile (`->`)
+    ctx.beginPath();
+    ctx.moveTo(headCx + sideHeadW * 0.36, headTopY + headH * 0.36);
+    ctx.lineTo(headCx + sideHeadW * 0.68, headTopY + headH * 0.56);
+    ctx.lineTo(headCx + sideHeadW * 0.44, headTopY + headH * 0.66);
+    ctx.lineTo(headCx + sideHeadW * 0.46, headTopY + headH * 0.86);
+    ctx.lineTo(headCx + sideHeadW * 0.18, headTopY + headH * 0.94);
+    ctx.closePath();
+    ctx.fill();
+
+    // Upright neck
+    const neckW = headH * 0.36 * bmiScale;
+    ctx.fillRect(
+      Math.round(headCx - neckW * 0.52),
+      Math.round(neckTopY),
+      Math.round(neckW),
+      Math.round(shoulderY - neckTopY + 4)
+    );
+
+    // Narrow lateral torso + side-profile arm silhouette
+    const backX = cx - sideTorsoW * 0.5;
+    const chestFrontX = cx + sideTorsoW * 0.5;
+    const waistBackX = cx - sideTorsoW * 0.42;
+    const waistFrontX = cx + sideTorsoW * 0.44;
+    const hipBackX = cx - sideTorsoW * 0.52;
+    const hipFrontX = cx + sideTorsoW * 0.42;
+
+    ctx.beginPath();
+    ctx.moveTo(backX + sideTorsoW * 0.12, shoulderY);
+    ctx.lineTo(chestFrontX - sideTorsoW * 0.08, shoulderY);
+    ctx.lineTo(chestFrontX, chestY);
+    ctx.lineTo(waistFrontX, waistY);
+    ctx.lineTo(hipFrontX, crotchY);
+    ctx.lineTo(hipBackX, crotchY);
+    ctx.lineTo(waistBackX, waistY);
+    ctx.lineTo(backX, chestY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Single-file lateral leg column down to ankle
+    const thighW = sideTorsoW * 0.68;
+    const ankleW = sideTorsoW * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(cx - thighW * 0.52, crotchY - 2);
+    ctx.lineTo(cx + thighW * 0.48, crotchY - 2);
+    ctx.lineTo(cx + thighW * 0.42, kneeY);
+    ctx.lineTo(cx + ankleW * 0.48, ankleY);
+    ctx.lineTo(cx - ankleW * 0.52, ankleY);
+    ctx.lineTo(cx - thighW * 0.46, kneeY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Clear rightward shoe-toe profile (`->`) resting flat on footSoleY
+    const heelX = cx - ankleW * 0.58;
+    const toeX = cx + headH * 0.62;
+    ctx.beginPath();
+    ctx.moveTo(heelX, ankleY - 2);
+    ctx.lineTo(cx + ankleW * 0.5, ankleY - 2);
+    ctx.lineTo(toeX, footSoleY - headH * 0.11);
+    ctx.lineTo(toeX, footSoleY);
+    ctx.lineTo(heelX, footSoleY);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+
+  const isQuarter = angleDeg === 45 || angleDeg === 135 || angleDeg === 225;
+  const facingDir = angleDeg === 225 ? -1 : angleDeg === 45 || angleDeg === 135 ? 1 : 0;
+  const shoulderW = isQuarter ? frontShoulderW * 0.84 : frontShoulderW;
+  const waistW = isQuarter ? frontWaistW * 0.86 : frontWaistW;
+  const hipW = isQuarter ? frontHipW * 0.86 : frontHipW;
+  const headW = isQuarter ? frontHeadW * 0.88 : frontHeadW;
+  const headCenterX = cx + facingDir * headH * 0.04;
+
+  // Head oval
+  ctx.beginPath();
+  ctx.ellipse(
+    headCenterX,
+    headTopY + headH * 0.5,
+    headW * 0.5,
+    headH * 0.5,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+
+  // Subtle 3/4 jawline/nose directional cue on 45°; subtle lost-profile cheek/ear cue on 135° / 225°
+  if (facingDir !== 0) {
+    const jutScale = angleDeg === 45 ? 0.58 : 0.48;
+    ctx.beginPath();
+    ctx.moveTo(headCenterX + facingDir * headW * 0.35, headTopY + headH * 0.42);
+    ctx.lineTo(headCenterX + facingDir * headW * jutScale, headTopY + headH * 0.58);
+    ctx.lineTo(headCenterX + facingDir * headW * 0.34, headTopY + headH * 0.82);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Neck
+  const neckW = headH * 0.38 * bmiScale;
+  ctx.fillRect(
+    Math.round(cx - neckW * 0.5),
+    Math.round(neckTopY),
+    Math.round(neckW),
+    Math.round(shoulderY - neckTopY + 4)
+  );
+
+  // Torso (shoulder -> waist -> hip)
+  ctx.beginPath();
+  ctx.moveTo(cx - shoulderW * 0.5, shoulderY);
+  ctx.lineTo(cx + shoulderW * 0.5, shoulderY);
+  ctx.lineTo(cx + waistW * 0.5, waistY);
+  ctx.lineTo(cx + hipW * 0.5, crotchY);
+  ctx.lineTo(cx - hipW * 0.5, crotchY);
+  ctx.lineTo(cx - waistW * 0.5, waistY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Left & right arms with clean air gap beside waist
+  const armW = headH * 0.28 * bmiScale;
+  const wristY = crotchY + headH * 0.25;
+  for (const side of [-1, 1] as const) {
+    const shX = cx + side * (shoulderW * 0.5 - armW * 0.25);
+    const wrX = cx + side * (shoulderW * 0.5 + headH * 0.14);
+    ctx.beginPath();
+    ctx.moveTo(shX - armW * 0.5, shoulderY + 2);
+    ctx.lineTo(shX + armW * 0.5, shoulderY + 2);
+    ctx.lineTo(wrX + armW * 0.4, wristY);
+    ctx.lineTo(wrX - armW * 0.4, wristY);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Two full-length 7.5-head adult legs + shoes grounded at footSoleY
+  const legOffset = hipW * 0.26;
+  const thighW = hipW * 0.38;
+  const ankleW = thighW * 0.58;
+  for (const side of [-1, 1] as const) {
+    const legCx = cx + side * legOffset;
+    ctx.beginPath();
+    ctx.moveTo(legCx - thighW * 0.5, crotchY - 2);
+    ctx.lineTo(legCx + thighW * 0.5, crotchY - 2);
+    ctx.lineTo(legCx + ankleW * 0.5, ankleY);
+    ctx.lineTo(legCx - ankleW * 0.5, ankleY);
+    ctx.closePath();
+    ctx.fill();
+
+    const toeShift =
+      facingDir !== 0 && side === facingDir
+        ? facingDir * headH * 0.26
+        : facingDir * headH * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(legCx - ankleW * 0.55, ankleY - 2);
+    ctx.lineTo(legCx + ankleW * 0.55, ankleY - 2);
+    ctx.lineTo(legCx + ankleW * 0.62 + Math.max(0, toeShift), footSoleY);
+    ctx.lineTo(legCx - ankleW * 0.62 + Math.min(0, toeShift), footSoleY);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/**
+ * Builds a `1344x896` (`3:2` landscape) spatial turnaround template filled with `backdropHex`
+ * and 6 subtle `±11 RGB` silhouette mannequins (`[0°, 45°, 90°]` on Row 1 and `[135°, 180°, 225°]`
+ * on Row 2) with ZERO grid divider lines, shared head-top `11%` & foot-sole `91%` baselines,
+ * `7.5-head` adult proportions, BMI-scaled widths, and a narrow `55%`-width right side profile at `90°`.
+ */
+export function buildTurnaround3x2LayoutGuideDataUrl(params: {
+  backdropHex: string;
+  heightCm: number;
+  weightKg: number;
+}): string | null {
+  if (typeof document === 'undefined') return null;
+
+  const [bgR, bgG, bgB] = parseHexToRgbTriplet(params.backdropHex || CUTOUT_STAGE_BACKDROP_HEX);
+  const safeH = clamp(Number(params.heightCm) || 172, 100, 230);
+  const safeW = clamp(Number(params.weightKg) || 64, 35, 160);
+  const bmi = safeW / (safeH / 100) ** 2;
+  const bmiScale = clamp(1 + (bmi - 22.0) * 0.022, 0.86, 1.24);
+  const memoKey = `${bgR},${bgG},${bgB}:${Math.round(bmiScale * 100)}`;
+  const cached = turnaround3x2GuideMemo.get(memoKey);
+  if (cached) return cached;
+
+  try {
+    const W = 1344;
+    const H = 896;
+    const cellW = W / 3;
+    const cellH = H / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      canvas.width = 0;
+      canvas.height = 0;
+      return null;
+    }
+
+    ctx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Exact ±11 RGB delta from backdropHex so any unpainted guide pixels key out cleanly with zero Sobel barrier
+    const rgbDelta = bgR + bgG + bgB < 180 ? 11 : -11;
+    const silR = clamp(bgR + rgbDelta, 0, 255);
+    const silG = clamp(bgG + rgbDelta, 0, 255);
+    const silB = clamp(bgB + rgbDelta, 0, 255);
+    ctx.fillStyle = `rgb(${silR}, ${silG}, ${silB})`;
+
+    const gridAngles: TurnaroundAngleDeg[][] = [
+      [0, 45, 90],
+      [135, 180, 225],
+    ];
+
+    for (let row = 0; row < 2; row += 1) {
+      const rowTop = row * cellH;
+      const headTopY = rowTop + Math.round(cellH * 0.11);
+      const footSoleY = rowTop + Math.round(cellH * 0.91);
+      for (let col = 0; col < 3; col += 1) {
+        const cx = Math.round(col * cellW + cellW * 0.5);
+        drawGuideSilhouetteMannequin(ctx, {
+          cx,
+          headTopY,
+          footSoleY,
+          bmiScale,
+          angleDeg: gridAngles[row][col],
+        });
+      }
+    }
+
+    const dataUrl = canvas.toDataURL('image/png');
+    canvas.width = 0;
+    canvas.height = 0;
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+      return null;
+    }
+
+    if (turnaround3x2GuideMemo.size >= 8) {
+      const oldestKey = turnaround3x2GuideMemo.keys().next().value;
+      if (oldestKey) turnaround3x2GuideMemo.delete(oldestKey);
+    }
+    turnaround3x2GuideMemo.set(memoKey, dataUrl);
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
+
+export const CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY = 'ainventory_char_identity_anchor_v8';
+const CHARACTER_ANCHOR_MAX_BYTES = 180 * 1024;
+const characterIdentityAnchorMemory = new Map<string, string>();
+
+function estimateDataUrlByteLength(dataUrl: string): number {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx < 0) return dataUrl.length;
+  const b64Len = dataUrl.length - commaIdx - 1;
+  return Math.ceil((b64Len * 3) / 4);
+}
+
+export function computeCharacterIdentityAnchorKey(
+  profile: Pick<
+    NormalizedVtonProfile,
+    'gender' | 'heightCm' | 'weightKg' | 'bodyShape' | 'skinToneHex' | 'avatarSpec'
+  >
+): string {
+  const app = profile.avatarSpec.appearance;
+  const gender = normalizeCanonicalAvatarGender(profile.gender, profile.avatarSpec.framePreset);
+  const skinHex = String(profile.skinToneHex || '#DFBA9B')
+    .trim()
+    .toUpperCase();
+  const hairStyle = String(app.hairStyle || 'soft_wavy')
+    .trim()
+    .toLowerCase();
+  const hairHex = String(app.hairColorHex || '#2B211B')
+    .trim()
+    .toUpperCase();
+  return `v8:${gender}:${profile.heightCm}:${profile.weightKg}:${profile.bodyShape}:${skinHex}:${hairStyle}:${hairHex}`;
+}
+
+export function getStoredCharacterIdentityAnchor(anchorKey: string): string | null {
+  if (!anchorKey) return null;
+  const memHit = characterIdentityAnchorMemory.get(anchorKey);
+  if (
+    memHit &&
+    memHit.startsWith('data:image/') &&
+    estimateDataUrlByteLength(memHit) <= CHARACTER_ANCHOR_MAX_BYTES
+  ) {
+    return memHit;
+  }
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const candidate = parsed[anchorKey];
+    if (
+      typeof candidate === 'string' &&
+      candidate.startsWith('data:image/') &&
+      estimateDataUrlByteLength(candidate) <= CHARACTER_ANCHOR_MAX_BYTES
+    ) {
+      characterIdentityAnchorMemory.set(anchorKey, candidate);
+      return candidate;
+    }
+  } catch {
+    // Ignore storage read/JSON errors
+  }
+  return null;
+}
+
+function persistCharacterIdentityAnchorEntry(anchorKey: string, dataUrl: string): void {
+  if (!anchorKey || !dataUrl.startsWith('data:image/')) return;
+  if (estimateDataUrlByteLength(dataUrl) > CHARACTER_ANCHOR_MAX_BYTES) return;
+
+  if (characterIdentityAnchorMemory.size >= 6 && !characterIdentityAnchorMemory.has(anchorKey)) {
+    const oldest = characterIdentityAnchorMemory.keys().next().value;
+    if (oldest) characterIdentityAnchorMemory.delete(oldest);
+  }
+  characterIdentityAnchorMemory.set(anchorKey, dataUrl);
+
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    let bag: Record<string, string> = {};
+    const existingRaw = window.localStorage.getItem(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY);
+    if (existingRaw) {
+      const parsed = JSON.parse(existingRaw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object') {
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' && v.startsWith('data:image/')) {
+            bag[k] = v;
+          }
+        }
+      }
+    }
+    delete bag[anchorKey];
+    const entries = Object.entries(bag).slice(-3);
+    const nextBag: Record<string, string> = Object.fromEntries(entries);
+    nextBag[anchorKey] = dataUrl;
+    window.localStorage.setItem(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY, JSON.stringify(nextBag));
+  } catch {
+    // Ignore storage quota errors; memory map still retains anchor for session
+  }
+}
+
+async function saveCharacterIdentityAnchorFromZeroSlice(params: {
+  anchorKey: string;
+  zeroSliceDataUrl: string;
+  backdropHex: string;
+}): Promise<string | null> {
+  const { anchorKey, zeroSliceDataUrl, backdropHex } = params;
+  if (!anchorKey || !zeroSliceDataUrl || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+
+  return new Promise<string | null>((resolve) => {
+    const img = new Image();
+    if (!zeroSliceDataUrl.startsWith('data:') && !zeroSliceDataUrl.startsWith('blob:')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      try {
+        const srcW = img.naturalWidth || img.width;
+        const srcH = img.naturalHeight || img.height;
+        if (srcW < 160 || srcH < 200) {
+          resolve(null);
+          return;
+        }
+
+        const [bgR, bgG, bgB] = parseHexToRgbTriplet(backdropHex || CUTOUT_STAGE_BACKDROP_HEX);
+        const backdropCss = `rgb(${bgR}, ${bgG}, ${bgB})`;
+        const maxHeights = [540, 440, 360];
+        const qualities = [0.84, 0.72, 0.6];
+
+        for (const maxH of maxHeights) {
+          const scale = Math.min(1, maxH / srcH);
+          const cw = Math.max(160, Math.round(srcW * scale));
+          const ch = Math.max(200, Math.round(srcH * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = cw;
+          canvas.height = ch;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            canvas.width = 0;
+            canvas.height = 0;
+            resolve(null);
+            return;
+          }
+          ctx.fillStyle = backdropCss;
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, cw, ch);
+
+          for (const q of qualities) {
+            const candidate = canvas.toDataURL('image/jpeg', q);
+            if (
+              candidate &&
+              candidate.startsWith('data:image/') &&
+              estimateDataUrlByteLength(candidate) <= CHARACTER_ANCHOR_MAX_BYTES
+            ) {
+              canvas.width = 0;
+              canvas.height = 0;
+              persistCharacterIdentityAnchorEntry(anchorKey, candidate);
+              resolve(candidate);
+              return;
+            }
+          }
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+        resolve(null);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = zeroSliceDataUrl;
+  });
+}
+
 function buildDirectClientGeminiParts(params: {
   profile: NormalizedVtonProfile;
   styleMode: VtonStyleMode;
@@ -3081,19 +3600,49 @@ function buildDirectClientGeminiParts(params: {
   });
 
   const header = isStylized
-    ? 'Stylized Isometric Simulation Character VTON lookbook (dimensional character, natural hair/hands, authentic fabric texture, zero flat vector polygons).'
+    ? 'Stylized Isometric Simulation Character VTON lookbook (matte 3D-stylized studio fashion avatar, unified 7.5-head adult proportions, authentic matte fabric texture, zero photorealistic skin pores, zero chibi distortion).'
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `4:3 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 invisible zones (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any zone, and NEVER draw vertical or horizontal panel separator lines).`
+    ? `3:2 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 invisible zones (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any zone, and NEVER draw vertical or horizontal panel separator lines).`
     : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
-  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, faithful body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${weatherBundle.combinedPrompt}`;
+  const canonicalCharacterBlock = buildCanonicalCharacterIdentityPromptBlock({
+    heightCm: profile.heightCm,
+    weightKg: profile.weightKg,
+    gender: profile.gender,
+    framePreset: spec.framePreset,
+    bodyShape: profile.bodyShape,
+    skinToneHex: profile.skinToneHex,
+    mstLevel: app.mstLevel,
+    mstUndertone: app.mstUndertone,
+    hairStyle: app.hairStyle,
+    hairColorHex: app.hairColorHex,
+    facialHair: app.facialHair,
+    styleMode,
+    hasPortraitReference: Boolean(profile.portraitDataUrl),
+  });
+  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, gender=${profile.gender || 'unisex'}, faithful 7.5-head adult body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${canonicalCharacterBlock}\n${weatherBundle.combinedPrompt}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
   ];
+
+  if (turnaroundSheet) {
+    const layoutGuideDataUrl = buildTurnaround3x2LayoutGuideDataUrl({
+      backdropHex: optimalBackdropHex,
+      heightCm: profile.heightCm,
+      weightKg: profile.weightKg,
+    });
+    const layoutGuidePart = parseDataUrlInlinePart(layoutGuideDataUrl);
+    if (layoutGuidePart) {
+      parts.push({
+        text: `[SPATIAL 3x2 TURNAROUND CANVAS TEMPLATE — ZERO GRID LINES]: Paint the 6 full-body views of the EXACT SAME character directly over the 6 faint mannequin pose guides on this 3:2 solid ${optimalBackdropHex} canvas: Row 1 = [0° Front, 45° Front-Right, 90° Pure Orthographic Right Side Profile (NARROW SIDE VIEW, ONE EYE, ZERO BACK)] and Row 2 = [135° Back-Right Rear-Quarter, 180° Pure Back, 225° Back-Left Rear-Quarter]. Paint completely over the faint guides; keep identical head-top and foot-sole baselines across all 6 figures and NEVER draw divider lines.`,
+      });
+      parts.push({ inlineData: layoutGuidePart });
+    }
+  }
 
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
@@ -3101,6 +3650,16 @@ function buildDirectClientGeminiParts(params: {
       text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (pure lateral side profile facing VIEWER'S RIGHT showing ONLY ONE eye and ZERO back view); on 135° Back-Right (Row 2 Left) and 225° Back-Left (Row 2 Right) render the matching rear-quarter hairstyle, ear, and lost-profile cheek/jawline contour facing diagonally away (rightward on 135°, leftward on 225°); and on Row 2 Center 180° Straight Back render ONLY the symmetrical back of the head & rear hair silhouette (STRICTLY ZERO front face on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
+  } else if (isStylized && !profile.portraitDataUrl) {
+    const characterAnchorKey = computeCharacterIdentityAnchorKey(profile);
+    const savedAnchorUrl = getStoredCharacterIdentityAnchor(characterAnchorKey);
+    const savedAnchorPart = parseDataUrlInlinePart(savedAnchorUrl);
+    if (savedAnchorPart) {
+      parts.push({
+        text: `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head body build from this reference — ONLY change the outfit to the newly equipped garments and adjust stance for the weather.`,
+      });
+      parts.push({ inlineData: savedAnchorPart });
+    }
   }
 
   const slotPlacementPrompts: Record<string, string> = {
@@ -3145,7 +3704,7 @@ function buildDirectClientGeminiParts(params: {
   }
 
   parts.push({
-    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_BACKDROP_HEX}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per zone. Return image only.`,
+    text: `Wear ALL equipped garments, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. Strictly ONE solitary person per zone. Return image only.`,
   });
 
   return parts;
@@ -3173,20 +3732,31 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   } = params;
 
   const sheetModes = useTurnaroundSheet ? [true, false] : [false];
-  const modalityStrategies: Array<{
-    responseModalities: Array<'TEXT' | 'IMAGE'>;
-    useAspectConfig: boolean;
-  }> = [
-    { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true },
-    { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false },
-    { responseModalities: ['IMAGE'], useAspectConfig: true },
-    { responseModalities: ['IMAGE'], useAspectConfig: false },
-  ];
   let lastReason = 'gemini_no_image_generated';
   let sawBillingQuota = false;
   let sawRateLimit = false;
 
   for (const turnaroundSheet of sheetModes) {
+    const modalityStrategies: Array<{
+      responseModalities: Array<'TEXT' | 'IMAGE'>;
+      useAspectConfig: boolean;
+      aspectRatio: '3:2' | '4:3' | '3:4' | null;
+    }> = turnaroundSheet
+      ? [
+          { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '3:2' },
+          { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '4:3' },
+          { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false, aspectRatio: null },
+          { responseModalities: ['IMAGE'], useAspectConfig: true, aspectRatio: '3:2' },
+          { responseModalities: ['IMAGE'], useAspectConfig: true, aspectRatio: '4:3' },
+          { responseModalities: ['IMAGE'], useAspectConfig: false, aspectRatio: null },
+        ]
+      : [
+          { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '3:4' },
+          { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false, aspectRatio: null },
+          { responseModalities: ['IMAGE'], useAspectConfig: true, aspectRatio: '3:4' },
+          { responseModalities: ['IMAGE'], useAspectConfig: false, aspectRatio: null },
+        ];
+
     const parts = buildDirectClientGeminiParts({
       profile,
       styleMode,
@@ -3199,7 +3769,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
     for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
       for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
-        const { responseModalities, useAspectConfig } = modalityStrategies[stratIdx];
+        const { responseModalities, useAspectConfig, aspectRatio } = modalityStrategies[stratIdx];
         const requestSignal =
           typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
             ? AbortSignal.timeout(55_000)
@@ -3208,8 +3778,8 @@ async function synthesizeDirectBrowserGeminiVton(params: {
         try {
           const generationConfig: Record<string, unknown> = {
             responseModalities,
-            ...(useAspectConfig
-              ? { imageConfig: { aspectRatio: turnaroundSheet ? '4:3' : '3:4' } }
+            ...(useAspectConfig && aspectRatio
+              ? { imageConfig: { aspectRatio } }
               : {}),
           };
           const res = await fetch(
@@ -3249,10 +3819,12 @@ async function synthesizeDirectBrowserGeminiVton(params: {
             if (
               res.status === 400 &&
               stratIdx < modalityStrategies.length - 1 &&
-              (msg.includes('modalit') ||
+              (useAspectConfig ||
+                msg.includes('modalit') ||
                 msg.includes('imageconfig') ||
                 msg.includes('image_config') ||
                 msg.includes('aspect') ||
+                msg.includes('invalid_argument') ||
                 msg.includes('unknown name'))
             ) {
               continue;
@@ -3529,12 +4101,21 @@ export async function synthesizeGeminiMultiAngleVton(
       const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
       const isStaticStandalone = String(envBag.VITE_STATIC_STANDALONE || '') === '1';
 
+      const characterAnchorKey =
+        styleMode === 'stylized_isometric' && !effectivePortraitUrl
+          ? computeCharacterIdentityAnchorKey(effectiveProfile)
+          : null;
+      const storedCharacterAnchorUrl = characterAnchorKey
+        ? getStoredCharacterIdentityAnchor(characterAnchorKey)
+        : null;
+
       let json: VtonServerResponse = {
         ok: false,
         fallbackReason: 'gemini_api_key_not_configured',
         compositeImageUrl: null,
       };
       let rawComposite: string | null = null;
+      let synthesisSource: 'gemini' | 'browser-gemini' | null = null;
 
       if (!isStaticStandalone) {
         const reqHeaders: Record<string, string> = {
@@ -3558,6 +4139,7 @@ export async function synthesizeGeminiMultiAngleVton(
               avatarConfigHash: effectiveProfile.avatarConfigHash,
               portraitDataUrl: effectivePortraitUrl,
               profile: {
+                gender: effectiveProfile.gender,
                 skinToneHex: effectiveProfile.skinToneHex,
                 personalColor: effectiveProfile.personalColor,
                 heightCm: effectiveProfile.heightCm,
@@ -3567,6 +4149,9 @@ export async function synthesizeGeminiMultiAngleVton(
                 waistScale: effectiveProfile.waistScale,
                 hipScale: effectiveProfile.hipScale,
                 portraitDataUrl: effectivePortraitUrl,
+                ...(storedCharacterAnchorUrl
+                  ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
+                  : {}),
                 avatarSpec: effectiveProfile.avatarSpec,
                 avatarConfigHash: effectiveProfile.avatarConfigHash,
                 styleMode,
@@ -3580,6 +4165,13 @@ export async function synthesizeGeminiMultiAngleVton(
           rawComposite = sanitizeImageCandidate(
             json?.compositeImageUrl ?? json?.afterImageUrl ?? null
           );
+          if (
+            (rawComposite || json?.panelImages) &&
+            json?.geminiUsed !== false &&
+            (json?.provider === 'gemini-vton' || Boolean(json?.geminiUsed))
+          ) {
+            synthesisSource = 'gemini';
+          }
         } catch (serverErr) {
           const serverStatus =
             serverErr && typeof serverErr === 'object' && 'status' in serverErr
@@ -3621,7 +4213,11 @@ export async function synthesizeGeminiMultiAngleVton(
           );
           json = directJson;
           rawComposite = directComposite;
-          if (rawComposite || directJson?.panelImages || directJson?.fallbackReason === 'aborted') {
+          if (rawComposite || directJson?.panelImages) {
+            synthesisSource = 'browser-gemini';
+            break;
+          }
+          if (directJson?.fallbackReason === 'aborted') {
             break;
           }
         }
@@ -3769,6 +4365,22 @@ export async function synthesizeGeminiMultiAngleVton(
       }
 
       await persistAiVtonSlices(entriesToPersist);
+
+      if (
+        characterAnchorKey &&
+        angleSlices[0] &&
+        (synthesisSource === 'browser-gemini' || synthesisSource === 'gemini')
+      ) {
+        const equippedHexes = Object.values(serializedSlots).map((it) =>
+          typeof it.color_hex === 'string' ? it.color_hex : null
+        );
+        const anchorBackdropHex = selectOptimalStudioKeyHex(equippedHexes);
+        await saveCharacterIdentityAnchorFromZeroSlice({
+          anchorKey: characterAnchorKey,
+          zeroSliceDataUrl: angleSlices[0],
+          backdropHex: anchorBackdropHex,
+        });
+      }
 
       const finalImg = angleSlices[angleDeg] || null;
       if (!finalImg) {

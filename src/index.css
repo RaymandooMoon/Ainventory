@@ -1463,6 +1463,9 @@ img {
   gap: 8px;
   overflow-x: auto;
   padding: 2px 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin-inline: 0;
   scrollbar-width: none;
 }
 
@@ -1509,6 +1512,20 @@ img {
   display: flex;
   gap: 8px;
   margin-top: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-inline: 0;
+}
+
+@media (max-width: 599px) {
+  .studio-25d-canvas,
+  .studio-mobile-slot-bar,
+  .studio-mobile-save-row {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-inline: 0;
+  }
 }
 
 .studio-save-submit {
@@ -1857,7 +1874,16 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--elevation-lg);
-  animation: higSheetEnter 0.36s var(--spring-ease) both;
+  animation: higSheetEnter 0.32s var(--spring-ease);
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.modal-box.is-entered,
+.ui-sheet-box.is-entered,
+.ui-sheet-box.is-dragging,
+.ui-sheet-box.is-dismissing {
+  animation: none;
 }
 
 @keyframes higSheetEnter {
@@ -1885,6 +1911,13 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   justify-content: center;
   cursor: grab;
   flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ui-sheet-drag-zone:active {
+  cursor: grabbing;
 }
 
 .ui-sheet-drag-handle {

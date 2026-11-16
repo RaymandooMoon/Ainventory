@@ -506,6 +506,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
       date: json.daily.time[idx] || tomorrowStr,
+      scenarioKey: 'live',
       condition,
       weatherCode: code,
       tempMin: Math.round(json.daily.temperature_2m_min[idx]),
@@ -531,12 +532,13 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
       date: tomorrowStr,
-      condition: '대체로 맑음',
-      weatherCode: 1,
-      tempMin: 8,
-      tempMax: 16,
+      scenarioKey: 'live',
+      condition: '내일 예보 · 구름 조금',
+      weatherCode: 2,
+      tempMin: 9,
+      tempMax: 18,
       precipProb: 15,
-      windSpeed: 11,
+      windSpeed: 12,
       humidity: 50,
       isSimulated: false,
       fallbackUsed: true,
@@ -558,17 +560,145 @@ function personalColorMatchBonus(itemHex, personalColorKey) {
   return Math.round(best * 18);
 }
 
-export function buildWeatherRecommendations(weather, closetGarments, recentLogs = [], userProfile = null) {
+export const LOOK_STYLE_PRESETS = Object.freeze({
+  business_casual: {
+    key: 'business_casual',
+    badge: '직장생활 · 비즈니스 캐주얼',
+    badgeEn: 'Office · Business Casual',
+    title: '직장생활을 위한 비즈니스 캐주얼 코디',
+    titleEn: 'Business Casual Look for Work',
+    formality: 'smart',
+  },
+  comfortable_casual: {
+    key: 'comfortable_casual',
+    badge: '일상 · 편한 캐주얼',
+    badgeEn: 'Daily · Comfortable Casual',
+    title: '하루 종일 편안한 데일리 캐주얼 코디',
+    titleEn: 'All-Day Comfortable Daily Casual Look',
+    formality: 'casual',
+  },
+  formal_office: {
+    key: 'formal_office',
+    badge: '포멀 · 오피스 정장',
+    badgeEn: 'Formal · Office Tailoring',
+    title: '격식 있는 포멀 오피스 코디',
+    titleEn: 'Tailored Formal Office Look',
+    formality: 'formal',
+  },
+  minimal_daily: {
+    key: 'minimal_daily',
+    badge: '미니멀 · 클린 데일리',
+    badgeEn: 'Minimal · Clean Daily',
+    title: '단정한 미니멀 데일리 코디',
+    titleEn: 'Clean Monochrome Minimal Daily Look',
+    formality: 'smart',
+  },
+});
+
+function resolveLookStylePresetKey(rawKey, fallbackKey) {
+  const normalized = String(rawKey || '').trim();
+  return Object.hasOwn(LOOK_STYLE_PRESETS, normalized) ? normalized : fallbackKey;
+}
+
+function computeStylePresetAffinityBonus(item, presetKey) {
+  const sub = String(item.subcategory || '').toLowerCase();
+  const formality = String(item.formality || '').toLowerCase();
+  const colorName = String(item.color_name || '');
+  const text = `${sub} ${item.fabric || ''} ${item.name || ''} ${item.name_en || ''}`.toLowerCase();
+
+  let bonus = 0;
+  if (presetKey === 'business_casual') {
+    if (formality === 'smart') bonus += 18;
+    else if (formality === 'formal') bonus += 12;
+    else if (formality === 'casual') bonus -= 8;
+
+    if (
+      /blazer|trench|coat|shirt|oxford|blouse|merino|knit|turtleneck|slacks|trousers|chino|loafer|derby|chelsea|briefcase|블레이저|트렌치|코트|셔츠|블라우스|메리노|니트|슬랙스|로퍼|더비|서류가방/.test(
+        text
+      )
+    ) {
+      bonus += 18;
+    }
+    if (/hoodie|sweatshirt|jogger|windbreaker|backpack|후드|맨투맨|스웨트|윈드브레이커|백팩/.test(text)) {
+      bonus -= 18;
+    }
+  } else if (presetKey === 'comfortable_casual') {
+    if (formality === 'casual') bonus += 20;
+    else if (formality === 'smart') bonus += 4;
+    else if (formality === 'formal') bonus -= 16;
+
+    if (
+      /cardigan|windbreaker|denim|trucker|quilted|puffer|padding|fleece|jacket|sweatshirt|hoodie|tee|t-shirt|tshirt|sweater|jeans|cotton|cargo|sneaker|court|runner|crossbody|tote|backpack|가디건|카디건|윈드브레이커|데님|퀼팅|패딩|자켓|스웨트|후드|티셔츠|청바지|스니커즈|크로스|토트|백팩/.test(
+        text
+      )
+    ) {
+      bonus += 20;
+    }
+    if (/briefcase|suit|oxford_shoes|derby|tie|서류가방|정장|더비|타이/.test(text)) {
+      bonus -= 20;
+    }
+  } else if (presetKey === 'formal_office') {
+    if (formality === 'formal') bonus += 24;
+    else if (formality === 'smart') bonus += 10;
+    else if (formality === 'casual') bonus -= 18;
+
+    if (
+      /suit|blazer|coat|trench|oxford|silk|shirt|blouse|slacks|trousers|loafer|derby|briefcase|tie|정장|블레이저|코트|옥스포드|실크|셔츠|슬랙스|로퍼|더비|서류가방|타이/.test(
+        text
+      )
+    ) {
+      bonus += 20;
+    }
+    if (/denim|jeans|hoodie|sweatshirt|sneaker|windbreaker|backpack|데님|후드|스니커즈|윈드브레이커|백팩/.test(text)) {
+      bonus -= 22;
+    }
+  } else if (presetKey === 'minimal_daily') {
+    if (formality === 'smart') bonus += 16;
+    else if (formality === 'casual') bonus += 10;
+
+    if (/블랙|화이트|아이보리|크림|오트밀|그레이|차콜|베이지|토프|네이비/.test(colorName)) {
+      bonus += 14;
+    }
+    if (
+      /coat|trench|blazer|cardigan|knit|turtleneck|shirt|tee|slacks|denim|sneaker|loafer|chelsea|tote|crossbody|코트|트렌치|가디건|니트|터틀넥|셔츠|슬랙스|스니커즈|로퍼|토트|크로스/.test(
+        text
+      )
+    ) {
+      bonus += 12;
+    }
+  }
+
+  return bonus;
+}
+
+export function buildWeatherRecommendations(
+  weather,
+  closetGarments,
+  recentLogs = [],
+  userProfile = null,
+  options = {}
+) {
   const active = closetGarments.filter((g) => g.status === 'active');
   const avgTemp = Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55);
   const diurnalSwing = weather.tempMax - weather.tempMin;
-  const isRainy = weather.precipProb >= 45 || (weather.weatherCode >= 51 && weather.weatherCode <= 82);
+  const isRainy =
+    weather.precipProb >= 45 || (weather.weatherCode >= 51 && weather.weatherCode <= 82);
+  const isSnowy = Boolean(weather.isSnowy || (weather.weatherCode >= 71 && weather.weatherCode <= 86));
   const isWindy =
     Number(weather.windSpeed) >= 22 ||
     /강풍|돌풍|칼바람|gale|windy/i.test(String(weather.condition || ''));
   const needOuter =
     (weather.tempMax < 23 && (avgTemp <= 19 || diurnalSwing >= 8)) || isRainy || isWindy;
   const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
+
+  const look1StyleKey = resolveLookStylePresetKey(
+    options?.look1Style ?? options?.look1_style,
+    'business_casual'
+  );
+  const look2StyleKey = resolveLookStylePresetKey(
+    options?.look2Style ?? options?.look2_style,
+    'comfortable_casual'
+  );
 
   const bodyMetrics = computeBodyMetrics(userProfile || {});
   const personalColorKey = userProfile?.personal_color || userProfile?.personalColor || 'autumn_warm';
@@ -603,7 +733,8 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
   ]);
   const WINTER_BOOTS = new Set(['long_boots', 'snow_boots', 'boots']);
 
-  const scoreItem = (item, preferredFormality) => {
+  const scoreItem = (item, presetSpec) => {
+    const preferredFormality = presetSpec?.formality || 'smart';
     let score = 50;
     const sub = String(item.subcategory || '');
     if (avgTemp >= item.min_temp && avgTemp <= item.max_temp) {
@@ -668,9 +799,10 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
     }
 
     if (preferredFormality && item.formality === preferredFormality) {
-      score += 14;
-    } else if (preferredFormality === 'formal' && item.formality === 'smart') {
       score += 10;
+    }
+    if (presetSpec?.key) {
+      score += computeStylePresetAffinityBonus(item, presetSpec.key);
     }
 
     // Personal color harmony boost (supports 12-subtype -> 4-season macro resolver)
@@ -706,75 +838,75 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       active.filter((g) => g.category === 'accessory' && neckSubs.has(String(g.subcategory || '')))
     ),
     outer: byCat('outer'),
-    top: byCat('top'),
-    bottom: byCat('bottom'),
+    top: byCat('top').filter(
+      (g) => !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
+    ),
+    bottom: byCat('bottom').filter((g) => !(avgTemp < 21 && g.subcategory === 'shorts')),
     dress: byCat('dress'),
     gloves: byCat('gloves').concat(
       active.filter((g) => g.category === 'accessory' && gloveSubs.has(String(g.subcategory || '')))
     ),
     underwear: byCat('underwear'),
     socks: byCat('socks'),
-    shoes: byCat('shoes'),
+    shoes: byCat('shoes').filter(
+      (g) => !((avgTemp < 23 || isRainy) && OPEN_SUMMER_SHOES.has(String(g.subcategory || '')))
+    ),
     umbrella: active.filter(isUmbrellaItem),
     accessory: byCat('accessory')
       .filter((g) => !isUmbrellaItem(g) && bagSubs.has(String(g.subcategory || 'bag')))
       .concat(byCat('bag')),
   };
 
-  const themes = [
+  if (pools.top.length === 0) pools.top = byCat('top');
+  if (pools.bottom.length === 0) pools.bottom = byCat('bottom');
+  if (pools.shoes.length === 0) pools.shoes = byCat('shoes');
+
+  const lookConfigs = [
     {
       id: 'commute',
-      badge: '출근 · 스마트 포멀',
-      title: isRainy
-        ? '비 예보 대비 단정한 출근 코디'
-        : isWindy
-          ? '강풍 대비 방풍 아우터 출근 코디'
-          : '일교차 대응 깔끔한 오피스룩',
-      formality: 'formal',
+      preset: LOOK_STYLE_PRESETS[look1StyleKey],
     },
     {
       id: 'daily',
-      badge: '데일리 · 미니멀 캐주얼',
-      title: isWindy ? '바람 부는 날 포근한 레이어드 데일리룩' : '하루 종일 편안하고 정돈된 데일리룩',
-      formality: 'smart',
-    },
-    {
-      id: 'relaxed',
-      badge: '오프타임 · 감각적 매치',
-      title: '옷장 속 숨은 아이템을 깨우는 기분 전환룩',
-      formality: 'casual',
+      preset: LOOK_STYLE_PRESETS[look2StyleKey],
     },
   ];
 
-  const usedCombos = new Set();
   const recommendations = [];
+  const look1ChosenIds = new Set();
 
-  themes.forEach((theme, idx) => {
-    const pickBest = (catKey, offset = 0) => {
-      const list = [...(pools[catKey] || [])].sort(
-        (a, b) => scoreItem(b, theme.formality) - scoreItem(a, theme.formality)
-      );
-      return list.length > 0 ? list[offset % list.length] : null;
+  lookConfigs.forEach(({ id, preset }, idx) => {
+    const excludeIds = idx === 0 ? new Set() : look1ChosenIds;
+
+    const pickBest = (catKey, fallbackOffset = 0) => {
+      const rawPool = pools[catKey] || [];
+      if (rawPool.length === 0) return null;
+      const ranked = [...rawPool].sort((a, b) => scoreItem(b, preset) - scoreItem(a, preset));
+      const distinct = ranked.filter((g) => !excludeIds.has(g.id));
+      if (distinct.length > 0) {
+        return distinct[0];
+      }
+      return ranked[fallbackOffset % ranked.length] || ranked[0];
     };
 
     const chosenOuter = needOuter ? pickBest('outer', idx) : null;
     const chosenTop = pickBest('top', idx);
     const chosenBottom = pickBest('bottom', idx);
-    const chosenShoes = pickBest('shoes', isRainy ? 0 : idx);
+    const chosenShoes = pickBest('shoes', idx);
     const chosenHeadwear =
-      needWarmAcc || idx === 2 || weather.tempMax >= 23
+      needWarmAcc || (weather.tempMax >= 26 && preset.formality === 'casual')
         ? pickBest('headwear', idx)
-        : pickBest('headwear', idx);
+        : null;
     const chosenNeckwear =
-      needWarmAcc || theme.formality === 'formal'
+      needWarmAcc || isWindy || preset.key === 'formal_office'
         ? pickBest('neckwear', idx)
-        : pickBest('neckwear', idx);
-    const chosenGloves = needWarmAcc ? pickBest('gloves', idx) : pickBest('gloves', idx);
+        : null;
+    const chosenGloves = avgTemp <= 4 ? pickBest('gloves', idx) : null;
     const chosenUnderwear = pickBest('underwear', idx);
     const chosenSocks = pickBest('socks', idx);
     const chosenAccessory = pickBest('accessory', idx);
-    const chosenUmbrella = isRainy ? pickBest('umbrella', idx) : null;
-    const chosenDress = idx === 2 && userProfile?.gender === 'female' ? pickBest('dress', 0) : null;
+    const chosenUmbrella = isRainy || isSnowy ? pickBest('umbrella', idx) : null;
+    const chosenDress = null;
 
     const slotMap = {
       headwear: chosenHeadwear,
@@ -807,45 +939,61 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       chosenUmbrella,
     ].filter(Boolean);
 
-    const comboKey = [chosenOuter?.id, chosenTop?.id, chosenBottom?.id, chosenShoes?.id]
-      .filter(Boolean)
-      .join('-');
-
-    if (coreItems.length >= 2 && !usedCombos.has(comboKey)) {
-      usedCombos.add(comboKey);
+    if (coreItems.length >= 2) {
+      if (idx === 0) {
+        coreItems.forEach((item) => {
+          if (item?.id !== undefined) look1ChosenIds.add(item.id);
+        });
+      }
 
       const reasons = [];
       if (needOuter && chosenOuter) {
         if (isRainy && chosenOuter.water_resistant) {
-          reasons.push(`강수 확률 ${weather.precipProb}%에 대비해 발수 소재 '${chosenOuter.name}'을(를) 선택했습니다.`);
+          reasons.push(
+            `강수 확률 ${weather.precipProb}%에 대비해 발수 소재 '${chosenOuter.name}'을(를) 선택했습니다.`
+          );
         } else if (isWindy) {
-          reasons.push(`풍속 ${weather.windSpeed}km/h 강풍에 체감 온도를 지켜주는 '${chosenOuter.name}' 레이어드를 매치했습니다.`);
+          reasons.push(
+            `풍속 ${weather.windSpeed}km/h 강풍에 체감 온도를 지켜주는 '${chosenOuter.name}' 레이어드를 매치했습니다.`
+          );
         } else if (diurnalSwing >= 8) {
-          reasons.push(`아침 최저 ${weather.tempMin}°C · 낮 최고 ${weather.tempMax}°C(일교차 ${diurnalSwing}°C)라 탈착하기 편한 '${chosenOuter.name}'을(를) 매치했습니다.`);
+          reasons.push(
+            `아침 최저 ${weather.tempMin}°C · 낮 최고 ${weather.tempMax}°C(일교차 ${diurnalSwing}°C)라 탈착하기 편한 '${chosenOuter.name}'을(를) 매치했습니다.`
+          );
         } else {
-          reasons.push(`체감 온도 약 ${avgTemp}°C에 알맞은 보온감의 '${chosenOuter.name}' 중심 레이어드입니다.`);
+          reasons.push(
+            `체감 온도 약 ${avgTemp}°C에 알맞은 보온감의 '${chosenOuter.name}' 중심 레이어드입니다.`
+          );
         }
       } else {
-        reasons.push(`낮 기온이 ${weather.tempMax}°C까지 올라 아우터 없이 쾌적한 단품 실루엣을 구성했습니다.`);
+        reasons.push(
+          `낮 기온이 ${weather.tempMax}°C까지 올라 아우터 없이 쾌적한 단품 실루엣을 구성했습니다.`
+        );
       }
 
       reasons.push(
-        `[${pcDisplayLabel} · ${bodyMetrics.shapeShortKo}(${bodyMetrics.chestCm}-${bodyMetrics.waistCm}-${bodyMetrics.hipCm}cm)] ${bodyMetrics.stylingAdvice}`
+        `[${preset.badge} · ${pcDisplayLabel} · ${bodyMetrics.shapeShortKo}(${bodyMetrics.chestCm}-${bodyMetrics.waistCm}-${bodyMetrics.hipCm}cm)] ${bodyMetrics.stylingAdvice}`
       );
 
       const pcSync = Math.min(
         99,
         Math.round(
           78 +
-            coreItems.reduce((acc, it) => acc + personalColorMatchBonus(it.color_hex, personalColorKey), 0) /
+            coreItems.reduce(
+              (acc, it) => acc + personalColorMatchBonus(it.color_hex, personalColorKey),
+              0
+            ) /
               Math.max(1, coreItems.length)
         )
       );
 
       recommendations.push({
-        id: theme.id,
-        badge: theme.badge,
-        title: theme.title,
+        id,
+        stylePreset: preset.key,
+        badge: preset.badge,
+        badgeEn: preset.badgeEn,
+        title: preset.title,
+        titleEn: preset.titleEn,
         items: coreItems,
         loadoutBySlot: slotMap,
         rationale: reasons.join(' '),
@@ -876,6 +1024,7 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       diurnalSwing,
       isRainy,
       isRaining: isRainy,
+      isSnowy,
       isWindy,
       humidity: weather.humidity ?? (isRainy ? 78 : 50),
       summary: weatherTip,
@@ -897,6 +1046,13 @@ export function buildWeatherRecommendations(weather, closetGarments, recentLogs 
       { key: 'live', label: '실시간 내일 예보' },
       ...Object.entries(WEATHER_SCENARIOS).map(([key, val]) => ({ key, label: val.label })),
     ],
+    lookStylePresets: Object.values(LOOK_STYLE_PRESETS).map((p) => ({
+      key: p.key,
+      badge: p.badge,
+      badgeEn: p.badgeEn,
+      title: p.title,
+      titleEn: p.titleEn,
+    })),
     recommendations,
   };
 }

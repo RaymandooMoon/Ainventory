@@ -115,28 +115,79 @@ export function ResponsiveSheetModal({
   actions,
   maxWidth = 720,
   lang = 'ko',
+  expandable,
+  defaultExpanded = false,
+  onExpandedChange,
   children,
   footer,
 }) {
+  const isSheetExpandable = Boolean(expandable ?? id === 'outfit-mobile-wardrobe-sheet');
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(Boolean(defaultExpanded));
+  const [hasEntered, setHasEntered] = useState(false);
+  const [isDismissing, setIsDismissing] = useState(false);
+
   const dialogRef = useRef(null);
   const previousFocusRef = useRef(null);
   const suppressTimerRef = useRef(null);
-  const startYRef = useRef(0);
+  const suppressChildTimerRef = useRef(null);
+  const dismissTimerRef = useRef(null);
+  const enterTimerRef = useRef(null);
   const dragYRef = useRef(0);
   const isDraggingRef = useRef(false);
+  const isExpandedRef = useRef(Boolean(defaultExpanded));
+  const isExpandableRef = useRef(isSheetExpandable);
+  const isDismissingRef = useRef(false);
   const onCloseRef = useRef(onClose);
-  const headingId = useId();
-
+  const onExpandedChangeRef = useRef(onExpandedChange);
   const suppressBackdropClickRef = useRef(false);
+  const suppressChildClickRef = useRef(false);
+  const gestureRef = useRef({
+    active: false,
+    fromHandle: false,
+    lockedOut: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    maxDistance: 0,
+    scrollEl: null,
+  });
+  const headingId = useId();
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
+    onExpandedChangeRef.current = onExpandedChange;
+  }, [onExpandedChange]);
+
+  useEffect(() => {
+    isExpandableRef.current = isSheetExpandable;
+  }, [isSheetExpandable]);
+
+  useEffect(() => {
     if (!open) return undefined;
+
+    const initialExpanded = isExpandableRef.current ? Boolean(defaultExpanded) : false;
+    isExpandedRef.current = initialExpanded;
+    isDismissingRef.current = false;
+    dragYRef.current = 0;
+    isDraggingRef.current = false;
+    suppressBackdropClickRef.current = false;
+    suppressChildClickRef.current = false;
+    setIsExpanded(initialExpanded);
+    setIsDismissing(false);
+    setHasEntered(false);
+    setDragY(0);
+    setIsDragging(false);
+
+    enterTimerRef.current = setTimeout(() => {
+      setHasEntered(true);
+      enterTimerRef.current = null;
+    }, 340);
+
     if (typeof document !== 'undefined') {
       previousFocusRef.current = document.activeElement;
     }
@@ -144,6 +195,36 @@ export function ResponsiveSheetModal({
       onCloseRef.current?.();
       return true;
     });
+
+    const triggerSmoothDismiss = () => {
+      if (isDismissingRef.current) return;
+      isDismissingRef.current = true;
+      setIsDismissing(true);
+      triggerHaptic('selection');
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = setTimeout(() => {
+        dismissTimerRef.current = null;
+        isDismissingRef.current = false;
+        setIsDismissing(false);
+        onCloseRef.current?.();
+      }, 180);
+    };
+
+    const markDragReleaseClickSuppression = () => {
+      suppressBackdropClickRef.current = true;
+      suppressChildClickRef.current = true;
+      if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+      suppressTimerRef.current = setTimeout(() => {
+        suppressBackdropClickRef.current = false;
+        suppressTimerRef.current = null;
+      }, 60);
+      if (suppressChildTimerRef.current) clearTimeout(suppressChildTimerRef.current);
+      suppressChildTimerRef.current = setTimeout(() => {
+        suppressChildClickRef.current = false;
+        suppressChildTimerRef.current = null;
+      }, 80);
+    };
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -158,7 +239,10 @@ export function ResponsiveSheetModal({
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
         if (e.shiftKey) {
-          if (document.activeElement === first || !dialogRef.current.contains(document.activeElement)) {
+          if (
+            document.activeElement === first ||
+            !dialogRef.current.contains(document.activeElement)
+          ) {
             e.preventDefault();
             last.focus();
           }
@@ -168,37 +252,133 @@ export function ResponsiveSheetModal({
         }
       }
     };
-    const handleWindowMove = (e) => {
-      if (!isDraggingRef.current) return;
-      const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
-      const delta = Math.max(0, clientY - startYRef.current);
-      dragYRef.current = delta;
-      setDragY(delta);
+
+    const readEventPoint = (e) => {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      }
+      if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+        return { x: e.clientX, y: e.clientY };
+      }
+      return null;
     };
+
+    const handleWindowMove = (e) => {
+      const g = gestureRef.current;
+      if (!g.active || g.lockedOut || isDismissingRef.current) return;
+      const pt = readEventPoint(e);
+      if (!pt) return;
+
+      const dx = pt.x - g.startX;
+      const dy = pt.y - g.startY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > g.maxDistance) {
+        g.maxDistance = dist;
+      }
+
+      if (!isDraggingRef.current) {
+        if (!g.fromHandle && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+          g.lockedOut = true;
+          return;
+        }
+
+        const passedThreshold = g.fromHandle
+          ? Math.abs(dy) >= 6
+          : Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx) * 1.25;
+
+        if (!passedThreshold) return;
+
+        if (!g.fromHandle && g.scrollEl) {
+          if (dy > 0 && g.scrollEl.scrollTop > 2) {
+            g.lockedOut = true;
+            return;
+          }
+          if (dy < 0 && !(isExpandableRef.current && !isExpandedRef.current)) {
+            g.lockedOut = true;
+            return;
+          }
+        }
+
+        if (dy < 0 && !isExpandableRef.current) {
+          return;
+        }
+
+        isDraggingRef.current = true;
+        setIsDragging(true);
+      }
+
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
+      const nextDragY = dy < 0 ? (isExpandableRef.current ? dy : 0) : dy;
+      dragYRef.current = nextDragY;
+      setDragY(nextDragY);
+    };
+
     const handleWindowEnd = () => {
-      if (!isDraggingRef.current) return;
+      const g = gestureRef.current;
+      if (!g.active) return;
+
+      const wasDragging = isDraggingRef.current;
       const finalDelta = dragYRef.current;
+      const elapsedMs = Math.max(1, Date.now() - g.startTime);
+      const velocity = elapsedMs >= 40 ? finalDelta / elapsedMs : 0;
+
+      g.active = false;
+      g.lockedOut = false;
+      g.scrollEl = null;
       isDraggingRef.current = false;
       dragYRef.current = 0;
       setIsDragging(false);
       setDragY(0);
-      if (finalDelta > 80) {
+
+      if (!wasDragging) return;
+
+      markDragReleaseClickSuppression();
+
+      const canExpand = isExpandableRef.current;
+      const currentlyExpanded = isExpandedRef.current;
+
+      // Upward swipe -> expand normal sheet to full wardrobe detent
+      if ((finalDelta < -38 || velocity < -0.45) && canExpand && !currentlyExpanded) {
+        isExpandedRef.current = true;
+        setIsExpanded(true);
+        onExpandedChangeRef.current?.(true);
         triggerHaptic('selection');
-        onCloseRef.current?.();
-      } else {
-        suppressBackdropClickRef.current = true;
-        if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
-        suppressTimerRef.current = setTimeout(() => {
-          suppressBackdropClickRef.current = false;
-          suppressTimerRef.current = null;
-        }, 0);
+        return;
+      }
+
+      // Downward swipe handling (2-detent aware)
+      if (finalDelta > 0) {
+        if (canExpand && currentlyExpanded) {
+          if (finalDelta > 185 || (velocity >= 0.95 && finalDelta > 60)) {
+            triggerSmoothDismiss();
+            return;
+          }
+          if (finalDelta >= 42 && finalDelta <= 185 && velocity < 0.95) {
+            isExpandedRef.current = false;
+            setIsExpanded(false);
+            onExpandedChangeRef.current?.(false);
+            triggerHaptic('selection');
+          }
+          return;
+        }
+
+        if (finalDelta > 64 || (velocity >= 0.55 && finalDelta > 32)) {
+          triggerSmoothDismiss();
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('pointermove', handleWindowMove);
     window.addEventListener('pointerup', handleWindowEnd);
     window.addEventListener('pointercancel', handleWindowEnd);
-    window.addEventListener('touchmove', handleWindowMove, { passive: true });
+    window.addEventListener('touchmove', handleWindowMove, { passive: false });
     window.addEventListener('touchend', handleWindowEnd);
     window.addEventListener('touchcancel', handleWindowEnd);
     return () => {
@@ -213,35 +393,138 @@ export function ResponsiveSheetModal({
         clearTimeout(suppressTimerRef.current);
         suppressTimerRef.current = null;
       }
+      if (suppressChildTimerRef.current) {
+        clearTimeout(suppressChildTimerRef.current);
+        suppressChildTimerRef.current = null;
+      }
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = null;
+      }
+      if (enterTimerRef.current) {
+        clearTimeout(enterTimerRef.current);
+        enterTimerRef.current = null;
+      }
       popBack();
+      gestureRef.current.active = false;
+      gestureRef.current.scrollEl = null;
       dragYRef.current = 0;
       isDraggingRef.current = false;
+      isDismissingRef.current = false;
       suppressBackdropClickRef.current = false;
+      suppressChildClickRef.current = false;
       setDragY(0);
       setIsDragging(false);
+      setIsDismissing(false);
       const prevEl = previousFocusRef.current;
       if (prevEl && typeof prevEl.focus === 'function' && document.contains(prevEl)) {
         prevEl.focus();
       }
     };
-  }, [open]);
+  }, [open, defaultExpanded]);
 
   if (!open) return null;
 
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
-    startYRef.current = clientY;
-    dragYRef.current = 0;
-    isDraggingRef.current = true;
-    setIsDragging(true);
+  const findScrollableContainer = (targetEl) => {
+    if (!targetEl || typeof window === 'undefined') return null;
+    const gridScroll = targetEl.closest('.atelier-drawer-grid-scroll');
+    if (gridScroll && dialogRef.current?.contains(gridScroll)) {
+      return gridScroll;
+    }
+    const sheetContent = targetEl.closest('.ui-sheet-content');
+    if (sheetContent && dialogRef.current?.contains(sheetContent)) {
+      const style = window.getComputedStyle(sheetContent);
+      if (
+        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        sheetContent.scrollHeight > sheetContent.clientHeight + 2
+      ) {
+        return sheetContent;
+      }
+    }
+    return null;
   };
+
+  const beginSheetGesture = (e, fromHandle) => {
+    if (isDismissingRef.current || gestureRef.current.active) return;
+    if (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0) return;
+
+    const targetEl = e.target instanceof Element ? e.target : null;
+    if (!fromHandle && targetEl?.closest('input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+
+    const clientX = e.touches?.[0]?.clientX ?? e.clientX ?? 0;
+    const clientY = e.touches?.[0]?.clientY ?? e.clientY ?? 0;
+
+    if (fromHandle) {
+      e.stopPropagation();
+    }
+
+    gestureRef.current = {
+      active: true,
+      fromHandle,
+      lockedOut: false,
+      startX: clientX,
+      startY: clientY,
+      startTime: Date.now(),
+      maxDistance: 0,
+      scrollEl: fromHandle ? null : findScrollableContainer(targetEl),
+    };
+  };
+
+  const handleDragZoneClick = (e) => {
+    e.stopPropagation();
+    if (!isSheetExpandable || suppressChildClickRef.current || isDismissingRef.current) return;
+    const next = !isExpandedRef.current;
+    isExpandedRef.current = next;
+    setIsExpanded(next);
+    onExpandedChangeRef.current?.(next);
+    triggerHaptic('selection');
+  };
+
+  const upwardExpandPx =
+    isDragging && dragY < 0 && isSheetExpandable && !isExpanded
+      ? Math.min(260, Math.round(Math.abs(dragY) * 0.9))
+      : 0;
+
+  let computedTransform;
+  if (isDismissing) {
+    computedTransform = 'translate3d(0, 105%, 0)';
+  } else if (isDragging && dragY > 0) {
+    computedTransform = `translate3d(0, ${dragY}px, 0)`;
+  } else if (
+    isDragging &&
+    dragY < 0 &&
+    isSheetExpandable &&
+    !isExpanded &&
+    id !== 'outfit-mobile-wardrobe-sheet'
+  ) {
+    computedTransform = `translate3d(0, ${Math.max(-24, Math.round(dragY * 0.25))}px, 0)`;
+  }
+
+  let computedTransition;
+  if (isDismissing) {
+    computedTransition = 'transform 0.18s cubic-bezier(0.32, 0.72, 0, 1)';
+  } else if (isDragging) {
+    computedTransition = 'none';
+  }
+
+  const sheetClassName = [
+    'modal-box',
+    'ui-sheet-box',
+    isExpanded ? 'is-expanded' : '',
+    hasEntered ? 'is-entered' : '',
+    isDragging ? 'is-dragging' : '',
+    isDismissing ? 'is-dismissing' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
       className="modal-backdrop ui-sheet-backdrop"
       onClick={() => {
-        if (suppressBackdropClickRef.current) return;
+        if (suppressBackdropClickRef.current || isDismissingRef.current) return;
         onCloseRef.current?.();
       }}
     >
@@ -251,24 +534,62 @@ export function ResponsiveSheetModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? headingId : undefined}
-        aria-label={!title ? eyebrow || tx(lang, '시트 대화상자', 'Sheet Dialog') : undefined}
+        aria-label={title || eyebrow || tx(lang, '시트 대화상자', 'Sheet Dialog')}
         data-sheet-panel="true"
-        className="modal-box ui-sheet-box"
+        data-sheet-expanded={isSheetExpandable ? (isExpanded ? 'true' : 'false') : undefined}
+        className={sheetClassName}
         style={{
           maxWidth,
-          transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-          transition: isDragging
-            ? 'none'
-            : 'transform 0.42s cubic-bezier(0.32, 0.72, 0, 1)',
+          transform: computedTransform,
+          transition: computedTransition,
+          '--sheet-drag-expand': upwardExpandPx > 0 ? `${upwardExpandPx}px` : undefined,
+        }}
+        onAnimationEnd={(e) => {
+          if (e.target === e.currentTarget) {
+            setHasEntered(true);
+          }
+        }}
+        onPointerDown={(e) => beginSheetGesture(e, false)}
+        onTouchStart={(e) => beginSheetGesture(e, false)}
+        onClickCapture={(e) => {
+          if (suppressChildClickRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
           data-sheet-handle="true"
+          role={isSheetExpandable ? 'button' : undefined}
+          tabIndex={isSheetExpandable ? 0 : undefined}
+          aria-expanded={isSheetExpandable ? isExpanded : undefined}
           className="ui-sheet-drag-zone"
-          onPointerDown={handleDragStart}
-          onTouchStart={handleDragStart}
-          aria-label={tx(lang, '드래그하여 닫기', 'Drag down to close')}
+          onPointerDown={(e) => beginSheetGesture(e, true)}
+          onTouchStart={(e) => beginSheetGesture(e, true)}
+          onClick={handleDragZoneClick}
+          onKeyDown={
+            isSheetExpandable
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    applyExpandedState(!isExpandedRef.current);
+                  }
+                }
+              : undefined
+          }
+          aria-label={
+            isSheetExpandable
+              ? isExpanded
+                ? tx(lang, '아래로 드래그하여 축소 또는 닫기', 'Drag down to collapse or close')
+                : tx(
+                    lang,
+                    '위로 드래그하여 확장 · 아래로 드래그하여 닫기',
+                    'Swipe up to expand or down to close'
+                  )
+              : tx(lang, '드래그하여 닫기', 'Drag down to close')
+          }
         >
           <div className="ui-sheet-drag-handle" aria-hidden="true" />
         </div>

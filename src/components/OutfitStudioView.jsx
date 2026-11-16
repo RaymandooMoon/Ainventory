@@ -391,6 +391,297 @@ function buildInitialStudioSlots(garments, preEquippedGarment) {
   return { ...EMPTY_STUDIO_SLOTS };
 }
 
+const LOOK_STYLE_STORAGE_KEY = 'ainventory_look_style_config_v1';
+
+const LOOK_STYLE_PRESETS = [
+  {
+    key: 'business_casual',
+    ko: '직장생활을 위한 비즈니스 캐주얼',
+    en: 'Business Casual',
+  },
+  {
+    key: 'comfortable_casual',
+    ko: '편한 캐주얼',
+    en: 'Comfortable Casual',
+  },
+  {
+    key: 'formal_office',
+    ko: '포멀 · 오피스 정장',
+    en: 'Formal Office',
+  },
+  {
+    key: 'minimal_daily',
+    ko: '미니멀 데일리',
+    en: 'Minimal Daily',
+  },
+];
+
+const VALID_LOOK_STYLE_KEYS = new Set(LOOK_STYLE_PRESETS.map((p) => p.key));
+
+const DEFAULT_LOOK_STYLE_CONFIG = {
+  look1Style: 'business_casual',
+  look2Style: 'comfortable_casual',
+};
+
+function readStoredLookStyleConfig() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { ...DEFAULT_LOOK_STYLE_CONFIG };
+  }
+  try {
+    const raw = window.localStorage.getItem(LOOK_STYLE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_LOOK_STYLE_CONFIG };
+    const parsed = JSON.parse(raw);
+    const look1Style = VALID_LOOK_STYLE_KEYS.has(parsed?.look1Style)
+      ? parsed.look1Style
+      : DEFAULT_LOOK_STYLE_CONFIG.look1Style;
+    const look2Style = VALID_LOOK_STYLE_KEYS.has(parsed?.look2Style)
+      ? parsed.look2Style
+      : DEFAULT_LOOK_STYLE_CONFIG.look2Style;
+    return { look1Style, look2Style };
+  } catch {
+    return { ...DEFAULT_LOOK_STYLE_CONFIG };
+  }
+}
+
+function writeStoredLookStyleConfig(nextConfig) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(LOOK_STYLE_STORAGE_KEY, JSON.stringify(nextConfig));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+const NEUTRAL_PALETTE_RE =
+  /black|white|grey|gray|charcoal|slate|ivory|cream|beige|taupe|stone|oat|navy|블랙|화이트|그레이|차콜|아이보리|크림|베이지|네이비|무채/i;
+const RELAXED_CASUAL_RE =
+  /hood|sweat|jogger|track|flip_flop|sandal|sport|puffer|parka|windbreaker|후드|맨투맨|조거|슬리퍼|샌들|패딩|윈드브레이커/i;
+const STRICT_FORMAL_RE =
+  /suit|tuxedo|necktie|stiletto|evening|ceremony|수트|정장|넥타이|타이|하객|이브닝/i;
+
+function isLowSaturationNeutralHex(hex) {
+  if (typeof hex !== 'string') return false;
+  const m = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return Math.max(r, g, b) - Math.min(r, g, b) <= 38;
+}
+
+function scoreGarmentForLookPreset(garment, styleKey, avgTemp) {
+  if (!garment) return -999;
+  let score = 0;
+
+  const minT = typeof garment.min_temp === 'number' ? garment.min_temp : 5;
+  const maxT = typeof garment.max_temp === 'number' ? garment.max_temp : 26;
+  if (avgTemp >= minT - 3 && avgTemp <= maxT + 3) {
+    score += 24;
+  } else {
+    const dist = avgTemp < minT ? minT - avgTemp : avgTemp - maxT;
+    score -= Math.min(20, dist * 1.4);
+  }
+
+  const blob = [
+    garment.name,
+    garment.name_en,
+    garment.subcategory,
+    garment.formality,
+    garment.occasion,
+    garment.color_name,
+    garment.fabric,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  if (styleKey === 'business_casual') {
+    if (doesGarmentMatchOccasion(garment, 'office')) score += 30;
+    if (doesGarmentMatchOccasion(garment, 'formal')) score += 10;
+    if (RELAXED_CASUAL_RE.test(blob)) score -= 24;
+  } else if (styleKey === 'comfortable_casual') {
+    if (doesGarmentMatchOccasion(garment, 'daily')) score += 30;
+    if (RELAXED_CASUAL_RE.test(blob)) score += 12;
+    if (STRICT_FORMAL_RE.test(blob)) score -= 22;
+  } else if (styleKey === 'formal_office') {
+    if (doesGarmentMatchOccasion(garment, 'formal')) score += 34;
+    if (doesGarmentMatchOccasion(garment, 'office')) score += 18;
+    if (RELAXED_CASUAL_RE.test(blob)) score -= 30;
+  } else if (styleKey === 'minimal_daily') {
+    if (isLowSaturationNeutralHex(garment.color_hex) || NEUTRAL_PALETTE_RE.test(blob)) {
+      score += 26;
+    }
+    if (doesGarmentMatchOccasion(garment, 'office') || doesGarmentMatchOccasion(garment, 'daily')) {
+      score += 14;
+    }
+    if (/logo|graphic|neon|형광|그래픽/i.test(blob)) score -= 18;
+  }
+
+  return score;
+}
+
+function curateStyledRecommendations({ rawRecs, garments, weather, lookStyleConfig }) {
+  const safeRaw = Array.isArray(rawRecs) ? rawRecs : [];
+  const wearable = (Array.isArray(garments) ? garments : []).filter(
+    (g) => isWearableStudioGarment(g) && !isSwimwearGarment(g)
+  );
+  const lookStyles = [
+    lookStyleConfig?.look1Style || DEFAULT_LOOK_STYLE_CONFIG.look1Style,
+    lookStyleConfig?.look2Style || DEFAULT_LOOK_STYLE_CONFIG.look2Style,
+  ];
+
+  if (wearable.length === 0) {
+    return safeRaw.slice(0, 2).map((rec, idx) => {
+      const styleKey = lookStyles[idx] || DEFAULT_LOOK_STYLE_CONFIG.look1Style;
+      const preset = LOOK_STYLE_PRESETS.find((p) => p.key === styleKey) || LOOK_STYLE_PRESETS[0];
+      return {
+        ...rec,
+        id: rec?.id || `look_${idx + 1}`,
+        presetKey: styleKey,
+        presetLabelKo: preset.ko,
+        presetLabelEn: preset.en,
+      };
+    });
+  }
+
+  const avgTemp =
+    typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)
+      ? weather.avgTemp
+      : typeof weather?.tempMin === 'number' && typeof weather?.tempMax === 'number'
+        ? (weather.tempMin + weather.tempMax) / 2
+        : 13;
+  const isRainy = Boolean(
+    weather?.isRainy || weather?.isRaining || weather?.scenarioKey === 'rainy_cool'
+  );
+  const isWindyOrCold = Boolean(weather?.isWindy || avgTemp <= 11);
+  const needsOuter = avgTemp < 20 || isRainy || isWindyOrCold;
+
+  const usedCoreIdsInLook1 = new Set();
+
+  return lookStyles.map((styleKey, idx) => {
+    const preset = LOOK_STYLE_PRESETS.find((p) => p.key === styleKey) || LOOK_STYLE_PRESETS[0];
+    const rawRec = safeRaw[idx] || null;
+    const rawMatchedPreset =
+      rawRec && rawRec.presetKey && rawRec.presetKey === styleKey;
+
+    if (rawMatchedPreset && Array.isArray(rawRec.items) && rawRec.items.length > 0) {
+      for (const it of rawRec.items) {
+        if (it?.id != null && idx === 0) usedCoreIdsInLook1.add(Number(it.id));
+      }
+      return {
+        ...rawRec,
+        id: rawRec.id || `look_${idx + 1}`,
+        presetKey: styleKey,
+        presetLabelKo: preset.ko,
+        presetLabelEn: preset.en,
+      };
+    }
+
+    const rawItemIds = new Set(
+      (rawRec?.items || []).map((it) => Number(it?.id)).filter((n) => Number.isFinite(n))
+    );
+    const defaultStyleForIdx =
+      idx === 0
+        ? DEFAULT_LOOK_STYLE_CONFIG.look1Style
+        : DEFAULT_LOOK_STYLE_CONFIG.look2Style;
+
+    const pickSlotBest = (slotKey, avoidDuplicateFromLook1 = true) => {
+      const candidates = wearable.filter((g) => doesGarmentMatchSubSlot(g, slotKey));
+      if (candidates.length === 0) return null;
+      const scored = candidates
+        .map((g) => {
+          let sc = scoreGarmentForLookPreset(g, styleKey, avgTemp);
+          if (styleKey === defaultStyleForIdx && rawItemIds.has(Number(g.id))) {
+            sc += 8;
+          }
+          if (
+            idx === 1 &&
+            avoidDuplicateFromLook1 &&
+            candidates.length > 1 &&
+            usedCoreIdsInLook1.has(Number(g.id))
+          ) {
+            sc -= 26;
+          }
+          return { g, sc };
+        })
+        .sort((a, b) => b.sc - a.sc || Number(a.g.id) - Number(b.g.id));
+      return scored[0]?.g || null;
+    };
+
+    const top = pickSlotBest('top');
+    const bottom = pickSlotBest('bottom');
+    const onepiece =
+      !top || !bottom
+        ? pickSlotBest('onepiece')
+        : styleKey === 'formal_office'
+          ? (() => {
+              const dress = pickSlotBest('onepiece');
+              if (!dress) return null;
+              const dressScore = scoreGarmentForLookPreset(dress, styleKey, avgTemp);
+              const pairScore =
+                (scoreGarmentForLookPreset(top, styleKey, avgTemp) +
+                  scoreGarmentForLookPreset(bottom, styleKey, avgTemp)) /
+                2;
+              return dressScore > pairScore + 8 ? dress : null;
+            })()
+          : null;
+
+    const outer = needsOuter ? pickSlotBest('outer') : null;
+    const shoes = pickSlotBest('shoes');
+    const accessory = pickSlotBest('accessory', false);
+    const neckwear = avgTemp <= 9 ? pickSlotBest('acc_neck', false) : null;
+    const umbrella = isRainy
+      ? wearable.find((g) => isUmbrellaGarment(g)) || null
+      : null;
+
+    const loadoutBySlot = {
+      outer: outer || null,
+      top: onepiece ? null : top,
+      bottom: onepiece ? null : bottom,
+      onepiece: onepiece || null,
+      shoes: shoes || null,
+      accessory: accessory || null,
+      acc_neck: neckwear || null,
+      acc_umbrella: umbrella || null,
+    };
+
+    const items = [
+      loadoutBySlot.outer,
+      loadoutBySlot.onepiece,
+      loadoutBySlot.top,
+      loadoutBySlot.bottom,
+      loadoutBySlot.shoes,
+      loadoutBySlot.accessory,
+      loadoutBySlot.acc_neck,
+      loadoutBySlot.acc_umbrella,
+    ].filter(Boolean);
+
+    if (idx === 0) {
+      for (const core of [
+        loadoutBySlot.outer,
+        loadoutBySlot.onepiece,
+        loadoutBySlot.top,
+        loadoutBySlot.bottom,
+        loadoutBySlot.shoes,
+      ]) {
+        if (core?.id != null) usedCoreIdsInLook1.add(Number(core.id));
+      }
+    }
+
+    return {
+      ...(rawRec || {}),
+      id: rawRec?.id || `look_${idx + 1}`,
+      title: preset.ko,
+      presetKey: styleKey,
+      presetLabelKo: preset.ko,
+      presetLabelEn: preset.en,
+      items,
+      itemIds: items.map((it) => it.id),
+      loadoutBySlot,
+    };
+  });
+}
+
 export default function OutfitStudioView({
   user,
   activeCloset,
@@ -442,11 +733,14 @@ export default function OutfitStudioView({
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredGarment, setHoveredGarment] = useState(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [weatherPopupOpen, setWeatherPopupOpen] = useState(false);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
   const [vtonRefreshNonce, setVtonRefreshNonce] = useState(0);
+  const [lookStyleConfig, setLookStyleConfig] = useState(() => readStoredLookStyleConfig());
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
+  const scenarioSnapshotsRef = useRef({});
   const ensuredSeedClosetsRef = useRef(new Set());
   const desktopTitleInputRef = useRef(null);
   const mobileTitleInputRef = useRef(null);
@@ -538,12 +832,24 @@ export default function OutfitStudioView({
       : 'male';
 
   useEffect(() => {
+    if (Object.values(rawSlots).some(Boolean)) {
+      scenarioSnapshotsRef.current[scenarioKey] = {
+        rawSlots,
+        activeRecId,
+        manualRainUmbrellaCleared,
+      };
+    }
+  }, [scenarioKey, rawSlots, activeRecId, manualRainUmbrellaCleared]);
+
+  useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({
       closet: activeCloset || 'sample',
       city: cityKey,
       scenario: scenarioKey,
       gender: effectiveGender,
+      look1_style: lookStyleConfig.look1Style,
+      look2_style: lookStyleConfig.look2Style,
     });
     if (skinProfile?.personalColor) {
       params.set('personal_color', skinProfile.personalColor);
@@ -562,7 +868,18 @@ export default function OutfitStudioView({
         if (cancelled) return;
         setWeatherPayload(data);
 
-        const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
+        const effectiveW = {
+          ...(data?.weather || {}),
+          scenarioKey,
+          ...(scenarioKey === 'rainy_cool' ? { isRainy: true, isRaining: true } : {}),
+          ...(scenarioKey === 'snowy_winter' ? { isSnowy: true } : {}),
+        };
+        const recs = curateStyledRecommendations({
+          rawRecs: data?.recommendations,
+          garments,
+          weather: effectiveW,
+          lookStyleConfig,
+        });
         const shouldForceOverwriteSlots = Boolean(forceAutoApplyWeatherRef.current);
         forceAutoApplyWeatherRef.current = false;
         if (
@@ -570,12 +887,6 @@ export default function OutfitStudioView({
           (shouldForceOverwriteSlots || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
-          const effectiveW = {
-            ...(data?.weather || {}),
-            scenarioKey,
-            ...(scenarioKey === 'rainy_cool' ? { isRainy: true, isRaining: true } : {}),
-            ...(scenarioKey === 'snowy_winter' ? { isSnowy: true } : {}),
-          };
           setSlots((prev) => {
             if (!shouldForceOverwriteSlots && Object.values(prev).some(Boolean)) {
               return prev;
@@ -604,7 +915,16 @@ export default function OutfitStudioView({
     return () => {
       cancelled = true;
     };
-  }, [activeCloset, cityKey, scenarioKey, gpsCoords, skinProfile, effectiveGender, garments]);
+  }, [
+    activeCloset,
+    cityKey,
+    scenarioKey,
+    gpsCoords,
+    skinProfile,
+    effectiveGender,
+    garments,
+    lookStyleConfig,
+  ]);
 
   const weather = useMemo(() => {
     const raw = weatherPayload?.weather || null;
@@ -869,14 +1189,53 @@ export default function OutfitStudioView({
   }, [savedOutfits]);
 
   const cities = weatherPayload?.cities?.length ? weatherPayload.cities : DEFAULT_CITIES;
-  const scenarios = weatherPayload?.scenarios?.length
-    ? weatherPayload.scenarios
-    : DEFAULT_SCENARIOS;
-  const recommendations = weatherPayload?.recommendations || [];
+  const scenarios = useMemo(() => {
+    const rawList = Array.isArray(weatherPayload?.scenarios) ? weatherPayload.scenarios : [];
+    const byKey = new Map(
+      rawList
+        .filter((item) => item && typeof item.key === 'string')
+        .map((item) => [item.key, item])
+    );
+    return DEFAULT_SCENARIOS.map((def) => {
+      const matched = byKey.get(def.key);
+      return matched?.label ? { ...def, label: matched.label } : def;
+    });
+  }, [weatherPayload]);
+
+  const recommendations = useMemo(
+    () =>
+      curateStyledRecommendations({
+        rawRecs: weatherPayload?.recommendations,
+        garments,
+        weather,
+        lookStyleConfig,
+      }),
+    [weatherPayload, garments, weather, lookStyleConfig]
+  );
+
   const activeRecommendation =
     recommendations.find((r) => r.id === activeRecId) || recommendations[0] || null;
 
+  const resolvedCityDisplayLabel = useMemo(() => {
+    if (cityKey === 'gps') {
+      return gpsCoords?.label || tx(lang, '내 위치', 'My Location');
+    }
+    const matched = cities.find((c) => c.key === cityKey);
+    if (matched?.name) {
+      const koName = matched.name.split('·')[0].trim();
+      return lang === 'en'
+        ? CITY_EN_NAMES[matched.key] || localizeOutfitTitle(koName, 'en')
+        : koName;
+    }
+    if (weather?.cityName) {
+      const koName = String(weather.cityName).split('·')[0].trim();
+      return lang === 'en' ? localizeOutfitTitle(koName, 'en') : koName;
+    }
+    return tx(lang, '서울', 'Seoul');
+  }, [cityKey, gpsCoords, cities, weather, lang]);
+
   const handleSelectCity = (nextCity) => {
+    scenarioSnapshotsRef.current = {};
     userModifiedSlotsRef.current = false;
     forceAutoApplyWeatherRef.current = true;
     setManualRainUmbrellaCleared(false);
@@ -887,6 +1246,29 @@ export default function OutfitStudioView({
   };
 
   const handleSelectScenario = (nextScenario) => {
+    if (!nextScenario || nextScenario === scenarioKey) return;
+    if (Object.values(rawSlots).some(Boolean)) {
+      scenarioSnapshotsRef.current[scenarioKey] = {
+        rawSlots,
+        activeRecId,
+        manualRainUmbrellaCleared,
+      };
+    }
+
+    const savedSnap = scenarioSnapshotsRef.current[nextScenario];
+    if (savedSnap && Object.values(savedSnap.rawSlots || {}).some(Boolean)) {
+      setSlots(savedSnap.rawSlots);
+      setActiveRecId(savedSnap.activeRecId ?? null);
+      activeRecIdRef.current = savedSnap.activeRecId ?? null;
+      setManualRainUmbrellaCleared(Boolean(savedSnap.manualRainUmbrellaCleared));
+      setHasExplicitSlotState(true);
+      userModifiedSlotsRef.current = true;
+      forceAutoApplyWeatherRef.current = false;
+      setScenarioKey(nextScenario);
+      triggerHaptic('selection');
+      return;
+    }
+
     userModifiedSlotsRef.current = false;
     forceAutoApplyWeatherRef.current = true;
     setManualRainUmbrellaCleared(false);
@@ -919,10 +1301,12 @@ export default function OutfitStudioView({
           lon: Number(pos.coords.longitude.toFixed(4)),
           label: tx(lang, '내 위치', 'My Location'),
         });
+        scenarioSnapshotsRef.current = {};
         userModifiedSlotsRef.current = false;
         forceAutoApplyWeatherRef.current = true;
         setManualRainUmbrellaCleared(false);
         activeRecIdRef.current = null;
+        setActiveRecId(null);
         setCityKey('gps');
         setScenarioKey('live');
       },
@@ -943,6 +1327,39 @@ export default function OutfitStudioView({
     setActiveRecId(rec.id);
     setHasExplicitSlotState(true);
     setSlots(mapWeatherRecToSlots(rec, garments, weather));
+  };
+
+  const handleChangeLookStyle = (lookIndex, nextStyleKey) => {
+    if (!VALID_LOOK_STYLE_KEYS.has(nextStyleKey)) return;
+    triggerHaptic('selection');
+    const nextConfig =
+      lookIndex === 0
+        ? { ...lookStyleConfig, look1Style: nextStyleKey }
+        : { ...lookStyleConfig, look2Style: nextStyleKey };
+    setLookStyleConfig(nextConfig);
+    writeStoredLookStyleConfig(nextConfig);
+
+    const nextRecs = curateStyledRecommendations({
+      rawRecs: weatherPayload?.recommendations,
+      garments,
+      weather,
+      lookStyleConfig: nextConfig,
+    });
+    const targetRec = nextRecs[lookIndex];
+    const prevRecAtIdx = recommendations[lookIndex];
+    const isTargetLookActive = Boolean(
+      (prevRecAtIdx && activeRecId === prevRecAtIdx.id) ||
+        (targetRec && activeRecId === targetRec.id) ||
+        (lookIndex === 0 && !activeRecId && !userModifiedSlotsRef.current)
+    );
+    if (targetRec && isTargetLookActive) {
+      userModifiedSlotsRef.current = false;
+      setManualRainUmbrellaCleared(false);
+      activeRecIdRef.current = targetRec.id;
+      setActiveRecId(targetRec.id);
+      setHasExplicitSlotState(true);
+      setSlots(mapWeatherRecToSlots(targetRec, garments, weather));
+    }
   };
 
   const handleQuickSelectSkinPreset = (preset) => {
@@ -1051,7 +1468,9 @@ export default function OutfitStudioView({
   };
 
   const handleClearAll = () => {
+    scenarioSnapshotsRef.current = {};
     userModifiedSlotsRef.current = true;
+    activeRecIdRef.current = null;
     setActiveRecId(null);
     setHasExplicitSlotState(true);
     setManualRainUmbrellaCleared(true);
@@ -1613,141 +2032,6 @@ export default function OutfitStudioView({
         </div>
       </header>
 
-      {/* Ultra-Minimal Apple HIG Tomorrow Weather Bar */}
-      <section
-        id={CARBON_DOM_CONTRACT.weatherRecommendPanelId}
-        className="weather-recommend-panel"
-        aria-label={tx(lang, '내일 날씨 코디', 'Tomorrow Weather')}
-      >
-        <div className="weather-minimal-top">
-          <div className="weather-minimal-badge-group">
-            <span className="weather-tomorrow-chip">
-              {weather?.isRainy ? (
-                <CloudRain size={13} />
-              ) : weather?.isSnowy || scenarioKey === 'winter_cold' ? (
-                <Snowflake size={13} />
-              ) : scenarioKey === 'summer_heatwave' ? (
-                <Flame size={13} />
-              ) : scenarioKey === 'cloudy_overcast' ? (
-                <Cloud size={13} />
-              ) : weather?.isWindy ? (
-                <Wind size={13} />
-              ) : weather ? (
-                <CloudSun size={13} />
-              ) : (
-                <Sun size={13} />
-              )}
-              <strong>{tx(lang, '내일 날씨 코디', 'Tomorrow Weather')}</strong>
-            </span>
-
-            {weather && (
-              <span className="weather-temp-compact tabular-nums">
-                {weather.tempMin}°/{weather.tempMax}°
-              </span>
-            )}
-          </div>
-
-          {recommendations.length > 0 && (
-            <div
-              className="weather-look-pills"
-              role="list"
-              aria-label={tx(lang, '추천 코디', 'Recommended Looks')}
-            >
-              {recommendations.map((rec, idx) => {
-                const isSelected = activeRecId === rec.id;
-                return (
-                  <button
-                    key={rec.id}
-                    type="button"
-                    data-weather-rec-id={rec.id}
-                    className={`weather-look-pill ${isSelected ? 'is-selected' : ''}`}
-                    onClick={() => handleApplyRecommendation(rec)}
-                  >
-                    <span>Look {idx + 1}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="weather-location-controls">
-            <select
-              aria-label={tx(lang, '도시 선택', 'Select City')}
-              className="weather-city-select"
-              value={cityKey}
-              onChange={(e) => handleSelectCity(e.target.value)}
-            >
-              {gpsCoords && (
-                <option value="gps">{tx(lang, '내 위치', 'My Location')}</option>
-              )}
-              {cities.map((c) => {
-                const koName = c.name.split('·')[0].trim();
-                const label =
-                  lang === 'en'
-                    ? CITY_EN_NAMES[c.key] || localizeOutfitTitle(koName, 'en')
-                    : koName;
-                return (
-                  <option key={c.key} value={c.key}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-
-            <button
-              type="button"
-              className="weather-icon-btn"
-              onClick={handleUseGpsLocation}
-              disabled={locatingGps}
-              aria-label={tx(lang, '현재 위치 예보', 'Use Current GPS Location')}
-            >
-              <LocateFixed size={13} />
-            </button>
-
-            <button
-              type="button"
-              id="log-tomorrow-outfit-btn"
-              className="weather-icon-btn"
-              disabled={loggingTomorrow || equippedItems.length === 0}
-              onClick={handleLogTomorrowCalendar}
-              title={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
-              aria-label={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
-            >
-              <CalendarPlus size={13} />
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="hig-pill-rail weather-scenario-rail"
-          role="tablist"
-          aria-label={tx(lang, '날씨', 'Weather Conditions')}
-        >
-          {scenarios.map((sc) => {
-            const active = scenarioKey === sc.key;
-            const pair = SHORT_SCENARIO_LABELS[sc.key];
-            const shortLabel = pair
-              ? lang === 'en'
-                ? pair.en
-                : pair.ko
-              : localizeOutfitTitle(sc.label, lang);
-            return (
-              <button
-                key={sc.key}
-                type="button"
-                role="tab"
-                data-weather-scenario={sc.key}
-                aria-selected={active}
-                className={`hig-filter-pill ${active ? 'active' : ''}`}
-                onClick={() => handleSelectScenario(sc.key)}
-              >
-                {shortLabel}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       <div className="studio-25d-layout">
         {/* Center: Isometric Parametric Character Stage */}
         <div className="studio-25d-stage-col">
@@ -1762,6 +2046,13 @@ export default function OutfitStudioView({
             avatarConfigHash={bridgedAvatar.avatarConfigHash}
             weather={weather}
             scenarioKey={scenarioKey}
+            locationLabel={resolvedCityDisplayLabel}
+            onOpenWeatherPopup={() => setWeatherPopupOpen(true)}
+            weatherPopupOpen={weatherPopupOpen}
+            recommendations={recommendations}
+            activeRecId={activeRecId}
+            lookStyleConfig={lookStyleConfig}
+            onApplyRecommendation={handleApplyRecommendation}
             forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -1790,6 +2081,9 @@ export default function OutfitStudioView({
             <button
               type="button"
               data-mobile-wardrobe-trigger="true"
+              aria-haspopup="dialog"
+              aria-expanded={mobileSheetOpen}
+              aria-controls="outfit-mobile-wardrobe-sheet"
               className="atelier-mobile-drawer-open-btn"
               onClick={() => {
                 triggerHaptic('selection');
@@ -1817,6 +2111,9 @@ export default function OutfitStudioView({
                   key={slot.key}
                   type="button"
                   data-mobile-slot-btn={slot.key}
+                  aria-haspopup="dialog"
+                  aria-expanded={mobileSheetOpen}
+                  aria-controls="outfit-mobile-wardrobe-sheet"
                   className={`studio-mobile-slot-pill ${isSelected ? 'active' : ''} ${count > 0 ? 'filled' : ''}`}
                   onClick={() => {
                     handleSelectTopFittingTab(slot.key);
@@ -1975,6 +2272,289 @@ export default function OutfitStudioView({
         </button>
       </form>
 
+      {/* Weather · Location · AI Look 1/2 Unified Settings Popup */}
+      <ResponsiveSheetModal
+        id={CARBON_DOM_CONTRACT.weatherRecommendPanelId}
+        open={weatherPopupOpen}
+        onClose={() => setWeatherPopupOpen(false)}
+        lang={lang}
+        eyebrow={tx(lang, '내일 날씨 코디', 'Tomorrow Weather')}
+        title={tx(
+          lang,
+          `${resolvedCityDisplayLabel} · 내일 날씨 및 AI 코디 설정`,
+          `${resolvedCityDisplayLabel} · Weather & AI Look Settings`
+        )}
+        maxWidth={480}
+      >
+        <div className="weather-popup-content">
+          {/* 1) 내일의 날씨 정보 & 9종 시뮬레이션 선택 */}
+          <div className="weather-popup-section">
+            <div className="weather-popup-section-head">
+              <span className="weather-popup-section-title">
+                {tx(lang, '내일의 날씨 정보 · 시뮬레이션', 'Tomorrow Forecast & Simulation')}
+              </span>
+              <span className="weather-popup-section-meta tabular-nums">
+                {scenarios.length} {tx(lang, '가지 날씨', 'SCENES')}
+              </span>
+            </div>
+
+            <div className="weather-popup-summary-card">
+              <div className="weather-popup-summary-top">
+                <div className="weather-popup-temp-group">
+                  <span className="weather-popup-cond-icon" aria-hidden="true">
+                    {weather?.isRainy ? (
+                      <CloudRain size={18} />
+                    ) : weather?.isSnowy || scenarioKey === 'winter_cold' ? (
+                      <Snowflake size={18} />
+                    ) : scenarioKey === 'summer_heatwave' ? (
+                      <Flame size={18} />
+                    ) : scenarioKey === 'cloudy_overcast' ? (
+                      <Cloud size={18} />
+                    ) : weather?.isWindy ? (
+                      <Wind size={18} />
+                    ) : weather ? (
+                      <CloudSun size={18} />
+                    ) : (
+                      <Sun size={18} />
+                    )}
+                  </span>
+                  <div className="weather-popup-temp-texts">
+                    <div className="weather-popup-temp-row tabular-nums">
+                      <strong className="weather-popup-temp-main">
+                        {weather ? `${weather.tempMin}°/${weather.tempMax}°` : '9°/17°'}
+                      </strong>
+                      <span className="weather-popup-cond-badge">
+                        {SHORT_SCENARIO_LABELS[scenarioKey]
+                          ? lang === 'en'
+                            ? SHORT_SCENARIO_LABELS[scenarioKey].en
+                            : SHORT_SCENARIO_LABELS[scenarioKey].ko
+                          : tx(lang, '예보', 'Forecast')}
+                      </span>
+                    </div>
+                    <span className="weather-popup-env-meta tabular-nums">
+                      {tx(
+                        lang,
+                        `평균 ${Math.round(weather?.avgTemp ?? 13)}°C · 강수 ${
+                          weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                        }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
+                        `Avg ${Math.round(weather?.avgTemp ?? 13)}°C · Precip ${
+                          weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                        }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  id="log-tomorrow-outfit-btn"
+                  className="weather-popup-calendar-btn"
+                  disabled={loggingTomorrow || equippedItems.length === 0}
+                  onClick={handleLogTomorrowCalendar}
+                  title={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
+                  aria-label={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
+                >
+                  <CalendarPlus size={14} />
+                  <span>{tx(lang, '내일 캘린더에 기록', 'Log Tomorrow')}</span>
+                </button>
+              </div>
+
+              <p className="weather-popup-tip">
+                {(weather?.weatherTip && localizeApiMessage(weather.weatherTip, lang)) ||
+                  tx(
+                    lang,
+                    isRainyWeatherActive
+                      ? '비 예보에 맞춰 생활 방수 아우터와 우산 코디를 우선 추천합니다.'
+                      : '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 내일 코디입니다.',
+                    isRainyWeatherActive
+                      ? 'Water-resistant outerwear and umbrella styling prioritized for rain.'
+                      : 'Balanced layering curated for tomorrow’s temperature range.'
+                  )}
+              </p>
+            </div>
+
+            <div
+              className="weather-popup-scenario-grid weather-scenario-rail"
+              role="tablist"
+              aria-label={tx(lang, '날씨', 'Weather Conditions')}
+            >
+              {scenarios.map((sc) => {
+                const active = scenarioKey === sc.key;
+                const pair = SHORT_SCENARIO_LABELS[sc.key];
+                const shortLabel = pair
+                  ? lang === 'en'
+                    ? pair.en
+                    : pair.ko
+                  : localizeOutfitTitle(sc.label, lang);
+                return (
+                  <button
+                    key={sc.key}
+                    type="button"
+                    role="tab"
+                    data-weather-scenario={sc.key}
+                    aria-selected={active}
+                    className={`hig-filter-pill weather-popup-scenario-chip ${active ? 'active' : ''}`}
+                    onClick={() => handleSelectScenario(sc.key)}
+                  >
+                    {shortLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2) 위치 정보 설정 */}
+          <div className="weather-popup-section">
+            <div className="weather-popup-section-head">
+              <span className="weather-popup-section-title">
+                {tx(lang, '위치 정보 설정', 'Location Settings')}
+              </span>
+              <span className="weather-popup-section-meta">{resolvedCityDisplayLabel}</span>
+            </div>
+
+            <div className="weather-popup-location-row">
+              <select
+                aria-label={tx(lang, '도시 선택', 'Select City')}
+                className="weather-city-select weather-popup-city-select"
+                value={cityKey}
+                onChange={(e) => handleSelectCity(e.target.value)}
+              >
+                {gpsCoords && (
+                  <option value="gps">{tx(lang, '내 위치', 'My Location')}</option>
+                )}
+                {cities.map((c) => {
+                  const koName = c.name.split('·')[0].trim();
+                  const label =
+                    lang === 'en'
+                      ? CITY_EN_NAMES[c.key] || localizeOutfitTitle(koName, 'en')
+                      : koName;
+                  return (
+                    <option key={c.key} value={c.key}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+
+              <button
+                type="button"
+                className="weather-popup-gps-btn"
+                onClick={handleUseGpsLocation}
+                disabled={locatingGps}
+                aria-label={tx(lang, '현재 위치 예보', 'Use Current GPS Location')}
+              >
+                <LocateFixed size={14} />
+                <span>
+                  {locatingGps
+                    ? tx(lang, '확인 중...', 'Locating...')
+                    : tx(lang, '현재 위치', 'Use GPS')}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3) AI 생성 코디 Look 1 · Look 2 설정 */}
+          <div className="weather-popup-section">
+            <div className="weather-popup-section-head">
+              <span className="weather-popup-section-title">
+                {tx(lang, 'AI 생성 코디 Look 1 · Look 2 설정', 'AI Look 1 & Look 2 Style Presets')}
+              </span>
+            </div>
+
+            <div className="weather-popup-looks-stack">
+              {[0, 1].map((lookIdx) => {
+                const selectedStyleKey =
+                  lookIdx === 0 ? lookStyleConfig.look1Style : lookStyleConfig.look2Style;
+                const rec = recommendations[lookIdx] || null;
+                const isLookActive = Boolean(rec && activeRecId === rec.id);
+                const selectedPreset =
+                  LOOK_STYLE_PRESETS.find((p) => p.key === selectedStyleKey) ||
+                  LOOK_STYLE_PRESETS[0];
+                const itemSummary =
+                  rec?.items?.length > 0
+                    ? rec.items
+                        .slice(0, 4)
+                        .map((it) => resolveGarmentDisplayName(it, lang))
+                        .filter(Boolean)
+                        .join(' · ')
+                    : tx(
+                        lang,
+                        '옷장에 등록된 의류로 자동 조합됩니다.',
+                        'Automatically curated from your wardrobe.'
+                      );
+
+                return (
+                  <div
+                    key={`popup-look-card-${lookIdx + 1}`}
+                    data-weather-look-card={lookIdx + 1}
+                    className={`weather-popup-look-card ${isLookActive ? 'is-active' : ''}`}
+                  >
+                    <div className="weather-popup-look-head">
+                      <div className="weather-popup-look-title-wrap">
+                        <span className="weather-popup-look-badge tabular-nums">
+                          {`Look ${lookIdx + 1}`}
+                        </span>
+                        <strong className="weather-popup-look-preset-name">
+                          {lang === 'en' ? selectedPreset.en : selectedPreset.ko}
+                        </strong>
+                      </div>
+
+                      <button
+                        type="button"
+                        data-popup-apply-look={String(lookIdx)}
+                        aria-pressed={isLookActive}
+                        disabled={!rec}
+                        className={`weather-popup-apply-btn ${isLookActive ? 'is-applied' : ''}`}
+                        onClick={() => {
+                          if (rec) {
+                            handleApplyRecommendation(rec);
+                          }
+                        }}
+                      >
+                        {isLookActive && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
+                        <span>
+                          {tx(
+                            lang,
+                            `Look ${lookIdx + 1} 적용`,
+                            `Apply Look ${lookIdx + 1}`
+                          )}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div
+                      className="weather-popup-preset-pills"
+                      role="group"
+                      aria-label={`Look ${lookIdx + 1} style preset`}
+                    >
+                      {LOOK_STYLE_PRESETS.map((preset) => {
+                        const isPresetSelected = selectedStyleKey === preset.key;
+                        return (
+                          <button
+                            key={preset.key}
+                            type="button"
+                            data-look-preset={`${lookIdx + 1}:${preset.key}`}
+                            aria-pressed={isPresetSelected}
+                            className={`weather-popup-preset-pill ${
+                              isPresetSelected ? 'is-selected' : ''
+                            }`}
+                            onClick={() => handleChangeLookStyle(lookIdx, preset.key)}
+                          >
+                            {lang === 'en' ? preset.en : preset.ko}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="weather-popup-look-items">{itemSummary}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </ResponsiveSheetModal>
+
       {/* Mobile Narrow-Viewport (< 600px) Dark Smoked-Glass Wardrobe Sheet */}
       <ResponsiveSheetModal
         id="outfit-mobile-wardrobe-sheet"
@@ -1983,6 +2563,7 @@ export default function OutfitStudioView({
         lang={lang}
         title={activeSlotCategoryTitle}
         maxWidth={520}
+        expandable={true}
       >
         {renderDrawerHeader(true, mobileSearchInputRef)}
         {renderOccasionTabs()}

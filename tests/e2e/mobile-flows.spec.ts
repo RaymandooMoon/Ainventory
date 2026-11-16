@@ -296,11 +296,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await page.goto('/outfits');
 
-    // 1. Tomorrow Weather Recommendation Panel & 2.5D Character Mannequin are visible
+    // 1. Upper weather bar is removed above stage; Weather Capsule + Bottom-Right Look 1/2 Dock live on stage
     const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
-    await expect(weatherPanel).toBeVisible();
-    await expect(weatherPanel).toContainText('내일 날씨 코디');
-    await expect(weatherPanel.locator('[data-weather-rec-id]').first()).toBeVisible();
+    await expect(weatherPanel).toHaveCount(0);
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
@@ -313,15 +311,41 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       )
     ).toBeVisible();
 
+    await expect(
+      studioCanvas.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+    ).toBeVisible();
+
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    await expect(weatherCapsule).toBeVisible();
+    await expect(weatherCapsule).toContainText('서울');
+    await expect(weatherCapsule).toContainText(/°C/);
+
     // Wait for Tomorrow's Weather #1 recommendation to dress the 2D VTON model
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
-    // 2. Switch weather scenario: Rainy Cool (needs outer + rain stage cue) -> Warm Spring (no outer)
+    // 2. Open unified Weather · Location · Look 1/2 popup via capsule and switch Rainy Cool -> Warm Spring
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await expect(weatherPanel).toContainText('내일 날씨 코디');
+    await expect(weatherPanel.locator('select.weather-city-select')).toBeVisible();
+    await expect(weatherPanel.locator('[data-weather-look-card="1"]')).toContainText(
+      '비즈니스 캐주얼'
+    );
+    await expect(weatherPanel.locator('[data-weather-look-card="2"]')).toContainText(
+      '편한 캐주얼'
+    );
+
     await weatherPanel.locator('[data-weather-scenario="rainy_cool"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
 
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
     await weatherPanel.locator('[data-weather-scenario="warm_spring"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(0);
 
@@ -665,9 +689,13 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
         await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
       }
       if (tab === 'outfits') {
-        await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toContainText(
-          'Tomorrow Weather'
-        );
+        await page.locator('[data-atelier-weather-capsule="true"]').click();
+        const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+        await expect(weatherPanel).toBeVisible();
+        await expect(weatherPanel).toContainText('Tomorrow Weather');
+        await assertZeroHangulOnPage('sample-outfits-weather-popup');
+        await page.keyboard.press('Escape');
+        await expect(weatherPanel).toHaveCount(0);
       }
       await assertZeroHangulOnPage(`sample-${tab}`);
     }
@@ -693,7 +721,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     for (const tab of ['outfits', 'calendar', 'stats']) {
       await page.locator(`[data-nav-tab="${tab}"]`).click();
       if (tab === 'outfits') {
-        await expect(page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`)).toBeVisible();
+        await expect(page.locator('[data-atelier-weather-capsule="true"]')).toBeVisible();
+        await expect(page.locator('[data-weather-look-dock="true"]')).toBeVisible();
         const mobileSlotBtn = page.locator('.studio-mobile-slot-pill').first();
         if (await mobileSlotBtn.isVisible()) {
           await mobileSlotBtn.click();

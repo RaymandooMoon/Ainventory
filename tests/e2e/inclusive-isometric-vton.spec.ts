@@ -253,6 +253,40 @@ async function performStageSwipe(
   }
 }
 
+const ALL_WEATHER_SCENARIO_KEYS = [
+  'live',
+  'crisp_autumn',
+  'cloudy_overcast',
+  'rainy_cool',
+  'snowy_winter',
+  'windy_gale',
+  'warm_spring',
+  'summer_heatwave',
+  'winter_cold',
+] as const;
+
+async function selectWeatherScenarioViaCapsulePopup(
+  page: Page,
+  scenarioKey: (typeof ALL_WEATHER_SCENARIO_KEYS)[number]
+) {
+  const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+  if (!(await weatherPanel.isVisible())) {
+    await page.locator('[data-atelier-weather-capsule="true"]').click();
+  }
+  await expect(weatherPanel).toBeVisible();
+  await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(
+    ALL_WEATHER_SCENARIO_KEYS.length
+  );
+  for (const key of ALL_WEATHER_SCENARIO_KEYS) {
+    await expect(weatherPanel.locator(`[data-weather-scenario="${key}"]`)).toBeVisible();
+  }
+  await weatherPanel.locator(`[data-weather-scenario="${scenarioKey}"]`).click();
+  if (await weatherPanel.isVisible()) {
+    await page.keyboard.press('Escape');
+  }
+  await expect(weatherPanel).toHaveCount(0);
+}
+
 test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal Multi-Angle VTON', () => {
   test('1. Decluttered Outfits Stage: zero procedural drawing, Character Simulation default without photo, removed Outfits title/mode rail/stage toggles, and symmetrical [-180..0..+180] bottom angle scrollbar + 360° swipe sync', async ({
     page,
@@ -475,7 +509,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     }
 
     await expect(
-      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
     const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
     if (await resetBtn.isVisible()) {
@@ -548,7 +582,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
@@ -787,7 +821,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
     const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
     if (await resetBtn.isVisible()) {
@@ -996,7 +1030,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`).first()
+      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
     ).toBeVisible();
 
     // 1. Initial entry auto-generates Look A once
@@ -1032,10 +1066,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(lookBSrc0).not.toBe(lookASrc0);
 
     // 4. Switch back to Look 1 -> automatic 0ms cache reuse with ZERO extra API calls!
-    await page
-      .locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId} [data-weather-rec-id]`)
-      .first()
-      .click();
+    await page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first().click();
     await expect(aiImg).toBeVisible();
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     expect(await aiImg.getAttribute('src')).toBe(lookASrc0);
@@ -1289,7 +1320,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .toBe(true);
 
     // (3) Select Rainy weather ('rainy_cool') -> verify visible rain layer above stage + auto-equipped umbrella!
-    await page.locator('[data-weather-scenario="rainy_cool"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
     const rainLayer = studioCanvas.locator('[data-studio-rain-layer="true"]');
     await expect(rainLayer).toBeVisible();
     const rainZIndex = await rainLayer.evaluate((el) =>
@@ -1705,7 +1736,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
     // (F) Switch to `비` (`rainy_cool`) -> verify rain foreground mode + umbrella curation badge
-    await page.locator('[data-weather-scenario="rainy_cool"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
     await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'rain');
     await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toBeVisible();
@@ -1714,7 +1745,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     );
 
     // (G) Switch to `한파` (`winter_cold`) -> verify coldwave foreground mode + sub-zero `-10°/-4°` badge + VTON trigger
-    await page.locator('[data-weather-scenario="winter_cold"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'winter_cold');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'coldwave');
     await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'coldwave');
     await expect(studioCanvas.locator('[data-weather-stage-badge="coldwave"]')).toContainText(
@@ -1728,14 +1759,14 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .toBe(true);
 
     // (H) Verify `눈` (`snowy_winter`), `흐림` (`cloudy_overcast`), and `폭염` (`summer_heatwave`) tabs
-    await page.locator('[data-weather-scenario="snowy_winter"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'snowy_winter');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'snow');
     await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'snow');
 
-    await page.locator('[data-weather-scenario="cloudy_overcast"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'cloudy_overcast');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'cloudy');
 
-    await page.locator('[data-weather-scenario="summer_heatwave"]').click();
+    await selectWeatherScenarioViaCapsulePopup(page, 'summer_heatwave');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'heatwave');
 
     // (I) Click Top `새로고침` (`[data-outfit-vton-refresh="true"]`) -> verify cache-bypass `forceRefresh: true`

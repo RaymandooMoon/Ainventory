@@ -18,8 +18,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v7-clean-6angle-cyclorama-360';
+export const CUTOUT_PIPELINE_VERSION = 'v8-consistent-avatar-3x2-cyclorama';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v7-clean-6angle-cyclorama-360',
   'v6-true-3x2-rear-quarter-360',
   'v5-gaze-aligned-fullbody-360',
   'v4-hole-aware-fullbody-360',
@@ -406,6 +407,213 @@ export function buildTurnaround2x2SheetAngleDirectives(): string {
   return buildTurnaround3x2SheetAngleDirectives();
 }
 
+export type CanonicalAvatarGender = 'male' | 'female' | 'unisex';
+
+export interface CanonicalCharacterIdentityParams {
+  heightCm?: number | null;
+  weightKg?: number | null;
+  gender?: CanonicalAvatarGender | string | null;
+  framePreset?: string | null;
+  bodyShape?: string | null;
+  archetypePreset?: string | null;
+  chestForm?: string | null;
+  skinToneHex?: string | null;
+  mstLevel?: number | null;
+  mstUndertone?: string | null;
+  personalColor?: string | null;
+  hairStyle?: string | null;
+  hairColorHex?: string | null;
+  facialHair?: string | null;
+  headShape?: string | null;
+  eyeShape?: string | null;
+  styleMode?: 'photorealistic' | 'stylized_isometric' | string | null;
+  hasPortraitReference?: boolean;
+}
+
+export function normalizeCanonicalAvatarGender(
+  rawGender?: unknown,
+  framePreset?: unknown
+): CanonicalAvatarGender {
+  const token = String(rawGender ?? '')
+    .trim()
+    .toLowerCase();
+  if (
+    token === 'male' ||
+    token === 'm' ||
+    token === 'man' ||
+    token === 'men' ||
+    token === 'masculine' ||
+    token === 'husband' ||
+    token === '남성' ||
+    token === '남'
+  ) {
+    return 'male';
+  }
+  if (
+    token === 'female' ||
+    token === 'f' ||
+    token === 'woman' ||
+    token === 'women' ||
+    token === 'feminine' ||
+    token === 'wife' ||
+    token === '여성' ||
+    token === '여'
+  ) {
+    return 'female';
+  }
+  if (token === 'unisex') {
+    return 'unisex';
+  }
+  const frame = String(framePreset ?? '')
+    .trim()
+    .toLowerCase();
+  if (frame === 'masculine') return 'male';
+  if (frame === 'feminine') return 'female';
+  return 'unisex';
+}
+
+function computeCanonicalAdultHeadRatio(heightCm: number): number {
+  if (heightCm >= 170 && heightCm <= 182) {
+    return 7.5;
+  }
+  if (heightCm < 170) {
+    const scaled = 7.5 - (170 - heightCm) * 0.02;
+    return Math.max(7.1, Math.min(7.5, Number(scaled.toFixed(1))));
+  }
+  const scaled = 7.5 + (heightCm - 182) * 0.021;
+  return Math.max(7.5, Math.min(7.8, Number(scaled.toFixed(1))));
+}
+
+function buildCanonicalHairLockDirective(params: {
+  gender: CanonicalAvatarGender;
+  hairStyle: string;
+  hairColorHex: string;
+}): string {
+  const { gender, hairStyle, hairColorHex } = params;
+  const hs = hairStyle.trim().toLowerCase() || 'soft_wavy';
+
+  if (gender === 'male') {
+    if (hs.includes('long')) {
+      return `HAIR LENGTH & SILHOUETTE LOCK (MALE LONG CUT, COLOR ${hairColorHex}): Men's intentional collar-to-shoulder straight long hair (${hairColorHex}) with identical length and parting across all views.`;
+    }
+    if (hs === 'buzz_shaved') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (MALE SHORT BUZZ, COLOR ${hairColorHex}): Men's clean ultra-short close-cropped buzz/shaved haircut (${hairColorHex}) strictly above the ears and shirt collar — NEVER shoulder-length hair or long flowing locks even in strong wind.`;
+    }
+    if (hs === 'type4_coily_afro') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (MALE SHORT COILY CROWN, COLOR ${hairColorHex}): Men's sculpted short-to-medium Type-4 coily Afro crown (${hairColorHex}) strictly above the shirt collar — NEVER shoulder-length straight/wavy hair or long flowing locks even in strong wind.`;
+    }
+    if (hs === 'hijab_headwrap') {
+      return `HAIR & HEADWEAR LOCK (COLOR ${hairColorHex}): Clean structured headwrap (${hairColorHex}) neatly above the shirt collar.`;
+    }
+    return `HAIR LENGTH & SILHOUETTE LOCK (MALE SHORT CUT, COLOR ${hairColorHex}): Render men's clean short tapered ear-length haircut strictly above the shirt collar — NEVER shoulder-length hair or long flowing locks even in strong wind (subtle ${hs.replaceAll('_', ' ')} crown texture in exact ${hairColorHex}).`;
+  }
+
+  if (gender === 'female') {
+    if (hs === 'buzz_shaved' || hs === 'pixie_short') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE SHORT PIXIE/BUZZ, COLOR ${hairColorHex}): Women's chic cropped short pixie/buzz haircut (${hairColorHex}) cleanly above the jawline and collar — NEVER shoulder-length or waist-length hair.`;
+    }
+    if (hs === 'straight_bob') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE CHIN-LENGTH BOB, COLOR ${hairColorHex}): Women's sleek jawline-to-chin length straight architectural bob (${hairColorHex}) strictly above the shoulders — NEVER long chest/waist-length locks.`;
+    }
+    if (hs.includes('long')) {
+      return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE LONG CUT, COLOR ${hairColorHex}): Women's smooth chest-length long straight hair (${hairColorHex}) with identical length and volume across all angles.`;
+    }
+    if (hs === 'hijab_headwrap') {
+      return `HAIR & HEADWRAP LOCK (FEMALE MODEST HIJAB, COLOR ${hairColorHex}): Women's neatly draped modest hijab headwrap (${hairColorHex}) framing the face cleanly.`;
+    }
+    if (hs === 'type4_coily_afro') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE COILY HALO, COLOR ${hairColorHex}): Women's sculptural rounded Type-4 coily Afro crown (${hairColorHex}) with consistent halo volume across all angles.`;
+    }
+    if (hs === 'box_braids_locs') {
+      return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE BRAIDS/LOCS, COLOR ${hairColorHex}): Women's neat shoulder-grazing box braids / locs (${hairColorHex}) with consistent length across all angles.`;
+    }
+    return `HAIR LENGTH & SILHOUETTE LOCK (FEMALE MEDIUM CUT, COLOR ${hairColorHex}): Women's tailored collarbone-length medium ${hs.replaceAll('_', ' ')} hair (${hairColorHex}) with consistent length across all angles.`;
+  }
+
+  if (hs.includes('long')) {
+    return `HAIR LENGTH & SILHOUETTE LOCK (UNISEX LONG CUT, COLOR ${hairColorHex}): Tailored shoulder-length straight hair (${hairColorHex}) with identical length across all angles.`;
+  }
+  if (hs === 'buzz_shaved' || hs === 'pixie_short') {
+    return `HAIR LENGTH & SILHOUETTE LOCK (SHORT CROPPED CUT, COLOR ${hairColorHex}): Clean short tapered ear-length haircut (${hairColorHex}) strictly above the shirt collar — NEVER shoulder-length hair or long flowing locks.`;
+  }
+  return `HAIR LENGTH & SILHOUETTE LOCK (TAILORED COLLAR-CLEARING CUT, COLOR ${hairColorHex}): Clean modern collar-clearing ${hs.replaceAll('_', ' ')} haircut (${hairColorHex}) with consistent length across all angles — NEVER untamed waist-length locks.`;
+}
+
+export function buildCanonicalCharacterIdentityPromptBlock(
+  params: CanonicalCharacterIdentityParams = {}
+): string {
+  const rawH = Number(params.heightCm);
+  const rawW = Number(params.weightKg);
+  const safeHeightCm = Number.isFinite(rawH) && rawH > 0 ? Math.max(100, Math.min(230, Math.round(rawH))) : 172;
+  const safeWeightKg = Number.isFinite(rawW) && rawW > 0 ? Math.max(35, Math.min(160, Math.round(rawW))) : 64;
+  const bmi = Number((safeWeightKg / (safeHeightCm / 100) ** 2).toFixed(1));
+  const bmiStr = bmi.toFixed(1);
+  const headRatio = computeCanonicalAdultHeadRatio(safeHeightCm);
+  const headRatioStr = headRatio.toFixed(1);
+
+  const gender = normalizeCanonicalAvatarGender(params.gender, params.framePreset);
+  const skinHex =
+    typeof params.skinToneHex === 'string' && /^#[0-9a-fA-F]{6}$/.test(params.skinToneHex.trim())
+      ? params.skinToneHex.trim().toUpperCase()
+      : '#DFBA9B';
+  const hairHex =
+    typeof params.hairColorHex === 'string' && /^#[0-9a-fA-F]{6}$/.test(params.hairColorHex.trim())
+      ? params.hairColorHex.trim().toUpperCase()
+      : '#2B211B';
+  const hairStyle = String(params.hairStyle || 'soft_wavy').trim() || 'soft_wavy';
+  const bodyShape = String(params.bodyShape || 'standard_balanced').trim() || 'standard_balanced';
+  const facialHair = String(params.facialHair || 'none').trim() || 'none';
+  const isStylized = String(params.styleMode || 'stylized_isometric').trim().toLowerCase() !== 'photorealistic';
+
+  let bmiBuildDescriptor: string;
+  if (bmi < 18.8) {
+    bmiBuildDescriptor = `${safeHeightCm}cm / ${safeWeightKg}kg = BMI ${bmiStr}: lean slender adult build, narrow waist and light limb volume, NEVER stocky/chubby chibi, NEVER bulky`;
+  } else if (bmi < 21.0) {
+    bmiBuildDescriptor = `${safeHeightCm}cm / ${safeWeightKg}kg = BMI ${bmiStr}: lithe trim-balanced adult build, clean shoulder-to-waist taper, NEVER stocky/chubby chibi, NEVER bulky`;
+  } else if (bmi <= 24.2) {
+    bmiBuildDescriptor = `${safeHeightCm}cm / ${safeWeightKg}kg = BMI ${bmiStr}: lean-balanced standard adult build, natural shoulder-to-waist taper, NEVER stocky/chubby chibi, NEVER overly thin or bodybuilder`;
+  } else if (bmi < 27.5) {
+    bmiBuildDescriptor = `${safeHeightCm}cm / ${safeWeightKg}kg = BMI ${bmiStr}: grounded athletic/solid mid-build adult frame (${bodyShape}), fuller chest and limb presence, NEVER stocky/chubby chibi and NEVER fashion-mannequin slimmed`;
+  } else {
+    bmiBuildDescriptor = `${safeHeightCm}cm / ${safeWeightKg}kg = BMI ${bmiStr}: dignified full-volume plus-build adult proportions across cheeks, neck, torso, and limbs, NEVER stocky short-legged chibi and NEVER fashion-mannequin slimmed`;
+  }
+
+  const genderPresentationLine =
+    gender === 'male'
+      ? `GENDER & ADULT SKELETAL LOCK: Explicit MALE adult presentation (gender=male, masculine shoulder/clavicle structure, straight adult male waist-to-pelvis line, adult male jawline, facialHair=${facialHair} — NEVER drift into female/androgynous presentation or juvenile boyish chibi proportions).`
+      : gender === 'female'
+        ? 'GENDER & ADULT SKELETAL LOCK: Explicit FEMALE adult presentation (gender=female, graceful adult feminine shoulder/waist/pelvis proportions and adult female facial bone structure — NEVER drift into juvenile chibi proportions).'
+        : `GENDER & ADULT SKELETAL LOCK: Balanced modern adult presentation (gender=unisex, ${headRatioStr}-head adult proportions, facialHair=${facialHair} — NEVER drift into juvenile chibi proportions).`;
+
+  const proportionLine = `ADULT CRANIAL-TO-BODY PROPORTION & BMI LOCK: Strictly ${headRatioStr} heads tall (${headRatioStr}-head adult fashion stature, full-length adult legs ~48% of total height) — ${bmiBuildDescriptor} (bodyShape=${bodyShape}, skinTone=${skinHex}${params.mstLevel ? `, MST-${params.mstLevel}` : ''}${params.mstUndertone ? `-${params.mstUndertone}` : ''}).`;
+
+  const hairLockLine = buildCanonicalHairLockDirective({
+    gender,
+    hairStyle,
+    hairColorHex: hairHex,
+  });
+
+  if (isStylized) {
+    return [
+      '[CANONICAL AINVENTORY CHARACTER IDENTITY, PROPORTION & ART-STYLE LOCK]',
+      'UNIFIED AINVENTORY SIGNATURE 3D-STYLIZED AVATAR STYLE: Clean modern matte 3D-shaded stylized fashion mannequin character (smooth matte porcelain-vinyl skin shading with soft studio ambient occlusion, subtle refined facial features, calm neutral gaze, clean silhouette edges WITHOUT thick black comic marker outlines, authentic matte fabric weave on clothing).',
+      'STRICT ART-STYLE & PROPORTION PROHIBITIONS: (1) NEVER render photorealistic human photography, real human skin pores, or real catalog model faces — DO NOT copy photographic realism from garment packshots onto the character\'s head/skin; (2) NEVER render chibi, super-deformed, 5-head/6-head short-legged cartoon figures, or thick black ink outlines; (3) NEVER render Western comic-book crosshatching or anime big-eye distortion.',
+      proportionLine,
+      genderPresentationLine,
+      hairLockLine,
+    ].join('\n');
+  }
+
+  return [
+    '[CANONICAL AINVENTORY EDITORIAL MODEL IDENTITY & PROPORTION LOCK]',
+    'PHOTOREALISTIC EDITORIAL STUDIO MODEL STYLE: Authentic SSENSE/COS medium-format 85mm studio fashion photography with natural human skin texture, lifelike facial bone structure, and true-to-life garment drape.',
+    `STRICT PROPORTION PROHIBITIONS: Maintain ${headRatioStr} heads tall (${headRatioStr}-head adult proportions) — NEVER render chibi, cartoon/CGI plastic skin, or compressed short-legged figures.`,
+    proportionLine,
+    genderPresentationLine,
+    hairLockLine,
+  ].join('\n');
+}
+
 export function buildWeatherPosePromptDirectives(
   params:
     | EffectiveWeatherMode
@@ -438,25 +646,25 @@ export function buildWeatherPosePromptDirectives(
   switch (effectiveMode) {
     case 'rain': {
       poseDirective =
-        'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, hairstyle, and full-body outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain generous 14% headroom clearance above the top dome/tip of the open umbrella and >=10% bottom margin below both shoes so neither the open umbrella canopy nor the feet are EVER cropped by the frame or quadrant boundary.';
+        'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The upright 7.5-head adult model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, locked haircut length, and full-body 7.5-head outfit silhouette remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain generous 14% headroom clearance above the top dome/tip of the open umbrella and >=10% bottom margin below both shoes so neither the open umbrella canopy nor the feet are EVER cropped by the frame or quadrant boundary.';
       physicalTraceDirective =
-        'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves.';
+        'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves while keeping the locked haircut neat and short/defined.';
       negativeDirective =
-        'STRICT RAIN NEGATIVE (NEVER closed/folded umbrella): NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER crop the top canopy of the umbrella or the bottom of the shoes, NEVER obscure or shadow the model’s face, NEVER fill the gap under the umbrella canopy around the shaft/shoulders with dark grey shadow (keep enclosed gaps flat #94A3B8), and NEVER draw falling rain streaks in the #94A3B8 background.';
+        'STRICT RAIN NEGATIVE (NEVER closed/folded umbrella): NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER crop the top canopy of the umbrella or the bottom of the shoes, NEVER shrink into a short-legged chibi figure, NEVER obscure or shadow the model’s face, NEVER fill the gap under the umbrella canopy around the shaft/shoulders with dark grey shadow (keep enclosed gaps flat #94A3B8), and NEVER draw falling rain streaks in the #94A3B8 background.';
       break;
     }
     case 'coldwave': {
       poseDirective =
-        'BITING SUB-ZERO COLDWAVE POSE (-10°C FREEZING ARCTIC WIND): Render an authentic cold-bracing winter stance — shoulders slightly hunched/drawn inward against freezing sub-zero wind, chin tucked slightly down toward the warm scarf/high coat collar, and hands tucked deeply into coat pockets or clasping the coat lapels/muffler snugly close to the chest for warmth.';
+        'BITING SUB-ZERO COLDWAVE POSE (-10°C FREEZING ARCTIC WIND): Render an upright, poised 7.5-head adult winter stance — spine tall, neck elongated, and legs full-length with elbows drawn neatly close to the torso and hands tucked into coat pockets or clasping the coat lapels/muffler snugly at the chest for warmth (strictly preserve full 7.5-head adult stature — NEVER hunch, crouch, or compress the body into a stocky chibi figure).';
       physicalTraceDirective =
         'COLDWAVE SNOW & FROST TRACE (MANDATORY ON HAT & SHOULDERS): Render distinct white snow crystals and fine icy frost visibly accumulated on the crown/cuff/brim of the beanie or winter hat, along the upper folds of the scarf/muffler, and across both coat/puffer shoulders ("snow crystals and frost accumulated on beanie and shoulders"), plus a subtle natural cold-flushed rosiness on the cheeks and tip of the nose. Cool crisp 6500K winter key light.';
       negativeDirective =
-        'STRICT COLDWAVE NEGATIVE: NEVER generate a warm relaxed indoor studio pose, NEVER leave the winter hat/beanie or coat shoulders completely clean and free of snow crystals/frost, and NEVER draw flying blizzard streaks across the #94A3B8 background.';
+        'STRICT COLDWAVE NEGATIVE: NEVER hunch shoulders up to the ears or compress into a stocky/chubby chibi silhouette, NEVER generate a warm relaxed indoor summer pose, NEVER leave the winter hat/beanie or coat shoulders completely clean and free of snow crystals/frost, and NEVER draw flying blizzard streaks across the #94A3B8 background.';
       break;
     }
     case 'snow': {
       poseDirective =
-        'WINTER SNOWFALL POSE: Natural, cozy winter lookbook full-body stance (such as one hand relaxed in the coat pocket or lightly resting near the scarf) with a calm gentle winter expression and generous head-to-toe framing.';
+        'WINTER SNOWFALL POSE: Upright 7.5-head adult cozy winter lookbook full-body stance (such as one hand relaxed in the coat pocket or lightly resting near the scarf) with a calm gentle winter expression and generous head-to-toe framing.';
       physicalTraceDirective =
         'SNOW PHYSICAL TRACE (MANDATORY ON HAT & SHOULDERS): Render soft, fluffy white snow visibly settled and accumulated atop the hat/beanie/hair crown and across the upper coat shoulders and sleeve tops ("fluffy white snow settled on hat/hair and coat shoulders"). Soft 6000K winter daylight.';
       negativeDirective =
@@ -465,16 +673,16 @@ export function buildWeatherPosePromptDirectives(
     }
     case 'wind': {
       poseDirective =
-        'STRONG WINDY GALE POSE: Dynamic wind-bracing editorial full-body stance — one hand lightly steadying the hat brim, hair, or coat lapel while maintaining poised balance against a brisk lateral gust.';
+        'STRONG WINDY GALE POSE: Upright 7.5-head adult wind-bracing editorial full-body stance — one hand lightly steadying the hat brim or coat lapel while maintaining tall, poised adult balance against a brisk lateral gust.';
       physicalTraceDirective =
-        'WIND PHYSICAL TRACE: Render realistic lateral wind physics with the coat hem, muffler/scarf ends, and outer hair strands visibly billowing and sweeping consistently to one side.';
+        'WIND PHYSICAL TRACE: Render realistic lateral wind physics primarily across the coat hem, lapels, trousers, and muffler/scarf ends sweeping consistently to one side, with only subtle wind-tousled crown movement strictly within the character’s locked haircut length (keep short ear-length haircuts strictly short above the collar — NEVER grow shoulder-length or long billowing hair locks).';
       negativeDirective =
-        'STRICT WIND NEGATIVE: NEVER obscure the face with hair and NEVER draw dust clouds, flying leaves, or motion blur streaks in the #94A3B8 background.';
+        'STRICT WIND NEGATIVE: NEVER lengthen short hair into shoulder-length or flowing locks, NEVER obscure the face with hair, NEVER hunch or shorten 7.5-head leg proportions, and NEVER draw dust clouds, flying leaves, or motion blur streaks in the #94A3B8 background.';
       break;
     }
     case 'heatwave': {
       poseDirective =
-        'MIDSUMMER HEATWAVE POSE: Breezy, breathable high-summer lookbook full-body stance, such as lightly shading the brow from bright overhead sunlight with one hand or a relaxed airy summer posture.';
+        'MIDSUMMER HEATWAVE POSE: Breezy, upright 7.5-head adult high-summer lookbook full-body stance, such as lightly shading the brow from bright overhead sunlight with one hand or a relaxed airy summer posture.';
       physicalTraceDirective =
         'HEATWAVE PHYSICAL TRACE: Bright crisp sunlit highlights (5200K) along the hair and shoulders, vibrant warm skin luminosity, and crisp airy summer fabric texture.';
       negativeDirective =
@@ -483,7 +691,7 @@ export function buildWeatherPosePromptDirectives(
     }
     case 'cloudy': {
       poseDirective =
-        'OVERCAST CLOUDY POSE: Calm, composed editorial lookbook full-body stance with natural relaxed posture.';
+        'OVERCAST CLOUDY POSE: Calm, upright 7.5-head adult editorial lookbook full-body stance with natural relaxed posture.';
       physicalTraceDirective =
         'CLOUDY PHYSICAL TRACE: Soft, wrap-around diffused overcast softbox illumination (5800K) with gentle tonal transitions that reveal authentic garment weave without harsh glare.';
       negativeDirective =
@@ -493,11 +701,11 @@ export function buildWeatherPosePromptDirectives(
     case 'clear':
     default: {
       poseDirective =
-        'CLEAR DAYLIGHT POSE: Confident, clean full-body editorial lookbook stance with natural posture.';
+        'CLEAR DAYLIGHT POSE: Confident, upright 7.5-head adult full-body studio stance with balanced natural posture and locked hairstyle silhouette.';
       physicalTraceDirective =
-        'CLEAR DAYLIGHT PHYSICAL TRACE: Crisp natural daylight illumination (5400K) showcasing true-to-life garment color, silhouette, and fabric drape.';
+        'CLEAR DAYLIGHT PHYSICAL TRACE: Clean balanced 5400K studio daylight illumination showcasing accurate garment color, matte fabric weave, and crisp tailoring while strictly preserving the locked avatar skin shading style (NEVER drift into photorealistic catalog skin pores when in stylized character mode).';
       negativeDirective =
-        'STRICT CLEAR NEGATIVE: NEVER draw cast shadows or studio cyclorama gradients on the #94A3B8 background.';
+        'STRICT CLEAR NEGATIVE: NEVER drift into photorealistic catalog-photo skin/faces in stylized character mode, NEVER shrink into chibi proportions, and NEVER draw cast shadows or studio cyclorama gradients on the #94A3B8 background.';
       break;
     }
   }

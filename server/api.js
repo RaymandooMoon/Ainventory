@@ -2645,7 +2645,13 @@ export function createApiRouter() {
       personal_color,
       skin_tone_hex,
       gender,
+      look1_style,
+      look2_style,
     } = req.query;
+    const styleOptions = {
+      look1Style: look1_style ? String(look1_style) : undefined,
+      look2Style: look2_style ? String(look2_style) : undefined,
+    };
     const closetOwner = authz.primaryCloset;
 
     if (closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife') {
@@ -2682,7 +2688,7 @@ export function createApiRouter() {
 
     // Requirement 8.a: If a real user's personal closet is empty, do NOT silently inject seed items!
     if (garments.length === 0) {
-      const emptyResult = buildWeatherRecommendations(weather, [], [], ownerUser);
+      const emptyResult = buildWeatherRecommendations(weather, [], [], ownerUser, styleOptions);
       return res.json({
         ...emptyResult,
         isClosetEmpty: true,
@@ -2697,7 +2703,7 @@ export function createApiRouter() {
       )
       .all(closetOwner);
 
-    const result = buildWeatherRecommendations(weather, garments, recentLogs, ownerUser);
+    const result = buildWeatherRecommendations(weather, garments, recentLogs, ownerUser, styleOptions);
     res.json({
       ...result,
       isClosetEmpty: false,

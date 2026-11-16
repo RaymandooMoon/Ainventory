@@ -394,6 +394,154 @@ interface StandaloneScenarioSpec {
   isSnowy?: boolean;
 }
 
+const LIVE_WEATHER_SCENARIO: StandaloneScenarioSpec = {
+  key: 'live',
+  label: '실시간 내일 예보',
+  cityName: '서울',
+  condition: '내일 예보 · 구름 조금',
+  weatherCode: 2,
+  tempMin: 9,
+  tempMax: 18,
+  windSpeed: 12,
+  precipProb: 15,
+  humidity: 50,
+  recommendedMotion: 'idle',
+  weatherTip:
+    '내일 아침 9°C · 낮 18°C로 활동하기 쾌적한 구름 조금 예보입니다. 탈착하기 좋은 가벼운 아우터 레이어드를 추천합니다.',
+};
+
+type LookStylePresetKey =
+  | 'business_casual'
+  | 'comfortable_casual'
+  | 'formal_office'
+  | 'minimal_daily';
+
+interface LookStylePresetSpec {
+  key: LookStylePresetKey;
+  badge: string;
+  badgeEn: string;
+  title: string;
+  titleEn: string;
+  preferredFormality: 'formal' | 'smart' | 'casual';
+}
+
+const LOOK_STYLE_PRESETS: Readonly<Record<LookStylePresetKey, LookStylePresetSpec>> = {
+  business_casual: {
+    key: 'business_casual',
+    badge: '직장생활 · 비즈니스 캐주얼',
+    badgeEn: 'Office · Business Casual',
+    title: '직장생활을 위한 비즈니스 캐주얼 코디',
+    titleEn: 'Business Casual Look for Work',
+    preferredFormality: 'smart',
+  },
+  comfortable_casual: {
+    key: 'comfortable_casual',
+    badge: '일상 · 편한 캐주얼',
+    badgeEn: 'Daily · Comfortable Casual',
+    title: '하루 종일 편안한 데일리 캐주얼 코디',
+    titleEn: 'All-Day Comfortable Daily Casual Look',
+    preferredFormality: 'casual',
+  },
+  formal_office: {
+    key: 'formal_office',
+    badge: '포멀 · 오피스 정장',
+    badgeEn: 'Formal · Office Tailoring',
+    title: '격식 있는 포멀 오피스 코디',
+    titleEn: 'Tailored Formal Office Look',
+    preferredFormality: 'formal',
+  },
+  minimal_daily: {
+    key: 'minimal_daily',
+    badge: '미니멀 · 클린 데일리',
+    badgeEn: 'Minimal · Clean Daily',
+    title: '단정한 미니멀 데일리 코디',
+    titleEn: 'Clean Monochrome Minimal Daily Look',
+    preferredFormality: 'smart',
+  },
+};
+
+function resolveLookStylePresetKey(
+  raw: string | null | undefined,
+  fallback: LookStylePresetKey
+): LookStylePresetKey {
+  const key = String(raw || '').trim() as LookStylePresetKey;
+  return Object.hasOwn(LOOK_STYLE_PRESETS, key) ? key : fallback;
+}
+
+function computeStandaloneStylePresetBonus(
+  item: GarmentRecord,
+  presetKey: LookStylePresetKey
+): number {
+  const sub = String(item.subcategory || '').toLowerCase();
+  const formality = String(item.formality || '').toLowerCase();
+  const colorName = String(item.color_name || '');
+  const text = `${sub} ${item.fabric || ''} ${item.name || ''} ${item.name_en || ''}`.toLowerCase();
+
+  let bonus = 0;
+  if (presetKey === 'business_casual') {
+    if (formality === 'smart') bonus += 18;
+    else if (formality === 'formal') bonus += 12;
+    else if (formality === 'casual') bonus -= 8;
+
+    if (
+      /blazer|trench|coat|shirt|oxford|blouse|merino|knit|turtleneck|slacks|trousers|chino|loafer|derby|chelsea|briefcase|블레이저|트렌치|코트|셔츠|블라우스|메리노|니트|슬랙스|로퍼|더비|서류가방/.test(
+        text
+      )
+    ) {
+      bonus += 18;
+    }
+    if (/hoodie|sweatshirt|jogger|windbreaker|backpack|후드|맨투맨|스웨트|윈드브레이커|백팩/.test(text)) {
+      bonus -= 18;
+    }
+  } else if (presetKey === 'comfortable_casual') {
+    if (formality === 'casual') bonus += 20;
+    else if (formality === 'smart') bonus += 4;
+    else if (formality === 'formal') bonus -= 16;
+
+    if (
+      /cardigan|windbreaker|denim|trucker|quilted|puffer|padding|fleece|jacket|sweatshirt|hoodie|tee|t-shirt|tshirt|sweater|jeans|cotton|cargo|sneaker|court|runner|crossbody|tote|backpack|가디건|카디건|윈드브레이커|데님|퀼팅|패딩|자켓|스웨트|후드|티셔츠|청바지|스니커즈|크로스|토트|백팩/.test(
+        text
+      )
+    ) {
+      bonus += 20;
+    }
+    if (/briefcase|suit|oxford_shoes|derby|tie|서류가방|정장|더비|타이/.test(text)) {
+      bonus -= 20;
+    }
+  } else if (presetKey === 'formal_office') {
+    if (formality === 'formal') bonus += 24;
+    else if (formality === 'smart') bonus += 10;
+    else if (formality === 'casual') bonus -= 18;
+
+    if (
+      /suit|blazer|coat|trench|oxford|silk|shirt|blouse|slacks|trousers|loafer|derby|briefcase|tie|정장|블레이저|코트|옥스포드|실크|셔츠|슬랙스|로퍼|더비|서류가방|타이/.test(
+        text
+      )
+    ) {
+      bonus += 20;
+    }
+    if (/denim|jeans|hoodie|sweatshirt|sneaker|windbreaker|backpack|데님|후드|스니커즈|윈드브레이커|백팩/.test(text)) {
+      bonus -= 22;
+    }
+  } else if (presetKey === 'minimal_daily') {
+    if (formality === 'smart') bonus += 16;
+    else if (formality === 'casual') bonus += 10;
+
+    if (/블랙|화이트|아이보리|크림|오트밀|그레이|차콜|베이지|토프|네이비/.test(colorName)) {
+      bonus += 14;
+    }
+    if (
+      /coat|trench|blazer|cardigan|knit|turtleneck|shirt|tee|slacks|denim|sneaker|loafer|chelsea|tote|crossbody|코트|트렌치|가디건|니트|터틀넥|셔츠|슬랙스|스니커즈|로퍼|토트|크로스/.test(
+        text
+      )
+    ) {
+      bonus += 12;
+    }
+  }
+
+  return bonus;
+}
+
 const WEATHER_SCENARIOS: Record<string, StandaloneScenarioSpec> = {
   crisp_autumn: {
     key: 'crisp_autumn',
@@ -974,12 +1122,17 @@ export async function handleStandaloneApiFallback(
     (pathname === '/weather-styling' || pathname === '/weather/recommendations') &&
     method === 'GET'
   ) {
-    const rawScKey = params.get('scenario') || 'crisp_autumn';
+    const rawScKey = params.get('scenario') || 'live';
     const normalizedScKey = rawScKey === 'mild_spring' ? 'warm_spring' : rawScKey;
     const spec =
-      (Object.hasOwn(WEATHER_SCENARIOS, normalizedScKey)
-        ? WEATHER_SCENARIOS[normalizedScKey]
-        : null) || WEATHER_SCENARIOS.crisp_autumn;
+      normalizedScKey === 'live'
+        ? LIVE_WEATHER_SCENARIO
+        : (Object.hasOwn(WEATHER_SCENARIOS, normalizedScKey)
+            ? WEATHER_SCENARIOS[normalizedScKey]
+            : null) || LIVE_WEATHER_SCENARIO;
+
+    const look1Style = resolveLookStylePresetKey(params.get('look1_style'), 'business_casual');
+    const look2Style = resolveLookStylePresetKey(params.get('look2_style'), 'comfortable_casual');
 
     const cityKey = params.get('city') || 'seoul';
     const matchedCity = CITY_COORDS.find((c) => c.key === cityKey);
@@ -998,92 +1151,162 @@ export async function handleStandaloneApiFallback(
       (spec.tempMax < 23 && (avgTemp <= 19 || spec.tempMax - spec.tempMin >= 8)) ||
       isRainy ||
       isWindy;
+    const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
     const openSummerShoes = new Set(['flip_flops', 'slides', 'sandals']);
-    const sortByTempFit = (list: GarmentRecord[]) =>
-      [...list].sort((a, b) => {
-        const midA = (Number(a.min_temp ?? 10) + Number(a.max_temp ?? 22)) * 0.5;
-        const midB = (Number(b.min_temp ?? 10) + Number(b.max_temp ?? 22)) * 0.5;
-        return Math.abs(midA - avgTemp) - Math.abs(midB - avgTemp);
-      });
+    const scoreStandaloneItem = (item: GarmentRecord, presetKey: LookStylePresetKey): number => {
+      const midTemp = (Number(item.min_temp ?? 10) + Number(item.max_temp ?? 22)) * 0.5;
+      let score = 60 - Math.min(40, Math.abs(midTemp - avgTemp) * 2.4);
+      if (avgTemp >= Number(item.min_temp ?? 10) && avgTemp <= Number(item.max_temp ?? 22)) {
+        score += 18;
+      }
+      if (isRainy && item.water_resistant) {
+        score += 22;
+      }
+      if (isWindy && item.category === 'outer' && item.water_resistant) {
+        score += 10;
+      }
+      score += computeStandaloneStylePresetBonus(item, presetKey);
+      return score;
+    };
 
-    const outers = sortByTempFit(seededGarments.filter((g) => g.category === 'outer'));
-    const tops = sortByTempFit(
-      seededGarments.filter(
-        (g) =>
-          g.category === 'top' &&
-          !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
-      )
+    const outersPool = seededGarments.filter((g) => g.category === 'outer');
+    const topsPool = seededGarments.filter(
+      (g) =>
+        g.category === 'top' &&
+        !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
     );
-    const bottoms = sortByTempFit(
-      seededGarments.filter(
-        (g) => g.category === 'bottom' && !(avgTemp < 21 && g.subcategory === 'shorts')
-      )
+    const bottomsPool = seededGarments.filter(
+      (g) => g.category === 'bottom' && !(avgTemp < 21 && g.subcategory === 'shorts')
     );
-    const shoesList = sortByTempFit(
-      seededGarments.filter(
-        (g) =>
-          g.category === 'shoes' &&
-          !((avgTemp < 23 || isRainy) && openSummerShoes.has(String(g.subcategory || '')))
-      )
+    const shoesPool = seededGarments.filter(
+      (g) =>
+        g.category === 'shoes' &&
+        !((avgTemp < 23 || isRainy) && openSummerShoes.has(String(g.subcategory || '')))
     );
     const isUmbrellaItem = (g: GarmentRecord) =>
       String(g.subcategory || '') === 'umbrella' ||
       /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
     const bagSubs = new Set(['bag', 'tote', 'crossbody', 'briefcase', 'backpack']);
+    const headSubs = new Set(['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat']);
+    const neckSubs = new Set(['neckwear', 'scarf', 'muffler', 'tie', 'necktie']);
+    const gloveSubs = new Set(['gloves', 'leather_gloves', 'mittens']);
+
     const umbrellaList = seededGarments.filter(isUmbrellaItem);
-    const accList = seededGarments.filter(
+    const accPool = seededGarments.filter(
       (g) =>
         !isUmbrellaItem(g) &&
         ((g.category === 'accessory' && bagSubs.has(String(g.subcategory || 'bag'))) ||
           g.category === 'bag')
     );
+    const headPool = seededGarments.filter(
+      (g) =>
+        g.category === 'headwear' ||
+        (g.category === 'accessory' && headSubs.has(String(g.subcategory || '')))
+    );
+    const neckPool = seededGarments.filter(
+      (g) =>
+        g.category === 'neckwear' ||
+        (g.category === 'accessory' && neckSubs.has(String(g.subcategory || '')))
+    );
+    const glovePool = seededGarments.filter(
+      (g) =>
+        g.category === 'gloves' ||
+        (g.category === 'accessory' && gloveSubs.has(String(g.subcategory || '')))
+    );
 
-    const buildFallbackRec = (idx: number, id: string, badge: string, title: string) => {
-      const chosenOuter = needOuter && outers.length
-        ? (isRainy ? outers.find((o) => o.water_resistant) || outers[idx % outers.length] : outers[idx % outers.length])
+    const pickForPreset = (
+      pool: GarmentRecord[],
+      presetKey: LookStylePresetKey,
+      excludeIds: ReadonlySet<number>,
+      fallbackIdx = 0
+    ): GarmentRecord | null => {
+      if (!pool.length) return null;
+      const ranked = [...pool].sort(
+        (a, b) => scoreStandaloneItem(b, presetKey) - scoreStandaloneItem(a, presetKey)
+      );
+      const distinct = ranked.filter((g) => !excludeIds.has(g.id));
+      if (distinct.length > 0) {
+        return distinct[0];
+      }
+      return ranked[fallbackIdx % ranked.length] || ranked[0];
+    };
+
+    const buildFallbackRec = (
+      idx: number,
+      id: string,
+      presetKey: LookStylePresetKey,
+      excludeIds: ReadonlySet<number>
+    ) => {
+      const preset = LOOK_STYLE_PRESETS[presetKey];
+      const chosenOuter = needOuter ? pickForPreset(outersPool, presetKey, excludeIds, idx) : null;
+      const chosenTop = pickForPreset(topsPool, presetKey, excludeIds, idx);
+      const chosenBottom = pickForPreset(bottomsPool, presetKey, excludeIds, idx);
+      const chosenShoes = pickForPreset(shoesPool, presetKey, excludeIds, idx);
+      const chosenAcc = pickForPreset(accPool, presetKey, excludeIds, idx);
+      const chosenHeadwear = needWarmAcc
+        ? pickForPreset(headPool, presetKey, excludeIds, idx)
         : null;
-      const chosenTop = tops.length ? tops[idx % tops.length] : null;
-      const chosenBottom = bottoms.length ? bottoms[idx % bottoms.length] : null;
-      const chosenShoes = shoesList.length ? shoesList[idx % shoesList.length] : null;
-      const chosenAcc = accList.length ? accList[idx % accList.length] : null;
+      const chosenNeckwear =
+        needWarmAcc || isWindy || presetKey === 'formal_office'
+          ? pickForPreset(neckPool, presetKey, excludeIds, idx)
+          : null;
+      const chosenGloves =
+        avgTemp <= 4 ? pickForPreset(glovePool, presetKey, excludeIds, idx) : null;
       const chosenUmbrella =
-        isRainy && umbrellaList.length ? umbrellaList[idx % umbrellaList.length] : null;
+        isRainy || spec.isSnowy ? pickForPreset(umbrellaList, presetKey, excludeIds, idx) : null;
       const items = [
+        chosenHeadwear,
+        chosenNeckwear,
         chosenOuter,
         chosenTop,
         chosenBottom,
+        chosenGloves,
         chosenShoes,
         chosenAcc,
         chosenUmbrella,
       ].filter((x): x is GarmentRecord => Boolean(x));
       return {
         id,
-        badge,
-        title,
+        stylePreset: preset.key,
+        badge: preset.badge,
+        badgeEn: preset.badgeEn,
+        title: preset.title,
+        titleEn: preset.titleEn,
         items,
         loadoutBySlot: {
+          headwear: chosenHeadwear,
+          neckwear: chosenNeckwear,
           outer: chosenOuter,
           top: chosenTop,
           bottom: chosenBottom,
+          gloves: chosenGloves,
           shoes: chosenShoes,
           accessory: chosenAcc,
           umbrella: chosenUmbrella,
           acc_umbrella: chosenUmbrella,
         },
-        rationale: `${spec.weatherTip} [${pcLabels.ko || '가을 웜톤'} 톤 매칭]`,
+        rationale: `${spec.weatherTip} [${preset.badge} · ${pcLabels.ko || '가을 웜톤'} 톤 매칭]`,
         suitabilityScore: Math.max(88, 97 - idx * 3),
         personalColorSync: Math.max(86, 95 - idx * 2),
       };
     };
+
+    const recommendations = (() => {
+      if (!seededGarments.length) return [];
+      const look1 = buildFallbackRec(0, 'commute', look1Style, new Set<number>());
+      const look1Ids = new Set<number>(look1.items.map((item) => item.id));
+      const look2 = buildFallbackRec(1, 'daily', look2Style, look1Ids);
+      return [look1, look2];
+    })();
 
     return {
       weather: {
         cityKey,
         cityName: resolvedCityName,
         date: tomorrow,
-        scenarioKey: rawScKey,
+        scenarioKey: normalizedScKey,
         condition: spec.condition,
         weatherCode: spec.weatherCode,
         tempMin: spec.tempMin,
@@ -1101,7 +1324,7 @@ export async function handleStandaloneApiFallback(
         summary: spec.weatherTip,
         weatherTip: spec.weatherTip,
         recommendedMotion: spec.recommendedMotion,
-        isSimulated: rawScKey !== 'live',
+        isSimulated: normalizedScKey !== 'live',
       },
       stylingProfile: {
         personalColor: pcKey,
@@ -1116,18 +1339,20 @@ export async function handleStandaloneApiFallback(
       },
       cities: CITY_COORDS.map((c) => ({ key: c.key, name: c.name })),
       scenarios: [
-        { key: 'live', label: '실시간 내일 예보' },
+        { key: LIVE_WEATHER_SCENARIO.key, label: LIVE_WEATHER_SCENARIO.label },
         ...Object.values(WEATHER_SCENARIOS).map((s) => ({
           key: s.key,
           label: s.label,
         })),
       ],
-      recommendations: seededGarments.length
-        ? [
-            buildFallbackRec(0, 'commute', '출근 · 스마트 포멀', `${spec.condition} 맞춤 출근 코디`),
-            buildFallbackRec(1, 'daily', '데일리 · 미니멀', `내일 ${avgTemp}°C 일교차 대응 데일리룩`),
-          ]
-        : [],
+      lookStylePresets: Object.values(LOOK_STYLE_PRESETS).map((p) => ({
+        key: p.key,
+        badge: p.badge,
+        badgeEn: p.badgeEn,
+        title: p.title,
+        titleEn: p.titleEn,
+      })),
+      recommendations,
       isClosetEmpty: seededGarments.length === 0,
       isSampleDemo: closet === 'sample',
     };

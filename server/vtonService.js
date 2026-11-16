@@ -2,6 +2,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import db, { DATA_DIR, ROOT_DIR, UPLOADS_DIR } from './db.js';
+import {
+  buildCanonicalCharacterIdentityPromptBlock,
+  normalizeCanonicalAvatarGender,
+} from '../src/services/weatherPromptBuilder.ts';
 
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
@@ -237,7 +241,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v7-clean-6angle-cyclorama-360';
+const CACHE_SCHEMA_VERSION = 'v8-consistent-avatar-3x2-cyclorama';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -301,9 +305,9 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     description:
       'cool overcast rainy-day editorial softbox illumination (6200K) with fine rainwater droplets beaded atop the open umbrella canopy and a subtle damp water-repellent sheen on outerwear shoulders',
     poseBlock: [
-      'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, hairstyle, and full-body outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain >=14% headroom clearance above the top dome/tip of the open umbrella so the open umbrella is NEVER cropped.',
-      'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves.',
-      'STRICT RAIN NEGATIVE: NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER shadow/obscure the face, and NEVER draw falling rain streaks in the #94A3B8 background.',
+      'RAINY DAY POSE (MANDATORY WIDE-OPEN UMBRELLA OVERHEAD): The upright 7.5-head adult model MUST hold a WIDE-OPEN full-canopy umbrella high above their head with one hand, tilting the open umbrella canopy slightly backward (~15 degrees) so the model’s entire face, locked haircut length, and full-body 7.5-head outfit remain 100% unobstructed, brightly illuminated, and clearly visible. Maintain >=14% headroom clearance above the top dome/tip of the open umbrella so the open umbrella is NEVER cropped.',
+      'RAIN PHYSICAL TRACE: Render realistic fine glistening rainwater droplets beaded across the top surface of the open umbrella canopy and a subtle water-repellent damp sheen on outerwear shoulders and sleeves while keeping the locked haircut neat.',
+      'STRICT RAIN NEGATIVE: NEVER hold a closed umbrella, NEVER hold a folded or rolled-up umbrella, NEVER use an umbrella as a walking cane/stick pointing downward, NEVER shrink into a short-legged chibi figure, NEVER shadow/obscure the face, and NEVER draw falling rain streaks in the #94A3B8 background.',
     ].join('\n'),
   },
   coldwave: {
@@ -312,9 +316,9 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     description:
       'crisp sub-zero (-10°C) winter key lighting (6500K) with natural cold-flushed cheeks/nose tip and visible white snow crystals and icy frost accumulated on winter hat/beanie and coat shoulders',
     poseBlock: [
-      'BITING SUB-ZERO COLDWAVE POSE (-10°C FREEZING ARCTIC WIND): Render an authentic cold-bracing winter stance — shoulders slightly hunched/drawn inward against freezing sub-zero wind, chin tucked slightly down toward the warm scarf/high coat collar, and hands tucked into coat pockets or clasping the coat lapels/muffler snugly close to the chest for warmth.',
+      'BITING SUB-ZERO COLDWAVE POSE (-10°C FREEZING ARCTIC WIND): Render an upright, poised 7.5-head adult winter stance — spine tall, neck elongated, and legs full-length with elbows drawn neatly close to the torso and hands tucked into coat pockets or clasping the coat lapels/muffler snugly close to the chest for warmth (strictly preserve full 7.5-head adult stature — NEVER hunch, crouch, or compress into a stocky chibi figure).',
       'COLDWAVE SNOW & FROST TRACE (MANDATORY ON HAT & SHOULDERS): Render distinct white snow crystals and fine icy frost visibly accumulated on the crown/cuff/brim of the beanie or winter hat, along the upper folds of the scarf/muffler, and across both coat/puffer shoulders ("snow crystals and frost accumulated on beanie and shoulders"), plus a subtle natural cold-flushed rosiness on the cheeks and tip of the nose.',
-      'STRICT COLDWAVE NEGATIVE: NEVER generate a warm relaxed indoor studio pose, NEVER leave the winter hat/beanie or coat shoulders completely clean and free of snow crystals/frost, and NEVER draw flying blizzard streaks across the #94A3B8 background.',
+      'STRICT COLDWAVE NEGATIVE: NEVER hunch shoulders up to the ears or compress into a stocky/chubby chibi silhouette, NEVER generate a warm relaxed indoor studio pose, NEVER leave the winter hat/beanie or coat shoulders completely clean and free of snow crystals/frost, and NEVER draw flying blizzard streaks across the #94A3B8 background.',
     ].join('\n'),
   },
   snow: {
@@ -323,7 +327,7 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     description:
       'soft 6000K winter snowfall daylight with fluffy white snow visibly settled atop the hat/hair crown and upper coat shoulders',
     poseBlock: [
-      'WINTER SNOWFALL POSE: Natural cozy winter lookbook full-body stance (one hand relaxed in coat pocket or lightly near scarf) with calm winter expression.',
+      'WINTER SNOWFALL POSE: Upright 7.5-head adult cozy winter lookbook full-body stance (one hand relaxed in coat pocket or lightly near scarf) with calm winter expression.',
       'SNOW PHYSICAL TRACE (MANDATORY ON HAT & SHOULDERS): Render soft, fluffy white snow visibly settled and accumulated atop the hat/beanie/hair crown and across the upper coat shoulders ("fluffy white snow settled on hat/hair and coat shoulders").',
       'STRICT SNOW NEGATIVE: NEVER draw airborne snowflakes or snow streaks in the #94A3B8 background air.',
     ].join('\n'),
@@ -332,11 +336,11 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     key: 'windy',
     effectiveWeather: 'wind',
     description:
-      'crisp directional daylight studio key light with dynamic lateral wind physics across outer hems, scarf ends, and outer hair strands',
+      'crisp directional daylight studio key light with dynamic lateral wind physics across outer hems and scarf ends while preserving locked short hair length',
     poseBlock: [
-      'STRONG WINDY GALE POSE: Dynamic wind-bracing editorial full-body stance — one hand lightly steadying the hat brim, hair, or coat lapel while maintaining poised balance against a brisk lateral gust.',
-      'WIND PHYSICAL TRACE: Render realistic lateral wind physics with the coat hem, muffler/scarf ends, and outer hair strands visibly billowing and sweeping consistently to one side without covering the face.',
-      'STRICT WIND NEGATIVE: NEVER obscure the face with hair and NEVER draw dust clouds or flying debris on the #94A3B8 background.',
+      'STRONG WINDY GALE POSE: Upright 7.5-head adult wind-bracing editorial full-body stance — one hand lightly steadying the hat brim or coat lapel while maintaining tall, poised adult balance against a brisk lateral gust.',
+      'WIND PHYSICAL TRACE: Render realistic lateral wind physics across the coat hem, lapels, trousers, and muffler/scarf ends sweeping consistently to one side, with only subtle crown movement strictly within the character’s locked haircut length (keep short ear-length haircuts strictly above the shirt collar — NEVER grow shoulder-length or long billowing hair locks).',
+      'STRICT WIND NEGATIVE: NEVER lengthen short hair into shoulder-length or flowing locks, NEVER obscure the face with hair, NEVER shorten 7.5-head leg proportions, and NEVER draw dust clouds or flying debris on the #94A3B8 background.',
     ].join('\n'),
   },
   heatwave: {
@@ -345,7 +349,7 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     description:
       'bright crisp high-summer sunlit highlights (5200K) with vibrant warm skin luminosity and airy summer fabric clarity',
     poseBlock: [
-      'MIDSUMMER HEATWAVE POSE: Breezy, breathable high-summer lookbook full-body stance (lightly shading the brow from bright overhead sunlight or relaxed airy summer posture).',
+      'MIDSUMMER HEATWAVE POSE: Breezy, upright 7.5-head adult high-summer lookbook full-body stance (lightly shading the brow from bright overhead sunlight or relaxed airy summer posture).',
       'HEATWAVE PHYSICAL TRACE: Bright crisp sunlit highlights (5200K) along hair and shoulders with crisp breathable summer fabric texture.',
       'STRICT HEATWAVE NEGATIVE: NEVER draw lens flare circles or sun orbs on the #94A3B8 background.',
     ].join('\n'),
@@ -356,7 +360,7 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     description:
       'soft diffused overcast 5800K illumination with gentle wrap-around tonal transitions',
     poseBlock: [
-      'OVERCAST CLOUDY POSE: Calm, composed editorial lookbook full-body stance with natural relaxed posture under soft 5800K diffused overcast illumination.',
+      'OVERCAST CLOUDY POSE: Calm, upright 7.5-head adult editorial lookbook full-body stance with natural relaxed posture under soft 5800K diffused overcast illumination.',
       'STRICT CLOUDY NEGATIVE: NEVER draw fog or clouds on the #94A3B8 background.',
     ].join('\n'),
   },
@@ -364,10 +368,10 @@ const WEATHER_POSE_DIRECTIVES = Object.freeze({
     key: 'clear',
     effectiveWeather: 'clear',
     description:
-      'crisp natural 5400K daylight illumination showcasing true-to-life garment color and silhouette',
+      'crisp balanced 5400K studio daylight illumination showcasing true-to-life garment color, matte fabric weave, and locked avatar skin shading',
     poseBlock: [
-      'CLEAR DAYLIGHT POSE: Confident, clean full-body editorial lookbook stance under crisp 5400K natural daylight.',
-      'STRICT CLEAR NEGATIVE: NEVER draw cast floor shadows or cyclorama gradients on the #94A3B8 background.',
+      'CLEAR DAYLIGHT POSE: Confident, upright 7.5-head adult full-body studio stance under balanced 5400K daylight while strictly preserving the locked avatar art style and haircut silhouette.',
+      'STRICT CLEAR NEGATIVE: NEVER drift into photorealistic catalog-photo skin/faces in stylized character mode, NEVER shrink into chibi proportions, and NEVER draw cast floor shadows or cyclorama gradients on the #94A3B8 background.',
     ].join('\n'),
   },
 });
@@ -949,6 +953,10 @@ export function normalizeVtonProfile(
     VALID_FRAME_PRESETS,
     'androgynous'
   );
+  const gender = normalizeCanonicalAvatarGender(
+    src.gender ?? extraOptions?.gender,
+    framePreset
+  );
   const archetypePreset = normalizeEnumToken(
     rawAvatarSpec.archetypePreset,
     VALID_ARCHETYPES,
@@ -957,7 +965,11 @@ export function normalizeVtonProfile(
   const chestForm = normalizeEnumToken(
     anthro.chestForm,
     VALID_CHEST_FORMS,
-    framePreset === 'feminine' ? 'contoured' : framePreset === 'masculine' ? 'pectoral' : 'flat'
+    framePreset === 'feminine' || gender === 'female'
+      ? 'contoured'
+      : framePreset === 'masculine' || gender === 'male'
+        ? 'pectoral'
+        : 'flat'
   );
 
   const shoulderScale = roundToStep(
@@ -1058,6 +1070,13 @@ export function normalizeVtonProfile(
   const portraitPart = rawPortrait
     ? decodeValidatedDataUrl(rawPortrait, MAX_DATA_URL_BYTES)
     : null;
+  const rawCharacterAnchor =
+    !portraitPart && styleMode === 'stylized_isometric'
+      ? (src.characterAnchorDataUrl ?? extraOptions?.characterAnchorDataUrl ?? null)
+      : null;
+  const characterAnchorPart = rawCharacterAnchor
+    ? decodeValidatedDataUrl(rawCharacterAnchor, 256 * 1024)
+    : null;
 
   return {
     viewAngleDeg,
@@ -1065,6 +1084,7 @@ export function normalizeVtonProfile(
     weatherMood,
     turnaroundSheet,
     avatarConfigHash: rawAvatarHash || null,
+    gender,
     framePreset,
     archetypePreset,
     chestForm,
@@ -1108,6 +1128,12 @@ export function normalizeVtonProfile(
         }
       : null,
     portraitHash: portraitPart ? portraitPart.sha256.slice(0, 32) : null,
+    characterAnchorPart: characterAnchorPart
+      ? {
+          mimeType: characterAnchorPart.mimeType,
+          base64Data: characterAnchorPart.base64Data,
+        }
+      : null,
   };
 }
 
@@ -1304,6 +1330,7 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
     weatherKey,
     layoutKey,
     avatarConfigHash: normalizedProfile.avatarConfigHash || null,
+    gender: normalizedProfile.gender || 'unisex',
     framePreset: normalizedProfile.framePreset,
     archetypePreset: normalizedProfile.archetypePreset,
     chestForm: normalizedProfile.chestForm,
@@ -1698,10 +1725,26 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
   const weatherDesc = resolvedMood.description;
   const weatherPoseBlock = resolvedMood.poseBlock || WEATHER_POSE_DIRECTIVES.clear.poseBlock;
 
+  const canonicalCharacterBlock = buildCanonicalCharacterIdentityPromptBlock({
+    heightCm: profile.heightCm,
+    weightKg: profile.weightKg,
+    gender: profile.gender,
+    framePreset: profile.framePreset,
+    bodyShape: profile.bodyShape,
+    skinToneHex: profile.skinToneHex,
+    mstLevel: profile.mstLevel,
+    mstUndertone: profile.mstUndertone,
+    hairStyle: profile.hairStyle,
+    hairColorHex: profile.hairColorHex,
+    facialHair: profile.facialHair,
+    styleMode: profile.styleMode,
+    hasPortraitReference: Boolean(profile.portraitPart),
+  });
+
   const styleHeader = isStylizedIso
     ? [
-        'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On lookbook image (tactile charming life-simulation character aesthetic with warm dimensional shading, refined appealing cranial & facial modeling, lush voluminous hair clusters, clean relaxed fingers, and authentic real-fabric texture fidelity).',
-        '- NEVER draw crude flat 2D vector polygons or stick/mannequin limbs; render polished, high-craft studio simulation character art.',
+        'Generate a high-craft Stylized Isometric Simulation Character Virtual Try-On lookbook image (Unified Ainventory Signature Matte 3D-Stylized Studio Avatar aesthetic: smooth matte porcelain-vinyl skin shading with soft studio ambient occlusion, subtle refined facial features, calm neutral gaze, unified 7.5-head adult proportions, clean silhouette edges WITHOUT thick black comic outlines, and authentic matte fabric weave on clothing).',
+        '- NEVER render photorealistic human photography, real human skin pores, or real catalog model faces; NEVER render chibi/super-deformed 5-head/6-head figures; NEVER draw crude flat 2D vector polygons.',
       ]
     : [
         'Generate a high-fashion Photorealistic Commercial Studio Virtual Try-On lookbook photograph (SSENSE / COS / Totême studio campaign photography shot on medium-format 85mm f/5.6 studio lens, natural skin texture, realistic hair strands, relaxed natural hands, and hyper-accurate real garment drape, seam thickness, and fabric weave).',
@@ -1710,14 +1753,14 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
 
   const cameraBlock = profile.turnaroundSheet
     ? [
-        'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (4:3 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
-        `- Compose ONE continuous, completely undivided 4:3 3x2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~82–85% of row height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
+        'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (3:2 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
+        `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~80–82% of row height (head-top ~11%, foot-sole ~91%), shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
         '- TOP ROW = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
         '  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.',
         "  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).",
-        "  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT. [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]",
+        "  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT. [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]",
         '- BOTTOM ROW = REAR-QUARTER & SYMMETRICAL BACK VIEWS:',
         "  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-RIGHT, diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.",
         '  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).',
@@ -1727,7 +1770,7 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
     : [
         'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles (~82–85% frame height).',
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles (~80–84% frame height).',
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
         "- For 90° lateral side views, face cleanly toward VIEWER'S RIGHT (screen-right) with authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.",
         `- CRITICAL RGBA CUTOUT & ENCLOSED-HOLE BACKDROP RULE: Render the ENTIRE background behind, beneath, AND inside every enclosed negative-space gap of the model (underneath the open umbrella canopy around the shaft/head/shoulders, between bent arms and waist, between legs/ankles, and inside bag handles/straps) as a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO props, ZERO plinth tiles, and ZERO airborne rain/snow/mist particles in the background. Include ZERO text and ZERO UI labels.`,
@@ -1736,6 +1779,8 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
   return [
     ...styleHeader,
     '',
+    canonicalCharacterBlock,
+    '',
     ...cameraBlock,
     '',
     `WEATHER-ADAPTIVE POSE, GARMENT PHYSICAL TRACES & LIGHTING (${resolvedMood.effectiveWeather.toUpperCase()}):`,
@@ -1743,7 +1788,7 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
     weatherPoseBlock,
     '',
     'INCLUSIVE CASTING, PROPORTION & COMPLEXION LOCK (ZERO MODEL BIAS):',
-    `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi})`,
+    `  * Stature & Mass: Exact Height ${profile.heightCm} cm (${statureCue}, legLengthScale=${profile.legLengthScale}), Exact Weight ${profile.weightKg} kg (BMI ${profile.bmi}), gender=${profile.gender || 'unisex'}`,
     `  * Presentation & Silhouette: framePreset=${profile.framePreset}, archetypePreset=${profile.archetypePreset}, upperTorsoLine="${chestEditorial}", shape="${shapeDesc}"`,
     `  * Tailoring Proportions: shoulder=${profile.shoulderScale}, chest=${profile.chestScale}, waist=${profile.waistScale}, midsection=${profile.abdomenScale}, hip=${profile.hipScale}, armVolume=${profile.armMassScale}, legVolume=${profile.legMassScale}`,
     `  * ${softTissueLock}`,
@@ -1762,10 +1807,10 @@ function appendPortraitParts(parts, profile) {
     FACIAL_HAIR_DESCRIPTIONS[profile.facialHair] || FACIAL_HAIR_DESCRIPTIONS.none;
   const mediumLabel =
     profile.styleMode === 'stylized_isometric'
-      ? 'stylized isometric character'
+      ? 'matte 3D-stylized studio character'
       : 'photorealistic studio fashion model';
 
-  const featureSummary = `Head shape: ${profile.headShape}; Hair: ${hairDesc} in exact color ${profile.hairColorHex}; Facial hair: ${facialHairDesc}; Eye shape: ${profile.eyeShape} (scale ${profile.eyeSizeScale}); Nose width scale: ${profile.noseWidthScale}; Lip fullness scale: ${profile.lipFullnessScale}; Brow strength: ${profile.browStrength}.`;
+  const featureSummary = `Gender: ${profile.gender || 'unisex'}; Head shape: ${profile.headShape}; Hair: ${hairDesc} in exact color ${profile.hairColorHex}; Facial hair: ${facialHairDesc}; Eye shape: ${profile.eyeShape} (scale ${profile.eyeSizeScale}); Nose width scale: ${profile.noseWidthScale}; Lip fullness scale: ${profile.lipFullnessScale}; Brow strength: ${profile.browStrength}.`;
 
   if (profile.portraitPart) {
     parts.push({
@@ -1796,6 +1841,17 @@ function appendPortraitParts(parts, profile) {
           ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
           : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, natural editorial lookbook expression matching camera angle ${angle}° in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
     });
+    if (profile.styleMode === 'stylized_isometric' && profile.characterAnchorPart) {
+      parts.push({
+        text: `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head body build from this reference — ONLY change the outfit to the newly equipped garments and adjust stance for the weather.`,
+      });
+      parts.push({
+        inlineData: {
+          mimeType: profile.characterAnchorPart.mimeType,
+          data: profile.characterAnchorPart.base64Data,
+        },
+      });
+    }
   }
 }
 
@@ -2021,7 +2077,7 @@ async function generateWithGeminiModelChain(
 ) {
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
-  const aspectRatio = options?.turnaroundSheet ? '4:3' : '3:4';
+  const isTurnaroundSheet = Boolean(options?.turnaroundSheet);
 
   for (const model of modelChain) {
     const elapsed = Date.now() - startedAt;
@@ -2039,18 +2095,39 @@ async function generateWithGeminiModelChain(
       break;
     }
 
-    const requestConfigs = [
-      {
-        responseModalities: ['TEXT', 'IMAGE'],
-        imageConfig: { aspectRatio },
-      },
-      {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-      {
-        responseModalities: ['IMAGE'],
-      },
-    ];
+    const requestConfigs = isTurnaroundSheet
+      ? [
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '3:2' },
+          },
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '4:3' },
+          },
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+          },
+          {
+            responseModalities: ['IMAGE'],
+            imageConfig: { aspectRatio: '3:2' },
+          },
+          {
+            responseModalities: ['IMAGE'],
+          },
+        ]
+      : [
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '3:4' },
+          },
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+          },
+          {
+            responseModalities: ['IMAGE'],
+          },
+        ];
 
     for (let stratIdx = 0; stratIdx < requestConfigs.length; stratIdx += 1) {
       const generationConfig = requestConfigs[stratIdx];

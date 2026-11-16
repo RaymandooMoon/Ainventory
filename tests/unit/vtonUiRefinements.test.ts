@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  buildGeminiTryOnPrompt,
+  normalizeVtonProfile,
+} from '../../server/vtonService.js';
+import {
+  CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY,
   angle360ToSignedScrollDeg,
+  buildTurnaround3x2LayoutGuideDataUrl,
+  computeCharacterIdentityAnchorKey,
   computeIdealDeviceMannequinScale,
   detectLateralFacingDirectionInBuffer,
   eraseSheetGridDividerLinesInBuffer,
+  getShowcaseDemoSheetUrl,
+  normalizeGenderNeutralProfile,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
@@ -13,6 +22,8 @@ import {
 import {
   CANONICAL_ANGLE_PROMPT_DIRECTIVES,
   CUTOUT_PIPELINE_VERSION,
+  buildCanonicalCharacterIdentityPromptBlock,
+  buildWeatherPosePromptDirectives,
 } from '../../src/services/weatherPromptBuilder.ts';
 
 describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', () => {
@@ -29,6 +40,10 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       resolveEffectiveVtonStyleMode({ preferredStyle: 'stylized_isometric', hasFacePhoto: false }),
       'stylized_isometric'
     );
+    assert.doesNotMatch(getShowcaseDemoSheetUrl('stylized_isometric'), /photoreal/i);
+    assert.match(getShowcaseDemoSheetUrl('stylized_isometric'), /stylized/i);
+    assert.doesNotMatch(getShowcaseDemoSheetUrl(null), /photoreal/i);
+    assert.match(getShowcaseDemoSheetUrl('photorealistic'), /photoreal/i);
   });
 
   it('honors Photorealistic Model when a user portrait photo is registered and selected', () => {
@@ -86,7 +101,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v7-clean-6angle-cyclorama-360');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v8-consistent-avatar-3x2-cyclorama');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
@@ -124,6 +139,89 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(angle360ToSignedScrollDeg(270, 0), -90);
     assert.equal(angle360ToSignedScrollDeg(180, -135), -180);
     assert.equal(angle360ToSignedScrollDeg(180, 135), 180);
+  });
+
+  it('locks 176cm/70kg BMI 22.6 7.5-head adult proportions, unified matte 3D-stylized art style, and male short hair across client & server prompts', () => {
+    const block = buildCanonicalCharacterIdentityPromptBlock({
+      heightCm: 176,
+      weightKg: 70,
+      gender: 'male',
+      bodyShape: 'standard_balanced',
+      skinToneHex: '#DFBA9B',
+      hairStyle: 'soft_wavy',
+      hairColorHex: '#2B211B',
+      styleMode: 'stylized_isometric',
+    });
+
+    assert.match(block, /176cm \/ 70kg = BMI 22\.6: lean-balanced standard adult build/);
+    assert.match(block, /7\.5 heads tall/);
+    assert.match(block, /UNIFIED AINVENTORY SIGNATURE 3D-STYLIZED AVATAR STYLE/);
+    assert.match(block, /NEVER render photorealistic human photography/);
+    assert.match(block, /NEVER render chibi, super-deformed, 5-head\/6-head/);
+    assert.match(
+      block,
+      /men's clean short tapered ear-length haircut strictly above the shirt collar — NEVER shoulder-length hair or long flowing locks even in strong wind/
+    );
+
+    const femaleBobBlock = buildCanonicalCharacterIdentityPromptBlock({
+      heightCm: 165,
+      weightKg: 54,
+      gender: 'female',
+      hairStyle: 'straight_bob',
+      hairColorHex: '#3A281E',
+      styleMode: 'stylized_isometric',
+    });
+    assert.match(femaleBobBlock, /Explicit FEMALE adult presentation/);
+    assert.match(femaleBobBlock, /jawline-to-chin length straight architectural bob/);
+
+    // Verify normalizeGenderNeutralProfile preserves male gender instead of losing it to androgynous
+    const normalizedClientProfile = normalizeGenderNeutralProfile({
+      heightCm: 176,
+      weightKg: 70,
+      bodySpec: { gender: 'male', heightCm: 176, weightKg: 70, bodyShape: 'standard_balanced' },
+      skinToneHex: '#DFBA9B',
+    });
+    assert.equal(normalizedClientProfile.gender, 'male');
+    assert.equal(CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY, 'ainventory_char_identity_anchor_v8');
+    const anchorKey = computeCharacterIdentityAnchorKey(normalizedClientProfile);
+    assert.match(anchorKey, /^v8:male:176:70:standard_balanced:#DFBA9B:/);
+
+    // Verify Node-safe behavior when document is undefined
+    if (typeof document === 'undefined') {
+      assert.equal(
+        buildTurnaround3x2LayoutGuideDataUrl({
+          backdropHex: '#94A3B8',
+          heightCm: 176,
+          weightKg: 70,
+        }),
+        null
+      );
+    }
+
+    // Verify coldwave & wind pose prompts preserve upright 7.5-head posture and short-hair lock
+    const coldwaveDirectives = buildWeatherPosePromptDirectives('coldwave');
+    assert.match(coldwaveDirectives.poseDirective, /7\.5-head adult/);
+    assert.match(coldwaveDirectives.negativeDirective, /NEVER hunch shoulders up to the ears/);
+
+    const windDirectives = buildWeatherPosePromptDirectives('wind');
+    assert.match(windDirectives.physicalTraceDirective, /NEVER grow shoulder-length or long billowing hair locks/);
+
+    // Verify server/vtonService.js prompt integration
+    const serverProfile = normalizeVtonProfile({
+      gender: 'male',
+      heightCm: 176,
+      weightKg: 70,
+      skinToneHex: '#DFBA9B',
+      styleMode: 'stylized_isometric',
+      turnaroundSheet: true,
+      weather: 'coldwave',
+    });
+    assert.equal(serverProfile.gender, 'male');
+    const serverPrompt = buildGeminiTryOnPrompt(serverProfile, {});
+    assert.match(serverPrompt, /176cm \/ 70kg = BMI 22\.6/);
+    assert.match(serverPrompt, /7\.5 heads tall/);
+    assert.match(serverPrompt, /NEVER render photorealistic human photography/);
+    assert.match(serverPrompt, /strictly above the shirt collar/);
   });
 
   it('erases tall vertical & horizontal panel grid divider lines both pre-crop and post-cutout while keeping the human silhouette intact', () => {
@@ -263,13 +361,13 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       stageHeight: 500,
       imageAspectRatio: 0.74,
     });
-    assert.ok(mobilePortraitSlice >= 1.07 && mobilePortraitSlice <= 1.2);
+    assert.ok(mobilePortraitSlice >= 1.07 && mobilePortraitSlice <= 1.16);
 
     const foldableWide = computeIdealDeviceMannequinScale({
       stageWidth: 717,
       stageHeight: 512,
       imageAspectRatio: 0.74,
     });
-    assert.ok(foldableWide >= 1.05 && foldableWide <= 1.16);
+    assert.ok(foldableWide >= 1.05 && foldableWide <= 1.14);
   });
 });

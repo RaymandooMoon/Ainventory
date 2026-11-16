@@ -117,6 +117,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   heightCm,
   weightKg,
   angleDeg,
+  isSynthesizing = false,
   asPrimaryStageTarget,
   transformStyle,
 }) {
@@ -196,6 +197,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
         <div
           className={`editorial-flatlay-collage ${placements.length >= 10 ? 'is-scrollable' : ''}`}
           data-flatlay-grid-cols={cols}
+          data-flatlay-count={placements.length}
           style={{
             '--flatlay-cols': cols,
             '--flatlay-rows': rows,
@@ -203,7 +205,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
         >
           {placements.map((entry) => {
             const { slotKey, garment } = entry;
-            const isSelected = activeSlotKey === slotKey;
+            const isSelected = !isSynthesizing && activeSlotKey === slotKey;
             const displayName =
               isEn && garment.name_en
                 ? garment.name_en
@@ -889,7 +891,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
     const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
     const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
-    const effectiveScale = safeZoom * idealBaseScale;
+    const restBaseScale = safeZoom <= 1.001 ? 1 : idealBaseScale;
+    const effectiveScale = safeZoom * restBaseScale;
     const parts = [];
     if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
       parts.push(
@@ -906,7 +909,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       parts.push('scaleX(-1)');
     }
     return {
-      transformOrigin: '50% 94%',
+      transformOrigin: '50% 92%',
       transform: parts.length > 0 ? parts.join(' ') : 'none',
     };
   }, [
@@ -922,7 +925,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   ]);
 
   const shadowTransformStyle = useMemo(() => {
-    const shadowScale = safeZoom * (1 + (idealBaseScale - 1) * 0.55);
+    const restBaseScale = safeZoom <= 1.001 ? 1 : idealBaseScale;
+    const shadowScale = safeZoom * (1 + (restBaseScale - 1) * 0.55);
     const hasTranslation = safePanX !== 0 || safePanY !== 0;
     if (!hasTranslation && Math.abs(shadowScale - 1) <= 0.005) {
       return undefined;
@@ -1031,6 +1035,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               heightCm={resolvedHeightCm}
               weightKg={resolvedWeightKg}
               angleDeg={safeAngleDeg}
+              isSynthesizing={aiLoading}
               asPrimaryStageTarget
               transformStyle={undefined}
             />
@@ -1053,6 +1058,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 heightCm={resolvedHeightCm}
                 weightKg={resolvedWeightKg}
                 angleDeg={safeAngleDeg}
+                isSynthesizing={aiLoading}
                 asPrimaryStageTarget={false}
                 transformStyle={undefined}
               />
@@ -1120,12 +1126,12 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             <div className="editorial-vton-shimmer-icon" aria-hidden="true">
               <Sparkles size={16} />
             </div>
-            <p className="editorial-vton-shimmer-title">
+            <p className="editorial-vton-shimmer-title tabular-nums">
               {isEn
                 ? `Generating Weather Pose & V4 Cutout (${safeAngleDeg}°)`
                 : `날씨 맞춤 전신 포즈 및 V4 투명 누끼 생성 중 (${safeAngleDeg}°)`}
             </p>
-            <p className="editorial-vton-shimmer-sub">
+            <p className="editorial-vton-shimmer-sub tabular-nums">
               {styleLabel} · {resolvedHeightCm}cm / {resolvedWeightKg}kg · {mstSwatch.code}
             </p>
           </div>

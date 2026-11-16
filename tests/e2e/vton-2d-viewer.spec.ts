@@ -1,5 +1,123 @@
-import { expect, test } from '@playwright/test';
+import zlib from 'node:zlib';
+import { expect, type Page, test } from '@playwright/test';
 import { CARBON_DOM_CONTRACT } from '../../src/contracts/carbonDesignContract.ts';
+
+const ALL_WEATHER_SCENARIOS = [
+  'live',
+  'crisp_autumn',
+  'cloudy_overcast',
+  'rainy_cool',
+  'snowy_winter',
+  'windy_gale',
+  'warm_spring',
+  'summer_heatwave',
+  'winter_cold',
+] as const;
+
+function buildPortraitTurnaround2x2PngDataUrl(variantSeed = 0): string {
+  const width = 192;
+  const height = 288;
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  const quadW = width / 2;
+  const quadH = height / 2;
+
+  for (let y = 0; y < height; y += 1) {
+    const rowOffset = y * (width * 4 + 1);
+    raw[rowOffset] = 0;
+    const localY = y % quadH;
+    for (let x = 0; x < width; x += 1) {
+      const localX = x % quadW;
+      const px = rowOffset + 1 + x * 4;
+      // Neutral #94A3B8 studio backdrop for clean V4 cutout -> alpha 0
+      let r = 148;
+      let g = 163;
+      let b = 184;
+      if (localY >= 18 && localY <= 128 && localX >= 30 && localX <= 66) {
+        r = 36 + ((variantSeed * 37) % 160);
+        g = 48 + ((variantSeed * 23) % 140);
+        b = 62 + ((variantSeed * 19) % 130);
+      }
+      raw[px] = r;
+      raw[px + 1] = g;
+      raw[px + 2] = b;
+      raw[px + 3] = 255;
+    }
+  }
+
+  const crcTable = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = (buf: Buffer): number => {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i += 1) {
+      c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const makeChunk = (type: string, data: Buffer): Buffer => {
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32BE(data.length, 0);
+    const typeBuf = Buffer.from(type, 'ascii');
+    const crcBuf = Buffer.alloc(4);
+    crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+    return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+  };
+
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const png = Buffer.concat([
+    sig,
+    makeChunk('IHDR', ihdr),
+    makeChunk('IDAT', zlib.deflateSync(raw)),
+    makeChunk('IEND', Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+async function swipeWardrobeSheetHandle(page: Page, deltaY: number) {
+  const handle = page.locator('#outfit-mobile-wardrobe-sheet [data-sheet-handle="true"]');
+  await expect(handle).toBeVisible();
+  const box = await handle.boundingBox();
+  expect(box).not.toBeNull();
+  const cx = Math.round(box!.x + box!.width / 2);
+  const cy = Math.round(box!.y + box!.height / 2);
+
+  await handle.evaluate(
+    async (el, coords) => {
+      const mkInit = (clientY: number, buttons: number): PointerEventInit => ({
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 11,
+        pointerType: 'touch',
+        isPrimary: true,
+        clientX: coords.x,
+        clientY,
+        button: 0,
+        buttons,
+      });
+      el.dispatchEvent(new PointerEvent('pointerdown', mkInit(coords.y0, 1)));
+      const steps = 4;
+      for (let i = 1; i <= steps; i += 1) {
+        await new Promise((r) => setTimeout(r, 40));
+        const y = Math.round(coords.y0 + ((coords.y1 - coords.y0) * i) / steps);
+        window.dispatchEvent(new PointerEvent('pointermove', mkInit(y, 1)));
+      }
+      await new Promise((r) => setTimeout(r, 20));
+      window.dispatchEvent(new PointerEvent('pointerup', mkInit(coords.y1, 0)));
+    },
+    { x: cx, y0: cy, y1: cy + deltaY }
+  );
+}
 
 test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline', () => {
   test('1. Zero .glb/3D texture requests, legacy 3D/2.5D mode fallback to 2d-vton, and removal of 3D orbit controls', async ({
@@ -285,4 +403,226 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       page.locator('.skin-modal-character-stage [data-avatar-spec-card="true"]')
     ).toBeVisible();
   });
+
+  test('4. Zero upper menu above stage, centered Seoul+weather capsule popup (all 9 scenarios + Look 1/2 presets), bottom-right Look 1/2 dock above angle scrollbar, per-scenario outfit & AI character persistence, non-clipping safe zone, and 2-detent swipeable mobile wardrobe sheet', async ({
+    page,
+  }) => {
+    let synthCount = 0;
+    await page.route('**/api/vton/synthesize', async (route) => {
+      synthCount += 1;
+      const seed = synthCount;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: 'turnaround_2x2',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: buildPortraitTurnaround2x2PngDataUrl(seed),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    const lookDock = studioCanvas.locator('[data-weather-look-dock="true"]');
+    const scrollDock = studioCanvas.locator('.studio-angle-scroll-dock');
+
+    await expect(studioCanvas).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+
+    // (1) Zero Upper Menu Above Stage & Centered Location+Weather Capsule + 9-Scenario Popup
+    await expect(weatherPanel).toHaveCount(0);
+    const upperLayoutAudit = await page.evaluate(() => {
+      const screen = document.querySelector('.hig-outfits-screen');
+      const header = screen?.querySelector(':scope > header');
+      const layout = screen?.querySelector(':scope > .studio-25d-layout');
+      if (!header || !layout) return { adjacent: false, gapPx: 999 };
+      const hRect = header.getBoundingClientRect();
+      const lRect = layout.getBoundingClientRect();
+      return {
+        adjacent: header.nextElementSibling === layout,
+        gapPx: lRect.top - hRect.bottom,
+      };
+    });
+    expect(upperLayoutAudit.adjacent).toBe(true);
+    expect(upperLayoutAudit.gapPx).toBeLessThanOrEqual(16);
+
+    await expect(weatherCapsule).toBeVisible();
+    await expect(weatherCapsule).toContainText(/서울|Seoul/);
+    const [stageBox, capsuleBox] = await Promise.all([
+      studioCanvas.boundingBox(),
+      weatherCapsule.boundingBox(),
+    ]);
+    expect(stageBox).not.toBeNull();
+    expect(capsuleBox).not.toBeNull();
+    expect(
+      Math.abs(
+        capsuleBox!.x + capsuleBox!.width / 2 - (stageBox!.x + stageBox!.width / 2)
+      )
+    ).toBeLessThanOrEqual(20);
+
+    // Open Weather Capsule Popup while `예보` (`live`) is selected -> assert all 9 scenarios + Look 1 & Look 2 presets
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(9);
+    for (const scKey of ALL_WEATHER_SCENARIOS) {
+      await expect(weatherPanel.locator(`[data-weather-scenario="${scKey}"]`)).toBeVisible();
+    }
+    await expect(weatherPanel.locator('[data-weather-scenario="live"]')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(weatherPanel.locator('[data-weather-look-card="1"]')).toContainText(
+      /비즈니스 캐주얼|Business Casual/
+    );
+    await expect(weatherPanel.locator('[data-weather-look-card="2"]')).toContainText(
+      /편한 캐주얼|Comfortable Casual/
+    );
+
+    // Switch to `맑음` (`crisp_autumn`) -> verify all 9 scenarios remain rendered when `맑음` is active, then return to `예보` (`live`)
+    await weatherPanel.locator('[data-weather-scenario="crisp_autumn"]').click();
+    await expect(weatherPanel.locator('[data-weather-scenario="crisp_autumn"]')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(weatherPanel.locator('[data-weather-scenario]')).toHaveCount(9);
+    for (const scKey of ALL_WEATHER_SCENARIOS) {
+      await expect(weatherPanel.locator(`[data-weather-scenario="${scKey}"]`)).toBeVisible();
+    }
+    await weatherPanel.locator('[data-weather-scenario="live"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+
+    // (2) `Look 1` / `Look 2` Dock Positioned Immediately Above Bottom-Right of Angle Scrollbar
+    await expect(lookDock).toBeVisible();
+    await expect(lookDock.locator('[data-weather-rec-id]')).toHaveCount(2);
+    await expect(scrollDock).toBeVisible();
+    const [lookRect, scrollRect] = await Promise.all([
+      lookDock.boundingBox(),
+      scrollDock.boundingBox(),
+    ]);
+    expect(lookRect).not.toBeNull();
+    expect(scrollRect).not.toBeNull();
+    expect(lookRect!.y + lookRect!.height).toBeLessThanOrEqual(scrollRect!.y + 6);
+    expect(
+      Math.abs(lookRect!.x + lookRect!.width - (scrollRect!.x + scrollRect!.width))
+    ).toBeLessThanOrEqual(12);
+    expect(lookRect!.x + lookRect!.width / 2).toBeGreaterThan(
+      stageBox!.x + stageBox!.width / 2
+    );
+
+    // (4) Non-Clipping Character Safe Zone at 1.0x Zoom
+    const aiImg = studioCanvas.locator('.editorial-ai-vton-img');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
+    const safeZoneMetrics = await studioCanvas.evaluate((root) => {
+      const layer = root.querySelector('.studio-2d-layer-after') as HTMLElement | null;
+      const capsule = root.querySelector('[data-atelier-weather-capsule="true"]');
+      const angleDock = root.querySelector('.studio-angle-scroll-dock');
+      if (!layer || !capsule || !angleDock) return null;
+      const cs = window.getComputedStyle(layer);
+      const padTop = Number.parseFloat(cs.paddingTop || '0');
+      const padBottom = Number.parseFloat(cs.paddingBottom || '0');
+      const layerRect = layer.getBoundingClientRect();
+      const capRect = capsule.getBoundingClientRect();
+      const dockRect = angleDock.getBoundingClientRect();
+      return {
+        padTop,
+        padBottom,
+        safeTopClearancePx: layerRect.top + padTop - capRect.bottom,
+        safeBottomClearancePx: dockRect.top - (layerRect.bottom - padBottom),
+      };
+    });
+    expect(safeZoneMetrics).not.toBeNull();
+    expect(safeZoneMetrics!.padTop).toBeGreaterThanOrEqual(52);
+    expect(safeZoneMetrics!.padBottom).toBeGreaterThanOrEqual(60);
+    expect(safeZoneMetrics!.safeTopClearancePx).toBeGreaterThanOrEqual(4);
+    expect(safeZoneMetrics!.safeBottomClearancePx).toBeGreaterThanOrEqual(4);
+
+    // (3) Per-Scenario Character & Outfit Persistence (`예보` -> `맑음` -> `예보` Does NOT Reset)
+    // Customize `예보` (`live`) by unequipping `top` and generating its AI VTON slice
+    await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(0);
+    const liveCustomCombo = await modelStage.getAttribute('data-outfit-combo');
+    expect(liveCustomCombo).toBeTruthy();
+
+    const genBtn = studioCanvas.locator('[data-vton-generate-btn="true"]');
+    if (await genBtn.isVisible()) {
+      await genBtn.click();
+    }
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    const liveCustomImgSrc = await aiImg.getAttribute('src');
+    expect(liveCustomImgSrc).toMatch(/^data:image\/png;base64,/);
+
+    // Switch to `맑음` (`crisp_autumn`) -> applies fresh `맑음` outfit (with `top` equipped)
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel.locator('[data-weather-scenario="crisp_autumn"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-weather-scenario', 'crisp_autumn');
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    const crispImgSrc = await aiImg.getAttribute('src');
+    expect(crispImgSrc).not.toBe(liveCustomImgSrc);
+
+    // Switch back to `예보` (`live`) -> preserves `예보` customized slots (`top` still absent) AND `liveCustomImgSrc`!
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel.locator('[data-weather-scenario="live"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-weather-scenario', 'live');
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(0);
+    await expect(modelStage).toHaveAttribute('data-outfit-combo', liveCustomCombo!);
+    await expect(aiImg).toBeVisible();
+    expect(await aiImg.getAttribute('src')).toBe(liveCustomImgSrc);
+
+    // (5) Swipeable 2-Detent Wardrobe Bottom Sheet on Narrow Mobile Viewport (< 600px, i.e., `ios-notch`)
+    const vp = page.viewportSize();
+    if (vp && vp.width < 600) {
+      const mobileTrigger = page.locator('[data-mobile-wardrobe-trigger="true"]');
+      await expect(mobileTrigger).toBeVisible();
+      await mobileTrigger.click();
+
+      const wardrobeSheet = page.locator('#outfit-mobile-wardrobe-sheet');
+      await expect(wardrobeSheet).toBeVisible();
+      await expect(wardrobeSheet).toHaveAttribute('data-sheet-expanded', 'false');
+      const compactBox = await wardrobeSheet.boundingBox();
+      expect(compactBox).not.toBeNull();
+
+      // Swipe UP (`deltaY = -120`) -> expands to full wardrobe detent (`data-sheet-expanded="true"`) & height grows
+      await swipeWardrobeSheetHandle(page, -120);
+      await expect(wardrobeSheet).toHaveAttribute('data-sheet-expanded', 'true');
+      await expect
+        .poll(async () => (await wardrobeSheet.boundingBox())?.height ?? 0)
+        .toBeGreaterThan(compactBox!.height + 100);
+
+      // First swipe DOWN (`deltaY = +100`) -> collapses back to normal detent (`data-sheet-expanded="false"`)
+      await swipeWardrobeSheetHandle(page, 100);
+      await expect(wardrobeSheet).toHaveAttribute('data-sheet-expanded', 'false');
+      await expect
+        .poll(async () => (await wardrobeSheet.boundingBox())?.height ?? 9999)
+        .toBeLessThanOrEqual(compactBox!.height + 20);
+
+      // Second swipe DOWN (`deltaY = +130`) -> dismisses/closes `#outfit-mobile-wardrobe-sheet` (`toHaveCount(0)`)
+      await swipeWardrobeSheetHandle(page, 130);
+      await expect(wardrobeSheet).toHaveCount(0);
+    } else {
+      await expect(
+        page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`)
+      ).toBeVisible();
+    }
+  });
 });
+
