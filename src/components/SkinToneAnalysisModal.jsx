@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ExternalLink,
-  KeyRound,
   Loader2,
   Palette,
   RotateCcw,
@@ -1264,7 +1263,7 @@ function ProfileModalContent({
         <section
           className="profile-ai-settings-card"
           data-profile-vton-style-section="true"
-          aria-label={tx(lang, 'AI 피팅 모델 및 API 설정', 'AI Fitting Model & API Settings')}
+          aria-label={tx(lang, 'AI 모델 피팅 설정', 'AI Model Fitting Settings')}
         >
           <div className="profile-ai-style-block">
             <div className="profile-ai-row-head">
@@ -1347,8 +1346,8 @@ function ProfileModalContent({
               }}
             >
               <span className="profile-api-key-summary-left">
-                <KeyRound size={14} aria-hidden="true" />
-                <span>{tx(lang, 'Gemini API 키 설정', 'Gemini API Key')}</span>
+                <Sparkles size={14} aria-hidden="true" />
+                <span>{tx(lang, 'AI 모델 피팅 활성화', 'Enable AI Model Fitting')}</span>
                 <span
                   className={`profile-api-key-dot-badge ${
                     hasConfiguredGeminiKey ? 'is-connected' : ''
@@ -1357,8 +1356,8 @@ function ProfileModalContent({
                   {apiKeySavedFlash
                     ? tx(lang, '저장됨', 'Saved')
                     : hasConfiguredGeminiKey
-                      ? tx(lang, '연결됨', 'Active')
-                      : tx(lang, '미설정', 'Not Set')}
+                      ? tx(lang, '켜짐', 'On')
+                      : tx(lang, '꺼짐', 'Off')}
                 </span>
               </span>
               <ChevronDown
@@ -1377,8 +1376,8 @@ function ProfileModalContent({
                 <p className="profile-api-key-desc">
                   {tx(
                     lang,
-                    '이 기기 브라우저에만 안전하게 보관되며 Gemini 가상 피팅 생성에 사용됩니다.',
-                    'Stored locally in this browser and used exclusively for Gemini virtual try-on.'
+                    'Google AI Studio의 Gemini 키를 연결하면 내 체형으로 AI 모델을 만들어 옷을 입혀 드려요. 키는 이 기기 브라우저에만 보관됩니다.',
+                    'Connect a Google AI Studio Gemini key to tailor an AI model to your body and dress it. The key stays in this browser only.'
                   )}
                 </p>
                 <div className="profile-api-key-input-row">

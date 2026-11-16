@@ -354,7 +354,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     // Symmetrical Bottom Angle Scrollbar: starts at center 0° (Front), both ends (-180 / +180) are 180° Back
     const angleDock = studioCanvas.locator('[data-angle-scroll-dock="true"]');
     const angleInput = studioCanvas.locator('input[data-angle-scroll-input="true"]');
-    await expect(angleDock).toBeVisible();
+    // DESIGN.md v3: in the 2D flat-lay lookbook (no AI model image yet) the 3D angle dock keeps its
+    // reserved slot but is hidden & inert; programmatic angle sync still stays consistent underneath.
+    await expect(studioCanvas).toHaveAttribute('data-angle-dock-visible', 'false');
+    await expect(angleDock).toBeHidden();
     await expect(angleInput).toHaveValue('0');
     await expect(angleDock.locator('[data-angle-center-reset="true"]')).toContainText(
       /0° 정면|0° Front/
@@ -378,7 +381,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toHaveAttribute('data-angle-scroll', '180');
 
     // Clicking center pill resets scrollbar back to dead-center 0° Front
-    await angleDock.locator('[data-angle-center-reset="true"]').click();
+    await setRangeSliderValue(page, 'input[data-angle-scroll-input="true"]', 0);
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
     await expect(angleInput).toHaveValue('0');
 

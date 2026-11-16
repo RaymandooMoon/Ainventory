@@ -1342,8 +1342,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             </div>
             <p className="editorial-vton-shimmer-title tabular-nums">
               {isEn
-                ? `Generating Weather Pose & V4 Cutout (${safeAngleDeg}°)`
-                : `날씨 맞춤 전신 포즈 및 V4 투명 누끼 생성 중 (${safeAngleDeg}°)`}
+                ? `Styling tailored weather look (${safeAngleDeg}°)`
+                : `체형에 맞춰 드레이핑하는 중 (${safeAngleDeg}°)`}
             </p>
             <p className="editorial-vton-shimmer-sub tabular-nums">
               {styleLabel} · {resolvedHeightCm}cm / {resolvedWeightKg}kg · {mstSwatch.code}

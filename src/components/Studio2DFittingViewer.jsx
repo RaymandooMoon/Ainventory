@@ -6,7 +6,6 @@ import {
   CloudSun,
   Flame,
   History,
-  KeyRound,
   RefreshCw,
   Snowflake,
   Sparkles,
@@ -51,6 +50,11 @@ import {
   trackFlatLayComboVisit,
 } from '../services/vton2DService.ts';
 import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
+import {
+  isStudioKeyActionableReason,
+  resolveStudioStatusCapsule,
+  shouldShowStudioAngleDock,
+} from '../services/studioStatusCapsule.ts';
 import {
   getWeatherStageBadgeMeta,
   resolveEffectiveWeatherFromRaw,
@@ -169,66 +173,7 @@ function getLocalDayKey(date = new Date()) {
 }
 
 function isKeyActionableReason(reason) {
-  return (
-    reason === 'gemini_api_key_not_configured' ||
-    reason === 'backend_unavailable' ||
-    reason === 'gemini_invalid_api_key' ||
-    reason === 'gemini_leaked_key' ||
-    reason === 'gemini_billing_required' ||
-    reason === 'gemini_http_401' ||
-    reason === 'gemini_http_403'
-  );
-}
-
-function formatFallbackToastMessage(reason, lang) {
-  const isEn = lang === 'en';
-  if (reason === 'empty_outfit') {
-    return isEn
-      ? 'Select at least one garment from your wardrobe before running AI Try-On.'
-      : 'AI 가상 피팅을 실행하려면 옷장에서 의류를 1개 이상 선택해 주세요.';
-  }
-  if (reason === 'gemini_api_key_not_configured' || reason === 'backend_unavailable') {
-    return isEn
-      ? 'Gemini API key is not configured — set your key in Profile or explore the Flat-Lay Lookbook.'
-      : 'Gemini API 키가 설정되지 않아 플랫레이 룩북을 표시합니다. 프로필에서 API 키를 설정할 수 있습니다.';
-  }
-  if (reason === 'gemini_invalid_api_key') {
-    return isEn
-      ? 'Invalid Gemini API key — please check your key in Profile.'
-      : '유효하지 않은 Gemini API 키입니다 — 프로필에서 키를 다시 확인해 주세요.';
-  }
-  if (reason === 'gemini_leaked_key') {
-    return isEn
-      ? 'This API key was blocked as publicly exposed — issue a new key in AI Studio.'
-      : '공개 노출로 차단된 API 키입니다 — AI Studio에서 새 키를 발급해 주세요.';
-  }
-  if (reason === 'gemini_billing_required') {
-    return isEn
-      ? 'Free-tier keys have 0 quota for Gemini image generation — link Tier 1 billing or try Sample AI Try-On.'
-      : '무료 티어 키는 이미지 생성 한도가 0입니다 — 유료 결제(Tier 1)를 연결하거나 샘플 피팅을 체험해 보세요.';
-  }
-  if (reason === 'gemini_http_401' || reason === 'gemini_http_403') {
-    return isEn
-      ? 'Gemini API permission denied — please verify your API key in Profile.'
-      : 'Gemini API 키 권한을 확인해 주세요 (프로필에서 재설정 가능).';
-  }
-  if (reason === 'gemini_http_429') {
-    return isEn
-      ? 'Gemini API rate limit reached (429) — please retry in a moment.'
-      : 'Gemini API 요청 한도(429)에 도달했습니다 — 잠시 후 재시도해 주세요.';
-  }
-  if (typeof reason === 'string' && reason.startsWith('gemini_empty_image_')) {
-    return isEn
-      ? `Model did not return an image (${reason.replace('gemini_empty_image_', '')}) — please retry or adjust garments.`
-      : `안전 필터 또는 응답 제한으로 이미지가 반환되지 않았습니다 (${reason.replace('gemini_empty_image_', '')}) — 재시도해 주세요.`;
-  }
-  const codeSuffix =
-    typeof reason === 'string' && reason && reason !== 'gemini_unavailable'
-      ? ` [${reason}]`
-      : '';
-  return isEn
-    ? `AI virtual try-on could not be generated — keeping Editorial Flat-Lay Board.${codeSuffix}`
-    : `AI 가상 피팅 생성이 지연되어 에디토리얼 플랫레이 보드를 유지합니다.${codeSuffix}`;
+  return isStudioKeyActionableReason(reason);
 }
 
 const LOOK_STYLE_TITLE_LABELS = {
@@ -1715,6 +1660,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     Boolean(resolveClientGeminiApiKey());
   void hasConfiguredGeminiKey;
 
+  const showAngleDock = shouldShowStudioAngleDock({
+    stageMode,
+    hasAiImage: Boolean(resolvedAiImageUrl),
+    aiLoading: Boolean(aiLoading),
+    demoShowcaseActive: Boolean(demoShowcaseEnabled),
+  });
+
+  const statusCapsuleSpec = useMemo(
+    () => (statusToast ? resolveStudioStatusCapsule(statusToast.reason, resolvedLang) : null),
+    [statusToast, resolvedLang]
+  );
+
   const centerAngleReadout = useMemo(() => {
     if (viewAngleDeg === 0 && Math.abs(angleScrollDeg) <= 12) {
       return isEn ? '0° Front' : '0° 정면';
@@ -1731,6 +1688,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
+      data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
       data-has-zoom-bar={showCharacterZoomBar ? 'true' : 'false'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
@@ -1787,15 +1745,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             <span className="studio-vton-step-label">
               {loadingStepIdx === 0
                 ? isEn
-                  ? 'Analyzing garments & body spec...'
-                  : '의류·체형 스펙 분석 중...'
+                  ? 'Selecting fabric & silhouette...'
+                  : '옷감을 고르는 중'
                 : loadingStepIdx === 1
                   ? isEn
-                    ? `Rendering ${canonicalSliceAngle}° full-body weather pose...`
-                    : `${canonicalSliceAngle}° 전신 날씨 포즈 AI 렌더링 중...`
+                    ? 'Draping tailored to your silhouette...'
+                    : '체형에 맞춰 드레이핑하는 중'
                   : isEn
-                    ? 'V7 clean cutout & cyclorama grounding...'
-                    : 'V7 투명 누끼 및 호리존 스튜디오 접지 중...'}
+                    ? 'Adjusting atelier studio lighting...'
+                    : '조명을 맞추는 중'}
             </span>
           </div>
         </>
@@ -1881,8 +1839,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             }
             title={
               isEn
-                ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits (0 credits)`
-                : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 이전 기록 즉시 불러오기 (0 크레딧)`
+                ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits instantly without extra generation`
+                : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 추가 생성 없이 즉시 불러오기`
             }
             className={`studio-vton-history-pill-btn tabular-nums ${historyOpen ? 'is-active' : ''}`}
             onPointerDown={(e) => e.stopPropagation()}
@@ -2012,8 +1970,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               aria-pressed={autoGenEnabled}
               title={
                 isEn
-                  ? 'Toggle automatic AI generation on garment change'
-                  : '옷 변경 시 자동 AI 생성 켜기/끄기 (OFF 권장: 크레딧 절약)'
+                  ? 'Toggle automatic AI fitting on garment change'
+                  : '옷 변경 시 자동 AI 피팅 켜기/끄기'
               }
               className={`studio-vton-autogen-btn ${autoGenEnabled ? 'is-active' : ''}`}
               onClick={handleToggleAutoGen}
@@ -2022,7 +1980,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               <span>
                 {isEn
                   ? `Auto ${autoGenEnabled ? 'ON' : 'OFF'}`
-                  : `자동 ${autoGenEnabled ? 'ON' : 'OFF'}`}
+                  : `자동 입히기 ${autoGenEnabled ? '켬' : '끔'}`}
               </span>
             </button>
           </div>
@@ -2058,78 +2016,77 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
         )}
 
-      {/* Status Toast when Gemini API key is missing or synthesis falls back to Flat-Lay Board */}
+      {/* Slim Studio Status Capsule (bottom HUD rail) — calm, single-line, one primary inline action.
+          Replaces the former red-dot alert box so AI model fitting reads as a studio feature. */}
       {!effectiveCompareActive &&
         !historyOpen &&
-        statusToast &&
+        statusCapsuleSpec &&
         (equippedCount > 0 || statusToast.reason === 'empty_outfit') && (
           <div
-            className="studio-vton-status-toast"
+            className={`studio-vton-status-toast studio-status-capsule ${showAngleDock ? 'is-above-angle-dock' : ''}`}
             data-vton-status-toast="true"
+            data-studio-status-capsule="true"
             data-toast-reason={statusToast.reason}
-            role="alert"
+            title={statusToast.reason}
+            role="status"
             aria-live="polite"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
             }}
           >
-            <div className="studio-vton-toast-head">
-              <span className="studio-vton-toast-dot" aria-hidden="true" />
-              <span className="studio-vton-toast-text">
-                {formatFallbackToastMessage(statusToast.reason, resolvedLang)}
-              </span>
+            <span className="studio-status-capsule-dot" aria-hidden="true" />
+            <span className="studio-vton-toast-text">{statusCapsuleSpec.message}</span>
+            {statusCapsuleSpec.action === 'activate' && (
               <button
                 type="button"
-                data-vton-dismiss-toast="true"
-                className="studio-vton-toast-dismiss"
-                aria-label={isEn ? 'Dismiss notice' : '안내 닫기'}
+                data-vton-open-key-btn="true"
+                className="studio-status-capsule-cta"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setHistoryOpen(false);
                   setStatusToast(null);
+                  onOpenSkinToneModal?.('api-key');
                 }}
               >
-                <X size={13} />
+                <Sparkles size={13} aria-hidden="true" />
+                <span>{statusCapsuleSpec.actionLabel}</span>
               </button>
-            </div>
-            {statusToast.reason !== 'empty_outfit' && (
-              <span className="studio-vton-toast-actions">
-                <button
-                  type="button"
-                  data-vton-retry-btn="true"
-                  className="studio-vton-toast-action is-primary-retry"
-                  aria-label={isEn ? 'Retry AI virtual try-on' : 'AI 가상 피팅 다시 시도'}
-                  onClick={handleRetryAiSynthesis}
-                >
-                  <RefreshCw size={12} />
-                  <span>{isEn ? 'Retry Now' : '다시 시도'}</span>
-                </button>
-                <button
-                  type="button"
-                  data-vton-open-key-btn="true"
-                  className="studio-vton-toast-action"
-                  aria-label={isEn ? 'Configure Gemini API key in Profile' : '프로필에서 Gemini API 키 설정'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setHistoryOpen(false);
-                    setStatusToast(null);
-                    onOpenSkinToneModal?.('api-key');
-                  }}
-                >
-                  <KeyRound size={11} />
-                  <span>{isEn ? 'API Key' : 'API 키 설정'}</span>
-                </button>
-                <button
-                  type="button"
-                  data-vton-demo-btn="true"
-                  className="studio-vton-toast-action"
-                  aria-label={isEn ? 'Preview Sample AI Try-On' : '샘플 AI 피팅 체험'}
-                  onClick={handleEnableDemoShowcase}
-                >
-                  <Sparkles size={11} />
-                  <span>{isEn ? 'Sample Fit' : '샘플 피팅'}</span>
-                </button>
-              </span>
             )}
+            {statusCapsuleSpec.action === 'retry' && (
+              <button
+                type="button"
+                data-vton-retry-btn="true"
+                className="studio-status-capsule-cta"
+                onClick={handleRetryAiSynthesis}
+              >
+                <RefreshCw size={13} aria-hidden="true" />
+                <span>{statusCapsuleSpec.actionLabel}</span>
+              </button>
+            )}
+            {statusCapsuleSpec.offerSample && (
+              <button
+                type="button"
+                data-vton-demo-btn="true"
+                className="studio-status-capsule-quiet"
+                aria-label={isEn ? 'Preview a sample AI model fitting' : '샘플 AI 모델 피팅 미리 보기'}
+                onClick={handleEnableDemoShowcase}
+              >
+                <span>{isEn ? 'Sample' : '샘플로 보기'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              data-vton-dismiss-toast="true"
+              className="studio-vton-toast-dismiss"
+              aria-label={isEn ? 'Dismiss notice' : '안내 닫기'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setStatusToast(null);
+              }}
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
           </div>
         )}
 
@@ -2161,7 +2118,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 <span>
                   {isEn
                     ? `Auto ${autoGenEnabled ? 'ON' : 'OFF'}`
-                    : `자동 ${autoGenEnabled ? 'ON' : 'OFF'}`}
+                    : `자동 입히기 ${autoGenEnabled ? '켬' : '끔'}`}
                 </span>
               </button>
               <button
@@ -2180,8 +2137,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           </div>
           <p className="studio-vton-key-popover-desc">
             {isEn
-              ? 'Select any previously generated look to restore it across 360° angles instantly with 0 AI credits.'
-              : '생성했던 코디 기록을 클릭하면 크레딧 소모 없이 360° 전 각도를 즉시 불러옵니다.'}
+              ? 'Select any previously generated look to restore it across 360° angles instantly without extra generation.'
+              : '생성했던 코디 기록을 클릭하면 추가 생성 없이 360° 전 각도를 즉시 불러옵니다.'}
           </p>
 
           {historyItems.length === 0 ? (
@@ -2242,7 +2199,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                         <span>·</span>
                         <span>{isEn ? '360° Swipe' : '360° 회전'}</span>
                         <span>·</span>
-                        <span>{isEn ? '0 Credit' : '0 크레딧'}</span>
+                        <span>{isEn ? 'Saved' : '보관됨'}</span>
                       </span>
                     </div>
                     <button
@@ -2402,8 +2359,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       {/* Bottom Symmetrical Angle Scrollbar (-180° Back .. 0° Front [Center Start] .. +180° Back) */}
       <div
-        className="studio-angle-scroll-dock"
+        className={`studio-angle-scroll-dock ${!showAngleDock ? 'is-hidden' : ''}`}
         data-angle-scroll-dock="true"
+        data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
+        aria-hidden={!showAngleDock ? 'true' : undefined}
+        inert={!showAngleDock}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="studio-angle-scroll-labels">

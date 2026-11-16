@@ -1249,10 +1249,10 @@ html[data-theme='dark']
 #profile-studio-sheet .avatar-mst-level-btn {
   min-width: 0;
   width: 100%;
-  min-height: 42px;
+  min-height: 48px;
   aspect-ratio: 1 / 0.92;
   padding: 4px 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-micro, 8px);
   border: 1px solid var(--profile-swatch-border);
   display: flex;
   align-items: flex-end;
@@ -1302,7 +1302,7 @@ html[data-theme='dark']
 #profile-studio-sheet .avatar-mst-undertone-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 
 @media (max-width: 380px) {

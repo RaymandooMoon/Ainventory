@@ -60,4 +60,14 @@
   --atelier-ink-muted-on-dark: rgba(247, 247, 245, 0.62);
   --atelier-ink-on-light: #1d1c1a;
   --atelier-ink-secondary-on-light: rgba(29, 28, 26, 0.68);
+
+  /* 7. Studio Status Capsule, Sand Accents & Zero-CLS Glass HUD */
+  --atelier-sand-dot: #d8c3a5;
+  --atelier-sand-ring: #d8c3a5;
+  --atelier-hud-glass-bg: rgba(255, 255, 255, 0.84);
+  --atelier-hud-glass-bg-dark: rgba(20, 20, 19, 0.84);
+  --atelier-hud-glass-solid: #f9f9fb;
+  --atelier-hud-glass-solid-dark: #1c1c1f;
+  --atelier-hud-text-secondary: #55524c;
+  --atelier-hud-text-secondary-dark: #aeaeb2;
 }
