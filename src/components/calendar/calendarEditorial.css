@@ -232,7 +232,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   white-space: nowrap;
   transition: color 0.22s var(--spring-ease);
 }
@@ -290,7 +290,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--space-2);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -356,7 +356,7 @@
 .cal-ed-weather-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-1);
   padding: 2px 6px;
   border-radius: var(--radius-pill);
   background: var(--glass-bg);
@@ -393,7 +393,7 @@
   position: absolute;
   width: 44px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--squircle-bg-color);
   background-image: var(--squircle-illumination);
   border: 1px solid var(--card-border);
@@ -408,7 +408,7 @@
 .cal-ed-stack-stage.is-large .cal-ed-stack-card {
   width: 86px;
   height: 96px;
-  border-radius: 18px;
+  border-radius: var(--radius-squircle);
   box-shadow: var(--elevation-sm);
 }
 
@@ -481,7 +481,7 @@
 .cal-ed-day-foot {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   width: 100%;
   min-width: 0;
 }
@@ -656,7 +656,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   color: var(--ink-muted);
   font-size: var(--type-caption);
   font-weight: 500;
@@ -750,7 +750,7 @@
 .cal-ed-archive-thumb {
   width: 38px;
   height: 42px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--squircle-bg-color);
   border: 1px solid var(--card-border);
   flex-shrink: 0;
@@ -863,7 +863,7 @@
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   transition:
     background-color 0.2s var(--spring-ease),
     color 0.2s var(--spring-ease),
@@ -927,7 +927,7 @@
 .cal-ed-lineup-thumb {
   width: 44px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--squircle-bg-color);
   border: 1px solid var(--card-border);
   flex-shrink: 0;
@@ -958,7 +958,7 @@
 .cal-ed-weather-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .cal-ed-weather-chip {
@@ -973,7 +973,7 @@
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   cursor: pointer;
   transition:
     background-color 0.2s var(--spring-ease),
@@ -1031,7 +1031,7 @@
 .cal-ed-outfit-mini-thumb {
   width: 34px;
   height: 38px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--squircle-bg-color);
   border: 1px solid var(--card-border);
   overflow: hidden;
@@ -1055,7 +1055,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
   padding: 8px;
   border-radius: var(--radius-md);
   border: 1px solid var(--card-border);
@@ -1075,7 +1075,7 @@
 .cal-ed-garment-pick-thumb {
   width: 100%;
   aspect-ratio: 1 / 1.05;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--squircle-bg-color);
   overflow: hidden;
 }
@@ -1125,7 +1125,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   cursor: pointer;
   transition: transform 0.2s var(--spring-ease);
 }
@@ -1147,7 +1147,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   cursor: pointer;
   transition:
     transform 0.2s var(--spring-ease),
@@ -1188,8 +1188,8 @@
   .cal-ed-day-cell {
     min-height: 88px;
     padding: 5px;
-    border-radius: 11px;
-    gap: 3px;
+    border-radius: var(--radius-sm);
+    gap: var(--space-1);
   }
 
   .cal-ed-day-num {
@@ -1214,7 +1214,7 @@
   .cal-ed-stack-card {
     width: 31px;
     height: 34px;
-    border-radius: 8px;
+    border-radius: var(--radius-micro);
   }
 
   .cal-ed-stack-card[data-stack-pos='0'] {

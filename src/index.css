@@ -9,7 +9,7 @@
   color-scheme: only light;
 
   /* Core Canvas & Atelier Surface Hierarchy (Contract-Compliant) */
-  --bg-canvas: #FAFBFD;
+  --bg-canvas: #FFFFFF;
   --bg-surface: #F5F5F7;
   --bg-elevated: #FFFFFF;
   --bg-tertiary: #E8E8ED;
@@ -39,7 +39,7 @@
   /* Ink & Semantic Tokens (WCAG 1.4.3 AA >= 4.5:1 on #FFFFFF/#FAFBFD/#F5F5F7) */
   --ink-primary: #1D1D1F;
   --ink-secondary: #515154;
-  --ink-muted: #6E6E73;
+  --ink-muted: #636366;
   --ink-inverse: #FFFFFF;
 
   --accent-mono: #1D1D1F;
@@ -52,8 +52,8 @@
   --success-bg: rgba(22, 101, 52, 0.09);
 
   /* Multi-Layer Refractive Glassmorphism & Elevation System */
-  --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-bg-dense: rgba(255, 255, 255, 0.9);
+  --glass-bg: rgba(255, 255, 255, 0.84);
+  --glass-bg-dense: rgba(255, 255, 255, 0.92);
   --glass-bg-solid-fallback: #F9F9FB;
   --glass-border: rgba(29, 29, 31, 0.085);
   --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -127,10 +127,11 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 
+  --radius-micro: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
   --radius-squircle: 22px;
   --radius-lg: 26px;
-  --radius-md: 14px;
-  --radius-sm: 10px;
   --radius-pill: 9999px;
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Pretendard Variable',
@@ -143,6 +144,8 @@
   --type-label: 0.8125rem;
   --type-caption: 0.78rem;
   --type-micro: 0.6875rem;
+  --type-metric-display: 1.75rem;
+  --type-metric-md: 1.375rem;
 
   --vibrancy-filter: blur(26px) saturate(190%);
   --vibrancy-filter-subtle: blur(18px) saturate(175%);
@@ -153,19 +156,19 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* Obsidian Gallery Core Surfaces */
-  --bg-canvas: #000000;
-  --bg-surface: #161618;
-  --bg-elevated: #1C1C1F;
+  /* Obsidian Gallery Core Surfaces (DESIGN.md v3) */
+  --bg-canvas: #141413;
+  --bg-surface: #1C1C1E;
+  --bg-elevated: #2C2C2E;
   --bg-tertiary: #2A2A2E;
   --bg-subtle: #232327;
-  --card-bg: #1C1C1F;
-  --card-subtle: #242429;
+  --card-bg: #1C1C1E;
+  --card-subtle: #21201E;
   --card-border: rgba(245, 245, 247, 0.095);
   --atelier-ambient-wash: radial-gradient(
     120% 80% at 50% -10%,
     rgba(42, 44, 54, 0.38) 0%,
-    rgba(0, 0, 0, 0) 68%
+    rgba(20, 20, 19, 0) 68%
   );
 
   --squircle-bg-color: #1C1C1E;
@@ -182,10 +185,10 @@
   --ink-primary: #F5F5F7;
   --ink-secondary: #AEAEB2;
   --ink-muted: #98989D;
-  --ink-inverse: #000000;
+  --ink-inverse: #141413;
 
   --accent-mono: #F5F5F7;
-  --accent-mono-ink: #000000;
+  --accent-mono-ink: #141413;
   --accent-soft-bg: rgba(245, 245, 247, 0.09);
   --danger-ink: #FF453A;
   --danger-bg: rgba(255, 69, 58, 0.15);
@@ -193,9 +196,9 @@
   --success-ink: #32D74B;
   --success-bg: rgba(50, 215, 75, 0.14);
 
-  --glass-bg: rgba(24, 24, 28, 0.8);
-  --glass-bg-dense: rgba(28, 28, 32, 0.9);
-  --glass-bg-solid-fallback: #1C1C1F;
+  --glass-bg: rgba(20, 20, 19, 0.84);
+  --glass-bg-dense: rgba(28, 28, 30, 0.92);
+  --glass-bg-solid-fallback: #1C1C1E;
   --glass-border: rgba(245, 245, 247, 0.13);
   --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   --scrim-bg: rgba(0, 0, 0, 0.66);
@@ -4382,6 +4385,51 @@ img,
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.hig-wardrobe-toolbar[hidden] {
+  display: none;
+}
+
+.hig-wardrobe-toolbar[data-open='true'] {
+  animation: higToolbarReveal 0.24s var(--spring-ease) both;
+}
+
+@keyframes higToolbarReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hig-wardrobe-search-toggle {
+  position: relative;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border: 1px solid var(--card-border);
+  box-shadow: none;
+}
+
+.hig-wardrobe-search-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+}
+
+.hig-wardrobe-search-toggle.active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hig-wardrobe-toolbar[data-open='true'] {
+    animation: none;
+  }
 }
 
 .hig-wardrobe-search-wrap {

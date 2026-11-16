@@ -66,6 +66,7 @@ export default function WardrobeView({
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeSubPart, setActiveSubPart] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const ensuredSeedRef = useRef(new Set());
@@ -178,6 +179,9 @@ export default function WardrobeView({
   const hasActiveFilterOrSearch =
     activeCategory !== 'all' || activeSubPart !== 'all' || searchQuery.trim().length > 0;
 
+  // Search + sort stay folded until requested; an active query keeps them visible.
+  const toolbarOpen = searchOpen || searchQuery.length > 0;
+
   return (
     <section className="hig-screen-container hig-closet-screen" aria-label="MY WARDROBE">
       {/* Top Bar: Left Title + Item Count | Right '+' + Profile + Account Settings */}
@@ -201,25 +205,50 @@ export default function WardrobeView({
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
             extraActions={
-              <button
-                id={CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}
-                type="button"
-                className="hig-circle-icon-btn"
-                aria-label={tx(lang, '옷 등록', 'Add Item')}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setAddModalOpen(true);
-                }}
-              >
-                <Plus size={21} strokeWidth={2.2} />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`hig-circle-icon-btn hig-wardrobe-search-toggle ${toolbarOpen ? 'active' : ''}`}
+                  data-wardrobe-search-toggle="true"
+                  aria-expanded={toolbarOpen}
+                  aria-controls="wardrobe-search-toolbar"
+                  aria-label={tx(lang, '검색·정렬 열기', 'Open search and sort')}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    if (toolbarOpen && !searchQuery) {
+                      setSearchOpen(false);
+                    } else {
+                      setSearchOpen(true);
+                    }
+                  }}
+                >
+                  <Search size={19} strokeWidth={2.1} />
+                </button>
+                <button
+                  id={CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}
+                  type="button"
+                  className="hig-circle-icon-btn"
+                  aria-label={tx(lang, '옷 등록', 'Add Item')}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setAddModalOpen(true);
+                  }}
+                >
+                  <Plus size={21} strokeWidth={2.2} />
+                </button>
+              </>
             }
           />
         </div>
       </header>
 
-      {/* Instant Search + Quick Sort Toolbar (Apple HIG Monochrome) */}
-      <div className="hig-wardrobe-toolbar">
+      {/* Progressive Disclosure: Search + Sort live behind the header toggle */}
+      <div
+        id="wardrobe-search-toolbar"
+        className="hig-wardrobe-toolbar"
+        data-open={toolbarOpen ? 'true' : 'false'}
+        hidden={!toolbarOpen}
+      >
         <div className="hig-wardrobe-search-wrap">
           <Search size={15} className="hig-wardrobe-search-icon" aria-hidden="true" />
           <input
@@ -271,7 +300,7 @@ export default function WardrobeView({
         </div>
       </div>
 
-      {/* Horizontal Scrollable Pill Category Filter */}
+      {/* Single Horizontal Pill Category Axis (Jewelry included — no duplicate row) */}
       <nav
         id={CARBON_DOM_CONTRACT.wardrobeCategoryRailId}
         className="hig-pill-rail"
@@ -284,6 +313,7 @@ export default function WardrobeView({
               key={pill.key}
               type="button"
               data-category-pill={pill.key}
+              data-wardrobe-jewelry-pill={pill.key === 'jewelry' ? 'true' : undefined}
               aria-pressed={active}
               className={`hig-filter-pill ${active ? 'active' : ''}`}
               onClick={() => {
@@ -298,51 +328,34 @@ export default function WardrobeView({
         })}
       </nav>
 
-      {/* Sibling Jewelry Collection & Accessory/Jewelry Sub-Part Filter Bar */}
-      <div className="hig-wardrobe-subtree-wrap" data-wardrobe-subtree="true">
-        <button
-          type="button"
-          data-wardrobe-jewelry-pill="true"
-          aria-pressed={activeCategory === 'jewelry'}
-          className={`hig-wardrobe-sub-pill ${activeCategory === 'jewelry' ? 'active' : ''}`}
-          onClick={() => {
-            triggerHaptic('selection');
-            if (activeCategory === 'jewelry') {
-              setActiveCategory('all');
-              setActiveSubPart('all');
-            } else {
-              setActiveCategory('jewelry');
-              setActiveSubPart('all');
-            }
-          }}
+      {/* Sub-Part Rail — disclosed only for Accessories / Jewelry */}
+      {activeSubPartOptions && (
+        <div
+          className="hig-wardrobe-subtree-wrap"
+          data-wardrobe-subtree="true"
+          role="group"
+          aria-label={tx(lang, '세부 분류', 'Sub-category')}
         >
-          {tx(lang, '주얼리', 'Jewelry')}
-        </button>
-
-        {activeSubPartOptions && (
-          <>
-            <span className="hig-wardrobe-subtree-divider" aria-hidden="true" />
-            {activeSubPartOptions.map((sub) => {
-              const active = activeSubPart === sub.key;
-              return (
-                <button
-                  key={sub.key}
-                  type="button"
-                  data-wardrobe-subpart-pill={sub.key}
-                  aria-pressed={active}
-                  className={`hig-wardrobe-sub-pill ${active ? 'active' : ''}`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setActiveSubPart(sub.key);
-                  }}
-                >
-                  {tx(lang, sub.ko, sub.en)}
-                </button>
-              );
-            })}
-          </>
-        )}
-      </div>
+          {activeSubPartOptions.map((sub) => {
+            const active = activeSubPart === sub.key;
+            return (
+              <button
+                key={sub.key}
+                type="button"
+                data-wardrobe-subpart-pill={sub.key}
+                aria-pressed={active}
+                className={`hig-wardrobe-sub-pill ${active ? 'active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setActiveSubPart(sub.key);
+                }}
+              >
+                {tx(lang, sub.ko, sub.en)}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Main 2~4 Column Squircle Inventory Grid */}
       {loading ? (

@@ -10,16 +10,19 @@ export const CARBON_HIG_TOKENS = {
     bgSurface: '#F5F5F7',
     bgElevated: '#FFFFFF',
     inkPrimary: '#1D1D1F',
-    inkSecondary: '#6E6E73',
+    inkSecondary: '#515154',
+    inkTertiary: '#636366',
     accentMono: '#1D1D1F',
     vibrancyHairline: 'rgba(29, 29, 31, 0.08)',
   },
   dark: {
-    bgCanvas: '#000000',
+    bgCanvas: '#141413',
     bgSurface: '#1C1C1E',
     bgElevated: '#2C2C2E',
+    bgCard: '#21201E',
     inkPrimary: '#F5F5F7',
     inkSecondary: '#AEAEB2',
+    inkTertiary: '#98989D',
     accentMono: '#F5F5F7',
     vibrancyHairline: 'rgba(245, 245, 247, 0.12)',
   },
@@ -38,20 +41,22 @@ export const CARBON_HIG_TOKENS = {
 export type AppTabKey = 'closet' | 'outfits' | 'calendar' | 'stats';
 
 export type WardrobeCategoryKey = 'top' | 'bottom' | 'outer' | 'shoes' | 'accessory';
-export type WardrobePillKey = 'all' | WardrobeCategoryKey;
+export type WardrobePillKey = 'all' | WardrobeCategoryKey | 'jewelry';
 
 export interface WardrobePillOption {
   key: WardrobePillKey;
-  label: 'All' | 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories';
+  label: 'All' | 'Tops' | 'Bottoms' | 'Outerwear' | 'Shoes' | 'Accessories' | 'Jewelry';
+  labelKo?: string;
 }
 
 export const WARDROBE_PILL_FILTERS: readonly WardrobePillOption[] = [
-  { key: 'all', label: 'All' },
-  { key: 'top', label: 'Tops' },
-  { key: 'bottom', label: 'Bottoms' },
-  { key: 'outer', label: 'Outerwear' },
-  { key: 'shoes', label: 'Shoes' },
-  { key: 'accessory', label: 'Accessories' },
+  { key: 'all', label: 'All', labelKo: '전체' },
+  { key: 'top', label: 'Tops', labelKo: '상의' },
+  { key: 'bottom', label: 'Bottoms', labelKo: '하의' },
+  { key: 'outer', label: 'Outerwear', labelKo: '아우터' },
+  { key: 'shoes', label: 'Shoes', labelKo: '신발' },
+  { key: 'accessory', label: 'Accessories', labelKo: '액세서리' },
+  { key: 'jewelry', label: 'Jewelry', labelKo: '주얼리' },
 ] as const;
 
 export const WARDROBE_CATEGORY_OPTIONS: ReadonlyArray<{

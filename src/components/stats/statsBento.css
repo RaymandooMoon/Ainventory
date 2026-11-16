@@ -87,7 +87,7 @@
 .stats-title-stack {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -117,7 +117,7 @@
 .stats-glass-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   padding: 5px 11px;
   border-radius: var(--radius-pill);
   background: var(--glass-bg);
@@ -138,7 +138,7 @@
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 3px;
+  padding: var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--bg-surface);
   border: 1px solid var(--card-border);
@@ -229,7 +229,7 @@
 }
 
 .stats-gauge-pct {
-  font-size: 1.78rem;
+  font-size: var(--type-metric-display);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--ink-primary);
@@ -238,7 +238,7 @@
 }
 
 .stats-gauge-caption {
-  font-size: 0.65rem;
+  font-size: var(--type-micro);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -272,7 +272,7 @@
 }
 
 .stats-kpi-value {
-  font-size: 1.32rem;
+  font-size: var(--type-metric-md);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink-primary);
@@ -306,7 +306,7 @@
 .stats-profile-specs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .stats-spec-chip {
@@ -367,7 +367,7 @@
   justify-content: center;
   text-align: center;
   pointer-events: none;
-  padding: 6px;
+  padding: var(--space-2);
 }
 
 .stats-donut-center-lbl {
@@ -383,7 +383,7 @@
 }
 
 .stats-donut-center-val {
-  font-size: 1.48rem;
+  font-size: var(--type-metric-md);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--ink-primary);
@@ -401,7 +401,7 @@
 .stats-comp-bars {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -409,7 +409,7 @@
   display: grid;
   grid-template-columns: 10px 92px minmax(0, 1fr) 68px;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
@@ -478,12 +478,12 @@
 .stats-spectrum-bar {
   height: 30px;
   border-radius: var(--radius-pill);
-  padding: 3px;
+  padding: var(--space-1);
   background: var(--bg-surface);
   border: 1px solid var(--card-border);
   display: flex;
   align-items: stretch;
-  gap: 3px;
+  gap: var(--space-1);
   overflow: hidden;
 }
 
@@ -548,7 +548,7 @@
 .stats-swatch-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -621,7 +621,7 @@
 .stats-rank-thumb {
   width: 50px;
   height: 54px;
-  border-radius: 13px;
+  border-radius: var(--radius-md);
   background: var(--squircle-bg-color);
   background-image: var(--squircle-illumination);
   border: 1px solid var(--card-border);
@@ -632,14 +632,14 @@
 .stats-rank-info {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 .stats-rank-name-line {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -747,7 +747,7 @@
 
   .stats-comp-row {
     grid-template-columns: 9px 78px minmax(0, 1fr) 62px;
-    gap: 8px;
+    gap: var(--space-2);
     padding: 6px 8px;
   }
 
@@ -778,8 +778,8 @@
 
   .stats-comp-row {
     grid-template-columns: 8px 68px minmax(0, 1fr) 54px;
-    gap: 6px;
-    padding: 6px;
+    gap: var(--space-2);
+    padding: var(--space-2);
   }
 }
 

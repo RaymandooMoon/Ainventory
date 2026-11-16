@@ -88,7 +88,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`)).toBeVisible();
 
-    // 2. Exact 6 Pill Category Filters
+    // 2. Exact 7 Pill Category Filters (single axis, Jewelry included)
     const pills = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeCategoryRailId} button`);
     await expect(pills).toHaveText([
       'All',
@@ -97,6 +97,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       'Outerwear',
       'Shoes',
       'Accessories',
+      'Jewelry',
     ]);
 
     // 3. Unified Bottom-Center Floating Glassmorphism 4-Tab Bar
