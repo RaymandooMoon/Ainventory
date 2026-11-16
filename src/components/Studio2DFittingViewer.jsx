@@ -413,7 +413,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleAngleScrollRelease = useCallback(() => {
     isScrubbingScrollRef.current = false;
-    if (Math.abs(angleScrollRef.current) >= 138) {
+    if (Math.abs(angleScrollRef.current) >= 158) {
       const snappedEnd = angleScrollRef.current < 0 ? -180 : 180;
       angleScrollRef.current = snappedEnd;
       setAngleScrollDeg(snappedEnd);
@@ -710,7 +710,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const fallbackSameComboMemorySlice = useMemo(() => {
     void historyCount;
     if (forceRefresh) return null;
-    const fallbackOrder = [0, 45, 90, 180].filter((deg) => deg !== canonicalSliceAngle);
+    const angularDist = (a, b) => {
+      const diff = Math.abs(a - b) % 360;
+      return diff > 180 ? 360 - diff : diff;
+    };
+    const fallbackOrder = TURNAROUND_ANGLES.filter((deg) => deg !== canonicalSliceAngle).sort(
+      (a, b) => angularDist(a, canonicalSliceAngle) - angularDist(b, canonicalSliceAngle)
+    );
     for (const deg of fallbackOrder) {
       const hit = peekMemoryAiVtonSlice({
         avatarConfigHash: resolvedAvatarHash,
@@ -1349,20 +1355,33 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     stageMode === 'ai-vton' && hasPinnedHistoryOverride
   );
 
-  const pinnedHistorySliceUrl = hasPinnedHistoryOverride
-    ? pinnedHistoryItem.angleSlices?.[canonicalSliceAngle] ||
+  const pinnedHistorySliceUrl = useMemo(() => {
+    if (!hasPinnedHistoryOverride || !pinnedHistoryItem) return null;
+    const direct = pinnedHistoryItem.angleSlices?.[canonicalSliceAngle];
+    if (direct) return direct;
+    // Legacy 4-angle history fallback: prefer lateral 90°/45° over 180° straight back when viewing 135°/225°
+    if (canonicalSliceAngle === 135 || canonicalSliceAngle === 225) {
+      return (
+        pinnedHistoryItem.angleSlices?.[90] ||
+        pinnedHistoryItem.angleSlices?.[45] ||
+        pinnedHistoryItem.thumbnailUrl ||
+        null
+      );
+    }
+    return (
       pinnedHistoryItem.angleSlices?.[0] ||
       pinnedHistoryItem.angleSlices?.[45] ||
       pinnedHistoryItem.thumbnailUrl ||
       null
-    : null;
+    );
+  }, [hasPinnedHistoryOverride, pinnedHistoryItem, canonicalSliceAngle]);
 
   const availableAiImageUrl =
     pinnedHistorySliceUrl ||
     memorySlice?.imageUrl ||
     (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
     demoSliceUrl ||
-    fallbackSameComboMemorySlice?.imageUrl ||
+    (aiLoading ? fallbackSameComboMemorySlice?.imageUrl : null) ||
     null;
 
   const resolvedAiImageUrl = stageMode === 'ai-vton' ? availableAiImageUrl : null;
@@ -2075,7 +2094,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="left-back"
-            className={`studio-angle-end-label ${angleScrollDeg <= -138 ? 'is-active' : ''}`}
+            className={`studio-angle-end-label ${angleScrollDeg <= -158 ? 'is-active' : ''}`}
             onClick={() => handleJumpAngleScroll(-180)}
           >
             {isEn ? 'Back' : '뒷모습'}
@@ -2096,7 +2115,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="right-back"
-            className={`studio-angle-end-label ${angleScrollDeg >= 138 ? 'is-active' : ''}`}
+            className={`studio-angle-end-label ${angleScrollDeg >= 158 ? 'is-active' : ''}`}
             onClick={() => handleJumpAngleScroll(180)}
           >
             {isEn ? 'Back' : '뒷모습'}

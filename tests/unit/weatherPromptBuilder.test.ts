@@ -43,7 +43,17 @@ describe('Phase 6: Weather Prompt Builder, Studio Key Hex & MediaPipe Lifecycle'
     assert.match(rainDirectives.headroomPrompt, /10% bottom margin/);
 
     const angle45 = buildTurnaroundAnglePromptDirective(45);
+    const angle135 = buildTurnaroundAnglePromptDirective(135);
+    const angle180 = buildTurnaroundAnglePromptDirective(180);
+    const angle225 = buildTurnaroundAnglePromptDirective(225);
     assert.match(angle45, /45/);
+    assert.match(angle135, /135/);
+    assert.match(angle135, /BACK-RIGHT/i);
+    assert.match(angle225, /225/);
+    assert.match(angle225, /BACK-LEFT/i);
+    assert.notEqual(angle135, angle180);
+    assert.notEqual(angle225, angle180);
+    assert.notEqual(angle135, angle225);
   });
 
   it('exports disposeMediaPipeLandmarker and safely resets singleton state when idle', async () => {

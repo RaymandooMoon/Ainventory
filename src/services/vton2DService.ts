@@ -29,7 +29,7 @@ import {
   CUTOUT_STAGE_BACKDROP_HEX,
   type EffectiveWeatherMode,
   LEGACY_CUTOUT_PIPELINE_VERSIONS,
-  buildTurnaround2x2SheetAngleDirectives,
+  buildTurnaround3x2SheetAngleDirectives,
   buildTurnaroundAnglePromptDirective,
   buildWeatherPosePromptDirectives,
   resolveEffectiveWeatherFromRaw,
@@ -42,11 +42,13 @@ export type ViewerStageMode = 'flatlay' | 'ai-vton';
 
 export type VtonStyleMode = 'photorealistic' | 'stylized_isometric';
 
-export type TurnaroundAngleDeg = 0 | 45 | 90 | 180;
+export type TurnaroundAngleDeg = 0 | 45 | 90 | 135 | 180 | 225;
 
 export type Turnaround360AngleDeg = 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315;
 
-export const TURNAROUND_ANGLES: readonly TurnaroundAngleDeg[] = [0, 45, 90, 180] as const;
+export const TURNAROUND_ANGLES: readonly TurnaroundAngleDeg[] = [
+  0, 45, 90, 135, 180, 225,
+] as const;
 
 export const TURNAROUND_360_ANGLES: readonly Turnaround360AngleDeg[] = [
   0, 45, 90, 135, 180, 225, 270, 315,
@@ -199,7 +201,7 @@ interface VtonServerResponse {
   cached?: boolean;
   provider?: string;
   model?: string | null;
-  layout?: 'turnaround_2x2' | 'single' | string;
+  layout?: 'turnaround_3x2' | 'turnaround_2x2' | 'single' | string;
   styleMode?: string;
   weatherMood?: string;
   geminiUsed?: boolean;
@@ -213,7 +215,7 @@ interface VtonServerResponse {
 const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_slices';
-const L1_MAX_ENTRIES = 24;
+const L1_MAX_ENTRIES = 36;
 const L2_MAX_ENTRIES = 240;
 const PACKSHOT_CACHE_MAX = 40;
 
@@ -436,9 +438,10 @@ export function resolveSignedAngleScrollState(rawScrollDeg: unknown): {
 } {
   const n = Number(rawScrollDeg);
   const clampedScrollDeg = Number.isFinite(n) ? clamp(n, -180, 180) : 0;
-  // Widen the outer ±180° back-view zone ([±138..±180]) so `180° 뒷모습` is effortlessly reachable at both ends
+  // Natural 157.5° boundary preserves full 45°-wide zones for ±135° (우후면/좌후면: [±113..±157])
+  // while outer [±158..±180] snaps cleanly to 180° 뒷모습 at both ends
   const snappedScrollDeg =
-    Math.abs(clampedScrollDeg) >= 138
+    Math.abs(clampedScrollDeg) >= 158
       ? clampedScrollDeg < 0
         ? -180
         : 180
@@ -524,9 +527,9 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
   },
   135: {
     angleDeg: 135,
-    canonicalSliceAngle: 180,
+    canonicalSliceAngle: 135,
     mirrorX: false,
-    perspectiveYawDeg: -7,
+    perspectiveYawDeg: 0,
     shortKo: '우후면',
     shortEn: '135° R',
     fullKo: '135° 우측 후면',
@@ -544,9 +547,9 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
   },
   225: {
     angleDeg: 225,
-    canonicalSliceAngle: 180,
+    canonicalSliceAngle: 225,
     mirrorX: false,
-    perspectiveYawDeg: 7,
+    perspectiveYawDeg: 0,
     shortKo: '좌후면',
     shortEn: '225° L',
     fullKo: '225° 좌측 후면',
@@ -580,8 +583,8 @@ export function resolve360AngleRenderSpec(rawAngle?: unknown): Turnaround360Rend
 }
 
 /**
- * Normalizes any numeric degree onto the 4 canonical turnaround angles:
- * `0°` (Front), `45°` (Quarter), `90°` (Side Profile), `180°` (Back).
+ * Normalizes any numeric degree onto the 6 canonical turnaround slice angles:
+ * `0°`, `45°`, `90°`, `135°` (Back-Right), `180°` (Back), `225°` (Back-Left).
  */
 export function normalizeTurnaroundAngleDeg(
   rawAngle?: unknown,
@@ -1496,23 +1499,25 @@ function measureOpaqueVerticalBounds(
 }
 
 /**
- * Ensures all 4 sliced turnaround angles (`0°`, `45°`, `90°`, `180°`) stand on a unified
+ * Ensures all sliced turnaround angles (`0°`, `45°`, `90°`, `135°`, `180°`, `225°`) stand on a unified
  * bottom floor baseline with generous shoe clearance and consistent full-body height so
- * `45°` never appears high-angle, zoomed-in, or cropped at the feet relative to `0°/90°/180°`.
+ * quarter/rear-quarter angles never appear high-angle, zoomed-in, or cropped at the feet.
  * Preserves bit-exact pixels (zero resampling) when slices already share an aligned baseline.
  */
 function normalizeTurnaroundCanvasesToFloorBaseline(
-  canvases: Record<TurnaroundAngleDeg, HTMLCanvasElement>
+  canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>>
 ): void {
-  const boundsByAngle = {} as Record<
-    TurnaroundAngleDeg,
-    ReturnType<typeof measureOpaqueVerticalBounds>
+  const activeAngles = TURNAROUND_ANGLES.filter((angle) => Boolean(canvases[angle]));
+  if (activeAngles.length < 2) return;
+
+  const boundsByAngle = {} as Partial<
+    Record<TurnaroundAngleDeg, ReturnType<typeof measureOpaqueVerticalBounds>>
   >;
   const heights: number[] = [];
   const bottoms: number[] = [];
 
-  for (const angle of TURNAROUND_ANGLES) {
-    const b = measureOpaqueVerticalBounds(canvases[angle]);
+  for (const angle of activeAngles) {
+    const b = measureOpaqueVerticalBounds(canvases[angle]!);
     boundsByAngle[angle] = b;
     if (b) {
       heights.push(b.maxY - b.minY + 1);
@@ -1527,7 +1532,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
   const sortedBottoms = bottoms.slice().sort((a, b) => a - b);
   const medianBottom = sortedBottoms[Math.floor(sortedBottoms.length / 2)];
 
-  for (const angle of TURNAROUND_ANGLES) {
+  for (const angle of activeAngles) {
     const c = canvases[angle];
     const b = boundsByAngle[angle];
     if (!c || !b) continue;
@@ -1618,7 +1623,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
   let maxPostFgW = 0;
   let minCanvasW = Infinity;
   let refCanvasH = 0;
-  for (const angle of TURNAROUND_ANGLES) {
+  for (const angle of activeAngles) {
     const c = canvases[angle];
     if (!c || c.height < 180 || c.width < 180) {
       minCanvasW = 0;
@@ -1640,7 +1645,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
       Math.ceil(maxPostFgW + refCanvasH * 0.08)
     );
     if (desiredPortraitW < minCanvasW - 16) {
-      for (const angle of TURNAROUND_ANGLES) {
+      for (const angle of activeAngles) {
         const c = canvases[angle];
         if (!c) continue;
         const oldW = c.width;
@@ -1691,9 +1696,10 @@ function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
 }
 
 /**
- * Detects whether a lateral (`90°` or `45°`) cutout human silhouette faces screen-left or screen-right
- * by comparing forefoot/toe overhang against ankle/lower-shin alignment at the bottom of the figure
- * (100% immune to overhead umbrellas, hats, or shoulder bags).
+ * Detects whether a lateral or oblique (`45°`, `90°`, `135°`, `225°`) cutout human silhouette faces
+ * screen-left or screen-right by comparing forefoot/toe overhang against ankle/lower-shin alignment
+ * (immune to overhead umbrellas, hats, or shoulder bags), with a head facial/ear skin-centroid fallback
+ * when floor-length coats or dresses cover the ankles.
  */
 function detectLateralCanvasFacingDirection(
   canvas: HTMLCanvasElement
@@ -1755,48 +1761,207 @@ function detectLateralCanvasFacingDirection(
     }
   }
 
-  if (ankleCount < 16 || footCount < 16 || ankleMaxX < ankleMinX || footMaxX < footMinX) {
-    return 'neutral';
+  if (ankleCount >= 16 && footCount >= 16 && ankleMaxX >= ankleMinX && footMaxX >= footMinX) {
+    const ankleMeanX = ankleSumX / ankleCount;
+    const footMeanX = footSumX / footCount;
+    const leftToeOverhang = ankleMinX - footMinX;
+    const rightToeOverhang = footMaxX - ankleMaxX;
+    const overhangDiff = rightToeOverhang - leftToeOverhang;
+    const meanShift = footMeanX - ankleMeanX;
+
+    const minOverhangPx = Math.max(3, fgW * 0.028);
+    const minMeanShiftPx = Math.max(1.5, fgW * 0.012);
+
+    if (overhangDiff < -minOverhangPx && meanShift < -minMeanShiftPx) {
+      return 'left';
+    }
+    if (overhangDiff > minOverhangPx && meanShift > minMeanShiftPx) {
+      return 'right';
+    }
   }
 
-  const ankleMeanX = ankleSumX / ankleCount;
-  const footMeanX = footSumX / footCount;
-  const leftToeOverhang = ankleMinX - footMinX;
-  const rightToeOverhang = footMaxX - ankleMaxX;
-  const overhangDiff = rightToeOverhang - leftToeOverhang;
-  const meanShift = footMeanX - ankleMeanX;
+  // Fallback for ankle-length coats/dresses: warm skin centroid in head band vs head opaque midpoint
+  const headY0 = Math.min(bounds.maxY, bounds.minY + Math.round(fgH * 0.035));
+  const headY1 = Math.min(bounds.maxY, bounds.minY + Math.round(fgH * 0.115));
+  let headMinX = cw;
+  let headMaxX = -1;
+  let skinSumX = 0;
+  let skinCount = 0;
 
-  const minOverhangPx = Math.max(4, fgW * 0.045);
-  const minMeanShiftPx = Math.max(2, fgW * 0.018);
+  for (let y = headY0; y <= headY1; y += 1) {
+    const row = y * cw * 4;
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const idx = row + x * 4;
+      if (data[idx + 3] < 150) continue;
+      if (x < headMinX) headMinX = x;
+      if (x > headMaxX) headMaxX = x;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r >= 95 && r > g + 8 && g > b + 4) {
+        skinSumX += x;
+        skinCount += 1;
+      }
+    }
+  }
 
-  if (overhangDiff < -minOverhangPx && meanShift < -minMeanShiftPx) {
-    return 'left';
+  const headW = headMaxX - headMinX + 1;
+  if (skinCount >= 16 && headW >= 14) {
+    const headMidX = (headMinX + headMaxX) * 0.5;
+    const skinOffset = skinSumX / skinCount - headMidX;
+    const minSkinShift = Math.max(2.5, headW * 0.07);
+    if (skinOffset < -minSkinShift) return 'left';
+    if (skinOffset > minSkinShift) return 'right';
   }
-  if (overhangDiff > minOverhangPx && meanShift > minMeanShiftPx) {
-    return 'right';
-  }
+
   return 'neutral';
 }
 
+interface HorizontalSpan {
+  x0: number;
+  x1: number;
+}
+
+function detectRowSubjectClusters(
+  sheetCtx: CanvasRenderingContext2D,
+  w: number,
+  y0: number,
+  y1: number
+): HorizontalSpan[] {
+  const rowH = y1 - y0;
+  if (w < 240 || rowH < 120) return [];
+  let data: Uint8ClampedArray;
+  try {
+    data = sheetCtx.getImageData(0, y0, w, rowH).data;
+  } catch {
+    return [];
+  }
+
+  const colHits = new Uint16Array(w);
+  const yStart = Math.max(2, Math.round(rowH * 0.04));
+  const yEnd = Math.min(rowH - 2, Math.round(rowH * 0.96));
+  const edgeXs = [2, Math.min(8, w - 1), Math.max(0, w - 9), Math.max(0, w - 3)];
+
+  for (let y = yStart; y < yEnd; y += 2) {
+    const rowOff = y * w * 4;
+    const rs: number[] = [];
+    const gs: number[] = [];
+    const bs: number[] = [];
+    for (const ex of edgeXs) {
+      const idx = rowOff + ex * 4;
+      rs.push(data[idx]);
+      gs.push(data[idx + 1]);
+      bs.push(data[idx + 2]);
+    }
+    rs.sort((a, b) => a - b);
+    gs.sort((a, b) => a - b);
+    bs.sort((a, b) => a - b);
+    const bgR = (rs[1] + rs[2]) * 0.5;
+    const bgG = (gs[1] + gs[2]) * 0.5;
+    const bgB = (bs[1] + bs[2]) * 0.5;
+
+    for (let x = 2; x < w - 2; x += 1) {
+      const idx = rowOff + x * 4;
+      if (data[idx + 3] < 40) continue;
+      const dr = data[idx] - bgR;
+      const dg = data[idx + 1] - bgG;
+      const db = data[idx + 2] - bgB;
+      if (dr * dr + dg * dg + db * db > 324) {
+        colHits[x] += 1;
+      }
+    }
+  }
+
+  const minColHits = Math.max(3, Math.round(((yEnd - yStart) / 2) * 0.025));
+  const gapBridgePx = Math.max(6, Math.round(w * 0.014));
+  const minClusterWidth = Math.max(18, Math.round(w * 0.045));
+  const spans: HorizontalSpan[] = [];
+
+  let inSpan = false;
+  let startX = 0;
+  let gapRun = 0;
+  for (let x = 0; x < w; x += 1) {
+    if (colHits[x] >= minColHits) {
+      if (!inSpan) {
+        inSpan = true;
+        startX = x;
+      }
+      gapRun = 0;
+    } else if (inSpan) {
+      gapRun += 1;
+      if (gapRun > gapBridgePx) {
+        const endX = x - gapRun;
+        if (endX - startX + 1 >= minClusterWidth) {
+          spans.push({ x0: startX, x1: endX });
+        }
+        inSpan = false;
+        gapRun = 0;
+      }
+    }
+  }
+  if (inSpan) {
+    const endX = w - 1 - gapRun;
+    if (endX - startX + 1 >= minClusterWidth) {
+      spans.push({ x0: startX, x1: endX });
+    }
+  }
+
+  return spans;
+}
+
+function resolveThreeColumnCropSpans(
+  clusters: HorizontalSpan[],
+  w: number
+): [HorizontalSpan, HorizontalSpan, HorizontalSpan] {
+  if (clusters.length === 3) {
+    const m01 = Math.round((clusters[0].x1 + clusters[1].x0) * 0.5);
+    const m12 = Math.round((clusters[1].x1 + clusters[2].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, w - 3) },
+    ];
+  }
+  if (clusters.length === 4) {
+    // Safeguard if an image model draws 4 columns x 2 rows instead of 3x2: pick columns 0, 1, 3 cleanly
+    const m01 = Math.round((clusters[0].x1 + clusters[1].x0) * 0.5);
+    const m12 = Math.round((clusters[1].x1 + clusters[2].x0) * 0.5);
+    const m23 = Math.round((clusters[2].x1 + clusters[3].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m23 + 1, x1: Math.max(m23 + 17, w - 3) },
+    ];
+  }
+  const colW = Math.floor(w / 3);
+  const trimX = Math.max(1, Math.round(colW * 0.012));
+  return [
+    { x0: trimX, x1: colW - trimX },
+    { x0: colW + trimX, x1: colW * 2 - trimX },
+    { x0: colW * 2 + trimX, x1: w - trimX },
+  ];
+}
+
 /**
- * Crops an AI-generated 2x2 Turnaround Studio Sheet (or 1x4 wide strip) into 4 individual RGBA PNG angle images:
- * - Top-Left     -> `0°` (Front)
- * - Top-Right    -> `45°` (Quarter, normalized to face screen-right)
- * - Bottom-Left  -> `90°` (Side Profile, normalized to face screen-right)
- * - Bottom-Right -> `180°` (Back)
+ * Crops an AI-generated 3x2 Turnaround Studio Sheet (6 panels: `0°, 45°, 90°, 135°, 180°, 225°`)
+ * — or a legacy/mock 2x2 sheet (`0°, 45°, 90°, 180°`) — into 6 individual RGBA PNG angle slices:
+ * - Row 1: `0°` (Front), `45°` (Front-Right), `90°` (Right Side)
+ * - Row 2: `135°` (Back-Right `우후면`), `180°` (Straight Back `후면`), `225°` (Back-Left `좌후면`)
  * Runs `isolateSingleSubjectInSlice` + V4 hole-aware `applyCornerBfsCutoutOnCanvas` +
- * screen-right gaze normalization + `normalizeTurnaroundCanvasesToFloorBaseline`!
+ * gaze-direction normalization + `normalizeTurnaroundCanvasesToFloorBaseline`.
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string,
-  options?: { forceFlipAngles?: TurnaroundAngleDeg[] }
+  options?: { layout?: string; forceFlipAngles?: TurnaroundAngleDeg[] }
 ): Promise<Record<TurnaroundAngleDeg, string>> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
     return {
       0: sheetDataUrl,
       45: sheetDataUrl,
       90: sheetDataUrl,
+      135: sheetDataUrl,
       180: sheetDataUrl,
+      225: sheetDataUrl,
     };
   }
 
@@ -1816,9 +1981,38 @@ export async function sliceTurnaround2x2Sheet(
           return;
         }
 
-        const isHorizontal1x4Strip = w / h >= 2.15;
+        const isExplicit2x2 = options?.layout === 'turnaround_2x2' || w < 256 || h < 256;
+        const isHorizontal1x6Strip = !isExplicit2x2 && w / h >= 3.15;
+        const isHorizontal1x4Strip = !isHorizontal1x6Strip && w / h >= 2.15;
 
-        let quadrants: Array<{
+        let topClusters: HorizontalSpan[] = [];
+        let botClusters: HorizontalSpan[] = [];
+        const halfH = Math.floor(h / 2);
+
+        if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip) {
+          const probeCanvas = document.createElement('canvas');
+          probeCanvas.width = w;
+          probeCanvas.height = h;
+          const probeCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
+          if (probeCtx) {
+            probeCtx.drawImage(img, 0, 0);
+            topClusters = detectRowSubjectClusters(probeCtx, w, 0, halfH);
+            botClusters = detectRowSubjectClusters(probeCtx, w, halfH, h);
+          }
+          probeCanvas.width = 0;
+          probeCanvas.height = 0;
+        }
+
+        const use3x2Grid =
+          !isExplicit2x2 &&
+          !isHorizontal1x6Strip &&
+          !isHorizontal1x4Strip &&
+          (options?.layout === 'turnaround_3x2' ||
+            topClusters.length >= 3 ||
+            botClusters.length >= 3 ||
+            (w / h >= 1.18 && !(topClusters.length === 2 && botClusters.length === 2)));
+
+        let panels: Array<{
           angle: TurnaroundAngleDeg;
           sx: number;
           sy: number;
@@ -1826,13 +2020,53 @@ export async function sliceTurnaround2x2Sheet(
           ch: number;
         }>;
 
-        if (isHorizontal1x4Strip) {
+        if (isHorizontal1x6Strip) {
+          const colW = Math.floor(w / 6);
+          const trimX = Math.max(1, Math.round(colW * 0.015));
+          const trimY = Math.max(1, Math.round(h * 0.012));
+          const cw = Math.max(16, colW - trimX * 2);
+          const ch = Math.max(16, h - trimY * 2);
+          panels = TURNAROUND_ANGLES.map((angle, idx) => ({
+            angle,
+            sx: colW * idx + trimX,
+            sy: trimY,
+            cw,
+            ch,
+          }));
+        } else if (use3x2Grid) {
+          const trimY = Math.max(1, Math.round(halfH * 0.012));
+          const ch = Math.max(16, halfH - trimY * 2);
+          const topSpans = resolveThreeColumnCropSpans(topClusters, w);
+          const botSpans = resolveThreeColumnCropSpans(botClusters, w);
+          const topAngles: [TurnaroundAngleDeg, TurnaroundAngleDeg, TurnaroundAngleDeg] = [
+            0, 45, 90,
+          ];
+          const botAngles: [TurnaroundAngleDeg, TurnaroundAngleDeg, TurnaroundAngleDeg] = [
+            135, 180, 225,
+          ];
+          panels = [
+            ...topAngles.map((angle, i) => ({
+              angle,
+              sx: topSpans[i].x0,
+              sy: trimY,
+              cw: Math.max(16, topSpans[i].x1 - topSpans[i].x0),
+              ch,
+            })),
+            ...botAngles.map((angle, i) => ({
+              angle,
+              sx: botSpans[i].x0,
+              sy: halfH + trimY,
+              cw: Math.max(16, botSpans[i].x1 - botSpans[i].x0),
+              ch,
+            })),
+          ];
+        } else if (isHorizontal1x4Strip) {
           const colW = Math.floor(w / 4);
           const trimX = Math.max(1, Math.round(colW * 0.015));
           const trimY = Math.max(1, Math.round(h * 0.012));
           const cw = Math.max(16, colW - trimX * 2);
           const ch = Math.max(16, h - trimY * 2);
-          quadrants = [
+          panels = [
             { angle: 0, sx: trimX, sy: trimY, cw, ch },
             { angle: 45, sx: colW + trimX, sy: trimY, cw, ch },
             { angle: 90, sx: colW * 2 + trimX, sy: trimY, cw, ch },
@@ -1840,12 +2074,11 @@ export async function sliceTurnaround2x2Sheet(
           ];
         } else {
           const halfW = Math.floor(w / 2);
-          const halfH = Math.floor(h / 2);
           const trimX = Math.max(1, Math.round(halfW * 0.012));
           const trimY = Math.max(1, Math.round(halfH * 0.012));
           const cw = Math.max(16, halfW - trimX * 2);
           const ch = Math.max(16, halfH - trimY * 2);
-          quadrants = [
+          panels = [
             { angle: 0, sx: trimX, sy: trimY, cw, ch },
             { angle: 45, sx: halfW + trimX, sy: trimY, cw, ch },
             { angle: 90, sx: trimX, sy: halfH + trimY, cw, ch },
@@ -1854,47 +2087,45 @@ export async function sliceTurnaround2x2Sheet(
         }
 
         const out = {} as Record<TurnaroundAngleDeg, string>;
-        const cutCanvases = {} as Record<TurnaroundAngleDeg, HTMLCanvasElement>;
+        const cutCanvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
         const extraCanvases: HTMLCanvasElement[] = [];
 
-        for (const q of quadrants) {
+        for (const p of panels) {
           const cropCanvas = document.createElement('canvas');
-          cropCanvas.width = q.cw;
-          cropCanvas.height = q.ch;
+          cropCanvas.width = p.cw;
+          cropCanvas.height = p.ch;
           const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) {
-            out[q.angle] = sheetDataUrl;
+            out[p.angle] = sheetDataUrl;
             continue;
           }
-          ctx.clearRect(0, 0, q.cw, q.ch);
-          ctx.drawImage(img, q.sx, q.sy, q.cw, q.ch, 0, 0, q.cw, q.ch);
+          ctx.clearRect(0, 0, p.cw, p.ch);
+          ctx.drawImage(img, p.sx, p.sy, p.cw, p.ch, 0, 0, p.cw, p.ch);
           const finalCanvas = isolateSingleSubjectInSlice(cropCanvas);
           if (finalCanvas !== cropCanvas) {
             extraCanvases.push(cropCanvas);
           }
           applyCornerBfsCutoutOnCanvas(finalCanvas);
 
-          // Ensure canonical `45°` & `90°` ALWAYS face screen-right so slider left = gaze left & slider right = gaze right!
-          if (forceFlipSet.has(q.angle)) {
+          // Normalize canonical gaze: `45°`, `90°`, `135°` face screen-right; `225°` faces screen-left!
+          if (forceFlipSet.has(p.angle)) {
             flipCanvasHorizontallyInPlace(finalCanvas);
           } else if (
-            (q.angle === 45 || q.angle === 90) &&
+            (p.angle === 45 || p.angle === 90 || p.angle === 135) &&
             detectLateralCanvasFacingDirection(finalCanvas) === 'left'
+          ) {
+            flipCanvasHorizontallyInPlace(finalCanvas);
+          } else if (
+            p.angle === 225 &&
+            detectLateralCanvasFacingDirection(finalCanvas) === 'right'
           ) {
             flipCanvasHorizontallyInPlace(finalCanvas);
           }
 
-          cutCanvases[q.angle] = finalCanvas;
+          cutCanvases[p.angle] = finalCanvas;
         }
 
-        if (
-          cutCanvases[0] &&
-          cutCanvases[45] &&
-          cutCanvases[90] &&
-          cutCanvases[180]
-        ) {
-          normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
-        }
+        normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
 
         for (const angle of TURNAROUND_ANGLES) {
           const c = cutCanvases[angle];
@@ -1904,6 +2135,14 @@ export async function sliceTurnaround2x2Sheet(
             c.height = 0;
           }
         }
+        // Populate rear-quarter keys cleanly when slicing legacy/mock 4-panel 2x2 sheets
+        if (!out[135]) {
+          out[135] = out[90] || out[180] || out[0] || sheetDataUrl;
+        }
+        if (!out[225]) {
+          out[225] = out[180] || out[90] || out[0] || sheetDataUrl;
+        }
+
         for (const extra of extraCanvases) {
           extra.width = 0;
           extra.height = 0;
@@ -1923,15 +2162,24 @@ export async function sliceTurnaround2x2Sheet(
       0: fallbackCut,
       45: fallbackCut,
       90: fallbackCut,
+      135: fallbackCut,
       180: fallbackCut,
+      225: fallbackCut,
     };
   }
 
-  // Run 4-corner + enclosed-hole alpha verification guard across ALL 4 turnaround angles
+  // Run 4-corner + enclosed-hole alpha verification guard across ALL 6 turnaround angles (deduped)
+  const uniqueMap = new Map<string, Promise<string>>();
   const verifiedOut = {} as Record<TurnaroundAngleDeg, string>;
   await Promise.all(
     TURNAROUND_ANGLES.map(async (angle) => {
-      verifiedOut[angle] = await ensureTransparentCutout(rawCropped[angle]);
+      const src = rawCropped[angle];
+      let job = uniqueMap.get(src);
+      if (!job) {
+        job = ensureTransparentCutout(src);
+        uniqueMap.set(src, job);
+      }
+      verifiedOut[angle] = await job;
     })
   );
   return verifiedOut;
@@ -1983,12 +2231,14 @@ export async function loadShowcaseDemoVtonSlices(
     try {
       const assetPath =
         styleMode === 'stylized_isometric'
-          ? '/seed/vton-showcase-stylized.jpg'
-          : '/seed/vton-showcase-photoreal.jpg';
+          ? '/seed/vton-showcase-3x2-stylized.jpg'
+          : '/seed/vton-showcase-3x2-photoreal.jpg';
       const sheetUrl = withPublicBaseUrl(assetPath);
-      // Both static showcase sheets have 45° & 90° facing screen-left; flip them so canonical +45°/+90° face screen-right
+      const forceFlipAngles: TurnaroundAngleDeg[] =
+        styleMode === 'stylized_isometric' ? [45, 90, 135] : [45, 90];
       const sliced = await sliceTurnaround2x2Sheet(sheetUrl, {
-        forceFlipAngles: [45, 90],
+        layout: 'turnaround_3x2',
+        forceFlipAngles,
       });
       showcaseMemorySlices[styleMode] = sliced;
       return sliced;
@@ -2278,7 +2528,7 @@ function buildDirectClientGeminiParts(params: {
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
   const cameraLine = turnaroundSheet
-    ? `SQUARE 1:1 Borderless 2x2 Turnaround Sheet (4 equal quadrants on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround2x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each quadrant (total 4 figures in the entire sheet — NEVER draw two models side-by-side or twin clones inside any quadrant).`
+    ? `4:3 Borderless 3x2 Turnaround Sheet (STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered inside each of the 6 panels (total 6 figures in the entire sheet — NEVER draw duplicate/twin models inside any panel).`
     : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models).`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
@@ -2291,7 +2541,7 @@ function buildDirectClientGeminiParts(params: {
   const portraitPart = parseDataUrlInlinePart(profile.portraitDataUrl);
   if (portraitPart) {
     parts.push({
-      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (facing VIEWER'S RIGHT), while on the Bottom-Right 180° Back view render ONLY the back of the head & rear hair silhouette (STRICTLY ZERO front face, eyes, nose, or front lapels on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
+      text: `[CRITICAL USER FACE IDENTITY LOCK — PRIMARY LIKENESS PHOTO BELOW]: The model's face MUST look unmistakably like this exact person in the attached photo! Reproduce their exact facial bone structure, eye shape, eyelid fold, eyebrows, nose bridge/tip, lips, cheek contour, jawline, and hairstyle/hairline across 0° Front, 45° Screen-Right Quarter (facing VIEWER'S RIGHT with face, both eyes, nose, chin 100% visible), and 90° Screen-Right Side Profile (facing VIEWER'S RIGHT); on 135° Back-Right (Row 2 Left) and 225° Back-Left (Row 2 Right) render the matching rear-quarter hairstyle, ear, and lost-profile cheek/jawline contour facing diagonally away (rightward on 135°, leftward on 225°); and on Row 2 Center 180° Straight Back render ONLY the symmetrical back of the head & rear hair silhouette (STRICTLY ZERO front face on 180° Back) in ${isStylized ? 'stylized character' : 'photorealistic'} style with skin tone ${profile.skinToneHex}. NEVER substitute a generic stock model face:`,
     });
     parts.push({ inlineData: portraitPart });
   }
@@ -2401,7 +2651,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           const generationConfig: Record<string, unknown> = {
             responseModalities,
             ...(useAspectConfig
-              ? { imageConfig: { aspectRatio: turnaroundSheet ? '1:1' : '3:4' } }
+              ? { imageConfig: { aspectRatio: turnaroundSheet ? '4:3' : '3:4' } }
               : {}),
           };
           const res = await fetch(
@@ -2513,7 +2763,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
                   cached: false,
                   provider: 'gemini-vton',
                   model,
-                  layout: turnaroundSheet ? 'turnaround_2x2' : 'single',
+                  layout: turnaroundSheet ? 'turnaround_3x2' : 'single',
                   styleMode,
                   weatherMood,
                   geminiUsed: true,
@@ -2862,7 +3112,7 @@ export async function synthesizeGeminiMultiAngleVton(
       const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
       const entriesToPersist: CachedAiVtonSlice[] = [];
       const isTurnaroundResponse = json.layout
-        ? json.layout === 'turnaround_2x2'
+        ? json.layout === 'turnaround_3x2' || json.layout === 'turnaround_2x2'
         : useTurnaroundSheet;
 
       if (json.panelImages && typeof json.panelImages === 'object') {
@@ -2901,7 +3151,9 @@ export async function synthesizeGeminiMultiAngleVton(
           }
         }
       } else if (rawComposite && isTurnaroundResponse) {
-        const sliced = await sliceTurnaround2x2Sheet(rawComposite);
+        const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
+          layout: json.layout || 'turnaround_3x2',
+        });
         for (const a of TURNAROUND_ANGLES) {
           const sliceUrl =
             sliced[a] ||

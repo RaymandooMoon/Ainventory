@@ -6,7 +6,7 @@ import db, { DATA_DIR, ROOT_DIR, UPLOADS_DIR } from './db.js';
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
 export const VALID_VTON_STYLE_MODES = new Set(['photorealistic', 'stylized_isometric']);
-export const TURNAROUND_ANGLES = Object.freeze([0, 45, 90, 180]);
+export const TURNAROUND_ANGLES = Object.freeze([0, 45, 90, 135, 180, 225]);
 export const VTON_CACHE_DIR = path.join(DATA_DIR, 'vton-cache');
 export const SEED_DIR = path.join(ROOT_DIR, 'public', 'seed');
 
@@ -237,7 +237,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v5-gaze-aligned-fullbody-360';
+const CACHE_SCHEMA_VERSION = 'v6-true-3x2-rear-quarter-360';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1290,7 +1290,7 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
  */
 export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
   const layoutKey = normalizedProfile.turnaroundSheet
-    ? 'turnaround_2x2'
+    ? 'turnaround_3x2'
     : `single_${normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}`;
   const styleMode = normalizedProfile.styleMode || VTON_STYLE_PRESET;
   const weatherKey =
@@ -1592,11 +1592,11 @@ function describeIsoCameraAngle(viewAngleDeg) {
     case -90:
       return 'Strict -90-degree lateral side-profile full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly left showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 10% bottom margin.';
     case 135:
-      return '135° Back-Quarter Right Full-Body View (eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 10% bottom margin showing back of head/hair, shoulder blades, rear garment construction, and full shoes on a flat #94A3B8 backdrop)';
+      return "Diagonal 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW turned away toward BACK-RIGHT (VIEWER'S RIGHT / SCREEN-RIGHT — midway between 90° right profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-RIGHT, (2) rear back of outfit rotated 45 degrees diagonally with RIGHT SHOULDER and full outer RIGHT SLEEVE prominent in foreground, and (3) staggered shoes with RIGHT SHOE outer side & toe pointing away toward SCREEN-RIGHT on a flat #94A3B8 backdrop.";
     case -135:
-      return '-135° Back-Quarter Left Full-Body View (eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 10% bottom margin showing back of head/hair, shoulder blades, rear garment construction, and full shoes on a flat #94A3B8 backdrop)';
+      return "Diagonal 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW turned away toward BACK-LEFT (VIEWER'S LEFT / SCREEN-LEFT — midway between -90° left profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-LEFT, (2) rear back of outfit rotated 45 degrees diagonally with LEFT SHOULDER and full outer LEFT SLEEVE prominent in foreground (preserving exact anatomical left/right bag and watch placement), and (3) staggered shoes with LEFT SHOE outer side & toe pointing away toward SCREEN-LEFT on a flat #94A3B8 backdrop.";
     case 180:
-      return 'Direct 180-degree rear back-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing directly away from camera showing the back of hair, back shoulders, rear garment tailoring, and full shoes with 10% bottom margin.';
+      return 'Strict symmetrical 180-degree PURE STRAIGHT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with perpendicular shoulders and back 100% turned directly toward camera (center-back seam vertical down spine) showing ONLY symmetrical back of hair, level back shoulders, rear garment tailoring, and straight rear heels of both shoes with 8–10% bottom margin (ZERO side cheek/jawline contour, ZERO shoe toe side-profile, ZERO front face).';
     default:
       return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.';
   }
@@ -1710,15 +1710,17 @@ function buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella = false) 
 
   const cameraBlock = profile.turnaroundSheet
     ? [
-        'CAMERA & 4-ANGLE 2x2 TURNAROUND STUDIO SHEET LOCK (SQUARE 1:1 — EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
-        `- Compose a clean, borderless SQUARE (1:1) 2x2 Grid Turnaround Studio Sheet divided into 4 equal quadrants (50% width x 50% height each) on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap (underneath the open umbrella canopy between shaft and head/shoulders, between bent arms and waist/torso, between legs/ankles, and inside bag handles/straps) — STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO floor plinths, and ZERO airborne rain/snow/dust particles in the background.`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 4 quadrants (0°, 45°, 90°, 180°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~82–85% of quadrant height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
-        '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 4 quadrants, render EXACTLY ONE (1) solitary person centered horizontally in that quadrant. NEVER place two models side-by-side in a quadrant, NEVER duplicate or mirror a figure, NEVER render background extras or reflections, and NEVER generate a 1x4 or 2x4 multi-person lineup.',
-        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical head-to-toe scale and identical floor baseline in each of the 4 quadrants:',
-        '  * [Top-Left Quadrant — 0° Direct Front Full-Body]: Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible on the floor with 8–10% bottom margin.',
-        "  * [Top-Right Quadrant — 45° Screen-Right Front-Quarter Full-Body (FACING VIEWER'S RIGHT, ZERO TILT, FULL FEET VISIBLE)]: Strict FRONT-FACING 45-degree horizontal-yaw full-body view turned toward VIEWER'S RIGHT (SCREEN-RIGHT) at the EXACT SAME eye-to-waist horizontal camera height and zero tilt as 0°, 90°, and 180°. Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles. The model MUST turn 40–45 degrees to face toward the RIGHT side of the frame (VIEWER'S RIGHT) so the FACE, BOTH EYES, NOSE, CHIN, GAZE, FRONT CHEST/LAPELS, and front shoe toes angle clearly toward SCREEN-RIGHT (NEVER facing screen-left, NEVER show a back view).",
-        "  * [Bottom-Left Quadrant — 90° Screen-Right Side Profile Full-Body (FACING VIEWER'S RIGHT)]: Strict 90-degree lateral side-profile full-body view facing toward VIEWER'S RIGHT (SCREEN-RIGHT). Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly toward the RIGHT edge of the frame so the nose, eyes, chin, chest, and shoe toes point strictly to SCREEN-RIGHT (NEVER facing screen-left), showing exact side profile of face, garment silhouette, and full shoes completely visible on the floor with 8–10% bottom margin.",
-        '  * [Bottom-Right Quadrant — 180° Strict Rear Back Full-Body (100% BACK OF HEAD & OUTFIT, ZERO FACE)]: Direct 180-degree STRICT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with their back 100% turned directly toward the camera showing ONLY the back of the head/hair, nape/back collar, back shoulders, rear garment tailoring/vent, and rear heels of both shoes with 8–10% bottom margin (NEVER show front face, eyes, nose, lips, chin, or front lapels; NEVER turn head over the shoulder; ZERO second figure).',
+        'CAMERA & 6-ANGLE 3x2 TURNAROUND STUDIO SHEET LOCK (4:3 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT PANELS — EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
+        `- Compose a clean, borderless 4:3 3x2 Grid Turnaround Studio Sheet divided into STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS (33.3% width x 50% height each; STRICTLY 3 FIGURES ON THE TOP ROW AND STRICTLY 3 FIGURES ON THE BOTTOM ROW — NEVER 4 COLUMNS, NEVER 8 FIGURES) on a 100% flat solid uniform chromakey-free neutral mid-slate (${CUTOUT_STAGE_HEX}) backdrop, including 100% flat shadowless ${CUTOUT_STAGE_HEX} inside EVERY enclosed gap (underneath the open umbrella canopy between shaft and head/shoulders, between bent arms and waist/torso, between legs/ankles, and inside bag handles/straps) — STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO shading inside enclosed loops, ZERO gradients, ZERO floor plinths, and ZERO airborne rain/snow/dust particles in the background.`,
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 panels (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~82–85% of panel height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
+        '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Inside EACH of the 6 panels, render EXACTLY ONE (1) solitary person centered horizontally in that panel (total 6 figures in the entire sheet — NEVER 8 figures, NEVER place two models side-by-side in a panel).',
+        '- Depict the EXACT SAME PERSON wearing the EXACT SAME OUTFIT and WEATHER POSE at identical head-to-toe scale and identical floor baseline in each of the 6 panels:',
+        '  * [Top-Left Panel (Row 1, Col 1) — 0° Direct Front Full-Body]: Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible on the floor with 8–10% bottom margin.',
+        "  * [Top-Center Panel (Row 1, Col 2) — 45° Screen-Right Front-Quarter Full-Body (FACING VIEWER'S RIGHT)]: Strict FRONT-FACING 45-degree horizontal-yaw full-body view turned toward VIEWER'S RIGHT (SCREEN-RIGHT) at identical eye-to-waist horizontal camera height and zero tilt. Face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER facing screen-left, NEVER show a back view).",
+        "  * [Top-Right Panel (Row 1, Col 3) — 90° Screen-Right Side Profile Full-Body (FACING VIEWER'S RIGHT)]: Strict 90-degree lateral side-profile full-body view facing toward VIEWER'S RIGHT (SCREEN-RIGHT) showing exact side profile of face, garment silhouette, and full shoes pointing strictly to SCREEN-RIGHT with 8–10% bottom margin.",
+        "  * [Bottom-Left Panel (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY TOWARD BACK-RIGHT / SCREEN-RIGHT — DISTINCT FROM 180° BACK)]: Diagonal 135-degree BACK-RIGHT three-quarter rear view turned away toward BACK-RIGHT (SCREEN-RIGHT), midway between 90° side profile and 180° straight back. Show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-RIGHT, diagonal rear back of outfit with RIGHT SHOULDER and outer RIGHT SLEEVE prominent in foreground, and staggered shoes with RIGHT SHOE outer side & toe pointing away toward SCREEN-RIGHT (MUST NOT look like a flat 180° straight back!).",
+        '  * [Bottom-Center Panel (Row 2, Col 2) — 180° Strict Symmetrical Rear Back Full-Body (100% STRAIGHT BACK, ZERO FACE)]: Strict symmetrical 180-degree pure rear back-facing full-body view. Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear heels of both shoes with 8–10% bottom margin (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).',
+        "  * [Bottom-Right Panel (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY TOWARD BACK-LEFT / SCREEN-LEFT — DISTINCT FROM 180° BACK)]: Diagonal 225-degree (-135°) BACK-LEFT three-quarter rear view turned away toward BACK-LEFT (SCREEN-LEFT), midway between -90° left profile and 180° straight back. Show back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-LEFT, diagonal rear back of outfit with LEFT SHOULDER and outer LEFT SLEEVE prominent in foreground (preserving exact anatomical left/right bag and watch sides without mirroring), and staggered shoes with LEFT SHOE outer side & toe pointing away toward SCREEN-LEFT (MUST NOT look like a flat 180° straight back!).",
         '- Render ZERO grid lines, ZERO dividing bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
@@ -1771,7 +1773,7 @@ function appendPortraitParts(parts, profile) {
         'THE ATTACHED PORTRAIT PHOTO IS THE REAL USER. You MUST render the model\'s face with 100% recognizable likeness to this exact uploaded user face photo — do NOT replace their face with a generic fashion stock model!',
         'Reproduce their exact eye shape & spacing, nose bridge & tip, lip contour, jawline/cheekbone structure, brow arch, hairstyle & hair parting/length/color from the photo, facial hair (if present), and eyeglasses (if worn in the photo unless overridden by equipped eyewear).',
         isTurnaround
-          ? `Maintain this exact user's unmistakable face likeness across the 0° front, 45° screen-right quarter, and 90° screen-right lateral side profile quadrants, and render ONLY the back of their head & hair silhouette on the Bottom-Right 180° back quadrant (STRICTLY ZERO front facial features on 180° back), integrated seamlessly onto the body in ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+          ? `Maintain this exact user's unmistakable face likeness across 0° front, 45° screen-right quarter, and 90° screen-right side profile on the Top Row; on Bottom-Left (135° Back-Right) and Bottom-Right (225° Back-Left) show their matching rear-three-quarter hair silhouette plus outer ear and cheek/jawline lost-profile facing away; and on Bottom-Center (180° Back) render ONLY the symmetrical back of their head & hair silhouette (ZERO front face on 180° back), in ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
           : isPureBack
             ? `Because the camera is at 180° full rear view, render ONLY the back of this exact user's head, hair silhouette/color from the attached photo, ears, and neck with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
             : isBackQuarter
@@ -1788,7 +1790,7 @@ function appendPortraitParts(parts, profile) {
   } else {
     parts.push({
       text: isTurnaround
-        ? `[FACE & HAIR IDENTITY LOCK — 4-VIEW TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, and 180° back views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+        ? `[FACE & HAIR IDENTITY LOCK — 6-VIEW 3x2 TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, 135° back-right quarter, 180° straight back, and 225° back-left quarter views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
         : isPureBack
           ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
           : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, natural editorial lookbook expression matching camera angle ${angle}° in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
@@ -1800,7 +1802,7 @@ function buildBaseModelParts(profile) {
   const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
   appendPortraitParts(parts, profile);
   const viewLabel = profile.turnaroundSheet
-    ? 'all 4 turnaround views (0°, 45°, 90°, 180°) with ONE solitary person per quadrant'
+    ? 'all 6 turnaround views (3x2 grid: 0°, 45°, 90° on top row; 135°, 180°, 225° on bottom row) with ONE solitary person per panel'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°`;
   parts.push({
     text: [
@@ -1838,7 +1840,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     Boolean(resolvedSlots.jwl_wrist_left && resolvedSlots.jwl_wrist_right) ||
     Boolean(resolvedSlots.jwl_ring_left && resolvedSlots.jwl_ring_right);
   const viewScopeText = profile.turnaroundSheet
-    ? 'ALL 4 TURNAROUND VIEWS (0° Front, 45° Quarter, 90° Side Profile, 180° Back — ONE solitary person per quadrant)'
+    ? 'ALL 6 TURNAROUND VIEWS (3x2 grid: 0° Front, 45° Quarter, 90° Side on Top Row; 135° Back-Right, 180° Back, 225° Back-Left on Bottom Row — ONE solitary person per panel)'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW`;
 
   const layeringRules = [
@@ -2018,7 +2020,7 @@ async function generateWithGeminiModelChain(
 ) {
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
-  const aspectRatio = options?.turnaroundSheet ? '1:1' : '3:4';
+  const aspectRatio = options?.turnaroundSheet ? '4:3' : '3:4';
 
   for (const model of modelChain) {
     const elapsed = Date.now() - startedAt;
@@ -2237,7 +2239,7 @@ export async function synthesizeVtonLook(params = {}) {
   const forceRefresh = Boolean(params.forceRefresh);
   const equippedSlots = Object.keys(resolvedSlots);
   const isBaseOnlyLook = equippedSlots.length === 0;
-  const layout = normalizedProfile.turnaroundSheet ? 'turnaround_2x2' : 'single';
+  const layout = normalizedProfile.turnaroundSheet ? 'turnaround_3x2' : 'single';
 
   const comboCacheKey = isBaseOnlyLook ? `base-${baseHash}` : `combo-${comboHash}`;
   const baseCacheKey = `base-${baseHash}`;

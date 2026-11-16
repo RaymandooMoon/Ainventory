@@ -18,8 +18,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v5-gaze-aligned-fullbody-360';
+export const CUTOUT_PIPELINE_VERSION = 'v6-true-3x2-rear-quarter-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v5-gaze-aligned-fullbody-360',
   'v4-hole-aware-fullbody-360',
   'v3-clean-cutout-front45-ground',
 ] as const;
@@ -361,30 +362,45 @@ export function buildCutoutBackdropDirective(
 export const CUTOUT_BACKDROP_DIRECTIVE = buildCutoutBackdropDirective(CUTOUT_STAGE_BACKDROP_HEX);
 
 export const HORIZONTAL_FULL_BODY_CAMERA_LOCK =
-  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 180°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, filling ~82–85% of vertical frame height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.';
+  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 135°, 180°, 225°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, filling ~82–85% of vertical frame height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.';
 
-export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<0 | 45 | 90 | 180, string> = {
+export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<
+  0 | 45 | 90 | 135 | 180 | 225,
+  string
+> = {
   0: 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible on the floor with 8–10% bottom margin.',
-  45: "Strict FRONT-FACING 45-degree horizontal-yaw full-body view turned toward VIEWER'S RIGHT (SCREEN-RIGHT) at the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° (NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles. The model MUST turn 40–45 degrees to face toward the RIGHT side of the frame (VIEWER'S RIGHT) so the FACE, BOTH EYES, NOSE, CHIN, GAZE, FRONT CHEST/LAPELS, and front shoe toes angle clearly toward SCREEN-RIGHT (NEVER facing screen-left, NEVER show a back view).",
+  45: "Strict FRONT-FACING 45-degree horizontal-yaw full-body view turned toward VIEWER'S RIGHT (SCREEN-RIGHT) at the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as all other views (NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles. The model MUST turn 40–45 degrees to face toward the RIGHT side of the frame (VIEWER'S RIGHT) so the FACE, BOTH EYES, NOSE, CHIN, GAZE, FRONT CHEST/LAPELS, and front shoe toes angle clearly toward SCREEN-RIGHT (NEVER facing screen-left, NEVER show a back view).",
   90: "Strict 90-degree lateral side-profile full-body view facing toward VIEWER'S RIGHT (SCREEN-RIGHT). Eye-to-waist level, straight-on horizontal camera, zero tilt; model facing cleanly toward the RIGHT edge of the frame so the nose, eyes, chin, chest, and shoe toes point strictly to SCREEN-RIGHT (NEVER facing screen-left), with full garment side silhouette and full shoes completely visible on the floor with 8–10% bottom margin.",
-  180: 'Direct 180-degree STRICT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with their back 100% turned directly toward the camera showing ONLY the back of the head/hair, nape/back collar, back shoulders, full rear back silhouette/vent/seams of the outfit, and rear heels of both shoes completely visible on the floor with 8–10% bottom margin. [ABSOLUTE NEGATIVE CONSTRAINT ON 180° BACK: NEVER show front face, eyes, nose, lips, chin, or front chest/lapels; NEVER turn head over the shoulder].',
+  135: "Diagonal 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW turned away toward BACK-RIGHT (VIEWER'S RIGHT / SCREEN-RIGHT — midway between 90° right profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt. REQUIRED 3/4 REAR-RIGHT ANATOMY: (1) HEAD LOST-PROFILE: Show the back-left 2/3 of the head/hair PLUS the distinct RIGHT EAR and outer contour of the RIGHT CHEEKBONE, TEMPLE, and JAWLINE facing away toward SCREEN-RIGHT (NEVER a symmetrical 180° straight back of head, NEVER looking forward at camera); (2) DIAGONAL REAR TORSO & RIGHT SLEEVE: Show the rear back of the outfit rotated 45 degrees diagonally so the RIGHT SHOULDER and full outer length of the RIGHT ARM/SLEEVE sit prominently in the near right foreground while the far left shoulder recedes diagonally to the left (center back seam shifted left of center, NEVER dead-center vertical); (3) STAGGERED SHOES: Both shoes completely visible with 8–10% bottom margin in a diagonal rear-right stance where the RIGHT SHOE outer side & toe point away toward SCREEN-RIGHT.",
+  180: 'Strict symmetrical 180-degree PURE STRAIGHT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with perpendicular shoulders and their back 100% turned directly toward the camera (center-back seam/vent vertical down the exact center of the spine) showing ONLY the symmetrical back of the head/hair, nape/back collar, level back shoulders, full rear silhouette of the outfit, and straight rear heels of both shoes side-by-side with 8–10% bottom margin. [ABSOLUTE NEGATIVE CONSTRAINT ON 180° BACK: NEVER show front face, eyes, nose, lips, chin, side cheek/jaw contour, shoe toe side-profile, or front lapels; NEVER turn head over the shoulder].',
+  225: "Diagonal 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW turned away toward BACK-LEFT (VIEWER'S LEFT / SCREEN-LEFT — midway between -90° left profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt. REQUIRED 3/4 REAR-LEFT ANATOMY: (1) HEAD LOST-PROFILE: Show the back-right 2/3 of the head/hair PLUS the distinct LEFT EAR and outer contour of the LEFT CHEEKBONE, TEMPLE, and JAWLINE facing away toward SCREEN-LEFT (NEVER a symmetrical 180° straight back of head, NEVER looking forward at camera); (2) DIAGONAL REAR TORSO & LEFT SLEEVE: Show the rear back of the outfit rotated 45 degrees diagonally toward SCREEN-LEFT so the LEFT SHOULDER and full outer length of the LEFT ARM/SLEEVE sit prominently in the near left foreground while the far right shoulder recedes diagonally to the right (center back seam shifted right of center; preserve exact anatomical left/right bag and watch placement without mirroring); (3) STAGGERED SHOES: Both shoes completely visible with 8–10% bottom margin in a diagonal rear-left stance where the LEFT SHOE outer side & toe point away toward SCREEN-LEFT.",
 };
 
 export function buildTurnaroundAnglePromptDirective(angleDeg: number): string {
-  if (angleDeg === 0) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[0];
-  if (angleDeg === 90 || angleDeg === -90) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[90];
-  if (angleDeg === 180 || angleDeg === -180) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[180];
+  const normalized = (((Math.round(Number(angleDeg) / 45) * 45) % 360) + 360) % 360;
+  if (normalized === 0) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[0];
+  if (normalized === 90 || normalized === 270) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[90];
+  if (normalized === 135) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[135];
+  if (normalized === 180) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[180];
+  if (normalized === 225) return CANONICAL_ANGLE_PROMPT_DIRECTIVES[225];
   return CANONICAL_ANGLE_PROMPT_DIRECTIVES[45];
 }
 
-export function buildTurnaround2x2SheetAngleDirectives(): string {
+export function buildTurnaround3x2SheetAngleDirectives(): string {
   return [
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
-    `  * [Top-Left Quadrant — 0° Front Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
-    `  * [Top-Right Quadrant — 45° Screen-Right Front-Quarter Full-Body (FACING VIEWER'S RIGHT, ZERO TILT, FULL FEET VISIBLE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
-    `  * [Bottom-Left Quadrant — 90° Screen-Right Side Profile Full-Body (FACING VIEWER'S RIGHT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
-    `  * [Bottom-Right Quadrant — 180° Strict Rear Back Full-Body (100% BACK OF HEAD & OUTFIT, ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
+    '  * STRICT 3x2 GRID TOPOLOGY: Arrange STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (EXACTLY 3 FIGURES ON THE TOP ROW AND EXACTLY 3 FIGURES ON THE BOTTOM ROW — NEVER 4 COLUMNS, NEVER 8 FIGURES).',
+    `  * [Top-Left Panel (Row 1, Col 1) — 0° Direct Front Full-Body]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
+    `  * [Top-Center Panel (Row 1, Col 2) — 45° Screen-Right Front-Quarter Full-Body (FACING VIEWER'S RIGHT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
+    `  * [Top-Right Panel (Row 1, Col 3) — 90° Screen-Right Side Profile Full-Body (FACING VIEWER'S RIGHT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
+    `  * [Bottom-Left Panel (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY TOWARD BACK-RIGHT / SCREEN-RIGHT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[135]}`,
+    `  * [Bottom-Center Panel (Row 2, Col 2) — 180° Strict Symmetrical Rear Back Full-Body (100% STRAIGHT BACK, ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
+    `  * [Bottom-Right Panel (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY TOWARD BACK-LEFT / SCREEN-LEFT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[225]}`,
   ].join('\n');
+}
+
+export function buildTurnaround2x2SheetAngleDirectives(): string {
+  return buildTurnaround3x2SheetAngleDirectives();
 }
 
 export function buildWeatherPosePromptDirectives(
@@ -488,7 +504,7 @@ export function buildWeatherPosePromptDirectives(
   }
 
   const framingGuard = normalizedParams.turnaroundSheet
-    ? `FRAME, FLOOR BASELINE & HEADROOM GUARD: Eye-to-waist level, straight-on horizontal camera, zero tilt across all 4 quadrants. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (approx. 78–82% quadrant height) so both shoes AND any overhead open umbrella or winter hat sit 100% inside the quadrant surrounded by flat ${backdropHex} on all four sides.`
+    ? `FRAME, FLOOR BASELINE & HEADROOM GUARD: Eye-to-waist level, straight-on horizontal camera, zero tilt across all 6 panels (3 columns x 2 rows). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (approx. 78–82% panel height) so both shoes AND any overhead open umbrella or winter hat sit 100% inside each panel surrounded by flat ${backdropHex} on all four sides.`
     : `FRAME, FLOOR BASELINE & HEADROOM GUARD: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles (approx. 80–84% frame height) surrounded by flat ${backdropHex}.`;
 
   const combinedPromptBlock = [

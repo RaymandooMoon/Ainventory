@@ -142,7 +142,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(zoomLevelBtn).toContainText('1.0');
 
     // 6) Gaze-aligned angle scrollbar: left (-45) mirrors left (`scaleX(-)`), right (+45) faces right (`scaleX(+)`),
-    //    and outer zone (-145) snaps cleanly to `180° 뒷모습` without dropping to Flat-Lay!
+    //    ±135° (`우후면`/`좌후면`) show dedicated rear-quarter slices (`!== 180°`), and outer zone (-165) snaps to `180° 뒷모습`!
     const angleInput = studioCanvas.locator('input[data-angle-scroll-input="true"]');
     const setScrollVal = async (val: number) => {
       await angleInput.evaluate((el, v) => {
@@ -166,8 +166,32 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
     const rightTransform = await aiImg.evaluate((el) => (el as HTMLElement).style.transform);
     expect(rightTransform).not.toContain('scaleX(-1)');
+    const src45 = await aiImg.getAttribute('src');
 
-    await setScrollVal(-145);
+    await setScrollVal(135);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '135');
+    await angleInput.dispatchEvent('pointerup');
+    await expect(angleInput).toHaveValue('135');
+    const src135 = await aiImg.getAttribute('src');
+    expect(src135).toBeTruthy();
+
+    await setScrollVal(180);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
+    const src180 = await aiImg.getAttribute('src');
+    expect(src180).toBeTruthy();
+    expect(src135).not.toBe(src180);
+    expect(src135).not.toBe(src45);
+
+    await setScrollVal(-135);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '225');
+    await angleInput.dispatchEvent('pointerup');
+    await expect(angleInput).toHaveValue('-135');
+    const src225 = await aiImg.getAttribute('src');
+    expect(src225).toBeTruthy();
+    expect(src225).not.toBe(src180);
+    expect(src225).not.toBe(src135);
+
+    await setScrollVal(-165);
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
     await expect(aiImg).toBeVisible();
     await angleInput.dispatchEvent('pointerup');

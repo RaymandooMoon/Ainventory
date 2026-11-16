@@ -36,7 +36,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     );
   });
 
-  it('starts symmetrical angle scrollbar at 0° Front in the center and maps outer back zones (-180..-138 and +138..+180) to 180° Back', () => {
+  it('starts symmetrical angle scrollbar at 0° Front in the center, preserves dedicated ±135° rear-quarter zones, and maps outer back zones (-180..-158 and +158..+180) to 180° Back', () => {
     const center = resolveSignedAngleScrollState(0);
     assert.equal(center.clampedScrollDeg, 0);
     assert.equal(center.angle360, 0);
@@ -52,20 +52,41 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(rightBack.angle360, 180);
     assert.equal(rightBack.residualYawDeg, 0);
 
-    // Outer scrollbar zone reaches 180° Back cleanly without getting stuck in narrow dead-zones
-    assert.equal(resolveSignedAngleScrollState(-145).angle360, 180);
-    assert.equal(resolveSignedAngleScrollState(145).angle360, 180);
+    // ±135° scrub positions MUST preserve dedicated 135° (우후면) and 225° (좌후면) rear-quarter views!
+    const backRight135 = resolveSignedAngleScrollState(135);
+    assert.equal(backRight135.angle360, 135);
+    assert.equal(resolveSignedAngleScrollState(145).angle360, 135);
 
-    // Back-view angles (135°, 180°, 225°) never mirrorX the 180° slice so asymmetric bags never teleport hands
-    assert.equal(resolve360AngleRenderSpec(135).mirrorX, false);
-    assert.equal(resolve360AngleRenderSpec(180).mirrorX, false);
-    assert.equal(resolve360AngleRenderSpec(225).mirrorX, false);
+    const backLeft225 = resolveSignedAngleScrollState(-135);
+    assert.equal(backLeft225.angle360, 225);
+    assert.equal(resolveSignedAngleScrollState(-145).angle360, 225);
+
+    // Outer scrollbar zone (±158..±180) reaches 180° Back cleanly
+    assert.equal(resolveSignedAngleScrollState(-165).angle360, 180);
+    assert.equal(resolveSignedAngleScrollState(165).angle360, 180);
+
+    // 135° (우후면) and 225° (좌후면) use dedicated canonical slices (NEVER 180° straight back!) with mirrorX: false
+    const spec135 = resolve360AngleRenderSpec(135);
+    const spec180 = resolve360AngleRenderSpec(180);
+    const spec225 = resolve360AngleRenderSpec(225);
+    assert.equal(spec135.canonicalSliceAngle, 135);
+    assert.equal(spec180.canonicalSliceAngle, 180);
+    assert.equal(spec225.canonicalSliceAngle, 225);
+    assert.notEqual(spec135.canonicalSliceAngle, spec180.canonicalSliceAngle);
+    assert.notEqual(spec225.canonicalSliceAngle, spec180.canonicalSliceAngle);
+    assert.equal(spec135.mirrorX, false);
+    assert.equal(spec180.mirrorX, false);
+    assert.equal(spec225.mirrorX, false);
   });
 
-  it('aligns slider direction with head/gaze direction (left = screen-left mirror, right = screen-right canonical)', () => {
+  it('aligns slider direction with head/gaze direction across front-quarter, side, and rear-quarter views', () => {
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[135], /BACK-RIGHT/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[135], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[180], /NEVER show front face/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[225], /BACK-LEFT/i);
+    assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[225], /SCREEN-LEFT/i);
 
     const pos45 = resolveSignedAngleScrollState(45);
     assert.equal(pos45.angle360, 45);
@@ -88,6 +109,8 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
 
     assert.equal(angle360ToSignedScrollDeg(0, 0), 0);
     assert.equal(angle360ToSignedScrollDeg(45, 0), 45);
+    assert.equal(angle360ToSignedScrollDeg(135, 0), 135);
+    assert.equal(angle360ToSignedScrollDeg(225, 0), -135);
     assert.equal(angle360ToSignedScrollDeg(315, 0), -45);
     assert.equal(angle360ToSignedScrollDeg(270, 0), -90);
     assert.equal(angle360ToSignedScrollDeg(180, -135), -180);
