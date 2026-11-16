@@ -1953,3 +1953,361 @@ html[lang='en'] .skin-lighting-segment {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Unified AI Fitting Model Style & Gemini API Key Settings Card (in Profile)
+   -------------------------------------------------------------------------- */
+#profile-studio-sheet .profile-ai-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--atelier-obsidian-card, #21201e);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.1));
+}
+
+#profile-studio-sheet .profile-ai-style-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#profile-studio-sheet .profile-ai-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#profile-studio-sheet .profile-ai-row-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--atelier-ink-on-dark, #f7f7f5);
+  letter-spacing: -0.01em;
+}
+
+#profile-studio-sheet .profile-ai-status-chip {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.12));
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.78));
+  font-size: 0.68rem;
+  font-weight: 640;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#profile-studio-sheet .profile-vton-style-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--atelier-obsidian-bg, #141413);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.1));
+}
+
+#profile-studio-sheet .profile-vton-style-btn {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.78));
+  font-size: 0.78rem;
+  font-weight: 660;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+#profile-studio-sheet .profile-vton-style-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+#profile-studio-sheet .profile-vton-style-btn.is-active {
+  background: #f7f7f5;
+  color: #141413;
+  border-color: #ffffff;
+  font-weight: 740;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+#profile-studio-sheet .profile-ai-style-hint {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.72));
+  word-break: keep-all;
+}
+
+#profile-studio-sheet .profile-ai-divider {
+  height: 1px;
+  background: var(--atelier-hairline, rgba(255, 255, 255, 0.09));
+}
+
+#profile-studio-sheet .profile-api-key-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#profile-studio-sheet .profile-api-key-summary-btn {
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 2px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--atelier-ink-on-dark, #f7f7f5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+#profile-studio-sheet .profile-api-key-summary-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.81rem;
+  font-weight: 680;
+  min-width: 0;
+}
+
+#profile-studio-sheet .profile-api-key-dot-badge {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.14));
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.76));
+  font-size: 0.66rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#profile-studio-sheet .profile-api-key-dot-badge.is-connected {
+  background: rgba(247, 247, 245, 0.18);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #ffffff;
+}
+
+#profile-studio-sheet .profile-api-key-chevron {
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.72));
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+
+#profile-studio-sheet .profile-api-key-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+#profile-studio-sheet .profile-api-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+#profile-studio-sheet .profile-api-key-desc {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.44;
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.72));
+  word-break: keep-all;
+}
+
+#profile-studio-sheet .profile-api-key-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#profile-studio-sheet .profile-api-key-input {
+  width: 100%;
+  min-height: 42px;
+  height: 42px;
+  padding: 0 38px 0 12px;
+  box-sizing: border-box;
+  border-radius: 11px;
+  background: var(--atelier-obsidian-bg, #141413);
+  border: 1px solid var(--atelier-hairline-strong, rgba(255, 255, 255, 0.18));
+  color: #ffffff;
+  font-size: 0.8rem;
+}
+
+#profile-studio-sheet .profile-api-key-inline-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.72));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#profile-studio-sheet .profile-api-key-inline-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+#profile-studio-sheet .profile-api-key-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#profile-studio-sheet .profile-api-key-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+#profile-studio-sheet .profile-api-key-link {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.12));
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.82));
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#profile-studio-sheet .profile-api-key-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+#profile-studio-sheet .profile-api-key-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#profile-studio-sheet .profile-api-key-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 720;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#profile-studio-sheet .profile-api-key-btn.is-subtle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atelier-hairline, rgba(255, 255, 255, 0.14));
+  color: var(--atelier-ink-secondary-on-dark, rgba(247, 247, 245, 0.85));
+}
+
+#profile-studio-sheet .profile-api-key-btn.is-primary {
+  background: #f7f7f5;
+  border: 1px solid #ffffff;
+  color: #141413;
+}
+
+/* Highlight banner when redirected from Photorealistic Photo Guide Popup */
+#profile-studio-sheet .atelier-face-hero-section.is-photo-guide-highlighted {
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+#profile-studio-sheet .profile-photo-guide-inline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 640;
+  line-height: 1.42;
+  word-break: keep-all;
+}
+
+/* Photo Registration Guidance Popup (Monochrome Editorial Card) */
+.profile-error-modal-card.profile-photo-guide-card {
+  width: min(100%, 376px);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.profile-photo-guide-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-photo-guide-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.profile-photo-guide-secondary-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(247, 247, 245, 0.88);
+  font-size: 0.78rem;
+  font-weight: 660;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.profile-photo-guide-secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.profile-photo-guide-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.81rem;
+  white-space: nowrap;
+}
+
+

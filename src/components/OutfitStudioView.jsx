@@ -423,7 +423,8 @@ export default function OutfitStudioView({
       skinProfile,
       bodySpec,
       user,
-      personReferenceUrl: skinProfile?.portraitDataUrl || null,
+      personReferenceUrl:
+        skinProfile?.portraitDataUrl || storedAvatarSpec?.appearance?.facePhotoUrl || null,
     });
   }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
 
@@ -562,9 +563,11 @@ export default function OutfitStudioView({
         setWeatherPayload(data);
 
         const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
+        const shouldForceOverwriteSlots = Boolean(forceAutoApplyWeatherRef.current);
+        forceAutoApplyWeatherRef.current = false;
         if (
           recs.length > 0 &&
-          (forceAutoApplyWeatherRef.current || !userModifiedSlotsRef.current)
+          (shouldForceOverwriteSlots || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
           const effectiveW = {
@@ -573,11 +576,15 @@ export default function OutfitStudioView({
             ...(scenarioKey === 'rainy_cool' ? { isRainy: true, isRaining: true } : {}),
             ...(scenarioKey === 'snowy_winter' ? { isSnowy: true } : {}),
           };
-          setSlots(mapWeatherRecToSlots(chosenRec, garments, effectiveW));
+          setSlots((prev) => {
+            if (!shouldForceOverwriteSlots && Object.values(prev).some(Boolean)) {
+              return prev;
+            }
+            return mapWeatherRecToSlots(chosenRec, garments, effectiveW);
+          });
           setHasExplicitSlotState(true);
           activeRecIdRef.current = chosenRec.id;
           setActiveRecId(chosenRec.id);
-          forceAutoApplyWeatherRef.current = false;
         } else if (recs.length === 0 && !userModifiedSlotsRef.current && garments.length > 0) {
           setSlots((prev) =>
             Object.values(prev).some(Boolean) ? prev : buildInitialStudioSlots(garments, null)
@@ -1766,9 +1773,14 @@ export default function OutfitStudioView({
             onUnequipSlot={handleUnequipSlot}
             onRestoreHistorySlots={handleRestoreHistorySlots}
             onQuickSelectPreset={handleQuickSelectSkinPreset}
-            onOpenSkinToneModal={() => {
-              if (onOpenSkinToneModal) onOpenSkinToneModal();
-              else onOpenProfile?.('skin');
+            onOpenSkinToneModal={(tabHint) => {
+              if (typeof tabHint === 'string' && onOpenProfile) {
+                onOpenProfile(tabHint);
+              } else if (onOpenSkinToneModal) {
+                onOpenSkinToneModal();
+              } else {
+                onOpenProfile?.('skin');
+              }
             }}
             onOpenBodyModal={handleOpenBodyModal}
           />

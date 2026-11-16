@@ -90,6 +90,54 @@ function buildMockTurnaround2x2PngDataUrl(seedOffset = 0): string {
   return `data:image/png;base64,${png.toString('base64')}`;
 }
 
+function buildSyntheticPortraitPngBuffer(): Buffer {
+  const w = 96;
+  const h = 96;
+  const raw = Buffer.alloc((w * 4 + 1) * h);
+  for (let y = 0; y < h; y += 1) {
+    const ro = y * (w * 4 + 1);
+    raw[ro] = 0;
+    for (let x = 0; x < w; x += 1) {
+      const px = ro + 1 + x * 4;
+      raw[px] = 226;
+      raw[px + 1] = 186;
+      raw[px + 2] = 158;
+      raw[px + 3] = 255;
+    }
+  }
+  const crcTable = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = (buf: Buffer): number => {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const makeChunk = (type: string, data: Buffer): Buffer => {
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32BE(data.length, 0);
+    const typeBuf = Buffer.from(type, 'ascii');
+    const crcBuf = Buffer.alloc(4);
+    crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+    return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+  };
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    sig,
+    makeChunk('IHDR', ihdr),
+    makeChunk('IDAT', zlib.deflateSync(raw)),
+    makeChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 async function selectStudioSlotAndPickItem(
   page: Page,
   slotKey: 'outer' | 'top' | 'bottom' | 'onepiece' | 'shoes' | 'accessory',
@@ -206,7 +254,7 @@ async function performStageSwipe(
 }
 
 test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal Multi-Angle VTON', () => {
-  test('1. Zero procedural drawing (<canvas>/polygon human = 0), default 0° Front AI Try-On, Top-Center style toggle, zero angle buttons, and 360° slow/fast swipe rotation', async ({
+  test('1. Decluttered Outfits Stage: zero procedural drawing, Character Simulation default without photo, removed Outfits title/mode rail/stage toggles, and symmetrical [-180..0..+180] bottom angle scrollbar + 360° swipe sync', async ({
     page,
   }) => {
     await page.goto('/outfits');
@@ -227,7 +275,17 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('.character-25d-fallback-svg')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-atelier-backdrop="true"]')).toBeVisible();
 
-    // Zero angle buttons & zero bottom tone/height dock in /outfits
+    // Decluttered stage invariants:
+    // - Top-left `Outfits / Virtual Studio` text lockup removed
+    // - Top-center `[실사 모델 | 시뮬레이션]` stage pill removed (moved to Profile)
+    // - Bottom-left `[AI 피팅 | 플랫레이]` button rail removed (character tap unfolds lookbook)
+    // - Stage floating API Key icon button removed (moved to Profile)
+    await expect(studioCanvas.locator('.atelier-stage-title-lockup')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-hud-style-segmented="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('.studio-vton-mode-rail')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-viewer-stage-btn]')).toHaveCount(0);
+    await expect(studioCanvas.locator('#open-vton-api-key-btn')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-hud-key-btn="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-iso-angle-badge]')).toHaveCount(0);
@@ -235,46 +293,57 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('#open-body-spec-btn')).toHaveCount(0);
     await expect(studioCanvas.locator('#open-skin-tone-modal-btn')).toHaveCount(0);
 
-    // Top-Center style segmented control ([실사 모델 | 시뮬레이션]) inside Top HUD without neighbor overlap
-    const topStyleSeg = studioCanvas.locator(
-      '.studio-hud-center-toggle-wrap [data-hud-style-segmented="true"]'
-    );
-    await expect(topStyleSeg).toBeVisible();
-    await expect(
-      topStyleSeg.locator('[data-vton-style-toggle="photorealistic"]')
-    ).toHaveAttribute('aria-pressed', 'true');
+    const topHudText = await studioCanvas.locator('.studio-stage-top-hud').innerText();
+    expect(topHudText).not.toMatch(/Outfits|Virtual Studio/i);
+
     const hudNonOverlapping = await studioCanvas.evaluate((root) => {
       const left = root.querySelector('.atelier-stage-brand-cluster')?.getBoundingClientRect();
-      const center = root.querySelector('[data-hud-style-segmented="true"]')?.getBoundingClientRect();
       const right = root.querySelector('[data-vton-history-btn="true"]')?.getBoundingClientRect();
-      if (!left || !center || !right) return false;
-      const overlaps = (a: DOMRect, b: DOMRect) =>
-        !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-      return !overlaps(left, center) && !overlaps(center, right);
+      if (!left || !right) return false;
+      return left.right <= right.left;
     });
     expect(hudNonOverlapping).toBe(true);
 
-    // Default view mode is AI Try-On (`ai-vton`) at 0° Front, with AI Try-On button first in bottom-left rail
+    // Without a registered portrait photo, default style mode MUST be `stylized_isometric` (`캐릭터 시뮬레이션`)
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
-    await expect(
-      studioCanvas.locator('.studio-vton-mode-rail .studio-vton-seg-btn').first()
-    ).toHaveAttribute('data-viewer-stage-btn', 'ai-vton');
-    await expect(studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
+    await expect(studioCanvas).toHaveAttribute('data-angle-scroll', '0');
     await expect(modelStage).toHaveAttribute('data-view-angle', '0');
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
-    // Instant switch to Flat-Lay Board and back to AI Try-On
-    await studioCanvas.locator('[data-viewer-stage-btn="flatlay"]').click();
-    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
-    await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'flatlay-lookbook');
-    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
-    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
+    // Symmetrical Bottom Angle Scrollbar: starts at center 0° (Front), both ends (-180 / +180) are 180° Back
+    const angleDock = studioCanvas.locator('[data-angle-scroll-dock="true"]');
+    const angleInput = studioCanvas.locator('input[data-angle-scroll-input="true"]');
+    await expect(angleDock).toBeVisible();
+    await expect(angleInput).toHaveValue('0');
+    await expect(angleDock.locator('[data-angle-center-reset="true"]')).toContainText(
+      /0° 정면|0° Front/
+    );
 
-    // Slow horizontal swipe right steps +45° across the full 8-angle 360° ring
+    // Scrubbing to +45° updates mannequin angle smoothly to 45°
+    await setRangeSliderValue(page, 'input[data-angle-scroll-input="true"]', 45);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
+    await expect(studioCanvas).toHaveAttribute('data-angle-scroll', '45');
+
+    // Scrubbing to left end (-180) and right end (+180) both show 180° Back (`뒷모습`)
+    await setRangeSliderValue(page, 'input[data-angle-scroll-input="true"]', -180);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
+    await expect(studioCanvas).toHaveAttribute('data-angle-scroll', '-180');
+    await expect(angleDock.locator('[data-angle-center-reset="true"]')).toContainText(
+      /180° 뒷모습|180° Back/
+    );
+
+    await setRangeSliderValue(page, 'input[data-angle-scroll-input="true"]', 180);
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '180');
+    await expect(studioCanvas).toHaveAttribute('data-angle-scroll', '180');
+
+    // Clicking center pill resets scrollbar back to dead-center 0° Front
+    await angleDock.locator('[data-angle-center-reset="true"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
+    await expect(angleInput).toHaveValue('0');
+
+    // Slow horizontal swipe right steps +45° across the full 8-angle 360° ring & syncs scrollbar
     for (const expectedDeg of ['45', '90', '135', '180', '225', '270', '315', '0']) {
       await performStageSwipe(page, studioCanvas, 'right', 'slow');
       await expect(studioCanvas).toHaveAttribute('data-view-angle', expectedDeg);
@@ -283,12 +352,15 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
         studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
       ).toHaveCount(0);
     }
+    await expect(angleInput).toHaveValue('0');
 
-    // Slow swipe left steps -45° (0° -> 315°), then slow swipe right returns to 0°
+    // Slow swipe left steps -45° (0° -> 315°, scrollbar -45), then slow swipe right returns to 0°
     await performStageSwipe(page, studioCanvas, 'left', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '315');
+    await expect(angleInput).toHaveValue('-45');
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
+    await expect(angleInput).toHaveValue('0');
 
     // Fast horizontal flick spins 180° opposite (0° -> 180° -> 0°)
     await performStageSwipe(page, studioCanvas, 'right', 'fast');
@@ -425,11 +497,37 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       matchText: /선글라스|버킷햇|토트|Sunglasses|Bucket|Tote/i,
     });
 
-    // Instant 0ms Flat-Lay Lookbook placement with object-fit: contain (zero distortion)
+    // Instant 0ms 100% Unfolded Flat-Lay Lookbook placement with non-overlapping CSS Grid & object-fit: contain
     const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
+    await expect(flatLayBoard).toHaveAttribute('data-flatlay-unfolded', 'true');
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="onepiece"]')).toBeVisible();
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="shoes"]')).toBeVisible();
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="accessory"]')).toBeVisible();
+
+    const unfoldedGridCheck = await flatLayBoard.evaluate((board) => {
+      const boxes = Array.from(board.querySelectorAll('[data-flatlay-item-slot]')).map((el) =>
+        el.getBoundingClientRect()
+      );
+      if (boxes.length < 3) return { ok: false, reason: 'missing_items' };
+      for (let i = 0; i < boxes.length; i += 1) {
+        if (boxes[i].width < 36 || boxes[i].height < 36) {
+          return { ok: false, reason: 'collapsed_box' };
+        }
+        for (let j = i + 1; j < boxes.length; j += 1) {
+          const a = boxes[i];
+          const b = boxes[j];
+          const overlaps = !(
+            a.right <= b.left + 1 ||
+            a.left >= b.right - 1 ||
+            a.bottom <= b.top + 1 ||
+            a.top >= b.bottom - 1
+          );
+          if (overlaps) return { ok: false, reason: `overlap_${i}_${j}` };
+        }
+      }
+      return { ok: true, reason: 'none' };
+    });
+    expect(unfoldedGridCheck).toEqual({ ok: true, reason: 'none' });
 
     const objectFitVal = await flatLayBoard
       .locator('[data-flatlay-item-slot="onepiece"] img')
@@ -442,7 +540,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="onepiece"]')).toHaveCount(0);
   });
 
-  test('4. 100% Gemini Multimodal VTON: default auto-run with API-key popover fallback, 2x2 turnaround slicing (0°/45°/90°/180°), IndexedDB 0ms cache, and Style toggle', async ({
+  test('4. Profile VTON Style & API Key Integration: Character Simulation default, Photo Guidance Popup -> Portrait Upload -> Photorealistic unlock, Character Tap Unfolded Lookbook, and 2x2 IndexedDB cache', async ({
     page,
   }) => {
     await page.goto('/outfits');
@@ -454,27 +552,65 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     ).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
-    // Part A: AI Try-On runs automatically by default on load! Without API key configured on CI server,
-    // it NEVER draws a polygon human; it keeps `ai-vton` stage mode with Editorial Flat-Lay Board visible
-    // underneath, keeps a permanent [키 설정 / API Key] HUD button visible, and surfaces a status toast!
+    // Part A: Without API key configured on CI server, stage surfaces status toast & unfolded Flat-Lay Board
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
-    await expect(studioCanvas.locator('[data-vton-hud-key-btn="true"]')).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
     await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
     await expect(
       studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
     ).toHaveCount(0);
 
-    // Open inline Gemini API Key popover from permanent HUD button, verify AI Studio link, and close
-    await studioCanvas.locator('[data-vton-hud-key-btn="true"]').click();
-    const keyPopover = studioCanvas.locator('[data-vton-key-popover="true"]');
+    // Clicking [API 키 설정] on the stage toast opens Profile directly with the Gemini API Key section expanded!
+    await studioCanvas.locator('[data-vton-open-key-btn="true"]').click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await expect(profileSheet).toBeVisible();
+    const keyPopover = profileSheet.locator('[data-vton-key-popover="true"]');
     await expect(keyPopover).toBeVisible();
     await expect(keyPopover.locator('[data-vton-aistudio-link="true"]')).toHaveAttribute(
       'href',
       'https://aistudio.google.com/apikey'
     );
-    await studioCanvas.locator('[data-vton-close-key-btn="true"]').click();
-    await expect(keyPopover).toHaveCount(0);
+
+    // Verify Profile Style Segmented Control: `캐릭터 시뮬레이션` is active by default when no photo is registered
+    const profileStyleSeg = profileSheet.locator('[data-profile-style-segmented="true"]');
+    await expect(profileStyleSeg).toBeVisible();
+    await expect(
+      profileStyleSeg.locator('[data-vton-style-toggle="stylized_isometric"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      profileStyleSeg.locator('[data-vton-style-toggle="stylized_isometric"]')
+    ).toContainText(/캐릭터 시뮬레이션|Character Simulation/);
+
+    // Selecting `실사 모델` without a registered photo opens the Photo Registration Guidance Popup!
+    await profileStyleSeg.locator('[data-vton-style-toggle="photorealistic"]').click();
+    const photoGuideModal = page.locator('[data-photo-guide-modal="true"]');
+    await expect(photoGuideModal).toBeVisible();
+    await expect(photoGuideModal).toContainText(/본인 사진 등록 안내|Register Your Photo/);
+    await expect(
+      profileStyleSeg.locator('[data-vton-style-toggle="stylized_isometric"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // Clicking [본인 사진 등록하기] closes popup & auto-enables `실사 모델` once a portrait photo is uploaded!
+    await photoGuideModal.locator('[data-photo-guide-register-btn="true"]').click();
+    await expect(photoGuideModal).toHaveCount(0);
+    await profileSheet.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'guide-portrait.png',
+      mimeType: 'image/png',
+      buffer: buildSyntheticPortraitPngBuffer(),
+    });
+    await expect(profileSheet.locator('[data-user-face-active="true"]')).toBeVisible();
+    await expect(
+      profileStyleSeg.locator('[data-vton-style-toggle="photorealistic"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // Resetting the portrait photo automatically reverts back to `캐릭터 시뮬레이션`!
+    await profileSheet.locator('[data-reset-face-photo-btn="true"]').click();
+    await expect(
+      profileStyleSeg.locator('[data-vton-style-toggle="stylized_isometric"]')
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(profileSheet).toBeHidden();
 
     // Part B: Mock Gemini `/api/vton/synthesize` returning a 2x2 Turnaround Studio Sheet
     const sheetPhoto = buildMockTurnaround2x2PngDataUrl(10);
@@ -486,7 +622,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       capturedBodies.push(postData);
       // Small delay so glassmorphism shimmer overlay is observable
       await new Promise((r) => setTimeout(r, 120));
-      const requestedStyle = String(postData?.styleMode || 'photorealistic');
+      const requestedStyle = String(postData?.styleMode || 'stylized_isometric');
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -505,7 +641,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
-    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
+    await page.locator('[data-outfit-vton-refresh="true"]').click();
     await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toBeVisible();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
@@ -513,14 +649,14 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
     expect(capturedBodies.length).toBe(1);
 
-    // Verify multimodal payload sent real Base64 garment inlineData + AvatarSpec + weather mood
+    // Verify default multimodal payload without photo used `stylized_isometric` (`캐릭터 시뮬레이션`)
     const firstPayload = capturedBodies[0] as {
       styleMode?: string;
       turnaroundSheet?: boolean;
       avatarSpec?: { anthropometrics?: { heightCm?: number } };
       slots?: Record<string, { packshotDataUrl?: string }>;
     };
-    expect(firstPayload.styleMode).toBe('photorealistic');
+    expect(firstPayload.styleMode).toBe('stylized_isometric');
     expect(firstPayload.turnaroundSheet).toBe(true);
     expect(firstPayload.avatarSpec?.anthropometrics?.heightCm).toBeGreaterThanOrEqual(140);
     const topSlotPayload = firstPayload.slots?.top;
@@ -529,7 +665,21 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const slice0 = await aiImg.getAttribute('src');
     expect(slice0).toMatch(/^data:image\/png;base64,/);
 
-    // Swipe to 90° Side Profile (two +45° slow swipes) & 180° Back -> 0ms IndexedDB/Memory slice hit with ZERO extra API calls!
+    // Tapping the character opens the 100% unfolded Flat-Lay Lookbook; clicking [캐릭터 보기] returns cleanly!
+    await aiImg.click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
+    await expect(studioCanvas).toHaveAttribute('data-lookbook-overlay', 'true');
+    await expect(
+      studioCanvas.locator('[data-flatlay-board="true"][data-flatlay-unfolded="true"]')
+    ).toBeVisible();
+    const closeLookbookBtn = studioCanvas.locator('[data-flatlay-close-btn="true"]');
+    await expect(closeLookbookBtn).toBeVisible();
+    await closeLookbookBtn.click();
+    await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
+    await expect(aiImg).toBeVisible();
+    expect(capturedBodies.length).toBe(1);
+
+    // Swipe to 90° Side Profile & 180° Back -> 0ms IndexedDB/Memory slice hit with ZERO extra API calls!
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
@@ -547,16 +697,41 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(slice180).not.toBe(slice90);
     expect(capturedBodies.length).toBe(1);
 
-    // Toggle style via Top-Center segmented pill to Stylized Isometric -> triggers Gemini with `stylized_isometric` prompt
-    await studioCanvas.locator('[data-vton-style-toggle="stylized_isometric"]').click();
+    // Register a portrait photo in Profile & select `실사 모델` -> triggers `photorealistic` synthesis
+    await page.locator('#open-profile-studio-btn').click();
+    await expect(profileSheet).toBeVisible();
+    await profileSheet.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'real-model-photo.png',
+      mimeType: 'image/png',
+      buffer: buildSyntheticPortraitPngBuffer(),
+    });
+    await expect(profileSheet.locator('[data-user-face-active="true"]')).toBeVisible();
+    await profileStyleSeg.locator('[data-vton-style-toggle="photorealistic"]').click();
+    await profileSheet.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+    await expect(profileSheet).toBeHidden();
+
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'photorealistic');
     await expect.poll(() => capturedBodies.length).toBe(2);
-    expect(capturedBodies[1].styleMode).toBe('stylized_isometric');
+    expect(capturedBodies[1].styleMode).toBe('photorealistic');
+    await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toHaveCount(0);
     await expect(aiImg).toBeVisible();
 
-    // Toggling back to Photorealistic hits cache in 0ms with zero extra API call!
-    await studioCanvas.locator('[data-vton-style-toggle="photorealistic"]').click();
+    // Switching to `캐릭터 시뮬레이션` at the new photo-extracted skin tone hash runs once (call #3),
+    // and toggling back to `실사 모델` & `캐릭터 시뮬레이션` reuses cache with ZERO extra API calls!
+    await page.locator('#open-profile-studio-btn').click();
+    await profileStyleSeg.locator('[data-vton-style-toggle="stylized_isometric"]').click();
+    await page.keyboard.press('Escape');
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
+    await expect.poll(() => capturedBodies.length).toBe(3);
+    await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toHaveCount(0);
+    await expect(aiImg).toBeVisible();
+
+    await page.locator('#open-profile-studio-btn').click();
+    await profileStyleSeg.locator('[data-vton-style-toggle="photorealistic"]').click();
+    await page.keyboard.press('Escape');
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'photorealistic');
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
-    expect(capturedBodies.length).toBe(2);
+    expect(capturedBodies.length).toBe(3);
   });
 
   test('5. 4-Season 128-item photorealistic catalog (>= 30 per season) & Winter long-puffer + long-boots Flat-Lay styling', async ({
@@ -635,7 +810,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('[data-flatlay-item-slot="shoes"]')).toBeVisible();
   });
 
-  test('6. Live AI VTON Test Showcase (?demo_vton=1 & 1-click Sample Fit button) slices 0°/45°/90°/180° in both Photorealistic and Stylized modes', async ({
+  test('6. Live AI VTON Test Showcase (?demo_vton=1) defaults to Character Simulation without photo, unfolds Lookbook on tap, and unlocks Photorealistic in Profile', async ({
     page,
   }) => {
     await page.goto('/outfits?demo_vton=1');
@@ -645,6 +820,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
 
     const src0 = await aiImg.getAttribute('src');
     expect(src0).toMatch(/^data:image\//);
@@ -656,14 +832,30 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(src90).toMatch(/^data:image\//);
     expect(src90).not.toBe(src0);
 
-    await studioCanvas.locator('[data-vton-style-toggle="stylized_isometric"]').click();
-    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
+    // Tap character -> opens unfolded lookbook -> press Escape to return to character
+    await aiImg.click();
+    await expect(studioCanvas).toHaveAttribute('data-lookbook-overlay', 'true');
+    await page.keyboard.press('Escape');
+    await expect(aiImg).toBeVisible();
+
+    // Register portrait photo in Profile & select Photorealistic -> updates showcase model slice
+    await page.locator('#open-profile-studio-btn').click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await profileSheet.locator('#skin-portrait-file-input').setInputFiles({
+      name: 'showcase-face.png',
+      mimeType: 'image/png',
+      buffer: buildSyntheticPortraitPngBuffer(),
+    });
+    await profileSheet.locator('[data-vton-style-toggle="photorealistic"]').click();
+    await profileSheet.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
+
+    await expect(studioCanvas).toHaveAttribute('data-vton-style', 'photorealistic');
     await expect
       .poll(async () => await aiImg.getAttribute('src'))
       .not.toBe(src90);
   });
 
-  test('7. Direct Browser Gemini Synthesis executes with Paid Tier key even when /api/vton/synthesize proxy returns gemini_network_error', async ({
+  test('7. Direct Browser Gemini Synthesis executes with Paid Tier key saved in Profile even when /api/vton/synthesize proxy returns gemini_network_error', async ({
     page,
   }) => {
     const mockTurnaroundDataUrl = buildMockTurnaround2x2PngDataUrl(77);
@@ -744,11 +936,17 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
 
-    await studioCanvas.locator('[data-vton-hud-key-btn="true"]').click();
-    const keyInput = studioCanvas.locator('[data-vton-key-input="true"]');
+    // Open Profile -> expand Gemini API Key Settings -> save Paid Tier key
+    await page.locator('#open-profile-studio-btn').click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await expect(profileSheet).toBeVisible();
+    await profileSheet.locator('#open-vton-api-key-btn').click();
+    const keyInput = profileSheet.locator('[data-vton-key-input="true"]');
     await expect(keyInput).toBeVisible();
     await keyInput.fill('test-paid-tier1-gemini-key-9876543210');
-    await studioCanvas.locator('[data-vton-save-key-btn="true"]').click();
+    await profileSheet.locator('[data-vton-save-key-btn="true"]').click();
+    await page.keyboard.press('Escape');
+    await expect(profileSheet).toBeHidden();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
@@ -765,7 +963,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(slice90).not.toBe(slice0);
   });
 
-  test('8. Smart Credit-Saver staging (0 API calls during multi-garment edits), automatic cache reuse, and Top-Right Saved AI Fittings History popover (Escape + click-outside + 1-click slot restore)', async ({
+  test('8. Smart Credit-Saver staging (0 API calls during multi-garment edits), automatic cache reuse, Character Tap Lookbook toggle, and Top-Right Saved AI Fittings History popover', async ({
     page,
   }) => {
     const sheetLookA = buildMockTurnaround2x2PngDataUrl(15);
@@ -775,6 +973,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.route('**/api/vton/synthesize', async (route) => {
       synthCalls += 1;
       const currentCall = synthCalls;
+      const postData = route.request().postDataJSON() as Record<string, unknown>;
       await new Promise((r) => setTimeout(r, 60));
       await route.fulfill({
         status: 200,
@@ -786,7 +985,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           provider: 'gemini-vton',
           model: 'gemini-3.1-flash-image',
           layout: 'turnaround_2x2',
-          styleMode: 'photorealistic',
+          styleMode: String(postData?.styleMode || 'stylized_isometric'),
           geminiUsed: true,
           compositeImageUrl: currentCall === 1 ? sheetLookA : sheetLookB,
         }),
@@ -842,10 +1041,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(await aiImg.getAttribute('src')).toBe(lookASrc0);
     expect(synthCalls).toBe(callsAfterInitial + 1);
 
-    // Toggling Flat-Lay <-> AI Try-On also preserves cache with ZERO extra API calls!
-    await studioCanvas.locator('[data-viewer-stage-btn="flatlay"]').click();
+    // Tapping character <-> closing unfolded Flat-Lay Lookbook preserves cache with ZERO extra API calls!
+    await aiImg.click();
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'flatlay');
-    await studioCanvas.locator('[data-viewer-stage-btn="ai-vton"]').click();
+    await studioCanvas.locator('[data-flatlay-close-btn="true"]').click();
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     expect(synthCalls).toBe(callsAfterInitial + 1);

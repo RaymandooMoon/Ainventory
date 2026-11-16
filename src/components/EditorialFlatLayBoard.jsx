@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { MoveHorizontal, Sparkles } from 'lucide-react';
+import { ArrowLeft, MoveHorizontal, Sparkles } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
@@ -86,134 +86,31 @@ function nowMs() {
 }
 
 /**
- * Computes balanced SSENSE / luxury editorial lookbook placements (`left%`, `top%`, `width%`, `height%`)
- * for 1..23 equipped garments & multi-part accessories/jewelry. Every cell uses `object-fit: contain`
- * so original aspect ratios and high-resolution fabric/metal details are 100% preserved.
+ * Orders equipped garments & accessories in editorial priority for a 100% unfolded,
+ * non-overlapping responsive CSS Grid lookbook board where every item is visible at once.
  */
 function computeFlatLayPlacements(layers) {
-  const ordered = [...layers].sort((a, b) => {
+  return [...layers].sort((a, b) => {
     const pa = SLOT_EDITORIAL_PRIORITY[a.slotKey] ?? 99;
     const pb = SLOT_EDITORIAL_PRIORITY[b.slotKey] ?? 99;
     return pa - pb;
   });
+}
 
-  const count = ordered.length;
-  if (count === 0) return [];
-
-  if (count === 1) {
-    return [
-      {
-        ...ordered[0],
-        box: { left: 13, top: 12, width: 74, height: 74, zIndex: 4 },
-      },
-    ];
-  }
-
-  if (count === 2) {
-    return [
-      {
-        ...ordered[0],
-        box: { left: 4, top: 9, width: 54, height: 64, zIndex: 4 },
-      },
-      {
-        ...ordered[1],
-        box: { left: 45, top: 28, width: 51, height: 62, zIndex: 5 },
-      },
-    ];
-  }
-
-  if (count === 3) {
-    return [
-      {
-        ...ordered[0],
-        box: { left: 4, top: 8, width: 49, height: 52, zIndex: 4 },
-      },
-      {
-        ...ordered[1],
-        box: { left: 49, top: 9, width: 47, height: 51, zIndex: 5 },
-      },
-      {
-        ...ordered[2],
-        box: { left: 22, top: 61, width: 56, height: 31, zIndex: 6 },
-      },
-    ];
-  }
-
-  if (count === 4) {
-    return [
-      {
-        ...ordered[0],
-        box: { left: 4, top: 8, width: 45, height: 44, zIndex: 4 },
-      },
-      {
-        ...ordered[1],
-        box: { left: 51, top: 8, width: 45, height: 43, zIndex: 5 },
-      },
-      {
-        ...ordered[2],
-        box: { left: 4, top: 53, width: 46, height: 39, zIndex: 6 },
-      },
-      {
-        ...ordered[3],
-        box: { left: 52, top: 55, width: 44, height: 36, zIndex: 7 },
-      },
-    ];
-  }
-
-  if (count === 5) {
-    return [
-      {
-        ...ordered[0],
-        box: { left: 3, top: 8, width: 45, height: 44, zIndex: 4 },
-      },
-      {
-        ...ordered[1],
-        box: { left: 50, top: 8, width: 46, height: 38, zIndex: 5 },
-      },
-      {
-        ...ordered[2],
-        box: { left: 4, top: 53, width: 44, height: 39, zIndex: 6 },
-      },
-      {
-        ...ordered[3],
-        box: { left: 50, top: 47, width: 46, height: 24, zIndex: 7 },
-      },
-      {
-        ...ordered[4],
-        box: { left: 52, top: 72, width: 42, height: 21, zIndex: 8 },
-      },
-    ];
-  }
-
-  // 6..8 items: 2-column magazine grid; 9+ items: 3-column multi-part editorial grid
-  const cols = count >= 9 ? 3 : 2;
-  const rows = Math.ceil(count / cols);
-  const usableTop = 8;
-  const usableHeight = 86;
-  const rowH = usableHeight / rows;
-  const colWidth = cols === 3 ? 30 : 45;
-
-  return ordered.map((entry, idx) => {
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    const leftPct = cols === 3 ? 3 + col * 32 : col === 0 ? 4 : 51;
-    return {
-      ...entry,
-      box: {
-        left: leftPct,
-        top: Number((usableTop + row * rowH).toFixed(2)),
-        width: colWidth,
-        height: Number(Math.max(12, rowH - 1.5).toFixed(2)),
-        zIndex: 4 + idx,
-      },
-    };
-  });
+function resolveFlatLayGridMetrics(count) {
+  if (count <= 1) return { cols: 1, rows: 1 };
+  if (count === 2) return { cols: 2, rows: 1 };
+  if (count <= 4) return { cols: 2, rows: 2 };
+  if (count <= 6) return { cols: 3, rows: 2 };
+  return { cols: 3, rows: Math.ceil(count / 3) };
 }
 
 const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   placements,
   activeSlotKey,
   onSelectSlot,
+  canReturnToCharacter = false,
+  onCloseFlatLay,
   resolvedLang,
   mstSwatch,
   heightCm,
@@ -223,29 +120,59 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   transformStyle,
 }) {
   const isEn = resolvedLang === 'en';
+  const { cols, rows } = useMemo(
+    () => resolveFlatLayGridMetrics(placements.length),
+    [placements.length]
+  );
 
   return (
     <div
-      className="editorial-flatlay-board"
+      className={`editorial-flatlay-board is-unfolded ${canReturnToCharacter ? 'has-close-action' : ''}`}
       data-flatlay-board="true"
+      data-flatlay-unfolded="true"
       data-flatlay-count={placements.length}
       data-vton-after-img={asPrimaryStageTarget ? 'true' : undefined}
       style={transformStyle}
     >
-      {/* Subtle Editorial Masthead inside Styling Board */}
-      <div className="editorial-flatlay-header" aria-hidden="true">
-        <span className="editorial-flatlay-kicker">
-          {isEn ? 'FLAT-LAY LOOKBOOK' : 'FLAT-LAY LOOKBOOK'}
-        </span>
-        <span className="editorial-flatlay-meta tabular-nums">
-          <span
-            className="editorial-flatlay-mst-dot"
-            style={{ backgroundColor: mstSwatch.hex }}
-          />
-          <span>
-            {heightCm}·{weightKg} · {angleDeg}°
+      {/* Editorial Masthead + Optional Return-to-Character Action */}
+      <div className="editorial-flatlay-header">
+        <div className="editorial-flatlay-header-left">
+          <span className="editorial-flatlay-kicker">
+            {isEn ? 'FLAT-LAY LOOKBOOK' : '플랫레이 룩북'}
           </span>
-        </span>
+          {placements.length > 0 && (
+            <span className="editorial-flatlay-count-chip tabular-nums">
+              {isEn ? `${placements.length} ITEMS` : `${placements.length}종 전체보기`}
+            </span>
+          )}
+        </div>
+
+        <div className="editorial-flatlay-header-right">
+          <span className="editorial-flatlay-meta tabular-nums" aria-hidden="true">
+            <span
+              className="editorial-flatlay-mst-dot"
+              style={{ backgroundColor: mstSwatch.hex }}
+            />
+            <span>
+              {heightCm}·{weightKg} · {angleDeg}°
+            </span>
+          </span>
+          {canReturnToCharacter && onCloseFlatLay && (
+            <button
+              type="button"
+              data-flatlay-close-btn="true"
+              className="editorial-flatlay-close-btn"
+              aria-label={isEn ? 'Return to character fitting view' : '캐릭터 피팅 화면으로 돌아가기'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCloseFlatLay();
+              }}
+            >
+              <ArrowLeft size={13} aria-hidden="true" />
+              <span>{isEn ? 'Character' : '캐릭터 보기'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {placements.length === 0 ? (
@@ -261,13 +188,20 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
           <p className="editorial-flatlay-empty-desc">
             {isEn
               ? 'Tap garments in your wardrobe to compose a zero-latency lookbook or run Gemini AI Try-On.'
-              : '옷장에서 아이템을 선택하면 원본 비율 그대로 즉시 배치되며, AI 피팅으로 다각도 착장을 생성할 수 있습니다.'}
+              : '옷장에서 아이템을 선택하면 원본 비율 그대로 한눈에 펼쳐지며, AI 피팅으로 다각도 착장을 생성할 수 있습니다.'}
           </p>
         </div>
       ) : (
-        <div className="editorial-flatlay-collage">
+        <div
+          className={`editorial-flatlay-collage ${placements.length >= 10 ? 'is-scrollable' : ''}`}
+          data-flatlay-grid-cols={cols}
+          style={{
+            '--flatlay-cols': cols,
+            '--flatlay-rows': rows,
+          }}
+        >
           {placements.map((entry) => {
-            const { slotKey, garment, box } = entry;
+            const { slotKey, garment } = entry;
             const isSelected = activeSlotKey === slotKey;
             const displayName =
               isEn && garment.name_en
@@ -291,13 +225,6 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                 data-flatlay-item-id={garment.id}
                 aria-label={`${slotBadge}: ${displayName}`}
                 className={`editorial-flatlay-item ${isSelected ? 'is-selected' : ''}`}
-                style={{
-                  left: `${box.left}%`,
-                  top: `${box.top}%`,
-                  width: `${box.width}%`,
-                  height: `${box.height}%`,
-                  zIndex: box.zIndex,
-                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectSlot?.(slotKey);
@@ -399,7 +326,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   activeSlotKey = null,
   onSelectSlot,
   stageMode = 'flatlay',
-  styleMode = 'photorealistic',
+  styleMode = 'stylized_isometric',
   aiImageUrl = null,
   aiLoading = false,
   effectiveWeather = 'clear',
@@ -413,7 +340,11 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   avatarConfigHash = null,
   personReferenceUrl = null,
   viewAngleDeg = DEFAULT_TURNAROUND_ANGLE,
+  scrollResidualYawDeg = 0,
   onSwipeRotate,
+  onTapCharacter,
+  onCloseFlatLay,
+  canReturnToCharacter = false,
   compareActive = false,
   compareSplitPct = 50,
   onCompareSplitChange,
@@ -554,9 +485,12 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [safeZoom, safePanX, safePanY, onZoomChange, onPanChange, clampPanOffset]
   );
 
+  const suppressNextClickRef = useRef(false);
+
   const handleStagePointerDown = useCallback(
     (e) => {
       if (e.button !== undefined && e.button !== 0) return;
+      suppressNextClickRef.current = false;
       const target = e.target;
       if (
         target instanceof Element &&
@@ -623,6 +557,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       if (g.mode === 'pan') {
         if (Math.hypot(dx, dy) > 3) {
           g.moved = true;
+          suppressNextClickRef.current = true;
         }
         if (onPanChange) {
           onPanChange(clampPanOffset(g.originPanX + dx, g.originPanY + dy, safeZoom));
@@ -638,6 +573,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       if (g.mode === 'swipe-candidate') {
         // Yield cleanly to native vertical page scrolling if vertical motion dominates
         if (absDy > 14 && absDy > absDx * 1.25) {
+          suppressNextClickRef.current = true;
           g.active = false;
           g.mode = 'idle';
           setIsRotatingDrag(false);
@@ -647,6 +583,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         if (absDx > 10 && absDx > absDy * 1.1) {
           g.mode = 'swipe-rotate';
           g.moved = true;
+          suppressNextClickRef.current = true;
           setIsRotatingDrag(true);
           if (!g.captured) {
             g.captured = true;
@@ -677,7 +614,12 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
       const finalMode = g.mode;
+      const wasMoved = Boolean(g.moved || absDx >= 8 || absDy >= 8 || isCancel);
       const activeDt = Math.max(12, endT - (g.motionStarted ? g.motionStartT : g.startT));
+
+      if (wasMoved) {
+        suppressNextClickRef.current = true;
+      }
 
       g.active = false;
       g.mode = 'idle';
@@ -725,16 +667,56 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [finishStagePointer]
   );
 
-  const handleStageKeyDown = useCallback(
+  const handleStageClick = useCallback(
     (e) => {
-      if (!onSwipeRotate) return;
+      if (suppressNextClickRef.current) {
+        suppressNextClickRef.current = false;
+        return;
+      }
       const target = e.target;
       if (
         target instanceof Element &&
-        target.closest('[data-vton-compare-slider], input, textarea, select, button')
+        target.closest('[data-vton-compare-slider], [data-flatlay-item-slot], button')
       ) {
         return;
       }
+      if (hasAiImage && placements.length > 0 && !compareActive && onTapCharacter) {
+        onTapCharacter();
+        return;
+      }
+      if (!hasAiImage && canReturnToCharacter && onCloseFlatLay) {
+        onCloseFlatLay();
+      }
+    },
+    [hasAiImage, placements.length, compareActive, onTapCharacter, canReturnToCharacter, onCloseFlatLay]
+  );
+
+  const handleStageKeyDown = useCallback(
+    (e) => {
+      const target = e.target;
+      if (
+        target instanceof Element &&
+        target.closest('[data-vton-compare-slider], [data-flatlay-item-slot], input, textarea, select, button')
+      ) {
+        return;
+      }
+      if (e.key === 'Escape' && !hasAiImage && canReturnToCharacter && onCloseFlatLay) {
+        e.preventDefault();
+        onCloseFlatLay();
+        return;
+      }
+      if (
+        (e.key === 'Enter' || e.key === ' ') &&
+        hasAiImage &&
+        placements.length > 0 &&
+        !compareActive &&
+        onTapCharacter
+      ) {
+        e.preventDefault();
+        onTapCharacter();
+        return;
+      }
+      if (!onSwipeRotate) return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         onSwipeRotate({
@@ -753,7 +735,15 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         });
       }
     },
-    [onSwipeRotate]
+    [
+      onSwipeRotate,
+      hasAiImage,
+      canReturnToCharacter,
+      onCloseFlatLay,
+      placements.length,
+      compareActive,
+      onTapCharacter,
+    ]
   );
 
   const updateCompareFromClientX = useCallback(
@@ -835,10 +825,15 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [safePanX, safePanY, safeZoom]
   );
 
+  const safeScrollResidualYaw = Number.isFinite(scrollResidualYawDeg)
+    ? clamp(scrollResidualYawDeg, -12, 12)
+    : 0;
+  const isScrollScrubbing = Math.abs(safeScrollResidualYaw) >= 0.1;
+
   const modelTransformStyle = useMemo(() => {
     const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
     const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
-    const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg;
+    const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
     const parts = [];
     if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
       parts.push(
@@ -863,6 +858,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     angleSpec.perspectiveYawDeg,
     isRotatingDrag,
     swipeDragPx,
+    safeScrollResidualYaw,
     safePanX,
     safePanY,
     safeZoom,
@@ -881,11 +877,11 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const styleLabel =
     resolvedStyleMode === 'stylized_isometric'
       ? isEn
-        ? 'Stylized Isometric'
-        : '감성 시뮬레이션 캐릭터'
+        ? 'Character Simulation'
+        : '캐릭터 시뮬레이션'
       : isEn
-        ? 'Photorealistic Studio'
-        : '스튜디오 실사 모델';
+        ? 'Photorealistic Model'
+        : '실사 모델';
 
   return (
     <div
@@ -893,11 +889,15 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       id={CARBON_DOM_CONTRACT.character25dMannequinId}
       tabIndex={0}
       aria-label={
-        isEn
-          ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
-          : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
+        hasAiImage && placements.length > 0
+          ? isEn
+            ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Tap character to view unfolded lookbook, or swipe horizontally to rotate.`
+            : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 캐릭터를 터치하면 플랫레이 룩북이 펼쳐지며, 좌우 드래그로 회전할 수 있습니다.`
+          : isEn
+            ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
+            : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
       }
-      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
+      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
@@ -921,6 +921,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       onPointerMove={handleStagePointerMove}
       onPointerUp={handleStagePointerUp}
       onPointerCancel={handleStagePointerCancel}
+      onClick={handleStageClick}
       onKeyDown={handleStageKeyDown}
     >
       <div className="studio-2d-viewport">
@@ -941,9 +942,18 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                     ? `Gemini AI virtual try-on (${angleSpec.fullEn})`
                     : `Gemini AI 가상 피팅 (${angleSpec.fullKo})`
                 }
+                title={
+                  placements.length > 0
+                    ? isEn
+                      ? 'Tap to open unfolded Flat-Lay Lookbook'
+                      : '터치하여 플랫레이 룩북 전체 보기'
+                    : undefined
+                }
                 data-vton-after-img="true"
                 data-ai-vton-img="true"
-                className="studio-2d-media-el editorial-ai-vton-img"
+                className={`studio-2d-media-el editorial-ai-vton-img ${
+                  placements.length > 0 && !compareActive ? 'is-lookbook-tappable' : ''
+                }`}
                 draggable={false}
                 style={modelTransformStyle}
               />
@@ -953,6 +963,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               placements={placements}
               activeSlotKey={activeSlotKey}
               onSelectSlot={onSelectSlot}
+              canReturnToCharacter={canReturnToCharacter}
+              onCloseFlatLay={onCloseFlatLay}
               resolvedLang={resolvedLang}
               mstSwatch={mstSwatch}
               heightCm={resolvedHeightCm}

@@ -140,7 +140,7 @@ export default function App() {
   }, []);
 
   const handleOpenProfileModal = useCallback((tab = 'skin') => {
-    setProfileModalTab(tab === 'body' ? 'body' : 'skin');
+    setProfileModalTab(tab === 'body' || tab === 'api-key' ? tab : 'skin');
     setProfileModalOpen(true);
   }, []);
 

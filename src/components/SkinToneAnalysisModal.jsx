@@ -4,7 +4,10 @@ import {
   AlertTriangle,
   Camera,
   Check,
+  ChevronDown,
   ChevronLeft,
+  ExternalLink,
+  KeyRound,
   Loader2,
   Palette,
   RotateCcw,
@@ -13,6 +16,7 @@ import {
   Upload,
   User,
   UserRound,
+  X,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -28,6 +32,7 @@ import {
   ISO_VIEW_ANGLE_OPTIONS,
   avatarSpecToLegacyBodySpec,
   bridgeLegacyPropsToAvatarSpec,
+  getAvatarSpecSnapshot,
   resolveCoupledBodyMetrics,
   sanitizeAvatarSpec,
   setAvatarSpec,
@@ -45,6 +50,16 @@ import {
   normalizeSeasonKey,
   translateSubTypeLabel,
 } from '../services/skinToneAnalyzer.ts';
+import {
+  GEMINI_API_KEY_EVENT,
+  VTON_STYLE_PREF_EVENT,
+  fetchServerGeminiConfigured,
+  getStoredClientGeminiApiKey,
+  getStoredVtonStylePreference,
+  resolveEffectiveVtonStyleMode,
+  setStoredClientGeminiApiKey,
+  setStoredVtonStylePreference,
+} from '../services/vton2DService.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
@@ -134,9 +149,13 @@ function ProfileModalContent({
   void theme;
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const faceHeroSectionRef = useRef(null);
   const manualToneSectionRef = useRef(null);
   const heightInputRef = useRef(null);
+  const apiKeyInputRef = useRef(null);
   const errorConfirmBtnRef = useRef(null);
+  const photoGuideRegisterBtnRef = useRef(null);
+  const apiKeySavedTimerRef = useRef(null);
   const analysisSeqRef = useRef(0);
   const fileReaderRef = useRef(null);
 
@@ -144,6 +163,9 @@ function ProfileModalContent({
     () => () => {
       fileReaderRef.current?.abort?.();
       fileReaderRef.current = null;
+      if (apiKeySavedTimerRef.current) {
+        clearTimeout(apiKeySavedTimerRef.current);
+      }
       void disposeMediaPipeLandmarker();
     },
     []
@@ -167,6 +189,56 @@ function ProfileModalContent({
   const [draftSpec, setDraftSpec] = useState(
     () => bridgeLegacyPropsToAvatarSpec({ skinProfile, bodySpec, user }).spec
   );
+
+  // VTON Model Style preference ('stylized_isometric' default when no photo; 'photorealistic' gated on user photo)
+  const [draftStylePref, setDraftStylePref] = useState(() => getStoredVtonStylePreference());
+  const [photoGuideModalOpen, setPhotoGuideModalOpen] = useState(false);
+  const [pendingPhotoForRealism, setPendingPhotoForRealism] = useState(false);
+
+  // Gemini API Key configuration moved cleanly into Profile
+  const [apiKeyPanelOpen, setApiKeyPanelOpen] = useState(() => initialTab === 'api-key');
+  const [draftApiKey, setDraftApiKey] = useState(() => getStoredClientGeminiApiKey());
+  const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
+    Boolean(getStoredClientGeminiApiKey())
+  );
+  const [hasServerConfiguredKey, setHasServerConfiguredKey] = useState(false);
+  const [apiKeySavedFlash, setApiKeySavedFlash] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchServerGeminiConfigured()
+      .then((configured) => {
+        if (mounted) setHasServerConfiguredKey(Boolean(configured));
+      })
+      .catch(() => {});
+    const onStyleSync = () => {
+      setDraftStylePref(getStoredVtonStylePreference());
+    };
+    const onKeySync = () => {
+      const current = getStoredClientGeminiApiKey();
+      setDraftApiKey(current);
+      setHasSavedClientKey(Boolean(current));
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
+      window.addEventListener(GEMINI_API_KEY_EVENT, onKeySync);
+    }
+    return () => {
+      mounted = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
+        window.removeEventListener(GEMINI_API_KEY_EVENT, onKeySync);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialTab !== 'api-key' || typeof window === 'undefined') return;
+    window.requestAnimationFrame(() => {
+      apiKeyInputRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      apiKeyInputRef.current?.focus?.();
+    });
+  }, [initialTab]);
 
   const [heightInputText, setHeightInputText] = useState(() =>
     String(
@@ -222,6 +294,29 @@ function ProfileModalContent({
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [profileErrorModal, handleDismissProfileErrorModal]);
+
+  const handleDismissPhotoGuideModal = useCallback(() => {
+    triggerHaptic('selection');
+    setPhotoGuideModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!photoGuideModalOpen) return undefined;
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        photoGuideRegisterBtnRef.current?.focus?.();
+      });
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleDismissPhotoGuideModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [photoGuideModalOpen, handleDismissPhotoGuideModal]);
 
   const [previewAngleDeg, setPreviewAngleDeg] = useState(DEFAULT_ISO_VIEW_ANGLE);
 
@@ -314,6 +409,102 @@ function ProfileModalContent({
     Boolean(analysisResult) &&
     !analysisResult.faceDetected;
 
+  const effectiveDraftVtonStyle = useMemo(
+    () =>
+      resolveEffectiveVtonStyleMode({
+        preferredStyle: draftStylePref,
+        hasFacePhoto: isFacePhotoActive,
+      }),
+    [draftStylePref, isFacePhotoActive]
+  );
+
+  const hasConfiguredGeminiKey = hasSavedClientKey || hasServerConfiguredKey;
+
+  const committedFacePhotoUrl = useMemo(
+    () =>
+      bridgeLegacyPropsToAvatarSpec({
+        skinProfile,
+        bodySpec,
+        user,
+        personReferenceUrl: skinProfile?.portraitDataUrl || null,
+      }).spec.appearance.facePhotoUrl || null,
+    [skinProfile, bodySpec, user]
+  );
+
+  const hasUnsavedPortraitChange = (draftFacePhotoUrl || null) !== committedFacePhotoUrl;
+
+  const handleSelectVtonStyle = (nextStyle) => {
+    triggerHaptic('selection');
+    if (nextStyle === 'stylized_isometric') {
+      setPendingPhotoForRealism(false);
+      setDraftStylePref('stylized_isometric');
+      if (!hasUnsavedPortraitChange) {
+        setStoredVtonStylePreference('stylized_isometric');
+      }
+      return;
+    }
+    // User selected 'photorealistic' (실사 모델)
+    if (isFacePhotoActive) {
+      setPendingPhotoForRealism(false);
+      setDraftStylePref('photorealistic');
+      if (!hasUnsavedPortraitChange) {
+        setStoredVtonStylePreference('photorealistic');
+      }
+      return;
+    }
+    if (hasCandidatePortrait && !isSampleSource) {
+      // Re-attach previously uploaded portrait in this session and stage Photorealistic Model
+      setDraftSpec((prev) =>
+        sanitizeAvatarSpec({
+          ...prev,
+          appearance: {
+            ...prev.appearance,
+            facePhotoUrl: effectiveFaceThumb,
+          },
+        })
+      );
+      setPendingPhotoForRealism(false);
+      setDraftStylePref('photorealistic');
+      return;
+    }
+    // No registered photo -> open guidance popup leading naturally to photo registration
+    setPhotoGuideModalOpen(true);
+  };
+
+  const handleConfirmPhotoGuideRegister = () => {
+    triggerHaptic('medium');
+    setPhotoGuideModalOpen(false);
+    setPendingPhotoForRealism(true);
+    setActiveTab('skin');
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        faceHeroSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        galleryInputRef.current?.click?.();
+      });
+    }
+  };
+
+  const handleSaveProfileApiKey = (e) => {
+    e?.preventDefault?.();
+    triggerHaptic('selection');
+    const saved = setStoredClientGeminiApiKey(draftApiKey);
+    setDraftApiKey(saved);
+    setHasSavedClientKey(Boolean(saved));
+    setApiKeySavedFlash(true);
+    if (apiKeySavedTimerRef.current) clearTimeout(apiKeySavedTimerRef.current);
+    apiKeySavedTimerRef.current = setTimeout(() => {
+      setApiKeySavedFlash(false);
+    }, 2200);
+  };
+
+  const handleClearProfileApiKey = () => {
+    triggerHaptic('selection');
+    setStoredClientGeminiApiKey('');
+    setDraftApiKey('');
+    setHasSavedClientKey(false);
+    setApiKeySavedFlash(false);
+  };
+
   const handleStepPreviewAngle = (direction) => {
     triggerHaptic('selection');
     const turnaroundAngles = [0, 45, 90, 180];
@@ -399,6 +590,10 @@ function ProfileModalContent({
 
       if (resolvedFaceUrl) {
         setCandidateFaceUrl(resolvedFaceUrl);
+        if (pendingPhotoForRealism || draftStylePref !== 'stylized_isometric') {
+          setPendingPhotoForRealism(false);
+          setDraftStylePref('photorealistic');
+        }
       }
 
       setDraftSpec((prev) =>
@@ -547,15 +742,19 @@ function ProfileModalContent({
   const handleToggleFacePhoto = () => {
     if (!hasCandidatePortrait && !isFacePhotoActive) return;
     triggerHaptic('selection');
+    const nextHasPhoto = !isFacePhotoActive;
     setDraftSpec((prev) =>
       sanitizeAvatarSpec({
         ...prev,
         appearance: {
           ...prev.appearance,
-          facePhotoUrl: isFacePhotoActive ? null : effectiveFaceThumb,
+          facePhotoUrl: nextHasPhoto ? effectiveFaceThumb : null,
         },
       })
     );
+    if (!nextHasPhoto) {
+      setDraftStylePref('stylized_isometric');
+    }
   };
 
   const handleResetFacePhoto = () => {
@@ -568,6 +767,8 @@ function ProfileModalContent({
     setCandidateFaceUrl('');
     setAnalysisResult(null);
     setMetricsOpen(false);
+    setPendingPhotoForRealism(false);
+    setDraftStylePref('stylized_isometric');
     setDraftSpec((prev) =>
       sanitizeAvatarSpec({
         ...prev,
@@ -726,25 +927,47 @@ function ProfileModalContent({
       bodySpec?.waistScale !== legacyBody.waistScale ||
       bodySpec?.hipScale !== legacyBody.hipScale;
 
+    const prevAvatarSpec = getAvatarSpecSnapshot().spec;
+    const prevStylePref = getStoredVtonStylePreference();
     setSavingProfile(true);
     try {
-      setAvatarSpec(cleanedSpec, { throwOnStorageError: true });
+      const resolvedStyleToSave = resolveEffectiveVtonStyleMode({
+        preferredStyle: draftStylePref,
+        hasFacePhoto: Boolean(app.facePhotoUrl),
+      });
 
+      // Persist V2 AvatarSpec & VTON style preference synchronously first so React 19
+      // batches them in the exact same turn as setBodySpec/setSkinProfile before network I/O.
+      setAvatarSpec(cleanedSpec, { throwOnStorageError: true });
+      setStoredVtonStylePreference(resolvedStyleToSave);
+
+      const pendingTasks = [];
       if (primarySource === 'body') {
         if (skinChanged) {
-          await Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }));
+          pendingTasks.push(
+            Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }))
+          );
         }
-        await Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }));
+        pendingTasks.push(Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true })));
       } else {
         if (bodyChanged) {
-          await Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true }));
+          pendingTasks.push(Promise.resolve(onApplyBodySpec?.(legacyBody, { throwOnError: true })));
         }
-        await Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }));
+        pendingTasks.push(
+          Promise.resolve(onApplySkinProfile?.(skinPayload, { throwOnError: true }))
+        );
       }
+      await Promise.all(pendingTasks);
 
       triggerHaptic('medium');
       onClose?.();
     } catch (err) {
+      try {
+        setAvatarSpec(prevAvatarSpec);
+        setStoredVtonStylePreference(prevStylePref);
+      } catch {
+        // Ignore rollback storage errors
+      }
       triggerHaptic('warning');
       const rawMessage = err instanceof Error ? err.message : '';
       const localized = rawMessage ? localizeApiMessage(rawMessage, lang) : '';
@@ -874,6 +1097,10 @@ function ProfileModalContent({
       handleDismissProfileErrorModal();
       return;
     }
+    if (photoGuideModalOpen) {
+      handleDismissPhotoGuideModal();
+      return;
+    }
     onClose?.();
   };
 
@@ -975,15 +1202,232 @@ function ProfileModalContent({
           </div>
         </div>
 
+        {/* Unified AI Fitting Model Style & Gemini API Key Settings Card */}
+        <section
+          className="profile-ai-settings-card"
+          data-profile-vton-style-section="true"
+          aria-label={tx(lang, 'AI 피팅 모델 및 API 설정', 'AI Fitting Model & API Settings')}
+        >
+          <div className="profile-ai-style-block">
+            <div className="profile-ai-row-head">
+              <span className="profile-ai-row-title">
+                {tx(lang, 'AI 피팅 모델', 'AI Fitting Model')}
+              </span>
+              <span className="profile-ai-status-chip">
+                {isFacePhotoActive
+                  ? tx(lang, '본인 사진 등록됨', 'Photo Registered')
+                  : tx(lang, '사진 미등록 · 기본', 'No Photo · Default')}
+              </span>
+            </div>
+
+            <div
+              className="profile-vton-style-segmented"
+              data-profile-style-segmented="true"
+              role="group"
+              aria-label={tx(lang, 'AI 피팅 모델 방식 선택', 'Select AI Fitting Model Style')}
+            >
+              <button
+                type="button"
+                data-vton-style-toggle="stylized_isometric"
+                aria-pressed={effectiveDraftVtonStyle === 'stylized_isometric'}
+                className={`profile-vton-style-btn ${
+                  effectiveDraftVtonStyle === 'stylized_isometric' ? 'is-active' : ''
+                }`}
+                onClick={() => handleSelectVtonStyle('stylized_isometric')}
+              >
+                {effectiveDraftVtonStyle === 'stylized_isometric' && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
+                <span>{tx(lang, '캐릭터 시뮬레이션', 'Character Simulation')}</span>
+              </button>
+              <button
+                type="button"
+                data-vton-style-toggle="photorealistic"
+                aria-pressed={effectiveDraftVtonStyle === 'photorealistic'}
+                className={`profile-vton-style-btn ${
+                  effectiveDraftVtonStyle === 'photorealistic' ? 'is-active' : ''
+                }`}
+                onClick={() => handleSelectVtonStyle('photorealistic')}
+              >
+                {effectiveDraftVtonStyle === 'photorealistic' && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
+                <span>{tx(lang, '실사 모델', 'Photorealistic Model')}</span>
+              </button>
+            </div>
+
+            <p className="profile-ai-style-hint">
+              {effectiveDraftVtonStyle === 'photorealistic'
+                ? tx(
+                    lang,
+                    '등록된 본인 사진의 이목구비와 헤어를 반영한 실사 피팅을 생성합니다.',
+                    'Generates photorealistic try-ons reflecting your registered portrait photo.'
+                  )
+                : tx(
+                    lang,
+                    '체형과 피부톤 스펙을 반영한 캐릭터 시뮬레이션으로 자연스럽게 피팅합니다.',
+                    'Fits outfits on a character simulation tailored to your body & skin tone.'
+                  )}
+            </p>
+          </div>
+
+          <div className="profile-ai-divider" role="separator" />
+
+          <div
+            className="profile-api-key-block"
+            data-profile-api-key-section="true"
+          >
+            <button
+              id="open-vton-api-key-btn"
+              type="button"
+              data-profile-api-key-toggle="true"
+              aria-expanded={apiKeyPanelOpen}
+              className="profile-api-key-summary-btn"
+              onClick={() => {
+                triggerHaptic('selection');
+                setApiKeyPanelOpen((prev) => !prev);
+              }}
+            >
+              <span className="profile-api-key-summary-left">
+                <KeyRound size={14} aria-hidden="true" />
+                <span>{tx(lang, 'Gemini API 키 설정', 'Gemini API Key')}</span>
+                <span
+                  className={`profile-api-key-dot-badge ${
+                    hasConfiguredGeminiKey ? 'is-connected' : ''
+                  }`}
+                >
+                  {apiKeySavedFlash
+                    ? tx(lang, '저장됨', 'Saved')
+                    : hasConfiguredGeminiKey
+                      ? tx(lang, '연결됨', 'Active')
+                      : tx(lang, '미설정', 'Not Set')}
+                </span>
+              </span>
+              <ChevronDown
+                size={15}
+                className={`profile-api-key-chevron ${apiKeyPanelOpen ? 'is-open' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+
+            {apiKeyPanelOpen && (
+              <form
+                className="profile-api-key-form"
+                data-vton-key-popover="true"
+                onSubmit={handleSaveProfileApiKey}
+              >
+                <p className="profile-api-key-desc">
+                  {tx(
+                    lang,
+                    '이 기기 브라우저에만 안전하게 보관되며 Gemini 가상 피팅 생성에 사용됩니다.',
+                    'Stored locally in this browser and used exclusively for Gemini virtual try-on.'
+                  )}
+                </p>
+                <div className="profile-api-key-input-row">
+                  <input
+                    ref={apiKeyInputRef}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-vton-key-input="true"
+                    value={draftApiKey}
+                    onChange={(e) => setDraftApiKey(e.target.value)}
+                    placeholder={tx(lang, 'AIzaSy... API 키 입력', 'Enter AIzaSy... API key')}
+                    aria-label={tx(lang, 'Gemini API 키 입력', 'Enter Gemini API key')}
+                    className="profile-api-key-input"
+                  />
+                  {draftApiKey && (
+                    <button
+                      type="button"
+                      className="profile-api-key-inline-clear"
+                      aria-label={tx(lang, '입력 지우기', 'Clear input')}
+                      onClick={() => {
+                        setDraftApiKey('');
+                        apiKeyInputRef.current?.focus?.();
+                      }}
+                    >
+                      <X size={13} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="profile-api-key-footer-row">
+                  <div className="profile-api-key-links">
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-vton-aistudio-link="true"
+                      className="profile-api-key-link"
+                    >
+                      <span>AI Studio</span>
+                      <ExternalLink size={11} aria-hidden="true" />
+                    </a>
+                    <a
+                      href="https://console.cloud.google.com/billing"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="profile-api-key-link"
+                    >
+                      <span>{tx(lang, '결제 연동', 'Billing')}</span>
+                      <ExternalLink size={11} aria-hidden="true" />
+                    </a>
+                  </div>
+
+                  <div className="profile-api-key-actions">
+                    {hasSavedClientKey && (
+                      <button
+                        type="button"
+                        data-vton-key-clear="true"
+                        className="profile-api-key-btn is-subtle"
+                        onClick={handleClearProfileApiKey}
+                      >
+                        {tx(lang, '초기화', 'Clear')}
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      data-vton-key-save="true"
+                      data-vton-save-key-btn="true"
+                      className="profile-api-key-btn is-primary"
+                    >
+                      {tx(lang, '저장', 'Save')}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        </section>
+
         {/* TAB 1: Unified Editorial Photo Analysis Hero + 3 White-Track Sliders + Monk 1-10 Spectrum */}
         {activeTab === 'skin' && (
           <>
             <section
-              className="atelier-face-hero-section"
+              ref={faceHeroSectionRef}
+              className={`atelier-face-hero-section ${
+                pendingPhotoForRealism ? 'is-photo-guide-highlighted' : ''
+              }`}
               data-face-analysis-state={
                 !analyzing && !errorMsg && !hasPhotoForEmptyCheck ? 'empty' : undefined
               }
             >
+              {pendingPhotoForRealism && !isFacePhotoActive && (
+                <div
+                  className="profile-photo-guide-inline-banner"
+                  data-photo-guide-inline-banner="true"
+                  role="status"
+                >
+                  <Camera size={14} aria-hidden="true" />
+                  <span>
+                    {tx(
+                      lang,
+                      '아래 업로드 또는 촬영 버튼으로 본인 사진을 등록하면 실사 모델로 자동 연결됩니다.',
+                      'Upload or take your photo below to automatically enable Photorealistic Model.'
+                    )}
+                  </span>
+                </div>
+              )}
               <div className="atelier-section-head">
                 <div className="atelier-section-title-group">
                   <span className="atelier-section-title">
@@ -1789,6 +2233,59 @@ function ProfileModalContent({
                 onClick={handleDismissProfileErrorModal}
               >
                 {tx(lang, '확인', 'Confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {photoGuideModalOpen && (
+        <div
+          className="profile-error-modal-backdrop"
+          data-photo-guide-backdrop="true"
+          onClick={handleDismissPhotoGuideModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-photo-guide-title"
+            aria-describedby="profile-photo-guide-desc"
+            data-photo-guide-modal="true"
+            className="profile-error-modal-card profile-photo-guide-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="profile-error-modal-header">
+              <span className="profile-photo-guide-icon" aria-hidden="true">
+                <Camera size={18} strokeWidth={2.2} />
+              </span>
+              <h3 id="profile-photo-guide-title" className="profile-error-modal-title">
+                {tx(lang, '본인 사진 등록 안내', 'Register Your Photo')}
+              </h3>
+            </div>
+            <p id="profile-photo-guide-desc" className="profile-error-modal-desc">
+              {tx(
+                lang,
+                '실사 모델 피팅은 등록된 본인 사진을 기반으로 얼굴과 헤어스타일을 자연스럽게 구현합니다. 본인 사진을 등록하고 실사 모델을 사용하시겠어요?',
+                'Photorealistic Model fitting renders your likeness from a registered portrait photo. Would you like to register your photo now?'
+              )}
+            </p>
+            <div className="profile-photo-guide-actions">
+              <button
+                type="button"
+                data-photo-guide-cancel-btn="true"
+                className="profile-photo-guide-secondary-btn"
+                onClick={handleDismissPhotoGuideModal}
+              >
+                {tx(lang, '캐릭터 시뮬레이션 유지', 'Keep Simulation')}
+              </button>
+              <button
+                ref={photoGuideRegisterBtnRef}
+                type="button"
+                data-photo-guide-register-btn="true"
+                className="profile-error-confirm-btn profile-photo-guide-primary-btn"
+                onClick={handleConfirmPhotoGuideRegister}
+              >
+                <Upload size={14} aria-hidden="true" />
+                <span>{tx(lang, '본인 사진 등록하기', 'Register Photo')}</span>
               </button>
             </div>
           </div>

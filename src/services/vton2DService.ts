@@ -302,6 +302,10 @@ export function normalizeViewerMode(rawMode?: unknown): CanonicalViewerMode {
   return '2d-vton';
 }
 
+export const VTON_STYLE_PREF_STORAGE_KEY = 'ainventory_vton_style_pref_v1';
+export const VTON_STYLE_PREF_EVENT = 'ainventory:vton-style-change';
+export const GEMINI_API_KEY_EVENT = 'ainventory:gemini-key-change';
+
 export function normalizeVtonStyleMode(raw?: unknown): VtonStyleMode {
   const s = String(raw || '')
     .trim()
@@ -313,6 +317,70 @@ export function normalizeVtonStyleMode(raw?: unknown): VtonStyleMode {
     s === 'isometric' ||
     s === 'character'
   ) {
+    return 'stylized_isometric';
+  }
+  return 'photorealistic';
+}
+
+export function getStoredVtonStylePreference(): VtonStyleMode | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(VTON_STYLE_PREF_STORAGE_KEY);
+    if (!raw) return null;
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed === 'photorealistic') return 'photorealistic';
+    if (trimmed === 'stylized_isometric') return 'stylized_isometric';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredVtonStylePreference(
+  mode: VtonStyleMode | null | undefined
+): VtonStyleMode | null {
+  const normalized: VtonStyleMode | null =
+    mode === 'photorealistic'
+      ? 'photorealistic'
+      : mode === 'stylized_isometric'
+        ? 'stylized_isometric'
+        : null;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      if (normalized) {
+        window.localStorage.setItem(VTON_STYLE_PREF_STORAGE_KEY, normalized);
+      } else {
+        window.localStorage.removeItem(VTON_STYLE_PREF_STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage write error
+    }
+    try {
+      window.dispatchEvent(
+        new CustomEvent(VTON_STYLE_PREF_EVENT, { detail: { styleMode: normalized } })
+      );
+    } catch {
+      // ignore CustomEvent dispatch errors
+    }
+  }
+  return normalized;
+}
+
+/**
+ * Resolves the active VTON render style:
+ * - When no user face photo is registered (`!hasFacePhoto`), defaults to `'stylized_isometric'`
+ *   (Character Simulation / 캐릭터 시뮬레이션).
+ * - When a user face photo is registered (`hasFacePhoto`), honors `'stylized_isometric'` if explicitly
+ *   chosen, otherwise uses `'photorealistic'` (Photorealistic Model / 실사 모델).
+ */
+export function resolveEffectiveVtonStyleMode(params: {
+  preferredStyle?: VtonStyleMode | null;
+  hasFacePhoto: boolean;
+}): VtonStyleMode {
+  if (!params.hasFacePhoto) {
+    return 'stylized_isometric';
+  }
+  if (params.preferredStyle === 'stylized_isometric') {
     return 'stylized_isometric';
   }
   return 'photorealistic';
@@ -336,6 +404,48 @@ export function normalizeTurnaround360Angle(
   return (TURNAROUND_360_ANGLES.includes(snapped as Turnaround360AngleDeg)
     ? snapped
     : fallback) as Turnaround360AngleDeg;
+}
+
+/**
+ * Maps a 360° studio angle (`0..315`) onto the bottom horizontal scroll range `[-180..+180]`
+ * where `0` is center (Front) and both `-180` and `+180` are Back (`180°`).
+ */
+export function angle360ToSignedScrollDeg(
+  rawAngle: unknown,
+  prevScrollDeg = 0
+): number {
+  const angle360 = normalizeTurnaround360Angle(rawAngle, DEFAULT_TURNAROUND_ANGLE);
+  if (angle360 === 180) {
+    return prevScrollDeg < 0 ? -180 : 180;
+  }
+  if (angle360 > 180) {
+    return angle360 - 360;
+  }
+  return angle360;
+}
+
+/**
+ * Computes both the snapped 8-way 360° angle and continuous residual micro-yaw (`[-9.5°..+9.5°]`)
+ * for smooth mannequin rotation as the user scrubs the `[-180..0..+180]` scrollbar.
+ */
+export function resolveSignedAngleScrollState(rawScrollDeg: unknown): {
+  clampedScrollDeg: number;
+  snappedScrollDeg: number;
+  angle360: Turnaround360AngleDeg;
+  residualYawDeg: number;
+} {
+  const n = Number(rawScrollDeg);
+  const clampedScrollDeg = Number.isFinite(n) ? clamp(n, -180, 180) : 0;
+  const snappedScrollDeg = clamp(Math.round(clampedScrollDeg / 45) * 45, -180, 180);
+  const angle360 = normalizeTurnaround360Angle(snappedScrollDeg, DEFAULT_TURNAROUND_ANGLE);
+  const deltaDeg = clampedScrollDeg - snappedScrollDeg;
+  const residualYawDeg = Math.round(clamp(deltaDeg * 0.42, -9.5, 9.5) * 10) / 10;
+  return {
+    clampedScrollDeg,
+    snappedScrollDeg,
+    angle360,
+    residualYawDeg,
+  };
 }
 
 const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
@@ -1702,6 +1812,13 @@ export function setStoredClientGeminiApiKey(rawKey: string | null | undefined): 
     }
   } catch {
     // ignore storage write error
+  }
+  try {
+    window.dispatchEvent(
+      new CustomEvent(GEMINI_API_KEY_EVENT, { detail: { hasKey: Boolean(cleaned) } })
+    );
+  } catch {
+    // ignore CustomEvent dispatch error
   }
   return cleaned;
 }
