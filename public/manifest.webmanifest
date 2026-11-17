@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "A inventory — 3D 스마트 옷장 & 쇼핑 판독 아틀리에",
   "short_name": "A inventory",
   "description": "에이클로젯 · 겟워드롭 · 웨어링 벤치마크 기반 실사 3D 피팅 마네킹, 퍼스널컬러 진단, 매장 중복 판독기",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",
@@ -12,13 +12,13 @@
   "categories": ["lifestyle", "shopping", "utilities"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"

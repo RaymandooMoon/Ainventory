@@ -19,7 +19,9 @@ export const SEED_DIR = path.join(ROOT_DIR, 'public', 'seed');
 
 export const VTON_SLOTS = Object.freeze([
   'outer',
+  'outer_mid',
   'top',
+  'top_mid',
   'onepiece',
   'dress',
   'bottom',
@@ -62,9 +64,11 @@ const PROMPT_SLOT_ORDER = Object.freeze([
   'jwl_ear_right',
   'onepiece',
   'top',
+  'top_mid',
   'dress',
   'acc_belt',
   'bottom',
+  'outer_mid',
   'outer',
   'jwl_brooch',
   'neckwear',
@@ -86,6 +90,13 @@ const PROMPT_SLOT_ORDER = Object.freeze([
 ]);
 
 const ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES = Object.freeze({
+  top: 'worn as the innermost base top over the torso (collar/cuffs peeking cleanly beneath any mid-layer or outerwear)',
+  top_mid:
+    'worn as the 2nd mid-layer cardigan or tailored vest/knit cleanly OVER [TOP] and UNDER [OUTER_MID]/[OUTER]',
+  outer_mid:
+    'worn as the 3rd mid-outerwear blazer/blouson/jacket cleanly OVER [TOP]/[TOP_MID] (and beneath [OUTER] coat if also equipped)',
+  outer:
+    'worn as the outermost overcoat/trench/padding cleanly OVER all inner [TOP], [TOP_MID], and [OUTER_MID] layers',
   shoes: `worn cleanly on BOTH feet with full soles visible on the floor. ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
   accessory: 'carried naturally in hand or slung cleanly over the shoulder',
   acc_umbrella:
@@ -117,6 +128,10 @@ const SLOT_ALIAS_MAP = Object.freeze({
   jacket: 'outer',
   outerwear: 'outer',
   blazer: 'outer',
+  mid_outer: 'outer_mid',
+  outermid: 'outer_mid',
+  mid_top: 'top_mid',
+  topmid: 'top_mid',
   shirt: 'top',
   knit: 'top',
   upper: 'top',
@@ -1928,8 +1943,11 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const hasOnepiece = Boolean(onepieceItem);
   const isSwimwearOnepiece = isResolvedSwimwearItem(onepieceItem);
   const hasTop = Boolean(resolvedSlots.top);
+  const hasTopMid = Boolean(resolvedSlots.top_mid);
   const hasBottom = Boolean(resolvedSlots.bottom);
+  const hasOuterMid = Boolean(resolvedSlots.outer_mid);
   const hasOuter = Boolean(resolvedSlots.outer);
+  const hasAnyTop = hasTop || hasTopMid;
   const hasShoes = Boolean(resolvedSlots.shoes);
   const hasLeftRightAsymmetry =
     Boolean(resolvedSlots.acc_hand_left && resolvedSlots.acc_hand_right) ||
@@ -1956,9 +1974,19 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     );
   }
 
-  if (hasOuter && (hasTop || hasOnepiece)) {
+  if (hasTop && hasTopMid) {
     layeringRules.push(
-      '- Layer the OUTER garment naturally over the inner TOP/ONEPIECE (worn relaxed open at the front on 0°/45° views so inner top, necklaces, and brooches remain visible, with realistic side thickness at 90° and full outer back construction at 180°).'
+      '- MULTI-STAGE TOP LAYERING: Layer [TOP_MID] (cardigan/vest/mid-knit) cleanly OVER the inner base [TOP] so the inner shirt collar/cuffs/hem remain naturally visible underneath.'
+    );
+  }
+  if (hasOuterMid && (hasAnyTop || hasOnepiece)) {
+    layeringRules.push(
+      '- MID-OUTERWEAR LAYERING: Layer [OUTER_MID] (blazer/blouson/leather jacket) cleanly OVER [TOP] and [TOP_MID] (or [ONEPIECE]) with relaxed open front draping so inner collar, buttons, and vest/cardigan depth remain clearly legible.'
+    );
+  }
+  if (hasOuter && (hasOuterMid || hasAnyTop || hasOnepiece)) {
+    layeringRules.push(
+      '- OUTER COAT OVERLAY: Layer [OUTER] (overcoat/trench/padding) as the outermost garment OVER [OUTER_MID], [TOP_MID], and [TOP] (worn relaxed open at the front on 0°/45° views so inner layering, necklaces, and brooches remain visible, with realistic side thickness at 90° and full outer back construction at 180°).'
     );
   }
   if (hasOnepiece && isSwimwearOnepiece) {
@@ -1977,7 +2005,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     );
   }
 
-  if (!hasTop && !hasOnepiece) {
+  if (!hasAnyTop && !hasOnepiece) {
     layeringRules.push(
       '- Since no top or onepiece is equipped, include a minimal neutral ecru (#EFECE6) crew-neck studio inner tee.'
     );

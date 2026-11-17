@@ -891,8 +891,12 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(specMetrics.hasColorDot).toBe(true);
     expect(specMetrics.pillTexts.length).toBeGreaterThanOrEqual(3);
 
+    await expect(gridScroll.locator('.atelier-unfolded-spec-card.is-equipped')).toHaveCount(0);
+    const firstUnequipped = gridScroll.locator('[data-slot-garment-id]').first();
+    await expect(firstUnequipped).toBeVisible();
+    await firstUnequipped.click();
     const unfoldedGridSpecStyle = await gridScroll
-      .locator('.atelier-unfolded-spec-card.is-equipped .atelier-spec-item-name')
+      .locator('.atelier-unfolded-spec-card.is-expanded .atelier-spec-item-name')
       .evaluate((el) => {
         const cs = window.getComputedStyle(el);
         return { whiteSpace: cs.whiteSpace, textOverflow: cs.textOverflow };

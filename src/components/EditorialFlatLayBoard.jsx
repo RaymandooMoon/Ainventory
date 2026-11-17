@@ -20,8 +20,10 @@ const SWIPE_FAST_FLICK_VELOCITY_PX_PER_MS = 0.8;
 
 const SLOT_EDITORIAL_PRIORITY = {
   outer: 1,
+  outer_mid: 1.5,
   onepiece: 2,
   dress: 2,
+  top_mid: 2.5,
   top: 3,
   bottom: 4,
   shoes: 5,
@@ -49,6 +51,8 @@ const SLOT_EDITORIAL_PRIORITY = {
 
 const SLOT_BADGE_LABELS = {
   outer: { ko: 'OUTER', en: 'OUTER' },
+  outer_mid: { ko: 'MID OUTER', en: 'MID OUTER' },
+  top_mid: { ko: 'MID TOP', en: 'MID TOP' },
   top: { ko: 'TOP', en: 'TOP' },
   onepiece: { ko: 'ONE-PIECE', en: 'ONE-PIECE' },
   dress: { ko: 'DRESS', en: 'DRESS' },

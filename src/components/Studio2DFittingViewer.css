@@ -2310,11 +2310,11 @@ html[data-vibrancy-fallback='solid']
   height: 36px;
   padding: 0 10px 0 8px;
   border-radius: 999px;
-  background: rgba(28, 28, 30, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(28, 28, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.68), 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   color: #f7f7f5;
   display: inline-flex;
   align-items: center;
@@ -2324,7 +2324,7 @@ html[data-vibrancy-fallback='solid']
   text-align: left;
   pointer-events: auto;
   cursor: pointer;
-  transition: background-color 0.18s var(--spring-ease), border-color 0.18s var(--spring-ease),
+  transition: background-color 0.16s var(--spring-ease), border-color 0.18s var(--spring-ease),
     transform 0.14s var(--spring-ease), box-shadow 0.18s var(--spring-ease);
 }
 
@@ -2335,12 +2335,16 @@ html[data-vibrancy-fallback='solid']
 }
 
 .atelier-weather-capsule:hover {
-  background: rgba(28, 28, 30, 0.84);
+  background: rgba(28, 28, 30, 0.86);
   border-color: rgba(255, 255, 255, 0.36);
 }
 
-.atelier-weather-capsule:active {
-  transform: scale(0.97);
+.atelier-weather-capsule:active,
+.atelier-weather-capsule.is-interacting {
+  background: rgba(28, 28, 30, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.56);
+  transform: scale(1.04) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
 .atelier-weather-capsule:focus-visible,
@@ -2428,11 +2432,11 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-hud-style-segmented {
-  background: rgba(34, 33, 30, 0.68);
+  background: rgba(34, 33, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.68), 0.96));
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   padding: 3px;
   gap: 3px;
 }
@@ -2475,11 +2479,11 @@ html[data-vibrancy-fallback='solid']
   margin: 0;
   box-sizing: border-box;
   border-radius: 12px;
-  background: rgba(34, 33, 30, 0.64);
+  background: rgba(34, 33, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.64), 0.96));
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   color: #f7f7f5;
   font-size: 0.66rem;
   font-weight: 740;
@@ -2490,7 +2494,7 @@ html[data-vibrancy-fallback='solid']
   justify-content: center;
   white-space: nowrap;
   outline: none;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
+  transition: background-color 0.16s var(--spring-ease), color 0.18s var(--spring-ease),
     border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease),
     box-shadow 0.18s var(--spring-ease);
 }
@@ -2521,8 +2525,14 @@ html[data-vibrancy-fallback='solid']
 
 .studio-2d-vton-viewer [data-vton-zoom-level='true']:active,
 .studio-2d-vton-viewer [data-stage-bg-picker-btn='true']:active,
-.studio-2d-vton-viewer [data-vton-history-btn='true']:active {
-  transform: scale(0.95);
+.studio-2d-vton-viewer [data-vton-history-btn='true']:active,
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true'].is-interacting,
+.studio-2d-vton-viewer [data-vton-history-btn='true'].is-interacting {
+  background: rgba(28, 28, 30, 0.96) !important;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.56);
+  transform: scale(1.05) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
 }
 
 .studio-2d-vton-viewer [data-vton-zoom-level='true']:focus-visible,
@@ -2572,11 +2582,11 @@ html[data-vibrancy-fallback='solid']
   min-height: 40px;
   padding: 0;
   border-radius: 50%;
-  background: rgba(34, 33, 30, 0.62);
+  background: rgba(34, 33, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.62), 0.96));
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   color: #f7f7f5;
   display: inline-flex;
   align-items: center;
@@ -2881,11 +2891,15 @@ html[data-vibrancy-fallback='solid']
   gap: 2px;
   padding: 2px;
   border-radius: var(--radius-pill);
-  background: var(--glass-bg-dense);
+  background: rgba(255, 255, 255, clamp(0.15, var(--hig-nav-bg-opacity, 0.72), 0.96));
   border: 1px solid var(--glass-border);
   box-shadow: var(--elevation-xs);
-  backdrop-filter: var(--vibrancy-filter-subtle);
-  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+}
+
+[data-theme='dark'] .studio-vton-segmented-pill {
+  background: rgba(28, 28, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.72), 0.96));
 }
 
 .studio-vton-seg-btn {
@@ -2970,26 +2984,33 @@ html[data-vibrancy-fallback='solid']
 }
 
 /* ==========================================================================
-   5A. BOTTOM-LEFT COMPACT ICON AI LOOK 1 / LOOK 2 DOCK (ABOVE ANGLE SCROLLBAR)
+   5A. BOTTOM-LEFT VERTICAL COMPACT ICON AI LOOK 1 / LOOK 2 DOCK
    ========================================================================== */
 .studio-weather-look-dock {
   position: absolute;
   left: 12px;
   right: auto;
-  bottom: 58px;
+  bottom: 64px;
   z-index: 56;
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: rgba(28, 28, 30, 0.66);
+  background: rgba(28, 28, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.66), 0.96));
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   display: inline-flex;
   align-items: center;
   gap: 3px;
   pointer-events: auto;
   box-sizing: border-box;
+}
+
+.studio-weather-look-dock.is-vertical {
+  flex-direction: column;
+  padding: 4px 3px;
+  border-radius: 16px;
+  gap: 4px;
 }
 
 .studio-weather-look-pill {
@@ -3010,13 +3031,17 @@ html[data-vibrancy-fallback='solid']
   gap: 3px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
-    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease);
+  transition: background-color 0.16s var(--spring-ease), color 0.18s var(--spring-ease),
+    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease),
+    box-shadow 0.16s var(--spring-ease);
 }
 
 .studio-weather-look-pill.is-icon-compact {
   width: 34px;
   min-width: 34px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 12px;
   padding: 0;
   gap: 2px;
 }
@@ -3030,7 +3055,7 @@ html[data-vibrancy-fallback='solid']
 .studio-weather-look-pill::after {
   content: '';
   position: absolute;
-  inset: -8px -4px;
+  inset: -4px;
 }
 
 .studio-weather-look-pill:focus-visible {
@@ -3043,8 +3068,12 @@ html[data-vibrancy-fallback='solid']
   color: #ffffff;
 }
 
-.studio-weather-look-pill:active {
-  transform: scale(0.95);
+.studio-weather-look-pill:active,
+.studio-weather-look-pill.is-interacting {
+  background: rgba(28, 28, 30, 0.96);
+  color: #ffffff;
+  transform: scale(1.06) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .studio-weather-look-pill.is-selected {
@@ -3055,8 +3084,14 @@ html[data-vibrancy-fallback='solid']
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.studio-weather-look-pill.is-selected:active,
+.studio-weather-look-pill.is-selected.is-interacting {
+  background: #ffffff;
+  color: #141413;
+}
+
 /* ==========================================================================
-   5B. BOTTOM SYMMETRICAL ANGLE SCROLLBAR (-180° BACK .. 0° FRONT .. +180° BACK)
+   5B. BOTTOM SLEEK ARCHITECTURAL ANGLE DIAL (-180° BACK .. 0° FRONT .. +180° BACK)
    ========================================================================== */
 .studio-angle-scroll-dock {
   position: absolute;
@@ -3064,18 +3099,28 @@ html[data-vibrancy-fallback='solid']
   right: 12px;
   bottom: 8px;
   z-index: 54;
-  padding: 4px 12px 5px;
-  border-radius: 16px;
-  background: rgba(28, 28, 30, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 5px 14px 6px;
+  border-radius: 20px;
+  background: rgba(28, 28, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.58), 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   pointer-events: auto;
   box-sizing: border-box;
+  transition: opacity 0.24s var(--spring-ease), transform 0.18s var(--spring-ease),
+    background-color 0.18s var(--spring-ease), border-color 0.18s var(--spring-ease),
+    visibility 0s linear 0s;
+}
+
+.studio-angle-scroll-dock.is-interacting {
+  background: rgba(22, 22, 24, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.42);
+  transform: scale(1.015);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
 }
 
 .studio-angle-scroll-labels {
@@ -3125,10 +3170,10 @@ html[data-vibrancy-fallback='solid']
   position: relative;
   min-height: 18px;
   height: 18px;
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: #ffffff;
   font-size: 0.59rem;
   font-weight: 740;
@@ -3167,8 +3212,8 @@ html[data-vibrancy-fallback='solid']
 
 .studio-angle-scroll-ticks {
   position: absolute;
-  left: 7px;
-  right: 7px;
+  left: 10px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -3179,21 +3224,21 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-angle-tick {
-  width: 1.5px;
+  width: 1px;
   height: 5px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.34);
 }
 
 .studio-angle-tick.is-center {
   width: 2px;
   height: 10px;
-  background: rgba(255, 255, 255, 0.88);
+  background: #ffffff;
 }
 
 .studio-angle-tick.is-end {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.56);
+  height: 7px;
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .studio-angle-scroll-input {
@@ -3216,47 +3261,67 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-angle-scroll-input::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 2px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.26);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.44) 50%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
 }
 
 .studio-angle-scroll-input::-moz-range-track {
-  height: 3px;
+  height: 2px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.26);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.44) 50%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
 }
 
-.studio-angle-scroll-input::-webkit-slider-thumb {
+.studio-angle-scroll-dock.is-sleek-dial .studio-angle-scroll-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  margin-top: -6.5px;
-  border-radius: 50%;
+  width: 24px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 999px;
   background: #ffffff;
-  border: 2px solid #141413;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
-  transition: transform 0.14s var(--spring-ease);
+  border: 1.5px solid rgba(20, 20, 19, 0.85);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.42);
+  transition: transform 0.14s var(--spring-ease), box-shadow 0.14s var(--spring-ease);
 }
 
-.studio-angle-scroll-input::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+.studio-angle-scroll-dock.is-sleek-dial .studio-angle-scroll-input::-moz-range-thumb {
+  width: 24px;
+  height: 12px;
+  border-radius: 999px;
   background: #ffffff;
-  border: 2px solid #141413;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+  border: 1.5px solid rgba(20, 20, 19, 0.85);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.42);
   box-sizing: border-box;
-  transition: transform 0.14s var(--spring-ease);
+  transition: transform 0.14s var(--spring-ease), box-shadow 0.14s var(--spring-ease);
 }
 
-.studio-angle-scroll-input:active::-webkit-slider-thumb {
-  transform: scale(1.18);
+.studio-angle-scroll-dock.is-sleek-dial .studio-angle-scroll-input:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.34),
+    0 4px 12px rgba(0, 0, 0, 0.48);
 }
 
-.studio-angle-scroll-input:active::-moz-range-thumb {
-  transform: scale(1.18);
+.studio-angle-scroll-dock.is-sleek-dial .studio-angle-scroll-input:active::-moz-range-thumb {
+  transform: scale(1.12);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.34),
+    0 4px 12px rgba(0, 0, 0, 0.48);
 }
 
 .studio-angle-scroll-input:focus-visible::-webkit-slider-thumb {
@@ -3503,9 +3568,9 @@ html[data-vibrancy-fallback='solid']
   .studio-weather-look-dock {
     left: 10px;
     right: auto;
-    bottom: 54px;
-    padding: 2.5px;
-    gap: 2.5px;
+    bottom: 60px;
+    padding: 3px;
+    gap: 3px;
   }
 
   .studio-weather-look-pill {
@@ -3518,6 +3583,8 @@ html[data-vibrancy-fallback='solid']
   .studio-weather-look-pill.is-icon-compact {
     width: 31px;
     min-width: 31px;
+    height: 28px;
+    min-height: 28px;
     padding: 0;
   }
 
@@ -5071,6 +5138,7 @@ html[data-vibrancy-fallback='solid']
 .tomorrow-prompt-btn {
   min-height: 44px;
   height: 44px;
+  padding: 0 14px;
   border-radius: var(--radius-pill);
   font-size: 0.84rem;
   font-weight: 720;
@@ -5078,7 +5146,12 @@ html[data-vibrancy-fallback='solid']
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   transition: transform 0.14s var(--spring-ease), opacity 0.16s var(--spring-ease);
+}
+
+.tomorrow-prompt-btn svg {
+  flex-shrink: 0;
 }
 
 .tomorrow-prompt-btn:active {

@@ -149,6 +149,7 @@
 
   --vibrancy-filter: blur(26px) saturate(190%);
   --vibrancy-filter-subtle: blur(18px) saturate(175%);
+  --hig-overlay-blur: calc(1px + 14px * var(--hig-nav-bg-opacity, 0.5));
   --spring-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --spring-bounce: cubic-bezier(0.22, 1.12, 0.36, 1);
 }
@@ -835,8 +836,8 @@ img {
   background: var(--nav-dock-bg, rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.5)));
   border: 1px solid var(--glass-border);
   box-shadow: var(--elevation-lg);
-  backdrop-filter: var(--vibrancy-filter);
-  -webkit-backdrop-filter: var(--vibrancy-filter);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(140%);
 }
 
 .hig-floating-tab-btn {
@@ -1843,14 +1844,19 @@ img {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background: var(--scrim-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(15, 18, 26, calc(0.06 + 0.30 * var(--hig-nav-bg-opacity, 0.5)));
+  backdrop-filter: blur(calc(var(--hig-overlay-blur, 8px) * 0.5));
+  -webkit-backdrop-filter: blur(calc(var(--hig-overlay-blur, 8px) * 0.5));
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: max(16px, calc(var(--safe-top) + 8px)) 0 0;
   animation: higScrimFade 0.22s ease both;
+}
+
+[data-theme='dark'] .modal-backdrop,
+[data-theme='dark'] .ui-sheet-backdrop {
+  background: rgba(0, 0, 0, calc(0.12 + 0.50 * var(--hig-nav-bg-opacity, 0.5)));
 }
 
 html[data-vibrancy-fallback='solid'] .modal-backdrop,
@@ -1881,7 +1887,9 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   width: 100%;
   max-height: min(86dvh, calc(100dvh - 32px));
   margin: 0;
-  background: var(--bg-elevated);
+  background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.92));
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(135%);
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(135%);
   border: 1px solid var(--glass-border);
   border-radius: 30px 30px 0 0;
   padding: 10px max(20px, calc(var(--safe-right) + 16px)) calc(24px + var(--safe-bottom))
@@ -1893,6 +1901,11 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   animation: higSheetEnter 0.32s var(--spring-ease);
   transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
+}
+
+[data-theme='dark'] .modal-box,
+[data-theme='dark'] .ui-sheet-box {
+  background: rgba(28, 28, 30, var(--hig-nav-bg-opacity, 0.92));
 }
 
 .modal-box.is-entered,
@@ -3421,17 +3434,34 @@ html[data-vibrancy-fallback='solid'] .hig-auth-container {
   height: 42px;
   padding: 4px;
   border-radius: 14px;
-  background: var(--glass-bg);
+  background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.5));
   border: 1px solid var(--glass-border);
-  backdrop-filter: var(--vibrancy-filter-subtle);
-  -webkit-backdrop-filter: var(--vibrancy-filter-subtle);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(135%);
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(135%);
   box-shadow: var(--elevation-sm);
   cursor: pointer;
-  transition: transform 0.18s var(--spring-ease), border-color 0.18s var(--spring-ease);
+  transition: transform 0.16s var(--spring-ease), border-color 0.18s var(--spring-ease),
+    background-color 0.16s var(--spring-ease), opacity 0.16s var(--spring-ease);
+}
+
+[data-theme='dark'] .studio-worn-slot-chip {
+  background: rgba(28, 28, 30, var(--hig-nav-bg-opacity, 0.5));
 }
 
 .studio-worn-slot-chip:hover {
   transform: scale(1.04);
+}
+
+.studio-worn-slot-chip:active,
+.studio-worn-slot-chip.is-interacting {
+  opacity: 0.98 !important;
+  background: rgba(255, 255, 255, 0.96);
+  transform: scale(1.06);
+}
+
+[data-theme='dark'] .studio-worn-slot-chip:active,
+[data-theme='dark'] .studio-worn-slot-chip.is-interacting {
+  background: rgba(28, 28, 30, 0.96);
 }
 
 .studio-worn-slot-chip.is-focused {

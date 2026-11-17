@@ -1003,5 +1003,186 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(rgba[(150 * w + 67) * 4 + 3], 255); // cream trousers left leg
     assert.equal(rgba[(150 * w + 93) * 4 + 3], 255); // cream trousers right leg
   });
+
+  it('(h) simultaneously serializes 2-stage Top (top + top_mid) and 2-stage Outer (outer_mid + outer) slots into client & server VTON prompts', () => {
+    const profile = normalizeGenderNeutralProfile({
+      heightCm: 176,
+      weightKg: 70,
+      bodySpec: { gender: 'male', heightCm: 176, weightKg: 70, bodyShape: 'standard_balanced' },
+      skinToneHex: '#DFBA9B',
+    });
+    const layeredSlots = {
+      top: {
+        id: 302,
+        name: '스카이블루 코튼 옥스포드 버튼다운 셔츠',
+        category: 'top',
+        subcategory: 'shirt',
+        color_name: '스카이블루',
+        color_hex: '#A7C4DC',
+      },
+      top_mid: {
+        id: 305,
+        name: '차콜 울 테일러드 웨이스트코트 조끼',
+        category: 'top',
+        subcategory: 'vest',
+        color_name: '차콜',
+        color_hex: '#33353A',
+      },
+      outer_mid: {
+        id: 307,
+        name: '슬레이트 그레이 울 싱글 미드 블레이저',
+        category: 'outer',
+        subcategory: 'blazer',
+        color_name: '그레이',
+        color_hex: '#595E66',
+      },
+      outer: {
+        id: 309,
+        name: '카멜 헤어 더블 브레스티드 오버코트',
+        category: 'outer',
+        subcategory: 'coat',
+        color_name: '카멜',
+        color_hex: '#B3895D',
+      },
+    };
+
+    const clientParts = buildDirectClientGeminiParts({
+      profile,
+      styleMode: 'stylized_isometric',
+      weatherMood: 'clear',
+      angleDeg: 0,
+      turnaroundSheet: true,
+      serializedSlots: layeredSlots,
+    });
+    const clientJoined = clientParts.map((p) => (typeof p.text === 'string' ? p.text : '')).join('\n');
+    assert.match(clientJoined, /TOP_MID|Mid-Layer Top/i);
+    assert.match(clientJoined, /OUTER_MID|Mid-Layer Outerwear/i);
+    assert.match(clientJoined, /웨이스트코트|조끼/);
+    assert.match(clientJoined, /블레이저/);
+    assert.match(clientJoined, /오버코트/);
+
+    const serverProfile = normalizeVtonProfile({
+      gender: 'male',
+      heightCm: 176,
+      weightKg: 70,
+      skinToneHex: '#DFBA9B',
+      styleMode: 'stylized_isometric',
+      turnaroundSheet: true,
+      weather: 'clear',
+    });
+    const serverPrompt = buildGeminiTryOnPrompt(serverProfile, layeredSlots);
+    assert.match(serverPrompt, /MULTI-STAGE TOP LAYERING/);
+    assert.match(serverPrompt, /MID-OUTERWEAR LAYERING/);
+    assert.match(serverPrompt, /\[EQUIPPED TOP_MID\]/);
+    assert.match(serverPrompt, /\[EQUIPPED OUTER_MID\]/);
+    assert.match(serverPrompt, /\[EQUIPPED OUTER\]/);
+  });
+
+  it('(i) preserves shaded muted-cool 0° right sleeves and 45° chest interiors matching #94A3B8 chroma ratio (lum <= 124) while keying outer backdrop', () => {
+    const w = 160;
+    const h = 220;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    // Cool slate-blue studio backdrop rgb(148, 163, 184)
+    for (let i = 0; i < w * h; i += 1) {
+      rgba[i * 4] = 148;
+      rgba[i * 4 + 1] = 163;
+      rgba[i * 4 + 2] = 184;
+      rgba[i * 4 + 3] = 255;
+    }
+    const paint = (
+      x0: number,
+      x1: number,
+      y0: number,
+      y1: number,
+      fn: (x: number, y: number) => [number, number, number]
+    ) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const [r, g, b] = fn(x, y);
+          const idx = (y * w + x) * 4;
+          rgba[idx] = r;
+          rgba[idx + 1] = g;
+          rgba[idx + 2] = b;
+          rgba[idx + 3] = 255;
+        }
+      }
+    };
+
+    // Head
+    paint(68, 92, 16, 44, () => [216, 174, 148]);
+    // Dark blazer shell around chest & sleeves
+    paint(52, 108, 45, 114, () => [32, 36, 44]);
+    // 45° Shaded Muted Cool-Slate Knit Chest Interior (lum ~ 115 <= 124, identical hue ratio to #94A3B8!)
+    paint(66, 94, 52, 92, () => [102, 116, 134]);
+    // 0° Right Sleeve in shaded slate-navy (lum ~ 111 <= 124, identical hue ratio to #94A3B8, y=58..106, x=100..118)
+    paint(100, 118, 58, 106, () => [98, 112, 130]);
+    // Enclosed real #94A3B8 gap under left arm (x=42..49, y=72..92) bounded by outer sleeve edge (x=38..41)
+    paint(38, 41, 58, 106, () => [32, 36, 44]);
+    paint(42, 51, 58, 71, () => [32, 36, 44]);
+    paint(42, 51, 93, 106, () => [32, 36, 44]);
+    // Trousers + shoes
+    paint(58, 76, 115, 186, () => [48, 52, 60]);
+    paint(84, 102, 115, 186, () => [48, 52, 60]);
+    paint(58, 76, 187, 198, () => [28, 28, 32]);
+    paint(84, 102, 187, 198, () => [28, 28, 32]);
+
+    cutoutStudioBackdropToRgba(rgba, w, h);
+
+    // Outer studio background & enclosed underarm gap become transparent
+    assert.equal(rgba[(2 * w + 2) * 4 + 3], 0);
+    assert.equal(rgba[(82 * w + 46) * 4 + 3], 0);
+    // Shaded cool-slate 45° knit chest & 0° right sleeve remain 100% opaque (alpha === 255)
+    assert.equal(rgba[(72 * w + 80) * 4 + 3], 255);
+    assert.equal(rgba[(82 * w + 109) * 4 + 3], 255);
+  });
+
+  it('(j) preserves light-blue turtleneck collars during alreadyTransparent hole sweep and preserves cream trouser outer edges in the lower studio floor zone', () => {
+    const w = 160;
+    const h = 220;
+    // 1) Already-transparent PNG with light-blue turtleneck collar rgb(149, 164, 183) at center neck
+    const transBuf = new Uint8ClampedArray(w * h * 4);
+    const fill = (buf: Uint8ClampedArray, x0: number, x1: number, y0: number, y1: number, r: number, g: number, b: number) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * w + x) * 4;
+          buf[idx] = r;
+          buf[idx + 1] = g;
+          buf[idx + 2] = b;
+          buf[idx + 3] = 255;
+        }
+      }
+    };
+    fill(transBuf, 68, 92, 18, 44, 214, 174, 150); // face
+    fill(transBuf, 68, 92, 45, 76, 149, 164, 183); // light-blue turtleneck collar near #94A3B8!
+    fill(transBuf, 52, 67, 48, 114, 144, 148, 154); // grey blazer
+    fill(transBuf, 93, 108, 48, 114, 144, 148, 154);
+    fill(transBuf, 58, 76, 115, 190, 212, 210, 202); // cream trousers
+    fill(transBuf, 84, 102, 115, 190, 212, 210, 202);
+
+    cutoutStudioBackdropToRgba(transBuf, w, h);
+    assert.equal(transBuf[(55 * w + 80) * 4 + 3], 255);
+
+    // 2) Cool neutral studio wall/floor rgb(172, 180, 191) with warm cream trousers rgb(199, 200, 195) in floor zone (y >= 0.72*h)
+    const opaqueBuf = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i += 1) {
+      opaqueBuf[i * 4] = 172;
+      opaqueBuf[i * 4 + 1] = 180;
+      opaqueBuf[i * 4 + 2] = 191;
+      opaqueBuf[i * 4 + 3] = 255;
+    }
+    fill(opaqueBuf, 68, 92, 18, 44, 214, 174, 150);
+    fill(opaqueBuf, 66, 94, 45, 114, 140, 144, 150);
+    fill(opaqueBuf, 58, 76, 115, 186, 199, 200, 195); // shaded cream trousers extending down to y=186 (>0.72*h)
+    fill(opaqueBuf, 84, 102, 115, 186, 199, 200, 195);
+    fill(opaqueBuf, 58, 76, 187, 196, 122, 68, 38);
+    fill(opaqueBuf, 84, 102, 187, 196, 122, 68, 38);
+
+    cutoutStudioBackdropToRgba(opaqueBuf, w, h);
+    assert.equal(opaqueBuf[(2 * w + 2) * 4 + 3], 0);
+    assert.equal(opaqueBuf[(170 * w + 59) * 4 + 3], 255); // outer cream trouser hem preserved in floor zone!
+    assert.equal(opaqueBuf[(170 * w + 101) * 4 + 3], 255);
+  });
 });
+
+
 

@@ -64,6 +64,7 @@ import {
   resolveEffectiveWeatherFromRaw,
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   DEFAULT_STAGE_BACKGROUND_ID,
   getStageBackgroundById,
@@ -129,6 +130,8 @@ const ORDERED_SLOT_KEYS = [
   'jwl_neck',
   'jwl_brooch',
   'outer',
+  'outer_mid',
+  'top_mid',
   'top',
   'onepiece',
   'dress',
@@ -491,6 +494,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
   const [compareSplitPct, setCompareSplitPct] = useState(50);
+  const [activeHudTouchId, setActiveHudTouchId] = useState(null);
+  const [isAngleInteracting, setIsAngleInteracting] = useState(false);
+
+  const handleHudTouchStart = useCallback((touchId) => {
+    setActiveHudTouchId(touchId);
+    triggerHaptic('selection');
+  }, []);
+
+  const handleHudTouchEnd = useCallback(() => {
+    setActiveHudTouchId(null);
+  }, []);
 
   const abortControllerRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -1284,6 +1298,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 provider: 'gemini-vton',
               });
               setStatusToast(null);
+              onAiLookGenerated?.({
+                imageUrl: targetUrl,
+                styleMode: liveSnap.styleMode,
+                fromCache: true,
+                slots: liveSnap.slots,
+              });
               return;
             }
             showToast('gemini_unavailable');
@@ -1351,7 +1371,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           });
           setStatusToast(null);
           refreshHistoryList();
-          onAiLookGenerated?.();
+          onAiLookGenerated?.({
+            imageUrl: outcome.imageUrl,
+            styleMode: liveSnap.styleMode,
+            fromCache: Boolean(outcome.fromCache),
+            slots: liveSnap.slots,
+          });
           return;
         }
 
@@ -1866,7 +1891,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               type="button"
               data-stage-bg-picker-btn="true"
               data-stage-bg-tier={resolvedBgItem.tier}
-              className={`studio-stage-bg-picker-btn tabular-nums is-tier-${resolvedBgItem.tier.toLowerCase()}`}
+              className={`studio-stage-bg-picker-btn tabular-nums is-tier-${resolvedBgItem.tier.toLowerCase()} ${
+                activeHudTouchId === 'bg-picker' ? 'is-interacting' : ''
+              }`.trim()}
               aria-label={
                 isEn
                   ? `Select stage background (${resolvedBgItem.tier} · ${resolvedBgItem.nameEn})`
@@ -1877,7 +1904,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   ? `Stage Backdrop: ${resolvedBgItem.tier} · ${resolvedBgItem.nameEn}`
                   : `배경 선택 · ${resolvedBgItem.tier}등급 ${resolvedBgItem.nameKo}`
               }
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                handleHudTouchStart('bg-picker');
+              }}
+              onPointerUp={handleHudTouchEnd}
+              onPointerCancel={handleHudTouchEnd}
+              onPointerLeave={handleHudTouchEnd}
               onClick={(e) => {
                 e.stopPropagation();
                 setHistoryOpen(false);
@@ -1895,7 +1928,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         <div className="atelier-stage-brand-cluster">
           <button
             type="button"
-            className={`atelier-weather-capsule is-top-center tabular-nums ${weatherPopupOpen ? 'is-open' : ''}`}
+            className={`atelier-weather-capsule is-top-center tabular-nums ${
+              weatherPopupOpen ? 'is-open' : ''
+            } ${activeHudTouchId === 'weather-capsule' ? 'is-interacting' : ''}`.trim()}
             data-atelier-weather-capsule="true"
             data-weather-stage-badge={effectiveWeather}
             aria-haspopup="dialog"
@@ -1905,7 +1940,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 ? `${resolvedLocationLabel} ${capsuleTempC}°C, ${weatherBadgeMeta.curationLabel}. Open weather, location, and AI Look 1 & 2 settings`
                 : `${resolvedLocationLabel} ${capsuleTempC}°C, ${weatherBadgeMeta.curationLabel}. 날씨·위치 및 AI 코디 Look 1·2 설정 열기`
             }
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleHudTouchStart('weather-capsule');
+            }}
+            onPointerUp={handleHudTouchEnd}
+            onPointerCancel={handleHudTouchEnd}
+            onPointerLeave={handleHudTouchEnd}
             onClick={(e) => {
               e.stopPropagation();
               setHistoryOpen(false);
@@ -1953,8 +1994,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits instantly without extra generation`
                 : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 추가 생성 없이 즉시 불러오기`
             }
-            className={`studio-vton-history-pill-btn tabular-nums ${historyOpen ? 'is-active' : ''}`}
-            onPointerDown={(e) => e.stopPropagation()}
+            className={`studio-vton-history-pill-btn tabular-nums ${
+              historyOpen ? 'is-active' : ''
+            } ${activeHudTouchId === 'history-btn' ? 'is-interacting' : ''}`.trim()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleHudTouchStart('history-btn');
+            }}
+            onPointerUp={handleHudTouchEnd}
+            onPointerCancel={handleHudTouchEnd}
+            onPointerLeave={handleHudTouchEnd}
             onClick={handleToggleHistoryPopover}
           >
             <span className="studio-vton-history-icon-wrap">
@@ -2363,8 +2412,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 aria-pressed={isSelectedSlot}
                 data-studio-slot={layer.slotKey}
                 data-slot-side={slotSide || undefined}
-                className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''}`}
+                className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''} ${
+                  activeHudTouchId === `slot-${layer.slotKey}` ? 'is-interacting' : ''
+                }`.trim()}
                 title={slotFullTitle}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  handleHudTouchStart(`slot-${layer.slotKey}`);
+                }}
+                onPointerUp={handleHudTouchEnd}
+                onPointerCancel={handleHudTouchEnd}
+                onPointerLeave={handleHudTouchEnd}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectSlot?.(layer.slotKey);
@@ -2405,6 +2463,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                       ? `Remove ${displayGarmentName}`
                       : `${layer.garment.name} 착장 해제`
                   }
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    triggerHaptic('selection');
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onUnequipSlot?.(layer.slotKey);
@@ -2418,11 +2480,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom-Left Compact Icon AI Look 1 / Look 2 Switcher (right above angle scrollbar) */}
+      {/* Bottom-Left Vertical Compact Icon AI Look 1 / Look 2 Switcher */}
       {stageLookRecommendations.length > 0 && (
         <div
-          className="studio-weather-look-dock"
+          className="studio-weather-look-dock is-vertical"
           data-weather-look-dock="true"
+          data-look-dock-orientation="vertical"
           role="group"
           aria-label={isEn ? 'AI weather outfit recommendations' : 'AI 날씨 추천 코디'}
           onPointerDown={(e) => e.stopPropagation()}
@@ -2456,7 +2519,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 aria-pressed={isSelected}
                 aria-label={`Look ${idx + 1}: ${presetTitle}`}
                 title={`Look ${idx + 1} · ${presetTitle}`}
-                className={`studio-weather-look-pill is-icon-compact tabular-nums ${isSelected ? 'is-selected' : ''}`}
+                className={`studio-weather-look-pill is-icon-compact tabular-nums ${
+                  isSelected ? 'is-selected' : ''
+                } ${activeHudTouchId === `look-${idx + 1}` ? 'is-interacting' : ''}`.trim()}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  handleHudTouchStart(`look-${idx + 1}`);
+                }}
+                onPointerUp={handleHudTouchEnd}
+                onPointerCancel={handleHudTouchEnd}
+                onPointerLeave={handleHudTouchEnd}
                 onClick={(e) => {
                   e.stopPropagation();
                   onApplyRecommendation?.(rec);
@@ -2472,9 +2544,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom Symmetrical Angle Scrollbar (-180° Back .. 0° Front [Center Start] .. +180° Back) */}
+      {/* Bottom Sleek Architectural Angle Slider (-180° Back .. 0° Front .. +180° Back) */}
       <div
-        className={`studio-angle-scroll-dock ${!showAngleDock ? 'is-hidden' : ''}`}
+        className={`studio-angle-scroll-dock is-sleek-dial ${!showAngleDock ? 'is-hidden' : ''} ${
+          isAngleInteracting ? 'is-interacting' : ''
+        }`.trim()}
         data-angle-scroll-dock="true"
         data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
         aria-hidden={!showAngleDock ? 'true' : undefined}
@@ -2486,6 +2560,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             type="button"
             data-angle-end-btn="left-back"
             className={`studio-angle-end-label ${angleScrollDeg <= -158 ? 'is-active' : ''}`}
+            onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(-180)}
           >
             {isEn ? 'Back' : '뒷모습'}
@@ -2498,6 +2573,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               viewAngleDeg === 0 && Math.abs(angleScrollDeg) <= 12 ? 'is-front' : ''
             }`}
             title={isEn ? 'Reset to 0° Front' : '0° 정면으로 이동'}
+            onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(0)}
           >
             <span>{centerAngleReadout}</span>
@@ -2507,6 +2583,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             type="button"
             data-angle-end-btn="right-back"
             className={`studio-angle-end-label ${angleScrollDeg >= 158 ? 'is-active' : ''}`}
+            onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(180)}
           >
             {isEn ? 'Back' : '뒷모습'}
@@ -2538,12 +2615,29 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 ? 'Mannequin angle scroll (center 0 degrees front, both ends 180 degrees back)'
                 : '마네킹 각도 스크롤 (가운데 0도 정면, 양 끝 뒷모습)'
             }
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setIsAngleInteracting(true);
+              triggerHaptic('selection');
+            }}
             onChange={handleAngleScrollChange}
-            onPointerUp={handleAngleScrollRelease}
-            onPointerCancel={handleAngleScrollRelease}
-            onTouchEnd={handleAngleScrollRelease}
+            onPointerUp={(e) => {
+              setIsAngleInteracting(false);
+              handleAngleScrollRelease(e);
+            }}
+            onPointerCancel={(e) => {
+              setIsAngleInteracting(false);
+              handleAngleScrollRelease(e);
+            }}
+            onTouchEnd={(e) => {
+              setIsAngleInteracting(false);
+              handleAngleScrollRelease(e);
+            }}
             onKeyUp={handleAngleScrollRelease}
-            onBlur={handleAngleScrollRelease}
+            onBlur={(e) => {
+              setIsAngleInteracting(false);
+              handleAngleScrollRelease(e);
+            }}
           />
         </div>
       </div>

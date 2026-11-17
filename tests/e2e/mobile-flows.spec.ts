@@ -229,17 +229,18 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const mobileAccSlotBtn = page.locator('[data-mobile-slot-btn="accessory"]');
     if (await mobileAccSlotBtn.isVisible()) {
       await mobileAccSlotBtn.click();
-      await page.locator('.ui-sheet-box [data-slot-garment-id]').first().click();
+      const firstCard = page.locator('.ui-sheet-box [data-slot-garment-id]').first();
+      await firstCard.click();
+      await page.locator('.ui-sheet-box [data-equip-inspector-btn="true"]').first().click();
     } else {
       await page.locator('[data-outfit-slot-tab="accessory"]').click();
-      await page
-        .locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId} [data-slot-garment-id]`)
-        .first()
-        .click();
+      const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
+      await picker.locator('[data-slot-garment-id]').first().click();
+      await picker.locator('[data-equip-inspector-btn="true"]').first().click();
     }
     await expect(studioCanvas.locator('[data-studio-slot="accessory"]')).toBeVisible();
 
-    // Save combined outfit
+    // Save combined outfit -> opens save-to-calendar confirmation modal
     const mobileSaveBtn = page.getByTestId('mobile-save-outfit-btn');
     if (await mobileSaveBtn.isVisible()) {
       await page.locator('.studio-mobile-save-row input').fill('Minimal Trench Coordi');
@@ -248,6 +249,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       await page.locator('.studio-save-bar input').fill('Minimal Trench Coordi');
       await page.locator(`#${CARBON_DOM_CONTRACT.studioSaveOutfitBtnId}`).click();
     }
+
+    const savedCalModal = page.locator('[data-outfit-saved-calendar-modal="true"]');
+    await expect(savedCalModal).toBeVisible();
+    await savedCalModal.locator('[data-saved-calendar-close="true"]').click();
+    await expect(savedCalModal).toHaveCount(0);
 
     // Step E: Return to Closet -> open registered item detail -> Delete item
     await page.locator('[data-nav-tab="closet"]').click();

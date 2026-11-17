@@ -35,6 +35,14 @@ const CITY_MAP = {
 
 const ORDERED_CITY_KEYS = [
   'seoul',
+  'gangnam_yeoksam',
+  'mapo_yeonnam',
+  'seongdong_seongsu',
+  'jongno_samcheong',
+  'yongsan_hannam',
+  'bundang_jeongja',
+  'busan_haeundae',
+  'jeju_aewol',
   'bundang',
   'incheon',
   'daejeon',
@@ -841,6 +849,29 @@ export function buildWeatherRecommendations(
   const neckSubs = new Set(['neckwear', 'scarf', 'muffler', 'tie', 'necktie']);
   const gloveSubs = new Set(['gloves', 'leather_gloves', 'mittens']);
 
+  const isMidOuterSub = (g) => {
+    const sk = String(g?.slot_key || '').toLowerCase();
+    if (sk === 'outer_mid') return true;
+    const sub = String(g?.subcategory || '').toLowerCase();
+    return sub === 'blazer' || sub === 'jacket' || sub === 'denim_jacket' || sub === 'leather_jacket' || sub === 'field_jacket';
+  };
+  const isMidTopSub = (g) => {
+    const sk = String(g?.slot_key || '').toLowerCase();
+    if (sk === 'top_mid') return true;
+    const sub = String(g?.subcategory || '').toLowerCase();
+    return sub === 'cardigan' || sub === 'vest';
+  };
+
+  const allOuterItems = byCat('outer');
+  const outerCoatItems = allOuterItems.filter((g) => !isMidOuterSub(g));
+  const outerMidItems = allOuterItems.filter(isMidOuterSub);
+
+  const allTopItems = byCat('top').filter(
+    (g) => !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
+  );
+  const baseTopItems = allTopItems.filter((g) => !isMidTopSub(g));
+  const midTopItems = allTopItems.filter(isMidTopSub);
+
   const pools = {
     headwear: byCat('headwear').concat(
       active.filter((g) => g.category === 'accessory' && headSubs.has(String(g.subcategory || '')))
@@ -848,10 +879,10 @@ export function buildWeatherRecommendations(
     neckwear: byCat('neckwear').concat(
       active.filter((g) => g.category === 'accessory' && neckSubs.has(String(g.subcategory || '')))
     ),
-    outer: byCat('outer'),
-    top: byCat('top').filter(
-      (g) => !(avgTemp < 22 && (g.subcategory === 'tank_top' || g.subcategory === 'sleeveless'))
-    ),
+    outer: outerCoatItems.length > 0 ? outerCoatItems : allOuterItems,
+    outer_mid: outerMidItems,
+    top: baseTopItems.length > 0 ? baseTopItems : allTopItems,
+    top_mid: midTopItems,
     bottom: byCat('bottom').filter((g) => !(avgTemp < 21 && g.subcategory === 'shorts')),
     dress: byCat('dress'),
     gloves: byCat('gloves').concat(
@@ -886,6 +917,9 @@ export function buildWeatherRecommendations(
   const recommendations = [];
   const look1ChosenIds = new Set();
 
+  const needMidTop = avgTemp <= 19 || diurnalSwing >= 7 || isWindy;
+  const needMidOuter = needOuter && (avgTemp <= 15 || diurnalSwing >= 9);
+
   lookConfigs.forEach(({ id, preset }, idx) => {
     const excludeIds = idx === 0 ? new Set() : look1ChosenIds;
 
@@ -901,7 +935,13 @@ export function buildWeatherRecommendations(
     };
 
     const chosenOuter = needOuter ? pickBest('outer', idx) : null;
+    const chosenOuterMid =
+      needMidOuter && pools.outer_mid.length > 0 ? pickBest('outer_mid', idx) : null;
     const chosenTop = pickBest('top', idx);
+    const chosenTopMid =
+      (needMidTop || preset.key === 'formal_office') && pools.top_mid.length > 0
+        ? pickBest('top_mid', idx)
+        : null;
     const chosenBottom = pickBest('bottom', idx);
     const chosenShoes = pickBest('shoes', idx);
     const chosenHeadwear =
@@ -923,7 +963,9 @@ export function buildWeatherRecommendations(
       headwear: chosenHeadwear,
       neckwear: chosenNeckwear,
       outer: chosenOuter,
+      outer_mid: chosenOuterMid && chosenOuterMid.id !== chosenOuter?.id ? chosenOuterMid : null,
       top: chosenTop,
+      top_mid: chosenTopMid && chosenTopMid.id !== chosenTop?.id ? chosenTopMid : null,
       bottom: chosenBottom,
       dress: chosenDress,
       gloves: chosenGloves,
@@ -939,7 +981,9 @@ export function buildWeatherRecommendations(
       chosenHeadwear,
       chosenNeckwear,
       chosenOuter,
+      slotMap.outer_mid,
       chosenTop,
+      slotMap.top_mid,
       chosenBottom,
       chosenDress,
       chosenGloves,
@@ -1101,6 +1145,7 @@ export function getSubcategoryLabel(sub) {
     mustang: '무스탕 · 시어링',
     knit: '니트 · 스웨터',
     cardigan: '가디건',
+    vest: '조끼 · 베스트',
     shirt: '셔츠',
     short_shirt: '반팔 셔츠',
     blouse: '블라우스',

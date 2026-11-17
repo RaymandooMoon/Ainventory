@@ -3,6 +3,7 @@ import {
   DEFAULT_STAGE_BACKGROUND_ID,
   getStageBackgroundById,
 } from '../utils/stageBackgroundCatalog.ts';
+import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
 
 export interface FittingAtelierBackdropProps {
@@ -72,7 +73,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
 
       {/* 1. Equipped 3:4 Architectural Studio / Terrace Photograph */}
       <img
-        src={bgItem.imageUrl}
+        src={withPublicBaseUrl(bgItem.imageUrl)}
         alt=""
         draggable={false}
         decoding="async"

@@ -9,6 +9,7 @@
 
 :root,
 [data-theme='light'] {
+  --hig-overlay-blur: calc(1px + 14px * var(--hig-nav-bg-opacity, 0.5));
   --nav-dock-bg: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.5));
   --nav-dock-border: rgba(29, 29, 31, 0.14);
   --nav-tab-inactive-ink: #515154; /* >= 7.8:1 on white/light glass */
@@ -21,6 +22,7 @@
 }
 
 [data-theme='dark'] {
+  --hig-overlay-blur: calc(1px + 14px * var(--hig-nav-bg-opacity, 0.5));
   --nav-dock-bg: rgba(28, 28, 30, var(--hig-nav-bg-opacity, 0.5));
   --nav-dock-border: rgba(245, 245, 247, 0.16);
   --nav-tab-inactive-ink: #aeaeb2; /* >= 8.2:1 on dark glass */
@@ -48,8 +50,8 @@ nav.hig-floating-tabbar.ui-bottom-tabbar {
   background: var(--nav-dock-bg);
   border: 1px solid var(--nav-dock-border);
   box-shadow: var(--elevation-lg);
-  backdrop-filter: var(--vibrancy-filter, blur(24px) saturate(185%));
-  -webkit-backdrop-filter: var(--vibrancy-filter, blur(24px) saturate(185%));
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px)) saturate(140%);
 }
 
 nav.hig-floating-tabbar.ui-bottom-tabbar .hig-floating-tab-btn.ui-bottom-tab-btn {

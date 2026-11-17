@@ -237,7 +237,9 @@ const ORDERED_OUTFIT_SLOTS = [
   'acc_neck',
   'jwl_neck',
   'outer',
+  'outer_mid',
   'jwl_brooch',
+  'top_mid',
   'top',
   'onepiece',
   'dress',
@@ -5041,6 +5043,13 @@ export function buildDirectClientGeminiParts(params: {
   }
 
   const slotPlacementPrompts: Record<string, string> = {
+    top: 'worn as the inner base top layer directly over the upper torso (with collar/hem naturally peeking beneath any mid-layer cardigan/vest or outerwear)',
+    top_mid:
+      'worn as the 2nd mid-layer cardigan or tailored vest/knit layered cleanly OVER the inner base [TOP] and UNDER any [OUTER_MID] or [OUTER] coat/jacket',
+    outer_mid:
+      'worn as the 3rd mid-outerwear blazer/blouson/leather-jacket layered cleanly OVER the [TOP]/[TOP_MID] inner layers (and UNDER any outer overcoat/trench when [OUTER] is also equipped)',
+    outer:
+      'worn as the outermost overcoat/trench/padding draped naturally OVER all inner [TOP], [TOP_MID], and [OUTER_MID] layers (left relaxed open in front on 0°/45° views so inner layering stays legible)',
     shoes: `worn cleanly on BOTH feet with full soles grounded on the floor. ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
     accessory: 'carried naturally on shoulder or in hand as main bag/tote/briefcase',
     acc_umbrella:

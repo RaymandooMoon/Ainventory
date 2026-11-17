@@ -491,7 +491,7 @@ function detectDominantInteriorStudioKeyRgb(
   d: Uint8ClampedArray,
   w: number,
   h: number
-): readonly [number, number, number] {
+): { rgb: readonly [number, number, number]; detected: boolean } {
   const nPx = w * h;
   const step = Math.max(1, Math.floor(Math.sqrt(nPx / 16384)));
   let opaqueSamples = 0;
@@ -510,13 +510,30 @@ function detectDominantInteriorStudioKeyRgb(
       const g = d[i + 1];
       const b = d[i + 2];
 
+      const inCentralNeckOrChestBand =
+        Math.abs(x - w * 0.5) <= w * 0.14 && y >= h * 0.14 && y <= h * 0.46;
+
       if (g > r + 8 && g > b + 4 && Math.hypot(r - 94, g - 156, b - 126) <= 68) {
         greenKeySamples += 1;
-      } else if (b > r + 10 && Math.hypot(r - 148, g - 163, b - 184) <= 38) {
+      } else if (
+        !inCentralNeckOrChestBand &&
+        b > r + 10 &&
+        Math.hypot(r - 148, g - 163, b - 184) <= 14
+      ) {
         slateKeySamples += 1;
-      } else if (r > g + 8 && b > g + 8 && Math.hypot(r - 142, g - 111, b - 158) <= 32) {
+      } else if (
+        !inCentralNeckOrChestBand &&
+        r > g + 8 &&
+        b > g + 8 &&
+        Math.hypot(r - 142, g - 111, b - 158) <= 20
+      ) {
         plumKeySamples += 1;
-      } else if (r > g + 10 && g > b + 8 && Math.hypot(r - 179, g - 131, b - 104) <= 22) {
+      } else if (
+        !inCentralNeckOrChestBand &&
+        r > g + 10 &&
+        g > b + 8 &&
+        Math.hypot(r - 179, g - 131, b - 104) <= 18
+      ) {
         terraKeySamples += 1;
       }
     }
@@ -524,18 +541,23 @@ function detectDominantInteriorStudioKeyRgb(
 
   const maxPocketSamples = Math.max(8, Math.round(opaqueSamples * 0.24));
   if (greenKeySamples >= 4 && greenKeySamples <= maxPocketSamples) {
-    return KNOWN_STUDIO_KEY_RGBS[1]; // #5E9C7E
+    return { rgb: KNOWN_STUDIO_KEY_RGBS[1], detected: true }; // #5E9C7E
   }
   if (slateKeySamples >= 4 && slateKeySamples <= maxPocketSamples) {
-    return KNOWN_STUDIO_KEY_RGBS[0]; // #94A3B8
+    return { rgb: KNOWN_STUDIO_KEY_RGBS[0], detected: true }; // #94A3B8
   }
   if (plumKeySamples >= 4 && plumKeySamples <= maxPocketSamples) {
-    return KNOWN_STUDIO_KEY_RGBS[3]; // #8E6F9E
+    return { rgb: KNOWN_STUDIO_KEY_RGBS[3], detected: true }; // #8E6F9E
   }
-  if (terraKeySamples >= 4 && terraKeySamples <= maxPocketSamples && greenKeySamples < 4 && slateKeySamples < 4) {
-    return KNOWN_STUDIO_KEY_RGBS[2]; // #B38368
+  if (
+    terraKeySamples >= 4 &&
+    terraKeySamples <= maxPocketSamples &&
+    greenKeySamples < 4 &&
+    slateKeySamples < 4
+  ) {
+    return { rgb: KNOWN_STUDIO_KEY_RGBS[2], detected: true }; // #B38368
   }
-  return KNOWN_STUDIO_KEY_RGBS[0];
+  return { rgb: KNOWN_STUDIO_KEY_RGBS[0], detected: false };
 }
 
 function purgeEnclosedBackdropHoles(
@@ -611,6 +633,7 @@ function purgeEnclosedBackdropHoles(
       if (r > g && g >= b - 3 && r - b >= 14 && r >= 68) continue;
       if (r > b + 16 && g > b + 8 && lum < 155) continue;
       if (eB >= eR && r > b + 8 && g >= b + 4 && lum >= 165) continue;
+      if (eB >= eR + 6 && r >= b && g >= b - 2 && lum >= 120) continue;
     }
 
     // Guard 1C: On non-chromatic neutral studio walls, the center chest/neck/torso core never
@@ -622,17 +645,40 @@ function purgeEnclosedBackdropHoles(
       Math.abs(pxX - subjectMidX) <= subjectWidth * 0.38;
     if (inNeutralTorsoCore) continue;
 
+    // Guard 1D: On non-green studio keys (e.g. cool slate #94A3B8), protect shaded upper-body
+    // sleeves (0 deg right sleeve) and upper-chest shirts/knitwear (45 deg chest) whose muted
+    // cool shadows have lum <= 124 unless they are an exact match to the studio key.
+    const inUpperGarmentBand =
+      pxY >= subjectTopY + 0.12 * subjectHeight &&
+      pxY <= subjectTopY + 0.56 * subjectHeight;
+    const bgDist = Math.hypot(r - eR, g - eG, b - eB);
+    if (inUpperGarmentBand && !isChromaticGreenKey && lum <= 124 && bgDist > 12) {
+      continue;
+    }
+
+    // Guard 1E: Protect central anatomical neck/turtleneck/collar/sternum column against non-green keys
+    const inNeckCollarColumn =
+      !isChromaticGreenKey &&
+      pxY >= subjectTopY + 0.08 * subjectHeight &&
+      pxY <= subjectTopY + 0.36 * subjectHeight &&
+      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.13;
+    if (inNeckCollarColumn && bgDist > 4) {
+      continue;
+    }
+
     const inNeutralLegCleftBand =
       !isChromaticStudioKey &&
       pxY >= subjectTopY + 0.52 * subjectHeight &&
       pxY <= subjectTopY + 0.96 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.18;
+      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.18 &&
+      !(eB >= eR + 6 && r >= b);
 
-    const bgDist = Math.hypot(r - eR, g - eG, b - eB);
     const effectiveHoleTol = isChromaticStudioKey
-      ? holePixelTol
+      ? inUpperGarmentBand && !isChromaticGreenKey
+        ? Math.min(18, holePixelTol)
+        : holePixelTol
       : inNeutralLegCleftBand
-        ? 26
+        ? 16
         : Math.min(11, holePixelTol);
     if (bgDist <= effectiveHoleTol) {
       candidate[p] = 1;
@@ -641,8 +687,8 @@ function purgeEnclosedBackdropHoles(
     }
 
     // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy (~10–64 lum darker)
-    // ONLY when the backdrop is a distinct chromatic studio key (#94A3B8 slate or #5E9C7E green),
-    // never on low-saturation neutral studio walls that resemble grey blazers or powder-blue shirts.
+    // ONLY when the backdrop is a distinct chromatic studio key (#5E9C7E green or lower-body slate cleft),
+    // never on upper-body sleeves or chest garments where cloth folds share muted chroma.
     const inLowerBodyCleftZone = pxY >= subjectTopY + 0.42 * subjectHeight;
     const isShadedGreenStudioPocket =
       g >= r + 7 &&
@@ -656,7 +702,15 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
-    if (isChromaticStudioKey && lum >= expLum - 64 && lum <= expLum + 14 && lum > 38 && lum < 218) {
+    const allowShadedChromaBand = isChromaticGreenKey || pxY > subjectTopY + 0.56 * subjectHeight;
+    if (
+      isChromaticStudioKey &&
+      allowShadedChromaBand &&
+      lum >= expLum - 64 &&
+      lum <= expLum + 14 &&
+      lum > 38 &&
+      lum < 218
+    ) {
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
       const satTol = Math.max(22, Math.round(expSat * 0.48));
       if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(58, expSat + 32)) {
@@ -818,13 +872,17 @@ function purgeEnclosedBackdropHoles(
 
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
+    const isUpperNonGreenPocket =
+      !isChromaticBackdropHole && cy < subjectTopY + 0.56 * subjectHeight;
     const maxAllowedStepDiff = isChromaticBackdropHole
       ? 15.5
-      : seedIsChromaticStudioKey
-        ? 10.5
-        : isNeutralLegCleftPocket
-          ? 7.5
-          : 4.5;
+      : isUpperNonGreenPocket
+        ? 5.5
+        : seedIsChromaticStudioKey
+          ? 10.5
+          : isNeutralLegCleftPocket
+            ? 7.5
+            : 4.5;
     if (meanStepDiff > maxAllowedStepDiff) continue;
 
     // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
@@ -840,20 +898,24 @@ function purgeEnclosedBackdropHoles(
     // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
     const maxAllowedMeanDist = isChromaticBackdropHole
       ? 68
-      : isNeutralLegCleftPocket
-        ? 28
-        : !seedIsChromaticStudioKey
-          ? 11
-          : touchesOuterBg
-            ? Math.min(28, holePixelTol * 0.95)
-            : Math.min(26, holePixelTol * 0.9);
+      : isUpperNonGreenPocket
+        ? 16
+        : isNeutralLegCleftPocket
+          ? 28
+          : !seedIsChromaticStudioKey
+            ? 11
+            : touchesOuterBg
+              ? Math.min(28, holePixelTol * 0.95)
+              : Math.min(26, holePixelTol * 0.9);
     if (meanDistToBg > maxAllowedMeanDist) continue;
 
     const minSharpRatio = isChromaticBackdropHole
       ? 0.24
-      : seedIsChromaticStudioKey || isNeutralLegCleftPocket
-        ? 0.45
-        : 0.62;
+      : isUpperNonGreenPocket
+        ? 0.58
+        : seedIsChromaticStudioKey || isNeutralLegCleftPocket
+          ? 0.45
+          : 0.62;
     const sharpRatio = perimeterFgCount > 0 ? sharpBoundaryCount / perimeterFgCount : 0;
     if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < minSharpRatio)) continue;
 
@@ -896,7 +958,13 @@ export function cutoutStudioBackdropToRgba(
   if (bgModel.alreadyTransparent) {
     // Outer perimeter is already transparent (e.g., cached V3 slice or @imgly output),
     // but enclosed interior studio backdrop islands (#94A3B8, #5E9C7E, etc.) may still be trapped inside!
-    const [keyR, keyG, keyB] = detectDominantInteriorStudioKeyRgb(d, w, h);
+    const {
+      rgb: [keyR, keyG, keyB],
+      detected,
+    } = detectDominantInteriorStudioKeyRgb(d, w, h);
+    if (!detected) {
+      return { modified: false, purgedHolePixels: 0 };
+    }
     const isGreenKey = keyG > keyR + 14 && keyG > keyB + 8;
     let transparentCount = 0;
     for (let p = 0; p < nPx; p += 1) {
@@ -1053,28 +1121,42 @@ export function cutoutStudioBackdropToRgba(
     const rb = resB[p];
     const bgDist = Math.hypot(rr, rg, rb);
 
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
     const py = Math.floor(p / w);
     const inFloorShadowZone = py >= Math.round(h * 0.72);
+    const isCoolFloorVignettePixel =
+      inFloorShadowZone &&
+      eB >= eR + 6 &&
+      b >= r + 2 &&
+      lum <= expLum + 28;
+    const isShadowShadeFloorPixel =
+      inFloorShadowZone &&
+      ((lum <= expLum + 4 && !(eB >= eR && r >= b && g >= b - 2)) || isCoolFloorVignettePixel);
     const localTol = isChromaticBg
       ? tolerance
-      : inFloorShadowZone
+      : isCoolFloorVignettePixel
         ? Math.min(tolerance, 26)
-        : Math.min(tolerance, 12);
+        : isShadowShadeFloorPixel
+          ? Math.min(tolerance, 22)
+          : Math.min(tolerance, 11);
     const localStepLimit = isChromaticBg
       ? stepLimit
-      : inFloorShadowZone
+      : isShadowShadeFloorPixel
         ? stepLimit
         : Math.min(stepLimit, 8);
     const localStrictPass = isChromaticBg
       ? Math.max(8, tolerance * 0.28)
-      : inFloorShadowZone
+      : isShadowShadeFloorPixel
         ? 10
         : 5;
     const localSobelBarrier = isChromaticBg
       ? SOBEL_EDGE_BARRIER_THRESHOLD
-      : inFloorShadowZone
-        ? 18
-        : 8;
+      : isCoolFloorVignettePixel
+        ? 16
+        : isShadowShadeFloorPixel
+          ? 14
+          : 8;
 
     // Sobel Edge Barrier: halt immediately at crisp garment/shoe/umbrella/hat contours
     // so white shirts (#FFFFFF), cream trousers, grey blazers, and dark coats are never eroded.
@@ -1090,8 +1172,11 @@ export function cutoutStudioBackdropToRgba(
     }
 
     // Hue-polarity guard: on cool/neutral studio walls (eB >= eR), warm cream/ivory/camel garments
-    // (r > b + 8) must never be swallowed unless practically identical to the background.
+    // (r > b + 8 or r >= b when cool-tinted backdrop) must never be swallowed.
     if (eB >= eR && r > b + 8 && g >= b + 4 && bgDist > 11) {
+      return;
+    }
+    if (eB >= eR + 6 && r >= b && g >= b - 2 && bgDist > 7) {
       return;
     }
 
@@ -1282,9 +1367,20 @@ export function cutoutStudioBackdropToRgba(
         }
       }
 
-      if (!usedLinearMatting && dist < outerTol) {
-        const ramp = clamp01((dist - innerTol) / Math.max(1, outerTol - innerTol));
-        alphaFactor = ring === 1 ? ramp * 0.9 : Math.max(0.58, ramp);
+      const bgRingSat = Math.max(cBgR, cBgG, cBgB) - Math.min(cBgR, cBgG, cBgB);
+      const isRingChromaticBg =
+        (cBgG > cBgR + 12 && cBgG > cBgB + 6) ||
+        (cBgB > cBgR + 14 && bgRingSat >= 24) ||
+        (cBgR > cBgG + 12 && cBgB > cBgG + 12 && bgRingSat >= 24);
+      const effectiveOuterTol = isRingChromaticBg ? outerTol : Math.min(outerTol, 18);
+      const isWarmOnCoolWall = cBgB >= cBgR + 6 && r >= b + 2 && g >= b && dist > 9;
+
+      if (!usedLinearMatting && ring === 1 && !isWarmOnCoolWall && dist < effectiveOuterTol) {
+        const effectiveInnerTol = isRingChromaticBg ? innerTol : Math.min(innerTol, 8);
+        const ramp = clamp01(
+          (dist - effectiveInnerTol) / Math.max(1, effectiveOuterTol - effectiveInnerTol)
+        );
+        alphaFactor = ramp * 0.9;
       }
 
       const alpha = clamp01(origAlpha * alphaFactor);

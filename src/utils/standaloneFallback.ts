@@ -14,6 +14,7 @@ import {
   getStudioSeedImageForGarment,
   resolveManifestSlotAndGlb,
 } from '../shared/garmentTaxonomy.js';
+import { LAYERED_10_CATALOG } from '../shared/layered10Catalog.js';
 import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
 import { readCachedResponse } from './offlineSync.ts';
 
@@ -152,11 +153,13 @@ const DEFAULT_STANDALONE_USERS: StoredStandaloneUser[] = [
 export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = [
   ...SEASONAL_120_CATALOG,
   ...ACCESSORY_JEWELRY_CATALOG,
+  ...LAYERED_10_CATALOG,
 ].map((item) => {
   const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
   const wearCount = ((item.idOffset * 3) % 24) + 2;
   const cpw = wearCount > 0 ? Math.round(item.price / wearCount) : item.price;
   const materialKey = 'material_key' in item ? (item.material_key ?? null) : null;
+  const explicitSlotKey = 'slot_key' in item && item.slot_key ? item.slot_key : spec.slotKey;
   return {
     key: item.key,
     id: 9000 + item.idOffset,
@@ -186,7 +189,7 @@ export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = [
     status: 'active',
     image_url:
       item.image_url || getStudioSeedImageForGarment(item.category, item.subcategory),
-    slot_key: spec.slotKey,
+    slot_key: explicitSlotKey,
     base_glb: spec.baseGlb,
     physics_preset: spec.physicsPreset,
     custom_texture: false,
@@ -1300,6 +1303,24 @@ export async function handleStandaloneApiFallback(
       return ranked[fallbackIdx % ranked.length] || ranked[0];
     };
 
+    const isMidOuter = (g: GarmentRecord) => {
+      const sk = String(g.slot_key || '').toLowerCase();
+      if (sk === 'outer_mid') return true;
+      const sub = String(g.subcategory || '').toLowerCase();
+      return sub === 'blazer' || sub === 'jacket' || sub === 'denim_jacket' || sub === 'leather_jacket' || sub === 'field_jacket';
+    };
+    const isMidTop = (g: GarmentRecord) => {
+      const sk = String(g.slot_key || '').toLowerCase();
+      if (sk === 'top_mid') return true;
+      const sub = String(g.subcategory || '').toLowerCase();
+      return sub === 'cardigan' || sub === 'vest';
+    };
+
+    const outerCoatPool = outersPool.filter((g) => !isMidOuter(g));
+    const outerMidPool = outersPool.filter(isMidOuter);
+    const topBasePool = topsPool.filter((g) => !isMidTop(g));
+    const topMidPool = topsPool.filter(isMidTop);
+
     const buildFallbackRec = (
       idx: number,
       id: string,
@@ -1307,8 +1328,28 @@ export async function handleStandaloneApiFallback(
       excludeIds: ReadonlySet<number>
     ) => {
       const preset = LOOK_STYLE_PRESETS[presetKey];
-      const chosenOuter = needOuter ? pickForPreset(outersPool, presetKey, excludeIds, idx) : null;
-      const chosenTop = pickForPreset(topsPool, presetKey, excludeIds, idx);
+      const chosenOuter = needOuter
+        ? pickForPreset(outerCoatPool.length > 0 ? outerCoatPool : outersPool, presetKey, excludeIds, idx)
+        : null;
+      const chosenOuterMidRaw =
+        needOuter && (avgTemp <= 15 || spec.tempMax - spec.tempMin >= 9) && outerMidPool.length > 0
+          ? pickForPreset(outerMidPool, presetKey, excludeIds, idx)
+          : null;
+      const chosenOuterMid =
+        chosenOuterMidRaw && chosenOuterMidRaw.id !== chosenOuter?.id ? chosenOuterMidRaw : null;
+      const chosenTop = pickForPreset(
+        topBasePool.length > 0 ? topBasePool : topsPool,
+        presetKey,
+        excludeIds,
+        idx
+      );
+      const chosenTopMidRaw =
+        (avgTemp <= 19 || spec.tempMax - spec.tempMin >= 7 || presetKey === 'formal_office') &&
+        topMidPool.length > 0
+          ? pickForPreset(topMidPool, presetKey, excludeIds, idx)
+          : null;
+      const chosenTopMid =
+        chosenTopMidRaw && chosenTopMidRaw.id !== chosenTop?.id ? chosenTopMidRaw : null;
       const chosenBottom = pickForPreset(bottomsPool, presetKey, excludeIds, idx);
       const chosenShoes = pickForPreset(shoesPool, presetKey, excludeIds, idx);
       const chosenAcc = pickForPreset(accPool, presetKey, excludeIds, idx);
@@ -1327,7 +1368,9 @@ export async function handleStandaloneApiFallback(
         chosenHeadwear,
         chosenNeckwear,
         chosenOuter,
+        chosenOuterMid,
         chosenTop,
+        chosenTopMid,
         chosenBottom,
         chosenGloves,
         chosenShoes,
@@ -1346,7 +1389,9 @@ export async function handleStandaloneApiFallback(
           headwear: chosenHeadwear,
           neckwear: chosenNeckwear,
           outer: chosenOuter,
+          outer_mid: chosenOuterMid,
           top: chosenTop,
+          top_mid: chosenTopMid,
           bottom: chosenBottom,
           gloves: chosenGloves,
           shoes: chosenShoes,

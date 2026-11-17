@@ -10,6 +10,11 @@ import {
   ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
 } from './accessoryJewelryCatalog.js';
 import {
+  LAYERED_10_BY_IMAGE_URL,
+  LAYERED_10_CATALOG,
+  LAYERED_10_NATIVE_HEX_MAP,
+} from './layered10Catalog.js';
+import {
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,
@@ -20,6 +25,9 @@ export {
   ACCESSORY_JEWELRY_BY_SUBCATEGORY,
   ACCESSORY_JEWELRY_CATALOG,
   ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
+  LAYERED_10_BY_IMAGE_URL,
+  LAYERED_10_CATALOG,
+  LAYERED_10_NATIVE_HEX_MAP,
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,
@@ -89,6 +97,7 @@ export const SUBCATEGORIES_BY_CAT = {
   top: [
     { value: 'knit', label: '니트 · 스웨터' },
     { value: 'cardigan', label: '가디건' },
+    { value: 'vest', label: '조끼 · 베스트' },
     { value: 'shirt', label: '셔츠' },
     { value: 'short_shirt', label: '반팔 셔츠' },
     { value: 'blouse', label: '블라우스 · 실크탑' },
@@ -177,12 +186,20 @@ export const SEASONS = [
 ];
 
 export const CITY_COORDS = [
-  { key: 'seoul', name: '서울', lat: 37.5665, lon: 126.978 },
-  { key: 'busan', name: '부산', lat: 35.1796, lon: 129.0756 },
-  { key: 'jeju', name: '제주', lat: 33.4996, lon: 126.5312 },
-  { key: 'tokyo', name: '도쿄', lat: 35.6762, lon: 139.6503 },
-  { key: 'newyork', name: '뉴욕', lat: 40.7128, lon: -74.006 },
-  { key: 'paris', name: '파리', lat: 48.8566, lon: 2.3522 },
+  { key: 'seoul', name: '서울 · 중구 명동', lat: 37.5665, lon: 126.978 },
+  { key: 'gangnam_yeoksam', name: '서울 강남구 역삼동', lat: 37.5007, lon: 127.0366 },
+  { key: 'mapo_yeonnam', name: '서울 마포구 연남동', lat: 37.5636, lon: 126.9254 },
+  { key: 'seongdong_seongsu', name: '서울 성동구 성수동', lat: 37.5446, lon: 127.056 },
+  { key: 'jongno_samcheong', name: '서울 종로구 삼청동', lat: 37.5844, lon: 126.9818 },
+  { key: 'yongsan_hannam', name: '서울 용산구 한남동', lat: 37.5349, lon: 127.0024 },
+  { key: 'bundang_jeongja', name: '성남 분당구 정자동', lat: 37.3665, lon: 127.1082 },
+  { key: 'busan_haeundae', name: '부산 해운대구 우동', lat: 35.1631, lon: 129.1636 },
+  { key: 'jeju_aewol', name: '제주 제주시 애월읍', lat: 33.4622, lon: 126.3292 },
+  { key: 'busan', name: '부산 중구 중앙동', lat: 35.1796, lon: 129.0756 },
+  { key: 'jeju', name: '제주 제주시 연동', lat: 33.4996, lon: 126.5312 },
+  { key: 'tokyo', name: '도쿄 시부야', lat: 35.6762, lon: 139.6503 },
+  { key: 'newyork', name: '뉴욕 소호', lat: 40.7128, lon: -74.006 },
+  { key: 'paris', name: '파리 마레', lat: 48.8566, lon: 2.3522 },
 ];
 
 export const STUDIO_SEED_BY_SUBCATEGORY = {
@@ -199,7 +216,8 @@ export const STUDIO_SEED_BY_SUBCATEGORY = {
   long_padding: '/seed/s4-winter-03-navy-long-puffer.webp',
   fleece: '/seed/s4-winter-09-cream-boa-fleece.webp',
   mustang: '/seed/s4-winter-08-brown-shearling-mustang.webp',
-  cardigan: '/seed/studio-cardigan.png',
+  cardigan: '/seed/layer-topmid-01-oatmeal-cardigan.webp',
+  vest: '/seed/layer-topmid-02-charcoal-vest.webp',
   knit: '/seed/cream-knit.jpg',
   shirt: '/seed/white-shirt.jpg',
   short_shirt: '/seed/s4-summer-10-sage-linen-short-shirt.webp',
@@ -333,6 +351,7 @@ const RAW_NATIVE_SEED_HEX = {
   '/seed/studio-glasses.jpg': '#4A3222',
   ...SEASONAL_120_NATIVE_HEX_MAP,
   ...ACCESSORY_JEWELRY_NATIVE_HEX_MAP,
+  ...LAYERED_10_NATIVE_HEX_MAP,
 };
 
 export function upgradeStudioSeedToWebp(url) {
@@ -461,7 +480,8 @@ export const MANIFEST_SLOT_GLB_BY_SUB = {
   fleece: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'drape_wind_garment' },
   mustang: { slotKey: 'outer', baseGlb: 'outer_jacket', physicsPreset: 'rigid_fitted' },
   knit: { slotKey: 'top', baseGlb: 'top_knit', physicsPreset: 'drape_wind_garment' },
-  cardigan: { slotKey: 'top', baseGlb: 'top_cardigan', physicsPreset: 'drape_wind_garment' },
+  cardigan: { slotKey: 'top_mid', baseGlb: 'top_cardigan', physicsPreset: 'drape_wind_garment' },
+  vest: { slotKey: 'top_mid', baseGlb: 'top_knit', physicsPreset: 'rigid_fitted' },
   shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
   short_shirt: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },
   blouse: { slotKey: 'top', baseGlb: 'top_shirt', physicsPreset: 'drape_wind_garment' },

@@ -7,6 +7,12 @@ export {
   type AccessoryJewelryCatalogItem,
 } from './accessoryJewelryCatalog.js';
 export {
+  LAYERED_10_BY_IMAGE_URL,
+  LAYERED_10_CATALOG,
+  LAYERED_10_NATIVE_HEX_MAP,
+  type Layered10CatalogItem,
+} from './layered10Catalog.js';
+export {
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,

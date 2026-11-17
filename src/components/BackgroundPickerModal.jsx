@@ -5,7 +5,7 @@ import {
   getStageBackgroundById,
 } from '../utils/stageBackgroundCatalog.ts';
 import { tx } from '../utils/i18n.ts';
-import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 /**
@@ -133,7 +133,7 @@ export default function BackgroundPickerModal({
                       }}
                     >
                       <div className="stage-bg-card-media">
-                        <img src={bg.imageUrl} alt={title} loading="lazy" />
+                        <img src={withPublicBaseUrl(bg.imageUrl)} alt={title} loading="lazy" />
                         <span className={`stage-tier-badge is-tier-${bg.tier.toLowerCase()}`}>
                           {bg.tier}
                         </span>

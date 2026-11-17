@@ -28,7 +28,9 @@ export type JewelrySubSlotKey =
 
 export type FittingSlotKey =
   | 'outer'
+  | 'outer_mid'
   | 'top'
+  | 'top_mid'
   | 'bottom'
   | 'onepiece'
   | 'shoes'
@@ -92,8 +94,8 @@ export const ACCESSORY_SUBTREE_SLOTS: readonly SubSlotTreeDefinition<AccessorySu
     key: 'accessory',
     parentTab: 'accessory',
     branchKey: 'carry',
-    branchKo: '휴대 · 허리',
-    branchEn: 'Carry & Waist',
+    branchKo: '가방 · 허리',
+    branchEn: 'Bag & Waist',
     labelKo: '가방 · 휴대',
     shortKo: '가방',
     labelEn: 'Bag / Carry',
@@ -104,8 +106,8 @@ export const ACCESSORY_SUBTREE_SLOTS: readonly SubSlotTreeDefinition<AccessorySu
     key: 'acc_umbrella',
     parentTab: 'accessory',
     branchKey: 'carry',
-    branchKo: '휴대 · 허리',
-    branchEn: 'Carry & Waist',
+    branchKo: '가방 · 허리',
+    branchEn: 'Bag & Waist',
     labelKo: '우산 · 양산',
     shortKo: '우산',
     labelEn: 'Umbrella',
@@ -117,8 +119,8 @@ export const ACCESSORY_SUBTREE_SLOTS: readonly SubSlotTreeDefinition<AccessorySu
     key: 'acc_belt',
     parentTab: 'accessory',
     branchKey: 'carry',
-    branchKo: '휴대 · 허리',
-    branchEn: 'Carry & Waist',
+    branchKo: '가방 · 허리',
+    branchEn: 'Bag & Waist',
     labelKo: '허리 · 벨트',
     shortKo: '벨트',
     labelEn: 'Waist Belt',
@@ -315,7 +317,9 @@ export const JEWELRY_SUBTREE_SLOTS: readonly SubSlotTreeDefinition<JewelrySubSlo
 
 export const ALL_EQUIPPABLE_SLOT_KEYS: readonly FittingSlotKey[] = [
   'outer',
+  'outer_mid',
   'top',
+  'top_mid',
   'bottom',
   'onepiece',
   'shoes',
@@ -344,7 +348,9 @@ export function resolveParentFittingTab(slotKey?: string | null): FittingTabKey 
   const key = String(slotKey || '').trim();
   if (key === 'jewelry' || JEWELRY_SLOT_SET.has(key)) return 'jewelry';
   if (key === 'accessory' || ACCESSORY_SLOT_SET.has(key)) return 'accessory';
-  if (key === 'outer' || key === 'top' || key === 'bottom' || key === 'onepiece' || key === 'shoes') {
+  if (key === 'outer' || key === 'outer_mid') return 'outer';
+  if (key === 'top' || key === 'top_mid') return 'top';
+  if (key === 'bottom' || key === 'onepiece' || key === 'shoes') {
     return key;
   }
   return 'top';
@@ -642,6 +648,51 @@ export function mapGarmentToFittingSlot(garment?: Partial<GarmentRecord> | null)
   return normalizeWardrobeCategoryKey(garment.category);
 }
 
+const MID_TOP_SUBCATEGORIES = new Set(['cardigan', 'vest']);
+const MID_OUTER_SUBCATEGORIES = new Set([
+  'blazer',
+  'jacket',
+  'denim_jacket',
+  'leather_jacket',
+  'field_jacket',
+  'cardigan',
+]);
+
+export function isMidTopLayerGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
+  const explicitSlot = String((garment as Record<string, unknown>).slot_key || '')
+    .trim()
+    .toLowerCase();
+  if (explicitSlot === 'top_mid') return true;
+  if (explicitSlot === 'top') return false;
+  const cat = String(garment.category || '').trim().toLowerCase();
+  const sub = String(garment.subcategory || '').trim().toLowerCase();
+  const name = String(garment.name || '');
+  if (cat === 'top' || cat === 'tops') {
+    return MID_TOP_SUBCATEGORIES.has(sub) || /가디건|조끼|베스트|cardigan|vest/i.test(name);
+  }
+  return false;
+}
+
+export function isMidOuterLayerGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
+  const explicitSlot = String((garment as Record<string, unknown>).slot_key || '')
+    .trim()
+    .toLowerCase();
+  if (explicitSlot === 'outer_mid') return true;
+  if (explicitSlot === 'outer') return false;
+  const cat = String(garment.category || '').trim().toLowerCase();
+  const sub = String(garment.subcategory || '').trim().toLowerCase();
+  const name = String(garment.name || '');
+  if (cat === 'outer' || cat === 'outerwear') {
+    return (
+      MID_OUTER_SUBCATEGORIES.has(sub) ||
+      /블레이저|블루종|트러커|라이더|워크\s*자켓|가죽\s*자켓|blazer|blouson/i.test(name)
+    );
+  }
+  return false;
+}
+
 /**
  * Maps any garment to its natural default equippable leaf slot (`FittingSlotKey`).
  * For symmetric/asymmetric left-right slots, defaults to the left slot (and callers can place a 2nd item in right!).
@@ -650,6 +701,12 @@ export function mapGarmentToDefaultSubSlot(
   garment?: Partial<GarmentRecord> | null
 ): FittingSlotKey {
   const topTab = mapGarmentToFittingSlot(garment);
+  if (topTab === 'top') {
+    return isMidTopLayerGarment(garment) ? 'top_mid' : 'top';
+  }
+  if (topTab === 'outer') {
+    return isMidOuterLayerGarment(garment) ? 'outer_mid' : 'outer';
+  }
   if (topTab !== 'accessory' && topTab !== 'jewelry') {
     return topTab;
   }
@@ -728,9 +785,25 @@ export function doesGarmentMatchSubSlot(
 ): boolean {
   if (!garment || !isWearableStudioGarment(garment)) return false;
 
+  if (targetSlotKey === 'top') {
+    return mapGarmentToFittingSlot(garment) === 'top' && !isMidTopLayerGarment(garment);
+  }
+  if (targetSlotKey === 'top_mid') {
+    return (
+      (mapGarmentToFittingSlot(garment) === 'top' && isMidTopLayerGarment(garment)) ||
+      String((garment as Record<string, unknown>).slot_key || '').trim().toLowerCase() === 'top_mid'
+    );
+  }
+  if (targetSlotKey === 'outer') {
+    return mapGarmentToFittingSlot(garment) === 'outer' && !isMidOuterLayerGarment(garment);
+  }
+  if (targetSlotKey === 'outer_mid') {
+    return (
+      (mapGarmentToFittingSlot(garment) === 'outer' && isMidOuterLayerGarment(garment)) ||
+      String((garment as Record<string, unknown>).slot_key || '').trim().toLowerCase() === 'outer_mid'
+    );
+  }
   if (
-    targetSlotKey === 'outer' ||
-    targetSlotKey === 'top' ||
     targetSlotKey === 'bottom' ||
     targetSlotKey === 'onepiece' ||
     targetSlotKey === 'shoes'
@@ -814,6 +887,8 @@ export class Studio25DFittingRenderer implements FittingRenderer {
     const resolvedMode = normalizeViewerMode(request.legacyMode);
     const slots = request.slots || {};
     const hasOuter = Boolean(slots.outer);
+    const hasOuterMid = Boolean(slots.outer_mid);
+    const hasAnyOuter = hasOuter || hasOuterMid;
 
     const layers: Studio25DLayer[] = [];
 
@@ -842,14 +917,30 @@ export class Studio25DFittingRenderer implements FittingRenderer {
 
       layers.push({
         slotKey: 'top',
-        slotLabel: 'Tops',
+        slotLabel: 'Inner Top',
         garment: slots.top,
         xPct: 50,
-        yPct: isDress ? 44.5 : hasOuter ? 28.4 : 30.8,
-        widthPct: isDress ? 47 : hasOuter ? 30.5 : 46.0,
-        zIndex: 32,
+        yPct: isDress ? 44.5 : hasAnyOuter ? 28.4 : 30.8,
+        widthPct: isDress ? 47 : hasAnyOuter ? 30.5 : 46.0,
+        zIndex: 30,
         rotationDeg: 0,
-        parallaxDepth: 0.68,
+        parallaxDepth: 0.65,
+        shadowBlurPx: 18,
+        shadowOffsetY: 10,
+      });
+    }
+
+    if (slots.top_mid) {
+      layers.push({
+        slotKey: 'top_mid',
+        slotLabel: 'Mid Layer',
+        garment: slots.top_mid,
+        xPct: 50,
+        yPct: hasAnyOuter ? 29.5 : 31.2,
+        widthPct: hasAnyOuter ? 34.0 : 45.5,
+        zIndex: 35,
+        rotationDeg: 0,
+        parallaxDepth: 0.72,
         shadowBlurPx: 20,
         shadowOffsetY: 11,
       });
@@ -894,6 +985,22 @@ export class Studio25DFittingRenderer implements FittingRenderer {
       });
     }
 
+    if (slots.outer_mid) {
+      layers.push({
+        slotKey: 'outer_mid',
+        slotLabel: 'Mid Outerwear',
+        garment: slots.outer_mid,
+        xPct: 50,
+        yPct: 29.8,
+        widthPct: hasOuter ? 42.0 : 46.5,
+        zIndex: 46,
+        rotationDeg: 0,
+        parallaxDepth: 0.8,
+        shadowBlurPx: 22,
+        shadowOffsetY: 12,
+      });
+    }
+
     if (slots.outer) {
       layers.push({
         slotKey: 'outer',
@@ -902,7 +1009,7 @@ export class Studio25DFittingRenderer implements FittingRenderer {
         xPct: 50,
         yPct: 30.0,
         widthPct: 48.5,
-        zIndex: 50,
+        zIndex: 52,
         rotationDeg: 0,
         parallaxDepth: 0.85,
         shadowBlurPx: 24,

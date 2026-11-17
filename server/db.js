@@ -6,6 +6,7 @@ import {
   ACCESSORY_JEWELRY_BY_SUBCATEGORY,
   resolveManifestSlotAndGlb,
 } from '../src/shared/garmentTaxonomy.js';
+import { LAYERED_10_CATALOG } from '../src/shared/layered10Catalog.js';
 import { SEASONAL_120_CATALOG } from '../src/shared/seasonal120Catalog.js';
 import {
   generateStatisticalWardrobeForUser,
@@ -366,6 +367,68 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
+export function ensureLayered10Seeds(closetOwner = 'sample') {
+  if (!closetOwner || closetOwner === 'all') return 0;
+
+  const existingUrls = new Set(
+    db
+      .prepare('SELECT image_url FROM garments WHERE closet_owner = ?')
+      .all(closetOwner)
+      .map((r) => r.image_url)
+  );
+
+  const today = new Date();
+  const fmtDate = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const insertSeed = db.prepare(`
+    INSERT INTO garments (
+      closet_owner, name, category, subcategory, color_name, color_hex,
+      seasons, min_temp, max_temp, water_resistant, formality,
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0)
+  `);
+
+  let insertedCount = 0;
+  for (const item of LAYERED_10_CATALOG) {
+    if (existingUrls.has(item.image_url)) continue;
+    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+    const wearCount = ((item.idOffset * 3) % 14) + 2;
+    const lastWornDate = fmtDate(((item.idOffset * 2) % 20) + 1);
+    const isFav = item.idOffset % 3 === 1 ? 1 : 0;
+    insertSeed.run(
+      closetOwner,
+      item.name,
+      item.category,
+      item.subcategory,
+      item.color_name,
+      item.color_hex,
+      JSON.stringify(item.seasons),
+      item.min_temp,
+      item.max_temp,
+      item.water_resistant ? 1 : 0,
+      item.formality,
+      item.brand,
+      item.price,
+      wearCount,
+      lastWornDate,
+      isFav,
+      item.image_url,
+      item.fabric,
+      item.slot_key || spec.slotKey,
+      spec.baseGlb,
+      spec.physicsPreset
+    );
+    existingUrls.add(item.image_url);
+    insertedCount += 1;
+  }
+  return insertedCount;
+}
+
 function ensureSampleClosetSeeded() {
   const sampleCount = db
     .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
@@ -377,6 +440,7 @@ function ensureSampleClosetSeeded() {
     .get().cnt;
   if (sampleCount >= 120 && legacyNonWebp === 0) {
     ensureNewSubcategoryMaterialSeeds('sample');
+    ensureLayered10Seeds('sample');
     return;
   }
 
@@ -428,6 +492,7 @@ function ensureSampleClosetSeeded() {
   }
 
   ensureNewSubcategoryMaterialSeeds('sample');
+  ensureLayered10Seeds('sample');
 }
 
 function ensureSeasonalHighlightsForDemoClosets() {
@@ -515,6 +580,8 @@ function ensureSeasonalHighlightsForDemoClosets() {
 
   ensureNewSubcategoryMaterialSeeds('husband');
   ensureNewSubcategoryMaterialSeeds('wife');
+  ensureLayered10Seeds('husband');
+  ensureLayered10Seeds('wife');
 }
 
 export function initDb() {

@@ -9,7 +9,7 @@ import {
   hasFreeDailyDrawRemaining,
 } from '../utils/stageBackgroundCatalog.ts';
 import { tx } from '../utils/i18n.ts';
-import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const ROULETTE_CARD_WIDTH = 96;
@@ -339,7 +339,7 @@ export default function StoreModal({
                         data-roulette-index={idx}
                         data-roulette-tier={card.tier}
                       >
-                        <img src={card.imageUrl} alt={cardName} />
+                        <img src={withPublicBaseUrl(card.imageUrl)} alt={cardName} />
                         <span className={`stage-tier-badge is-tier-${card.tier.toLowerCase()}`}>
                           {card.tier}
                         </span>
@@ -353,7 +353,7 @@ export default function StoreModal({
           ) : revealItem ? (
             <div className="stage-store-reveal-content" data-store-draw-result="true">
               <div className="stage-store-reveal-preview">
-                <img src={revealItem.imageUrl} alt={revealTitle} />
+                <img src={withPublicBaseUrl(revealItem.imageUrl)} alt={revealTitle} />
                 <span className={`stage-tier-badge is-large is-tier-${revealItem.tier.toLowerCase()}`}>
                   {revealItem.tier} TIER
                 </span>
@@ -426,8 +426,8 @@ export default function StoreModal({
                 <p>
                   {tx(
                     lang,
-                    '매일 1회 무료 뽑기를 제공하며, 출석 체크로 얻은 i 코인으로 10종의 배경을 수집할 수 있습니다.',
-                    'Claim 1 free draw every day or spend 10 i earned from Calendar check-ins to unlock all 10 stage backdrops.'
+                    `매일 1회 무료 뽑기를 제공하며, 출석 체크로 얻은 i 코인으로 ${STAGE_BACKGROUNDS.length}종의 배경을 수집할 수 있습니다.`,
+                    `Claim 1 free draw every day or spend 10 i earned from Calendar check-ins to unlock all ${STAGE_BACKGROUNDS.length} stage backdrops.`
                   )}
                 </p>
               </div>
@@ -497,9 +497,15 @@ export default function StoreModal({
           </div>
         </div>
 
-        {/* All 10 Collectibles Catalog Grid */}
+        {/* All Collectibles Catalog Grid */}
         <div className="stage-store-catalog-head">
-          <strong>{tx(lang, '전체 스테이지 컬렉션 (10종)', 'All 10 Stage Backdrops')}</strong>
+          <strong>
+            {tx(
+              lang,
+              `전체 스테이지 컬렉션 (${STAGE_BACKGROUNDS.length}종)`,
+              `All ${STAGE_BACKGROUNDS.length} Stage Backdrops`
+            )}
+          </strong>
           <span className="tabular-nums">
             {tx(
               lang,
@@ -533,7 +539,7 @@ export default function StoreModal({
                 }}
               >
                 <div className="stage-bg-card-media">
-                  <img src={bg.imageUrl} alt={title} loading="lazy" />
+                  <img src={withPublicBaseUrl(bg.imageUrl)} alt={title} loading="lazy" />
                   <span className={`stage-tier-badge is-tier-${bg.tier.toLowerCase()}`}>
                     {bg.tier}
                   </span>

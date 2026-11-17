@@ -106,7 +106,7 @@
     box-shadow: none;
   }
 
-  .hig-outfits-screen .studio-desktop-picker-col {
+  #studio-slot-picker.studio-desktop-picker-col {
     display: flex !important;
     flex-direction: column;
     gap: 10px;
@@ -115,12 +115,19 @@
     border-radius: 0;
     border: none;
     border-left: 1px solid var(--atelier-drawer-glass-border);
-    background: var(--atelier-drawer-glass-bg);
-    backdrop-filter: var(--atelier-drawer-blur);
-    -webkit-backdrop-filter: var(--atelier-drawer-blur);
+    background: rgba(12, 12, 14, var(--hig-nav-bg-opacity, 0.84)) !important;
+    backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
+    -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
     color: var(--atelier-ink-on-dark);
     box-shadow: -14px 0 36px rgba(0, 0, 0, 0.18);
     font-family: var(--atelier-font-sans);
+  }
+
+  html[data-theme='light'] #studio-slot-picker.studio-desktop-picker-col {
+    background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.88)) !important;
+    border-left-color: rgba(29, 29, 31, 0.1);
+    color: #1d1d1f;
+    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.08);
   }
 
   .hig-outfits-screen .studio-mobile-slot-bar,
@@ -184,9 +191,9 @@
     min-height: 44px;
     padding: 0 16px;
     border-radius: 14px;
-    background: var(--atelier-drawer-glass-bg);
-    backdrop-filter: var(--atelier-drawer-blur);
-    -webkit-backdrop-filter: var(--atelier-drawer-blur);
+    background: rgba(16, 16, 18, var(--hig-nav-bg-opacity, 0.84));
+    backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
+    -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
     border: 1px solid var(--atelier-drawer-glass-border);
     color: var(--atelier-ink-on-dark);
     font-family: var(--atelier-font-sans);
@@ -199,10 +206,20 @@
     box-shadow: var(--elevation-sm);
   }
 
+  html[data-theme='light'] .hig-outfits-screen .atelier-mobile-drawer-open-btn {
+    background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.88));
+    border-color: rgba(29, 29, 31, 0.12);
+    color: #1d1d1f;
+  }
+
   .hig-outfits-screen .atelier-mobile-drawer-open-meta {
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--atelier-ink-secondary-on-dark);
+  }
+
+  html[data-theme='light'] .hig-outfits-screen .atelier-mobile-drawer-open-meta {
+    color: #515154;
   }
 }
 
@@ -210,9 +227,9 @@
 #outfit-mobile-wardrobe-sheet.ui-sheet-box {
   height: min(64dvh, 560px);
   max-height: min(64dvh, 560px);
-  background: var(--atelier-drawer-glass-bg) !important;
-  backdrop-filter: var(--atelier-drawer-blur) !important;
-  -webkit-backdrop-filter: var(--atelier-drawer-blur) !important;
+  background: rgba(14, 14, 16, var(--hig-nav-bg-opacity, 0.84)) !important;
+  backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%) !important;
   border: 1px solid var(--atelier-drawer-glass-border) !important;
   color: var(--atelier-ink-on-dark) !important;
   font-family: var(--atelier-font-sans);
@@ -220,6 +237,16 @@
     height 0.36s cubic-bezier(0.32, 0.72, 0, 1),
     max-height 0.36s cubic-bezier(0.32, 0.72, 0, 1),
     transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet.ui-sheet-box {
+  background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.88)) !important;
+  border-color: rgba(29, 29, 31, 0.12) !important;
+  color: #1d1d1f !important;
+}
+
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
+  background: rgba(29, 29, 31, 0.2) !important;
 }
 
 #outfit-mobile-wardrobe-sheet.ui-sheet-box.is-expanded {
@@ -424,40 +451,47 @@
   color: var(--atelier-ink-secondary-on-dark);
 }
 
+.studio-season-dropdown-row,
+.studio-subtree-select-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.studio-dropdown-select {
+  width: 100%;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 11px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atelier-hairline);
+  color: var(--atelier-ink-on-dark);
+  font-family: var(--atelier-font-sans);
+  font-size: 0.75rem;
+  font-weight: 640;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.studio-dropdown-select:hover,
+.studio-dropdown-select:focus-visible {
+  border-color: var(--atelier-hairline-strong);
+  background-color: rgba(255, 255, 255, 0.13);
+}
+
+.studio-dropdown-select option,
+.studio-dropdown-select optgroup {
+  background-color: #1c1c1e;
+  color: #f5f5f7;
+}
+
 #studio-slot-picker .studio-season-filter-rail,
 #outfit-mobile-wardrobe-sheet .studio-season-filter-rail {
   margin: 0;
   gap: 5px;
   padding-bottom: 1px;
-}
-
-#studio-slot-picker .studio-season-filter-rail .hig-filter-pill,
-#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill {
-  min-height: 30px !important;
-  height: 30px !important;
-  padding: 0 10px !important;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--atelier-hairline);
-  color: var(--atelier-ink-secondary-on-dark);
-  font-size: 0.71rem !important;
-  font-weight: 620;
-  box-shadow: none;
-}
-
-#studio-slot-picker .studio-season-filter-rail .hig-filter-pill:hover:not(.active),
-#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.11);
-  color: #ffffff;
-}
-
-#studio-slot-picker .studio-season-filter-rail .hig-filter-pill.active,
-#outfit-mobile-wardrobe-sheet .studio-season-filter-rail .hig-filter-pill.active {
-  background: #ffffff !important;
-  color: #141413 !important;
-  border-color: #ffffff !important;
-  font-weight: 740;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28) !important;
 }
 
 /* 7. Dual-Zone Body: [46px Left Vertical Silhouette Rail + Right 2-Column #F7F7F5 Packshot Grid] */
@@ -680,12 +714,12 @@
   box-sizing: border-box;
   padding: 10px 11px !important;
   border-radius: 16px !important;
-  background-color: #ffffff !important;
+  background-color: rgba(255, 255, 255, clamp(0.32, calc(var(--hig-nav-bg-opacity, 0.9) + 0.14), 0.98)) !important;
   border: 1.5px solid #1c1c1e !important;
   color: #1c1c1e !important;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.92),
-    0 8px 20px rgba(0, 0, 0, 0.26) !important;
+    0 0 0 1px rgba(255, 255, 255, 0.72),
+    0 8px 20px rgba(0, 0, 0, 0.2) !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
@@ -703,7 +737,7 @@
 
 #studio-slot-picker .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped),
 #outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped) {
-  background-color: #f5f5f7 !important;
+  background-color: rgba(245, 245, 247, clamp(0.30, calc(var(--hig-nav-bg-opacity, 0.9) + 0.12), 0.96)) !important;
   border-color: rgba(28, 28, 30, 0.34) !important;
 }
 
@@ -713,6 +747,13 @@
   justify-content: space-between;
   gap: 6px;
   width: 100%;
+}
+
+.atelier-spec-status-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .atelier-spec-status-pill {
@@ -739,25 +780,58 @@
   border: 1px solid rgba(28, 28, 30, 0.2);
 }
 
-.atelier-spec-unequip-btn {
-  min-height: 22px;
-  padding: 0 9px;
+.atelier-spec-unequip-btn,
+.atelier-spec-equip-btn {
+  min-height: 24px;
+  padding: 0 11px;
   border-radius: 999px;
+  font-family: var(--atelier-font-sans);
+  font-size: 0.66rem;
+  font-weight: 740;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.atelier-spec-unequip-btn {
   background: #f5f5f7;
   border: 1px solid rgba(28, 28, 30, 0.14);
   color: #1c1c1e;
-  font-family: var(--atelier-font-sans);
-  font-size: 0.64rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .atelier-spec-unequip-btn:hover {
   background: #1c1c1e;
   color: #ffffff;
   border-color: #1c1c1e;
+}
+
+.atelier-spec-equip-btn {
+  background: #1c1c1e;
+  border: 1px solid #1c1c1e;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+.atelier-spec-equip-btn:hover {
+  opacity: 0.9;
+}
+
+.atelier-spec-equip-btn:active,
+.atelier-spec-unequip-btn:active {
+  transform: scale(0.95);
+}
+
+.studio-slot-equipped-only-note {
+  padding: 14px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed var(--atelier-hairline-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
 }
 
 .atelier-spec-opposite-chip {
@@ -1122,13 +1196,15 @@
    ========================================================================== */
 #weather-recommend-panel.ui-sheet-box {
   max-height: min(86dvh, calc(100dvh - 32px));
-  background: #ffffff;
+  background: rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.92));
+  backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 10px)) saturate(135%);
   color: #1c1c1e;
   border: 1px solid rgba(28, 28, 30, 0.1);
 }
 
 html[data-theme='dark'] #weather-recommend-panel.ui-sheet-box {
-  background: #1c1c1e;
+  background: rgba(28, 28, 30, var(--hig-nav-bg-opacity, 0.92));
   color: #f5f5f7;
   border-color: rgba(245, 245, 247, 0.14);
 }
@@ -1170,16 +1246,16 @@ html[data-theme='dark'] #weather-recommend-panel .weather-popup-section + .weath
 #weather-recommend-panel .weather-popup-summary-card {
   padding: 10px 12px;
   border-radius: 14px;
-  background: #f5f5f7;
-  border: 1px solid rgba(28, 28, 30, 0.08);
+  background: rgba(245, 245, 247, clamp(0.24, calc(var(--hig-nav-bg-opacity, 0.92) * 0.9), 0.96));
+  border: 1px solid rgba(28, 28, 30, 0.1);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 html[data-theme='dark'] #weather-recommend-panel .weather-popup-summary-card {
-  background: #2c2c2e;
-  border-color: rgba(245, 245, 247, 0.12);
+  background: rgba(44, 44, 46, clamp(0.24, calc(var(--hig-nav-bg-opacity, 0.92) * 0.9), 0.96));
+  border-color: rgba(245, 245, 247, 0.14);
 }
 
 #weather-recommend-panel .weather-popup-tip {
@@ -1318,12 +1394,12 @@ html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-select:focu
   gap: 8px;
   padding: 8px 10px;
   border-radius: 14px;
-  background: #f5f5f7;
+  background: rgba(245, 245, 247, clamp(0.24, calc(var(--hig-nav-bg-opacity, 0.92) * 0.9), 0.96));
   border: 1px solid rgba(28, 28, 30, 0.1);
 }
 
 html[data-theme='dark'] #weather-recommend-panel .weather-popup-look-card.weather-popup-look-row {
-  background: #2c2c2e;
+  background: rgba(44, 44, 46, clamp(0.24, calc(var(--hig-nav-bg-opacity, 0.92) * 0.9), 0.96));
   border-color: rgba(245, 245, 247, 0.14);
 }
 
@@ -1399,3 +1475,235 @@ html[data-theme='dark'] #weather-recommend-panel .weather-popup-apply-btn.is-app
   color: #1c1c1e;
 }
 
+/* ==========================================================================
+   10. Light Theme Sync for Wardrobe Drawer (#studio-slot-picker & #outfit-mobile-wardrobe-sheet)
+   Matches Closet Light Mode (#FFFFFF / #F5F5F7 + #1D1D1F / #515154)
+   ========================================================================== */
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-nav-btn,
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-filter-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-nav-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-filter-btn {
+  color: #515154;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-nav-btn:hover,
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-filter-btn:hover,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-nav-btn:hover,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-filter-btn:hover {
+  background: rgba(29, 29, 31, 0.06);
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-filter-btn.has-active-filter,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-filter-btn.has-active-filter {
+  color: #1d1d1f;
+  background: rgba(29, 29, 31, 0.09);
+  border-color: rgba(29, 29, 31, 0.18);
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-filter-dot,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-filter-dot {
+  background: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-focused-title,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-focused-title {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-occasion-tabs,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-occasion-tabs {
+  border-bottom-color: rgba(29, 29, 31, 0.1);
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-occasion-tab,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-occasion-tab {
+  color: #636366;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-occasion-tab:hover:not(.is-active),
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-occasion-tab:hover:not(.is-active) {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-occasion-tab.is-active,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-occasion-tab.is-active {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-occasion-tab.is-active::after,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-occasion-tab.is-active::after {
+  background: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-search-icon,
+html[data-theme='light'] #studio-slot-picker .studio-input-clear-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-search-icon,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-input-clear-btn {
+  color: #515154;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-search-input,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-search-input {
+  background: rgba(29, 29, 31, 0.05) !important;
+  border-color: rgba(29, 29, 31, 0.12) !important;
+  color: #1d1d1f !important;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-search-input::placeholder,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-search-input::placeholder {
+  color: #6e6e73 !important;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-dropdown-select,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-dropdown-select {
+  background-color: rgba(29, 29, 31, 0.05);
+  border-color: rgba(29, 29, 31, 0.12);
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-dropdown-select:hover,
+html[data-theme='light'] #studio-slot-picker .studio-dropdown-select:focus-visible,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-dropdown-select:hover,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-dropdown-select:focus-visible {
+  background-color: rgba(29, 29, 31, 0.08);
+  border-color: rgba(29, 29, 31, 0.28);
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-dropdown-select option,
+html[data-theme='light'] #studio-slot-picker .studio-dropdown-select optgroup,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-dropdown-select option,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-dropdown-select optgroup {
+  background-color: #ffffff;
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-subtree-panel,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-subtree-panel {
+  background: rgba(29, 29, 31, 0.04);
+  border-color: rgba(29, 29, 31, 0.1);
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-subtree-active-hint,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-subtree-active-hint {
+  border-top-color: rgba(29, 29, 31, 0.08);
+  color: #515154;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-subtree-active-hint strong,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-subtree-active-hint strong {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-subtree-unequip-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-subtree-unequip-btn {
+  background: #ffffff;
+  border-color: rgba(29, 29, 31, 0.16);
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-category-rail-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-category-rail-btn {
+  color: #636366;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-category-rail-btn:hover:not(.is-active),
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-category-rail-btn:hover:not(.is-active) {
+  background: rgba(29, 29, 31, 0.07);
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-category-rail-btn.is-active,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-category-rail-btn.is-active {
+  background: #1d1d1f !important;
+  color: #ffffff !important;
+  border-color: #1d1d1f;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-rail-equipped-dot,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-rail-equipped-dot {
+  background: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-category-rail-btn.is-active .atelier-rail-equipped-dot,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-category-rail-btn.is-active .atelier-rail-equipped-dot {
+  background: #ffffff;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-rail-count-badge,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-rail-count-badge {
+  background: #1d1d1f;
+  color: #ffffff;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-category-rail-btn.is-active .atelier-rail-count-badge,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-category-rail-btn.is-active .atelier-rail-count-badge {
+  background: #ffffff;
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .atelier-drawer-grid-scroll,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-drawer-grid-scroll {
+  scrollbar-color: rgba(29, 29, 31, 0.2) transparent;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-empty-state,
+html[data-theme='light'] #studio-slot-picker .studio-slot-equipped-only-note,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-empty-state,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-equipped-only-note {
+  background: rgba(29, 29, 31, 0.04);
+  border-color: rgba(29, 29, 31, 0.16);
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-empty-title,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-empty-title {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-slot-empty-desc,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-slot-empty-desc {
+  color: #515154;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-empty-cta-btn,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-empty-cta-btn {
+  background: #1d1d1f;
+  color: #ffffff;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-save-bar {
+  border-top-color: rgba(29, 29, 31, 0.1);
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-save-bar .hig-native-input {
+  background: rgba(29, 29, 31, 0.05) !important;
+  border-color: rgba(29, 29, 31, 0.12) !important;
+  color: #1d1d1f !important;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-save-bar .hig-native-input::placeholder {
+  color: #6e6e73 !important;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-save-submit {
+  background: #1d1d1f !important;
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-saved-look-chip {
+  background: rgba(29, 29, 31, 0.05);
+  border-color: rgba(29, 29, 31, 0.12);
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-saved-look-select {
+  color: #1d1d1f;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-saved-look-del {
+  color: #515154;
+}
+
+html[data-theme='light'] #studio-slot-picker .studio-saved-look-del:hover {
+  color: #1d1d1f;
+}

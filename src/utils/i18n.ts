@@ -11,14 +11,20 @@ export function preloadCatalogTranslations(): Promise<void> {
   catalogLoadPromise = Promise.all([
     import('../shared/seasonal120Catalog.js'),
     import('../shared/accessoryJewelryCatalog.js'),
+    import('../shared/layered10Catalog.js'),
   ])
-    .then(([seasonalMod, accessoryMod]) => {
+    .then(([seasonalMod, accessoryMod, layeredMod]) => {
       for (const item of seasonalMod.SEASONAL_120_CATALOG || []) {
         if (item.name && item.name_en) {
           CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
         }
       }
       for (const item of accessoryMod.ACCESSORY_JEWELRY_CATALOG || []) {
+        if (item.name && item.name_en) {
+          CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+        }
+      }
+      for (const item of layeredMod.LAYERED_10_CATALOG || []) {
         if (item.name && item.name_en) {
           CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
         }
@@ -324,6 +330,16 @@ const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
   '오프라인 매장 촬영 아이템': 'In-Store Scanned Garment',
   '신규 등록 의류': 'New Garment',
   '새 아이템': 'New Garment',
+  '수피마 코튼 헤비 크루넥 반팔 티셔츠': 'Supima Cotton Heavyweight Crewneck Tee',
+  '스카이블루 코튼 옥스포드 버튼다운 셔츠': 'Sky Blue Cotton Oxford Button-Down Shirt',
+  '차콜 파인 메리노 울 모크넥 풀오버': 'Charcoal Fine Merino Wool Mockneck Pullover',
+  '오트밀 캐시미어 V넥 미드 레이어 가디건': 'Oatmeal Cashmere V-Neck Mid-Layer Cardigan',
+  '차콜 울 테일러드 웨이스트코트 조끼': 'Charcoal Wool Tailored Waistcoat Vest',
+  '샌드 베이지 메리노 케이블 니트 베스트': 'Sand Beige Merino Cable Knit Vest',
+  '슬레이트 그레이 울 싱글 미드 블레이저': 'Slate Gray Wool Single Mid Blazer',
+  '에스프레소 스웨이드 숏 미드 블루종 자켓': 'Espresso Suede Short Mid Blouson Jacket',
+  '카멜 헤어 더블 브레스티드 오버코트': 'Camel Hair Double-Breasted Overcoat',
+  '다크 네이비 버진 울 체스터필드 코트': 'Dark Navy Virgin Wool Chesterfield Coat',
 };
 
 const BRAND_KO_TO_EN: Readonly<Record<string, string>> = {
@@ -656,6 +672,15 @@ const FASHION_PHRASE_PAIRS: ReadonlyArray< readonly [string, string] > = [
   ['카키', 'Khaki'],
   ['코랄', 'Coral'],
   ['코냑', 'Cognac'],
+  ['서울 강남구 역삼동', 'Yeoksam-dong, Gangnam-gu'],
+  ['서울 마포구 연남동', 'Yeonnam-dong, Mapo-gu'],
+  ['서울 성동구 성수동', 'Seongsu-dong, Seongdong-gu'],
+  ['서울 종로구 삼청동', 'Samcheong-dong, Jongno-gu'],
+  ['서울 용산구 한남동', 'Hannam-dong, Yongsan-gu'],
+  ['성남 분당구 정자동', 'Jeongja-dong, Bundang-gu'],
+  ['부산 해운대구 우동', 'U-dong, Haeundae-gu'],
+  ['제주 제주시 애월읍', 'Aewol-eup, Jeju'],
+  ['서울 · 중구 명동', 'Myeongdong, Jung-gu'],
   ['서울', 'Seoul'],
   ['분당', 'Bundang'],
   ['성남', 'Seongnam'],
@@ -668,6 +693,8 @@ const FASHION_PHRASE_PAIRS: ReadonlyArray< readonly [string, string] > = [
   ['도쿄', 'Tokyo'],
   ['뉴욕', 'New York'],
   ['파리', 'Paris'],
+  ['조끼', 'Vest'],
+  ['베스트', 'Vest'],
 ];
 
 // Standard Revised Romanization of Korean (국어의 로마자 표기법) fallback for arbitrary proper nouns

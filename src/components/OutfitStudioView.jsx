@@ -84,30 +84,107 @@ import '../styles/atelierTokens.css';
 import './OutfitWardrobeDrawer.css';
 
 const DEFAULT_CITIES = [
-  { key: 'seoul', name: '서울' },
-  { key: 'bundang', name: '분당' },
-  { key: 'incheon', name: '인천' },
-  { key: 'daejeon', name: '대전' },
-  { key: 'daegu', name: '대구' },
-  { key: 'busan', name: '부산' },
-  { key: 'jeju', name: '제주' },
-  { key: 'tokyo', name: '도쿄' },
-  { key: 'newyork', name: '뉴욕' },
-  { key: 'paris', name: '파리' },
+  { key: 'seoul', name: '서울 · 중구 명동' },
+  { key: 'gangnam_yeoksam', name: '서울 강남구 역삼동' },
+  { key: 'mapo_yeonnam', name: '서울 마포구 연남동' },
+  { key: 'seongdong_seongsu', name: '서울 성동구 성수동' },
+  { key: 'jongno_samcheong', name: '서울 종로구 삼청동' },
+  { key: 'yongsan_hannam', name: '서울 용산구 한남동' },
+  { key: 'bundang_jeongja', name: '성남 분당구 정자동' },
+  { key: 'busan_haeundae', name: '부산 해운대구 우동' },
+  { key: 'jeju_aewol', name: '제주 제주시 애월읍' },
+  { key: 'busan', name: '부산 중구 중앙동' },
+  { key: 'jeju', name: '제주 제주시 연동' },
+  { key: 'tokyo', name: '도쿄 시부야' },
+  { key: 'newyork', name: '뉴욕 소호' },
+  { key: 'paris', name: '파리 마레' },
 ];
 
 const CITY_EN_NAMES = {
-  seoul: 'Seoul',
-  bundang: 'Bundang',
-  incheon: 'Incheon',
-  daejeon: 'Daejeon',
-  daegu: 'Daegu',
-  busan: 'Busan',
-  jeju: 'Jeju',
-  tokyo: 'Tokyo',
-  newyork: 'New York',
-  paris: 'Paris',
+  seoul: 'Seoul · Myeongdong, Jung-gu',
+  gangnam_yeoksam: 'Seoul · Yeoksam-dong, Gangnam-gu',
+  mapo_yeonnam: 'Seoul · Yeonnam-dong, Mapo-gu',
+  seongdong_seongsu: 'Seoul · Seongsu-dong, Seongdong-gu',
+  jongno_samcheong: 'Seoul · Samcheong-dong, Jongno-gu',
+  yongsan_hannam: 'Seoul · Hannam-dong, Yongsan-gu',
+  bundang_jeongja: 'Seongnam · Jeongja-dong, Bundang-gu',
+  busan_haeundae: 'Busan · U-dong, Haeundae-gu',
+  jeju_aewol: 'Jeju · Aewol-eup',
+  busan: 'Busan · Jungang-dong, Jung-gu',
+  jeju: 'Jeju · Yeon-dong',
+  tokyo: 'Tokyo · Shibuya',
+  newyork: 'New York · SoHo',
+  paris: 'Paris · Le Marais',
 };
+
+const LOOK_STYLE_SHORT_TITLES = {
+  business_casual: { ko: '비즈니스 캐주얼', en: 'Business Casual' },
+  comfortable_casual: { ko: '편한 캐주얼', en: 'Casual' },
+  formal_office: { ko: '포멀 정장', en: 'Formal' },
+  minimal_daily: { ko: '미니멀 데일리', en: 'Minimal Daily' },
+};
+
+function buildAutoOutfitTitle({
+  styleMode,
+  weather,
+  scenarioKey,
+  slots,
+  activeRecommendation,
+  resolvedCityDisplayLabel,
+  lang,
+}) {
+  const recPresetKey = activeRecommendation?.presetKey;
+  const stylePair = recPresetKey ? LOOK_STYLE_SHORT_TITLES[recPresetKey] : null;
+  const styleLabel = stylePair
+    ? lang === 'en'
+      ? stylePair.en
+      : stylePair.ko
+    : styleMode === 'stylized_isometric'
+      ? lang === 'en'
+        ? 'AI Character Look'
+        : 'AI 캐릭터 코디'
+      : lang === 'en'
+        ? 'AI Fitting Look'
+        : 'AI 피팅 코디';
+
+  const cityShort = String(resolvedCityDisplayLabel || (lang === 'en' ? 'Seoul' : '서울'))
+    .replace(/\s*·\s*/g, ' ')
+    .trim();
+
+  const tempVal =
+    typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)
+      ? Math.round(weather.avgTemp)
+      : null;
+  const condPair = SHORT_SCENARIO_LABELS[scenarioKey || weather?.scenarioKey || 'live'];
+  const condWord = condPair
+    ? lang === 'en'
+      ? condPair.en
+      : condPair.ko
+    : weather?.isRainy
+      ? lang === 'en'
+        ? 'Rain'
+        : '비'
+      : weather?.isSnowy
+        ? lang === 'en'
+          ? 'Snow'
+          : '눈'
+        : lang === 'en'
+          ? 'Look'
+          : '데일리';
+
+  const keyGarment =
+    slots?.outer || slots?.outer_mid || slots?.onepiece || slots?.top_mid || slots?.top;
+  const garmentShort = keyGarment ? resolveGarmentDisplayName(keyGarment, lang) : '';
+
+  const parts = [cityShort, styleLabel];
+  if (tempVal != null) {
+    parts.push(`${condWord} ${tempVal}°C`);
+  } else if (garmentShort) {
+    parts.push(garmentShort);
+  }
+  const composed = parts.filter(Boolean).join(' · ');
+  return composed.length > 76 ? `${composed.slice(0, 73).trim()}...` : composed;
+}
 
 const SHORT_SCENARIO_LABELS = {
   live: { ko: '예보', en: 'Live' },
@@ -523,6 +600,7 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
   const next = { ...EMPTY_STUDIO_SLOTS };
 
   next.outer = resolveItem(slotMap.outer);
+  next.outer_mid = resolveItem(slotMap.outer_mid);
   next.onepiece = resolveItem(slotMap.onepiece) || resolveItem(slotMap.dress);
   const rawTop = resolveItem(slotMap.top);
   if (!next.onepiece && rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece') {
@@ -534,6 +612,7 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
     hasNonSwimOnepiece || (rawTop && mapGarmentToFittingSlot(rawTop) === 'onepiece')
       ? null
       : rawTop;
+  next.top_mid = hasNonSwimOnepiece ? null : resolveItem(slotMap.top_mid);
   next.bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
   next.shoes = resolveItem(slotMap.shoes);
 
@@ -572,10 +651,11 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
           next.onepiece = item;
           if (!isSwimwearGarment(item)) {
             next.top = null;
+            next.top_mid = null;
             next.bottom = null;
           }
         }
-      } else if (defaultKey === 'top' || defaultKey === 'bottom') {
+      } else if (defaultKey === 'top' || defaultKey === 'top_mid' || defaultKey === 'bottom') {
         if (!next[defaultKey] && !(next.onepiece && !isSwimwearGarment(next.onepiece))) {
           next[defaultKey] = item;
         }
@@ -866,7 +946,12 @@ function curateStyledRecommendations({
             })()
           : null;
 
-    const outer = needsOuter ? pickSlotBest('outer') : null;
+    const topMid = !onepiece && avgTemp <= 21 ? pickSlotBest('top_mid') : null;
+    const outerMid = avgTemp <= 19 ? pickSlotBest('outer_mid') : null;
+    const outer =
+      needsOuter && (avgTemp <= 12 || !outerMid || isRainy || isWindyOrCold)
+        ? pickSlotBest('outer')
+        : null;
     const shoes = pickSlotBest('shoes');
     const accessory = pickSlotBest('accessory', false);
     const neckwear = avgTemp <= 9 ? pickSlotBest('acc_neck', false) : null;
@@ -877,9 +962,11 @@ function curateStyledRecommendations({
 
     const loadoutBySlot = {
       outer: outer || null,
+      outer_mid: outerMid || null,
+      onepiece: onepiece || null,
+      top_mid: onepiece ? null : topMid || null,
       top: onepiece ? null : top,
       bottom: onepiece ? null : bottom,
-      onepiece: onepiece || null,
       shoes: shoes || null,
       accessory: accessory || null,
       acc_neck: neckwear || null,
@@ -888,7 +975,9 @@ function curateStyledRecommendations({
 
     const items = [
       loadoutBySlot.outer,
+      loadoutBySlot.outer_mid,
       loadoutBySlot.onepiece,
+      loadoutBySlot.top_mid,
       loadoutBySlot.top,
       loadoutBySlot.bottom,
       loadoutBySlot.shoes,
@@ -900,7 +989,9 @@ function curateStyledRecommendations({
     if (idx === 0) {
       for (const core of [
         loadoutBySlot.outer,
+        loadoutBySlot.outer_mid,
         loadoutBySlot.onepiece,
+        loadoutBySlot.top_mid,
         loadoutBySlot.top,
         loadoutBySlot.bottom,
         loadoutBySlot.shoes,
@@ -1007,6 +1098,8 @@ export default function OutfitStudioView({
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [outfitTitle, setOutfitTitle] = useState('');
   const [savingOutfit, setSavingOutfit] = useState(false);
+  const [calendarSavedModal, setCalendarSavedModal] = useState(null);
+  const hasCustomOutfitTitleRef = useRef(false);
 
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
@@ -1072,7 +1165,11 @@ export default function OutfitStudioView({
   const handleSelectTopFittingTab = useCallback((tabKey) => {
     triggerHaptic('selection');
     setSelectedInspectorId(null);
-    if (tabKey === 'accessory') {
+    if (tabKey === 'outer') {
+      setActiveSlotKey((prev) => (prev === 'outer' || prev === 'outer_mid' ? prev : 'outer'));
+    } else if (tabKey === 'top') {
+      setActiveSlotKey((prev) => (prev === 'top' || prev === 'top_mid' ? prev : 'top'));
+    } else if (tabKey === 'accessory') {
       setActiveSlotKey((prev) => (isAccessorySlotKey(prev) ? prev : 'accessory'));
     } else if (tabKey === 'jewelry') {
       setActiveSlotKey((prev) => (isJewelrySlotKey(prev) ? prev : 'jwl_neck'));
@@ -1548,18 +1645,9 @@ export default function OutfitStudioView({
     });
 
     const equippedId = slots[activeSlotKey]?.id;
-    if (equippedId == null || filtered.length <= 1) return filtered;
-
-    const equippedFirst = [];
-    const others = [];
-    for (const item of filtered) {
-      if (item.id === equippedId) {
-        equippedFirst.push(item);
-      } else {
-        others.push(item);
-      }
-    }
-    return equippedFirst.length > 0 ? [...equippedFirst, ...others] : filtered;
+    if (equippedId == null) return filtered;
+    // Exclude currently equipped slot item so "착용 중" appears ONLY once in .atelier-pinned-equipped-dock
+    return filtered.filter((item) => Number(item.id) !== Number(equippedId));
   }, [garments, activeSlotKey, occasionFilter, seasonFilter, searchQuery, lang, slots]);
 
   const equippedItems = useMemo(() => {
@@ -1570,8 +1658,8 @@ export default function OutfitStudioView({
     const accCount = ACCESSORY_SUBTREE_SLOTS.filter((s) => Boolean(slots[s.key])).length;
     const jwlCount = JEWELRY_SUBTREE_SLOTS.filter((s) => Boolean(slots[s.key])).length;
     return {
-      outer: slots.outer ? 1 : 0,
-      top: slots.top ? 1 : 0,
+      outer: (slots.outer ? 1 : 0) + (slots.outer_mid ? 1 : 0),
+      top: (slots.top ? 1 : 0) + (slots.top_mid ? 1 : 0),
       bottom: slots.bottom ? 1 : 0,
       onepiece: slots.onepiece ? 1 : 0,
       shoes: slots.shoes ? 1 : 0,
@@ -1628,16 +1716,16 @@ export default function OutfitStudioView({
     }
     const matched = cities.find((c) => c.key === cityKey);
     if (matched?.name) {
-      const koName = matched.name.split('·')[0].trim();
+      const koName = String(matched.name).replace(/\s*·\s*/g, ' ').trim();
       return lang === 'en'
         ? CITY_EN_NAMES[matched.key] || localizeOutfitTitle(koName, 'en')
         : koName;
     }
     if (weather?.cityName) {
-      const koName = String(weather.cityName).split('·')[0].trim();
+      const koName = String(weather.cityName).replace(/\s*·\s*/g, ' ').trim();
       return lang === 'en' ? localizeOutfitTitle(koName, 'en') : koName;
     }
-    return tx(lang, '서울', 'Seoul');
+    return tx(lang, '서울 중구 명동', 'Seoul · Myeongdong, Jung-gu');
   }, [cityKey, gpsCoords, cities, weather, lang]);
 
   const handleSelectCity = (nextCity) => {
@@ -1913,15 +2001,16 @@ export default function OutfitStudioView({
 
     if (!isUnequipping) {
       if (targetSlotKey === 'onepiece' && !isSwimwearGarment(item)) {
-        // Non-swimwear dress/jumpsuit replaces top & bottom cleanly
+        // Non-swimwear dress/jumpsuit replaces top, top_mid & bottom cleanly
         nextSlots.top = null;
+        nextSlots.top_mid = null;
         nextSlots.bottom = null;
       } else if (
-        (targetSlotKey === 'top' || targetSlotKey === 'bottom') &&
+        (targetSlotKey === 'top' || targetSlotKey === 'top_mid' || targetSlotKey === 'bottom') &&
         nextSlots.onepiece &&
         !isSwimwearGarment(nextSlots.onepiece)
       ) {
-        // Equipping top or bottom clears a non-swimwear dress (swimwear stays layerable!)
+        // Equipping top, top_mid, or bottom clears a non-swimwear dress (swimwear stays layerable!)
         nextSlots.onepiece = null;
       }
     }
@@ -1957,7 +2046,7 @@ export default function OutfitStudioView({
           .slice(0, 2)
           .map((g) => resolveGarmentDisplayName(g, lang))
           .join(' · ');
-      await apiFetch('/outfits', {
+      const savedOutfitRes = await apiFetch('/outfits', {
         method: 'POST',
         body: JSON.stringify({
           closet_owner: activeCloset || 'sample',
@@ -1967,12 +2056,45 @@ export default function OutfitStudioView({
           item_ids: equippedItems.map((g) => g.id),
         }),
       });
+
+      const targetDate =
+        weather?.date && /^\d{4}-\d{2}-\d{2}$/.test(String(weather.date))
+          ? String(weather.date)
+          : dayTarget === 'tomorrow'
+            ? getLocalDateKey(new Date(Date.now() + 86400000))
+            : getLocalDateKey(new Date());
+
+      await apiFetch('/calendar', {
+        method: 'POST',
+        body: JSON.stringify({
+          closet_owner: activeCloset || 'sample',
+          worn_date: targetDate,
+          outfit_id: savedOutfitRes?.id ?? null,
+          item_ids: equippedItems.map((g) => g.id),
+          weather_summary: weather?.condition || SHORT_SCENARIO_LABELS[scenarioKey]?.ko || '예보',
+          temp_c:
+            typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)
+              ? Math.round(weather.avgTemp)
+              : null,
+          status: dayTarget === 'tomorrow' ? 'planned' : 'worn',
+          note: title,
+        }),
+      });
+
       markTodayOutfitGenerated();
+      hasCustomOutfitTitleRef.current = false;
       setOutfitTitle('');
       triggerHaptic('medium');
       await reloadOutfits();
       onClosetUpdated?.();
-      showToast?.(tx(lang, '코디 저장됨', 'Outfit saved'));
+
+      const [, mPart, dPart] = targetDate.split('-');
+      setCalendarSavedModal({
+        dateStr: targetDate,
+        monthNum: Number(mPart) || new Date().getMonth() + 1,
+        dayNum: Number(dPart) || new Date().getDate(),
+        title,
+      });
     } catch (err) {
       showToast?.(
         localizeApiMessage(err?.message, lang) || tx(lang, '저장 실패', 'Failed to save outfit')
@@ -2101,34 +2223,139 @@ export default function OutfitStudioView({
   );
 
   const renderSeasonFilterRail = () => (
-    <div
-      className="hig-pill-rail studio-season-filter-rail"
-      role="group"
-      aria-label={tx(lang, '계절 필터', 'Season Filter')}
-    >
-      {STUDIO_SEASON_FILTERS.map((s) => {
-        const active = seasonFilter === s.key;
-        return (
-          <button
-            key={s.key}
-            type="button"
-            data-outfit-season-filter={s.key}
-            aria-pressed={active}
-            className={`hig-filter-pill ${active ? 'active' : ''}`}
-            onClick={() => {
-              triggerHaptic('selection');
-              setSeasonFilter(s.key);
-            }}
-          >
-            {active && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
-            <span>{tx(lang, s.ko, s.en)}</span>
-          </button>
-        );
-      })}
+    <div className="studio-season-dropdown-row">
+      <select
+        data-outfit-season-select="true"
+        className="studio-dropdown-select"
+        aria-label={tx(lang, '계절 필터', 'Season Filter')}
+        value={seasonFilter}
+        onChange={(e) => {
+          triggerHaptic('selection');
+          setSeasonFilter(e.target.value);
+        }}
+      >
+        {STUDIO_SEASON_FILTERS.map((s) => (
+          <option key={s.key} value={s.key} data-outfit-season-filter={s.key}>
+            {tx(lang, s.ko, s.en)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 
   const renderSubTreePanel = () => {
+    if (activeParentTab === 'top') {
+      const topStageValue = activeSlotKey === 'top_mid' ? 'top_mid' : 'top';
+      const activeEquipped = slots[topStageValue] || null;
+      return (
+        <div
+          className="studio-subtree-panel"
+          data-layer-subtree="top"
+          role="region"
+          aria-label={tx(lang, '상의 레이어링 단계 선택', 'Top Layering Stage')}
+        >
+          <div className="studio-subtree-select-wrap">
+            <select
+              data-layer-stage-select="top"
+              className="studio-dropdown-select"
+              aria-label={tx(lang, '상의 단계 선택', 'Select Top Layer Stage')}
+              value={topStageValue}
+              onChange={(e) => {
+                triggerHaptic('selection');
+                setSelectedInspectorId(null);
+                setActiveSlotKey(e.target.value);
+              }}
+            >
+              <option value="top">
+                {tx(lang, '1단계 · 이너 상의 (티·셔츠·니트)', 'Stage 1 · Base Top (Tee · Shirt · Knit)')}
+              </option>
+              <option value="top_mid">
+                {tx(lang, '2단계 · 미드 레이어 (가디건·조끼)', 'Stage 2 · Mid Layer (Cardigan · Vest)')}
+              </option>
+            </select>
+          </div>
+          <div className="studio-subtree-active-hint">
+            <span>
+              <strong>
+                {topStageValue === 'top_mid'
+                  ? tx(lang, '미드 레이어', 'Mid Layer')
+                  : tx(lang, '이너 상의', 'Base Top')}
+              </strong>
+              {' · '}
+              {activeEquipped
+                ? resolveGarmentDisplayName(activeEquipped, lang)
+                : tx(lang, '이너 + 미드 상의 동시 레이어링 가능', 'Layer Base + Mid Top together')}
+            </span>
+            {activeEquipped && (
+              <button
+                type="button"
+                className="studio-subtree-unequip-btn"
+                onClick={() => handleUnequipSlot(topStageValue)}
+              >
+                {tx(lang, '해제', 'Remove')}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeParentTab === 'outer') {
+      const outerStageValue = activeSlotKey === 'outer_mid' ? 'outer_mid' : 'outer';
+      const activeEquipped = slots[outerStageValue] || null;
+      return (
+        <div
+          className="studio-subtree-panel"
+          data-layer-subtree="outer"
+          role="region"
+          aria-label={tx(lang, '외투 레이어링 단계 선택', 'Outerwear Layering Stage')}
+        >
+          <div className="studio-subtree-select-wrap">
+            <select
+              data-layer-stage-select="outer"
+              className="studio-dropdown-select"
+              aria-label={tx(lang, '외투 단계 선택', 'Select Outerwear Layer Stage')}
+              value={outerStageValue}
+              onChange={(e) => {
+                triggerHaptic('selection');
+                setSelectedInspectorId(null);
+                setActiveSlotKey(e.target.value);
+              }}
+            >
+              <option value="outer_mid">
+                {tx(lang, '1단계 · 미드 아우터 (블레이저·자켓)', 'Stage 1 · Mid Outer (Blazer · Jacket)')}
+              </option>
+              <option value="outer">
+                {tx(lang, '2단계 · 아우터 (코트·트렌치·패딩)', 'Stage 2 · Outer Coat (Coat · Trench · Puffer)')}
+              </option>
+            </select>
+          </div>
+          <div className="studio-subtree-active-hint">
+            <span>
+              <strong>
+                {outerStageValue === 'outer_mid'
+                  ? tx(lang, '미드 아우터', 'Mid Outer')
+                  : tx(lang, '아우터', 'Outer Coat')}
+              </strong>
+              {' · '}
+              {activeEquipped
+                ? resolveGarmentDisplayName(activeEquipped, lang)
+                : tx(lang, '자켓 + 코트 2단계 겹쳐입기 가능', 'Layer Blazer + Coat together')}
+            </span>
+            {activeEquipped && (
+              <button
+                type="button"
+                className="studio-subtree-unequip-btn"
+                onClick={() => handleUnequipSlot(outerStageValue)}
+              >
+                {tx(lang, '해제', 'Remove')}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     const isAcc = activeParentTab === 'accessory';
     const isJwl = activeParentTab === 'jewelry';
     if (!isAcc && !isJwl) return null;
@@ -2145,41 +2372,44 @@ export default function OutfitStudioView({
         role="region"
         aria-label={
           isAcc
-            ? tx(lang, '액세서리 부위별 착용 트리', 'Accessory Body-Part Tree')
-            : tx(lang, '주얼리 부위별 착용 트리', 'Jewelry Body-Part Tree')
+            ? tx(lang, '액세서리 부위별 착용 선택', 'Accessory Body-Part Selector')
+            : tx(lang, '주얼리 부위별 착용 선택', 'Jewelry Body-Part Selector')
         }
       >
-        {branchGroups.map((group) => (
-          <div key={group.branchKey} className="studio-subtree-branch">
-            <span className="studio-subtree-branch-label">
-              {lang === 'en' ? group.branchEn : group.branchKo}
-            </span>
-            <div className="studio-subtree-pills">
-              {group.items.map((sub) => {
-                const isSelected = activeSlotKey === sub.key;
-                const equippedInSub = Boolean(slots[sub.key]);
-                return (
-                  <button
-                    key={sub.key}
-                    type="button"
-                    data-sub-slot-btn={sub.key}
-                    aria-pressed={isSelected}
-                    className={`studio-subtree-pill ${isSelected ? 'active' : ''} ${equippedInSub ? 'is-equipped' : ''}`}
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      setSelectedInspectorId(null);
-                      setActiveSlotKey(sub.key);
-                    }}
-                  >
-                    {isSelected && <Check size={11} strokeWidth={2.6} aria-hidden="true" />}
-                    <span>{lang === 'en' ? sub.labelEn : sub.labelKo}</span>
-                    {equippedInSub && <span className="studio-slot-dot" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <div className="studio-subtree-select-wrap">
+          <select
+            data-subtree-select={isAcc ? 'accessory' : 'jewelry'}
+            className="studio-dropdown-select"
+            aria-label={
+              isAcc
+                ? tx(lang, '액세서리 부위 선택', 'Select Accessory Part')
+                : tx(lang, '주얼리 부위 선택', 'Select Jewelry Part')
+            }
+            value={activeSlotKey}
+            onChange={(e) => {
+              triggerHaptic('selection');
+              setSelectedInspectorId(null);
+              setActiveSlotKey(e.target.value);
+            }}
+          >
+            {branchGroups.map((group) => (
+              <optgroup
+                key={group.branchKey}
+                label={lang === 'en' ? group.branchEn : group.branchKo}
+              >
+                {group.items.map((sub) => {
+                  const equippedInSub = Boolean(slots[sub.key]);
+                  const labelText = lang === 'en' ? sub.labelEn : sub.labelKo;
+                  return (
+                    <option key={sub.key} value={sub.key}>
+                      {equippedInSub ? `✓ ${labelText} (${tx(lang, '착용 중', 'Worn')})` : labelText}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            ))}
+          </select>
+        </div>
 
         {activeMeta && (
           <div className="studio-subtree-active-hint">
@@ -2388,6 +2618,33 @@ export default function OutfitStudioView({
       occasionFilter !== 'all' || seasonFilter !== 'all' || searchQuery.trim().length > 0;
     const isFilterEmptyOnly = rawSlotGarmentCount > 0 && hasFilterOrSearch;
 
+    const hasEquippedInSlot = Boolean(slots[activeSlotKey]);
+    const hasOnlyEquippedInSlot =
+      slotGarments.length === 0 && hasEquippedInSlot && !hasFilterOrSearch;
+
+    if (hasOnlyEquippedInSlot) {
+      return (
+        <div className="studio-slot-equipped-only-note" data-slot-equipped-only="true">
+          <p className="studio-slot-empty-desc">
+            {tx(
+              lang,
+              '현재 착용 중인 아이템 외 추가 의류가 없습니다.',
+              'No other garments in this category besides the currently worn item.'
+            )}
+          </p>
+          <button
+            type="button"
+            data-empty-go-closet-btn="true"
+            className="studio-empty-cta-btn"
+            onClick={handleNavigateToCloset}
+          >
+            <Plus size={14} />
+            <span>{tx(lang, '옷장에서 의류 추가하기', 'Add Garments in Closet')}</span>
+          </button>
+        </div>
+      );
+    }
+
     return slotGarments.length === 0 ? (
       <div className="studio-slot-empty-state" data-slot-empty-state="true">
         <p className="studio-slot-empty-title">
@@ -2452,46 +2709,56 @@ export default function OutfitStudioView({
     ) : (
       <div className="studio-mini-inventory-grid">
         {slotGarments.map((item) => {
-          const isEquipped = slots[activeSlotKey]?.id === item.id;
-          const isExpanded = !isEquipped && selectedInspectorId === item.id;
-          const isUnfolded = isEquipped || isExpanded;
+          const isExpanded = selectedInspectorId === item.id;
           const isEquippedOpposite = Boolean(oppositeItem && oppositeItem.id === item.id);
           const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
             ? tx(lang, 'L 착용', 'Worn L')
             : tx(lang, 'R 착용', 'Worn R');
 
-          if (isUnfolded) {
+          if (isExpanded) {
             const specs = resolveGarmentInspectorSpecs(item, lang);
             return (
-              <button
+              <div
                 key={item.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 data-slot-garment-id={item.id}
-                aria-pressed={isEquipped}
-                className={`studio-mini-garment-card atelier-packshot-card atelier-unfolded-spec-card ${
-                  isEquipped ? 'is-equipped' : ''
-                } ${isExpanded ? 'is-expanded' : ''}`.trim()}
+                aria-expanded="true"
+                className="studio-mini-garment-card atelier-packshot-card atelier-unfolded-spec-card is-expanded"
                 onClick={() => {
-                  handleToggleEquip(item);
-                  if (closeOnPick) setMobileSheetOpen(false);
+                  triggerHaptic('selection');
+                  setSelectedInspectorId((prev) => (prev === item.id ? null : item.id));
+                }}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    triggerHaptic('selection');
+                    setSelectedInspectorId((prev) => (prev === item.id ? null : item.id));
+                  }
                 }}
               >
                 <div className="atelier-spec-status-bar">
-                  <span
-                    className={`atelier-spec-status-pill ${
-                      isEquipped ? 'is-equipped' : 'is-selected'
-                    }`}
-                  >
-                    {isEquipped && <Check size={11} strokeWidth={2.8} aria-hidden="true" />}
-                    <span>
-                      {isEquipped
-                        ? tx(lang, '착용 중', 'Equipped')
-                        : tx(lang, '선택됨', 'Selected')}
+                  <div className="atelier-spec-status-left">
+                    <span className="atelier-spec-status-pill is-selected">
+                      <span>{tx(lang, '선택됨', 'Selected')}</span>
                     </span>
-                  </span>
-                  {isEquippedOpposite && (
-                    <span className="atelier-spec-opposite-chip">{oppositeBadgeLabel}</span>
-                  )}
+                    {isEquippedOpposite && (
+                      <span className="atelier-spec-opposite-chip">{oppositeBadgeLabel}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    data-equip-inspector-btn="true"
+                    className="atelier-spec-equip-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleEquip(item);
+                      if (closeOnPick) setMobileSheetOpen(false);
+                    }}
+                  >
+                    {tx(lang, '착용', 'Wear')}
+                  </button>
                 </div>
 
                 <div className="atelier-spec-main-row">
@@ -2520,7 +2787,7 @@ export default function OutfitStudioView({
                     <GarmentObject25D item={item} alt={specs.displayName} padding="8%" />
                   </div>
                 </div>
-              </button>
+              </div>
             );
           }
 
@@ -2530,11 +2797,11 @@ export default function OutfitStudioView({
               key={item.id}
               type="button"
               data-slot-garment-id={item.id}
-              aria-pressed={isEquipped}
+              aria-expanded="false"
               className="studio-mini-garment-card atelier-packshot-card"
               onClick={() => {
-                handleToggleEquip(item);
-                if (closeOnPick) setMobileSheetOpen(false);
+                triggerHaptic('selection');
+                setSelectedInspectorId(item.id);
               }}
             >
               <div className="studio-mini-squircle">
@@ -2676,7 +2943,22 @@ export default function OutfitStudioView({
             activeRecId={activeRecId}
             lookStyleConfig={lookStyleConfig}
             onApplyRecommendation={handleApplyRecommendation}
-            onAiLookGenerated={() => markTodayOutfitGenerated()}
+            onAiLookGenerated={(meta) => {
+              markTodayOutfitGenerated();
+              if (!hasCustomOutfitTitleRef.current) {
+                setOutfitTitle(
+                  buildAutoOutfitTitle({
+                    styleMode: meta?.styleMode,
+                    weather,
+                    scenarioKey,
+                    slots: meta?.slots || slots,
+                    activeRecommendation,
+                    resolvedCityDisplayLabel,
+                    lang,
+                  })
+                );
+              }
+            }}
             forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -2802,7 +3084,11 @@ export default function OutfitStudioView({
                 placeholder={tx(lang, '코디 이름', 'Outfit Name')}
                 aria-label={tx(lang, '코디 이름', 'Outfit Name')}
                 value={outfitTitle}
-                onChange={(e) => setOutfitTitle(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  hasCustomOutfitTitleRef.current = val.trim().length > 0;
+                  setOutfitTitle(val);
+                }}
                 maxLength={80}
               />
               {outfitTitle.length > 0 && (
@@ -2813,6 +3099,7 @@ export default function OutfitStudioView({
                   aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
                   onClick={() => {
                     triggerHaptic('selection');
+                    hasCustomOutfitTitleRef.current = false;
                     setOutfitTitle('');
                     desktopTitleInputRef.current?.focus?.();
                   }}
@@ -2875,7 +3162,11 @@ export default function OutfitStudioView({
             placeholder={tx(lang, '코디 이름', 'Outfit Name')}
             aria-label={tx(lang, '코디 이름', 'Outfit Name')}
             value={outfitTitle}
-            onChange={(e) => setOutfitTitle(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              hasCustomOutfitTitleRef.current = val.trim().length > 0;
+              setOutfitTitle(val);
+            }}
             maxLength={80}
           />
           {outfitTitle.length > 0 && (
@@ -2886,6 +3177,7 @@ export default function OutfitStudioView({
               aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
               onClick={() => {
                 triggerHaptic('selection');
+                hasCustomOutfitTitleRef.current = false;
                 setOutfitTitle('');
                 mobileTitleInputRef.current?.focus?.();
               }}
@@ -3134,7 +3426,7 @@ export default function OutfitStudioView({
                   <option value="gps">{tx(lang, '내 위치', 'My Location')}</option>
                 )}
                 {cities.map((c) => {
-                  const koName = c.name.split('·')[0].trim();
+                  const koName = String(c.name || '').replace(/\s*·\s*/g, ' ').trim();
                   const label =
                     lang === 'en'
                       ? CITY_EN_NAMES[c.key] ||
@@ -3326,6 +3618,63 @@ export default function OutfitStudioView({
         onSelectBackground={handleSelectStageBackground}
         onGoCalendar={() => onNavigateTab?.('calendar')}
       />
+
+      {/* Outfit Saved -> Calendar Navigation Confirmation Modal */}
+      <ResponsiveSheetModal
+        id="outfit-saved-calendar-modal"
+        open={Boolean(calendarSavedModal)}
+        onClose={() => setCalendarSavedModal(null)}
+        lang={lang}
+        eyebrow={tx(lang, '저장 완료', 'Saved to Calendar')}
+        title={
+          calendarSavedModal
+            ? tx(
+                lang,
+                `${calendarSavedModal.monthNum}월 ${calendarSavedModal.dayNum}일 캘린더에 저장되었습니다`,
+                `Saved to Calendar (${calendarSavedModal.monthNum}/${calendarSavedModal.dayNum})`
+              )
+            : ''
+        }
+        maxWidth={400}
+      >
+        <div className="tomorrow-prompt-modal-body" data-outfit-saved-calendar-modal="true">
+          <p className="tomorrow-prompt-modal-desc">
+            {calendarSavedModal?.title
+              ? tx(
+                  lang,
+                  `‘${calendarSavedModal.title}’ 코디가 옷장 코디북과 ${calendarSavedModal.monthNum}월 ${calendarSavedModal.dayNum}일 캘린더에 함께 기록되었습니다.`,
+                  `“${calendarSavedModal.title}” has been saved to your lookbook and logged for ${calendarSavedModal.monthNum}/${calendarSavedModal.dayNum}.`
+                )
+              : ''}
+          </p>
+          <div className="tomorrow-prompt-modal-actions">
+            <button
+              type="button"
+              data-saved-calendar-close="true"
+              className="tomorrow-prompt-btn is-secondary"
+              onClick={() => {
+                triggerHaptic('selection');
+                setCalendarSavedModal(null);
+              }}
+            >
+              {tx(lang, '닫기', 'Close')}
+            </button>
+            <button
+              type="button"
+              data-saved-calendar-go="true"
+              className="tomorrow-prompt-btn is-primary"
+              onClick={() => {
+                triggerHaptic('medium');
+                setCalendarSavedModal(null);
+                onNavigateTab?.('calendar');
+              }}
+            >
+              <CalendarPlus size={15} />
+              <span>{tx(lang, '캘린더 보러가기', 'View Calendar')}</span>
+            </button>
+          </div>
+        </div>
+      </ResponsiveSheetModal>
     </section>
   );
 }

@@ -149,7 +149,16 @@ async function selectStudioSlotAndPickItem(
     const sheet = page.locator('.ui-sheet-box');
     await expect(sheet).toBeVisible();
     if (options?.season) {
-      await sheet.locator(`[data-outfit-season-filter="${options.season}"]`).click();
+      await sheet.locator('[data-outfit-season-select="true"]').selectOption(options.season);
+    }
+    const pinnedCard = sheet.locator('[data-pinned-equipped-card]');
+    if (options?.matchText && (await pinnedCard.count()) > 0) {
+      const pinnedText = (await pinnedCard.innerText().catch(() => '')) || '';
+      if (options.matchText.test(pinnedText)) {
+        const pickedId = (await pinnedCard.getAttribute('data-pinned-equipped-card')) || '';
+        await page.keyboard.press('Escape');
+        return pickedId;
+      }
     }
     const cards = sheet.locator('[data-slot-garment-id]');
     const target = options?.matchText
@@ -157,18 +166,25 @@ async function selectStudioSlotAndPickItem(
       : cards.first();
     await expect(target).toBeVisible();
     const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
-    if ((await target.getAttribute('aria-pressed')) === 'true') {
-      await page.keyboard.press('Escape');
-    } else {
-      await target.click();
-    }
+    await target.click();
+    const expandedCard = sheet.locator(`[data-slot-garment-id="${pickedId}"]`);
+    const wearBtn = expandedCard.locator('[data-equip-inspector-btn="true"]');
+    await expect(wearBtn).toBeVisible();
+    await wearBtn.click();
     return pickedId;
   }
 
   await page.locator(`[data-outfit-slot-tab="${slotKey}"]`).click();
   const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
   if (options?.season) {
-    await picker.locator(`[data-outfit-season-filter="${options.season}"]`).click();
+    await picker.locator('[data-outfit-season-select="true"]').selectOption(options.season);
+  }
+  const pinnedCard = picker.locator('[data-pinned-equipped-card]');
+  if (options?.matchText && (await pinnedCard.count()) > 0) {
+    const pinnedText = (await pinnedCard.innerText().catch(() => '')) || '';
+    if (options.matchText.test(pinnedText)) {
+      return (await pinnedCard.getAttribute('data-pinned-equipped-card')) || '';
+    }
   }
   const cards = picker.locator('[data-slot-garment-id]');
   const target = options?.matchText
@@ -176,9 +192,11 @@ async function selectStudioSlotAndPickItem(
     : cards.first();
   await expect(target).toBeVisible();
   const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
-  if ((await target.getAttribute('aria-pressed')) !== 'true') {
-    await target.click();
-  }
+  await target.click();
+  const expandedCard = picker.locator(`[data-slot-garment-id="${pickedId}"]`);
+  const wearBtn = expandedCard.locator('[data-equip-inspector-btn="true"]');
+  await expect(wearBtn).toBeVisible();
+  await wearBtn.click();
   return pickedId;
 }
 
@@ -1435,18 +1453,28 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
         await mobileBtn.click();
         const sheet = page.locator('.ui-sheet-box');
         await expect(sheet).toBeVisible();
-        await sheet.locator(`[data-sub-slot-btn="${subSlotKey}"]`).click();
+        await sheet.locator(`[data-subtree-select="${parentTab}"]`).selectOption(subSlotKey);
         const cards = sheet.locator('[data-slot-garment-id]');
-        await expect(cards.nth(cardIndex)).toBeVisible();
-        await cards.nth(cardIndex).click();
+        const target = cards.nth(cardIndex);
+        await expect(target).toBeVisible();
+        const gid = (await target.getAttribute('data-slot-garment-id')) || '';
+        await target.click();
+        await sheet
+          .locator(`[data-slot-garment-id="${gid}"] [data-equip-inspector-btn="true"]`)
+          .click();
         return;
       }
       await page.locator(`[data-outfit-slot-tab="${parentTab}"]`).click();
       const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
-      await picker.locator(`[data-sub-slot-btn="${subSlotKey}"]`).click();
+      await picker.locator(`[data-subtree-select="${parentTab}"]`).selectOption(subSlotKey);
       const cards = picker.locator('[data-slot-garment-id]');
-      await expect(cards.nth(cardIndex)).toBeVisible();
-      await cards.nth(cardIndex).click();
+      const target = cards.nth(cardIndex);
+      await expect(target).toBeVisible();
+      const gid = (await target.getAttribute('data-slot-garment-id')) || '';
+      await target.click();
+      await picker
+        .locator(`[data-slot-garment-id="${gid}"] [data-equip-inspector-btn="true"]`)
+        .click();
     };
 
     // Equip TWO DIFFERENT gloves on Left Hand (index 0) and Right Hand (index 1) simultaneously!
