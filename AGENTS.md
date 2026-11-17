@@ -47,6 +47,7 @@ npm run hooks:install
 2. **린터 설정 보호 (`Config Protection`)**: 에러를 우회하기 위해 [.oxlintrc.json](.oxlintrc.json) 규칙을 임의로 완화하거나 삭제하지 마세요. 항상 실제 소스 코드를 수정합니다.
 3. **디자인 계약 준수**: UI/CSS 변경 시 [.agent/rules/web/design-quality.md](.agent/rules/web/design-quality.md)와 더불어 프로젝트 고유 디자인 계약인 [src/contracts/carbonDesignContract.ts](src/contracts/carbonDesignContract.ts) 및 [src/styles/atelierTokens.css](src/styles/atelierTokens.css)의 무채색 미니멀·8pt 그리드·`tabular-nums` 원칙을 우선 준수합니다.
 4. **네이티브 플러그인 우선**: GitHub 작업은 MCP 중복 실행 대신 Antigravity 내장 `gh` CLI(`github` 스킬)를 우선 사용합니다.
+5. **Stitch-First UI 디자인 (필수 법칙)**: 앞으로 **모든 UI 디자인은 반드시 Google Stitch로 먼저 진행**합니다. Stitch에서 시안(기본 2종, 비파괴 생성)을 만들어 사용자가 선택한 뒤에만 코드에 반영하며, 디자인 시스템은 [.stitch/DESIGN.md](.stitch/DESIGN.md) 기반 자산을 사용합니다. API 키는 절대 출력·커밋하지 않습니다. 상세: [.agent/rules/web/stitch-first-ui.md](.agent/rules/web/stitch-first-ui.md)
 
 ### 0-4. 컨텍스트 초과(`HTTP 400`) 방지를 위한 하위 원문 온디맨드 참조 인덱스
 루트 파일 비대화를 막기 위해 상세 원문은 `.agent/`(및 호환 심볼릭 링크 `.agents/`) 하위에 분리 배치되어 있습니다. 작업 성격에 맞는 파일만 `view_file` 또는 `/슬래시` 명령으로 온디맨드 열람하세요.
