@@ -1,6 +1,20 @@
 import zlib from 'node:zlib';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { CARBON_DOM_CONTRACT } from '../../src/contracts/carbonDesignContract.ts';
+
+/**
+ * The login panel stays `inert` while the brand intro plays. Skip it via the
+ * intro CTA when present, then wait until the panel is in the `form` phase.
+ */
+async function waitForLoginFormPhase(page: Page): Promise<void> {
+  const root = page.locator('.luxe-auth-root');
+  await expect(root).toBeVisible();
+  const introCta = page.locator('[data-login-intro-cta]');
+  if ((await root.getAttribute('data-login-phase')) === 'intro' && (await introCta.isVisible())) {
+    await introCta.click().catch(() => undefined);
+  }
+  await expect(root).toHaveAttribute('data-login-phase', 'form', { timeout: 15000 });
+}
 
 /**
  * Generates a valid 64x64 PNG buffer (navy garment core on #F5F5F7 studio border)
@@ -276,8 +290,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(motionStage).toBeVisible();
     await expect(page.locator('video')).toHaveCount(0);
     await expect(motionStage).toHaveAttribute('data-motion-theme', 'dark');
-    await expect(motionStage.locator('#wardrobe-optical-scanner')).toBeVisible();
-    await expect(motionStage.locator('[data-inventory-slot="0"]')).toBeVisible();
+    await expect(motionStage).toHaveAttribute('data-login-look', /^(maison|runway)$/);
+    await expect(motionStage.locator('[data-luxe-motion]').first()).toBeAttached();
+    await expect(page.locator('[data-brand-logo]').first()).toBeVisible();
 
     await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -501,6 +516,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     page,
   }) => {
     await page.goto('/?auth=1');
+    await waitForLoginFormPhase(page);
 
     await page.locator(`#${CARBON_DOM_CONTRACT.authTabRegisterId}`).click();
     const uniqueEmail = `female.avatar.${Date.now()}@example.com`;
@@ -765,6 +781,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     // Also sign into seeded SQLite account (`admin` / `admin`) in English mode and verify all Korean DB garments, brands & saved outfits render 100% in English!
     await page.goto('/?auth=1');
+    await waitForLoginFormPhase(page);
     await expect(page.locator('#login-username')).toBeVisible();
     await assertZeroHangulOnPage('login-en');
     await page.locator('#login-username').fill('admin');
