@@ -1292,7 +1292,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const drawBtn = storeModal.locator('[data-store-draw-btn="true"]');
     await expect(drawBtn).toContainText(/무료 뽑기|Free Daily Draw/);
     await drawBtn.click();
-    await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible();
+    await expect(storeModal.locator('[data-store-phase="spinning"]')).toBeVisible();
+    await expect(storeModal.locator('[data-store-roulette-needle="true"]')).toBeVisible();
+    await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible({
+      timeout: 6000,
+    });
     await expect(storeModal.locator('[data-store-reveal-tier]')).toHaveAttribute(
       'data-store-reveal-tier',
       /^[SABC]$/
@@ -1328,7 +1332,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(attendanceBtn).toBeDisabled();
     await expect(page.locator('[data-calendar-attended="true"]').first()).toBeVisible();
 
-    // 5) Return to Outfits -> paid 10 i backdrop gacha draw works & spends 10 i
+    // 5) Return to Outfits -> paid 10 i backdrop gacha draw works, spins roulette, supports Skip, & spends 10 i
     await page.locator('[data-nav-tab="outfits"]').click();
     await page.locator('[data-open-store-btn="true"]').click();
     await expect(storeModal).toBeVisible();
@@ -1336,6 +1340,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal.locator('[data-store-draw-btn="true"]')).toBeEnabled();
     await expect(storeModal.locator('[data-store-draw-btn="true"]')).toContainText('10 i');
     await storeModal.locator('[data-store-draw-btn="true"]').click();
+    await expect(storeModal.locator('[data-store-phase="spinning"]')).toBeVisible();
+    const skipSpinBtn = storeModal.locator('[data-store-skip-spin="true"]');
+    if (await skipSpinBtn.isVisible()) {
+      await skipSpinBtn.click();
+    }
     await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible();
     await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText(/^(0|5) i$/);
   });

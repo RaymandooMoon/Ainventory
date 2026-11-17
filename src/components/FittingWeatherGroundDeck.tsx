@@ -15,6 +15,7 @@ export interface StageGroundDeckProps {
   compareActive?: boolean;
   compareSplitPct?: number;
   hasArchitecturalBackdrop?: boolean;
+  isOutdoor?: boolean;
 }
 
 /**
@@ -23,10 +24,9 @@ export interface StageGroundDeckProps {
  *   directly behind the RGBA cutout model (`z-20`) and beneath the foreground weather canvas (`z-30`).
  * - Aligns horizon & dual-layer Contact AO Shadow with the normalized `94%` shoe sole baseline so all
  *   8 swipe angles (`0°..315°`) ground naturally onto the studio floor plane without floating or clipping.
- * - `rain`: Wet reflective stone/slate floor + upside-down `scaleY(-0.30)` real-time mirror reflection
- *   (syncing `mirrorX` when viewing mirrored angles) + dense sole Contact AO Shadow.
- * - `coldwave` / `snow`: Frosted ice glaze / accumulated snow sheen + pressed-snow AO shadow.
- * - `clear` / `mild` / `cloudy` / `wind` / `heatwave`: Honed travertine satin floor sheen + warm cove bounce.
+ * - `rain` (on open-sky outdoor stages): Wet reflective stone/slate floor + upside-down `scaleY(-0.30)` real-time mirror reflection + dense sole Contact AO Shadow.
+ * - `coldwave` / `snow` (outdoor): Frosted ice glaze / accumulated snow sheen + pressed-snow AO shadow.
+ * - Enclosed indoor stages (`!isOutdoor`) / clear outdoor: Dry architectural studio floor satin + warm ivory ambient bounce.
  */
 export function StageGroundDeck({
   effectiveWeather,
@@ -42,17 +42,19 @@ export function StageGroundDeck({
   compareActive = false,
   compareSplitPct = 50,
   hasArchitecturalBackdrop = true,
+  isOutdoor = true,
 }: StageGroundDeckProps) {
   if (stageMode !== 'ai-vton') {
     return null;
   }
 
   const hasModelImage = Boolean(modelImageUrl);
+  const stageWeather: EffectiveWeatherMode = isOutdoor ? effectiveWeather : 'clear';
 
   const deckVariant: 'wet-pavement' | 'frost-snow' | 'runway-studio' =
-    effectiveWeather === 'rain'
+    stageWeather === 'rain'
       ? 'wet-pavement'
-      : effectiveWeather === 'coldwave' || effectiveWeather === 'snow'
+      : stageWeather === 'coldwave' || stageWeather === 'snow'
         ? 'frost-snow'
         : 'runway-studio';
 
@@ -129,10 +131,11 @@ export function StageGroundDeck({
       aria-hidden="true"
       data-stage-ground-deck="true"
       data-ground-variant={deckVariant}
-      data-ground-weather={effectiveWeather}
-      data-ground-scenario={scenarioKey}
+      data-ground-weather={stageWeather}
+      data-ground-outdoor={isOutdoor ? 'true' : 'false'}
+      data-ground-scenario={isOutdoor ? scenarioKey : 'indoor'}
       data-ground-theme={theme}
-      className={`studio-stage-ground-deck is-${deckVariant} is-weather-${effectiveWeather} is-theme-${theme} ${hasArchitecturalBackdrop ? 'has-arch-backdrop' : ''} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
+      className={`studio-stage-ground-deck is-${deckVariant} is-weather-${stageWeather} is-theme-${theme} ${hasArchitecturalBackdrop ? 'has-arch-backdrop' : ''} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
       style={rootStyle}
     >
       {/* Seamless Curved Cyclorama Floor Deck Surface (zero hard horizon line) */}
@@ -150,8 +153,8 @@ export function StageGroundDeck({
         )}
       </div>
 
-      {/* Real-time Wet Pavement Mirror Reflection (`rain` mode + transparent cutout model) */}
-      {effectiveWeather === 'rain' && hasModelImage && modelImageUrl && (
+      {/* Real-time Wet Pavement Mirror Reflection (`rain` mode outdoors + transparent cutout model) */}
+      {stageWeather === 'rain' && hasModelImage && modelImageUrl && (
         <div
           data-wet-mirror-reflection="true"
           className="studio-ground-wet-reflection-viewport"

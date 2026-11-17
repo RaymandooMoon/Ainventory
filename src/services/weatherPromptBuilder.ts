@@ -18,8 +18,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v11-fullbody-cleanhole-360';
+export const CUTOUT_PIPELINE_VERSION = 'v12-uniform-stature-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v11-fullbody-cleanhole-360',
   'v10-fullbody-cleanhole-360',
   'v9-solo-avatar-symmetric-shoes',
   'v8-consistent-avatar-3x2-cyclorama',

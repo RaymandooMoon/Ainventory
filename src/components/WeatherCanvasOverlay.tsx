@@ -13,6 +13,7 @@ export interface WeatherCanvasOverlayProps {
   isDark?: boolean;
   timeOfDay?: TimeOfDayPhase;
   umbrellaCollisionEnabled?: boolean;
+  isIndoorStage?: boolean;
   className?: string;
 }
 
@@ -120,10 +121,13 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
   isDark = false,
   timeOfDay = 'day',
   umbrellaCollisionEnabled = true,
+  isIndoorStage = false,
   className = '',
 }: WeatherCanvasOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const activeWeather: WeatherCanvasOverlayMode = isIndoorStage ? 'clear' : weather;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -132,6 +136,17 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
+
+    if (isIndoorStage) {
+      const w = Math.max(1, Math.min(2048, container.clientWidth || 380));
+      const h = Math.max(1, Math.min(2048, container.clientHeight || 480));
+      const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+      canvas.width = Math.min(2048, Math.round(w * dpr));
+      canvas.height = Math.min(2048, Math.round(h * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      return undefined;
+    }
 
     let width = Math.max(1, Math.min(2048, container.clientWidth || 380));
     let height = Math.max(1, Math.min(2048, container.clientHeight || 480));
@@ -1136,19 +1151,20 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       resizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [weather, isDark, timeOfDay, umbrellaCollisionEnabled]);
+  }, [weather, isDark, timeOfDay, umbrellaCollisionEnabled, isIndoorStage]);
 
-  const isRain = weather === 'rain';
+  const isRain = activeWeather === 'rain';
 
   return (
     <div
       ref={containerRef}
       aria-hidden="true"
-      data-weather-overlay={weather}
-      data-weather-foreground={weather}
+      data-weather-overlay={activeWeather}
+      data-weather-foreground={activeWeather}
       data-weather-tod={timeOfDay}
+      data-indoor-lighting={isIndoorStage ? 'ivory-ambient' : undefined}
       data-studio-rain-layer={isRain ? 'true' : undefined}
-      className={`weather-canvas-overlay weather-foreground-overlay studio-weather-foreground-overlay weather-fg-${weather} tod-${timeOfDay} ${isRain ? 'studio-25d-rain-layer is-canvas-rain' : ''} ${className}`.trim()}
+      className={`weather-canvas-overlay weather-foreground-overlay studio-weather-foreground-overlay weather-fg-${activeWeather} tod-${timeOfDay} ${isIndoorStage ? 'is-indoor-stage' : ''} ${isRain ? 'studio-25d-rain-layer is-canvas-rain' : ''} ${className}`.trim()}
       style={{
         position: 'absolute',
         inset: 0,
@@ -1178,7 +1194,7 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       <canvas
         ref={canvasRef}
         data-weather-foreground-canvas="true"
-        data-weather-mode={weather}
+        data-weather-mode={activeWeather}
         className="weather-canvas-overlay-el weather-foreground-canvas-el studio-weather-foreground-canvas"
         style={{
           position: 'absolute',

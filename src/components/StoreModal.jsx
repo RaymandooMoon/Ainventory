@@ -12,10 +12,45 @@ import { tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
+const ROULETTE_CARD_WIDTH = 96;
+const ROULETTE_CARD_GAP = 10;
+const ROULETTE_CARD_STRIDE = ROULETTE_CARD_WIDTH + ROULETTE_CARD_GAP;
+const ROULETTE_CARD_COUNT = 26;
+const ROULETTE_TARGET_INDEX = 21;
+const ROULETTE_START_INDEX = 1;
+const ROULETTE_DURATION_MS = 2050;
+const ROULETTE_REDUCED_DURATION_MS = 180;
+
+function buildRouletteReelCards(targetBg) {
+  const pool = STAGE_BACKGROUNDS.filter((bg) => bg.id !== targetBg.id);
+  const byTierPriority = [
+    ...pool.filter((bg) => bg.tier === 'C'),
+    ...pool.filter((bg) => bg.tier === 'B'),
+    ...pool.filter((bg) => bg.tier === 'A'),
+    ...pool.filter((bg) => bg.tier === 'S'),
+  ];
+  const fallbackPool = byTierPriority.length > 0 ? byTierPriority : STAGE_BACKGROUNDS;
+
+  const cards = [];
+  for (let i = 0; i < ROULETTE_CARD_COUNT; i += 1) {
+    if (i === ROULETTE_TARGET_INDEX) {
+      cards.push(targetBg);
+      continue;
+    }
+    // Place tantalizing high-tier near-misses around target landing without duplicating targetBg
+    const offsetSeed = i === ROULETTE_TARGET_INDEX - 1 || i === ROULETTE_TARGET_INDEX + 1
+      ? fallbackPool[(fallbackPool.length - 1 - (i % 2)) % fallbackPool.length]
+      : fallbackPool[(i * 5 + 3) % fallbackPool.length];
+    cards.push(offsetSeed);
+  }
+  return cards;
+}
+
 /**
  * In-App Stage Background Store & Tiered Gacha Drawer (`StoreModal`)
  * - Free Daily Draw (`0 i`) once per calendar day
  * - Standard Paid Draw (`10 i`) with weighted drop rates (S 3%, A 17%, B 35%, C 45%)
+ * - Horizontal Roulette / Slot-Machine Draw Stage (`idle` -> `spinning` -> `revealed`)
  * - Distinct S / A / B / C reveal effects + Duplicate Mileage Refund (`5 i`)
  */
 export default function StoreModal({
@@ -27,21 +62,123 @@ export default function StoreModal({
   onSelectBackground,
   onGoCalendar,
 }) {
+  const [drawPhase, setDrawPhase] = useState('idle');
   const [drawResult, setDrawResult] = useState(null);
+  const [pendingResult, setPendingResult] = useState(null);
+  const [reelCards, setReelCards] = useState([]);
+  const [activeReelIdx, setActiveReelIdx] = useState(ROULETTE_START_INDEX);
   const [animatingTier, setAnimatingTier] = useState(null);
+
   const animTimerRef = useRef(null);
+  const spinRafRef = useRef(null);
+  const viewportRef = useRef(null);
+  const trackRef = useRef(null);
+  const pendingResultRef = useRef(null);
+
+  const cancelSpinTimers = () => {
+    if (spinRafRef.current !== null) {
+      cancelAnimationFrame(spinRafRef.current);
+      spinRafRef.current = null;
+    }
+    if (animTimerRef.current) {
+      clearTimeout(animTimerRef.current);
+      animTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!open) {
+      cancelSpinTimers();
+      pendingResultRef.current = null;
+      setDrawPhase('idle');
       setDrawResult(null);
+      setPendingResult(null);
+      setReelCards([]);
+      setActiveReelIdx(ROULETTE_START_INDEX);
       setAnimatingTier(null);
     }
     return () => {
-      if (animTimerRef.current) {
-        clearTimeout(animTimerRef.current);
-      }
+      cancelSpinTimers();
     };
   }, [open]);
+
+  const finishSpinToReveal = (res) => {
+    cancelSpinTimers();
+    if (!res?.drawnItem) return;
+    const tier = res.drawnItem.tier;
+    pendingResultRef.current = null;
+    setPendingResult(null);
+    setDrawResult(res);
+    setDrawPhase('revealed');
+    setAnimatingTier(tier);
+    triggerHaptic(tier === 'S' || tier === 'A' ? 'heavy' : 'medium');
+    animTimerRef.current = setTimeout(() => {
+      setAnimatingTier(null);
+      animTimerRef.current = null;
+    }, 1150);
+  };
+
+  useEffect(() => {
+    if (drawPhase !== 'spinning' || !pendingResult?.drawnItem) return undefined;
+    const targetRes = pendingResult;
+    pendingResultRef.current = targetRes;
+
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const durationMs = prefersReduced ? ROULETTE_REDUCED_DURATION_MS : ROULETTE_DURATION_MS;
+
+    const viewportW = viewportRef.current?.clientWidth || 360;
+    const centerX = viewportW * 0.5;
+    const offsetForIdx = (idx) => centerX - (idx * ROULETTE_CARD_STRIDE + ROULETTE_CARD_WIDTH * 0.5);
+    const startOffset = offsetForIdx(ROULETTE_START_INDEX);
+    const targetOffset = offsetForIdx(ROULETTE_TARGET_INDEX);
+
+    if (trackRef.current) {
+      trackRef.current.style.transform = `translate3d(${startOffset}px, 0, 0)`;
+    }
+
+    let startTs = 0;
+    let lastCrossedIdx = ROULETTE_START_INDEX;
+
+    const tick = (now) => {
+      if (!startTs) startTs = now;
+      const elapsed = now - startTs;
+      const progress = Math.min(1, elapsed / durationMs);
+      // Smooth slot-machine quintic deceleration into the winning card
+      const eased = 1 - Math.pow(1 - progress, 4.2);
+      const currentX = startOffset + (targetOffset - startOffset) * eased;
+
+      if (trackRef.current) {
+        trackRef.current.style.transform = `translate3d(${currentX.toFixed(2)}px, 0, 0)`;
+      }
+
+      const rawIdx = Math.round(
+        (centerX - currentX - ROULETTE_CARD_WIDTH * 0.5) / ROULETTE_CARD_STRIDE
+      );
+      const clampedIdx = Math.max(0, Math.min(ROULETTE_CARD_COUNT - 1, rawIdx));
+      if (clampedIdx !== lastCrossedIdx) {
+        lastCrossedIdx = clampedIdx;
+        setActiveReelIdx(clampedIdx);
+      }
+
+      if (progress < 1) {
+        spinRafRef.current = requestAnimationFrame(tick);
+      } else {
+        spinRafRef.current = null;
+        finishSpinToReveal(targetRes);
+      }
+    };
+
+    spinRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (spinRafRef.current !== null) {
+        cancelAnimationFrame(spinRafRef.current);
+        spinRafRef.current = null;
+      }
+    };
+  }, [drawPhase, pendingResult]);
 
   const iBalance = economyState?.iBalance ?? 0;
   const freeAvailable = hasFreeDailyDrawRemaining(economyState);
@@ -51,6 +188,7 @@ export default function StoreModal({
   const equippedBg = getStageBackgroundById(equippedId);
 
   const handleTriggerDraw = () => {
+    if (drawPhase === 'spinning') return;
     const res = onPerformDraw?.();
     if (!res) return;
     if (!res.ok) {
@@ -58,22 +196,29 @@ export default function StoreModal({
       return;
     }
 
-    const tier = res.drawnItem.tier;
-    triggerHaptic(tier === 'S' || tier === 'A' ? 'heavy' : 'medium');
-    setDrawResult(res);
-    setAnimatingTier(tier);
-    if (animTimerRef.current) clearTimeout(animTimerRef.current);
-    animTimerRef.current = setTimeout(() => {
-      setAnimatingTier(null);
-    }, 1150);
+    cancelSpinTimers();
+    triggerHaptic('selection');
+    setDrawResult(null);
+    setAnimatingTier(null);
+    setReelCards(buildRouletteReelCards(res.drawnItem));
+    setActiveReelIdx(ROULETTE_START_INDEX);
+    setPendingResult(res);
+    setDrawPhase('spinning');
   };
 
-  const revealItem = drawResult?.drawnItem || null;
+  const handleSkipSpin = () => {
+    const activeRes = pendingResultRef.current || pendingResult;
+    if (!activeRes) return;
+    finishSpinToReveal(activeRes);
+  };
+
+  const revealItem = drawPhase === 'revealed' ? drawResult?.drawnItem || null : null;
   const revealTitle = revealItem
     ? lang === 'en'
       ? revealItem.nameEn
       : revealItem.nameKo
     : '';
+  const activeReelCard = reelCards[activeReelIdx] || reelCards[ROULETTE_TARGET_INDEX] || null;
 
   return (
     <ResponsiveSheetModal
@@ -85,7 +230,11 @@ export default function StoreModal({
       title={tx(lang, '배경 스토어', 'Backdrop Store')}
       maxWidth={680}
     >
-      <div className="stage-store-root" data-store-modal="true">
+      <div
+        className="stage-store-root"
+        data-store-modal="true"
+        data-store-phase={drawPhase}
+      >
         {/* Currency Balance & Free Draw Status Bar */}
         <div className="stage-store-balance-bar">
           <div className="stage-store-balance-pill" data-store-balance-pill="true">
@@ -123,21 +272,85 @@ export default function StoreModal({
           </div>
         </div>
 
-        {/* Hero Gacha Card with Distinct S / A / B / C Reveal Stage */}
+        {/* Hero Gacha Card: Idle -> Spinning Roulette Reel -> Tiered Reveal */}
         <div
           className={[
             'stage-store-hero-card',
+            `is-phase-${drawPhase}`,
             revealItem ? `has-reveal is-tier-${revealItem.tier.toLowerCase()}` : '',
             animatingTier ? `is-animating is-animating-${animatingTier.toLowerCase()}` : '',
           ]
             .filter(Boolean)
             .join(' ')}
+          data-store-phase={drawPhase}
           data-store-reveal-tier={revealItem?.tier || undefined}
           data-store-animating={animatingTier ? 'true' : 'false'}
         >
           <div className="stage-store-fx-overlay" aria-hidden="true" />
 
-          {revealItem ? (
+          {drawPhase === 'spinning' ? (
+            <div className="stage-store-roulette-stage" data-store-roulette-stage="true">
+              <div className="stage-store-roulette-top">
+                <div className="stage-store-roulette-status">
+                  <span
+                    className={`stage-tier-badge is-tier-${(activeReelCard?.tier || 'C').toLowerCase()}`}
+                    data-store-roulette-live-tier={activeReelCard?.tier || 'C'}
+                  >
+                    {activeReelCard?.tier || 'C'} TIER
+                  </span>
+                  <strong className="stage-store-roulette-title">
+                    {tx(lang, '스테이지 룰렛 회전 중...', 'Spinning Stage Roulette...')}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  data-store-skip-spin="true"
+                  className="btn btn-secondary btn-sm stage-store-skip-btn"
+                  onClick={handleSkipSpin}
+                >
+                  <span>{tx(lang, '결과 바로보기', 'Skip')}</span>
+                </button>
+              </div>
+
+              <div
+                ref={viewportRef}
+                className="stage-store-roulette-viewport"
+                aria-hidden="true"
+              >
+                <div
+                  className="stage-store-roulette-needle"
+                  data-store-roulette-needle="true"
+                />
+                <div ref={trackRef} className="stage-store-roulette-track">
+                  {reelCards.map((card, idx) => {
+                    const isCenter = idx === activeReelIdx;
+                    const cardName = lang === 'en' ? card.nameEn : card.nameKo;
+                    return (
+                      <div
+                        key={`${card.id}-${idx}`}
+                        className={[
+                          'stage-store-roulette-card',
+                          `is-tier-${card.tier.toLowerCase()}`,
+                          isCenter ? 'is-center-active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        data-roulette-index={idx}
+                        data-roulette-tier={card.tier}
+                      >
+                        <img src={card.imageUrl} alt={cardName} />
+                        <span className={`stage-tier-badge is-tier-${card.tier.toLowerCase()}`}>
+                          {card.tier}
+                        </span>
+                        <span className="stage-store-roulette-card-label">{cardName}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : revealItem ? (
             <div className="stage-store-reveal-content" data-store-draw-result="true">
               <div className="stage-store-reveal-preview">
                 <img src={revealItem.imageUrl} alt={revealTitle} />
@@ -235,13 +448,18 @@ export default function StoreModal({
               <button
                 type="button"
                 data-store-draw-btn="true"
-                disabled={!freeAvailable && !canPaidDraw}
+                disabled={drawPhase === 'spinning' || (!freeAvailable && !canPaidDraw)}
                 className={`btn btn-primary stage-store-draw-btn tabular-nums ${
                   freeAvailable ? 'is-free-draw' : ''
                 }`}
                 onClick={handleTriggerDraw}
               >
-                {freeAvailable ? (
+                {drawPhase === 'spinning' ? (
+                  <>
+                    <Sparkles size={16} aria-hidden="true" />
+                    <span>{tx(lang, '룰렛 추첨 중...', 'Drawing...')}</span>
+                  </>
+                ) : freeAvailable ? (
                   <>
                     <Gift size={16} aria-hidden="true" />
                     <span>{tx(lang, '오늘의 무료 뽑기 (0 i)', 'Free Daily Draw (0 i)')}</span>
@@ -260,7 +478,7 @@ export default function StoreModal({
                 )}
               </button>
 
-              {!freeAvailable && !canPaidDraw && (
+              {drawPhase !== 'spinning' && !freeAvailable && !canPaidDraw && (
                 <button
                   type="button"
                   data-store-go-calendar="true"

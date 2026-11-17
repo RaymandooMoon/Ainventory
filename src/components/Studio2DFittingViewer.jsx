@@ -660,15 +660,55 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const equippedCount = layers.length;
   const effectiveCompareActive = compareActive && equippedCount > 0;
 
+  const resolvedBgItem = useMemo(
+    () => getStageBackgroundById(stageBackgroundId),
+    [stageBackgroundId]
+  );
+  const isStageOutdoor = Boolean(resolvedBgItem.isOutdoor);
+
   const effectiveWeather = useMemo(
     () => resolveEffectiveWeatherFromRaw(weather),
     [weather]
   );
+  const stageEffectiveWeather = isStageOutdoor ? effectiveWeather : 'clear';
   const weatherOverlayMode = useMemo(() => {
     if (scenarioKey === 'warm_spring') return 'mild';
     if (scenarioKey === 'live' && effectiveWeather === 'clear') return 'forecast';
     return effectiveWeather;
   }, [scenarioKey, effectiveWeather]);
+  const stageWeatherOverlayMode = isStageOutdoor ? weatherOverlayMode : 'clear';
+
+  const vtonWeather = useMemo(() => {
+    if (isStageOutdoor || effectiveWeather !== 'rain' || !weather || typeof weather !== 'object') {
+      return weather;
+    }
+    return {
+      ...weather,
+      mode: 'cloudy',
+      selectedMode: 'cloudy',
+      liveCondition: 'cloudy',
+      condition: 'cloudy',
+      conditionKo: '흐림',
+      label: '흐림',
+      mood: 'cloudy',
+      weatherCode: 3,
+      code: 3,
+      precipProb: 0,
+      isRainy: false,
+      isRaining: false,
+    };
+  }, [isStageOutdoor, effectiveWeather, weather]);
+
+  const vtonEffectiveWeather = useMemo(
+    () => resolveEffectiveWeatherFromRaw(vtonWeather),
+    [vtonWeather]
+  );
+
+  const vtonSlots = useMemo(() => {
+    if (isStageOutdoor || !slots || !slots.acc_umbrella) return slots;
+    const { acc_umbrella: _omitted, ...rest } = slots;
+    return rest;
+  }, [isStageOutdoor, slots]);
 
   const weatherBadgeMeta = useMemo(
     () => getWeatherStageBadgeMeta(weather, resolvedLang),
@@ -676,8 +716,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const normalizedScenarioKey = scenarioKey || 'live';
-  const { outfitComboId } = useMemo(() => computeOutfitComboId(slots), [slots]);
-  const scenarioVtonKey = `${normalizedScenarioKey}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
+  const { outfitComboId } = useMemo(() => computeOutfitComboId(vtonSlots), [vtonSlots]);
+  const scenarioVtonKey = `${normalizedScenarioKey}|${isStageOutdoor ? 'outdoor' : 'indoor'}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
   const scenarioVtonSnapshotsRef = useRef({});
   const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
 
@@ -752,16 +792,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         avatarConfigHash: resolvedAvatarHash,
         outfitComboId,
         styleMode,
-        effectiveWeather,
+        effectiveWeather: vtonEffectiveWeather,
         angleDeg: canonicalSliceAngle,
-      })}|sc:${normalizedScenarioKey}`,
+      })}|sc:${normalizedScenarioKey}|${isStageOutdoor ? 'outdoor' : 'indoor'}`,
     [
       resolvedAvatarHash,
       outfitComboId,
       styleMode,
-      effectiveWeather,
+      vtonEffectiveWeather,
       canonicalSliceAngle,
       normalizedScenarioKey,
+      isStageOutdoor,
     ]
   );
 
@@ -785,14 +826,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       avatarConfigHash: resolvedAvatarHash,
       outfitComboId,
       styleMode,
-      effectiveWeather,
+      effectiveWeather: vtonEffectiveWeather,
       angleDeg: canonicalSliceAngle,
     });
   }, [
     resolvedAvatarHash,
     outfitComboId,
     styleMode,
-    effectiveWeather,
+    vtonEffectiveWeather,
     canonicalSliceAngle,
     forceRefresh,
     historyCount,
@@ -830,7 +871,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         avatarConfigHash: resolvedAvatarHash,
         outfitComboId,
         styleMode,
-        effectiveWeather,
+        effectiveWeather: vtonEffectiveWeather,
         angleDeg: deg,
       });
       if (hit?.imageUrl) return hit;
@@ -840,7 +881,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     resolvedAvatarHash,
     outfitComboId,
     styleMode,
-    effectiveWeather,
+    vtonEffectiveWeather,
     canonicalSliceAngle,
     forceRefresh,
     historyCount,
@@ -857,7 +898,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const latestInputsRef = useRef({
-    slots,
+    slots: vtonSlots,
     skinProfile,
     bodySpec,
     user,
@@ -865,8 +906,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     resolvedAvatarHash,
     canonicalSliceAngle,
     styleMode,
-    weather,
-    effectiveWeather,
+    weather: vtonWeather,
+    effectiveWeather: vtonEffectiveWeather,
     normalizedScenarioKey,
     scenarioVtonKey,
     resolvedTheme,
@@ -877,7 +918,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   useEffect(() => {
     latestInputsRef.current = {
-      slots,
+      slots: vtonSlots,
       skinProfile,
       bodySpec,
       user,
@@ -885,8 +926,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       resolvedAvatarHash,
       canonicalSliceAngle,
       styleMode,
-      weather,
-      effectiveWeather,
+      weather: vtonWeather,
+      effectiveWeather: vtonEffectiveWeather,
       normalizedScenarioKey,
       scenarioVtonKey,
       resolvedTheme,
@@ -913,9 +954,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       activeFacePhotoUrl && pendingFacePhotoApproveRef.current === activeFacePhotoUrl
     );
 
-    if (prevEffectiveWeatherRef.current !== effectiveWeather) {
-      prevEffectiveWeatherRef.current = effectiveWeather;
-      pendingWeatherApproveRef.current = effectiveWeather;
+    if (prevEffectiveWeatherRef.current !== vtonEffectiveWeather) {
+      prevEffectiveWeatherRef.current = vtonEffectiveWeather;
+      pendingWeatherApproveRef.current = vtonEffectiveWeather;
       setPinnedHistoryItem(null);
     }
     if (prevScenarioKeyRef.current !== normalizedScenarioKey) {
@@ -924,7 +965,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setPinnedHistoryItem(null);
     }
     const weatherTabJustChanged = Boolean(
-      pendingWeatherApproveRef.current === effectiveWeather ||
+      pendingWeatherApproveRef.current === vtonEffectiveWeather ||
         pendingScenarioApproveRef.current === normalizedScenarioKey
     );
 
@@ -942,7 +983,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
         pinnedHistoryItem.styleMode !== styleMode ||
         (pinnedHistoryItem.effectiveWeather &&
-          pinnedHistoryItem.effectiveWeather !== effectiveWeather))
+          pinnedHistoryItem.effectiveWeather !== vtonEffectiveWeather))
     ) {
       setAiLoading(false);
       setStagedNeedsApply(false);
@@ -1355,7 +1396,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     outfitComboId,
     resolvedAvatarHash,
     activeFacePhotoUrl,
-    effectiveWeather,
+    vtonEffectiveWeather,
     styleMode,
     equippedCount,
     retryNonce,
@@ -1487,7 +1528,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       const matchesLiveState =
         (item.outfitComboId === outfitComboId || restoredLiveCombo) &&
         item.avatarConfigHash === resolvedAvatarHash &&
-        (!item.effectiveWeather || item.effectiveWeather === effectiveWeather);
+        (!item.effectiveWeather || item.effectiveWeather === vtonEffectiveWeather);
 
       if (matchesLiveState) {
         setPinnedHistoryItem(null);
@@ -1499,7 +1540,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [
       outfitComboId,
       resolvedAvatarHash,
-      effectiveWeather,
+      vtonEffectiveWeather,
       onRestoreHistorySlots,
     ]
   );
@@ -1533,8 +1574,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     setStageMode('ai-vton');
   }, []);
 
-  const isRainy = effectiveWeather === 'rain';
-  const isWindy = effectiveWeather === 'wind' || effectiveWeather === 'coldwave';
+  const isRainy = isStageOutdoor && effectiveWeather === 'rain';
+  const isWindy =
+    isStageOutdoor && (effectiveWeather === 'wind' || effectiveWeather === 'coldwave');
 
   const hasPinnedHistoryOverride = Boolean(
     pinnedHistoryItem &&
@@ -1542,7 +1584,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pinnedHistoryItem.avatarConfigHash !== resolvedAvatarHash ||
         pinnedHistoryItem.styleMode !== styleMode ||
         (pinnedHistoryItem.effectiveWeather &&
-          pinnedHistoryItem.effectiveWeather !== effectiveWeather))
+          pinnedHistoryItem.effectiveWeather !== vtonEffectiveWeather))
   );
 
   const isShowingPinnedHistory = Boolean(
@@ -1590,10 +1632,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const resolvedAiImageUrl = stageMode === 'ai-vton' ? availableAiImageUrl : null;
   const canReturnToCharacter = stageMode === 'flatlay' && Boolean(availableAiImageUrl);
-  const resolvedBgItem = useMemo(
-    () => getStageBackgroundById(stageBackgroundId),
-    [stageBackgroundId]
-  );
   const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
 
   useEffect(() => {
@@ -1731,7 +1769,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
-      className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} is-tod-${timeOfDay} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
+      className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${stageEffectiveWeather} ${isStageOutdoor ? `is-tod-${timeOfDay} is-outdoor-sky` : 'is-indoor-ivory'} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
       data-stage-view={resolvedAiImageUrl ? 'ai-vton' : 'flatlay'}
@@ -1742,6 +1780,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-has-bg-picker={showStageBgPickerBtn ? 'true' : 'false'}
       data-stage-bg-id={resolvedBgItem.id}
       data-stage-bg-tier={resolvedBgItem.tier}
+      data-stage-outdoor={isStageOutdoor ? 'true' : 'false'}
+      data-stage-lighting={isStageOutdoor ? 'outdoor-sky' : 'indoor-ivory'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
       data-effective-weather={effectiveWeather}
@@ -1766,11 +1806,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         theme={resolvedTheme}
         timeOfDay={timeOfDay}
         backgroundId={resolvedBgItem.id}
+        isOutdoor={isStageOutdoor}
       />
 
       {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection + Contact AO Shadow */}
       <StageGroundDeck
-        effectiveWeather={effectiveWeather}
+        effectiveWeather={stageEffectiveWeather}
         scenarioKey={scenarioKey}
         theme={resolvedTheme}
         modelImageUrl={resolvedAiImageUrl}
@@ -1783,6 +1824,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
         hasArchitecturalBackdrop={true}
+        isOutdoor={isStageOutdoor}
       />
 
       {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
@@ -1988,11 +2030,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       {/* Layer 3 (z-30 Standalone Weather Environment Overlay — pointer-events: none) */}
       <WeatherCanvasOverlay
-        weather={weatherOverlayMode}
+        weather={stageWeatherOverlayMode}
         isDark={resolvedTheme === 'dark'}
         timeOfDay={timeOfDay}
+        isIndoorStage={!isStageOutdoor}
         umbrellaCollisionEnabled={
-          stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
+          isStageOutdoor && stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
         }
       />
 

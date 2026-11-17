@@ -12,6 +12,7 @@ export interface StageBackgroundItem {
   floorToneDark: string;
   weight: number;
   isDefaultUnlocked: boolean;
+  isOutdoor: boolean;
 }
 
 export const DEFAULT_STAGE_BACKGROUND_ID = 'c_atelier_plaster';
@@ -52,6 +53,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(44, 38, 30, 0.42)',
     weight: 3,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'a_hannam_flagship',
@@ -65,19 +67,21 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(18, 20, 24, 0.46)',
     weight: 9,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'a_sunset_rooftop',
     tier: 'A',
     nameKo: '노을 루프탑 테라스',
     nameEn: 'Sunset Rooftop Terrace',
-    subtitleKo: '골든아워 트래버틴 & 슬레이트 루프탑',
-    subtitleEn: 'Golden-Hour Skylight Terrace & Slate Floor',
+    subtitleKo: '골든아워 오픈 스카이 & 슬레이트 루프탑',
+    subtitleEn: 'Open-Sky Sunset Terrace & Slate Floor',
     imageUrl: '/assets/backgrounds/a_sunset_rooftop.jpg',
     floorToneLight: 'rgba(184, 146, 114, 0.22)',
     floorToneDark: 'rgba(48, 36, 32, 0.44)',
     weight: 8,
     isDefaultUnlocked: false,
+    isOutdoor: true,
   },
   {
     id: 'b_seoul_cafe_terrace',
@@ -91,19 +95,21 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(32, 34, 38, 0.36)',
     weight: 12,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'b_brick_courtyard',
     tier: 'B',
     nameKo: '유럽 브릭 코트야드',
     nameEn: 'European Brick Courtyard',
-    subtitleKo: '아치형 석조 회랑 & 코블스톤 중정',
-    subtitleEn: 'Warm Brick Arcade & Cobblestone Floor',
+    subtitleKo: '오픈 스카이 중정 & 코블스톤 플라자',
+    subtitleEn: 'Open-Sky Brick Arcade & Cobblestone Floor',
     imageUrl: '/assets/backgrounds/b_brick_courtyard.jpg',
     floorToneLight: 'rgba(176, 154, 134, 0.2)',
     floorToneDark: 'rgba(42, 34, 28, 0.38)',
     weight: 12,
     isDefaultUnlocked: false,
+    isOutdoor: true,
   },
   {
     id: 'b_minimal_loft_window',
@@ -117,6 +123,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(38, 32, 26, 0.38)',
     weight: 11,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'c_atelier_plaster',
@@ -130,6 +137,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(26, 26, 28, 0.34)',
     weight: 12,
     isDefaultUnlocked: true,
+    isOutdoor: false,
   },
   {
     id: 'c_concrete_gallery',
@@ -143,6 +151,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(24, 25, 28, 0.36)',
     weight: 11,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'c_oak_dressing_room',
@@ -156,6 +165,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(36, 30, 24, 0.36)',
     weight: 11,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
   {
     id: 'c_stone_boutique',
@@ -169,6 +179,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     floorToneDark: 'rgba(34, 31, 28, 0.36)',
     weight: 11,
     isDefaultUnlocked: false,
+    isOutdoor: false,
   },
 ];
 

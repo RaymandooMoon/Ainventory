@@ -314,6 +314,84 @@
   opacity: 0.42;
 }
 
+/* 1C. Enclosed-Ceiling Indoor Warm Ivory Incandescent Indirect Cove Lighting (zero sky/weather wash) */
+.atelier-indoor-ivory-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  transition: opacity 0.45s ease, background 0.45s ease;
+  background:
+    radial-gradient(
+      ellipse 78% 36% at 50% 6%,
+      rgba(255, 243, 214, 0.44) 0%,
+      rgba(251, 228, 180, 0.16) 52%,
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 58% 48% at 50% 54%,
+      rgba(255, 248, 232, 0.22) 0%,
+      rgba(248, 233, 200, 0.08) 54%,
+      transparent 82%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 245, 224, 0.14) 0%,
+      rgba(253, 242, 218, 0.05) 48%,
+      rgba(246, 232, 204, 0.12) 100%
+    );
+}
+
+.atelier-stage-backdrop.is-dark .atelier-indoor-ivory-ambient {
+  background:
+    radial-gradient(
+      ellipse 76% 36% at 50% 8%,
+      rgba(255, 236, 196, 0.24) 0%,
+      rgba(235, 198, 140, 0.09) 52%,
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 56% 46% at 50% 52%,
+      rgba(255, 238, 204, 0.12) 0%,
+      rgba(218, 180, 128, 0.04) 54%,
+      transparent 82%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 236, 198, 0.06) 0%,
+      transparent 52%,
+      rgba(240, 212, 166, 0.06) 100%
+    );
+}
+
+.atelier-stage-backdrop.is-indoor-ivory.has-arch-backdrop .atelier-stage-environment-photo {
+  filter: brightness(1.02) saturate(1.03) sepia(0.06);
+}
+
+.atelier-stage-backdrop.is-indoor-ivory.is-dark.has-arch-backdrop .atelier-stage-environment-photo {
+  filter: brightness(0.8) contrast(1.04) saturate(1.03) sepia(0.08);
+}
+
+.atelier-stage-backdrop.is-indoor-ivory .atelier-backdrop-skylight-wash {
+  opacity: 0.34;
+  background: radial-gradient(
+    ellipse 82% 48% at 50% 10%,
+    rgba(255, 246, 226, 0.42) 0%,
+    rgba(249, 234, 204, 0.14) 56%,
+    transparent 86%
+  );
+}
+
+.atelier-stage-backdrop.is-indoor-ivory.is-dark .atelier-backdrop-skylight-wash {
+  opacity: 0.3;
+  background: radial-gradient(
+    ellipse 82% 48% at 50% 10%,
+    rgba(255, 238, 202, 0.16) 0%,
+    rgba(220, 188, 142, 0.05) 56%,
+    transparent 86%
+  );
+}
+
 /* 3. Subtle curved architectural cyclorama side depth (soft room framing without corner seams) */
 .atelier-cyclorama-side-depth {
   position: absolute;
@@ -595,6 +673,24 @@
     rgba(186, 230, 253, 0.14) 0%,
     rgba(148, 163, 184, 0.06) 54%,
     transparent 80%
+  );
+}
+
+.studio-2d-vton-viewer[data-stage-outdoor='false'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 16%,
+    rgba(255, 244, 218, 0.22) 0%,
+    rgba(248, 230, 194, 0.08) 54%,
+    transparent 82%
+  );
+}
+
+[data-theme='dark'] .studio-2d-vton-viewer[data-stage-outdoor='false'] .studio-25d-keylight {
+  background: radial-gradient(
+    circle at 50% 16%,
+    rgba(255, 236, 196, 0.14) 0%,
+    rgba(218, 182, 132, 0.05) 54%,
+    transparent 82%
   );
 }
 
@@ -5744,6 +5840,166 @@ html[data-vibrancy-fallback='solid']
 .stage-store-catalog-head strong {
   color: var(--ink-primary);
   font-weight: 760;
+}
+
+/* Store Roulette / Slot-Machine Carousel Stage */
+.stage-store-roulette-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stage-store-roulette-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stage-store-roulette-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stage-store-roulette-title {
+  font-size: 0.86rem;
+  font-weight: 760;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-store-skip-btn {
+  flex-shrink: 0;
+}
+
+.stage-store-roulette-viewport {
+  position: relative;
+  width: 100%;
+  height: 158px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--squircle-border);
+  display: flex;
+  align-items: center;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000000 12%,
+    #000000 88%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000000 12%,
+    #000000 88%,
+    transparent 100%
+  );
+}
+
+.stage-store-roulette-needle {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 104px;
+  transform: translateX(-50%);
+  border-radius: 14px;
+  border: 2px solid var(--ink-primary);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 6px 20px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.stage-store-roulette-needle::before,
+.stage-store-roulette-needle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: var(--ink-primary);
+}
+
+.stage-store-roulette-needle::before {
+  top: -5px;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.stage-store-roulette-needle::after {
+  bottom: -5px;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+.stage-store-roulette-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  will-change: transform;
+  padding: 0;
+}
+
+.stage-store-roulette-card {
+  position: relative;
+  flex: 0 0 96px;
+  width: 96px;
+  height: 132px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--squircle-border);
+  opacity: 0.72;
+  transition: opacity 0.12s ease, border-color 0.12s ease;
+}
+
+.stage-store-roulette-card.is-center-active {
+  opacity: 1;
+  border-color: var(--ink-primary);
+}
+
+.stage-store-roulette-card.is-tier-s.is-center-active {
+  border-color: rgba(212, 175, 55, 0.96);
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.45);
+}
+
+.stage-store-roulette-card.is-tier-a.is-center-active {
+  border-color: rgba(148, 163, 184, 0.96);
+  box-shadow: 0 0 14px rgba(148, 163, 184, 0.36);
+}
+
+.stage-store-roulette-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stage-store-roulette-card .stage-tier-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.stage-store-roulette-card-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 6px 5px;
+  background: linear-gradient(180deg, transparent 0%, rgba(10, 10, 14, 0.84) 100%);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 

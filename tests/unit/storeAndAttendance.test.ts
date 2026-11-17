@@ -43,12 +43,20 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
     assert.equal(weightByTier.B, TIER_DROP_RATES.B);
     assert.equal(weightByTier.C, TIER_DROP_RATES.C);
 
+    const outdoorIds = STAGE_BACKGROUNDS.filter((b) => b.isOutdoor).map((b) => b.id).sort();
+    const indoorIds = STAGE_BACKGROUNDS.filter((b) => !b.isOutdoor).map((b) => b.id);
+    assert.deepEqual(outdoorIds, ['a_sunset_rooftop', 'b_brick_courtyard']);
+    assert.equal(indoorIds.length, 8);
+    assert.equal(indoorIds.includes('a_hannam_flagship'), true);
+    assert.equal(indoorIds.includes('c_atelier_plaster'), true);
+
     const init = createInitialEconomyState();
     assert.equal(init.equippedBackgroundId, DEFAULT_STAGE_BACKGROUND_ID);
     assert.deepEqual(init.unlockedIds, [DEFAULT_STAGE_BACKGROUND_ID]);
     const defaultBg = STAGE_BACKGROUNDS.find((b) => b.id === DEFAULT_STAGE_BACKGROUND_ID);
     assert.equal(defaultBg?.tier, 'C');
     assert.equal(defaultBg?.isDefaultUnlocked, true);
+    assert.equal(defaultBg?.isOutdoor, false);
   });
 
   it('uses 1 free daily draw, then costs 10 i per paid draw, equips new unlocks, and refunds 5 i on duplicates', () => {

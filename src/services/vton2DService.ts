@@ -1991,21 +1991,6 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
   return cleanCanvas;
 }
 
-function measureOpaqueVerticalBounds(
-  canvas: HTMLCanvasElement
-): { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number; coreCx: number } | null {
-  const cw = canvas.width;
-  const ch = canvas.height;
-  if (cw < 16 || ch < 16) return null;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-  const data = ctx.getImageData(0, 0, cw, ch).data;
-  const bounds = measureOpaqueVerticalBoundsInBuffer(data, cw, ch);
-  if (!bounds) return null;
-  const coreCx = computeCoreAnatomicalCenterXInBuffer(data, cw, ch, bounds);
-  return { ...bounds, coreCx };
-}
-
 export function measureOpaqueVerticalBoundsInBuffer(
   data: Uint8ClampedArray,
   cw: number,
@@ -2247,89 +2232,313 @@ async function inspectCutoutDataUrlIntegrity(
   });
 }
 
+export const CANONICAL_HUMAN_STATURE_RATIO = 0.72;
+export const CANONICAL_FLOOR_BASELINE_RATIO = 0.945;
+export const CANONICAL_PORTRAIT_ASPECT_RATIO = 0.75;
+
+export interface CoreHumanVerticalBounds {
+  minY: number;
+  maxY: number;
+  minX: number;
+  maxX: number;
+  fgPixels: number;
+  coreCx: number;
+  humanCrownY: number;
+  footSoleY: number;
+  hasOverheadProp: boolean;
+}
+
 /**
- * Ensures all sliced turnaround angles (`0°`, `45°`, `90°`, `135°`, `180°`, `225°`) stand on a unified
- * bottom floor baseline with generous shoe clearance, uniform stature, and centered vertical standing axis
- * (immune to asymmetric umbrellas or briefcases pulling horizontal center off).
+ * Separates the anatomical human crown-to-sole vertical stature (`humanCrownY .. footSoleY`)
+ * from overhead props (open rain umbrella canopies) so figures with vs. without umbrellas
+ * render at identical physical body height on the stage.
+ */
+export function detectCoreHumanVerticalBoundsInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number,
+  preBounds?: { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number } | null
+): CoreHumanVerticalBounds | null {
+  const b = preBounds ?? measureOpaqueVerticalBoundsInBuffer(data, cw, ch);
+  if (!b) return null;
+  const coreCx = computeCoreAnatomicalCenterXInBuffer(data, cw, ch, b);
+  const fgH = Math.max(1, b.maxY - b.minY + 1);
+
+  const rowCounts = new Int32Array(ch);
+  const rowSpans = new Int32Array(ch);
+  const rowMinXs = new Int32Array(ch);
+  const rowMaxXs = new Int32Array(ch);
+  const bodyWidths: number[] = [];
+
+  for (let y = b.minY; y <= b.maxY; y += 1) {
+    const rowOff = y * cw;
+    let cnt = 0;
+    let rMin = cw;
+    let rMax = -1;
+    for (let x = b.minX; x <= b.maxX; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 48) {
+        cnt += 1;
+        if (x < rMin) rMin = x;
+        if (x > rMax) rMax = x;
+      }
+    }
+    rowCounts[y] = cnt;
+    rowMinXs[y] = rMin;
+    rowMaxXs[y] = rMax;
+    const span = rMax >= rMin ? rMax - rMin + 1 : 0;
+    rowSpans[y] = span;
+    if (cnt > 0 && y >= b.minY + fgH * 0.34 && y <= b.minY + fgH * 0.78) {
+      bodyWidths.push(cnt);
+    }
+  }
+
+  bodyWidths.sort((a, z) => a - z);
+  const medianBodyWidth =
+    bodyWidths.length > 0 ? bodyWidths[Math.floor(bodyWidths.length / 2)] : Math.max(12, cw * 0.18);
+
+  const topSearchEndY = Math.min(b.maxY, Math.round(b.minY + fgH * 0.34));
+  const wideThreshold = Math.max(medianBodyWidth * 1.38, cw * 0.32);
+
+  let wideStartY = -1;
+  let wideEndY = -1;
+  let canopyMaxSpan = 0;
+  for (let y = b.minY; y <= topSearchEndY; y += 1) {
+    const span = rowSpans[y];
+    if (span >= wideThreshold) {
+      if (wideStartY === -1) wideStartY = y;
+      wideEndY = y;
+      if (span > canopyMaxSpan) canopyMaxSpan = span;
+    }
+  }
+
+  let humanCrownY = b.minY;
+  let hasOverheadProp = false;
+
+  if (wideStartY !== -1 && wideEndY >= wideStartY && (wideStartY - b.minY) <= fgH * 0.14) {
+    const headSearchLimitY = Math.min(b.maxY, Math.round(b.minY + fgH * 0.38));
+    const centerBandHalf = Math.max(8, medianBodyWidth * 0.42);
+    let candidateCrownY = -1;
+
+    const getCenterRunOnRow = (y: number): { width: number; hasSideWings: boolean } => {
+      const rowOff = y * cw;
+      const runs: Array<{ start: number; end: number; width: number }> = [];
+      let runStart = -1;
+      for (let x = b.minX; x <= b.maxX; x += 1) {
+        if (data[(rowOff + x) * 4 + 3] > 48) {
+          if (runStart === -1) runStart = x;
+        } else if (runStart !== -1) {
+          runs.push({ start: runStart, end: x - 1, width: x - runStart });
+          runStart = -1;
+        }
+      }
+      if (runStart !== -1) {
+        runs.push({ start: runStart, end: b.maxX, width: b.maxX - runStart + 1 });
+      }
+      if (runs.length === 0) return { width: 0, hasSideWings: false };
+      let bestRun = runs[0];
+      let bestDist = Infinity;
+      for (const r of runs) {
+        const mid = (r.start + r.end) * 0.5;
+        const containsCenter = coreCx >= r.start - 4 && coreCx <= r.end + 4;
+        const dist = containsCenter ? 0 : Math.abs(mid - coreCx);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestRun = r;
+        }
+      }
+      if (bestDist > centerBandHalf) {
+        return { width: 0, hasSideWings: runs.length > 0 };
+      }
+      const hasOuterWings = runs.some(
+        (r) =>
+          r !== bestRun &&
+          (bestRun.start - r.end >= 2 || r.start - bestRun.end >= 2)
+      );
+      return { width: bestRun.width, hasSideWings: hasOuterWings };
+    };
+
+    // Case 1: Air/shaft gap under canopy dome followed by solid sustained head crown
+    let seenShaftOrGap = false;
+    for (let y = wideStartY + 1; y <= headSearchLimitY; y += 1) {
+      const cnt = rowCounts[y];
+      if (cnt <= Math.max(6, medianBodyWidth * 0.24)) {
+        seenShaftOrGap = true;
+        continue;
+      }
+      if (seenShaftOrGap) {
+        const centerInfo = getCenterRunOnRow(y);
+        const minHeadW = Math.max(4, medianBodyWidth * 0.16);
+        if (centerInfo.width >= minHeadW) {
+          // Verify sustained head below this row (next 2 rows also have center presence)
+          const next1 = y + 1 <= headSearchLimitY ? getCenterRunOnRow(y + 1).width >= minHeadW : true;
+          const next2 = y + 2 <= headSearchLimitY ? getCenterRunOnRow(y + 2).width >= minHeadW : true;
+          if (next1 && next2) {
+            candidateCrownY = y;
+            break;
+          }
+        }
+      }
+    }
+
+    // Case 2: Canopy dome transitions directly into narrow head crown (no air gap)
+    if (candidateCrownY === -1 && wideEndY + 1 <= headSearchLimitY) {
+      const nextY = wideEndY + 1;
+      const nextSpan = rowSpans[nextY];
+      if (
+        nextSpan > 0 &&
+        nextSpan <= Math.min(medianBodyWidth * 0.85, canopyMaxSpan * 0.62)
+      ) {
+        candidateCrownY = nextY;
+      }
+    }
+
+    // Case 3: Arched canopy wings hang beside upper head with transparent interior separation
+    if (candidateCrownY === -1) {
+      for (let y = wideStartY + 1; y <= headSearchLimitY; y += 1) {
+        const info = getCenterRunOnRow(y);
+        if (
+          info.hasSideWings &&
+          info.width >= Math.max(4, medianBodyWidth * 0.16) &&
+          info.width <= Math.min(medianBodyWidth * 0.78, canopyMaxSpan * 0.52)
+        ) {
+          candidateCrownY = y;
+          break;
+        }
+      }
+    }
+
+    if (
+      candidateCrownY > b.minY + 2 &&
+      b.maxY - candidateCrownY + 1 >= fgH * 0.62
+    ) {
+      humanCrownY = candidateCrownY;
+      hasOverheadProp = true;
+    }
+  }
+
+  return {
+    ...b,
+    coreCx,
+    humanCrownY,
+    footSoleY: b.maxY,
+    hasOverheadProp,
+  };
+}
+
+export interface UniformStaturePlacement {
+  canonicalW: number;
+  canonicalH: number;
+  scale: number;
+  dstW: number;
+  dstH: number;
+  dstX: number;
+  dstY: number;
+}
+
+/**
+ * Computes exact destination transform placing every generated VTON character onto a locked
+ * `3:4` (`0.75`) portrait canvas with unified human crown-to-sole height (`0.72 * H`),
+ * anchored soles at `0.945 * H`, and core lower-ankle center X locked to `0.50 * W`.
+ */
+export function computeUniformStaturePlacement(params: {
+  totalW: number;
+  totalH: number;
+  coreBounds: CoreHumanVerticalBounds;
+  targetH?: number;
+}): UniformStaturePlacement {
+  const { totalW, totalH, coreBounds, targetH } = params;
+  const canonicalH = targetH && targetH >= 180 ? Math.round(targetH) : totalH;
+  const canonicalW = Math.round(canonicalH * CANONICAL_PORTRAIT_ASPECT_RATIO);
+  const targetHumanStature = canonicalH * CANONICAL_HUMAN_STATURE_RATIO;
+  const targetFloorY = canonicalH * CANONICAL_FLOOR_BASELINE_RATIO;
+  const minTopEdgeY = canonicalH * 0.015;
+
+  const rawHumanH = Math.max(16, coreBounds.footSoleY - coreBounds.humanCrownY + 1);
+  const rawFgH = Math.max(16, coreBounds.maxY - coreBounds.minY + 1);
+  const rawFgW = Math.max(16, coreBounds.maxX - coreBounds.minX + 1);
+
+  const desiredScale = targetHumanStature / rawHumanH;
+  const maxTopSafeScale = (targetFloorY - minTopEdgeY) / rawFgH;
+  const maxWidthSafeScale = (canonicalW * 0.94) / rawFgW;
+  const scale = clamp(Math.min(desiredScale, maxTopSafeScale, maxWidthSafeScale), 0.48, 1.85);
+
+  const dstW = Math.round(totalW * scale);
+  const dstH = Math.round(totalH * scale);
+  const rawDstX = canonicalW * 0.5 - coreBounds.coreCx * scale;
+  const minSafeDstX = 2 - coreBounds.minX * scale;
+  const maxSafeDstX = canonicalW - 3 - coreBounds.maxX * scale;
+  const dstX = Math.round(
+    minSafeDstX <= maxSafeDstX
+      ? clamp(rawDstX, minSafeDstX, maxSafeDstX)
+      : canonicalW * 0.5 - (coreBounds.minX + rawFgW * 0.5) * scale
+  );
+  const dstY = Math.round(targetFloorY - coreBounds.footSoleY * scale);
+
+  return {
+    canonicalW,
+    canonicalH,
+    scale,
+    dstW,
+    dstH,
+    dstX,
+    dstY,
+  };
+}
+
+function measureCoreHumanVerticalBounds(
+  canvas: HTMLCanvasElement
+): CoreHumanVerticalBounds | null {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (cw < 16 || ch < 16) return null;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  const data = ctx.getImageData(0, 0, cw, ch).data;
+  return detectCoreHumanVerticalBoundsInBuffer(data, cw, ch);
+}
+
+/**
+ * Ensures every sliced turnaround angle (`0°`, `45°`, `90°`, `135°`, `180°`, `225°` or single-angle frame)
+ * renders at an identical canonical human stature (`0.72 * H`), grounded on a unified bottom floor baseline
+ * (`0.945 * H`), dead-centered on the anatomical lower-ankle spine (`0.50 * W`), and housed inside an
+ * exact `3:4` (`0.75`) portrait canvas so umbrellas/briefcases/angles never alter apparent body size.
  */
 function normalizeTurnaroundCanvasesToFloorBaseline(
   canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>>
 ): void {
   const activeAngles = TURNAROUND_ANGLES.filter((angle) => Boolean(canvases[angle]));
-  if (activeAngles.length < 2) return;
+  if (activeAngles.length < 1) return;
 
-  const boundsByAngle = {} as Partial<
-    Record<TurnaroundAngleDeg, ReturnType<typeof measureOpaqueVerticalBounds>>
-  >;
-  const heights: number[] = [];
-  const bottoms: number[] = [];
-
-  for (const angle of activeAngles) {
-    const b = measureOpaqueVerticalBounds(canvases[angle]!);
-    boundsByAngle[angle] = b;
-    if (b) {
-      heights.push(b.maxY - b.minY + 1);
-      bottoms.push(b.maxY);
-    }
-  }
-
-  if (heights.length < 2) return;
-
-  const canonicalH = heights.length > 0
-    ? Math.max(...activeAngles.map((a) => canvases[a]?.height || 0))
-    : 0;
-  const sortedH = heights.slice().sort((a, b) => a - b);
-  const medianFgH = sortedH[Math.floor(sortedH.length / 2)];
-  const sortedBottoms = bottoms.slice().sort((a, b) => a - b);
-  const medianBottom = sortedBottoms[Math.floor(sortedBottoms.length / 2)];
+  const coreByAngle = {} as Partial<Record<TurnaroundAngleDeg, CoreHumanVerticalBounds | null>>;
+  let maxSourceH = 0;
 
   for (const angle of activeAngles) {
     const c = canvases[angle];
-    const b = boundsByAngle[angle];
-    if (!c || !b) continue;
+    if (!c || c.width < 16 || c.height < 16) continue;
+    const cb = measureCoreHumanVerticalBounds(c);
+    coreByAngle[angle] = cb;
+    if (cb) {
+      maxSourceH = Math.max(maxSourceH, c.height);
+    }
+  }
+
+  if (maxSourceH < 64) return;
+  const targetCanonicalH = maxSourceH >= 180 ? Math.max(720, maxSourceH) : maxSourceH;
+
+  for (const angle of activeAngles) {
+    const c = canvases[angle];
+    const cb = coreByAngle[angle];
+    if (!c || !cb) continue;
     const cw = c.width;
     const ch = c.height;
-    if (ch < 64) continue;
+    if (cw < 16 || ch < 16) continue;
 
-    // Resample canvas vertically if height diverges from canonicalH so object-fit:contain matches 1:1
-    const baseH = canonicalH >= 180 ? canonicalH : ch;
-    const heightNormScale = baseH / ch;
-    const fgH = (b.maxY - b.minY + 1) * heightNormScale;
-    const targetIdealH = Math.round(baseH * 0.81);
-    const targetMaxAllowedH = Math.round(baseH * 0.85);
-    const minTopPadPx = Math.round(baseH * 0.07);
-    const canonicalFloorY = Math.min(
-      Math.round(baseH * 0.94),
-      Math.max(Math.round(baseH * 0.88), medianBottom)
-    );
-    const targetFloorY =
-      baseH >= 180
-        ? Math.round(baseH * 0.94)
-        : medianBottom > Math.round(baseH * 0.945)
-          ? Math.round(baseH * 0.935)
-          : canonicalFloorY;
-
-    const scaledMedianFgH = medianFgH;
-    const heightDiffRatio = scaledMedianFgH > 0 ? Math.abs(fgH - scaledMedianFgH) / scaledMedianFgH : 0;
-    const isUndersizedFullBody = baseH >= 180 && scaledMedianFgH < Math.round(baseH * 0.77);
-    const needsScaleNormalization =
-      baseH >= 180 &&
-      (fgH > targetMaxAllowedH ||
-        heightDiffRatio > 0.015 ||
-        isUndersizedFullBody ||
-        Math.abs(heightNormScale - 1) > 0.01);
-    const bottomDelta = targetFloorY - b.maxY * heightNormScale;
-
-    const fgW = (b.maxX - b.minX + 1) * heightNormScale;
-    const srcCx = b.coreCx;
-    const horizOffsetPx = Math.abs(cw * 0.5 - srcCx);
-
-    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 2 && horizOffsetPx <= 3) {
-      continue;
-    }
-
-    const dstCanvasW = needsScaleNormalization ? Math.round(cw * heightNormScale) : cw;
-    const dstCanvasH = needsScaleNormalization ? baseH : ch;
+    const placement = computeUniformStaturePlacement({
+      totalW: cw,
+      totalH: ch,
+      coreBounds: cb,
+      targetH: targetCanonicalH,
+    });
 
     const scratch = document.createElement('canvas');
     scratch.width = cw;
@@ -2344,111 +2553,28 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
 
     sCtx.clearRect(0, 0, cw, ch);
     sCtx.drawImage(c, 0, 0);
-    if (c.width !== dstCanvasW || c.height !== dstCanvasH) {
-      c.width = dstCanvasW;
-      c.height = dstCanvasH;
+
+    if (c.width !== placement.canonicalW || c.height !== placement.canonicalH) {
+      c.width = placement.canonicalW;
+      c.height = placement.canonicalH;
     }
-    cCtx.clearRect(0, 0, dstCanvasW, dstCanvasH);
+    cCtx.clearRect(0, 0, placement.canonicalW, placement.canonicalH);
     cCtx.imageSmoothingEnabled = true;
     cCtx.imageSmoothingQuality = 'high';
-
-    if (needsScaleNormalization) {
-      const uniformDesiredFgH = isUndersizedFullBody
-        ? Math.min(targetMaxAllowedH, Math.max(scaledMedianFgH, targetIdealH))
-        : Math.min(targetMaxAllowedH, scaledMedianFgH);
-      const rawFgH = Math.max(1, b.maxY - b.minY + 1);
-      const rawFgW = Math.max(1, b.maxX - b.minX + 1);
-      const maxTopSafeScale = (targetFloorY - minTopPadPx) / rawFgH;
-      const maxWidthSafeScale = (dstCanvasW * 0.92) / rawFgW;
-      const scale = clamp(
-        Math.min(uniformDesiredFgH / rawFgH, maxTopSafeScale, maxWidthSafeScale),
-        0.65,
-        1.35
-      );
-      const dstW = Math.round(cw * scale);
-      const dstH = Math.round(ch * scale);
-      const rawDstX = dstCanvasW * 0.5 - srcCx * scale;
-      const minSafeDstX = 2 - b.minX * scale;
-      const maxSafeDstX = dstCanvasW - 3 - b.maxX * scale;
-      const dstX = Math.round(
-        minSafeDstX <= maxSafeDstX
-          ? clamp(rawDstX, minSafeDstX, maxSafeDstX)
-          : dstCanvasW * 0.5 - (b.minX + rawFgW * 0.5) * scale
-      );
-      const dstY = Math.round(targetFloorY - b.maxY * scale);
-      cCtx.drawImage(scratch, 0, 0, cw, ch, dstX, dstY, dstW, dstH);
-    } else {
-      const rawDx = cw * 0.5 - srcCx;
-      const minSafeDx = 2 - b.minX;
-      const maxSafeDx = cw - 3 - b.maxX;
-      const clampedDx = Math.round(
-        minSafeDx <= maxSafeDx ? clamp(rawDx, minSafeDx, maxSafeDx) : cw * 0.5 - (b.minX + fgW * 0.5)
-      );
-      const clampedDy = clamp(
-        Math.round(bottomDelta),
-        minTopPadPx - b.minY,
-        ch - 2 - b.maxY
-      );
-      cCtx.drawImage(scratch, clampedDx, clampedDy);
-    }
+    cCtx.drawImage(
+      scratch,
+      0,
+      0,
+      cw,
+      ch,
+      placement.dstX,
+      placement.dstY,
+      placement.dstW,
+      placement.dstH
+    );
 
     scratch.width = 0;
     scratch.height = 0;
-  }
-
-  // Unify all canvas dimensions to an exact ~3:4 portrait box centered on cw/2 so every
-  // turnaround slice renders at 1:1 identical proportions under `object-fit: contain`.
-  let maxPostFgW = 0;
-  let minCanvasW = Infinity;
-  let refCanvasH = 0;
-  for (const angle of activeAngles) {
-    const c = canvases[angle];
-    if (!c || c.height < 180 || c.width < 180) {
-      minCanvasW = 0;
-      break;
-    }
-    refCanvasH = c.height;
-    minCanvasW = Math.min(minCanvasW, c.width);
-    const postB = measureOpaqueVerticalBounds(c);
-    if (postB) {
-      const symmetricSpan =
-        Math.max(Math.abs(postB.minX - c.width * 0.5), Math.abs(postB.maxX - c.width * 0.5)) * 2;
-      maxPostFgW = Math.max(maxPostFgW, symmetricSpan);
-    }
-  }
-
-  if (minCanvasW >= 180 && refCanvasH >= 180 && maxPostFgW > 0) {
-    const desiredPortraitW = Math.max(
-      Math.round(refCanvasH * 0.74),
-      Math.ceil(maxPostFgW + refCanvasH * 0.08)
-    );
-    for (const angle of activeAngles) {
-      const c = canvases[angle];
-      if (!c) continue;
-      if (Math.abs(c.width - desiredPortraitW) <= 4 && c.width >= desiredPortraitW) continue;
-      const oldW = c.width;
-      const oldH = c.height;
-      const scratch = document.createElement('canvas');
-      scratch.width = desiredPortraitW;
-      scratch.height = oldH;
-      const sCtx = scratch.getContext('2d');
-      const cCtx = c.getContext('2d', { willReadFrequently: true });
-      if (sCtx && cCtx) {
-        if (desiredPortraitW <= oldW) {
-          const cropX = Math.max(0, Math.round((oldW - desiredPortraitW) * 0.5));
-          sCtx.drawImage(c, cropX, 0, desiredPortraitW, oldH, 0, 0, desiredPortraitW, oldH);
-        } else {
-          const padLeft = Math.round((desiredPortraitW - oldW) * 0.5);
-          sCtx.drawImage(c, 0, 0, oldW, oldH, padLeft, 0, oldW, oldH);
-        }
-        c.width = desiredPortraitW;
-        c.height = oldH;
-        cCtx.clearRect(0, 0, desiredPortraitW, oldH);
-        cCtx.drawImage(scratch, 0, 0);
-      }
-      scratch.width = 0;
-      scratch.height = 0;
-    }
   }
 }
 
@@ -2457,7 +2583,7 @@ async function normalizeTurnaroundDataUrlsToFloorBaseline(
 ): Promise<void> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') return;
   const active = TURNAROUND_ANGLES.filter((a) => Boolean(slices[a]));
-  if (active.length < 2) return;
+  if (active.length < 1) return;
 
   const canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
   await Promise.all(
@@ -2496,7 +2622,7 @@ async function normalizeTurnaroundDataUrlsToFloorBaseline(
   );
 
   const loaded = TURNAROUND_ANGLES.filter((a) => Boolean(canvases[a]));
-  if (loaded.length < 2) return;
+  if (loaded.length < 1) return;
 
   normalizeTurnaroundCanvasesToFloorBaseline(canvases);
   for (const angle of loaded) {
@@ -5739,8 +5865,13 @@ export async function synthesizeGeminiMultiAngleVton(
         const cutoutComposite = await ensureTransparentCutout(
           await removeModelBackgroundToPng(rawComposite)
         );
+        const singleMap: Partial<Record<TurnaroundAngleDeg, string>> = {
+          [angleDeg]: cutoutComposite,
+        };
+        await normalizeTurnaroundDataUrlsToFloorBaseline(singleMap);
+        const normalizedSingle = singleMap[angleDeg] || cutoutComposite;
         markCacheKeyTransparentVerified(cacheKey);
-        angleSlices[angleDeg] = cutoutComposite;
+        angleSlices[angleDeg] = normalizedSingle;
         entriesToPersist.push({
           cacheKey,
           avatarConfigHash: profile.avatarConfigHash,
@@ -5749,7 +5880,7 @@ export async function synthesizeGeminiMultiAngleVton(
           angleDeg,
           weatherMood,
           effectiveWeather,
-          imageUrl: cutoutComposite,
+          imageUrl: normalizedSingle,
           sheetImageUrl: null,
           outfitLabel,
           garmentLabels,

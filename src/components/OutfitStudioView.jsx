@@ -503,7 +503,8 @@ function resolveGarmentInspectorSpecs(item, lang) {
   };
 }
 
-function mapWeatherRecToSlots(rec, allGarments, weather) {
+function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
+  const allowOutdoorUmbrella = options?.allowOutdoorUmbrella !== false;
   const byId = new Map((allGarments || []).map((g) => [Number(g.id), g]));
   const resolveItem = (raw) => {
     if (!raw) return null;
@@ -539,12 +540,13 @@ function mapWeatherRecToSlots(rec, allGarments, weather) {
   const candidateAcc = resolveItem(slotMap.accessory);
   const candidateNeck = resolveItem(slotMap.neckwear) || resolveItem(slotMap.acc_neck);
   const candidateHead = resolveItem(slotMap.headwear) || resolveItem(slotMap.acc_head);
-  const candidateUmbrella =
-    resolveItem(slotMap.acc_umbrella) ||
-    resolveItem(slotMap.umbrella) ||
-    (isRainyWeather
-      ? (allGarments || []).find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null
-      : null);
+  const candidateUmbrella = allowOutdoorUmbrella
+    ? resolveItem(slotMap.acc_umbrella) ||
+      resolveItem(slotMap.umbrella) ||
+      (isRainyWeather
+        ? (allGarments || []).find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null
+        : null)
+    : null;
 
   if (candidateAcc) {
     const mappedAccSlot = mapGarmentToDefaultSubSlot(candidateAcc);
@@ -752,7 +754,13 @@ function scoreGarmentForLookPreset(garment, styleKey, avgTemp) {
   return score;
 }
 
-function curateStyledRecommendations({ rawRecs, garments, weather, lookStyleConfig }) {
+function curateStyledRecommendations({
+  rawRecs,
+  garments,
+  weather,
+  lookStyleConfig,
+  allowOutdoorUmbrella = true,
+}) {
   const safeRaw = Array.isArray(rawRecs) ? rawRecs : [];
   const wearable = (Array.isArray(garments) ? garments : []).filter(
     (g) => isWearableStudioGarment(g) && !isSwimwearGarment(g)
@@ -862,9 +870,10 @@ function curateStyledRecommendations({ rawRecs, garments, weather, lookStyleConf
     const shoes = pickSlotBest('shoes');
     const accessory = pickSlotBest('accessory', false);
     const neckwear = avgTemp <= 9 ? pickSlotBest('acc_neck', false) : null;
-    const umbrella = isRainy
-      ? wearable.find((g) => isUmbrellaGarment(g)) || null
-      : null;
+    const umbrella =
+      isRainy && allowOutdoorUmbrella
+        ? wearable.find((g) => isUmbrellaGarment(g)) || null
+        : null;
 
     const loadoutBySlot = {
       outer: outer || null,
@@ -1020,6 +1029,11 @@ export default function OutfitStudioView({
   }, []);
 
   const freeDailyDrawAvailable = hasFreeDailyDrawRemaining(economyState, getLocalDateKey());
+  const equippedStageBg = useMemo(
+    () => getStageBackgroundById(economyState?.equippedBackgroundId),
+    [economyState?.equippedBackgroundId]
+  );
+  const isEquippedStageOutdoor = Boolean(equippedStageBg.isOutdoor);
 
   const handleSelectStageBackground = useCallback(
     (bgId) => {
@@ -1210,6 +1224,7 @@ export default function OutfitStudioView({
           garments,
           weather: effectiveW,
           lookStyleConfig,
+          allowOutdoorUmbrella: isEquippedStageOutdoor,
         });
         const shouldForceOverwriteSlots = Boolean(forceAutoApplyWeatherRef.current);
         forceAutoApplyWeatherRef.current = false;
@@ -1218,7 +1233,9 @@ export default function OutfitStudioView({
           (shouldForceOverwriteSlots || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
-          const mappedSlots = mapWeatherRecToSlots(chosenRec, garments, effectiveW);
+          const mappedSlots = mapWeatherRecToSlots(chosenRec, garments, effectiveW, {
+            allowOutdoorUmbrella: isEquippedStageOutdoor,
+          });
           if (!effectiveW.isRainy && !effectiveW.isRaining && !effectiveW.isSnowy) {
             autoEquippedUmbrellaIdRef.current = null;
           }
@@ -1260,6 +1277,7 @@ export default function OutfitStudioView({
     effectiveGender,
     garments,
     lookStyleConfig,
+    isEquippedStageOutdoor,
   ]);
 
   const weather = useMemo(() => {
@@ -1462,9 +1480,10 @@ export default function OutfitStudioView({
       next[key] = resolved && isWearableStudioGarment(resolved) ? resolved : null;
     }
 
-    // Automatically equip first available umbrella on rainy weather unless user explicitly unequipped it;
-    // strip auto-equipped rain umbrella immediately when transitioning back to dry live/clear weather.
-    if (isRainyWeatherActive && !manualRainUmbrellaCleared && !next.acc_umbrella) {
+    // Automatically equip first available umbrella ONLY on open-sky outdoor stages during rain
+    // (unless user explicitly unequipped it). Enclosed-ceiling indoor stages suppress umbrella action.
+    const shouldAutoEquipUmbrella = isRainyWeatherActive && isEquippedStageOutdoor;
+    if (shouldAutoEquipUmbrella && !manualRainUmbrellaCleared && !next.acc_umbrella) {
       const firstUmbrella =
         garments.find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null;
       if (firstUmbrella) {
@@ -1472,7 +1491,7 @@ export default function OutfitStudioView({
         autoEquippedUmbrellaIdRef.current = firstUmbrella.id;
       }
     } else if (
-      !isRainyWeatherActive &&
+      !shouldAutoEquipUmbrella &&
       next.acc_umbrella &&
       autoEquippedUmbrellaIdRef.current != null &&
       Number(next.acc_umbrella.id) === Number(autoEquippedUmbrellaIdRef.current)
@@ -1481,7 +1500,14 @@ export default function OutfitStudioView({
     }
 
     return next;
-  }, [rawSlots, hasExplicitSlotState, garments, isRainyWeatherActive, manualRainUmbrellaCleared]);
+  }, [
+    rawSlots,
+    hasExplicitSlotState,
+    garments,
+    isRainyWeatherActive,
+    isEquippedStageOutdoor,
+    manualRainUmbrellaCleared,
+  ]);
 
   const totalWearableCount = useMemo(
     () => garments.filter((g) => isWearableStudioGarment(g)).length,
@@ -1588,8 +1614,9 @@ export default function OutfitStudioView({
         garments,
         weather,
         lookStyleConfig,
+        allowOutdoorUmbrella: isEquippedStageOutdoor,
       }),
-    [weatherPayload, garments, weather, lookStyleConfig]
+    [weatherPayload, garments, weather, lookStyleConfig, isEquippedStageOutdoor]
   );
 
   const activeRecommendation =
@@ -1671,7 +1698,7 @@ export default function OutfitStudioView({
       setSlots((prev) => ({ ...prev, acc_umbrella: null }));
     }
     setScenarioKey(nextScenario);
-    if (nextScenario === 'rainy_cool') {
+    if (nextScenario === 'rainy_cool' && isEquippedStageOutdoor) {
       const firstUmbrella = garments.find(
         (g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)
       );
@@ -1746,7 +1773,11 @@ export default function OutfitStudioView({
     activeRecIdRef.current = rec.id;
     setActiveRecId(rec.id);
     setHasExplicitSlotState(true);
-    setSlots(mapWeatherRecToSlots(rec, garments, weather));
+    setSlots(
+      mapWeatherRecToSlots(rec, garments, weather, {
+        allowOutdoorUmbrella: isEquippedStageOutdoor,
+      })
+    );
   };
 
   const handleChangeLookStyle = (lookIndex, nextStyleKey) => {
@@ -1764,6 +1795,7 @@ export default function OutfitStudioView({
       garments,
       weather,
       lookStyleConfig: nextConfig,
+      allowOutdoorUmbrella: isEquippedStageOutdoor,
     });
     const targetRec = nextRecs[lookIndex];
     const prevRecAtIdx = recommendations[lookIndex];
@@ -1778,7 +1810,11 @@ export default function OutfitStudioView({
       activeRecIdRef.current = targetRec.id;
       setActiveRecId(targetRec.id);
       setHasExplicitSlotState(true);
-      setSlots(mapWeatherRecToSlots(targetRec, garments, weather));
+      setSlots(
+        mapWeatherRecToSlots(targetRec, garments, weather, {
+          allowOutdoorUmbrella: isEquippedStageOutdoor,
+        })
+      );
     }
   };
 

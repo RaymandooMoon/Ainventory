@@ -553,6 +553,8 @@ function purgeEnclosedBackdropHoles(
 
   let subjectTopY = h;
   let subjectBottomY = -1;
+  let subjectMinX = w;
+  let subjectMaxX = -1;
   for (let p = 0; p < nPx; p += 1) {
     if (bgMask[p]) continue;
     if (d[p * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
@@ -560,13 +562,17 @@ function purgeEnclosedBackdropHoles(
     const y = (p - x) / w;
     if (y < subjectTopY) subjectTopY = y;
     if (y > subjectBottomY) subjectBottomY = y;
+    if (x < subjectMinX) subjectMinX = x;
+    if (x > subjectMaxX) subjectMaxX = x;
   }
   if (subjectBottomY < subjectTopY) return 0;
   const subjectHeight = Math.max(1, subjectBottomY - subjectTopY);
+  const subjectWidth = Math.max(1, subjectMaxX - subjectMinX);
+  const subjectMidX = (subjectMinX + subjectMaxX) * 0.5;
   const subjectFootwearBandY = subjectTopY + 0.78 * subjectHeight;
   const canvasFootwearBandY = h * 0.78;
 
-  const holePixelTol = Math.min(30, Math.max(20, tolerance * 0.72));
+  const holePixelTol = Math.min(28, Math.max(18, tolerance * 0.72));
   const candidate = new Uint8Array(nPx);
   let candidateTotal = 0;
 
@@ -575,6 +581,8 @@ function purgeEnclosedBackdropHoles(
     const i = p * 4;
     if (d[i + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
 
+    const pxX = p % w;
+    const pxY = (p - pxX) / w;
     const r = d[i];
     const g = d[i + 1];
     const b = d[i + 2];
@@ -584,33 +592,58 @@ function purgeEnclosedBackdropHoles(
 
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
+    const expSat = Math.max(eR, eG, eB) - Math.min(eR, eG, eB);
+    const isChromaticGreenKey = eG > eR + 12 && eG > eB + 6;
+    const isChromaticSlateKey = eB > eR + 14 && expSat >= 24;
+    const isChromaticStudioKey =
+      isChromaticGreenKey || isChromaticSlateKey || (eR > eG + 12 && eB > eG + 12 && expSat >= 24);
 
     // Guard 1A: Protect pure highlights (white shirts, sneakers, snow crystals, eye sclera)
     // and deep darks (obsidian coats, dark hair, pupils) against mid-tone studio backdrops.
     if (expLum >= 58 && expLum <= 212) {
-      if (lum >= 224 || lum <= 44) continue;
+      if (lum >= 220 || lum <= 44) continue;
     }
 
     // Guard 1B: Protect human skin chromaticity locus (MST 1–10 warm/peach/tan/olive/melanin)
-    // whenever the studio backdrop itself is not warm skin-colored.
+    // AND warm cream/ivory/beige garments whenever the studio backdrop itself is not warm.
     const backdropIsWarm = eR > eG + 8 && eG > eB + 8;
     if (!backdropIsWarm) {
       if (r > g && g >= b - 3 && r - b >= 14 && r >= 68) continue;
       if (r > b + 16 && g > b + 8 && lum < 155) continue;
+      if (eB >= eR && r > b + 8 && g >= b + 4 && lum >= 165) continue;
     }
 
+    // Guard 1C: On non-chromatic neutral studio walls, the center chest/neck/torso core never
+    // contains hollow air holes—never mistake light blue shirts or wool blazers for backdrop!
+    const inNeutralTorsoCore =
+      !isChromaticStudioKey &&
+      pxY >= subjectTopY + 0.1 * subjectHeight &&
+      pxY <= subjectTopY + 0.54 * subjectHeight &&
+      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.38;
+    if (inNeutralTorsoCore) continue;
+
+    const inNeutralLegCleftBand =
+      !isChromaticStudioKey &&
+      pxY >= subjectTopY + 0.52 * subjectHeight &&
+      pxY <= subjectTopY + 0.96 * subjectHeight &&
+      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.18;
+
     const bgDist = Math.hypot(r - eR, g - eG, b - eB);
-    if (bgDist <= holePixelTol) {
+    const effectiveHoleTol = isChromaticStudioKey
+      ? holePixelTol
+      : inNeutralLegCleftBand
+        ? 26
+        : Math.min(11, holePixelTol);
+    if (bgDist <= effectiveHoleTol) {
       candidate[p] = 1;
       candidateTotal += 1;
       continue;
     }
 
     // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy (~10–64 lum darker)
-    // that still retain the exact studio backdrop chromaticity (both #94A3B8 slate & #5E9C7E green).
-    const pxY = Math.floor(p / w);
+    // ONLY when the backdrop is a distinct chromatic studio key (#94A3B8 slate or #5E9C7E green),
+    // never on low-saturation neutral studio walls that resemble grey blazers or powder-blue shirts.
     const inLowerBodyCleftZone = pxY >= subjectTopY + 0.42 * subjectHeight;
-    const isChromaticGreenKey = eG > eR + 12 && eG > eB + 6;
     const isShadedGreenStudioPocket =
       g >= r + 7 &&
       g >= b + 4 &&
@@ -623,9 +656,8 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
-    if (lum >= expLum - 64 && lum <= expLum + 18 && lum > 38 && lum < 220) {
+    if (isChromaticStudioKey && lum >= expLum - 64 && lum <= expLum + 14 && lum > 38 && lum < 218) {
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      const expSat = Math.max(eR, eG, eB) - Math.min(eR, eG, eB);
       const satTol = Math.max(22, Math.round(expSat * 0.48));
       if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(58, expSat + 32)) {
         const chromaDist = Math.hypot(
@@ -774,9 +806,25 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
+    const seedIsChromaticStudioKey =
+      (sEG > sER + 12 && sEG > sEB + 6) ||
+      (sEB > sER + 14 && seedExpSat >= 24) ||
+      (sER > sEG + 12 && sEB > sEG + 12 && seedExpSat >= 24);
+    const isNeutralLegCleftPocket =
+      !seedIsChromaticStudioKey &&
+      cy >= subjectTopY + 0.52 * subjectHeight &&
+      Math.abs(cx - subjectMidX) <= subjectWidth * 0.18 &&
+      area <= Math.round(nPx * 0.085);
+
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
-    const maxAllowedStepDiff = isChromaticBackdropHole ? 15.5 : 10.5;
+    const maxAllowedStepDiff = isChromaticBackdropHole
+      ? 15.5
+      : seedIsChromaticStudioKey
+        ? 10.5
+        : isNeutralLegCleftPocket
+          ? 7.5
+          : 4.5;
     if (meanStepDiff > maxAllowedStepDiff) continue;
 
     // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
@@ -792,12 +840,20 @@ function purgeEnclosedBackdropHoles(
     // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
     const maxAllowedMeanDist = isChromaticBackdropHole
       ? 68
-      : touchesOuterBg
-        ? Math.min(28, holePixelTol * 0.95)
-        : Math.min(26, holePixelTol * 0.9);
+      : isNeutralLegCleftPocket
+        ? 28
+        : !seedIsChromaticStudioKey
+          ? 11
+          : touchesOuterBg
+            ? Math.min(28, holePixelTol * 0.95)
+            : Math.min(26, holePixelTol * 0.9);
     if (meanDistToBg > maxAllowedMeanDist) continue;
 
-    const minSharpRatio = isChromaticBackdropHole ? 0.24 : 0.48;
+    const minSharpRatio = isChromaticBackdropHole
+      ? 0.24
+      : seedIsChromaticStudioKey || isNeutralLegCleftPocket
+        ? 0.45
+        : 0.62;
     const sharpRatio = perimeterFgCount > 0 ? sharpBoundaryCount / perimeterFgCount : 0;
     if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < minSharpRatio)) continue;
 
@@ -965,7 +1021,6 @@ export function cutoutStudioBackdropToRgba(
   const sobel = computeResidualSobelBarrier(resR, resG, resB, w, h);
 
   const stepLimit = Math.max(16, Math.round(tolerance * 0.58));
-  const strictBgPassDist = Math.max(8, tolerance * 0.28);
 
   const queue = new Int32Array(nPx);
   let head = 0;
@@ -981,47 +1036,82 @@ export function cutoutStudioBackdropToRgba(
       return;
     }
 
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    const eR = expRArr[p];
+    const eG = expGArr[p];
+    const eB = expBArr[p];
+    const bgSat = Math.max(eR, eG, eB) - Math.min(eR, eG, eB);
+    const isChromaticBg =
+      (eG > eR + 12 && eG > eB + 6) ||
+      (eB > eR + 14 && bgSat >= 24) ||
+      (eR > eG + 12 && eB > eG + 12 && bgSat >= 24);
+
     const rr = resR[p];
     const rg = resG[p];
     const rb = resB[p];
     const bgDist = Math.hypot(rr, rg, rb);
 
+    const py = Math.floor(p / w);
+    const inFloorShadowZone = py >= Math.round(h * 0.72);
+    const localTol = isChromaticBg
+      ? tolerance
+      : inFloorShadowZone
+        ? Math.min(tolerance, 26)
+        : Math.min(tolerance, 12);
+    const localStepLimit = isChromaticBg
+      ? stepLimit
+      : inFloorShadowZone
+        ? stepLimit
+        : Math.min(stepLimit, 8);
+    const localStrictPass = isChromaticBg
+      ? Math.max(8, tolerance * 0.28)
+      : inFloorShadowZone
+        ? 10
+        : 5;
+    const localSobelBarrier = isChromaticBg
+      ? SOBEL_EDGE_BARRIER_THRESHOLD
+      : inFloorShadowZone
+        ? 18
+        : 8;
+
     // Sobel Edge Barrier: halt immediately at crisp garment/shoe/umbrella/hat contours
-    // so white shirts (#FFFFFF), white sneakers, and dark coats are never eroded.
-    if (sobel[p] >= SOBEL_EDGE_BARRIER_THRESHOLD && bgDist > strictBgPassDist) {
+    // so white shirts (#FFFFFF), cream trousers, grey blazers, and dark coats are never eroded.
+    if (sobel[p] >= localSobelBarrier && bgDist > localStrictPass) {
       return;
     }
 
     if (fromP >= 0) {
       const stepDelta = Math.hypot(rr - resR[fromP], rg - resG[fromP], rb - resB[fromP]);
-      if (stepDelta > stepLimit) {
+      if (stepDelta > localStepLimit) {
         return;
       }
     }
 
-    if (bgDist <= tolerance) {
+    // Hue-polarity guard: on cool/neutral studio walls (eB >= eR), warm cream/ivory/camel garments
+    // (r > b + 8) must never be swallowed unless practically identical to the background.
+    if (eB >= eR && r > b + 8 && g >= b + 4 && bgDist > 11) {
+      return;
+    }
+
+    if (bgDist <= localTol) {
       bgMask[p] = 1;
       queue[tail++] = p;
       return;
     }
 
-    // Absorb subtle neutral studio cast shadows on the floor/wall when chroma matches local
-    // expectedBg(x, y) AND Sobel barrier is quiet, while strictly protecting white & black clothing.
-    if (sobel[p] < SOBEL_EDGE_BARRIER_THRESHOLD * 0.72) {
-      const r = d[i];
-      const g = d[i + 1];
-      const b = d[i + 2];
+    // Absorb subtle studio cast shadows ONLY on chromatic studio backdrops or in the lower floor zone
+    // (`py >= 0.72*h`). Never treat upper-wall neutral garments (grey blazers, blue shirts) as cast shadow!
+    if ((isChromaticBg || inFloorShadowZone) && sobel[p] < SOBEL_EDGE_BARRIER_THRESHOLD * 0.68) {
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      const eR = expRArr[p];
-      const eG = expGArr[p];
-      const eB = expBArr[p];
       const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
       const isGreenExp = eG > eR + 12 && eG > eB + 6;
-      const maxDarkShift = isGreenExp && g > r + 6 && g > b + 4 ? 68 : 52;
-      const maxChromaLimit = isGreenExp && g > r + 6 && g > b + 4 ? 0.095 : 0.068;
-      if (lum >= expLum - maxDarkShift && lum <= expLum + 16 && lum > 36 && lum < 244) {
+      const maxDarkShift = isGreenExp && g > r + 6 && g > b + 4 ? 68 : isChromaticBg ? 44 : 38;
+      const maxChromaLimit = isGreenExp && g > r + 6 && g > b + 4 ? 0.095 : isChromaticBg ? 0.068 : 0.055;
+      if (lum >= expLum - maxDarkShift && lum <= expLum + 2 && lum > 36 && lum < 244) {
         const sat = Math.max(r, g, b) - Math.min(r, g, b);
-        if (sat <= (isGreenExp ? 56 : 40)) {
+        if (sat <= (isGreenExp ? 56 : isChromaticBg ? 40 : 28)) {
           const chromaDist = Math.hypot(
             r / lum - eR / expLum,
             g / lum - eG / expLum,

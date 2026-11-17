@@ -1330,8 +1330,34 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .poll(() => capturedPortraitUrls.some((u) => Boolean(u && u.startsWith('data:image/'))))
       .toBe(true);
 
-    // (3) Select Rainy weather ('rainy_cool') -> verify visible rain layer above stage + auto-equipped umbrella!
+    // (3) Select Rainy weather ('rainy_cool') on indoor stage (c_atelier_plaster) ->
+    //     weather capsule shows rain, indoor stage renders warm ivory ambient light,
+    //     and rain particles + wet mirror + umbrella are suppressed indoors!
     await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'indoor-ivory');
+    await expect(studioCanvas.locator('[data-indoor-ivory-light="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-studio-slot="acc_umbrella"]')).toHaveCount(0);
+
+    // (4) Switch to open-sky outdoor stage (b_brick_courtyard) -> rain particles, wet mirror, and auto-umbrella activate!
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const raw = window.localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : { unlockedIds: ['c_atelier_plaster'], iBalance: 0 };
+      const unlocked = Array.from(
+        new Set([...(parsed.unlockedIds || []), 'c_atelier_plaster', 'b_brick_courtyard'])
+      );
+      const next = {
+        ...parsed,
+        unlockedIds: unlocked,
+        equippedBackgroundId: 'b_brick_courtyard',
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 'b_brick_courtyard');
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
     const rainLayer = studioCanvas.locator('[data-studio-rain-layer="true"]');
     await expect(rainLayer).toBeVisible();
     const rainZIndex = await rainLayer.evaluate((el) =>
@@ -1746,14 +1772,38 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.getByRole('button', { name: '라이트 모드로 전환' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-    // (F) Switch to `비` (`rainy_cool`) -> verify rain foreground mode + umbrella curation badge
+    // (F) Verify indoor vs open-sky outdoor weather gating on `비` (`rainy_cool`):
+    //     Indoors keeps weather readout `rain` but suppresses rain particles/wet floor + activates warm ivory ambient light
     await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
-    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'rain');
-    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'indoor-ivory');
+    await expect(studioCanvas.locator('[data-indoor-ivory-light="true"]')).toBeVisible();
+    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'clear');
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-weather-stage-badge="rain"]')).toContainText(
       '우산 코디'
     );
+
+    // Switch to open-sky outdoor stage (`a_sunset_rooftop`) -> outdoor sky lighting & weather overlays run!
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const raw = window.localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : { unlockedIds: ['c_atelier_plaster'], iBalance: 0 };
+      const unlocked = Array.from(
+        new Set([...(parsed.unlockedIds || []), 'c_atelier_plaster', 'a_sunset_rooftop'])
+      );
+      const next = {
+        ...parsed,
+        unlockedIds: unlocked,
+        equippedBackgroundId: 'a_sunset_rooftop',
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
+    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'rain');
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toBeVisible();
 
     // (G) Switch to `한파` (`winter_cold`) -> verify coldwave foreground mode + sub-zero `-10°/-4°` badge + VTON trigger
     await selectWeatherScenarioViaCapsulePopup(page, 'winter_cold');

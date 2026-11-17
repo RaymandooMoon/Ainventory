@@ -6,6 +6,9 @@ import {
 } from '../../server/vtonService.js';
 import { cutoutStudioBackdropToRgba } from '../../src/services/cutoutService.ts';
 import {
+  CANONICAL_FLOOR_BASELINE_RATIO,
+  CANONICAL_HUMAN_STATURE_RATIO,
+  CANONICAL_PORTRAIT_ASPECT_RATIO,
   CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY,
   angle360ToSignedScrollDeg,
   buildDirectClientGeminiParts,
@@ -13,6 +16,8 @@ import {
   computeCharacterIdentityAnchorKey,
   computeCoreAnatomicalCenterXInBuffer,
   computeIdealDeviceMannequinScale,
+  computeUniformStaturePlacement,
+  detectCoreHumanVerticalBoundsInBuffer,
   detectLateralFacingDirectionInBuffer,
   detectRowHeadClustersInBuffer,
   eraseSheetGridDividerLinesInBuffer,
@@ -115,7 +120,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v11-fullbody-cleanhole-360');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v12-uniform-stature-360');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
@@ -845,6 +850,158 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     fillOpaque(fullWithUmbrella, 46, 56, 121, 168);
     fillOpaque(fullWithUmbrella, 64, 74, 121, 168);
     assert.equal(inspectTurnaroundSliceIntegrityInBuffer(fullWithUmbrella, pw, ph).reason, 'ok');
+  });
+
+  it('(f) normalizes bare-head, umbrella-holding, undersized, and briefcase-carrying silhouettes to identical human body stature (0.72*H), 0.945*H floor baseline, and exact 3:4 portrait aspect ratio', () => {
+    const paintRect = (
+      buf: Uint8ClampedArray,
+      w: number,
+      x0: number,
+      x1: number,
+      y0: number,
+      y1: number
+    ) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * w + x) * 4;
+          buf[idx] = 48;
+          buf[idx + 1] = 52;
+          buf[idx + 2] = 64;
+          buf[idx + 3] = 255;
+        }
+      }
+    };
+
+    // Figure A: Large bare-head human inside a 600x800 frame (human head y=80..140, feet bottom y=739 -> height 660)
+    const wA = 600;
+    const hA = 800;
+    const figBareLarge = new Uint8ClampedArray(wA * hA * 4);
+    paintRect(figBareLarge, wA, 270, 330, 80, 140); // head
+    paintRect(figBareLarge, wA, 235, 365, 141, 460); // torso/coat (width 131)
+    paintRect(figBareLarge, wA, 255, 285, 461, 739); // left leg
+    paintRect(figBareLarge, wA, 315, 345, 461, 739); // right leg
+
+    // Figure B: Undersized umbrella-holding human inside a 540x720 frame (umbrella y=40..105, head y=118..162, feet y=577 -> human height 460)
+    const wB = 540;
+    const hB = 720;
+    const figUmbrellaSmall = new Uint8ClampedArray(wB * hB * 4);
+    paintRect(figUmbrellaSmall, wB, 267, 273, 40, 46); // finial tip
+    paintRect(figUmbrellaSmall, wB, 140, 400, 47, 105); // wide overhead umbrella dome (span 261 >= 1.38*97)
+    paintRect(figUmbrellaSmall, wB, 267, 273, 106, 117); // thin umbrella shaft above crown
+    paintRect(figUmbrellaSmall, wB, 248, 292, 118, 162); // head crown at y=118
+    paintRect(figUmbrellaSmall, wB, 222, 318, 163, 390); // torso (width 97)
+    paintRect(figUmbrellaSmall, wB, 240, 262, 391, 577); // left leg
+    paintRect(figUmbrellaSmall, wB, 278, 300, 391, 577); // right leg
+    paintRect(figUmbrellaSmall, wB, 170, 218, 290, 380); // side briefcase
+
+    const coreA = detectCoreHumanVerticalBoundsInBuffer(figBareLarge, wA, hA);
+    const coreB = detectCoreHumanVerticalBoundsInBuffer(figUmbrellaSmall, wB, hB);
+    assert.ok(coreA && coreB);
+    assert.equal(coreA.hasOverheadProp, false);
+    assert.equal(coreA.humanCrownY, 80);
+    assert.equal(coreA.footSoleY, 739);
+
+    assert.equal(coreB.hasOverheadProp, true);
+    assert.equal(coreB.humanCrownY, 118);
+    assert.equal(coreB.footSoleY, 577);
+
+    const targetH = 800;
+    const placeA = computeUniformStaturePlacement({
+      totalW: wA,
+      totalH: hA,
+      coreBounds: coreA,
+      targetH,
+    });
+    const placeB = computeUniformStaturePlacement({
+      totalW: wB,
+      totalH: hB,
+      coreBounds: coreB,
+      targetH,
+    });
+
+    // Both output onto identical locked 3:4 portrait aspect ratio (600x800)
+    assert.equal(placeA.canonicalW, Math.round(targetH * CANONICAL_PORTRAIT_ASPECT_RATIO));
+    assert.equal(placeB.canonicalW, Math.round(targetH * CANONICAL_PORTRAIT_ASPECT_RATIO));
+    assert.equal(placeA.canonicalH, targetH);
+    assert.equal(placeB.canonicalH, targetH);
+
+    // Rendered human crown-to-sole pixel heights match 0.72 * targetH identically!
+    const renderedHumanHeightA = (coreA.footSoleY - coreA.humanCrownY + 1) * placeA.scale;
+    const renderedHumanHeightB = (coreB.footSoleY - coreB.humanCrownY + 1) * placeB.scale;
+    const expectedStature = targetH * CANONICAL_HUMAN_STATURE_RATIO;
+    assert.ok(Math.abs(renderedHumanHeightA - expectedStature) <= 2);
+    assert.ok(Math.abs(renderedHumanHeightB - expectedStature) <= 2);
+    assert.ok(Math.abs(renderedHumanHeightA - renderedHumanHeightB) <= 2);
+
+    // Both foot soles align onto the exact floor baseline (0.945 * targetH) & umbrella top stays inside canvas (> 0)
+    const renderedSoleA = coreA.footSoleY * placeA.scale + placeA.dstY;
+    const renderedSoleB = coreB.footSoleY * placeB.scale + placeB.dstY;
+    const renderedUmbrellaTopB = coreB.minY * placeB.scale + placeB.dstY;
+    assert.ok(Math.abs(renderedSoleA - targetH * CANONICAL_FLOOR_BASELINE_RATIO) <= 1.5);
+    assert.ok(Math.abs(renderedSoleB - targetH * CANONICAL_FLOOR_BASELINE_RATIO) <= 1.5);
+    assert.ok(renderedUmbrellaTopB >= 8, `Umbrella finial clipped top: ${renderedUmbrellaTopB}`);
+
+    // Both anatomical centers land at dead-center X (canonicalW * 0.5)
+    const renderedCenterA = coreA.coreCx * placeA.scale + placeA.dstX;
+    const renderedCenterB = coreB.coreCx * placeB.scale + placeB.dstX;
+    assert.ok(Math.abs(renderedCenterA - placeA.canonicalW * 0.5) <= 2);
+    assert.ok(Math.abs(renderedCenterB - placeB.canonicalW * 0.5) <= 2);
+  });
+
+  it('(g) protects cool-grey blazers, powder-blue shirts, and cream trousers against low-saturation neutral studio walls while keying outer backdrop cleanly', () => {
+    const w = 160;
+    const h = 220;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    // Cool neutral studio backdrop rgb(188, 194, 201)
+    for (let i = 0; i < w * h; i += 1) {
+      rgba[i * 4] = 188;
+      rgba[i * 4 + 1] = 194;
+      rgba[i * 4 + 2] = 201;
+      rgba[i * 4 + 3] = 255;
+    }
+
+    const paintRect = (
+      x0: number,
+      x1: number,
+      y0: number,
+      y1: number,
+      r: number,
+      g: number,
+      b: number
+    ) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * w + x) * 4;
+          rgba[idx] = r;
+          rgba[idx + 1] = g;
+          rgba[idx + 2] = b;
+          rgba[idx + 3] = 255;
+        }
+      }
+    };
+
+    // Head/skin, powder-blue turtleneck, cool-grey blazer, shaded cream trousers, brown shoes
+    paintRect(68, 92, 18, 44, 212, 168, 146);
+    paintRect(66, 94, 45, 76, 156, 178, 198); // powder-blue turtleneck close to backdrop
+    paintRect(52, 65, 48, 108, 166, 170, 176); // left blazer panel close to backdrop
+    paintRect(95, 108, 48, 108, 166, 170, 176); // right blazer panel close to backdrop
+    paintRect(58, 76, 109, 184, 208, 204, 192); // shaded cream trousers left leg
+    paintRect(84, 102, 109, 184, 208, 204, 192); // shaded cream trousers right leg
+    paintRect(58, 76, 185, 196, 128, 72, 42); // brown leather shoes
+    paintRect(84, 102, 185, 196, 128, 72, 42);
+
+    cutoutStudioBackdropToRgba(rgba, w, h);
+
+    // Outer backdrop corners become transparent
+    assert.equal(rgba[(2 * w + 2) * 4 + 3], 0);
+    assert.equal(rgba[(215 * w + 155) * 4 + 3], 0);
+
+    // Blazer, powder-blue shirt, and both legs of cream trousers remain 100% opaque
+    assert.equal(rgba[(60 * w + 80) * 4 + 3], 255); // turtleneck chest
+    assert.equal(rgba[(80 * w + 58) * 4 + 3], 255); // blazer left panel
+    assert.equal(rgba[(80 * w + 102) * 4 + 3], 255); // blazer right panel
+    assert.equal(rgba[(150 * w + 67) * 4 + 3], 255); // cream trousers left leg
+    assert.equal(rgba[(150 * w + 93) * 4 + 3], 255); // cream trousers right leg
   });
 });
 
