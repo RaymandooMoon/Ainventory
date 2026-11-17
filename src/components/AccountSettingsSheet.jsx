@@ -24,6 +24,13 @@ import {
   triggerHaptic,
 } from '../utils/nativeBridge.ts';
 import { getOfflineQueueCount, purgeAllLocalUserData } from '../utils/offlineSync.ts';
+import {
+  DEFAULT_NAV_OPACITY,
+  MAX_NAV_OPACITY,
+  MIN_NAV_OPACITY,
+  getStoredNavOpacity,
+  saveStoredNavOpacity,
+} from '../utils/stageBackgroundCatalog.ts';
 import { runCircularThemeTransition } from '../utils/themeTransition.ts';
 import BrandLogo from './auth/BrandLogo.tsx';
 import { LegalDisclosureModal, ResponsiveSheetModal } from './common/AppUI.jsx';
@@ -47,6 +54,7 @@ function AccountSettingsContent({
   onOpenLegalDoc,
 }) {
   const [themePref, setThemePref] = useState(() => getStoredThemePreference());
+  const [navOpacity, setNavOpacity] = useState(() => getStoredNavOpacity());
   const [queueCount, setQueueCount] = useState(0);
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -216,6 +224,56 @@ function AccountSettingsContent({
               <span>{opt.label}</span>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Bottom Navigation Bar Transparency Control (Default 50%) */}
+      <div className="hig-sheet-card" data-nav-opacity-card="true">
+        <div className="hig-sheet-row-between" style={{ marginBottom: 8 }}>
+          <label htmlFor="settings-nav-opacity-slider" className="hig-caption" style={{ fontWeight: 620 }}>
+            {tx(lang, '하단 네비게이션 바 불투명도', 'Bottom Navigation Bar Opacity')}
+          </label>
+          <span
+            className="hig-caption tabular-nums"
+            data-nav-opacity-value="true"
+            style={{ fontWeight: 720, color: 'var(--ink-primary)' }}
+          >
+            {Math.round(navOpacity * 100)}%
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            id="settings-nav-opacity-slider"
+            data-nav-opacity-slider="true"
+            type="range"
+            min={MIN_NAV_OPACITY}
+            max={MAX_NAV_OPACITY}
+            step={0.05}
+            value={navOpacity}
+            aria-label={tx(
+              lang,
+              '하단 네비게이션 바 불투명도 조절',
+              'Adjust bottom navigation bar opacity'
+            )}
+            onChange={(e) => {
+              const nextVal = saveStoredNavOpacity(Number(e.target.value));
+              setNavOpacity(nextVal);
+            }}
+            style={{ flex: 1, accentColor: 'var(--ink-primary)', minHeight: 28 }}
+          />
+          <button
+            type="button"
+            data-nav-opacity-reset="true"
+            className="btn btn-secondary btn-sm tabular-nums"
+            disabled={Math.abs(navOpacity - DEFAULT_NAV_OPACITY) < 0.01}
+            onClick={() => {
+              triggerHaptic('selection');
+              const resetVal = saveStoredNavOpacity(DEFAULT_NAV_OPACITY);
+              setNavOpacity(resetVal);
+            }}
+          >
+            <span>{tx(lang, '기본 50%', 'Default 50%')}</span>
+          </button>
         </div>
       </div>
 

@@ -2839,6 +2839,7 @@ export function createApiRouter(options = {}) {
     const {
       city = 'seoul',
       scenario = 'live',
+      day_target = 'today',
       lat,
       lon,
       location_label,
@@ -2848,6 +2849,7 @@ export function createApiRouter(options = {}) {
       look1_style,
       look2_style,
     } = req.query;
+    const resolvedDayTarget = String(day_target) === 'tomorrow' ? 'tomorrow' : 'today';
     const styleOptions = {
       look1Style: look1_style ? String(look1_style) : undefined,
       look2Style: look2_style ? String(look2_style) : undefined,
@@ -2884,7 +2886,12 @@ export function createApiRouter(options = {}) {
         ? { lat: Number(lat), lon: Number(lon), label: location_label || '현재 위치' }
         : null;
 
-    const weather = await fetchTomorrowWeather(String(city), String(scenario), customCoords);
+    const weather = await fetchTomorrowWeather(
+      String(city),
+      String(scenario),
+      customCoords,
+      resolvedDayTarget
+    );
 
     // Requirement 8.a: If a real user's personal closet is empty, do NOT silently inject seed items!
     if (garments.length === 0) {

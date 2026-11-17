@@ -176,12 +176,13 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       .poll(async () => studioCanvas.getAttribute('data-vton-loading'), { timeout: 15000 })
       .not.toBe('true');
 
-    // 1) Split Flat-Lay button (`[data-vton-compare-btn]`) & +/- buttons are permanently removed,
-    //    and zoom badge (`[data-vton-zoom-level="true"]`) does NOT appear while fallback Flat-Lay is displayed
+    // 1) Split Flat-Lay button (`[data-vton-compare-btn]`), +/- buttons, and legacy zoom badge (`[data-vton-zoom-level="true"]`) are permanently removed;
+    //    top-left Stage Background Picker button (`[data-stage-bg-picker-btn="true"]`) occupies the left HUD slot cleanly
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('.studio-hud-left-slot [data-stage-bg-picker-btn="true"]')).toBeVisible();
 
     // 2) Worn-slots dock is unclipped, pointer-interactive, and scrollable (horizontal row on <600px flat-lay, vertical rail otherwise)
     const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
@@ -209,6 +210,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
 
     const centerAndScale = await modelStage.evaluate((stageEl) => {
       const imgEl = stageEl.querySelector('[data-ai-vton-img="true"]');
@@ -224,13 +226,13 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(centerAndScale.idealScale).toBeGreaterThanOrEqual(1);
     expect(centerAndScale.centerDeltaPx).toBeLessThanOrEqual(4);
 
-    // 4) Top HUD 1:1 Symmetry (Zoom Badge vs Icon-Only History Button) + Smooth `1.0x -> 1.2x -> 1.5x` Step + 2-Finger Pinch
-    const zoomLevelBtn = studioCanvas.locator(
-      '.studio-hud-left-slot [data-vton-zoom-level="true"]'
+    // 4) Top HUD 1:1 Symmetry (Background Picker Badge vs Icon-Only History Button) + Modal + 2-Finger Pinch Zoom
+    const bgPickerBtn = studioCanvas.locator(
+      '.studio-hud-left-slot [data-stage-bg-picker-btn="true"]'
     );
     const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
-    await expect(zoomLevelBtn).toBeVisible();
-    await expect(zoomLevelBtn).toContainText('1.0');
+    await expect(bgPickerBtn).toBeVisible();
+    await expect(bgPickerBtn).toHaveAttribute('data-stage-bg-tier', 'C');
     await expect(historyBtn).toBeVisible();
 
     const historyText = (await historyBtn.innerText()).trim();
@@ -241,80 +243,32 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(supCountNum).toBeGreaterThanOrEqual(0);
     expect(supCountNum).toBeLessThanOrEqual(99);
 
-    const [canvasBox, zoomBox, histBox] = await Promise.all([
+    const [canvasBox, bgBtnBox, histBox] = await Promise.all([
       studioCanvas.boundingBox(),
-      zoomLevelBtn.boundingBox(),
+      bgPickerBtn.boundingBox(),
       historyBtn.boundingBox(),
     ]);
     expect(canvasBox).not.toBeNull();
-    expect(zoomBox).not.toBeNull();
+    expect(bgBtnBox).not.toBeNull();
     expect(histBox).not.toBeNull();
-    expect(Math.abs(zoomBox!.width - histBox!.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(zoomBox!.height - histBox!.height)).toBeLessThanOrEqual(1);
-    const leftInset = zoomBox!.x - canvasBox!.x;
+    expect(Math.abs(bgBtnBox!.width - histBox!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(bgBtnBox!.height - histBox!.height)).toBeLessThanOrEqual(1);
+    const leftInset = bgBtnBox!.x - canvasBox!.x;
     const rightInset = canvasBox!.x + canvasBox!.width - (histBox!.x + histBox!.width);
     expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(2);
+
+    // Clicking Background Picker opens 10-stage architectural backdrop catalog modal
+    await bgPickerBtn.click();
+    const bgModal = page.locator('#stage-background-picker-modal');
+    await expect(bgModal).toBeVisible();
+    await expect(bgModal.locator('[data-bg-option-id]')).toHaveCount(10);
+    await page.keyboard.press('Escape');
+    await expect(bgModal).toHaveCount(0);
 
     const imgBox10 = await aiImg.boundingBox();
     expect(imgBox10).not.toBeNull();
 
-    // First click: smooth `1.0x -> 1.2x` (zero abrupt jump)
-    await zoomLevelBtn.click();
-    await expect(zoomLevelBtn).toContainText('1.2');
-    await expect(modelStage).toHaveAttribute('data-zoom', '1.20');
-    await expect
-      .poll(
-        async () => {
-          const box = await aiImg.boundingBox();
-          return box ? box.width / imgBox10!.width : 0;
-        },
-        { timeout: 2500 }
-      )
-      .toBeGreaterThanOrEqual(1.15);
-    const imgBox12 = await aiImg.boundingBox();
-    expect(imgBox12).not.toBeNull();
-    const scale12Ratio = imgBox12!.width / imgBox10!.width;
-    expect(scale12Ratio).toBeGreaterThanOrEqual(1.15);
-    expect(scale12Ratio).toBeLessThanOrEqual(1.25);
-
-    // Second click: `1.2x -> 1.5x`, then pan character off-center & verify ~1s auto-recenter to `0,0`
-    await zoomLevelBtn.click();
-    await expect(zoomLevelBtn).toContainText('1.5');
-    await expect(modelStage).toHaveAttribute('data-zoom', '1.50');
-
-    const stageBox = await modelStage.boundingBox();
-    expect(stageBox).toBeTruthy();
-    const cx = Math.round(stageBox!.x + stageBox!.width * 0.52);
-    const cy = Math.round(stageBox!.y + stageBox!.height * 0.56);
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.mouse.move(cx + 48, cy + 24, { steps: 4 });
-    await page.mouse.up();
-
-    await expect(modelStage).not.toHaveAttribute('data-pan-offset', '0,0');
-    // Wait ~1.1s -> character automatically aligns back to dead-center (`0,0`)!
-    await expect
-      .poll(async () => modelStage.getAttribute('data-pan-offset'), { timeout: 3000 })
-      .toBe('0,0');
-
-    // 5) Tap zoomed character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides zoom badge
-    await aiImg.click();
-    const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
-    await expect(flatLayBoard).toBeVisible();
-    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
-    const flatLayTransform = await flatLayBoard.evaluate(
-      (el) => window.getComputedStyle(el).transform
-    );
-    expect(flatLayTransform).toBe('none');
-
-    // Close Flat-Lay Lookbook -> returns to character & 3rd click cycles `1.5x -> 1.0x`
-    await flatLayBoard.locator('[data-flatlay-close-btn="true"]').click();
-    await expect(aiImg).toBeVisible();
-    await zoomLevelBtn.click();
-    await expect(zoomLevelBtn).toContainText('1.0');
-    await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
-
-    // Continuous 2-finger pinch-to-zoom (`touchstart` -> `touchmove` 1.18x -> 1.35x -> `touchend`) without discrete jumps
+    // Continuous 2-finger pinch-to-zoom (`touchstart` -> `touchmove` 1.18x -> 1.45x -> `touchend`) without discrete jumps
     const pinchZoomTrail = await modelStage.evaluate((stageEl) => {
       const rect = stageEl.getBoundingClientRect();
       const midX = rect.left + rect.width / 2;
@@ -362,16 +316,92 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       emitTwoFingerTouch('touchstart', 50); // initial distance = 100px
       emitTwoFingerTouch('touchmove', 59); // intermediate distance = 118px -> 1.18x
       const midAttr = stageEl.getAttribute('data-zoom');
-      emitTwoFingerTouch('touchmove', 67.5); // expanded distance = 135px -> 1.35x
+      emitTwoFingerTouch('touchmove', 72.5); // expanded distance = 145px -> 1.45x
       emitTwoFingerTouch('touchend', null);
       return { midAttr };
     });
-    await expect(modelStage).toHaveAttribute('data-zoom', '1.35');
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.45');
     expect(pinchZoomTrail.midAttr === '1.18' || pinchZoomTrail.midAttr === '1.00').toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const box = await aiImg.boundingBox();
+          return box ? box.width / imgBox10!.width : 0;
+        },
+        { timeout: 2500 }
+      )
+      .toBeGreaterThanOrEqual(1.3);
 
-    // Reset continuous pinch zoom back to 1.0x via single tap on zoom badge
-    await zoomLevelBtn.click();
-    await expect(zoomLevelBtn).toContainText('1.0');
+    // Pan zoomed character off-center & verify ~1s auto-recenter back to `0,0`
+    const stageBox = await modelStage.boundingBox();
+    expect(stageBox).toBeTruthy();
+    const cx = Math.round(stageBox!.x + stageBox!.width * 0.52);
+    const cy = Math.round(stageBox!.y + stageBox!.height * 0.56);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 48, cy + 24, { steps: 4 });
+    await page.mouse.up();
+
+    await expect(modelStage).not.toHaveAttribute('data-pan-offset', '0,0');
+    await expect
+      .poll(async () => modelStage.getAttribute('data-pan-offset'), { timeout: 3000 })
+      .toBe('0,0');
+
+    // 5) Tap zoomed character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides bg picker badge
+    await aiImg.click();
+    const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
+    await expect(flatLayBoard).toBeVisible();
+    await expect(studioCanvas.locator('[data-stage-bg-picker-btn="true"]')).toHaveCount(0);
+    const flatLayTransform = await flatLayBoard.evaluate(
+      (el) => window.getComputedStyle(el).transform
+    );
+    expect(flatLayTransform).toBe('none');
+
+    // Close Flat-Lay Lookbook -> restores character + bg picker button & pinch-in resets zoom cleanly back to 1.0x
+    await flatLayBoard.locator('[data-flatlay-close-btn="true"]').click();
+    await expect(aiImg).toBeVisible();
+    await expect(bgPickerBtn).toBeVisible();
+
+    await modelStage.evaluate((stageEl) => {
+      const rect = stageEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const midY = rect.top + rect.height / 2;
+      const emitTwoFingerTouch = (
+        type: 'touchstart' | 'touchmove' | 'touchend',
+        halfSpanPx: number | null
+      ) => {
+        const pts =
+          halfSpanPx === null
+            ? []
+            : [
+                { id: 1, x: midX - halfSpanPx, y: midY },
+                { id: 2, x: midX + halfSpanPx, y: midY },
+              ];
+        const touchList = pts.map(
+          (p) =>
+            new Touch({
+              identifier: p.id,
+              target: stageEl,
+              clientX: p.x,
+              clientY: p.y,
+              pageX: p.x,
+              pageY: p.y,
+            })
+        );
+        stageEl.dispatchEvent(
+          new TouchEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            touches: touchList,
+            targetTouches: touchList,
+            changedTouches: touchList,
+          })
+        );
+      };
+      emitTwoFingerTouch('touchstart', 80);
+      emitTwoFingerTouch('touchmove', 48);
+      emitTwoFingerTouch('touchend', null);
+    });
     await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
 
     // 6) Gaze-aligned angle scrollbar: left (-45) mirrors left (`scaleX(-)`), right (+45) faces right (`scaleX(+)`),
@@ -638,21 +668,29 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
 
-    // (2) `Look 1` / `Look 2` Dock Positioned Immediately Above Bottom-Right of Angle Scrollbar
+    // (2) Compact Icon `Look 1` / `Look 2` Dock Positioned at Bottom-Left Above Angle Scrollbar & Worn Dock on Right
     await expect(lookDock).toBeVisible();
     await expect(lookDock.locator('[data-weather-rec-id]')).toHaveCount(2);
     await expect(scrollDock).toBeVisible();
-    const [lookRect, scrollRect] = await Promise.all([
+    const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
+    await expect(wornDock).toBeVisible();
+    const [lookRect, scrollRect, wornRect, firstLookPillRect] = await Promise.all([
       lookDock.boundingBox(),
       scrollDock.boundingBox(),
+      wornDock.boundingBox(),
+      lookDock.locator('[data-weather-rec-id]').first().boundingBox(),
     ]);
     expect(lookRect).not.toBeNull();
     expect(scrollRect).not.toBeNull();
+    expect(wornRect).not.toBeNull();
+    expect(firstLookPillRect).not.toBeNull();
     expect(lookRect!.y + lookRect!.height).toBeLessThanOrEqual(scrollRect!.y + 6);
-    expect(
-      Math.abs(lookRect!.x + lookRect!.width - (scrollRect!.x + scrollRect!.width))
-    ).toBeLessThanOrEqual(12);
-    expect(lookRect!.x + lookRect!.width / 2).toBeGreaterThan(
+    expect(Math.abs(lookRect!.x - scrollRect!.x)).toBeLessThanOrEqual(12);
+    expect(lookRect!.x + lookRect!.width / 2).toBeLessThan(
+      stageBox!.x + stageBox!.width / 2
+    );
+    expect(firstLookPillRect!.width).toBeLessThanOrEqual(42);
+    expect(wornRect!.x + wornRect!.width / 2).toBeGreaterThan(
       stageBox!.x + stageBox!.width / 2
     );
 

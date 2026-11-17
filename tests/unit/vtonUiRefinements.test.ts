@@ -11,16 +11,19 @@ import {
   buildDirectClientGeminiParts,
   buildTurnaround3x2LayoutGuideDataUrl,
   computeCharacterIdentityAnchorKey,
+  computeCoreAnatomicalCenterXInBuffer,
   computeIdealDeviceMannequinScale,
   detectLateralFacingDirectionInBuffer,
   detectRowHeadClustersInBuffer,
   eraseSheetGridDividerLinesInBuffer,
   getShowcaseDemoSheetUrl,
+  inspectTurnaroundSliceIntegrityInBuffer,
   measureRowCenterForegroundDensityInBuffer,
   normalizeGenderNeutralProfile,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
+  resolveTurnaroundRowSplitYInBuffer,
   resolveTurnaroundSheetGridDecisionInBuffer,
   scrubCutoutArtifactsInBuffer,
   splitTouchingTwinSilhouettesInBuffer,
@@ -112,7 +115,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v9-solo-avatar-symmetric-shoes');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v11-fullbody-cleanhole-360');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
@@ -668,4 +671,180 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(rgba[(135 * w + 50) * 4 + 3], 255);
     assert.equal(rgba[(135 * w + 78) * 4 + 3], 255);
   });
+
+  it('(d) purges shaded #5E9C7E green triangles trapped between calves/ankles down to the floor (both opaque & alreadyTransparent PNGs)', () => {
+    const w = 140;
+    const h = 200;
+    const drawScene = (outerAlpha: number) => {
+      const buf = new Uint8ClampedArray(w * h * 4);
+      // Outer backdrop #5E9C7E (94, 156, 126)
+      for (let i = 0; i < w * h; i += 1) {
+        buf[i * 4] = 94;
+        buf[i * 4 + 1] = 156;
+        buf[i * 4 + 2] = 126;
+        buf[i * 4 + 3] = outerAlpha;
+      }
+      // Draw camel coat torso + long leg trousers from y=30..176 enclosing a narrow green triangle gap between calves (y=130..178)
+      for (let y = 30; y <= 176; y += 1) {
+        for (let x = 44; x <= 96; x += 1) {
+          const isCalfGap = y >= 132 && y <= 174 && x >= 66 && x <= 74;
+          const idx = (y * w + x) * 4;
+          if (isCalfGap) {
+            // Shaded sage-green studio triangle (#5E9C7E slightly darkened to ~76,136,108)
+            buf[idx] = 76;
+            buf[idx + 1] = 136;
+            buf[idx + 2] = 108;
+            buf[idx + 3] = 255;
+          } else {
+            buf[idx] = y < 126 ? 176 : 210; // camel coat upper, ivory slacks lower
+            buf[idx + 1] = y < 126 ? 138 : 204;
+            buf[idx + 2] = y < 126 ? 90 : 192;
+            buf[idx + 3] = 255;
+          }
+        }
+      }
+      // Solid floor bridge across bottom shoes so the green gap at y=165 (~0.825*h) is 100% enclosed
+      for (let y = 175; y <= 184; y += 1) {
+        for (let x = 48; x <= 92; x += 1) {
+          const idx = (y * w + x) * 4;
+          buf[idx] = 28;
+          buf[idx + 1] = 28;
+          buf[idx + 2] = 32;
+          buf[idx + 3] = 255;
+        }
+      }
+      return buf;
+    };
+
+    const freshGreenBuf = drawScene(255);
+    const freshRes = cutoutStudioBackdropToRgba(freshGreenBuf, w, h);
+    assert.ok(freshRes.purgedHolePixels > 100);
+    assert.equal(freshGreenBuf[(165 * w + 70) * 4 + 3], 0);
+    assert.equal(freshGreenBuf[(150 * w + 55) * 4 + 3], 255); // ivory trouser leg preserved
+
+    // Pre-transparent outer PNG still trapping shaded #5E9C7E leg-gap hole must ALSO purge it!
+    const preCutBuf = drawScene(0);
+    const preRes = cutoutStudioBackdropToRgba(preCutBuf, w, h);
+    assert.ok(preRes.purgedHolePixels > 100);
+    assert.equal(preCutBuf[(165 * w + 70) * 4 + 3], 0);
+    assert.equal(preCutBuf[(150 * w + 55) * 4 + 3], 255);
+
+    // Anti-aliased darker sage-green shadow band (#416E57) between boots down to floor must also purge
+    const shadedGapBuf = drawScene(255);
+    for (let y = 132; y <= 174; y += 1) {
+      for (let x = 66; x <= 74; x += 1) {
+        const idx = (y * w + x) * 4;
+        shadedGapBuf[idx] = 65;
+        shadedGapBuf[idx + 1] = 110;
+        shadedGapBuf[idx + 2] = 87;
+        shadedGapBuf[idx + 3] = 255;
+      }
+    }
+    cutoutStudioBackdropToRgba(shadedGapBuf, w, h);
+    assert.equal(shadedGapBuf[(165 * w + 70) * 4 + 3], 0);
+    assert.equal(shadedGapBuf[(150 * w + 55) * 4 + 3], 255);
+  });
+
+  it('(e) finds Row 1 / Row 2 valley above or below h/2 so Row 2 135° heads are never decapitated, detects half-body & headless slices, and centers body axis independent of asymmetric briefcase/umbrella', () => {
+    // 1. Dynamic Row Split Y when Row 1 umbrellas occupy y=10..126 and Row 2 begins early at y=136 (h=300, h/2=150 would clip Row 2 heads!)
+    const sw = 240;
+    const sh = 300;
+    const sheet = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < sw * sh; i += 1) {
+      sheet[i * 4] = 148;
+      sheet[i * 4 + 1] = 163;
+      sheet[i * 4 + 2] = 184;
+      sheet[i * 4 + 3] = 255;
+    }
+    const drawSheetFig = (x0: number, x1: number, y0: number, y1: number) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * sw + x) * 4;
+          sheet[idx] = 36;
+          sheet[idx + 1] = 42;
+          sheet[idx + 2] = 54;
+          sheet[idx + 3] = 255;
+        }
+      }
+    };
+    // Row 1 figures end at y=126; empty valley y=127..135 (mid 131); Row 2 figures start at y=136 (above h/2=150!)
+    drawSheetFig(20, 60, 12, 126);
+    drawSheetFig(100, 140, 12, 126);
+    drawSheetFig(180, 220, 12, 126);
+    drawSheetFig(20, 60, 136, 286);
+    drawSheetFig(100, 140, 136, 286);
+    drawSheetFig(180, 220, 136, 286);
+
+    const splitY = resolveTurnaroundRowSplitYInBuffer(sheet, sw, sh);
+    assert.ok(splitY >= 127 && splitY <= 135, `Expected valley splitY in [127..135], got ${splitY}`);
+
+    // 2. Full-body vs half-body & headless slice integrity
+    const pw = 120;
+    const ph = 180;
+    const fullBody = new Uint8ClampedArray(pw * ph * 4);
+    const fillOpaque = (buf: Uint8ClampedArray, x0: number, x1: number, y0: number, y1: number) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const idx = (y * pw + x) * 4;
+          buf[idx] = 50;
+          buf[idx + 1] = 50;
+          buf[idx + 2] = 60;
+          buf[idx + 3] = 255;
+        }
+      }
+    };
+    fillOpaque(fullBody, 50, 70, 14, 34); // head crown
+    fillOpaque(fullBody, 40, 80, 35, 110); // torso & coat
+    fillOpaque(fullBody, 46, 56, 111, 166); // left leg + briefcase test extension below
+    fillOpaque(fullBody, 64, 74, 111, 166); // right leg + shoe
+    assert.equal(inspectTurnaroundSliceIntegrityInBuffer(fullBody, pw, ph).reason, 'ok');
+
+    // Headless cut at y=0..2 (broad coat shoulders hitting top edge)
+    const headless = new Uint8ClampedArray(pw * ph * 4);
+    fillOpaque(headless, 34, 86, 0, 96);
+    fillOpaque(headless, 46, 56, 97, 166);
+    fillOpaque(headless, 64, 74, 97, 166);
+    const headlessRep = inspectTurnaroundSliceIntegrityInBuffer(headless, pw, ph);
+    assert.equal(headlessRep.ok, false);
+    assert.equal(headlessRep.reason, 'clipped_top');
+
+    // Floating waist-up half-body shot (~43% height ending wide across coat hem)
+    const halfBody = new Uint8ClampedArray(pw * ph * 4);
+    fillOpaque(halfBody, 48, 72, 24, 42);
+    fillOpaque(halfBody, 34, 86, 43, 98);
+    const halfBodyRep = inspectTurnaroundSliceIntegrityInBuffer(halfBody, pw, ph);
+    assert.equal(halfBodyRep.ok, false);
+    assert.equal(halfBodyRep.reason, 'half_body');
+
+    // 3. Asymmetric prop (heavy left briefcase + tilted right umbrella + long protruding 90° shoe toe)
+    // must NOT skew lower-ankle standing center X
+    const propFig = new Uint8ClampedArray(pw * ph * 4);
+    fillOpaque(propFig, 54, 66, 20, 40); // head centered at x=60
+    fillOpaque(propFig, 46, 74, 41, 128); // torso centered at x=60
+    fillOpaque(propFig, 10, 45, 76, 118); // huge left-hand briefcase pulling overall bounding box left!
+    fillOpaque(propFig, 52, 68, 129, 158); // calves/ankles anchored right around x=60
+    fillOpaque(propFig, 52, 92, 159, 168); // long right-pointing 90° dress shoe toe protruding to x=92!
+    const coreCx = computeCoreAnatomicalCenterXInBuffer(propFig, pw, ph);
+    assert.ok(Math.abs(coreCx - 60) <= 2, `Expected core standing center ~60, got ${coreCx}`);
+
+    // 4. Shifted waist-down crop (moved down to y=42..168 by floor baseline shift!) MUST still fail as clipped_top
+    const shiftedWaistCrop = new Uint8ClampedArray(pw * ph * 4);
+    fillOpaque(shiftedWaistCrop, 36, 84, 42, 110); // flat cut across waist/coat (width 49)
+    fillOpaque(shiftedWaistCrop, 46, 56, 111, 168);
+    fillOpaque(shiftedWaistCrop, 64, 74, 111, 168);
+    const shiftedRep = inspectTurnaroundSliceIntegrityInBuffer(shiftedWaistCrop, pw, ph);
+    assert.equal(shiftedRep.ok, false);
+    assert.equal(shiftedRep.reason, 'clipped_top');
+
+    // 5. Genuine full-body character holding a rounded overhead umbrella MUST pass inspectTurnaroundSliceIntegrityInBuffer
+    const fullWithUmbrella = new Uint8ClampedArray(pw * ph * 4);
+    fillOpaque(fullWithUmbrella, 58, 62, 12, 14); // narrow finial tip
+    fillOpaque(fullWithUmbrella, 24, 96, 15, 34); // dome widens sharply below tip
+    fillOpaque(fullWithUmbrella, 50, 70, 35, 52); // head
+    fillOpaque(fullWithUmbrella, 40, 80, 53, 120); // coat torso
+    fillOpaque(fullWithUmbrella, 46, 56, 121, 168);
+    fillOpaque(fullWithUmbrella, 64, 74, 121, 168);
+    assert.equal(inspectTurnaroundSliceIntegrityInBuffer(fullWithUmbrella, pw, ph).reason, 'ok');
+  });
 });
+

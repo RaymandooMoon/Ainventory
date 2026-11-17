@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   Columns3,
@@ -91,10 +92,12 @@ export default function CalendarLookbookGrid({
   cursorDate,
   selectedDate,
   todayStr,
+  attendanceDates = [],
   onNavigatePeriod,
   onJumpToday,
   onSelectDate,
 }) {
+  const attendedSet = useMemo(() => new Set(attendanceDates || []), [attendanceDates]);
   const logsByDate = useMemo(() => {
     const map = new Map();
     for (const entry of logs) {
@@ -323,17 +326,20 @@ export default function CalendarLookbookGrid({
               const ariaText = primaryEntry
                 ? `${cell.dateStr} · ${lookTitle}`
                 : `${cell.dateStr} · ${tx(lang, '착장 추가', 'Add Outfit')}`;
+              const isAttended = attendedSet.has(cell.dateStr);
 
               return (
                 <button
                   key={cell.dateStr}
                   type="button"
                   data-calendar-date={cell.dateStr}
+                  data-calendar-attended={isAttended ? 'true' : undefined}
                   style={{ '--cell-idx': idx }}
                   aria-label={ariaText}
                   className={[
                     'cal-ed-day-cell',
                     cell.entries.length > 0 ? 'has-entry' : '',
+                    isAttended ? 'is-attended' : '',
                     !cell.isCurrentMonth ? 'is-outside' : '',
                     cell.isToday ? 'is-today' : '',
                     cell.isSelected ? 'is-selected' : '',
@@ -347,6 +353,15 @@ export default function CalendarLookbookGrid({
                 >
                   <div className="cal-ed-day-top">
                     <span className="cal-ed-day-num">{cell.dayNum}</span>
+                    {isAttended && (
+                      <span
+                        className="cal-ed-attended-stamp"
+                        title={tx(lang, '출석 완료', 'Checked In')}
+                        aria-label={tx(lang, '출석 완료', 'Checked In')}
+                      >
+                        <Check size={9} strokeWidth={3} aria-hidden="true" />
+                      </span>
+                    )}
                     {weatherInfo && (
                       <span className="cal-ed-weather-pill">
                         {WeatherIcon ? <WeatherIcon size={10} /> : null}
@@ -399,15 +414,18 @@ export default function CalendarLookbookGrid({
             const WeatherIcon = weatherInfo?.IconComp || null;
             const lookTitle = primaryEntry ? resolveEntryTitle(primaryEntry, outfits, lang) : '';
             const noteText = primaryEntry ? localizeCalendarNote(primaryEntry.note, lang) : '';
+            const isAttended = attendedSet.has(cell.dateStr);
 
             return (
               <button
                 key={cell.dateStr}
                 type="button"
                 data-calendar-date={cell.dateStr}
+                data-calendar-attended={isAttended ? 'true' : undefined}
                 style={{ '--cell-idx': idx }}
                 className={[
                   'cal-ed-week-card',
+                  isAttended ? 'is-attended' : '',
                   cell.isToday ? 'is-today' : '',
                   cell.isSelected ? 'is-selected' : '',
                 ]
@@ -429,6 +447,13 @@ export default function CalendarLookbookGrid({
                       {String(cell.dayNum).padStart(2, '0')}
                     </strong>
                   </div>
+
+                  {isAttended && (
+                    <span className="cal-ed-attended-stamp is-week">
+                      <Check size={10} strokeWidth={3} aria-hidden="true" />
+                      <span>{tx(lang, '출석', 'IN')}</span>
+                    </span>
+                  )}
 
                   {primaryEntry ? (
                     <span

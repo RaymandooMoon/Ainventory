@@ -14,6 +14,7 @@ export interface StageGroundDeckProps {
   pan?: { x: number; y: number } | null;
   compareActive?: boolean;
   compareSplitPct?: number;
+  hasArchitecturalBackdrop?: boolean;
 }
 
 /**
@@ -40,6 +41,7 @@ export function StageGroundDeck({
   pan = null,
   compareActive = false,
   compareSplitPct = 50,
+  hasArchitecturalBackdrop = true,
 }: StageGroundDeckProps) {
   if (stageMode !== 'ai-vton') {
     return null;
@@ -89,9 +91,13 @@ export function StageGroundDeck({
         pointerEvents: 'none',
         WebkitMaskImage: featheredFloorMask,
         maskImage: featheredFloorMask,
-        background: isDark
-          ? 'linear-gradient(180deg, rgba(24, 30, 40, 0.28) 0%, rgba(18, 23, 31, 0.62) 48%, rgba(11, 14, 20, 0.86) 100%)'
-          : 'linear-gradient(180deg, rgba(176, 184, 194, 0.16) 0%, rgba(142, 152, 164, 0.30) 50%, rgba(112, 122, 136, 0.44) 100%)',
+        background: hasArchitecturalBackdrop
+          ? isDark
+            ? 'linear-gradient(180deg, rgba(16, 22, 32, 0.08) 0%, rgba(12, 18, 28, 0.28) 54%, rgba(8, 12, 20, 0.44) 100%)'
+            : 'linear-gradient(180deg, rgba(164, 176, 192, 0.08) 0%, rgba(126, 140, 158, 0.18) 52%, rgba(96, 110, 128, 0.28) 100%)'
+          : isDark
+            ? 'linear-gradient(180deg, rgba(24, 30, 40, 0.28) 0%, rgba(18, 23, 31, 0.62) 48%, rgba(11, 14, 20, 0.86) 100%)'
+            : 'linear-gradient(180deg, rgba(176, 184, 194, 0.16) 0%, rgba(142, 152, 164, 0.30) 50%, rgba(112, 122, 136, 0.44) 100%)',
       }
     : {
         top: '76%',
@@ -105,7 +111,7 @@ export function StageGroundDeck({
         pointerEvents: 'none',
         background: isDark
           ? 'radial-gradient(ellipse 76% 64% at 50% 38%, rgba(226, 232, 240, 0.10) 0%, rgba(148, 197, 255, 0.08) 48%, transparent 84%)'
-          : 'radial-gradient(ellipse 76% 64% at 50% 38%, rgba(255, 255, 255, 0.34) 0%, rgba(186, 214, 242, 0.12) 52%, transparent 84%)',
+          : 'radial-gradient(ellipse 76% 64% at 50% 38%, rgba(255, 255, 255, 0.28) 0%, rgba(186, 214, 242, 0.10) 52%, transparent 84%)',
       }
     : { pointerEvents: 'none' };
 
@@ -126,7 +132,7 @@ export function StageGroundDeck({
       data-ground-weather={effectiveWeather}
       data-ground-scenario={scenarioKey}
       data-ground-theme={theme}
-      className={`studio-stage-ground-deck is-${deckVariant} is-weather-${effectiveWeather} is-theme-${theme} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
+      className={`studio-stage-ground-deck is-${deckVariant} is-weather-${effectiveWeather} is-theme-${theme} ${hasArchitecturalBackdrop ? 'has-arch-backdrop' : ''} ${hasModelImage ? 'has-model' : 'is-ambient-only'} ${equippedCount > 0 ? 'has-left-rail' : ''}`}
       style={rootStyle}
     >
       {/* Seamless Curved Cyclorama Floor Deck Surface (zero hard horizon line) */}

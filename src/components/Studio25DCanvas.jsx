@@ -20,6 +20,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   viewAngleDeg,
   onViewAngleChange,
   weather,
+  dayTarget = 'today',
   scenarioKey,
   locationLabel,
   onOpenWeatherPopup,
@@ -28,6 +29,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   activeRecId = null,
   lookStyleConfig = null,
   onApplyRecommendation,
+  onAiLookGenerated,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
@@ -35,6 +37,8 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onQuickSelectPreset,
   onOpenSkinToneModal,
   onOpenBodyModal,
+  stageBackgroundId,
+  onOpenBackgroundPicker,
   lang,
   forceRefresh = false,
   forceRefreshNonce = 0,
@@ -62,6 +66,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       viewAngleDeg={viewAngleDeg}
       onViewAngleChange={onViewAngleChange}
       weather={weather}
+      dayTarget={dayTarget}
       scenarioKey={scenarioKey}
       locationLabel={locationLabel}
       onOpenWeatherPopup={onOpenWeatherPopup}
@@ -70,6 +75,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       activeRecId={activeRecId}
       lookStyleConfig={lookStyleConfig}
       onApplyRecommendation={onApplyRecommendation}
+      onAiLookGenerated={onAiLookGenerated}
       activeSlotKey={activeSlotKey}
       onSelectSlot={onSelectSlot}
       onUnequipSlot={onUnequipSlot}
@@ -77,6 +83,8 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       onQuickSelectPreset={onQuickSelectPreset}
       onOpenSkinToneModal={onOpenSkinToneModal}
       onOpenBodyModal={onOpenBodyModal}
+      stageBackgroundId={stageBackgroundId}
+      onOpenBackgroundPicker={onOpenBackgroundPicker}
       lang={lang}
       forceRefresh={forceRefresh}
       forceRefreshNonce={forceRefreshNonce}

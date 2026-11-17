@@ -480,6 +480,64 @@ function computeResidualSobelBarrier(
  *
  * Returns the number of newly purged interior background pixels (`bgMask[p]` set from `0` to `2`).
  */
+const KNOWN_STUDIO_KEY_RGBS: ReadonlyArray<readonly [number, number, number]> = [
+  [148, 163, 184], // #94A3B8 cool slate
+  [94, 156, 126],  // #5E9C7E sage matte green
+  [179, 131, 104], // #B38368 muted terracotta
+  [142, 111, 158], // #8E6F9E muted plum
+];
+
+function detectDominantInteriorStudioKeyRgb(
+  d: Uint8ClampedArray,
+  w: number,
+  h: number
+): readonly [number, number, number] {
+  const nPx = w * h;
+  const step = Math.max(1, Math.floor(Math.sqrt(nPx / 16384)));
+  let opaqueSamples = 0;
+  let greenKeySamples = 0;
+  let slateKeySamples = 0;
+  let plumKeySamples = 0;
+  let terraKeySamples = 0;
+
+  for (let y = 0; y < h; y += step) {
+    const rowOff = y * w;
+    for (let x = 0; x < w; x += step) {
+      const i = (rowOff + x) * 4;
+      if (d[i + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
+      opaqueSamples += 1;
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+
+      if (g > r + 8 && g > b + 4 && Math.hypot(r - 94, g - 156, b - 126) <= 68) {
+        greenKeySamples += 1;
+      } else if (b > r + 10 && Math.hypot(r - 148, g - 163, b - 184) <= 38) {
+        slateKeySamples += 1;
+      } else if (r > g + 8 && b > g + 8 && Math.hypot(r - 142, g - 111, b - 158) <= 32) {
+        plumKeySamples += 1;
+      } else if (r > g + 10 && g > b + 8 && Math.hypot(r - 179, g - 131, b - 104) <= 22) {
+        terraKeySamples += 1;
+      }
+    }
+  }
+
+  const maxPocketSamples = Math.max(8, Math.round(opaqueSamples * 0.24));
+  if (greenKeySamples >= 4 && greenKeySamples <= maxPocketSamples) {
+    return KNOWN_STUDIO_KEY_RGBS[1]; // #5E9C7E
+  }
+  if (slateKeySamples >= 4 && slateKeySamples <= maxPocketSamples) {
+    return KNOWN_STUDIO_KEY_RGBS[0]; // #94A3B8
+  }
+  if (plumKeySamples >= 4 && plumKeySamples <= maxPocketSamples) {
+    return KNOWN_STUDIO_KEY_RGBS[3]; // #8E6F9E
+  }
+  if (terraKeySamples >= 4 && terraKeySamples <= maxPocketSamples && greenKeySamples < 4 && slateKeySamples < 4) {
+    return KNOWN_STUDIO_KEY_RGBS[2]; // #B38368
+  }
+  return KNOWN_STUDIO_KEY_RGBS[0];
+}
+
 function purgeEnclosedBackdropHoles(
   d: Uint8ClampedArray,
   w: number,
@@ -548,18 +606,35 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
-    // Also catch enclosed gaps slightly shaded by surrounding limbs/umbrella canopy (~10–30 lum darker)
-    // that still retain the exact studio backdrop chromaticity (e.g. cool slate #94A3B8).
-    if (lum >= expLum - 32 && lum <= expLum + 12 && lum > 52 && lum < 218) {
+    // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy (~10–64 lum darker)
+    // that still retain the exact studio backdrop chromaticity (both #94A3B8 slate & #5E9C7E green).
+    const pxY = Math.floor(p / w);
+    const inLowerBodyCleftZone = pxY >= subjectTopY + 0.42 * subjectHeight;
+    const isChromaticGreenKey = eG > eR + 12 && eG > eB + 6;
+    const isShadedGreenStudioPocket =
+      g >= r + 7 &&
+      g >= b + 4 &&
+      Math.hypot(r - 94, g - 156, b - 126) <= 68 &&
+      (isChromaticGreenKey || inLowerBodyCleftZone);
+
+    if (isShadedGreenStudioPocket) {
+      candidate[p] = 1;
+      candidateTotal += 1;
+      continue;
+    }
+
+    if (lum >= expLum - 64 && lum <= expLum + 18 && lum > 38 && lum < 220) {
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
       const expSat = Math.max(eR, eG, eB) - Math.min(eR, eG, eB);
-      if (Math.abs(sat - expSat) <= 15 && sat <= 52) {
+      const satTol = Math.max(22, Math.round(expSat * 0.48));
+      if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(58, expSat + 32)) {
         const chromaDist = Math.hypot(
           r / lum - eR / expLum,
           g / lum - eG / expLum,
           b / lum - eB / expLum
         );
-        if (chromaDist <= 0.052) {
+        const maxChromaDist = isChromaticGreenKey && g > r + 7 && g > b + 4 ? 0.118 : 0.068;
+        if (chromaDist <= maxChromaDist) {
           candidate[p] = 1;
           candidateTotal += 1;
         }
@@ -643,7 +718,7 @@ function purgeEnclosedBackdropHoles(
           if (d[qi + 3] > 80) {
             perimeterFgCount += 1;
             const edgeJump = Math.hypot(pr - d[qi], pg - d[qi + 1], pb - d[qi + 2]);
-            if (edgeJump >= 19) {
+            if (edgeJump >= 12) {
               sharpBoundaryCount += 1;
             }
           }
@@ -655,40 +730,76 @@ function purgeEnclosedBackdropHoles(
     if (area < minArea || area > maxArea) continue;
 
     const meanR = sumR / area;
+    const meanG = sumG / area;
     const meanB = sumB / area;
     const meanDistToBg = sumDistToBg / area;
     const meanStepDiff = stepPairs > 0 ? sumStepDiff / stepPairs : 0;
-
-    // Guard 5 (Footwear Zone Guard): Protect shoe tongues, grey suede panels, laces, and white
-    // sneaker interiors in the lower shoe/foot band from ever being punched out as backdrop holes.
+    const meanSat = Math.max(meanR, meanG, meanB) - Math.min(meanR, meanG, meanB);
+    const seedIdxP = compQueue[0];
+    const sER = expRArr[seedIdxP];
+    const sEG = expGArr[seedIdxP];
+    const sEB = expBArr[seedIdxP];
+    const sExpLum = Math.max(1, 0.299 * sER + 0.587 * sEG + 0.114 * sEB);
+    const meanLum = Math.max(1, 0.299 * meanR + 0.587 * meanG + 0.114 * meanB);
+    const meanChromaDist = Math.hypot(
+      meanR / meanLum - sER / sExpLum,
+      meanG / meanLum - sEG / sExpLum,
+      meanB / meanLum - sEB / sExpLum
+    );
+    const seedExpSat = Math.max(sER, sEG, sEB) - Math.min(sER, sEG, sEB);
     const cx = (minX + maxX) * 0.5;
     const cy = (minY + maxY) * 0.5;
-    if (cy >= subjectFootwearBandY || cy >= canvasFootwearBandY) {
+    const isLowerLegCleftPocket =
+      cy >= subjectTopY + 0.42 * subjectHeight &&
+      area <= Math.round(nPx * 0.085) &&
+      meanG >= meanR + 7 &&
+      meanG >= meanB + 4 &&
+      Math.hypot(meanR - 94, meanG - 156, meanB - 126) <= 68;
+    const isChromaticBackdropHole =
+      isLowerLegCleftPocket ||
+      (seedExpSat >= 42 &&
+        meanSat >= 28 &&
+        meanG >= meanR + 7 &&
+        meanG >= meanB + 4 &&
+        meanChromaDist <= 0.115 &&
+        meanLum >= sExpLum - 64 &&
+        meanLum <= sExpLum + 26);
+
+    // Guard 5 (Footwear Zone Guard): Protect shoe tongues, grey suede panels, laces, and white
+    // sneaker interiors in the lower shoe/foot band from ever being punched out as backdrop holes,
+    // EXCEPT: (a) vertical leg/calf gaps extending above 0.82*subjectHeight, or (b) unmistakable
+    // chromatic studio key islands (e.g. #5E9C7E green triangles trapped between calves/ankles).
+    const startsInShoeBand = minY >= subjectTopY + 0.82 * subjectHeight;
+    if ((cy >= subjectFootwearBandY || cy >= canvasFootwearBandY) && !isChromaticBackdropHole && startsInShoeBand) {
       continue;
     }
 
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
-    if (meanStepDiff > 10.5) continue;
+    const maxAllowedStepDiff = isChromaticBackdropHole ? 15.5 : 10.5;
+    if (meanStepDiff > maxAllowedStepDiff) continue;
 
     // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
-    // unless the island unmistakably matches cool slate studio key (#94A3B8: B - R >= 20).
+    // unless the island unmistakably matches studio key (#94A3B8 slate or #5E9C7E green).
     const inFaceCore =
       cx >= w * 0.36 && cx <= w * 0.64 && cy >= h * 0.08 && cy <= h * 0.27;
     if (inFaceCore && area < Math.max(18, Math.round(nPx * 0.0018))) {
-      if (!(meanB - meanR >= 20 && meanDistToBg <= 15)) {
+      if (!((meanB - meanR >= 20 && meanDistToBg <= 15) || isChromaticBackdropHole)) {
         continue;
       }
     }
 
     // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
-    const maxAllowedMeanDist = touchesOuterBg
-      ? Math.min(28, holePixelTol * 0.95)
-      : Math.min(24, holePixelTol * 0.85);
+    const maxAllowedMeanDist = isChromaticBackdropHole
+      ? 68
+      : touchesOuterBg
+        ? Math.min(28, holePixelTol * 0.95)
+        : Math.min(26, holePixelTol * 0.9);
     if (meanDistToBg > maxAllowedMeanDist) continue;
 
+    const minSharpRatio = isChromaticBackdropHole ? 0.24 : 0.48;
     const sharpRatio = perimeterFgCount > 0 ? sharpBoundaryCount / perimeterFgCount : 0;
-    if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < 0.56)) continue;
+    if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < minSharpRatio)) continue;
 
     for (let idx = 0; idx < area; idx += 1) {
       bgMask[compQueue[idx]] = 2;
@@ -728,12 +839,14 @@ export function cutoutStudioBackdropToRgba(
 
   if (bgModel.alreadyTransparent) {
     // Outer perimeter is already transparent (e.g., cached V3 slice or @imgly output),
-    // but enclosed interior #94A3B8 studio backdrop islands may still be trapped inside!
+    // but enclosed interior studio backdrop islands (#94A3B8, #5E9C7E, etc.) may still be trapped inside!
+    const [keyR, keyG, keyB] = detectDominantInteriorStudioKeyRgb(d, w, h);
+    const isGreenKey = keyG > keyR + 14 && keyG > keyB + 8;
     let transparentCount = 0;
     for (let p = 0; p < nPx; p += 1) {
-      expRArr[p] = 148;
-      expGArr[p] = 163;
-      expBArr[p] = 184;
+      expRArr[p] = keyR;
+      expGArr[p] = keyG;
+      expBArr[p] = keyB;
       if (d[p * 4 + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) {
         bgMask[p] = 1;
         transparentCount += 1;
@@ -789,7 +902,7 @@ export function cutoutStudioBackdropToRgba(
         const g = d[i + 1];
         const b = d[i + 2];
         const origAlpha = d[i + 3] / 255;
-        const dist = Math.hypot(r - 148, g - 163, b - 184);
+        const dist = Math.hypot(r - keyR, g - keyG, b - keyB);
         if (dist < outerTol) {
           const ramp = clamp01((dist - innerTol) / Math.max(1, outerTol - innerTol));
           const alpha = clamp01(origAlpha * Math.max(0.2, ramp * 0.9));
@@ -801,11 +914,19 @@ export function cutoutStudioBackdropToRgba(
             d[i + 3] = 0;
           } else {
             const safeAlpha = Math.max(0.15, alpha);
-            d[i] = clampByte((r - (1 - safeAlpha) * 148) / safeAlpha);
-            d[i + 1] = clampByte((g - (1 - safeAlpha) * 163) / safeAlpha);
-            d[i + 2] = clampByte((b - (1 - safeAlpha) * 184) / safeAlpha);
+            const uR = clampByte((r - (1 - safeAlpha) * keyR) / safeAlpha);
+            let uG = clampByte((g - (1 - safeAlpha) * keyG) / safeAlpha);
+            const uB = clampByte((b - (1 - safeAlpha) * keyB) / safeAlpha);
+            if (isGreenKey && uG > Math.max(uR, uB) + 4) {
+              uG = Math.max(uR, uB) + 4;
+            }
+            d[i] = uR;
+            d[i + 1] = uG;
+            d[i + 2] = uB;
             d[i + 3] = outAlpha;
           }
+        } else if (isGreenKey && g > Math.max(r, b) + 6) {
+          d[i + 1] = Math.round((Math.max(r, b) + g) * 0.5);
         }
       }
     }
@@ -895,15 +1016,18 @@ export function cutoutStudioBackdropToRgba(
       const eG = expGArr[p];
       const eB = expBArr[p];
       const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
-      if (lum >= expLum - 52 && lum <= expLum + 16 && lum > 40 && lum < 244) {
+      const isGreenExp = eG > eR + 12 && eG > eB + 6;
+      const maxDarkShift = isGreenExp && g > r + 6 && g > b + 4 ? 68 : 52;
+      const maxChromaLimit = isGreenExp && g > r + 6 && g > b + 4 ? 0.095 : 0.068;
+      if (lum >= expLum - maxDarkShift && lum <= expLum + 16 && lum > 36 && lum < 244) {
         const sat = Math.max(r, g, b) - Math.min(r, g, b);
-        if (sat <= 40) {
+        if (sat <= (isGreenExp ? 56 : 40)) {
           const chromaDist = Math.hypot(
             r / lum - eR / expLum,
             g / lum - eG / expLum,
             b / lum - eB / expLum
           );
-          if (chromaDist <= 0.068) {
+          if (chromaDist <= maxChromaLimit) {
             bgMask[p] = 1;
             queue[tail++] = p;
           }
@@ -1085,11 +1209,20 @@ export function cutoutStudioBackdropToRgba(
 
       // Pass 4: Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
       // Removes mixed studio backdrop color from 1–2px outer & inner hole boundary pixels
+      const isGreenStudioBg = cBgG > cBgR + 12 && cBgG > cBgB + 6;
       if (alpha < 0.985) {
         const safeAlpha = Math.max(0.14, alpha);
-        d[i] = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
-        d[i + 1] = clampByte((g - (1 - safeAlpha) * cBgG) / safeAlpha);
-        d[i + 2] = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
+        const uR = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
+        let uG = clampByte((g - (1 - safeAlpha) * cBgG) / safeAlpha);
+        const uB = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
+        if (isGreenStudioBg && uG > Math.max(uR, uB) + 2) {
+          uG = Math.max(uR, uB) + 2;
+        }
+        d[i] = uR;
+        d[i + 1] = uG;
+        d[i + 2] = uB;
+      } else if (isGreenStudioBg && g > Math.max(r, b) + 4) {
+        d[i + 1] = Math.max(r, b) + 2;
       }
       d[i + 3] = outAlpha;
     }

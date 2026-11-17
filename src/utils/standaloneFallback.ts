@@ -396,9 +396,9 @@ interface StandaloneScenarioSpec {
 
 const LIVE_WEATHER_SCENARIO: StandaloneScenarioSpec = {
   key: 'live',
-  label: '실시간 내일 예보',
+  label: '실시간 오늘 예보',
   cityName: '서울',
-  condition: '내일 예보 · 구름 조금',
+  condition: '오늘 예보 · 구름 조금',
   weatherCode: 2,
   tempMin: 9,
   tempMax: 18,
@@ -407,7 +407,7 @@ const LIVE_WEATHER_SCENARIO: StandaloneScenarioSpec = {
   humidity: 50,
   recommendedMotion: 'idle',
   weatherTip:
-    '내일 아침 9°C · 낮 18°C로 활동하기 쾌적한 구름 조금 예보입니다. 탈착하기 좋은 가벼운 아우터 레이어드를 추천합니다.',
+    '오늘 아침 9°C · 낮 18°C로 활동하기 쾌적한 구름 조금 예보입니다. 탈착하기 좋은 가벼운 아우터 레이어드를 추천합니다.',
 };
 
 type LookStylePresetKey =
@@ -1175,13 +1175,24 @@ export async function handleStandaloneApiFallback(
     method === 'GET'
   ) {
     const rawScKey = params.get('scenario') || 'live';
+    const dayTarget = params.get('day_target') === 'tomorrow' ? 'tomorrow' : 'today';
     const normalizedScKey = rawScKey === 'mild_spring' ? 'warm_spring' : rawScKey;
-    const spec =
+    const baseSpec =
       normalizedScKey === 'live'
         ? LIVE_WEATHER_SCENARIO
         : (Object.hasOwn(WEATHER_SCENARIOS, normalizedScKey)
             ? WEATHER_SCENARIOS[normalizedScKey]
             : null) || LIVE_WEATHER_SCENARIO;
+    const spec =
+      normalizedScKey === 'live' && dayTarget === 'tomorrow'
+        ? {
+            ...baseSpec,
+            label: '실시간 내일 예보',
+            condition: '내일 예보 · 구름 조금',
+            weatherTip:
+              '내일 아침 9°C · 낮 18°C로 활동하기 쾌적한 구름 조금 예보입니다. 탈착하기 좋은 가벼운 아우터 레이어드를 추천합니다.',
+          }
+        : baseSpec;
 
     const look1Style = resolveLookStylePresetKey(params.get('look1_style'), 'business_casual');
     const look2Style = resolveLookStylePresetKey(params.get('look2_style'), 'comfortable_casual');
@@ -1204,7 +1215,11 @@ export async function handleStandaloneApiFallback(
       isRainy ||
       isWindy;
     const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const targetDateStr = new Date(
+      Date.now() + (dayTarget === 'tomorrow' ? 86400000 : 0)
+    )
+      .toISOString()
+      .slice(0, 10);
 
     const openSummerShoes = new Set(['flip_flops', 'slides', 'sandals']);
     const scoreStandaloneItem = (item: GarmentRecord, presetKey: LookStylePresetKey): number => {
@@ -1357,7 +1372,8 @@ export async function handleStandaloneApiFallback(
       weather: {
         cityKey,
         cityName: resolvedCityName,
-        date: tomorrow,
+        date: targetDateStr,
+        dayTarget,
         scenarioKey: normalizedScKey,
         condition: spec.condition,
         weatherCode: spec.weatherCode,
@@ -1391,7 +1407,7 @@ export async function handleStandaloneApiFallback(
       },
       cities: CITY_COORDS.map((c) => ({ key: c.key, name: c.name })),
       scenarios: [
-        { key: LIVE_WEATHER_SCENARIO.key, label: LIVE_WEATHER_SCENARIO.label },
+        { key: LIVE_WEATHER_SCENARIO.key, label: dayTarget === 'tomorrow' ? '실시간 내일 예보' : '실시간 오늘 예보' },
         ...Object.values(WEATHER_SCENARIOS).map((s) => ({
           key: s.key,
           label: s.label,

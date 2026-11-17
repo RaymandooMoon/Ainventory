@@ -86,6 +86,140 @@
   );
 }
 
+/* 1B. Live Samsung Galaxy Weather Time-of-Day Sky Gradient & Horizon Glow */
+.atelier-backdrop-tod-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  transition: background 0.6s ease, opacity 0.6s ease;
+  opacity: 0;
+}
+
+.atelier-stage-backdrop.is-tod-sunrise .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 206, 186, 0.72) 0%,
+    rgba(253, 174, 138, 0.46) 44%,
+    rgba(254, 240, 220, 0.18) 82%,
+    transparent 100%
+  );
+}
+
+.atelier-stage-backdrop.is-dark.is-tod-sunrise .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(104, 62, 78, 0.54) 0%,
+    rgba(154, 92, 70, 0.34) 46%,
+    rgba(32, 24, 38, 0.16) 86%,
+    transparent 100%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-day .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(164, 214, 255, 0.66) 0%,
+    rgba(216, 239, 255, 0.38) 46%,
+    rgba(248, 251, 255, 0.12) 86%,
+    transparent 100%
+  );
+}
+
+.atelier-stage-backdrop.is-dark.is-tod-day .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(44, 88, 142, 0.36) 0%,
+    rgba(30, 58, 96, 0.18) 48%,
+    transparent 88%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-sunset .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(116, 102, 186, 0.46) 0%,
+    rgba(248, 148, 108, 0.56) 42%,
+    rgba(253, 208, 158, 0.3) 76%,
+    transparent 100%
+  );
+}
+
+.atelier-stage-backdrop.is-dark.is-tod-sunset .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(62, 46, 104, 0.62) 0%,
+    rgba(176, 80, 62, 0.44) 46%,
+    rgba(48, 26, 38, 0.22) 84%,
+    transparent 100%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-night .atelier-cyclorama-wall-cove {
+  background: linear-gradient(
+    180deg,
+    #060b18 0%,
+    #0b1326 48%,
+    #111c33 74%,
+    #091020 90%,
+    #0c1426 100%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-night .atelier-backdrop-tod-sky {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 64% 42% at 76% 15%, rgba(203, 213, 225, 0.26) 0%, transparent 70%),
+    linear-gradient(
+      180deg,
+      rgba(6, 11, 24, 0.88) 0%,
+      rgba(15, 23, 42, 0.72) 56%,
+      rgba(11, 17, 32, 0.58) 100%
+    );
+}
+
+.atelier-stage-backdrop.is-tod-night .atelier-cyclorama-center-halo {
+  background: radial-gradient(
+    ellipse 64% 52% at 50% 43%,
+    rgba(148, 163, 184, 0.16) 0%,
+    rgba(51, 65, 85, 0.08) 52%,
+    transparent 82%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-night.is-tod-night .atelier-backdrop-skylight-wash {
+  background: radial-gradient(
+    ellipse 84% 54% at 50% 10%,
+    rgba(56, 78, 118, 0.22) 0%,
+    rgba(15, 23, 42, 0.12) 54%,
+    transparent 86%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-sunset.is-tod-sunset .atelier-backdrop-skylight-wash {
+  background: radial-gradient(
+    ellipse 84% 54% at 32% 14%,
+    rgba(255, 194, 134, 0.32) 0%,
+    rgba(244, 132, 108, 0.14) 56%,
+    transparent 86%
+  );
+}
+
+.atelier-stage-backdrop.is-tod-night.is-tod-night .atelier-backdrop-atmospheric-haze {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(15, 23, 42, 0.36) 50%,
+    transparent 100%
+  );
+}
+
 /* 2. Soft studio softbox back-separation halo behind mannequin torso/shoulders */
 .atelier-cyclorama-center-halo {
   position: absolute;
@@ -94,8 +228,8 @@
   pointer-events: none !important;
   background: radial-gradient(
     ellipse 64% 52% at 50% 43%,
-    rgba(255, 255, 255, 0.86) 0%,
-    rgba(255, 255, 255, 0.34) 48%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.24) 48%,
     transparent 80%
   );
 }
@@ -107,6 +241,77 @@
     rgba(42, 44, 50, 0.18) 50%,
     transparent 80%
   );
+}
+
+/* 0B. Equipped 3:4 Architectural Studio / Terrace Photograph */
+.atelier-stage-environment-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  z-index: 0;
+  pointer-events: none !important;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: filter 0.55s ease, opacity 0.45s ease;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-day .atelier-stage-environment-photo {
+  filter: brightness(1.01) contrast(1.01);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-dark.is-tod-day .atelier-stage-environment-photo {
+  filter: brightness(0.72) contrast(1.05);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-sunrise .atelier-stage-environment-photo {
+  filter: brightness(0.97) saturate(1.05) sepia(0.08);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-dark.is-tod-sunrise .atelier-stage-environment-photo {
+  filter: brightness(0.68) saturate(1.04) sepia(0.09);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-sunset .atelier-stage-environment-photo {
+  filter: brightness(0.92) saturate(1.08) sepia(0.14);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-dark.is-tod-sunset .atelier-stage-environment-photo {
+  filter: brightness(0.64) saturate(1.06) sepia(0.14);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-night .atelier-stage-environment-photo {
+  filter: brightness(0.56) contrast(1.06) saturate(0.92);
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-day .atelier-backdrop-tod-sky {
+  opacity: 0.24;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-sunrise .atelier-backdrop-tod-sky {
+  opacity: 0.4;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-sunset .atelier-backdrop-tod-sky {
+  opacity: 0.46;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop.is-tod-night .atelier-backdrop-tod-sky {
+  opacity: 0.58;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop .atelier-cyclorama-center-halo {
+  opacity: 0.26;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop .atelier-backdrop-atmospheric-haze {
+  opacity: 0.28;
+}
+
+.atelier-stage-backdrop.has-arch-backdrop .atelier-backdrop-skylight-wash {
+  opacity: 0.42;
 }
 
 /* 3. Subtle curved architectural cyclorama side depth (soft room framing without corner seams) */
@@ -684,7 +889,8 @@
 .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
   .studio-2d-model-stage.is-flatlay-stage
   .studio-2d-layer {
-  padding-inline: 58px;
+  padding-left: 14px;
+  padding-right: 58px;
 }
 
 /* Character-tap unfolded Flat-Lay Lookbook overlay spans full stage width without left-rail squeeze */
@@ -700,6 +906,7 @@
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-worn-slots-dock,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .atelier-stage-left-controls,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-vton-zoom-level='true'],
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-stage-bg-picker-btn='true'],
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-weather-look-dock {
   opacity: 0;
   pointer-events: none;
@@ -871,8 +1078,10 @@
   width: 100%;
   height: 100%;
   border-radius: 20px;
-  background-color: var(--bg-elevated);
+  background-color: rgba(255, 255, 255, 0.72);
   background-image: var(--squircle-illumination);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--squircle-border);
   box-shadow: var(--squircle-inset-rim), var(--elevation-xs);
   box-sizing: border-box;
@@ -881,10 +1090,22 @@
   transform-origin: 50% 50%;
 }
 
-[data-theme='dark'] .editorial-flatlay-board {
-  background-color: #0a0a0c;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.028) 0%, rgba(255, 255, 255, 0) 48%);
-  border-color: rgba(245, 245, 247, 0.12);
+[data-theme='dark'] .editorial-flatlay-board,
+.studio-2d-vton-viewer[data-time-of-day='night'] .editorial-flatlay-board {
+  background-color: rgba(11, 17, 32, 0.68);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 48%);
+  border-color: rgba(245, 245, 247, 0.14);
+  color: #f1f5f9;
+}
+
+.studio-2d-vton-viewer[data-time-of-day='night'] .editorial-flatlay-kicker,
+.studio-2d-vton-viewer[data-time-of-day='night'] .editorial-flatlay-meta,
+.studio-2d-vton-viewer[data-time-of-day='night'] .editorial-flatlay-empty-hint {
+  color: rgba(226, 232, 240, 0.84);
+}
+
+.studio-2d-vton-viewer[data-time-of-day='night'] .editorial-flatlay-empty-title {
+  color: #f8fafc;
 }
 
 .editorial-flatlay-header {
@@ -2142,8 +2363,9 @@ html[data-vibrancy-fallback='solid']
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
-/* Mirror-Twin Smoked-Glass Squircle Badges: Top-Left [1.0×] & Top-Right [History⁰] */
+/* Mirror-Twin Smoked-Glass Squircle Badges: Top-Left [BG Picker] & Top-Right [History⁰] */
 .studio-2d-vton-viewer [data-vton-zoom-level='true'],
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true'],
 .studio-2d-vton-viewer [data-vton-history-btn='true'] {
   pointer-events: auto !important;
   cursor: pointer;
@@ -2177,7 +2399,17 @@ html[data-vibrancy-fallback='solid']
     box-shadow 0.18s var(--spring-ease);
 }
 
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true'].is-tier-s {
+  border-color: rgba(212, 175, 55, 0.72);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25), 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true'].is-tier-a {
+  border-color: rgba(214, 224, 240, 0.56);
+}
+
 .studio-2d-vton-viewer [data-vton-zoom-level='true']::after,
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true']::after,
 .studio-2d-vton-viewer [data-vton-history-btn='true']::after {
   content: '';
   position: absolute;
@@ -2185,17 +2417,20 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-2d-vton-viewer [data-vton-zoom-level='true']:hover:not(.is-zoomed),
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true']:hover,
 .studio-2d-vton-viewer [data-vton-history-btn='true']:hover:not(.is-active) {
   background: rgba(34, 33, 30, 0.84);
   border-color: rgba(255, 255, 255, 0.36);
 }
 
 .studio-2d-vton-viewer [data-vton-zoom-level='true']:active,
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true']:active,
 .studio-2d-vton-viewer [data-vton-history-btn='true']:active {
   transform: scale(0.95);
 }
 
 .studio-2d-vton-viewer [data-vton-zoom-level='true']:focus-visible,
+.studio-2d-vton-viewer [data-stage-bg-picker-btn='true']:focus-visible,
 .studio-2d-vton-viewer [data-vton-history-btn='true']:focus-visible {
   border-color: rgba(255, 255, 255, 0.54);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 4px 14px rgba(0, 0, 0, 0.2);
@@ -2589,7 +2824,8 @@ html[data-vibrancy-fallback='solid']
   pointer-events: auto;
   top: 56px;
   bottom: 64px;
-  left: 12px;
+  left: auto;
+  right: 10px;
   z-index: 64;
   max-height: none;
   overflow-y: auto;
@@ -2598,11 +2834,12 @@ html[data-vibrancy-fallback='solid']
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   scrollbar-width: none;
-  padding: 6px 7px 10px 2px;
+  padding: 6px 7px 10px 6px;
   box-sizing: border-box;
 }
 
-.studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
+.studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock,
+.studio-2d-vton-viewer[data-has-bg-picker='false'] .studio-worn-slots-dock {
   top: 56px;
 }
 
@@ -2637,11 +2874,12 @@ html[data-vibrancy-fallback='solid']
 }
 
 /* ==========================================================================
-   5A. BOTTOM-RIGHT AI WEATHER LOOK 1 / LOOK 2 DOCK (RIGHT ABOVE ANGLE SCROLLBAR)
+   5A. BOTTOM-LEFT COMPACT ICON AI LOOK 1 / LOOK 2 DOCK (ABOVE ANGLE SCROLLBAR)
    ========================================================================== */
 .studio-weather-look-dock {
   position: absolute;
-  right: 12px;
+  left: 12px;
+  right: auto;
   bottom: 58px;
   z-index: 56;
   padding: 3px;
@@ -2673,16 +2911,30 @@ html[data-vibrancy-fallback='solid']
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.18s var(--spring-ease), color 0.18s var(--spring-ease),
     border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease);
 }
 
+.studio-weather-look-pill.is-icon-compact {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  gap: 2px;
+}
+
+.studio-weather-look-num {
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .studio-weather-look-pill::after {
   content: '';
   position: absolute;
-  inset: -8px -2px;
+  inset: -8px -4px;
 }
 
 .studio-weather-look-pill:focus-visible {
@@ -3046,6 +3298,7 @@ html[data-vibrancy-fallback='solid']
   }
 
   .studio-2d-vton-viewer [data-vton-zoom-level='true'],
+  .studio-2d-vton-viewer [data-stage-bg-picker-btn='true'],
   .studio-2d-vton-viewer [data-vton-history-btn='true'] {
     font-size: 0.61rem;
   }
@@ -3115,13 +3368,15 @@ html[data-vibrancy-fallback='solid']
   .studio-2d-vton-viewer .studio-worn-slots-dock {
     top: 52px;
     bottom: 60px;
-    left: 10px;
+    left: auto;
+    right: 8px;
     max-height: none;
     gap: 7px;
-    padding: 6px 7px 10px 2px;
+    padding: 6px 7px 10px 6px;
   }
 
-  .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock {
+  .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock,
+  .studio-2d-vton-viewer[data-has-bg-picker='false'] .studio-worn-slots-dock {
     top: 52px;
   }
 
@@ -3141,7 +3396,8 @@ html[data-vibrancy-fallback='solid']
   .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
-    padding-inline: 52px;
+    padding-left: 10px;
+    padding-right: 54px;
   }
 
   .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-layer {
@@ -3149,7 +3405,8 @@ html[data-vibrancy-fallback='solid']
   }
 
   .studio-weather-look-dock {
-    right: 10px;
+    left: 10px;
+    right: auto;
     bottom: 54px;
     padding: 2.5px;
     gap: 2.5px;
@@ -3160,6 +3417,12 @@ html[data-vibrancy-fallback='solid']
     height: 26px;
     padding: 0 10px;
     font-size: 0.64rem;
+  }
+
+  .studio-weather-look-pill.is-icon-compact {
+    width: 31px;
+    min-width: 31px;
+    padding: 0;
   }
 
   .studio-angle-scroll-dock {
@@ -3455,6 +3718,30 @@ html[data-vibrancy-fallback='solid']
   );
 }
 
+/* Transparent architectural floor override so 3:4 room floors remain crisp beneath shoes */
+.studio-stage-ground-deck.has-arch-backdrop.is-runway-studio .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(18, 18, 22, 0.04) 58%,
+    rgba(18, 18, 22, 0.14) 100%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.has-arch-backdrop.is-runway-studio .studio-ground-plane-surface,
+.studio-stage-ground-deck.has-arch-backdrop.is-runway-studio.is-theme-dark .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(8, 8, 12, 0.14) 58%,
+    rgba(4, 4, 8, 0.28) 100%
+  );
+}
+
+.studio-stage-ground-deck.has-arch-backdrop.is-runway-studio .studio-ground-perspective-sheen {
+  background: none;
+}
+
 /* 10B. Rain Mode: Wet Slate Cyclorama Floor + Real-Time Mirror Reflection */
 .studio-stage-ground-deck.is-wet-pavement .studio-ground-plane-surface {
   background: linear-gradient(
@@ -3608,6 +3895,25 @@ html[data-vibrancy-fallback='solid']
     rgba(42, 54, 72, 0.62) 0%,
     rgba(26, 36, 52, 0.84) 48%,
     rgba(14, 21, 36, 0.95) 100%
+  );
+}
+
+.studio-stage-ground-deck.has-arch-backdrop.is-frost-snow .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(228, 242, 254, 0.16) 0%,
+    rgba(240, 249, 255, 0.34) 52%,
+    rgba(224, 238, 254, 0.44) 100%
+  );
+}
+
+[data-theme='dark'] .studio-stage-ground-deck.has-arch-backdrop.is-frost-snow .studio-ground-plane-surface,
+.studio-stage-ground-deck.has-arch-backdrop.is-frost-snow.is-theme-dark .studio-ground-plane-surface {
+  background: linear-gradient(
+    180deg,
+    rgba(42, 54, 72, 0.18) 0%,
+    rgba(26, 36, 52, 0.36) 52%,
+    rgba(14, 21, 36, 0.48) 100%
   );
 }
 
@@ -3939,6 +4245,7 @@ html[data-vibrancy-fallback='solid']
   }
 
   .hig-outfits-screen [data-vton-zoom-level='true'],
+  .hig-outfits-screen [data-stage-bg-picker-btn='true'],
   .hig-outfits-screen [data-vton-history-btn='true'] {
     position: relative;
     width: 100%;
@@ -3958,6 +4265,7 @@ html[data-vibrancy-fallback='solid']
   }
 
   .hig-outfits-screen [data-vton-zoom-level='true'],
+  .hig-outfits-screen [data-stage-bg-picker-btn='true'],
   .hig-outfits-screen [data-vton-history-btn='true'] {
     position: relative;
     width: 100%;
@@ -3969,6 +4277,7 @@ html[data-vibrancy-fallback='solid']
 }
 
 .hig-outfits-screen [data-vton-zoom-level='true']::after,
+.hig-outfits-screen [data-stage-bg-picker-btn='true']::after,
 .hig-outfits-screen [data-vton-history-btn='true']::after {
   content: '';
   position: absolute;
@@ -4485,51 +4794,49 @@ html[data-vibrancy-fallback='solid']
 @media (max-width: 599px) {
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slots-dock {
-    top: 48px;
-    bottom: auto;
-    left: 10px;
-    right: 10px;
+    top: 52px;
+    bottom: 86px;
+    left: auto;
+    right: 8px;
     width: auto;
-    max-width: calc(100% - 20px);
-    height: 50px;
-    max-height: 50px;
-    flex-direction: row;
+    max-height: none;
+    flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    gap: 7px;
-    padding: 5px 4px 3px 2px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    touch-action: pan-x;
+    gap: 6px;
+    padding: 6px 7px 10px 6px;
+    overflow-x: visible;
+    overflow-y: auto;
+    touch-action: pan-y;
   }
 
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slot-chip {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
   }
 
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-vton-staged-bar,
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-vton-pinned-banner {
-    top: 102px;
+    top: 52px;
     left: 10px;
-    right: 10px;
-    max-width: calc(100% - 20px);
+    right: 58px;
+    max-width: calc(100% - 68px);
     z-index: 65;
   }
 
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
-    padding: 102px 10px 60px;
+    padding: 52px 54px 60px 10px;
   }
 
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
-    padding-top: 142px;
+    padding-top: 94px;
   }
 
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
@@ -4546,7 +4853,8 @@ html[data-vibrancy-fallback='solid']
 
   .studio-2d-vton-viewer[data-has-status-capsule='true'][data-angle-dock-visible='false']
     .studio-weather-look-dock {
-    right: 10px;
+    left: 10px;
+    right: auto;
     bottom: 92px;
   }
 
@@ -4609,6 +4917,835 @@ html[data-vibrancy-fallback='solid']
     height: 30px;
   }
 }
+
+/* ==========================================================================
+   15. TODAY / TOMORROW FORECAST TOGGLE & AFTER-8PM TOMORROW OUTFIT MODAL
+   ========================================================================== */
+.weather-popup-day-toggle-row {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.weather-popup-day-btn {
+  min-height: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-secondary);
+  font-size: 0.78rem;
+  font-weight: 680;
+  cursor: pointer;
+  transition: background-color 0.16s var(--spring-ease), color 0.16s var(--spring-ease);
+}
+
+.weather-popup-day-btn.is-active {
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-weight: 760;
+}
+
+.tomorrow-prompt-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 0 6px;
+}
+
+.tomorrow-prompt-modal-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.tomorrow-prompt-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tomorrow-prompt-btn {
+  min-height: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  font-size: 0.84rem;
+  font-weight: 720;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.14s var(--spring-ease), opacity 0.16s var(--spring-ease);
+}
+
+.tomorrow-prompt-btn:active {
+  transform: scale(0.97);
+}
+
+.tomorrow-prompt-btn.is-secondary {
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border-hover);
+  color: var(--ink-primary);
+}
+
+.tomorrow-prompt-btn.is-primary {
+  background: var(--accent-mono);
+  border: 1px solid transparent;
+  color: var(--accent-mono-ink);
+}
+
+/* ==========================================================================
+   16. STORE HEADER BUTTON, FREE DRAW SPEECH BUBBLE, BACKGROUND PICKER & GACHA
+   ========================================================================== */
+.atelier-top-bar {
+  position: relative;
+  z-index: 80;
+}
+
+.store-header-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.store-header-btn {
+  position: relative;
+}
+
+.store-header-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px var(--bg-surface);
+  pointer-events: none;
+}
+
+.store-free-draw-bubble {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  padding: 5px 11px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 1px solid color-mix(in srgb, var(--ink-primary) 16%, transparent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+  font-size: 0.69rem;
+  font-weight: 720;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  animation: storeBubblePulse 2.4s ease-in-out infinite;
+}
+
+.store-free-draw-bubble::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  background: var(--accent-mono);
+  border-top: 1px solid color-mix(in srgb, var(--ink-primary) 16%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--ink-primary) 16%, transparent);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.store-free-draw-bubble:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+@keyframes storeBubblePulse {
+  0%,
+  100% {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24), 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+  50% {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28), 0 0 0 3px rgba(245, 158, 11, 0.22);
+  }
+}
+
+@media (max-width: 599px) {
+  .hig-outfits-screen:has([data-store-free-draw-bubble='true']) .studio-25d-layout {
+    margin-top: 12px;
+  }
+
+  .hig-outfits-screen:has([data-store-free-draw-bubble='true']) .studio-stage-top-hud {
+    top: 14px;
+  }
+
+  .store-free-draw-bubble {
+    top: calc(100% + 1px);
+    min-height: 22px;
+    font-size: 0.61rem;
+    padding: 3px 9px;
+    left: auto;
+    right: -74px;
+    transform: none;
+    animation: storeBubblePulse 2.4s ease-in-out infinite;
+  }
+
+  .store-free-draw-bubble:active {
+    transform: scale(0.96);
+  }
+
+  .store-free-draw-bubble::before {
+    left: auto;
+    right: 88px;
+    width: 8px;
+    height: 8px;
+    top: -4px;
+    transform: rotate(45deg);
+  }
+}
+
+/* Tier Badges (S / A / B / C) — Monolithic Luxury Editorial Contrast */
+.stage-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.stage-tier-badge.is-large {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+}
+
+.stage-tier-badge.is-tier-s {
+  background: linear-gradient(135deg, #f6d365 0%, #c89d28 100%);
+  color: #161208;
+  box-shadow: 0 2px 10px rgba(212, 175, 55, 0.36);
+}
+
+.stage-tier-badge.is-tier-a {
+  background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
+  color: #0f172a;
+}
+
+.stage-tier-badge.is-tier-b {
+  background: #27272a;
+  color: #f4f4f5;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.stage-tier-badge.is-tier-c {
+  background: var(--bg-elevated);
+  color: var(--ink-secondary);
+  border: 1px solid var(--squircle-border-hover);
+}
+
+/* Background Picker Modal */
+.stage-bg-picker-root,
+.stage-store-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 2px 0 8px;
+}
+
+.stage-bg-picker-summary,
+.stage-store-balance-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  flex-wrap: wrap;
+}
+
+.stage-bg-picker-summary-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stage-bg-picker-current-name {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 740;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-bg-picker-current-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+}
+
+.stage-bg-tier-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.stage-bg-tier-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stage-bg-tier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-bg-tier-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-bg-tier-label {
+  font-size: 0.82rem;
+  font-weight: 740;
+  color: var(--ink-primary);
+}
+
+.stage-bg-tier-count {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+}
+
+.stage-bg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 599px) {
+  .stage-bg-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+.stage-bg-card {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--squircle-border);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s var(--spring-ease), border-color 0.16s var(--spring-ease),
+    box-shadow 0.16s var(--spring-ease);
+}
+
+.stage-bg-card:hover {
+  border-color: var(--squircle-border-hover);
+}
+
+.stage-bg-card:active {
+  transform: scale(0.98);
+}
+
+.stage-bg-card.is-equipped {
+  border-color: var(--ink-primary);
+  box-shadow: 0 0 0 1.5px var(--ink-primary), var(--elevation-sm);
+}
+
+.stage-bg-card.is-locked .stage-bg-card-media img {
+  filter: grayscale(0.35) brightness(0.66);
+}
+
+.stage-bg-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.stage-bg-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stage-bg-card-media .stage-tier-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+}
+
+.stage-bg-equipped-pill {
+  position: absolute;
+  bottom: 7px;
+  right: 7px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-size: 0.64rem;
+  font-weight: 760;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.stage-bg-equipped-pill.is-inline {
+  position: static;
+}
+
+.stage-bg-lock-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 8, 10, 0.42);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 720;
+  backdrop-filter: blur(2px);
+}
+
+.stage-bg-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 4px 3px;
+}
+
+.stage-bg-card-title {
+  font-size: 0.78rem;
+  font-weight: 720;
+  color: var(--ink-primary);
+  line-height: 1.25;
+}
+
+.stage-bg-card-sub {
+  font-size: 0.66rem;
+  color: var(--ink-secondary);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.stage-bg-card-cta {
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-weight: 720;
+  color: var(--ink-primary);
+}
+
+/* Store Modal & Tiered Gacha FX */
+.stage-store-balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage-currency-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 0.96rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stage-store-balance-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.stage-store-balance-label {
+  font-size: 0.66rem;
+  color: var(--ink-secondary);
+  font-weight: 650;
+}
+
+.stage-store-balance-value {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--ink-primary);
+}
+
+.stage-store-owned-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+  font-weight: 640;
+  flex-wrap: wrap;
+}
+
+.stage-store-hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 18px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--squircle-border-hover);
+  box-shadow: var(--elevation-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stage-store-hero-card.has-reveal.is-tier-s {
+  border-color: rgba(212, 175, 55, 0.86);
+  box-shadow: 0 0 28px rgba(212, 175, 55, 0.28), var(--elevation-md);
+}
+
+.stage-store-hero-card.has-reveal.is-tier-a {
+  border-color: rgba(148, 163, 184, 0.86);
+  box-shadow: 0 0 24px rgba(148, 163, 184, 0.24), var(--elevation-md);
+}
+
+.stage-store-hero-card.has-reveal.is-tier-b {
+  border-color: rgba(96, 165, 250, 0.6);
+}
+
+.stage-store-fx-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+}
+
+.stage-store-hero-card.is-animating-s .stage-store-fx-overlay {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 42%,
+    rgba(255, 232, 148, 0.86) 0%,
+    rgba(212, 175, 55, 0.44) 44%,
+    transparent 74%
+  );
+  animation: gachaTierSBurst 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.stage-store-hero-card.is-animating-a .stage-store-fx-overlay {
+  opacity: 1;
+  background: linear-gradient(
+    115deg,
+    transparent 12%,
+    rgba(226, 232, 240, 0.68) 48%,
+    rgba(191, 219, 254, 0.42) 56%,
+    transparent 88%
+  );
+  animation: gachaTierASheen 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.stage-store-hero-card.is-animating-b .stage-store-fx-overlay {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(147, 197, 253, 0.44) 0%,
+    rgba(59, 130, 246, 0.16) 54%,
+    transparent 78%
+  );
+  animation: gachaTierBPulse 0.9s ease-out forwards;
+}
+
+.stage-store-hero-card.is-animating-c .stage-store-fx-overlay {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.42) 0%,
+    transparent 72%
+  );
+  animation: gachaTierCFlash 0.72s ease-out forwards;
+}
+
+@keyframes gachaTierSBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) rotate(-8deg);
+  }
+  28% {
+    opacity: 1;
+    transform: scale(1.16) rotate(4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45) rotate(0deg);
+  }
+}
+
+@keyframes gachaTierASheen {
+  0% {
+    opacity: 0;
+    transform: translateX(-80%);
+  }
+  35% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(85%);
+  }
+}
+
+@keyframes gachaTierBPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  35% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+
+@keyframes gachaTierCFlash {
+  0% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.stage-store-idle-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stage-store-idle-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stage-store-idle-copy strong {
+  display: block;
+  font-size: 0.94rem;
+  font-weight: 760;
+  color: var(--ink-primary);
+}
+
+.stage-store-idle-copy p {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.stage-store-reveal-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stage-store-reveal-preview {
+  position: relative;
+  width: 108px;
+  flex: 0 0 108px;
+  aspect-ratio: 3 / 4;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1.5px solid var(--squircle-border-hover);
+}
+
+.stage-store-reveal-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stage-store-reveal-preview .stage-tier-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+}
+
+.stage-store-reveal-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stage-store-reveal-kicker {
+  font-size: 0.66rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  color: var(--ink-secondary);
+}
+
+.stage-store-reveal-title {
+  font-size: 1rem;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.stage-store-reveal-sub {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ink-secondary);
+  line-height: 1.38;
+}
+
+.stage-store-reveal-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.stage-store-refund-pill,
+.stage-store-new-pill {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 720;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--accent-soft-bg);
+  color: var(--ink-primary);
+  border: 1px solid var(--squircle-border);
+}
+
+@media (max-width: 480px) {
+  .stage-store-reveal-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stage-store-reveal-preview {
+    width: 100%;
+    max-width: 140px;
+  }
+}
+
+.stage-store-action-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--squircle-border);
+}
+
+.stage-store-odds-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stage-odds-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 660;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  color: var(--ink-secondary);
+}
+
+.stage-odds-chip strong {
+  color: var(--ink-primary);
+}
+
+.stage-store-cta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stage-store-draw-btn {
+  flex: 1;
+  min-height: 46px;
+}
+
+.stage-store-catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--ink-secondary);
+}
+
+.stage-store-catalog-head strong {
+  color: var(--ink-primary);
+  font-weight: 760;
+}
+
 
 
 

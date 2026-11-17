@@ -18,8 +18,10 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v9-solo-avatar-symmetric-shoes';
+export const CUTOUT_PIPELINE_VERSION = 'v11-fullbody-cleanhole-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v10-fullbody-cleanhole-360',
+  'v9-solo-avatar-symmetric-shoes',
   'v8-consistent-avatar-3x2-cyclorama',
   'v7-clean-6angle-cyclorama-360',
   'v6-true-3x2-rear-quarter-360',
@@ -509,7 +511,7 @@ export function buildCutoutBackdropDirective(
 export const CUTOUT_BACKDROP_DIRECTIVE = buildCutoutBackdropDirective(CUTOUT_STAGE_BACKDROP_HEX);
 
 export const HORIZONTAL_FULL_BODY_CAMERA_LOCK =
-  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 135°, 180°, 225°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER cropped at ankles/calves). Mandatory full-body shot from head to toe, filling ~82–85% of vertical frame height, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.';
+  'CAMERA HEIGHT & FULL-BODY FRAMING LOCK (IDENTICAL ACROSS 0°, 45°, 90°, 135°, 180°, 225°): Eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking down, NEVER low-angle, NEVER half-body, NEVER waist-up, NEVER thigh-up, NEVER cropped at torso, hips, knees, ankles, or crown). Mandatory 100% full-body shot from TOP OF HEAD (or overhead umbrella dome) DOWN TO FULL SHOE SOLES, filling ~78–83% of cell height, both shoes completely visible on the floor with 8–10% bottom margin and 8–12% top headroom, consistent stature across all angles.';
 
 export const CANONICAL_ANGLE_PROMPT_DIRECTIVES: Record<
   0 | 45 | 90 | 135 | 180 | 225,
@@ -544,12 +546,12 @@ export function buildTurnaround3x2SheetAngleDirectives(): string {
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
     `  * ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
     `  * ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
-    '  * STRICT 3x2 UNDIVIDED GRID TOPOLOGY (ZERO GRID/DIVIDER LINES): Arrange STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL on ONE continuous undivided solid background — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames!',
-    '  * TOP ROW = FRONT & PURE 90° SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
+    '  * STRICT 3x2 UNDIVIDED GRID TOPOLOGY (ZERO GRID/DIVIDER LINES): Arrange STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL on ONE continuous undivided solid background — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames! Keep an empty >=6% solid horizontal gutter between Row 1 shoe soles (ending around y=46%) and Row 2 head crowns (starting around y=54%) so Row 1 and Row 2 NEVER touch or overlap vertically.',
+    '  * TOP ROW (y=2%..46%) = FRONT & PURE 90° SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
     `    - [Top-Left (Row 1, Col 1) — 0° Direct Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
     `    - [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
     `    - [Top-Right (Row 1, Col 3) — 90° PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->, 1 EYE, SIDE NOSE, ZERO BACK VENT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
-    '  * BOTTOM ROW = REAR-QUARTER & SYMMETRICAL BACK VIEWS:',
+    '  * BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (FULL HEAD TO SHOES INSIDE ROW 2):',
     `    - [Bottom-Left (Row 2, Col 1) — 135° Back-Right Rear-Quarter (FACING AWAY RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[135]}`,
     `    - [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Straight Back (ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
     `    - [Bottom-Right (Row 2, Col 3) — 225° Back-Left Rear-Quarter (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[225]}`,

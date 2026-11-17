@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Plus } from 'lucide-react';
+import { Check, Coins, Download, Flame, Plus } from 'lucide-react';
 import { apiFetch, getStoredToken } from '../utils/api.ts';
 import {
   localizeApiMessage,
@@ -8,6 +8,15 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  ATTENDANCE_DAILY_REWARD_I,
+  ATTENDANCE_STREAK_30_BONUS_I,
+  ATTENDANCE_STREAK_7_BONUS_I,
+  ECONOMY_STATE_EVENT,
+  claimDailyAttendance,
+  loadStoredEconomyState,
+  saveStoredEconomyState,
+} from '../utils/stageBackgroundCatalog.ts';
 import CalendarLookbookGrid from './calendar/CalendarLookbookGrid.jsx';
 import {
   formatIsoDateLocal,
@@ -79,17 +88,69 @@ export default function CalendarView({
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [drawerEntryId, setDrawerEntryId] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
 
   const reloadSeqRef = useRef(0);
   const icsRevokeTimerRef = useRef(null);
 
   useEffect(() => {
+    const syncEconomy = (ev) => {
+      if (ev?.detail) {
+        setEconomyState(ev.detail);
+      } else {
+        setEconomyState(loadStoredEconomyState());
+      }
+    };
+    window.addEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+    window.addEventListener('storage', syncEconomy);
     return () => {
+      window.removeEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+      window.removeEventListener('storage', syncEconomy);
       if (icsRevokeTimerRef.current) {
         clearTimeout(icsRevokeTimerRef.current);
       }
     };
   }, []);
+
+  const attendanceClaimedToday = economyState.attendanceDates.includes(todayStr);
+
+  const handleClaimAttendance = useCallback(() => {
+    const res = claimDailyAttendance(economyState, todayStr);
+    if (!res.ok) {
+      triggerHaptic('warning');
+      showToast?.(tx(lang, '오늘의 출석 체크를 이미 완료했습니다.', 'Already checked in today.'));
+      return;
+    }
+    const saved = saveStoredEconomyState(res.nextState);
+    setEconomyState(saved);
+    triggerHaptic(res.streak7BonusI > 0 || res.streak30BonusI > 0 ? 'heavy' : 'medium');
+
+    if (res.streak30BonusI > 0) {
+      showToast?.(
+        tx(
+          lang,
+          `30일 연속 출석 달성! +${res.totalAwardedI} i (기본 ${res.dailyRewardI} + 한달 보너스 ${res.streak30BonusI})`,
+          `30-Day Streak! +${res.totalAwardedI} i awarded`
+        )
+      );
+    } else if (res.streak7BonusI > 0) {
+      showToast?.(
+        tx(
+          lang,
+          `7일 연속 출석 달성! +${res.totalAwardedI} i (기본 ${res.dailyRewardI} + 주간 보너스 ${res.streak7BonusI})`,
+          `7-Day Streak! +${res.totalAwardedI} i awarded`
+        )
+      );
+    } else {
+      showToast?.(
+        tx(
+          lang,
+          `출석 체크 완료! +${res.totalAwardedI} i 지급 (연속 ${res.newStreak}일)`,
+          `Check-In Complete! +${res.totalAwardedI} i (Streak ${res.newStreak}d)`
+        )
+      );
+    }
+  }, [economyState, todayStr, lang, showToast]);
 
   const fetchCalendarData = useCallback(async () => {
     const q = encodeURIComponent(activeCloset || 'sample');
@@ -377,6 +438,61 @@ export default function CalendarView({
         </span>
       </div>
 
+      {/* Daily Attendance Check-In & i Coin Economy Banner */}
+      <section
+        className="cal-ed-attendance-card"
+        data-calendar-attendance-card="true"
+        aria-label={tx(lang, '출석 체크 리워드', 'Daily Attendance Rewards')}
+      >
+        <div className="cal-ed-attendance-info">
+          <div className="cal-ed-attendance-top-row">
+            <span className="cal-ed-attendance-balance tabular-nums" data-calendar-i-balance="true">
+              <Coins size={14} aria-hidden="true" />
+              <strong>{economyState.iBalance} i</strong>
+            </span>
+            <span className="cal-ed-attendance-streak tabular-nums" data-calendar-streak="true">
+              <Flame size={13} aria-hidden="true" />
+              <span>
+                {tx(lang, `연속 ${economyState.attendanceStreak}일`, `${economyState.attendanceStreak}d Streak`)}
+              </span>
+            </span>
+          </div>
+          <div className="cal-ed-attendance-milestones tabular-nums">
+            <span>
+              {tx(
+                lang,
+                `매일 +${ATTENDANCE_DAILY_REWARD_I} i · 7일 연속 +${ATTENDANCE_STREAK_7_BONUS_I} i · 30일 연속 +${ATTENDANCE_STREAK_30_BONUS_I} i`,
+                `Daily +${ATTENDANCE_DAILY_REWARD_I} i · 7d +${ATTENDANCE_STREAK_7_BONUS_I} i · 30d +${ATTENDANCE_STREAK_30_BONUS_I} i`
+              )}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          data-calendar-attendance-btn="true"
+          disabled={attendanceClaimedToday}
+          className={`cal-ed-attendance-btn tabular-nums ${
+            attendanceClaimedToday ? 'is-claimed' : ''
+          }`.trim()}
+          onClick={handleClaimAttendance}
+        >
+          {attendanceClaimedToday ? (
+            <>
+              <Check size={15} strokeWidth={2.6} aria-hidden="true" />
+              <span>{tx(lang, '오늘 출석 완료', 'Checked In')}</span>
+            </>
+          ) : (
+            <>
+              <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
+              <span>
+                {tx(lang, `출석 체크 (+${ATTENDANCE_DAILY_REWARD_I} i)`, `Check In (+${ATTENDANCE_DAILY_REWARD_I} i)`)}
+              </span>
+            </>
+          )}
+        </button>
+      </section>
+
       {loading ? (
         <div className="hig-wardrobe-grid">
           {[1, 2, 3, 4].map((k) => (
@@ -394,6 +510,7 @@ export default function CalendarView({
           cursorDate={cursorDate}
           selectedDate={selectedDate}
           todayStr={todayStr}
+          attendanceDates={economyState.attendanceDates}
           onNavigatePeriod={handleNavigatePeriod}
           onJumpToday={handleJumpToday}
           onSelectDate={handleSelectDate}

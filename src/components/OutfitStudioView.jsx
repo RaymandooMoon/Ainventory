@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Search,
   Snowflake,
+  Store,
   Sun,
   Trash2,
   Wind,
@@ -55,8 +56,27 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  getLocalDateKey,
+  incrementTomorrowPromptShownCount,
+  markTodayOutfitGenerated,
+  readTodayOutfitGeneratedDate,
+  readTomorrowPromptShownCount,
+  shouldShowTomorrowOutfitPrompt,
+} from '../utils/tomorrowPromptPolicy.ts';
+import {
+  ECONOMY_STATE_EVENT,
+  equipStageBackground,
+  getStageBackgroundById,
+  hasFreeDailyDrawRemaining,
+  loadStoredEconomyState,
+  rollBackgroundGacha,
+  saveStoredEconomyState,
+} from '../utils/stageBackgroundCatalog.ts';
+import BackgroundPickerModal from './BackgroundPickerModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import OutfitCategorySilhouetteRail from './OutfitCategorySilhouetteRail.tsx';
+import StoreModal from './StoreModal.jsx';
 import Studio25DCanvas from './Studio25DCanvas.jsx';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
@@ -911,6 +931,7 @@ export default function OutfitStudioView({
   preEquippedGarment,
   onConsumePreEquipped,
   onClosetUpdated,
+  onNavigateTab,
   showToast,
 }) {
   const {
@@ -963,16 +984,71 @@ export default function OutfitStudioView({
 
   const [cityKey, setCityKey] = useState('seoul');
   const [scenarioKey, setScenarioKey] = useState('live');
+  const [dayTarget, setDayTarget] = useState('today');
   const [gpsCoords, setGpsCoords] = useState(null);
   const [locatingGps, setLocatingGps] = useState(false);
   const [weatherPayload, setWeatherPayload] = useState(null);
   const [activeRecId, setActiveRecId] = useState(null);
   const activeRecIdRef = useRef(null);
   const [loggingTomorrow, setLoggingTomorrow] = useState(false);
+  const [showTomorrowPrompt, setShowTomorrowPrompt] = useState(false);
+  const tomorrowPromptEvaluatedRef = useRef(false);
+  const autoEquippedUmbrellaIdRef = useRef(null);
 
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [outfitTitle, setOutfitTitle] = useState('');
   const [savingOutfit, setSavingOutfit] = useState(false);
+
+  const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
+  const [bgPickerOpen, setBgPickerOpen] = useState(false);
+  const [storeOpen, setStoreOpen] = useState(false);
+
+  useEffect(() => {
+    const syncEconomy = (ev) => {
+      if (ev?.detail) {
+        setEconomyState(ev.detail);
+      } else {
+        setEconomyState(loadStoredEconomyState());
+      }
+    };
+    window.addEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+    window.addEventListener('storage', syncEconomy);
+    return () => {
+      window.removeEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+      window.removeEventListener('storage', syncEconomy);
+    };
+  }, []);
+
+  const freeDailyDrawAvailable = hasFreeDailyDrawRemaining(economyState, getLocalDateKey());
+
+  const handleSelectStageBackground = useCallback(
+    (bgId) => {
+      const next = equipStageBackground(bgId);
+      setEconomyState(next);
+      const item = getStageBackgroundById(bgId);
+      showToast?.(
+        tx(
+          lang,
+          `${item.tier}등급 '${item.nameKo}' 배경 적용됨`,
+          `Equipped ${item.tier} · ${item.nameEn}`
+        )
+      );
+    },
+    [lang, showToast]
+  );
+
+  const handlePerformStoreDraw = useCallback(() => {
+    const outcome = rollBackgroundGacha(economyState, getLocalDateKey());
+    if (outcome.ok) {
+      const saved = saveStoredEconomyState(outcome.nextState);
+      setEconomyState(saved);
+    }
+    return {
+      ...outcome,
+      drawnItem: outcome.background,
+      isDuplicate: !outcome.isNewUnlock,
+    };
+  }, [economyState]);
 
   const activeParentTab = useMemo(
     () => resolveParentFittingTab(activeSlotKey),
@@ -1046,14 +1122,53 @@ export default function OutfitStudioView({
       : 'male';
 
   useEffect(() => {
+    const evaluatePrompt = () => {
+      if (tomorrowPromptEvaluatedRef.current) return;
+      const winHour =
+        typeof window !== 'undefined' && typeof window.__AINVENTORY_HOUR_OVERRIDE__ === 'number'
+          ? window.__AINVENTORY_HOUR_OVERRIDE__
+          : null;
+      const now = new Date();
+      const currentHour = winHour != null && Number.isFinite(winHour) ? winHour : now.getHours();
+      const shouldShow = shouldShowTomorrowOutfitPrompt({
+        hour: currentHour,
+        todayDateStr: getLocalDateKey(now),
+        lastGeneratedDateStr: readTodayOutfitGeneratedDate(),
+        shownCount: readTomorrowPromptShownCount(),
+        dayTarget,
+      });
+      if (shouldShow) {
+        tomorrowPromptEvaluatedRef.current = true;
+        incrementTomorrowPromptShownCount();
+        setShowTomorrowPrompt(true);
+      }
+    };
+
+    evaluatePrompt();
+    const handleFocusOrVis = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        evaluatePrompt();
+      }
+    };
+    window.addEventListener('focus', handleFocusOrVis);
+    document.addEventListener('visibilitychange', handleFocusOrVis);
+    return () => {
+      window.removeEventListener('focus', handleFocusOrVis);
+      document.removeEventListener('visibilitychange', handleFocusOrVis);
+    };
+  }, [dayTarget]);
+
+  const weatherSnapshotScopeKey = `${scenarioKey}:${dayTarget}`;
+
+  useEffect(() => {
     if (Object.values(rawSlots).some(Boolean)) {
-      scenarioSnapshotsRef.current[scenarioKey] = {
+      scenarioSnapshotsRef.current[weatherSnapshotScopeKey] = {
         rawSlots,
         activeRecId,
         manualRainUmbrellaCleared,
       };
     }
-  }, [scenarioKey, rawSlots, activeRecId, manualRainUmbrellaCleared]);
+  }, [weatherSnapshotScopeKey, rawSlots, activeRecId, manualRainUmbrellaCleared]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1061,6 +1176,7 @@ export default function OutfitStudioView({
       closet: activeCloset || 'sample',
       city: cityKey,
       scenario: scenarioKey,
+      day_target: dayTarget,
       gender: effectiveGender,
       look1_style: lookStyleConfig.look1Style,
       look2_style: lookStyleConfig.look2Style,
@@ -1085,6 +1201,7 @@ export default function OutfitStudioView({
         const effectiveW = {
           ...(data?.weather || {}),
           scenarioKey,
+          dayTarget,
           ...(scenarioKey === 'rainy_cool' ? { isRainy: true, isRaining: true } : {}),
           ...(scenarioKey === 'snowy_winter' ? { isSnowy: true } : {}),
         };
@@ -1101,11 +1218,15 @@ export default function OutfitStudioView({
           (shouldForceOverwriteSlots || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
+          const mappedSlots = mapWeatherRecToSlots(chosenRec, garments, effectiveW);
+          if (!effectiveW.isRainy && !effectiveW.isRaining && !effectiveW.isSnowy) {
+            autoEquippedUmbrellaIdRef.current = null;
+          }
           setSlots((prev) => {
             if (!shouldForceOverwriteSlots && Object.values(prev).some(Boolean)) {
               return prev;
             }
-            return mapWeatherRecToSlots(chosenRec, garments, effectiveW);
+            return mappedSlots;
           });
           setHasExplicitSlotState(true);
           activeRecIdRef.current = chosenRec.id;
@@ -1133,6 +1254,7 @@ export default function OutfitStudioView({
     activeCloset,
     cityKey,
     scenarioKey,
+    dayTarget,
     gpsCoords,
     skinProfile,
     effectiveGender,
@@ -1142,7 +1264,11 @@ export default function OutfitStudioView({
 
   const weather = useMemo(() => {
     const raw = weatherPayload?.weather || null;
-    const rawMatchesScenario = Boolean(raw && (!raw.scenarioKey || raw.scenarioKey === scenarioKey));
+    const rawMatchesScenario = Boolean(
+      raw &&
+        raw.scenarioKey === scenarioKey &&
+        (!raw.dayTarget || raw.dayTarget === dayTarget)
+    );
 
     if (scenarioKey === 'rainy_cool') {
       return {
@@ -1155,6 +1281,7 @@ export default function OutfitStudioView({
               cityName: raw?.cityName || '서울',
             }),
         scenarioKey: 'rainy_cool',
+        dayTarget,
         isRainy: true,
         isRaining: true,
         isSnowy: false,
@@ -1252,8 +1379,23 @@ export default function OutfitStudioView({
             isSnowy: false,
           };
     }
-    return raw ? { ...raw, scenarioKey } : null;
-  }, [weatherPayload, scenarioKey]);
+    if (!rawMatchesScenario) {
+      return {
+        cityName: raw?.cityName || '서울',
+        tempMin: 9,
+        tempMax: 18,
+        avgTemp: 13,
+        condition: dayTarget === 'tomorrow' ? '내일 예보' : '오늘 예보',
+        dayTarget,
+        scenarioKey: 'live',
+        isRainy: false,
+        isRaining: false,
+        isSnowy: false,
+        isWindy: false,
+      };
+    }
+    return { ...raw, scenarioKey: 'live', dayTarget: raw.dayTarget || dayTarget };
+  }, [weatherPayload, scenarioKey, dayTarget]);
 
   const isRainyWeatherActive = Boolean(
     scenarioKey === 'rainy_cool' || weather?.isRainy || weather?.isRaining
@@ -1320,13 +1462,22 @@ export default function OutfitStudioView({
       next[key] = resolved && isWearableStudioGarment(resolved) ? resolved : null;
     }
 
-    // Automatically equip first available umbrella on rainy weather unless user explicitly unequipped it
+    // Automatically equip first available umbrella on rainy weather unless user explicitly unequipped it;
+    // strip auto-equipped rain umbrella immediately when transitioning back to dry live/clear weather.
     if (isRainyWeatherActive && !manualRainUmbrellaCleared && !next.acc_umbrella) {
       const firstUmbrella =
         garments.find((g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)) || null;
       if (firstUmbrella) {
         next.acc_umbrella = firstUmbrella;
+        autoEquippedUmbrellaIdRef.current = firstUmbrella.id;
       }
+    } else if (
+      !isRainyWeatherActive &&
+      next.acc_umbrella &&
+      autoEquippedUmbrellaIdRef.current != null &&
+      Number(next.acc_umbrella.id) === Number(autoEquippedUmbrellaIdRef.current)
+    ) {
+      next.acc_umbrella = null;
     }
 
     return next;
@@ -1476,16 +1627,29 @@ export default function OutfitStudioView({
   const handleSelectScenario = (nextScenario) => {
     if (!nextScenario || nextScenario === scenarioKey) return;
     if (Object.values(rawSlots).some(Boolean)) {
-      scenarioSnapshotsRef.current[scenarioKey] = {
+      scenarioSnapshotsRef.current[weatherSnapshotScopeKey] = {
         rawSlots,
         activeRecId,
         manualRainUmbrellaCleared,
       };
     }
 
-    const savedSnap = scenarioSnapshotsRef.current[nextScenario];
+    const nextScopeKey = `${nextScenario}:${dayTarget}`;
+    const savedSnap = scenarioSnapshotsRef.current[nextScopeKey];
     if (savedSnap && Object.values(savedSnap.rawSlots || {}).some(Boolean)) {
-      setSlots(savedSnap.rawSlots);
+      const restoredSlots = { ...savedSnap.rawSlots };
+      if (
+        nextScenario !== 'rainy_cool' &&
+        restoredSlots.acc_umbrella &&
+        autoEquippedUmbrellaIdRef.current != null &&
+        Number(restoredSlots.acc_umbrella.id) === Number(autoEquippedUmbrellaIdRef.current)
+      ) {
+        restoredSlots.acc_umbrella = null;
+      }
+      if (nextScenario !== 'rainy_cool') {
+        autoEquippedUmbrellaIdRef.current = null;
+      }
+      setSlots(restoredSlots);
       setActiveRecId(savedSnap.activeRecId ?? null);
       activeRecIdRef.current = savedSnap.activeRecId ?? null;
       setManualRainUmbrellaCleared(Boolean(savedSnap.manualRainUmbrellaCleared));
@@ -1502,16 +1666,43 @@ export default function OutfitStudioView({
     setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = null;
     setActiveRecId(null);
+    if (nextScenario !== 'rainy_cool') {
+      autoEquippedUmbrellaIdRef.current = null;
+      setSlots((prev) => ({ ...prev, acc_umbrella: null }));
+    }
     setScenarioKey(nextScenario);
     if (nextScenario === 'rainy_cool') {
       const firstUmbrella = garments.find(
         (g) => isWearableStudioGarment(g) && isUmbrellaGarment(g)
       );
       if (firstUmbrella) {
+        autoEquippedUmbrellaIdRef.current = firstUmbrella.id;
         setSlots((prev) => ({ ...prev, acc_umbrella: firstUmbrella }));
         setHasExplicitSlotState(true);
       }
     }
+    triggerHaptic('selection');
+  };
+
+  const handleSelectDayTarget = (nextDayTarget) => {
+    const normalized = nextDayTarget === 'tomorrow' ? 'tomorrow' : 'today';
+    if (normalized === dayTarget) return;
+    if (Object.values(rawSlots).some(Boolean)) {
+      scenarioSnapshotsRef.current[weatherSnapshotScopeKey] = {
+        rawSlots,
+        activeRecId,
+        manualRainUmbrellaCleared,
+      };
+    }
+    scenarioSnapshotsRef.current = {
+      ...scenarioSnapshotsRef.current,
+    };
+    userModifiedSlotsRef.current = false;
+    forceAutoApplyWeatherRef.current = true;
+    setManualRainUmbrellaCleared(false);
+    activeRecIdRef.current = null;
+    setActiveRecId(null);
+    setDayTarget(normalized);
     triggerHaptic('selection');
   };
 
@@ -1549,6 +1740,7 @@ export default function OutfitStudioView({
   const handleApplyRecommendation = (rec) => {
     if (!rec) return;
     triggerHaptic('selection');
+    markTodayOutfitGenerated();
     userModifiedSlotsRef.current = false;
     setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = rec.id;
@@ -1618,17 +1810,25 @@ export default function OutfitStudioView({
     if (equippedItems.length === 0) return;
     setLoggingTomorrow(true);
     try {
-      const tomorrowDate =
+      const targetDate =
         weather?.date ||
-        new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+        (dayTarget === 'tomorrow'
+          ? new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10));
       const labelTitle =
         localizeOutfitTitle(activeRecommendation?.title, lang) ||
-        tx(lang, `${weather?.cityName || '서울'} 내일 코디`, 'Tomorrow Weather Look');
+        tx(
+          lang,
+          dayTarget === 'tomorrow'
+            ? `${weather?.cityName || '서울'} 내일 코디`
+            : `${weather?.cityName || '서울'} 오늘 코디`,
+          dayTarget === 'tomorrow' ? 'Tomorrow Weather Look' : 'Today Weather Look'
+        );
       await apiFetch('/calendar', {
         method: 'POST',
         body: JSON.stringify({
           closet_owner: activeCloset || 'sample',
-          worn_date: tomorrowDate,
+          worn_date: targetDate,
           outfit_id: null,
           item_ids: equippedItems.map((g) => g.id),
           status: 'planned',
@@ -1637,7 +1837,13 @@ export default function OutfitStudioView({
       });
       triggerHaptic('medium');
       onClosetUpdated?.();
-      showToast?.(tx(lang, '내일 캘린더에 추가됨', 'Added to tomorrow calendar'));
+      showToast?.(
+        tx(
+          lang,
+          dayTarget === 'tomorrow' ? '내일 캘린더에 추가됨' : '오늘 캘린더에 추가됨',
+          dayTarget === 'tomorrow' ? 'Added to tomorrow calendar' : 'Added to today calendar'
+        )
+      );
     } catch (err) {
       showToast?.(
         localizeApiMessage(err?.message, lang) || tx(lang, '기록 실패', 'Failed to log outfit')
@@ -1655,9 +1861,11 @@ export default function OutfitStudioView({
 
     setSelectedInspectorId(item?.id ?? null);
     userModifiedSlotsRef.current = true;
+    markTodayOutfitGenerated();
     setActiveRecId(null);
     setHasExplicitSlotState(true);
     if (targetSlotKey === 'acc_umbrella') {
+      autoEquippedUmbrellaIdRef.current = null;
       setManualRainUmbrellaCleared(isUnequipping);
     }
     triggerHaptic('selection');
@@ -1694,22 +1902,11 @@ export default function OutfitStudioView({
     setActiveRecId(null);
     setHasExplicitSlotState(true);
     if (slotKey === 'acc_umbrella') {
+      autoEquippedUmbrellaIdRef.current = null;
       setManualRainUmbrellaCleared(true);
     }
     triggerHaptic('selection');
     setSlots({ ...slots, [slotKey]: null });
-  };
-
-  const handleClearAll = () => {
-    scenarioSnapshotsRef.current = {};
-    userModifiedSlotsRef.current = true;
-    activeRecIdRef.current = null;
-    setActiveRecId(null);
-    setSelectedInspectorId(null);
-    setHasExplicitSlotState(true);
-    setManualRainUmbrellaCleared(true);
-    triggerHaptic('selection');
-    setSlots({ ...EMPTY_STUDIO_SLOTS });
   };
 
   const handleSaveOutfit = async (e) => {
@@ -1734,6 +1931,7 @@ export default function OutfitStudioView({
           item_ids: equippedItems.map((g) => g.id),
         }),
       });
+      markTodayOutfitGenerated();
       setOutfitTitle('');
       triggerHaptic('medium');
       await reloadOutfits();
@@ -2356,34 +2554,64 @@ export default function OutfitStudioView({
                   </button>
                 )}
                 {equippedItems.length > 0 && (
-                  <>
+                  <button
+                    type="button"
+                    data-outfit-vton-refresh="true"
+                    className="hig-circle-icon-btn is-subtle"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setVtonRefreshNonce((n) => n + 1);
+                    }}
+                    title={tx(
+                      lang,
+                      '날씨 포즈·투명 배경제거 새로고침',
+                      'Regenerate Weather Pose & Cutout'
+                    )}
+                    aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                )}
+                <div className="store-header-btn-wrap">
+                  <button
+                    type="button"
+                    data-open-store-btn="true"
+                    className={`hig-circle-icon-btn is-subtle store-header-btn ${
+                      freeDailyDrawAvailable ? 'has-free-draw' : ''
+                    }`.trim()}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setStoreOpen(true);
+                    }}
+                    title={tx(lang, '배경 스토어', 'Backdrop Store')}
+                    aria-label={tx(lang, '배경 스토어 열기', 'Open Backdrop Store')}
+                  >
+                    <Store size={17} />
+                    {freeDailyDrawAvailable && (
+                      <span className="store-header-dot" aria-hidden="true" />
+                    )}
+                  </button>
+
+                  {freeDailyDrawAvailable && (
                     <button
                       type="button"
-                      data-outfit-vton-refresh="true"
-                      className="hig-circle-icon-btn is-subtle"
+                      data-store-free-draw-bubble="true"
+                      className="store-free-draw-bubble"
                       onClick={() => {
                         triggerHaptic('selection');
-                        setVtonRefreshNonce((n) => n + 1);
+                        setStoreOpen(true);
                       }}
-                      title={tx(
-                        lang,
-                        '날씨 포즈·투명 배경제거 새로고침',
-                        'Regenerate Weather Pose & Cutout'
-                      )}
-                      aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
                     >
-                      <RefreshCw size={16} />
+                      <span>
+                        {tx(
+                          lang,
+                          '오늘의 무료 뽑기 상품이 남았어요!',
+                          'Free daily draw left!'
+                        )}
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      className="hig-circle-icon-btn is-subtle"
-                      onClick={handleClearAll}
-                      aria-label={tx(lang, '착장 초기화', 'Reset Outfit')}
-                    >
-                      <RotateCcw size={17} />
-                    </button>
-                  </>
-                )}
+                  )}
+                </div>
               </>
             }
           />
@@ -2403,6 +2631,7 @@ export default function OutfitStudioView({
             avatarSpec={bridgedAvatar.spec}
             avatarConfigHash={bridgedAvatar.avatarConfigHash}
             weather={weather}
+            dayTarget={dayTarget}
             scenarioKey={scenarioKey}
             locationLabel={resolvedCityDisplayLabel}
             onOpenWeatherPopup={() => setWeatherPopupOpen(true)}
@@ -2411,6 +2640,7 @@ export default function OutfitStudioView({
             activeRecId={activeRecId}
             lookStyleConfig={lookStyleConfig}
             onApplyRecommendation={handleApplyRecommendation}
+            onAiLookGenerated={() => markTodayOutfitGenerated()}
             forceRefreshNonce={vtonRefreshNonce}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
@@ -2433,6 +2663,8 @@ export default function OutfitStudioView({
               }
             }}
             onOpenBodyModal={handleOpenBodyModal}
+            stageBackgroundId={economyState.equippedBackgroundId}
+            onOpenBackgroundPicker={() => setBgPickerOpen(true)}
           />
 
           {/* Narrow Mobile (< 600px) Floating Smoked-Glass Drawer Trigger + Slot Bar */}
@@ -2643,20 +2875,50 @@ export default function OutfitStudioView({
         open={weatherPopupOpen}
         onClose={() => setWeatherPopupOpen(false)}
         lang={lang}
-        eyebrow={tx(lang, '내일 날씨 코디', 'Tomorrow Weather')}
+        eyebrow={tx(
+          lang,
+          dayTarget === 'tomorrow' ? '내일 날씨 코디' : '오늘 날씨 코디',
+          dayTarget === 'tomorrow' ? 'Tomorrow Weather' : 'Today Weather'
+        )}
         title={tx(
           lang,
-          `${resolvedCityDisplayLabel} · 내일 날씨 및 AI 코디 설정`,
-          `${resolvedCityDisplayLabel} · Weather & AI Look Settings`
+          `${resolvedCityDisplayLabel} · ${dayTarget === 'tomorrow' ? '내일' : '오늘'} 날씨 및 AI 코디 설정`,
+          `${resolvedCityDisplayLabel} · ${dayTarget === 'tomorrow' ? 'Tomorrow' : 'Today'} Weather & AI Look`
         )}
         maxWidth={480}
       >
         <div className="weather-popup-content">
-          {/* 1) 내일의 날씨 정보 & 시뮬레이션 선택 */}
+          {/* Today vs Tomorrow Forecast Target Toggle */}
+          <div className="weather-popup-day-toggle-row" role="group" aria-label={tx(lang, '날씨 기준일', 'Forecast Day')}>
+            <button
+              type="button"
+              data-weather-day-target="today"
+              aria-pressed={dayTarget === 'today'}
+              className={`weather-popup-day-btn ${dayTarget === 'today' ? 'is-active' : ''}`}
+              onClick={() => handleSelectDayTarget('today')}
+            >
+              {tx(lang, '오늘 날씨', 'Today')}
+            </button>
+            <button
+              type="button"
+              data-weather-day-target="tomorrow"
+              aria-pressed={dayTarget === 'tomorrow'}
+              className={`weather-popup-day-btn ${dayTarget === 'tomorrow' ? 'is-active' : ''}`}
+              onClick={() => handleSelectDayTarget('tomorrow')}
+            >
+              {tx(lang, '내일 날씨', 'Tomorrow')}
+            </button>
+          </div>
+
+          {/* 1) 오늘/내일의 날씨 정보 & 시뮬레이션 선택 */}
           <div className="weather-popup-section">
             <div className="weather-popup-section-head">
               <span className="weather-popup-section-title">
-                {tx(lang, '내일의 날씨 정보 · 시뮬레이션', 'Tomorrow Forecast & Simulation')}
+                {tx(
+                  lang,
+                  dayTarget === 'tomorrow' ? '내일의 날씨 정보 · 시뮬레이션' : '오늘의 날씨 정보 · 시뮬레이션',
+                  dayTarget === 'tomorrow' ? 'Tomorrow Forecast & Simulation' : 'Today Forecast & Simulation'
+                )}
               </span>
               <span className="weather-popup-section-meta tabular-nums">
                 {scenarios.length} {tx(lang, '가지 날씨', 'SCENES')}
@@ -2716,11 +2978,25 @@ export default function OutfitStudioView({
                   className="weather-popup-calendar-btn"
                   disabled={loggingTomorrow || equippedItems.length === 0}
                   onClick={handleLogTomorrowCalendar}
-                  title={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
-                  aria-label={tx(lang, '내일 캘린더에 기록', 'Log to Tomorrow Calendar')}
+                  title={tx(
+                    lang,
+                    dayTarget === 'tomorrow' ? '내일 캘린더에 기록' : '오늘 캘린더에 기록',
+                    dayTarget === 'tomorrow' ? 'Log to Tomorrow Calendar' : 'Log to Today Calendar'
+                  )}
+                  aria-label={tx(
+                    lang,
+                    dayTarget === 'tomorrow' ? '내일 캘린더에 기록' : '오늘 캘린더에 기록',
+                    dayTarget === 'tomorrow' ? 'Log to Tomorrow Calendar' : 'Log to Today Calendar'
+                  )}
                 >
                   <CalendarPlus size={14} />
-                  <span>{tx(lang, '내일 캘린더에 기록', 'Log Tomorrow')}</span>
+                  <span>
+                    {tx(
+                      lang,
+                      dayTarget === 'tomorrow' ? '내일 캘린더에 기록' : '오늘 캘린더에 기록',
+                      dayTarget === 'tomorrow' ? 'Log Tomorrow' : 'Log Today'
+                    )}
+                  </span>
                 </button>
               </div>
 
@@ -2732,10 +3008,14 @@ export default function OutfitStudioView({
                       lang,
                       isRainyWeatherActive
                         ? '비 예보에 맞춰 생활 방수 아우터와 우산 코디를 우선 추천합니다.'
-                        : '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 내일 코디입니다.',
+                        : dayTarget === 'tomorrow'
+                          ? '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 내일 코디입니다.'
+                          : '일교차와 체감 온도를 고려해 레이어링 밸런스를 맞춘 오늘 코디입니다.',
                       isRainyWeatherActive
                         ? 'Water-resistant outerwear and umbrella styling prioritized for rain.'
-                        : 'Balanced layering curated for tomorrow’s temperature range.'
+                        : dayTarget === 'tomorrow'
+                          ? 'Balanced layering curated for tomorrow’s temperature range.'
+                          : 'Balanced layering curated for today’s temperature range.'
                     )}
               </p>
 
@@ -2944,6 +3224,72 @@ export default function OutfitStudioView({
           </div>
         </div>
       </ResponsiveSheetModal>
+
+      {/* After-8-PM Tomorrow Outfit Setup Modal (up to 3 impressions when today's outfit was created) */}
+      <ResponsiveSheetModal
+        id="tomorrow-outfit-prompt-modal"
+        open={showTomorrowPrompt}
+        onClose={() => setShowTomorrowPrompt(false)}
+        lang={lang}
+        eyebrow={tx(lang, '내일 코디 안내', 'Tomorrow Outfit')}
+        title={tx(lang, '내일 코디를 설정할까요?', 'Set up tomorrow’s outfit?')}
+        maxWidth={400}
+      >
+        <div className="tomorrow-prompt-modal-body" data-tomorrow-outfit-modal="true">
+          <p className="tomorrow-prompt-modal-desc">
+            {tx(
+              lang,
+              '오늘 코디를 생성하셨네요. 내일 날씨 예보에 맞춘 내일 코디로 전환할까요?',
+              'Your outfit for today is ready. Switch the weather forecast to plan tomorrow’s look?'
+            )}
+          </p>
+          <div className="tomorrow-prompt-modal-actions">
+            <button
+              type="button"
+              data-tomorrow-prompt-no="true"
+              className="tomorrow-prompt-btn is-secondary"
+              onClick={() => {
+                triggerHaptic('selection');
+                setShowTomorrowPrompt(false);
+              }}
+            >
+              {tx(lang, '아니오', 'No, keep today')}
+            </button>
+            <button
+              type="button"
+              data-tomorrow-prompt-yes="true"
+              className="tomorrow-prompt-btn is-primary"
+              onClick={() => {
+                triggerHaptic('medium');
+                setShowTomorrowPrompt(false);
+                handleSelectDayTarget('tomorrow');
+              }}
+            >
+              {tx(lang, '예', 'Yes, switch to tomorrow')}
+            </button>
+          </div>
+        </div>
+      </ResponsiveSheetModal>
+      {/* Stage Background Selector Modal */}
+      <BackgroundPickerModal
+        open={bgPickerOpen}
+        onClose={() => setBgPickerOpen(false)}
+        lang={lang}
+        economyState={economyState}
+        onSelectBackground={handleSelectStageBackground}
+        onOpenStore={() => setStoreOpen(true)}
+      />
+
+      {/* In-App Stage Background Store & Tiered Gacha Modal */}
+      <StoreModal
+        open={storeOpen}
+        onClose={() => setStoreOpen(false)}
+        lang={lang}
+        economyState={economyState}
+        onPerformDraw={handlePerformStoreDraw}
+        onSelectBackground={handleSelectStageBackground}
+        onGoCalendar={() => onNavigateTab?.('calendar')}
+      />
     </section>
   );
 }

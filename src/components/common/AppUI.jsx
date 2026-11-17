@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, Check, FileText, ShieldCheck, Sparkles, X } from 'lucide-react';
 import StudioGarmentImage from '../StudioGarmentImage.jsx';
 import { HeaderUtilityNav, PageHeaderNav } from '../ui/HeaderNav.tsx';
@@ -520,7 +521,7 @@ export function ResponsiveSheetModal({
     .filter(Boolean)
     .join(' ');
 
-  return (
+  const modalMarkup = (
     <div
       className="modal-backdrop ui-sheet-backdrop"
       onClick={() => {
@@ -626,6 +627,11 @@ export function ResponsiveSheetModal({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalMarkup, document.body);
+  }
+  return modalMarkup;
 }
 
 export const BottomSheet = ResponsiveSheetModal;

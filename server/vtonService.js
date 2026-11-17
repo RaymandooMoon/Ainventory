@@ -245,7 +245,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v9-solo-avatar-symmetric-shoes';
+const CACHE_SCHEMA_VERSION = 'v11-fullbody-cleanhole-360';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1778,15 +1778,15 @@ function buildEditorialStyleAndBodyPrompt(
     ? [
         'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (3:2 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
         `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free studio (${backdropHex}) backdrop, including 100% flat shadowless ${backdropHex} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER high-angle looking downward, NEVER crop ankles or shoes). Mandatory full-body shot from head to toe, filling ~80–82% of row height (head-top ~11%, foot-sole ~91%), shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles.',
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER half-body, NEVER waist-up, NEVER thigh-up, NEVER crop heads, ankles, or shoes). Top Row (0°, 45°, 90°) sits strictly within y=2%..46%; Bottom Row (135°, 180°, 225°) sits strictly within y=54%..98%, leaving a clean >=6% horizontal background gutter around y=50% so Row 1 shoes and Row 2 head crowns NEVER touch or get clipped! Mandatory full-body head-to-shoe silhouette (~80% of each row height), both shoes completely visible.',
         `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
         `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
-        '- TOP ROW = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
+        '- TOP ROW (y=2%..46%) = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
         '  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.',
         "  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).",
         "  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT. [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]",
-        '- BOTTOM ROW = REAR-QUARTER & SYMMETRICAL BACK VIEWS:',
+        '- BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (100% FULL-BODY WITH FULL HEAD & SHOES INSIDE BOTTOM ROW):',
         "  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-RIGHT, diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.",
         '  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).',
         "  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between -90° left profile and 180° straight back; show back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-LEFT, diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left (preserving exact anatomical left/right bag and watch placement), and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).",
@@ -1795,7 +1795,7 @@ function buildEditorialStyleAndBodyPrompt(
     : [
         'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head to toe, shoes and feet completely visible on the floor with 8–10% bottom margin, consistent scale across all angles (~80–84% frame height).',
+        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Eye-to-waist level, straight-on horizontal camera, zero tilt. Mandatory 100% full-body shot from head to toe — NEVER waist-up, NEVER thigh-up, NEVER headless, NEVER crop ankles or shoes; shoes and feet completely visible on the floor with 8–10% bottom margin and 8–12% top headroom (~78–83% frame height).',
         '- STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary full-body person centered in the frame — NEVER render twin/duplicate figures, side-by-side clones, or extra background models.',
         `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
         "- For 90° lateral side views, face cleanly toward VIEWER'S RIGHT (screen-right) with authentic side head/jaw/ear profile, full dimensional hair volume at crown and back of head, natural relaxed hands/fingers, and true lateral garment thickness, side seams, and natural gravity folds.",

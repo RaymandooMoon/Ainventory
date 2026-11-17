@@ -1,66 +1,92 @@
 import { memo } from 'react';
+import {
+  DEFAULT_STAGE_BACKGROUND_ID,
+  getStageBackgroundById,
+} from '../utils/stageBackgroundCatalog.ts';
+import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
 
 export interface FittingAtelierBackdropProps {
   effectiveWeather?: string;
   scenarioKey?: string;
   theme?: 'light' | 'dark';
+  timeOfDay?: TimeOfDayPhase;
+  backgroundId?: string;
 }
 
 /**
- * Seamless Architectural Infinity-Cove Cyclorama Photography Studio Backdrop (`z-index: 2`).
- * - Replaces flat 2D cartoon vector furniture props (lamp, stone block, wireframe coat rack, corner seam)
- *   with a pure, depth-calibrated studio cyclorama horizon ("무봉제 호리존 스튜디오") that harmonizes naturally
- *   with BOTH `캐릭터 시뮬레이션` (dimensional character mannequin) and `실사 모델` (photorealistic lookbook).
- * - Features:
- *   1. Continuous curved cyclorama wall-to-floor sweep (`.atelier-cyclorama-wall-cove`) with zero hard seams.
- *   2. Soft overhead keylight & back-separation studio softbox halo (`.atelier-cyclorama-center-halo`) behind
- *      the mannequin's shoulders/torso so silhouettes separate cleanly without artificial clip-art clutter.
- *   3. Subtle curved architectural cove side depth (`.atelier-cyclorama-side-depth`) for natural 3D room volume.
- *   4. Weather-adaptive studio daylight temperature wash across all 9 weather scenarios (`live`, `clear`,
- *      `mild/warm_spring`, `cloudy`, `rain`, `snow`, `wind`, `heatwave`, `coldwave`).
- * - Strictly ZERO `<canvas>` elements, ZERO vector furniture clip-art, & `pointer-events: none` (`aria-hidden="true"`).
+ * Architectural Stage Room Backdrop (`z-index: 2`) combining:
+ * - Equipped S/A/B/C Architectural Room Environment photo (`/assets/backgrounds/*.jpg`)
+ * - Samsung Galaxy Weather-inspired live Time-of-Day atmospheric lighting tint
+ * - Feathered horizon wash for seamless Ground Deck grounding
+ * Strictly ZERO `<canvas>` elements & `pointer-events: none`.
  */
 const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   effectiveWeather = 'clear',
   scenarioKey = 'live',
   theme = 'light',
+  timeOfDay = 'day',
+  backgroundId = DEFAULT_STAGE_BACKGROUND_ID,
 }: FittingAtelierBackdropProps) {
   const isDark = theme === 'dark';
   const isRain = effectiveWeather === 'rain';
   const isWarmSpring = scenarioKey === 'warm_spring';
   const isLiveForecast = scenarioKey === 'live';
+  const resolvedTod: TimeOfDayPhase =
+    timeOfDay === 'sunrise' || timeOfDay === 'sunset' || timeOfDay === 'night'
+      ? timeOfDay
+      : 'day';
+  const bgItem = getStageBackgroundById(backgroundId);
 
   return (
     <div
       className={[
         'atelier-stage-backdrop',
         'is-infinity-cyclorama',
+        'has-arch-backdrop',
         isDark ? 'is-dark' : 'is-light',
         `is-weather-${effectiveWeather}`,
+        `is-tod-${resolvedTod}`,
         isWarmSpring ? 'is-scenario-warm-spring' : '',
         isLiveForecast ? 'is-scenario-live' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       data-atelier-backdrop="true"
-      data-backdrop-style="infinity-cyclorama"
+      data-backdrop-style="architectural-stage"
+      data-backdrop-bg-id={bgItem.id}
+      data-backdrop-bg-tier={bgItem.tier}
       data-backdrop-weather={effectiveWeather}
       data-backdrop-scenario={scenarioKey}
+      data-backdrop-tod={resolvedTod}
       aria-hidden="true"
     >
-      {/* 1. Continuous Infinity-Cove Cyclorama Wall-to-Floor Sweep (zero hard wall/corner lines) */}
+      {/* 0. Fallback Infinity-Cove Cyclorama Wall-to-Floor Sweep */}
       <div className="atelier-cyclorama-wall-cove" />
 
-      {/* 2. Weather-Adaptive Studio Overhead Softbox Wash */}
+      {/* 1. Equipped 3:4 Architectural Studio / Terrace Photograph */}
+      <img
+        src={bgItem.imageUrl}
+        alt=""
+        draggable={false}
+        decoding="async"
+        className="atelier-stage-environment-photo"
+        data-stage-bg-id={bgItem.id}
+        data-stage-bg-tier={bgItem.tier}
+      />
+
+      {/* 1B. Subtle Live Time-of-Day Sky & Window Light Tint */}
+      <div className="atelier-backdrop-tod-sky" />
+
+      {/* 2. Weather-Adaptive Overhead Skylight Softbox Wash */}
       <div className="atelier-backdrop-skylight-wash" />
 
-      {/* 3. Studio Softbox Subject Back-Separation Halo (subtle 3D rim depth behind mannequin) */}
+      {/* 3. Subtle Subject Back-Separation Halo behind Mannequin */}
       <div className="atelier-cyclorama-center-halo" />
 
-      {/* 4. Subtle Curved Studio Cove Architectural Side Falloff */}
+      {/* 4. Architectural Framing Side Depth Vignette */}
       <div className="atelier-cyclorama-side-depth" />
 
-      {/* 5. Feathered Cove Horizon Transition blending seamlessly into the Ground Deck */}
+      {/* 5. Feathered Cove Horizon Transition blending cleanly into Ground Deck */}
       <div className="atelier-backdrop-atmospheric-haze" />
 
       {/* 6. Rain moody slate studio ambiance (strictly activated ONLY when effectiveWeather === 'rain') */}

@@ -1,11 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Award,
+  Briefcase,
   ChevronDown,
   Cloud,
   CloudRain,
   CloudSun,
+  Coffee,
   Flame,
   History,
+  Layers,
   RefreshCw,
   Snowflake,
   Sparkles,
@@ -60,6 +64,14 @@ import {
   resolveEffectiveWeatherFromRaw,
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import {
+  DEFAULT_STAGE_BACKGROUND_ID,
+  getStageBackgroundById,
+} from '../utils/stageBackgroundCatalog.ts';
+import {
+  formatWeatherCapsuleDateTime,
+  resolveEffectiveClientTimeOfDay,
+} from '../utils/tomorrowPromptPolicy.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
@@ -158,13 +170,6 @@ function renderWeatherCapsuleIcon(effectiveWeather, scenarioKey) {
   return <CloudSun size={15} />;
 }
 
-const ZOOM_STEPS = [1, 1.2, 1.5];
-
-function formatZoomLabel(zoomValue) {
-  const rounded = Math.round((Number(zoomValue) || 1) * 10) / 10;
-  return `${rounded.toFixed(1)}×`;
-}
-
 function getLocalDayKey(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -216,6 +221,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   viewAngleDeg: controlledViewAngleDeg,
   onViewAngleChange,
   weather,
+  dayTarget = 'today',
   scenarioKey = 'live',
   locationLabel,
   onOpenWeatherPopup,
@@ -224,6 +230,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   activeRecId = null,
   lookStyleConfig = null,
   onApplyRecommendation,
+  onAiLookGenerated,
   activeSlotKey,
   onSelectSlot,
   onUnequipSlot,
@@ -231,6 +238,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onQuickSelectPreset: _legacyQuickSelectPreset,
   onOpenSkinToneModal,
   onOpenBodyModal: _legacyOpenBodyModal,
+  stageBackgroundId = DEFAULT_STAGE_BACKGROUND_ID,
+  onOpenBackgroundPicker,
   lang,
   forceRefresh = false,
   forceRefreshNonce = 0,
@@ -468,6 +477,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
   const [dayKey, setDayKey] = useState(() => getLocalDayKey());
+  const [clockNow, setClockNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const syncClock = () => setClockNow(new Date());
+    const id = setInterval(syncClock, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   const [zoom, setZoom] = useState(1);
   const [idealBaseScale, setIdealBaseScale] = useState(1);
@@ -1294,6 +1310,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           });
           setStatusToast(null);
           refreshHistoryList();
+          onAiLookGenerated?.();
           return;
         }
 
@@ -1516,19 +1533,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     setStageMode('ai-vton');
   }, []);
 
-  const handleZoomCycleOrReset = useCallback((e) => {
-    e.stopPropagation();
-    setZoom((prev) => {
-      const current = Number(prev) || 1;
-      const matchedIdx = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) <= 0.015);
-      if (matchedIdx === -1 || matchedIdx === ZOOM_STEPS.length - 1) {
-        setPan({ x: 0, y: 0 });
-        return 1;
-      }
-      return ZOOM_STEPS[matchedIdx + 1];
-    });
-  }, []);
-
   const isRainy = effectiveWeather === 'rain';
   const isWindy = effectiveWeather === 'wind' || effectiveWeather === 'coldwave';
 
@@ -1585,8 +1589,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     null;
 
   const resolvedAiImageUrl = stageMode === 'ai-vton' ? availableAiImageUrl : null;
-  const showCharacterZoomBar = Boolean(stageMode === 'ai-vton' && resolvedAiImageUrl);
   const canReturnToCharacter = stageMode === 'flatlay' && Boolean(availableAiImageUrl);
+  const resolvedBgItem = useMemo(
+    () => getStageBackgroundById(stageBackgroundId),
+    [stageBackgroundId]
+  );
+  const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
 
   useEffect(() => {
     if (!canReturnToCharacter) return undefined;
@@ -1705,10 +1713,25 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     isShowingPinnedHistory && !effectiveCompareActive && !historyOpen
   );
 
+  const timeOfDay = useMemo(
+    () => resolveEffectiveClientTimeOfDay(clockNow),
+    [clockNow]
+  );
+
+  const weatherCapsuleDateTimeLabel = useMemo(
+    () =>
+      formatWeatherCapsuleDateTime(
+        clockNow,
+        dayTarget === 'tomorrow' ? 'tomorrow' : 'today',
+        resolvedLang === 'en' ? 'en' : 'ko'
+      ),
+    [clockNow, dayTarget, resolvedLang]
+  );
+
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
-      className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
+      className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} is-tod-${timeOfDay} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
       data-stage-view={resolvedAiImageUrl ? 'ai-vton' : 'flatlay'}
@@ -1716,11 +1739,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-has-status-capsule={hasStatusCapsuleVisible ? 'true' : 'false'}
       data-has-staged-bar={hasStagedBarVisible ? 'true' : 'false'}
       data-has-top-banner={aiLoading || hasStagedBarVisible || hasPinnedBannerVisible ? 'true' : 'false'}
-      data-has-zoom-bar={showCharacterZoomBar ? 'true' : 'false'}
+      data-has-bg-picker={showStageBgPickerBtn ? 'true' : 'false'}
+      data-stage-bg-id={resolvedBgItem.id}
+      data-stage-bg-tier={resolvedBgItem.tier}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
       data-effective-weather={effectiveWeather}
       data-weather-scenario={scenarioKey}
+      data-day-target={dayTarget}
+      data-time-of-day={timeOfDay}
       data-vton-style={styleMode}
       data-equipped-count={equippedCount}
       data-vton-provider={activeProvider}
@@ -1730,13 +1757,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-angle-scroll={angleScrollDeg}
       data-avatar-hash={resolvedAvatarHash}
     >
-      {/* Stage Base (z-0..2): Seamless Infinity-Cove Cyclorama Photography Studio */}
+      {/* Stage Base (z-0..2): Architectural Room Stage Backdrop + Time-of-Day Sky */}
       <div aria-hidden="true" className="studio-25d-keylight" />
       <div aria-hidden="true" className="studio-25d-cyclorama-floor" />
       <FittingAtelierBackdrop
         effectiveWeather={effectiveWeather}
         scenarioKey={scenarioKey}
         theme={resolvedTheme}
+        timeOfDay={timeOfDay}
+        backgroundId={resolvedBgItem.id}
       />
 
       {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection + Contact AO Shadow */}
@@ -1753,6 +1782,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pan={pan}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
+        hasArchitecturalBackdrop={true}
       />
 
       {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
@@ -1786,24 +1816,36 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [1.0×] Slot | Top-Center Weather Capsule | Right [History⁰] */}
+      {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [History⁰] */}
       <div className="studio-stage-top-hud">
         <div className="studio-hud-left-slot">
-          {showCharacterZoomBar && (
+          {showStageBgPickerBtn && (
             <button
               type="button"
-              data-vton-zoom-level="true"
-              className={`studio-vton-zoom-level-btn tabular-nums ${zoom > 1.01 ? 'is-zoomed' : ''}`}
-              aria-label={isEn ? 'Cycle or reset zoom level' : '확대 배율 전환 및 초기화'}
+              data-stage-bg-picker-btn="true"
+              data-stage-bg-tier={resolvedBgItem.tier}
+              className={`studio-stage-bg-picker-btn tabular-nums is-tier-${resolvedBgItem.tier.toLowerCase()}`}
+              aria-label={
+                isEn
+                  ? `Select stage background (${resolvedBgItem.tier} · ${resolvedBgItem.nameEn})`
+                  : `배경 선택 (${resolvedBgItem.tier}등급 · ${resolvedBgItem.nameKo})`
+              }
               title={
                 isEn
-                  ? 'Tap to cycle zoom or pinch with two fingers on character'
-                  : '터치하여 확대 배율 전환 (캐릭터 두 손가락 핀치 확대 지원)'
+                  ? `Stage Backdrop: ${resolvedBgItem.tier} · ${resolvedBgItem.nameEn}`
+                  : `배경 선택 · ${resolvedBgItem.tier}등급 ${resolvedBgItem.nameKo}`
               }
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={handleZoomCycleOrReset}
+              onClick={(e) => {
+                e.stopPropagation();
+                setHistoryOpen(false);
+                onOpenBackgroundPicker?.();
+              }}
             >
-              {formatZoomLabel(zoom)}
+              <span className="studio-vton-history-icon-wrap">
+                <Layers size={14} strokeWidth={2.1} aria-hidden="true" />
+                <sup className="studio-vton-history-sup">{resolvedBgItem.tier}</sup>
+              </span>
             </button>
           )}
         </div>
@@ -1838,11 +1880,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 </strong>
                 <span className="studio-weather-curation-dot" aria-hidden="true" />
                 <span className="atelier-weather-capsule-curation">
-                  {weatherBadgeMeta.curationLabel}
+                  {capsuleStatusWord}
                 </span>
               </div>
-              <span className="atelier-weather-capsule-sub">
-                {weatherBadgeMeta.tempText} · {capsuleStatusWord}
+              <span className="atelier-weather-capsule-sub" data-weather-capsule-datetime="true">
+                {weatherCapsuleDateTimeLabel} · {weatherBadgeMeta.tempText}
               </span>
             </div>
             <ChevronDown
@@ -1948,6 +1990,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       <WeatherCanvasOverlay
         weather={weatherOverlayMode}
         isDark={resolvedTheme === 'dark'}
+        timeOfDay={timeOfDay}
         umbrellaCollisionEnabled={
           stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
         }
@@ -2332,7 +2375,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom-Right AI Weather Curation Look 1 / Look 2 Dock (right above angle scrollbar) */}
+      {/* Bottom-Left Compact Icon AI Look 1 / Look 2 Switcher (right above angle scrollbar) */}
       {stageLookRecommendations.length > 0 && (
         <div
           className="studio-weather-look-dock"
@@ -2354,6 +2397,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             const presetTitle = isEn
               ? rec.presetLabelEn || presetMeta.en
               : rec.presetLabelKo || presetMeta.ko;
+            const LookStyleIcon =
+              styleKey === 'comfortable_casual'
+                ? Coffee
+                : styleKey === 'formal_office'
+                  ? Award
+                  : styleKey === 'minimal_daily'
+                    ? Sparkles
+                    : Briefcase;
             return (
               <button
                 key={rec.id || `look-${idx + 1}`}
@@ -2362,13 +2413,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 aria-pressed={isSelected}
                 aria-label={`Look ${idx + 1}: ${presetTitle}`}
                 title={`Look ${idx + 1} · ${presetTitle}`}
-                className={`studio-weather-look-pill tabular-nums ${isSelected ? 'is-selected' : ''}`}
+                className={`studio-weather-look-pill is-icon-compact tabular-nums ${isSelected ? 'is-selected' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onApplyRecommendation?.(rec);
                 }}
               >
-                {`Look ${idx + 1}`}
+                <LookStyleIcon size={13} strokeWidth={2.2} aria-hidden="true" />
+                <span className="studio-weather-look-num" aria-hidden="true">
+                  {idx + 1}
+                </span>
               </button>
             );
           })}

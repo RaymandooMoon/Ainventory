@@ -1288,3 +1288,124 @@
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   ATTENDANCE CHECK-IN CARD & i CURRENCY STAMPS
+   ========================================================================== */
+.cal-ed-attendance-card {
+  margin-bottom: var(--space-4);
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--squircle-border);
+  box-shadow: var(--elevation-xs);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cal-ed-attendance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cal-ed-attendance-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-ed-attendance-balance,
+.cal-ed-attendance-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--squircle-border);
+  font-size: 0.78rem;
+  font-weight: 740;
+  color: var(--ink-primary);
+}
+
+.cal-ed-attendance-milestones {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.cal-ed-attendance-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  border: 1px solid transparent;
+  font-size: 0.8rem;
+  font-weight: 740;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.14s var(--spring-ease), opacity 0.16s var(--spring-ease);
+}
+
+.cal-ed-attendance-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.cal-ed-attendance-btn.is-claimed,
+.cal-ed-attendance-btn:disabled {
+  background: var(--accent-soft-bg);
+  color: var(--ink-secondary);
+  border-color: var(--squircle-border);
+  cursor: default;
+}
+
+.cal-ed-attended-stamp {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  z-index: 3;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent-mono);
+  color: var(--accent-mono-ink);
+  box-shadow: 0 0 0 1.5px var(--card-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cal-ed-attended-stamp.is-week {
+  position: static;
+  box-shadow: none;
+  width: auto;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-weight: 760;
+}
+
+@media (max-width: 599px) {
+  .cal-ed-attendance-card {
+    padding: 12px 14px;
+  }
+
+  .cal-ed-attendance-btn {
+    width: 100%;
+  }
+}

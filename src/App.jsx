@@ -36,6 +36,7 @@ import {
 } from './utils/nativeBridge.ts';
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
 import { resolveInitialTabFromPath } from './utils/logoTransition.ts';
+import { applyNavOpacityCss, getStoredNavOpacity } from './utils/stageBackgroundCatalog.ts';
 import { runCircularThemeTransition } from './utils/themeTransition.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
@@ -59,8 +60,8 @@ const DEFAULT_LOCAL_USER = {
 };
 
 const FLOATING_TABS = [
-  { key: 'closet', label: 'Closet', path: '/closet', Icon: LayoutGrid },
   { key: 'outfits', label: 'Outfits', path: '/', Icon: Layers },
+  { key: 'closet', label: 'Closet', path: '/closet', Icon: LayoutGrid },
   { key: 'calendar', label: 'Calendar', path: '/calendar', Icon: Calendar },
   { key: 'stats', label: 'Stats', path: '/stats', Icon: BarChart3 },
 ];
@@ -159,9 +160,10 @@ export default function App() {
     setBodySpec(syncedBody);
   }, []);
 
-  // Native shell + theme + offline sync listener
+  // Native shell + theme + nav bar opacity + offline sync listener
   useEffect(() => {
     void initNativeBackBridge();
+    applyNavOpacityCss(getStoredNavOpacity());
 
     const unsubTheme = subscribeThemeChange((effective) => {
       setResolvedTheme(effective);
@@ -622,6 +624,7 @@ export default function App() {
               preEquippedGarment={preEquippedGarment}
               onConsumePreEquipped={handleConsumePreEquipped}
               onClosetUpdated={handleClosetUpdated}
+              onNavigateTab={navigateTab}
               showToast={showToast}
             />
           )}

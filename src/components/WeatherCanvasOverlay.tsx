@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import type { EffectiveWeatherMode } from '../services/weatherPromptBuilder.ts';
+import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
 
 export type WeatherCanvasOverlayMode =
   | EffectiveWeatherMode
@@ -10,6 +11,7 @@ export type WeatherCanvasOverlayMode =
 export interface WeatherCanvasOverlayProps {
   weather: WeatherCanvasOverlayMode;
   isDark?: boolean;
+  timeOfDay?: TimeOfDayPhase;
   umbrellaCollisionEnabled?: boolean;
   className?: string;
 }
@@ -116,6 +118,7 @@ const RIPPLE_ASPECT_RATIO = 4.3;
 const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
   weather,
   isDark = false,
+  timeOfDay = 'day',
   umbrellaCollisionEnabled = true,
   className = '',
 }: WeatherCanvasOverlayProps) {
@@ -143,6 +146,22 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
     const snowflakes: Snowflake[] = [];
     const windRibbons: WindRibbon[] = [];
     const motes: AmbientMote[] = [];
+    const nightStars: Array<{ x: number; y: number; r: number; alpha: number; phase: number }> = [];
+    if (timeOfDay === 'night') {
+      const starCount = weather === 'rain' || weather === 'cloudy' ? 14 : 36;
+      for (let i = 0; i < starCount; i += 1) {
+        nightStars.push({
+          x: Math.random() * width,
+          y: height * (0.04 + Math.random() * 0.44),
+          r: 0.7 + Math.random() * 1.4,
+          alpha:
+            weather === 'rain' || weather === 'cloudy'
+              ? 0.14 + Math.random() * 0.18
+              : 0.34 + Math.random() * 0.48,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
 
     const syncCanvasSize = () => {
       const prevW = width;
@@ -916,24 +935,64 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           ctx.restore();
         }
       } else if (weather === 'clear' || weather === 'forecast' || weather === 'realtime') {
-        // Subtle diagonal warm sunbeams from top-right + floating golden dust bokeh
-        ctx.save();
-        const beamAlpha = weather === 'clear' ? 0.11 : 0.07;
-        const beamGrad = ctx.createLinearGradient(width * 0.92, 0, width * 0.25, height * 0.72);
-        beamGrad.addColorStop(
-          0,
-          isDark ? `rgba(253, 230, 138, ${beamAlpha})` : `rgba(251, 191, 36, ${beamAlpha})`
-        );
-        beamGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
-        ctx.fillStyle = beamGrad;
-        ctx.beginPath();
-        ctx.moveTo(width * 0.56, 0);
-        ctx.lineTo(width, 0);
-        ctx.lineTo(width, height * 0.45);
-        ctx.lineTo(width * 0.18, height * 0.85);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
+        // Galaxy Weather Live Time-of-Day Sky Illumination
+        if (timeOfDay === 'night') {
+          const moonX = width * 0.78;
+          const moonY = height * 0.14;
+          const moonHalo = ctx.createRadialGradient(
+            moonX,
+            moonY,
+            3,
+            moonX,
+            moonY,
+            Math.min(width, height) * 0.36
+          );
+          moonHalo.addColorStop(0, 'rgba(226, 232, 240, 0.24)');
+          moonHalo.addColorStop(0.35, 'rgba(148, 163, 184, 0.08)');
+          moonHalo.addColorStop(1, 'rgba(15, 23, 42, 0)');
+          ctx.fillStyle = moonHalo;
+          ctx.fillRect(0, 0, width, height);
+        } else if (timeOfDay === 'sunset' || timeOfDay === 'sunrise') {
+          const isSunset = timeOfDay === 'sunset';
+          const horizonGrad = ctx.createRadialGradient(
+            width * (isSunset ? 0.22 : 0.78),
+            height * 0.36,
+            8,
+            width * (isSunset ? 0.22 : 0.78),
+            height * 0.36,
+            Math.min(width, height) * 0.68
+          );
+          horizonGrad.addColorStop(
+            0,
+            isSunset ? 'rgba(251, 146, 60, 0.24)' : 'rgba(251, 191, 166, 0.22)'
+          );
+          horizonGrad.addColorStop(
+            0.48,
+            isSunset ? 'rgba(244, 114, 182, 0.10)' : 'rgba(253, 224, 172, 0.09)'
+          );
+          horizonGrad.addColorStop(1, 'rgba(251, 146, 60, 0)');
+          ctx.fillStyle = horizonGrad;
+          ctx.fillRect(0, 0, width, height);
+        } else {
+          // Crisp bright daytime Galaxy weather sunbeams from top-right
+          ctx.save();
+          const beamAlpha = weather === 'clear' ? 0.14 : 0.09;
+          const beamGrad = ctx.createLinearGradient(width * 0.92, 0, width * 0.22, height * 0.74);
+          beamGrad.addColorStop(
+            0,
+            isDark ? `rgba(253, 230, 138, ${beamAlpha})` : `rgba(255, 214, 102, ${beamAlpha + 0.03})`
+          );
+          beamGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
+          ctx.fillStyle = beamGrad;
+          ctx.beginPath();
+          ctx.moveTo(width * 0.54, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width, height * 0.48);
+          ctx.lineTo(width * 0.16, height * 0.88);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
 
         for (let i = 0; i < motes.length; i += 1) {
           const m = motes[i];
@@ -946,9 +1005,14 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
           if (m.x < -8) m.x = width + 8;
           if (m.x > width + 8) m.x = -8;
           const twinkle = 0.5 + 0.5 * Math.sin(elapsedSec * 2 + m.phase);
-          ctx.fillStyle = isDark
-            ? `rgba(254, 240, 138, ${m.alpha * twinkle})`
-            : `rgba(217, 119, 6, ${m.alpha * 0.78 * twinkle})`;
+          ctx.fillStyle =
+            timeOfDay === 'night'
+              ? `rgba(226, 232, 240, ${m.alpha * 0.7 * twinkle})`
+              : timeOfDay === 'sunset'
+                ? `rgba(253, 186, 116, ${m.alpha * twinkle})`
+                : isDark
+                  ? `rgba(254, 240, 138, ${m.alpha * twinkle})`
+                  : `rgba(217, 119, 6, ${m.alpha * 0.78 * twinkle})`;
           ctx.beginPath();
           ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
           ctx.fill();
@@ -986,6 +1050,18 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
             : `rgba(234, 88, 12, ${m.alpha * 0.58 * pulse})`;
           ctx.beginPath();
           ctx.ellipse(m.x, m.y, m.radius * 1.25, m.radius * 0.85, m.phase * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Celestial twinkling night stars across the upper sky horizon (Galaxy Weather night effect)
+      if (timeOfDay === 'night' && nightStars.length > 0) {
+        for (let i = 0; i < nightStars.length; i += 1) {
+          const st = nightStars[i];
+          const twinkle = 0.45 + 0.55 * Math.sin(elapsedSec * 2.2 + st.phase);
+          ctx.fillStyle = `rgba(241, 245, 249, ${(st.alpha * twinkle).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -1060,7 +1136,7 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       resizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [weather, isDark, umbrellaCollisionEnabled]);
+  }, [weather, isDark, timeOfDay, umbrellaCollisionEnabled]);
 
   const isRain = weather === 'rain';
 
@@ -1070,8 +1146,9 @@ const WeatherCanvasOverlay = memo(function WeatherCanvasOverlay({
       aria-hidden="true"
       data-weather-overlay={weather}
       data-weather-foreground={weather}
+      data-weather-tod={timeOfDay}
       data-studio-rain-layer={isRain ? 'true' : undefined}
-      className={`weather-canvas-overlay weather-foreground-overlay studio-weather-foreground-overlay weather-fg-${weather} ${isRain ? 'studio-25d-rain-layer is-canvas-rain' : ''} ${className}`.trim()}
+      className={`weather-canvas-overlay weather-foreground-overlay studio-weather-foreground-overlay weather-fg-${weather} tod-${timeOfDay} ${isRain ? 'studio-25d-rain-layer is-canvas-rain' : ''} ${className}`.trim()}
       style={{
         position: 'absolute',
         inset: 0,

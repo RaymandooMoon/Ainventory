@@ -449,7 +449,13 @@ function inferWeatherMotion(code, precipProb, windSpeed, condition = '') {
   return 'idle';
 }
 
-export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live', customCoords = null) {
+export async function fetchTomorrowWeather(
+  cityKey = 'seoul',
+  scenario = 'live',
+  customCoords = null,
+  dayTarget = 'today'
+) {
+  const resolvedDayTarget = dayTarget === 'tomorrow' ? 'tomorrow' : 'today';
   const hasCustom =
     customCoords &&
     Number.isFinite(Number(customCoords.lat)) &&
@@ -465,16 +471,19 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
       }
     : CITY_MAP[safeCityKey] || CITY_MAP.seoul;
 
-  const tomorrowDate = new Date();
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowStr = tomorrowDate.toISOString().slice(0, 10);
+  const targetDateObj = new Date();
+  if (resolvedDayTarget === 'tomorrow') {
+    targetDateObj.setDate(targetDateObj.getDate() + 1);
+  }
+  const targetDateStr = targetDateObj.toISOString().slice(0, 10);
 
   if (scenario && scenario !== 'live' && Object.hasOwn(WEATHER_SCENARIOS, scenario)) {
     const preset = WEATHER_SCENARIOS[scenario];
     return {
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
-      date: tomorrowStr,
+      date: targetDateStr,
+      dayTarget: resolvedDayTarget,
       scenarioKey: scenario,
       ...preset,
       recommendedMotion: inferWeatherMotion(
@@ -486,7 +495,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     };
   }
 
-  const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : safeCityKey}:${tomorrowStr}`;
+  const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : safeCityKey}:${resolvedDayTarget}:${targetDateStr}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < 20 * 60 * 1000) {
     return cached.data;
@@ -497,7 +506,7 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    const idx = json.daily?.time?.length > 1 ? 1 : 0;
+    const idx = resolvedDayTarget === 'tomorrow' && json.daily?.time?.length > 1 ? 1 : 0;
     const code = json.daily.weather_code[idx] ?? 1;
     const condition = weatherCodeToKorean(code);
     const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
@@ -505,7 +514,8 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     const data = {
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
-      date: json.daily.time[idx] || tomorrowStr,
+      date: json.daily.time[idx] || targetDateStr,
+      dayTarget: resolvedDayTarget,
       scenarioKey: 'live',
       condition,
       weatherCode: code,
@@ -531,9 +541,10 @@ export async function fetchTomorrowWeather(cityKey = 'seoul', scenario = 'live',
     return {
       cityKey: hasCustom ? 'gps' : safeCityKey,
       cityName: city.name,
-      date: tomorrowStr,
+      date: targetDateStr,
+      dayTarget: resolvedDayTarget,
       scenarioKey: 'live',
-      condition: '내일 예보 · 구름 조금',
+      condition: resolvedDayTarget === 'tomorrow' ? '내일 예보 · 구름 조금' : '오늘 예보 · 구름 조금',
       weatherCode: 2,
       tempMin: 9,
       tempMax: 18,
@@ -1003,22 +1014,24 @@ export function buildWeatherRecommendations(
     }
   });
 
+  const dayLabelKo = weather?.dayTarget === 'tomorrow' ? '내일' : '오늘';
   let weatherTip = '';
   if (isRainy) {
-    weatherTip = `내일 비 소식(${weather.precipProb}%)이 있습니다. 밝은 밑단 바지나 스웨이드 슈즈는 피하고 발수 아우터·가죽 슈즈 위주로 준비하세요.`;
+    weatherTip = `${dayLabelKo} 비 소식(${weather.precipProb}%)이 있습니다. 밝은 밑단 바지나 스웨이드 슈즈는 피하고 발수 아우터·가죽 슈즈 위주로 준비하세요.`;
   } else if (isWindy) {
     weatherTip = `강한 바람(풍속 ${weather.windSpeed}km/h)이 예보되어 있습니다. 바람을 막아주는 트렌치·오버코트와 머플러 레이어드를 추천합니다.`;
   } else if (diurnalSwing >= 9) {
-    weatherTip = `내일 아침(${weather.tempMin}°C)과 낮(${weather.tempMax}°C) 기온 차가 ${diurnalSwing}°C로 큽니다. 얇은 이너 위에 탈착하기 좋은 아우터가 필수입니다.`;
+    weatherTip = `${dayLabelKo} 최저(${weather.tempMin}°C)와 최고(${weather.tempMax}°C) 기온 차가 ${diurnalSwing}°C로 큽니다. 얇은 이너 위에 탈착하기 좋은 아우터가 필수입니다.`;
   } else if (avgTemp <= 4) {
-    weatherTip = `내일은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜주세요.`;
+    weatherTip = `${dayLabelKo}은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜주세요.`;
   } else {
-    weatherTip = `내일 ${weather.cityName} 기온은 ${weather.tempMin}°C ~ ${weather.tempMax}°C로 활동하기 쾌적합니다.`;
+    weatherTip = `${dayLabelKo} ${weather.cityName} 기온은 ${weather.tempMin}°C ~ ${weather.tempMax}°C로 활동하기 쾌적합니다.`;
   }
 
   return {
     weather: {
       ...weather,
+      dayTarget: weather?.dayTarget === 'tomorrow' ? 'tomorrow' : 'today',
       avgTemp,
       tempC: avgTemp,
       diurnalSwing,
@@ -1043,7 +1056,7 @@ export function buildWeatherRecommendations(
       name: CITY_MAP[key].name,
     })),
     scenarios: [
-      { key: 'live', label: '실시간 내일 예보' },
+      { key: 'live', label: weather?.dayTarget === 'tomorrow' ? '실시간 내일 예보' : '실시간 오늘 예보' },
       ...Object.entries(WEATHER_SCENARIOS).map(([key, val]) => ({ key, label: val.label })),
     ],
     lookStylePresets: Object.values(LOOK_STYLE_PRESETS).map((p) => ({

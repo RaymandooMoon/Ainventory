@@ -1993,14 +1993,25 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
 
 function measureOpaqueVerticalBounds(
   canvas: HTMLCanvasElement
-): { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number } | null {
+): { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number; coreCx: number } | null {
   const cw = canvas.width;
   const ch = canvas.height;
   if (cw < 16 || ch < 16) return null;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
   const data = ctx.getImageData(0, 0, cw, ch).data;
+  const bounds = measureOpaqueVerticalBoundsInBuffer(data, cw, ch);
+  if (!bounds) return null;
+  const coreCx = computeCoreAnatomicalCenterXInBuffer(data, cw, ch, bounds);
+  return { ...bounds, coreCx };
+}
 
+export function measureOpaqueVerticalBoundsInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number
+): { minY: number; maxY: number; minX: number; maxX: number; fgPixels: number } | null {
+  if (cw < 16 || ch < 16 || data.length < cw * ch * 4) return null;
   let minY = ch;
   let maxY = -1;
   let minX = cw;
@@ -2025,10 +2036,221 @@ function measureOpaqueVerticalBounds(
 }
 
 /**
+ * Computes the horizontal standing center axis of the human body from the lower-calf/ankle
+ * column (`0.78..0.92` of subject height), so asymmetric side props (wide umbrellas or
+ * briefcases/totes) and forward-protruding 90-degree shoes (`0.93..1.00`) never pull the
+ * character off-center.
+ */
+export function computeCoreAnatomicalCenterXInBuffer(
+  data: Uint8ClampedArray,
+  cw: number,
+  ch: number,
+  bounds?: { minY: number; maxY: number; minX: number; maxX: number } | null
+): number {
+  const b = bounds ?? measureOpaqueVerticalBoundsInBuffer(data, cw, ch);
+  if (!b) return cw * 0.5;
+  const fgH = Math.max(1, b.maxY - b.minY + 1);
+  const yStart = Math.max(b.minY, Math.round(b.minY + fgH * 0.78));
+  const yEnd = Math.min(ch - 1, Math.max(yStart, Math.round(b.minY + fgH * 0.92)));
+  const rowCenters: number[] = [];
+
+  for (let y = yStart; y <= yEnd; y += 1) {
+    const rowOff = y * cw;
+    // Collect contiguous opaque runs on this row so isolated single-pixel specks can't bias rMin/rMax
+    const runs: Array<{ start: number; end: number; width: number }> = [];
+    let runStart = -1;
+    for (let x = b.minX; x <= b.maxX; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 48) {
+        if (runStart === -1) runStart = x;
+      } else if (runStart !== -1) {
+        runs.push({ start: runStart, end: x - 1, width: x - runStart });
+        runStart = -1;
+      }
+    }
+    if (runStart !== -1) {
+      runs.push({ start: runStart, end: b.maxX, width: b.maxX - runStart + 1 });
+    }
+    const validRuns = runs.filter((r) => r.width >= 3);
+    const chosen = validRuns.length > 0 ? validRuns : runs;
+    if (chosen.length > 0) {
+      const rMin = chosen[0].start;
+      const rMax = chosen[chosen.length - 1].end;
+      rowCenters.push((rMin + rMax) * 0.5);
+    }
+  }
+
+  if (rowCenters.length === 0) {
+    return b.minX + (b.maxX - b.minX + 1) * 0.5;
+  }
+  rowCenters.sort((a, z) => a - z);
+  return rowCenters[Math.floor(rowCenters.length / 2)];
+}
+
+export type TurnaroundSliceIntegrityReason =
+  | 'ok'
+  | 'too_small'
+  | 'clipped_top'
+  | 'clipped_bottom'
+  | 'half_body';
+
+export interface TurnaroundSliceIntegrityReport {
+  ok: boolean;
+  reason: TurnaroundSliceIntegrityReason;
+  fgHeightRatio: number;
+}
+
+/**
+ * Inspects a cut-out slice RGBA buffer for half-body / waist-up generation (`image_78da260b.png`)
+ * or headless / lower-body-only slicing (`image_19c6d0f0.png`, `image_f651a252.png`),
+ * including vertically baseline-shifted crops where the waist cut moved down inside the canvas.
+ */
+export function inspectTurnaroundSliceIntegrityInBuffer(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number
+): TurnaroundSliceIntegrityReport {
+  const b = measureOpaqueVerticalBoundsInBuffer(data, w, h);
+  if (!b) {
+    return { ok: false, reason: 'too_small', fgHeightRatio: 0 };
+  }
+  const fgH = b.maxY - b.minY + 1;
+  const fgHeightRatio = fgH / Math.max(1, h);
+  if (fgHeightRatio < 0.36 || b.fgPixels < w * h * 0.012) {
+    return { ok: false, reason: 'too_small', fgHeightRatio };
+  }
+
+  const rowCounts = new Int32Array(h);
+  const rowSpans = new Int32Array(h);
+  let maxRowCount = 0;
+  let maxRowSpan = 0;
+  const bodyWidths: number[] = [];
+
+  for (let y = b.minY; y <= b.maxY; y += 1) {
+    const rowOff = y * w;
+    let cnt = 0;
+    let rMin = w;
+    let rMax = -1;
+    for (let x = b.minX; x <= b.maxX; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 48) {
+        cnt += 1;
+        if (x < rMin) rMin = x;
+        if (x > rMax) rMax = x;
+      }
+    }
+    rowCounts[y] = cnt;
+    const span = rMax >= rMin ? rMax - rMin + 1 : 0;
+    rowSpans[y] = span;
+    if (cnt > maxRowCount) maxRowCount = cnt;
+    if (span > maxRowSpan) maxRowSpan = span;
+    if (span > 0 && y >= b.minY + fgH * 0.25 && y <= b.minY + fgH * 0.85) {
+      bodyWidths.push(cnt);
+    }
+  }
+
+  bodyWidths.sort((a, z) => a - z);
+  const medianBodyWidth =
+    bodyWidths.length > 0 ? bodyWidths[Math.floor(bodyWidths.length / 2)] : maxRowCount;
+
+  // Check 1A: Clipped-top / headless slice touching canvas top edge (torso/shoulders cut flush at y <= 3)
+  const topEdgeCount = Math.max(rowCounts[0] || 0, rowCounts[1] || 0, rowCounts[2] || 0);
+  const topCrownCount = rowCounts[b.minY + 1] ?? rowCounts[b.minY] ?? 0;
+  if (
+    (b.minY <= 2 && topEdgeCount >= Math.max(w * 0.14, medianBodyWidth * 0.52)) ||
+    (b.minY <= 3 && topCrownCount >= Math.max(w * 0.18, medianBodyWidth * 0.65))
+  ) {
+    return { ok: false, reason: 'clipped_top', fgHeightRatio };
+  }
+
+  // Check 1B: Vertically shifted flat waist-down / chest-down crop (e.g. shifted down to 0.94 baseline!)
+  // Unlike a genuine head or rounded umbrella canopy (which starts narrow at minY and expands smoothly),
+  // a truncated torso/waist starts IMMEDIATELY wide and flat at b.minY..b.minY+2 with high solidity.
+  const yFlat = Math.min(b.maxY, b.minY + 2);
+  const yShoulderProbe = Math.min(b.maxY, b.minY + Math.max(4, Math.round(fgH * 0.14)));
+  const topAtMin = rowCounts[b.minY] || 0;
+  const topAtFlat = rowCounts[yFlat] || 0;
+  const topFlatSpan = Math.max(1, rowSpans[yFlat] || 1);
+  const probeBelowWidth = rowCounts[yShoulderProbe] || 0;
+  if (
+    fgHeightRatio < 0.78 &&
+    topAtFlat >= Math.max(w * 0.16, medianBodyWidth * 0.6) &&
+    topAtMin >= topAtFlat * 0.68 &&
+    topAtFlat / topFlatSpan >= 0.62 &&
+    probeBelowWidth <= topAtFlat * 1.45
+  ) {
+    return { ok: false, reason: 'clipped_top', fgHeightRatio };
+  }
+
+  // Check 2: Clipped-bottom (coat/waist sliced flat against y >= h - 3, NOT narrow shoes)
+  const botEdgeCount = Math.max(
+    rowCounts[h - 1] || 0,
+    rowCounts[h - 2] || 0,
+    rowCounts[h - 3] || 0
+  );
+  if (b.maxY >= h - 3 && botEdgeCount >= Math.max(w * 0.2, medianBodyWidth * 0.62)) {
+    return { ok: false, reason: 'clipped_bottom', fgHeightRatio };
+  }
+
+  // Check 3: Floating half-body / waist-up shot (compact head+torso ending flat around mid-canvas)
+  const bottomTrimBandY = Math.max(b.minY, Math.round(b.maxY - fgH * 0.04));
+  let maxBottomBarCount = 0;
+  for (let y = bottomTrimBandY; y <= b.maxY; y += 1) {
+    if (rowCounts[y] > maxBottomBarCount) maxBottomBarCount = rowCounts[y];
+  }
+  const heightToMedianBodyAspect = fgH / Math.max(1, medianBodyWidth);
+  if (
+    fgHeightRatio < 0.52 &&
+    heightToMedianBodyAspect < 2.15 &&
+    maxBottomBarCount >= medianBodyWidth * 0.52
+  ) {
+    return { ok: false, reason: 'half_body', fgHeightRatio };
+  }
+
+  return { ok: true, reason: 'ok', fgHeightRatio };
+}
+
+async function inspectCutoutDataUrlIntegrity(
+  dataUrl: string
+): Promise<TurnaroundSliceIntegrityReport> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined' || !dataUrl) {
+    return { ok: true, reason: 'ok', fgHeightRatio: 0.8 };
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w < 16 || h < 16) {
+          resolve({ ok: false, reason: 'too_small', fgHeightRatio: 0 });
+          return;
+        }
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const rgba = ctx.getImageData(0, 0, w, h).data;
+        const rep = inspectTurnaroundSliceIntegrityInBuffer(rgba, w, h);
+        c.width = 0;
+        c.height = 0;
+        resolve(rep);
+      } catch {
+        resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
+      }
+    };
+    img.onerror = () => resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Ensures all sliced turnaround angles (`0°`, `45°`, `90°`, `135°`, `180°`, `225°`) stand on a unified
- * bottom floor baseline with generous shoe clearance and consistent full-body height so
- * quarter/rear-quarter angles never appear high-angle, zoomed-in, or cropped at the feet.
- * Preserves bit-exact pixels (zero resampling) when slices already share an aligned baseline.
+ * bottom floor baseline with generous shoe clearance, uniform stature, and centered vertical standing axis
+ * (immune to asymmetric umbrellas or briefcases pulling horizontal center off).
  */
 function normalizeTurnaroundCanvasesToFloorBaseline(
   canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>>
@@ -2053,6 +2275,9 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
 
   if (heights.length < 2) return;
 
+  const canonicalH = heights.length > 0
+    ? Math.max(...activeAngles.map((a) => canvases[a]?.height || 0))
+    : 0;
   const sortedH = heights.slice().sort((a, b) => a - b);
   const medianFgH = sortedH[Math.floor(sortedH.length / 2)];
   const sortedBottoms = bottoms.slice().sort((a, b) => a - b);
@@ -2066,35 +2291,45 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     const ch = c.height;
     if (ch < 64) continue;
 
-    const fgH = b.maxY - b.minY + 1;
-    const targetIdealH = Math.round(ch * 0.82);
-    const targetMaxAllowedH = Math.round(ch * 0.85);
-    const minTopPadPx = Math.round(ch * 0.09);
+    // Resample canvas vertically if height diverges from canonicalH so object-fit:contain matches 1:1
+    const baseH = canonicalH >= 180 ? canonicalH : ch;
+    const heightNormScale = baseH / ch;
+    const fgH = (b.maxY - b.minY + 1) * heightNormScale;
+    const targetIdealH = Math.round(baseH * 0.81);
+    const targetMaxAllowedH = Math.round(baseH * 0.85);
+    const minTopPadPx = Math.round(baseH * 0.07);
     const canonicalFloorY = Math.min(
-      Math.round(ch * 0.94),
-      Math.max(Math.round(ch * 0.88), medianBottom)
+      Math.round(baseH * 0.94),
+      Math.max(Math.round(baseH * 0.88), medianBottom)
     );
     const targetFloorY =
-      ch >= 180
-        ? Math.round(ch * 0.94)
-        : medianBottom > Math.round(ch * 0.945)
-          ? Math.round(ch * 0.935)
+      baseH >= 180
+        ? Math.round(baseH * 0.94)
+        : medianBottom > Math.round(baseH * 0.945)
+          ? Math.round(baseH * 0.935)
           : canonicalFloorY;
 
-    const heightDiffRatio = medianFgH > 0 ? Math.abs(fgH - medianFgH) / medianFgH : 0;
-    const isUndersizedFullBody = ch >= 180 && medianFgH < Math.round(ch * 0.77);
+    const scaledMedianFgH = medianFgH;
+    const heightDiffRatio = scaledMedianFgH > 0 ? Math.abs(fgH - scaledMedianFgH) / scaledMedianFgH : 0;
+    const isUndersizedFullBody = baseH >= 180 && scaledMedianFgH < Math.round(baseH * 0.77);
     const needsScaleNormalization =
-      ch >= 180 &&
-      (fgH > targetMaxAllowedH || heightDiffRatio > 0.065 || isUndersizedFullBody);
-    const bottomDelta = targetFloorY - b.maxY;
+      baseH >= 180 &&
+      (fgH > targetMaxAllowedH ||
+        heightDiffRatio > 0.015 ||
+        isUndersizedFullBody ||
+        Math.abs(heightNormScale - 1) > 0.01);
+    const bottomDelta = targetFloorY - b.maxY * heightNormScale;
 
-    const fgW = b.maxX - b.minX + 1;
-    const srcCx = b.minX + fgW * 0.5;
+    const fgW = (b.maxX - b.minX + 1) * heightNormScale;
+    const srcCx = b.coreCx;
     const horizOffsetPx = Math.abs(cw * 0.5 - srcCx);
 
-    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 3 && horizOffsetPx <= 4) {
+    if (!needsScaleNormalization && Math.abs(bottomDelta) <= 2 && horizOffsetPx <= 3) {
       continue;
     }
+
+    const dstCanvasW = needsScaleNormalization ? Math.round(cw * heightNormScale) : cw;
+    const dstCanvasH = needsScaleNormalization ? baseH : ch;
 
     const scratch = document.createElement('canvas');
     scratch.width = cw;
@@ -2109,29 +2344,46 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
 
     sCtx.clearRect(0, 0, cw, ch);
     sCtx.drawImage(c, 0, 0);
-    cCtx.clearRect(0, 0, cw, ch);
+    if (c.width !== dstCanvasW || c.height !== dstCanvasH) {
+      c.width = dstCanvasW;
+      c.height = dstCanvasH;
+    }
+    cCtx.clearRect(0, 0, dstCanvasW, dstCanvasH);
     cCtx.imageSmoothingEnabled = true;
     cCtx.imageSmoothingQuality = 'high';
 
     if (needsScaleNormalization) {
       const uniformDesiredFgH = isUndersizedFullBody
-        ? Math.min(targetMaxAllowedH, Math.max(medianFgH, targetIdealH))
-        : Math.min(targetMaxAllowedH, medianFgH);
-      const maxTopSafeScale = (targetFloorY - minTopPadPx) / Math.max(1, fgH);
-      const maxWidthSafeScale = (cw * 0.92) / Math.max(1, fgW);
+        ? Math.min(targetMaxAllowedH, Math.max(scaledMedianFgH, targetIdealH))
+        : Math.min(targetMaxAllowedH, scaledMedianFgH);
+      const rawFgH = Math.max(1, b.maxY - b.minY + 1);
+      const rawFgW = Math.max(1, b.maxX - b.minX + 1);
+      const maxTopSafeScale = (targetFloorY - minTopPadPx) / rawFgH;
+      const maxWidthSafeScale = (dstCanvasW * 0.92) / rawFgW;
       const scale = clamp(
-        Math.min(uniformDesiredFgH / Math.max(1, fgH), maxTopSafeScale, maxWidthSafeScale),
-        0.72,
-        1.22
+        Math.min(uniformDesiredFgH / rawFgH, maxTopSafeScale, maxWidthSafeScale),
+        0.65,
+        1.35
       );
       const dstW = Math.round(cw * scale);
       const dstH = Math.round(ch * scale);
-      const dstX = Math.round(cw * 0.5 - srcCx * scale);
+      const rawDstX = dstCanvasW * 0.5 - srcCx * scale;
+      const minSafeDstX = 2 - b.minX * scale;
+      const maxSafeDstX = dstCanvasW - 3 - b.maxX * scale;
+      const dstX = Math.round(
+        minSafeDstX <= maxSafeDstX
+          ? clamp(rawDstX, minSafeDstX, maxSafeDstX)
+          : dstCanvasW * 0.5 - (b.minX + rawFgW * 0.5) * scale
+      );
       const dstY = Math.round(targetFloorY - b.maxY * scale);
       cCtx.drawImage(scratch, 0, 0, cw, ch, dstX, dstY, dstW, dstH);
     } else {
-      // Pure integer translation centering X & grounding Y — zero pixel resampling blur!
-      const clampedDx = Math.round(cw * 0.5 - srcCx);
+      const rawDx = cw * 0.5 - srcCx;
+      const minSafeDx = 2 - b.minX;
+      const maxSafeDx = cw - 3 - b.maxX;
+      const clampedDx = Math.round(
+        minSafeDx <= maxSafeDx ? clamp(rawDx, minSafeDx, maxSafeDx) : cw * 0.5 - (b.minX + fgW * 0.5)
+      );
       const clampedDy = clamp(
         Math.round(bottomDelta),
         minTopPadPx - b.minY,
@@ -2144,8 +2396,8 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     scratch.height = 0;
   }
 
-  // Trim excess horizontal square transparent margins symmetrically to a ~3:4 portrait canvas
-  // so narrow mobile viewports (`object-fit: contain`) never width-choke full-body characters!
+  // Unify all canvas dimensions to an exact ~3:4 portrait box centered on cw/2 so every
+  // turnaround slice renders at 1:1 identical proportions under `object-fit: contain`.
   let maxPostFgW = 0;
   let minCanvasW = Infinity;
   let refCanvasH = 0;
@@ -2170,28 +2422,89 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
       Math.round(refCanvasH * 0.74),
       Math.ceil(maxPostFgW + refCanvasH * 0.08)
     );
-    if (desiredPortraitW < minCanvasW - 16) {
-      for (const angle of activeAngles) {
-        const c = canvases[angle];
-        if (!c) continue;
-        const oldW = c.width;
-        const oldH = c.height;
-        const cropX = Math.max(0, Math.round((oldW - desiredPortraitW) * 0.5));
-        const scratch = document.createElement('canvas');
-        scratch.width = desiredPortraitW;
-        scratch.height = oldH;
-        const sCtx = scratch.getContext('2d');
-        const cCtx = c.getContext('2d', { willReadFrequently: true });
-        if (sCtx && cCtx) {
+    for (const angle of activeAngles) {
+      const c = canvases[angle];
+      if (!c) continue;
+      if (Math.abs(c.width - desiredPortraitW) <= 4 && c.width >= desiredPortraitW) continue;
+      const oldW = c.width;
+      const oldH = c.height;
+      const scratch = document.createElement('canvas');
+      scratch.width = desiredPortraitW;
+      scratch.height = oldH;
+      const sCtx = scratch.getContext('2d');
+      const cCtx = c.getContext('2d', { willReadFrequently: true });
+      if (sCtx && cCtx) {
+        if (desiredPortraitW <= oldW) {
+          const cropX = Math.max(0, Math.round((oldW - desiredPortraitW) * 0.5));
           sCtx.drawImage(c, cropX, 0, desiredPortraitW, oldH, 0, 0, desiredPortraitW, oldH);
-          c.width = desiredPortraitW;
-          c.height = oldH;
-          cCtx.clearRect(0, 0, desiredPortraitW, oldH);
-          cCtx.drawImage(scratch, 0, 0);
+        } else {
+          const padLeft = Math.round((desiredPortraitW - oldW) * 0.5);
+          sCtx.drawImage(c, 0, 0, oldW, oldH, padLeft, 0, oldW, oldH);
         }
-        scratch.width = 0;
-        scratch.height = 0;
+        c.width = desiredPortraitW;
+        c.height = oldH;
+        cCtx.clearRect(0, 0, desiredPortraitW, oldH);
+        cCtx.drawImage(scratch, 0, 0);
       }
+      scratch.width = 0;
+      scratch.height = 0;
+    }
+  }
+}
+
+async function normalizeTurnaroundDataUrlsToFloorBaseline(
+  slices: Partial<Record<TurnaroundAngleDeg, string>>
+): Promise<void> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') return;
+  const active = TURNAROUND_ANGLES.filter((a) => Boolean(slices[a]));
+  if (active.length < 2) return;
+
+  const canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
+  await Promise.all(
+    active.map(
+      (angle) =>
+        new Promise<void>((resolve) => {
+          const src = slices[angle];
+          if (!src) {
+            resolve();
+            return;
+          }
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const w = img.naturalWidth || img.width;
+              const h = img.naturalHeight || img.height;
+              if (w >= 64 && h >= 64) {
+                const c = document.createElement('canvas');
+                c.width = w;
+                c.height = h;
+                const ctx = c.getContext('2d', { willReadFrequently: true });
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0);
+                  canvases[angle] = c;
+                }
+              }
+            } catch {
+              // ignore broken angle
+            }
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = src;
+        })
+    )
+  );
+
+  const loaded = TURNAROUND_ANGLES.filter((a) => Boolean(canvases[a]));
+  if (loaded.length < 2) return;
+
+  normalizeTurnaroundCanvasesToFloorBaseline(canvases);
+  for (const angle of loaded) {
+    const c = canvases[angle];
+    if (c) {
+      slices[angle] = c.toDataURL('image/png');
+      c.width = 0;
+      c.height = 0;
     }
   }
 }
@@ -2219,6 +2532,43 @@ function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
   cCtx.restore();
   scratch.width = 0;
   scratch.height = 0;
+}
+
+async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined' || !dataUrl) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w < 8 || h < 8) {
+          resolve(dataUrl);
+          return;
+        }
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        flipCanvasHorizontallyInPlace(c);
+        const flipped = c.toDataURL('image/png');
+        c.width = 0;
+        c.height = 0;
+        resolve(flipped);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
 }
 
 /**
@@ -3155,14 +3505,92 @@ function evaluateTurnaroundGridDecisionFromStats(params: {
   return hasCenterSubjectMass || w / h >= 1.15;
 }
 
+/**
+ * Scans `[0.34h .. 0.66h]` for the horizontal background valley separating Row 1 (`0°, 45°, 90°`)
+ * and Row 2 (`135°, 180°, 225°`), preventing hardcoded `h / 2` from decapitating tall/shifted Row 2 heads.
+ */
+export function resolveTurnaroundRowSplitYInBuffer(
+  sheetRgba: Uint8ClampedArray,
+  w: number,
+  h: number
+): number {
+  const halfH = Math.floor(h / 2);
+  if (w < 64 || h < 64 || sheetRgba.length < w * h * 4) return halfH;
+
+  const yMin = Math.max(12, Math.floor(h * 0.34));
+  const yMax = Math.min(h - 13, Math.floor(h * 0.66));
+  if (yMax <= yMin) return halfH;
+
+  const xMin = Math.max(2, Math.floor(w * 0.04));
+  const xMax = Math.min(w - 3, Math.ceil(w * 0.96));
+  const sampleWidth = Math.max(1, xMax - xMin + 1);
+  const edgeXs = [2, Math.min(8, w - 1), Math.max(0, w - 9), Math.max(0, w - 3)];
+  const rowDensities = new Float32Array(h);
+
+  for (let y = yMin; y <= yMax; y += 1) {
+    const rowOff = y * w * 4;
+    const [bgR, bgG, bgB] = estimateRowMedianEdgeBackdropRgb(sheetRgba, w, rowOff, edgeXs);
+    let fg = 0;
+    for (let x = xMin; x <= xMax; x += 2) {
+      const idx = rowOff + x * 4;
+      if (sheetRgba[idx + 3] < 40) continue;
+      const dr = sheetRgba[idx] - bgR;
+      const dg = sheetRgba[idx + 1] - bgG;
+      const db = sheetRgba[idx + 2] - bgB;
+      if (dr * dr + dg * dg + db * db > 324) {
+        fg += 2;
+      }
+    }
+    rowDensities[y] = Math.min(1, fg / sampleWidth);
+  }
+
+  let bestValleyCenter = -1;
+  let bestValleyScore = -Infinity;
+  let curStart = -1;
+  for (let y = yMin; y <= yMax + 1; y += 1) {
+    const isEmptyRow = y <= yMax && rowDensities[y] <= 0.014;
+    if (isEmptyRow) {
+      if (curStart === -1) curStart = y;
+    } else if (curStart !== -1) {
+      const len = y - curStart;
+      if (len >= 2) {
+        const mid = (curStart + (y - 1)) * 0.5;
+        const centerDistPenalty = Math.abs(mid - halfH) * 0.15;
+        const score = len - centerDistPenalty;
+        if (score > bestValleyScore) {
+          bestValleyScore = score;
+          bestValleyCenter = Math.round(mid);
+        }
+      }
+      curStart = -1;
+    }
+  }
+
+  if (bestValleyCenter >= yMin && bestValleyCenter <= yMax) {
+    return bestValleyCenter;
+  }
+
+  let minRowY = halfH;
+  let minScore = Infinity;
+  for (let y = yMin + 1; y < yMax; y += 1) {
+    const smoothed = (rowDensities[y - 1] + rowDensities[y] + rowDensities[y + 1]) / 3;
+    const score = smoothed + Math.abs(y - halfH) * 0.0002;
+    if (score < minScore) {
+      minScore = score;
+      minRowY = y;
+    }
+  }
+  return minRowY;
+}
+
 export function resolveTurnaroundSheetGridDecisionInBuffer(
   sheetRgba: Uint8ClampedArray,
   w: number,
   h: number,
   options?: { layout?: string }
 ): TurnaroundSheetGridDecision {
-  const halfH = Math.floor(h / 2);
-  const botH = h - halfH;
+  const splitY = resolveTurnaroundRowSplitYInBuffer(sheetRgba, w, h);
+  const botH = h - splitY;
   const isExplicit2x2 = options?.layout === 'turnaround_2x2' || w < 256 || h < 256;
   const isHorizontalStrip = !isExplicit2x2 && w / h >= 2.15;
 
@@ -3174,13 +3602,13 @@ export function resolveTurnaroundSheetGridDecisionInBuffer(
   let botCenterDensity = 0;
 
   if (!isExplicit2x2 && !isHorizontalStrip && sheetRgba.length >= w * h * 4) {
-    const topData = sheetRgba.subarray(0, halfH * w * 4);
-    const botData = sheetRgba.subarray(halfH * w * 4, h * w * 4);
-    topClusters = detectRowSubjectClustersInBuffer(topData, w, halfH);
+    const topData = sheetRgba.subarray(0, splitY * w * 4);
+    const botData = sheetRgba.subarray(splitY * w * 4, h * w * 4);
+    topClusters = detectRowSubjectClustersInBuffer(topData, w, splitY);
     botClusters = detectRowSubjectClustersInBuffer(botData, w, botH);
-    topHeadClusters = detectRowHeadClustersInBuffer(topData, w, halfH);
+    topHeadClusters = detectRowHeadClustersInBuffer(topData, w, splitY);
     botHeadClusters = detectRowHeadClustersInBuffer(botData, w, botH);
-    topCenterDensity = measureRowCenterForegroundDensityInBuffer(topData, w, halfH);
+    topCenterDensity = measureRowCenterForegroundDensityInBuffer(topData, w, splitY);
     botCenterDensity = measureRowCenterForegroundDensityInBuffer(botData, w, botH);
   }
 
@@ -3319,15 +3747,24 @@ export async function sliceTurnaround2x2Sheet(
         let botHeadClusters: HorizontalSpan[] = [];
         let topCenterDensity = 0;
         let botCenterDensity = 0;
-        const halfH = Math.floor(h / 2);
+        let splitY = Math.floor(h / 2);
+
+        if (sheetCtx && w >= 64 && h >= 64) {
+          try {
+            const fullSheetRgba = sheetCtx.getImageData(0, 0, w, h).data;
+            splitY = resolveTurnaroundRowSplitYInBuffer(fullSheetRgba, w, h);
+          } catch {
+            splitY = Math.floor(h / 2);
+          }
+        }
 
         if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip && sheetCtx) {
-          topClusters = detectRowSubjectClusters(sheetCtx, w, 0, halfH);
-          botClusters = detectRowSubjectClusters(sheetCtx, w, halfH, h);
-          topHeadClusters = detectRowHeadClusters(sheetCtx, w, 0, halfH);
-          botHeadClusters = detectRowHeadClusters(sheetCtx, w, halfH, h);
-          topCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, 0, halfH);
-          botCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, halfH, h);
+          topClusters = detectRowSubjectClusters(sheetCtx, w, 0, splitY);
+          botClusters = detectRowSubjectClusters(sheetCtx, w, splitY, h);
+          topHeadClusters = detectRowHeadClusters(sheetCtx, w, 0, splitY);
+          botHeadClusters = detectRowHeadClusters(sheetCtx, w, splitY, h);
+          topCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, 0, splitY);
+          botCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, splitY, h);
         }
 
         const use3x2Grid = evaluateTurnaroundGridDecisionFromStats({
@@ -3364,8 +3801,11 @@ export async function sliceTurnaround2x2Sheet(
             ch,
           }));
         } else if (use3x2Grid) {
-          const trimY = Math.max(2, Math.round(halfH * 0.016));
-          const ch = Math.max(16, halfH - trimY * 2);
+          const trimTop = Math.max(1, Math.round(splitY * 0.012));
+          const botTotalH = h - splitY;
+          const trimBot = Math.max(1, Math.round(botTotalH * 0.012));
+          const topCh = Math.max(16, splitY - trimTop * 2);
+          const botCh = Math.max(16, botTotalH - trimBot * 2);
           const topSpans = resolveThreeColumnCropSpans(topClusters, topHeadClusters, w);
           const botSpans = resolveThreeColumnCropSpans(botClusters, botHeadClusters, w);
           const topAngles: [TurnaroundAngleDeg, TurnaroundAngleDeg, TurnaroundAngleDeg] = [
@@ -3378,16 +3818,16 @@ export async function sliceTurnaround2x2Sheet(
             ...topAngles.map((angle, i) => ({
               angle,
               sx: topSpans[i].x0,
-              sy: trimY,
+              sy: trimTop,
               cw: Math.max(16, topSpans[i].x1 - topSpans[i].x0),
-              ch,
+              ch: topCh,
             })),
             ...botAngles.map((angle, i) => ({
               angle,
               sx: botSpans[i].x0,
-              sy: halfH + trimY,
+              sy: splitY + trimBot,
               cw: Math.max(16, botSpans[i].x1 - botSpans[i].x0),
-              ch,
+              ch: botCh,
             })),
           ];
         } else if (isHorizontal1x4Strip) {
@@ -3405,14 +3845,17 @@ export async function sliceTurnaround2x2Sheet(
         } else {
           const halfW = Math.floor(w / 2);
           const trimX = Math.max(2, Math.round(halfW * 0.016));
-          const trimY = Math.max(2, Math.round(halfH * 0.016));
+          const trimTop = Math.max(1, Math.round(splitY * 0.012));
+          const botTotalH = h - splitY;
+          const trimBot = Math.max(1, Math.round(botTotalH * 0.012));
           const cw = Math.max(16, halfW - trimX * 2);
-          const ch = Math.max(16, halfH - trimY * 2);
+          const topCh = Math.max(16, splitY - trimTop * 2);
+          const botCh = Math.max(16, botTotalH - trimBot * 2);
           panels = [
-            { angle: 0, sx: trimX, sy: trimY, cw, ch },
-            { angle: 45, sx: halfW + trimX, sy: trimY, cw, ch },
-            { angle: 90, sx: trimX, sy: halfH + trimY, cw, ch },
-            { angle: 180, sx: halfW + trimX, sy: halfH + trimY, cw, ch },
+            { angle: 0, sx: trimX, sy: trimTop, cw, ch: topCh },
+            { angle: 45, sx: halfW + trimX, sy: trimTop, cw, ch: topCh },
+            { angle: 90, sx: trimX, sy: splitY + trimBot, cw, ch: botCh },
+            { angle: 180, sx: halfW + trimX, sy: splitY + trimBot, cw, ch: botCh },
           ];
         }
 
@@ -5118,6 +5561,149 @@ export async function synthesizeGeminiMultiAngleVton(
         const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
           layout: json.layout || 'turnaround_3x2',
         });
+
+        // Verify full-body head-to-shoe integrity on every slice and auto-repair defective angles
+        const integrityEntries = await Promise.all(
+          TURNAROUND_ANGLES.map(async (a) => {
+            const url = sliced[a];
+            if (!url) return [a, { ok: false, reason: 'too_small', fgHeightRatio: 0 }] as const;
+            const rep = await inspectCutoutDataUrlIntegrity(url);
+            return [a, rep] as const;
+          })
+        );
+        const badAngles = integrityEntries
+          .filter(([, rep]) => !rep.ok)
+          .map(([a]) => a);
+
+        if (badAngles.length > 0 && !request.signal?.aborted) {
+          const repairTargets =
+            badAngles.length <= 2
+              ? badAngles
+              : Array.from(new Set<TurnaroundAngleDeg>([angleDeg, 0, ...badAngles])).slice(0, 6);
+
+          const attemptRepairAngle = async (repairAngle: TurnaroundAngleDeg) => {
+            try {
+              let repairRaw: string | null = null;
+              if (synthesisSource === 'gemini' && !isStaticStandalone) {
+                const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
+                if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+                const serverRepair = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+                  method: 'POST',
+                  headers: reqHeaders,
+                  body: JSON.stringify({
+                    mode,
+                    styleMode,
+                    viewAngleDeg: repairAngle,
+                    turnaroundSheet: false,
+                    weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                    avatarSpec: effectiveProfile.avatarSpec,
+                    avatarConfigHash: effectiveProfile.avatarConfigHash,
+                    portraitDataUrl: effectivePortraitUrl,
+                    profile: {
+                      gender: effectiveProfile.gender,
+                      skinToneHex: effectiveProfile.skinToneHex,
+                      personalColor: effectiveProfile.personalColor,
+                      heightCm: effectiveProfile.heightCm,
+                      weightKg: effectiveProfile.weightKg,
+                      bodyShape: effectiveProfile.bodyShape,
+                      shoulderScale: effectiveProfile.shoulderScale,
+                      waistScale: effectiveProfile.waistScale,
+                      hipScale: effectiveProfile.hipScale,
+                      portraitDataUrl: effectivePortraitUrl,
+                      ...(storedCharacterAnchorUrl
+                        ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
+                        : {}),
+                      avatarSpec: effectiveProfile.avatarSpec,
+                      avatarConfigHash: effectiveProfile.avatarConfigHash,
+                      styleMode,
+                      viewAngleDeg: repairAngle,
+                      turnaroundSheet: false,
+                    },
+                    slots: serializedSlots,
+                    forceRefresh: true,
+                  }),
+                });
+                repairRaw = sanitizeImageCandidate(
+                  serverRepair?.compositeImageUrl ?? serverRepair?.afterImageUrl ?? null
+                );
+              }
+              if (!repairRaw && clientGeminiKeys.length > 0) {
+                const repairJson = await synthesizeDirectBrowserGeminiVton({
+                  apiKey: clientGeminiKeys[0],
+                  profile: effectiveProfile,
+                  styleMode,
+                  weatherMood,
+                  weather: request.weather,
+                  angleDeg: repairAngle,
+                  useTurnaroundSheet: false,
+                  serializedSlots,
+                });
+                repairRaw = sanitizeImageCandidate(
+                  repairJson?.compositeImageUrl ?? repairJson?.afterImageUrl ?? null
+                );
+              }
+              if (repairRaw) {
+                const repairCut = await ensureTransparentCutout(
+                  await removeModelBackgroundToPng(repairRaw)
+                );
+                const repairCheck = await inspectCutoutDataUrlIntegrity(repairCut);
+                if (repairCheck.ok) {
+                  sliced[repairAngle] = repairCut;
+                }
+              }
+            } catch {
+              // ignore single-angle repair failure and fall through to symmetric mirror check
+            }
+          };
+
+          // Bound concurrency to 3 requests at a time and retry up to 2 attempts if still cropped
+          for (let i = 0; i < repairTargets.length; i += 3) {
+            await Promise.all(
+              repairTargets.slice(i, i + 3).map(async (targetAngle) => {
+                await attemptRepairAngle(targetAngle);
+                const post = sliced[targetAngle]
+                  ? await inspectCutoutDataUrlIntegrity(sliced[targetAngle]!)
+                  : { ok: false };
+                if (!post.ok && !request.signal?.aborted) {
+                  await attemptRepairAngle(targetAngle);
+                }
+              })
+            );
+          }
+        }
+
+        // Last-resort headless/half-body guard: mirror opposite valid rear-quarter slice rather than showing headless crops
+        for (const a of badAngles) {
+          const recheck = sliced[a]
+            ? await inspectCutoutDataUrlIntegrity(sliced[a]!)
+            : { ok: false };
+          if (!recheck.ok) {
+            const mirrorPartner: Partial<Record<TurnaroundAngleDeg, TurnaroundAngleDeg[]>> = {
+              135: [225, 90],
+              225: [135, 90],
+              180: [135, 225],
+            };
+            const candidates = mirrorPartner[a] || [];
+            for (const partnerAngle of candidates) {
+              if (!sliced[partnerAngle]) continue;
+              const partnerCheck = await inspectCutoutDataUrlIntegrity(sliced[partnerAngle]!);
+              if (partnerCheck.ok) {
+                sliced[a] =
+                  partnerAngle === 135 || partnerAngle === 225
+                    ? a === 180
+                      ? sliced[partnerAngle]!
+                      : await flipDataUrlHorizontally(sliced[partnerAngle]!)
+                    : await flipDataUrlHorizontally(sliced[partnerAngle]!);
+                break;
+              }
+            }
+          }
+        }
+
+        // Re-normalize ALL 6 final slices together after single-angle repairs so every angle
+        // shares identical 3:4 aspect canvas dimensions, 0.94 floor baseline, uniform height, and dead-center spine X.
+        await normalizeTurnaroundDataUrlsToFloorBaseline(sliced);
+
         for (const a of TURNAROUND_ANGLES) {
           const sliceUrl =
             sliced[a] ||

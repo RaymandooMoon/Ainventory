@@ -832,7 +832,7 @@ img {
   gap: 4px;
   padding: 6px;
   border-radius: var(--radius-pill);
-  background: var(--glass-bg);
+  background: var(--nav-dock-bg, rgba(255, 255, 255, var(--hig-nav-bg-opacity, 0.5)));
   border: 1px solid var(--glass-border);
   box-shadow: var(--elevation-lg);
   backdrop-filter: var(--vibrancy-filter);
@@ -1842,7 +1842,7 @@ img {
 .ui-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 140;
+  z-index: 1200;
   background: var(--scrim-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -3400,10 +3400,11 @@ html[data-vibrancy-fallback='solid'] .hig-auth-container {
   transform: scale(0.95);
 }
 
-/* Compact Left Worn-Slot Chips (`[data-studio-slot]`) */
+/* Compact Right Worn-Slot Chips (`[data-studio-slot]`) */
 .studio-worn-slots-dock {
   position: absolute;
-  left: 12px;
+  left: auto;
+  right: 12px;
   top: 56px;
   z-index: 54;
   display: flex;

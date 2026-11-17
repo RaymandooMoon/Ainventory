@@ -96,12 +96,12 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(headerGeometry).not.toBeNull();
     expect(headerGeometry!.gap).toBeGreaterThanOrEqual(4);
 
-    // Unified Bottom-Center Floating Glassmorphism 4-Tab Bar keeps Closet, Outfits, Calendar, Stats order
+    // Unified Bottom-Center Floating Glassmorphism 4-Tab Bar puts Outfits first, then Closet, Calendar, Stats
     const tabs = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId} button`);
-    await expect(tabs).toHaveText(['Closet', 'Outfits', 'Calendar', 'Stats']);
+    await expect(tabs).toHaveText(['Outfits', 'Closet', 'Calendar', 'Stats']);
 
     // Navigate to Closet (`/closet`) and verify MY WARDROBE is removed while item count remains visible
-    await tabs.nth(0).click();
+    await tabs.nth(1).click();
     await expect(page).toHaveURL(/\/closet$/);
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toHaveCount(0);
 
@@ -339,11 +339,15 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(weatherCapsule).toBeVisible();
     await expect(weatherCapsule).toContainText('서울');
     await expect(weatherCapsule).toContainText(/°C/);
+    await expect(weatherCapsule.locator('[data-weather-capsule-datetime="true"]')).toContainText(
+      /오늘\s+\d{1,2}\.\d{1,2}\([일월화수목금토]\)\s+\d{2}:\d{2}/
+    );
+    await expect(studioCanvas).toHaveAttribute('data-day-target', 'today');
 
-    // Wait for Tomorrow's Weather #1 recommendation to dress the 2D VTON model
+    // Wait for Today's Weather #1 recommendation to dress the 2D VTON model
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
-    // 2. Open unified Weather · Location · Look 1/2 popup via capsule and switch Rainy Cool -> Warm Spring
+    // 2. Open unified Weather · Location · Look 1/2 popup via capsule and verify Today default + 비 -> 예보 clearing + Warm Spring
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
     await weatherPanel.evaluate(async (el) => {
@@ -361,7 +365,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       expect(panelBox.y).toBeGreaterThanOrEqual(0);
       expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(vpSize.height + 1);
     }
-    await expect(weatherPanel).toContainText('내일 날씨 코디');
+    await expect(weatherPanel).toContainText('오늘 날씨 코디');
     await expect(weatherPanel.locator('[data-weather-source-caption="true"]')).toContainText(
       'Open-Meteo'
     );
@@ -380,11 +384,20 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     );
     await expect(weatherPanel.locator('.weather-popup-look-items')).toHaveCount(0);
 
+    // Switch to `비` (`rainy_cool`) -> verify rain activates -> switch back to `예보` (`live`) -> rain & auto umbrella clear cleanly
     await weatherScenarioSelect.selectOption('rainy_cool');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel.locator('button[data-weather-scenario="live"]').click();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', /^(clear|cloudy|wind)$/);
 
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
@@ -446,7 +459,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(mannequin).toHaveAttribute('data-body-shape', 'muscular');
     await expect(mannequin).toHaveAttribute('data-height-cm', '178');
 
-    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero +/- zoom buttons, compact zoom badge)
+    // 5. 2D VTON Viewer Inspection (zero 3D camera orbit pills, zero zoom buttons/badge, compact Background Picker HUD + pinch zoom)
     await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-iso-rotate-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-angle-btn]')).toHaveCount(0);
@@ -454,6 +467,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
+    await expect(
+      studioCanvas.locator('.studio-hud-left-slot [data-stage-bg-picker-btn="true"]')
+    ).toBeVisible();
 
     await page.getByRole('button', { name: /피팅 새로고침|Refresh/i }).click();
     await studioCanvas.locator('[data-vton-demo-btn="true"]').click();
@@ -461,18 +477,55 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(demoAiImg).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
 
-    const zoomBadgeBtn = studioCanvas.locator(
-      '.studio-hud-left-slot [data-vton-zoom-level="true"]'
+    const bgBadgeBtn = studioCanvas.locator(
+      '.studio-hud-left-slot [data-stage-bg-picker-btn="true"]'
     );
-    await expect(zoomBadgeBtn).toBeVisible();
-    await expect(zoomBadgeBtn).toContainText('1.0');
+    await expect(bgBadgeBtn).toBeVisible();
+    await expect(bgBadgeBtn).toHaveAttribute('data-stage-bg-tier', 'C');
     const box10 = await demoAiImg.boundingBox();
     expect(box10).not.toBeNull();
 
-    await zoomBadgeBtn.click();
-    await expect(zoomBadgeBtn).toContainText('1.2');
-    await expect(mannequin).toHaveAttribute('data-zoom', '1.20');
+    // Verify 2-finger pinch zoom scales character smoothly (`1.00 -> 1.35 -> 1.00`)
+    await mannequin.evaluate((stageEl) => {
+      const rect = stageEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const midY = rect.top + rect.height / 2;
+      const emit = (type: 'touchstart' | 'touchmove' | 'touchend', halfSpanPx: number | null) => {
+        const pts =
+          halfSpanPx === null
+            ? []
+            : [
+                { id: 1, x: midX - halfSpanPx, y: midY },
+                { id: 2, x: midX + halfSpanPx, y: midY },
+              ];
+        const tl = pts.map(
+          (p) =>
+            new Touch({
+              identifier: p.id,
+              target: stageEl,
+              clientX: p.x,
+              clientY: p.y,
+              pageX: p.x,
+              pageY: p.y,
+            })
+        );
+        stageEl.dispatchEvent(
+          new TouchEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            touches: tl,
+            targetTouches: tl,
+            changedTouches: tl,
+          })
+        );
+      };
+      emit('touchstart', 50);
+      emit('touchmove', 67.5);
+      emit('touchend', null);
+    });
+    await expect(mannequin).toHaveAttribute('data-zoom', '1.35');
     await expect
       .poll(
         async () => {
@@ -481,19 +534,45 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
         },
         { timeout: 2500 }
       )
-      .toBeGreaterThanOrEqual(1.15);
-    const box12 = await demoAiImg.boundingBox();
-    expect(box12).not.toBeNull();
-    const stepScaleRatio = box12!.width / box10!.width;
-    expect(stepScaleRatio).toBeGreaterThanOrEqual(1.15);
-    expect(stepScaleRatio).toBeLessThanOrEqual(1.25);
+      .toBeGreaterThanOrEqual(1.25);
 
-    await zoomBadgeBtn.click();
-    await expect(zoomBadgeBtn).toContainText('1.5');
-    await expect(mannequin).toHaveAttribute('data-zoom', '1.50');
-
-    await zoomBadgeBtn.click();
-    await expect(zoomBadgeBtn).toContainText('1.0');
+    await mannequin.evaluate((stageEl) => {
+      const rect = stageEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const midY = rect.top + rect.height / 2;
+      const emit = (type: 'touchstart' | 'touchmove' | 'touchend', halfSpanPx: number | null) => {
+        const pts =
+          halfSpanPx === null
+            ? []
+            : [
+                { id: 1, x: midX - halfSpanPx, y: midY },
+                { id: 2, x: midX + halfSpanPx, y: midY },
+              ];
+        const tl = pts.map(
+          (p) =>
+            new Touch({
+              identifier: p.id,
+              target: stageEl,
+              clientX: p.x,
+              clientY: p.y,
+              pageX: p.x,
+              pageY: p.y,
+            })
+        );
+        stageEl.dispatchEvent(
+          new TouchEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            touches: tl,
+            targetTouches: tl,
+            changedTouches: tl,
+          })
+        );
+      };
+      emit('touchstart', 80);
+      emit('touchmove', 50);
+      emit('touchend', null);
+    });
     await expect(mannequin).toHaveAttribute('data-zoom', '1.00');
 
     // Unequipping Tops leaves an unbroken 2D editorial base model
@@ -776,7 +855,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
         await page.locator('[data-atelier-weather-capsule="true"]').click();
         const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
         await expect(weatherPanel).toBeVisible();
-        await expect(weatherPanel).toContainText('Tomorrow Weather');
+        await expect(weatherPanel).toContainText('Today Weather');
         await assertZeroHangulOnPage('sample-outfits-weather-popup');
         await page.keyboard.press('Escape');
         await expect(weatherPanel).toHaveCount(0);
@@ -1079,4 +1158,186 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(badgeText).toMatch(/딥/);
     expect(badgeText).not.toMatch(/MST-\d+/);
   });
+
+  test('9. After-8PM Tomorrow Outfit prompt modal (max 3 impressions, 예 -> tomorrow / 아니오 -> today) and Galaxy live time-of-day sky stages', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __AINVENTORY_HOUR_OVERRIDE__?: number }).__AINVENTORY_HOUR_OVERRIDE__ = 21;
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      window.localStorage.setItem('ainventory_outfit_generated_date_v1', `${y}-${m}-${d}`);
+    });
+
+    // Impression 1: Dismiss with 아니오 -> keeps today weather
+    await page.goto('/?tod=sunset');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toHaveAttribute('data-time-of-day', 'sunset');
+    await expect(studioCanvas.locator('[data-atelier-backdrop="true"]')).toHaveAttribute(
+      'data-backdrop-tod',
+      'sunset'
+    );
+    const tomorrowModal = page.locator('[data-tomorrow-outfit-modal="true"]');
+    await expect(tomorrowModal).toBeVisible();
+    const modalLayerAudit = await page.evaluate(() => {
+      const sheet = document.querySelector('#tomorrow-outfit-prompt-modal');
+      const backdrop = sheet?.closest('.ui-sheet-backdrop');
+      const tabbar = document.querySelector('.hig-floating-tabbar');
+      const yesBtn = sheet?.querySelector('[data-tomorrow-prompt-yes="true"]');
+      const noBtn = sheet?.querySelector('[data-tomorrow-prompt-no="true"]');
+      const bZ = backdrop ? Number(window.getComputedStyle(backdrop).zIndex || 0) : 0;
+      const tZ = tabbar ? Number(window.getComputedStyle(tabbar).zIndex || 0) : 0;
+      const noRect = noBtn?.getBoundingClientRect();
+      const topHit = noRect
+        ? document.elementFromPoint(noRect.left + noRect.width / 2, noRect.top + noRect.height / 2)
+        : null;
+      return {
+        bZ,
+        tZ,
+        yesInteractive: Boolean(yesBtn),
+        noDirectHit: Boolean(noBtn && topHit && (topHit === noBtn || noBtn.contains(topHit))),
+      };
+    });
+    expect(modalLayerAudit.bZ).toBeGreaterThan(modalLayerAudit.tZ);
+    expect(modalLayerAudit.yesInteractive).toBe(true);
+    expect(modalLayerAudit.noDirectHit).toBe(true);
+
+    await tomorrowModal.locator('[data-tomorrow-prompt-no="true"]').click();
+    await expect(tomorrowModal).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-day-target', 'today');
+
+    // Impression 2: Confirm with 예 -> switches weather to tomorrow
+    await page.goto('/?tod=night');
+    await expect(studioCanvas).toHaveAttribute('data-time-of-day', 'night');
+    await expect(studioCanvas.locator('[data-weather-foreground]')).toHaveAttribute(
+      'data-weather-tod',
+      'night'
+    );
+    await expect(tomorrowModal).toBeVisible();
+    await tomorrowModal.locator('[data-tomorrow-prompt-yes="true"]').click();
+    await expect(tomorrowModal).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-day-target', 'tomorrow');
+    await expect(studioCanvas.locator('[data-weather-capsule-datetime="true"]')).toContainText('내일');
+
+    // Impression 3: Shown one final time, dismiss
+    await page.goto('/?tod=day');
+    await expect(studioCanvas).toHaveAttribute('data-time-of-day', 'day');
+    await expect(tomorrowModal).toBeVisible();
+    await tomorrowModal.locator('[data-tomorrow-prompt-no="true"]').click();
+    await expect(tomorrowModal).toHaveCount(0);
+
+    // 4th access: Must NOT appear (>= 3 impressions reached)
+    await page.reload();
+    await expect(studioCanvas).toBeVisible();
+    await expect(tomorrowModal).toHaveCount(0);
+  });
+
+  test('10. Nav bar 50% default opacity + Settings slider, 10 architectural stage backgrounds, Store free-draw speech bubble & gacha, and Calendar attendance (+10 i)', async ({
+    page,
+  }) => {
+    await page.goto('/outfits');
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+
+    // 1) Default C-tier architectural backdrop & translucent bottom navigation bar (`0.5` = 50%)
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 'c_atelier_plaster');
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-tier', 'C');
+    await expect(studioCanvas.locator('.atelier-stage-environment-photo')).toBeVisible();
+
+    const defaultNavOpacity = await page.evaluate(() =>
+      window.getComputedStyle(document.documentElement).getPropertyValue('--hig-nav-bg-opacity').trim()
+    );
+    expect(Number.parseFloat(defaultNavOpacity)).toBeCloseTo(0.5, 2);
+
+    // Settings slider adjusts --hig-nav-bg-opacity live & Default 50% button resets it
+    await page.locator(`#${CARBON_DOM_CONTRACT.openAccountSettingsBtnId}`).click();
+    const opacitySlider = page.locator('[data-nav-opacity-slider="true"]');
+    await expect(opacitySlider).toBeVisible();
+    await opacitySlider.evaluate((el) => {
+      const input = el as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      setter?.call(input, '0.85');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(page.locator('[data-nav-opacity-value="true"]')).toHaveText('85%');
+    const updatedNavOpacity = await page.evaluate(() =>
+      window.getComputedStyle(document.documentElement).getPropertyValue('--hig-nav-bg-opacity').trim()
+    );
+    expect(Number.parseFloat(updatedNavOpacity)).toBeCloseTo(0.85, 2);
+
+    await page.locator('[data-nav-opacity-reset="true"]').click();
+    await expect(page.locator('[data-nav-opacity-value="true"]')).toHaveText('50%');
+    await page.keyboard.press('Escape');
+
+    // 2) Top-right Store button + Unclaimed daily free-draw speech bubble -> opens #stage-store-modal & claims free 0 i draw
+    const storeBtn = page.locator('[data-open-store-btn="true"]');
+    const freeBubble = page.locator('[data-store-free-draw-bubble="true"]');
+    await expect(storeBtn).toBeVisible();
+    await expect(freeBubble).toBeVisible();
+    await expect(freeBubble).toContainText(/무료 뽑기|Free daily draw/);
+
+    await freeBubble.click();
+    const storeModal = page.locator('#stage-store-modal');
+    await expect(storeModal).toBeVisible();
+    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText('0 i');
+    await expect(storeModal.locator('[data-store-collection-item]')).toHaveCount(10);
+
+    const drawBtn = storeModal.locator('[data-store-draw-btn="true"]');
+    await expect(drawBtn).toContainText(/무료 뽑기|Free Daily Draw/);
+    await drawBtn.click();
+    await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible();
+    await expect(storeModal.locator('[data-store-reveal-tier]')).toHaveAttribute(
+      'data-store-reveal-tier',
+      /^[SABC]$/
+    );
+    await page.keyboard.press('Escape');
+    await expect(storeModal).toHaveCount(0);
+    await expect(freeBubble).toHaveCount(0);
+
+    // 3) Top-left Background Picker opens all 10 (S×1, A×2, B×3, C×4) & equips C-tier / unlocked background
+    await studioCanvas.locator('[data-stage-bg-picker-btn="true"]').click();
+    const bgPickerModal = page.locator('#stage-background-picker-modal');
+    await expect(bgPickerModal).toBeVisible();
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(1);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(2);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(3);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="C"] [data-bg-option-id]')).toHaveCount(4);
+
+    // Equip an unlocked option and confirm modal closes & stage attribute stays valid
+    await bgPickerModal.locator('[data-bg-option-id="c_atelier_plaster"]').click();
+    await expect(bgPickerModal).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 'c_atelier_plaster');
+
+    // 4) Calendar tab -> Attendance check-in awards +10 i, increments streak, and stamps today
+    await page.locator('[data-nav-tab="calendar"]').click();
+    await expect(page.locator('[data-calendar-attendance-card="true"]')).toBeVisible();
+    await expect(page.locator('[data-calendar-i-balance="true"]')).toHaveText('0 i');
+    const attendanceBtn = page.locator('[data-calendar-attendance-btn="true"]');
+    await expect(attendanceBtn).toBeEnabled();
+    await attendanceBtn.click();
+
+    await expect(page.locator('[data-calendar-i-balance="true"]')).toHaveText('10 i');
+    await expect(page.locator('[data-calendar-streak="true"]')).toContainText(/1일|1d/);
+    await expect(attendanceBtn).toBeDisabled();
+    await expect(page.locator('[data-calendar-attended="true"]').first()).toBeVisible();
+
+    // 5) Return to Outfits -> paid 10 i backdrop gacha draw works & spends 10 i
+    await page.locator('[data-nav-tab="outfits"]').click();
+    await page.locator('[data-open-store-btn="true"]').click();
+    await expect(storeModal).toBeVisible();
+    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText('10 i');
+    await expect(storeModal.locator('[data-store-draw-btn="true"]')).toBeEnabled();
+    await expect(storeModal.locator('[data-store-draw-btn="true"]')).toContainText('10 i');
+    await storeModal.locator('[data-store-draw-btn="true"]').click();
+    await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible();
+    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText(/^(0|5) i$/);
+  });
 });
+
