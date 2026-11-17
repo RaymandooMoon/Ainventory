@@ -61,9 +61,9 @@
   --atelier-ink-on-light: #1d1c1a;
   --atelier-ink-secondary-on-light: rgba(29, 28, 26, 0.68);
 
-  /* 7. Studio Status Capsule, Sand Accents & Zero-CLS Glass HUD */
-  --atelier-sand-dot: #d8c3a5;
-  --atelier-sand-ring: #d8c3a5;
+  /* 7. Studio Status Capsule, Maison Gold Accents & Zero-CLS Glass HUD (DESIGN.md v4) */
+  --atelier-sand-dot: var(--accent-gold, #b08d57);
+  --atelier-sand-ring: var(--accent-gold, #b08d57);
   --atelier-hud-glass-bg: rgba(255, 255, 255, 0.84);
   --atelier-hud-glass-bg-dark: rgba(20, 20, 19, 0.84);
   --atelier-hud-glass-solid: #f9f9fb;
