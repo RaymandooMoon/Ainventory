@@ -332,6 +332,18 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .hig-large-title {
   font-size: var(--type-screen-title);
   font-weight: 740;
@@ -4734,6 +4746,26 @@ html[data-theme-transitioning='1'] *::after {
 
 .atelier-logo-img.is-visible {
   opacity: 1;
+}
+
+:root[data-theme='dark'] .atelier-logo-frame .atelier-logo-img--light {
+  opacity: 0;
+}
+
+:root[data-theme='dark'] .atelier-logo-frame .atelier-logo-img--dark {
+  opacity: 1;
+}
+
+:root[data-theme='light'] .atelier-logo-frame .atelier-logo-img--dark {
+  opacity: 0;
+}
+
+:root[data-theme='light'] .atelier-logo-frame .atelier-logo-img--light {
+  opacity: 1;
+}
+
+:root[data-theme='dark'] .atelier-logo-frame.hig-shell-brand-logo .atelier-logo-img--dark {
+  filter: brightness(1.12) drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.35));
 }
 
 .hig-wardrobe-meta-row {

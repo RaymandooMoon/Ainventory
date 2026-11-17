@@ -183,7 +183,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
 
-    // 2) Left worn-slots dock is unclipped, pointer-interactive, and vertically scrollable
+    // 2) Worn-slots dock is unclipped, pointer-interactive, and scrollable (horizontal row on <600px flat-lay, vertical rail otherwise)
     const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
     await expect(wornDock).toBeVisible();
     const dockMetrics = await wornDock.evaluate((el) => {
@@ -192,12 +192,13 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
         c.getBoundingClientRect()
       );
       return {
+        overflowX: cs.overflowX,
         overflowY: cs.overflowY,
         pointerEvents: cs.pointerEvents,
         minChipHeight: chips.length > 0 ? Math.min(...chips.map((r) => r.height)) : 0,
       };
     });
-    expect(dockMetrics.overflowY).toBe('auto');
+    expect(dockMetrics.overflowX === 'auto' || dockMetrics.overflowY === 'auto').toBe(true);
     expect(dockMetrics.pointerEvents).toBe('auto');
     expect(dockMetrics.minChipHeight).toBeGreaterThanOrEqual(40);
 

@@ -4483,7 +4483,7 @@ html[data-vibrancy-fallback='solid']
    14. MOBILE OUTFITS FLAT-LAY & OLED HUD CLEARANCE (< 600px)
    ========================================================================== */
 @media (max-width: 599px) {
-  .studio-2d-vton-viewer[data-vton-provider='flatlay-lookbook']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slots-dock {
     top: 48px;
     bottom: auto;
@@ -4503,25 +4503,42 @@ html[data-vibrancy-fallback='solid']
     touch-action: pan-x;
   }
 
-  .studio-2d-vton-viewer[data-vton-provider='flatlay-lookbook']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slot-chip {
     width: 40px;
     height: 40px;
   }
 
-  .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+    .studio-vton-staged-bar,
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+    .studio-vton-pinned-banner {
+    top: 102px;
+    left: 10px;
+    right: 10px;
+    max-width: calc(100% - 20px);
+    z-index: 65;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
     padding: 102px 10px 60px;
   }
 
-  .studio-2d-vton-viewer[data-has-status-capsule='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
-    padding: 102px 10px 128px;
+    padding-top: 142px;
   }
 
-  .studio-2d-vton-viewer[data-has-status-capsule='true'][data-equipped-count='0']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+    .studio-2d-model-stage.is-flatlay-stage
+    .studio-2d-layer {
+    padding-bottom: 128px;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true'][data-equipped-count='0']:not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
     padding: 52px 10px 100px;

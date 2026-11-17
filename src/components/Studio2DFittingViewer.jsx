@@ -1690,14 +1690,32 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       (equippedCount > 0 || statusToast.reason === 'empty_outfit')
   );
 
+  const hasStagedBarVisible = Boolean(
+    !effectiveCompareActive &&
+      !historyOpen &&
+      !statusToast &&
+      stageMode === 'ai-vton' &&
+      equippedCount > 0 &&
+      stagedNeedsApply &&
+      !aiLoading &&
+      !resolvedAiImageUrl
+  );
+
+  const hasPinnedBannerVisible = Boolean(
+    isShowingPinnedHistory && !effectiveCompareActive && !historyOpen
+  );
+
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
       className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${effectiveWeather} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
+      data-stage-view={resolvedAiImageUrl ? 'ai-vton' : 'flatlay'}
       data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
       data-has-status-capsule={hasStatusCapsuleVisible ? 'true' : 'false'}
+      data-has-staged-bar={hasStagedBarVisible ? 'true' : 'false'}
+      data-has-top-banner={aiLoading || hasStagedBarVisible || hasPinnedBannerVisible ? 'true' : 'false'}
       data-has-zoom-bar={showCharacterZoomBar ? 'true' : 'false'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
@@ -1949,14 +1967,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       )}
 
       {/* Smart Credit-Saver Staged CTA Bar */}
-      {!effectiveCompareActive &&
-        !historyOpen &&
-        !statusToast &&
-        stageMode === 'ai-vton' &&
-        equippedCount > 0 &&
-        stagedNeedsApply &&
-        !aiLoading &&
-        !resolvedAiImageUrl && (
+      {hasStagedBarVisible && (
           <div
             className="studio-vton-staged-bar"
             data-vton-staged-bar="true"
@@ -1996,9 +2007,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         )}
 
       {/* Pinned History Banner when viewing a past generated outfit different from current wardrobe slots */}
-      {isShowingPinnedHistory &&
-        !effectiveCompareActive &&
-        !historyOpen && (
+      {hasPinnedBannerVisible && (
           <div
             className="studio-vton-pinned-banner"
             data-vton-pinned-banner="true"
