@@ -1,12 +1,13 @@
 ---
-version: "v3"
-name: "Ainventory — Tailored Atelier Editorial System (Master Design v3)"
+version: "v4"
+name: "Ainventory — Haute Atelier Editorial System (Fashion Core v4)"
 description: >
-  Editorial, tactile, calm, tailored-atelier design system for a private fitting studio app:
+  High-fashion editorial, tactile, runway-calm private fitting studio & digital wardrobe system:
   3D/2D digital closet, AI model virtual try-on, weather-aware styling, calendar lookbook and
-  wardrobe statistics. Monochrome architecture on Paper White / Gallery Gray / Atelier Linen in
-  light mode and Warm Obsidian / Graphite in dark mode, so garments, skin tones and weather
-  light carry all of the chroma. All product copy is Korean.
+  wardrobe statistics. Grounded in contemporary luxury fashion maison aesthetics — sculptural
+  negative space, architectural hairline framing, kinetic silk motion, Paper White / Atelier Linen
+  in light mode, and True OLED Black (#000000) in dark mode so garments, silhouettes, and skin
+  tones hold 100% of the chroma. Primary brand mark: dual-theme hanger-calligraphy "iNVTRY" logo.
 colors:
   # Light — "Atelier Daylight"
   canvas: "#FFFFFF"
@@ -25,18 +26,18 @@ colors:
   hairline-strong: "rgba(29, 29, 31, 0.16)"
   primary: "#1D1D1F"
   on-primary: "#FFFFFF"
-  # Dark — "Warm Obsidian Gallery"
-  dark-canvas: "#141413"
-  dark-surface: "#1C1C1E"
-  dark-elevated: "#2C2C2E"
-  dark-card: "#21201E"
+  # Dark — "OLED Noir Runway" (Pixels off #000000 primary canvas)
+  dark-canvas: "#000000"
+  dark-surface: "#121214"
+  dark-elevated: "#1C1C1E"
+  dark-card: "#161618"
   dark-ink: "#F5F5F7"
   dark-ink-secondary: "#AEAEB2"
   dark-ink-tertiary: "#98989D"
-  dark-hairline: "rgba(245, 245, 247, 0.12)"
+  dark-hairline: "rgba(245, 245, 247, 0.14)"
   dark-primary: "#F5F5F7"
-  dark-on-primary: "#141413"
-  # Atelier accent (hairline/focus only — never a fill for chrome)
+  dark-on-primary: "#000000"
+  # Atelier accent (hairline/focus/logo-shadow only — never a loud fill for chrome)
   sand: "#D8C3A5"
   sand-ink: "#7A5F3E"
   # Semantic (validation & destructive only)
@@ -273,14 +274,18 @@ components:
 
 **Ainventory**는 내 옷을 사진 한 장으로 디지털화하고, **AI로 생성한 나만의 모델**에게 날씨와 일정에 맞는 착장을 입혀 보는 **프라이빗 피팅 스튜디오**다. 웹(GitHub Pages)과 Capacitor Android에서 동일하게 동작하는 모바일 우선 앱이며, 모든 제품 카피는 한국어로 작성한다.
 
-### Brand Mood — 4 Adjectives
+### Brand Mood — 4 Fashion Editorial Pillars
 
 | 형용사 | 의미 | 화면에서의 구현 |
 | :--- | :--- | :--- |
-| **Editorial** (에디토리얼) | 패션 매거진의 지면처럼 큰 여백·대비가 분명한 타이포·한 화면 한 메시지 | 화면 타이틀은 `screen-title` 1개, 섹션 머리는 `kicker` 대문자 키커 + `headline`. 장식 아이콘·배지 최소화 |
-| **Tactile** (촉각적) | 원단과 종이를 만지는 듯한 물성 | 스쿼클 카드의 상단 키라이트·1px 스펙큘러 림·접지 그림자, 탭 시 `scale(0.97)` 압축, 햅틱 `selection` |
-| **Calm** (고요함) | 경고·알림이 소리치지 않는 공간 | 무채색 크롬, 붉은색은 파괴적 확인에만, 상태 안내는 1줄 캡슐(`role="status"`), 모션은 180–360ms 스프링 |
-| **Tailored Atelier** (맞춤 아틀리에) | 재단사의 작업실 — 리넨 호리존, 샌드 줄자, 오브시디언 작업대 | Outfits 스테이지 `#F4F0E8` 리넨 사이클로라마 + `#141413` 오브시디언 드로어 + `#D8C3A5` 샌드 포커스 헤어라인 |
+| **Fashion-Forward Editorial** (하이패션 에디토리얼) | 럭셔리 패션 하우스 룩북·런웨이의 절제된 긴장감과 여백 | 로고 중심 오프닝(Boro식 침묵 + Rimowa식 상승 전환), `screen-title` 1개, 불필요한 배지·장식 태그·상태 캡슐 배제 |
+| **Tactile** (촉각적) | 실크·오간자·리넨과 종이를 만지는 듯한 물성 | 스쿼클 카드의 상단 키라이트·1px 스펙큘러 림·접지 그림자, 탭 시 `scale(0.97)` 압축, 햅틱 `selection` |
+| **OLED Noir & Daylight Calm** (순흑·백야의 고요함) | 다크모드 OLED 픽셀 오프(`#000000`) 순흑 스테이지와 종이 백색의 극단적 무채색 정제 | 무채색 크롬, 다크 배경 `#000000` 극대화(글래스/카드만 최소 1px 헤어라인 분리), 모션은 180–620ms 감속 스프링 |
+| **Tailored Atelier** (맞춤 아틀리에) | 재단사의 작업실 — 리넨 호리존, 샌드 줄자, 행어 원라인 로고 `iNVTRY` | Outfits 스테이지 `#F4F0E8` 리넨 / `#000000` OLED 순흑 + 듀얼 테마 `"iNVTRY"` 로고(라이트 `#1D1D1F`+`#CCB596`, 다크 `#F5F5F7`+`#B29A7A`) |
+
+### Default Theme & Brand Mark Rules
+- **디폴트 테마**: 앱 최초 진입 시 항상 **`system`**(`ThemePreference = 'system'`)으로 동작해 OS 라이트/다크 설정을 즉시 따른다.
+- **브랜드 로고 (`iNVTRY`)**: 서비스명(`A inventory`)을 텍스트 대신 행어-의류 원라인 로고(`iNVTRY`)로 우선 표기하며, 라이트 모드(`#1D1D1F` 잉크 + `#CCB596` 웜 샌드)와 OLED 다크 모드(`#F5F5F7` 알라바스터 + `#B29A7A` 샴페인 샌드)에서 자동 전환한다.
 
 ### Spatial Philosophy — "Gallery, Not Dashboard"
 1. **옷과 사람이 주인공이다.** 화면 면적의 85% 이상(`minVisualRatio: 0.85`)은 의류 이미지·AI 모델·여백이 차지하고, 크롬(컨트롤)은 가장자리 글래스 HUD로 물러난다.
@@ -315,26 +320,28 @@ components:
 | Ink on Linen 2nd | `#55524C` | `--atelier-ink-secondary-on-light` (solid) | 리넨 스테이지 위 보조 텍스트 | 6.85:1 on `#F4F0E8` |
 | Hairline | `rgba(29,29,31,0.08)` / strong `0.16` | `--hairline` | 카드 외곽선, 구분선 | — |
 
-### Dark — "Warm Obsidian Gallery"
+### Dark — "OLED Noir Runway" (True `#000000` Background Priority)
+
+다크 모드에서는 OLED 디스플레이의 서브픽셀이 완전히 소등되는 **완벽한 순흑(`#000000`)** 을 화면 캔버스와 주요 배경에 폭넓게 사용한다. 표면 위계는 두꺼운 회색 박스 대신 **순흑(`#000000`) 배경 + 미묘한 1px 헤어라인 및 최소 고도(`#121214` / `#1C1C1E`)** 로 구분한다.
 
 | Role | Hex | CSS Variable | 용도 | 대비 |
 | :--- | :--- | :--- | :--- | :--- |
-| Canvas | `#141413` | `--bg-canvas` | 앱 배경 (순흑 `#000` 대신 따뜻한 오브시디언 — 할레이션·번인 완화, 에디토리얼 톤 유지) | `#F5F5F7` 16.93:1 |
-| Surface | `#1C1C1E` | `--bg-surface` | 카드, 입력, 시트 | `#F5F5F7` 15.63:1 |
+| Canvas (OLED Off) | `#000000` | `--bg-canvas` | 앱 배경, 로그인 스테이지, Outfits 다크 스테이지 베이스 (OLED 완벽 소등) | `#F5F5F7` 19.56:1 |
+| Surface | `#121214` / `#1C1C1E` | `--bg-surface` | 카드, 입력, 시트 (순흑 위 절제된 구분) | `#F5F5F7` 15.63:1+ |
 | Elevated | `#2C2C2E` | `--bg-elevated` | 모달 내부 카드, 활성 세그먼트 | — |
-| Studio Card | `#21201E` | `--atelier-obsidian-card` | 드로어 카드 | `#D8C3A5` 9.51:1 |
+| Studio Card | `#161618` | `--atelier-obsidian-card` | 드로어 카드 | `#D8C3A5` 10.6:1 |
 | Ink Primary | `#F5F5F7` | `--ink-primary` | 제목·본문·1차 CTA 배경 | — |
-| Ink Secondary | `#AEAEB2` | `--ink-secondary` | 보조 본문 | 7.69:1 on `#1C1C1E` |
-| Ink Tertiary | `#98989D` | `--ink-muted` | 캡션 | 5.93:1 on `#1C1C1E` |
-| Hairline | `rgba(245,245,247,0.12)` | `--hairline` | 외곽선 | — |
+| Ink Secondary | `#AEAEB2` | `--ink-secondary` | 보조 본문 | 9.2:1 on `#000000` |
+| Ink Tertiary | `#98989D` | `--ink-muted` | 캡션 | 7.1:1 on `#000000` |
+| Hairline | `rgba(245,245,247,0.14)` | `--hairline` | 순흑 위 미세 경계선 | — |
 
-> Outfits 스테이지는 **라이트 모드에서 항상 리넨(`#F4F0E8`, 휘도 ≥ 225)** 을 유지하고, 다크 모드에서만 `#141413 → #1B1A18` 로 전환한다. 드로어는 양 모드 모두 오브시디언 스모크 글래스다.
+> Outfits 스테이지는 **라이트 모드에서 항상 리넨(`#F4F0E8`, 휘도 ≥ 225)** 을 유지하고, 다크 모드에서는 **OLED 순흑(`#000000 → #0C0C0E`)** 로 전환한다. 드로어는 양 모드 모두 스모크 글래스다.
 
 ### Atelier Accent & Semantic
 
 | Role | Light | Dark | 규칙 |
 | :--- | :--- | :--- | :--- |
-| Sand (재단 줄자) | `#D8C3A5` 헤어라인 / 텍스트 시 `#7A5F3E` (5.23:1 on linen) | `#D8C3A5` (10.77:1 on `#141413`) | **채우기 금지.** 착용/포커스 링(2px), 날씨 큐레이션 점(6px), 진행 쉬머 하이라이트에만 |
+| Sand (재단 줄자) | `#D8C3A5` 헤어라인 / 텍스트 시 `#7A5F3E` (5.23:1 on linen) | `#D8C3A5` (12.1:1 on `#000000`) | **채우기 금지.** 착용/포커스 링(2px), 날씨 큐레이션 점(6px), 진행 쉬머 하이라이트, 로고 오프셋 그림자에만 |
 | Danger | `#B42318` (6.57:1 on white) | `#FF6961` (6.03:1 on `#1C1C1E`) | 필드 검증 오류 텍스트, 삭제 확인 버튼에만. 정보성 상태 안내·API 키 미설정 안내에 사용 금지 |
 | Success | `#1F6F43` (6.15:1) | `#4ADE80` (9.76:1) | 인증 완료 체크, 저장 완료 캡슐 아이콘 |
 | Focus Ring | `#1D4ED8` | `#60A5FA` | `:focus-visible` 2px 링 + 2px 오프셋. 유일하게 허용되는 유채색 UI 링 |
@@ -448,11 +455,16 @@ components:
 - 화면 하단 중앙 캡슐, 글래스(0.84) + `--elevation-lg`, 높이 64px, 탭 4개 각 ≥ 48dp, 간격 8px.
 - 활성: 대비 반전 + 2px 외곽 링 + 라벨 760 + `18×2.5px` 하단 인디케이터(색 이외 단서).
 
-### Login Atelier
-- 무대: 리넨(`#F4F0E8`) / 다크 `#141413` 배경 + 의류 모션 스테이지(`#login-wardrobe-motion-stage`).
-- 순서: 브랜드 워드마크 → 한 줄 가치 제안(`display`) → **Google 계정으로 로그인**(최상단 1순위) → Apple 로그인 → `또는` 구분선 → 로그인/회원가입 세그먼트 → 폼 → 샘플 옷장 체험(보조 텍스트 버튼).
+### Login Atelier (2-Stage Boro Intro → Rimowa Reveal)
+- **무대**: 라이트(`#FFFFFF` / 리넨 실크 웨이브) 또는 다크 **OLED 순흑(`#000000`)** 배경 + 키네틱 실크/런웨이 스포트라이트 캔버스(`#login-wardrobe-motion-stage`). 상단 라이브 상태 캡슐·보조 브랜드 마크·서브타이틀 문구는 모두 제거해 순수 패션 하우스 오프닝을 유지한다.
+- **Stage 1 — Intro (`Get started`)**:
+  - 즉시 로그인 폼을 띄우지 않는다.
+  - 화면 정중앙에 듀얼 테마 `"iNVTRY"` 행어 원라인 로고만 크게 배치하고, 하단 안전 영역에 단일 pill 버튼 **`Get started`**(국문: `시작하기`)만 고정한다. 우측 상단에는 테마/언어 유틸리티 버튼만 절제해 둔다.
+- **Stage 2 — Rimowa-Style Reveal Transition**:
+  - `Get started` 클릭 시 중앙의 `"iNVTRY"` 로고가 `transform: translate3d(...) scale(...)`로 상단 헤더 위치까지 부드럽게 미끄러져 올라가며, 동시에 로그인 모놀리스 패널과 약관 푸터가 아래에서 위로(`translate3d(0, 56px, 0) → 0`) 올라오면서 **투명(`opacity: 0`)에서 불투명(`opacity: 1`)으로** 자연스럽게 전환된다 (`600ms cubic-bezier(0.22, 1, 0.36, 1)`).
+- **Auth Panel 순서**: 듀얼 테마 `iNVTRY` 로고 → **Google 계정으로 로그인**(최상단 1순위) → Apple 로그인 → `또는` 구분선 → 로그인/회원가입 세그먼트 → 폼 → 샘플 옷장 체험(보조 텍스트 버튼).
 - **Google 버튼**: 공식 4색 G 로고 SVG(18px, 색 변경 금지), 라이트 `#FFFFFF` 배경 + `#747775` 1px 테두리 + `#1F1F1F` 텍스트(16.48:1), 다크 `#131314` 배경 + `#8E918F` 테두리 + `#E3E3E3` 텍스트(14.47:1). 높이 48px, pill, 라벨 `Google 계정으로 로그인`.
-- 오류: 필드 오류는 필드 하단 `caption` + danger 잉크. 시스템 오류는 폼 하단 **인라인 노트**(surface 배경, 14px 아이콘, 1–2줄, 우측 텍스트 버튼 `다시 시도`). 상단을 밀어내는 경고 카드 금지.
+- **오류**: 필드 오류는 필드 하단 `caption` + danger 잉크. 시스템 오류는 폼 하단 **인라인 노트**(surface 배경, 14px 아이콘, 1–2줄, 우측 텍스트 버튼 `다시 시도`). 상단을 밀어내는 경고 카드 금지.
 
 ### Closet
 - **단일 카테고리 레일**: 40px 필, 간격 8px, 활성은 대비 반전 + 체크 없는 굵은 라벨, 우측에 카운트(`tabular-nums`). 주얼리는 레일 말미 필로 흡수.
@@ -483,15 +495,15 @@ components:
 
 ## Imagery — Theme-Coordinated Packshots
 
-- **배경 톤 일치**: 의류 팩샷은 누끼(`image/webp`, 투명) 후 테마 표면 위에 놓는다. 라이트: 옷장 `#F5F5F7`, 드로어 `#F7F7F5`, 스테이지 `#F4F0E8`. 다크: `#1C1C1E` / `#21201E` / `#141413`. 흰 배경이 박힌 원본 사진은 `mix-blend-mode: multiply`(라이트 한정) 또는 표면색 패딩으로 경계를 숨긴다.
+- **배경 톤 일치**: 의류 팩샷은 누끼(`image/webp`, 투명) 후 테마 표면 위에 놓는다. 라이트: 옷장 `#F5F5F7`, 드로어 `#F7F7F5`, 스테이지 `#F4F0E8`. 다크: `#121214` / `#161618` / `#000000` (OLED 순흑). 흰 배경이 박힌 원본 사진은 `mix-blend-mode: multiply`(라이트 한정) 또는 표면색 패딩으로 경계를 숨긴다.
 - **조명 방향 통일**: 모든 2.5D 카드·AI 모델·아바타 실루엣은 **좌상단 45° 키라이트**, 우하단 접지 그림자. 다크 모드에서는 키라이트 강도 −40%, 림 라이트(스펙큘러) 유지.
-- **AI 모델 실루엣 조명**: 라이트 = 리넨 반사광의 따뜻한 화이트, 다크 = 오브시디언 위 샌드 림 라이트. 생성 쉬머 색도 동일 계열.
+- **AI 모델 실루엣 조명**: 라이트 = 리넨 반사광의 따뜻한 화이트, 다크 = OLED 순흑 위 샌드 림 라이트. 생성 쉬머 색도 동일 계열.
 - **아이콘**: Lucide 1.75–2.1 stroke, 잉크 색 상속(`currentColor`). 유채색 아이콘 금지(Google G 로고만 예외).
 - **날씨와 이미지**: 비 → 젖은 바닥 반사(데크), 맑음 → 웜 글로우, 눈 → 화이트 베일. 의류 이미지 자체 색은 오버레이로 왜곡하지 않는다(오버레이는 z-30, 텍스트·이미지 대비 규칙 준수).
 
 ## Motion — Zero-CLS Rules
 
-- **커브**: `--spring-ease: cubic-bezier(0.32, 0.72, 0, 1)`. 지속시간: 마이크로 120–180ms, 전환 240ms, 시트 340–360ms.
+- **커브**: `--spring-ease: cubic-bezier(0.32, 0.72, 0, 1)` (인트로→로그인 리빌은 `cubic-bezier(0.22, 1, 0.36, 1)`). 지속시간: 마이크로 120–180ms, 전환 240ms, 시트 340–360ms, 인트로 리빌 600ms.
 - **애니메이션 허용 속성은 `opacity`, `transform`, `filter`, `clip-path` 뿐.** `height/width/top/margin` 애니메이션 금지.
 - **예약 슬롯**: 조건부 UI(상태 캡슐, Staged CTA, 각도 독, 서브파트 레일)는 항상 고정 크기 컨테이너를 렌더하고 내부만 crossfade. 마운트/언마운트로 형제 요소를 밀어내지 않는다.
 - **이미지 박스**: 모든 이미지 컨테이너에 `aspect-ratio` 명시. 로딩은 스켈레톤 쉬머(같은 크기).
@@ -502,7 +514,7 @@ components:
 ## Do's and Don'ts
 
 ### Do's
-- 크롬은 무채색(`#FFFFFF`/`#F5F5F7`/`#1D1D1F`, 다크 `#141413`/`#1C1C1E`/`#F5F5F7`), 색은 옷·피부·날씨에서만.
+- 크롬은 무채색(`#FFFFFF`/`#F5F5F7`/`#1D1D1F`, 다크 `#000000` OLED 순흑/`#121214`/`#F5F5F7`), 색은 옷·피부·날씨에서만.
 - 모든 수치에 `tabular-nums`, 모든 타깃 48dp, 모든 간격 8pt 스케일.
 - 상태는 1줄 캡슐로 조용히, 다음 행동은 하나의 명확한 CTA로.
 - 조건부 UI는 예약 슬롯에서 crossfade (Zero-CLS).
@@ -511,15 +523,16 @@ components:
 
 ### Don'ts
 - 붉은 점·붉은 박스로 정보성 상태(API 키 미설정 등)를 알리지 않는다.
+- 로그인 화면에 불필요한 라이브 상태 필·보조 브랜드 배지·장식 서브타이틀을 중복 노출하지 않는다.
 - 플랫레이 룩북에 3D 각도 컨트롤을 노출하지 않는다.
 - 같은 의미의 필터 축을 두 줄 이상 동시에 노출하지 않는다.
-- 웜골드·보라-파랑 그라디언트·네온 액센트를 크롬에 넣지 않는다. 샌드는 헤어라인/점만.
+- 웜골드·보라-파랑 그라디언트·네온 액센트를 크롬에 넣지 않는다. 샌드는 헤어라인/점/로고 오프셋 그림자만.
 - 라이트 모드 Outfits 스테이지를 어둡게 만들지 않는다.
 - 날씨 오버레이 위에 HUD 없이 텍스트를 직접 올리지 않는다.
 - 임의 반경(9/11/12/13/18px), 스케일 밖 간격(2/3/5/6px)을 새로 도입하지 않는다.
 
 ## Stitch Generation Notes (for screen prompts)
 
-- 기본 바이브 문구: *"Editorial, tactile, calm tailored-atelier private fitting studio; monochrome chrome on paper white #FFFFFF, gallery gray #F5F5F7 and warm linen #F4F0E8 (dark: warm obsidian #141413, graphite #1C1C1E); sand #D8C3A5 hairline accents only; Keep all product copy and button text in Korean."*
-- 이미지 일체화: *"Garment packshot cards use #F7F7F5 backgrounds with transparent cutouts and a soft top-left key light; AI model silhouette lit with warm linen bounce light (dark: sand rim light); icons inherit ink color."*
+- 기본 바이브 문구: *"High-fashion luxury maison editorial private fitting studio; minimal runway silhouette framing, tactile silk/linen motion; monochrome chrome on paper white #FFFFFF, gallery gray #F5F5F7 and warm linen #F4F0E8 (dark: true OLED black #000000 pixels-off primary background, deep surface #121214, elevated #1C1C1E); sand #D8C3A5 hairline accents only; dual-theme hanger calligraphy logo 'iNVTRY'; Keep all product copy and button text in Korean."*
+- 이미지 일체화: *"Garment packshot cards use #F7F7F5 backgrounds with transparent cutouts and a soft top-left key light; AI model silhouette lit with warm linen bounce light (dark: sand rim light on pure OLED black #000000); icons inherit ink color."*
 - 정제는 `edit_screens`로 프롬프트당 1–2개 요소만(예: "Replace the red warning box above the stage with a slim glass studio status capsule"), UI 요소명(`navigation bar`, `primary call-to-action button`, `card layout`, `floating HUD`, `bottom sheet`)을 정확히 지목한다.

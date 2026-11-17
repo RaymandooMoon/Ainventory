@@ -42,7 +42,7 @@ let systemMediaBound = false;
 
 function normalizeThemePref(raw: string | null | undefined): ThemePreference {
   if (raw === 'dark' || raw === 'light' || raw === 'system') return raw;
-  return 'light';
+  return 'system';
 }
 
 function notifyThemeListeners(effective: EffectiveTheme, pref: ThemePreference): void {
@@ -208,7 +208,7 @@ export function getThemePreference(): ThemePreference {
   } catch {
     // ignore storage access error
   }
-  return 'light';
+  return 'system';
 }
 
 export function resolveEffectiveTheme(pref: string = getThemePreference()): EffectiveTheme {

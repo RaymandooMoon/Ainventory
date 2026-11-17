@@ -156,39 +156,39 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* Obsidian Gallery Core Surfaces (DESIGN.md v3) */
-  --bg-canvas: #141413;
-  --bg-surface: #1C1C1E;
-  --bg-elevated: #2C2C2E;
+  /* OLED Noir Runway Core Surfaces (DESIGN.md v4) */
+  --bg-canvas: #000000;
+  --bg-surface: #121214;
+  --bg-elevated: #1C1C1E;
   --bg-tertiary: #2A2A2E;
-  --bg-subtle: #232327;
-  --card-bg: #1C1C1E;
-  --card-subtle: #21201E;
-  --card-border: rgba(245, 245, 247, 0.095);
+  --bg-subtle: #1A1A1D;
+  --card-bg: #121214;
+  --card-subtle: #161618;
+  --card-border: rgba(245, 245, 247, 0.11);
   --atelier-ambient-wash: radial-gradient(
     120% 80% at 50% -10%,
-    rgba(42, 44, 54, 0.38) 0%,
-    rgba(20, 20, 19, 0) 68%
+    rgba(36, 36, 42, 0.24) 0%,
+    rgba(0, 0, 0, 0) 68%
   );
 
-  --squircle-bg-color: #1C1C1E;
+  --squircle-bg-color: #161618;
   --squircle-illumination: radial-gradient(
     circle at 46% 32%,
-    rgba(48, 51, 60, 0.9) 0%,
-    rgba(28, 28, 30, 0.96) 76%
+    rgba(40, 42, 48, 0.85) 0%,
+    rgba(18, 18, 20, 0.98) 76%
   );
-  --squircle-border: rgba(245, 245, 247, 0.085);
-  --squircle-border-hover: rgba(245, 245, 247, 0.2);
-  --squircle-inset-rim: inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  --squircle-border: rgba(245, 245, 247, 0.1);
+  --squircle-border-hover: rgba(245, 245, 247, 0.22);
+  --squircle-inset-rim: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.65);
 
   --ink-primary: #F5F5F7;
   --ink-secondary: #AEAEB2;
   --ink-muted: #98989D;
-  --ink-inverse: #141413;
+  --ink-inverse: #000000;
 
   --accent-mono: #F5F5F7;
-  --accent-mono-ink: #141413;
+  --accent-mono-ink: #000000;
   --accent-soft-bg: rgba(245, 245, 247, 0.09);
   --danger-ink: #FF453A;
   --danger-bg: rgba(255, 69, 58, 0.15);
@@ -196,9 +196,9 @@
   --success-ink: #32D74B;
   --success-bg: rgba(50, 215, 75, 0.14);
 
-  --glass-bg: rgba(20, 20, 19, 0.84);
-  --glass-bg-dense: rgba(28, 28, 30, 0.92);
-  --glass-bg-solid-fallback: #1C1C1E;
+  --glass-bg: rgba(0, 0, 0, 0.84);
+  --glass-bg-dense: rgba(18, 18, 20, 0.94);
+  --glass-bg-solid-fallback: #121214;
   --glass-border: rgba(245, 245, 247, 0.13);
   --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   --scrim-bg: rgba(0, 0, 0, 0.66);

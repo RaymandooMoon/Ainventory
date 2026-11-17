@@ -12,7 +12,7 @@ describe('carbonDesignContract Apple HIG monochrome & taxonomy invariants', () =
   it('preserves immutable light and OLED dark monochrome tokens and 8pt grid', () => {
     assert.equal(CARBON_HIG_TOKENS.light.bgCanvas, '#FFFFFF');
     assert.equal(CARBON_HIG_TOKENS.light.bgSurface, '#F5F5F7');
-    assert.equal(CARBON_HIG_TOKENS.dark.bgCanvas, '#141413');
+    assert.equal(CARBON_HIG_TOKENS.dark.bgCanvas, '#000000');
     assert.equal(CARBON_HIG_TOKENS.dark.bgSurface, '#1C1C1E');
     assert.equal(CARBON_HIG_TOKENS.gridUnitPt, 8);
     assert.ok(CARBON_HIG_TOKENS.touchTargetMinPx >= 44);

@@ -4,18 +4,18 @@
    ========================================================================== */
 
 :root {
-  /* 1. Core Obsidian & Charcoal Surfaces (Profile Sheet & Dark Drawer) */
-  --atelier-obsidian-bg: #141413;
-  --atelier-obsidian-elevated: #1c1c1a;
-  --atelier-obsidian-card: #21201e;
-  --atelier-obsidian-subtle: #2a2926;
-  --atelier-hairline: rgba(255, 255, 255, 0.09);
-  --atelier-hairline-strong: rgba(255, 255, 255, 0.18);
+  /* 1. Core OLED Noir & Charcoal Surfaces (Profile Sheet & Dark Drawer) */
+  --atelier-obsidian-bg: #000000;
+  --atelier-obsidian-elevated: #121214;
+  --atelier-obsidian-card: #161618;
+  --atelier-obsidian-subtle: #1f1f22;
+  --atelier-hairline: rgba(255, 255, 255, 0.1);
+  --atelier-hairline-strong: rgba(255, 255, 255, 0.2);
 
   /* 2. Smoked Glassmorphism Drawer (Outfits Right 42% Drawer) */
-  --atelier-drawer-glass-bg: rgba(20, 20, 19, 0.8);
-  --atelier-drawer-glass-surface: rgba(30, 29, 27, 0.72);
-  --atelier-drawer-glass-border: rgba(255, 255, 255, 0.12);
+  --atelier-drawer-glass-bg: rgba(0, 0, 0, 0.84);
+  --atelier-drawer-glass-surface: rgba(18, 18, 20, 0.78);
+  --atelier-drawer-glass-border: rgba(255, 255, 255, 0.14);
   --atelier-drawer-blur: blur(24px) saturate(135%);
 
   /* 3. Warm Beige Studio Viewport (Outfits Left 58% Viewport)
@@ -24,8 +24,8 @@
   --atelier-stage-warm-base: #f4f0e8;
   --atelier-stage-warm-mid: #ece7dd;
   --atelier-stage-warm-shadow: #e6e0d5;
-  --atelier-stage-dark-base: #141413;
-  --atelier-stage-dark-mid: #1b1a18;
+  --atelier-stage-dark-base: #000000;
+  --atelier-stage-dark-mid: #0c0c0e;
 
   /* Strictly activated ONLY when weather === 'rain' */
   --atelier-stage-rain-tint: rgba(14, 16, 20, 0.22);
@@ -65,9 +65,9 @@
   --atelier-sand-dot: #d8c3a5;
   --atelier-sand-ring: #d8c3a5;
   --atelier-hud-glass-bg: rgba(255, 255, 255, 0.84);
-  --atelier-hud-glass-bg-dark: rgba(20, 20, 19, 0.84);
+  --atelier-hud-glass-bg-dark: rgba(0, 0, 0, 0.84);
   --atelier-hud-glass-solid: #f9f9fb;
-  --atelier-hud-glass-solid-dark: #1c1c1f;
+  --atelier-hud-glass-solid-dark: #121214;
   --atelier-hud-text-secondary: #55524c;
   --atelier-hud-text-secondary-dark: #aeaeb2;
 }

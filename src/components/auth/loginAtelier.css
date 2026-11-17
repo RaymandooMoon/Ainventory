@@ -66,36 +66,36 @@
 }
 
 .atelier-auth-root[data-auth-theme='dark'] {
-  /* Dark Theme Tokens — Apple HIG True OLED Black & Elevated Graphite (WCAG AA+ >= 9.5:1) */
+  /* Dark Theme Tokens — OLED Noir Runway (#000000 Pixels-Off Primary Canvas, WCAG AA+ >= 10:1) */
   --atelier-bg-solid: #000000;
-  --atelier-panel-bg: rgba(28, 28, 30, 0.84);
-  --atelier-panel-border: rgba(245, 245, 247, 0.12);
+  --atelier-panel-bg: rgba(14, 14, 16, 0.88);
+  --atelier-panel-border: rgba(245, 245, 247, 0.14);
   --atelier-panel-shadow:
-    0 28px 80px -16px rgba(0, 0, 0, 0.78),
-    0 8px 24px -4px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 28px 80px -16px rgba(0, 0, 0, 0.92),
+    0 8px 24px -4px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
   --atelier-ink-primary: #f5f5f7;
   --atelier-ink-secondary: #aeaeb2;
   --atelier-ink-muted: #98989d;
-  --atelier-surface-subtle: #1c1c1e;
-  --atelier-surface-elevated: #2c2c2e;
-  --atelier-input-bg: rgba(18, 18, 20, 0.9);
-  --atelier-input-border: rgba(245, 245, 247, 0.16);
-  --atelier-input-border-hover: rgba(245, 245, 247, 0.34);
-  --atelier-input-focus-ring: rgba(245, 245, 247, 0.2);
+  --atelier-surface-subtle: #121214;
+  --atelier-surface-elevated: #1c1c1e;
+  --atelier-input-bg: rgba(0, 0, 0, 0.92);
+  --atelier-input-border: rgba(245, 245, 247, 0.18);
+  --atelier-input-border-hover: rgba(245, 245, 247, 0.36);
+  --atelier-input-focus-ring: rgba(245, 245, 247, 0.22);
   --atelier-accent-bg: #f5f5f7;
   --atelier-accent-fg: #000000;
   --atelier-accent-hover: #ffffff;
   --atelier-accent-indicator: #f5f5f7;
-  --atelier-secondary-bg: rgba(44, 44, 46, 0.84);
+  --atelier-secondary-bg: rgba(24, 24, 27, 0.9);
   --atelier-secondary-fg: #f5f5f7;
-  --atelier-secondary-border: rgba(245, 245, 247, 0.16);
-  --atelier-secondary-hover: #3a3a3c;
-  --atelier-card-glass-bg: rgba(28, 28, 30, 0.68);
-  --atelier-card-glass-border: rgba(245, 245, 247, 0.12);
-  --atelier-card-glass-shadow: 0 24px 52px -14px rgba(0, 0, 0, 0.72);
-  --atelier-pill-bg: rgba(28, 28, 30, 0.8);
-  --atelier-pill-border: rgba(245, 245, 247, 0.14);
+  --atelier-secondary-border: rgba(245, 245, 247, 0.18);
+  --atelier-secondary-hover: #2c2c2e;
+  --atelier-card-glass-bg: rgba(14, 14, 16, 0.76);
+  --atelier-card-glass-border: rgba(245, 245, 247, 0.14);
+  --atelier-card-glass-shadow: 0 24px 52px -14px rgba(0, 0, 0, 0.85);
+  --atelier-pill-bg: rgba(18, 18, 20, 0.86);
+  --atelier-pill-border: rgba(245, 245, 247, 0.16);
   --atelier-danger-bg: rgba(245, 245, 247, 0.08);
   --atelier-danger-border: rgba(245, 245, 247, 0.28);
   --atelier-danger-ink: #f5f5f7;
@@ -157,86 +157,8 @@
 }
 
 /* ==========================================================================
- * Ambient AI Wardrobe Live Status Capsule (Mobile + Desktop Safe Zone)
- * ========================================================================== */
-
-.atelier-live-capsule-wrap {
-  position: absolute;
-  top: max(14px, env(safe-area-inset-top, 14px));
-  left: 50%;
-  transform: translate3d(-50%, 0, 0);
-  z-index: 2;
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-  max-width: calc(100vw - 32px);
-}
-
-.atelier-live-capsule {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--atelier-pill-bg);
-  border: 1px solid var(--atelier-pill-border);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  color: var(--atelier-ink-secondary);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.4;
-  white-space: nowrap;
-  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.16);
-}
-
-.atelier-live-dot {
-  position: relative;
-  display: inline-flex;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--atelier-ink-primary);
-  box-shadow: 0 0 0 3px var(--atelier-input-focus-ring);
-  flex-shrink: 0;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .atelier-live-dot {
-    animation: atelierPulseDot 2.8s ease-in-out infinite;
-  }
-}
-
-@keyframes atelierPulseDot {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.92;
-  }
-  50% {
-    transform: scale(1.18);
-    opacity: 0.55;
-  }
-}
-
-@media (max-width: 767px) {
-  .atelier-live-capsule-wrap {
-    /* On mobile, tuck neatly below the top utility bar via clean optical alpha */
-    top: auto;
-    bottom: max(10px, env(safe-area-inset-bottom, 10px));
-    opacity: 0.92;
-  }
-
-  .atelier-live-capsule {
-    font-size: 11px;
-    padding: 5px 12px;
-  }
-}
-
-/* ==========================================================================
  * Layer B — 3D Parallax Couture Curation Glass Cards (Desktop Flanks Only)
- * Strictly hidden below 1180px so 0px ever collides with 440px Auth Card
+ * Strictly hidden below 1180px & hidden in Intro stage for Boro-pure opening
  * ========================================================================== */
 
 .atelier-flank-cards {
@@ -245,6 +167,12 @@
   pointer-events: none;
   z-index: 1;
   perspective: 1100px;
+  opacity: 0;
+  transition: opacity 0.62s var(--atelier-ease-spring);
+}
+
+.atelier-flank-cards.is-visible {
+  opacity: 1;
 }
 
 .atelier-curation-card {
@@ -397,8 +325,20 @@
 }
 
 /* ==========================================================================
- * Centered Single-Column Adaptive Auth Stage
+ * Centered Single-Column Adaptive Auth Stage (Boro Intro -> Rimowa Reveal)
  * ========================================================================== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .atelier-auth-stage {
   position: relative;
@@ -411,9 +351,15 @@
   align-items: center;
   justify-content: center;
   padding:
-    max(16px, env(safe-area-inset-top, 16px))
+    max(68px, calc(env(safe-area-inset-top, 16px) + 56px))
     clamp(16px, 4vw, 32px)
-    max(52px, calc(env(safe-area-inset-bottom, 16px) + 40px));
+    max(44px, calc(env(safe-area-inset-bottom, 16px) + 28px));
+}
+
+.atelier-auth-stage[data-auth-stage='intro'] {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .atelier-auth-column {
@@ -421,41 +367,28 @@
   max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: stretch;
+  gap: 18px;
 }
 
-/* Top Utility Bar (Brand Kicker + 48x48px Theme & Language Switches) */
+/* Top Utility Bar (Fixed Right-Aligned 48x48px Theme & Language Switches) */
 .atelier-topbar {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  right: clamp(16px, 4vw, 32px);
+  z-index: 12;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  width: 100%;
-}
-
-.atelier-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--atelier-ink-secondary);
-}
-
-.atelier-brand-gem {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  transform: rotate(45deg);
-  background: var(--atelier-accent-indicator);
+  pointer-events: none;
 }
 
 .atelier-utility-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  pointer-events: auto;
 }
 
 .atelier-utility-btn {
@@ -496,28 +429,148 @@
   outline-offset: 2px;
 }
 
-/* Hero Typography */
+/* Dual-Theme iNVTRY Logo Anchor (Centered in Intro -> Glides Upward on Auth Reveal) */
 .atelier-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 4px 4px 2px;
+  padding: 4px 8px 2px;
+  will-change: transform;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition: transform 0.64s var(--atelier-ease-spring);
 }
 
-.atelier-hero-title {
-  margin: 0;
-  font-size: clamp(28px, 5vw, 34px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.18;
-  color: var(--atelier-ink-primary);
+.atelier-auth-column[data-auth-stage='intro'] .atelier-hero {
+  transform: translate3d(0, clamp(186px, 29.5dvh, 276px), 0) scale(1.16);
 }
 
-.atelier-hero-subtitle {
-  margin: 8px 0 0;
-  font-size: 14.5px;
-  font-weight: 500;
-  line-height: 1.55;
-  color: var(--atelier-ink-secondary);
-  word-break: keep-all;
+.atelier-logo-frame {
+  position: relative;
+  display: inline-block;
+  width: clamp(210px, 56vw, 272px);
+  aspect-ratio: 1120 / 394;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.atelier-logo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  pointer-events: none;
+}
+
+.atelier-logo-img--overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.atelier-logo-img.is-visible {
+  opacity: 1;
+}
+
+/* Rimowa-Style Auth Panel Upward Reveal (Transparent -> Opaque) */
+.atelier-auth-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.56s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.14s,
+    transform 0.68s cubic-bezier(0.16, 1, 0.3, 1) 0.04s,
+    visibility 0s linear 0s;
+}
+
+.atelier-auth-reveal.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate3d(0, 96px, 0);
+  transition:
+    opacity 0.36s var(--atelier-ease-spring),
+    transform 0.48s var(--atelier-ease-spring),
+    visibility 0s linear 0.48s;
+}
+
+/* Boro-Style Bottom "Get started" Intro Pill Dock */
+.atelier-intro-dock {
+  position: fixed;
+  left: 50%;
+  bottom: max(28px, calc(env(safe-area-inset-bottom, 16px) + 20px));
+  z-index: 11;
+  width: min(calc(100vw - 40px), 360px);
+  display: flex;
+  justify-content: center;
+  transform: translate3d(-50%, 0, 0);
+  opacity: 1;
+  will-change: transform, opacity;
+  transition:
+    opacity 0.34s var(--atelier-ease-spring),
+    transform 0.46s var(--atelier-ease-spring),
+    visibility 0s linear 0s;
+}
+
+.atelier-intro-dock.is-dismissed {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate3d(-50%, 28px, 0);
+  transition:
+    opacity 0.28s var(--atelier-ease-spring),
+    transform 0.4s var(--atelier-ease-spring),
+    visibility 0s linear 0.4s;
+}
+
+.atelier-get-started-btn {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 28px;
+  border-radius: 9999px;
+  border: 0;
+  background: var(--atelier-accent-bg);
+  color: var(--atelier-accent-fg);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow:
+    0 18px 40px -12px rgba(0, 0, 0, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.08);
+  transition:
+    background-color 0.2s ease,
+    transform 0.16s var(--atelier-ease-spring),
+    box-shadow 0.2s ease;
+}
+
+.atelier-get-started-btn:hover {
+  background: var(--atelier-accent-hover);
+  transform: translateY(-1px);
+}
+
+.atelier-get-started-btn:active {
+  transform: scale(0.975);
+}
+
+.atelier-get-started-btn:focus-visible {
+  outline: 2px solid var(--atelier-accent-indicator);
+  outline-offset: 3px;
+}
+
+.atelier-auth-root[data-auth-theme='dark'] .atelier-get-started-btn {
+  box-shadow:
+    0 18px 44px -10px rgba(255, 255, 255, 0.14),
+    0 2px 10px rgba(0, 0, 0, 0.65);
 }
 
 /* ==========================================================================
@@ -1439,8 +1492,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .atelier-monolith.is-shaking,
-  .atelier-spin,
-  .atelier-live-dot {
+  .atelier-spin {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
@@ -1448,5 +1500,14 @@
   .atelier-curation-card {
     transform: none !important;
     transition: none !important;
+  }
+
+  .atelier-hero,
+  .atelier-auth-reveal,
+  .atelier-intro-dock,
+  .atelier-flank-cards,
+  .atelier-logo-img {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
   }
 }

@@ -276,8 +276,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(motionStage).toBeVisible();
     await expect(page.locator('video')).toHaveCount(0);
     await expect(motionStage).toHaveAttribute('data-motion-theme', 'dark');
-    await expect(motionStage.locator('#wardrobe-optical-scanner')).toBeVisible();
-    await expect(motionStage.locator('[data-inventory-slot="0"]')).toBeVisible();
+    await expect(motionStage.locator('#wardrobe-optical-scanner')).toHaveCount(0);
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.introGetStartedBtnId}`)).toBeVisible();
 
     await page.locator(`#${CARBON_DOM_CONTRACT.loginThemeToggleId}`).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -501,6 +501,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     page,
   }) => {
     await page.goto('/?auth=1');
+
+    const getStartedBtn = page.locator(`#${CARBON_DOM_CONTRACT.introGetStartedBtnId}`);
+    await expect(getStartedBtn).toBeVisible();
+    await getStartedBtn.click();
 
     await page.locator(`#${CARBON_DOM_CONTRACT.authTabRegisterId}`).click();
     const uniqueEmail = `female.avatar.${Date.now()}@example.com`;
@@ -765,6 +769,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     // Also sign into seeded SQLite account (`admin` / `admin`) in English mode and verify all Korean DB garments, brands & saved outfits render 100% in English!
     await page.goto('/?auth=1');
+    await page.locator(`#${CARBON_DOM_CONTRACT.introGetStartedBtnId}`).click();
     await expect(page.locator('#login-username')).toBeVisible();
     await assertZeroHangulOnPage('login-en');
     await page.locator('#login-username').fill('admin');

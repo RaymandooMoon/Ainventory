@@ -4,6 +4,7 @@ import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
 export interface LoginBackdropCanvasProps {
   effectiveTheme?: string;
   lang?: string;
+  stage?: 'intro' | 'auth';
 }
 
 interface RgbTuple {
@@ -144,12 +145,12 @@ const SILK_RIBBONS: readonly SilkRibbonSpec[] = [
     thickness: 40,
     twistPhase: 1.9,
     parallaxDepth: 1.25,
-    darkPrimary: { r: 255, g: 255, b: 255 }, // Pure Specular Filament
+    darkPrimary: { r: 216, g: 195, b: 165 }, // Atelier Champagne Sand
     darkSecondary: { r: 199, g: 199, b: 204 }, // Platinum Thread
     lightPrimary: { r: 29, g: 29, b: 31 }, // Carbon Filament
-    lightSecondary: { r: 110, g: 110, b: 115 }, // Neutral Slate
-    alphaDark: 0.11,
-    alphaLight: 0.07,
+    lightSecondary: { r: 184, g: 164, b: 136 }, // Warm Sand Shadow
+    alphaDark: 0.14,
+    alphaLight: 0.085,
   },
 ];
 
@@ -217,6 +218,7 @@ function rgbaStr(c: RgbTuple, alpha: number): string {
 const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   effectiveTheme = 'light',
   lang = 'ko',
+  stage = 'intro',
 }: LoginBackdropCanvasProps) {
   const isEn = lang === 'en';
   const isDark = effectiveTheme === 'dark';
@@ -225,6 +227,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const targetDarkRef = useRef<number>(isDark ? 1 : 0);
   targetDarkRef.current = isDark ? 1 : 0;
+  const targetIntroRef = useRef<number>(stage === 'intro' ? 1 : 0);
+  targetIntroRef.current = stage === 'intro' ? 1 : 0;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -242,12 +246,12 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
 
     let width = Math.max(window.innerWidth || 1, 1);
     let height = Math.max(window.innerHeight || 1, 1);
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
     const syncSize = () => {
       width = Math.max(window.innerWidth || 1, 1);
       height = Math.max(window.innerHeight || 1, 1);
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -266,8 +270,9 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     let currentPtrX = 0;
     let currentPtrY = 0;
     let currentDarkMix = targetDarkRef.current;
+    let currentIntroMix = targetIntroRef.current;
 
-    const motes = createInitialMotes(30);
+    const motes = createInitialMotes(34);
 
     const onPointerMove = (ev: PointerEvent) => {
       if (width <= 0 || height <= 0) return;
@@ -289,45 +294,52 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     const drawFrame = (timeSec: number, dtSec: number) => {
       // Autonomous Lissajous orbital drift when idle or on mobile
       if (!pointerActive || performance.now() - lastPointerTs > 3200) {
-        targetPtrX = Math.sin(timeSec * 0.34) * 0.45;
-        targetPtrY = Math.cos(timeSec * 0.26) * 0.38;
+        targetPtrX = Math.sin(timeSec * 0.36) * 0.52;
+        targetPtrY = Math.cos(timeSec * 0.28) * 0.42;
       }
 
-      // Spring damping physics (lerp factor 0.04)
-      const springLerp = 0.04;
+      // Spring damping physics (lerp factor 0.045)
+      const springLerp = 0.045;
       currentPtrX += (targetPtrX - currentPtrX) * springLerp;
       currentPtrY += (targetPtrY - currentPtrY) * springLerp;
 
-      // Smooth theme cross-fade
+      // Crisp frame-rate-independent theme & intro-stage cross-fade
       const desiredDark = targetDarkRef.current;
-      currentDarkMix += (desiredDark - currentDarkMix) * (prefersReducedMotion ? 1 : 0.08);
-      if (Math.abs(desiredDark - currentDarkMix) < 0.002) {
+      const themeStep = prefersReducedMotion ? 1 : Math.min(1, Math.max(0.24, dtSec * 18));
+      currentDarkMix += (desiredDark - currentDarkMix) * themeStep;
+      if (Math.abs(desiredDark - currentDarkMix) < 0.01) {
         currentDarkMix = desiredDark;
+      }
+      const desiredIntro = targetIntroRef.current;
+      const introStep = prefersReducedMotion ? 1 : Math.min(1, Math.max(0.14, dtSec * 10));
+      currentIntroMix += (desiredIntro - currentIntroMix) * introStep;
+      if (Math.abs(desiredIntro - currentIntroMix) < 0.008) {
+        currentIntroMix = desiredIntro;
       }
 
       // Update CSS custom properties for Layer B 3D parallax glass cards (zero React re-render)
       stage.style.setProperty('--atelier-ptr-x', currentPtrX.toFixed(4));
       stage.style.setProperty('--atelier-ptr-y', currentPtrY.toFixed(4));
 
-      // 1. Seamless Full-Bleed OLED Black (#000000) / Pure Alabaster (#FFFFFF -> #F5F5F7) Base Gradient
+      // 1. True OLED Pure Black (#000000) / Atelier Daylight (#FFFFFF -> #F6F4EF) Base Gradient
       const topBg = mixRgb({ r: 255, g: 255, b: 255 }, { r: 0, g: 0, b: 0 }, currentDarkMix);
-      const midBg = mixRgb({ r: 247, g: 247, b: 249 }, { r: 12, g: 12, b: 14 }, currentDarkMix);
-      const botBg = mixRgb({ r: 242, g: 242, b: 246 }, { r: 24, g: 24, b: 27 }, currentDarkMix);
+      const midBg = mixRgb({ r: 249, g: 248, b: 245 }, { r: 0, g: 0, b: 0 }, currentDarkMix);
+      const botBg = mixRgb({ r: 243, g: 241, b: 236 }, { r: 6, g: 6, b: 8 }, currentDarkMix);
 
       const bgGrad = ctx.createLinearGradient(0, 0, width * 0.35, height);
       bgGrad.addColorStop(0, rgbaStr(topBg, 1));
-      bgGrad.addColorStop(0.52, rgbaStr(midBg, 1));
+      bgGrad.addColorStop(0.58, rgbaStr(midBg, 1));
       bgGrad.addColorStop(1, rgbaStr(botBg, 1));
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Soft Architectural Monochrome Key/Rim Light Auras (responds gently to spring pointer)
-      const aura1CenterX = width * (0.28 + currentPtrX * 0.06);
-      const aura1CenterY = height * (0.26 + currentPtrY * 0.06);
-      const aura1Radius = Math.max(width, height) * 0.58;
+      // 2. Runway Editorial Spotlight Halo (subtle warm sand in light, restrained whisper in OLED dark)
+      const aura1CenterX = width * (0.5 + currentPtrX * 0.08 + Math.sin(timeSec * 0.22) * 0.04);
+      const aura1CenterY = height * (0.44 + currentPtrY * 0.06 - (1 - currentIntroMix) * 0.14);
+      const aura1Radius = Math.max(width, height) * 0.56;
       const aura1Color = mixRgb(
-        { r: 209, g: 209, b: 214 },
-        { r: 142, g: 142, b: 147 },
+        { r: 226, g: 214, b: 196 },
+        { r: 216, g: 195, b: 165 },
         currentDarkMix
       );
       const aura1 = ctx.createRadialGradient(
@@ -338,15 +350,15 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         aura1CenterY,
         aura1Radius
       );
-      aura1.addColorStop(0, rgbaStr(aura1Color, 0.14 + currentDarkMix * 0.02));
-      aura1.addColorStop(0.6, rgbaStr(aura1Color, 0.035));
+      aura1.addColorStop(0, rgbaStr(aura1Color, 0.12 - currentDarkMix * 0.06));
+      aura1.addColorStop(0.55, rgbaStr(aura1Color, 0.032 - currentDarkMix * 0.015));
       aura1.addColorStop(1, rgbaStr(aura1Color, 0));
       ctx.fillStyle = aura1;
       ctx.fillRect(0, 0, width, height);
 
-      const aura2CenterX = width * (0.74 - currentPtrX * 0.05);
-      const aura2CenterY = height * (0.72 - currentPtrY * 0.05);
-      const aura2Radius = Math.max(width, height) * 0.54;
+      const aura2CenterX = width * (0.76 - currentPtrX * 0.06);
+      const aura2CenterY = height * (0.74 - currentPtrY * 0.06);
+      const aura2Radius = Math.max(width, height) * 0.48;
       const aura2Color = mixRgb(
         { r: 174, g: 174, b: 178 },
         { r: 99, g: 99, b: 102 },
@@ -360,8 +372,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         aura2CenterY,
         aura2Radius
       );
-      aura2.addColorStop(0, rgbaStr(aura2Color, 0.1 + currentDarkMix * 0.03));
-      aura2.addColorStop(0.65, rgbaStr(aura2Color, 0.025));
+      aura2.addColorStop(0, rgbaStr(aura2Color, 0.075 - currentDarkMix * 0.035));
+      aura2.addColorStop(0.6, rgbaStr(aura2Color, 0.018));
       aura2.addColorStop(1, rgbaStr(aura2Color, 0));
       ctx.fillStyle = aura2;
       ctx.fillRect(0, 0, width, height);
@@ -601,6 +613,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       ref={stageRef}
       id={CARBON_DOM_CONTRACT.loginMotionStageId}
       data-motion-theme={isDark ? 'dark' : 'light'}
+      data-motion-stage={stage}
       className="atelier-backdrop-stage"
     >
       {/* Layer A: 60fps Silk/Cashmere Couture Light Ribbons Canvas */}
@@ -619,20 +632,11 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         <rect width="100%" height="100%" filter="url(#atelier-velvet-dither)" />
       </svg>
 
-      {/* Ambient Live AI Wardrobe Capsule (Visible across Mobile + Desktop Safe Zones) */}
-      <div className="atelier-live-capsule-wrap">
-        <div id="wardrobe-optical-scanner" className="atelier-live-capsule">
-          <span className="atelier-live-dot" data-inventory-slot="0" aria-hidden="true" />
-          <span>
-            {isEn
-              ? 'AI Weather Styling · Digital Closet'
-              : 'AI 날씨 스타일링 · 디지털 옷장'}
-          </span>
-        </div>
-      </div>
-
-      {/* Layer B: Adaptive 3D Parallax Couture Curation Cards (Desktop Safe Flanks >= 1180px) */}
-      <div className="atelier-flank-cards" aria-hidden="true">
+      {/* Layer B: Adaptive 3D Parallax Couture Curation Cards (Desktop Safe Flanks >= 1180px, auth stage) */}
+      <div
+        className={`atelier-flank-cards ${stage === 'auth' ? 'is-visible' : ''}`}
+        aria-hidden="true"
+      >
         {/* Card 1 (Top-Left): AI Weather Fit */}
         <article className="atelier-curation-card atelier-curation-card--tl">
           <div className="atelier-card-head">

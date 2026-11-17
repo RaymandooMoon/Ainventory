@@ -15,11 +15,13 @@ import { apiFetch, setStoredToken } from '../utils/api.ts';
 import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
+import BrandLogo from './auth/BrandLogo.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
 import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
 import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
+import { resolveInitialAuthStage } from '../utils/authStage.ts';
 import './auth/loginAtelier.css';
 
 const GOOGLE_SIGN_IN_BTN_ID = 'google-sign-in-btn';
@@ -46,6 +48,9 @@ export default function LoginView({
   const isDev = Boolean(import.meta.env.DEV) || isLocalHost;
   const hasAppleClientId = Boolean(import.meta.env.VITE_APPLE_CLIENT_ID);
 
+  const [authStage, setAuthStage] = useState(() =>
+    resolveInitialAuthStage(typeof window !== 'undefined' ? window.location.search : '')
+  ); // 'intro' | 'auth'
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -448,60 +453,69 @@ export default function LoginView({
     }
   };
 
+  const isIntro = authStage === 'intro';
+
+  const handleGetStarted = () => {
+    if (!isIntro) return;
+    triggerHaptic('selection');
+    setAuthStage('auth');
+  };
+
   return (
-    <div className="atelier-auth-root" data-auth-theme={effectiveTheme}>
+    <div
+      className="atelier-auth-root"
+      data-auth-theme={effectiveTheme}
+      data-auth-stage={authStage}
+    >
       {/* Seamless Fullscreen Kinetic Silk/Cashmere Canvas + 3D Parallax Couture Curation Stage */}
-      <LoginBackdropCanvas effectiveTheme={effectiveTheme} lang={lang} />
+      <LoginBackdropCanvas effectiveTheme={effectiveTheme} lang={lang} stage={authStage} />
 
-      <main className="atelier-auth-stage">
-        <div className="atelier-auth-column">
-          {/* Top Utility Controls (>= 48x48px Touch Targets, 8px Gap) */}
-          <header className="atelier-topbar">
-            <span className="atelier-brand-mark">
-              <span className="atelier-brand-gem" aria-hidden="true" />
-              <span>A INVENTORY</span>
-            </span>
+      {/* Top Utility Controls (>= 48x48px Touch Targets, 8px Gap) */}
+      <header className="atelier-topbar">
+        <div className="atelier-utility-group">
+          <button
+            id={CARBON_DOM_CONTRACT.loginThemeToggleId}
+            type="button"
+            className="atelier-utility-btn"
+            aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
+            onClick={onToggleTheme}
+          >
+            {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
 
-            <div className="atelier-utility-group">
-              <button
-                id={CARBON_DOM_CONTRACT.loginThemeToggleId}
-                type="button"
-                className="atelier-utility-btn"
-                aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
-                onClick={onToggleTheme}
-              >
-                {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-                <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
-              </button>
+          <button
+            id={CARBON_DOM_CONTRACT.loginLangToggleId}
+            type="button"
+            className="atelier-utility-btn"
+            aria-label={isEn ? 'Switch language' : '언어 전환'}
+            onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
+          >
+            <Globe size={15} />
+            <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
+          </button>
+        </div>
+      </header>
 
-              <button
-                id={CARBON_DOM_CONTRACT.loginLangToggleId}
-                type="button"
-                className="atelier-utility-btn"
-                aria-label={isEn ? 'Switch language' : '언어 전환'}
-                onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
-              >
-                <Globe size={15} />
-                <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
-              </button>
-            </div>
-          </header>
-
-          {/* Couture Hero Title & Subtitle */}
+      <main className="atelier-auth-stage" data-auth-stage={authStage}>
+        <div className="atelier-auth-column" data-auth-stage={authStage}>
+          {/* Dual-Theme iNVTRY Logo — Centered in Intro, Glides Upward on Get Started */}
           <div className="atelier-hero">
-            <h1 className="atelier-hero-title">{tr(lang, 'brandTitle')}</h1>
-            <p className="atelier-hero-subtitle">
-              {isEn
-                ? 'AI Weather Styling & Minimal Digital Wardrobe'
-                : '날씨 맞춤 AI 스타일링 · 미니멀 디지털 옷장'}
-            </p>
+            <h1 className="sr-only">{tr(lang, 'brandTitle')}</h1>
+            <BrandLogo effectiveTheme={effectiveTheme} alt={tr(lang, 'brandTitle')} />
           </div>
 
-          {/* Centered Adaptive Frosted-Glass Auth Monolith */}
-          <section
-            className={`atelier-monolith ${isShaking ? 'is-shaking' : ''}`}
-            aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
+          {/* Rimowa-Style Upward Reveal Container: Transparent -> Opaque Auth Monolith */}
+          <div
+            className={`atelier-auth-reveal ${isIntro ? 'is-hidden' : 'is-revealed'}`}
+            aria-hidden={isIntro}
+            inert={isIntro}
           >
+            {/* Centered Adaptive Frosted-Glass Auth Monolith */}
+            <section
+              className={`atelier-monolith ${isShaking ? 'is-shaking' : ''}`}
+              aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
+            >
             {/* Top Priority: Google Sign-in and Apple Sign-in Stack */}
             <div className="atelier-social-stack">
               <GoogleSignInButton
@@ -1037,8 +1051,26 @@ export default function LoginView({
               {isEn ? 'Terms of Service' : '이용약관'}
             </button>
           </footer>
+          </div>
         </div>
       </main>
+
+      {/* Boro-Style Bottom "Get started" Intro Pill Dock */}
+      <div
+        className={`atelier-intro-dock ${isIntro ? 'is-visible' : 'is-dismissed'}`}
+        aria-hidden={!isIntro}
+        inert={!isIntro}
+      >
+        <button
+          id={CARBON_DOM_CONTRACT.introGetStartedBtnId}
+          type="button"
+          className="atelier-get-started-btn"
+          aria-label={isEn ? 'Get started' : '시작하기 (Get started)'}
+          onClick={handleGetStarted}
+        >
+          <span>Get started</span>
+        </button>
+      </div>
 
       <GoogleSignInFallbackModal
         open={googleFallbackOpen}
