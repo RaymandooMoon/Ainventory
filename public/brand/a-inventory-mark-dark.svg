@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" role="img" aria-label="A Inventory">
+  <g stroke="#D4AF6A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 17V13.6C24 11.8 26.3 11.2 27.3 9.9C28.6 8.2 27.5 5.4 24.9 5.4C22.9 5.4 21.6 6.7 21.6 8.4"/>
+    <path d="M7 56L24 17L41 56"/>
+    <path d="M13.6 41H34.4"/>
+    <path d="M52 17V56"/>
+    <path d="M47.5 17H56.5M47.5 56H56.5"/>
+  </g>
+</svg>

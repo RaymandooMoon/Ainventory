@@ -10,6 +10,10 @@
 
   /* Core Canvas & Atelier Surface Hierarchy (Contract-Compliant) */
   --bg-canvas: #FFFFFF;
+  /* Maison Gold point color (DESIGN.md v4) — fills always carry --on-gold text */
+  --accent-gold: #B08D57;
+  --accent-gold-ink: #8C6A3A;
+  --on-gold: #0A0A0A;
   --bg-surface: #F5F5F7;
   --bg-elevated: #FFFFFF;
   --bg-tertiary: #E8E8ED;
@@ -156,8 +160,11 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* Obsidian Gallery Core Surfaces (DESIGN.md v3) */
-  --bg-canvas: #141413;
+  /* OLED Noir Core Surfaces (DESIGN.md v4) — true black canvas, graphite elevation */
+  --bg-canvas: #000000;
+  --accent-gold: #D4AF6A;
+  --accent-gold-ink: #E0BE7E;
+  --on-gold: #0A0A0A;
   --bg-surface: #1C1C1E;
   --bg-elevated: #2C2C2E;
   --bg-tertiary: #2A2A2E;
@@ -168,7 +175,7 @@
   --atelier-ambient-wash: radial-gradient(
     120% 80% at 50% -10%,
     rgba(42, 44, 54, 0.38) 0%,
-    rgba(20, 20, 19, 0) 68%
+    rgba(0, 0, 0, 0) 68%
   );
 
   --squircle-bg-color: #1C1C1E;

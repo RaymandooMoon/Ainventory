@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   Globe,
   KeyRound,
@@ -17,19 +18,51 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
 import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
-import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
+import LoginLuxeBackdrop from './auth/LoginLuxeBackdrop.tsx';
+import AInventoryLogo from './brand/AInventoryLogo.tsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
-import './auth/loginAtelier.css';
+import {
+  LOGIN_INTRO_AUTO_ADVANCE_MS,
+  LOGIN_INTRO_SEEN_KEY,
+  LOGIN_LOOKS,
+  LOGIN_LOOK_META,
+  LOGIN_LOOK_STORAGE_KEY,
+  computeIntroShift,
+  resolveInitialLoginPhase,
+  resolveLoginLook,
+} from '../services/loginLook.ts';
+import './auth/loginLuxe.css';
 
 const GOOGLE_SIGN_IN_BTN_ID = 'google-sign-in-btn';
 
+const readStorage = (storageName, key) => {
+  try {
+    return window[storageName]?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStorage = (storageName, key, value) => {
+  try {
+    window[storageName]?.setItem(key, value);
+  } catch {
+    // Storage can be unavailable (private mode / WebView policy) — preference is best-effort.
+  }
+};
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /**
- * Investor-Grade Adaptive Login & Kinetic AI Wardrobe Atelier Entry Screen
- * - Pure TypeScript HTML5 Canvas 2D Silk/Cashmere Aurora + Adaptive 3D Parallax Curation Cards
- * - Centered Single-Column Adaptive Frosted-Glass Monolith (360px Mobile -> 4K Desktop)
- * - 2-Way High-Contrast Segmented Control (Sign In | Sign Up)
- * - 48x48px Touch Targets, Instant Clear (X) + Password Visibility Toggles, 3-State Exception UX
+ * A Inventory — Maison Gold Login (DESIGN.md v4)
+ * - Intro: centered gold monogram + wordmark over a living brand backdrop, "시작하기" CTA
+ * - Reveal: logo glides to the top while the auth panel rises from transparent to opaque
+ * - Two lookbook variants (LOOK 01 Maison / LOOK 02 Runway) × light / OLED-black dark
+ * - Rimowa-grade structured form: labelled fields, editorial tabs, 48dp targets, inline notes
  */
 export default function LoginView({
   onLoginSuccess,
@@ -81,6 +114,63 @@ export default function LoginView({
   const shakeTimerRef = useRef(null);
 
   const loading = Boolean(loadingAction);
+
+  // Brand-surface choreography: LOOK (01 Maison / 02 Runway) + intro → form phase
+  const [look, setLook] = useState(() =>
+    resolveLoginLook(
+      typeof window !== 'undefined' ? window.location.search : '',
+      readStorage('localStorage', LOGIN_LOOK_STORAGE_KEY)
+    )
+  );
+  const [phase, setPhase] = useState(() =>
+    resolveInitialLoginPhase({
+      prefersReducedMotion: prefersReducedMotion(),
+      introSeenThisSession: readStorage('sessionStorage', LOGIN_INTRO_SEEN_KEY) === '1',
+    })
+  );
+  const [introRun, setIntroRun] = useState(0);
+  const rootRef = useRef(null);
+  const logoSlotRef = useRef(null);
+  const isIntro = phase === 'intro';
+
+  const advanceIntro = useCallback(() => {
+    writeStorage('sessionStorage', LOGIN_INTRO_SEEN_KEY, '1');
+    setPhase('form');
+  }, []);
+
+  useEffect(() => {
+    if (!isIntro) return undefined;
+    const timer = setTimeout(advanceIntro, LOGIN_INTRO_AUTO_ADVANCE_MS);
+    return () => clearTimeout(timer);
+  }, [isIntro, introRun, advanceIntro]);
+
+  // Center the logo in the viewport during the intro; the panel keeps its final layout box (Zero-CLS).
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const slot = logoSlotRef.current;
+    if (!root || !slot) return undefined;
+    const measure = () => {
+      const rect = slot.getBoundingClientRect();
+      const shift = computeIntroShift(window.innerHeight, rect.top, rect.height);
+      root.style.setProperty('--intro-shift', `${shift}px`);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [look, isIntro]);
+
+  const handleSelectLook = (nextLook) => {
+    if (nextLook === look) return;
+    triggerHaptic('selection');
+    writeStorage('localStorage', LOGIN_LOOK_STORAGE_KEY, nextLook);
+    setLook(nextLook);
+    if (!prefersReducedMotion()) {
+      rootRef.current?.scrollTo?.({ top: 0 });
+      window.scrollTo?.({ top: 0 });
+      setPhase('intro');
+      setIntroRun((n) => n + 1);
+    }
+  };
 
   const triggerValidationShake = () => {
     triggerHaptic('light');
@@ -448,62 +538,133 @@ export default function LoginView({
     }
   };
 
+  const lookMeta = LOGIN_LOOK_META[look];
+  const fieldLabel = (htmlFor, ko, en, required = false) => (
+    <label htmlFor={htmlFor} className="luxe-field-label">
+      {isEn ? en : ko}
+      {required && (
+        <span className="luxe-field-required" aria-hidden="true">
+          *
+        </span>
+      )}
+    </label>
+  );
+
+  const renderInlineNote = () =>
+    error && (
+      <div role="status" aria-live="polite" className="atelier-inline-note">
+        <div className="atelier-inline-note-main">
+          <AlertCircle size={14} className="atelier-inline-note-icon" />
+          <p className="atelier-inline-note-text">{error}</p>
+        </div>
+        <button
+          type="button"
+          className="atelier-inline-note-retry-btn"
+          disabled={loading}
+          onClick={handleRetryAfterError}
+        >
+          <RotateCcw size={12} />
+          <span>{isEn ? 'Retry' : '다시 시도'}</span>
+        </button>
+      </div>
+    );
+
   return (
-    <div className="atelier-auth-root" data-auth-theme={effectiveTheme}>
-      {/* Seamless Fullscreen Kinetic Silk/Cashmere Canvas + 3D Parallax Couture Curation Stage */}
-      <LoginBackdropCanvas effectiveTheme={effectiveTheme} lang={lang} />
+    <div
+      ref={rootRef}
+      className="luxe-auth-root"
+      data-auth-theme={effectiveTheme}
+      data-login-look={look}
+      data-login-phase={phase}
+    >
+      {/* Living brand backdrop (Maison gold silk canvas / Runway spotlight marquee) */}
+      <LoginLuxeBackdrop effectiveTheme={effectiveTheme} look={look} />
 
-      <main className="atelier-auth-stage">
-        <div className="atelier-auth-column">
-          {/* Top Utility Controls (>= 48x48px Touch Targets, 8px Gap) */}
-          <header className="atelier-topbar">
-            <span className="atelier-brand-mark">
-              <span className="atelier-brand-gem" aria-hidden="true" />
-              <span>A INVENTORY</span>
-            </span>
-
-            <div className="atelier-utility-group">
+      {/* Top Utility Bar — LOOK switch · theme · language (always interactive, ≥ 48dp) */}
+      <header className="luxe-topbar">
+        <div
+          className="luxe-look-switch"
+          role="group"
+          aria-label={isEn ? 'Login look' : '로그인 룩 선택'}
+        >
+          {LOGIN_LOOKS.map((key) => {
+            const meta = LOGIN_LOOK_META[key];
+            const active = key === look;
+            return (
               <button
-                id={CARBON_DOM_CONTRACT.loginThemeToggleId}
+                key={key}
                 type="button"
-                className="atelier-utility-btn"
-                aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
-                onClick={onToggleTheme}
+                data-login-look-btn={key}
+                aria-pressed={active}
+                title={isEn ? `Look ${meta.index} · ${meta.labelEn}` : `룩 ${meta.index} · ${meta.labelKo}`}
+                className={`luxe-look-btn ${active ? 'is-active' : ''}`}
+                onClick={() => handleSelectLook(key)}
               >
-                {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-                <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
+                <span className="luxe-look-kicker">LOOK</span>
+                <span className="luxe-look-index tabular-nums">{meta.index}</span>
               </button>
+            );
+          })}
+        </div>
 
-              <button
-                id={CARBON_DOM_CONTRACT.loginLangToggleId}
-                type="button"
-                className="atelier-utility-btn"
-                aria-label={isEn ? 'Switch language' : '언어 전환'}
-                onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
-              >
-                <Globe size={15} />
-                <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
-              </button>
+        <div className="luxe-utility-group">
+          <button
+            id={CARBON_DOM_CONTRACT.loginThemeToggleId}
+            type="button"
+            className="luxe-utility-btn"
+            aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
+            onClick={onToggleTheme}
+          >
+            {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+
+          <button
+            id={CARBON_DOM_CONTRACT.loginLangToggleId}
+            type="button"
+            className="luxe-utility-btn"
+            aria-label={isEn ? 'Switch language' : '언어 전환'}
+            onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
+          >
+            <Globe size={15} />
+            <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="luxe-stage">
+        <div className="luxe-column">
+          {/* Logo slot keeps its final layout box; only the inner motion layer is transformed */}
+          <div ref={logoSlotRef} className="luxe-logo-slot">
+            <div className="luxe-logo-motion">
+              <AInventoryLogo
+                key={`${look}-${introRun}`}
+                variant={look}
+                layout={look === 'maison' ? 'stacked' : 'inline'}
+                framed={look === 'runway'}
+                animateDraw={isIntro}
+              />
+              <p className="luxe-logo-tagline">
+                {isEn ? 'AI Private Fitting Atelier' : 'AI 프라이빗 피팅 아틀리에'}
+              </p>
             </div>
-          </header>
-
-          {/* Couture Hero Title & Subtitle */}
-          <div className="atelier-hero">
-            <h1 className="atelier-hero-title">{tr(lang, 'brandTitle')}</h1>
-            <p className="atelier-hero-subtitle">
-              {isEn
-                ? 'AI Weather Styling & Minimal Digital Wardrobe'
-                : '날씨 맞춤 AI 스타일링 · 미니멀 디지털 옷장'}
-            </p>
           </div>
 
-          {/* Centered Adaptive Frosted-Glass Auth Monolith */}
+          {/* Auth panel rises with the logo and turns from transparent to opaque */}
           <section
-            className={`atelier-monolith ${isShaking ? 'is-shaking' : ''}`}
+            className={`luxe-panel ${isShaking ? 'is-shaking' : ''}`}
             aria-label={isEn ? 'Authentication panel' : '로그인 및 회원가입 패널'}
+            inert={isIntro}
+            data-login-panel="true"
           >
-            {/* Top Priority: Google Sign-in and Apple Sign-in Stack */}
-            <div className="atelier-social-stack">
+            <div className="luxe-panel-head">
+              <span className="luxe-kicker">
+                {`LOOK ${lookMeta.index} · ${lookMeta.labelEn.toUpperCase()}`}
+              </span>
+              <h1 className="luxe-welcome">{isEn ? 'Welcome back' : '다시 오신 것을 환영합니다'}</h1>
+            </div>
+
+            <div className="luxe-social-stack">
               <GoogleSignInButton
                 id={GOOGLE_SIGN_IN_BTN_ID}
                 onClick={handleGoogleSignIn}
@@ -551,14 +712,13 @@ export default function LoginView({
               </button>
             </div>
 
-            {/* '또는' Divider */}
-            <div className="atelier-divider">
-              <span>{isEn ? 'or with account' : '또는'}</span>
+            <div className="luxe-divider">
+              <span>{isEn ? 'or continue with' : '또는 다음으로 계속하기'}</span>
             </div>
 
-            {/* 2-Way Segmented Control: Sign In | Sign Up */}
+            {/* Editorial Tabs: Sign In | Sign Up (gold underline indicator) */}
             <div
-              className="atelier-segmented"
+              className="luxe-tabs"
               role="tablist"
               aria-label={isEn ? 'Authentication mode' : '인증 방식 선택'}
             >
@@ -568,7 +728,7 @@ export default function LoginView({
                 role="tab"
                 aria-selected={authMode === 'login'}
                 aria-controls="auth-panel-login"
-                className={`atelier-seg-tab ${authMode === 'login' ? 'is-active' : ''}`}
+                className={`luxe-tab ${authMode === 'login' ? 'is-active' : ''}`}
                 onClick={() => {
                   setAuthMode('login');
                   setError('');
@@ -584,7 +744,7 @@ export default function LoginView({
                 role="tab"
                 aria-selected={authMode === 'register'}
                 aria-controls="auth-panel-register"
-                className={`atelier-seg-tab ${authMode === 'register' ? 'is-active' : ''}`}
+                className={`luxe-tab ${authMode === 'register' ? 'is-active' : ''}`}
                 onClick={() => {
                   setAuthMode('register');
                   setError('');
@@ -595,7 +755,7 @@ export default function LoginView({
               </button>
             </div>
 
-            {/* Mode 1: Minimal Sign-In Form */}
+            {/* Mode 1: Sign-In Form */}
             {authMode === 'login' && (
               <form
                 id="auth-panel-login"
@@ -603,40 +763,44 @@ export default function LoginView({
                 aria-labelledby={CARBON_DOM_CONTRACT.authTabLoginId}
                 onSubmit={handleLoginSubmit}
                 noValidate
-                className="atelier-form"
+                className="luxe-form"
               >
-                <AuthFieldInput
-                  ref={usernameRef}
-                  id="login-username"
-                  value={username}
-                  onValueChange={(next) => {
-                    setUsername(next);
-                    clearFieldError('username');
-                  }}
-                  lang={lang}
-                  errorText={fieldErrors.username}
-                  placeholder={isEn ? 'Username or email' : '아이디 또는 이메일'}
-                  aria-label={isEn ? 'Username or email' : '아이디 또는 이메일'}
-                  autoComplete="username"
-                  disabled={loading}
-                />
+                <div className="luxe-field">
+                  {fieldLabel('login-username', '아이디 또는 이메일', 'Username or email', true)}
+                  <AuthFieldInput
+                    ref={usernameRef}
+                    id="login-username"
+                    value={username}
+                    onValueChange={(next) => {
+                      setUsername(next);
+                      clearFieldError('username');
+                    }}
+                    lang={lang}
+                    errorText={fieldErrors.username}
+                    placeholder={isEn ? 'name@example.com' : 'name@example.com'}
+                    autoComplete="username"
+                    disabled={loading}
+                  />
+                </div>
 
-                <AuthFieldInput
-                  ref={passwordRef}
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onValueChange={(next) => {
-                    setPassword(next);
-                    clearFieldError('password');
-                  }}
-                  lang={lang}
-                  errorText={fieldErrors.password}
-                  placeholder={isEn ? 'Password' : '비밀번호'}
-                  aria-label={isEn ? 'Password' : '비밀번호'}
-                  autoComplete="current-password"
-                  disabled={loading}
-                />
+                <div className="luxe-field">
+                  {fieldLabel('login-password', '비밀번호', 'Password', true)}
+                  <AuthFieldInput
+                    ref={passwordRef}
+                    id="login-password"
+                    type="password"
+                    value={password}
+                    onValueChange={(next) => {
+                      setPassword(next);
+                      clearFieldError('password');
+                    }}
+                    lang={lang}
+                    errorText={fieldErrors.password}
+                    placeholder={isEn ? 'Password' : '비밀번호'}
+                    autoComplete="current-password"
+                    disabled={loading}
+                  />
+                </div>
 
                 {isDev && (
                   <div className="atelier-seed-bar">
@@ -674,24 +838,7 @@ export default function LoginView({
                   </div>
                 )}
 
-                {/* Slim Inline System Note at bottom of form (role="status", aria-live="polite") */}
-                {error && (
-                  <div role="status" aria-live="polite" className="atelier-inline-note">
-                    <div className="atelier-inline-note-main">
-                      <AlertCircle size={14} className="atelier-inline-note-icon" />
-                      <p className="atelier-inline-note-text">{error}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="atelier-inline-note-retry-btn"
-                      disabled={loading}
-                      onClick={handleRetryAfterError}
-                    >
-                      <RotateCcw size={12} />
-                      <span>{isEn ? 'Retry' : '다시 시도'}</span>
-                    </button>
-                  </div>
-                )}
+                {renderInlineNote()}
 
                 <button
                   id="login-submit-btn"
@@ -706,9 +853,45 @@ export default function LoginView({
                       <span>{isEn ? 'Signing in...' : '로그인 확인 중...'}</span>
                     </>
                   ) : (
-                    <span>{tr(lang, 'loginSubmit')}</span>
+                    <span>{isEn ? 'Sign In' : '로그인'}</span>
                   )}
                 </button>
+
+                {/* Rimowa-style membership invitation */}
+                <div className="luxe-invite">
+                  <h2 className="luxe-invite-title">
+                    {isEn ? "Don't have an account?" : '계정이 없으신가요?'}
+                  </h2>
+                  <p className="luxe-invite-desc">
+                    {isEn
+                      ? 'Join to unlock your private fitting atelier.'
+                      : '가입하시면 나만의 프라이빗 피팅 아틀리에가 열립니다.'}
+                  </p>
+                  <ul className="luxe-invite-list">
+                    {[
+                      ['AI가 날씨에 맞춰 코디를 제안해요', 'Weather-aware AI outfit picks'],
+                      ['내 체형의 AI 모델에 바로 입혀 봐요', 'Try looks on your own AI model'],
+                      ['착용 기록이 룩북과 통계로 쌓여요', 'Wear history as lookbook & stats'],
+                    ].map(([ko, en]) => (
+                      <li key={en}>
+                        <Check size={15} strokeWidth={2.2} aria-hidden="true" />
+                        <span>{isEn ? en : ko}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="atelier-secondary-btn luxe-invite-btn"
+                    disabled={loading}
+                    onClick={() => {
+                      setAuthMode('register');
+                      setError('');
+                      setFieldErrors({});
+                    }}
+                  >
+                    <span>{isEn ? 'Create Account' : '계정 만들기'}</span>
+                  </button>
+                </div>
               </form>
             )}
 
@@ -720,17 +903,13 @@ export default function LoginView({
                 aria-labelledby={CARBON_DOM_CONTRACT.authTabRegisterId}
                 onSubmit={handleCompleteRegister}
                 noValidate
-                className="atelier-form"
+                className="luxe-form"
               >
                 <ol
                   className="atelier-signup-stepper"
                   aria-label={isEn ? 'Sign-up progress' : '회원가입 단계'}
                 >
-                  <li
-                    className={`atelier-signup-step ${
-                      otpVerified ? 'is-done' : 'is-current'
-                    }`}
-                  >
+                  <li className={`atelier-signup-step ${otpVerified ? 'is-done' : 'is-current'}`}>
                     <span className="atelier-signup-step-num">01</span>
                     <span>{isEn ? 'Verify Email' : '이메일 인증'}</span>
                   </li>
@@ -748,11 +927,7 @@ export default function LoginView({
                   </li>
                   <li
                     className={`atelier-signup-step ${
-                      regPassword.length >= 4
-                        ? 'is-done'
-                        : otpVerified
-                          ? 'is-current'
-                          : ''
+                      regPassword.length >= 4 ? 'is-done' : otpVerified ? 'is-current' : ''
                     }`}
                   >
                     <span className="atelier-signup-step-num">03</span>
@@ -760,60 +935,63 @@ export default function LoginView({
                   </li>
                 </ol>
 
-                <div className="atelier-inline-row">
-                  <AuthFieldInput
-                    ref={regEmailRef}
-                    id="register-email-input"
-                    type="email"
-                    value={regEmail}
-                    onValueChange={(next) => {
-                      setRegEmail(next);
-                      setOtpVerified(false);
-                      clearFieldError('regEmail');
-                    }}
-                    lang={lang}
-                    errorText={fieldErrors.regEmail}
-                    placeholder="name@example.com"
-                    aria-label={isEn ? 'Email address' : '이메일 주소'}
-                    autoComplete="email"
-                    disabled={loading}
-                  />
+                <div className="luxe-field">
+                  {fieldLabel('register-email-input', '이메일 주소', 'Email address', true)}
+                  <div className="atelier-inline-row">
+                    <AuthFieldInput
+                      ref={regEmailRef}
+                      id="register-email-input"
+                      type="email"
+                      value={regEmail}
+                      onValueChange={(next) => {
+                        setRegEmail(next);
+                        setOtpVerified(false);
+                        clearFieldError('regEmail');
+                      }}
+                      lang={lang}
+                      errorText={fieldErrors.regEmail}
+                      placeholder="name@example.com"
+                      autoComplete="email"
+                      disabled={loading}
+                    />
 
-                  <button
-                    id="send-otp-btn"
-                    type="button"
-                    className="atelier-inline-btn"
-                    disabled={loading || cooldownSec > 0}
-                    aria-busy={loadingAction === 'otp-send'}
-                    onClick={handleSendOtp}
-                  >
-                    {loadingAction === 'otp-send' ? (
-                      <Loader2 size={15} className="atelier-spin" />
-                    ) : (
-                      <Mail size={15} />
-                    )}
-                    <span>
-                      {loadingAction === 'otp-send'
-                        ? isEn
-                          ? 'Sending...'
-                          : '발송 중...'
-                        : cooldownSec > 0
+                    <button
+                      id="send-otp-btn"
+                      type="button"
+                      className="atelier-inline-btn"
+                      disabled={loading || cooldownSec > 0}
+                      aria-busy={loadingAction === 'otp-send'}
+                      onClick={handleSendOtp}
+                    >
+                      {loadingAction === 'otp-send' ? (
+                        <Loader2 size={15} className="atelier-spin" />
+                      ) : (
+                        <Mail size={15} />
+                      )}
+                      <span className="tabular-nums">
+                        {loadingAction === 'otp-send'
                           ? isEn
-                            ? `Resend ${cooldownSec}s`
-                            : `재발송 ${cooldownSec}s`
-                          : otpSent
+                            ? 'Sending...'
+                            : '발송 중...'
+                          : cooldownSec > 0
                             ? isEn
-                              ? 'Resend'
-                              : '재발송'
-                            : isEn
-                              ? 'Send Code'
-                              : '코드 발송'}
-                    </span>
-                  </button>
+                              ? `Resend ${cooldownSec}s`
+                              : `재발송 ${cooldownSec}s`
+                            : otpSent
+                              ? isEn
+                                ? 'Resend'
+                                : '재발송'
+                              : isEn
+                                ? 'Send Code'
+                                : '코드 발송'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 {otpSent && (
-                  <div className="atelier-field-block">
+                  <div className="luxe-field">
+                    {fieldLabel('register-otp-input', '인증코드', 'Verification code', true)}
                     <div className="atelier-inline-row">
                       <AuthFieldInput
                         ref={regOtpRef}
@@ -830,7 +1008,6 @@ export default function LoginView({
                         lang={lang}
                         errorText={fieldErrors.otpCode}
                         placeholder={isEn ? '6-digit code' : '6자리 인증코드'}
-                        aria-label={isEn ? '6-digit verification code' : '6자리 인증코드'}
                         autoComplete="one-time-code"
                         disabled={loading || otpVerified}
                       />
@@ -863,7 +1040,7 @@ export default function LoginView({
                     </div>
 
                     {isDev && devPreviewCode && !otpVerified && (
-                      <span className="atelier-dev-otp-hint">
+                      <span className="atelier-dev-otp-hint tabular-nums">
                         {isEn
                           ? `Local dev code: ${devPreviewCode}`
                           : `로컬 테스트 코드: ${devPreviewCode}`}
@@ -872,110 +1049,106 @@ export default function LoginView({
                   </div>
                 )}
 
-                <div
-                  className="atelier-segmented"
-                  role="radiogroup"
-                  aria-label={isEn ? 'Select gender' : '성별 선택'}
-                >
-                  {[
-                    { key: 'male', label: isEn ? 'Male' : '남성' },
-                    { key: 'female', label: isEn ? 'Female' : '여성' },
-                  ].map((g) => (
-                    <button
-                      key={g.key}
-                      type="button"
-                      data-signup-gender={g.key}
-                      aria-pressed={regGender === g.key}
-                      className={`atelier-seg-tab ${regGender === g.key ? 'is-active' : ''}`}
-                      disabled={loading}
-                      onClick={() => handleSelectSignupGender(g.key)}
-                    >
-                      <span>{g.label}</span>
-                    </button>
-                  ))}
+                <div className="luxe-field">
+                  <span className="luxe-field-label" id="signup-gender-label">
+                    {isEn ? 'Fit profile' : '피팅 프로필'}
+                  </span>
+                  <div
+                    className="luxe-segmented"
+                    role="radiogroup"
+                    aria-labelledby="signup-gender-label"
+                  >
+                    {[
+                      { key: 'male', label: isEn ? 'Male' : '남성' },
+                      { key: 'female', label: isEn ? 'Female' : '여성' },
+                    ].map((g) => (
+                      <button
+                        key={g.key}
+                        type="button"
+                        data-signup-gender={g.key}
+                        aria-pressed={regGender === g.key}
+                        className={`luxe-seg-tab ${regGender === g.key ? 'is-active' : ''}`}
+                        disabled={loading}
+                        onClick={() => handleSelectSignupGender(g.key)}
+                      >
+                        <span>{g.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="atelier-anthro-grid">
-                  <AuthFieldInput
-                    id="register-name-input"
-                    type="text"
-                    value={regDisplayName}
-                    onValueChange={setRegDisplayName}
-                    lang={lang}
-                    placeholder={isEn ? 'Nickname' : '닉네임'}
-                    aria-label={isEn ? 'Display name' : '이름 / 닉네임'}
-                    autoComplete="nickname"
-                    disabled={loading}
-                  />
+                  <div className="luxe-field">
+                    {fieldLabel('register-name-input', '닉네임', 'Nickname')}
+                    <AuthFieldInput
+                      id="register-name-input"
+                      type="text"
+                      value={regDisplayName}
+                      onValueChange={setRegDisplayName}
+                      lang={lang}
+                      placeholder={isEn ? 'Nickname' : '닉네임'}
+                      autoComplete="nickname"
+                      disabled={loading}
+                    />
+                  </div>
 
-                  <AuthFieldInput
-                    id="register-height-input"
-                    type="number"
-                    min={145}
-                    max={200}
-                    clearable={false}
-                    tabular
-                    unitSuffix="cm"
-                    value={regHeightCm}
-                    onValueChange={setRegHeightCm}
-                    lang={lang}
-                    placeholder="176"
-                    aria-label={isEn ? 'Height (cm)' : '신장 cm'}
-                    disabled={loading}
-                  />
+                  <div className="luxe-field">
+                    {fieldLabel('register-height-input', '키', 'Height')}
+                    <AuthFieldInput
+                      id="register-height-input"
+                      type="number"
+                      min={145}
+                      max={200}
+                      clearable={false}
+                      tabular
+                      unitSuffix="cm"
+                      value={regHeightCm}
+                      onValueChange={setRegHeightCm}
+                      lang={lang}
+                      placeholder="176"
+                      disabled={loading}
+                    />
+                  </div>
 
+                  <div className="luxe-field">
+                    {fieldLabel('register-weight-input', '몸무게', 'Weight')}
+                    <AuthFieldInput
+                      id="register-weight-input"
+                      type="number"
+                      min={38}
+                      max={130}
+                      clearable={false}
+                      tabular
+                      unitSuffix="kg"
+                      value={regWeightKg}
+                      onValueChange={setRegWeightKg}
+                      lang={lang}
+                      placeholder="70"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div className="luxe-field">
+                  {fieldLabel('register-password-input', '비밀번호 (4자 이상)', 'Password (4+ chars)', true)}
                   <AuthFieldInput
-                    id="register-weight-input"
-                    type="number"
-                    min={38}
-                    max={130}
-                    clearable={false}
-                    tabular
-                    unitSuffix="kg"
-                    value={regWeightKg}
-                    onValueChange={setRegWeightKg}
+                    ref={regPasswordRef}
+                    id="register-password-input"
+                    type="password"
+                    value={regPassword}
+                    onValueChange={(next) => {
+                      setRegPassword(next);
+                      clearFieldError('regPassword');
+                    }}
                     lang={lang}
-                    placeholder="70"
-                    aria-label={isEn ? 'Weight (kg)' : '체중 kg'}
+                    errorText={fieldErrors.regPassword}
+                    placeholder={isEn ? 'Password' : '비밀번호'}
+                    autoComplete="new-password"
                     disabled={loading}
                   />
                 </div>
 
-                <AuthFieldInput
-                  ref={regPasswordRef}
-                  id="register-password-input"
-                  type="password"
-                  value={regPassword}
-                  onValueChange={(next) => {
-                    setRegPassword(next);
-                    clearFieldError('regPassword');
-                  }}
-                  lang={lang}
-                  errorText={fieldErrors.regPassword}
-                  placeholder={isEn ? 'Password (4+ chars)' : '비밀번호 (4자 이상)'}
-                  aria-label={isEn ? 'Password' : '비밀번호'}
-                  autoComplete="new-password"
-                  disabled={loading}
-                />
-
-                {/* Slim Inline System Note at bottom of register form */}
-                {error && (
-                  <div role="status" aria-live="polite" className="atelier-inline-note">
-                    <div className="atelier-inline-note-main">
-                      <AlertCircle size={14} className="atelier-inline-note-icon" />
-                      <p className="atelier-inline-note-text">{error}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="atelier-inline-note-retry-btn"
-                      disabled={loading}
-                      onClick={handleRetryAfterError}
-                    >
-                      <RotateCcw size={12} />
-                      <span>{isEn ? 'Retry' : '다시 시도'}</span>
-                    </button>
-                  </div>
-                )}
+                {renderInlineNote()}
 
                 <button
                   id="complete-register-btn"
@@ -996,15 +1169,13 @@ export default function LoginView({
               </form>
             )}
 
-            {/* Secondary Text Button: Experience with Sample Closet (DESIGN.md v3) */}
+            {/* Secondary Text Button: Experience with Sample Closet */}
             <div className="atelier-sample-demo-row">
               <button
                 id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
                 type="button"
                 aria-label={
-                  isEn
-                    ? 'Experience with Sample Closet'
-                    : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
+                  isEn ? 'Experience with Sample Closet' : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
                 }
                 className="atelier-text-btn"
                 disabled={loading}
@@ -1013,32 +1184,46 @@ export default function LoginView({
                 <span>{isEn ? 'Explore with Sample Closet' : '샘플 옷장으로 체험하기'}</span>
               </button>
             </div>
-          </section>
 
-          {/* Store Compliance Legal Footer (>= 48px Touch Targets) */}
-          <footer className="atelier-legal-footer">
-            <button
-              id="login-privacy-policy-btn"
-              type="button"
-              className="atelier-legal-btn"
-              onClick={() => setLegalModalDoc('privacy')}
-            >
-              {isEn ? 'Privacy Policy' : '개인정보처리방침'}
-            </button>
-            <span className="atelier-legal-dot" aria-hidden="true">
-              ·
-            </span>
-            <button
-              id="login-terms-btn"
-              type="button"
-              className="atelier-legal-btn"
-              onClick={() => setLegalModalDoc('terms')}
-            >
-              {isEn ? 'Terms of Service' : '이용약관'}
-            </button>
-          </footer>
+            {/* Store Compliance Legal Footer (>= 48px Touch Targets) */}
+            <footer className="atelier-legal-footer">
+              <button
+                id="login-privacy-policy-btn"
+                type="button"
+                className="atelier-legal-btn"
+                onClick={() => setLegalModalDoc('privacy')}
+              >
+                {isEn ? 'Privacy Policy' : '개인정보처리방침'}
+              </button>
+              <span className="atelier-legal-dot" aria-hidden="true">
+                ·
+              </span>
+              <button
+                id="login-terms-btn"
+                type="button"
+                className="atelier-legal-btn"
+                onClick={() => setLegalModalDoc('terms')}
+              >
+                {isEn ? 'Terms of Service' : '이용약관'}
+              </button>
+            </footer>
+          </section>
         </div>
       </main>
+
+      {/* Intro CTA (BORO-style bottom pill) — skips the auto-advance */}
+      <div className="luxe-intro-cta-wrap" aria-hidden={!isIntro}>
+        <button
+          type="button"
+          className="luxe-intro-cta"
+          data-login-intro-cta="true"
+          tabIndex={isIntro ? 0 : -1}
+          onClick={advanceIntro}
+        >
+          {isEn ? 'Get started' : '시작하기'}
+        </button>
+        <span key={`progress-${introRun}`} className="luxe-intro-progress" aria-hidden="true" />
+      </div>
 
       <GoogleSignInFallbackModal
         open={googleFallbackOpen}
