@@ -8,6 +8,7 @@ import { createVtonRouter } from './vtonRouter.js';
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
+process.env.ALLOW_PREVIEW_IFRAME ??= '1';
 const distDir = path.join(ROOT_DIR, 'dist');
 const SESSION_SWEEP_INTERVAL_MS = 12 * 60 * 60 * 1000;
 

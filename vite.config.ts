@@ -54,14 +54,14 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5173,
+      port: 3000,
       strictPort: true,
-      allowedHosts: ['localhost', '127.0.0.1'],
+      allowedHosts: true,
     },
     preview: {
       host: '0.0.0.0',
       port: 4173,
-      allowedHosts: ['localhost', '127.0.0.1'],
+      allowedHosts: true,
     },
     build: {
       chunkSizeWarningLimit: 1200,
