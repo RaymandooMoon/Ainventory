@@ -15,6 +15,7 @@ import {
   shiftIsoMonth,
 } from './calendar/calendarHelpers.js';
 import CalendarSlideOverDrawer from './calendar/CalendarSlideOverDrawer.jsx';
+import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
 import './calendar/calendarEditorial.css';
 
@@ -58,6 +59,7 @@ function buildIcsText(logs, outfits, lang = 'ko') {
 export default function CalendarView({
   activeCloset,
   garments = [],
+  theme = 'light',
   lang = 'ko',
   skinProfile,
   onOpenProfile,
@@ -330,10 +332,7 @@ export default function CalendarView({
     <section className="hig-screen-container" aria-label="Calendar">
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
-          <h1 className="hig-screen-title">CALENDAR</h1>
-          <span className="hig-item-count tabular-nums">
-            {tx(lang, `${logs.length}건 기록`, `${logs.length} ENTRIES`)}
-          </span>
+          <AppHeaderBrand effectiveTheme={theme} />
         </div>
         <div className="hig-top-bar-actions">
           <TopRightUtilityActions
@@ -370,6 +369,13 @@ export default function CalendarView({
           />
         </div>
       </header>
+
+      <div className="hig-sub-header-row">
+        <h1 className="hig-screen-title hig-sub-screen-title">CALENDAR</h1>
+        <span className="hig-item-count tabular-nums">
+          {tx(lang, `${logs.length}건 기록`, `${logs.length} ENTRIES`)}
+        </span>
+      </div>
 
       {loading ? (
         <div className="hig-wardrobe-grid">

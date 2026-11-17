@@ -4263,11 +4263,37 @@ img,
   flex-shrink: 0;
 }
 
-@media (max-width: 390px) {
+@media (max-width: 560px) {
+  .hig-top-bar {
+    gap: 8px;
+  }
+
+  .hig-top-right-utility-group {
+    gap: 6px;
+  }
+
+  .hig-top-right-utility-group .hig-circle-icon-btn,
   .hig-profile-quick-pill {
-    padding: 0 10px;
-    font-size: 0.74rem;
-    gap: 5px;
+    position: relative;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 9999px;
+    justify-content: center;
+  }
+
+  .hig-top-right-utility-group .hig-circle-icon-btn::after,
+  .hig-profile-quick-pill::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: 9999px;
+  }
+
+  .hig-profile-quick-label {
+    display: none;
   }
 }
 
@@ -4602,7 +4628,138 @@ img,
 }
 
 /* ==========================================================================
-   16. REDUCED MOTION ACCESSIBILITY GUARD
+   16. CIRCULAR THEME VIEW TRANSITIONS & GLOBAL BRAND LOGO PRIMITIVES
+   ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+html[data-theme-transitioning='1'] *,
+html[data-theme-transitioning='1'] *::before,
+html[data-theme-transitioning='1'] *::after {
+  transition-property: none !important;
+}
+
+.atelier-theme-ripple-ring {
+  position: fixed;
+  z-index: 2147483647;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 2px solid rgba(216, 195, 165, 0.72);
+  background: radial-gradient(
+    circle,
+    rgba(216, 195, 165, 0.14) 0%,
+    rgba(216, 195, 165, 0.04) 68%,
+    transparent 100%
+  );
+  transform: scale(0);
+  opacity: 0.9;
+  animation: atelierThemeRippleExpand 0.64s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes atelierThemeRippleExpand {
+  from {
+    transform: scale(0);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.hig-logo-img-fallback-guard {
+  display: block;
+}
+
+.hig-top-bar-brand-slot {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.atelier-logo-frame {
+  position: relative;
+  display: inline-block;
+  width: clamp(210px, 56vw, 272px);
+  aspect-ratio: 1120 / 394;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.atelier-logo-frame.hig-shell-brand-logo {
+  width: 96px;
+  transform-origin: left center;
+}
+
+@media (min-width: 561px) {
+  .atelier-logo-frame.hig-shell-brand-logo {
+    width: 118px;
+  }
+}
+
+.atelier-logo-frame.is-compact {
+  width: 96px;
+}
+
+.atelier-logo-frame.is-mini {
+  width: 78px;
+}
+
+.atelier-logo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  pointer-events: none;
+}
+
+.atelier-logo-img--overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.atelier-logo-img.is-visible {
+  opacity: 1;
+}
+
+.hig-wardrobe-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: calc(var(--space-5) * -0.4) 0 var(--space-2);
+}
+
+.hig-sub-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: calc(var(--space-5) * -0.35) 0 var(--space-4);
+}
+
+.hig-sub-screen-title {
+  font-size: clamp(1.18rem, 3.6vw, 1.54rem);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+}
+
+/* ==========================================================================
+   17. REDUCED MOTION ACCESSIBILITY GUARD
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -4613,3 +4770,4 @@ img,
     transition-duration: 0.01ms !important;
   }
 }
+

@@ -134,7 +134,7 @@
   .hig-outfits-screen .studio-25d-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+    gap: 8px;
   }
 
   .hig-outfits-screen .studio-25d-stage-col {
@@ -156,7 +156,8 @@
     box-sizing: border-box;
     margin: 0;
     margin-inline: 0;
-    min-height: 536px;
+    min-height: 430px;
+    height: clamp(430px, calc(100dvh - 280px), 516px);
     border-radius: 24px;
   }
 

@@ -58,6 +58,7 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import OutfitCategorySilhouetteRail from './OutfitCategorySilhouetteRail.tsx';
 import Studio25DCanvas from './Studio25DCanvas.jsx';
+import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
 import '../styles/atelierTokens.css';
 import './OutfitWardrobeDrawer.css';
@@ -2327,8 +2328,8 @@ export default function OutfitStudioView({
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
       <header id="hig-top-bar" className="hig-top-bar atelier-top-bar">
         <div className="hig-top-bar-titles">
-          <h1 className="hig-screen-title">OUTFITS</h1>
-          <span className="hig-item-count tabular-nums">{equippedItems.length} ACTIVE</span>
+          <h1 className="sr-only">Outfits</h1>
+          <AppHeaderBrand effectiveTheme={theme} />
         </div>
 
         <div className="hig-top-bar-actions">

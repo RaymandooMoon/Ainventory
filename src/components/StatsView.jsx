@@ -3,6 +3,7 @@ import { Moon, Palette, SlidersHorizontal, Sun } from 'lucide-react';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
 import { tx } from '../utils/i18n.ts';
+import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
 import {
   MostWornRankingCard,
@@ -67,10 +68,7 @@ export default function StatsView({
     <section className="hig-screen-container" aria-label="Stats">
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
-          <h1 className="hig-screen-title">STATS</h1>
-          <span className="hig-item-count tabular-nums">
-            {tx(lang, `${garments.length}개 아이템`, `${garments.length} ITEMS`)}
-          </span>
+          <AppHeaderBrand effectiveTheme={theme} />
         </div>
         <div className="hig-top-bar-actions">
           <TopRightUtilityActions
@@ -95,6 +93,13 @@ export default function StatsView({
           />
         </div>
       </header>
+
+      <div className="hig-sub-header-row">
+        <h1 className="hig-screen-title hig-sub-screen-title">STATS</h1>
+        <span className="hig-item-count tabular-nums">
+          {tx(lang, `${garments.length}개 아이템`, `${garments.length} ITEMS`)}
+        </span>
+      </div>
 
       <div className="stats-bento-grid">
         {/* 1. Wardrobe Vitality Hero Card + Utilization Gauge Ring (Span 7) */}

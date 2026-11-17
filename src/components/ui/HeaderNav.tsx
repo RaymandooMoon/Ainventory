@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { Moon, Sun, UserCog } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
 import { tx } from '../../utils/i18n.ts';
@@ -16,7 +16,7 @@ export interface HeaderUtilityNavProps {
   onOpenProfile?: (tab?: 'skin' | 'body') => void;
   onOpenAccount?: () => void;
   theme?: 'light' | 'dark';
-  onToggleTheme?: () => void;
+  onToggleTheme?: (event?: MouseEvent<HTMLButtonElement>) => void;
   extraActions?: ReactNode;
   className?: string;
 }
@@ -45,9 +45,9 @@ export function HeaderUtilityNav({
         <button
           type="button"
           className="hig-circle-icon-btn is-subtle min-h-12 min-w-12"
-          onClick={() => {
+          onClick={(e) => {
             triggerHaptic('selection');
-            onToggleTheme();
+            onToggleTheme(e);
           }}
           aria-label={
             theme === 'dark'
@@ -84,7 +84,7 @@ export function HeaderUtilityNav({
           style={{ backgroundColor: swatchHex }}
           aria-hidden="true"
         />
-        <span>{tx(lang, '프로필', 'Profile')}</span>
+        <span className="hig-profile-quick-label">{tx(lang, '프로필', 'Profile')}</span>
       </button>
 
       <button

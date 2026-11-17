@@ -22,6 +22,7 @@ import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
 import { resolveInitialAuthStage } from '../utils/authStage.ts';
+import { capturePendingLogoFlight } from '../utils/logoTransition.ts';
 import './auth/loginAtelier.css';
 
 const GOOGLE_SIGN_IN_BTN_ID = 'google-sign-in-btn';
@@ -84,6 +85,7 @@ export default function LoginView({
   const regOtpRef = useRef(null);
   const regPasswordRef = useRef(null);
   const shakeTimerRef = useRef(null);
+  const brandLogoRef = useRef(null);
 
   const loading = Boolean(loadingAction);
 
@@ -175,6 +177,7 @@ export default function LoginView({
       });
       setStoredToken(data.token);
       triggerHaptic('light');
+      capturePendingLogoFlight(brandLogoRef.current);
       onLoginSuccess(data.user);
     } catch (err) {
       setError(localizeApiMessage(err.message, lang));
@@ -195,6 +198,8 @@ export default function LoginView({
     setFieldErrors({});
     setLoadingAction('sample');
     triggerHaptic('light');
+    void import('./OutfitStudioView.jsx');
+    capturePendingLogoFlight(brandLogoRef.current);
     try {
       onEnterSampleDemo?.();
     } finally {
@@ -223,6 +228,7 @@ export default function LoginView({
       });
       setStoredToken(data.token);
       triggerHaptic('light');
+      capturePendingLogoFlight(brandLogoRef.current);
       onLoginSuccess(data.user);
     } catch (err) {
       if (err?.reason === 'not_configured') {
@@ -263,6 +269,7 @@ export default function LoginView({
       });
       setStoredToken(data.token);
       triggerHaptic('light');
+      capturePendingLogoFlight(brandLogoRef.current);
       onLoginSuccess(data.user);
     } catch (err) {
       setError(localizeApiMessage(err.message, lang));
@@ -406,6 +413,7 @@ export default function LoginView({
       });
       setStoredToken(data.token);
       triggerHaptic('medium');
+      capturePendingLogoFlight(brandLogoRef.current);
       onLoginSuccess(data.user);
     } catch (err) {
       setError(localizeApiMessage(err.message, lang));
@@ -458,6 +466,7 @@ export default function LoginView({
   const handleGetStarted = () => {
     if (!isIntro) return;
     triggerHaptic('selection');
+    void import('./OutfitStudioView.jsx');
     setAuthStage('auth');
   };
 
@@ -502,7 +511,11 @@ export default function LoginView({
           {/* Dual-Theme iNVTRY Logo — Centered in Intro, Glides Upward on Get Started */}
           <div className="atelier-hero">
             <h1 className="sr-only">{tr(lang, 'brandTitle')}</h1>
-            <BrandLogo effectiveTheme={effectiveTheme} alt={tr(lang, 'brandTitle')} />
+            <BrandLogo
+              ref={brandLogoRef}
+              effectiveTheme={effectiveTheme}
+              alt={tr(lang, 'brandTitle')}
+            />
           </div>
 
           {/* Rimowa-Style Upward Reveal Container: Transparent -> Opaque Auth Monolith */}

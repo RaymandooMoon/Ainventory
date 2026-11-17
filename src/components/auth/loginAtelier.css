@@ -143,7 +143,7 @@
   pointer-events: none;
 }
 
-/* Inline feTurbulence micro-dither eliminates 8-bit dark gradient banding */
+/* Ultra-light static vignette veil eliminates gradient banding with zero per-frame SVG filter cost */
 .atelier-dither-veil {
   position: absolute;
   inset: 0;
@@ -151,9 +151,12 @@
   height: 100%;
   border: 0 !important;
   outline: none !important;
-  opacity: 0.025;
   pointer-events: none;
-  mix-blend-mode: overlay;
+  background: radial-gradient(
+    circle at 50% 42%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
 }
 
 /* ==========================================================================

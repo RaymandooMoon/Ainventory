@@ -61,7 +61,7 @@ function createTestGarmentPngBuffer(): Buffer {
 }
 
 test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
-  test('1. Default Closet home, Apple HIG minimalism, squircle 2.5D grid, and zero 3D/MediaPipe loads', async ({
+  test('1. Default Outfits home, top-left brand non-overlap, Closet squircle 2.5D grid without MY WARDROBE, and zero 3D/MediaPipe loads', async ({
     page,
   }) => {
     const forbiddenAssetRequests: string[] = [];
@@ -79,13 +79,34 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     await page.goto('/');
 
-    // 1. Default Home is MY WARDROBE (`Closet`)
-    const titleEl = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`);
-    await expect(titleEl).toHaveText('MY WARDROBE');
+    // 1. Default Home is Outfits with top-left iNVTRY brand mark clear of utility actions
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`)).toBeVisible();
+    const headerBrand = page.locator('.hig-top-bar [data-brand-logo="true"]');
+    await expect(headerBrand).toBeVisible();
+
+    const headerGeometry = await page.evaluate(() => {
+      const brand = document.querySelector('.hig-top-bar [data-brand-logo="true"]');
+      const actions = document.querySelector('.hig-top-bar-actions');
+      const bRect = brand?.getBoundingClientRect();
+      const aRect = actions?.getBoundingClientRect();
+      return bRect && aRect
+        ? { brandRight: bRect.right, actionsLeft: aRect.left, gap: aRect.left - bRect.right }
+        : null;
+    });
+    expect(headerGeometry).not.toBeNull();
+    expect(headerGeometry!.gap).toBeGreaterThanOrEqual(4);
+
+    // Unified Bottom-Center Floating Glassmorphism 4-Tab Bar keeps Closet, Outfits, Calendar, Stats order
+    const tabs = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId} button`);
+    await expect(tabs).toHaveText(['Closet', 'Outfits', 'Calendar', 'Stats']);
+
+    // Navigate to Closet (`/closet`) and verify MY WARDROBE is removed while item count remains visible
+    await tabs.nth(0).click();
+    await expect(page).toHaveURL(/\/closet$/);
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toHaveCount(0);
 
     const countEl = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeItemCountId}`);
     await expect(countEl).toHaveText(/^\d+ ITEMS$/);
-
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`)).toBeVisible();
 
     // 2. Exact 7 Pill Category Filters (single axis, Jewelry included)
@@ -100,11 +121,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       'Jewelry',
     ]);
 
-    // 3. Unified Bottom-Center Floating Glassmorphism 4-Tab Bar
-    const tabs = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId} button`);
-    await expect(tabs).toHaveText(['Closet', 'Outfits', 'Calendar', 'Stats']);
-
-    // 4. Squircle #F5F5F7 cards with zero SVG placeholder wireframes
+    // 3. Squircle #F5F5F7 cards with zero SVG placeholder wireframes
     const firstSquircle = page.locator(`.${CARBON_DOM_CONTRACT.cutoutTileClass}`).first();
     await expect(firstSquircle).toBeVisible();
     const squircleStyle = await firstSquircle.evaluate((el) => {
@@ -120,8 +137,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(squircleStyle.radius).toBeLessThanOrEqual(24);
     expect(squircleStyle.svgCount).toBe(0);
 
-    // 5. Zero prohibited editorial copy & zero 3D/WASM requests
+    // 4. Zero prohibited editorial copy & zero 3D/WASM requests
     const bodyText = await page.locator('body').innerText();
+    expect(bodyText).not.toContain('MY WARDROBE');
     expect(bodyText).not.toContain('비워진 공간');
     expect(bodyText).not.toContain('SPATIAL FITTING');
     expect(bodyText).not.toContain('평균 완성도');
@@ -133,7 +151,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
   test('2. Full User Flow: + Register -> Grid Exposure -> /item/:id Detail (2.5D Tilt & Edit) -> Outfits Studio Combination -> Delete', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/closet');
 
     // Wait for initial wardrobe garments fetch to settle before reading baseline count
     await expect(
@@ -233,7 +251,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     // Step E: Return to Closet -> open registered item detail -> Delete item
     await page.locator('[data-nav-tab="closet"]').click();
-    await expect(page.locator('#wardrobe-header-title')).toHaveText('MY WARDROBE');
+    await expect(page).toHaveURL(/\/closet$/);
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeItemCountId}`)).toBeVisible();
 
     const updatedCard = page
       .locator(`#${CARBON_DOM_CONTRACT.wardrobeGridId} .hig-wardrobe-card`, {
@@ -485,7 +504,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     // 6. Unmount -> Remount lifecycle regression guard
     const tabBar = page.locator(`#${CARBON_DOM_CONTRACT.floatingTabBarId}`);
     await tabBar.getByRole('button', { name: 'Closet' }).click();
-    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toBeVisible();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeItemCountId}`)).toBeVisible();
     await tabBar.getByRole('button', { name: 'Outfits' }).click();
     await expect(mannequin.locator('.character-25d-fallback-svg')).toHaveCount(0);
     await expect(
@@ -524,11 +543,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#register-password-input').fill('pass1234');
     await page.locator('#complete-register-btn').click();
 
-    // Lands on MY WARDROBE -> navigate to Outfits and verify gender-neutral 2D model + 165cm + 53kg reflected automatically
-    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeHeaderTitleId}`)).toHaveText(
-      'MY WARDROBE'
-    );
-    await page.locator('[data-nav-tab="outfits"]').click();
+    // Lands directly on Outfits (`/`) with top-left brand logo and gender-neutral 2D model + 165cm + 53kg
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('.hig-top-bar [data-brand-logo="true"]')).toBeVisible();
 
     const mannequin = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(mannequin).toBeVisible();
@@ -776,6 +793,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#login-password').fill('admin');
     await page.locator('#login-submit-btn').click();
 
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`)).toBeVisible();
+    await assertZeroHangulOnPage('admin-outfits-landing-en');
+
+    await page.locator('[data-nav-tab="closet"]').click();
     await expect(page.locator('.hig-wardrobe-card').first()).toBeVisible();
     await assertZeroHangulOnPage('admin-closet-en');
 

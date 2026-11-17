@@ -1682,6 +1682,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return isEn ? angleSpec.shortEn : angleSpec.shortKo;
   }, [viewAngleDeg, angleScrollDeg, angleSpec.shortEn, angleSpec.shortKo, isEn]);
 
+  const hasStatusCapsuleVisible = Boolean(
+    !effectiveCompareActive &&
+      !historyOpen &&
+      statusCapsuleSpec &&
+      statusToast &&
+      (equippedCount > 0 || statusToast.reason === 'empty_outfit')
+  );
+
   return (
     <div
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
@@ -1689,6 +1697,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-fitting-mode={viewerMode}
       data-stage-mode={stageMode}
       data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
+      data-has-status-capsule={hasStatusCapsuleVisible ? 'true' : 'false'}
       data-has-zoom-bar={showCharacterZoomBar ? 'true' : 'false'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-stage-theme={resolvedTheme}

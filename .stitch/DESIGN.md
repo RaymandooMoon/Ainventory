@@ -1,13 +1,19 @@
 ---
-version: "v4"
-name: "Ainventory — Haute Atelier Editorial System (Fashion Core v4)"
+version: "v5"
+name: "Ainventory — Haute Atelier Editorial System (Fashion Core v5)"
 description: >
   High-fashion editorial, tactile, runway-calm private fitting studio & digital wardrobe system:
-  3D/2D digital closet, AI model virtual try-on, weather-aware styling, calendar lookbook and
-  wardrobe statistics. Grounded in contemporary luxury fashion maison aesthetics — sculptural
-  negative space, architectural hairline framing, kinetic silk motion, Paper White / Atelier Linen
-  in light mode, and True OLED Black (#000000) in dark mode so garments, silhouettes, and skin
-  tones hold 100% of the chroma. Primary brand mark: dual-theme hanger-calligraphy "iNVTRY" logo.
+  Outfits-first default landing studio, 3D/2D digital closet, AI model virtual try-on,
+  weather-aware styling, calendar lookbook and wardrobe statistics. Grounded in contemporary
+  luxury fashion maison aesthetics — sculptural negative space, architectural hairline framing,
+  kinetic silk motion, Paper White / Atelier Linen in light mode, and True OLED Black (#000000)
+  in dark mode so garments, silhouettes, and skin tones hold 100% of the chroma.
+  CRITICAL MANDATES:
+  (1) Every screen across the entire app MUST feature the exact continuous one-line hanger-garments
+      "iNVTRY" calligraphy logo (dual-theme transparent PNG assets) — NEVER substitute with plain text.
+  (2) Stitch-First UI Evolution: ALL UI improvements, screen redesigns, and layout updates MUST
+      use Google Stitch first and persist generated/edited screens in Stitch project
+      projects/11505180160165595336 as the visual record before implementation.
 colors:
   # Light — "Atelier Daylight"
   canvas: "#FFFFFF"
@@ -283,9 +289,18 @@ components:
 | **OLED Noir & Daylight Calm** (순흑·백야의 고요함) | 다크모드 OLED 픽셀 오프(`#000000`) 순흑 스테이지와 종이 백색의 극단적 무채색 정제 | 무채색 크롬, 다크 배경 `#000000` 극대화(글래스/카드만 최소 1px 헤어라인 분리), 모션은 180–620ms 감속 스프링 |
 | **Tailored Atelier** (맞춤 아틀리에) | 재단사의 작업실 — 리넨 호리존, 샌드 줄자, 행어 원라인 로고 `iNVTRY` | Outfits 스테이지 `#F4F0E8` 리넨 / `#000000` OLED 순흑 + 듀얼 테마 `"iNVTRY"` 로고(라이트 `#1D1D1F`+`#CCB596`, 다크 `#F5F5F7`+`#B29A7A`) |
 
-### Default Theme & Brand Mark Rules
+### Default Theme, Whole-App Brand Mark & Stitch-First Governance (NON-NEGOTIABLE)
 - **디폴트 테마**: 앱 최초 진입 시 항상 **`system`**(`ThemePreference = 'system'`)으로 동작해 OS 라이트/다크 설정을 즉시 따른다.
-- **브랜드 로고 (`iNVTRY`)**: 서비스명(`A inventory`)을 텍스트 대신 행어-의류 원라인 로고(`iNVTRY`)로 우선 표기하며, 라이트 모드(`#1D1D1F` 잉크 + `#CCB596` 웜 샌드)와 OLED 다크 모드(`#F5F5F7` 알라바스터 + `#B29A7A` 샴페인 샌드)에서 자동 전환한다.
+- **기본 진입 화면 (`Outfits` First)**: 로그인·샘플 옷장 진입·루트(`/`) 접속 시 첫 화면은 항상 **`Outfits` 스튜디오**다. 옷장(`Closet`)은 `/closet` 경로와 하단 탭에서 1탭으로 전환한다.
+- **전체 앱 `"iNVTRY"` 로고 활용 & 스무스 상승 글라이드 (절대 망각 금지)**:
+  - 서비스의 유일한 공식 로고는 다섯 개의 옷걸이와 의류 실루엣이 하나로 이어진 **원라인 캘리그라피 `"iNVTRY"` 로고**다(`public/assets/brand/invtry-logo-light.png` & `invtry-logo-dark.png`, `<BrandLogo />` 컴포넌트).
+  - 로그인 화면에서 메인 화면으로 진입할 때, 로그인 화면의 `"iNVTRY"` 로고가 끊김 없이 메인 화면 **최상단 좌측 헤더 슬롯으로 부드럽게 상승(FLIP Glide, `620ms cubic-bezier(0.22, 1, 0.36, 1)`)** 하여 정착한다.
+  - 앞으로 신규 화면, 리디자인, Stitch 시안 생성, 앱 내 브랜딩 영역을 설계할 때 **반드시 전체 앱 전반에 이 공식 `"iNVTRY"` 로고를 일관되게 활용**해야 한다.
+  - **금지 사항**: 로고 대신 일반 세리프/산세리프 폰트로 `"I N V T R Y"`, `"A INVENTORY"`, `"A inventory"` 또는 불필요한 `"MY WARDROBE"` 영문 헤더 타이틀을 남용하거나 로고를 누락해서는 절대 안 된다.
+  - **듀얼 테마 색상 규약**: 라이트 모드에서는 카본 블랙(`#1D1D1F`) + 웜 샌드 오프셋(`#CCB596`), OLED 다크 모드에서는 알라바스터 화이트(`#F5F5F7`) + 샴페인 샌드 오프셋(`#B29A7A`)을 자동 전환한다.
+- **Stitch-First UI 개선 & 영구 기록 의무 (MANDATORY)**:
+  - 앞으로 **모든 UI 개선·신규 화면 설계·레이아웃 개편 시 반드시 Google Stitch를 먼저 활용**(`upload_design_md` → `generate_screen_from_text` / `edit_screens`)하여 시안을 제작·검증한 뒤 코드에 반영한다.
+  - 모든 UI 변경 이력과 최종 확정 시안 스크린은 **Stitch 프로젝트(`projects/11505180160165595336`, `A inventory UI rev`)에 누락 없이 영구 기록·보존**해야 한다.
 
 ### Spatial Philosophy — "Gallery, Not Dashboard"
 1. **옷과 사람이 주인공이다.** 화면 면적의 85% 이상(`minVisualRatio: 0.85`)은 의류 이미지·AI 모델·여백이 차지하고, 크롬(컨트롤)은 가장자리 글래스 HUD로 물러난다.
@@ -404,11 +419,11 @@ components:
 - 모든 인터랙티브 요소의 히트 영역 **≥ 48×48dp** (시각 크기가 작아도 패딩/의사요소로 확장). 인접 타깃 간격 ≥ 8px.
 - 예외 없음: 칩 해제 `×`, 히스토리 삭제, 캘린더 날짜 셀, 비밀번호 표시 토글 포함.
 
-### Information Architecture (4-Tab)
-1. **옷장 (`closet`)**: 타이틀 + 아이템 수 → 단일 카테고리 레일(전체·상의·하의·아우터·신발·액세서리·주얼리) → (선택 시) 서브파트 레일 → 스쿼클 그리드(2→3→4열). 검색·정렬은 헤더 아이콘에서 펼침.
-2. **코디 (`outfits`)**: AI 모델 스튜디오 무대(리넨 사이클로라마) + 오브시디언 드로어. `≥ 600px` 58:42 분할, 모바일은 전체 무대 + 바텀시트 드로어.
-3. **캘린더 (`calendar`)**: 월간 룩북 그리드(착장 썸네일 셀) + 슬라이드 오버 데이 드로어.
-4. **통계 (`stats`)**: 벤토 카드(대표 수치 → 차트 → 랭킹) 에디토리얼 그리드.
+### Information Architecture (4-Tab · Outfits Default Home)
+1. **코디 (`outfits`, 기본 홈 `/`)**: 상단 좌측 `"iNVTRY"` 로고 + 우측 겹침 없는 유틸리티 버튼 → 날씨·AI 스튜디오 무대(리넨 사이클로라마 / OLED 순흑 `#000000`) + 스모크 글래스 드로어. `≥ 600px` 58:42 분할, 모바일은 비겹침 플랫레이/수평 착용 레일 + 슬림 1줄 상태 캡슐 + 하단 플로팅 탭 독 위로 완전히 노출되는 서랍 CTA 바텀시트 트리거.
+2. **옷장 (`closet`, `/closet`)**: 상단 좌측 `"iNVTRY"` 로고(`MY WARDROBE` 문구 삭제) + 우측 검색·추가·프로필·설정(모바일 비겹침 40dp/48dp 히트박스) → 카테고리 레일 상단 우측/인라인 메타 슬롯에 `{N} ITEMS` 정숙 배치 → 단일 카테고리 레일 → 스쿼클 그리드(2→3→4열).
+3. **캘린더 (`calendar`, `/calendar`)**: 상단 `"iNVTRY"` 로고 + 기록 건수 서브헤더 + 월간 룩북 그리드(착장 썸네일 셀) + 슬라이드 오버 데이 드로어.
+4. **통계 (`stats`, `/stats`)**: 상단 `"iNVTRY"` 로고 + 벤토 카드(대표 수치 → 차트 → 랭킹) 에디토리얼 그리드.
 
 ### Breakpoints & Safe Areas
 - `≤ 359px` 폴드 커버 / `360–599px` 표준 모바일 / `≥ 600px` 태블릿·언폴드 / `≥ 1024px` 데스크톱(`max-width: 1160px`).
@@ -455,32 +470,36 @@ components:
 - 화면 하단 중앙 캡슐, 글래스(0.84) + `--elevation-lg`, 높이 64px, 탭 4개 각 ≥ 48dp, 간격 8px.
 - 활성: 대비 반전 + 2px 외곽 링 + 라벨 760 + `18×2.5px` 하단 인디케이터(색 이외 단서).
 
-### Login Atelier (2-Stage Boro Intro → Rimowa Reveal)
-- **무대**: 라이트(`#FFFFFF` / 리넨 실크 웨이브) 또는 다크 **OLED 순흑(`#000000`)** 배경 + 키네틱 실크/런웨이 스포트라이트 캔버스(`#login-wardrobe-motion-stage`). 상단 라이브 상태 캡슐·보조 브랜드 마크·서브타이틀 문구는 모두 제거해 순수 패션 하우스 오프닝을 유지한다.
+### Login Atelier (2-Stage Boro Intro → Rimowa Reveal · Glamorous Runway Edition)
+- **현재 로그인 패널 레이아웃 보존**: 중앙 정렬 단일 컬럼 글래스 모놀리스(`.atelier-monolith`) 구조와 구성 순서는 현행 구현을 그대로 유지한다.
+- **화려한 키네틱 런웨이 백드롭 (`#login-wardrobe-motion-stage`)**: 라이트(`#FFFFFF → #F3F1EC`) 또는 다크 **OLED 순흑(`#000000`)** 캔버스 위에 ① 대각선 볼류메트릭 캣워크 스포트라이트 빔, ② 7중 오간자/실크 하모닉 리본 + 이중 스펙큘러 림, ③ 회전하는 미세 아틀리에 궤도 아크, ④ 샴페인 샌드·실버 보케 및 4각 쿠튀르 스타 글린트가 입체적으로 흐른다. 상단 라이브 상태 캡슐·보조 브랜드 마크·서브타이틀 문구는 모두 제거해 순수 패션 하우스 오프닝을 유지한다.
 - **Stage 1 — Intro (`Get started`)**:
   - 즉시 로그인 폼을 띄우지 않는다.
   - 화면 정중앙에 듀얼 테마 `"iNVTRY"` 행어 원라인 로고만 크게 배치하고, 하단 안전 영역에 단일 pill 버튼 **`Get started`**(국문: `시작하기`)만 고정한다. 우측 상단에는 테마/언어 유틸리티 버튼만 절제해 둔다.
 - **Stage 2 — Rimowa-Style Reveal Transition**:
-  - `Get started` 클릭 시 중앙의 `"iNVTRY"` 로고가 `transform: translate3d(...) scale(...)`로 상단 헤더 위치까지 부드럽게 미끄러져 올라가며, 동시에 로그인 모놀리스 패널과 약관 푸터가 아래에서 위로(`translate3d(0, 56px, 0) → 0`) 올라오면서 **투명(`opacity: 0`)에서 불투명(`opacity: 1`)으로** 자연스럽게 전환된다 (`600ms cubic-bezier(0.22, 1, 0.36, 1)`).
+  - `Get started` 클릭 시 중앙의 `"iNVTRY"` 로고가 `transform: translate3d(...) scale(...)`로 상단 헤더 위치까지 부드럽게 미끄러져 올라가며, 동시에 로그인 모놀리스 패널과 약관 푸터가 아래에서 위로(`translate3d(0, 96px, 0) → 0`) 올라오면서 **투명(`opacity: 0`)에서 불투명(`opacity: 1`)으로** 자연스럽게 전환된다 (`680ms cubic-bezier(0.16, 1, 0.3, 1)`).
 - **Auth Panel 순서**: 듀얼 테마 `iNVTRY` 로고 → **Google 계정으로 로그인**(최상단 1순위) → Apple 로그인 → `또는` 구분선 → 로그인/회원가입 세그먼트 → 폼 → 샘플 옷장 체험(보조 텍스트 버튼).
 - **Google 버튼**: 공식 4색 G 로고 SVG(18px, 색 변경 금지), 라이트 `#FFFFFF` 배경 + `#747775` 1px 테두리 + `#1F1F1F` 텍스트(16.48:1), 다크 `#131314` 배경 + `#8E918F` 테두리 + `#E3E3E3` 텍스트(14.47:1). 높이 48px, pill, 라벨 `Google 계정으로 로그인`.
 - **오류**: 필드 오류는 필드 하단 `caption` + danger 잉크. 시스템 오류는 폼 하단 **인라인 노트**(surface 배경, 14px 아이콘, 1–2줄, 우측 텍스트 버튼 `다시 시도`). 상단을 밀어내는 경고 카드 금지.
 
-### Closet
-- **단일 카테고리 레일**: 40px 필, 간격 8px, 활성은 대비 반전 + 체크 없는 굵은 라벨, 우측에 카운트(`tabular-nums`). 주얼리는 레일 말미 필로 흡수.
+### Closet (`/closet`)
+- **헤더 정돈**: 기존의 큰 `"MY WARDROBE"` 영문 타이틀은 제거하고 좌측에 공식 `"iNVTRY"` 로고를 배치한다. 우측 유틸리티 버튼(검색·`+`·프로필·계정 설정)은 모바일 360–393px 폭에서도 좌측 로고와 최소 12px 이상 여유 간격을 유지한다(프로필 스와치는 `< 480px`에서 콤팩트 서클 아바타로 축약하되 48dp 터치 영역 보장).
+- **`{N} ITEMS` 카운터 위치**: 상단 우측 버튼과 충돌하지 않도록 카테고리 레일과 짝을 이루는 서브 헤더 우측(`tabular-nums`) 또는 필터 레일 인라인 메타 텍스트로 정갈하게 배치한다.
+- **단일 카테고리 레일**: 40px 필, 간격 8px, 활성은 대비 반전 + 체크 없는 굵은 라벨. 주얼리는 레일 말미 필로 흡수.
 - **서브파트 레일**: 액세서리/주얼리 선택 시에만 180ms 슬라이드 다운(높이는 예약 슬롯 내 opacity 전환).
-- **검색/정렬**: 헤더 아이콘 버튼(48dp) → 펼침 시 레일 위에 검색 필드 + 정렬 세그먼트.
-- **스쿼클 카드**: 1:1, `#F5F5F7`, 22px, 의류 13% 패딩, 하단 2줄 메타(이름 640 / 브랜드 `#636366`), 착용 배지(`3회`, tabular).
+- **스쿼클 카드**: 1:1, `#F5F5F7` / 다크 `#161618`, 22px, 의류 13% 패딩, 하단 2줄 메타(이름 640 / 브랜드 `#636366`), 착용 배지(`3회`, tabular).
 
-### Outfits — AI Model Studio
-- **무대 레이어**: z-0 사이클로라마 → z-10 접지 데크 → z-20 모델/플랫레이 → z-30 날씨 캔버스 → z-55 HUD.
-- **대칭 Top HUD (보존)**: 좌 줌 배율 캡슐 · 중앙 날씨 캡슐(`지역 · 14°C` + 큐레이션 점 + 서브라인) · 우 보관함 버튼. 높이 40px 캡슐, 상단 슬롯 48px 고정.
-- **Studio Status Capsule (신규, 붉은 경고 박스 대체)**: 무대 하단 HUD 레일 안의 1줄 글래스 캡슐(`role="status"`). 구성: 6px 샌드 점(정보) → 상태 문구(`AI 모델 피팅이 꺼져 있어요` 등) → 우측 1차 텍스트 CTA(`AI 모델 피팅 활성화`) → 닫기(48dp). 원시 에러 코드는 `title`/`data-reason`에만.
-- **AI 모델 피팅 활성화 동선**: CTA → `#profile-studio-sheet` `api-key` 섹션 딥링크(키 미설정) 또는 즉시 재시도(일시 오류). `샘플 피팅`은 캡슐 오버플로 대신 시트 내 보조 버튼으로.
+### Outfits — AI Model Studio (Default Home `/`)
+- **상단 헤더 비겹침 규칙**: 좌측 `"iNVTRY"` 로고 + 우측 유틸리티 버튼(`테마`, `새로고침`, `초기화`, `프로필 스와치`, `계정 설정`). 모바일 `< 480px`에서는 유틸리티 간격을 6px, 시각 38–40px(의사요소 `48dp` 터치 영역) + 프로필 텍스트 숨김 원형 스와치로 압축해 로고와 절대 겹치지 않는다.
+- **모바일 스테이지·착용 레일·플랫레이 분리 (Zero-Overlap)**:
+  - `< 600px` 모바일에서 착용 슬롯 독(`.studio-worn-slots-dock`)을 좌측 세로 고정 대신 **상단 HUD 바로 아래 수평 스크롤 1줄 칩 레일**로 배치해 플랫레이 보드가 스테이지 **전체 가로 폭**을 온전히 사용하도록 한다.
+  - 모바일 플랫레이 보드는 2열(1–4벌 2열, 5벌은 2열+하단 와이드/히어로 또는 균형 그리드)로 구성해 `"발마칸 코트"`, `"스트라이프 셔츠"` 등 의류명이 한 글자(`발...`)로 잘리지 않고 넉넉하게 읽히게 한다.
+  - `< 600px` 스테이지 높이는 `clamp(420px, calc(100dvh - 308px), 520px)` 로 제한해 하단의 **"옷장 서랍 열기" CTA 버튼과 슬롯 바가 하단 플로팅 탭 독에 절대 가려지지 않도록** 보장한다.
+- **Studio Status Capsule (슬림 1줄 예약 레일)**: 무대 하단 예약 HUD 레일(높이 `40px`, `flex-wrap: nowrap`) 안에 배치해 플랫레이 의류 카드를 덮지 않는다. 구성: 6px 샌드 점 → 1줄 상태 문구 → 우측 콤팩트 CTA → `샘플` → 닫기(`X`).
+- **무대 레이어**: z-0 사이클로라마(라이트 `#F4F0E8` / 다크 OLED 순흑 `#000000`→`#0A0A0C`) → z-10 접지 데크 → z-20 모델/플랫레이 → z-30 날씨 캔버스 → z-55 HUD.
 - **3D 각도 독**: AI 모델 뷰(이미지 존재·생성 중·샘플)에서만 노출. 플랫레이 룩북에서는 같은 높이의 빈 슬롯을 유지한 채 `opacity: 0; visibility: hidden; inert`.
-- **생성 중 — 실루엣 조명 쉬머**: 모델 실루엣(마네킹 윤곽) 위로 샌드→화이트 대각 하이라이트가 1.6s 주기로 스윕, 상단 2px 진행 라인. 문구는 3단계 사용자 언어(`옷감을 고르는 중` → `체형에 맞춰 드레이핑하는 중` → `조명을 맞추는 중`).
-- **Profile Studio Sheet (보존)**: 피부톤 MST 1–10 스와치 행(각 48dp, 선택 시 샌드 2px 링 + 체크), 체형 슬라이더(cm/kg tabular), AI 스타일(캐릭터/실사), API 키. 시트 높이 상태 64dvh / 92dvh.
-- **팩샷 카드**: `#F7F7F5`, 14px, 1:1.06, 착용 시 샌드 2px 링 + 흰 외곽 헤일로.
+- **Profile Studio Sheet (보존)**: 피부톤 MST 1–10 스와치 행(각 48dp), 체형 슬라이더(cm/kg tabular), AI 스타일(캐릭터/실사), API 키.
+- **팩샷 카드**: 라이트 `#F7F7F5` / 다크 OLED `#161618` + `1px solid rgba(245,245,247,0.12)` 헤어라인, 14px 라운드, 착용 시 샌드 2px 링.
 
 ### Calendar Lookbook
 - 7열 그리드, 셀 간격 8px, 셀 14px 반경, 날짜 `metric-inline` 좌상단, 착장 썸네일 8px 반경 하단 정렬. 오늘은 잉크 2px 링(색 이외 단서), 선택은 대비 반전 날짜 배지.
@@ -503,13 +522,16 @@ components:
 
 ## Motion — Zero-CLS Rules
 
-- **커브**: `--spring-ease: cubic-bezier(0.32, 0.72, 0, 1)` (인트로→로그인 리빌은 `cubic-bezier(0.22, 1, 0.36, 1)`). 지속시간: 마이크로 120–180ms, 전환 240ms, 시트 340–360ms, 인트로 리빌 600ms.
+- **커브**: `--spring-ease: cubic-bezier(0.32, 0.72, 0, 1)` (인트로→로그인 리빌 및 원형 테마 전환은 `cubic-bezier(0.22, 1, 0.36, 1)`). 지속시간: 마이크로 120–180ms, 전환 240ms, 시트 340–360ms, 원형 테마 팽창 640ms, 인트로 리빌 680ms.
+- **원형 확산 테마 전환 (Circular Button-Origin Theme Ripple)**:
+  - 라이트 ↔ 다크 전환 버튼(로그인 상단바, 앱 헤더 유틸리티, 계정 설정 화면 테마 버튼 등)을 누르면 클릭된 버튼의 중심 좌표 `(cx, cy)` 에서 **`circle(0px at cx cy) → circle(maxR at cx cy)`** 원형 파동이 View Transitions API(`::view-transition-new(root)`)로 바깥까지 부드럽게 커지며 테마와 `"iNVTRY"` 로고 컬러, 캔버스를 즉시 전환한다.
+  - `prefers-reduced-motion: reduce`에서는 원형 확산을 생략하고 즉각 전환한다.
 - **애니메이션 허용 속성은 `opacity`, `transform`, `filter`, `clip-path` 뿐.** `height/width/top/margin` 애니메이션 금지.
 - **예약 슬롯**: 조건부 UI(상태 캡슐, Staged CTA, 각도 독, 서브파트 레일)는 항상 고정 크기 컨테이너를 렌더하고 내부만 crossfade. 마운트/언마운트로 형제 요소를 밀어내지 않는다.
 - **이미지 박스**: 모든 이미지 컨테이너에 `aspect-ratio` 명시. 로딩은 스켈레톤 쉬머(같은 크기).
 - **숫자**: tabular-nums로 폭 고정, 카운트업 애니메이션 시에도 폭 불변.
 - **상태 전환 매트릭스 (Outfits)**: 플랫레이 ↔ 생성 중 ↔ AI 모델 뷰 ↔ 피부톤/체형 시트 — 무대 박스 크기·HUD 위치 변화 0px, 바뀌는 것은 무대 내용(crossfade 240ms)과 HUD 내용뿐.
-- `prefers-reduced-motion: reduce` → 쉬머·스윕·파티클 정지, crossfade만 120ms.
+- `prefers-reduced-motion: reduce` → 쉬머·스윕·파티클·원형 확산 정지, crossfade만 120ms.
 
 ## Do's and Don'ts
 
@@ -533,6 +555,6 @@ components:
 
 ## Stitch Generation Notes (for screen prompts)
 
-- 기본 바이브 문구: *"High-fashion luxury maison editorial private fitting studio; minimal runway silhouette framing, tactile silk/linen motion; monochrome chrome on paper white #FFFFFF, gallery gray #F5F5F7 and warm linen #F4F0E8 (dark: true OLED black #000000 pixels-off primary background, deep surface #121214, elevated #1C1C1E); sand #D8C3A5 hairline accents only; dual-theme hanger calligraphy logo 'iNVTRY'; Keep all product copy and button text in Korean."*
+- 기본 바이브 문구: *"High-fashion luxury maison editorial private fitting studio; minimal runway silhouette framing, dramatic volumetric spotlight beams & kinetic silk/organza motion; monochrome chrome on paper white #FFFFFF, gallery gray #F5F5F7 and warm linen #F4F0E8 (dark: true OLED black #000000 pixels-off primary background, deep surface #121214, elevated #1C1C1E); sand #D8C3A5 hairline accents only; MANDATORY: always display the exact continuous one-line hanger-garments 'iNVTRY' calligraphy logo mark across every screen (never replace with generic serif/sans text); Keep all product copy and button text in Korean."*
 - 이미지 일체화: *"Garment packshot cards use #F7F7F5 backgrounds with transparent cutouts and a soft top-left key light; AI model silhouette lit with warm linen bounce light (dark: sand rim light on pure OLED black #000000); icons inherit ink color."*
-- 정제는 `edit_screens`로 프롬프트당 1–2개 요소만(예: "Replace the red warning box above the stage with a slim glass studio status capsule"), UI 요소명(`navigation bar`, `primary call-to-action button`, `card layout`, `floating HUD`, `bottom sheet`)을 정확히 지목한다.
+- 정제는 `edit_screens`로 프롬프트당 1–2개 요소만(예: "Replace generic text header with the exact continuous one-line hanger-garments iNVTRY logo"), UI 요소명(`navigation bar`, `primary call-to-action button`, `card layout`, `floating HUD`, `bottom sheet`)을 정확히 지목한다.

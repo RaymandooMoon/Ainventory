@@ -35,6 +35,8 @@ import {
   triggerHaptic,
 } from './utils/nativeBridge.ts';
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
+import { resolveInitialTabFromPath } from './utils/logoTransition.ts';
+import { runCircularThemeTransition } from './utils/themeTransition.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
 const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
@@ -57,15 +59,15 @@ const DEFAULT_LOCAL_USER = {
 };
 
 const FLOATING_TABS = [
-  { key: 'closet', label: 'Closet', path: '/', Icon: LayoutGrid },
-  { key: 'outfits', label: 'Outfits', path: '/outfits', Icon: Layers },
+  { key: 'closet', label: 'Closet', path: '/closet', Icon: LayoutGrid },
+  { key: 'outfits', label: 'Outfits', path: '/', Icon: Layers },
   { key: 'calendar', label: 'Calendar', path: '/calendar', Icon: Calendar },
   { key: 'stats', label: 'Stats', path: '/stats', Icon: BarChart3 },
 ];
 
 function parseAppLocation() {
   if (typeof window === 'undefined') {
-    return { tab: 'closet', itemId: null, showAuth: false };
+    return { tab: 'outfits', itemId: null, showAuth: false };
   }
   const { pathname, search } = window.location;
   const params = new URLSearchParams(search);
@@ -75,23 +77,14 @@ function parseAppLocation() {
     params.get('auth') === '1' ||
     params.get('verify_token')
   ) {
-    return { tab: 'closet', itemId: null, showAuth: true };
+    return { tab: 'outfits', itemId: null, showAuth: true };
   }
 
   const itemMatch = pathname.match(/^\/item\/(-?\d+)\/?$/);
   if (itemMatch) {
     return { tab: 'closet', itemId: Number(itemMatch[1]), showAuth: false };
   }
-  if (pathname.startsWith('/outfits')) {
-    return { tab: 'outfits', itemId: null, showAuth: false };
-  }
-  if (pathname.startsWith('/calendar')) {
-    return { tab: 'calendar', itemId: null, showAuth: false };
-  }
-  if (pathname.startsWith('/stats')) {
-    return { tab: 'stats', itemId: null, showAuth: false };
-  }
-  return { tab: 'closet', itemId: null, showAuth: false };
+  return { tab: resolveInitialTabFromPath(pathname), itemId: null, showAuth: false };
 }
 
 export default function App() {
@@ -427,12 +420,20 @@ export default function App() {
     }
   }, []);
 
-  const handleToggleTheme = useCallback(() => {
-    const next = resolvedTheme === 'dark' ? 'light' : 'dark';
-    const applied = applyThemePreference(next);
-    setResolvedTheme(applied);
-    triggerHaptic('selection');
-  }, [resolvedTheme]);
+  const handleToggleTheme = useCallback(
+    (event) => {
+      const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+      triggerHaptic('selection');
+      runCircularThemeTransition({
+        event,
+        applyTheme: () => {
+          const applied = applyThemePreference(next);
+          setResolvedTheme(applied);
+        },
+      });
+    },
+    [resolvedTheme]
+  );
 
   const handleChangeLang = useCallback((nextLang) => {
     const normalized = setStoredLang(nextLang);
@@ -445,7 +446,7 @@ export default function App() {
     setUser(DEFAULT_LOCAL_USER);
     setShowAuthScreen(false);
     setSelectedItemId(null);
-    setActiveTab('closet');
+    setActiveTab('outfits');
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, '', '/');
     }
@@ -458,7 +459,7 @@ export default function App() {
       syncAccountToAvatar(loggedInUser);
       setShowAuthScreen(false);
       setSelectedItemId(null);
-      setActiveTab('closet');
+      setActiveTab('outfits');
       setRefreshKey((k) => k + 1);
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/');
@@ -522,7 +523,7 @@ export default function App() {
     setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
     setSelectedItemId(null);
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
-      window.history.pushState({}, '', '/');
+      window.history.pushState({}, '', '/closet');
     }
   }, []);
 
@@ -591,6 +592,7 @@ export default function App() {
               activeCloset={activeCloset}
               garments={garments}
               loading={garmentsLoading}
+              theme={resolvedTheme}
               lang={lang}
               skinProfile={skinProfile}
               onOpenProfile={handleOpenProfileModal}
@@ -628,6 +630,7 @@ export default function App() {
             <CalendarView
               activeCloset={activeCloset}
               garments={garments}
+              theme={resolvedTheme}
               lang={lang}
               skinProfile={skinProfile}
               onOpenProfile={handleOpenProfileModal}
@@ -706,6 +709,7 @@ export default function App() {
             user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
+            theme={resolvedTheme}
             lang={lang}
             onChangeLang={handleChangeLang}
             onOpenProfile={handleOpenProfileModal}

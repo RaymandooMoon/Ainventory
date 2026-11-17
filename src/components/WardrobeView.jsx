@@ -19,6 +19,7 @@ import {
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AddGarmentModal from './AddGarmentModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
+import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
 
 const ACCESSORY_WARDROBE_SUBPARTS = [
@@ -55,6 +56,7 @@ export default function WardrobeView({
   activeCloset,
   garments = [],
   loading = false,
+  theme = 'light',
   lang = 'ko',
   skinProfile,
   onOpenProfile,
@@ -183,19 +185,12 @@ export default function WardrobeView({
   const toolbarOpen = searchOpen || searchQuery.length > 0;
 
   return (
-    <section className="hig-screen-container hig-closet-screen" aria-label="MY WARDROBE">
-      {/* Top Bar: Left Title + Item Count | Right '+' + Profile + Account Settings */}
+    <section className="hig-screen-container hig-closet-screen" aria-label="Closet">
+      {/* Top Bar: Left iNVTRY Brand | Right Search + '+' + Profile + Account Settings */}
       <header className="hig-top-bar">
         <div className="hig-top-bar-titles">
-          <h1 id={CARBON_DOM_CONTRACT.wardrobeHeaderTitleId} className="hig-screen-title">
-            MY WARDROBE
-          </h1>
-          <span
-            id={CARBON_DOM_CONTRACT.wardrobeItemCountId}
-            className="hig-item-count tabular-nums"
-          >
-            {garments.length} ITEMS
-          </span>
+          <h1 className="sr-only">Closet</h1>
+          <AppHeaderBrand effectiveTheme={theme} />
         </div>
 
         <div className="hig-top-bar-actions">
@@ -298,6 +293,16 @@ export default function WardrobeView({
             );
           })}
         </div>
+      </div>
+
+      {/* Relocated Wardrobe Item Count Pill (Cleanly clear of top-bar utilities) */}
+      <div className="hig-wardrobe-meta-row">
+        <span
+          id={CARBON_DOM_CONTRACT.wardrobeItemCountId}
+          className="hig-item-count tabular-nums"
+        >
+          {garments.length} ITEMS
+        </span>
       </div>
 
       {/* Single Horizontal Pill Category Axis (Jewelry included — no duplicate row) */}

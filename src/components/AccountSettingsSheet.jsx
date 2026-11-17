@@ -24,6 +24,8 @@ import {
   triggerHaptic,
 } from '../utils/nativeBridge.ts';
 import { getOfflineQueueCount, purgeAllLocalUserData } from '../utils/offlineSync.ts';
+import { runCircularThemeTransition } from '../utils/themeTransition.ts';
+import BrandLogo from './auth/BrandLogo.tsx';
 import { LegalDisclosureModal, ResponsiveSheetModal } from './common/AppUI.jsx';
 
 /**
@@ -35,6 +37,7 @@ function AccountSettingsContent({
   user,
   skinProfile,
   bodySpec,
+  theme = 'light',
   lang = 'ko',
   onChangeLang,
   onOpenProfile,
@@ -63,10 +66,15 @@ function AccountSettingsContent({
     };
   }, []);
 
-  const handleThemeSelect = (nextPref) => {
+  const handleThemeSelect = (nextPref, event) => {
     triggerHaptic('selection');
-    setThemePref(nextPref);
-    applyThemePreference(nextPref);
+    runCircularThemeTransition({
+      event,
+      applyTheme: () => {
+        setThemePref(nextPref);
+        applyThemePreference(nextPref);
+      },
+    });
   };
 
   const handleSyncNow = async () => {
@@ -115,7 +123,7 @@ function AccountSettingsContent({
 
   return (
     <div className="hig-item-detail-body">
-      {/* User Summary */}
+      {/* User Summary + Official iNVTRY Brand Signature */}
       <div className="hig-sheet-card">
         <div className="hig-sheet-row-between">
           <div>
@@ -127,6 +135,7 @@ function AccountSettingsContent({
               {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
             </div>
           </div>
+          <BrandLogo effectiveTheme={theme} className="is-compact" alt="iNVTRY" />
         </div>
       </div>
 
@@ -224,7 +233,7 @@ function AccountSettingsContent({
               id={`theme-mode-${opt.key}-btn`}
               type="button"
               className={`btn ${themePref === opt.key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => handleThemeSelect(opt.key)}
+              onClick={(e) => handleThemeSelect(opt.key, e)}
             >
               {opt.icon}
               <span>{opt.label}</span>
@@ -384,6 +393,7 @@ export default function AccountSettingsSheet({
   user,
   skinProfile,
   bodySpec,
+  theme = 'light',
   lang = 'ko',
   onChangeLang,
   onOpenProfile,
@@ -409,6 +419,7 @@ export default function AccountSettingsSheet({
             user={user}
             skinProfile={skinProfile}
             bodySpec={bodySpec}
+            theme={theme}
             lang={lang}
             onChangeLang={onChangeLang}
             onOpenProfile={onOpenProfile}
