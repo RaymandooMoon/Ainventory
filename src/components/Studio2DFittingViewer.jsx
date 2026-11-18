@@ -477,6 +477,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   postLoginRevealActiveRef.current = postLoginRevealActive;
   const [frontOnlyDegraded, setFrontOnlyDegraded] = useState(false);
   const [frontOnlyToastVisible, setFrontOnlyToastVisible] = useState(false);
+  const [frontOnlyPopupInfo, setFrontOnlyPopupInfo] = useState(null);
   const frontOnlyToastTimerRef = useRef(null);
   const [storedStylePref, setStoredStylePref] = useState(() =>
     getStoredVtonStylePreference()
@@ -1312,6 +1313,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           setStagedNeedsApply(false);
           setFrontOnlyDegraded(false);
           setFrontOnlyToastVisible(false);
+          setFrontOnlyPopupInfo(null);
           setAiState({
             cacheKey: currentAiCacheKey,
             imageUrl: idbHit.slice.imageUrl,
@@ -1369,12 +1371,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
 
       const delayMs =
-        weatherTabJustChanged && !isForceBypass
-          ? 210
-          : facePhotoJustApplied && !isForceBypass
-            ? 90
-            : isDirectDemoClick || isForceBypass
-              ? 0
+        isDirectDemoClick || isForceBypass || demoShowcaseEnabled
+          ? 0
+          : weatherTabJustChanged
+            ? 210
+            : facePhotoJustApplied
+              ? 90
               : isUserApproved
                 ? 30
                 : autoGenEnabled && hasInitialAutoRunRef.current
@@ -1537,13 +1539,19 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             frontOnlyToastTimerRef.current = null;
           }
           if (isFrontOnly) {
+            const toastDurationMs = Math.max(
+              1500,
+              Math.min(8000, Number(outcome.notificationPopup?.durationMs) || 3000)
+            );
+            setFrontOnlyPopupInfo(outcome.notificationPopup || null);
             commitAngleDeg(0);
             setFrontOnlyToastVisible(true);
             frontOnlyToastTimerRef.current = setTimeout(() => {
               frontOnlyToastTimerRef.current = null;
               setFrontOnlyToastVisible(false);
-            }, 3000);
+            }, toastDurationMs);
           } else {
+            setFrontOnlyPopupInfo(null);
             setFrontOnlyToastVisible(false);
           }
           setAiState({
@@ -2814,8 +2822,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         >
           <span>
             {isEn
-              ? 'Due to a temporary connection issue, only the front view is shown.'
-              : '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.'}
+              ? frontOnlyPopupInfo?.messageEn ||
+                'Due to a temporary connection issue, only the front view is shown.'
+              : frontOnlyPopupInfo?.messageKo ||
+                '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.'}
           </span>
         </div>
       )}

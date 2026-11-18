@@ -360,6 +360,12 @@ export interface VtonQcSliceMetrics {
   halfBody: boolean;
   interiorChromaRatio: number;
   outfitMeanRgb: [number, number, number] | null;
+  hasWideOverheadCanopy?: boolean;
+  umbrellaGapChromaRatio?: number;
+  upperTorsoMeanRgb?: [number, number, number] | null;
+  upperTorsoLeftRgb?: [number, number, number] | null;
+  upperTorsoRightRgb?: [number, number, number] | null;
+  upperTorsoLeftRightDiff?: number;
 }
 
 export interface InspectPixelSliceQcOptions {
@@ -434,6 +440,12 @@ export function inspectPixelSliceQc(
       halfBody: true,
       interiorChromaRatio: 0,
       outfitMeanRgb: null,
+      hasWideOverheadCanopy: false,
+      umbrellaGapChromaRatio: 0,
+      upperTorsoMeanRgb: null,
+      upperTorsoLeftRgb: null,
+      upperTorsoRightRgb: null,
+      upperTorsoLeftRightDiff: 0,
     };
   }
 
@@ -473,6 +485,12 @@ export function inspectPixelSliceQc(
       halfBody: true,
       interiorChromaRatio: 0,
       outfitMeanRgb: null,
+      hasWideOverheadCanopy: false,
+      umbrellaGapChromaRatio: 0,
+      upperTorsoMeanRgb: null,
+      upperTorsoLeftRgb: null,
+      upperTorsoRightRgb: null,
+      upperTorsoLeftRightDiff: 0,
     };
   }
 
@@ -543,7 +561,8 @@ export function inspectPixelSliceQc(
     if (rowSpans[y] > maxTop15Span) maxTop15Span = rowSpans[y];
   }
   const hasWideOverheadCanopy =
-    shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, width * 0.34);
+    (medianBodyWidth > 0 && maxTop15Span >= Math.max(medianBodyWidth * 1.48, width * 0.42)) ||
+    (shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, width * 0.34));
 
   // Collar-cut / headless silhouette detector (e.g., decapitated jacket starting directly at collar/deltoids):
   // A real 7.5-head human without an overhead umbrella has a narrow head/neck in [6%..11% of fgH] (< 80% of shoulder width).
@@ -606,18 +625,43 @@ export function inspectPixelSliceQc(
     scaleInvariantThighCut ||
     (fgHeightRatio < 0.58 && heightAspect < 2.22 && maxBotBar >= medianBodyWidth * 0.52);
 
-  // Interior chroma-key pocket & garment RGB palette inspection
+  // Interior chroma-key pocket, umbrella under-canopy cavity, & upper-torso outerwear symmetry inspection
   const customKeyRgb = parseStudioHexTriplet(options?.studioBackdropHex);
-  const chromaY0 = Math.min(maxY, Math.round(minY + fgH * 0.16));
+  const chromaY0 = Math.min(
+    maxY,
+    Math.round(minY + fgH * (hasWideOverheadCanopy ? 0.05 : 0.16))
+  );
   const chromaY1 = Math.max(chromaY0, Math.round(maxY - fgH * 0.06));
+  const umbrellaGapY1 = Math.min(chromaY1, Math.round(minY + fgH * 0.36));
   const outfitY0 = Math.min(maxY, Math.round(minY + fgH * 0.22));
   const outfitY1 = Math.max(outfitY0, Math.round(minY + fgH * 0.74));
+  const torsoY0 = Math.min(maxY, Math.round(minY + fgH * 0.25));
+  const torsoY1 = Math.max(torsoY0, Math.round(minY + fgH * 0.46));
+  const torsoRefWidth = hasWideOverheadCanopy
+    ? medianBodyWidth
+    : shoulderMaxSpan > 0
+      ? shoulderMaxSpan
+      : medianBodyWidth;
+  const torsoHalfSpan = Math.max(8, Math.round(torsoRefWidth * 0.5));
+  const torsoInnerGap = Math.max(2, Math.round(torsoHalfSpan * 0.16));
+  const torsoOuterLimit = Math.max(torsoInnerGap + 4, Math.round(torsoHalfSpan * 0.88));
+
   let interiorChromaPixels = 0;
   let interiorSpanPixels = 0;
+  let umbrellaGapChromaPixels = 0;
+  let umbrellaGapSpanPixels = 0;
   let sumR = 0;
   let sumG = 0;
   let sumB = 0;
   let outfitCount = 0;
+  let leftSumR = 0;
+  let leftSumG = 0;
+  let leftSumB = 0;
+  let leftCount = 0;
+  let rightSumR = 0;
+  let rightSumG = 0;
+  let rightSumB = 0;
+  let rightCount = 0;
 
   for (let y = chromaY0; y <= chromaY1; y += 1) {
     const rowOff = y * width;
@@ -634,20 +678,47 @@ export function inspectPixelSliceQc(
       }
     }
     if (firstNonKey === -1 || lastNonKey - firstNonKey < 4) continue;
+    const inUmbrellaGapBand = hasWideOverheadCanopy && y <= umbrellaGapY1;
+    const inUpperTorsoBand = y >= torsoY0 && y <= torsoY1;
     for (let x = firstNonKey + 1; x < lastNonKey; x += 1) {
       const idx = (rowOff + x) * 4;
       if (data[idx + 3] > 64) {
         interiorSpanPixels += 1;
+        if (inUmbrellaGapBand) umbrellaGapSpanPixels += 1;
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
         if (isChromaKeyLeakRgb(r, g, b, customKeyRgb)) {
           interiorChromaPixels += 1;
-        } else if (y >= outfitY0 && y <= outfitY1) {
-          sumR += r;
-          sumG += g;
-          sumB += b;
-          outfitCount += 1;
+          if (inUmbrellaGapBand) umbrellaGapChromaPixels += 1;
+        } else {
+          if (y >= outfitY0 && y <= outfitY1) {
+            sumR += r;
+            sumG += g;
+            sumB += b;
+            outfitCount += 1;
+          }
+          if (inUpperTorsoBand) {
+            const dx = x - coreCenterX;
+            const absDx = Math.abs(dx);
+            const inInnerNeckV =
+              absDx <= torsoHalfSpan * 0.32 && y <= torsoY0 + Math.round((torsoY1 - torsoY0) * 0.38);
+            const isBareSkinTone =
+              inInnerNeckV && r >= 182 && g >= 128 && b >= 98 && r > g + 10;
+            if (absDx >= torsoInnerGap && absDx <= torsoOuterLimit && !isBareSkinTone) {
+              if (dx < 0) {
+                leftSumR += r;
+                leftSumG += g;
+                leftSumB += b;
+                leftCount += 1;
+              } else {
+                rightSumR += r;
+                rightSumG += g;
+                rightSumB += b;
+                rightCount += 1;
+              }
+            }
+          }
         }
       }
     }
@@ -655,6 +726,10 @@ export function inspectPixelSliceQc(
 
   const interiorChromaRatio =
     interiorSpanPixels > 0 ? interiorChromaPixels / interiorSpanPixels : 0;
+  const umbrellaGapChromaRatio =
+    hasWideOverheadCanopy && umbrellaGapSpanPixels > 0
+      ? umbrellaGapChromaPixels / umbrellaGapSpanPixels
+      : 0;
   const outfitMeanRgb: [number, number, number] | null =
     outfitCount >= 16
       ? [
@@ -663,6 +738,42 @@ export function inspectPixelSliceQc(
           Math.round(sumB / outfitCount),
         ]
       : null;
+
+  const upperTorsoLeftRgb: [number, number, number] | null =
+    leftCount >= 12
+      ? [
+          Math.round(leftSumR / leftCount),
+          Math.round(leftSumG / leftCount),
+          Math.round(leftSumB / leftCount),
+        ]
+      : null;
+  const upperTorsoRightRgb: [number, number, number] | null =
+    rightCount >= 12
+      ? [
+          Math.round(rightSumR / rightCount),
+          Math.round(rightSumG / rightCount),
+          Math.round(rightSumB / rightCount),
+        ]
+      : null;
+  const totalUpperCount = leftCount + rightCount;
+  const upperTorsoMeanRgb: [number, number, number] | null =
+    totalUpperCount >= 16
+      ? [
+          Math.round((leftSumR + rightSumR) / totalUpperCount),
+          Math.round((leftSumG + rightSumG) / totalUpperCount),
+          Math.round((leftSumB + rightSumB) / totalUpperCount),
+        ]
+      : null;
+  const upperTorsoLeftRightDiff =
+    upperTorsoLeftRgb && upperTorsoRightRgb
+      ? Math.round(
+          Math.hypot(
+            upperTorsoLeftRgb[0] - upperTorsoRightRgb[0],
+            upperTorsoLeftRgb[1] - upperTorsoRightRgb[1],
+            upperTorsoLeftRgb[2] - upperTorsoRightRgb[2]
+          ) * 10
+        ) / 10
+      : 0;
 
   return {
     width,
@@ -680,6 +791,12 @@ export function inspectPixelSliceQc(
     halfBody,
     interiorChromaRatio,
     outfitMeanRgb,
+    hasWideOverheadCanopy,
+    umbrellaGapChromaRatio,
+    upperTorsoMeanRgb,
+    upperTorsoLeftRgb,
+    upperTorsoRightRgb,
+    upperTorsoLeftRightDiff,
   };
 }
 
@@ -715,12 +832,18 @@ export function evaluateTurnaroundConsistencyQc(
     };
   }
 
+  const frontSplitCoat = (front.upperTorsoLeftRightDiff ?? 0) > 58;
+  const frontUmbrellaGap =
+    Boolean(front.hasWideOverheadCanopy) && (front.umbrellaGapChromaRatio ?? 0) > 0.035;
+
   const frontComplete =
     !front.clippedTop &&
     !front.clippedBottom &&
     !front.halfBody &&
     front.fgHeightRatio >= 0.48 &&
-    front.interiorChromaRatio <= 0.045;
+    front.interiorChromaRatio <= 0.045 &&
+    !frontSplitCoat &&
+    !frontUmbrellaGap;
 
   if (!frontComplete) {
     failedAnglesSet.add(0);
@@ -729,6 +852,8 @@ export function evaluateTurnaroundConsistencyQc(
     if (front.halfBody) reasons.push('0:half_body');
     if (front.fgHeightRatio < 0.48) reasons.push('0:too_small');
     if (front.interiorChromaRatio > 0.045) reasons.push('0:interior_chroma_hole');
+    if (frontSplitCoat) reasons.push('0:split_outerwear_color');
+    if (frontUmbrellaGap) reasons.push('0:umbrella_gap_cutout_failed');
   }
 
   const angles = Object.keys(slicesByAngle)
@@ -755,6 +880,14 @@ export function evaluateTurnaroundConsistencyQc(
       failedAnglesSet.add(angle);
       reasons.push(`${angle}:interior_chroma_hole`);
     }
+    if (m.hasWideOverheadCanopy && (m.umbrellaGapChromaRatio ?? 0) > 0.035 && angle !== 0) {
+      failedAnglesSet.add(angle);
+      reasons.push(`${angle}:umbrella_gap_cutout_failed`);
+    }
+    if ((angle === 180) && (m.upperTorsoLeftRightDiff ?? 0) > 58) {
+      failedAnglesSet.add(angle);
+      reasons.push(`${angle}:split_outerwear_color`);
+    }
     if (Math.abs(m.coreCenterXRatio - 0.5) > 0.16) {
       failedAnglesSet.add(angle);
       reasons.push(`${angle}:off_center_x`);
@@ -778,6 +911,16 @@ export function evaluateTurnaroundConsistencyQc(
         if (rgbDist > 95) {
           failedAnglesSet.add(angle);
           reasons.push(`${angle}:palette_drift`);
+        }
+      }
+      if (front.upperTorsoMeanRgb && m.upperTorsoMeanRgb) {
+        const udr = m.upperTorsoMeanRgb[0] - front.upperTorsoMeanRgb[0];
+        const udg = m.upperTorsoMeanRgb[1] - front.upperTorsoMeanRgb[1];
+        const udb = m.upperTorsoMeanRgb[2] - front.upperTorsoMeanRgb[2];
+        const upperDist = Math.sqrt(udr * udr + udg * udg + udb * udb);
+        if (upperDist > 64) {
+          failedAnglesSet.add(angle);
+          reasons.push(`${angle}:outerwear_palette_drift`);
         }
       }
     }

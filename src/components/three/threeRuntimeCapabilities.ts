@@ -5,6 +5,36 @@ export type StageTierCode = 'S' | 'A' | 'B' | 'C';
 
 let cachedIsSoftwareGl: boolean | null = null;
 
+export function peekCachedSoftwareWebGl(): boolean | null {
+  return cachedIsSoftwareGl;
+}
+
+/**
+ * Classifies an existing WebGL context directly from its GPU renderer string
+ * without allocating or tearing down a separate probe context.
+ */
+export function detectSoftwareWebGlFromContext(
+  gl: WebGLRenderingContext | WebGL2RenderingContext | null | undefined
+): boolean {
+  if (cachedIsSoftwareGl !== null) {
+    return cachedIsSoftwareGl;
+  }
+  if (!gl) {
+    cachedIsSoftwareGl = true;
+    return true;
+  }
+  try {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
+    const gpu = String(gl.getParameter(param) || '');
+    cachedIsSoftwareGl = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+    return cachedIsSoftwareGl;
+  } catch {
+    cachedIsSoftwareGl = true;
+    return true;
+  }
+}
+
 /**
  * Detects CPU/software WebGL (SwiftShader, llvmpipe, softpipe, Basic Render)
  * directly from the GPU renderer string (never user-agent) and frees the probe context.
@@ -27,14 +57,11 @@ export function detectSoftwareWebGl(): boolean {
       cachedIsSoftwareGl = true;
       return true;
     }
-    const ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
-    const gpu = String(gl.getParameter(param) || '');
+    const detected = detectSoftwareWebGlFromContext(gl);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     probeCanvas.width = 0;
     probeCanvas.height = 0;
-    cachedIsSoftwareGl = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
-    return cachedIsSoftwareGl;
+    return detected;
   } catch {
     cachedIsSoftwareGl = true;
     return true;

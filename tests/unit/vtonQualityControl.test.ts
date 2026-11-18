@@ -25,6 +25,7 @@ import {
   triggerPostLoginReveal,
 } from '../../src/utils/logoTransition.ts';
 import { selectOptimalStudioKeyHex } from '../../src/services/weatherPromptBuilder.ts';
+import { cutoutStudioBackdropToRgba } from '../../src/services/cutoutService.ts';
 
 function createMemoryStorage() {
   const map = new Map<string, string>();
@@ -487,5 +488,137 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
     assert.ok(flip.translateY > 250);
     assert.ok(flip.scaleX > 1.5);
     assert.match(flip.transformCss, /^translate3d\(/);
+  });
+
+  it('flags split_outerwear_color and cross-angle outerwear_palette_drift while passing consistent coats', () => {
+    const paintCamelSilhouette = () =>
+      makeSliceRgba({
+        topY: 12,
+        bottomY: 168,
+        leftX: 38,
+        rightX: 82,
+        headCrownNarrow: true,
+        rgb: [176, 128, 72],
+      });
+
+    const clean0 = paintCamelSilhouette();
+    const clean45 = paintCamelSilhouette();
+    const m0Clean = inspectPixelSliceQc(clean0.buf, clean0.width, clean0.height);
+    const m45Clean = inspectPixelSliceQc(clean45.buf, clean45.width, clean45.height);
+    assert.ok((m0Clean.upperTorsoLeftRightDiff ?? 999) < 10);
+    assert.equal(evaluateTurnaroundConsistencyQc({ 0: m0Clean, 45: m45Clean }).ok, true);
+
+    // Split left/right coat on 0° (left half grey [78, 84, 92], right half camel [176, 128, 72])
+    const split0 = paintCamelSilhouette();
+    for (let y = 48; y <= 92; y += 1) {
+      for (let x = 38; x < 60; x += 1) {
+        const idx = (y * split0.width + x) * 4;
+        split0.buf[idx] = 78;
+        split0.buf[idx + 1] = 84;
+        split0.buf[idx + 2] = 92;
+      }
+    }
+    const mSplit0 = inspectPixelSliceQc(split0.buf, split0.width, split0.height);
+    assert.ok((mSplit0.upperTorsoLeftRightDiff ?? 0) > 58);
+    const splitReport = evaluateTurnaroundConsistencyQc({ 0: mSplit0, 45: m45Clean });
+    assert.equal(splitReport.ok, false);
+    assert.ok(splitReport.reasons.includes('0:split_outerwear_color'));
+
+    // Cross-angle outerwear swap: 0° camel coat vs 45° slate-grey jacket across upper torso (legs stay same)
+    const swapped45 = paintCamelSilhouette();
+    for (let y = 44; y <= 96; y += 1) {
+      for (let x = 38; x <= 82; x += 1) {
+        const idx = (y * swapped45.width + x) * 4;
+        swapped45.buf[idx] = 72;
+        swapped45.buf[idx + 1] = 80;
+        swapped45.buf[idx + 2] = 92;
+      }
+    }
+    const mSwapped45 = inspectPixelSliceQc(swapped45.buf, swapped45.width, swapped45.height);
+    const swapReport = evaluateTurnaroundConsistencyQc({ 0: m0Clean, 45: mSwapped45 });
+    assert.equal(swapReport.ok, false);
+    assert.ok(swapReport.failedAngles.includes(45));
+    assert.ok(swapReport.reasons.includes('45:outerwear_palette_drift'));
+  });
+
+  it('punches trapped studio backdrop inside umbrella arch without touching head/coat and flags unkeyed cavities', () => {
+    const w = 120;
+    const h = 180;
+    const buildUmbrellaScene = (outerAlpha: 0 | 255) => {
+      const buf = new Uint8ClampedArray(w * h * 4);
+      const bg: [number, number, number] = [148, 163, 184]; // #94A3B8 cool slate studio backdrop
+      for (let y = 0; y < h; y += 1) {
+        for (let x = 0; x < w; x += 1) {
+          const i = (y * w + x) * 4;
+          buf[i] = bg[0];
+          buf[i + 1] = bg[1];
+          buf[i + 2] = bg[2];
+          buf[i + 3] = outerAlpha;
+        }
+      }
+      const paintRect = (x0: number, x1: number, y0: number, y1: number, rgb: [number, number, number]) => {
+        for (let y = y0; y <= y1; y += 1) {
+          for (let x = x0; x <= x1; x += 1) {
+            const i = (y * w + x) * 4;
+            buf[i] = rgb[0];
+            buf[i + 1] = rgb[1];
+            buf[i + 2] = rgb[2];
+            buf[i + 3] = 255;
+          }
+        }
+      };
+      // When outer corners are already keyed (alpha=0), keep trapped studio pocket opaque under arch
+      if (outerAlpha === 0) {
+        paintRect(14, 106, 22, 46, bg);
+      }
+      // Open overhead umbrella canopy dome + downward side rim enclosing air gap
+      paintRect(14, 106, 10, 22, [34, 42, 62]);
+      paintRect(14, 18, 22, 46, [34, 42, 62]);
+      paintRect(102, 106, 22, 46, [34, 42, 62]);
+      // Narrow shaft + head + shoulders/coat/pants/shoes
+      paintRect(58, 62, 22, 34, [40, 44, 52]);
+      paintRect(50, 70, 32, 48, [198, 152, 122]);
+      paintRect(38, 82, 50, 112, [168, 118, 66]);
+      paintRect(44, 76, 112, 168, [54, 48, 44]);
+      return buf;
+    };
+
+    // 1) Outer-keyed figure with trapped grey/slate cavity inside umbrella arch fails QC
+    const unkeyedBuf = buildUmbrellaScene(0);
+    const mUnkeyed = inspectPixelSliceQc(unkeyedBuf, w, h, { studioBackdropHex: '#94A3B8' });
+    assert.equal(mUnkeyed.hasWideOverheadCanopy, true);
+    assert.ok((mUnkeyed.umbrellaGapChromaRatio ?? 0) > 0.035);
+
+    const failClean0 = inspectPixelSliceQc(
+      makeSliceRgba({
+        topY: 12,
+        bottomY: 168,
+        leftX: 40,
+        rightX: 80,
+        headCrownNarrow: true,
+        rgb: [168, 118, 66],
+      }).buf,
+      w,
+      h
+    );
+    const umbrellaFailReport = evaluateTurnaroundConsistencyQc({ 0: failClean0, 45: mUnkeyed });
+    assert.equal(umbrellaFailReport.ok, false);
+    assert.ok(umbrellaFailReport.reasons.includes('45:umbrella_gap_cutout_failed'));
+
+    // 2) Full-opaque scene after V4 cutoutStudioBackdropToRgba: both outer backdrop AND trapped arch punch transparent (alpha === 0)
+    //    while coat, canopy, and head stay 100% opaque!
+    const mattedBuf = buildUmbrellaScene(255);
+    cutoutStudioBackdropToRgba(mattedBuf, w, h);
+    const leftGapAlpha = mattedBuf[(30 * w + 32) * 4 + 3];
+    const rightGapAlpha = mattedBuf[(30 * w + 88) * 4 + 3];
+    const headAlpha = mattedBuf[(40 * w + 60) * 4 + 3];
+    const coatAlpha = mattedBuf[(80 * w + 60) * 4 + 3];
+    assert.equal(leftGapAlpha, 0);
+    assert.equal(rightGapAlpha, 0);
+    assert.equal(headAlpha, 255);
+    assert.equal(coatAlpha, 255);
+
+    const mMatted = inspectPixelSliceQc(mattedBuf, w, h, { studioBackdropHex: '#94A3B8' });
+    assert.ok((mMatted.umbrellaGapChromaRatio ?? 1) <= 0.01);
   });
 });

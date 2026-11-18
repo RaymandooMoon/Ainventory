@@ -1173,6 +1173,10 @@ export function normalizeVtonProfile(
           base64Data: characterAnchorPart.base64Data,
         }
       : null,
+    qcCorrectionHint:
+      typeof extraOptions?.qcCorrectionHint === 'string' && extraOptions.qcCorrectionHint.trim()
+        ? extraOptions.qcCorrectionHint.trim().slice(0, 600)
+        : '',
   };
 }
 
@@ -1627,6 +1631,24 @@ function setCacheEntry(cacheKey, { kind, model, dataUrl }) {
   }
 }
 
+export function invalidateVtonCacheEntry(cacheKey) {
+  if (typeof cacheKey !== 'string' || !SAFE_CACHE_KEY_RE.test(cacheKey)) return false;
+  let removed = memCache.delete(cacheKey);
+  if (ensureDiskCacheDir()) {
+    const cacheRoot = path.resolve(VTON_CACHE_DIR);
+    const targetPath = path.resolve(cacheRoot, `${cacheKey}.json`);
+    if (targetPath.startsWith(`${cacheRoot}${path.sep}`) && fs.existsSync(targetPath)) {
+      try {
+        fs.unlinkSync(targetPath);
+        removed = true;
+      } catch {
+        // ignore disk unlink error
+      }
+    }
+  }
+  return removed;
+}
+
 function countTotalCacheEntries() {
   const keys = new Set(memCache.keys());
   if (ensureDiskCacheDir()) {
@@ -1945,6 +1967,9 @@ function buildBaseModelParts(profile) {
       `- Dress the figure (${viewLabel}) in a minimal neutral ecru (#EFECE6) fitted crew-neck cotton studio T-shirt, clean tailored stone-ecru (#DFDBD2) knee-length studio shorts with crisp side seams, and minimal off-white (#EAE7E1) low-profile studio slip-on canvas shoes.`,
       `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
       '- Keep the silhouette clean and unobstructed so authentic body proportions and MST complexion are unmistakably legible.',
+      ...(profile.qcCorrectionHint
+        ? [`[SERVER QC RETRY CORRECTION — FIX PREVIOUS DEFECT]: ${profile.qcCorrectionHint}`]
+        : []),
       '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
     ].join('\n'),
   });
@@ -2041,13 +2066,24 @@ function buildCompositeLookParts(profile, resolvedSlots) {
     );
   }
   if (hasOuterMid && (hasAnyTop || hasOnepiece)) {
+    const outerMidItem = resolvedSlots.outer_mid;
     layeringRules.push(
-      '- MID-OUTERWEAR LAYERING: Layer [OUTER_MID] (blazer/blouson/leather jacket) cleanly OVER [TOP] and [TOP_MID] (or [ONEPIECE]) with relaxed open front draping so inner collar, buttons, and vest/cardigan depth remain clearly legible.'
+      `- MID-OUTERWEAR LAYERING: Layer [OUTER_MID] ("${outerMidItem.name}", ${outerMidItem.colorHex}) cleanly OVER [TOP] and [TOP_MID] (or [ONEPIECE]) with relaxed open front draping so inner collar, buttons, and vest/cardigan depth remain clearly legible.${
+        hasOuter
+          ? ` Because [OUTER] ("${resolvedSlots.outer.name}", ${resolvedSlots.outer.colorHex}) is worn outside [OUTER_MID], keep BOTH shoulders and sleeves in [OUTER]'s single color ${resolvedSlots.outer.colorHex} while [OUTER_MID] (${outerMidItem.colorHex}) peeks ONLY gently at the inner chest lapels underneath.`
+          : ''
+      }`
     );
   }
-  if (hasOuter && (hasOuterMid || hasAnyTop || hasOnepiece)) {
+  if (hasOuter) {
+    const outerItem = resolvedSlots.outer;
     layeringRules.push(
-      '- OUTER COAT OVERLAY: Layer [OUTER] (overcoat/trench/padding) as the outermost garment OVER [OUTER_MID], [TOP_MID], and [TOP] (worn relaxed open at the front on 0°/45° views so inner layering, necklaces, and brooches remain visible, with realistic side thickness at 90° and full outer back construction at 180°).'
+      `- OUTERMOST COAT COLOR & LEFT-RIGHT SYMMETRY LOCK: Render [OUTER] ("${outerItem.name}", exact single color ${outerItem.colorName} ${outerItem.colorHex}) uniformly on BOTH the entire wearer-left side AND entire wearer-right side (both sleeves, both shoulders, both front panels, and full back) across EVERY turnaround view (${viewScopeText}). STRICTLY FORBIDDEN: NEVER split the coat into two different colors left-vs-right (e.g., half grey / half camel), and NEVER drop/swap [OUTER] for [OUTER_MID] on 45°/90°/135°/180°/225° angles!`
+    );
+  }
+  if (hasEquippedUmbrella || effectiveWeather === 'rain') {
+    layeringRules.push(
+      `- UMBRELLA UNDER-CANOPY NEGATIVE SPACE CUTOUT RULE: Keep the ENTIRE enclosed cavity underneath the open umbrella dome (between the canopy underside ribs, thin handle/shaft, crown/sides of the head, neck, and shoulders) filled 100% with flat uniform solid (${backdropHex}) backdrop color so background removal keys cleanly through — ZERO grey sky haze, ZERO dark overhang fill, ZERO shadow gradient inside the canopy loop.`
     );
   }
   if (hasOnepiece && isSwimwearOnepiece) {
@@ -2120,6 +2156,12 @@ function buildCompositeLookParts(profile, resolvedSlots) {
         text: `${specLine}\nRender this [${slot.toUpperCase()}] (${viewScopeText}) with authentic ${item.fabric} material sheen, construction details, and exact color ${item.colorHex}.`,
       });
     }
+  }
+
+  if (profile.qcCorrectionHint) {
+    parts.push({
+      text: `[SERVER QC RETRY CORRECTION — FIX PREVIOUS DEFECT]: ${profile.qcCorrectionHint}`,
+    });
   }
 
   parts.push({
@@ -2689,6 +2731,7 @@ export async function synthesizeVtonLook(params = {}) {
       turnaroundSheet: Boolean(
         params.turnaroundSheet ?? rawProfile?.turnaroundSheet ?? false
       ),
+      qcCorrectionHint: params.qcCorrectionHint ?? null,
     }
   );
 
@@ -2708,9 +2751,23 @@ export async function synthesizeVtonLook(params = {}) {
 
   const includeBaseModel = Boolean(params.includeBaseModel);
   const forceRefresh = Boolean(params.forceRefresh);
+  const skipCacheWrite = Boolean(params.skipCacheWrite);
   const equippedSlots = Object.keys(resolvedSlots);
   const isBaseOnlyLook = equippedSlots.length === 0;
   const layout = normalizedProfile.turnaroundSheet ? 'turnaround_3x2' : 'single';
+
+  const studioBackdropHex = selectOptimalStudioKeyHex(
+    equippedSlots.map((slot) => {
+      const item = resolvedSlots[slot];
+      return {
+        slot,
+        category: item?.category ?? null,
+        colorHex: item?.colorHex ?? null,
+        colorName: item?.colorName ?? null,
+        name: item?.name ?? null,
+      };
+    })
+  );
 
   const comboCacheKey = isBaseOnlyLook ? `base-${baseHash}` : `combo-${comboHash}`;
   const baseCacheKey = `base-${baseHash}`;
@@ -2728,6 +2785,8 @@ export async function synthesizeVtonLook(params = {}) {
     cached: false,
     comboHash,
     baseHash,
+    cacheKey: comboCacheKey,
+    studioBackdropHex,
     viewAngleDeg: normalizedProfile.viewAngleDeg,
     avatarConfigHash: normalizedProfile.avatarConfigHash,
     handedness: normalizedProfile.dominantHand,
@@ -2757,6 +2816,8 @@ export async function synthesizeVtonLook(params = {}) {
         cached: true,
         comboHash,
         baseHash,
+        cacheKey: comboCacheKey,
+        studioBackdropHex,
         viewAngleDeg: normalizedProfile.viewAngleDeg,
         avatarConfigHash: normalizedProfile.avatarConfigHash,
         handedness: normalizedProfile.dominantHand,
@@ -2837,7 +2898,7 @@ export async function synthesizeVtonLook(params = {}) {
           return buildFallbackResult(baseGen.reason || 'gemini_synthesis_failed');
         }
 
-        if (!baseGen.cached) {
+        if (!baseGen.cached && !skipCacheWrite) {
           setCacheEntry(finalBaseCacheKey, {
             kind: 'base',
             model: baseGen.model,
@@ -2858,6 +2919,8 @@ export async function synthesizeVtonLook(params = {}) {
           cached: Boolean(baseGen.cached),
           comboHash,
           baseHash,
+          cacheKey: finalBaseCacheKey,
+          studioBackdropHex,
           viewAngleDeg: normalizedProfile.viewAngleDeg,
           avatarConfigHash: normalizedProfile.avatarConfigHash,
           handedness: normalizedProfile.dominantHand,
@@ -2945,7 +3008,7 @@ export async function synthesizeVtonLook(params = {}) {
         return buildFallbackResult(comboRes?.reason || 'gemini_synthesis_failed');
       }
 
-      if (!comboRes.fromCache) {
+      if (!comboRes.fromCache && !skipCacheWrite) {
         setCacheEntry(finalComboCacheKey, {
           kind: 'combo',
           model: comboRes.model,
@@ -2956,7 +3019,7 @@ export async function synthesizeVtonLook(params = {}) {
       let resolvedBaseUrl = null;
       if (includeBaseModel && baseRes?.ok && baseRes.dataUrl) {
         resolvedBaseUrl = baseRes.dataUrl;
-        if (!baseRes.fromCache) {
+        if (!baseRes.fromCache && !skipCacheWrite) {
           setCacheEntry(baseCacheKey, {
             kind: 'base',
             model: baseRes.model,
@@ -2978,6 +3041,8 @@ export async function synthesizeVtonLook(params = {}) {
         cached: Boolean(comboRes.fromCache && (!includeBaseModel || baseRes?.fromCache)),
         comboHash,
         baseHash,
+        cacheKey: finalComboCacheKey,
+        studioBackdropHex,
         viewAngleDeg: normalizedProfile.viewAngleDeg,
         avatarConfigHash: normalizedProfile.avatarConfigHash,
         handedness: normalizedProfile.dominantHand,

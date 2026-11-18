@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import {
@@ -8,8 +8,9 @@ import {
   createStagePreviewCardTexture,
   createStoneMicroReliefTexture,
   createStudioEnvironmentTexture,
-  detectSoftwareWebGl,
+  detectSoftwareWebGlFromContext,
   disposeObject3DTree,
+  peekCachedSoftwareWebGl,
   scheduleAfterSoftwareDraw,
 } from './threeRuntimeCapabilities.ts';
 
@@ -140,34 +141,47 @@ export default function StoreThreeGachaStage({
   const updatePreviewCardRef = useRef<((tier: StageTierCode, outdoor: boolean) => void) | null>(
     null
   );
-  const isSoftwareGl = detectSoftwareWebGl();
+  const [isSoftwareGlAttr, setIsSoftwareGlAttr] = useState<boolean>(
+    () => peekCachedSoftwareWebGl() ?? true
+  );
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return undefined;
 
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({
-        alpha: true,
-        antialias: !isSoftwareGl,
-        powerPreference: 'high-performance',
-      });
-    } catch {
-      return undefined;
-    }
+    let unmounted = false;
+    let bootRafId = 0;
+    let bootTimerId = 0;
+    let cleanupStage: (() => void) | null = null;
 
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = isSoftwareGl ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.14;
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const bootStage = () => {
+      if (unmounted) return;
+      const cachedSw = peekCachedSoftwareWebGl();
+      let renderer: THREE.WebGLRenderer;
+      try {
+        renderer = new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: cachedSw === false,
+          powerPreference: 'high-performance',
+        });
+      } catch {
+        return;
+      }
 
-    const canvas = renderer.domElement;
-    canvas.className = 'store-three-gacha-canvas';
-    container.replaceChildren(canvas);
+      const isSoftwareGl = detectSoftwareWebGlFromContext(renderer.getContext());
+      setIsSoftwareGlAttr(isSoftwareGl);
+
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = isSoftwareGl ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.14;
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = !isSoftwareGl;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const canvas = renderer.domElement;
+      canvas.className = 'store-three-gacha-canvas';
+      container.replaceChildren(canvas);
 
     const scene = new THREE.Scene();
     const envTexture = isSoftwareGl
@@ -713,24 +727,37 @@ export default function StoreThreeGachaStage({
 
     requestRender();
 
-    return () => {
-      disposed = true;
-      wakeRenderRef.current = null;
-      updatePreviewCardRef.current = null;
-      cancelScheduledFrames();
-      resizeObserver?.disconnect();
-      canvas.removeEventListener('webglcontextlost', onContextLost, false);
-      canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
-      scene.environment = null;
-      envTexture?.dispose();
-      contactShadowDark.dispose();
-      contactShadowLight.dispose();
-      activeCardTex.dispose();
-      disposeObject3DTree(scene);
-      renderer.dispose();
-      container.replaceChildren();
+      cleanupStage = () => {
+        disposed = true;
+        wakeRenderRef.current = null;
+        updatePreviewCardRef.current = null;
+        cancelScheduledFrames();
+        resizeObserver?.disconnect();
+        canvas.removeEventListener('webglcontextlost', onContextLost, false);
+        canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
+        scene.environment = null;
+        envTexture?.dispose();
+        contactShadowDark.dispose();
+        contactShadowLight.dispose();
+        activeCardTex.dispose();
+        disposeObject3DTree(scene);
+        renderer.dispose();
+        container.replaceChildren();
+      };
     };
-  }, [isSoftwareGl]);
+
+    bootRafId = requestAnimationFrame(() => {
+      if (unmounted) return;
+      bootTimerId = window.setTimeout(bootStage, 24);
+    });
+
+    return () => {
+      unmounted = true;
+      if (bootRafId) cancelAnimationFrame(bootRafId);
+      if (bootTimerId) clearTimeout(bootTimerId);
+      cleanupStage?.();
+    };
+  }, []);
 
   useEffect(() => {
     updatePreviewCardRef.current?.(activeTier, Boolean(isOutdoor));
@@ -747,7 +774,7 @@ export default function StoreThreeGachaStage({
       data-testid="store-three-gacha-stage"
       data-gacha-phase={phase}
       data-gacha-tier={activeTier}
-      data-software-gl={isSoftwareGl ? 'true' : 'false'}
+      data-software-gl={isSoftwareGlAttr ? 'true' : 'false'}
       aria-hidden="true"
     >
       <div ref={mountRef} className="store-three-gacha-mount" />

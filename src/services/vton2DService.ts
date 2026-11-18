@@ -203,10 +203,20 @@ export interface AiVtonHistoryEntry {
   updatedAt: number;
 }
 
+export interface VtonNotificationPopup {
+  code: string;
+  durationMs: number;
+  messageKo: string;
+  messageEn: string;
+}
+
 export interface AiVtonSynthesisOutcome {
   ok: boolean;
   fallbackToFlatLay: boolean;
   frontOnlyDegraded?: boolean;
+  fallbackView?: string;
+  notificationPopup?: VtonNotificationPopup | null;
+  qcAttempts?: number;
   reason: string | null;
   mode: CanonicalViewerMode;
   provider: VtonProviderId;
@@ -240,6 +250,14 @@ interface VtonServerResponse {
   geminiUsed?: boolean;
   handedness?: string;
   bagAssetMirrored?: boolean;
+  frontOnlyDegraded?: boolean;
+  fallbackView?: string;
+  qcStatus?: string;
+  qcPassed?: boolean;
+  qcAttempts?: number;
+  qcReasons?: string[];
+  failedAngles?: number[];
+  notificationPopup?: VtonNotificationPopup | null;
   fallbackReason?: string | null;
   compositeImageUrl?: string | null;
   afterImageUrl?: string | null;
@@ -1811,7 +1829,7 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
   const ch = srcCanvas.height;
   if (cw < 80 || ch < 72) return srcCanvas;
 
-  const ctx = srcCanvas.getContext('2d');
+  const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return srcCanvas;
 
   let imgData: ImageData;
@@ -1966,7 +1984,7 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
     const cleanCanvas = document.createElement('canvas');
     cleanCanvas.width = outW;
     cleanCanvas.height = ch;
-    const cleanCtx = cleanCanvas.getContext('2d');
+    const cleanCtx = cleanCanvas.getContext('2d', { willReadFrequently: true });
     if (!cleanCtx) return srcCanvas;
 
     cleanCtx.clearRect(0, 0, outW, ch);
@@ -2037,7 +2055,7 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
   const cleanCanvas = document.createElement('canvas');
   cleanCanvas.width = outW;
   cleanCanvas.height = ch;
-  const cleanCtx = cleanCanvas.getContext('2d');
+  const cleanCtx = cleanCanvas.getContext('2d', { willReadFrequently: true });
   if (!cleanCtx) return srcCanvas;
 
   cleanCtx.clearRect(0, 0, outW, ch);
@@ -2660,7 +2678,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
   }
 
   if (maxSourceH < 64) return;
-  const targetCanonicalH = maxSourceH >= 180 ? Math.max(720, maxSourceH) : maxSourceH;
+  const targetCanonicalH = maxSourceH;
 
   for (const angle of activeAngles) {
     const c = canvases[angle];
@@ -2680,7 +2698,7 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     const scratch = document.createElement('canvas');
     scratch.width = cw;
     scratch.height = ch;
-    const sCtx = scratch.getContext('2d');
+    const sCtx = scratch.getContext('2d', { willReadFrequently: true });
     const cCtx = c.getContext('2d', { willReadFrequently: true });
     if (!sCtx || !cCtx) {
       scratch.width = 0;
@@ -2779,7 +2797,7 @@ function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
   const scratch = document.createElement('canvas');
   scratch.width = cw;
   scratch.height = ch;
-  const sCtx = scratch.getContext('2d');
+  const sCtx = scratch.getContext('2d', { willReadFrequently: true });
   const cCtx = canvas.getContext('2d', { willReadFrequently: true });
   if (!sCtx || !cCtx) {
     scratch.width = 0;
@@ -3973,7 +3991,7 @@ export async function sliceTurnaround2x2Sheet(
     if (!sheetDataUrl.startsWith('data:') && !sheetDataUrl.startsWith('blob:')) {
       img.crossOrigin = 'anonymous';
     }
-    img.onload = () => {
+    img.onload = async () => {
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
@@ -4127,7 +4145,11 @@ export async function sliceTurnaround2x2Sheet(
         const extraCanvases: HTMLCanvasElement[] = [sheetCanvas];
         const cropSource: CanvasImageSource = sheetCtx ? sheetCanvas : img;
 
-        for (const p of panels) {
+        for (let panelIdx = 0; panelIdx < panels.length; panelIdx += 1) {
+          const p = panels[panelIdx];
+          if (panelIdx > 0 && panelIdx % 2 === 0) {
+            await new Promise<void>((r) => setTimeout(r, 0));
+          }
           const cropCanvas = document.createElement('canvas');
           cropCanvas.width = p.cw;
           cropCanvas.height = p.ch;
@@ -4177,7 +4199,7 @@ export async function sliceTurnaround2x2Sheet(
           const mirror225 = document.createElement('canvas');
           mirror225.width = cutCanvases[90].width;
           mirror225.height = cutCanvases[90].height;
-          const mCtx = mirror225.getContext('2d');
+          const mCtx = mirror225.getContext('2d', { willReadFrequently: true });
           if (mCtx) {
             mCtx.translate(mirror225.width, 0);
             mCtx.scale(-1, 1);
@@ -4228,12 +4250,17 @@ export async function sliceTurnaround2x2Sheet(
     };
   }
 
-  // Run 4-corner + enclosed-hole alpha verification guard across ALL 6 turnaround angles (deduped)
+  // Every cut canvas above already ran applyCornerBfsCutoutOnCanvas + scrubCutoutArtifactsOnCanvas;
+  // only re-run ensureTransparentCutout if any angle fell back to raw sheetDataUrl.
   const uniqueMap = new Map<string, Promise<string>>();
   const verifiedOut = {} as Record<TurnaroundAngleDeg, string>;
   await Promise.all(
     TURNAROUND_ANGLES.map(async (angle) => {
       const src = rawCropped[angle];
+      if (src && src !== sheetDataUrl && src.startsWith('data:image/png;base64,')) {
+        verifiedOut[angle] = src;
+        return;
+      }
       let job = uniqueMap.get(src);
       if (!job) {
         job = ensureTransparentCutout(src);
@@ -4307,7 +4334,7 @@ export async function mirrorImageDataUrlHorizontally(
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
           resolve(dataUrl);
           return;
@@ -4366,7 +4393,7 @@ async function compositeMirroredBagOnSideSlice(
           const canvas = document.createElement('canvas');
           canvas.width = w;
           canvas.height = h;
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) {
             resolve(sliceDataUrl);
             return;
@@ -4382,7 +4409,7 @@ async function compositeMirroredBagOnSideSlice(
           const bagCanvas = document.createElement('canvas');
           bagCanvas.width = bw;
           bagCanvas.height = bh;
-          const bagCtx = bagCanvas.getContext('2d');
+          const bagCtx = bagCanvas.getContext('2d', { willReadFrequently: true });
           if (!bagCtx) {
             resolve(sliceDataUrl);
             return;
@@ -5528,8 +5555,20 @@ export function buildDirectClientGeminiParts(params: {
     }
   }
 
+  const hasOuter = Boolean(serializedSlots.outer);
+  const hasOuterMid = Boolean(serializedSlots.outer_mid);
+  const outerwearColorLock =
+    hasOuter || hasOuterMid
+      ? ` [OUTERMOST COAT COLOR & LEFT-RIGHT SYMMETRY LOCK: The outermost ${
+          hasOuter ? '[OUTER]' : '[OUTER_MID]'
+        } coat/jacket MUST render in ONE UNIFIED consistent fabric & exact hex color across BOTH left and right halves (STRICTLY NEVER half-grey / half-brown split coat!) and MUST remain the exact same outer coat/color across ALL angles (0°, 45°, 90°, 135°, 180°, 225°) — never drop or swap it for an inner blazer on side/back views!]`
+      : '';
+  const umbrellaCutoutLock = hasUmbrella
+    ? ` [UMBRELLA UNDER-CANOPY NEGATIVE SPACE CUTOUT RULE: The enclosed hollow cavity UNDERNEATH the open umbrella canopy and around the neck/shoulders/umbrella-shaft MUST be painted 100% solid bright shadowless studio backdrop (${optimalBackdropHex}) matching the outer corners (ZERO grey/dark interior drop-shadow pocket under the umbrella dome) so background segmentation punches out a clean hollow transparent void under the umbrella!]`
+    : '';
+
   parts.push({
-    text: `Wear ALL equipped garments, footwear, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background. ${turnaroundSheet ? SOLO_SINGLE_PERSON_PER_CELL_LOCK : 'Strictly ONE solitary person in frame.'} ${FOOTWEAR_PAIR_SYMMETRY_LOCK} Return image only.`,
+    text: `Wear ALL equipped garments, footwear, body-part accessories, and jewelry above simultaneously on their exact specified left/right body parts against a 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop, STRICTLY NO vertical/horizontal grid divider lines, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne rain/snow streaks in background.${outerwearColorLock}${umbrellaCutoutLock} ${turnaroundSheet ? SOLO_SINGLE_PERSON_PER_CELL_LOCK : 'Strictly ONE solitary person in frame.'} ${FOOTWEAR_PAIR_SYMMETRY_LOCK} Return image only.`,
   });
 
   return parts;
@@ -6194,6 +6233,69 @@ export async function synthesizeGeminiMultiAngleVton(
           ? json.layout === 'turnaround_3x2' || json.layout === 'turnaround_2x2'
           : useTurnaroundSheet;
 
+        if (
+          rawComposite &&
+          (json.frontOnlyDegraded || json.fallbackView === 'positive-only')
+        ) {
+          const zeroCut = await ensureTransparentCutout(
+            await removeModelBackgroundToPng(rawComposite)
+          );
+          const zeroMap: Partial<Record<TurnaroundAngleDeg, string>> = { 0: zeroCut };
+          await normalizeTurnaroundDataUrlsToFloorBaseline(zeroMap);
+          const finalZeroUrl = zeroMap[0] || zeroCut;
+          const zeroCacheKey = buildAiVtonCacheKey({
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather,
+            angleDeg: 0,
+          });
+          logVtonQcFailure({
+            outfitComboId,
+            avatarConfigHash: profile.avatarConfigHash,
+            attempts: Number(json.qcAttempts) || maxQcAttempts,
+            reasons:
+              Array.isArray(json.qcReasons) && json.qcReasons.length > 0
+                ? json.qcReasons
+                : [json.fallbackReason || 'qc_front_only_fallback'],
+            failedAngles: Array.isArray(json.failedAngles) ? json.failedAngles : [],
+            frontOnlyFallback: true,
+          });
+          return {
+            ok: true,
+            fallbackToFlatLay: false,
+            frontOnlyDegraded: true,
+            fallbackView: json.fallbackView || 'positive-only',
+            notificationPopup: json.notificationPopup ?? {
+              code: 'QC_FRONT_ONLY_FALLBACK',
+              durationMs: 3000,
+              messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+              messageEn: 'Due to a temporary connection issue, only the front view is shown.',
+            },
+            qcAttempts: Number(json.qcAttempts) || maxQcAttempts,
+            reason: json.fallbackReason || 'qc_front_only_fallback',
+            mode,
+            provider: 'gemini-vton',
+            styleMode,
+            angleDeg: 0,
+            weatherMood,
+            effectiveWeather,
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            cacheKey: zeroCacheKey,
+            fromCache: false,
+            cacheLayer: 'fresh',
+            imageUrl: finalZeroUrl,
+            angleSlices: { 0: finalZeroUrl },
+            equippedCount: equippedGarments.length,
+            equippedSlotKeys,
+            profile,
+            handedness: profile.dominantHand,
+            bagAssetMirrored,
+            createdAt: now,
+          };
+        }
+
         if (json.panelImages && typeof json.panelImages === 'object') {
           for (const a of TURNAROUND_ANGLES) {
             const rawCandidate = sanitizeImageCandidate(json.panelImages[String(a)]);
@@ -6649,6 +6751,14 @@ export async function synthesizeGeminiMultiAngleVton(
             ok: true,
             fallbackToFlatLay: false,
             frontOnlyDegraded: true,
+            fallbackView: 'positive-only',
+            notificationPopup: {
+              code: 'QC_FRONT_ONLY_FALLBACK',
+              durationMs: 3000,
+              messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+              messageEn: 'Due to a temporary connection issue, only the front view is shown.',
+            },
+            qcAttempts: maxQcAttempts,
             reason: 'qc_front_only_fallback',
             mode,
             provider: 'gemini-vton',

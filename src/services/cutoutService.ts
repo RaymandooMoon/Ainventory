@@ -594,6 +594,38 @@ function purgeEnclosedBackdropHoles(
   const subjectFootwearBandY = subjectTopY + 0.78 * subjectHeight;
   const canvasFootwearBandY = h * 0.78;
 
+  // Measure torso-only span width separately from a wide overhead umbrella dome so torso guards
+  // do not shield the empty air cavity under the umbrella canopy beside the head/shoulders.
+  const torsoSpans: number[] = [];
+  let maxTop18Span = 0;
+  const top18LimitY = subjectTopY + 0.18 * subjectHeight;
+  const torsoScanY0 = Math.round(subjectTopY + 0.28 * subjectHeight);
+  const torsoScanY1 = Math.round(subjectTopY + 0.72 * subjectHeight);
+  for (let y = subjectTopY; y <= subjectBottomY; y += 2) {
+    const rOff = y * w;
+    let rMin = w;
+    let rMax = -1;
+    for (let x = subjectMinX; x <= subjectMaxX; x += 1) {
+      const p = rOff + x;
+      if (!bgMask[p] && d[p * 4 + 3] > CORNER_ALPHA_OPAQUE_THRESHOLD) {
+        if (x < rMin) rMin = x;
+        if (x > rMax) rMax = x;
+      }
+    }
+    if (rMax >= rMin) {
+      const span = rMax - rMin + 1;
+      if (y <= top18LimitY && span > maxTop18Span) {
+        maxTop18Span = span;
+      }
+      if (y >= torsoScanY0 && y <= torsoScanY1) {
+        torsoSpans.push(span);
+      }
+    }
+  }
+  const torsoMidWidth = medianOfSortedOrSmall(torsoSpans, subjectWidth);
+  const hasOverheadUmbrella =
+    torsoMidWidth >= 12 && maxTop18Span >= Math.max(torsoMidWidth * 1.32, w * 0.34);
+
   const holePixelTol = Math.min(28, Math.max(18, tolerance * 0.72));
   const candidate = new Uint8Array(nPx);
   let candidateTotal = 0;
@@ -637,22 +669,35 @@ function purgeEnclosedBackdropHoles(
     }
 
     // Guard 1C: On non-chromatic neutral studio walls, the center chest/neck/torso core never
-    // contains hollow air holes—never mistake light blue shirts or wool blazers for backdrop!
+    // contains hollow air holes—use torsoMidWidth so overhead umbrellas never shield side air cavities.
     const inNeutralTorsoCore =
       !isChromaticStudioKey &&
-      pxY >= subjectTopY + 0.1 * subjectHeight &&
+      pxY >= subjectTopY + (hasOverheadUmbrella ? 0.26 : 0.12) * subjectHeight &&
       pxY <= subjectTopY + 0.54 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.38;
+      Math.abs(pxX - subjectMidX) <= torsoMidWidth * 0.36;
     if (inNeutralTorsoCore) continue;
+
+    // Zone flag for negative-space pockets trapped under an open umbrella canopy beside head/shoulders
+    const inUmbrellaUnderCanopyZone =
+      hasOverheadUmbrella &&
+      pxY >= subjectTopY + 0.04 * subjectHeight &&
+      pxY <= subjectTopY + 0.42 * subjectHeight &&
+      Math.abs(pxX - subjectMidX) > torsoMidWidth * 0.15;
 
     // Guard 1D: On non-green studio keys (e.g. cool slate #94A3B8), protect shaded upper-body
     // sleeves (0 deg right sleeve) and upper-chest shirts/knitwear (45 deg chest) whose muted
-    // cool shadows have lum <= 124 unless they are an exact match to the studio key.
+    // cool shadows have lum <= 124 unless they are an exact match to the studio key or under-canopy sky.
     const inUpperGarmentBand =
       pxY >= subjectTopY + 0.12 * subjectHeight &&
       pxY <= subjectTopY + 0.56 * subjectHeight;
     const bgDist = Math.hypot(r - eR, g - eG, b - eB);
-    if (inUpperGarmentBand && !isChromaticGreenKey && lum <= 124 && bgDist > 12) {
+    if (
+      inUpperGarmentBand &&
+      !isChromaticGreenKey &&
+      !inUmbrellaUnderCanopyZone &&
+      lum <= 124 &&
+      bgDist > 12
+    ) {
       continue;
     }
 
@@ -661,7 +706,7 @@ function purgeEnclosedBackdropHoles(
       !isChromaticGreenKey &&
       pxY >= subjectTopY + 0.08 * subjectHeight &&
       pxY <= subjectTopY + 0.36 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.13;
+      Math.abs(pxX - subjectMidX) <= Math.min(subjectWidth, torsoMidWidth) * 0.13;
     if (inNeckCollarColumn && bgDist > 4) {
       continue;
     }
@@ -670,16 +715,18 @@ function purgeEnclosedBackdropHoles(
       !isChromaticStudioKey &&
       pxY >= subjectTopY + 0.52 * subjectHeight &&
       pxY <= subjectTopY + 0.96 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= subjectWidth * 0.18 &&
+      Math.abs(pxX - subjectMidX) <= torsoMidWidth * 0.22 &&
       !(eB >= eR + 6 && r >= b);
 
-    const effectiveHoleTol = isChromaticStudioKey
-      ? inUpperGarmentBand && !isChromaticGreenKey
-        ? Math.min(18, holePixelTol)
-        : holePixelTol
-      : inNeutralLegCleftBand
-        ? 16
-        : Math.min(11, holePixelTol);
+    const effectiveHoleTol = inUmbrellaUnderCanopyZone
+      ? Math.min(28, holePixelTol)
+      : isChromaticStudioKey
+        ? inUpperGarmentBand && !isChromaticGreenKey
+          ? Math.min(18, holePixelTol)
+          : holePixelTol
+        : inNeutralLegCleftBand
+          ? 16
+          : Math.min(11, holePixelTol);
     if (bgDist <= effectiveHoleTol) {
       candidate[p] = 1;
       candidateTotal += 1;
@@ -687,14 +734,12 @@ function purgeEnclosedBackdropHoles(
     }
 
     // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy (~10–64 lum darker)
-    // ONLY when the backdrop is a distinct chromatic studio key (#5E9C7E green or lower-body slate cleft),
-    // never on upper-body sleeves or chest garments where cloth folds share muted chroma.
     const inLowerBodyCleftZone = pxY >= subjectTopY + 0.42 * subjectHeight;
     const isShadedGreenStudioPocket =
       g >= r + 7 &&
       g >= b + 4 &&
       Math.hypot(r - 94, g - 156, b - 126) <= 68 &&
-      (isChromaticGreenKey || inLowerBodyCleftZone);
+      (isChromaticGreenKey || inLowerBodyCleftZone || inUmbrellaUnderCanopyZone);
 
     if (isShadedGreenStudioPocket) {
       candidate[p] = 1;
@@ -702,24 +747,30 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
-    const allowShadedChromaBand = isChromaticGreenKey || pxY > subjectTopY + 0.56 * subjectHeight;
+    const allowShadedChromaBand =
+      isChromaticGreenKey || inUmbrellaUnderCanopyZone || pxY > subjectTopY + 0.56 * subjectHeight;
     if (
-      isChromaticStudioKey &&
+      (isChromaticStudioKey || inUmbrellaUnderCanopyZone) &&
       allowShadedChromaBand &&
       lum >= expLum - 64 &&
-      lum <= expLum + 14 &&
+      lum <= expLum + 18 &&
       lum > 38 &&
       lum < 218
     ) {
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      const satTol = Math.max(22, Math.round(expSat * 0.48));
+      const satTol = Math.max(24, Math.round(expSat * 0.5));
       if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(58, expSat + 32)) {
         const chromaDist = Math.hypot(
           r / lum - eR / expLum,
           g / lum - eG / expLum,
           b / lum - eB / expLum
         );
-        const maxChromaDist = isChromaticGreenKey && g > r + 7 && g > b + 4 ? 0.118 : 0.068;
+        const maxChromaDist =
+          isChromaticGreenKey && g > r + 7 && g > b + 4
+            ? 0.118
+            : inUmbrellaUnderCanopyZone
+              ? 0.088
+              : 0.068;
         if (chromaDist <= maxChromaDist) {
           candidate[p] = 1;
           candidateTotal += 1;
@@ -758,6 +809,7 @@ function purgeEnclosedBackdropHoles(
     let sharpBoundaryCount = 0;
     let touchesOuterBg = false;
 
+    const neighbors = new Int32Array(4);
     while (qHead < qTail) {
       const p = compQueue[qHead++];
       const x = p % w;
@@ -776,14 +828,14 @@ function purgeEnclosedBackdropHoles(
       sumB += pb;
       sumDistToBg += Math.hypot(pr - expRArr[p], pg - expGArr[p], pb - expBArr[p]);
 
-      // Inspect 4-connected neighbors
-      const neighbors: number[] = [];
-      if (x > 0) neighbors.push(p - 1);
-      if (x < w - 1) neighbors.push(p + 1);
-      if (y > 0) neighbors.push(p - w);
-      if (y < h - 1) neighbors.push(p + w);
+      // Inspect 4-connected neighbors without allocating a new JS array per pixel
+      let nCount = 0;
+      if (x > 0) neighbors[nCount++] = p - 1;
+      if (x < w - 1) neighbors[nCount++] = p + 1;
+      if (y > 0) neighbors[nCount++] = p - w;
+      if (y < h - 1) neighbors[nCount++] = p + w;
 
-      for (let ni = 0; ni < neighbors.length; ni += 1) {
+      for (let ni = 0; ni < nCount; ni += 1) {
         const q = neighbors[ni];
         if (bgMask[q]) {
           touchesOuterBg = true;
@@ -870,19 +922,30 @@ function purgeEnclosedBackdropHoles(
       Math.abs(cx - subjectMidX) <= subjectWidth * 0.18 &&
       area <= Math.round(nPx * 0.085);
 
+    const isOverheadUmbrellaHole =
+      hasOverheadUmbrella &&
+      cy >= subjectTopY + 0.04 * subjectHeight &&
+      cy <= subjectTopY + 0.4 * subjectHeight &&
+      area >= Math.max(10, Math.round(nPx * 0.00012)) &&
+      Math.abs(cx - subjectMidX) > torsoMidWidth * 0.15;
+
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
     const isUpperNonGreenPocket =
-      !isChromaticBackdropHole && cy < subjectTopY + 0.56 * subjectHeight;
+      !isChromaticBackdropHole &&
+      !isOverheadUmbrellaHole &&
+      cy < subjectTopY + 0.56 * subjectHeight;
     const maxAllowedStepDiff = isChromaticBackdropHole
       ? 15.5
-      : isUpperNonGreenPocket
-        ? 5.5
-        : seedIsChromaticStudioKey
-          ? 10.5
-          : isNeutralLegCleftPocket
-            ? 7.5
-            : 4.5;
+      : isOverheadUmbrellaHole
+        ? 10.5
+        : isUpperNonGreenPocket
+          ? 5.5
+          : seedIsChromaticStudioKey
+            ? 10.5
+            : isNeutralLegCleftPocket
+              ? 7.5
+              : 4.5;
     if (meanStepDiff > maxAllowedStepDiff) continue;
 
     // Guard 4: Protect micro eye-sclera / eyewear specular regions inside the upper-center face core
@@ -898,24 +961,28 @@ function purgeEnclosedBackdropHoles(
     // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
     const maxAllowedMeanDist = isChromaticBackdropHole
       ? 68
-      : isUpperNonGreenPocket
-        ? 16
-        : isNeutralLegCleftPocket
-          ? 28
-          : !seedIsChromaticStudioKey
-            ? 11
-            : touchesOuterBg
-              ? Math.min(28, holePixelTol * 0.95)
-              : Math.min(26, holePixelTol * 0.9);
+      : isOverheadUmbrellaHole
+        ? 52
+        : isUpperNonGreenPocket
+          ? 16
+          : isNeutralLegCleftPocket
+            ? 28
+            : !seedIsChromaticStudioKey
+              ? 11
+              : touchesOuterBg
+                ? Math.min(28, holePixelTol * 0.95)
+                : Math.min(26, holePixelTol * 0.9);
     if (meanDistToBg > maxAllowedMeanDist) continue;
 
     const minSharpRatio = isChromaticBackdropHole
       ? 0.24
-      : isUpperNonGreenPocket
-        ? 0.58
-        : seedIsChromaticStudioKey || isNeutralLegCleftPocket
-          ? 0.45
-          : 0.62;
+      : isOverheadUmbrellaHole
+        ? 0.28
+        : isUpperNonGreenPocket
+          ? 0.58
+          : seedIsChromaticStudioKey || isNeutralLegCleftPocket
+            ? 0.45
+            : 0.62;
     const sharpRatio = perimeterFgCount > 0 ? sharpBoundaryCount / perimeterFgCount : 0;
     if (!touchesOuterBg && (perimeterFgCount < 4 || sharpRatio < minSharpRatio)) continue;
 

@@ -170,7 +170,11 @@ const PERSONAL_COLOR_INFO = {
 };
 
 const weatherCache = new Map();
+const weatherInFlight = new Map();
 const WEATHER_CACHE_MAX = 120;
+const WEATHER_SUCCESS_TTL_MS = 20 * 60 * 1000;
+const WEATHER_FALLBACK_TTL_MS = 2 * 60 * 1000;
+const OPEN_METEO_TIMEOUT_MS = 1600;
 
 function computeColorSimilarityRatio(hexA, hexB, nameA = '', nameB = '') {
   const rgbA = hexToRgb(hexA);
@@ -505,66 +509,84 @@ export async function fetchTomorrowWeather(
 
   const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : safeCityKey}:${resolvedDayTarget}:${targetDateStr}`;
   const cached = weatherCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < 20 * 60 * 1000) {
+  if (cached && Date.now() - cached.fetchedAt < (cached.ttlMs || WEATHER_SUCCESS_TTL_MS)) {
     return cached.data;
   }
 
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FSeoul&forecast_days=3`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const idx = resolvedDayTarget === 'tomorrow' && json.daily?.time?.length > 1 ? 1 : 0;
-    const code = json.daily.weather_code[idx] ?? 1;
-    const condition = weatherCodeToKorean(code);
-    const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
-    const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
-    const data = {
-      cityKey: hasCustom ? 'gps' : safeCityKey,
-      cityName: city.name,
-      date: json.daily.time[idx] || targetDateStr,
-      dayTarget: resolvedDayTarget,
-      scenarioKey: 'live',
-      condition,
-      weatherCode: code,
-      tempMin: Math.round(json.daily.temperature_2m_min[idx]),
-      tempMax: Math.round(json.daily.temperature_2m_max[idx]),
-      precipProb,
-      windSpeed,
-      humidity: precipProb >= 50 ? 78 : 50,
-      isSimulated: false,
-      recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
-    };
-    if (weatherCache.size >= WEATHER_CACHE_MAX) {
-      const oldestKey = weatherCache.keys().next().value;
-      if (oldestKey !== undefined) weatherCache.delete(oldestKey);
-    }
-    weatherCache.set(cacheKey, { fetchedAt: Date.now(), data });
-    return data;
-  } catch (err) {
-    console.warn(
-      '[Weather] Open-Meteo forecast fetch degraded to local fallback:',
-      err instanceof Error ? err.message : String(err)
-    );
-    return {
-      cityKey: hasCustom ? 'gps' : safeCityKey,
-      cityName: city.name,
-      date: targetDateStr,
-      dayTarget: resolvedDayTarget,
-      scenarioKey: 'live',
-      condition: resolvedDayTarget === 'tomorrow' ? '내일 예보 · 구름 조금' : '오늘 예보 · 구름 조금',
-      weatherCode: 2,
-      tempMin: 9,
-      tempMax: 18,
-      precipProb: 15,
-      windSpeed: 12,
-      humidity: 50,
-      isSimulated: false,
-      fallbackUsed: true,
-      weatherUnavailable: true,
-      recommendedMotion: 'idle',
-    };
+  const pending = weatherInFlight.get(cacheKey);
+  if (pending) {
+    return pending;
   }
+
+  const job = (async () => {
+    const storeCache = (data, ttlMs) => {
+      if (weatherCache.size >= WEATHER_CACHE_MAX) {
+        const oldestKey = weatherCache.keys().next().value;
+        if (oldestKey !== undefined) weatherCache.delete(oldestKey);
+      }
+      weatherCache.set(cacheKey, { fetchedAt: Date.now(), ttlMs, data });
+    };
+
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FSeoul&forecast_days=3`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(OPEN_METEO_TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const idx = resolvedDayTarget === 'tomorrow' && json.daily?.time?.length > 1 ? 1 : 0;
+      const code = json.daily.weather_code[idx] ?? 1;
+      const condition = weatherCodeToKorean(code);
+      const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
+      const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
+      const data = {
+        cityKey: hasCustom ? 'gps' : safeCityKey,
+        cityName: city.name,
+        date: json.daily.time[idx] || targetDateStr,
+        dayTarget: resolvedDayTarget,
+        scenarioKey: 'live',
+        condition,
+        weatherCode: code,
+        tempMin: Math.round(json.daily.temperature_2m_min[idx]),
+        tempMax: Math.round(json.daily.temperature_2m_max[idx]),
+        precipProb,
+        windSpeed,
+        humidity: precipProb >= 50 ? 78 : 50,
+        isSimulated: false,
+        recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
+      };
+      storeCache(data, WEATHER_SUCCESS_TTL_MS);
+      return data;
+    } catch (err) {
+      console.warn(
+        '[Weather] Open-Meteo forecast fetch degraded to local fallback:',
+        err instanceof Error ? err.message : String(err)
+      );
+      const fallbackData = {
+        cityKey: hasCustom ? 'gps' : safeCityKey,
+        cityName: city.name,
+        date: targetDateStr,
+        dayTarget: resolvedDayTarget,
+        scenarioKey: 'live',
+        condition: resolvedDayTarget === 'tomorrow' ? '내일 예보 · 구름 조금' : '오늘 예보 · 구름 조금',
+        weatherCode: 2,
+        tempMin: 9,
+        tempMax: 18,
+        precipProb: 15,
+        windSpeed: 12,
+        humidity: 50,
+        isSimulated: false,
+        fallbackUsed: true,
+        weatherUnavailable: true,
+        recommendedMotion: 'idle',
+      };
+      storeCache(fallbackData, WEATHER_FALLBACK_TTL_MS);
+      return fallbackData;
+    } finally {
+      weatherInFlight.delete(cacheKey);
+    }
+  })();
+
+  weatherInFlight.set(cacheKey, job);
+  return job;
 }
 
 function personalColorMatchBonus(itemHex, personalColorKey) {

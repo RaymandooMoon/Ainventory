@@ -4,9 +4,11 @@ import {
   DEFAULT_ISO_VIEW_ANGLE,
   VTON_MODE,
   getVtonServiceStatus,
+  invalidateVtonCacheEntry,
   normalizeIsoViewAngleDeg,
   synthesizeVtonLook,
 } from './vtonService.js';
+import { createVtonQcMiddleware } from './vtonQcMiddleware.js';
 
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SYNTHESES_PER_WINDOW = 360;
@@ -229,9 +231,17 @@ function normalizeSynthesisMode(rawMode) {
   return { ok: true, mode: VTON_MODE };
 }
 
-export function createVtonRouter() {
+export function createVtonRouter(options = {}) {
   const router = express.Router();
   const vtonJsonParser = express.json({ limit: '15mb' });
+  const synthesizeLook = options.synthesizeVtonLookImpl || synthesizeVtonLook;
+  const invalidateCache = options.invalidateVtonCacheImpl || invalidateVtonCacheEntry;
+  const vtonQualityControlMiddleware = createVtonQcMiddleware({
+    synthesizeLook,
+    invalidateCache,
+    logFilePath: options.qcLogFilePath,
+    maxAttempts: options.maxQcAttempts,
+  });
 
   router.get('/status', requireVtonSessionOrSample, (req, res) => {
     const ipRate = checkIpRateLimit(`vton:status:${resolveClientIp(req)}`, MAX_STATUS_PER_WINDOW);
@@ -254,7 +264,7 @@ export function createVtonRouter() {
     return res.status(200).json(getVtonServiceStatus({ geminiApiKey: headerApiKey }));
   });
 
-  router.post('/synthesize', requireVtonSessionOrSample, vtonJsonParser, async (req, res) => {
+  function prepareVtonSynthesisParams(req, res, next) {
     const ipRate = checkIpRateLimit(
       `vton:synth:${resolveClientIp(req)}`,
       MAX_SYNTHESES_PER_WINDOW
@@ -359,7 +369,7 @@ export function createVtonRouter() {
       ...(rawAvatarSpec ? { avatarSpec: rawAvatarSpec } : {}),
     };
 
-    const result = await synthesizeVtonLook({
+    req.vtonSynthesisParams = {
       mode: modeResult.mode,
       profile: mergedProfile,
       avatarSpec: rawAvatarSpec,
@@ -416,11 +426,21 @@ export function createVtonRouter() {
       authorizedClosets: req.vtonAuth.authorizedClosets,
       isSampleGuest: req.vtonAuth.isSampleGuest,
       isAuthenticated: req.vtonAuth.isAuthenticated,
-    });
+    };
+    return next();
+  }
 
-    res.setHeader('Cache-Control', 'private, no-store');
-    return res.status(200).json(result);
-  });
+  router.post(
+    '/synthesize',
+    requireVtonSessionOrSample,
+    vtonJsonParser,
+    prepareVtonSynthesisParams,
+    vtonQualityControlMiddleware,
+    (_req, res) => {
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.status(200).json(res.locals.vtonResult);
+    }
+  );
 
   router.use((_req, res) => {
     res.status(404).json({ error: 'VTON API endpoint not found' });
