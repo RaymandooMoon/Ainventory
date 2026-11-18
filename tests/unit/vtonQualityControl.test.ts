@@ -18,6 +18,7 @@ import {
   peekPostLoginReveal,
   triggerPostLoginReveal,
 } from '../../src/utils/logoTransition.ts';
+import { selectOptimalStudioKeyHex } from '../../src/services/weatherPromptBuilder.ts';
 
 function createMemoryStorage() {
   const map = new Map<string, string>();
@@ -107,8 +108,68 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
     assert.match(leftHanded.slotPrompt, /ANATOMICAL RIGHT/);
     assert.match(leftHanded.crossAngleLockPrompt, /RIGHT SIDE CARRY/);
 
+    // Explicit per-angle IMAGE-LEFT / IMAGE-RIGHT screen-side coordinates prevent front/back shoulder swap
+    assert.match(rightHanded.perAngleScreenPrompt[0], /IMAGE-RIGHT/);
+    assert.match(rightHanded.perAngleScreenPrompt[45], /IMAGE-RIGHT/);
+    assert.match(rightHanded.perAngleScreenPrompt[135], /IMAGE-LEFT/);
+    assert.match(rightHanded.perAngleScreenPrompt[180], /IMAGE-LEFT/);
+    assert.match(rightHanded.perAngleScreenPrompt[225], /IMAGE-LEFT/);
+    assert.match(leftHanded.perAngleScreenPrompt[0], /IMAGE-LEFT/);
+    assert.match(leftHanded.perAngleScreenPrompt[180], /IMAGE-RIGHT/);
+
     // Defaults safely to right-handed
     assert.equal(resolveBagCarryAnatomy(undefined).carrySide, 'left');
+  });
+
+  it('avoids #94A3B8 cool-slate studio key backdrop when denim/indigo/blue pants are worn', () => {
+    const selectedHex = selectOptimalStudioKeyHex([
+      { name: '다크 브라운 스웨이드 자켓', color: '브라운', color_hex: '#3E2E24' },
+      { name: '카멜 캐시미어 가디건', color: '카멜', color_hex: '#C19A6B' },
+      { name: '라이트 인디고 스트레이트 데님 팬츠', color: '라이트 블루', color_hex: '#6C8CB5' },
+    ]);
+    assert.notEqual(selectedHex.toUpperCase(), '#94A3B8');
+  });
+
+  it('rejects headless collar-cut and scale-invariant thigh-cut slices during QC', () => {
+    // 1) Headless collar-cut silhouette: tall enough overall, but top 16% has wide flat jacket collar with no narrow neck taper
+    const headlessBack = makeSliceRgba({
+      topY: 16,
+      bottomY: 168,
+      leftX: 34,
+      rightX: 86,
+      headCrownNarrow: false,
+      rgb: [58, 46, 38],
+    });
+    const mHeadless = inspectPixelSliceQc(headlessBack.buf, headlessBack.width, headlessBack.height);
+    assert.equal(mHeadless.clippedTop, true);
+    const clean0 = makeSliceRgba({
+      topY: 12,
+      bottomY: 168,
+      leftX: 40,
+      rightX: 80,
+      headCrownNarrow: true,
+      rgb: [58, 46, 38],
+    });
+    const mClean0 = inspectPixelSliceQc(clean0.buf, clean0.width, clean0.height);
+    const headlessReport = evaluateTurnaroundConsistencyQc({ 0: mClean0, 225: mHeadless });
+    assert.equal(headlessReport.ok, false);
+    assert.ok(headlessReport.failedAngles.includes(225));
+
+    // 2) Thigh-cut half-body even after being stretched to fill 79% vertical stature (heightAspect < 2.08 with wide bottom cut)
+    const stretchedThighCut = makeSliceRgba({
+      topY: 16,
+      bottomY: 158,
+      leftX: 20,
+      rightX: 100,
+      headCrownNarrow: true,
+      rgb: [58, 46, 38],
+    });
+    const mThighCut = inspectPixelSliceQc(
+      stretchedThighCut.buf,
+      stretchedThighCut.width,
+      stretchedThighCut.height
+    );
+    assert.equal(mThighCut.halfBody, true);
   });
 
   it('resolves backdrop aura tier from explicit grade letters or stage IDs', () => {

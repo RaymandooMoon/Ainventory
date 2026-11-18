@@ -511,12 +511,12 @@ export function computeIdealDeviceMannequinScale(params?: {
       ? Math.max(availH, effectiveTargetH) / Math.max(1, renderedBoxH)
       : 1;
   const stageAspect = sw / sh;
-  const presenceBoost = stageAspect < 0.85 ? 1.185 : stageAspect < 1.25 ? 1.155 : 1.145;
+  const presenceBoost = stageAspect < 0.85 ? 1.235 : stageAspect < 1.25 ? 1.205 : 1.19;
 
   const renderedBoxW = renderedBoxH * imgAspect;
-  const maxHorizontalScale = (sw * 0.94) / Math.max(1, renderedBoxW * 0.6);
+  const maxHorizontalScale = (sw * 0.95) / Math.max(1, renderedBoxW * 0.58);
   const rawIdeal = widthChokeCompensation * presenceBoost;
-  return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.14, 1.52) * 1000) / 1000;
+  return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.18, 1.58) * 1000) / 1000;
 }
 
 const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
@@ -2150,6 +2150,39 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
   const medianBodyWidth =
     bodyWidths.length > 0 ? bodyWidths[Math.floor(bodyWidths.length / 2)] : maxRowCount;
 
+  // Measure shoulder/upper-torso max span (16%..36% of fgH) vs top cranial/neck zone (6%..11% of fgH)
+  const shY0 = Math.min(b.maxY, Math.round(b.minY + fgH * 0.16));
+  const shY1 = Math.min(b.maxY, Math.max(shY0, Math.round(b.minY + fgH * 0.36)));
+  let shoulderMaxSpan = 0;
+  for (let y = shY0; y <= shY1; y += 1) {
+    if (rowSpans[y] > shoulderMaxSpan) shoulderMaxSpan = rowSpans[y];
+  }
+  const topCanopyEndY = Math.min(b.maxY, Math.round(b.minY + fgH * 0.15));
+  let maxTop15Span = 0;
+  for (let y = b.minY; y <= topCanopyEndY; y += 1) {
+    if (rowSpans[y] > maxTop15Span) maxTop15Span = rowSpans[y];
+  }
+  const hasWideOverheadCanopy =
+    shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, w * 0.34);
+
+  const headNeckY0 = Math.min(b.maxY, Math.round(b.minY + fgH * 0.06));
+  const headNeckY1 = Math.min(b.maxY, Math.max(headNeckY0, Math.round(b.minY + fgH * 0.11)));
+  let minHeadNeckSpan = Infinity;
+  for (let y = headNeckY0; y <= headNeckY1; y += 1) {
+    if (rowSpans[y] > 0 && rowSpans[y] < minHeadNeckSpan) {
+      minHeadNeckSpan = rowSpans[y];
+    }
+  }
+  if (
+    !hasWideOverheadCanopy &&
+    fgH >= 36 &&
+    shoulderMaxSpan >= w * 0.22 &&
+    Number.isFinite(minHeadNeckSpan) &&
+    minHeadNeckSpan >= shoulderMaxSpan * 0.82
+  ) {
+    return { ok: false, reason: 'clipped_top', fgHeightRatio };
+  }
+
   // Check 1A: Clipped-top / headless slice touching canvas top edge (torso/shoulders cut flush at y <= 3)
   const topEdgeCount = Math.max(rowCounts[0] || 0, rowCounts[1] || 0, rowCounts[2] || 0);
   const topCrownCount = rowCounts[b.minY + 1] ?? rowCounts[b.minY] ?? 0;
@@ -2160,9 +2193,7 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
     return { ok: false, reason: 'clipped_top', fgHeightRatio };
   }
 
-  // Check 1B: Vertically shifted flat waist-down / chest-down crop (e.g. shifted down to 0.94 baseline!)
-  // Unlike a genuine head or rounded umbrella canopy (which starts narrow at minY and expands smoothly),
-  // a truncated torso/waist starts IMMEDIATELY wide and flat at b.minY..b.minY+2 with high solidity.
+  // Check 1B: Vertically shifted flat waist-down / chest-down crop
   const yFlat = Math.min(b.maxY, b.minY + 2);
   const yShoulderProbe = Math.min(b.maxY, b.minY + Math.max(4, Math.round(fgH * 0.14)));
   const topAtMin = rowCounts[b.minY] || 0;
@@ -2179,17 +2210,19 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
     return { ok: false, reason: 'clipped_top', fgHeightRatio };
   }
 
-  // Check 2: Clipped-bottom (coat/waist sliced flat against y >= h - 3, NOT narrow shoes)
+  // Check 2: Clipped-bottom (coat/waist/thighs sliced flat against y >= h - 5, NOT narrow shoes)
   const botEdgeCount = Math.max(
     rowCounts[h - 1] || 0,
     rowCounts[h - 2] || 0,
-    rowCounts[h - 3] || 0
+    rowCounts[h - 3] || 0,
+    rowCounts[h - 4] || 0,
+    rowCounts[h - 5] || 0
   );
-  if (b.maxY >= h - 3 && botEdgeCount >= Math.max(w * 0.2, medianBodyWidth * 0.62)) {
+  if (b.maxY >= h - 5 && botEdgeCount >= Math.max(w * 0.18, medianBodyWidth * 0.56)) {
     return { ok: false, reason: 'clipped_bottom', fgHeightRatio };
   }
 
-  // Check 3: Floating half-body / waist-up shot (compact head+torso ending flat around mid-canvas)
+  // Check 3: Half-body / waist-up / thigh-cut shot (including scale-invariant aspect ratio)
   const bottomTrimBandY = Math.max(b.minY, Math.round(b.maxY - fgH * 0.04));
   let maxBottomBarCount = 0;
   for (let y = bottomTrimBandY; y <= b.maxY; y += 1) {
@@ -2197,9 +2230,12 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
   }
   const heightToMedianBodyAspect = fgH / Math.max(1, medianBodyWidth);
   if (
-    fgHeightRatio < 0.52 &&
-    heightToMedianBodyAspect < 2.15 &&
-    maxBottomBarCount >= medianBodyWidth * 0.52
+    (!hasWideOverheadCanopy &&
+      heightToMedianBodyAspect < 2.08 &&
+      maxBottomBarCount >= medianBodyWidth * 0.56) ||
+    (fgHeightRatio < 0.58 &&
+      heightToMedianBodyAspect < 2.22 &&
+      maxBottomBarCount >= medianBodyWidth * 0.52)
   ) {
     return { ok: false, reason: 'half_body', fgHeightRatio };
   }
@@ -2246,7 +2282,10 @@ async function inspectCutoutDataUrlIntegrity(
   });
 }
 
-async function inspectDataUrlQcMetrics(dataUrl: string): Promise<VtonQcSliceMetrics | null> {
+async function inspectDataUrlQcMetrics(
+  dataUrl: string,
+  studioBackdropHex?: string | null
+): Promise<VtonQcSliceMetrics | null> {
   if (typeof document === 'undefined' || typeof Image === 'undefined' || !dataUrl) {
     return null;
   }
@@ -2272,7 +2311,7 @@ async function inspectDataUrlQcMetrics(dataUrl: string): Promise<VtonQcSliceMetr
         }
         ctx.drawImage(img, 0, 0);
         const rgba = ctx.getImageData(0, 0, w, h).data;
-        const metrics = inspectPixelSliceQc(rgba, w, h);
+        const metrics = inspectPixelSliceQc(rgba, w, h, { studioBackdropHex });
         c.width = 0;
         c.height = 0;
         resolve(metrics);
@@ -2285,8 +2324,8 @@ async function inspectDataUrlQcMetrics(dataUrl: string): Promise<VtonQcSliceMetr
   });
 }
 
-export const CANONICAL_HUMAN_STATURE_RATIO = 0.72;
-export const CANONICAL_FLOOR_BASELINE_RATIO = 0.945;
+export const CANONICAL_HUMAN_STATURE_RATIO = 0.79;
+export const CANONICAL_FLOOR_BASELINE_RATIO = 0.955;
 export const CANONICAL_PORTRAIT_ASPECT_RATIO = 0.75;
 
 export interface CoreHumanVerticalBounds {
@@ -4503,9 +4542,20 @@ function drawGuideSilhouetteMannequin(
     footSoleY: number;
     bmiScale: number;
     angleDeg: TurnaroundAngleDeg;
+    bagCarrySide?: 'left' | 'right' | null;
   }
 ): void {
-  const { cx, rowTop, cellW, cellH, headTopY, footSoleY, bmiScale, angleDeg } = params;
+  const {
+    cx,
+    rowTop,
+    cellW,
+    cellH,
+    headTopY,
+    footSoleY,
+    bmiScale,
+    angleDeg,
+    bagCarrySide = null,
+  } = params;
   const figH = Math.max(120, footSoleY - headTopY);
   const headH = figH / 7.5;
 
@@ -4713,6 +4763,34 @@ function drawGuideSilhouetteMannequin(
     ctx.fill();
   }
 
+  // Subtle anatomical bag placement block on IMAGE-RIGHT / IMAGE-LEFT so Gemini locks the bag to ONE shoulder across 360°
+  if (bagCarrySide === 'left' || bagCarrySide === 'right') {
+    const isFrontHalf = angleDeg === 0 || angleDeg === 45;
+    const isRearHalf = angleDeg === 135 || angleDeg === 180 || angleDeg === 225;
+    // Anatomical left = IMAGE-RIGHT (+1) on front half, IMAGE-LEFT (-1) on rear half; mirrored for anatomical right
+    const leftSign = isFrontHalf ? 1 : isRearHalf ? -1 : 0;
+    const screenDir = bagCarrySide === 'left' ? leftSign : -leftSign;
+    if (screenDir !== 0) {
+      const bagW = headH * 0.64 * widthCompact;
+      const bagH = headH * 0.86;
+      const bagCenterX = cx + screenDir * (hipW * 0.56 + bagW * 0.28);
+      const bagTopY = waistY + headH * 0.16;
+      const strapShoulderX = cx + screenDir * (shoulderW * 0.36);
+      ctx.fillRect(
+        Math.round(Math.min(strapShoulderX, bagCenterX) - 2),
+        Math.round(shoulderY + 2),
+        Math.max(4, Math.round(Math.abs(bagCenterX - strapShoulderX) * 0.24)),
+        Math.round(bagTopY - shoulderY)
+      );
+      ctx.fillRect(
+        Math.round(bagCenterX - bagW * 0.5),
+        Math.round(bagTopY),
+        Math.round(bagW),
+        Math.round(bagH)
+      );
+    }
+  }
+
   ctx.restore();
 }
 
@@ -4727,6 +4805,7 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   backdropHex: string;
   heightCm: number;
   weightKg: number;
+  bagCarrySide?: 'left' | 'right' | null;
 }): string | null {
   if (typeof document === 'undefined') return null;
 
@@ -4735,7 +4814,8 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   const safeW = clamp(Number(params.weightKg) || 64, 35, 160);
   const bmi = safeW / (safeH / 100) ** 2;
   const bmiScale = clamp(1 + (bmi - 22.0) * 0.022, 0.86, 1.24);
-  const memoKey = `v9:${bgR},${bgG},${bgB}:${Math.round(bmiScale * 100)}`;
+  const bagTag = params.bagCarrySide || 'none';
+  const memoKey = `v13:${bgR},${bgG},${bgB}:${Math.round(bmiScale * 100)}:${bagTag}`;
   const cached = turnaround3x2GuideMemo.get(memoKey);
   if (cached) return cached;
 
@@ -4784,6 +4864,7 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
           footSoleY,
           bmiScale,
           angleDeg: gridAngles[row][col],
+          bagCarrySide: params.bagCarrySide || null,
         });
       }
     }
@@ -5033,9 +5114,13 @@ export function buildDirectClientGeminiParts(params: {
     ? 'Stylized Isometric Simulation Character VTON lookbook (matte 3D-stylized studio fashion avatar, unified 7.5-head adult proportions, authentic matte fabric texture, zero photorealistic skin pores, zero chibi distortion).'
     : 'Photorealistic SSENSE/COS Studio VTON lookbook photograph (85mm lens, realistic skin, natural hair/hands, accurate garment drape).';
 
+  const hasEquippedBag = Boolean(serializedSlots.accessory);
+  const bagAnatomy = resolveBagCarryAnatomy(spec.dominantHand);
+  const singleBagLock = hasEquippedBag ? ` [BAG LOCK: ${bagAnatomy.perAngleScreenPrompt[angleDeg]}]` : '';
+
   const cameraLine = turnaroundSheet
-    ? `3:2 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives()}\n${weatherBundle.headroomPrompt} ${SOLO_SINGLE_PERSON_PER_CELL_LOCK} ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`
-    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models). ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`;
+    ? `3:2 Borderless Undivided 3x2 Turnaround Sheet (ONE continuous seamless canvas with STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 PORTRAIT PANELS TOTAL — STRICTLY ZERO white/grey/black vertical or horizontal grid divider lines, ZERO panel borders, NEVER 4 COLUMNS, NEVER 8 FIGURES — on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap under umbrellas, between arms/torso, between legs, and inside bag handles, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero lines/text) of the EXACT SAME person & outfit:\n${buildTurnaround3x2SheetAngleDirectives({ dominantHand: spec.dominantHand, hasEquippedBag })}\n${weatherBundle.headroomPrompt} ${SOLO_SINGLE_PERSON_PER_CELL_LOCK} ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`
+    : `Full-body studio portrait (${angleDeg}°) on 100% flat solid uniform chromakey-free studio (${optimalBackdropHex}) backdrop including 100% flat shadowless ${optimalBackdropHex} inside every enclosed gap, STRICTLY NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, ZERO airborne weather particles, zero text. CAMERA ANGLE REQUIREMENT: ${buildTurnaroundAnglePromptDirective(angleDeg)}${singleBagLock} ${weatherBundle.headroomPrompt} STRICT SINGLE-SUBJECT RULE: Render EXACTLY ONE (1) solitary human figure centered in frame (NEVER draw duplicate/twin models). ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`;
 
   const bmi = Number((profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1));
   const canonicalCharacterBlock = buildCanonicalCharacterIdentityPromptBlock({
@@ -5054,7 +5139,8 @@ export function buildDirectClientGeminiParts(params: {
     styleMode,
     hasPortraitReference: Boolean(profile.portraitDataUrl),
   });
-  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, gender=${profile.gender || 'unisex'}, dominantHand=${spec.dominantHand}, faithful 7.5-head adult body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${canonicalCharacterBlock}\n${weatherBundle.combinedPrompt}`;
+  const bagLockSummary = hasEquippedBag ? `\n${bagAnatomy.crossAngleLockPrompt}` : '';
+  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, gender=${profile.gender || 'unisex'}, dominantHand=${spec.dominantHand}, faithful 7.5-head adult body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${canonicalCharacterBlock}${bagLockSummary}\n${weatherBundle.combinedPrompt}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
@@ -5065,6 +5151,7 @@ export function buildDirectClientGeminiParts(params: {
       backdropHex: optimalBackdropHex,
       heightCm: profile.heightCm,
       weightKg: profile.weightKg,
+      bagCarrySide: hasEquippedBag ? bagAnatomy.carrySide : null,
     });
     const layoutGuidePart = parseDataUrlInlinePart(layoutGuideDataUrl);
     if (layoutGuidePart) {
@@ -5093,7 +5180,6 @@ export function buildDirectClientGeminiParts(params: {
     }
   }
 
-  const bagAnatomy = resolveBagCarryAnatomy(spec.dominantHand);
   const slotPlacementPrompts: Record<string, string> = {
     top: 'worn as the inner base top layer directly over the upper torso (with collar/hem naturally peeking beneath any mid-layer cardigan/vest or outerwear)',
     top_mid:
@@ -5477,28 +5563,52 @@ export async function synthesizeGeminiMultiAngleVton(
           }
         })
       );
-      return {
-        ok: true,
-        fallbackToFlatLay: false,
-        reason: null,
-        mode,
-        provider: 'gemini-vton',
-        styleMode,
-        angleDeg,
-        weatherMood,
-        effectiveWeather,
-        avatarConfigHash: profile.avatarConfigHash,
-        outfitComboId,
-        cacheKey,
-        fromCache: true,
-        cacheLayer: cachedHit.layer,
-        imageUrl: cachedHit.slice.imageUrl,
-        angleSlices,
-        equippedCount: equippedGarments.length,
-        equippedSlotKeys,
-        profile,
-        createdAt: cachedHit.slice.updatedAt,
-      };
+      let cachedQcValid = true;
+      if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
+        const cachedMetrics: Partial<Record<number, VtonQcSliceMetrics>> = {};
+        await Promise.all(
+          Object.entries(angleSlices).map(async ([k, url]) => {
+            if (!url) return;
+            const m = await inspectDataUrlQcMetrics(url);
+            if (m) cachedMetrics[Number(k)] = m;
+          })
+        );
+        if (Object.keys(cachedMetrics).length >= 2) {
+          cachedQcValid = evaluateTurnaroundConsistencyQc(cachedMetrics).ok;
+        } else if (cachedMetrics[angleDeg]) {
+          const cm = cachedMetrics[angleDeg]!;
+          cachedQcValid =
+            !cm.clippedTop &&
+            !cm.clippedBottom &&
+            !cm.halfBody &&
+            cm.fgHeightRatio >= 0.48 &&
+            cm.interiorChromaRatio <= 0.045;
+        }
+      }
+      if (cachedQcValid) {
+        return {
+          ok: true,
+          fallbackToFlatLay: false,
+          reason: null,
+          mode,
+          provider: 'gemini-vton',
+          styleMode,
+          angleDeg,
+          weatherMood,
+          effectiveWeather,
+          avatarConfigHash: profile.avatarConfigHash,
+          outfitComboId,
+          cacheKey,
+          fromCache: true,
+          cacheLayer: cachedHit.layer,
+          imageUrl: cachedHit.slice.imageUrl,
+          angleSlices,
+          equippedCount: equippedGarments.length,
+          equippedSlotKeys,
+          profile,
+          createdAt: cachedHit.slice.updatedAt,
+        };
+      }
     }
   }
 
@@ -5887,36 +5997,75 @@ export async function synthesizeGeminiMultiAngleVton(
             }
           }
 
-          // Last-resort headless/half-body guard: mirror opposite valid rear-quarter slice rather than showing headless crops
-          for (const a of badAngles) {
-            const recheck = sliced[a]
-              ? await inspectCutoutDataUrlIntegrity(sliced[a]!)
-              : { ok: false };
-            if (!recheck.ok) {
-              const mirrorPartner: Partial<Record<TurnaroundAngleDeg, TurnaroundAngleDeg[]>> = {
-                135: [225, 90],
-                225: [135, 90],
-                180: [135, 225],
-              };
-              const candidates = mirrorPartner[a] || [];
-              for (const partnerAngle of candidates) {
-                if (!sliced[partnerAngle]) continue;
-                const partnerCheck = await inspectCutoutDataUrlIntegrity(sliced[partnerAngle]!);
-                if (partnerCheck.ok) {
-                  sliced[a] =
-                    partnerAngle === 135 || partnerAngle === 225
-                      ? a === 180
-                        ? sliced[partnerAngle]!
-                        : await flipDataUrlHorizontally(sliced[partnerAngle]!)
-                      : await flipDataUrlHorizontally(sliced[partnerAngle]!);
-                  break;
+          const hasAsymmetricOutfit = equippedSlotKeys.some(
+            (sk) =>
+              sk === 'accessory' ||
+              sk === 'acc_umbrella' ||
+              sk === 'umbrella' ||
+              sk.endsWith('_left') ||
+              sk.endsWith('_right')
+          );
+
+          // Last-resort headless/half-body guard ONLY for symmetric outfits (never flip asymmetric bags/umbrellas onto the wrong shoulder!)
+          if (!hasAsymmetricOutfit) {
+            for (const a of badAngles) {
+              const recheck = sliced[a]
+                ? await inspectCutoutDataUrlIntegrity(sliced[a]!)
+                : { ok: false };
+              if (!recheck.ok) {
+                const mirrorPartner: Partial<Record<TurnaroundAngleDeg, TurnaroundAngleDeg[]>> = {
+                  135: [225, 90],
+                  225: [135, 90],
+                  180: [135, 225],
+                };
+                const candidates = mirrorPartner[a] || [];
+                for (const partnerAngle of candidates) {
+                  if (!sliced[partnerAngle]) continue;
+                  const partnerCheck = await inspectCutoutDataUrlIntegrity(sliced[partnerAngle]!);
+                  if (partnerCheck.ok) {
+                    sliced[a] =
+                      partnerAngle === 135 || partnerAngle === 225
+                        ? a === 180
+                          ? sliced[partnerAngle]!
+                          : await flipDataUrlHorizontally(sliced[partnerAngle]!)
+                        : await flipDataUrlHorizontally(sliced[partnerAngle]!);
+                    break;
+                  }
                 }
               }
             }
           }
 
+          const qcBackdropHex = selectOptimalStudioKeyHex(
+            extractStudioKeyColorInputs(serializedSlots)
+          );
+
+          // Pre-normalization QC: catch cropped / thigh-cut / headless raw slices BEFORE floor-baseline rescaling masks fgHeightRatio!
+          let preNormQcPassed = true;
+          if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
+            const rawMetricsByAngle: Partial<Record<number, VtonQcSliceMetrics>> = {};
+            await Promise.all(
+              TURNAROUND_ANGLES.map(async (a) => {
+                const rawUrl = sliced[a];
+                if (!rawUrl) return;
+                const m = await inspectDataUrlQcMetrics(rawUrl, qcBackdropHex);
+                if (m) rawMetricsByAngle[a] = m;
+              })
+            );
+            if (Object.keys(rawMetricsByAngle).length > 0) {
+              const rawQc = evaluateTurnaroundConsistencyQc(rawMetricsByAngle);
+              lastQcReport = rawQc;
+              if (rawQc.frontValid && sliced[0]) {
+                const zeroMap: Partial<Record<TurnaroundAngleDeg, string>> = { 0: sliced[0] };
+                await normalizeTurnaroundDataUrlsToFloorBaseline(zeroMap);
+                bestValidZeroSlice = zeroMap[0] || sliced[0];
+              }
+              preNormQcPassed = rawQc.ok;
+            }
+          }
+
           // Re-normalize ALL 6 final slices together after single-angle repairs so every angle
-          // shares identical 3:4 aspect canvas dimensions, 0.94 floor baseline, uniform height, and dead-center spine X.
+          // shares identical 3:4 aspect canvas dimensions, 0.955 floor baseline, uniform 0.79 height, and dead-center spine X.
           await normalizeTurnaroundDataUrlsToFloorBaseline(sliced);
 
           for (const a of TURNAROUND_ANGLES) {
@@ -5950,6 +6099,10 @@ export async function synthesizeGeminiMultiAngleVton(
               updatedAt: now,
             });
           }
+
+          if (!preNormQcPassed) {
+            continue;
+          }
         } else if (rawComposite) {
           const cutoutComposite = await ensureTransparentCutout(
             await removeModelBackgroundToPng(rawComposite)
@@ -5982,12 +6135,15 @@ export async function synthesizeGeminiMultiAngleVton(
 
         // Pre-display Pixel QC verification across all generated angles (browser runtime)
         let qcPassed = true;
+        const postQcBackdropHex = selectOptimalStudioKeyHex(
+          extractStudioKeyColorInputs(serializedSlots)
+        );
         if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
           const metricsByAngle: Partial<Record<number, VtonQcSliceMetrics>> = {};
           await Promise.all(
             Object.entries(angleSlices).map(async ([k, url]) => {
               if (!url) return;
-              const m = await inspectDataUrlQcMetrics(url);
+              const m = await inspectDataUrlQcMetrics(url, postQcBackdropHex);
               if (m) {
                 metricsByAngle[Number(k)] = m;
               }
@@ -6028,13 +6184,10 @@ export async function synthesizeGeminiMultiAngleVton(
             angleSlices[0] &&
             (synthesisSource === 'browser-gemini' || synthesisSource === 'gemini')
           ) {
-            const anchorBackdropHex = selectOptimalStudioKeyHex(
-              extractStudioKeyColorInputs(serializedSlots)
-            );
             await saveCharacterIdentityAnchorFromZeroSlice({
               anchorKey: characterAnchorKey,
               zeroSliceDataUrl: angleSlices[0],
-              backdropHex: anchorBackdropHex,
+              backdropHex: postQcBackdropHex,
             });
           }
           break;
@@ -6042,6 +6195,83 @@ export async function synthesizeGeminiMultiAngleVton(
       }
 
       if (!passedSlices) {
+        // Rescue attempt: if all 3 multi-angle sheet attempts failed QC and even 0° was invalid,
+        // synthesize a single dedicated 0° front portrait so we can honor the 3s front-only fallback cleanly.
+        if (!bestValidZeroSlice && !isFatalReason(lastFailureReason) && !request.signal?.aborted) {
+          try {
+            let rescueRaw: string | null = null;
+            if (!isStaticStandalone) {
+              const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
+              if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+              const serverRescue = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+                method: 'POST',
+                headers: reqHeaders,
+                body: JSON.stringify({
+                  mode,
+                  styleMode,
+                  viewAngleDeg: 0,
+                  turnaroundSheet: false,
+                  weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                  avatarSpec: effectiveProfile.avatarSpec,
+                  avatarConfigHash: effectiveProfile.avatarConfigHash,
+                  portraitDataUrl: effectivePortraitUrl,
+                  profile: {
+                    gender: effectiveProfile.gender,
+                    dominantHand: effectiveProfile.dominantHand,
+                    skinToneHex: effectiveProfile.skinToneHex,
+                    personalColor: effectiveProfile.personalColor,
+                    heightCm: effectiveProfile.heightCm,
+                    weightKg: effectiveProfile.weightKg,
+                    bodyShape: effectiveProfile.bodyShape,
+                    shoulderScale: effectiveProfile.shoulderScale,
+                    waistScale: effectiveProfile.waistScale,
+                    hipScale: effectiveProfile.hipScale,
+                    portraitDataUrl: effectivePortraitUrl,
+                    avatarSpec: effectiveProfile.avatarSpec,
+                    avatarConfigHash: effectiveProfile.avatarConfigHash,
+                    styleMode,
+                    viewAngleDeg: 0,
+                    turnaroundSheet: false,
+                  },
+                  slots: serializedSlots,
+                  forceRefresh: true,
+                }),
+              });
+              rescueRaw = sanitizeImageCandidate(
+                serverRescue?.compositeImageUrl ?? serverRescue?.afterImageUrl ?? null
+              );
+            }
+            if (!rescueRaw && clientGeminiKeys.length > 0) {
+              const rescueDirect = await synthesizeDirectBrowserGeminiVton({
+                apiKey: clientGeminiKeys[0],
+                profile: effectiveProfile,
+                styleMode,
+                weatherMood,
+                weather: request.weather,
+                angleDeg: 0,
+                useTurnaroundSheet: false,
+                serializedSlots,
+              });
+              rescueRaw = sanitizeImageCandidate(
+                rescueDirect?.compositeImageUrl ?? rescueDirect?.afterImageUrl ?? null
+              );
+            }
+            if (rescueRaw) {
+              const rescueCut = await ensureTransparentCutout(
+                await removeModelBackgroundToPng(rescueRaw)
+              );
+              const rescueCheck = await inspectCutoutDataUrlIntegrity(rescueCut);
+              if (rescueCheck.ok) {
+                const rescueMap: Partial<Record<TurnaroundAngleDeg, string>> = { 0: rescueCut };
+                await normalizeTurnaroundDataUrlsToFloorBaseline(rescueMap);
+                bestValidZeroSlice = rescueMap[0] || rescueCut;
+              }
+            }
+          } catch {
+            // Ignore rescue error and fall back gracefully
+          }
+        }
+
         if (!isFatalReason(lastFailureReason)) {
           logVtonQcFailure({
             outfitComboId,

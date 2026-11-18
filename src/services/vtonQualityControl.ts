@@ -4,6 +4,8 @@ export type StageAuraTier = 'C' | 'B' | 'A' | 'S';
 export const VTON_QC_LOG_STORAGE_KEY = 'ainventory_vton_qc_failures_v1';
 const MAX_QC_LOG_ENTRIES = 30;
 
+export type BagViewerScreenPlacement = 'screen-left' | 'screen-right' | 'far-occluded';
+
 export interface BagCarryAnatomyDirective {
   dominantHand: DominantHand;
   carrySide: 'left' | 'right';
@@ -12,12 +14,17 @@ export interface BagCarryAnatomyDirective {
   carryLabelEn: string;
   slotPrompt: string;
   crossAngleLockPrompt: string;
+  perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement>;
+  perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string>;
 }
 
 /**
- * Enforces realistic anatomical handedness for bag carry:
- * - Right-handed wearer keeps right arm/hand free and carries bags on ANATOMICAL LEFT arm/shoulder.
- * - Left-handed wearer keeps left arm/hand free and carries bags on ANATOMICAL RIGHT arm/shoulder.
+ * Enforces realistic anatomical handedness AND explicit per-angle viewer screen-left/screen-right
+ * coordinates for bag carry so multi-angle generation never swaps shoulders between front and back:
+ * - Right-handed wearer keeps right arm/hand free and carries bags on ANATOMICAL LEFT arm/shoulder
+ *   (VIEWER'S RIGHT on 0°/45°, occluded behind torso on 90°, VIEWER'S LEFT on 135°/180°/225°).
+ * - Left-handed wearer keeps left arm/hand free and carries bags on ANATOMICAL RIGHT arm/shoulder
+ *   (VIEWER'S LEFT on 0°/45°, foreground right side on 90°, VIEWER'S RIGHT on 135°/180°, far right on 225°).
  */
 export function resolveBagCarryAnatomy(
   rawDominantHand?: unknown
@@ -30,6 +37,22 @@ export function resolveBagCarryAnatomy(
       : 'right';
 
   if (normalized === 'left') {
+    const perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement> = {
+      0: 'screen-left',
+      45: 'screen-left',
+      90: 'screen-right',
+      135: 'screen-right',
+      180: 'screen-right',
+      225: 'far-occluded',
+    };
+    const perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string> = {
+      0: "0° Front: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL RIGHT shoulder/arm/hand); wearer's left arm on IMAGE-RIGHT MUST be 100% empty.",
+      45: "45° Front-Right: Bag MUST sit in foreground on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL RIGHT shoulder/arm/hand); far left arm on IMAGE-RIGHT is 100% empty.",
+      90: "90° Right Side Profile: Wearer's right side faces camera so the bag is CLEARLY VISIBLE in foreground on the right shoulder/hand.",
+      135: "135° Back-Right: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL RIGHT shoulder/arm/hand); left shoulder on IMAGE-LEFT is 100% empty.",
+      180: "180° Straight Back: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL RIGHT shoulder/arm/hand); left side on IMAGE-LEFT is 100% empty.",
+      225: "225° Back-Left: Foreground left shoulder/arm on IMAGE-LEFT MUST be 100% empty; bag stays on wearer's far right side (IMAGE-RIGHT ->).",
+    };
     return {
       dominantHand: 'left',
       carrySide: 'right',
@@ -37,11 +60,30 @@ export function resolveBagCarryAnatomy(
       carryLabelKo: '오른팔 · 오른손 (왼손잡이)',
       carryLabelEn: 'Right arm / shoulder (Left-handed)',
       slotPrompt:
-        "carried EXCLUSIVELY on the model's ANATOMICAL RIGHT shoulder / RIGHT forearm / RIGHT hand across ALL turnaround angles (viewer's LEFT on 0° front view; NEVER switch sides to the left arm)",
+        `carried EXCLUSIVELY on the model's ANATOMICAL RIGHT shoulder / RIGHT forearm / RIGHT hand across ALL turnaround angles — STRICT IMAGE-SIDE COORDINATES: [0° Front = IMAGE-LEFT <- | 45° = IMAGE-LEFT <- | 90° Right Profile = FOREGROUND VISIBLE | 135° Back-Right = IMAGE-RIGHT -> | 180° Back = IMAGE-RIGHT -> | 225° Back-Left = FAR RIGHT SIDE, NEVER on foreground left shoulder!]`,
       crossAngleLockPrompt:
-        "ANATOMICAL HANDEDNESS BAG-CARRY LOCK (LEFT-HANDED WEARER -> RIGHT SIDE CARRY): Keep the wearer's dominant ANATOMICAL LEFT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/briefcase MUST stay consistently on the wearer's ANATOMICAL RIGHT shoulder/arm/hand without swapping sides between front, side, and back views.",
+        `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (LEFT-HANDED WEARER -> RIGHT SIDE CARRY): Keep the wearer's dominant ANATOMICAL LEFT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/crossbody/briefcase MUST stay locked to the wearer's ANATOMICAL RIGHT shoulder/arm/hand with exact camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
+      perAngleScreenSide,
+      perAngleScreenPrompt,
     };
   }
+
+  const perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement> = {
+    0: 'screen-right',
+    45: 'screen-right',
+    90: 'far-occluded',
+    135: 'screen-left',
+    180: 'screen-left',
+    225: 'screen-left',
+  };
+  const perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string> = {
+    0: "0° Front: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL LEFT shoulder/arm/hand); wearer's right arm on IMAGE-LEFT MUST be 100% empty (NEVER place bag on IMAGE-LEFT at 0°!).",
+    45: "45° Front-Right: Bag MUST stay on FAR IMAGE-RIGHT side (wearer's ANATOMICAL LEFT shoulder/arm/hand); foreground right arm on IMAGE-LEFT is 100% empty.",
+    90: "90° Right Side Profile: Foreground right shoulder/arm facing camera MUST be 100% empty (ZERO bag strap over right shoulder); bag stays behind torso on far left side.",
+    135: "135° Back-Right: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand); foreground right shoulder on IMAGE-RIGHT is 100% empty.",
+    180: "180° Straight Back: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand); right side on IMAGE-RIGHT is 100% empty.",
+    225: "225° Back-Left: Bag is PROMINENT in foreground on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand).",
+  };
 
   return {
     dominantHand: 'right',
@@ -50,9 +92,11 @@ export function resolveBagCarryAnatomy(
     carryLabelKo: '왼팔 · 왼손 (오른손잡이)',
     carryLabelEn: 'Left arm / shoulder (Right-handed)',
     slotPrompt:
-      "carried EXCLUSIVELY on the model's ANATOMICAL LEFT shoulder / LEFT forearm / LEFT hand across ALL turnaround angles (viewer's RIGHT on 0° front view; NEVER switch sides to the right arm)",
+      `carried EXCLUSIVELY on the model's ANATOMICAL LEFT shoulder / LEFT forearm / LEFT hand across ALL turnaround angles — STRICT IMAGE-SIDE COORDINATES: [0° Front = IMAGE-RIGHT -> (NEVER IMAGE-LEFT!) | 45° = IMAGE-RIGHT -> | 90° Right Profile = BEHIND TORSO, foreground right arm EMPTY | 135° Back-Right = IMAGE-LEFT <- | 180° Back = IMAGE-LEFT <- | 225° Back-Left = FOREGROUND IMAGE-LEFT <-]`,
     crossAngleLockPrompt:
-      "ANATOMICAL HANDEDNESS BAG-CARRY LOCK (RIGHT-HANDED WEARER -> LEFT SIDE CARRY): Keep the wearer's dominant ANATOMICAL RIGHT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/briefcase MUST stay consistently on the wearer's ANATOMICAL LEFT shoulder/arm/hand without swapping sides between front, side, and back views.",
+      `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (RIGHT-HANDED WEARER -> LEFT SIDE CARRY): Keep the wearer's dominant ANATOMICAL RIGHT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/crossbody/briefcase MUST stay locked to the wearer's ANATOMICAL LEFT shoulder/arm/hand with exact camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
+    perAngleScreenSide,
+    perAngleScreenPrompt,
   };
 }
 
@@ -87,7 +131,27 @@ export interface VtonQcSliceMetrics {
   outfitMeanRgb: [number, number, number] | null;
 }
 
-function isChromaKeyLeakRgb(r: number, g: number, b: number): boolean {
+export interface InspectPixelSliceQcOptions {
+  studioBackdropHex?: string | null;
+}
+
+function parseStudioHexTriplet(rawHex?: string | null): [number, number, number] | null {
+  if (typeof rawHex !== 'string') return null;
+  const clean = rawHex.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(clean)) return null;
+  return [
+    Number.parseInt(clean.slice(1, 3), 16),
+    Number.parseInt(clean.slice(3, 5), 16),
+    Number.parseInt(clean.slice(5, 7), 16),
+  ];
+}
+
+function isChromaKeyLeakRgb(
+  r: number,
+  g: number,
+  b: number,
+  customKeyRgb?: [number, number, number] | null
+): boolean {
   // Legacy green #5E9C7E
   const isGreenKey =
     g > r + 14 &&
@@ -100,18 +164,27 @@ function isChromaKeyLeakRgb(r: number, g: number, b: number): boolean {
     Math.abs(r - 148) <= 16 &&
     Math.abs(g - 163) <= 16 &&
     Math.abs(b - 184) <= 16;
-  return isGreenKey || isSlateHole;
+  if (isGreenKey || isSlateHole) return true;
+  if (customKeyRgb) {
+    const [kr, kg, kb] = customKeyRgb;
+    if (Math.abs(r - kr) <= 16 && Math.abs(g - kg) <= 16 && Math.abs(b - kb) <= 16) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
  * Pure RGBA buffer inspection for a single cut-out VTON angle slice.
- * Evaluates full-body completeness, baseline grounding, horizontal centering,
- * interior unkeyed green/slate pockets, and central garment palette signature.
+ * Evaluates full-body completeness (including cranial head-to-shoulder taper & scale-invariant
+ * thigh-cut detection), baseline grounding, horizontal centering, interior unkeyed chroma pockets,
+ * and central garment palette signature.
  */
 export function inspectPixelSliceQc(
   data: Uint8ClampedArray,
   width: number,
-  height: number
+  height: number,
+  options?: InspectPixelSliceQcOptions
 ): VtonQcSliceMetrics {
   if (width < 16 || height < 16 || data.length < width * height * 4) {
     return {
@@ -226,7 +299,39 @@ export function inspectPixelSliceQc(
       : (minX + maxX) * 0.5;
   const coreCenterXRatio = coreCenterX / Math.max(1, width);
 
-  // Top clip check (headless / waist-down crop)
+  // Measure shoulder/upper-torso max span (16%..36% of fgH) vs top cranial/neck zone (6%..12% of fgH)
+  const shY0 = Math.min(maxY, Math.round(minY + fgH * 0.16));
+  const shY1 = Math.min(maxY, Math.max(shY0, Math.round(minY + fgH * 0.36)));
+  let shoulderMaxSpan = 0;
+  for (let y = shY0; y <= shY1; y += 1) {
+    if (rowSpans[y] > shoulderMaxSpan) shoulderMaxSpan = rowSpans[y];
+  }
+  const topCanopyEndY = Math.min(maxY, Math.round(minY + fgH * 0.15));
+  let maxTop15Span = 0;
+  for (let y = minY; y <= topCanopyEndY; y += 1) {
+    if (rowSpans[y] > maxTop15Span) maxTop15Span = rowSpans[y];
+  }
+  const hasWideOverheadCanopy =
+    shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, width * 0.34);
+
+  // Collar-cut / headless silhouette detector (e.g., decapitated jacket starting directly at collar/deltoids):
+  // A real 7.5-head human without an overhead umbrella has a narrow head/neck in [6%..11% of fgH] (< 80% of shoulder width).
+  const headNeckY0 = Math.min(maxY, Math.round(minY + fgH * 0.06));
+  const headNeckY1 = Math.min(maxY, Math.max(headNeckY0, Math.round(minY + fgH * 0.11)));
+  let minHeadNeckSpan = Infinity;
+  for (let y = headNeckY0; y <= headNeckY1; y += 1) {
+    if (rowSpans[y] > 0 && rowSpans[y] < minHeadNeckSpan) {
+      minHeadNeckSpan = rowSpans[y];
+    }
+  }
+  const headlessCollarCut =
+    !hasWideOverheadCanopy &&
+    fgH >= 36 &&
+    shoulderMaxSpan >= width * 0.22 &&
+    Number.isFinite(minHeadNeckSpan) &&
+    minHeadNeckSpan >= shoulderMaxSpan * 0.82;
+
+  // Top clip check (headless / collar-cut / waist-down crop)
   const topEdgeCount = Math.max(rowCounts[0] || 0, rowCounts[1] || 0, rowCounts[2] || 0);
   const yFlat = Math.min(maxY, minY + 2);
   const topAtMin = rowCounts[minY] || 0;
@@ -236,6 +341,7 @@ export function inspectPixelSliceQc(
   const probeBelow = rowCounts[probeY] || 0;
 
   const clippedTop =
+    headlessCollarCut ||
     (minY <= 2 && topEdgeCount >= Math.max(width * 0.14, medianBodyWidth * 0.52)) ||
     (fgHeightRatio < 0.78 &&
       topAtFlat >= Math.max(width * 0.16, medianBodyWidth * 0.6) &&
@@ -243,27 +349,34 @@ export function inspectPixelSliceQc(
       topAtFlat / topFlatSpan >= 0.62 &&
       probeBelow <= topAtFlat * 1.45);
 
-  // Bottom clip check (cut off at torso/knees flush against canvas bottom)
+  // Bottom clip check (cut off at torso/thighs/knees flush against canvas bottom)
   const botEdgeCount = Math.max(
     rowCounts[height - 1] || 0,
     rowCounts[height - 2] || 0,
-    rowCounts[height - 3] || 0
+    rowCounts[height - 3] || 0,
+    rowCounts[height - 4] || 0
   );
   const clippedBottom =
-    maxY >= height - 3 && botEdgeCount >= Math.max(width * 0.2, medianBodyWidth * 0.62);
+    maxY >= height - 4 && botEdgeCount >= Math.max(width * 0.18, medianBodyWidth * 0.56);
 
-  // Half-body / waist-up check
+  // Half-body / waist-up / thigh-cut check (including scale-invariant aspect ratio so rescaled thigh crops fail!)
   const botTrimY = Math.max(minY, Math.round(maxY - fgH * 0.04));
   let maxBotBar = 0;
   for (let y = botTrimY; y <= maxY; y += 1) {
     if (rowCounts[y] > maxBotBar) maxBotBar = rowCounts[y];
   }
   const heightAspect = fgH / Math.max(1, medianBodyWidth);
+  const scaleInvariantThighCut =
+    !hasWideOverheadCanopy &&
+    heightAspect < 2.08 &&
+    maxBotBar >= medianBodyWidth * 0.56;
   const halfBody =
     fgHeightRatio < 0.44 ||
-    (fgHeightRatio < 0.54 && heightAspect < 2.15 && maxBotBar >= medianBodyWidth * 0.52);
+    scaleInvariantThighCut ||
+    (fgHeightRatio < 0.58 && heightAspect < 2.22 && maxBotBar >= medianBodyWidth * 0.52);
 
   // Interior chroma-key pocket & garment RGB palette inspection
+  const customKeyRgb = parseStudioHexTriplet(options?.studioBackdropHex);
   const chromaY0 = Math.min(maxY, Math.round(minY + fgH * 0.16));
   const chromaY1 = Math.max(chromaY0, Math.round(maxY - fgH * 0.06));
   const outfitY0 = Math.min(maxY, Math.round(minY + fgH * 0.22));
@@ -281,7 +394,10 @@ export function inspectPixelSliceQc(
     let lastNonKey = -1;
     for (let x = minX; x <= maxX; x += 1) {
       const idx = (rowOff + x) * 4;
-      if (data[idx + 3] > 64 && !isChromaKeyLeakRgb(data[idx], data[idx + 1], data[idx + 2])) {
+      if (
+        data[idx + 3] > 64 &&
+        !isChromaKeyLeakRgb(data[idx], data[idx + 1], data[idx + 2], customKeyRgb)
+      ) {
         if (firstNonKey === -1) firstNonKey = x;
         lastNonKey = x;
       }
@@ -294,7 +410,7 @@ export function inspectPixelSliceQc(
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
-        if (isChromaKeyLeakRgb(r, g, b)) {
+        if (isChromaKeyLeakRgb(r, g, b, customKeyRgb)) {
           interiorChromaPixels += 1;
         } else if (y >= outfitY0 && y <= outfitY1) {
           sumR += r;

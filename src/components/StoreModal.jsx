@@ -11,6 +11,7 @@ import {
 import { tx } from '../utils/i18n.ts';
 import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import StoreThreeGachaStage from './three/StoreThreeGachaStage.tsx';
 
 const ROULETTE_CARD_WIDTH = 96;
 const ROULETTE_CARD_GAP = 10;
@@ -219,6 +220,15 @@ export default function StoreModal({
       : revealItem.nameKo
     : '';
   const activeReelCard = reelCards[activeReelIdx] || reelCards[ROULETTE_TARGET_INDEX] || null;
+  const liveGachaTarget =
+    drawPhase === 'spinning'
+      ? activeReelCard || equippedBg
+      : revealItem || equippedBg;
+  const resolvedModalTheme =
+    typeof document !== 'undefined' &&
+    document.documentElement.getAttribute('data-theme') === 'light'
+      ? 'light'
+      : 'dark';
 
   return (
     <ResponsiveSheetModal
@@ -287,6 +297,13 @@ export default function StoreModal({
           data-store-animating={animatingTier ? 'true' : 'false'}
         >
           <div className="stage-store-fx-overlay" aria-hidden="true" />
+
+          <StoreThreeGachaStage
+            phase={drawPhase}
+            activeTier={liveGachaTarget?.tier || 'C'}
+            isOutdoor={Boolean(liveGachaTarget?.isOutdoor)}
+            theme={resolvedModalTheme}
+          />
 
           {drawPhase === 'spinning' ? (
             <div className="stage-store-roulette-stage" data-store-roulette-stage="true">

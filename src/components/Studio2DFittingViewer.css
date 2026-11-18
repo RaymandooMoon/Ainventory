@@ -978,25 +978,58 @@
 
 /* Full-body floor-plane alignment: exact 50% horizontal dead-center + zero top/bottom clipping */
 .studio-2d-model-stage.is-ai-stage .studio-2d-layer {
-  padding: 58px 14px 70px;
+  padding: 56px 12px 66px;
   align-items: flex-end;
 }
 
-/* Keep Flat-Lay outer board bounds 1:1 aligned with AI stage; indent inner header & cards for worn-slot chips */
-.studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-  .studio-2d-model-stage.is-flatlay-stage
-  .editorial-flatlay-header {
-  right: 54px;
+/* Clean full-card Flat-Lay Lookbook elevation: full horizontal card width (weather bar stays visible at top,
+   worn-slot chips & Look 1/2 dock sit cleanly in the reserved bottom rail below the card) */
+.studio-2d-model-stage.is-flatlay-stage .studio-2d-layer {
+  padding: 54px 12px 66px;
+  align-items: stretch;
 }
 
-.studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-staged-bar='true']:not([data-lookbook-overlay='true'])
   .studio-2d-model-stage.is-flatlay-stage
-  .editorial-flatlay-collage,
-.studio-2d-vton-viewer[data-post-login-reveal='true']:not([data-equipped-count='0'])
+  .studio-2d-layer,
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='true']:not([data-lookbook-overlay='true'])
   .studio-2d-model-stage.is-flatlay-stage
-  .editorial-flatlay-collage {
-  left: 48px;
-  right: 52px;
+  .studio-2d-layer {
+  padding-top: 90px;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-2d-model-stage.is-flatlay-stage
+  .studio-2d-layer {
+  padding-bottom: 120px;
+}
+
+/* Hybrid Three.js Spatial Lighting, Perspective Ground & Volumetric Weather Layer (z-12) */
+.studio-three-stage-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none !important;
+  overflow: hidden;
+}
+
+.studio-three-stage-mount,
+.studio-three-stage-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none !important;
+}
+
+/* Avoid expensive per-frame backdrop-filter readbacks over active Three.js WebGL canvas */
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-stage-bg-picker-btn,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .atelier-weather-capsule,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-vton-history-pill-btn,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-weather-look-dock,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-mobile-drawer-hud-btn,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-angle-scroll-dock {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Character-tap unfolded Flat-Lay Lookbook overlay spans full stage width without left-rail squeeze */
@@ -1536,12 +1569,6 @@
   pointer-events: none;
 }
 
-.studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-  .studio-2d-model-stage.is-flatlay-stage
-  .editorial-flatlay-countdown-bar {
-  right: 54px;
-}
-
 .editorial-flatlay-countdown-track {
   width: 100%;
   height: 3px;
@@ -1585,7 +1612,7 @@
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  padding: 6px 6px 22px;
+  padding: 20px 8px 22px;
   border-radius: 14px;
   background: var(--accent-soft-bg);
   border: 1px solid var(--squircle-border);
@@ -1638,34 +1665,40 @@
   height: 100%;
 }
 
-.editorial-flatlay-caption {
-  position: absolute;
-  left: 5px;
-  right: 5px;
-  bottom: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  pointer-events: none;
-}
-
 .editorial-flatlay-slot-tag {
-  flex-shrink: 0;
-  font-size: 0.5rem;
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  z-index: 2;
+  font-size: 0.48rem;
   font-weight: 760;
-  letter-spacing: 0.06em;
-  padding: 1px 5px;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  padding: 2px 5px;
   border-radius: var(--radius-pill);
   background: var(--bg-elevated);
   border: 1px solid var(--squircle-border);
   color: var(--ink-secondary);
+  pointer-events: none;
+}
+
+.editorial-flatlay-caption {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  pointer-events: none;
 }
 
 .editorial-flatlay-item-name {
-  font-size: 0.61rem;
-  font-weight: 650;
+  width: 100%;
+  text-align: center;
+  font-size: 0.64rem;
+  font-weight: 660;
   color: var(--ink-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -1763,6 +1796,10 @@
   pointer-events: none;
 }
 
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-stage-aura[data-aura-tier='S'] {
+  animation: none;
+}
+
 .editorial-vton-shimmer-overlay::after {
   content: '';
   position: absolute;
@@ -1777,9 +1814,10 @@
   animation: studioVtonShimmer 1.5s var(--spring-ease) infinite;
 }
 
-.studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
   .editorial-vton-shimmer-overlay {
-  padding-right: 60px;
+  inset: 90px 12px 66px;
+  padding-right: 16px;
 }
 
 .editorial-vton-shimmer-card {
@@ -2934,14 +2972,14 @@ html[data-vibrancy-fallback='solid']
 .studio-vton-staged-bar,
 .studio-vton-pinned-banner {
   position: absolute;
-  top: 56px;
-  left: 58px;
-  right: 58px;
+  top: 50px;
+  left: 12px;
+  right: 12px;
   width: fit-content;
-  max-width: calc(100% - 116px);
+  max-width: calc(100% - 24px);
   margin-inline: auto;
   z-index: 58;
-  padding: 5px 7px;
+  padding: 5px 8px;
   border-radius: var(--radius-pill);
   background: var(--glass-bg-dense);
   border: 1px solid var(--glass-border);
@@ -3250,6 +3288,62 @@ html[data-vibrancy-fallback='solid']
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
+}
+
+/* In Flat-Lay Lookbook view (no AI character rendered yet), dock worn chips & Look 1/2 cleanly
+   in the single horizontal bottom rail below the Flat-Lay card so ZERO side buttons overlap cards */
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-worn-slots-dock {
+  top: auto;
+  bottom: 8px;
+  left: 106px;
+  right: 12px;
+  width: auto;
+  max-height: 54px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-worn-slot-chip {
+  width: 40px;
+  height: 40px;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-weather-look-dock {
+  bottom: 12px;
+  left: 12px;
+  flex-direction: row;
+  padding: 3px 4px;
+  border-radius: var(--radius-pill);
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-mobile-drawer-hud-btn {
+  bottom: 11px;
+  right: 10px;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-worn-slots-dock {
+  bottom: 62px;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-weather-look-dock {
+  bottom: 66px;
+}
+
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-mobile-drawer-hud-btn {
+  bottom: 65px;
 }
 
 .studio-2d-vton-viewer .studio-worn-slots-dock::-webkit-scrollbar {
@@ -5449,82 +5543,70 @@ html[data-vibrancy-fallback='solid']
    14. MOBILE OUTFITS FLAT-LAY & OLED HUD CLEARANCE (< 600px)
    ========================================================================== */
 @media (max-width: 599px) {
-  .studio-2d-vton-viewer .studio-worn-slots-dock {
+  .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-worn-slots-dock {
     bottom: 106px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
     .studio-worn-slots-dock {
-    top: 52px;
-    bottom: 106px;
-    left: auto;
-    right: 8px;
+    top: auto;
+    bottom: 8px;
+    left: 104px;
+    right: 56px;
     width: auto;
-    max-height: none;
-    flex-direction: column;
+    max-height: 54px;
+    flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
-    padding: 6px 7px 10px 6px;
-    overflow-x: visible;
-    overflow-y: auto;
-    touch-action: pan-y;
+    padding: 5px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
     .studio-worn-slot-chip {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-    .studio-vton-staged-bar,
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-    .studio-vton-pinned-banner {
-    top: 52px;
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-2d-model-stage.is-flatlay-stage
+    .studio-2d-layer {
+    padding-bottom: 152px;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-worn-slots-dock {
+    bottom: 92px;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-weather-look-dock {
     left: 10px;
-    right: 58px;
-    max-width: calc(100% - 68px);
-    z-index: 65;
+    right: auto;
+    bottom: 96px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-    .studio-2d-model-stage.is-flatlay-stage
-    .editorial-flatlay-header {
-    right: 48px;
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-mobile-drawer-hud-btn {
+    bottom: 95px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-    .studio-2d-model-stage.is-flatlay-stage
-    .editorial-flatlay-collage,
-  .studio-2d-vton-viewer[data-post-login-reveal='true']:not([data-equipped-count='0'])
-    .studio-2d-model-stage.is-flatlay-stage
-    .editorial-flatlay-collage {
-    left: 44px;
-    right: 48px;
-  }
-
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-top-banner='true']:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
-    .studio-2d-model-stage.is-flatlay-stage
-    .editorial-flatlay-board {
-    padding-top: 40px;
-  }
-
-  .studio-2d-vton-viewer[data-has-status-capsule='true'][data-angle-dock-visible='false']
+  .studio-2d-vton-viewer[data-stage-view='ai-vton'][data-has-status-capsule='true'][data-angle-dock-visible='false']
     .studio-weather-look-dock {
     left: 10px;
     right: auto;
     bottom: 92px;
   }
 
-  .studio-2d-vton-viewer[data-has-status-capsule='true'][data-angle-dock-visible='false']
+  .studio-2d-vton-viewer[data-stage-view='ai-vton'][data-has-status-capsule='true'][data-angle-dock-visible='false']
     .studio-mobile-drawer-hud-btn {
     bottom: 92px;
   }
 
-  .studio-2d-vton-viewer[data-has-status-capsule='true'][data-angle-dock-visible='false']
-    .studio-worn-slots-dock,
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-vton-loading='false']:not([data-lookbook-overlay='true'])[data-has-status-capsule='true'][data-angle-dock-visible='false']
+  .studio-2d-vton-viewer[data-stage-view='ai-vton'][data-has-status-capsule='true'][data-angle-dock-visible='false']
     .studio-worn-slots-dock {
     bottom: 138px;
   }
@@ -5538,17 +5620,20 @@ html[data-vibrancy-fallback='solid']
     gap: 6px;
   }
 
-  .editorial-flatlay-collage[data-flatlay-count='5']:not(.is-scrollable) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: none;
-    grid-auto-rows: minmax(68px, 1fr);
+  /* Keep 2 spacious columns on mobile even for 5-10 layered items so Korean garment titles never truncate to 1 syllable */
+  .editorial-flatlay-collage[data-flatlay-count='5'],
+  .editorial-flatlay-collage[data-flatlay-count='6'],
+  .editorial-flatlay-collage[data-flatlay-count='7'],
+  .editorial-flatlay-collage[data-flatlay-count='8'],
+  .editorial-flatlay-collage[data-flatlay-count='9'],
+  .editorial-flatlay-collage[data-flatlay-count='10'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: none !important;
+    grid-auto-rows: minmax(90px, 1fr);
     overflow-y: auto;
   }
 
-  .editorial-flatlay-collage[data-flatlay-count='5']:not(.is-scrollable) > .editorial-flatlay-item {
-    grid-column: span 1;
-  }
-
+  .editorial-flatlay-collage[data-flatlay-count='5']:not(.is-scrollable) > .editorial-flatlay-item,
   .editorial-flatlay-collage[data-flatlay-count='5']:not(.is-scrollable)
     > .editorial-flatlay-item:nth-child(4) {
     grid-column: span 1;
@@ -6587,6 +6672,42 @@ html[data-vibrancy-fallback='solid']
   text-overflow: ellipsis;
 }
 
+/* 3D Atelier Showcase Capsule / Objet Gacha Stage (StoreModal) */
+.store-three-gacha-stage {
+  position: relative;
+  width: 100%;
+  height: 176px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse 85% 75% at 50% 62%,
+    rgba(255, 250, 240, 0.08) 0%,
+    rgba(12, 12, 14, 0.24) 100%
+  );
+  border: 1px solid var(--squircle-border);
+  pointer-events: none;
+}
 
+[data-theme='light'] .store-three-gacha-stage {
+  background: radial-gradient(
+    ellipse 85% 75% at 50% 62%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(226, 224, 218, 0.48) 100%
+  );
+}
 
+.store-three-gacha-stage[data-gacha-tier='S'] {
+  border-color: rgba(212, 175, 55, 0.45);
+}
 
+.store-three-gacha-stage[data-gacha-tier='A'] {
+  border-color: rgba(148, 163, 184, 0.42);
+}
+
+.store-three-gacha-mount,
+.store-three-gacha-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

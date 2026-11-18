@@ -20,8 +20,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v12-uniform-stature-360';
+export const CUTOUT_PIPELINE_VERSION = 'v13-qc-handedness-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v12-uniform-stature-360',
   'v11-fullbody-cleanhole-360',
   'v10-fullbody-cleanhole-360',
   'v9-solo-avatar-symmetric-shoes',
@@ -89,8 +90,8 @@ const NAMED_STUDIO_COLLISION_COLOR_RULES: ReadonlyArray<{
     collidesWithCoolSlate: true,
   },
   {
-    pattern: /스카이\s*블루|sky\s*blue/i,
-    rgb: [135, 182, 219],
+    pattern: /스카이\s*블루|라이트\s*블루|데님|인디고|청바지|네이비|블루|sky\s*blue|light\s*blue|\bdenim\b|\bindigo\b|\bjeans\b|\bnavy\b|\bblue\b/i,
+    rgb: [108, 142, 178],
     collidesWithCoolSlate: true,
   },
   {
@@ -547,25 +548,38 @@ export const FOOTWEAR_PAIR_SYMMETRY_LOCK =
 export const CRISP_GARMENT_WEAVE_SHARPNESS_LOCK =
   'CRISP GARMENT & EDGE DEFINITION LOCK: Render razor-sharp tailoring edges, crisp collar/lapel stitching, clear button/zipper hardware, natural micro-weave fabric grain (wool, denim twill, rib knit, brushed cotton, full-grain leather), and ultra-clean outer silhouette separation with zero motion blur, painterly smear, or fuzzy halos.';
 
-export function buildTurnaround3x2SheetAngleDirectives(): string {
+export function buildTurnaround3x2SheetAngleDirectives(options?: {
+  dominantHand?: DominantHand | string | null;
+  hasEquippedBag?: boolean;
+}): string {
+  const bagAnatomy = options?.hasEquippedBag
+    ? resolveBagCarryAnatomy(options?.dominantHand)
+    : null;
+  const suffix = (angle: 0 | 45 | 90 | 135 | 180 | 225) =>
+    bagAnatomy ? ` [BAG LOCK: ${bagAnatomy.perAngleScreenPrompt[angle]}]` : '';
+
   return [
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
     `  * ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
     `  * ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
+    ...(bagAnatomy ? [`  * ${bagAnatomy.crossAngleLockPrompt}`] : []),
     '  * STRICT 3x2 UNDIVIDED GRID TOPOLOGY (ZERO GRID/DIVIDER LINES): Arrange STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL on ONE continuous undivided solid background — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames! Keep an empty >=6% solid horizontal gutter between Row 1 shoe soles (ending around y=46%) and Row 2 head crowns (starting around y=54%) so Row 1 and Row 2 NEVER touch or overlap vertically.',
     '  * TOP ROW (y=2%..46%) = FRONT & PURE 90° SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
-    `    - [Top-Left (Row 1, Col 1) — 0° Direct Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}`,
-    `    - [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}`,
-    `    - [Top-Right (Row 1, Col 3) — 90° PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->, 1 EYE, SIDE NOSE, ZERO BACK VENT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}`,
+    `    - [Top-Left (Row 1, Col 1) — 0° Direct Front]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[0]}${suffix(0)}`,
+    `    - [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[45]}${suffix(45)}`,
+    `    - [Top-Right (Row 1, Col 3) — 90° PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->, 1 EYE, SIDE NOSE, ZERO BACK VENT)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[90]}${suffix(90)}`,
     '  * BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (FULL HEAD TO SHOES INSIDE ROW 2):',
-    `    - [Bottom-Left (Row 2, Col 1) — 135° Back-Right Rear-Quarter (FACING AWAY RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[135]}`,
-    `    - [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Straight Back (ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}`,
-    `    - [Bottom-Right (Row 2, Col 3) — 225° Back-Left Rear-Quarter (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[225]}`,
+    `    - [Bottom-Left (Row 2, Col 1) — 135° Back-Right Rear-Quarter (FACING AWAY RIGHT ->)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[135]}${suffix(135)}`,
+    `    - [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Straight Back (ZERO FACE)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[180]}${suffix(180)}`,
+    `    - [Bottom-Right (Row 2, Col 3) — 225° Back-Left Rear-Quarter (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: ${CANONICAL_ANGLE_PROMPT_DIRECTIVES[225]}${suffix(225)}`,
   ].join('\n');
 }
 
-export function buildTurnaround2x2SheetAngleDirectives(): string {
-  return buildTurnaround3x2SheetAngleDirectives();
+export function buildTurnaround2x2SheetAngleDirectives(options?: {
+  dominantHand?: DominantHand | string | null;
+  hasEquippedBag?: boolean;
+}): string {
+  return buildTurnaround3x2SheetAngleDirectives(options);
 }
 
 export type CanonicalAvatarGender = 'male' | 'female' | 'unisex';

@@ -261,7 +261,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v11-fullbody-cleanhole-360';
+const CACHE_SCHEMA_VERSION = 'v13-qc-handedness-360';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -1737,7 +1737,8 @@ function isResolvedSwimwearItem(item) {
 function buildEditorialStyleAndBodyPrompt(
   profile,
   hasEquippedUmbrella = false,
-  backdropHex = CUTOUT_STAGE_HEX
+  backdropHex = CUTOUT_STAGE_HEX,
+  hasEquippedBag = false
 ) {
   const pcDesc =
     PERSONAL_COLOR_DESCRIPTIONS[profile.personalColor] ||
@@ -1807,13 +1808,13 @@ function buildEditorialStyleAndBodyPrompt(
         `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
         '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
         '- TOP ROW (y=2%..46%) = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
-        '  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.',
-        "  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).",
-        "  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT. [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]",
+        `  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[0]}]` : ''}`,
+        `  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[45]}]` : ''}`,
+        `  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[90]}]` : ''} [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]`,
         '- BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (100% FULL-BODY WITH FULL HEAD & SHOES INSIDE BOTTOM ROW):',
-        "  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-RIGHT, diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.",
-        '  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).',
-        "  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between -90° left profile and 180° straight back; show back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-LEFT, diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left (preserving exact anatomical left/right bag and watch placement), and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).",
+        `  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-RIGHT, diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[135]}]` : ''}`,
+        `  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[180]}]` : ''}`,
+        `  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between -90° left profile and 180° straight back; show back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-LEFT, diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left (preserving exact anatomical left/right bag and watch placement), and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[225]}]` : ''}`,
         '- Render ZERO grid lines, ZERO white/grey divider bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
@@ -1942,9 +1943,17 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const backdropHex = selectOptimalStudioKeyHex(equippedColorInputs);
 
   const hasEquippedUmbrella = Boolean(resolvedSlots.acc_umbrella);
+  const hasEquippedBag = Boolean(resolvedSlots.accessory);
   const effectiveWeather = profile.weatherMood?.effectiveWeather || 'clear';
   const parts = [
-    { text: buildEditorialStyleAndBodyPrompt(profile, hasEquippedUmbrella, backdropHex) },
+    {
+      text: buildEditorialStyleAndBodyPrompt(
+        profile,
+        hasEquippedUmbrella,
+        backdropHex,
+        hasEquippedBag
+      ),
+    },
   ];
   appendPortraitParts(parts, profile);
 
@@ -2034,6 +2043,11 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   parts.push({ text: layeringRules.join('\n') });
 
   const bagAnatomy = resolveBagCarryAnatomy(profile.dominantHand);
+  if (resolvedSlots.accessory) {
+    parts.push({
+      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER & SCREEN-SIDE LOCK]: ${bagAnatomy.crossAngleLockPrompt}`,
+    });
+  }
   for (const slot of equippedKeys) {
     const item = resolvedSlots[slot];
     const placementCue =

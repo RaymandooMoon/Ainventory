@@ -79,6 +79,7 @@ import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+import StudioThreeStageLayer from './three/StudioThreeStageLayer.tsx';
 import WeatherCanvasOverlay from './WeatherCanvasOverlay.tsx';
 import '../styles/atelierTokens.css';
 import './Studio2DFittingViewer.css';
@@ -166,6 +167,7 @@ const ASYMMETRIC_ITEM_SLOT_KEYS = [
   'jwl_ring_left',
   'jwl_ring_right',
 ];
+void ASYMMETRIC_ITEM_SLOT_KEYS;
 
 const WEATHER_CAPSULE_SHORT_LABELS = {
   rain: { ko: '비', en: 'Rain' },
@@ -764,14 +766,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const { acc_umbrella: _omitted, ...rest } = slots;
     return rest;
   }, [isStageOutdoor, slots]);
-
-  const hasAsymmetricItems = useMemo(
-    () =>
-      Boolean(
-        vtonSlots && ASYMMETRIC_ITEM_SLOT_KEYS.some((key) => Boolean(vtonSlots[key]))
-      ),
-    [vtonSlots]
-  );
 
   const weatherBadgeMeta = useMemo(
     () => getWeatherStageBadgeMeta(weather, resolvedLang),
@@ -1947,7 +1941,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         modelImageUrl={resolvedAiImageUrl}
         stageMode={stageMode}
         equippedCount={equippedCount}
-        mirrorX={hasAsymmetricItems ? false : angleSpec.mirrorX || pinnedHistoryForceMirrorX}
+        mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
         zoom={zoom}
         idealBaseScale={1}
         pan={pan}
@@ -1956,6 +1950,20 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         hasArchitecturalBackdrop={true}
         isOutdoor={isStageOutdoor}
       />
+
+      {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Ground Contact, Camera Parallax & Volumetric Weather */}
+      {Boolean(resolvedAiImageUrl) && stageMode === 'ai-vton' && !canReturnToCharacter && (
+        <StudioThreeStageLayer
+          isOutdoor={isStageOutdoor}
+          weatherMode={stageEffectiveWeather}
+          timeOfDay={timeOfDay}
+          auraTier={auraTier}
+          theme={resolvedTheme}
+          angleScrollDeg={angleScrollDeg}
+          paused={false}
+          hasCharacter={true}
+        />
+      )}
 
       {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
       {aiLoading && !postLoginRevealActive && (
@@ -2165,7 +2173,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         personReferenceUrl={activeFacePhotoUrl}
         viewAngleDeg={viewAngleDeg}
         scrollResidualYawDeg={scrollResidualYawDeg}
-        forceMirrorX={hasAsymmetricItems ? false : pinnedHistoryForceMirrorX}
+        forceMirrorX={pinnedHistoryForceMirrorX}
         onSwipeRotate={frontOnlyDegraded ? undefined : handleSwipeRotate}
         onTapCharacter={handleTapCharacter}
         onCloseFlatLay={handleCloseFlatLay}
@@ -2179,7 +2187,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         onPanChange={setPan}
         onIdealScaleChange={setIdealBaseScale}
         auraTier={auraTier}
-        hasAsymmetricItems={hasAsymmetricItems}
         postLoginRevealActive={postLoginRevealActive}
         postLoginProgress={postLoginProgress}
         onUserInteractFlatLay={handleUserInteractFlatLay}

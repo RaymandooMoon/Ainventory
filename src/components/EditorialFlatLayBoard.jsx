@@ -283,6 +283,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                   }
                 }}
               >
+                <span className="editorial-flatlay-slot-tag">{slotBadge}</span>
                 <div className="editorial-flatlay-cutout-wrap">
                   <StudioGarmentImage
                     item={garment}
@@ -298,7 +299,6 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                   />
                 </div>
                 <span className="editorial-flatlay-caption">
-                  <span className="editorial-flatlay-slot-tag">{slotBadge}</span>
                   <span className="editorial-flatlay-item-name">{displayName}</span>
                 </span>
               </div>
@@ -401,7 +401,6 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   onPanChange,
   onIdealScaleChange,
   auraTier = 'C',
-  hasAsymmetricItems = false,
   postLoginRevealActive = false,
   postLoginProgress = 0,
   onUserInteractFlatLay,
@@ -412,9 +411,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const resolvedStyleMode = normalizeVtonStyleMode(styleMode);
   const safeAngleDeg = normalizeTurnaround360Angle(viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
   const angleSpec = useMemo(() => resolve360AngleRenderSpec(safeAngleDeg), [safeAngleDeg]);
-  const effectiveMirrorX = hasAsymmetricItems
-    ? false
-    : Boolean(angleSpec.mirrorX || forceMirrorX);
+  const effectiveMirrorX = Boolean(angleSpec.mirrorX || forceMirrorX);
   const resolvedLang = lang === 'en' || lang === 'ko' ? lang : getStoredLang();
   const isEn = resolvedLang === 'en';
 
