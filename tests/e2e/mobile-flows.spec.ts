@@ -200,6 +200,14 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page).toHaveURL(/\/item\/-?\d+$/);
     const detailSheet = page.locator(`#${CARBON_DOM_CONTRACT.garmentDetailSheetId}`);
     await expect(detailSheet).toBeVisible();
+    await detailSheet.evaluate(async (el) => {
+      await Promise.all(
+        el
+          .getAnimations({ subtree: true })
+          .filter((anim) => Number.isFinite(anim.effect?.getComputedTiming().iterations ?? 1))
+          .map((anim) => anim.finished.catch(() => {}))
+      );
+    });
 
     // Verify 2.5D tilt responsiveness on pointer move
     const tiltStage = page.locator(`#${CARBON_DOM_CONTRACT.itemDetailTiltStageId}`);
@@ -207,8 +215,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(box).not.toBeNull();
     if (box) {
       await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.2);
-      const tiltX = Number(await tiltStage.getAttribute('data-tilt-x'));
-      expect(Math.abs(tiltX)).toBeGreaterThan(1);
+      await expect
+        .poll(async () => Math.abs(Number((await tiltStage.getAttribute('data-tilt-x')) || '0')), {
+          timeout: 2500,
+        })
+        .toBeGreaterThan(1);
     }
 
     // Edit metadata (Brand, Size, Memo) & Save
@@ -349,6 +360,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       /오늘\s+\d{1,2}\.\d{1,2}\([일월화수목금토]\)\s+\d{2}:\d{2}/
     );
     await expect(studioCanvas).toHaveAttribute('data-day-target', 'today');
+    const initialLiveWeather =
+      (await studioCanvas.getAttribute('data-effective-weather')) || 'clear';
 
     // Wait for Today's Weather #1 recommendation to dress the 2D VTON model
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
@@ -390,20 +403,55 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     );
     await expect(weatherPanel.locator('.weather-popup-look-items')).toHaveCount(0);
 
-    // Switch to `비` (`rainy_cool`) -> verify rain activates -> switch back to `예보` (`live`) -> rain & auto umbrella clear cleanly
+    // Switch to `비` (`rainy_cool`) -> verify indoor rain badge & outerwear first, activate outdoor stage to verify rain particles, then return to `예보` (`live`)
     await weatherScenarioSelect.selectOption('rainy_cool');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
-    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const next = {
+        unlockedIds: ['c_atelier_plaster', 'a_sunset_rooftop'],
+        equippedBackgroundId: 'a_sunset_rooftop',
+        iBalance: 0,
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
+    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
 
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
     await weatherPanel.locator('button[data-weather-scenario="live"]').click();
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', initialLiveWeather);
+    if (initialLiveWeather === 'rain' || initialLiveWeather === 'snow') {
+      await weatherCapsule.click();
+      await expect(weatherPanel).toBeVisible();
+      await weatherPanel
+        .locator('select[data-weather-scenario-select="true"]')
+        .selectOption('crisp_autumn');
+      await page.keyboard.press('Escape');
+      await expect(weatherPanel).toHaveCount(0);
+      await expect(studioCanvas).toHaveAttribute('data-effective-weather', /^(clear|cloudy|wind)$/);
+    }
     await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
-    await expect(studioCanvas).toHaveAttribute('data-effective-weather', /^(clear|cloudy|wind)$/);
+
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const next = {
+        unlockedIds: ['c_atelier_plaster', 'a_sunset_rooftop'],
+        equippedBackgroundId: 'c_atelier_plaster',
+        iBalance: 0,
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'indoor-ivory');
 
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();

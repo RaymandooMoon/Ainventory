@@ -11,6 +11,10 @@ export interface StageGroundDeckProps {
   mirrorX?: boolean;
   zoom?: number;
   idealBaseScale?: number;
+  soleTransformOrigin?: string;
+  soleStageTopPct?: number;
+  renderedContentW?: number | null;
+  renderedContentH?: number | null;
   pan?: { x: number; y: number } | null;
   compareActive?: boolean;
   compareSplitPct?: number;
@@ -22,7 +26,7 @@ export interface StageGroundDeckProps {
  * Perspective Studio Floor Deck, Contact AO Shadow & Real-Time Wet Mirror Reflection (`StageGroundDeck`)
  * - Positioned across the perspective floor zone (`top: 76% -> 100%`, `z-index: 10`, `pointer-events: none`),
  *   directly behind the RGBA cutout model (`z-20`) and beneath the foreground weather canvas (`z-30`).
- * - Aligns horizon & dual-layer Contact AO Shadow with the normalized `94%` shoe sole baseline so all
+ * - Aligns horizon & dual-layer Contact AO Shadow with the normalized shoe sole baseline so all
  *   8 swipe angles (`0°..315°`) ground naturally onto the studio floor plane without floating or clipping.
  * - `rain` (on open-sky outdoor stages): Wet reflective stone/slate floor + upside-down `scaleY(-0.30)` real-time mirror reflection + dense sole Contact AO Shadow.
  * - `coldwave` / `snow` (outdoor): Frosted ice glaze / accumulated snow sheen + pressed-snow AO shadow.
@@ -38,6 +42,10 @@ export function StageGroundDeck({
   mirrorX = false,
   zoom = 1,
   idealBaseScale = 1,
+  soleTransformOrigin = '50% 95.5%',
+  soleStageTopPct = 85.5,
+  renderedContentW = null,
+  renderedContentH = null,
   pan = null,
   compareActive = false,
   compareSplitPct = 50,
@@ -60,8 +68,15 @@ export function StageGroundDeck({
 
   const safeZoom = Number.isFinite(zoom) ? Math.max(1, Math.min(3, zoom)) : 1;
   const safeBaseScale = Number.isFinite(idealBaseScale)
-    ? Math.max(1, Math.min(1.5, idealBaseScale))
+    ? Math.max(1, Math.min(1.65, idealBaseScale))
     : 1;
+  const safeSoleOrigin =
+    typeof soleTransformOrigin === 'string' && soleTransformOrigin.trim()
+      ? soleTransformOrigin
+      : '50% 95.5%';
+  const safeSoleStageTopPct = Number.isFinite(soleStageTopPct)
+    ? Math.max(70, Math.min(96, soleStageTopPct))
+    : 85.5;
   const panX = pan && Number.isFinite(pan.x) ? pan.x : 0;
   const panY = pan && Number.isFinite(pan.y) ? pan.y : 0;
   const safeSplit = Number.isFinite(compareSplitPct)
@@ -82,6 +97,13 @@ export function StageGroundDeck({
   const cameraTransform =
     Math.abs(effectiveCameraScale - 1) > 0.002 || panX !== 0 || panY !== 0
       ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${effectiveCameraScale.toFixed(3)})`
+      : undefined;
+
+  const aoScaleX = 1 + (effectiveCameraScale - 1) * 0.62;
+  const aoScaleY = 1 + (effectiveCameraScale - 1) * 0.25;
+  const aoTransform =
+    Math.abs(effectiveCameraScale - 1) > 0.002 || panX !== 0 || panY !== 0
+      ? `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${aoScaleX.toFixed(3)}, ${aoScaleY.toFixed(3)})`
       : undefined;
 
   const featheredFloorMask =
@@ -117,14 +139,32 @@ export function StageGroundDeck({
       }
     : { pointerEvents: 'none' };
 
+  const reflClipTopPct = Math.max(75, Math.min(94.5, safeSoleStageTopPct - 1.2));
+  const reflMaskZeroPct = Math.max(74, reflClipTopPct - 0.5).toFixed(1);
+  const reflMaskPeakPct = Math.min(96.5, reflClipTopPct + 2.8).toFixed(1);
+  const reflMaskMidPct = Math.min(98.8, reflClipTopPct + 8.5).toFixed(1);
+  const reflMaskExpr = `linear-gradient(180deg, transparent ${reflMaskZeroPct}%, rgba(0, 0, 0, 0.78) ${reflMaskPeakPct}%, rgba(0, 0, 0, 0.34) ${reflMaskMidPct}%, transparent 99.5%)`;
+
   const wetReflectionViewportStyle: React.CSSProperties = {
     pointerEvents: 'none',
-    clipPath: 'inset(85.5% 0 0 0)',
-    WebkitMaskImage:
-      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.78) 88.5%, rgba(0, 0, 0, 0.34) 94.5%, transparent 99.5%)',
-    maskImage:
-      'linear-gradient(180deg, transparent 85%, rgba(0, 0, 0, 0.78) 88.5%, rgba(0, 0, 0, 0.34) 94.5%, transparent 99.5%)',
+    clipPath: `inset(${reflClipTopPct.toFixed(1)}% 0 0 0)`,
+    WebkitMaskImage: reflMaskExpr,
+    maskImage: reflMaskExpr,
   };
+
+  const reflectionContentSizeStyle: React.CSSProperties =
+    renderedContentW &&
+    renderedContentH &&
+    Number.isFinite(renderedContentW) &&
+    Number.isFinite(renderedContentH)
+      ? {
+          width: `${renderedContentW}px`,
+          height: `${renderedContentH}px`,
+          maxWidth: '100%',
+          maxHeight: '100%',
+          flex: '0 0 auto',
+        }
+      : {};
 
   return (
     <div
@@ -165,6 +205,8 @@ export function StageGroundDeck({
               className="studio-ground-wet-reflection-camera"
               style={{
                 pointerEvents: 'none',
+                ...reflectionContentSizeStyle,
+                transformOrigin: safeSoleOrigin,
                 ...(cameraTransform ? { transform: cameraTransform } : {}),
               }}
             >
@@ -175,6 +217,7 @@ export function StageGroundDeck({
                 className="studio-wet-mirror-reflection-img"
                 style={{
                   pointerEvents: 'none',
+                  transformOrigin: safeSoleOrigin,
                   ...(mirrorX ? { transform: 'scaleX(-1) scaleY(-0.30)' } : {}),
                 }}
               />
@@ -190,7 +233,9 @@ export function StageGroundDeck({
           className="studio-ground-contact-ao-shadow"
           style={{
             pointerEvents: 'none',
-            ...(cameraTransform ? { transform: cameraTransform } : {}),
+            top: `calc(${safeSoleStageTopPct.toFixed(2)}% - 13px)`,
+            bottom: 'auto',
+            ...(aoTransform ? { transform: aoTransform } : {}),
           }}
         />
       )}

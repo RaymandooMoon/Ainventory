@@ -11,35 +11,69 @@ import {
  * so we can deterministically verify client-side `sliceTurnaround2x2Sheet` across 0°/45°/90°/180°!
  */
 function buildMockTurnaround2x2PngDataUrl(seedOffset = 0): string {
-  const width = 128;
-  const height = 128;
+  const width = 192;
+  const height = 288;
+  const quadW = width / 2;
+  const quadH = height / 2;
   const raw = Buffer.alloc((width * 4 + 1) * height);
+
+  const coatR = 54 + ((seedOffset * 7) % 140);
+  const coatG = 68 + ((seedOffset * 11) % 130);
+  const coatB = 88 + ((seedOffset * 13) % 125);
 
   for (let y = 0; y < height; y += 1) {
     const rowOffset = y * (width * 4 + 1);
     raw[rowOffset] = 0; // filter type 0
-    const isBottom = y >= height / 2;
+    const isBottom = y >= quadH;
+    const localY = y % quadH;
     for (let x = 0; x < width; x += 1) {
-      const isRight = x >= width / 2;
+      const isRight = x >= quadW;
+      const localX = x % quadW;
       const px = rowOffset + 1 + x * 4;
-      // Top-Left (0°), Top-Right (45°), Bottom-Left (90°), Bottom-Right (180°)
-      if (!isBottom && !isRight) {
-        raw[px] = (210 + seedOffset) % 255;
-        raw[px + 1] = 195;
-        raw[px + 2] = 180;
-      } else if (!isBottom && isRight) {
-        raw[px] = 180;
-        raw[px + 1] = (210 + seedOffset) % 255;
-        raw[px + 2] = 195;
-      } else if (isBottom && !isRight) {
-        raw[px] = 185;
-        raw[px + 1] = 190;
-        raw[px + 2] = (220 + seedOffset) % 255;
-      } else {
-        raw[px] = (225 + seedOffset) % 255;
-        raw[px + 1] = 215;
-        raw[px + 2] = 175;
+      // Uniform #94A3B8 studio backdrop for clean V4 cutout -> alpha 0
+      let r = 148;
+      let g = 163;
+      let b = 184;
+
+      const angle: 0 | 45 | 90 | 180 = !isBottom && !isRight ? 0 : !isBottom ? 45 : !isRight ? 90 : 180;
+      const inHead =
+        localY >= 12 &&
+        localY <= 25 &&
+        localX >= (angle === 45 ? 43 : 42) &&
+        localX <= (angle === 45 ? 54 : 53);
+      const torsoMinX = angle === 90 ? 37 : 34;
+      const torsoMaxX = angle === 90 ? 58 : 61;
+      const inTorso = localY >= 26 && localY <= 74 && localX >= torsoMinX && localX <= torsoMaxX;
+      const legMinX = angle === 90 ? 41 : 39;
+      const legMaxX = angle === 90 ? 54 : 56;
+      const inLegs = localY >= 75 && localY <= 118 && localX >= legMinX && localX <= legMaxX;
+      const inShoes =
+        localY >= 119 &&
+        localY <= 129 &&
+        ((localX >= 41 && localX <= 46) || (localX >= 50 && localX <= 55));
+
+      if (inHead) {
+        r = 204;
+        g = 162;
+        b = 134;
+      } else if (inTorso) {
+        const delta = angle === 180 && localY <= 34 ? -14 : angle === 45 ? 8 : angle === 90 ? -6 : 0;
+        r = Math.max(20, Math.min(245, coatR + delta));
+        g = Math.max(20, Math.min(245, coatG + delta));
+        b = Math.max(20, Math.min(245, coatB + delta));
+      } else if (inLegs) {
+        r = angle === 180 ? 38 : angle === 90 ? 48 : 56;
+        g = angle === 45 ? 52 : 44;
+        b = angle === 90 ? 64 : 52;
+      } else if (inShoes) {
+        r = 32;
+        g = 34;
+        b = 38;
       }
+
+      raw[px] = r;
+      raw[px + 1] = g;
+      raw[px + 2] = b;
       raw[px + 3] = 255;
     }
   }
@@ -1142,16 +1176,17 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
   test('9. Twin/duplicate model isolation on wide 2x2 slice, user face photo upload -> portraitDataUrl VTON identity lock, and rainy weather rain layer + auto-umbrella', async ({
     page,
   }) => {
-    // Build a 256x192 2x2 sheet whose 180° (bottom-right, 128x96) quadrant intentionally contains TWO side-by-side twin figures
+    // Build a 256x288 2x2 sheet whose 180° (bottom-right, 128x144) quadrant intentionally contains TWO side-by-side twin figures
     const buildTwinTurnaroundPng = (): string => {
       const width = 256;
-      const height = 192;
+      const height = 288;
       const raw = Buffer.alloc((width * 4 + 1) * height);
+      const quadH = height / 2;
       for (let y = 0; y < height; y += 1) {
         const rowOffset = y * (width * 4 + 1);
         raw[rowOffset] = 0;
-        const isBottom = y >= height / 2;
-        const localY = y % (height / 2);
+        const isBottom = y >= quadH;
+        const localY = y % quadH;
         for (let x = 0; x < width; x += 1) {
           const isRight = x >= width / 2;
           const localX = x % (width / 2);
@@ -1161,21 +1196,67 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           let g = 245;
           let b = 247;
           if (isBottom && isRight) {
-            // Twin Figure A (Red-toned) on left [20..46] and Twin Figure B (Blue-toned) on right [82..106]
-            if (localY >= 12 && localY <= 84 && localX >= 20 && localX <= 46) {
+            // Twin Figure A (Red-toned) centered around x=34 with tapered head, torso, slim trousers & narrow shoes
+            if (localY >= 12 && localY <= 25 && localX >= 29 && localX <= 39) {
+              r = 204;
+              g = 162;
+              b = 134;
+            } else if (localY >= 26 && localY <= 78 && localX >= 17 && localX <= 51) {
               r = 195;
               g = 38;
               b = 42;
-            } else if (localY >= 14 && localY <= 82 && localX >= 82 && localX <= 106) {
+            } else if (localY >= 79 && localY <= 118 && localX >= 22 && localX <= 46) {
+              r = 185;
+              g = 36;
+              b = 40;
+            } else if (
+              localY >= 119 &&
+              localY <= 129 &&
+              ((localX >= 23 && localX <= 29) || (localX >= 39 && localX <= 45))
+            ) {
+              r = 42;
+              g = 36;
+              b = 38;
+            } else if (localY >= 14 && localY <= 26 && localX >= 92 && localX <= 102) {
+              // Twin Figure B (Blue-toned) on right [82..112]
+              r = 204;
+              g = 162;
+              b = 134;
+            } else if (localY >= 27 && localY <= 116 && localX >= 83 && localX <= 111) {
               r = 32;
               g = 76;
               b = 205;
+            } else if (
+              localY >= 117 &&
+              localY <= 127 &&
+              ((localX >= 86 && localX <= 92) || (localX >= 101 && localX <= 107))
+            ) {
+              r = 28;
+              g = 62;
+              b = 175;
             }
-          } else if (localY >= 14 && localY <= 82 && localX >= 48 && localX <= 80) {
-            // Single centered figure in 0°/45°/90° quadrants
-            r = isBottom ? 55 : 42;
-            g = isRight ? 95 : 58;
-            b = 85;
+          } else if (localY >= 12 && localY <= 25 && localX >= 58 && localX <= 69) {
+            // Single centered figure tapered head in 0°/45°/90° quadrants
+            r = 204;
+            g = 162;
+            b = 134;
+          } else if (localY >= 26 && localY <= 78 && localX >= 46 && localX <= 81) {
+            // Single centered figure torso/coat matching Twin A crimson tone across 0°/45°/90°
+            r = 195;
+            g = isRight ? 42 : 38;
+            b = isBottom ? 46 : 42;
+          } else if (localY >= 79 && localY <= 118 && localX >= 51 && localX <= 76) {
+            r = 185;
+            g = isRight ? 40 : 36;
+            b = isBottom ? 44 : 40;
+          } else if (
+            localY >= 119 &&
+            localY <= 129 &&
+            ((localX >= 52 && localX <= 58) || (localX >= 69 && localX <= 75))
+          ) {
+            r = 42;
+            g = 36;
+            b = 38;
           }
           raw[px] = r;
           raw[px + 1] = g;
@@ -1747,9 +1828,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           }
         }
       }
-      // Coat top is localY=41 and enclosed hole center is (localX=64, localY=69 -> coatMinY + 28)
-      const holeCenterY = Math.min(c.height - 1, coatMinY + 28);
-      const holeCenterX = 64;
+      // Coat top is localY=41..108 and enclosed hole center is at horizontal midline (cx=width*0.5, dy~42% of coat height)
+      const holeCenterY = Math.min(
+        c.height - 1,
+        coatMinY + Math.max(10, Math.round((coatMaxY - coatMinY) * 0.42))
+      );
+      const holeCenterX = Math.round(c.width * 0.5);
       const enclosedHoleAlpha = d[(holeCenterY * c.width + holeCenterX) * 4 + 3];
       return {
         cornerAlpha,
@@ -1809,9 +1893,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'clear');
     await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toHaveCount(0);
-    await expect(studioCanvas.locator('[data-weather-stage-badge="rain"]')).toContainText(
-      '우산 코디'
-    );
+    const rainBadge = studioCanvas.locator('[data-weather-stage-badge="rain"]');
+    await expect(rainBadge).toContainText('비');
+    await expect(rainBadge).toHaveAttribute('aria-label', /우산 코디/);
 
     // Switch to open-sky outdoor stage (`a_sunset_rooftop`) -> outdoor sky lighting & weather overlays run!
     await page.evaluate(() => {
@@ -1837,12 +1921,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await selectWeatherScenarioViaCapsulePopup(page, 'winter_cold');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'coldwave');
     await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'coldwave');
-    await expect(studioCanvas.locator('[data-weather-stage-badge="coldwave"]')).toContainText(
-      '방한 코디'
-    );
-    await expect(studioCanvas.locator('[data-weather-stage-badge="coldwave"]')).toContainText(
-      '-10°/-4°'
-    );
+    const coldwaveBadge = studioCanvas.locator('[data-weather-stage-badge="coldwave"]');
+    await expect(coldwaveBadge).toContainText('한파');
+    await expect(coldwaveBadge).toHaveAttribute('aria-label', /방한 코디/);
+    await expect(coldwaveBadge).toContainText('-10°/-4°');
     await expect
       .poll(() => capturedPayloads.some((p) => Number(p.weather?.tempMin) <= -5))
       .toBe(true);
@@ -1947,4 +2029,545 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(modelStage).toHaveAttribute('data-height-cm', '215');
   });
+
+  test('13. WS-3a & WS-3c: Dominant-hand bag mirroring (right vs left) across 0°/45°/90° + rainy umbrella #D8CFC4/#C0B8AE under-canopy cutout & outer coat color parity', async ({
+    page,
+  }) => {
+    const buildRichTurnaroundPng = (opts: {
+      handedness: 'right' | 'left';
+      withUmbrella: boolean;
+      width?: number;
+      height?: number;
+      cropSidePanels?: boolean;
+      singleCropped?: boolean;
+    }): string => {
+      const w = opts.width || 420;
+      const h = opts.height || 288;
+      const raw = Buffer.alloc((w * 4 + 1) * h);
+      const [bgR, bgG, bgB] = opts.withUmbrella ? [216, 207, 196] : [148, 163, 184];
+
+      for (let y = 0; y < h; y += 1) {
+        const ro = y * (w * 4 + 1);
+        raw[ro] = 0;
+        for (let x = 0; x < w; x += 1) {
+          const px = ro + 1 + x * 4;
+          raw[px] = bgR;
+          raw[px + 1] = bgG;
+          raw[px + 2] = bgB;
+          raw[px + 3] = 255;
+        }
+      }
+
+      const paintRect = (
+        x0: number,
+        x1: number,
+        y0: number,
+        y1: number,
+        r: number,
+        g: number,
+        b: number
+      ) => {
+        const ix0 = Math.max(0, Math.round(x0));
+        const ix1 = Math.min(w - 1, Math.round(x1));
+        const iy0 = Math.max(0, Math.round(y0));
+        const iy1 = Math.min(h - 1, Math.round(y1));
+        for (let y = iy0; y <= iy1; y += 1) {
+          const ro = y * (w * 4 + 1);
+          for (let x = ix0; x <= ix1; x += 1) {
+            const px = ro + 1 + x * 4;
+            raw[px] = r;
+            raw[px + 1] = g;
+            raw[px + 2] = b;
+            raw[px + 3] = 255;
+          }
+        }
+      };
+
+      const drawCellFigure = (
+        ox: number,
+        oy: number,
+        cw: number,
+        ch: number,
+        angle: number,
+        cropped: boolean
+      ) => {
+        const cx = ox + cw / 2;
+        if (cropped) {
+          // Severely cropped thigh-level half-body so QC flags incomplete height
+          paintRect(cx - 14, cx + 14, oy + 46, oy + 78, 176, 128, 72);
+          return;
+        }
+
+        if (opts.withUmbrella) {
+          // Dark open umbrella dome + outer drop ribs enclosing #D8CFC4 (left) & shaded #C0B8AE (right) sky gaps
+          paintRect(cx - 46, cx + 46, oy + 10, oy + 26, 32, 36, 44);
+          paintRect(cx - 46, cx - 40, oy + 26, oy + 44, 32, 36, 44);
+          paintRect(cx + 40, cx + 46, oy + 26, oy + 44, 32, 36, 44);
+          // Explicitly shade right under-canopy pocket #C0B8AE (192,184,174) while left stays #D8CFC4
+          paintRect(cx + 15, cx + 39, oy + 27, oy + 43, 192, 184, 174);
+        }
+
+        // Head + subtle facing direction nose so sliceTurnaround2x2Sheet keeps 45/90 right & 225 left
+        const headTop = opts.withUmbrella ? oy + 27 : oy + 14;
+        const headBot = opts.withUmbrella ? oy + 43 : oy + 32;
+        paintRect(cx - 9, cx + 9, headTop, headBot, 223, 186, 155);
+        if (angle === 45 || angle === 90 || angle === 135) {
+          paintRect(cx + 9, cx + 12, headTop + 5, headTop + 11, 223, 186, 155);
+        } else if (angle === 225) {
+          paintRect(cx - 12, cx - 9, headTop + 5, headTop + 11, 223, 186, 155);
+        }
+
+        // Shoulder bridge (under umbrella ribs when rainy) & Camel coat (#B08048) consistent across all angles
+        const coatTop = oy + 44;
+        const coatBot = oy + 92;
+        if (opts.withUmbrella) {
+          paintRect(cx - 46, cx + 46, oy + 44, oy + 49, 176, 128, 72);
+        }
+        paintRect(cx - 19, cx + 19, coatTop, coatBot, 176, 128, 72);
+
+        // Dark charcoal trousers + leather shoes down to floor baseline (~91% of cell height)
+        paintRect(cx - 13, cx - 2, oy + 93, oy + 124, 52, 56, 62);
+        paintRect(cx + 2, cx + 13, oy + 93, oy + 124, 52, 56, 62);
+        paintRect(cx - 13, cx - 1, oy + 125, oy + 132, 30, 32, 36);
+        paintRect(cx + 1, cx + 13, oy + 125, oy + 132, 30, 32, 36);
+
+        // Crimson leather briefcase (#9C2C38) placed by handedness across 0°/45°/90°
+        if (!opts.withUmbrella) {
+          const bagSign = opts.handedness === 'left' ? -1 : 1;
+          const bagCenterX =
+            angle === 90 ? cx + bagSign * 16 : angle === 45 ? cx + bagSign * 18 : cx + bagSign * 21;
+          paintRect(bagCenterX - 6, bagCenterX + 6, oy + 76, oy + 94, 156, 44, 56);
+        }
+      };
+
+      if (opts.singleCropped) {
+        drawCellFigure(0, 0, w, h, 0, true);
+      } else {
+        const cw = Math.floor(w / 3);
+        const ch = Math.floor(h / 2);
+        const layoutAngles = [
+          [0, 0, 0],
+          [1, 0, 45],
+          [2, 0, 90],
+          [0, 1, 135],
+          [1, 1, 180],
+          [2, 1, 225],
+        ] as const;
+        for (const [col, row, ang] of layoutAngles) {
+          drawCellFigure(
+            col * cw,
+            row * ch,
+            cw,
+            ch,
+            ang,
+            Boolean(opts.cropSidePanels && ang !== 0)
+          );
+        }
+      }
+
+      const crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xffffffff;
+        for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+        return (c ^ 0xffffffff) >>> 0;
+      };
+      const makeChunk = (type: string, data: Buffer): Buffer => {
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+      };
+      const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(w, 0);
+      ihdr.writeUInt32BE(h, 4);
+      ihdr[8] = 8;
+      ihdr[9] = 6;
+      const png = Buffer.concat([
+        sig,
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', zlib.deflateSync(raw)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ]);
+      return `data:image/png;base64,${png.toString('base64')}`;
+    };
+
+    const capturedHands: string[] = [];
+    await page.route('**/api/vton/synthesize', async (route) => {
+      const body = JSON.parse(route.request().postData() || '{}') as {
+        handedness?: string;
+        weather?: { effectiveWeather?: string; mood?: string } | null;
+      };
+      const handedness = body.handedness === 'left' ? 'left' : 'right';
+      capturedHands.push(handedness);
+      const isRain =
+        body.weather?.effectiveWeather === 'rain' || body.weather?.mood === 'rainy';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: 'turnaround_3x2',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: buildRichTurnaroundPng({
+            handedness,
+            withUmbrella: isRain,
+          }),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(studioCanvas).toBeVisible();
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+
+    // Equip briefcase/bag in `accessory` slot
+    await selectStudioSlotAndPickItem(page, 'accessory', {
+      matchText: /가방|토트|브리프|크로스/i,
+    });
+    await expect(studioCanvas).toHaveAttribute('data-vton-handedness', 'right');
+    await expect(studioCanvas).toHaveAttribute('data-vton-bag-mirrored', 'false');
+    await expect(aiImg).toBeVisible();
+
+    const measureActiveImageStats = () =>
+      aiImg.evaluate(async (el) => {
+        const img = el as HTMLImageElement;
+        if (!img.complete) {
+          await new Promise<void>((res, rej) => {
+            img.onload = () => res();
+            img.onerror = () => rej(new Error('Image load failed'));
+          });
+        }
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, c.width, c.height).data;
+        let bagCount = 0;
+        let bagSumX = 0;
+        let fgMinX = c.width;
+        let fgMaxX = 0;
+        let fgMinY = c.height;
+        let fgMaxY = 0;
+        let camelCount = 0;
+        let camelR = 0;
+        let camelG = 0;
+        let camelB = 0;
+        let umbrellaCanopyOpaque = 0;
+        let underCanopyRightPocketMaxAlpha = 0;
+        let underCanopyLeftPocketMaxAlpha = 0;
+        for (let y = 0; y < c.height; y += 1) {
+          for (let x = 0; x < c.width; x += 1) {
+            const i = (y * c.width + x) * 4;
+            const a = d[i + 3];
+            if (a > 200) {
+              if (x < fgMinX) fgMinX = x;
+              if (x > fgMaxX) fgMaxX = x;
+              if (y < fgMinY) fgMinY = y;
+              if (y > fgMaxY) fgMaxY = y;
+              const r = d[i];
+              const g = d[i + 1];
+              const b = d[i + 2];
+              if (r >= 130 && g <= 70 && b <= 80) {
+                bagCount += 1;
+                bagSumX += x;
+              }
+              if (r >= 145 && r <= 205 && g >= 100 && g <= 155 && b >= 45 && b <= 100) {
+                camelCount += 1;
+                camelR += r;
+                camelG += g;
+                camelB += b;
+              }
+              if (y < c.height * 0.34 && r < 60 && g < 65 && b < 75) {
+                umbrellaCanopyOpaque += 1;
+              }
+            }
+          }
+        }
+        const cx = (fgMinX + fgMaxX) * 0.5;
+        const bagMeanDxRatio =
+          bagCount > 0 ? (bagSumX / bagCount - cx) / Math.max(1, c.width) : 0;
+        const figH = Math.max(1, fgMaxY - fgMinY);
+        const pocketY0 = Math.round(fgMinY + figH * 0.16);
+        const pocketY1 = Math.round(fgMinY + figH * 0.25);
+        for (let y = pocketY0; y <= pocketY1; y += 1) {
+          for (let x = Math.round(c.width * 0.26); x <= Math.round(c.width * 0.36); x += 1) {
+            underCanopyLeftPocketMaxAlpha = Math.max(
+              underCanopyLeftPocketMaxAlpha,
+              d[(y * c.width + x) * 4 + 3]
+            );
+          }
+          for (let x = Math.round(c.width * 0.64); x <= Math.round(c.width * 0.74); x += 1) {
+            underCanopyRightPocketMaxAlpha = Math.max(
+              underCanopyRightPocketMaxAlpha,
+              d[(y * c.width + x) * 4 + 3]
+            );
+          }
+        }
+        const cornerAlpha = d[(1 * c.width + 1) * 4 + 3];
+        c.width = 0;
+        c.height = 0;
+        return {
+          bagCount,
+          bagMeanDxRatio,
+          camelCount,
+          camelRgb: camelCount
+            ? [camelR / camelCount, camelG / camelCount, camelB / camelCount]
+            : null,
+          umbrellaCanopyOpaque,
+          underCanopyLeftPocketMaxAlpha,
+          underCanopyRightPocketMaxAlpha,
+          cornerAlpha,
+        };
+      });
+
+    const rightHandByAngle: Record<number, number> = {};
+    for (const ang of [0, 45, 90] as const) {
+      await setRangeSliderValue(page, '[data-angle-scroll-input="true"]', ang);
+      await expect(modelStage).toHaveAttribute('data-view-angle', String(ang));
+      const st = await measureActiveImageStats();
+      expect(st.bagCount).toBeGreaterThan(15);
+      rightHandByAngle[ang] = st.bagMeanDxRatio;
+      expect(st.bagMeanDxRatio).toBeGreaterThan(0.05);
+    }
+
+    // Switch profile dominantHand to `left` -> apply & persist
+    await page.locator('#open-profile-studio-btn').click();
+    const profileSheet = page.locator('#profile-studio-sheet');
+    await expect(profileSheet).toBeVisible();
+    await profileSheet.locator('#profile-tab-body').click();
+    await profileSheet.locator('[data-dominant-hand-btn="left"]').click();
+    await expect(profileSheet.locator('[data-dominant-hand-btn="left"]')).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    await profileSheet.locator('#apply-body-spec-btn').click();
+    await expect(profileSheet).toBeHidden();
+
+    await expect(studioCanvas).toHaveAttribute('data-vton-handedness', 'left');
+    await expect(studioCanvas).toHaveAttribute('data-vton-bag-mirrored', 'true');
+    await expect.poll(() => capturedHands.includes('left')).toBe(true);
+
+    for (const ang of [0, 45, 90] as const) {
+      await setRangeSliderValue(page, '[data-angle-scroll-input="true"]', ang);
+      await expect(modelStage).toHaveAttribute('data-view-angle', String(ang));
+      const st = await measureActiveImageStats();
+      expect(st.bagCount).toBeGreaterThan(15);
+      // Left-handed bag stays consistently mirrored onto the opposite hip/shoulder across 0°/45°/90°
+      expect(st.bagMeanDxRatio).toBeLessThan(-0.05);
+      expect(rightHandByAngle[ang] - st.bagMeanDxRatio).toBeGreaterThan(0.14);
+    }
+
+    // WS-3c: Rainy scenario with overhead umbrella on outdoor stage -> #D8CFC4 / shaded #C0B8AE pockets purge cleanly & camel coat RGB stays consistent across 0°/45°/90°
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const next = {
+        unlockedIds: ['c_atelier_plaster', 'a_sunset_rooftop'],
+        equippedBackgroundId: 'a_sunset_rooftop',
+        iBalance: 0,
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
+
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel
+      .locator('select[data-weather-scenario-select="true"]')
+      .selectOption('rainy_cool');
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+
+    const coatRgbByAngle: Record<number, number[]> = {};
+    for (const ang of [0, 45, 90] as const) {
+      await setRangeSliderValue(page, '[data-angle-scroll-input="true"]', ang);
+      await expect(modelStage).toHaveAttribute('data-view-angle', String(ang));
+      const st = await measureActiveImageStats();
+      expect(st.cornerAlpha).toBe(0);
+      expect(st.underCanopyLeftPocketMaxAlpha).toBe(0);
+      expect(st.underCanopyRightPocketMaxAlpha).toBe(0);
+      expect(st.umbrellaCanopyOpaque).toBeGreaterThan(40);
+      expect(st.camelRgb).not.toBeNull();
+      coatRgbByAngle[ang] = st.camelRgb!;
+    }
+
+    const baseCoat = coatRgbByAngle[0];
+    for (const ang of [45, 90] as const) {
+      const cmp = coatRgbByAngle[ang];
+      const delta = Math.hypot(
+        cmp[0] - baseCoat[0],
+        cmp[1] - baseCoat[1],
+        cmp[2] - baseCoat[2]
+      );
+      expect(delta).toBeLessThan(18);
+    }
+  });
+
+  test('14. WS-3b: 3 consecutive multi-angle QC failures write server QC failure log, lock to positive-only 0° front fallback, and show 3s auto-dismiss popup', async ({
+    page,
+  }) => {
+    const buildQcPartialSheet = (cropSidePanels: boolean, singleCropped: boolean): string => {
+      const w = singleCropped ? 96 : 192;
+      const h = singleCropped ? 144 : 288;
+      const raw = Buffer.alloc((w * 4 + 1) * h);
+      for (let y = 0; y < h; y += 1) {
+        const ro = y * (w * 4 + 1);
+        raw[ro] = 0;
+        for (let x = 0; x < w; x += 1) {
+          const px = ro + 1 + x * 4;
+          raw[px] = 148;
+          raw[px + 1] = 163;
+          raw[px + 2] = 184;
+          raw[px + 3] = 255;
+        }
+      }
+      const paint = (x0: number, x1: number, y0: number, y1: number, r: number, g: number, b: number) => {
+        for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y += 1) {
+          for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x += 1) {
+            const px = y * (w * 4 + 1) + 1 + x * 4;
+            raw[px] = r;
+            raw[px + 1] = g;
+            raw[px + 2] = b;
+            raw[px + 3] = 255;
+          }
+        }
+      };
+
+      if (singleCropped) {
+        paint(34, 62, 52, 80, 176, 128, 72);
+      } else {
+        const panels = [
+          { ox: 0, oy: 0, full: true },
+          { ox: 96, oy: 0, full: !cropSidePanels },
+          { ox: 0, oy: 144, full: !cropSidePanels },
+          { ox: 96, oy: 144, full: !cropSidePanels },
+        ];
+        for (const p of panels) {
+          if (p.full) {
+            paint(p.ox + 38, p.ox + 58, p.oy + 14, p.oy + 34, 223, 186, 155);
+            paint(p.ox + 30, p.ox + 66, p.oy + 35, p.oy + 130, 62, 82, 118);
+          } else {
+            paint(p.ox + 34, p.ox + 62, p.oy + 48, p.oy + 76, 62, 82, 118);
+          }
+        }
+      }
+
+      const crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+      const crc32 = (buf: Buffer): number => {
+        let c = 0xffffffff;
+        for (let i = 0; i < buf.length; i += 1) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+        return (c ^ 0xffffffff) >>> 0;
+      };
+      const makeChunk = (type: string, data: Buffer): Buffer => {
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+      };
+      const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(w, 0);
+      ihdr.writeUInt32BE(h, 4);
+      ihdr[8] = 8;
+      ihdr[9] = 6;
+      const png = Buffer.concat([
+        sig,
+        makeChunk('IHDR', ihdr),
+        makeChunk('IDAT', zlib.deflateSync(raw)),
+        makeChunk('IEND', Buffer.alloc(0)),
+      ]);
+      return `data:image/png;base64,${png.toString('base64')}`;
+    };
+
+    let sheetAttempts = 0;
+    const qcLogResponses: Array<{ status: number; ok: boolean; logged: boolean }> = [];
+    page.on('response', async (res) => {
+      if (res.url().includes('/api/vton/qc-failure-log')) {
+        const json = await res.json().catch(() => ({}));
+        qcLogResponses.push({
+          status: res.status(),
+          ok: Boolean(json?.ok),
+          logged: Boolean(json?.logged),
+        });
+      }
+    });
+
+    await page.route('**/api/vton/synthesize', async (route) => {
+      const body = JSON.parse(route.request().postData() || '{}') as {
+        turnaroundSheet?: boolean;
+      };
+      const isSheet = body.turnaroundSheet !== false;
+      if (isSheet) sheetAttempts += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: isSheet ? 'turnaround_2x2' : 'single',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: buildQcPartialSheet(true, !isSheet),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    const frontOnlyToast = studioCanvas.locator('[data-vton-front-only-toast="true"]');
+
+    // Toast must appear with exact Korean notice, front-only 0° character stays visible, and toast auto-dismisses after ~3s
+    await expect(studioCanvas).toHaveAttribute('data-front-only-degraded', 'true', {
+      timeout: 20000,
+    });
+    await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
+    await expect(studioCanvas.locator('[data-angle-scroll-dock="true"]')).toHaveAttribute(
+      'data-angle-dock-visible',
+      'false'
+    );
+    await expect(aiImg).toBeVisible();
+    await expect(frontOnlyToast).toBeVisible();
+    await expect(frontOnlyToast).toHaveText('현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.');
+
+    // Auto-dismisses cleanly after 3s durationMs without user click
+    await expect(frontOnlyToast).toHaveCount(0, { timeout: 6000 });
+
+    // Confirm all 3 QC turnaround retries executed and real POST /api/vton/qc-failure-log succeeded (201)
+    expect(sheetAttempts).toBe(3);
+    await expect.poll(() => qcLogResponses.length).toBeGreaterThanOrEqual(1);
+    expect(qcLogResponses[0]).toEqual({ status: 201, ok: true, logged: true });
+  });
 });
+

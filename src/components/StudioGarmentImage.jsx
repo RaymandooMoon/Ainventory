@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { hexToRgb } from '../shared/colorMath.js';
 import {
   getNativeSeedHex,
@@ -477,6 +477,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   style = {},
   imgStyle = {},
   allowStorePhoto = false,
+  eager = false,
 }) {
   const rawSrc = src || item?.image_url || '';
   const cat = category || item?.category || 'top';
@@ -563,10 +564,18 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   const rawDisplaySrc = failedKey === cacheKey ? fallbackSeedSrc : computedSrc;
   const displaySrc = withPublicBaseUrl(rawDisplaySrc);
 
+  const imgRef = useRef(null);
   const [loadedSrc, setLoadedSrc] = useState(null);
   const isReady =
     loadedSrc === displaySrc ||
     Boolean(displaySrc && (displaySrc.startsWith('data:') || displaySrc.startsWith('blob:')));
+
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el?.complete && el.naturalWidth > 0 && loadedSrc !== displaySrc) {
+      setLoadedSrc(displaySrc);
+    }
+  }, [displaySrc, loadedSrc]);
 
   return (
     <div
@@ -590,15 +599,11 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
         />
       )}
       <img
-        ref={(el) => {
-          if (el?.complete && el.naturalWidth > 0 && loadedSrc !== displaySrc) {
-            setLoadedSrc(displaySrc);
-          }
-        }}
+        ref={imgRef}
         src={displaySrc}
         alt={label}
-        loading="lazy"
-        decoding="async"
+        loading={eager ? 'eager' : 'lazy'}
+        decoding={eager ? 'sync' : 'async'}
         onLoad={() => setLoadedSrc(displaySrc)}
         onError={() => {
           if (rawDisplaySrc !== fallbackSeedSrc) {

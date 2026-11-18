@@ -292,7 +292,6 @@ export default function StoreModal({
           ]
             .filter(Boolean)
             .join(' ')}
-          data-store-phase={drawPhase}
           data-store-reveal-tier={revealItem?.tier || undefined}
           data-store-animating={animatingTier ? 'true' : 'false'}
         >

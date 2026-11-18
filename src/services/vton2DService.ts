@@ -1,6 +1,6 @@
 import type { GarmentRecord } from '../contracts/carbonDesignContract.ts';
 import { getStudioSeedImageForGarment, resolveStudioSeedUrl } from '../shared/garmentTaxonomy.js';
-import { apiFetch } from '../utils/api.ts';
+import { apiFetch, getStoredToken, isSampleDemoMode } from '../utils/api.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import {
   type AvatarDominantHand,
@@ -319,7 +319,14 @@ const LEGACY_MODE_STORAGE_KEYS = [
 const l1SliceCache = new Map<string, CachedAiVtonSlice>();
 const encodedGarmentPackshotCache = new Map<string, string>();
 const seenFlatLayCombos = new Set<string>();
-const inFlightAiRequests = new Map<string, Promise<AiVtonSynthesisOutcome>>();
+interface InFlightAiEntry {
+  promise: Promise<AiVtonSynthesisOutcome>;
+  subscriberCount: number;
+  settled: boolean;
+  controller: AbortController | null;
+}
+
+const inFlightAiRequests = new Map<string, InFlightAiEntry>();
 let vtonDbPromise: Promise<IDBDatabase | null> | null = null;
 
 function clamp(v: number, min: number, max: number): number {
@@ -513,6 +520,10 @@ export function resolveSignedAngleScrollState(rawScrollDeg: unknown): {
   };
 }
 
+export const CANONICAL_HUMAN_STATURE_RATIO = 0.79;
+export const CANONICAL_FLOOR_BASELINE_RATIO = 0.955;
+export const CANONICAL_PORTRAIT_ASPECT_RATIO = 0.75;
+
 /**
  * Computes the ideal device-adaptive base display scale for `1.0x` zoom so the mannequin fills
  * ~80–84% of the stage height comfortably on narrow portrait phones, foldables, tablets, and desktops
@@ -551,6 +562,108 @@ export function computeIdealDeviceMannequinScale(params?: {
   const maxHorizontalScale = (sw * 0.95) / Math.max(1, renderedBoxW * 0.58);
   const rawIdeal = widthChokeCompensation * presenceBoost;
   return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.18, 1.58) * 1000) / 1000;
+}
+
+export interface MannequinFloorPlacement {
+  effectiveBaseScale: number;
+  soleTransformOrigin: string;
+  soleStageTopPct: number;
+  renderedContentW: number | null;
+  renderedContentH: number | null;
+}
+
+/**
+ * Computes sole-locked transform origin, stage floor contact percentage, and headroom-safe
+ * responsive scale (`>= 1`) so characters fill narrow/foldable/desktop viewports prominently
+ * without clipping umbrella canopies/crowns or drifting off the floor contact shadow.
+ */
+export function computeMannequinFloorPlacement(params?: {
+  stageWidth?: number;
+  stageHeight?: number;
+  imageAspectRatio?: number;
+  topRatio?: number | null;
+  bottomRatio?: number | null;
+}): MannequinFloorPlacement {
+  const sw = Number(params?.stageWidth) || 0;
+  const sh = Number(params?.stageHeight) || 0;
+  const rawTopRatio =
+    typeof params?.topRatio === 'number' && Number.isFinite(params.topRatio)
+      ? params.topRatio
+      : NaN;
+  const rawBottomRatio =
+    typeof params?.bottomRatio === 'number' && Number.isFinite(params.bottomRatio)
+      ? params.bottomRatio
+      : NaN;
+  const soleFrac =
+    Number.isFinite(rawBottomRatio) && rawBottomRatio > 0.4
+      ? clamp(rawBottomRatio, 0.84, 0.995)
+      : CANONICAL_FLOOR_BASELINE_RATIO;
+  const topFrac =
+    Number.isFinite(rawTopRatio) && rawTopRatio >= 0
+      ? clamp(rawTopRatio, 0.005, 0.45)
+      : Math.max(0.04, CANONICAL_FLOOR_BASELINE_RATIO - CANONICAL_HUMAN_STATURE_RATIO);
+  const effectiveSoleFrac = Math.max(soleFrac, topFrac + 0.15);
+
+  if (sw < 120 || sh < 160) {
+    return {
+      effectiveBaseScale: 1.22,
+      soleTransformOrigin: `50% ${(effectiveSoleFrac * 100).toFixed(2)}%`,
+      soleStageTopPct: 85.5,
+      renderedContentW: null,
+      renderedContentH: null,
+    };
+  }
+
+  const isCompact = sw <= 595;
+  const topPad = isCompact ? 54 : 56;
+  const bottomPad = 66;
+  const sidePad = isCompact ? 10 : 12;
+  const availW = Math.max(120, sw - sidePad * 2);
+  const availH = Math.max(160, sh - topPad - bottomPad);
+  const rawAspect = Number(params?.imageAspectRatio);
+  const imgAspect =
+    Number.isFinite(rawAspect) && rawAspect > 0.25 ? clamp(rawAspect, 0.45, 1.45) : 0.74;
+
+  const renderedContentH = Math.min(availH, availW / imgAspect);
+  const renderedContentW = renderedContentH * imgAspect;
+  const soleOffsetFromBottomPx = (1 - effectiveSoleFrac) * renderedContentH;
+  const originYPct = clamp(effectiveSoleFrac * 100, 75, 99.5);
+  const soleStageY = sh - bottomPad - soleOffsetFromBottomPx;
+  const soleStageTopPct =
+    Math.round(clamp((soleStageY / Math.max(1, sh)) * 100, 72, 96) * 100) / 100;
+
+  const rawIdeal = computeIdealDeviceMannequinScale({
+    stageWidth: sw,
+    stageHeight: sh,
+    imageAspectRatio: imgAspect,
+  });
+  const minSafeHeadY = Math.max(52, topPad - 2);
+  const availAboveSole = Math.max(24, soleStageY - minSafeHeadY);
+  const aboveSolePx = Math.max(24, (effectiveSoleFrac - topFrac) * renderedContentH);
+  const maxHeadSafeScale = availAboveSole / aboveSolePx;
+  const maxDomTopSafeScale = Math.max(
+    1,
+    (soleStageY - 6) / Math.max(1, effectiveSoleFrac * renderedContentH)
+  );
+  const maxBottomSafeScale =
+    soleOffsetFromBottomPx > 2 ? (bottomPad - 50 + soleOffsetFromBottomPx) / soleOffsetFromBottomPx : 1.58;
+  const maxHorizontalScale = (sw * 0.96) / Math.max(1, renderedContentW * 0.62);
+  const effectiveBaseScale =
+    Math.round(
+      clamp(
+        Math.min(rawIdeal, maxHeadSafeScale, maxDomTopSafeScale, maxBottomSafeScale, maxHorizontalScale),
+        1,
+        1.58
+      ) * 1000
+    ) / 1000;
+
+  return {
+    effectiveBaseScale,
+    soleTransformOrigin: `50% ${originYPct.toFixed(2)}%`,
+    soleStageTopPct,
+    renderedContentW: Math.round(renderedContentW * 10) / 10,
+    renderedContentH: Math.round(renderedContentH * 10) / 10,
+  };
 }
 
 const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
@@ -1985,16 +2098,26 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
     cleanCanvas.width = outW;
     cleanCanvas.height = ch;
     const cleanCtx = cleanCanvas.getContext('2d', { willReadFrequently: true });
-    if (!cleanCtx) return srcCanvas;
-
-    cleanCtx.clearRect(0, 0, outW, ch);
-    if (!alreadyTransparent) {
-      cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
-      cleanCtx.fillRect(0, 0, outW, ch);
+    if (!cleanCtx) {
+      cleanCanvas.width = 0;
+      cleanCanvas.height = 0;
+      return srcCanvas;
     }
-    const dx = Math.round((outW - subW) * 0.5);
-    cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
-    return cleanCanvas;
+
+    try {
+      cleanCtx.clearRect(0, 0, outW, ch);
+      if (!alreadyTransparent) {
+        cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+        cleanCtx.fillRect(0, 0, outW, ch);
+      }
+      const dx = Math.round((outW - subW) * 0.5);
+      cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
+      return cleanCanvas;
+    } catch {
+      cleanCanvas.width = 0;
+      cleanCanvas.height = 0;
+      return srcCanvas;
+    }
   };
 
   if (humanIslands.length < 2) {
@@ -2056,16 +2179,26 @@ export function isolateSingleSubjectInSlice(srcCanvas: HTMLCanvasElement): HTMLC
   cleanCanvas.width = outW;
   cleanCanvas.height = ch;
   const cleanCtx = cleanCanvas.getContext('2d', { willReadFrequently: true });
-  if (!cleanCtx) return srcCanvas;
-
-  cleanCtx.clearRect(0, 0, outW, ch);
-  if (!alreadyTransparent) {
-    cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
-    cleanCtx.fillRect(0, 0, outW, ch);
+  if (!cleanCtx) {
+    cleanCanvas.width = 0;
+    cleanCanvas.height = 0;
+    return srcCanvas;
   }
-  const dx = Math.round((outW - subW) * 0.5);
-  cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
-  return cleanCanvas;
+
+  try {
+    cleanCtx.clearRect(0, 0, outW, ch);
+    if (!alreadyTransparent) {
+      cleanCtx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+      cleanCtx.fillRect(0, 0, outW, ch);
+    }
+    const dx = Math.round((outW - subW) * 0.5);
+    cleanCtx.drawImage(srcCanvas, sx, 0, subW, ch, dx, 0, subW, ch);
+    return cleanCanvas;
+  } catch {
+    cleanCanvas.width = 0;
+    cleanCanvas.height = 0;
+    return srcCanvas;
+  }
 }
 
 export function measureOpaqueVerticalBoundsInBuffer(
@@ -2225,8 +2358,18 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
   for (let y = b.minY; y <= topCanopyEndY; y += 1) {
     if (rowSpans[y] > maxTop15Span) maxTop15Span = rowSpans[y];
   }
+  let underCanopyPocketRows = 0;
+  const pocketBandY0 = Math.min(b.maxY, Math.round(b.minY + fgH * 0.14));
+  const pocketBandY1 = Math.min(b.maxY, Math.round(b.minY + fgH * 0.34));
+  const canopyPocketSpanMin = Math.max(medianBodyWidth * 1.4, w * 0.36);
+  for (let y = pocketBandY0; y <= pocketBandY1; y += 1) {
+    if (rowSpans[y] >= canopyPocketSpanMin && rowCounts[y] <= rowSpans[y] * 0.68) {
+      underCanopyPocketRows += 1;
+    }
+  }
   const hasWideOverheadCanopy =
-    shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, w * 0.34);
+    (shoulderMaxSpan > 0 && maxTop15Span >= Math.max(shoulderMaxSpan * 1.24, w * 0.34)) ||
+    (medianBodyWidth > 0 && maxTop15Span >= canopyPocketSpanMin && underCanopyPocketRows >= 2);
 
   const headNeckY0 = Math.min(b.maxY, Math.round(b.minY + fgH * 0.06));
   const headNeckY1 = Math.min(b.maxY, Math.max(headNeckY0, Math.round(b.minY + fgH * 0.11)));
@@ -2273,15 +2416,16 @@ export function inspectTurnaroundSliceIntegrityInBuffer(
     return { ok: false, reason: 'clipped_top', fgHeightRatio };
   }
 
-  // Check 2: Clipped-bottom (coat/waist/thighs sliced flat against y >= h - 5, NOT narrow shoes)
-  const botEdgeCount = Math.max(
-    rowCounts[h - 1] || 0,
-    rowCounts[h - 2] || 0,
-    rowCounts[h - 3] || 0,
-    rowCounts[h - 4] || 0,
-    rowCounts[h - 5] || 0
-  );
-  if (b.maxY >= h - 5 && botEdgeCount >= Math.max(w * 0.18, medianBodyWidth * 0.56)) {
+  // Check 2: Clipped-bottom (coat/waist/thighs sliced flat against bottom edge, NOT shoes on 0.955*H floor baseline)
+  const botEdgeMarginPx = Math.max(2, Math.min(4, Math.floor(h * 0.025)));
+  let botEdgeCount = 0;
+  for (let offset = 1; offset <= botEdgeMarginPx; offset += 1) {
+    botEdgeCount = Math.max(botEdgeCount, rowCounts[h - offset] || 0);
+  }
+  if (
+    b.maxY >= h - botEdgeMarginPx &&
+    botEdgeCount >= Math.max(w * 0.18, medianBodyWidth * 0.56)
+  ) {
     return { ok: false, reason: 'clipped_bottom', fgHeightRatio };
   }
 
@@ -2325,17 +2469,20 @@ async function inspectCutoutDataUrlIntegrity(
         const c = document.createElement('canvas');
         c.width = w;
         c.height = h;
-        const ctx = c.getContext('2d', { willReadFrequently: true });
-        if (!ctx) {
-          resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
-          return;
+        try {
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          if (!ctx) {
+            resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          const rgba = ctx.getImageData(0, 0, w, h).data;
+          const rep = inspectTurnaroundSliceIntegrityInBuffer(rgba, w, h);
+          resolve(rep);
+        } finally {
+          c.width = 0;
+          c.height = 0;
         }
-        ctx.drawImage(img, 0, 0);
-        const rgba = ctx.getImageData(0, 0, w, h).data;
-        const rep = inspectTurnaroundSliceIntegrityInBuffer(rgba, w, h);
-        c.width = 0;
-        c.height = 0;
-        resolve(rep);
       } catch {
         resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
       }
@@ -2365,19 +2512,20 @@ async function inspectDataUrlQcMetrics(
         const c = document.createElement('canvas');
         c.width = w;
         c.height = h;
-        const ctx = c.getContext('2d', { willReadFrequently: true });
-        if (!ctx) {
+        try {
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          const rgba = ctx.getImageData(0, 0, w, h).data;
+          const metrics = inspectPixelSliceQc(rgba, w, h, { studioBackdropHex });
+          resolve(metrics);
+        } finally {
           c.width = 0;
           c.height = 0;
-          resolve(null);
-          return;
         }
-        ctx.drawImage(img, 0, 0);
-        const rgba = ctx.getImageData(0, 0, w, h).data;
-        const metrics = inspectPixelSliceQc(rgba, w, h, { studioBackdropHex });
-        c.width = 0;
-        c.height = 0;
-        resolve(metrics);
       } catch {
         resolve(null);
       }
@@ -2386,10 +2534,6 @@ async function inspectDataUrlQcMetrics(
     img.src = dataUrl;
   });
 }
-
-export const CANONICAL_HUMAN_STATURE_RATIO = 0.79;
-export const CANONICAL_FLOOR_BASELINE_RATIO = 0.955;
-export const CANONICAL_PORTRAIT_ASPECT_RATIO = 0.75;
 
 export interface CoreHumanVerticalBounds {
   minY: number;
@@ -2602,7 +2746,7 @@ export function computeUniformStaturePlacement(params: {
   targetH?: number;
 }): UniformStaturePlacement {
   const { totalW, totalH, coreBounds, targetH } = params;
-  const canonicalH = targetH && targetH >= 180 ? Math.round(targetH) : totalH;
+  const canonicalH = targetH && targetH >= 64 ? Math.round(targetH) : totalH;
   const canonicalW = Math.round(canonicalH * CANONICAL_PORTRAIT_ASPECT_RATIO);
   const targetHumanStature = canonicalH * CANONICAL_HUMAN_STATURE_RATIO;
   const targetFloorY = canonicalH * CANONICAL_FLOOR_BASELINE_RATIO;
@@ -2698,38 +2842,36 @@ function normalizeTurnaroundCanvasesToFloorBaseline(
     const scratch = document.createElement('canvas');
     scratch.width = cw;
     scratch.height = ch;
-    const sCtx = scratch.getContext('2d', { willReadFrequently: true });
-    const cCtx = c.getContext('2d', { willReadFrequently: true });
-    if (!sCtx || !cCtx) {
+    try {
+      const sCtx = scratch.getContext('2d', { willReadFrequently: true });
+      const cCtx = c.getContext('2d', { willReadFrequently: true });
+      if (!sCtx || !cCtx) continue;
+
+      sCtx.clearRect(0, 0, cw, ch);
+      sCtx.drawImage(c, 0, 0);
+
+      if (c.width !== placement.canonicalW || c.height !== placement.canonicalH) {
+        c.width = placement.canonicalW;
+        c.height = placement.canonicalH;
+      }
+      cCtx.clearRect(0, 0, placement.canonicalW, placement.canonicalH);
+      cCtx.imageSmoothingEnabled = true;
+      cCtx.imageSmoothingQuality = 'high';
+      cCtx.drawImage(
+        scratch,
+        0,
+        0,
+        cw,
+        ch,
+        placement.dstX,
+        placement.dstY,
+        placement.dstW,
+        placement.dstH
+      );
+    } finally {
       scratch.width = 0;
       scratch.height = 0;
-      continue;
     }
-
-    sCtx.clearRect(0, 0, cw, ch);
-    sCtx.drawImage(c, 0, 0);
-
-    if (c.width !== placement.canonicalW || c.height !== placement.canonicalH) {
-      c.width = placement.canonicalW;
-      c.height = placement.canonicalH;
-    }
-    cCtx.clearRect(0, 0, placement.canonicalW, placement.canonicalH);
-    cCtx.imageSmoothingEnabled = true;
-    cCtx.imageSmoothingQuality = 'high';
-    cCtx.drawImage(
-      scratch,
-      0,
-      0,
-      cw,
-      ch,
-      placement.dstX,
-      placement.dstY,
-      placement.dstW,
-      placement.dstH
-    );
-
-    scratch.width = 0;
-    scratch.height = 0;
   }
 }
 
@@ -2741,51 +2883,66 @@ async function normalizeTurnaroundDataUrlsToFloorBaseline(
   if (active.length < 1) return;
 
   const canvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
-  await Promise.all(
-    active.map(
-      (angle) =>
-        new Promise<void>((resolve) => {
-          const src = slices[angle];
-          if (!src) {
-            resolve();
-            return;
-          }
-          const img = new Image();
-          img.onload = () => {
-            try {
-              const w = img.naturalWidth || img.width;
-              const h = img.naturalHeight || img.height;
-              if (w >= 64 && h >= 64) {
-                const c = document.createElement('canvas');
-                c.width = w;
-                c.height = h;
-                const ctx = c.getContext('2d', { willReadFrequently: true });
-                if (ctx) {
-                  ctx.drawImage(img, 0, 0);
-                  canvases[angle] = c;
+  try {
+    await Promise.all(
+      active.map(
+        (angle) =>
+          new Promise<void>((resolve) => {
+            const src = slices[angle];
+            if (!src) {
+              resolve();
+              return;
+            }
+            const img = new Image();
+            img.onload = () => {
+              let c: HTMLCanvasElement | null = null;
+              try {
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                if (w >= 64 && h >= 64) {
+                  c = document.createElement('canvas');
+                  c.width = w;
+                  c.height = h;
+                  const ctx = c.getContext('2d', { willReadFrequently: true });
+                  if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    canvases[angle] = c;
+                  } else {
+                    c.width = 0;
+                    c.height = 0;
+                  }
+                }
+              } catch {
+                if (c) {
+                  c.width = 0;
+                  c.height = 0;
                 }
               }
-            } catch {
-              // ignore broken angle
-            }
-            resolve();
-          };
-          img.onerror = () => resolve();
-          img.src = src;
-        })
-    )
-  );
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = src;
+          })
+      )
+    );
 
-  const loaded = TURNAROUND_ANGLES.filter((a) => Boolean(canvases[a]));
-  if (loaded.length < 1) return;
+    const loaded = TURNAROUND_ANGLES.filter((a) => Boolean(canvases[a]));
+    if (loaded.length < 1) return;
 
-  normalizeTurnaroundCanvasesToFloorBaseline(canvases);
-  for (const angle of loaded) {
-    const c = canvases[angle];
-    if (c) {
-      slices[angle] = c.toDataURL('image/png');
-      c.width = 0;
-      c.height = 0;
+    normalizeTurnaroundCanvasesToFloorBaseline(canvases);
+    for (const angle of loaded) {
+      const c = canvases[angle];
+      if (c) {
+        slices[angle] = c.toDataURL('image/png');
+      }
+    }
+  } finally {
+    for (const angle of TURNAROUND_ANGLES) {
+      const c = canvases[angle];
+      if (c) {
+        c.width = 0;
+        c.height = 0;
+      }
     }
   }
 }
@@ -2797,22 +2954,21 @@ function flipCanvasHorizontallyInPlace(canvas: HTMLCanvasElement): void {
   const scratch = document.createElement('canvas');
   scratch.width = cw;
   scratch.height = ch;
-  const sCtx = scratch.getContext('2d', { willReadFrequently: true });
-  const cCtx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!sCtx || !cCtx) {
+  try {
+    const sCtx = scratch.getContext('2d', { willReadFrequently: true });
+    const cCtx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!sCtx || !cCtx) return;
+    sCtx.drawImage(canvas, 0, 0);
+    cCtx.clearRect(0, 0, cw, ch);
+    cCtx.save();
+    cCtx.translate(cw, 0);
+    cCtx.scale(-1, 1);
+    cCtx.drawImage(scratch, 0, 0);
+    cCtx.restore();
+  } finally {
     scratch.width = 0;
     scratch.height = 0;
-    return;
   }
-  sCtx.drawImage(canvas, 0, 0);
-  cCtx.clearRect(0, 0, cw, ch);
-  cCtx.save();
-  cCtx.translate(cw, 0);
-  cCtx.scale(-1, 1);
-  cCtx.drawImage(scratch, 0, 0);
-  cCtx.restore();
-  scratch.width = 0;
-  scratch.height = 0;
 }
 
 async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
@@ -2822,6 +2978,7 @@ async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      let c: HTMLCanvasElement | null = null;
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
@@ -2829,7 +2986,7 @@ async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
           resolve(dataUrl);
           return;
         }
-        const c = document.createElement('canvas');
+        c = document.createElement('canvas');
         c.width = w;
         c.height = h;
         const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -2839,12 +2996,14 @@ async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
         }
         ctx.drawImage(img, 0, 0);
         flipCanvasHorizontallyInPlace(c);
-        const flipped = c.toDataURL('image/png');
-        c.width = 0;
-        c.height = 0;
-        resolve(flipped);
+        resolve(c.toDataURL('image/png'));
       } catch {
         resolve(dataUrl);
+      } finally {
+        if (c) {
+          c.width = 0;
+          c.height = 0;
+        }
       }
     };
     img.onerror = () => resolve(dataUrl);
@@ -3007,9 +3166,8 @@ export function eraseSheetGridDividerLinesInBuffer(
   const isHorizontalRuleRow = new Uint8Array(h);
   const xStep = Math.max(1, Math.floor(w / 180));
   const totalSampleCols = Math.max(1, Math.ceil(w / xStep));
-  for (let y = 0; y < h; y += 1) {
-    const ny = y / h;
-    if (!(ny <= 0.035 || ny >= 0.965 || Math.abs(ny - 0.5) <= 0.075)) continue;
+  const isHorizontalBandRowAt = (y: number): boolean => {
+    if (y < 0 || y >= h) return false;
     let nonBgCount = 0;
     let sumR = 0;
     let sumG = 0;
@@ -3027,7 +3185,7 @@ export function eraseSheetGridDividerLinesInBuffer(
         sumB += data[idx + 2];
       }
     }
-    if (nonBgCount / totalSampleCols < 0.46) continue;
+    if (nonBgCount / totalSampleCols < 0.46) return false;
     const meanR = sumR / nonBgCount;
     const meanG = sumG / nonBgCount;
     const meanB = sumB / nonBgCount;
@@ -3045,7 +3203,12 @@ export function eraseSheetGridDividerLinesInBuffer(
         Math.abs(data[idx + 2] - meanB);
       if (diffMean <= 44) consistentCount += 1;
     }
-    if (consistentCount / nonBgCount >= 0.72) {
+    return consistentCount / nonBgCount >= 0.72;
+  };
+  for (let y = 0; y < h; y += 1) {
+    const ny = y / h;
+    if (!(ny <= 0.035 || ny >= 0.965 || Math.abs(ny - 0.5) <= 0.075)) continue;
+    if (isHorizontalBandRowAt(y)) {
       isHorizontalRuleRow[y] = 1;
     }
   }
@@ -3061,7 +3224,23 @@ export function eraseSheetGridDividerLinesInBuffer(
     while (hyEnd + 1 < h && isHorizontalRuleRow[hyEnd + 1]) {
       hyEnd += 1;
     }
-    if (hyEnd - hy + 1 <= maxRuleH) {
+    let trueHyStart = hy;
+    let trueHyEnd = hyEnd;
+    while (
+      trueHyStart > 0 &&
+      trueHyEnd - trueHyStart + 1 <= maxRuleH &&
+      (isHorizontalRuleRow[trueHyStart - 1] || isHorizontalBandRowAt(trueHyStart - 1))
+    ) {
+      trueHyStart -= 1;
+    }
+    while (
+      trueHyEnd + 1 < h &&
+      trueHyEnd - trueHyStart + 1 <= maxRuleH &&
+      (isHorizontalRuleRow[trueHyEnd + 1] || isHorizontalBandRowAt(trueHyEnd + 1))
+    ) {
+      trueHyEnd += 1;
+    }
+    if (trueHyEnd - trueHyStart + 1 <= maxRuleH) {
       const wipeY0 = Math.max(0, hy - 1);
       const wipeY1 = Math.min(h - 1, hyEnd + 1);
       for (let x = 0; x < w; x += 1) {
@@ -3556,22 +3735,6 @@ export function detectRowSubjectClustersInBuffer(
   return spans;
 }
 
-function detectRowSubjectClusters(
-  sheetCtx: CanvasRenderingContext2D,
-  w: number,
-  y0: number,
-  y1: number
-): HorizontalSpan[] {
-  const rowH = y1 - y0;
-  if (w < 240 || rowH < 120) return [];
-  try {
-    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
-    return detectRowSubjectClustersInBuffer(data, w, rowH);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Scans ONLY the upper head/crown band (`y = rowTop + 0.04*rowH .. rowTop + 0.24*rowH`)
  * with tight `gapBridgePx = Math.max(3, Math.round(w * 0.006))` where heads never touch
@@ -3643,22 +3806,6 @@ export function detectRowHeadClustersInBuffer(
   return spans;
 }
 
-export function detectRowHeadClusters(
-  sheetCtx: CanvasRenderingContext2D,
-  w: number,
-  y0: number,
-  y1: number
-): HorizontalSpan[] {
-  const rowH = y1 - y0;
-  if (w < 240 || rowH < 120) return [];
-  try {
-    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
-    return detectRowHeadClustersInBuffer(data, w, rowH);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Measures foreground density in the central `[0.45w .. 0.55w]` band of a row.
  * In a true `2x2` sheet, `x = 0.50w` is an empty central gutter (`density ~ 0`),
@@ -3698,22 +3845,6 @@ export function measureRowCenterForegroundDensityInBuffer(
   }
 
   return totalPixels > 0 ? fgPixels / totalPixels : 0;
-}
-
-function measureRowCenterForegroundDensity(
-  sheetCtx: CanvasRenderingContext2D,
-  w: number,
-  y0: number,
-  y1: number
-): number {
-  const rowH = y1 - y0;
-  if (w < 240 || rowH < 120) return 0;
-  try {
-    const data = sheetCtx.getImageData(0, y0, w, rowH).data;
-    return measureRowCenterForegroundDensityInBuffer(data, w, rowH);
-  } catch {
-    return 0;
-  }
 }
 
 export interface TurnaroundSheetGridDecision {
@@ -3992,6 +4123,10 @@ export async function sliceTurnaround2x2Sheet(
       img.crossOrigin = 'anonymous';
     }
     img.onload = async () => {
+      let sheetCanvas: HTMLCanvasElement | null = null;
+      let mirror225: HTMLCanvasElement | null = null;
+      const cutCanvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
+      const extraCanvases: HTMLCanvasElement[] = [];
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
@@ -4001,17 +4136,22 @@ export async function sliceTurnaround2x2Sheet(
         }
 
         // Draw sheet onto a working canvas and erase any model-drawn grid divider lines BEFORE clustering/cropping
-        const sheetCanvas = document.createElement('canvas');
+        sheetCanvas = document.createElement('canvas');
         sheetCanvas.width = w;
         sheetCanvas.height = h;
+        extraCanvases.push(sheetCanvas);
         const sheetCtx = sheetCanvas.getContext('2d', { willReadFrequently: true });
+        let fullSheetRgba: Uint8ClampedArray | null = null;
         if (sheetCtx) {
           sheetCtx.drawImage(img, 0, 0);
-          if (w >= 256 && h >= 256) {
+          if (w >= 64 && h >= 64) {
             try {
               const sheetImgData = sheetCtx.getImageData(0, 0, w, h);
-              eraseSheetGridDividerLinesInBuffer(sheetImgData.data, w, h);
-              sheetCtx.putImageData(sheetImgData, 0, 0);
+              if (w >= 256 && h >= 256) {
+                eraseSheetGridDividerLinesInBuffer(sheetImgData.data, w, h);
+                sheetCtx.putImageData(sheetImgData, 0, 0);
+              }
+              fullSheetRgba = sheetImgData.data;
             } catch {
               // Ignore cross-origin read errors if any
             }
@@ -4030,22 +4170,20 @@ export async function sliceTurnaround2x2Sheet(
         let botCenterDensity = 0;
         let splitY = Math.floor(h / 2);
 
-        if (sheetCtx && w >= 64 && h >= 64) {
-          try {
-            const fullSheetRgba = sheetCtx.getImageData(0, 0, w, h).data;
-            splitY = resolveTurnaroundRowSplitYInBuffer(fullSheetRgba, w, h);
-          } catch {
-            splitY = Math.floor(h / 2);
+        if (fullSheetRgba) {
+          splitY = resolveTurnaroundRowSplitYInBuffer(fullSheetRgba, w, h);
+          if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip) {
+            const splitOffset = splitY * w * 4;
+            const botH = h - splitY;
+            const topData = fullSheetRgba.subarray(0, splitOffset);
+            const botData = fullSheetRgba.subarray(splitOffset, h * w * 4);
+            topClusters = detectRowSubjectClustersInBuffer(topData, w, splitY);
+            botClusters = detectRowSubjectClustersInBuffer(botData, w, botH);
+            topHeadClusters = detectRowHeadClustersInBuffer(topData, w, splitY);
+            botHeadClusters = detectRowHeadClustersInBuffer(botData, w, botH);
+            topCenterDensity = measureRowCenterForegroundDensityInBuffer(topData, w, splitY);
+            botCenterDensity = measureRowCenterForegroundDensityInBuffer(botData, w, botH);
           }
-        }
-
-        if (!isExplicit2x2 && !isHorizontal1x6Strip && !isHorizontal1x4Strip && sheetCtx) {
-          topClusters = detectRowSubjectClusters(sheetCtx, w, 0, splitY);
-          botClusters = detectRowSubjectClusters(sheetCtx, w, splitY, h);
-          topHeadClusters = detectRowHeadClusters(sheetCtx, w, 0, splitY);
-          botHeadClusters = detectRowHeadClusters(sheetCtx, w, splitY, h);
-          topCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, 0, splitY);
-          botCenterDensity = measureRowCenterForegroundDensity(sheetCtx, w, splitY, h);
         }
 
         const use3x2Grid = evaluateTurnaroundGridDecisionFromStats({
@@ -4141,8 +4279,6 @@ export async function sliceTurnaround2x2Sheet(
         }
 
         const out = {} as Record<TurnaroundAngleDeg, string>;
-        const cutCanvases: Partial<Record<TurnaroundAngleDeg, HTMLCanvasElement>> = {};
-        const extraCanvases: HTMLCanvasElement[] = [sheetCanvas];
         const cropSource: CanvasImageSource = sheetCtx ? sheetCanvas : img;
 
         for (let panelIdx = 0; panelIdx < panels.length; panelIdx += 1) {
@@ -4155,20 +4291,23 @@ export async function sliceTurnaround2x2Sheet(
           cropCanvas.height = p.ch;
           const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) {
+            cropCanvas.width = 0;
+            cropCanvas.height = 0;
             out[p.angle] = sheetDataUrl;
             continue;
           }
+          extraCanvases.push(cropCanvas);
           ctx.clearRect(0, 0, p.cw, p.ch);
           ctx.drawImage(cropSource, p.sx, p.sy, p.cw, p.ch, 0, 0, p.cw, p.ch);
           const preCutIsolated = isolateSingleSubjectInSlice(cropCanvas);
           if (preCutIsolated !== cropCanvas) {
-            extraCanvases.push(cropCanvas);
+            extraCanvases.push(preCutIsolated);
           }
           applyCornerBfsCutoutOnCanvas(preCutIsolated);
           scrubCutoutArtifactsOnCanvas(preCutIsolated);
           const finalCanvas = isolateSingleSubjectInSlice(preCutIsolated);
           if (finalCanvas !== preCutIsolated) {
-            extraCanvases.push(preCutIsolated);
+            extraCanvases.push(finalCanvas);
           }
 
           // Normalize canonical gaze: `45°`, `90°`, `135°` face screen-right; `225°` faces screen-left!
@@ -4196,7 +4335,7 @@ export async function sliceTurnaround2x2Sheet(
           out[135] = cutCanvases[90].toDataURL('image/png');
         }
         if (!cutCanvases[225] && cutCanvases[90]) {
-          const mirror225 = document.createElement('canvas');
+          mirror225 = document.createElement('canvas');
           mirror225.width = cutCanvases[90].width;
           mirror225.height = cutCanvases[90].height;
           const mCtx = mirror225.getContext('2d', { willReadFrequently: true });
@@ -4208,14 +4347,13 @@ export async function sliceTurnaround2x2Sheet(
           }
           mirror225.width = 0;
           mirror225.height = 0;
+          mirror225 = null;
         }
 
         for (const angle of TURNAROUND_ANGLES) {
           const c = cutCanvases[angle];
           if (c) {
             out[angle] = c.toDataURL('image/png');
-            c.width = 0;
-            c.height = 0;
           }
         }
         if (!out[135]) {
@@ -4225,13 +4363,25 @@ export async function sliceTurnaround2x2Sheet(
           out[225] = out[180] || out[90] || out[0] || sheetDataUrl;
         }
 
+        resolve(out);
+      } catch {
+        resolve(null);
+      } finally {
+        if (mirror225) {
+          mirror225.width = 0;
+          mirror225.height = 0;
+        }
+        for (const angle of TURNAROUND_ANGLES) {
+          const c = cutCanvases[angle];
+          if (c) {
+            c.width = 0;
+            c.height = 0;
+          }
+        }
         for (const extra of extraCanvases) {
           extra.width = 0;
           extra.height = 0;
         }
-        resolve(out);
-      } catch {
-        resolve(null);
       }
     };
     img.onerror = () => resolve(null);
@@ -4298,7 +4448,7 @@ const showcaseInFlight: Partial<
   Record<string, Promise<Record<TurnaroundAngleDeg, string> | null>>
 > = {};
 
-function resolveShowcaseCacheKey(
+export function resolveShowcaseCacheKey(
   styleMode: VtonStyleMode,
   options?: ShowcaseDemoVtonOptions | null
 ): { cacheKey: string; mirrorForLeftHanded: boolean } {
@@ -4308,8 +4458,16 @@ function resolveShowcaseCacheKey(
   );
   const hasBag = options?.hasEquippedBag !== false;
   const mirrorForLeftHanded = hand === 'left' && hasBag;
+  const bagToken = options?.bagGarment
+    ? resolveGarmentCanonicalImageUrl(options.bagGarment) ||
+      String(options.bagGarment.id || options.bagGarment.name || '').trim()
+    : '';
   return {
-    cacheKey: mirrorForLeftHanded ? `${styleMode}::left` : styleMode,
+    cacheKey: mirrorForLeftHanded
+      ? bagToken
+        ? `${styleMode}::left::${bagToken}`
+        : `${styleMode}::left`
+      : styleMode,
     mirrorForLeftHanded,
   };
 }
@@ -4324,6 +4482,7 @@ export async function mirrorImageDataUrlHorizontally(
   return new Promise<string>((resolve) => {
     const img = new Image();
     img.onload = () => {
+      let canvas: HTMLCanvasElement | null = null;
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
@@ -4331,7 +4490,7 @@ export async function mirrorImageDataUrlHorizontally(
           resolve(dataUrl);
           return;
         }
-        const canvas = document.createElement('canvas');
+        canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -4351,6 +4510,11 @@ export async function mirrorImageDataUrlHorizontally(
         );
       } catch {
         resolve(dataUrl);
+      } finally {
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
       }
     };
     img.onerror = () => resolve(dataUrl);
@@ -4380,6 +4544,8 @@ async function compositeMirroredBagOnSideSlice(
     baseImg.onload = () => {
       const bagImg = new Image();
       bagImg.onload = () => {
+        let canvas: HTMLCanvasElement | null = null;
+        let bagCanvas: HTMLCanvasElement | null = null;
         try {
           const w = baseImg.naturalWidth || baseImg.width;
           const h = baseImg.naturalHeight || baseImg.height;
@@ -4390,7 +4556,7 @@ async function compositeMirroredBagOnSideSlice(
             return;
           }
 
-          const canvas = document.createElement('canvas');
+          canvas = document.createElement('canvas');
           canvas.width = w;
           canvas.height = h;
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -4406,7 +4572,7 @@ async function compositeMirroredBagOnSideSlice(
           }
 
           // Cut out solid packshot background & horizontally mirror the bag asset
-          const bagCanvas = document.createElement('canvas');
+          bagCanvas = document.createElement('canvas');
           bagCanvas.width = bw;
           bagCanvas.height = bh;
           const bagCtx = bagCanvas.getContext('2d', { willReadFrequently: true });
@@ -4449,6 +4615,15 @@ async function compositeMirroredBagOnSideSlice(
           resolve(canvas.toDataURL('image/png'));
         } catch {
           resolve(sliceDataUrl);
+        } finally {
+          if (bagCanvas) {
+            bagCanvas.width = 0;
+            bagCanvas.height = 0;
+          }
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
         }
       };
       bagImg.onerror = () => resolve(sliceDataUrl);
@@ -4635,6 +4810,16 @@ export function resolveClientGeminiApiKey(): string {
   return resolveCandidateClientGeminiApiKeys()[0] || '';
 }
 
+function buildVtonRequestAuthHeaders(
+  extraHeaders: Record<string, string> = {}
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (isSampleDemoMode() || !getStoredToken()) {
+    headers['X-Demo-Mode'] = 'sample';
+  }
+  return { ...headers, ...extraHeaders };
+}
+
 export async function fetchServerGeminiConfigured(): Promise<boolean> {
   const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
   if (String(envBag.VITE_STATIC_STANDALONE || '') === '1') {
@@ -4643,7 +4828,7 @@ export async function fetchServerGeminiConfigured(): Promise<boolean> {
   try {
     const status = await apiFetch<{ geminiConfigured?: boolean }>('/vton/status', {
       method: 'GET',
-      headers: { 'X-Demo-Mode': 'sample' },
+      headers: buildVtonRequestAuthHeaders(),
     });
     return Boolean(status?.geminiConfigured);
   } catch {
@@ -4660,6 +4845,7 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
     return await new Promise<string | null>((resolve) => {
       const img = new Image();
       img.onload = () => {
+        let canvas: HTMLCanvasElement | null = null;
         try {
           const nw = img.naturalWidth || img.width;
           const nh = img.naturalHeight || img.height;
@@ -4671,7 +4857,7 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
           const scale = Math.min(1, maxEdge / Math.max(nw, nh));
           const targetW = Math.max(16, Math.round(nw * scale));
           const targetH = Math.max(16, Math.round(nh * scale));
-          const canvas = document.createElement('canvas');
+          canvas = document.createElement('canvas');
           canvas.width = targetW;
           canvas.height = targetH;
           const ctx = canvas.getContext('2d');
@@ -4685,6 +4871,11 @@ async function normalizeImageBlobToJpegDataUrl(blob: Blob): Promise<string | nul
           resolve(canvas.toDataURL('image/jpeg', 0.82));
         } catch {
           resolve(null);
+        } finally {
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
         }
       };
       img.onerror = () => resolve(null);
@@ -5145,18 +5336,17 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
   const cached = turnaround3x2GuideMemo.get(memoKey);
   if (cached) return cached;
 
+  let canvas: HTMLCanvasElement | null = null;
   try {
     const W = 1344;
     const H = 896;
     const cellW = W / 3;
     const cellH = H / 2;
-    const canvas = document.createElement('canvas');
+    canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      canvas.width = 0;
-      canvas.height = 0;
       return null;
     }
 
@@ -5196,8 +5386,6 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
     }
 
     const dataUrl = canvas.toDataURL('image/png');
-    canvas.width = 0;
-    canvas.height = 0;
     if (!dataUrl || !dataUrl.startsWith('data:image/')) {
       return null;
     }
@@ -5210,6 +5398,11 @@ export function buildTurnaround3x2LayoutGuideDataUrl(params: {
     return dataUrl;
   } catch {
     return null;
+  } finally {
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
   }
 }
 
@@ -5325,6 +5518,7 @@ async function saveCharacterIdentityAnchorFromZeroSlice(params: {
       img.crossOrigin = 'anonymous';
     }
     img.onload = () => {
+      let canvas: HTMLCanvasElement | null = null;
       try {
         const srcW = img.naturalWidth || img.width;
         const srcH = img.naturalHeight || img.height;
@@ -5342,13 +5536,11 @@ async function saveCharacterIdentityAnchorFromZeroSlice(params: {
           const scale = Math.min(1, maxH / srcH);
           const cw = Math.max(160, Math.round(srcW * scale));
           const ch = Math.max(200, Math.round(srcH * scale));
-          const canvas = document.createElement('canvas');
+          canvas = document.createElement('canvas');
           canvas.width = cw;
           canvas.height = ch;
           const ctx = canvas.getContext('2d');
           if (!ctx) {
-            canvas.width = 0;
-            canvas.height = 0;
             resolve(null);
             return;
           }
@@ -5365,8 +5557,6 @@ async function saveCharacterIdentityAnchorFromZeroSlice(params: {
               candidate.startsWith('data:image/') &&
               estimateDataUrlByteLength(candidate) <= CHARACTER_ANCHOR_MAX_BYTES
             ) {
-              canvas.width = 0;
-              canvas.height = 0;
               persistCharacterIdentityAnchorEntry(anchorKey, candidate);
               resolve(candidate);
               return;
@@ -5374,10 +5564,16 @@ async function saveCharacterIdentityAnchorFromZeroSlice(params: {
           }
           canvas.width = 0;
           canvas.height = 0;
+          canvas = null;
         }
         resolve(null);
       } catch {
         resolve(null);
+      } finally {
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
       }
     };
     img.onerror = () => resolve(null);
@@ -5583,6 +5779,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   angleDeg: TurnaroundAngleDeg;
   useTurnaroundSheet: boolean;
   serializedSlots: Record<string, Record<string, unknown>>;
+  signal?: AbortSignal;
 }): Promise<VtonServerResponse> {
   const {
     apiKey,
@@ -5593,7 +5790,16 @@ async function synthesizeDirectBrowserGeminiVton(params: {
     angleDeg,
     useTurnaroundSheet,
     serializedSlots,
+    signal,
   } = params;
+
+  if (signal?.aborted) {
+    return {
+      ok: false,
+      fallbackReason: 'aborted',
+      compositeImageUrl: null,
+    };
+  }
 
   const sheetModes = useTurnaroundSheet ? [true, false] : [false];
   let lastReason = 'gemini_no_image_generated';
@@ -5601,6 +5807,14 @@ async function synthesizeDirectBrowserGeminiVton(params: {
   let sawRateLimit = false;
 
   for (const turnaroundSheet of sheetModes) {
+    if (signal?.aborted) {
+      return {
+        ok: false,
+        fallbackReason: 'aborted',
+        compositeImageUrl: null,
+      };
+    }
+
     const modalityStrategies: Array<{
       responseModalities: Array<'TEXT' | 'IMAGE'>;
       useAspectConfig: boolean;
@@ -5646,12 +5860,40 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
     for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
       for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
+        if (signal?.aborted) {
+          return {
+            ok: false,
+            fallbackReason: 'aborted',
+            compositeImageUrl: null,
+          };
+        }
         const { responseModalities, useAspectConfig, aspectRatio, imageSize } =
           modalityStrategies[stratIdx];
-        const requestSignal =
+        const timeoutSignal =
           typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
             ? AbortSignal.timeout(55_000)
             : undefined;
+        let requestController: AbortController | null = null;
+        let detachSignalAbort: (() => void) | null = null;
+        let requestSignal: AbortSignal | undefined = timeoutSignal;
+
+        if (signal) {
+          if (timeoutSignal && typeof AbortSignal.any === 'function') {
+            requestSignal = AbortSignal.any([signal, timeoutSignal]);
+          } else if (timeoutSignal && typeof AbortController !== 'undefined') {
+            requestController = new AbortController();
+            const abortFn = () => requestController?.abort();
+            signal.addEventListener('abort', abortFn, { once: true });
+            timeoutSignal.addEventListener('abort', abortFn, { once: true });
+            detachSignalAbort = () => {
+              signal.removeEventListener('abort', abortFn);
+              timeoutSignal.removeEventListener('abort', abortFn);
+            };
+            requestSignal = requestController.signal;
+          } else {
+            requestSignal = signal;
+          }
+        }
 
         try {
           const generationConfig: Record<string, unknown> = {
@@ -5669,7 +5911,7 @@ async function synthesizeDirectBrowserGeminiVton(params: {
             `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
             {
               method: 'POST',
-              signal: requestSignal,
+              ...(requestSignal ? { signal: requestSignal } : {}),
               headers: {
                 'Content-Type': 'application/json',
                 'x-goog-api-key': apiKey,
@@ -5810,6 +6052,13 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           }
           break;
         } catch (err) {
+          if (signal?.aborted) {
+            return {
+              ok: false,
+              fallbackReason: 'aborted',
+              compositeImageUrl: null,
+            };
+          }
           const isTimeout =
             err instanceof Error &&
             (err.name === 'TimeoutError' ||
@@ -5819,6 +6068,8 @@ async function synthesizeDirectBrowserGeminiVton(params: {
             lastReason = isTimeout ? 'gemini_timeout' : 'gemini_network_error';
           }
           break;
+        } finally {
+          detachSignalAbort?.();
         }
       }
     }
@@ -5996,8 +6247,87 @@ export async function synthesizeGeminiMultiAngleVton(
   const useTurnaroundSheet = request.turnaroundSheet !== false;
   const flightKey = `${CUTOUT_PIPELINE_VERSION}::${profile.avatarConfigHash}::${outfitComboId}::${styleMode}::${effectiveWeather}::${useTurnaroundSheet ? 'sheet' : angleDeg}`;
 
+  const buildAbortedOutcome = (): AiVtonSynthesisOutcome => ({
+    ok: false,
+    fallbackToFlatLay: true,
+    reason: 'aborted',
+    mode,
+    provider: 'flatlay-lookbook',
+    styleMode,
+    angleDeg,
+    weatherMood,
+    effectiveWeather,
+    avatarConfigHash: profile.avatarConfigHash,
+    outfitComboId,
+    cacheKey,
+    fromCache: false,
+    cacheLayer: 'flatlay',
+    imageUrl: null,
+    angleSlices: {},
+    equippedCount: equippedGarments.length,
+    equippedSlotKeys,
+    profile,
+    handedness: profile.dominantHand,
+    bagAssetMirrored,
+    createdAt: Date.now(),
+  });
+
+  if (request.signal?.aborted) {
+    return buildAbortedOutcome();
+  }
+
+  const awaitEntryWithCallerSignal = (
+    entry: InFlightAiEntry,
+    callerSignal?: AbortSignal
+  ): Promise<AiVtonSynthesisOutcome> => {
+    if (!callerSignal) {
+      return entry.promise;
+    }
+    if (callerSignal.aborted) {
+      entry.subscriberCount = Math.max(0, entry.subscriberCount - 1);
+      if (entry.subscriberCount <= 0 && !entry.settled) {
+        entry.controller?.abort();
+      }
+      return Promise.resolve(buildAbortedOutcome());
+    }
+    return new Promise<AiVtonSynthesisOutcome>((resolve) => {
+      let finished = false;
+      const onAbort = () => {
+        if (finished) return;
+        finished = true;
+        entry.subscriberCount = Math.max(0, entry.subscriberCount - 1);
+        if (entry.subscriberCount <= 0 && !entry.settled) {
+          entry.controller?.abort();
+        }
+        resolve(buildAbortedOutcome());
+      };
+      callerSignal.addEventListener('abort', onAbort, { once: true });
+      entry.promise
+        .then((shared) => {
+          if (finished) return;
+          finished = true;
+          callerSignal.removeEventListener('abort', onAbort);
+          resolve(shared);
+        })
+        .catch(() => {
+          if (finished) return;
+          finished = true;
+          callerSignal.removeEventListener('abort', onAbort);
+          resolve(buildAbortedOutcome());
+        });
+    });
+  };
+
   if (!request.forceRefresh && inFlightAiRequests.has(flightKey)) {
-    const shared = await inFlightAiRequests.get(flightKey)!;
+    const existingEntry = inFlightAiRequests.get(flightKey)!;
+    if (request.signal?.aborted) {
+      return buildAbortedOutcome();
+    }
+    existingEntry.subscriberCount += 1;
+    const shared = await awaitEntryWithCallerSignal(existingEntry, request.signal);
+    if (shared.reason === 'aborted' && request.signal?.aborted) {
+      return shared;
+    }
     const targetImg = shared.angleSlices[angleDeg] || shared.imageUrl;
     return {
       ...shared,
@@ -6007,32 +6337,17 @@ export async function synthesizeGeminiMultiAngleVton(
     };
   }
 
-  if (request.signal?.aborted) {
-    return {
-      ok: false,
-      fallbackToFlatLay: true,
-      reason: 'aborted',
-      mode,
-      provider: 'flatlay-lookbook',
-      styleMode,
-      angleDeg,
-      weatherMood,
-      effectiveWeather,
-      avatarConfigHash: profile.avatarConfigHash,
-      outfitComboId,
-      cacheKey,
-      fromCache: false,
-      cacheLayer: 'flatlay',
-      imageUrl: null,
-      angleSlices: {},
-      equippedCount: equippedGarments.length,
-      equippedSlotKeys,
-      profile,
-      handedness: profile.dominantHand,
-      bagAssetMirrored,
-      createdAt: Date.now(),
-    };
-  }
+  const flightController =
+    !request.forceRefresh && typeof AbortController !== 'undefined'
+      ? new AbortController()
+      : null;
+  const effectiveSignal = flightController ? flightController.signal : request.signal;
+  const flightEntry: InFlightAiEntry = {
+    promise: Promise.resolve(buildAbortedOutcome()),
+    subscriberCount: 1,
+    settled: false,
+    controller: flightController,
+  };
 
   const runPromise = (async (): Promise<AiVtonSynthesisOutcome> => {
     try {
@@ -6084,16 +6399,25 @@ export async function synthesizeGeminiMultiAngleVton(
         reason === 'gemini_billing_required';
 
       const maxQcAttempts = 3;
+      const serializedWeatherPayload =
+        request.weather && typeof request.weather === 'object'
+          ? {
+              ...request.weather,
+              effectiveWeather: request.weather.effectiveWeather ?? effectiveWeather,
+              mood: request.weather.mood ?? weatherMood,
+            }
+          : { mood: weatherMood, effectiveWeather };
       let bestValidZeroSlice: string | null = null;
       let lastQcReport: TurnaroundConsistencyQcReport | null = null;
       let lastFailureReason: string | null = null;
+      let lastModelName: string | null = null;
 
       let passedSlices: Partial<Record<TurnaroundAngleDeg, string>> | null = null;
       let passedEntries: CachedAiVtonSlice[] = [];
       let passedCached = false;
 
       for (let attempt = 1; attempt <= maxQcAttempts; attempt += 1) {
-        if (request.signal?.aborted) {
+        if (effectiveSignal?.aborted) {
           lastFailureReason = 'aborted';
           break;
         }
@@ -6108,24 +6432,22 @@ export async function synthesizeGeminiMultiAngleVton(
         let synthesisSource: 'gemini' | 'browser-gemini' | null = null;
 
         if (!isStaticStandalone) {
-          const reqHeaders: Record<string, string> = {
-            'X-Demo-Mode': 'sample',
+          const reqHeaders = buildVtonRequestAuthHeaders({
             'X-Profile-Key': serverProfileConfig.profileKey,
-          };
-          if (clientGeminiKey) {
-            reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
-          }
+            ...(clientGeminiKey ? { 'X-Gemini-Api-Key': clientGeminiKey } : {}),
+          });
 
           try {
             json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
               method: 'POST',
               headers: reqHeaders,
+              ...(effectiveSignal ? { signal: effectiveSignal } : {}),
               body: JSON.stringify({
                 mode,
                 styleMode,
                 viewAngleDeg: angleDeg,
                 turnaroundSheet: useTurnaroundSheet,
-                weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                weather: serializedWeatherPayload,
                 profileKey: serverProfileConfig.profileKey,
                 handedness: effectiveProfile.dominantHand,
                 avatarSpec: effectiveProfile.avatarSpec,
@@ -6168,14 +6490,18 @@ export async function synthesizeGeminiMultiAngleVton(
               synthesisSource = 'gemini';
             }
           } catch (serverErr) {
+            const isServerAbort =
+              Boolean(effectiveSignal?.aborted) ||
+              (serverErr instanceof Error && serverErr.name === 'AbortError');
             const serverStatus =
               serverErr && typeof serverErr === 'object' && 'status' in serverErr
                 ? Number((serverErr as { status?: number }).status)
                 : 0;
             json = {
               ok: false,
-              fallbackReason:
-                serverStatus === 413
+              fallbackReason: isServerAbort
+                ? 'aborted'
+                : serverStatus === 413
                   ? 'payload_too_large'
                   : serverStatus > 0
                     ? `http_${serverStatus}`
@@ -6198,10 +6524,11 @@ export async function synthesizeGeminiMultiAngleVton(
               profile: effectiveProfile,
               styleMode,
               weatherMood,
-              weather: request.weather,
+              weather: serializedWeatherPayload,
               angleDeg,
               useTurnaroundSheet,
               serializedSlots,
+              signal: effectiveSignal,
             });
             const directComposite = sanitizeImageCandidate(
               directJson?.compositeImageUrl ?? directJson?.afterImageUrl ?? null
@@ -6227,6 +6554,7 @@ export async function synthesizeGeminiMultiAngleVton(
         }
 
         const modelName = String(json.model || 'gemini-3.1-flash-image-preview');
+        lastModelName = modelName;
         const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
         const entriesToPersist: CachedAiVtonSlice[] = [];
         const isTurnaroundResponse = json.layout
@@ -6349,7 +6677,7 @@ export async function synthesizeGeminiMultiAngleVton(
             .filter(([, rep]) => !rep.ok)
             .map(([a]) => a);
 
-          if (badAngles.length > 0 && !request.signal?.aborted) {
+          if (badAngles.length > 0 && !effectiveSignal?.aborted) {
             const repairTargets =
               badAngles.length <= 2
                 ? badAngles
@@ -6359,23 +6687,29 @@ export async function synthesizeGeminiMultiAngleVton(
               try {
                 let repairRaw: string | null = null;
                 if (synthesisSource === 'gemini' && !isStaticStandalone) {
-                  const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
-                  if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+                  const reqHeaders = buildVtonRequestAuthHeaders({
+                    'X-Profile-Key': serverProfileConfig.profileKey,
+                    ...(clientGeminiKey ? { 'X-Gemini-Api-Key': clientGeminiKey } : {}),
+                  });
                   const serverRepair = await apiFetch<VtonServerResponse>('/vton/synthesize', {
                     method: 'POST',
                     headers: reqHeaders,
+                    ...(effectiveSignal ? { signal: effectiveSignal } : {}),
                     body: JSON.stringify({
                       mode,
                       styleMode,
                       viewAngleDeg: repairAngle,
                       turnaroundSheet: false,
-                      weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                      weather: serializedWeatherPayload,
+                      profileKey: serverProfileConfig.profileKey,
+                      handedness: effectiveProfile.dominantHand,
                       avatarSpec: effectiveProfile.avatarSpec,
                       avatarConfigHash: effectiveProfile.avatarConfigHash,
                       portraitDataUrl: effectivePortraitUrl,
                       profile: {
                         gender: effectiveProfile.gender,
                         dominantHand: effectiveProfile.dominantHand,
+                        handedness: effectiveProfile.dominantHand,
                         skinToneHex: effectiveProfile.skinToneHex,
                         personalColor: effectiveProfile.personalColor,
                         heightCm: effectiveProfile.heightCm,
@@ -6402,16 +6736,17 @@ export async function synthesizeGeminiMultiAngleVton(
                     serverRepair?.compositeImageUrl ?? serverRepair?.afterImageUrl ?? null
                   );
                 }
-                if (!repairRaw && clientGeminiKeys.length > 0) {
+                if (!repairRaw && clientGeminiKeys.length > 0 && !effectiveSignal?.aborted) {
                   const repairJson = await synthesizeDirectBrowserGeminiVton({
                     apiKey: clientGeminiKeys[0],
                     profile: effectiveProfile,
                     styleMode,
                     weatherMood,
-                    weather: request.weather,
+                    weather: serializedWeatherPayload,
                     angleDeg: repairAngle,
                     useTurnaroundSheet: false,
                     serializedSlots,
+                    signal: effectiveSignal,
                   });
                   repairRaw = sanitizeImageCandidate(
                     repairJson?.compositeImageUrl ?? repairJson?.afterImageUrl ?? null
@@ -6433,13 +6768,16 @@ export async function synthesizeGeminiMultiAngleVton(
 
             // Bound concurrency to 3 requests at a time and retry up to 2 attempts if still cropped
             for (let i = 0; i < repairTargets.length; i += 3) {
+              if (effectiveSignal?.aborted) break;
               await Promise.all(
                 repairTargets.slice(i, i + 3).map(async (targetAngle) => {
+                  if (effectiveSignal?.aborted) return;
                   await attemptRepairAngle(targetAngle);
+                  if (effectiveSignal?.aborted) return;
                   const post = sliced[targetAngle]
                     ? await inspectCutoutDataUrlIntegrity(sliced[targetAngle]!)
                     : { ok: false };
-                  if (!post.ok && !request.signal?.aborted) {
+                  if (!post.ok && !effectiveSignal?.aborted) {
                     await attemptRepairAngle(targetAngle);
                   }
                 })
@@ -6551,6 +6889,7 @@ export async function synthesizeGeminiMultiAngleVton(
           }
 
           if (!preNormQcPassed) {
+            lastFailureReason = lastQcReport?.reasons?.[0] || 'qc_failed';
             continue;
           }
         } else if (rawComposite) {
@@ -6642,29 +6981,30 @@ export async function synthesizeGeminiMultiAngleVton(
           }
           break;
         }
+        lastFailureReason = lastQcReport?.reasons?.[0] || 'qc_failed';
       }
 
       if (!passedSlices) {
         // Rescue attempt: if all 3 multi-angle sheet attempts failed QC and even 0° was invalid,
         // synthesize a single dedicated 0° front portrait so we can honor the 3s front-only fallback cleanly.
-        if (!bestValidZeroSlice && !isFatalReason(lastFailureReason) && !request.signal?.aborted) {
+        if (!bestValidZeroSlice && !isFatalReason(lastFailureReason) && !effectiveSignal?.aborted) {
           try {
             let rescueRaw: string | null = null;
             if (!isStaticStandalone) {
-              const reqHeaders: Record<string, string> = {
-                'X-Demo-Mode': 'sample',
+              const reqHeaders = buildVtonRequestAuthHeaders({
                 'X-Profile-Key': serverProfileConfig.profileKey,
-              };
-              if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+                ...(clientGeminiKey ? { 'X-Gemini-Api-Key': clientGeminiKey } : {}),
+              });
               const serverRescue = await apiFetch<VtonServerResponse>('/vton/synthesize', {
                 method: 'POST',
                 headers: reqHeaders,
+                ...(effectiveSignal ? { signal: effectiveSignal } : {}),
                 body: JSON.stringify({
                   mode,
                   styleMode,
                   viewAngleDeg: 0,
                   turnaroundSheet: false,
-                  weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                  weather: serializedWeatherPayload,
                   profileKey: serverProfileConfig.profileKey,
                   handedness: effectiveProfile.dominantHand,
                   avatarSpec: effectiveProfile.avatarSpec,
@@ -6697,22 +7037,23 @@ export async function synthesizeGeminiMultiAngleVton(
                 serverRescue?.compositeImageUrl ?? serverRescue?.afterImageUrl ?? null
               );
             }
-            if (!rescueRaw && clientGeminiKeys.length > 0) {
+            if (!rescueRaw && clientGeminiKeys.length > 0 && !effectiveSignal?.aborted) {
               const rescueDirect = await synthesizeDirectBrowserGeminiVton({
                 apiKey: clientGeminiKeys[0],
                 profile: effectiveProfile,
                 styleMode,
                 weatherMood,
-                weather: request.weather,
+                weather: serializedWeatherPayload,
                 angleDeg: 0,
                 useTurnaroundSheet: false,
                 serializedSlots,
+                signal: effectiveSignal,
               });
               rescueRaw = sanitizeImageCandidate(
                 rescueDirect?.compositeImageUrl ?? rescueDirect?.afterImageUrl ?? null
               );
             }
-            if (rescueRaw) {
+            if (rescueRaw && !effectiveSignal?.aborted) {
               const rescueCut = await ensureTransparentCutout(
                 await removeModelBackgroundToPng(rescueRaw)
               );
@@ -6728,15 +7069,42 @@ export async function synthesizeGeminiMultiAngleVton(
           }
         }
 
+        if (effectiveSignal?.aborted) {
+          return buildAbortedOutcome();
+        }
+
         if (!isFatalReason(lastFailureReason)) {
+          const failureReasons = lastQcReport?.reasons || [lastFailureReason || 'qc_failed'];
+          const failedAngles = lastQcReport?.failedAngles || [];
           logVtonQcFailure({
             outfitComboId,
             avatarConfigHash: profile.avatarConfigHash,
             attempts: maxQcAttempts,
-            reasons: lastQcReport?.reasons || [lastFailureReason || 'qc_failed'],
-            failedAngles: lastQcReport?.failedAngles || [],
+            reasons: failureReasons,
+            failedAngles,
             frontOnlyFallback: Boolean(bestValidZeroSlice),
           });
+          if (!isStaticStandalone) {
+            void apiFetch('/vton/qc-failure-log', {
+              method: 'POST',
+              headers: buildVtonRequestAuthHeaders({
+                'Content-Type': 'application/json',
+                'X-Profile-Key': serverProfileConfig.profileKey,
+              }),
+              body: JSON.stringify({
+                comboHash: outfitComboId,
+                avatarConfigHash: profile.avatarConfigHash,
+                attempts: maxQcAttempts,
+                reasons: failureReasons,
+                failedAngles,
+                equippedSlots: equippedSlotKeys,
+                handedness: profile.dominantHand,
+                frontOnlyFallback: Boolean(bestValidZeroSlice),
+                provider: 'client-vton-qc',
+                model: lastModelName,
+              }),
+            }).catch(() => {});
+          }
         }
 
         if (bestValidZeroSlice && !isFatalReason(lastFailureReason)) {
@@ -6867,7 +7235,7 @@ export async function synthesizeGeminiMultiAngleVton(
       };
     } catch (err) {
       const isAbort =
-        Boolean(request.signal?.aborted) ||
+        Boolean(effectiveSignal?.aborted) ||
         (err instanceof Error && err.name === 'AbortError');
       const status =
         err && typeof err === 'object' && 'status' in err
@@ -6905,12 +7273,16 @@ export async function synthesizeGeminiMultiAngleVton(
         createdAt: Date.now(),
       };
     } finally {
-      inFlightAiRequests.delete(flightKey);
+      flightEntry.settled = true;
+      if (inFlightAiRequests.get(flightKey) === flightEntry) {
+        inFlightAiRequests.delete(flightKey);
+      }
     }
   })();
 
-  if (!request.forceRefresh) {
-    inFlightAiRequests.set(flightKey, runPromise);
+  flightEntry.promise = runPromise;
+  if (!request.forceRefresh && !flightEntry.settled) {
+    inFlightAiRequests.set(flightKey, flightEntry);
   }
-  return runPromise;
+  return awaitEntryWithCallerSignal(flightEntry, request.signal);
 }

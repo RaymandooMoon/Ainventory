@@ -4,7 +4,10 @@ import {
   buildGeminiTryOnPrompt,
   normalizeVtonProfile,
 } from '../../server/vtonService.js';
-import { cutoutStudioBackdropToRgba } from '../../src/services/cutoutService.ts';
+import {
+  cutoutStudioBackdropToRgba,
+  inferOuterPerimeterBackdropRgb,
+} from '../../src/services/cutoutService.ts';
 import {
   CANONICAL_FLOOR_BASELINE_RATIO,
   CANONICAL_HUMAN_STATURE_RATIO,
@@ -16,6 +19,8 @@ import {
   computeCharacterIdentityAnchorKey,
   computeCoreAnatomicalCenterXInBuffer,
   computeIdealDeviceMannequinScale,
+  computeMannequinFloorPlacement,
+  computeOutfitComboId,
   computeUniformStaturePlacement,
   detectCoreHumanVerticalBoundsInBuffer,
   detectLateralFacingDirectionInBuffer,
@@ -27,6 +32,7 @@ import {
   normalizeGenderNeutralProfile,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
+  resolveShowcaseCacheKey,
   resolveSignedAngleScrollState,
   resolveTurnaroundRowSplitYInBuffer,
   resolveTurnaroundSheetGridDecisionInBuffer,
@@ -1182,7 +1188,189 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(opaqueBuf[(170 * w + 59) * 4 + 3], 255); // outer cream trouser hem preserved in floor zone!
     assert.equal(opaqueBuf[(170 * w + 101) * 4 + 3], 255);
   });
+
+  it('(k) computes responsive ResizeObserver floor placement across iOS notch, Android foldable, and desktop viewports while clamping overhead umbrella headroom', () => {
+    const mobilePlace = computeMannequinFloorPlacement({
+      stageWidth: 369,
+      stageHeight: 610,
+      imageAspectRatio: 0.75,
+    });
+    const foldablePlace = computeMannequinFloorPlacement({
+      stageWidth: 693,
+      stageHeight: 660,
+      imageAspectRatio: 0.75,
+    });
+    const desktopPlace = computeMannequinFloorPlacement({
+      stageWidth: 790,
+      stageHeight: 740,
+      imageAspectRatio: 0.75,
+    });
+
+    // Narrow mobile compensates for aspect/width choke so character stays prominent without clipping
+    assert.ok(mobilePlace.effectiveBaseScale > 1.0 && mobilePlace.effectiveBaseScale <= 1.58);
+    assert.ok(foldablePlace.effectiveBaseScale >= 1.0 && foldablePlace.effectiveBaseScale <= 1.58);
+    assert.ok(desktopPlace.effectiveBaseScale >= 1.0 && desktopPlace.effectiveBaseScale <= 1.58);
+    assert.match(mobilePlace.soleTransformOrigin, /^50% \d+\.\d{2}%$/);
+    assert.ok(mobilePlace.soleStageTopPct >= 72 && mobilePlace.soleStageTopPct <= 96);
+
+    // Tall umbrella canopy (topRatio near canvas top) clamps scale down safely without vertical crown clipping
+    const standardHead = computeMannequinFloorPlacement({
+      stageWidth: 600,
+      stageHeight: 660,
+      imageAspectRatio: 0.75,
+      topRatio: 0.14,
+      bottomRatio: 0.95,
+    });
+    const tallUmbrella = computeMannequinFloorPlacement({
+      stageWidth: 600,
+      stageHeight: 660,
+      imageAspectRatio: 0.75,
+      topRatio: 0.02,
+      bottomRatio: 0.95,
+    });
+    assert.ok(
+      tallUmbrella.effectiveBaseScale <= standardHead.effectiveBaseScale,
+      `Expected overhead canopy (${tallUmbrella.effectiveBaseScale}) to clamp scale <= standard (${standardHead.effectiveBaseScale})`
+    );
+    assert.ok(tallUmbrella.effectiveBaseScale >= 1.0);
+
+    // Null/undefined probe bounds must never coerce via Number(null) === 0 down to 84% floor origin
+    const unmeasuredDesktop = computeMannequinFloorPlacement({
+      stageWidth: 620,
+      stageHeight: 620,
+      imageAspectRatio: 0.752,
+      topRatio: null,
+      bottomRatio: null,
+    });
+    assert.equal(unmeasuredDesktop.soleTransformOrigin, '50% 95.50%');
+    assert.ok(
+      unmeasuredDesktop.soleStageTopPct > 84,
+      `Expected soleStageTopPct > 84 when unmeasured, got ${unmeasuredDesktop.soleStageTopPct}`
+    );
+    assert.ok(unmeasuredDesktop.effectiveBaseScale > 1.05);
+  });
+
+  it('(l) isolates outfitComboId and showcase cache keys by handedness and equipped bag asset', () => {
+    const toteBagA = {
+      id: 901,
+      name: '레더 구조감 토트백',
+      category: 'accessory',
+      subcategory: 'tote',
+      color_hex: '#2F241D',
+      image_url: '/seed/bag-tote-brown.png',
+    };
+    const crossbodyBagB = {
+      id: 902,
+      name: '캔버스 크로스백',
+      category: 'accessory',
+      subcategory: 'crossbody',
+      color_hex: '#C4B69F',
+      image_url: '/seed/bag-canvas-sand.png',
+    };
+    const coat = {
+      id: 101,
+      name: '카멜 헤어 코트',
+      category: 'outer',
+      subcategory: 'coat',
+      color_hex: '#B08048',
+    };
+
+    const comboRight = computeOutfitComboId({ outer: coat, accessory: toteBagA }, 'right');
+    const comboLeft = computeOutfitComboId({ outer: coat, accessory: toteBagA }, 'left');
+    assert.notEqual(comboRight.outfitComboId, comboLeft.outfitComboId);
+
+    const keyRight = resolveShowcaseCacheKey('stylized_isometric', {
+      handedness: 'right',
+      hasEquippedBag: true,
+      bagGarment: toteBagA,
+    });
+    const keyLeftA = resolveShowcaseCacheKey('stylized_isometric', {
+      handedness: 'left',
+      hasEquippedBag: true,
+      bagGarment: toteBagA,
+    });
+    const keyLeftB = resolveShowcaseCacheKey('stylized_isometric', {
+      handedness: 'left',
+      hasEquippedBag: true,
+      bagGarment: crossbodyBagB,
+    });
+    const keyLeftNoBag = resolveShowcaseCacheKey('stylized_isometric', {
+      handedness: 'left',
+      hasEquippedBag: false,
+      bagGarment: null,
+    });
+
+    assert.equal(keyRight.mirrorForLeftHanded, false);
+    assert.equal(keyLeftA.mirrorForLeftHanded, true);
+    assert.notEqual(keyRight.cacheKey, keyLeftA.cacheKey);
+    assert.notEqual(keyLeftA.cacheKey, keyLeftB.cacheKey);
+    assert.equal(keyLeftNoBag.mirrorForLeftHanded, false);
+    assert.equal(keyLeftNoBag.cacheKey, keyRight.cacheKey);
+  });
+
+  it('(m) infers #D8CFC4 warm-stone perimeter before @imgly and purges trapped under-umbrella canopy pockets without eating camel outerwear or face skin', () => {
+    const w = 160;
+    const h = 220;
+    const paintScene = (buf: Uint8ClampedArray, outerAlpha: number) => {
+      for (let i = 0; i < w * h; i += 1) {
+        buf[i * 4] = 216;
+        buf[i * 4 + 1] = 207;
+        buf[i * 4 + 2] = 196;
+        buf[i * 4 + 3] = outerAlpha;
+      }
+      const fill = (x0: number, x1: number, y0: number, y1: number, r: number, g: number, b: number) => {
+        for (let y = y0; y <= y1; y += 1) {
+          for (let x = x0; x <= x1; x += 1) {
+            const idx = (y * w + x) * 4;
+            buf[idx] = r;
+            buf[idx + 1] = g;
+            buf[idx + 2] = b;
+            buf[idx + 3] = 255;
+          }
+        }
+      };
+      // Overhead dark umbrella dome + outer enclosure ribs framing under-canopy #D8CFC4 / shaded pockets
+      fill(16, 144, 14, 42, 34, 38, 46);
+      fill(16, 24, 43, 84, 34, 38, 46);
+      fill(136, 144, 43, 84, 34, 38, 46);
+      // Trapped #D8CFC4 (left) & shaded #C0B8AE (right) warm-stone backdrop pockets under umbrella dome
+      fill(25, 65, 43, 80, 216, 207, 196);
+      fill(95, 135, 43, 80, 192, 184, 174);
+      // Head/face skin & hair crown at center
+      fill(66, 94, 43, 78, 214, 172, 148);
+      // Shoulder bridge & tailored camel coat (#B08048) torso/waist
+      fill(20, 140, 81, 90, 176, 128, 72);
+      fill(52, 108, 91, 144, 176, 128, 72);
+      // Cream trousers & shoes
+      fill(58, 76, 145, 186, 212, 208, 198);
+      fill(84, 102, 145, 186, 212, 208, 198);
+      fill(58, 76, 187, 196, 36, 36, 40);
+      fill(84, 102, 187, 196, 36, 36, 40);
+    };
+
+    const rawOpaque = new Uint8ClampedArray(w * h * 4);
+    paintScene(rawOpaque, 255);
+    const inferredBackdropRgb = inferOuterPerimeterBackdropRgb(rawOpaque, w, h);
+    assert.deepEqual(inferredBackdropRgb, [216, 207, 196]);
+
+    // Simulate @imgly stripping outer perimeter to alpha=0 while trapping #D8CFC4 / shaded pocket under the dome
+    const postImglyBuf = new Uint8ClampedArray(w * h * 4);
+    paintScene(postImglyBuf, 0);
+    const res = cutoutStudioBackdropToRgba(postImglyBuf, w, h, { inferredBackdropRgb });
+    assert.ok(res.purgedHolePixels > 150);
+
+    // Both exact #D8CFC4 and shaded #C0B8AE under-umbrella sky cavities become transparent (alpha === 0)
+    assert.equal(postImglyBuf[(62 * w + 45) * 4 + 3], 0);
+    assert.equal(postImglyBuf[(62 * w + 115) * 4 + 3], 0);
+
+    // Face skin, umbrella canopy, camel coat (#B08048), and trousers stay opaque
+    assert.equal(postImglyBuf[(28 * w + 80) * 4 + 3], 255);
+    assert.equal(postImglyBuf[(60 * w + 80) * 4 + 3], 255);
+    assert.equal(postImglyBuf[(110 * w + 80) * 4 + 3], 255);
+    assert.equal(postImglyBuf[(168 * w + 66) * 4 + 3], 255);
+  });
 });
+
 
 
 

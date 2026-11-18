@@ -2060,6 +2060,20 @@ export default function OutfitStudioView({
     setSlots({ ...slots, [slotKey]: null });
   };
 
+  const handleClearAll = () => {
+    if (equippedItems.length === 0) return;
+    delete scenarioSnapshotsRef.current[weatherSnapshotScopeKey];
+    autoEquippedUmbrellaIdRef.current = null;
+    userModifiedSlotsRef.current = true;
+    activeRecIdRef.current = null;
+    setActiveRecId(null);
+    setSelectedInspectorId(null);
+    setHasExplicitSlotState(true);
+    setManualRainUmbrellaCleared(true);
+    triggerHaptic('selection');
+    setSlots({ ...EMPTY_STUDIO_SLOTS });
+  };
+
   const handleSaveOutfit = async (e) => {
     e?.preventDefault?.();
     if (equippedItems.length === 0) return;
@@ -2814,29 +2828,41 @@ export default function OutfitStudioView({
             </button>
           )}
           {equippedItems.length > 0 && (
-            <button
-              type="button"
-              data-outfit-vton-refresh="true"
-              className="hig-circle-icon-btn is-subtle"
-              onClick={() => {
-                triggerHaptic('selection');
-                setVtonRefreshNonce((n) => n + 1);
-              }}
-              title={tx(
-                lang,
-                '날씨 포즈·투명 배경제거 새로고침',
-                'Regenerate Weather Pose & Cutout'
-              )}
-              aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
-            >
-              <RefreshCw size={16} />
-            </button>
+            <>
+              <button
+                type="button"
+                data-outfit-vton-refresh="true"
+                className="hig-circle-icon-btn is-subtle"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setVtonRefreshNonce((n) => n + 1);
+                }}
+                title={tx(
+                  lang,
+                  '날씨 포즈·투명 배경제거 새로고침',
+                  'Regenerate Weather Pose & Cutout'
+                )}
+                aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
+              >
+                <RefreshCw size={16} />
+              </button>
+              <button
+                type="button"
+                data-outfit-clear-all="true"
+                className="hig-circle-icon-btn is-subtle"
+                onClick={handleClearAll}
+                title={tx(lang, '착장 초기화', 'Reset Outfit')}
+                aria-label={tx(lang, '착장 초기화', 'Reset Outfit')}
+              >
+                <RotateCcw size={16} />
+              </button>
+            </>
           )}
         </div>
 
         <div className="hig-top-bar-titles">
           <h1 className="sr-only">Outfits</h1>
-          <AppHeaderBrand effectiveTheme={theme} />
+          <AppHeaderBrand effectiveTheme={theme} lang={lang} />
         </div>
 
         <div className="hig-top-bar-actions">

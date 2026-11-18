@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
+import { tx } from '../../utils/i18n.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import { computeLogoFlipTransform, consumePendingLogoFlight } from '../../utils/logoTransition.ts';
 import BrandLogo from '../auth/BrandLogo.tsx';
 
 export interface AppHeaderBrandProps {
   effectiveTheme?: 'light' | 'dark' | string;
+  lang?: 'ko' | 'en' | string;
   className?: string;
   onClick?: () => void;
 }
@@ -16,10 +18,14 @@ export interface AppHeaderBrandProps {
  */
 export default function AppHeaderBrand({
   effectiveTheme = 'light',
+  lang,
   className = '',
   onClick,
 }: AppHeaderBrandProps) {
   const logoRef = useRef<HTMLSpanElement | null>(null);
+  const resolvedLang =
+    lang ??
+    (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko');
 
   useLayoutEffect(() => {
     const el = logoRef.current;
@@ -75,7 +81,7 @@ export default function AppHeaderBrand({
         type="button"
         data-header-brand-btn="true"
         className="hig-top-bar-brand-btn"
-        aria-label="iNVTRY · 기본 화면으로 이동"
+        aria-label={tx(resolvedLang, 'iNVTRY · 기본 화면으로 이동', 'iNVTRY · Go to Outfits home')}
         title="iNVTRY"
         onClick={handleBrandClick}
       >

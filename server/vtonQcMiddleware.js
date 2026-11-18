@@ -654,26 +654,54 @@ export function buildQcCorrectionHint(reasons = []) {
   return cues.join(' ');
 }
 
+export function sanitizeQcLogString(value, maxLen = 160) {
+  return String(value || '')
+    .replace(/\p{Cc}/gu, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+const MAX_QC_LOG_BYTES = 5 * 1024 * 1024;
+
 export function appendVtonQcFailureLog(entry, logFilePath) {
   const targetPath = path.resolve(
     String(logFilePath || process.env.AINVENTORY_VTON_QC_LOG_PATH || DEFAULT_VTON_QC_LOG_PATH)
   );
   try {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    try {
+      const stat = fs.statSync(targetPath);
+      if (stat.size >= MAX_QC_LOG_BYTES) {
+        fs.renameSync(targetPath, `${targetPath}.1`);
+      }
+    } catch {
+      // File does not exist yet
+    }
+    const isFrontOnlyFallback =
+      entry?.frontOnlyFallback !== false && entry?.frontOnlyDegraded !== false;
     const record = {
       timestamp: Date.now(),
       isoTime: new Date().toISOString(),
-      comboHash: String(entry?.comboHash || 'unknown'),
-      avatarConfigHash: entry?.avatarConfigHash || null,
+      comboHash: sanitizeQcLogString(entry?.comboHash || 'unknown', 128) || 'unknown',
+      avatarConfigHash: entry?.avatarConfigHash
+        ? sanitizeQcLogString(entry.avatarConfigHash, 64) || null
+        : null,
       attempts: Math.max(1, Math.round(Number(entry?.attempts) || 3)),
-      reasons: Array.isArray(entry?.reasons) ? entry.reasons.slice(0, 24) : [],
+      reasons: Array.isArray(entry?.reasons)
+        ? entry.reasons
+            .slice(0, 24)
+            .map((r) => sanitizeQcLogString(r, 160))
+            .filter(Boolean)
+        : [],
       failedAngles: Array.isArray(entry?.failedAngles) ? entry.failedAngles.slice(0, 8) : [],
-      equippedSlots: Array.isArray(entry?.equippedSlots) ? entry.equippedSlots : [],
-      handedness: entry?.handedness || 'right',
-      fallbackView: 'positive-only',
-      frontOnlyDegraded: true,
-      provider: entry?.provider || 'gemini-vton',
-      model: entry?.model || null,
+      equippedSlots: Array.isArray(entry?.equippedSlots)
+        ? entry.equippedSlots.slice(0, 24).map((s) => sanitizeQcLogString(s, 48)).filter(Boolean)
+        : [],
+      handedness: sanitizeQcLogString(entry?.handedness, 16).toLowerCase() === 'left' ? 'left' : 'right',
+      fallbackView: isFrontOnlyFallback ? 'positive-only' : 'flatlay-fallback',
+      frontOnlyDegraded: isFrontOnlyFallback,
+      provider: sanitizeQcLogString(entry?.provider || 'gemini-vton', 64) || 'gemini-vton',
+      model: entry?.model ? sanitizeQcLogString(entry.model, 96) || null : null,
     };
     fs.appendFileSync(targetPath, `${JSON.stringify(record)}\n`, 'utf8');
     return true;
@@ -809,7 +837,61 @@ export function createVtonQcMiddleware({
       }
 
       if (!positiveOnlyImageUrl) {
-        positiveOnlyImageUrl = lastResult?.compositeImageUrl || null;
+        const isLastTurnaround =
+          lastResult?.layout === 'turnaround_3x2' || lastResult?.layout === 'turnaround_2x2';
+        if (isLastTurnaround) {
+          const panelZero = lastResult?.panelImages?.['0'];
+          if (typeof panelZero === 'string' && panelZero.startsWith('data:image/')) {
+            positiveOnlyImageUrl = panelZero;
+          } else {
+            const parsedLast = parseImageDataUrl(lastResult?.compositeImageUrl);
+            if (parsedLast?.mimeType === 'image/png') {
+              const decodedLast = decodePngBufferToRgba(parsedLast.buffer);
+              if (decodedLast) {
+                const panels = sliceTurnaroundPanelsInServerBuffer(
+                  decodedLast.rgba,
+                  decodedLast.width,
+                  decodedLast.height,
+                  lastResult.layout
+                );
+                const cell0 = panels?.[0];
+                if (cell0) {
+                  const cell0Data = new Uint8ClampedArray(cell0.rgba);
+                  cutoutStudioBackdropToRgba(cell0Data, cell0.width, cell0.height);
+                  scrubCutoutArtifactsInBuffer(cell0Data, cell0.width, cell0.height);
+                  positiveOnlyImageUrl = encodeRgbaToPngDataUrl(
+                    cell0.width,
+                    cell0.height,
+                    cell0Data
+                  );
+                }
+              }
+            }
+          }
+        } else {
+          positiveOnlyImageUrl = lastResult?.compositeImageUrl || null;
+        }
+      }
+
+      if (!positiveOnlyImageUrl) {
+        res.locals.vtonResult = {
+          ...lastResult,
+          ok: true,
+          provider: 'flatlay-fallback',
+          geminiUsed: false,
+          fallbackToFlatLay: true,
+          compositeImageUrl: null,
+          baseModelImageUrl: null,
+          frontOnlyDegraded: false,
+          fallbackView: 'flatlay-fallback',
+          qcStatus: 'failed_fallback_flatlay',
+          qcPassed: false,
+          qcAttempts: attemptLimit,
+          qcReasons: lastReport?.reasons || ['qc_validation_failed'],
+          failedAngles: lastReport?.failedAngles || [0],
+          fallbackReason: 'qc_validation_failed',
+        };
+        return next();
       }
 
       res.locals.vtonResult = {

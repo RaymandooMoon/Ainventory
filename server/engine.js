@@ -483,11 +483,12 @@ export async function fetchTomorrowWeather(
       }
     : CITY_MAP[safeCityKey] || CITY_MAP.seoul;
 
-  const targetDateObj = new Date();
-  if (resolvedDayTarget === 'tomorrow') {
-    targetDateObj.setDate(targetDateObj.getDate() + 1);
-  }
-  const targetDateStr = targetDateObj.toISOString().slice(0, 10);
+  const targetDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(Date.now() + (resolvedDayTarget === 'tomorrow' ? 86_400_000 : 0)));
 
   if (scenario && scenario !== 'live' && Object.hasOwn(WEATHER_SCENARIOS, scenario)) {
     const preset = WEATHER_SCENARIOS[scenario];
@@ -510,7 +511,7 @@ export async function fetchTomorrowWeather(
   const cacheKey = `${hasCustom ? `${city.lat.toFixed(2)},${city.lon.toFixed(2)}` : safeCityKey}:${resolvedDayTarget}:${targetDateStr}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < (cached.ttlMs || WEATHER_SUCCESS_TTL_MS)) {
-    return cached.data;
+    return { ...cached.data, cityName: city.name };
   }
 
   const pending = weatherInFlight.get(cacheKey);
@@ -520,11 +521,19 @@ export async function fetchTomorrowWeather(
 
   const job = (async () => {
     const storeCache = (data, ttlMs) => {
+      const now = Date.now();
+      if (weatherCache.size >= WEATHER_CACHE_MAX) {
+        for (const [k, v] of weatherCache.entries()) {
+          if (now - v.fetchedAt >= (v.ttlMs || WEATHER_SUCCESS_TTL_MS)) {
+            weatherCache.delete(k);
+          }
+        }
+      }
       if (weatherCache.size >= WEATHER_CACHE_MAX) {
         const oldestKey = weatherCache.keys().next().value;
         if (oldestKey !== undefined) weatherCache.delete(oldestKey);
       }
-      weatherCache.set(cacheKey, { fetchedAt: Date.now(), ttlMs, data });
+      weatherCache.set(cacheKey, { fetchedAt: now, ttlMs, data });
     };
 
     try {
@@ -535,6 +544,11 @@ export async function fetchTomorrowWeather(
       const idx = resolvedDayTarget === 'tomorrow' && json.daily?.time?.length > 1 ? 1 : 0;
       const code = json.daily.weather_code[idx] ?? 1;
       const condition = weatherCodeToKorean(code);
+      const minRaw = Number(json.daily.temperature_2m_min?.[idx]);
+      const maxRaw = Number(json.daily.temperature_2m_max?.[idx]);
+      if (!Number.isFinite(minRaw) || !Number.isFinite(maxRaw)) {
+        throw new Error('Invalid Open-Meteo temperature payload');
+      }
       const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
       const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
       const data = {
@@ -545,8 +559,8 @@ export async function fetchTomorrowWeather(
         scenarioKey: 'live',
         condition,
         weatherCode: code,
-        tempMin: Math.round(json.daily.temperature_2m_min[idx]),
-        tempMax: Math.round(json.daily.temperature_2m_max[idx]),
+        tempMin: Math.round(minRaw),
+        tempMax: Math.round(maxRaw),
         precipProb,
         windSpeed,
         humidity: precipProb >= 50 ? 78 : 50,

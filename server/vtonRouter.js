@@ -8,11 +8,16 @@ import {
   normalizeIsoViewAngleDeg,
   synthesizeVtonLook,
 } from './vtonService.js';
-import { createVtonQcMiddleware } from './vtonQcMiddleware.js';
+import {
+  appendVtonQcFailureLog,
+  createVtonQcMiddleware,
+  sanitizeQcLogString,
+} from './vtonQcMiddleware.js';
 
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SYNTHESES_PER_WINDOW = 360;
 const MAX_STATUS_PER_WINDOW = 480;
+const MAX_QC_LOG_PER_WINDOW = 240;
 const MAX_RATE_BUCKETS = 2048;
 
 const ACCEPTED_MODES = new Set([
@@ -157,7 +162,8 @@ function requireVtonSessionOrSample(req, res, next) {
     .toLowerCase();
   const allowedRoute =
     (req.method === 'GET' && req.path === '/status') ||
-    (req.method === 'POST' && req.path === '/synthesize');
+    (req.method === 'POST' && req.path === '/synthesize') ||
+    (req.method === 'POST' && req.path === '/qc-failure-log');
 
   if (demoHeader === 'sample' && allowedRoute) {
     req.vtonAuth = {
@@ -441,6 +447,63 @@ export function createVtonRouter(options = {}) {
       return res.status(200).json(res.locals.vtonResult);
     }
   );
+
+  const qcLogJsonParser = express.json({ limit: '64kb' });
+
+  router.post('/qc-failure-log', requireVtonSessionOrSample, qcLogJsonParser, (req, res) => {
+    const ipRate = checkIpRateLimit(`vton:qclog:${resolveClientIp(req)}`, MAX_QC_LOG_PER_WINDOW);
+    if (!ipRate.allowed) {
+      res.setHeader('Retry-After', String(ipRate.retryAfterSec));
+      return res.status(429).json({
+        error: `QC 로그 기록 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: ipRate.retryAfterSec,
+      });
+    }
+
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ error: '유효한 JSON 로그 본문이 필요합니다.' });
+    }
+
+    const cleanText = (val, maxLen) =>
+      typeof val === 'string' ? sanitizeQcLogString(val, maxLen) : '';
+    const rawCombo = cleanText(body.comboHash ?? body.outfitComboId, 128);
+    const rawHash = cleanText(body.avatarConfigHash, 64);
+    const rawProvider = cleanText(body.provider, 64);
+    const rawModel = cleanText(body.model, 96);
+    const record = {
+      comboHash: rawCombo || 'unknown',
+      avatarConfigHash: rawHash || null,
+      attempts: Math.max(1, Math.min(10, Math.round(Number(body.attempts) || 3))),
+      reasons: Array.isArray(body.reasons)
+        ? body.reasons
+            .map((r) => cleanText(r, 160))
+            .filter(Boolean)
+            .slice(0, 24)
+        : ['qc_front_only_fallback'],
+      failedAngles: Array.isArray(body.failedAngles)
+        ? body.failedAngles
+            .map((a) => Number(a))
+            .filter((a) => Number.isFinite(a))
+            .slice(0, 8)
+        : [0],
+      equippedSlots: Array.isArray(body.equippedSlots)
+        ? body.equippedSlots
+            .map((s) => cleanText(s, 48))
+            .filter(Boolean)
+            .slice(0, 24)
+        : [],
+      handedness: cleanText(body.handedness, 16).toLowerCase() === 'left' ? 'left' : 'right',
+      frontOnlyFallback: body.frontOnlyFallback !== false,
+      provider: rawProvider || 'client-vton-qc',
+      model: rawModel || null,
+    };
+
+    const logged = appendVtonQcFailureLog(record, options.qcLogFilePath);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(201).json({ ok: Boolean(logged), logged: Boolean(logged) });
+  });
 
   router.use((_req, res) => {
     res.status(404).json({ error: 'VTON API endpoint not found' });

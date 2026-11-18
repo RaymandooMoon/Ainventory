@@ -389,13 +389,14 @@ function isChromaKeyLeakRgb(
   b: number,
   customKeyRgb?: [number, number, number] | null
 ): boolean {
-  // Legacy green #5E9C7E
+  // Legacy green #5E9C7E (cool sage matte green where b >= r, avoiding warm-olive garments like [124,178,93])
   const isGreenKey =
     g > r + 14 &&
     g > b + 6 &&
-    Math.abs(r - 94) <= 36 &&
-    Math.abs(g - 156) <= 36 &&
-    Math.abs(b - 126) <= 36;
+    b >= r &&
+    Math.abs(r - 94) <= 24 &&
+    Math.abs(g - 156) <= 24 &&
+    Math.abs(b - 126) <= 24;
   // Slate #94A3B8 or closely adjacent cool grey studio wall hole
   const isSlateHole =
     Math.abs(r - 148) <= 16 &&

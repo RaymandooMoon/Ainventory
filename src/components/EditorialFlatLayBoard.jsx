@@ -4,7 +4,7 @@ import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
-  computeIdealDeviceMannequinScale,
+  computeMannequinFloorPlacement,
   computeOutfitComboId,
   normalizeGenderNeutralProfile,
   normalizeTurnaround360Angle,
@@ -88,6 +88,29 @@ function nowMs() {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
     : Date.now();
+}
+
+const AI_BOUNDS_CACHE_MAX = 48;
+const aiImageBoundsCache = new Map();
+
+function readCachedAiImageProbe(src) {
+  const hit = aiImageBoundsCache.get(src);
+  if (!hit) return null;
+  aiImageBoundsCache.delete(src);
+  aiImageBoundsCache.set(src, hit);
+  return hit;
+}
+
+function writeCachedAiImageProbe(src, entry) {
+  if (!src) return;
+  if (aiImageBoundsCache.has(src)) {
+    aiImageBoundsCache.delete(src);
+  }
+  aiImageBoundsCache.set(src, entry);
+  if (aiImageBoundsCache.size > AI_BOUNDS_CACHE_MAX) {
+    const oldestKey = aiImageBoundsCache.keys().next().value;
+    if (oldestKey !== undefined) aiImageBoundsCache.delete(oldestKey);
+  }
 }
 
 /**
@@ -233,7 +256,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
         </div>
       ) : (
         <div
-          className={`editorial-flatlay-collage ${placements.length >= 10 ? 'is-scrollable' : ''}`}
+          className={`editorial-flatlay-collage ${placements.length >= 8 ? 'is-scrollable' : ''}`}
           data-flatlay-grid-cols={cols}
           data-flatlay-count={placements.length}
           style={{
@@ -289,6 +312,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                     item={garment}
                     alt={displayName}
                     allowStorePhoto={allowStorePhoto}
+                    eager
                     className="editorial-flatlay-garment-media"
                     style={{ width: '100%', height: '100%' }}
                     imgStyle={{
@@ -399,7 +423,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   pan = { x: 0, y: 0 },
   onZoomChange,
   onPanChange,
-  onIdealScaleChange,
+  onFloorPlacementChange,
   auraTier = 'C',
   postLoginRevealActive = false,
   postLoginProgress = 0,
@@ -465,8 +489,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   );
 
   const { outfitComboId, equippedGarments } = useMemo(
-    () => computeOutfitComboId(slots),
-    [slots]
+    () => computeOutfitComboId(slots, profile.dominantHand),
+    [slots, profile.dominantHand]
   );
 
   const resolvedLayers = useMemo(() => {
@@ -492,8 +516,10 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   );
 
   const stageRef = useRef(null);
+  const aiImgRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [aiImgAspect, setAiImgAspect] = useState(0.76);
+  const [aiContentBounds, setAiContentBounds] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
   const [isRotatingDrag, setIsRotatingDrag] = useState(false);
@@ -512,6 +538,113 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       recenterTimerRef.current = null;
     }
   }, []);
+
+  const measureAiImageEl = useCallback((img, expectedSrc) => {
+    const cached = expectedSrc ? readCachedAiImageProbe(expectedSrc) : null;
+    if (cached) {
+      setAiImgAspect((prev) => (Math.abs(prev - cached.ratio) < 0.005 ? prev : cached.ratio));
+      setAiContentBounds((prev) => {
+        if (!cached.bounds) {
+          return prev?.src === expectedSrc ? null : prev;
+        }
+        if (
+          prev &&
+          prev.src === cached.bounds.src &&
+          Math.abs(prev.topRatio - cached.bounds.topRatio) < 0.005 &&
+          Math.abs(prev.bottomRatio - cached.bounds.bottomRatio) < 0.005
+        ) {
+          return prev;
+        }
+        return cached.bounds;
+      });
+      return;
+    }
+
+    const nw = img?.naturalWidth || 0;
+    const nh = img?.naturalHeight || 0;
+    if (nw < 16 || nh < 16) return;
+    const ratio = Math.round((nw / nh) * 1000) / 1000;
+    setAiImgAspect((prev) => (Math.abs(prev - ratio) < 0.005 ? prev : ratio));
+
+    if (typeof document === 'undefined') return;
+    const th = 128;
+    const tw = Math.max(16, Math.min(96, Math.round(ratio * th)));
+    const probe = document.createElement('canvas');
+    probe.width = tw;
+    probe.height = th;
+    try {
+      const ctx = probe.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, tw, th);
+      const data = ctx.getImageData(0, 0, tw, th).data;
+      const topCornersTransparent = data[3] <= 36 && data[(tw - 1) * 4 + 3] <= 36;
+      if (!topCornersTransparent) {
+        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
+        setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
+        return;
+      }
+      let minRow = th;
+      let maxRow = -1;
+      for (let y = 0; y < th; y += 1) {
+        const rowOff = y * tw;
+        let rowOpaque = 0;
+        for (let x = 0; x < tw; x += 1) {
+          if (data[(rowOff + x) * 4 + 3] > 36) {
+            rowOpaque += 1;
+          }
+        }
+        if (rowOpaque >= 1) {
+          if (y < minRow) minRow = y;
+          if (y > maxRow) maxRow = y;
+        }
+      }
+      if (maxRow > minRow + Math.round(th * 0.2)) {
+        const nextBounds = {
+          src: expectedSrc,
+          topRatio: Math.round((minRow / th) * 1000) / 1000,
+          bottomRatio: Math.round(((maxRow + 1) / th) * 1000) / 1000,
+        };
+        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: nextBounds });
+        setAiContentBounds((prev) =>
+          prev &&
+          prev.src === nextBounds.src &&
+          Math.abs(prev.topRatio - nextBounds.topRatio) < 0.005 &&
+          Math.abs(prev.bottomRatio - nextBounds.bottomRatio) < 0.005
+            ? prev
+            : nextBounds
+        );
+      } else {
+        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
+      }
+    } catch {
+      setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
+    } finally {
+      probe.width = 0;
+      probe.height = 0;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!aiImageUrl) return;
+    const cached = readCachedAiImageProbe(aiImageUrl);
+    if (cached) {
+      setAiImgAspect((prev) => (Math.abs(prev - cached.ratio) < 0.005 ? prev : cached.ratio));
+      setAiContentBounds((prev) =>
+        cached.bounds
+          ? prev?.src === cached.bounds.src
+            ? prev
+            : cached.bounds
+          : prev?.src === aiImageUrl
+            ? null
+            : prev
+      );
+      return;
+    }
+    const img = aiImgRef.current;
+    if (img?.complete && img.naturalWidth >= 16) {
+      measureAiImageEl(img, aiImageUrl);
+    }
+  }, [aiImageUrl, measureAiImageEl]);
 
   useEffect(() => {
     if (!canPinchZoom) {
@@ -541,29 +674,40 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     return () => window.removeEventListener('resize', syncSize);
   }, []);
 
-  const handleAiImageLoad = useCallback((e) => {
-    const img = e.currentTarget;
-    const nw = img?.naturalWidth || 0;
-    const nh = img?.naturalHeight || 0;
-    if (nw >= 16 && nh >= 16) {
-      const ratio = Math.round((nw / nh) * 1000) / 1000;
-      setAiImgAspect((prev) => (Math.abs(prev - ratio) < 0.005 ? prev : ratio));
-    }
-  }, []);
+  const handleAiImageLoad = useCallback(
+    (e) => {
+      const src = aiImageUrl || e.currentTarget.currentSrc || e.currentTarget.src || '';
+      measureAiImageEl(e.currentTarget, src);
+    },
+    [aiImageUrl, measureAiImageEl]
+  );
 
-  const idealBaseScale = useMemo(
+  const activeContentBounds =
+    aiContentBounds && aiContentBounds.src === aiImageUrl ? aiContentBounds : null;
+
+  const floorPlacement = useMemo(
     () =>
-      computeIdealDeviceMannequinScale({
+      computeMannequinFloorPlacement({
         stageWidth: stageSize.width,
         stageHeight: stageSize.height,
         imageAspectRatio: aiImgAspect,
+        topRatio: activeContentBounds?.topRatio ?? null,
+        bottomRatio: activeContentBounds?.bottomRatio ?? null,
       }),
-    [stageSize.width, stageSize.height, aiImgAspect]
+    [
+      stageSize.width,
+      stageSize.height,
+      aiImgAspect,
+      activeContentBounds?.topRatio,
+      activeContentBounds?.bottomRatio,
+    ]
   );
 
+  const idealBaseScale = floorPlacement.effectiveBaseScale;
+
   useEffect(() => {
-    onIdealScaleChange?.(idealBaseScale);
-  }, [idealBaseScale, onIdealScaleChange]);
+    onFloorPlacementChange?.(floorPlacement);
+  }, [floorPlacement, onFloorPlacementChange]);
 
   // Auto-recenter mannequin position to dead-center (`{ x: 0, y: 0 }`) 1,000ms (1 second) after pan/pinch release
   useEffect(() => {
@@ -1154,7 +1298,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
     const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
     const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
-    const effectiveScale = safeZoom;
+    const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
     const parts = [];
     if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
       parts.push(
@@ -1171,7 +1315,16 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       parts.push('scaleX(-1)');
     }
     return {
-      transformOrigin: '50% 50%',
+      ...(floorPlacement.renderedContentW && floorPlacement.renderedContentH
+        ? {
+            width: `${floorPlacement.renderedContentW}px`,
+            height: `${floorPlacement.renderedContentH}px`,
+            maxWidth: '100%',
+            maxHeight: '100%',
+            flex: '0 0 auto',
+          }
+        : {}),
+      transformOrigin: floorPlacement.soleTransformOrigin,
       transform: parts.length > 0 ? parts.join(' ') : 'none',
     };
   }, [
@@ -1183,18 +1336,32 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     safePanX,
     safePanY,
     safeZoom,
+    floorPlacement.effectiveBaseScale,
+    floorPlacement.soleTransformOrigin,
+    floorPlacement.renderedContentW,
+    floorPlacement.renderedContentH,
   ]);
 
   const shadowTransformStyle = useMemo(() => {
-    const shadowScale = 1 + (safeZoom - 1) * 0.55;
+    const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
+    const shadowScale = 1 + (effectiveScale - 1) * 0.55;
     const hasTranslation = safePanX !== 0 || safePanY !== 0;
-    if (!hasTranslation && Math.abs(shadowScale - 1) <= 0.005) {
-      return undefined;
-    }
     return {
-      transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${shadowScale.toFixed(3)})`,
+      top: `calc(${floorPlacement.soleStageTopPct.toFixed(2)}% - 13px)`,
+      bottom: 'auto',
+      ...(hasTranslation || Math.abs(shadowScale - 1) > 0.005
+        ? {
+            transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${shadowScale.toFixed(3)})`,
+          }
+        : {}),
     };
-  }, [safePanX, safePanY, safeZoom]);
+  }, [
+    safePanX,
+    safePanY,
+    safeZoom,
+    floorPlacement.effectiveBaseScale,
+    floorPlacement.soleStageTopPct,
+  ]);
 
   const styleLabel =
     resolvedStyleMode === 'stylized_isometric'
@@ -1266,6 +1433,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 aria-hidden="true"
               />
               <img
+                ref={aiImgRef}
                 src={aiImageUrl}
                 onLoad={handleAiImageLoad}
                 alt={

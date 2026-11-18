@@ -387,6 +387,22 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
     assert.ok(greenFail.failedAngles.includes(90));
     assert.ok(greenFail.reasons.some((r) => r.includes('interior_chroma_hole')));
 
+    // Genuine warm-olive garment (RGB 124,178,93) is NOT false-flagged as cool #5E9C7E green key
+    const oliveCoat = makeSliceRgba({
+      topY: 12,
+      bottomY: 168,
+      leftX: 36,
+      rightX: 84,
+      headCrownNarrow: true,
+      rgb: [124, 178, 93],
+    });
+    const mOlive = inspectPixelSliceQc(oliveCoat.buf, oliveCoat.width, oliveCoat.height, {
+      studioBackdropHex: '#94A3B8',
+    });
+    assert.equal(mOlive.interiorChromaRatio, 0);
+    const olivePass = evaluateTurnaroundConsistencyQc({ 0: mOlive, 45: mOlive, 90: mOlive, 180: mOlive });
+    assert.equal(olivePass.ok, true);
+
     // Palette drift at 180° fails consistency
     const neonRedBack = makeSliceRgba({
       topY: 13,

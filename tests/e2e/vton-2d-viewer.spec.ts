@@ -32,7 +32,13 @@ function buildPortraitTurnaround2x2PngDataUrl(variantSeed = 0): string {
       let r = 148;
       let g = 163;
       let b = 184;
-      if (localY >= 18 && localY <= 128 && localX >= 30 && localX <= 66) {
+      const inHead = localY >= 14 && localY <= 30 && localX >= 43 && localX <= 53;
+      const inTorsoAndLegs = localY >= 31 && localY <= 128 && localX >= 33 && localX <= 63;
+      if (inHead) {
+        r = 204;
+        g = 162;
+        b = 134;
+      } else if (inTorsoAndLegs) {
         r = 36 + ((variantSeed * 37) % 160);
         g = 48 + ((variantSeed * 23) % 140);
         b = 62 + ((variantSeed * 19) % 130);
@@ -537,8 +543,8 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       expect(weatherRect.y - stageRect.y).toBeLessThanOrEqual(24);
     }
 
-    // Seamless Infinity-Cove Cyclorama studio backdrop (zero cartoon furniture vector props)
-    await expect(studioCanvas.locator('[data-backdrop-style="infinity-cyclorama"]')).toBeVisible();
+    // Seamless Architectural Stage studio backdrop (zero cartoon furniture vector props)
+    await expect(studioCanvas.locator('[data-backdrop-style="architectural-stage"]')).toBeVisible();
     await expect(studioCanvas.locator('.atelier-backdrop-props-svg')).toHaveCount(0);
 
     // Compact preview in Skin-Tone Modal uses non-procedural Avatar Spec Card with zero <canvas>
@@ -850,7 +856,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     // Item 9: Selecting `outer` category displays `'외투'` (NOT garment name `'발수 코튼 개버딘 트렌치코트'`)
     const drawerTitle = drawerRoot.locator('[data-drawer-focused-title="true"]');
     await expect(drawerTitle).toBeVisible();
-    await expect(drawerTitle).toHaveText('외투');
+    await expect(drawerTitle.locator('.atelier-drawer-focused-title-label')).toHaveText('외투');
     await expect(drawerTitle).not.toContainText('발수 코튼 개버딘 트렌치코트');
 
     // Item 4: Pinned equipped card sits above `.atelier-drawer-grid-scroll`, stays fixed on scroll, & shows unclipped metadata
@@ -955,5 +961,217 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     );
     expect(await readSheetLuminance()).toBeLessThan(45);
   });
+
+  test('6. WS-1: Responsive ResizeObserver character scaling (`data-ideal-scale`), non-clipping bounds, and floor contact/AO/wet-reflection grounding across viewports', async ({
+    page,
+  }) => {
+    await page.route('**/api/vton/synthesize', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: 'turnaround_2x2',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: buildPortraitTurnaround2x2PngDataUrl(7),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+
+    await expect(studioCanvas).toBeVisible();
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+
+    // Confirm responsive `data-ideal-scale` is active (> 1.0, <= 1.58) rather than hardcoded 1.0
+    await expect
+      .poll(async () => Number((await modelStage.getAttribute('data-ideal-scale')) || '0'))
+      .toBeGreaterThan(1.01);
+    const idealScale = Number((await modelStage.getAttribute('data-ideal-scale')) || '1');
+    expect(idealScale).toBeLessThanOrEqual(1.58);
+
+    // Confirm AI character image fills stage prominently without clipping above Weather Capsule or below floor
+    const [stageBox, capsuleBox, imgBox, floorShadowBox, aoShadowBox] = await Promise.all([
+      studioCanvas.boundingBox(),
+      studioCanvas.locator('[data-atelier-weather-capsule="true"]').boundingBox(),
+      aiImg.boundingBox(),
+      studioCanvas.locator('[data-floor-contact-shadow="true"]').boundingBox(),
+      studioCanvas.locator('[data-ground-ao-shadow="true"]').boundingBox(),
+    ]);
+    expect(stageBox).not.toBeNull();
+    expect(capsuleBox).not.toBeNull();
+    expect(imgBox).not.toBeNull();
+    expect(floorShadowBox).not.toBeNull();
+    expect(aoShadowBox).not.toBeNull();
+
+    // Floor contact shadow & StageGroundDeck AO shadow align tightly near stage floor baseline without drifting off soles
+    const floorShadowCenterY = floorShadowBox!.y + floorShadowBox!.height / 2;
+    const aoShadowCenterY = aoShadowBox!.y + aoShadowBox!.height / 2;
+    expect(Math.abs(floorShadowCenterY - aoShadowCenterY)).toBeLessThanOrEqual(14);
+    expect(imgBox!.y).toBeGreaterThanOrEqual(stageBox!.y - 2);
+    expect(imgBox!.y + imgBox!.height).toBeLessThanOrEqual(stageBox!.y + stageBox!.height + 8);
+    expect(aoShadowBox!.y + aoShadowBox!.height).toBeLessThanOrEqual(
+      stageBox!.y + stageBox!.height + 12
+    );
+
+    // Switch to rainy scenario on outdoor stage -> wet pavement mirror reflection renders & anchors beneath soles
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    await weatherCapsule.click();
+    await expect(weatherPanel).toBeVisible();
+    await weatherPanel
+      .locator('select[data-weather-scenario-select="true"]')
+      .selectOption('rainy_cool');
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+
+    await page.evaluate(() => {
+      const key = 'ainventory_stage_economy_v1';
+      const next = {
+        unlockedIds: ['c_atelier_plaster', 'a_sunset_rooftop'],
+        equippedBackgroundId: 'a_sunset_rooftop',
+        iBalance: 0,
+      };
+      window.localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
+    });
+    await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
+    await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
+    await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toBeVisible();
+  });
+
+  test('7. WS-2: Flat-Lay Lookbook overlay (`data-lookbook-overlay="true"`) elevates board above competing HUDs while preserving interactive Weather Capsule & History controls', async ({
+    page,
+  }) => {
+    await page.route('**/api/vton/synthesize', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cached: false,
+          mode: '2d-vton',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image',
+          layout: 'turnaround_2x2',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: buildPortraitTurnaround2x2PngDataUrl(11),
+        }),
+      });
+    });
+
+    await page.goto('/outfits');
+
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
+    const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
+
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await aiImg.click();
+
+    await expect(studioCanvas).toHaveAttribute('data-lookbook-overlay', 'true');
+    const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
+    await expect(flatLayBoard).toBeVisible();
+
+    await expect
+      .poll(() =>
+        studioCanvas.evaluate((root) => {
+          const wornDock = root.querySelector('.studio-worn-slots-dock') as HTMLElement | null;
+          return wornDock ? window.getComputedStyle(wornDock).opacity : '0';
+        })
+      )
+      .toBe('0');
+
+    const zHierarchy = await studioCanvas.evaluate((root) => {
+      const topHud = root.querySelector('.studio-stage-top-hud') as HTMLElement | null;
+      const stage = root.querySelector('.studio-2d-model-stage') as HTMLElement | null;
+      const wornDock = root.querySelector('.studio-worn-slots-dock') as HTMLElement | null;
+      const lookDock = root.querySelector('[data-weather-look-dock="true"]') as HTMLElement | null;
+      const angleDock = root.querySelector('[data-angle-scroll-dock="true"]') as HTMLElement | null;
+      const topZ = topHud ? Number.parseInt(window.getComputedStyle(topHud).zIndex || '0', 10) : 0;
+      const stageZ = stage ? Number.parseInt(window.getComputedStyle(stage).zIndex || '0', 10) : 0;
+      const hiddenState = (el: HTMLElement | null) => {
+        if (!el) return { missing: true, visibility: '', opacity: '', pointerEvents: '' };
+        const cs = window.getComputedStyle(el);
+        return {
+          missing: false,
+          visibility: cs.visibility,
+          opacity: cs.opacity,
+          pointerEvents: cs.pointerEvents,
+        };
+      };
+      return {
+        topZ,
+        stageZ,
+        wornDock: hiddenState(wornDock),
+        lookDock: hiddenState(lookDock),
+        angleDock: hiddenState(angleDock),
+      };
+    });
+
+    expect(zHierarchy.stageZ).toBeGreaterThanOrEqual(57);
+    expect(zHierarchy.topZ).toBeGreaterThan(zHierarchy.stageZ);
+    expect(zHierarchy.wornDock.visibility).toBe('hidden');
+    expect(zHierarchy.wornDock.opacity).toBe('0');
+    expect(zHierarchy.wornDock.pointerEvents).toBe('none');
+    expect(zHierarchy.angleDock.visibility).toBe('hidden');
+    expect(zHierarchy.angleDock.pointerEvents).toBe('none');
+    if (!zHierarchy.lookDock.missing) {
+      expect(zHierarchy.lookDock.visibility).toBe('hidden');
+      expect(zHierarchy.lookDock.pointerEvents).toBe('none');
+    }
+
+    // Top Weather Capsule stays above & cleanly separated from elevated Flat-Lay board
+    await expect(weatherCapsule).toBeVisible();
+    await expect(historyBtn).toBeVisible();
+    const [capsuleBox, boardBox] = await Promise.all([
+      weatherCapsule.boundingBox(),
+      flatLayBoard.boundingBox(),
+    ]);
+    expect(capsuleBox).not.toBeNull();
+    expect(boardBox).not.toBeNull();
+    expect(boardBox!.y).toBeGreaterThanOrEqual(capsuleBox!.y + capsuleBox!.height - 2);
+
+    // Desktop right slot picker (`>= 600px`) dims softly while overlay is open
+    const vp = page.viewportSize();
+    if (vp && vp.width >= 600) {
+      await expect
+        .poll(() =>
+          page
+            .locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`)
+            .evaluate((el) => Number.parseFloat(window.getComputedStyle(el).opacity || '1'))
+        )
+        .toBeLessThan(0.6);
+    }
+
+    // Weather Capsule remains genuinely interactive over lookbook overlay
+    await weatherCapsule.click();
+    const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
+    await expect(weatherPanel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(weatherPanel).toHaveCount(0);
+
+    // Close Flat-Lay Lookbook -> returns to AI character stage cleanly
+    const closeBtn = studioCanvas.locator('[data-flatlay-close-btn="true"]');
+    await expect(closeBtn).toBeVisible();
+    await closeBtn.click();
+
+    await expect(studioCanvas).not.toHaveAttribute('data-lookbook-overlay', 'true');
+    await expect(modelStage).toHaveAttribute('data-stage-view', 'ai-vton');
+    await expect(aiImg).toBeVisible();
+  });
 });
+
 

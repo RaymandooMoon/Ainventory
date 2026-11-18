@@ -341,4 +341,104 @@ describe('Server-Side VTON QC Middleware (3x Retry, Failure Logging & Positive-O
     assert.equal(parsedLog.comboHash, 'combo_qc_test_01');
     assert.ok(Array.isArray(parsedLog.reasons) && parsedLog.reasons.length > 0);
   });
+
+  it('persists client-reported 3x QC failure telemetry via POST /api/vton/qc-failure-log while rejecting unauthenticated and malformed payloads', async () => {
+    if (fs.existsSync(qcLogPath)) fs.rmSync(qcLogPath);
+
+    const unauthRes = await fetch(`${baseUrl}/api/vton/qc-failure-log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comboHash: 'unauth' }),
+    });
+    assert.equal(unauthRes.status, 401);
+
+    const badBodyRes = await fetch(`${baseUrl}/api/vton/qc-failure-log`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Mode': 'sample',
+      },
+      body: JSON.stringify(['invalid-array-body']),
+    });
+    assert.equal(badBodyRes.status, 400);
+
+    const validRes = await fetch(`${baseUrl}/api/vton/qc-failure-log`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Mode': 'sample',
+      },
+      body: JSON.stringify({
+        comboHash: 'combo_client_left_bag_02',
+        avatarConfigHash: 'avatar_hash_99',
+        attempts: 3,
+        reasons: ['qc_attempt_1_failed', 'qc_attempt_2_failed', 'qc_attempt_3_failed'],
+        failedAngles: [45, 90, 135],
+        equippedSlots: ['outer', 'accessory', 'acc_umbrella'],
+        handedness: 'left',
+        frontOnlyFallback: true,
+        provider: 'client-gemini-vton',
+        model: 'gemini-3.1-flash-image-preview',
+      }),
+    });
+    assert.equal(validRes.status, 201);
+    const validBody = (await validRes.json()) as { ok?: boolean; logged?: boolean };
+    assert.equal(validBody.ok, true);
+    assert.equal(validBody.logged, true);
+
+    assert.equal(fs.existsSync(qcLogPath), true);
+    const lines = fs.readFileSync(qcLogPath, 'utf8').trim().split('\n');
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]) as {
+      comboHash?: string;
+      avatarConfigHash?: string | null;
+      attempts?: number;
+      handedness?: string;
+      fallbackView?: string;
+      frontOnlyDegraded?: boolean;
+      provider?: string;
+      model?: string | null;
+      failedAngles?: number[];
+      equippedSlots?: string[];
+    };
+    assert.equal(entry.comboHash, 'combo_client_left_bag_02');
+    assert.equal(entry.avatarConfigHash, 'avatar_hash_99');
+    assert.equal(entry.attempts, 3);
+    assert.equal(entry.handedness, 'left');
+    assert.equal(entry.fallbackView, 'positive-only');
+    assert.equal(entry.frontOnlyDegraded, true);
+    assert.equal(entry.provider, 'client-gemini-vton');
+    assert.equal(entry.model, 'gemini-3.1-flash-image-preview');
+    assert.deepEqual(entry.failedAngles, [45, 90, 135]);
+    assert.deepEqual(entry.equippedSlots, ['outer', 'accessory', 'acc_umbrella']);
+
+    // Verify frontOnlyFallback: false logs flatlay-fallback and strips newline control chars safely
+    const flatLayRes = await fetch(`${baseUrl}/api/vton/qc-failure-log`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Mode': 'sample',
+      },
+      body: JSON.stringify({
+        comboHash: 'combo_flatlay\r\ninjected',
+        attempts: 3,
+        reasons: ['0:clipped_top\nforged_line'],
+        failedAngles: [0],
+        frontOnlyFallback: false,
+      }),
+    });
+    assert.equal(flatLayRes.status, 201);
+    const updatedLines = fs.readFileSync(qcLogPath, 'utf8').trim().split('\n');
+    assert.equal(updatedLines.length, 2);
+    const flatEntry = JSON.parse(updatedLines[1]) as {
+      comboHash?: string;
+      fallbackView?: string;
+      frontOnlyDegraded?: boolean;
+      reasons?: string[];
+    };
+    assert.equal(flatEntry.comboHash, 'combo_flatlay  injected');
+    assert.equal(flatEntry.fallbackView, 'flatlay-fallback');
+    assert.equal(flatEntry.frontOnlyDegraded, false);
+    assert.deepEqual(flatEntry.reasons, ['0:clipped_top forged_line']);
+  });
 });

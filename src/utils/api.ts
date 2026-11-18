@@ -244,7 +244,8 @@ export async function apiFetch<T = Record<string, unknown>>(
     path === '/garments/analyze' ||
     path === '/shopping/analyze' ||
     path === '/shopping-check' ||
-    path === '/vton/synthesize';
+    path === '/vton/synthesize' ||
+    path === '/vton/qc-failure-log';
 
   // In Sample / Default Local Closet Mode, state mutations persist in local IndexedDB
   // (`/profile/config` is excluded so server-side profile configuration persists on the server)
@@ -332,6 +333,19 @@ export async function apiFetch<T = Record<string, unknown>>(
   // Stateless compute endpoints (/garments/analyze, /shopping/analyze, /shopping-check)
   // never enqueue into mutation_queue; fall back to local vision/similarity compute when offline
   if (isStatelessCompute) {
+    if (path === '/vton/qc-failure-log') {
+      if (isBrowserOffline) {
+        return coerceApiPayload<T>({ ok: false, logged: false });
+      }
+      try {
+        return coerceApiPayload<T>(await rawNetworkFetch(path, options));
+      } catch (err) {
+        if (isNetworkOrBackendUnavailable(err)) {
+          return coerceApiPayload<T>({ ok: false, logged: false });
+        }
+        throw err;
+      }
+    }
     if (isBrowserOffline) {
       return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
     }

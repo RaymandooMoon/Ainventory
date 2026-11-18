@@ -211,7 +211,7 @@ export default function WardrobeView({
 
         <div className="hig-top-bar-titles">
           <h1 className="sr-only">Closet</h1>
-          <AppHeaderBrand effectiveTheme={theme} />
+          <AppHeaderBrand effectiveTheme={theme} lang={lang} />
         </div>
 
         <div className="hig-top-bar-actions">

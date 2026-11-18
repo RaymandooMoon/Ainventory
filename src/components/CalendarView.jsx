@@ -405,7 +405,7 @@ export default function CalendarView({
           )}
         </div>
         <div className="hig-top-bar-titles">
-          <AppHeaderBrand effectiveTheme={theme} />
+          <AppHeaderBrand effectiveTheme={theme} lang={lang} />
         </div>
         <div className="hig-top-bar-actions">
           <TopRightUtilityActions

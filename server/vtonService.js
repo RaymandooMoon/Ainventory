@@ -2846,8 +2846,11 @@ export async function synthesizeVtonLook(params = {}) {
     return buildFallbackResult('gemini_model_not_configured');
   }
 
-  // 3. Coalesce concurrent identical synthesis requests
-  const flightKey = `${comboHash}:${layout}:${normalizedProfile.viewAngleDeg}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}`;
+  // 3. Coalesce concurrent identical synthesis requests (scoped by key fingerprint so invalid/guest keys never poison valid concurrent requests)
+  const keyFingerprint = apiKey
+    ? crypto.createHash('sha256').update(String(apiKey)).digest('hex').slice(0, 8)
+    : 'srv';
+  const flightKey = `${comboHash}:${layout}:${normalizedProfile.viewAngleDeg}:${includeBaseModel ? 1 : 0}:${forceRefresh ? 1 : 0}:${keyFingerprint}`;
   if (!forceRefresh && inFlightSyntheses.has(flightKey)) {
     return inFlightSyntheses.get(flightKey);
   }

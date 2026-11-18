@@ -73,6 +73,7 @@
     grid-template-columns: minmax(0, 58fr) minmax(272px, 42fr);
     gap: 0;
     align-items: stretch;
+    min-height: 0;
     border-radius: 26px;
     overflow: hidden;
     border: 1px solid var(--squircle-border);
@@ -89,6 +90,7 @@
     position: relative;
     top: auto;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -98,8 +100,8 @@
     width: 100%;
     max-width: none;
     margin: 0;
-    height: 100%;
-    min-height: 584px;
+    height: clamp(460px, calc(100dvh - 180px), 740px);
+    min-height: 460px;
     aspect-ratio: auto;
     border-radius: 0;
     border: none;
@@ -111,6 +113,10 @@
     flex-direction: column;
     gap: 10px;
     min-width: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: clamp(460px, calc(100dvh - 180px), 740px);
+    overflow: hidden;
     padding: 14px 10px 14px;
     border-radius: 0;
     border: none;
@@ -121,6 +127,24 @@
     color: var(--atelier-ink-on-dark);
     box-shadow: -14px 0 36px rgba(0, 0, 0, 0.18);
     font-family: var(--atelier-font-sans);
+    transition: opacity 0.22s var(--spring-ease), filter 0.22s var(--spring-ease);
+  }
+
+  .hig-outfits-screen .studio-25d-layout:has([data-lookbook-overlay='true']) #studio-slot-picker.studio-desktop-picker-col {
+    opacity: 0.42;
+    filter: blur(3px);
+  }
+
+  @media (hover: hover) {
+    .hig-outfits-screen .studio-25d-layout:has([data-lookbook-overlay='true']) #studio-slot-picker.studio-desktop-picker-col:hover {
+      opacity: 1;
+      filter: none;
+    }
+  }
+
+  .hig-outfits-screen .studio-25d-layout:has([data-lookbook-overlay='true']) #studio-slot-picker.studio-desktop-picker-col:focus-within {
+    opacity: 1;
+    filter: none;
   }
 
   html[data-theme='light'] #studio-slot-picker.studio-desktop-picker-col {
@@ -134,6 +158,11 @@
   .hig-outfits-screen .studio-mobile-save-row,
   .hig-outfits-screen .atelier-mobile-drawer-trigger-row {
     display: none !important;
+  }
+
+  #studio-slot-picker .atelier-drawer-grid-scroll {
+    max-height: none;
+    flex: 1 1 auto;
   }
 }
 

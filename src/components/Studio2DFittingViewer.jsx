@@ -479,6 +479,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [frontOnlyToastVisible, setFrontOnlyToastVisible] = useState(false);
   const [frontOnlyPopupInfo, setFrontOnlyPopupInfo] = useState(null);
   const frontOnlyToastTimerRef = useRef(null);
+  const clearFrontOnlyFallbackState = useCallback(() => {
+    if (frontOnlyToastTimerRef.current) {
+      clearTimeout(frontOnlyToastTimerRef.current);
+      frontOnlyToastTimerRef.current = null;
+    }
+    setFrontOnlyDegraded(false);
+    setFrontOnlyToastVisible(false);
+    setFrontOnlyPopupInfo(null);
+  }, []);
   const [storedStylePref, setStoredStylePref] = useState(() =>
     getStoredVtonStylePreference()
   );
@@ -535,8 +544,28 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   }, []);
 
   const [zoom, setZoom] = useState(1);
-  const [idealBaseScale, setIdealBaseScale] = useState(1);
-  void idealBaseScale;
+  const [floorPlacement, setFloorPlacement] = useState(() => ({
+    effectiveBaseScale: 1,
+    soleTransformOrigin: '50% 95.5%',
+    soleStageTopPct: 85.5,
+    renderedContentW: null,
+    renderedContentH: null,
+  }));
+  const handleFloorPlacementChange = useCallback((next) => {
+    if (!next || typeof next !== 'object') return;
+    setFloorPlacement((prev) => {
+      if (
+        prev.effectiveBaseScale === next.effectiveBaseScale &&
+        prev.soleTransformOrigin === next.soleTransformOrigin &&
+        prev.soleStageTopPct === next.soleStageTopPct &&
+        prev.renderedContentW === next.renderedContentW &&
+        prev.renderedContentH === next.renderedContentH
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
   const [compareSplitPct, setCompareSplitPct] = useState(50);
@@ -649,25 +678,28 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStoredStylePref(nextPref);
       setHistoryOverrideStyle(null);
       setPinnedHistoryItem(null);
+      clearFrontOnlyFallbackState();
       userApprovedGenRef.current = true;
       forceBypassCacheRef.current = false;
       setStageMode('ai-vton');
     };
     window.addEventListener(VTON_STYLE_PREF_EVENT, handleStylePrefUpdated);
     return () => window.removeEventListener(VTON_STYLE_PREF_EVENT, handleStylePrefUpdated);
-  }, []);
+  }, [clearFrontOnlyFallbackState]);
 
   // Sync server-side profile configuration (`handedness`) updates immediately into VTON pipeline
   useEffect(() => {
     const handleProfileConfigUpdated = (ev) => {
       const detail = ev?.detail;
       const nextHand = normalizeHandedness(detail?.handedness, 'right');
+      if (resolvedAvatarSpec?.dominantHand === nextHand) {
+        return;
+      }
       scenarioVtonSnapshotsRef.current = {};
       setScenarioSnapEpoch((n) => n + 1);
-      if (resolvedAvatarSpec?.dominantHand !== nextHand) {
-        patchAvatarSpec({ dominantHand: nextHand });
-      }
+      patchAvatarSpec({ dominantHand: nextHand });
       setPinnedHistoryItem(null);
+      clearFrontOnlyFallbackState();
       userApprovedGenRef.current = true;
       forceBypassCacheRef.current = false;
       setStageMode('ai-vton');
@@ -676,16 +708,25 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     window.addEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
     return () =>
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
-  }, [resolvedAvatarSpec?.dominantHand]);
+  }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
   // Dismiss open `기록` popover cleanly on Escape key
   useEffect(() => {
     if (!historyOpen) return undefined;
     const handleKeyDown = (ev) => {
-      if (ev.key === 'Escape') {
-        ev.stopPropagation();
-        setHistoryOpen(false);
+      if (ev.key !== 'Escape' || ev.defaultPrevented) return;
+      if (
+        typeof document !== 'undefined' &&
+        document.querySelector(
+          '.hig-modal-backdrop, [role="dialog"][aria-modal="true"], #profile-studio-sheet:not([hidden]), #weather-recommend-panel'
+        )
+      ) {
+        return;
       }
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation?.();
+      setHistoryOpen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -772,6 +813,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     }
     return {
       ...weather,
+      effectiveWeather: 'cloudy',
       mode: 'cloudy',
       selectedMode: 'cloudy',
       liveCondition: 'cloudy',
@@ -834,7 +876,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
 
   const recordScenarioVtonSnapshot = useCallback(
-    (targetKey, angleDeg, imageUrl, angleSlicesMap = null) => {
+    (targetKey, angleDeg, imageUrl, angleSlicesMap = null, meta = null) => {
       if (!targetKey || (!imageUrl && !angleSlicesMap)) return;
       const prev = scenarioVtonSnapshotsRef.current[targetKey] || { angleSlices: {} };
       const nextSlices = {
@@ -847,6 +889,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       scenarioVtonSnapshotsRef.current[targetKey] = {
         imageUrl: imageUrl || prev.imageUrl || nextSlices[0] || null,
         angleSlices: nextSlices,
+        frontOnlyDegraded: Boolean(meta?.frontOnlyDegraded),
+        notificationPopup: meta?.frontOnlyDegraded ? meta.notificationPopup || null : null,
       };
       setScenarioSnapEpoch((n) => n + 1);
     },
@@ -855,10 +899,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const prevFacePhotoRef = useRef(activeFacePhotoUrl);
   const pendingFacePhotoApproveRef = useRef(null);
-  const prevEffectiveWeatherRef = useRef(effectiveWeather);
+  const prevEffectiveWeatherRef = useRef(vtonEffectiveWeather);
   const pendingWeatherApproveRef = useRef(null);
   const prevScenarioKeyRef = useRef(normalizedScenarioKey);
   const pendingScenarioApproveRef = useRef(null);
+  const pendingScenarioSlotHydrationRef = useRef(false);
+  const pendingScenarioHydrationUntilRef = useRef(0);
   const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
 
@@ -866,17 +912,25 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   useEffect(() => {
     if (prevOutfitComboRef.current !== outfitComboId) {
       prevOutfitComboRef.current = outfitComboId;
+      clearFrontOnlyFallbackState();
       if (restoringFromHistoryRef.current) {
         restoringFromHistoryRef.current = false;
       } else {
         setPinnedHistoryItem(null);
         setHistoryOverrideStyle(null);
+        if (
+          pendingScenarioSlotHydrationRef.current &&
+          Date.now() <= pendingScenarioHydrationUntilRef.current
+        ) {
+          pendingScenarioSlotHydrationRef.current = false;
+          pendingScenarioApproveRef.current = normalizedScenarioKey;
+        }
         if (!postLoginRevealActiveRef.current) {
           setStageMode('ai-vton');
         }
       }
     }
-  }, [outfitComboId]);
+  }, [outfitComboId, normalizedScenarioKey, clearFrontOnlyFallbackState]);
 
   // Sync Gemini API Key updates saved in Profile modal
   useEffect(() => {
@@ -889,6 +943,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStagedNeedsApply(false);
       setDemoShowcaseEnabled(false);
       setStatusToast(null);
+      clearFrontOnlyFallbackState();
       if (hasKey && equippedCount > 0) {
         userApprovedGenRef.current = true;
         forceBypassCacheRef.current = false;
@@ -898,7 +953,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
     window.addEventListener(GEMINI_API_KEY_EVENT, handleApiKeyUpdated);
     return () => window.removeEventListener(GEMINI_API_KEY_EVENT, handleApiKeyUpdated);
-  }, [equippedCount]);
+  }, [equippedCount, clearFrontOnlyFallbackState]);
 
   const currentAiCacheKey = useMemo(
     () =>
@@ -1027,18 +1082,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     skinProfile,
     bodySpec,
     user,
+    avatarSpec,
     resolvedAvatarSpec,
     resolvedAvatarHash,
+    hasEquippedBag,
+    equippedBagGarment: equippedBagEntry?.garment || null,
     canonicalSliceAngle,
     styleMode,
     weather: vtonWeather,
     effectiveWeather: vtonEffectiveWeather,
     normalizedScenarioKey,
+    isStageOutdoor,
     scenarioVtonKey,
     resolvedTheme,
     rawLegacyMode,
     forceRefresh,
     resolvedLang,
+    onAiLookGenerated,
   });
 
   useEffect(() => {
@@ -1047,18 +1107,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       skinProfile,
       bodySpec,
       user,
+      avatarSpec,
       resolvedAvatarSpec,
       resolvedAvatarHash,
+      hasEquippedBag,
+      equippedBagGarment: equippedBagEntry?.garment || null,
       canonicalSliceAngle,
       styleMode,
       weather: vtonWeather,
       effectiveWeather: vtonEffectiveWeather,
       normalizedScenarioKey,
+      isStageOutdoor,
       scenarioVtonKey,
       resolvedTheme,
       rawLegacyMode,
       forceRefresh,
       resolvedLang,
+      onAiLookGenerated,
     };
   });
 
@@ -1084,11 +1149,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     if (prevEffectiveWeatherRef.current !== vtonEffectiveWeather) {
       prevEffectiveWeatherRef.current = vtonEffectiveWeather;
       pendingWeatherApproveRef.current = vtonEffectiveWeather;
+      pendingScenarioSlotHydrationRef.current = true;
+      pendingScenarioHydrationUntilRef.current = Date.now() + 2500;
       setPinnedHistoryItem(null);
     }
     if (prevScenarioKeyRef.current !== normalizedScenarioKey) {
       prevScenarioKeyRef.current = normalizedScenarioKey;
       pendingScenarioApproveRef.current = normalizedScenarioKey;
+      pendingScenarioSlotHydrationRef.current = true;
+      pendingScenarioHydrationUntilRef.current = Date.now() + 2500;
       setPinnedHistoryItem(null);
     }
     const weatherTabJustChanged = Boolean(
@@ -1129,11 +1198,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         weatherTabJustChanged
     );
 
-    const scenarioExactUrl = !isForceBypass
-      ? scenarioVtonSnapshotsRef.current[scenarioVtonKey]?.angleSlices?.[
-          snap.canonicalSliceAngle
-        ] || null
-      : null;
+    const scenarioEntry = !isForceBypass ? scenarioVtonSnapshotsRef.current[scenarioVtonKey] : null;
+    const scenarioExactUrl = scenarioEntry?.angleSlices?.[snap.canonicalSliceAngle] || null;
 
     if (scenarioExactUrl) {
       forceBypassCacheRef.current = false;
@@ -1143,8 +1209,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
-      setFrontOnlyDegraded(false);
-      setFrontOnlyToastVisible(false);
+      if (scenarioEntry?.frontOnlyDegraded) {
+        setFrontOnlyDegraded(true);
+        if (scenarioEntry.notificationPopup) {
+          setFrontOnlyPopupInfo(scenarioEntry.notificationPopup);
+        }
+      } else {
+        clearFrontOnlyFallbackState();
+      }
       setAiState({
         cacheKey: currentAiCacheKey,
         imageUrl: scenarioExactUrl,
@@ -1193,8 +1265,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
-      setFrontOnlyDegraded(false);
-      setFrontOnlyToastVisible(false);
+      clearFrontOnlyFallbackState();
       setAiState({
         cacheKey: currentAiCacheKey,
         imageUrl: syncHit.imageUrl,
@@ -1217,8 +1288,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         snap.canonicalSliceAngle,
         {
           handedness: snapHandedness,
-          hasEquippedBag,
-          bagGarment: equippedBagEntry?.garment || null,
+          hasEquippedBag: snap.hasEquippedBag,
+          bagGarment: snap.equippedBagGarment || null,
         }
       );
       if (cachedDemoUrl) {
@@ -1234,8 +1305,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pendingScenarioApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
         setStagedNeedsApply(false);
-        setFrontOnlyDegraded(false);
-        setFrontOnlyToastVisible(false);
+        clearFrontOnlyFallbackState();
         setAiState({
           cacheKey: currentAiCacheKey,
           imageUrl: cachedDemoUrl,
@@ -1283,26 +1353,36 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             snap.canonicalSliceAngle,
             idbHit.slice.imageUrl
           );
-          void Promise.all(siblingPromises).then((hits) => {
-            const siblingMap = {
-              [snap.canonicalSliceAngle]: idbHit.slice.imageUrl,
-            };
-            hits.forEach((h, idx) => {
-              if (h?.slice?.imageUrl) {
-                siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
-              }
-            });
-            recordScenarioVtonSnapshot(
-              scenarioVtonKey,
-              snap.canonicalSliceAngle,
-              idbHit.slice.imageUrl,
-              siblingMap
-            );
-            preloadImageUrls([
-              idbHit.slice.imageUrl,
-              ...hits.map((h) => h?.slice?.imageUrl).filter(Boolean),
-            ]);
-          });
+          void Promise.all(siblingPromises)
+            .then((hits) => {
+              if (controller.signal.aborted) return;
+              const siblingMap = {
+                [snap.canonicalSliceAngle]: idbHit.slice.imageUrl,
+              };
+              hits.forEach((h, idx) => {
+                if (h?.slice?.imageUrl) {
+                  siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
+                }
+              });
+              const existingSnap = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+              recordScenarioVtonSnapshot(
+                scenarioVtonKey,
+                snap.canonicalSliceAngle,
+                idbHit.slice.imageUrl,
+                siblingMap,
+                existingSnap?.frontOnlyDegraded
+                  ? {
+                      frontOnlyDegraded: true,
+                      notificationPopup: existingSnap.notificationPopup || null,
+                    }
+                  : null
+              );
+              preloadImageUrls([
+                idbHit.slice.imageUrl,
+                ...hits.map((h) => h?.slice?.imageUrl).filter(Boolean),
+              ]);
+            })
+            .catch(() => {});
 
           forceBypassCacheRef.current = false;
           userApprovedGenRef.current = false;
@@ -1311,9 +1391,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           pendingScenarioApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
           setStagedNeedsApply(false);
-          setFrontOnlyDegraded(false);
-          setFrontOnlyToastVisible(false);
-          setFrontOnlyPopupInfo(null);
+          clearFrontOnlyFallbackState();
           setAiState({
             cacheKey: currentAiCacheKey,
             imageUrl: idbHit.slice.imageUrl,
@@ -1403,13 +1481,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         );
         fetchServerProfileConfig(fallbackHand)
           .then((serverCfg) => {
+            if (controller.signal.aborted) return null;
             const resolvedHand = serverCfg.hasStoredRecord
               ? serverCfg.handedness
               : fallbackHand;
             if (
               serverCfg.hasStoredRecord &&
               resolvedHand !== liveSnap.resolvedAvatarSpec?.dominantHand &&
-              !avatarSpec
+              !liveSnap.avatarSpec
             ) {
               patchAvatarSpec({ dominantHand: resolvedHand });
             }
@@ -1453,6 +1532,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               slices?.[45] ||
               null;
             if (targetUrl) {
+              clearFrontOnlyFallbackState();
               recordScenarioVtonSnapshot(
                 liveSnap.scenarioVtonKey,
                 liveSnap.canonicalSliceAngle,
@@ -1467,7 +1547,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 provider: 'gemini-vton',
               });
               setStatusToast(null);
-              onAiLookGenerated?.({
+              liveSnap.onAiLookGenerated?.({
                 imageUrl: targetUrl,
                 styleMode: liveSnap.styleMode,
                 fromCache: true,
@@ -1523,16 +1603,30 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           if (outcome.angleSlices) {
             preloadImageUrls(Object.values(outcome.angleSlices));
           }
+          const isFrontOnly = Boolean(outcome.frontOnlyDegraded);
+          const effectiveRecordedAngle = isFrontOnly ? 0 : liveSnap.canonicalSliceAngle;
+          const resolvedOutcomeCacheKey = isFrontOnly
+            ? `${buildAiVtonCacheKey({
+                avatarConfigHash: liveSnap.resolvedAvatarHash,
+                outfitComboId,
+                styleMode: liveSnap.styleMode,
+                effectiveWeather: liveSnap.effectiveWeather,
+                angleDeg: 0,
+              })}|sc:${liveSnap.normalizedScenarioKey}|${liveSnap.isStageOutdoor ? 'outdoor' : 'indoor'}`
+            : currentAiCacheKey;
           recordScenarioVtonSnapshot(
             liveSnap.scenarioVtonKey,
-            liveSnap.canonicalSliceAngle,
+            effectiveRecordedAngle,
             outcome.imageUrl,
-            outcome.angleSlices || null
+            outcome.angleSlices || null,
+            {
+              frontOnlyDegraded: isFrontOnly,
+              notificationPopup: isFrontOnly ? outcome.notificationPopup || null : null,
+            }
           );
           setAiLoading(false);
           configBlockedRef.current = false;
           setStagedNeedsApply(false);
-          const isFrontOnly = Boolean(outcome.frontOnlyDegraded);
           setFrontOnlyDegraded(isFrontOnly);
           if (frontOnlyToastTimerRef.current) {
             clearTimeout(frontOnlyToastTimerRef.current);
@@ -1555,14 +1649,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             setFrontOnlyToastVisible(false);
           }
           setAiState({
-            cacheKey: currentAiCacheKey,
+            cacheKey: resolvedOutcomeCacheKey,
             imageUrl: outcome.imageUrl,
             fromCache: outcome.fromCache,
             provider: 'gemini-vton',
           });
           setStatusToast(null);
           refreshHistoryList();
-          onAiLookGenerated?.({
+          liveSnap.onAiLookGenerated?.({
             imageUrl: outcome.imageUrl,
             styleMode: liveSnap.styleMode,
             fromCache: Boolean(outcome.fromCache),
@@ -1619,6 +1713,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     demoShowcaseEnabled,
     autoGenEnabled,
     pinnedHistoryItem,
+    clearFrontOnlyFallbackState,
     commitAngleDeg,
     recordScenarioVtonSnapshot,
     refreshHistoryList,
@@ -1634,6 +1729,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       configBlockedRef.current = false;
       manualDemoRef.current = true;
+      clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
       setDemoShowcaseEnabled(true);
@@ -1641,7 +1737,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, showToast]
+    [equippedCount, clearFrontOnlyFallbackState, showToast]
   );
 
   const handleApproveStagedSynthesis = useCallback(
@@ -1652,6 +1748,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       configBlockedRef.current = false;
+      clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
       setStatusToast(null);
@@ -1660,7 +1757,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, showToast]
+    [equippedCount, clearFrontOnlyFallbackState, showToast]
   );
 
   const handleRetryAiSynthesis = useCallback(
@@ -1672,6 +1769,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
       configBlockedRef.current = false;
+      clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
       setDemoShowcaseEnabled(false);
@@ -1681,7 +1779,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, scenarioVtonKey, showToast]
+    [equippedCount, scenarioVtonKey, clearFrontOnlyFallbackState, showToast]
   );
 
   useEffect(() => {
@@ -1721,6 +1819,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setAiLoading(false);
       setStatusToast(null);
       setStagedNeedsApply(false);
+      clearFrontOnlyFallbackState();
       setHistoryOverrideStyle(normalizeVtonStyleMode(item.styleMode));
       setStageMode('ai-vton');
 
@@ -1758,6 +1857,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       outfitComboId,
       resolvedAvatarHash,
       vtonEffectiveWeather,
+      clearFrontOnlyFallbackState,
       onRestoreHistorySlots,
     ]
   );
@@ -1876,14 +1976,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   useEffect(() => {
     if (!canReturnToCharacter) return undefined;
     const handleEscLookbook = (ev) => {
-      if (ev.key === 'Escape') {
-        ev.stopPropagation();
-        setStageMode('ai-vton');
+      if (ev.key !== 'Escape') return;
+      if (ev.defaultPrevented || weatherPopupOpen || historyOpen) return;
+      if (
+        typeof document !== 'undefined' &&
+        document.querySelector(
+          '.hig-modal-backdrop, [role="dialog"][aria-modal="true"], #profile-studio-sheet:not([hidden]), #weather-recommend-panel'
+        )
+      ) {
+        return;
       }
+      ev.preventDefault();
+      ev.stopPropagation();
+      setStageMode('ai-vton');
     };
     window.addEventListener('keydown', handleEscLookbook);
     return () => window.removeEventListener('keydown', handleEscLookbook);
-  }, [canReturnToCharacter]);
+  }, [canReturnToCharacter, weatherPopupOpen, historyOpen]);
 
   const activeProvider =
     stageMode === 'ai-vton' && resolvedAiImageUrl ? 'gemini-vton' : 'flatlay-lookbook';
@@ -2065,7 +2174,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         equippedCount={equippedCount}
         mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
         zoom={zoom}
-        idealBaseScale={1}
+        idealBaseScale={floorPlacement.effectiveBaseScale}
+        soleTransformOrigin={floorPlacement.soleTransformOrigin}
+        soleStageTopPct={floorPlacement.soleStageTopPct}
+        renderedContentW={floorPlacement.renderedContentW}
+        renderedContentH={floorPlacement.renderedContentH}
         pan={pan}
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
@@ -2307,7 +2420,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pan={pan}
         onZoomChange={setZoom}
         onPanChange={setPan}
-        onIdealScaleChange={setIdealBaseScale}
+        onFloorPlacementChange={handleFloorPlacementChange}
         auraTier={auraTier}
         postLoginRevealActive={postLoginRevealActive}
         postLoginProgress={postLoginProgress}
@@ -2708,6 +2821,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
+                    pendingScenarioSlotHydrationRef.current = false;
+                    pendingScenarioHydrationUntilRef.current = 0;
                     onUnequipSlot?.(layer.slotKey);
                   }}
                 >

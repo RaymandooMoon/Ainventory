@@ -1032,23 +1032,44 @@
   -webkit-backdrop-filter: none;
 }
 
-/* Character-tap unfolded Flat-Lay Lookbook overlay spans full stage width without left-rail squeeze */
+/* Character-tap unfolded Flat-Lay Lookbook overlay spans full stage width cleanly above cards while preserving top Weather Capsule & History HUD */
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-model-stage {
   z-index: 57;
 }
 
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-layer {
-  padding: 58px 14px 70px !important;
+  padding: 58px 14px 16px !important;
   align-items: stretch;
+}
+
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .editorial-flatlay-board {
+  box-shadow: var(--squircle-inset-rim), 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme='dark'] .studio-2d-vton-viewer[data-lookbook-overlay='true'] .editorial-flatlay-board,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'][data-stage-theme='dark']
+  .editorial-flatlay-board {
+  box-shadow: var(--squircle-inset-rim), 0 20px 46px rgba(0, 0, 0, 0.48);
 }
 
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-worn-slots-dock,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .atelier-stage-left-controls,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-vton-zoom-level='true'],
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-stage-bg-picker-btn='true'],
-.studio-2d-vton-viewer[data-lookbook-overlay='true']:not([data-post-login-reveal='true']) .studio-weather-look-dock {
+.studio-2d-vton-viewer[data-lookbook-overlay='true']:not([data-post-login-reveal='true']) .studio-weather-look-dock,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-mobile-drawer-hud-btn,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-pinned-banner,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-staged-bar,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-status-toast,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-step-status,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-progress-track,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-swipe-angle-feedback,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-angle-scroll-dock,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-weather-curation-badge {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  transition: opacity 0.16s var(--spring-ease), visibility 0s linear 0s;
 }
 
 .studio-2d-layer-after {
@@ -1931,7 +1952,7 @@
   max-width: calc(100% - 32px);
   min-height: 48px;
   margin-inline: auto;
-  z-index: 58;
+  z-index: 66;
   padding: 4px 4px 4px 16px;
   border-radius: var(--radius-squircle);
   background: var(--atelier-hud-glass-bg, rgba(255, 255, 255, 0.84));
@@ -3290,9 +3311,9 @@ html[data-vibrancy-fallback='solid']
   height: 44px;
 }
 
-/* In Flat-Lay Lookbook view (no AI character rendered yet), dock worn chips & Look 1/2 cleanly
+/* In Flat-Lay Lookbook view (no AI character rendered or loading yet), dock worn chips & Look 1/2 cleanly
    in the single horizontal bottom rail below the Flat-Lay card so ZERO side buttons overlap cards */
-.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
   .studio-worn-slots-dock {
   top: auto;
   bottom: 8px;
@@ -3310,13 +3331,13 @@ html[data-vibrancy-fallback='solid']
   touch-action: pan-x;
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
   .studio-worn-slot-chip {
   width: 40px;
   height: 40px;
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
   .studio-weather-look-dock {
   bottom: 12px;
   left: 12px;
@@ -3325,23 +3346,23 @@ html[data-vibrancy-fallback='solid']
   border-radius: var(--radius-pill);
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
   .studio-mobile-drawer-hud-btn {
   bottom: 11px;
   right: 10px;
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
   .studio-worn-slots-dock {
   bottom: 62px;
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
   .studio-weather-look-dock {
   bottom: 66px;
 }
 
-.studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+.studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
   .studio-mobile-drawer-hud-btn {
   bottom: 65px;
 }
@@ -4150,7 +4171,42 @@ html[data-vibrancy-fallback='solid']
   }
 
   .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-layer {
-    padding: 54px 10px 66px !important;
+    padding: 54px 10px 14px !important;
+  }
+
+  .studio-vton-status-toast.studio-status-capsule {
+    left: 10px;
+    right: 10px;
+    bottom: 8px;
+    max-width: calc(100% - 20px);
+    min-height: 40px;
+    padding: 6px 8px 6px 12px;
+    border-radius: 16px;
+    gap: 5px 8px;
+    font-size: 0.72rem;
+    line-height: 1.32;
+  }
+
+  .studio-status-capsule-cta,
+  .studio-status-capsule-quiet {
+    min-height: 34px;
+    font-size: 0.71rem;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-2d-model-stage.is-flatlay-stage
+    .studio-2d-layer {
+    padding-bottom: 164px;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-worn-slots-dock {
+    bottom: 104px;
+  }
+
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+    .studio-weather-look-dock {
+    bottom: 108px;
   }
 
   .studio-weather-look-dock {
@@ -4587,7 +4643,7 @@ html[data-vibrancy-fallback='solid']
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: 58px 14px 70px;
+  padding: 56px 12px 66px;
   box-sizing: border-box;
   display: flex;
   align-items: flex-end;
@@ -5543,11 +5599,12 @@ html[data-vibrancy-fallback='solid']
    14. MOBILE OUTFITS FLAT-LAY & OLED HUD CLEARANCE (< 600px)
    ========================================================================== */
 @media (max-width: 599px) {
-  .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-worn-slots-dock {
+  .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-worn-slots-dock,
+  .studio-2d-vton-viewer[data-angle-dock-visible='true'] .studio-worn-slots-dock {
     bottom: 106px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slots-dock {
     top: auto;
     bottom: 8px;
@@ -5565,7 +5622,7 @@ html[data-vibrancy-fallback='solid']
     touch-action: pan-x;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
     .studio-worn-slot-chip {
     width: 40px;
     height: 40px;
@@ -5574,24 +5631,24 @@ html[data-vibrancy-fallback='solid']
   .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .studio-2d-layer {
-    padding-bottom: 152px;
+    padding-bottom: 164px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
     .studio-worn-slots-dock {
-    bottom: 92px;
+    bottom: 104px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
     .studio-weather-look-dock {
     left: 10px;
     right: auto;
-    bottom: 96px;
+    bottom: 108px;
   }
 
-  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
+  .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false'][data-has-status-capsule='true']:not([data-lookbook-overlay='true'])
     .studio-mobile-drawer-hud-btn {
-    bottom: 95px;
+    bottom: 107px;
   }
 
   .studio-2d-vton-viewer[data-stage-view='ai-vton'][data-has-status-capsule='true'][data-angle-dock-visible='false']
@@ -5853,7 +5910,7 @@ html[data-vibrancy-fallback='solid']
 
 @media (max-width: 599px) {
   .hig-outfits-screen:has([data-store-free-draw-bubble='true']) .studio-25d-layout {
-    margin-top: 12px;
+    margin-top: 4px;
   }
 
   .hig-outfits-screen:has([data-store-free-draw-bubble='true']) .studio-stage-top-hud {

@@ -23,6 +23,7 @@ export interface CutoutOptions {
   maxDimension?: number;
   skipAiModel?: boolean;
   aiTimeoutMs?: number;
+  inferredBackdropRgb?: readonly [number, number, number] | null;
 }
 
 const DEFAULT_MAX_DIMENSION = 2048;
@@ -155,6 +156,45 @@ export function areFourCornersTransparent(
     }
   }
   return true;
+}
+
+/**
+ * Computes the median opaque outer 4% perimeter RGB color prior to `@imgly` background removal
+ * so interior enclosed-hole sweeps on non-green studio backdrops retain exact backdrop chroma context.
+ */
+export function inferOuterPerimeterBackdropRgb(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number
+): readonly [number, number, number] | null {
+  if (w < 16 || h < 16 || data.length < w * h * 4) return null;
+
+  const borderX = Math.max(1, Math.round(w * 0.04));
+  const borderY = Math.max(1, Math.round(h * 0.04));
+  const step = Math.max(1, Math.floor(Math.max(w, h) / 64));
+  const rs: number[] = [];
+  const gs: number[] = [];
+  const bs: number[] = [];
+
+  for (let y = 0; y < h; y += step) {
+    const inTopOrBottom = y < borderY || y >= h - borderY;
+    const rowOff = y * w;
+    for (let x = 0; x < w; x += step) {
+      if (!inTopOrBottom && x >= borderX && x < w - borderX) continue;
+      const i = (rowOff + x) * 4;
+      if (data[i + 3] <= CORNER_ALPHA_OPAQUE_THRESHOLD) continue;
+      rs.push(data[i]);
+      gs.push(data[i + 1]);
+      bs.push(data[i + 2]);
+    }
+  }
+
+  if (rs.length < 8) return null;
+  return [
+    Math.round(medianOfSortedOrSmall(rs, 240)),
+    Math.round(medianOfSortedOrSmall(gs, 240)),
+    Math.round(medianOfSortedOrSmall(bs, 240)),
+  ] as const;
 }
 
 interface ScanlineBackdropModel {
@@ -513,7 +553,7 @@ function detectDominantInteriorStudioKeyRgb(
       const inCentralNeckOrChestBand =
         Math.abs(x - w * 0.5) <= w * 0.14 && y >= h * 0.14 && y <= h * 0.46;
 
-      if (g > r + 8 && g > b + 4 && Math.hypot(r - 94, g - 156, b - 126) <= 68) {
+      if (g > r + 8 && g > b + 4 && b >= r && Math.hypot(r - 94, g - 156, b - 126) <= 68) {
         greenKeySamples += 1;
       } else if (
         !inCentralNeckOrChestBand &&
@@ -594,13 +634,14 @@ function purgeEnclosedBackdropHoles(
   const subjectFootwearBandY = subjectTopY + 0.78 * subjectHeight;
   const canvasFootwearBandY = h * 0.78;
 
-  // Measure torso-only span width separately from a wide overhead umbrella dome so torso guards
-  // do not shield the empty air cavity under the umbrella canopy beside the head/shoulders.
+  // Measure torso-only span width & horizontal center separately from a wide overhead umbrella dome so torso
+  // guards do not shield empty air under an off-center canopy beside the head/shoulders.
   const torsoSpans: number[] = [];
-  let maxTop18Span = 0;
-  const top18LimitY = subjectTopY + 0.18 * subjectHeight;
-  const torsoScanY0 = Math.round(subjectTopY + 0.28 * subjectHeight);
-  const torsoScanY1 = Math.round(subjectTopY + 0.72 * subjectHeight);
+  const torsoCenters: number[] = [];
+  let maxTop24Span = 0;
+  const top24LimitY = subjectTopY + 0.24 * subjectHeight;
+  const torsoScanY0 = Math.round(subjectTopY + 0.4 * subjectHeight);
+  const torsoScanY1 = Math.round(subjectTopY + 0.74 * subjectHeight);
   for (let y = subjectTopY; y <= subjectBottomY; y += 2) {
     const rOff = y * w;
     let rMin = w;
@@ -614,17 +655,19 @@ function purgeEnclosedBackdropHoles(
     }
     if (rMax >= rMin) {
       const span = rMax - rMin + 1;
-      if (y <= top18LimitY && span > maxTop18Span) {
-        maxTop18Span = span;
+      if (y <= top24LimitY && span > maxTop24Span) {
+        maxTop24Span = span;
       }
       if (y >= torsoScanY0 && y <= torsoScanY1) {
         torsoSpans.push(span);
+        torsoCenters.push((rMin + rMax) * 0.5);
       }
     }
   }
   const torsoMidWidth = medianOfSortedOrSmall(torsoSpans, subjectWidth);
+  const torsoCenterX = medianOfSortedOrSmall(torsoCenters, subjectMidX);
   const hasOverheadUmbrella =
-    torsoMidWidth >= 12 && maxTop18Span >= Math.max(torsoMidWidth * 1.32, w * 0.34);
+    torsoMidWidth >= 12 && maxTop24Span >= Math.max(torsoMidWidth * 1.32, w * 0.34);
 
   const holePixelTol = Math.min(28, Math.max(18, tolerance * 0.72));
   const candidate = new Uint8Array(nPx);
@@ -658,10 +701,35 @@ function purgeEnclosedBackdropHoles(
       if (lum >= 220 || lum <= 44) continue;
     }
 
+    // Zone flag for negative-space pockets trapped under an open umbrella canopy beside head/shoulders
+    const inUmbrellaUnderCanopyZone =
+      hasOverheadUmbrella &&
+      pxY >= subjectTopY + 0.04 * subjectHeight &&
+      pxY <= subjectTopY + 0.42 * subjectHeight &&
+      Math.abs(pxX - torsoCenterX) > torsoMidWidth * 0.15;
+    const bgDist = Math.hypot(r - eR, g - eG, b - eB);
+
     // Guard 1B: Protect human skin chromaticity locus (MST 1–10 warm/peach/tan/olive/melanin)
-    // AND warm cream/ivory/beige garments whenever the studio backdrop itself is not warm.
-    const backdropIsWarm = eR > eG + 8 && eG > eB + 8;
-    if (!backdropIsWarm) {
+    // AND warm cream/ivory/beige garments unless the pocket is inside an under-canopy sky cavity
+    // closely matching the studio backdrop (e.g. warm-stone #D8CFC4 or shaded cavity beneath dome).
+    const backdropIsWarm = eR > eG + 8 && eG > eB + 8 && eR - eB >= 24;
+    const safeLum = Math.max(1, lum);
+    const umbChromaDist = inUmbrellaUnderCanopyZone
+      ? Math.hypot(
+          r / safeLum - eR / expLum,
+          g / safeLum - eG / expLum,
+          b / safeLum - eB / expLum
+        )
+      : 1;
+    const bypassWarmGuardForUmbrella =
+      inUmbrellaUnderCanopyZone &&
+      (bgDist <= 14 ||
+        (bgDist <= 22 && r - b <= 22) ||
+        (bgDist <= 48 &&
+          umbChromaDist <= 0.048 &&
+          Math.abs(r - b - (eR - eB)) <= 12 &&
+          r - b <= 28));
+    if (!backdropIsWarm && !bypassWarmGuardForUmbrella) {
       if (r > g && g >= b - 3 && r - b >= 14 && r >= 68) continue;
       if (r > b + 16 && g > b + 8 && lum < 155) continue;
       if (eB >= eR && r > b + 8 && g >= b + 4 && lum >= 165) continue;
@@ -669,20 +737,13 @@ function purgeEnclosedBackdropHoles(
     }
 
     // Guard 1C: On non-chromatic neutral studio walls, the center chest/neck/torso core never
-    // contains hollow air holes—use torsoMidWidth so overhead umbrellas never shield side air cavities.
+    // contains hollow air holes—use torsoMidWidth + torsoCenterX so overhead umbrellas never shield side air cavities.
     const inNeutralTorsoCore =
       !isChromaticStudioKey &&
       pxY >= subjectTopY + (hasOverheadUmbrella ? 0.26 : 0.12) * subjectHeight &&
       pxY <= subjectTopY + 0.54 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= torsoMidWidth * 0.36;
+      Math.abs(pxX - torsoCenterX) <= torsoMidWidth * 0.36;
     if (inNeutralTorsoCore) continue;
-
-    // Zone flag for negative-space pockets trapped under an open umbrella canopy beside head/shoulders
-    const inUmbrellaUnderCanopyZone =
-      hasOverheadUmbrella &&
-      pxY >= subjectTopY + 0.04 * subjectHeight &&
-      pxY <= subjectTopY + 0.42 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) > torsoMidWidth * 0.15;
 
     // Guard 1D: On non-green studio keys (e.g. cool slate #94A3B8), protect shaded upper-body
     // sleeves (0 deg right sleeve) and upper-chest shirts/knitwear (45 deg chest) whose muted
@@ -690,7 +751,6 @@ function purgeEnclosedBackdropHoles(
     const inUpperGarmentBand =
       pxY >= subjectTopY + 0.12 * subjectHeight &&
       pxY <= subjectTopY + 0.56 * subjectHeight;
-    const bgDist = Math.hypot(r - eR, g - eG, b - eB);
     if (
       inUpperGarmentBand &&
       !isChromaticGreenKey &&
@@ -706,7 +766,7 @@ function purgeEnclosedBackdropHoles(
       !isChromaticGreenKey &&
       pxY >= subjectTopY + 0.08 * subjectHeight &&
       pxY <= subjectTopY + 0.36 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= Math.min(subjectWidth, torsoMidWidth) * 0.13;
+      Math.abs(pxX - torsoCenterX) <= Math.min(subjectWidth, torsoMidWidth) * 0.13;
     if (inNeckCollarColumn && bgDist > 4) {
       continue;
     }
@@ -715,7 +775,7 @@ function purgeEnclosedBackdropHoles(
       !isChromaticStudioKey &&
       pxY >= subjectTopY + 0.52 * subjectHeight &&
       pxY <= subjectTopY + 0.96 * subjectHeight &&
-      Math.abs(pxX - subjectMidX) <= torsoMidWidth * 0.22 &&
+      Math.abs(pxX - torsoCenterX) <= torsoMidWidth * 0.22 &&
       !(eB >= eR + 6 && r >= b);
 
     const effectiveHoleTol = inUmbrellaUnderCanopyZone
@@ -738,6 +798,7 @@ function purgeEnclosedBackdropHoles(
     const isShadedGreenStudioPocket =
       g >= r + 7 &&
       g >= b + 4 &&
+      b >= r &&
       Math.hypot(r - 94, g - 156, b - 126) <= 68 &&
       (isChromaticGreenKey || inLowerBodyCleftZone || inUmbrellaUnderCanopyZone);
 
@@ -786,6 +847,7 @@ function purgeEnclosedBackdropHoles(
   const minArea = Math.max(4, Math.round(nPx * 0.000035));
   const maxArea = Math.round(nPx * 0.16);
   let purgedPixels = 0;
+  const neighbors = new Int32Array(4);
 
   for (let seed = 0; seed < nPx; seed += 1) {
     if (!candidate[seed] || visited[seed]) continue;
@@ -809,7 +871,6 @@ function purgeEnclosedBackdropHoles(
     let sharpBoundaryCount = 0;
     let touchesOuterBg = false;
 
-    const neighbors = new Int32Array(4);
     while (qHead < qTail) {
       const p = compQueue[qHead++];
       const x = p % w;
@@ -892,6 +953,7 @@ function purgeEnclosedBackdropHoles(
       area <= Math.round(nPx * 0.085) &&
       meanG >= meanR + 7 &&
       meanG >= meanB + 4 &&
+      meanB >= meanR &&
       Math.hypot(meanR - 94, meanG - 156, meanB - 126) <= 68;
     const isChromaticBackdropHole =
       isLowerLegCleftPocket ||
@@ -919,7 +981,7 @@ function purgeEnclosedBackdropHoles(
     const isNeutralLegCleftPocket =
       !seedIsChromaticStudioKey &&
       cy >= subjectTopY + 0.52 * subjectHeight &&
-      Math.abs(cx - subjectMidX) <= subjectWidth * 0.18 &&
+      Math.abs(cx - torsoCenterX) <= subjectWidth * 0.18 &&
       area <= Math.round(nPx * 0.085);
 
     const isOverheadUmbrellaHole =
@@ -927,7 +989,7 @@ function purgeEnclosedBackdropHoles(
       cy >= subjectTopY + 0.04 * subjectHeight &&
       cy <= subjectTopY + 0.4 * subjectHeight &&
       area >= Math.max(10, Math.round(nPx * 0.00012)) &&
-      Math.abs(cx - subjectMidX) > torsoMidWidth * 0.15;
+      Math.abs(cx - torsoCenterX) > torsoMidWidth * 0.15;
 
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
     // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
@@ -1024,14 +1086,18 @@ export function cutoutStudioBackdropToRgba(
 
   if (bgModel.alreadyTransparent) {
     // Outer perimeter is already transparent (e.g., cached V3 slice or @imgly output),
-    // but enclosed interior studio backdrop islands (#94A3B8, #5E9C7E, etc.) may still be trapped inside!
-    const {
-      rgb: [keyR, keyG, keyB],
-      detected,
-    } = detectDominantInteriorStudioKeyRgb(d, w, h);
-    if (!detected) {
+    // but enclosed interior studio backdrop islands (#94A3B8, #5E9C7E, #D8CFC4, etc.) may still be trapped inside!
+    const detectedKey = detectDominantInteriorStudioKeyRgb(d, w, h);
+    const hasExplicitInferredKey =
+      !detectedKey.detected &&
+      Array.isArray(options.inferredBackdropRgb) &&
+      options.inferredBackdropRgb.length === 3;
+    if (!detectedKey.detected && !hasExplicitInferredKey) {
       return { modified: false, purgedHolePixels: 0 };
     }
+    const [keyR, keyG, keyB] = detectedKey.detected
+      ? detectedKey.rgb
+      : (options.inferredBackdropRgb as readonly [number, number, number]);
     const isGreenKey = keyG > keyR + 14 && keyG > keyB + 8;
     let transparentCount = 0;
     for (let p = 0; p < nPx; p += 1) {
@@ -1644,12 +1710,29 @@ export async function removeModelBackgroundToPng(
     return typeof imageSource === 'string' ? imageSource : '';
   }
 
-  const { canvas } = await decodeImageSourceToCanvas(
+  const { canvas, ctx } = await decodeImageSourceToCanvas(
     imageSource,
     options.maxDimension ?? DEFAULT_MAX_DIMENSION
   );
 
   try {
+    let mattingOptions = options;
+    if (!options.inferredBackdropRgb && canvas.width >= 16 && canvas.height >= 16) {
+      try {
+        const origData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const inferredBackdropRgb = inferOuterPerimeterBackdropRgb(
+          origData,
+          canvas.width,
+          canvas.height
+        );
+        if (inferredBackdropRgb) {
+          mattingOptions = { ...options, inferredBackdropRgb };
+        }
+      } catch {
+        // Ignore perimeter inference failures on tainted or unreadable canvases
+      }
+    }
+
     if (!options.skipAiModel) {
       const aiBlob = await tryImglySemanticCutout(
         canvas,
@@ -1672,7 +1755,7 @@ export async function removeModelBackgroundToPng(
           // Ensure AI segmentation did not wipe the subject, and run V4 hole-aware cleanup
           // to guarantee zero residual opaque corners OR trapped interior holes!
           if (opaqueRatio >= 0.025 && opaqueRatio <= 0.97) {
-            applyV4HoleAwareMattingOnCanvas(aiCanvas, options);
+            applyV4HoleAwareMattingOnCanvas(aiCanvas, mattingOptions);
             return aiCanvas.toDataURL('image/png');
           }
         } finally {
@@ -1682,7 +1765,7 @@ export async function removeModelBackgroundToPng(
       }
     }
 
-    applyV4HoleAwareMattingOnCanvas(canvas, options);
+    applyV4HoleAwareMattingOnCanvas(canvas, mattingOptions);
     return canvas.toDataURL('image/png');
   } catch {
     return typeof imageSource === 'string' ? imageSource : '';

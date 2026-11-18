@@ -228,7 +228,9 @@ export function ResponsiveSheetModal({
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation?.();
         onCloseRef.current?.();
         return;
       }
