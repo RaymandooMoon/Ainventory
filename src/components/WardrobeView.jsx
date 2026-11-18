@@ -186,8 +186,29 @@ export default function WardrobeView({
 
   return (
     <section className="hig-screen-container hig-closet-screen" aria-label="Closet">
-      {/* Top Bar: Left iNVTRY Brand | Right Search + '+' + Profile + Account Settings */}
+      {/* Top Bar: Left Search | Center iNVTRY Brand | Right '+' + Profile + Account Settings */}
       <header className="hig-top-bar">
+        <div className="hig-top-bar-left ui-nav-utility-group">
+          <button
+            type="button"
+            className={`hig-circle-icon-btn hig-wardrobe-search-toggle ${toolbarOpen ? 'active' : ''}`}
+            data-wardrobe-search-toggle="true"
+            aria-expanded={toolbarOpen}
+            aria-controls="wardrobe-search-toolbar"
+            aria-label={tx(lang, '검색·정렬 열기', 'Open search and sort')}
+            onClick={() => {
+              triggerHaptic('selection');
+              if (toolbarOpen && !searchQuery) {
+                setSearchOpen(false);
+              } else {
+                setSearchOpen(true);
+              }
+            }}
+          >
+            <Search size={19} strokeWidth={2.1} />
+          </button>
+        </div>
+
         <div className="hig-top-bar-titles">
           <h1 className="sr-only">Closet</h1>
           <AppHeaderBrand effectiveTheme={theme} />
@@ -200,38 +221,18 @@ export default function WardrobeView({
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
             extraActions={
-              <>
-                <button
-                  type="button"
-                  className={`hig-circle-icon-btn hig-wardrobe-search-toggle ${toolbarOpen ? 'active' : ''}`}
-                  data-wardrobe-search-toggle="true"
-                  aria-expanded={toolbarOpen}
-                  aria-controls="wardrobe-search-toolbar"
-                  aria-label={tx(lang, '검색·정렬 열기', 'Open search and sort')}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    if (toolbarOpen && !searchQuery) {
-                      setSearchOpen(false);
-                    } else {
-                      setSearchOpen(true);
-                    }
-                  }}
-                >
-                  <Search size={19} strokeWidth={2.1} />
-                </button>
-                <button
-                  id={CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}
-                  type="button"
-                  className="hig-circle-icon-btn"
-                  aria-label={tx(lang, '옷 등록', 'Add Item')}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setAddModalOpen(true);
-                  }}
-                >
-                  <Plus size={21} strokeWidth={2.2} />
-                </button>
-              </>
+              <button
+                id={CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}
+                type="button"
+                className="hig-circle-icon-btn"
+                aria-label={tx(lang, '옷 등록', 'Add Item')}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setAddModalOpen(true);
+                }}
+              >
+                <Plus size={21} strokeWidth={2.2} />
+              </button>
             }
           />
         </div>

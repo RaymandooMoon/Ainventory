@@ -3,11 +3,20 @@ import { getStudioSeedImageForGarment, resolveStudioSeedUrl } from '../shared/ga
 import { apiFetch } from '../utils/api.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import {
+  type AvatarDominantHand,
   type AvatarSpec,
   bridgeLegacyPropsToAvatarSpec,
   computeAvatarConfigHash,
   sanitizeAvatarSpec,
 } from './avatarSpecStore.ts';
+import {
+  type TurnaroundConsistencyQcReport,
+  type VtonQcSliceMetrics,
+  evaluateTurnaroundConsistencyQc,
+  inspectPixelSliceQc,
+  logVtonQcFailure,
+  resolveBagCarryAnatomy,
+} from './vtonQualityControl.ts';
 import {
   applyCornerBfsCutoutOnCanvas,
   ensureTransparentCutout,
@@ -93,6 +102,7 @@ export interface NormalizedVtonProfile {
   avatarSpec: AvatarSpec;
   avatarConfigHash: string;
   gender?: CanonicalAvatarGender;
+  dominantHand: AvatarDominantHand;
   skinToneHex: string;
   personalColor: PersonalColorSeasonKey;
   personalColorLabelKo: string;
@@ -184,6 +194,7 @@ export interface AiVtonHistoryEntry {
 export interface AiVtonSynthesisOutcome {
   ok: boolean;
   fallbackToFlatLay: boolean;
+  frontOnlyDegraded?: boolean;
   reason: string | null;
   mode: CanonicalViewerMode;
   provider: VtonProviderId;
@@ -481,11 +492,11 @@ export function computeIdealDeviceMannequinScale(params?: {
   const sw = Number(params?.stageWidth) || 0;
   const sh = Number(params?.stageHeight) || 0;
   if (sw < 120 || sh < 160) {
-    return 1.12;
+    return 1.22;
   }
   const isCompact = sw <= 1060;
-  const topPad = isCompact ? 54 : 58;
-  const bottomPad = isCompact ? 60 : 64;
+  const topPad = isCompact ? 58 : 62;
+  const bottomPad = isCompact ? 68 : 72;
   const sidePad = isCompact ? 8 : 12;
   const availW = Math.max(120, sw - sidePad * 2);
   const availH = Math.max(160, sh - topPad - bottomPad);
@@ -494,18 +505,18 @@ export function computeIdealDeviceMannequinScale(params?: {
     Number.isFinite(rawAspect) && rawAspect > 0.25 ? clamp(rawAspect, 0.45, 1.45) : 0.74;
 
   const renderedBoxH = Math.min(availH, availW / imgAspect);
-  const effectiveTargetH = sh - (topPad + bottomPad) * 0.68;
+  const effectiveTargetH = sh - (topPad + bottomPad) * 0.64;
   const widthChokeCompensation =
     renderedBoxH < availH
       ? Math.max(availH, effectiveTargetH) / Math.max(1, renderedBoxH)
       : 1;
   const stageAspect = sw / sh;
-  const presenceBoost = stageAspect < 0.85 ? 1.115 : stageAspect < 1.25 ? 1.09 : 1.08;
+  const presenceBoost = stageAspect < 0.85 ? 1.185 : stageAspect < 1.25 ? 1.155 : 1.145;
 
   const renderedBoxW = renderedBoxH * imgAspect;
-  const maxHorizontalScale = (sw * 0.94) / Math.max(1, renderedBoxW * 0.62);
+  const maxHorizontalScale = (sw * 0.94) / Math.max(1, renderedBoxW * 0.6);
   const rawIdeal = widthChokeCompensation * presenceBoost;
-  return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.05, 1.44) * 1000) / 1000;
+  return Math.round(clamp(Math.min(rawIdeal, maxHorizontalScale), 1.14, 1.52) * 1000) / 1000;
 }
 
 const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360RenderSpec> = {
@@ -864,6 +875,7 @@ export function normalizeGenderNeutralProfile(
     avatarSpec: syncedSpec,
     avatarConfigHash,
     gender,
+    dominantHand: syncedSpec.dominantHand,
     skinToneHex: syncedSpec.appearance.skinToneHex,
     personalColor,
     personalColorLabelKo: closestPreset.labelKo,
@@ -2230,6 +2242,45 @@ async function inspectCutoutDataUrlIntegrity(
       }
     };
     img.onerror = () => resolve({ ok: true, reason: 'ok', fgHeightRatio: 0.8 });
+    img.src = dataUrl;
+  });
+}
+
+async function inspectDataUrlQcMetrics(dataUrl: string): Promise<VtonQcSliceMetrics | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined' || !dataUrl) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w < 16 || h < 16) {
+          resolve(null);
+          return;
+        }
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          c.width = 0;
+          c.height = 0;
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const rgba = ctx.getImageData(0, 0, w, h).data;
+        const metrics = inspectPixelSliceQc(rgba, w, h);
+        c.width = 0;
+        c.height = 0;
+        resolve(metrics);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
     img.src = dataUrl;
   });
 }
@@ -4196,7 +4247,6 @@ export async function loadShowcaseDemoVtonSlices(
 
 const DIRECT_GEMINI_MODEL_CHAIN = [
   'gemini-3.1-flash-image-preview',
-  'gemini-3-pro-image-preview',
   'gemini-2.5-flash-image',
 ] as const;
 
@@ -4993,6 +5043,7 @@ export function buildDirectClientGeminiParts(params: {
     weightKg: profile.weightKg,
     gender: profile.gender,
     framePreset: spec.framePreset,
+    dominantHand: spec.dominantHand,
     bodyShape: profile.bodyShape,
     skinToneHex: profile.skinToneHex,
     mstLevel: app.mstLevel,
@@ -5003,7 +5054,7 @@ export function buildDirectClientGeminiParts(params: {
     styleMode,
     hasPortraitReference: Boolean(profile.portraitDataUrl),
   });
-  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, gender=${profile.gender || 'unisex'}, faithful 7.5-head adult body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${canonicalCharacterBlock}\n${weatherBundle.combinedPrompt}`;
+  const bodyLock = `Model: ${profile.weightKg && profile.heightCm ? `${profile.heightCm}cm/${profile.weightKg}kg` : '172cm/64kg'} (BMI ${bmi}, gender=${profile.gender || 'unisex'}, dominantHand=${spec.dominantHand}, faithful 7.5-head adult body/face/limb volume), frame=${spec.framePreset}, archetype=${spec.archetypePreset}, chest=${anthro.chestForm}, skin=${profile.skinToneHex} (MST-${app.mstLevel}-${app.mstUndertone}), hair=${app.hairStyle} (${app.hairColorHex}), beard=${app.facialHair}.\n${canonicalCharacterBlock}\n${weatherBundle.combinedPrompt}`;
 
   const parts: Array<Record<string, unknown>> = [
     { text: `${header}\n${cameraLine}\n${bodyLock}` },
@@ -5042,6 +5093,7 @@ export function buildDirectClientGeminiParts(params: {
     }
   }
 
+  const bagAnatomy = resolveBagCarryAnatomy(spec.dominantHand);
   const slotPlacementPrompts: Record<string, string> = {
     top: 'worn as the inner base top layer directly over the upper torso (with collar/hem naturally peeking beneath any mid-layer cardigan/vest or outerwear)',
     top_mid:
@@ -5051,7 +5103,7 @@ export function buildDirectClientGeminiParts(params: {
     outer:
       'worn as the outermost overcoat/trench/padding draped naturally OVER all inner [TOP], [TOP_MID], and [OUTER_MID] layers (left relaxed open in front on 0°/45° views so inner layering stays legible)',
     shoes: `worn cleanly on BOTH feet with full soles grounded on the floor. ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
-    accessory: 'carried naturally on shoulder or in hand as main bag/tote/briefcase',
+    accessory: bagAnatomy.slotPrompt,
     acc_umbrella:
       weatherBundle.effectiveWeather === 'rain'
         ? 'MUST BE WIDE-OPEN FULL DOME CANOPY held high above the head with one hand and tilted ~15° backward so the face, hair, and entire outfit remain 100% visible (NEVER closed, folded, rolled, or used as a walking cane)'
@@ -5129,8 +5181,15 @@ async function synthesizeDirectBrowserGeminiVton(params: {
       responseModalities: Array<'TEXT' | 'IMAGE'>;
       useAspectConfig: boolean;
       aspectRatio: '3:2' | '4:3' | '3:4' | null;
+      imageSize?: '1K';
     }> = turnaroundSheet
       ? [
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            useAspectConfig: true,
+            aspectRatio: '3:2',
+            imageSize: '1K',
+          },
           { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '3:2' },
           { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '4:3' },
           { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false, aspectRatio: null },
@@ -5139,6 +5198,12 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           { responseModalities: ['IMAGE'], useAspectConfig: false, aspectRatio: null },
         ]
       : [
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            useAspectConfig: true,
+            aspectRatio: '3:4',
+            imageSize: '1K',
+          },
           { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: true, aspectRatio: '3:4' },
           { responseModalities: ['TEXT', 'IMAGE'], useAspectConfig: false, aspectRatio: null },
           { responseModalities: ['IMAGE'], useAspectConfig: true, aspectRatio: '3:4' },
@@ -5157,7 +5222,8 @@ async function synthesizeDirectBrowserGeminiVton(params: {
 
     for (const model of DIRECT_GEMINI_MODEL_CHAIN) {
       for (let stratIdx = 0; stratIdx < modalityStrategies.length; stratIdx += 1) {
-        const { responseModalities, useAspectConfig, aspectRatio } = modalityStrategies[stratIdx];
+        const { responseModalities, useAspectConfig, aspectRatio, imageSize } =
+          modalityStrategies[stratIdx];
         const requestSignal =
           typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
             ? AbortSignal.timeout(55_000)
@@ -5167,7 +5233,12 @@ async function synthesizeDirectBrowserGeminiVton(params: {
           const generationConfig: Record<string, unknown> = {
             responseModalities,
             ...(useAspectConfig && aspectRatio
-              ? { imageConfig: { aspectRatio } }
+              ? {
+                  imageConfig: {
+                    aspectRatio,
+                    ...(imageSize ? { imageSize } : {}),
+                  },
+                }
               : {}),
           };
           const res = await fetch(
@@ -5497,125 +5568,529 @@ export async function synthesizeGeminiMultiAngleVton(
         ? getStoredCharacterIdentityAnchor(characterAnchorKey)
         : null;
 
-      let json: VtonServerResponse = {
-        ok: false,
-        fallbackReason: 'gemini_api_key_not_configured',
-        compositeImageUrl: null,
-      };
-      let rawComposite: string | null = null;
-      let synthesisSource: 'gemini' | 'browser-gemini' | null = null;
+      const now = Date.now();
+      const garmentLabels = equippedGarments
+        .map(({ garment }) => String(garment.name || '').trim())
+        .filter(Boolean);
+      const slotGarmentIds: Record<string, number | string> = {};
+      for (const { slotKey, garment } of equippedGarments) {
+        if (garment?.id !== undefined && garment?.id !== null) {
+          slotGarmentIds[slotKey] = garment.id;
+        }
+      }
+      const outfitLabel =
+        garmentLabels.length > 2
+          ? `${garmentLabels.slice(0, 2).join(' · ')} 외 ${garmentLabels.length - 2}`
+          : garmentLabels.join(' · ') || '저장된 AI 피팅';
 
-      if (!isStaticStandalone) {
-        const reqHeaders: Record<string, string> = {
-          'X-Demo-Mode': 'sample',
-        };
-        if (clientGeminiKey) {
-          reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+      const isFatalReason = (reason?: string | null): boolean =>
+        reason === 'aborted' ||
+        reason === 'gemini_api_key_not_configured' ||
+        reason === 'gemini_invalid_api_key' ||
+        reason === 'gemini_leaked_key' ||
+        reason === 'gemini_billing_required';
+
+      const maxQcAttempts = 3;
+      let bestValidZeroSlice: string | null = null;
+      let lastQcReport: TurnaroundConsistencyQcReport | null = null;
+      let lastFailureReason: string | null = null;
+
+      let passedSlices: Partial<Record<TurnaroundAngleDeg, string>> | null = null;
+      let passedEntries: CachedAiVtonSlice[] = [];
+      let passedCached = false;
+
+      for (let attempt = 1; attempt <= maxQcAttempts; attempt += 1) {
+        if (request.signal?.aborted) {
+          lastFailureReason = 'aborted';
+          break;
         }
 
-        try {
-          json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
-            method: 'POST',
-            headers: reqHeaders,
-            body: JSON.stringify({
-              mode,
-              styleMode,
-              viewAngleDeg: angleDeg,
-              turnaroundSheet: useTurnaroundSheet,
-              weather: request.weather ?? { mood: weatherMood, effectiveWeather },
-              avatarSpec: effectiveProfile.avatarSpec,
-              avatarConfigHash: effectiveProfile.avatarConfigHash,
-              portraitDataUrl: effectivePortraitUrl,
-              profile: {
-                gender: effectiveProfile.gender,
-                skinToneHex: effectiveProfile.skinToneHex,
-                personalColor: effectiveProfile.personalColor,
-                heightCm: effectiveProfile.heightCm,
-                weightKg: effectiveProfile.weightKg,
-                bodyShape: effectiveProfile.bodyShape,
-                shoulderScale: effectiveProfile.shoulderScale,
-                waistScale: effectiveProfile.waistScale,
-                hipScale: effectiveProfile.hipScale,
-                portraitDataUrl: effectivePortraitUrl,
-                ...(storedCharacterAnchorUrl
-                  ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
-                  : {}),
-                avatarSpec: effectiveProfile.avatarSpec,
-                avatarConfigHash: effectiveProfile.avatarConfigHash,
+        const attemptForceRefresh = Boolean(request.forceRefresh) || attempt > 1;
+        let json: VtonServerResponse = {
+          ok: false,
+          fallbackReason: 'gemini_api_key_not_configured',
+          compositeImageUrl: null,
+        };
+        let rawComposite: string | null = null;
+        let synthesisSource: 'gemini' | 'browser-gemini' | null = null;
+
+        if (!isStaticStandalone) {
+          const reqHeaders: Record<string, string> = {
+            'X-Demo-Mode': 'sample',
+          };
+          if (clientGeminiKey) {
+            reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+          }
+
+          try {
+            json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+              method: 'POST',
+              headers: reqHeaders,
+              body: JSON.stringify({
+                mode,
                 styleMode,
                 viewAngleDeg: angleDeg,
                 turnaroundSheet: useTurnaroundSheet,
-              },
-              slots: serializedSlots,
-              forceRefresh: Boolean(request.forceRefresh),
-            }),
-          });
-          rawComposite = sanitizeImageCandidate(
-            json?.compositeImageUrl ?? json?.afterImageUrl ?? null
-          );
-          if (
-            (rawComposite || json?.panelImages) &&
-            json?.geminiUsed !== false &&
-            (json?.provider === 'gemini-vton' || Boolean(json?.geminiUsed))
-          ) {
-            synthesisSource = 'gemini';
+                weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                avatarSpec: effectiveProfile.avatarSpec,
+                avatarConfigHash: effectiveProfile.avatarConfigHash,
+                portraitDataUrl: effectivePortraitUrl,
+                profile: {
+                  gender: effectiveProfile.gender,
+                  dominantHand: effectiveProfile.dominantHand,
+                  skinToneHex: effectiveProfile.skinToneHex,
+                  personalColor: effectiveProfile.personalColor,
+                  heightCm: effectiveProfile.heightCm,
+                  weightKg: effectiveProfile.weightKg,
+                  bodyShape: effectiveProfile.bodyShape,
+                  shoulderScale: effectiveProfile.shoulderScale,
+                  waistScale: effectiveProfile.waistScale,
+                  hipScale: effectiveProfile.hipScale,
+                  portraitDataUrl: effectivePortraitUrl,
+                  ...(storedCharacterAnchorUrl
+                    ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
+                    : {}),
+                  avatarSpec: effectiveProfile.avatarSpec,
+                  avatarConfigHash: effectiveProfile.avatarConfigHash,
+                  styleMode,
+                  viewAngleDeg: angleDeg,
+                  turnaroundSheet: useTurnaroundSheet,
+                },
+                slots: serializedSlots,
+                forceRefresh: attemptForceRefresh,
+              }),
+            });
+            rawComposite = sanitizeImageCandidate(
+              json?.compositeImageUrl ?? json?.afterImageUrl ?? null
+            );
+            if (
+              (rawComposite || json?.panelImages) &&
+              json?.geminiUsed !== false &&
+              (json?.provider === 'gemini-vton' || Boolean(json?.geminiUsed))
+            ) {
+              synthesisSource = 'gemini';
+            }
+          } catch (serverErr) {
+            const serverStatus =
+              serverErr && typeof serverErr === 'object' && 'status' in serverErr
+                ? Number((serverErr as { status?: number }).status)
+                : 0;
+            json = {
+              ok: false,
+              fallbackReason:
+                serverStatus === 413
+                  ? 'payload_too_large'
+                  : serverStatus > 0
+                    ? `http_${serverStatus}`
+                    : 'backend_unavailable',
+              compositeImageUrl: null,
+            };
+            rawComposite = null;
           }
-        } catch (serverErr) {
-          const serverStatus =
-            serverErr && typeof serverErr === 'object' && 'status' in serverErr
-              ? Number((serverErr as { status?: number }).status)
-              : 0;
-          json = {
-            ok: false,
-            fallbackReason:
-              serverStatus === 413
-                ? 'payload_too_large'
-                : serverStatus > 0
-                  ? `http_${serverStatus}`
-                  : 'backend_unavailable',
-            compositeImageUrl: null,
+        }
+
+        if (
+          !rawComposite &&
+          !json?.panelImages &&
+          clientGeminiKeys.length > 0 &&
+          json?.fallbackReason !== 'aborted'
+        ) {
+          for (const candidateKey of clientGeminiKeys) {
+            const directJson = await synthesizeDirectBrowserGeminiVton({
+              apiKey: candidateKey,
+              profile: effectiveProfile,
+              styleMode,
+              weatherMood,
+              weather: request.weather,
+              angleDeg,
+              useTurnaroundSheet,
+              serializedSlots,
+            });
+            const directComposite = sanitizeImageCandidate(
+              directJson?.compositeImageUrl ?? directJson?.afterImageUrl ?? null
+            );
+            json = directJson;
+            rawComposite = directComposite;
+            if (rawComposite || directJson?.panelImages) {
+              synthesisSource = 'browser-gemini';
+              break;
+            }
+            if (directJson?.fallbackReason === 'aborted') {
+              break;
+            }
+          }
+        }
+
+        if (!rawComposite && !json?.panelImages) {
+          lastFailureReason = json?.fallbackReason || 'gemini_api_key_not_configured';
+          if (isFatalReason(lastFailureReason)) {
+            break;
+          }
+          continue;
+        }
+
+        const modelName = String(json.model || 'gemini-3.1-flash-image-preview');
+        const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
+        const entriesToPersist: CachedAiVtonSlice[] = [];
+        const isTurnaroundResponse = json.layout
+          ? json.layout === 'turnaround_3x2' || json.layout === 'turnaround_2x2'
+          : useTurnaroundSheet;
+
+        if (json.panelImages && typeof json.panelImages === 'object') {
+          for (const a of TURNAROUND_ANGLES) {
+            const rawCandidate = sanitizeImageCandidate(json.panelImages[String(a)]);
+            if (rawCandidate) {
+              const candidate = await ensureTransparentCutout(
+                await removeModelBackgroundToPng(rawCandidate)
+              );
+              const entryCacheKey = buildAiVtonCacheKey({
+                avatarConfigHash: profile.avatarConfigHash,
+                outfitComboId,
+                styleMode,
+                effectiveWeather,
+                angleDeg: a,
+              });
+              markCacheKeyTransparentVerified(entryCacheKey);
+              angleSlices[a] = candidate;
+              entriesToPersist.push({
+                cacheKey: entryCacheKey,
+                avatarConfigHash: profile.avatarConfigHash,
+                outfitComboId,
+                styleMode,
+                angleDeg: a,
+                weatherMood,
+                effectiveWeather,
+                imageUrl: candidate,
+                sheetImageUrl: null,
+                outfitLabel,
+                garmentLabels,
+                slotGarmentIds,
+                equippedCount: equippedGarments.length,
+                model: modelName,
+                updatedAt: now,
+              });
+            }
+          }
+        } else if (rawComposite && isTurnaroundResponse) {
+          const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
+            layout: json.layout || 'turnaround_3x2',
+          });
+
+          // Verify full-body head-to-shoe integrity on every slice and auto-repair defective angles
+          const integrityEntries = await Promise.all(
+            TURNAROUND_ANGLES.map(async (a) => {
+              const url = sliced[a];
+              if (!url) return [a, { ok: false, reason: 'too_small', fgHeightRatio: 0 }] as const;
+              const rep = await inspectCutoutDataUrlIntegrity(url);
+              return [a, rep] as const;
+            })
+          );
+          const badAngles = integrityEntries
+            .filter(([, rep]) => !rep.ok)
+            .map(([a]) => a);
+
+          if (badAngles.length > 0 && !request.signal?.aborted) {
+            const repairTargets =
+              badAngles.length <= 2
+                ? badAngles
+                : Array.from(new Set<TurnaroundAngleDeg>([angleDeg, 0, ...badAngles])).slice(0, 6);
+
+            const attemptRepairAngle = async (repairAngle: TurnaroundAngleDeg) => {
+              try {
+                let repairRaw: string | null = null;
+                if (synthesisSource === 'gemini' && !isStaticStandalone) {
+                  const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
+                  if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
+                  const serverRepair = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+                    method: 'POST',
+                    headers: reqHeaders,
+                    body: JSON.stringify({
+                      mode,
+                      styleMode,
+                      viewAngleDeg: repairAngle,
+                      turnaroundSheet: false,
+                      weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                      avatarSpec: effectiveProfile.avatarSpec,
+                      avatarConfigHash: effectiveProfile.avatarConfigHash,
+                      portraitDataUrl: effectivePortraitUrl,
+                      profile: {
+                        gender: effectiveProfile.gender,
+                        dominantHand: effectiveProfile.dominantHand,
+                        skinToneHex: effectiveProfile.skinToneHex,
+                        personalColor: effectiveProfile.personalColor,
+                        heightCm: effectiveProfile.heightCm,
+                        weightKg: effectiveProfile.weightKg,
+                        bodyShape: effectiveProfile.bodyShape,
+                        shoulderScale: effectiveProfile.shoulderScale,
+                        waistScale: effectiveProfile.waistScale,
+                        hipScale: effectiveProfile.hipScale,
+                        portraitDataUrl: effectivePortraitUrl,
+                        ...(storedCharacterAnchorUrl
+                          ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
+                          : {}),
+                        avatarSpec: effectiveProfile.avatarSpec,
+                        avatarConfigHash: effectiveProfile.avatarConfigHash,
+                        styleMode,
+                        viewAngleDeg: repairAngle,
+                        turnaroundSheet: false,
+                      },
+                      slots: serializedSlots,
+                      forceRefresh: true,
+                    }),
+                  });
+                  repairRaw = sanitizeImageCandidate(
+                    serverRepair?.compositeImageUrl ?? serverRepair?.afterImageUrl ?? null
+                  );
+                }
+                if (!repairRaw && clientGeminiKeys.length > 0) {
+                  const repairJson = await synthesizeDirectBrowserGeminiVton({
+                    apiKey: clientGeminiKeys[0],
+                    profile: effectiveProfile,
+                    styleMode,
+                    weatherMood,
+                    weather: request.weather,
+                    angleDeg: repairAngle,
+                    useTurnaroundSheet: false,
+                    serializedSlots,
+                  });
+                  repairRaw = sanitizeImageCandidate(
+                    repairJson?.compositeImageUrl ?? repairJson?.afterImageUrl ?? null
+                  );
+                }
+                if (repairRaw) {
+                  const repairCut = await ensureTransparentCutout(
+                    await removeModelBackgroundToPng(repairRaw)
+                  );
+                  const repairCheck = await inspectCutoutDataUrlIntegrity(repairCut);
+                  if (repairCheck.ok) {
+                    sliced[repairAngle] = repairCut;
+                  }
+                }
+              } catch {
+                // ignore single-angle repair failure and fall through to symmetric mirror check
+              }
+            };
+
+            // Bound concurrency to 3 requests at a time and retry up to 2 attempts if still cropped
+            for (let i = 0; i < repairTargets.length; i += 3) {
+              await Promise.all(
+                repairTargets.slice(i, i + 3).map(async (targetAngle) => {
+                  await attemptRepairAngle(targetAngle);
+                  const post = sliced[targetAngle]
+                    ? await inspectCutoutDataUrlIntegrity(sliced[targetAngle]!)
+                    : { ok: false };
+                  if (!post.ok && !request.signal?.aborted) {
+                    await attemptRepairAngle(targetAngle);
+                  }
+                })
+              );
+            }
+          }
+
+          // Last-resort headless/half-body guard: mirror opposite valid rear-quarter slice rather than showing headless crops
+          for (const a of badAngles) {
+            const recheck = sliced[a]
+              ? await inspectCutoutDataUrlIntegrity(sliced[a]!)
+              : { ok: false };
+            if (!recheck.ok) {
+              const mirrorPartner: Partial<Record<TurnaroundAngleDeg, TurnaroundAngleDeg[]>> = {
+                135: [225, 90],
+                225: [135, 90],
+                180: [135, 225],
+              };
+              const candidates = mirrorPartner[a] || [];
+              for (const partnerAngle of candidates) {
+                if (!sliced[partnerAngle]) continue;
+                const partnerCheck = await inspectCutoutDataUrlIntegrity(sliced[partnerAngle]!);
+                if (partnerCheck.ok) {
+                  sliced[a] =
+                    partnerAngle === 135 || partnerAngle === 225
+                      ? a === 180
+                        ? sliced[partnerAngle]!
+                        : await flipDataUrlHorizontally(sliced[partnerAngle]!)
+                      : await flipDataUrlHorizontally(sliced[partnerAngle]!);
+                  break;
+                }
+              }
+            }
+          }
+
+          // Re-normalize ALL 6 final slices together after single-angle repairs so every angle
+          // shares identical 3:4 aspect canvas dimensions, 0.94 floor baseline, uniform height, and dead-center spine X.
+          await normalizeTurnaroundDataUrlsToFloorBaseline(sliced);
+
+          for (const a of TURNAROUND_ANGLES) {
+            const sliceUrl =
+              sliced[a] ||
+              (await ensureTransparentCutout(await removeModelBackgroundToPng(rawComposite)));
+            const entryCacheKey = buildAiVtonCacheKey({
+              avatarConfigHash: profile.avatarConfigHash,
+              outfitComboId,
+              styleMode,
+              effectiveWeather,
+              angleDeg: a,
+            });
+            markCacheKeyTransparentVerified(entryCacheKey);
+            angleSlices[a] = sliceUrl;
+            entriesToPersist.push({
+              cacheKey: entryCacheKey,
+              avatarConfigHash: profile.avatarConfigHash,
+              outfitComboId,
+              styleMode,
+              angleDeg: a,
+              weatherMood,
+              effectiveWeather,
+              imageUrl: sliceUrl,
+              sheetImageUrl: null,
+              outfitLabel,
+              garmentLabels,
+              slotGarmentIds,
+              equippedCount: equippedGarments.length,
+              model: modelName,
+              updatedAt: now,
+            });
+          }
+        } else if (rawComposite) {
+          const cutoutComposite = await ensureTransparentCutout(
+            await removeModelBackgroundToPng(rawComposite)
+          );
+          const singleMap: Partial<Record<TurnaroundAngleDeg, string>> = {
+            [angleDeg]: cutoutComposite,
           };
-          rawComposite = null;
-        }
-      }
-
-      if (
-        !rawComposite &&
-        !json?.panelImages &&
-        clientGeminiKeys.length > 0 &&
-        json?.fallbackReason !== 'aborted'
-      ) {
-        for (const candidateKey of clientGeminiKeys) {
-          const directJson = await synthesizeDirectBrowserGeminiVton({
-            apiKey: candidateKey,
-            profile: effectiveProfile,
+          await normalizeTurnaroundDataUrlsToFloorBaseline(singleMap);
+          const normalizedSingle = singleMap[angleDeg] || cutoutComposite;
+          markCacheKeyTransparentVerified(cacheKey);
+          angleSlices[angleDeg] = normalizedSingle;
+          entriesToPersist.push({
+            cacheKey,
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
             styleMode,
-            weatherMood,
-            weather: request.weather,
             angleDeg,
-            useTurnaroundSheet,
-            serializedSlots,
+            weatherMood,
+            effectiveWeather,
+            imageUrl: normalizedSingle,
+            sheetImageUrl: null,
+            outfitLabel,
+            garmentLabels,
+            slotGarmentIds,
+            equippedCount: equippedGarments.length,
+            model: modelName,
+            updatedAt: now,
           });
-          const directComposite = sanitizeImageCandidate(
-            directJson?.compositeImageUrl ?? directJson?.afterImageUrl ?? null
+        }
+
+        // Pre-display Pixel QC verification across all generated angles (browser runtime)
+        let qcPassed = true;
+        if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
+          const metricsByAngle: Partial<Record<number, VtonQcSliceMetrics>> = {};
+          await Promise.all(
+            Object.entries(angleSlices).map(async ([k, url]) => {
+              if (!url) return;
+              const m = await inspectDataUrlQcMetrics(url);
+              if (m) {
+                metricsByAngle[Number(k)] = m;
+              }
+            })
           );
-          json = directJson;
-          rawComposite = directComposite;
-          if (rawComposite || directJson?.panelImages) {
-            synthesisSource = 'browser-gemini';
-            break;
+          if (Object.keys(metricsByAngle).length > 0) {
+            if (isTurnaroundResponse) {
+              const qc = evaluateTurnaroundConsistencyQc(metricsByAngle);
+              lastQcReport = qc;
+              if (qc.frontValid && angleSlices[0]) {
+                bestValidZeroSlice = angleSlices[0];
+              }
+              qcPassed = qc.ok;
+            } else {
+              const m = metricsByAngle[angleDeg] ?? metricsByAngle[0];
+              if (m) {
+                const singleOk =
+                  !m.clippedTop &&
+                  !m.clippedBottom &&
+                  !m.halfBody &&
+                  m.fgHeightRatio >= 0.48 &&
+                  m.interiorChromaRatio <= 0.045;
+                if (singleOk && (angleSlices[0] || angleSlices[angleDeg])) {
+                  bestValidZeroSlice = angleSlices[0] || angleSlices[angleDeg] || bestValidZeroSlice;
+                }
+                qcPassed = singleOk;
+              }
+            }
           }
-          if (directJson?.fallbackReason === 'aborted') {
-            break;
+        }
+
+        if (qcPassed) {
+          passedSlices = angleSlices;
+          passedEntries = entriesToPersist;
+          passedCached = Boolean(json.cached);
+          if (
+            characterAnchorKey &&
+            angleSlices[0] &&
+            (synthesisSource === 'browser-gemini' || synthesisSource === 'gemini')
+          ) {
+            const anchorBackdropHex = selectOptimalStudioKeyHex(
+              extractStudioKeyColorInputs(serializedSlots)
+            );
+            await saveCharacterIdentityAnchorFromZeroSlice({
+              anchorKey: characterAnchorKey,
+              zeroSliceDataUrl: angleSlices[0],
+              backdropHex: anchorBackdropHex,
+            });
           }
+          break;
         }
       }
 
-      if (!rawComposite && !json?.panelImages) {
+      if (!passedSlices) {
+        if (!isFatalReason(lastFailureReason)) {
+          logVtonQcFailure({
+            outfitComboId,
+            avatarConfigHash: profile.avatarConfigHash,
+            attempts: maxQcAttempts,
+            reasons: lastQcReport?.reasons || [lastFailureReason || 'qc_failed'],
+            failedAngles: lastQcReport?.failedAngles || [],
+            frontOnlyFallback: Boolean(bestValidZeroSlice),
+          });
+        }
+
+        if (bestValidZeroSlice && !isFatalReason(lastFailureReason)) {
+          const zeroCacheKey = buildAiVtonCacheKey({
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather,
+            angleDeg: 0,
+          });
+          return {
+            ok: true,
+            fallbackToFlatLay: false,
+            frontOnlyDegraded: true,
+            reason: 'qc_front_only_fallback',
+            mode,
+            provider: 'gemini-vton',
+            styleMode,
+            angleDeg: 0,
+            weatherMood,
+            effectiveWeather,
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            cacheKey: zeroCacheKey,
+            fromCache: false,
+            cacheLayer: 'fresh',
+            imageUrl: bestValidZeroSlice,
+            angleSlices: { 0: bestValidZeroSlice },
+            equippedCount: equippedGarments.length,
+            equippedSlotKeys,
+            profile,
+            createdAt: now,
+          };
+        }
+
         return {
           ok: false,
           fallbackToFlatLay: true,
-          reason: json?.fallbackReason || 'gemini_api_key_not_configured',
+          frontOnlyDegraded: false,
+          reason: lastFailureReason || 'gemini_api_key_not_configured',
           mode,
           provider: 'flatlay-lookbook',
           styleMode,
@@ -5636,292 +6111,14 @@ export async function synthesizeGeminiMultiAngleVton(
         };
       }
 
-      const now = Date.now();
-      const modelName = String(json.model || 'gemini-3.1-flash-image');
-      const garmentLabels = equippedGarments
-        .map(({ garment }) => String(garment.name || '').trim())
-        .filter(Boolean);
-      const slotGarmentIds: Record<string, number | string> = {};
-      for (const { slotKey, garment } of equippedGarments) {
-        if (garment?.id !== undefined && garment?.id !== null) {
-          slotGarmentIds[slotKey] = garment.id;
-        }
-      }
-      const outfitLabel =
-        garmentLabels.length > 2
-          ? `${garmentLabels.slice(0, 2).join(' · ')} 외 ${garmentLabels.length - 2}`
-          : garmentLabels.join(' · ') || '저장된 AI 피팅';
-      const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
-      const entriesToPersist: CachedAiVtonSlice[] = [];
-      const isTurnaroundResponse = json.layout
-        ? json.layout === 'turnaround_3x2' || json.layout === 'turnaround_2x2'
-        : useTurnaroundSheet;
+      await persistAiVtonSlices(passedEntries);
 
-      if (json.panelImages && typeof json.panelImages === 'object') {
-        for (const a of TURNAROUND_ANGLES) {
-          const rawCandidate = sanitizeImageCandidate(json.panelImages[String(a)]);
-          if (rawCandidate) {
-            const candidate = await ensureTransparentCutout(
-              await removeModelBackgroundToPng(rawCandidate)
-            );
-            const entryCacheKey = buildAiVtonCacheKey({
-              avatarConfigHash: profile.avatarConfigHash,
-              outfitComboId,
-              styleMode,
-              effectiveWeather,
-              angleDeg: a,
-            });
-            markCacheKeyTransparentVerified(entryCacheKey);
-            angleSlices[a] = candidate;
-            entriesToPersist.push({
-              cacheKey: entryCacheKey,
-              avatarConfigHash: profile.avatarConfigHash,
-              outfitComboId,
-              styleMode,
-              angleDeg: a,
-              weatherMood,
-              effectiveWeather,
-              imageUrl: candidate,
-              sheetImageUrl: null,
-              outfitLabel,
-              garmentLabels,
-              slotGarmentIds,
-              equippedCount: equippedGarments.length,
-              model: modelName,
-              updatedAt: now,
-            });
-          }
-        }
-      } else if (rawComposite && isTurnaroundResponse) {
-        const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
-          layout: json.layout || 'turnaround_3x2',
-        });
-
-        // Verify full-body head-to-shoe integrity on every slice and auto-repair defective angles
-        const integrityEntries = await Promise.all(
-          TURNAROUND_ANGLES.map(async (a) => {
-            const url = sliced[a];
-            if (!url) return [a, { ok: false, reason: 'too_small', fgHeightRatio: 0 }] as const;
-            const rep = await inspectCutoutDataUrlIntegrity(url);
-            return [a, rep] as const;
-          })
-        );
-        const badAngles = integrityEntries
-          .filter(([, rep]) => !rep.ok)
-          .map(([a]) => a);
-
-        if (badAngles.length > 0 && !request.signal?.aborted) {
-          const repairTargets =
-            badAngles.length <= 2
-              ? badAngles
-              : Array.from(new Set<TurnaroundAngleDeg>([angleDeg, 0, ...badAngles])).slice(0, 6);
-
-          const attemptRepairAngle = async (repairAngle: TurnaroundAngleDeg) => {
-            try {
-              let repairRaw: string | null = null;
-              if (synthesisSource === 'gemini' && !isStaticStandalone) {
-                const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
-                if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
-                const serverRepair = await apiFetch<VtonServerResponse>('/vton/synthesize', {
-                  method: 'POST',
-                  headers: reqHeaders,
-                  body: JSON.stringify({
-                    mode,
-                    styleMode,
-                    viewAngleDeg: repairAngle,
-                    turnaroundSheet: false,
-                    weather: request.weather ?? { mood: weatherMood, effectiveWeather },
-                    avatarSpec: effectiveProfile.avatarSpec,
-                    avatarConfigHash: effectiveProfile.avatarConfigHash,
-                    portraitDataUrl: effectivePortraitUrl,
-                    profile: {
-                      gender: effectiveProfile.gender,
-                      skinToneHex: effectiveProfile.skinToneHex,
-                      personalColor: effectiveProfile.personalColor,
-                      heightCm: effectiveProfile.heightCm,
-                      weightKg: effectiveProfile.weightKg,
-                      bodyShape: effectiveProfile.bodyShape,
-                      shoulderScale: effectiveProfile.shoulderScale,
-                      waistScale: effectiveProfile.waistScale,
-                      hipScale: effectiveProfile.hipScale,
-                      portraitDataUrl: effectivePortraitUrl,
-                      ...(storedCharacterAnchorUrl
-                        ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
-                        : {}),
-                      avatarSpec: effectiveProfile.avatarSpec,
-                      avatarConfigHash: effectiveProfile.avatarConfigHash,
-                      styleMode,
-                      viewAngleDeg: repairAngle,
-                      turnaroundSheet: false,
-                    },
-                    slots: serializedSlots,
-                    forceRefresh: true,
-                  }),
-                });
-                repairRaw = sanitizeImageCandidate(
-                  serverRepair?.compositeImageUrl ?? serverRepair?.afterImageUrl ?? null
-                );
-              }
-              if (!repairRaw && clientGeminiKeys.length > 0) {
-                const repairJson = await synthesizeDirectBrowserGeminiVton({
-                  apiKey: clientGeminiKeys[0],
-                  profile: effectiveProfile,
-                  styleMode,
-                  weatherMood,
-                  weather: request.weather,
-                  angleDeg: repairAngle,
-                  useTurnaroundSheet: false,
-                  serializedSlots,
-                });
-                repairRaw = sanitizeImageCandidate(
-                  repairJson?.compositeImageUrl ?? repairJson?.afterImageUrl ?? null
-                );
-              }
-              if (repairRaw) {
-                const repairCut = await ensureTransparentCutout(
-                  await removeModelBackgroundToPng(repairRaw)
-                );
-                const repairCheck = await inspectCutoutDataUrlIntegrity(repairCut);
-                if (repairCheck.ok) {
-                  sliced[repairAngle] = repairCut;
-                }
-              }
-            } catch {
-              // ignore single-angle repair failure and fall through to symmetric mirror check
-            }
-          };
-
-          // Bound concurrency to 3 requests at a time and retry up to 2 attempts if still cropped
-          for (let i = 0; i < repairTargets.length; i += 3) {
-            await Promise.all(
-              repairTargets.slice(i, i + 3).map(async (targetAngle) => {
-                await attemptRepairAngle(targetAngle);
-                const post = sliced[targetAngle]
-                  ? await inspectCutoutDataUrlIntegrity(sliced[targetAngle]!)
-                  : { ok: false };
-                if (!post.ok && !request.signal?.aborted) {
-                  await attemptRepairAngle(targetAngle);
-                }
-              })
-            );
-          }
-        }
-
-        // Last-resort headless/half-body guard: mirror opposite valid rear-quarter slice rather than showing headless crops
-        for (const a of badAngles) {
-          const recheck = sliced[a]
-            ? await inspectCutoutDataUrlIntegrity(sliced[a]!)
-            : { ok: false };
-          if (!recheck.ok) {
-            const mirrorPartner: Partial<Record<TurnaroundAngleDeg, TurnaroundAngleDeg[]>> = {
-              135: [225, 90],
-              225: [135, 90],
-              180: [135, 225],
-            };
-            const candidates = mirrorPartner[a] || [];
-            for (const partnerAngle of candidates) {
-              if (!sliced[partnerAngle]) continue;
-              const partnerCheck = await inspectCutoutDataUrlIntegrity(sliced[partnerAngle]!);
-              if (partnerCheck.ok) {
-                sliced[a] =
-                  partnerAngle === 135 || partnerAngle === 225
-                    ? a === 180
-                      ? sliced[partnerAngle]!
-                      : await flipDataUrlHorizontally(sliced[partnerAngle]!)
-                    : await flipDataUrlHorizontally(sliced[partnerAngle]!);
-                break;
-              }
-            }
-          }
-        }
-
-        // Re-normalize ALL 6 final slices together after single-angle repairs so every angle
-        // shares identical 3:4 aspect canvas dimensions, 0.94 floor baseline, uniform height, and dead-center spine X.
-        await normalizeTurnaroundDataUrlsToFloorBaseline(sliced);
-
-        for (const a of TURNAROUND_ANGLES) {
-          const sliceUrl =
-            sliced[a] ||
-            (await ensureTransparentCutout(await removeModelBackgroundToPng(rawComposite)));
-          const entryCacheKey = buildAiVtonCacheKey({
-            avatarConfigHash: profile.avatarConfigHash,
-            outfitComboId,
-            styleMode,
-            effectiveWeather,
-            angleDeg: a,
-          });
-          markCacheKeyTransparentVerified(entryCacheKey);
-          angleSlices[a] = sliceUrl;
-          entriesToPersist.push({
-            cacheKey: entryCacheKey,
-            avatarConfigHash: profile.avatarConfigHash,
-            outfitComboId,
-            styleMode,
-            angleDeg: a,
-            weatherMood,
-            effectiveWeather,
-            imageUrl: sliceUrl,
-            sheetImageUrl: null,
-            outfitLabel,
-            garmentLabels,
-            slotGarmentIds,
-            equippedCount: equippedGarments.length,
-            model: modelName,
-            updatedAt: now,
-          });
-        }
-      } else if (rawComposite) {
-        const cutoutComposite = await ensureTransparentCutout(
-          await removeModelBackgroundToPng(rawComposite)
-        );
-        const singleMap: Partial<Record<TurnaroundAngleDeg, string>> = {
-          [angleDeg]: cutoutComposite,
-        };
-        await normalizeTurnaroundDataUrlsToFloorBaseline(singleMap);
-        const normalizedSingle = singleMap[angleDeg] || cutoutComposite;
-        markCacheKeyTransparentVerified(cacheKey);
-        angleSlices[angleDeg] = normalizedSingle;
-        entriesToPersist.push({
-          cacheKey,
-          avatarConfigHash: profile.avatarConfigHash,
-          outfitComboId,
-          styleMode,
-          angleDeg,
-          weatherMood,
-          effectiveWeather,
-          imageUrl: normalizedSingle,
-          sheetImageUrl: null,
-          outfitLabel,
-          garmentLabels,
-          slotGarmentIds,
-          equippedCount: equippedGarments.length,
-          model: modelName,
-          updatedAt: now,
-        });
-      }
-
-      await persistAiVtonSlices(entriesToPersist);
-
-      if (
-        characterAnchorKey &&
-        angleSlices[0] &&
-        (synthesisSource === 'browser-gemini' || synthesisSource === 'gemini')
-      ) {
-        const anchorBackdropHex = selectOptimalStudioKeyHex(
-          extractStudioKeyColorInputs(serializedSlots)
-        );
-        await saveCharacterIdentityAnchorFromZeroSlice({
-          anchorKey: characterAnchorKey,
-          zeroSliceDataUrl: angleSlices[0],
-          backdropHex: anchorBackdropHex,
-        });
-      }
-
-      const finalImg = angleSlices[angleDeg] || null;
+      const finalImg = passedSlices[angleDeg] || passedSlices[0] || null;
       if (!finalImg) {
         return {
           ok: false,
           fallbackToFlatLay: true,
+          frontOnlyDegraded: false,
           reason: 'gemini_empty_image_part',
           mode,
           provider: 'flatlay-lookbook',
@@ -5946,6 +6143,7 @@ export async function synthesizeGeminiMultiAngleVton(
       return {
         ok: true,
         fallbackToFlatLay: false,
+        frontOnlyDegraded: false,
         reason: null,
         mode,
         provider: 'gemini-vton',
@@ -5956,10 +6154,10 @@ export async function synthesizeGeminiMultiAngleVton(
         avatarConfigHash: profile.avatarConfigHash,
         outfitComboId,
         cacheKey,
-        fromCache: Boolean(json.cached),
-        cacheLayer: json.cached ? 'server' : 'fresh',
+        fromCache: passedCached,
+        cacheLayer: passedCached ? 'server' : 'fresh',
         imageUrl: finalImg,
-        angleSlices,
+        angleSlices: passedSlices,
         equippedCount: equippedGarments.length,
         equippedSlotKeys,
         profile,

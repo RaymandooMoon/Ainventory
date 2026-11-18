@@ -1368,10 +1368,14 @@ export function cutoutStudioBackdropToRgba(
       }
 
       const bgRingSat = Math.max(cBgR, cBgG, cBgB) - Math.min(cBgR, cBgG, cBgB);
+      const isGreenStudioBg = cBgG > cBgR + 10 && cBgG > cBgB + 5;
+      const isSlateBlueBg = cBgB > cBgR + 8 && cBgB >= cBgG;
+      const isTerracottaBg = cBgR > cBgB + 16 && cBgR >= cBgG + 10;
+      const isMauveBg = cBgR > cBgG + 10 && cBgB > cBgG + 10 && bgRingSat >= 18;
       const isRingChromaticBg =
-        (cBgG > cBgR + 12 && cBgG > cBgB + 6) ||
+        isGreenStudioBg ||
         (cBgB > cBgR + 14 && bgRingSat >= 24) ||
-        (cBgR > cBgG + 12 && cBgB > cBgG + 12 && bgRingSat >= 24);
+        isMauveBg;
       const effectiveOuterTol = isRingChromaticBg ? outerTol : Math.min(outerTol, 18);
       const isWarmOnCoolWall = cBgB >= cBgR + 6 && r >= b + 2 && g >= b && dist > 9;
 
@@ -1380,12 +1384,19 @@ export function cutoutStudioBackdropToRgba(
         const ramp = clamp01(
           (dist - effectiveInnerTol) / Math.max(1, effectiveOuterTol - effectiveInnerTol)
         );
-        alphaFactor = ramp * 0.9;
+        alphaFactor = ramp * 0.92;
       }
 
-      const alpha = clamp01(origAlpha * alphaFactor);
+      // Snap soft matte edges subtly sharper (reducing muddy semi-transparent halos around garments/shoes)
+      let rawAlpha = clamp01(origAlpha * alphaFactor);
+      if (ring === 1 && rawAlpha < 0.24) {
+        rawAlpha *= 0.65;
+      } else if (ring === 2 && rawAlpha > 0.88) {
+        rawAlpha = Math.min(1, rawAlpha * 1.04);
+      }
+      const alpha = clamp01(rawAlpha);
       const outAlpha = clampByte(alpha * 255);
-      if (outAlpha <= 5) {
+      if (outAlpha <= 6) {
         d[i] = 0;
         d[i + 1] = 0;
         d[i + 2] = 0;
@@ -1393,22 +1404,28 @@ export function cutoutStudioBackdropToRgba(
         continue;
       }
 
-      // Pass 4: Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
-      // Removes mixed studio backdrop color from 1–2px outer & inner hole boundary pixels
-      const isGreenStudioBg = cBgG > cBgR + 12 && cBgG > cBgB + 6;
+      // Pass 4: Crisp Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
+      // Removes mixed studio backdrop color (#5E9C7E / #94A3B8 / #B38368 / #8E6F9E) from boundary pixels
       if (alpha < 0.985) {
-        const safeAlpha = Math.max(0.14, alpha);
-        const uR = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
+        const safeAlpha = Math.max(0.18, alpha);
+        let uR = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
         let uG = clampByte((g - (1 - safeAlpha) * cBgG) / safeAlpha);
-        const uB = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
+        let uB = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
         if (isGreenStudioBg && uG > Math.max(uR, uB) + 2) {
-          uG = Math.max(uR, uB) + 2;
+          uG = Math.max(uR, uB) + 1;
+        } else if (isSlateBlueBg && uB > Math.max(uR, uG) + 4 && dist < outerTol * 1.15) {
+          uB = Math.round((uR + uG) * 0.5 + 2);
+        } else if (isTerracottaBg && uR > uB + 18 && dist < outerTol * 1.15) {
+          uR = clampByte(uR - (1 - safeAlpha) * 14);
+        } else if (isMauveBg && uR > uG + 8 && uB > uG + 8 && dist < outerTol * 1.15) {
+          const neutralBase = Math.round((uR + uB) * 0.5);
+          uG = Math.max(uG, neutralBase - 4);
         }
         d[i] = uR;
         d[i + 1] = uG;
         d[i + 2] = uB;
       } else if (isGreenStudioBg && g > Math.max(r, b) + 4) {
-        d[i + 1] = Math.max(r, b) + 2;
+        d[i + 1] = Math.max(r, b) + 1;
       }
       d[i + 3] = outAlpha;
     }

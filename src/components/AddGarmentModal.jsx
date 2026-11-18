@@ -17,7 +17,7 @@ import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const ACCESSORY_SUBTYPE_OPTIONS = [
-  { key: 'bag', ko: '가방 · 휴대', en: 'Bag / Carry' },
+  { key: 'bag', ko: '가방 · 허리', en: 'Bag & Waist' },
   { key: 'umbrella', ko: '우산 · 양산', en: 'Umbrella' },
   { key: 'watch', ko: '손목시계', en: 'Watch' },
   { key: 'gloves', ko: '장갑', en: 'Gloves' },

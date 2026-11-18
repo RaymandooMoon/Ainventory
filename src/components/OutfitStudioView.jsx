@@ -8,7 +8,6 @@ import {
   CloudSun,
   Filter,
   Flame,
-  Layers,
   LocateFixed,
   Moon,
   Plus,
@@ -45,7 +44,8 @@ import {
   resolveParentFittingTab,
 } from '../services/fittingRenderer.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
-import { apiFetch } from '../utils/api.ts';
+import { formatKoreanDistrictLocation } from '../services/vtonQualityControl.ts';
+import { CITY_COORDS, apiFetch } from '../utils/api.ts';
 import {
   localizeApiMessage,
   localizeBrandName,
@@ -1064,6 +1064,7 @@ export default function OutfitStudioView({
   const [occasionFilter, setOccasionFilter] = useState('all');
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState(
     () => preEquippedGarment?.id ?? null
   );
@@ -1828,12 +1829,37 @@ export default function OutfitStudioView({
     }
     setLocatingGps(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(4));
+        const lon = Number(pos.coords.longitude.toFixed(4));
+        let geoJson = null;
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller
+          ? setTimeout(() => {
+              controller.abort();
+            }, 5000)
+          : null;
+        try {
+          const resp = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=ko`,
+            controller ? { signal: controller.signal } : undefined
+          );
+          if (resp.ok) {
+            geoJson = await resp.json();
+          }
+        } catch {
+          // Fallback to closest city centroid if reverse geocoding times out or fails offline
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+        const resolvedLabel = formatKoreanDistrictLocation(geoJson, lat, lon, CITY_COORDS);
         setLocatingGps(false);
         setGpsCoords({
-          lat: Number(pos.coords.latitude.toFixed(4)),
-          lon: Number(pos.coords.longitude.toFixed(4)),
-          label: tx(lang, '내 위치', 'My Location'),
+          lat,
+          lon,
+          label: resolvedLabel,
         });
         scenarioSnapshotsRef.current = {};
         userModifiedSlotsRef.current = false;
@@ -2246,7 +2272,6 @@ export default function OutfitStudioView({
   const renderSubTreePanel = () => {
     if (activeParentTab === 'top') {
       const topStageValue = activeSlotKey === 'top_mid' ? 'top_mid' : 'top';
-      const activeEquipped = slots[topStageValue] || null;
       return (
         <div
           className="studio-subtree-panel"
@@ -2274,35 +2299,12 @@ export default function OutfitStudioView({
               </option>
             </select>
           </div>
-          <div className="studio-subtree-active-hint">
-            <span>
-              <strong>
-                {topStageValue === 'top_mid'
-                  ? tx(lang, '미드 레이어', 'Mid Layer')
-                  : tx(lang, '이너 상의', 'Base Top')}
-              </strong>
-              {' · '}
-              {activeEquipped
-                ? resolveGarmentDisplayName(activeEquipped, lang)
-                : tx(lang, '이너 + 미드 상의 동시 레이어링 가능', 'Layer Base + Mid Top together')}
-            </span>
-            {activeEquipped && (
-              <button
-                type="button"
-                className="studio-subtree-unequip-btn"
-                onClick={() => handleUnequipSlot(topStageValue)}
-              >
-                {tx(lang, '해제', 'Remove')}
-              </button>
-            )}
-          </div>
         </div>
       );
     }
 
     if (activeParentTab === 'outer') {
       const outerStageValue = activeSlotKey === 'outer_mid' ? 'outer_mid' : 'outer';
-      const activeEquipped = slots[outerStageValue] || null;
       return (
         <div
           className="studio-subtree-panel"
@@ -2330,28 +2332,6 @@ export default function OutfitStudioView({
               </option>
             </select>
           </div>
-          <div className="studio-subtree-active-hint">
-            <span>
-              <strong>
-                {outerStageValue === 'outer_mid'
-                  ? tx(lang, '미드 아우터', 'Mid Outer')
-                  : tx(lang, '아우터', 'Outer Coat')}
-              </strong>
-              {' · '}
-              {activeEquipped
-                ? resolveGarmentDisplayName(activeEquipped, lang)
-                : tx(lang, '자켓 + 코트 2단계 겹쳐입기 가능', 'Layer Blazer + Coat together')}
-            </span>
-            {activeEquipped && (
-              <button
-                type="button"
-                className="studio-subtree-unequip-btn"
-                onClick={() => handleUnequipSlot(outerStageValue)}
-              >
-                {tx(lang, '해제', 'Remove')}
-              </button>
-            )}
-          </div>
         </div>
       );
     }
@@ -2361,8 +2341,6 @@ export default function OutfitStudioView({
     if (!isAcc && !isJwl) return null;
 
     const branchGroups = isAcc ? ACCESSORY_BRANCH_GROUPS : JEWELRY_BRANCH_GROUPS;
-    const activeMeta = SUB_SLOT_META_BY_KEY[activeSlotKey];
-    const activeEquipped = slots[activeSlotKey] || null;
 
     return (
       <div
@@ -2410,31 +2388,6 @@ export default function OutfitStudioView({
             ))}
           </select>
         </div>
-
-        {activeMeta && (
-          <div className="studio-subtree-active-hint">
-            <span>
-              <strong>{lang === 'en' ? activeMeta.labelEn : activeMeta.labelKo}</strong>
-              {' · '}
-              {activeEquipped
-                ? resolveGarmentDisplayName(activeEquipped, lang)
-                : tx(
-                    lang,
-                    '각 부위(좌/우 포함) 동시 착용 가능',
-                    'Simultaneous wear per part (incl. L/R)'
-                  )}
-            </span>
-            {activeEquipped && (
-              <button
-                type="button"
-                className="studio-subtree-unequip-btn"
-                onClick={() => handleUnequipSlot(activeSlotKey)}
-              >
-                {tx(lang, '해제', 'Remove')}
-              </button>
-            )}
-          </div>
-        )}
       </div>
     );
   };
@@ -2497,13 +2450,28 @@ export default function OutfitStudioView({
         >
           <ChevronLeft size={18} />
         </button>
-        <span
-          className="atelier-drawer-focused-title"
+        <button
+          type="button"
+          className={`atelier-drawer-focused-title is-search-trigger ${drawerSearchOpen ? 'is-open' : ''}`.trim()}
           data-drawer-focused-title="true"
-          title={focusedDrawerTitle}
+          aria-expanded={drawerSearchOpen}
+          title={tx(lang, '눌러서 의류 검색', 'Tap to search garments')}
+          onClick={() => {
+            triggerHaptic('selection');
+            setDrawerSearchOpen((prev) => {
+              const next = !prev;
+              if (next) {
+                requestAnimationFrame(() => inputRef?.current?.focus?.());
+              }
+              return next;
+            });
+          }}
         >
-          {focusedDrawerTitle}
-        </span>
+          <span className="atelier-drawer-focused-title-label">{focusedDrawerTitle}</span>
+          <span className="atelier-drawer-search-hint">
+            {tx(lang, '눌러서 검색', 'Tap to search')}
+          </span>
+        </button>
       </div>
       <button
         type="button"
@@ -2512,7 +2480,8 @@ export default function OutfitStudioView({
         title={tx(lang, '검색 및 필터', 'Search & Filters')}
         onClick={() => {
           triggerHaptic('selection');
-          inputRef?.current?.focus?.();
+          setDrawerSearchOpen(true);
+          requestAnimationFrame(() => inputRef?.current?.focus?.());
         }}
       >
         <Filter size={15} />
@@ -2828,6 +2797,43 @@ export default function OutfitStudioView({
   return (
     <section className="hig-screen-container hig-outfits-screen" aria-label="Outfits">
       <header id="hig-top-bar" className="hig-top-bar atelier-top-bar">
+        <div className="hig-top-bar-left">
+          {onToggleTheme && (
+            <button
+              type="button"
+              data-outfit-theme-toggle="true"
+              className="hig-circle-icon-btn is-subtle"
+              onClick={onToggleTheme}
+              aria-label={
+                theme === 'dark'
+                  ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
+                  : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
+              }
+            >
+              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+          )}
+          {equippedItems.length > 0 && (
+            <button
+              type="button"
+              data-outfit-vton-refresh="true"
+              className="hig-circle-icon-btn is-subtle"
+              onClick={() => {
+                triggerHaptic('selection');
+                setVtonRefreshNonce((n) => n + 1);
+              }}
+              title={tx(
+                lang,
+                '날씨 포즈·투명 배경제거 새로고침',
+                'Regenerate Weather Pose & Cutout'
+              )}
+              aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
+            >
+              <RefreshCw size={16} />
+            </button>
+          )}
+        </div>
+
         <div className="hig-top-bar-titles">
           <h1 className="sr-only">Outfits</h1>
           <AppHeaderBrand effectiveTheme={theme} />
@@ -2840,82 +2846,46 @@ export default function OutfitStudioView({
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
             extraActions={
-              <>
-                {onToggleTheme && (
+              <div className="store-header-btn-wrap">
+                <button
+                  type="button"
+                  data-open-store-btn="true"
+                  className={`hig-circle-icon-btn is-subtle store-header-btn ${
+                    freeDailyDrawAvailable ? 'has-free-draw' : ''
+                  }`.trim()}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setStoreOpen(true);
+                  }}
+                  title={tx(lang, '배경 스토어', 'Backdrop Store')}
+                  aria-label={tx(lang, '배경 스토어 열기', 'Open Backdrop Store')}
+                >
+                  <Store size={17} />
+                  {freeDailyDrawAvailable && (
+                    <span className="store-header-dot" aria-hidden="true" />
+                  )}
+                </button>
+
+                {freeDailyDrawAvailable && (
                   <button
                     type="button"
-                    data-outfit-theme-toggle="true"
-                    className="hig-circle-icon-btn is-subtle"
-                    onClick={onToggleTheme}
-                    aria-label={
-                      theme === 'dark'
-                        ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
-                        : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
-                    }
-                  >
-                    {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-                  </button>
-                )}
-                {equippedItems.length > 0 && (
-                  <button
-                    type="button"
-                    data-outfit-vton-refresh="true"
-                    className="hig-circle-icon-btn is-subtle"
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      setVtonRefreshNonce((n) => n + 1);
-                    }}
-                    title={tx(
-                      lang,
-                      '날씨 포즈·투명 배경제거 새로고침',
-                      'Regenerate Weather Pose & Cutout'
-                    )}
-                    aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
-                  >
-                    <RefreshCw size={16} />
-                  </button>
-                )}
-                <div className="store-header-btn-wrap">
-                  <button
-                    type="button"
-                    data-open-store-btn="true"
-                    className={`hig-circle-icon-btn is-subtle store-header-btn ${
-                      freeDailyDrawAvailable ? 'has-free-draw' : ''
-                    }`.trim()}
+                    data-store-free-draw-bubble="true"
+                    className="store-free-draw-bubble"
                     onClick={() => {
                       triggerHaptic('selection');
                       setStoreOpen(true);
                     }}
-                    title={tx(lang, '배경 스토어', 'Backdrop Store')}
-                    aria-label={tx(lang, '배경 스토어 열기', 'Open Backdrop Store')}
                   >
-                    <Store size={17} />
-                    {freeDailyDrawAvailable && (
-                      <span className="store-header-dot" aria-hidden="true" />
-                    )}
+                    <span>
+                      {tx(
+                        lang,
+                        '오늘의 무료 뽑기 상품이 남았어요!',
+                        'Free daily draw left!'
+                      )}
+                    </span>
                   </button>
-
-                  {freeDailyDrawAvailable && (
-                    <button
-                      type="button"
-                      data-store-free-draw-bubble="true"
-                      className="store-free-draw-bubble"
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        setStoreOpen(true);
-                      }}
-                    >
-                      <span>
-                        {tx(
-                          lang,
-                          '오늘의 무료 뽑기 상품이 남았어요!',
-                          'Free daily draw left!'
-                        )}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </>
+                )}
+              </div>
             }
           />
         </div>
@@ -2983,31 +2953,9 @@ export default function OutfitStudioView({
             onOpenBodyModal={handleOpenBodyModal}
             stageBackgroundId={economyState.equippedBackgroundId}
             onOpenBackgroundPicker={() => setBgPickerOpen(true)}
+            onOpenMobileDrawer={() => setMobileSheetOpen(true)}
+            mobileDrawerOpen={mobileSheetOpen}
           />
-
-          {/* Narrow Mobile (< 600px) Floating Smoked-Glass Drawer Trigger + Slot Bar */}
-          <div className="atelier-mobile-drawer-trigger-row">
-            <button
-              type="button"
-              data-mobile-wardrobe-trigger="true"
-              aria-haspopup="dialog"
-              aria-expanded={mobileSheetOpen}
-              aria-controls="outfit-mobile-wardrobe-sheet"
-              className="atelier-mobile-drawer-open-btn"
-              onClick={() => {
-                triggerHaptic('selection');
-                setMobileSheetOpen(true);
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Layers size={15} />
-                <span>{focusedDrawerTitle}</span>
-              </span>
-              <span className="atelier-mobile-drawer-open-meta tabular-nums">
-                {tx(lang, '옷장 서랍 열기', 'Open Wardrobe')}
-              </span>
-            </button>
-          </div>
 
           {/* Mobile Slot Dock (< 600px) */}
           <div className="studio-mobile-slot-bar">
@@ -3055,7 +3003,8 @@ export default function OutfitStudioView({
           {renderOccasionTabs()}
 
           <div className="atelier-filter-strip">
-            {renderSlotSearchBar(desktopSearchInputRef)}
+            {(drawerSearchOpen || searchQuery.trim().length > 0) &&
+              renderSlotSearchBar(desktopSearchInputRef)}
             {renderSeasonFilterRail()}
           </div>
 
@@ -3244,12 +3193,9 @@ export default function OutfitStudioView({
               <span className="weather-popup-section-title">
                 {tx(
                   lang,
-                  dayTarget === 'tomorrow' ? '내일의 날씨 정보 · 시뮬레이션' : '오늘의 날씨 정보 · 시뮬레이션',
-                  dayTarget === 'tomorrow' ? 'Tomorrow Forecast & Simulation' : 'Today Forecast & Simulation'
+                  dayTarget === 'tomorrow' ? '내일의 날씨' : '오늘의 날씨',
+                  dayTarget === 'tomorrow' ? 'Tomorrow Forecast' : 'Today Forecast'
                 )}
-              </span>
-              <span className="weather-popup-section-meta tabular-nums">
-                {scenarios.length} {tx(lang, '가지 날씨', 'SCENES')}
               </span>
             </div>
 
@@ -3412,7 +3358,6 @@ export default function OutfitStudioView({
               <span className="weather-popup-section-title">
                 {tx(lang, '위치 정보 설정', 'Location Settings')}
               </span>
-              <span className="weather-popup-section-meta">{resolvedCityDisplayLabel}</span>
             </div>
 
             <div className="weather-popup-location-row">
@@ -3534,7 +3479,8 @@ export default function OutfitStudioView({
         {renderDrawerHeader(true, mobileSearchInputRef)}
         {renderOccasionTabs()}
         <div className="atelier-filter-strip">
-          {renderSlotSearchBar(mobileSearchInputRef)}
+          {(drawerSearchOpen || searchQuery.trim().length > 0) &&
+            renderSlotSearchBar(mobileSearchInputRef)}
           {renderSeasonFilterRail()}
         </div>
         {renderSubTreePanel()}

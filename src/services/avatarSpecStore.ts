@@ -177,10 +177,13 @@ export interface AvatarAppearance {
   facePhotoUrl: string | null;
 }
 
+export type AvatarDominantHand = 'right' | 'left';
+
 export interface AvatarSpec {
   version: 2;
   framePreset: AvatarFramePreset;
   archetypePreset: AvatarArchetypePreset;
+  dominantHand: AvatarDominantHand;
   anthropometrics: AvatarAnthropometrics;
   coupledSoftTissue: AvatarCoupledSoftTissue;
   appearance: AvatarAppearance;
@@ -189,6 +192,7 @@ export interface AvatarSpec {
 export interface AvatarSpecPatch {
   framePreset?: AvatarFramePreset;
   archetypePreset?: AvatarArchetypePreset;
+  dominantHand?: AvatarDominantHand;
   anthropometrics?: Partial<AvatarAnthropometrics>;
   coupledSoftTissue?: Partial<AvatarCoupledSoftTissue>;
   appearance?: Partial<AvatarAppearance>;
@@ -981,6 +985,18 @@ function defaultHairForFrame(framePreset: AvatarFramePreset): AvatarHairStyle {
   return 'soft_wavy';
 }
 
+export function normalizeDominantHand(
+  raw: unknown,
+  fallback: AvatarDominantHand = 'right'
+): AvatarDominantHand {
+  const s = String(raw || '')
+    .trim()
+    .toLowerCase();
+  if (s === 'left' || s === 'l' || s === '왼손' || s === '왼손잡이') return 'left';
+  if (s === 'right' || s === 'r' || s === '오른손' || s === '오른손잡이') return 'right';
+  return fallback;
+}
+
 export function getDefaultAvatarSpec(
   framePreset: AvatarFramePreset = 'androgynous'
 ): AvatarSpec {
@@ -993,6 +1009,7 @@ export function getDefaultAvatarSpec(
     version: 2,
     framePreset: safeFrame,
     archetypePreset: defaultArchetypeForFrame(safeFrame),
+    dominantHand: 'right',
     anthropometrics: {
       heightCm,
       weightKg,
@@ -1050,6 +1067,10 @@ export function sanitizeAvatarSpec(raw?: unknown): AvatarSpec {
   const archetypePreset = normalizeArchetypePreset(
     obj.archetypePreset,
     base.archetypePreset
+  );
+  const dominantHand = normalizeDominantHand(
+    obj.dominantHand,
+    base.dominantHand
   );
 
   const rawAnthro =
@@ -1157,6 +1178,7 @@ export function sanitizeAvatarSpec(raw?: unknown): AvatarSpec {
     version: 2,
     framePreset,
     archetypePreset,
+    dominantHand,
     anthropometrics,
     coupledSoftTissue,
     appearance,
@@ -1201,6 +1223,7 @@ export function computeAvatarConfigHash(spec: AvatarSpec): string {
     `v:${s.version}`,
     `fr:${s.framePreset}`,
     `ar:${s.archetypePreset}`,
+    `dh:${s.dominantHand}`,
     `h:${a.heightCm}`,
     `w:${a.weightKg}`,
     `sh:${a.shoulderScale.toFixed(2)}`,
@@ -2008,6 +2031,9 @@ function mergeAvatarSpecPatch(prev: AvatarSpec, patch: AvatarSpecPatch): AvatarS
   const nextArchetype = patch.archetypePreset
     ? normalizeArchetypePreset(patch.archetypePreset, prev.archetypePreset)
     : prev.archetypePreset;
+  const nextDominantHand = patch.dominantHand
+    ? normalizeDominantHand(patch.dominantHand, prev.dominantHand)
+    : prev.dominantHand;
 
   const mergedAnthro = {
     ...prev.anthropometrics,
@@ -2059,6 +2085,7 @@ function mergeAvatarSpecPatch(prev: AvatarSpec, patch: AvatarSpecPatch): AvatarS
     version: 2,
     framePreset: nextFrame,
     archetypePreset: nextArchetype,
+    dominantHand: nextDominantHand,
     anthropometrics: mergedAnthro,
     coupledSoftTissue: mergedSoft,
     appearance: mergedApp,

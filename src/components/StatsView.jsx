@@ -67,6 +67,20 @@ export default function StatsView({
   return (
     <section className="hig-screen-container" aria-label="Stats">
       <header className="hig-top-bar">
+        <div className="hig-top-bar-left ui-nav-utility-group">
+          <button
+            type="button"
+            className="hig-circle-icon-btn is-subtle"
+            onClick={onToggleTheme}
+            aria-label={
+              theme === 'dark'
+                ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
+                : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
+            }
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
         <div className="hig-top-bar-titles">
           <AppHeaderBrand effectiveTheme={theme} />
         </div>
@@ -76,20 +90,6 @@ export default function StatsView({
             lang={lang}
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
-            extraActions={
-              <button
-                type="button"
-                className="hig-circle-icon-btn is-subtle"
-                onClick={onToggleTheme}
-                aria-label={
-                  theme === 'dark'
-                    ? tx(lang, '라이트 모드로 전환', 'Switch to Light Mode')
-                    : tx(lang, '다크 모드로 전환', 'Switch to Dark Mode')
-                }
-              >
-                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-            }
           />
         </div>
       </header>

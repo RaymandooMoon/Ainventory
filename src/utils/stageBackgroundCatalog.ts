@@ -121,7 +121,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     imageUrl: '/assets/backgrounds/b_seoul_cafe_terrace.jpg',
     floorToneLight: 'rgba(164, 166, 170, 0.2)',
     floorToneDark: 'rgba(32, 34, 38, 0.36)',
-    weight: 9,
+    weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: false,
   },
@@ -135,7 +135,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     imageUrl: '/assets/backgrounds/b_brick_courtyard.jpg',
     floorToneLight: 'rgba(176, 154, 134, 0.2)',
     floorToneDark: 'rgba(42, 34, 28, 0.38)',
-    weight: 9,
+    weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: true,
   },
@@ -149,7 +149,7 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     imageUrl: '/assets/backgrounds/b_minimal_loft_window.jpg',
     floorToneLight: 'rgba(192, 166, 134, 0.2)',
     floorToneDark: 'rgba(38, 32, 26, 0.38)',
-    weight: 9,
+    weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: false,
   },
@@ -163,7 +163,21 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     imageUrl: '/assets/backgrounds/b_stone_courtyard_outdoor.jpg',
     floorToneLight: 'rgba(188, 182, 172, 0.2)',
     floorToneDark: 'rgba(34, 33, 31, 0.4)',
-    weight: 8,
+    weight: 7,
+    isDefaultUnlocked: false,
+    isOutdoor: true,
+  },
+  {
+    id: 'b_seoul_plaza_outdoor',
+    tier: 'B',
+    nameKo: '광화문 스톤 플라자',
+    nameEn: 'Seoul Stone-Paved Plaza',
+    subtitleKo: '오픈 스카이 도심 석재 광장 & 오픈 에어 테라스',
+    subtitleEn: 'Open-Sky Granite Plaza & Architectural Terrace',
+    imageUrl: '/assets/backgrounds/b_seoul_plaza_outdoor.jpg',
+    floorToneLight: 'rgba(178, 180, 184, 0.2)',
+    floorToneDark: 'rgba(32, 34, 38, 0.42)',
+    weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: true,
   },
@@ -559,4 +573,43 @@ export function saveStoredNavOpacity(opacity: number): number {
     }
   }
   return safeOpacity;
+}
+
+export function setAdminCurrencyBalance(targetI: number): StageEconomyState {
+  const cur = loadStoredEconomyState();
+  const safeBalance = Number.isFinite(Number(targetI))
+    ? Math.max(0, Math.min(99999, Math.floor(Number(targetI))))
+    : cur.iBalance;
+  return saveStoredEconomyState({
+    ...cur,
+    iBalance: safeBalance,
+  });
+}
+
+export function adjustAdminCurrencyBalance(deltaI: number): StageEconomyState {
+  const cur = loadStoredEconomyState();
+  const delta = Number.isFinite(Number(deltaI)) ? Math.trunc(Number(deltaI)) : 0;
+  return saveStoredEconomyState({
+    ...cur,
+    iBalance: Math.max(0, Math.min(99999, cur.iBalance + delta)),
+  });
+}
+
+export function resetAdminFreeDraw(): StageEconomyState {
+  const cur = loadStoredEconomyState();
+  return saveStoredEconomyState({
+    ...cur,
+    lastFreeDrawDate: null,
+  });
+}
+
+export function setAdminAttendanceStreak(streak: number): StageEconomyState {
+  const cur = loadStoredEconomyState();
+  const safeStreak = Number.isFinite(Number(streak))
+    ? Math.max(0, Math.min(365, Math.floor(Number(streak))))
+    : cur.attendanceStreak;
+  return saveStoredEconomyState({
+    ...cur,
+    attendanceStreak: safeStreak,
+  });
 }

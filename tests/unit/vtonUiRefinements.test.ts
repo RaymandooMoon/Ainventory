@@ -373,21 +373,21 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       stageHeight: 500,
       imageAspectRatio: 1.0,
     });
-    assert.ok(mobileSquare >= 1.25 && mobileSquare <= 1.44);
+    assert.ok(mobileSquare >= 1.32 && mobileSquare <= 1.52);
 
     const mobilePortraitSlice = computeIdealDeviceMannequinScale({
       stageWidth: 361,
       stageHeight: 500,
       imageAspectRatio: 0.74,
     });
-    assert.ok(mobilePortraitSlice >= 1.07 && mobilePortraitSlice <= 1.16);
+    assert.ok(mobilePortraitSlice >= 1.14 && mobilePortraitSlice <= 1.24);
 
     const foldableWide = computeIdealDeviceMannequinScale({
       stageWidth: 717,
       stageHeight: 512,
       imageAspectRatio: 0.74,
     });
-    assert.ok(foldableWide >= 1.05 && mobilePortraitSlice > 0 && foldableWide <= 1.14);
+    assert.ok(foldableWide >= 1.14 && mobilePortraitSlice > 0 && foldableWide <= 1.2);
   });
 
   it('(a) keeps 3x2 grid active on square sheets when sleeves touch via head-cluster & x=0.50w center-column discriminators, and splits touching side-by-side twins via DP head-valley seam while sparing solo umbrella silhouettes', () => {

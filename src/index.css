@@ -149,7 +149,7 @@
 
   --vibrancy-filter: blur(26px) saturate(190%);
   --vibrancy-filter-subtle: blur(18px) saturate(175%);
-  --hig-overlay-blur: calc(1px + 14px * var(--hig-nav-bg-opacity, 0.5));
+  --hig-overlay-blur: calc(max(0px, (var(--hig-nav-bg-opacity, 0.5) - 0.15) * 18px));
   --spring-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --spring-bounce: cubic-bezier(0.22, 1.12, 0.36, 1);
 }
@@ -473,19 +473,29 @@ img {
    3. TOP HEADER BAR & HORIZONTAL CATEGORY PILL RAIL
    ========================================================================== */
 .hig-top-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.hig-top-bar-left {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  justify-self: start;
 }
 
 .hig-top-bar-titles {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-3);
   min-width: 0;
-  flex-wrap: wrap;
+  justify-self: center;
 }
 
 .hig-screen-title {
@@ -511,8 +521,10 @@ img {
 .hig-top-bar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .hig-circle-icon-btn {
@@ -1844,9 +1856,9 @@ img {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background: rgba(15, 18, 26, calc(0.06 + 0.30 * var(--hig-nav-bg-opacity, 0.5)));
-  backdrop-filter: blur(calc(var(--hig-overlay-blur, 8px) * 0.5));
-  -webkit-backdrop-filter: blur(calc(var(--hig-overlay-blur, 8px) * 0.5));
+  background: rgba(15, 18, 26, calc(0.02 + 0.28 * var(--hig-nav-bg-opacity, 0.5)));
+  backdrop-filter: blur(calc(max(0px, (var(--hig-nav-bg-opacity, 0.5) - 0.2) * 8px)));
+  -webkit-backdrop-filter: blur(calc(max(0px, (var(--hig-nav-bg-opacity, 0.5) - 0.2) * 8px)));
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1856,7 +1868,7 @@ img {
 
 [data-theme='dark'] .modal-backdrop,
 [data-theme='dark'] .ui-sheet-backdrop {
-  background: rgba(0, 0, 0, calc(0.12 + 0.50 * var(--hig-nav-bg-opacity, 0.5)));
+  background: rgba(0, 0, 0, calc(0.04 + 0.44 * var(--hig-nav-bg-opacity, 0.5)));
 }
 
 html[data-vibrancy-fallback='solid'] .modal-backdrop,
@@ -4308,25 +4320,28 @@ img,
 
 @media (max-width: 560px) {
   .hig-top-bar {
-    gap: 8px;
-  }
-
-  .hig-top-right-utility-group {
     gap: 6px;
   }
 
+  .hig-top-bar-left,
+  .hig-top-right-utility-group {
+    gap: 5px;
+  }
+
+  .hig-top-bar-left .hig-circle-icon-btn,
   .hig-top-right-utility-group .hig-circle-icon-btn,
   .hig-profile-quick-pill {
     position: relative;
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    min-height: 38px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
     padding: 0;
     border-radius: 9999px;
     justify-content: center;
   }
 
+  .hig-top-bar-left .hig-circle-icon-btn::after,
   .hig-top-right-utility-group .hig-circle-icon-btn::after,
   .hig-profile-quick-pill::after {
     content: '';
@@ -4728,8 +4743,35 @@ html[data-theme-transitioning='1'] *::after {
 .hig-top-bar-brand-slot {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   min-width: 0;
+}
+
+.hig-top-bar-brand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  min-height: 44px;
+  border-radius: 9999px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.2s var(--spring-ease), opacity 0.2s ease;
+}
+
+.hig-top-bar-brand-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.hig-top-bar-brand-btn:active {
+  transform: scale(0.95);
+}
+
+.hig-top-bar-brand-btn:focus-visible {
+  outline: 2px solid var(--ink-primary);
+  outline-offset: 2px;
 }
 
 .atelier-logo-frame {
@@ -4742,13 +4784,13 @@ html[data-theme-transitioning='1'] *::after {
 }
 
 .atelier-logo-frame.hig-shell-brand-logo {
-  width: 96px;
-  transform-origin: left center;
+  width: 78px;
+  transform-origin: center center;
 }
 
 @media (min-width: 561px) {
   .atelier-logo-frame.hig-shell-brand-logo {
-    width: 118px;
+    width: 112px;
   }
 }
 

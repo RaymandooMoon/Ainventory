@@ -1,3 +1,5 @@
+import { resolveBagCarryAnatomy, type DominantHand } from './vtonQualityControl.ts';
+
 export type WeatherMode =
   | 'realtime'
   | 'clear'
@@ -542,6 +544,9 @@ export const SOLO_SINGLE_PERSON_PER_CELL_LOCK =
 export const FOOTWEAR_PAIR_SYMMETRY_LOCK =
   'FOOTWEAR PAIR SYMMETRY LOCK (MANDATORY): Left shoe and right shoe MUST be an IDENTICAL MATCHED PAIR in the exact same upper color, material, tongue, laces, and sole on BOTH feet — NEVER mismatch left and right shoe colors (e.g. never one black shoe and one grey/white shoe).';
 
+export const CRISP_GARMENT_WEAVE_SHARPNESS_LOCK =
+  'CRISP GARMENT & EDGE DEFINITION LOCK: Render razor-sharp tailoring edges, crisp collar/lapel stitching, clear button/zipper hardware, natural micro-weave fabric grain (wool, denim twill, rib knit, brushed cotton, full-grain leather), and ultra-clean outer silhouette separation with zero motion blur, painterly smear, or fuzzy halos.';
+
 export function buildTurnaround3x2SheetAngleDirectives(): string {
   return [
     `  * ${HORIZONTAL_FULL_BODY_CAMERA_LOCK}`,
@@ -570,6 +575,7 @@ export interface CanonicalCharacterIdentityParams {
   weightKg?: number | null;
   gender?: CanonicalAvatarGender | string | null;
   framePreset?: string | null;
+  dominantHand?: DominantHand | string | null;
   bodyShape?: string | null;
   archetypePreset?: string | null;
   chestForm?: string | null;
@@ -748,14 +754,18 @@ export function buildCanonicalCharacterIdentityPromptBlock(
     hairStyle,
     hairColorHex: hairHex,
   });
+  const bagAnatomy = resolveBagCarryAnatomy(params.dominantHand);
+  const handednessLockLine = bagAnatomy.crossAngleLockPrompt;
 
   if (isStylized) {
     return [
       '[CANONICAL AINVENTORY CHARACTER IDENTITY, PROPORTION & ART-STYLE LOCK]',
       'UNIFIED AINVENTORY SIGNATURE 3D-STYLIZED AVATAR STYLE: Clean modern matte 3D-shaded stylized fashion mannequin character (smooth matte porcelain-vinyl skin shading with soft studio ambient occlusion, subtle refined facial features, calm neutral gaze, clean silhouette edges WITHOUT thick black comic marker outlines, authentic matte fabric weave on clothing).',
       'STRICT ART-STYLE & PROPORTION PROHIBITIONS: (1) NEVER render photorealistic human photography, real human skin pores, or real catalog model faces — DO NOT copy photographic realism from garment packshots onto the character\'s head/skin; (2) NEVER render chibi, super-deformed, 5-head/6-head short-legged cartoon figures, or thick black ink outlines; (3) NEVER render Western comic-book crosshatching or anime big-eye distortion.',
+      CRISP_GARMENT_WEAVE_SHARPNESS_LOCK,
       proportionLine,
       genderPresentationLine,
+      handednessLockLine,
       hairLockLine,
     ].join('\n');
   }
@@ -764,8 +774,10 @@ export function buildCanonicalCharacterIdentityPromptBlock(
     '[CANONICAL AINVENTORY EDITORIAL MODEL IDENTITY & PROPORTION LOCK]',
     'PHOTOREALISTIC EDITORIAL STUDIO MODEL STYLE: Authentic SSENSE/COS medium-format 85mm studio fashion photography with natural human skin texture, lifelike facial bone structure, and true-to-life garment drape.',
     `STRICT PROPORTION PROHIBITIONS: Maintain ${headRatioStr} heads tall (${headRatioStr}-head adult proportions) — NEVER render chibi, cartoon/CGI plastic skin, or compressed short-legged figures.`,
+    CRISP_GARMENT_WEAVE_SHARPNESS_LOCK,
     proportionLine,
     genderPresentationLine,
+    handednessLockLine,
     hairLockLine,
   ].join('\n');
 }

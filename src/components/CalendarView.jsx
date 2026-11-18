@@ -392,6 +392,18 @@ export default function CalendarView({
   return (
     <section className="hig-screen-container" aria-label="Calendar">
       <header className="hig-top-bar">
+        <div className="hig-top-bar-left ui-nav-utility-group">
+          {logs.length > 0 && (
+            <button
+              type="button"
+              className="hig-circle-icon-btn is-subtle"
+              onClick={handleExportIcs}
+              aria-label={tx(lang, '캘린더 내보내기', 'Export Calendar (.ics)')}
+            >
+              <Download size={18} />
+            </button>
+          )}
+        </div>
         <div className="hig-top-bar-titles">
           <AppHeaderBrand effectiveTheme={theme} />
         </div>
@@ -402,30 +414,18 @@ export default function CalendarView({
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
             extraActions={
-              <>
-                {logs.length > 0 && (
-                  <button
-                    type="button"
-                    className="hig-circle-icon-btn is-subtle"
-                    onClick={handleExportIcs}
-                    aria-label={tx(lang, '캘린더 내보내기', 'Export Calendar (.ics)')}
-                  >
-                    <Download size={18} />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="hig-circle-icon-btn"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setDrawerEntryId(null);
-                    setDrawerOpen(true);
-                  }}
-                  aria-label={tx(lang, '착용 일정 추가', 'Add Outfit Entry')}
-                >
-                  <Plus size={20} strokeWidth={2.2} />
-                </button>
-              </>
+              <button
+                type="button"
+                className="hig-circle-icon-btn"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setDrawerEntryId(null);
+                  setDrawerOpen(true);
+                }}
+                aria-label={tx(lang, '착용 일정 추가', 'Add Outfit Entry')}
+              >
+                <Plus size={20} strokeWidth={2.2} />
+              </button>
             }
           />
         </div>

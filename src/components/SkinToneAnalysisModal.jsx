@@ -2174,6 +2174,11 @@ function ProfileModalContent({
                       {tx(lang, '힙', 'Hip')}{' '}
                       {Math.round(draftSpec.anthropometrics.hipScale * 100)}%
                     </span>
+                    <span className="studio-summary-metric-pill">
+                      {draftSpec.dominantHand === 'left'
+                        ? tx(lang, '왼손잡이', 'Left-Handed')
+                        : tx(lang, '오른손잡이', 'Right-Handed')}
+                    </span>
                   </div>
                   <p className="avatar-studio-hint">
                     {lang === 'en' ? activeArchetypeMeta.descEn : activeArchetypeMeta.descKo}

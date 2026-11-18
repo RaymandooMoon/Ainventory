@@ -35,7 +35,7 @@ import {
   triggerHaptic,
 } from './utils/nativeBridge.ts';
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
-import { resolveInitialTabFromPath } from './utils/logoTransition.ts';
+import { resolveInitialTabFromPath, triggerPostLoginReveal } from './utils/logoTransition.ts';
 import { applyNavOpacityCss, getStoredNavOpacity } from './utils/stageBackgroundCatalog.ts';
 import { runCircularThemeTransition } from './utils/themeTransition.ts';
 
@@ -392,6 +392,16 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleBrandNavigate = (event) => {
+      const targetKey = typeof event?.detail === 'string' ? event.detail : 'outfits';
+      navigateTab(targetKey);
+    };
+    window.addEventListener('ainventory:navigate-tab', handleBrandNavigate);
+    return () => window.removeEventListener('ainventory:navigate-tab', handleBrandNavigate);
+  }, [navigateTab]);
+
   const handleOpenGarmentDetail = useCallback((garment) => {
     if (!garment) return;
     setSelectedItemId(Number(garment.id));
@@ -443,6 +453,7 @@ export default function App() {
   }, []);
 
   const handleEnterSampleCloset = useCallback(() => {
+    triggerPostLoginReveal();
     setStoredToken(null);
     setSampleDemoMode(true);
     setUser(DEFAULT_LOCAL_USER);
@@ -456,6 +467,7 @@ export default function App() {
 
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
+      triggerPostLoginReveal();
       setSampleDemoMode(false);
       setUser(loggedInUser);
       syncAccountToAvatar(loggedInUser);

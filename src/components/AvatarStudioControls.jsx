@@ -1130,6 +1130,64 @@ export function InclusiveBodyMorphControls({
         </p>
       </div>
 
+      {/* 1b. Anatomical Dominant Hand & Asymmetric Bag/Umbrella Carry Orientation */}
+      <div className="avatar-studio-card" data-dominant-hand-card="true">
+        <div className="avatar-studio-card-head">
+          <span className="avatar-studio-card-title">
+            {tx(lang, '주로 쓰는 손 · 가방 착용 방향', 'Dominant Hand · Bag Carry')}
+          </span>
+        </div>
+        <div
+          className="avatar-frame-grid"
+          role="radiogroup"
+          aria-label={tx(lang, '주로 쓰는 손 선택', 'Select Dominant Hand')}
+        >
+          {[
+            {
+              key: 'right',
+              labelKo: '오른손잡이 (왼팔/왼손 착용)',
+              labelEn: 'Right-Handed (Left-side carry)',
+            },
+            {
+              key: 'left',
+              labelKo: '왼손잡이 (오른팔/오른손 착용)',
+              labelEn: 'Left-Handed (Right-side carry)',
+            },
+          ].map((opt) => {
+            const active = (draftSpec.dominantHand || 'right') === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                data-dominant-hand-btn={opt.key}
+                className={`avatar-frame-card ${active ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onChangeDraftSpec((prev) =>
+                    sanitizeAvatarSpec({
+                      ...prev,
+                      dominantHand: opt.key,
+                    })
+                  );
+                }}
+              >
+                {active && <Check size={14} strokeWidth={2.8} aria-hidden="true" />}
+                <span>{lang === 'en' ? opt.labelEn : opt.labelKo}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="avatar-studio-hint">
+          {tx(
+            lang,
+            '크로스백·서류가방·토트백과 우산 등 비대칭 아이템의 좌우 착용 위치를 AI 전신 피팅에 일관되게 반영합니다.',
+            'Keeps bags and umbrellas anatomically consistent across all AI turnaround angles.'
+          )}
+        </p>
+      </div>
+
       {/* 2. 8 Inclusive Body Archetype Chips */}
       <div className="avatar-studio-card">
         <div className="avatar-studio-card-head">

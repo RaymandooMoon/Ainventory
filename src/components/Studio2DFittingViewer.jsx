@@ -59,11 +59,13 @@ import {
   resolveStudioStatusCapsule,
   shouldShowStudioAngleDock,
 } from '../services/studioStatusCapsule.ts';
+import { resolveStageAuraTier } from '../services/vtonQualityControl.ts';
 import {
   getWeatherStageBadgeMeta,
   resolveEffectiveWeatherFromRaw,
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import { consumePostLoginReveal } from '../utils/logoTransition.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   DEFAULT_STAGE_BACKGROUND_ID,
@@ -148,6 +150,21 @@ const ORDERED_SLOT_KEYS = [
   'shoes',
   'accessory',
   'acc_umbrella',
+];
+
+const ASYMMETRIC_ITEM_SLOT_KEYS = [
+  'accessory',
+  'acc_umbrella',
+  'acc_hand_left',
+  'acc_hand_right',
+  'acc_wrist_left',
+  'acc_wrist_right',
+  'jwl_ear_left',
+  'jwl_ear_right',
+  'jwl_wrist_left',
+  'jwl_wrist_right',
+  'jwl_ring_left',
+  'jwl_ring_right',
 ];
 
 const WEATHER_CAPSULE_SHORT_LABELS = {
@@ -243,6 +260,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onOpenBodyModal: _legacyOpenBodyModal,
   stageBackgroundId = DEFAULT_STAGE_BACKGROUND_ID,
   onOpenBackgroundPicker,
+  onOpenMobileDrawer,
+  mobileDrawerOpen = false,
   lang,
   forceRefresh = false,
   forceRefreshNonce = 0,
@@ -432,7 +451,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     null;
   const hasFacePhoto = Boolean(activeFacePhotoUrl);
 
-  const [stageMode, setStageMode] = useState('ai-vton');
+  const initialPostLoginRevealRef = useRef(null);
+  if (initialPostLoginRevealRef.current === null) {
+    initialPostLoginRevealRef.current = consumePostLoginReveal();
+  }
+  const [stageMode, setStageMode] = useState(() =>
+    initialPostLoginRevealRef.current ? 'flatlay' : 'ai-vton'
+  );
+  const [postLoginRevealActive, setPostLoginRevealActive] = useState(() =>
+    Boolean(initialPostLoginRevealRef.current)
+  );
+  const [postLoginProgress, setPostLoginProgress] = useState(0);
+  const postLoginRevealActiveRef = useRef(postLoginRevealActive);
+  postLoginRevealActiveRef.current = postLoginRevealActive;
+  const [frontOnlyDegraded, setFrontOnlyDegraded] = useState(false);
+  const [frontOnlyToastVisible, setFrontOnlyToastVisible] = useState(false);
+  const frontOnlyToastTimerRef = useRef(null);
   const [storedStylePref, setStoredStylePref] = useState(() =>
     getStoredVtonStylePreference()
   );
@@ -646,6 +680,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
+      if (frontOnlyToastTimerRef.current) {
+        clearTimeout(frontOnlyToastTimerRef.current);
+      }
       abortControllerRef.current?.abort();
     };
   }, [clearSpinTimers]);
@@ -679,6 +716,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [stageBackgroundId]
   );
   const isStageOutdoor = Boolean(resolvedBgItem.isOutdoor);
+  const auraTier = useMemo(
+    () => resolveStageAuraTier(resolvedBgItem?.tier || resolvedBgItem?.id),
+    [resolvedBgItem]
+  );
 
   const effectiveWeather = useMemo(
     () => resolveEffectiveWeatherFromRaw(weather),
@@ -723,6 +764,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const { acc_umbrella: _omitted, ...rest } = slots;
     return rest;
   }, [isStageOutdoor, slots]);
+
+  const hasAsymmetricItems = useMemo(
+    () =>
+      Boolean(
+        vtonSlots && ASYMMETRIC_ITEM_SLOT_KEYS.some((key) => Boolean(vtonSlots[key]))
+      ),
+    [vtonSlots]
+  );
 
   const weatherBadgeMeta = useMemo(
     () => getWeatherStageBadgeMeta(weather, resolvedLang),
@@ -773,7 +822,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       } else {
         setPinnedHistoryItem(null);
         setHistoryOverrideStyle(null);
-        setStageMode('ai-vton');
+        if (!postLoginRevealActiveRef.current) {
+          setStageMode('ai-vton');
+        }
       }
     }
   }, [outfitComboId]);
@@ -951,6 +1002,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   });
 
+  const isVtonPipelineActive = stageMode === 'ai-vton' || postLoginRevealActive;
+
   // Smart Credit-Saver Gemini Multimodal VTON Pipeline (V4 Hole-Aware Cutout + Full-Body Floor Lock)
   useEffect(() => {
     abortControllerRef.current?.abort();
@@ -983,7 +1036,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pendingScenarioApproveRef.current === normalizedScenarioKey
     );
 
-    if (stageMode !== 'ai-vton' || equippedCount === 0) {
+    if (!isVtonPipelineActive || equippedCount === 0) {
       setAiLoading(false);
       setStagedNeedsApply(false);
       return undefined;
@@ -1030,6 +1083,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
+      setFrontOnlyDegraded(false);
+      setFrontOnlyToastVisible(false);
       setAiState({
         cacheKey: currentAiCacheKey,
         imageUrl: scenarioExactUrl,
@@ -1078,6 +1133,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
       setStagedNeedsApply(false);
+      setFrontOnlyDegraded(false);
+      setFrontOnlyToastVisible(false);
       setAiState({
         cacheKey: currentAiCacheKey,
         imageUrl: syncHit.imageUrl,
@@ -1108,6 +1165,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pendingScenarioApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
         setStagedNeedsApply(false);
+        setFrontOnlyDegraded(false);
+        setFrontOnlyToastVisible(false);
         setAiState({
           cacheKey: currentAiCacheKey,
           imageUrl: cachedDemoUrl,
@@ -1183,6 +1242,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           pendingScenarioApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
           setStagedNeedsApply(false);
+          setFrontOnlyDegraded(false);
+          setFrontOnlyToastVisible(false);
           setAiState({
             cacheKey: currentAiCacheKey,
             imageUrl: idbHit.slice.imageUrl,
@@ -1363,6 +1424,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           setAiLoading(false);
           configBlockedRef.current = false;
           setStagedNeedsApply(false);
+          const isFrontOnly = Boolean(outcome.frontOnlyDegraded);
+          setFrontOnlyDegraded(isFrontOnly);
+          if (frontOnlyToastTimerRef.current) {
+            clearTimeout(frontOnlyToastTimerRef.current);
+            frontOnlyToastTimerRef.current = null;
+          }
+          if (isFrontOnly) {
+            commitAngleDeg(0);
+            setFrontOnlyToastVisible(true);
+            frontOnlyToastTimerRef.current = setTimeout(() => {
+              frontOnlyToastTimerRef.current = null;
+              setFrontOnlyToastVisible(false);
+            }, 3000);
+          } else {
+            setFrontOnlyToastVisible(false);
+          }
           setAiState({
             cacheKey: currentAiCacheKey,
             imageUrl: outcome.imageUrl,
@@ -1414,7 +1491,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       controller.abort();
     };
   }, [
-    stageMode,
+    isVtonPipelineActive,
     currentAiCacheKey,
     scenarioVtonKey,
     normalizedScenarioKey,
@@ -1428,6 +1505,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     demoShowcaseEnabled,
     autoGenEnabled,
     pinnedHistoryItem,
+    commitAngleDeg,
     recordScenarioVtonSnapshot,
     refreshHistoryList,
     showToast,
@@ -1659,6 +1737,28 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const canReturnToCharacter = stageMode === 'flatlay' && Boolean(availableAiImageUrl);
   const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
 
+  const handleUserInteractFlatLay = useCallback(() => {
+    setPostLoginRevealActive(false);
+  }, []);
+
+  useEffect(() => {
+    if (!postLoginRevealActive) return undefined;
+    setPostLoginProgress(0);
+    const startTs = Date.now();
+    const DURATION_MS = 2600;
+    const intervalId = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - startTs) / DURATION_MS) * 100);
+      setPostLoginProgress(pct);
+    }, 50);
+    return () => clearInterval(intervalId);
+  }, [postLoginRevealActive]);
+
+  useEffect(() => {
+    if (!postLoginRevealActive || postLoginProgress < 100 || aiLoading) return;
+    setStageMode('ai-vton');
+    setPostLoginRevealActive(false);
+  }, [postLoginRevealActive, postLoginProgress, aiLoading]);
+
   useEffect(() => {
     if (!canReturnToCharacter) return undefined;
     const handleEscLookbook = (ev) => {
@@ -1731,12 +1831,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     Boolean(resolveClientGeminiApiKey());
   void hasConfiguredGeminiKey;
 
-  const showAngleDock = shouldShowStudioAngleDock({
-    stageMode,
-    hasAiImage: Boolean(resolvedAiImageUrl),
-    aiLoading: Boolean(aiLoading),
-    demoShowcaseActive: Boolean(demoShowcaseEnabled),
-  });
+  const showAngleDock =
+    !frontOnlyDegraded &&
+    shouldShowStudioAngleDock({
+      stageMode,
+      hasAiImage: Boolean(resolvedAiImageUrl),
+      aiLoading: Boolean(aiLoading),
+      demoShowcaseActive: Boolean(demoShowcaseEnabled),
+    });
 
   const statusCapsuleSpec = useMemo(
     () => (statusToast ? resolveStudioStatusCapsule(statusToast.reason, resolvedLang) : null),
@@ -1765,6 +1867,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     !effectiveCompareActive &&
       !historyOpen &&
       !statusToast &&
+      !postLoginRevealActive &&
       stageMode === 'ai-vton' &&
       equippedCount > 0 &&
       stagedNeedsApply &&
@@ -1808,6 +1911,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-stage-outdoor={isStageOutdoor ? 'true' : 'false'}
       data-stage-lighting={isStageOutdoor ? 'outdoor-sky' : 'indoor-ivory'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
+      data-post-login-reveal={postLoginRevealActive ? 'true' : undefined}
+      data-front-only-degraded={frontOnlyDegraded ? 'true' : undefined}
       data-stage-theme={resolvedTheme}
       data-effective-weather={effectiveWeather}
       data-weather-scenario={scenarioKey}
@@ -1817,7 +1922,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-equipped-count={equippedCount}
       data-vton-provider={activeProvider}
       data-vton-cached={isCachedHit ? 'true' : 'false'}
-      data-vton-loading={aiLoading ? 'true' : 'false'}
+      data-vton-loading={aiLoading && !postLoginRevealActive ? 'true' : 'false'}
       data-view-angle={viewAngleDeg}
       data-angle-scroll={angleScrollDeg}
       data-avatar-hash={resolvedAvatarHash}
@@ -1842,7 +1947,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         modelImageUrl={resolvedAiImageUrl}
         stageMode={stageMode}
         equippedCount={equippedCount}
-        mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
+        mirrorX={hasAsymmetricItems ? false : angleSpec.mirrorX || pinnedHistoryForceMirrorX}
         zoom={zoom}
         idealBaseScale={1}
         pan={pan}
@@ -1853,7 +1958,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       />
 
       {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
-      {aiLoading && (
+      {aiLoading && !postLoginRevealActive && (
         <>
           <div aria-hidden="true" className="studio-vton-progress-track">
             <div className="studio-vton-progress-fill is-indeterminate" />
@@ -2039,7 +2144,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         stageMode={stageMode}
         styleMode={styleMode}
         aiImageUrl={resolvedAiImageUrl}
-        aiLoading={aiLoading}
+        aiLoading={aiLoading && !postLoginRevealActive}
         effectiveWeather={effectiveWeather}
         theme={resolvedTheme}
         skinToneHex={
@@ -2060,8 +2165,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         personReferenceUrl={activeFacePhotoUrl}
         viewAngleDeg={viewAngleDeg}
         scrollResidualYawDeg={scrollResidualYawDeg}
-        forceMirrorX={pinnedHistoryForceMirrorX}
-        onSwipeRotate={handleSwipeRotate}
+        forceMirrorX={hasAsymmetricItems ? false : pinnedHistoryForceMirrorX}
+        onSwipeRotate={frontOnlyDegraded ? undefined : handleSwipeRotate}
         onTapCharacter={handleTapCharacter}
         onCloseFlatLay={handleCloseFlatLay}
         canReturnToCharacter={canReturnToCharacter}
@@ -2073,6 +2178,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         onZoomChange={setZoom}
         onPanChange={setPan}
         onIdealScaleChange={setIdealBaseScale}
+        auraTier={auraTier}
+        hasAsymmetricItems={hasAsymmetricItems}
+        postLoginRevealActive={postLoginRevealActive}
+        postLoginProgress={postLoginProgress}
+        onUserInteractFlatLay={handleUserInteractFlatLay}
         legacyMode={viewerMode}
         lang={resolvedLang}
       />
@@ -2541,6 +2651,51 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Mobile Wardrobe Drawer Trigger HUD Icon (Bottom-Right above angle slider) */}
+      {onOpenMobileDrawer && (
+        <button
+          type="button"
+          data-mobile-wardrobe-trigger="true"
+          aria-haspopup="dialog"
+          aria-expanded={Boolean(mobileDrawerOpen)}
+          aria-controls="outfit-mobile-wardrobe-sheet"
+          aria-label={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
+          title={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
+          className={`studio-mobile-drawer-hud-btn ${
+            activeHudTouchId === 'mobile-drawer-hud' ? 'is-interacting' : ''
+          }`.trim()}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            handleHudTouchStart('mobile-drawer-hud');
+          }}
+          onPointerUp={handleHudTouchEnd}
+          onPointerCancel={handleHudTouchEnd}
+          onPointerLeave={handleHudTouchEnd}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMobileDrawer?.();
+          }}
+        >
+          <Layers size={15} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      )}
+
+      {/* 3s Auto-Dismiss Toast for Front-Only Degraded Multi-Angle Fallback */}
+      {frontOnlyToastVisible && (
+        <div
+          className="studio-front-only-toast"
+          data-vton-front-only-toast="true"
+          role="status"
+          aria-live="polite"
+        >
+          <span>
+            {isEn
+              ? 'Due to a temporary connection issue, only the front view is shown.'
+              : '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.'}
+          </span>
         </div>
       )}
 

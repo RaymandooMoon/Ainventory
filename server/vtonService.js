@@ -9,6 +9,7 @@ import {
   normalizeCanonicalAvatarGender,
   selectOptimalStudioKeyHex,
 } from '../src/services/weatherPromptBuilder.ts';
+import { resolveBagCarryAnatomy } from '../src/services/vtonQualityControl.ts';
 
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
@@ -653,7 +654,6 @@ export function resolveGeminiModelChain() {
   const candidates = [
     readServerEnvVar('GEMINI_VTON_MODEL'),
     'gemini-3.1-flash-image-preview',
-    'gemini-3-pro-image-preview',
     'gemini-2.5-flash-image',
   ].filter(Boolean);
   return [...new Set(candidates)];
@@ -981,6 +981,12 @@ export function normalizeVtonProfile(
     VALID_ARCHETYPES,
     bmi >= 30 ? 'plus_size' : bodyShape === 'muscular' ? 'athletic' : 'rectangle'
   );
+  const dominantHandToken = String(
+    rawAvatarSpec.dominantHand ?? src.dominantHand ?? extraOptions?.dominantHand ?? 'right'
+  )
+    .trim()
+    .toLowerCase();
+  const dominantHand = dominantHandToken === 'left' ? 'left' : 'right';
   const chestForm = normalizeEnumToken(
     anthro.chestForm,
     VALID_CHEST_FORMS,
@@ -1106,6 +1112,7 @@ export function normalizeVtonProfile(
     gender,
     framePreset,
     archetypePreset,
+    dominantHand,
     chestForm,
     mstLevel,
     mstUndertone,
@@ -1352,6 +1359,7 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
     gender: normalizedProfile.gender || 'unisex',
     framePreset: normalizedProfile.framePreset,
     archetypePreset: normalizedProfile.archetypePreset,
+    dominantHand: normalizedProfile.dominantHand || 'right',
     chestForm: normalizedProfile.chestForm,
     mstLevel: normalizedProfile.mstLevel,
     mstUndertone: normalizedProfile.mstUndertone,
@@ -1768,6 +1776,7 @@ function buildEditorialStyleAndBodyPrompt(
     weightKg: profile.weightKg,
     gender: profile.gender,
     framePreset: profile.framePreset,
+    dominantHand: profile.dominantHand || 'right',
     bodyShape: profile.bodyShape,
     skinToneHex: profile.skinToneHex,
     mstLevel: profile.mstLevel,
@@ -2024,9 +2033,13 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   }
   parts.push({ text: layeringRules.join('\n') });
 
+  const bagAnatomy = resolveBagCarryAnatomy(profile.dominantHand);
   for (const slot of equippedKeys) {
     const item = resolvedSlots[slot];
-    const placementCue = ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
+    const placementCue =
+      slot === 'accessory'
+        ? bagAnatomy.slotPrompt
+        : ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
     const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Material/Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.${placementCue ? `\nAnatomical Placement: ${placementCue}` : ''}`;
     if (item.packshot) {
       parts.push({
@@ -2169,6 +2182,10 @@ async function generateWithGeminiModelChain(
       ? [
           {
             responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
+          },
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: { aspectRatio: '3:2' },
           },
           {
@@ -2187,6 +2204,10 @@ async function generateWithGeminiModelChain(
           },
         ]
       : [
+          {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '3:4', imageSize: '1K' },
+          },
           {
             responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: { aspectRatio: '3:4' },

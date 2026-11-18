@@ -257,11 +257,11 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const rightInset = canvasBox!.x + canvasBox!.width - (histBox!.x + histBox!.width);
     expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(2);
 
-    // Clicking Background Picker opens 10-stage architectural backdrop catalog modal
+    // Clicking Background Picker opens 14-stage architectural backdrop catalog modal
     await bgPickerBtn.click();
     const bgModal = page.locator('#stage-background-picker-modal');
     await expect(bgModal).toBeVisible();
-    await expect(bgModal.locator('[data-bg-option-id]')).toHaveCount(10);
+    await expect(bgModal.locator('[data-bg-option-id]')).toHaveCount(14);
     await page.keyboard.press('Escape');
     await expect(bgModal).toHaveCount(0);
 

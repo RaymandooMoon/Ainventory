@@ -39,6 +39,8 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onOpenBodyModal,
   stageBackgroundId,
   onOpenBackgroundPicker,
+  onOpenMobileDrawer,
+  mobileDrawerOpen = false,
   lang,
   forceRefresh = false,
   forceRefreshNonce = 0,
@@ -85,6 +87,8 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       onOpenBodyModal={onOpenBodyModal}
       stageBackgroundId={stageBackgroundId}
       onOpenBackgroundPicker={onOpenBackgroundPicker}
+      onOpenMobileDrawer={onOpenMobileDrawer}
+      mobileDrawerOpen={mobileDrawerOpen}
       lang={lang}
       forceRefresh={forceRefresh}
       forceRefreshNonce={forceRefreshNonce}

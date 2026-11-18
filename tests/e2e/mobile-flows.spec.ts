@@ -1293,7 +1293,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const storeModal = page.locator('#stage-store-modal');
     await expect(storeModal).toBeVisible();
     await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText('0 i');
-    await expect(storeModal.locator('[data-store-collection-item]')).toHaveCount(10);
+    await expect(storeModal.locator('[data-store-collection-item]')).toHaveCount(14);
 
     const drawBtn = storeModal.locator('[data-store-draw-btn="true"]');
     await expect(drawBtn).toContainText(/무료 뽑기|Free Daily Draw/);
@@ -1311,13 +1311,13 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal).toHaveCount(0);
     await expect(freeBubble).toHaveCount(0);
 
-    // 3) Top-left Background Picker opens all 10 (S×1, A×2, B×3, C×4) & equips C-tier / unlocked background
+    // 3) Top-left Background Picker opens all 14 (S×2, A×3, B×5, C×4) & equips C-tier / unlocked background
     await studioCanvas.locator('[data-stage-bg-picker-btn="true"]').click();
     const bgPickerModal = page.locator('#stage-background-picker-modal');
     await expect(bgPickerModal).toBeVisible();
-    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(1);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(2);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(3);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(2);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(3);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(5);
     await expect(bgPickerModal.locator('[data-bg-tier-group="C"] [data-bg-option-id]')).toHaveCount(4);
 
     // Equip an unlocked option and confirm modal closes & stage attribute stays valid

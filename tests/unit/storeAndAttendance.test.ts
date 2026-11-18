@@ -20,8 +20,8 @@ import {
 } from '../../src/utils/stageBackgroundCatalog.ts';
 
 describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
-  it('defines 13 architectural + open-sky outdoor backgrounds across S(2), A(3), B(4), C(4) summing to 100% weight with C-tier default', () => {
-    assert.equal(STAGE_BACKGROUNDS.length, 13);
+  it('defines 14 architectural + open-sky outdoor backgrounds across S(2), A(3), B(5), C(4) summing to 100% weight with C-tier default', () => {
+    assert.equal(STAGE_BACKGROUNDS.length, 14);
 
     const byTier = { S: 0, A: 0, B: 0, C: 0 };
     const weightByTier = { S: 0, A: 0, B: 0, C: 0 };
@@ -35,7 +35,7 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
 
     assert.equal(byTier.S, 2);
     assert.equal(byTier.A, 3);
-    assert.equal(byTier.B, 4);
+    assert.equal(byTier.B, 5);
     assert.equal(byTier.C, 4);
     assert.equal(totalWeight, 100);
     assert.equal(weightByTier.S, TIER_DROP_RATES.S);
@@ -49,6 +49,7 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
       'a_hannam_terrace_outdoor',
       'a_sunset_rooftop',
       'b_brick_courtyard',
+      'b_seoul_plaza_outdoor',
       'b_stone_courtyard_outdoor',
       's_palais_royal_outdoor',
     ]);

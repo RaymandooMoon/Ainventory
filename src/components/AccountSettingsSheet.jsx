@@ -26,10 +26,16 @@ import {
 import { getOfflineQueueCount, purgeAllLocalUserData } from '../utils/offlineSync.ts';
 import {
   DEFAULT_NAV_OPACITY,
+  ECONOMY_STATE_EVENT,
   MAX_NAV_OPACITY,
   MIN_NAV_OPACITY,
+  adjustAdminCurrencyBalance,
   getStoredNavOpacity,
+  loadStoredEconomyState,
+  resetAdminFreeDraw,
   saveStoredNavOpacity,
+  setAdminAttendanceStreak,
+  setAdminCurrencyBalance,
 } from '../utils/stageBackgroundCatalog.ts';
 import { runCircularThemeTransition } from '../utils/themeTransition.ts';
 import BrandLogo from './auth/BrandLogo.tsx';
@@ -59,6 +65,11 @@ function AccountSettingsContent({
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const isAdminUser = user?.role === 'admin' || user?.username === 'admin';
+  const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
+  const [adminCurrencyInput, setAdminCurrencyInput] = useState(() =>
+    String(loadStoredEconomyState().iBalance ?? 0)
+  );
 
   useEffect(() => {
     let active = true;
@@ -73,6 +84,17 @@ function AccountSettingsContent({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAdminUser || typeof window === 'undefined') return undefined;
+    const syncEconomy = (ev) => {
+      const next = ev?.detail || loadStoredEconomyState();
+      setEconomyState(next);
+      setAdminCurrencyInput(String(next.iBalance ?? 0));
+    };
+    window.addEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+    return () => window.removeEventListener(ECONOMY_STATE_EVENT, syncEconomy);
+  }, [isAdminUser]);
 
   const handleThemeSelect = (nextPref, event) => {
     triggerHaptic('selection');
@@ -342,6 +364,115 @@ function AccountSettingsContent({
           </div>
         )}
       </div>
+
+      {/* Admin Only: i Currency & Draw / Streak Testing Panel */}
+      {isAdminUser && (
+        <div className="hig-sheet-card" data-admin-economy-panel="true">
+          <div className="hig-sheet-row-between" style={{ marginBottom: 8 }}>
+            <div>
+              <div className="hig-body" style={{ fontWeight: 700 }}>
+                {tx(lang, '관리자 테스트 · 재화(i) 및 출석 조정', 'Admin QA · Currency (i) & Streak')}
+              </div>
+              <div className="hig-caption tabular-nums" data-admin-current-i="true">
+                {tx(
+                  lang,
+                  `현재 보유: ${economyState.iBalance} i · 연속 출석: ${economyState.attendanceStreak}일`,
+                  `Current: ${economyState.iBalance} i · Streak: ${economyState.attendanceStreak}d`
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {[-50, -10, 10, 50, 100].map((delta) => (
+              <button
+                key={delta}
+                type="button"
+                data-admin-i-delta={String(delta)}
+                className="btn btn-secondary btn-sm tabular-nums"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  const next = adjustAdminCurrencyBalance(delta);
+                  setEconomyState(next);
+                  setAdminCurrencyInput(String(next.iBalance));
+                  emitStatusCapsule(
+                    tx(lang, `재화 ${next.iBalance} i로 변경됨`, `Balance set to ${next.iBalance} i`)
+                  );
+                }}
+              >
+                {delta > 0 ? `+${delta} i` : `${delta} i`}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <input
+              type="number"
+              min={0}
+              max={99999}
+              step={1}
+              data-admin-i-input="true"
+              className="hig-native-input tabular-nums"
+              value={adminCurrencyInput}
+              aria-label={tx(lang, '보유 재화 i 직접 입력', 'Set exact i balance')}
+              onChange={(e) => setAdminCurrencyInput(e.target.value)}
+              style={{ flex: 1, minHeight: 40 }}
+            />
+            <button
+              type="button"
+              data-admin-i-apply="true"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                triggerHaptic('medium');
+                const next = setAdminCurrencyBalance(Number(adminCurrencyInput));
+                setEconomyState(next);
+                setAdminCurrencyInput(String(next.iBalance));
+                emitStatusCapsule(
+                  tx(lang, `보유 재화 ${next.iBalance} i 적용`, `Applied ${next.iBalance} i`)
+                );
+              }}
+            >
+              <span>{tx(lang, '직접 적용', 'Apply')}</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <button
+              type="button"
+              data-admin-reset-free-draw="true"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                triggerHaptic('selection');
+                const next = resetAdminFreeDraw();
+                setEconomyState(next);
+                emitStatusCapsule(
+                  tx(lang, '오늘의 무료 뽑기 초기화됨', 'Daily free draw reset')
+                );
+              }}
+            >
+              <span>{tx(lang, '무료 뽑기 초기화', 'Reset Free Draw')}</span>
+            </button>
+            {[0, 6, 29].map((streakVal) => (
+              <button
+                key={streakVal}
+                type="button"
+                data-admin-streak-set={String(streakVal)}
+                className="btn btn-secondary btn-sm tabular-nums"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  const next = setAdminAttendanceStreak(streakVal);
+                  setEconomyState(next);
+                  emitStatusCapsule(
+                    tx(lang, `연속 출석 ${next.attendanceStreak}일 설정`, `Streak set to ${next.attendanceStreak}d`)
+                  );
+                }}
+              >
+                <span>{tx(lang, `연속 ${streakVal}일`, `Streak ${streakVal}d`)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Legal Disclosures: Privacy Policy & Terms of Service */}
       <div className="hig-grid-2">

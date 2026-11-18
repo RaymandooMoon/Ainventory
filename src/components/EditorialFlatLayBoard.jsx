@@ -122,6 +122,9 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   weightKg,
   angleDeg,
   isSynthesizing = false,
+  postLoginRevealActive = false,
+  postLoginProgress = 0,
+  onUserInteractFlatLay,
   asPrimaryStageTarget,
   transformStyle,
 }) {
@@ -133,10 +136,13 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
 
   return (
     <div
-      className={`editorial-flatlay-board is-unfolded ${canReturnToCharacter ? 'has-close-action' : ''}`}
+      className={`editorial-flatlay-board is-unfolded ${canReturnToCharacter ? 'has-close-action' : ''} ${
+        postLoginRevealActive ? 'is-post-login-reveal' : ''
+      }`.trim()}
       data-flatlay-board="true"
       data-flatlay-unfolded="true"
       data-flatlay-count={placements.length}
+      data-post-login-reveal={postLoginRevealActive ? 'true' : undefined}
       data-vton-after-img={asPrimaryStageTarget ? 'true' : undefined}
       style={transformStyle}
     >
@@ -181,6 +187,34 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
         </div>
       </div>
 
+      {postLoginRevealActive && (
+        <div
+          className="editorial-flatlay-countdown-bar"
+          data-post-login-countdown="true"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(clamp(postLoginProgress, 0, 100))}
+          aria-label={
+            isEn
+              ? 'Lookbook preview before showing character'
+              : '플랫레이 룩북 확인 후 캐릭터로 전환'
+          }
+        >
+          <div className="editorial-flatlay-countdown-track">
+            <div
+              className="editorial-flatlay-countdown-fill"
+              style={{ width: `${clamp(postLoginProgress, 0, 100).toFixed(1)}%` }}
+            />
+          </div>
+          <span className="editorial-flatlay-countdown-copy">
+            {isEn
+              ? 'Switching to your styled character · Tap an item to edit'
+              : '룩북 확인 중 · 편집하지 않으면 곧 캐릭터를 보여드려요'}
+          </span>
+        </div>
+      )}
+
       {placements.length === 0 ? (
         <div className="editorial-flatlay-empty" data-flatlay-empty="true">
           <div
@@ -207,7 +241,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
             '--flatlay-rows': rows,
           }}
         >
-          {placements.map((entry) => {
+          {placements.map((entry, idx) => {
             const { slotKey, garment } = entry;
             const isSelected = !isSynthesizing && activeSlotKey === slotKey;
             const displayName =
@@ -231,15 +265,20 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                 data-flatlay-item-slot={slotKey}
                 data-flatlay-item-id={garment.id}
                 aria-label={`${slotBadge}: ${displayName}`}
-                className={`editorial-flatlay-item ${isSelected ? 'is-selected' : ''}`}
+                className={`editorial-flatlay-item ${isSelected ? 'is-selected' : ''} ${
+                  postLoginRevealActive ? 'is-stagger-reveal' : ''
+                }`.trim()}
+                style={postLoginRevealActive ? { '--stagger-idx': idx } : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
+                  onUserInteractFlatLay?.();
                   onSelectSlot?.(slotKey);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     e.stopPropagation();
+                    onUserInteractFlatLay?.();
                     onSelectSlot?.(slotKey);
                   }
                 }}
@@ -361,6 +400,11 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   onZoomChange,
   onPanChange,
   onIdealScaleChange,
+  auraTier = 'C',
+  hasAsymmetricItems = false,
+  postLoginRevealActive = false,
+  postLoginProgress = 0,
+  onUserInteractFlatLay,
   legacyMode,
   lang,
 }) {
@@ -368,7 +412,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const resolvedStyleMode = normalizeVtonStyleMode(styleMode);
   const safeAngleDeg = normalizeTurnaround360Angle(viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
   const angleSpec = useMemo(() => resolve360AngleRenderSpec(safeAngleDeg), [safeAngleDeg]);
-  const effectiveMirrorX = Boolean(angleSpec.mirrorX || forceMirrorX);
+  const effectiveMirrorX = hasAsymmetricItems
+    ? false
+    : Boolean(angleSpec.mirrorX || forceMirrorX);
   const resolvedLang = lang === 'en' || lang === 'ko' ? lang : getStoredLang();
   const isEn = resolvedLang === 'en';
 
@@ -1217,6 +1263,11 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 className="studio-floor-contact-shadow"
                 style={shadowTransformStyle}
               />
+              <div
+                className="studio-stage-aura"
+                data-aura-tier={auraTier}
+                aria-hidden="true"
+              />
               <img
                 src={aiImageUrl}
                 onLoad={handleAiImageLoad}
@@ -1254,6 +1305,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               weightKg={resolvedWeightKg}
               angleDeg={safeAngleDeg}
               isSynthesizing={aiLoading}
+              postLoginRevealActive={postLoginRevealActive}
+              postLoginProgress={postLoginProgress}
+              onUserInteractFlatLay={onUserInteractFlatLay}
               asPrimaryStageTarget
               transformStyle={undefined}
             />

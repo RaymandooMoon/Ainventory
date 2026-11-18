@@ -119,3 +119,31 @@ export function getPathForTab(tab: AppNavTab): string {
   if (tab === 'stats') return '/stats';
   return '/';
 }
+
+export const MAX_POST_LOGIN_REVEAL_AGE_MS = 12000;
+
+let pendingPostLoginRevealAt: number | null = null;
+
+export function triggerPostLoginReveal(now: number = Date.now()): void {
+  pendingPostLoginRevealAt = now;
+}
+
+export function peekPostLoginReveal(now: number = Date.now()): boolean {
+  if (pendingPostLoginRevealAt === null) return false;
+  if (now < pendingPostLoginRevealAt || now - pendingPostLoginRevealAt > MAX_POST_LOGIN_REVEAL_AGE_MS) {
+    pendingPostLoginRevealAt = null;
+    return false;
+  }
+  return true;
+}
+
+export function consumePostLoginReveal(now: number = Date.now()): boolean {
+  const active = peekPostLoginReveal(now);
+  pendingPostLoginRevealAt = null;
+  return active;
+}
+
+export function clearPostLoginReveal(): void {
+  pendingPostLoginRevealAt = null;
+}
+
