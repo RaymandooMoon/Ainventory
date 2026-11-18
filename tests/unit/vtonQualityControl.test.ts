@@ -2,15 +2,21 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   clearVtonQcLogs,
+  computeBagAssetPlacementBox,
   evaluateTurnaroundConsistencyQc,
   formatKoreanDistrictLocation,
   inspectPixelSliceQc,
+  isBagGarmentItem,
+  isValidHandednessToken,
   logVtonQcFailure,
+  mirrorRgbaPixelBufferHorizontally,
+  normalizeHandedness,
   readVtonQcLogs,
   resolveBagCarryAnatomy,
   resolveStageAuraTier,
   VTON_QC_LOG_STORAGE_KEY,
 } from '../../src/services/vtonQualityControl.ts';
+import { computeOutfitComboId } from '../../src/services/vton2DService.ts';
 import {
   clearPostLoginReveal,
   computeLogoFlipTransform,
@@ -119,6 +125,131 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
 
     // Defaults safely to right-handed
     assert.equal(resolveBagCarryAnatomy(undefined).carrySide, 'left');
+    assert.equal(resolveBagCarryAnatomy('left-handed').carrySide, 'right');
+    assert.equal(resolveBagCarryAnatomy('right-handed').carrySide, 'left');
+  });
+
+  it('normalizes and validates handedness tokens and mirrors bag asset placement boxes when left-handed', () => {
+    assert.equal(normalizeHandedness(undefined), 'right');
+    assert.equal(normalizeHandedness(null), 'right');
+    assert.equal(normalizeHandedness('right'), 'right');
+    assert.equal(normalizeHandedness('right-handed'), 'right');
+    assert.equal(normalizeHandedness('오른손잡이'), 'right');
+    assert.equal(normalizeHandedness('left'), 'left');
+    assert.equal(normalizeHandedness('left-handed'), 'left');
+    assert.equal(normalizeHandedness('LEFT_HANDED'), 'left');
+    assert.equal(normalizeHandedness('왼손잡이'), 'left');
+
+    assert.equal(isValidHandednessToken('right'), true);
+    assert.equal(isValidHandednessToken('left'), true);
+    assert.equal(isValidHandednessToken('right-handed'), true);
+    assert.equal(isValidHandednessToken('left-handed'), true);
+    assert.equal(isValidHandednessToken('ambidextrous'), false);
+    assert.equal(isValidHandednessToken(123), false);
+
+    assert.equal(
+      isBagGarmentItem({
+        slot: 'accessory',
+        category: 'accessory',
+        subcategory: 'briefcase',
+        name: '브라운 이탈리안 풀그레인 레더 서류가방',
+      }),
+      true
+    );
+    assert.equal(
+      isBagGarmentItem({
+        slot: 'acc_umbrella',
+        category: 'accessory',
+        subcategory: 'umbrella',
+        name: '장우산',
+      }),
+      false
+    );
+    assert.equal(
+      isBagGarmentItem({
+        slot: 'acc_neck',
+        category: 'accessory',
+        subcategory: 'muffler',
+        name: '캐시미어 머플러',
+      }),
+      false
+    );
+
+    const geom = {
+      cx: 224,
+      shoulderY: 160,
+      waistY: 310,
+      shoulderW: 112,
+      hipW: 96,
+      headH: 95,
+    };
+
+    for (const angleDeg of [0, 45, 135, 180] as const) {
+      const rightBox = computeBagAssetPlacementBox({ ...geom, angleDeg, handedness: 'right' });
+      const leftBox = computeBagAssetPlacementBox({
+        ...geom,
+        angleDeg,
+        handedness: 'left-handed',
+      });
+      assert.equal(rightBox.visible, true);
+      assert.equal(leftBox.visible, true);
+      assert.equal(rightBox.mirrored, false);
+      assert.equal(leftBox.mirrored, true);
+      assert.equal(leftBox.centerOffsetFromAxis, -rightBox.centerOffsetFromAxis);
+    }
+
+    const frontRightHanded = computeBagAssetPlacementBox({
+      ...geom,
+      angleDeg: 0,
+      handedness: 'right',
+    });
+    const frontLeftHanded = computeBagAssetPlacementBox({
+      ...geom,
+      angleDeg: 0,
+      handedness: 'left-handed',
+    });
+    assert.ok(frontRightHanded.bagCenterX > geom.cx);
+    assert.ok(frontLeftHanded.bagCenterX < geom.cx);
+
+    const sideRightHanded = computeBagAssetPlacementBox({
+      ...geom,
+      angleDeg: 90,
+      handedness: 'right',
+    });
+    const sideLeftHanded = computeBagAssetPlacementBox({
+      ...geom,
+      angleDeg: 90,
+      handedness: 'left-handed',
+    });
+    assert.equal(sideRightHanded.visible, false);
+    assert.equal(sideLeftHanded.visible, true);
+    assert.ok(sideLeftHanded.bagRect !== null);
+
+    // Pure RGBA pixel buffer horizontal flip (`x -> width - 1 - x`)
+    const srcPixels = new Uint8ClampedArray([
+      10, 20, 30, 255, 200, 210, 220, 128,
+    ]);
+    const flipped = mirrorRgbaPixelBufferHorizontally(srcPixels, 2, 1);
+    assert.deepEqual(Array.from(flipped), [200, 210, 220, 128, 10, 20, 30, 255]);
+    // Immutability check
+    assert.deepEqual(Array.from(srcPixels), [10, 20, 30, 255, 200, 210, 220, 128]);
+
+    // Outfit combo ID isolates mirrored bag renders when left-handed while keeping default right-handed unchanged
+    const slotsWithBag = {
+      top: { id: 101, category: 'top', subcategory: 'knit', color_hex: '#333333', name: '니트' },
+      accessory: {
+        id: 202,
+        category: 'accessory',
+        subcategory: 'briefcase',
+        color_hex: '#5C3A21',
+        name: '레더 서류가방',
+      },
+    };
+    const defaultCombo = computeOutfitComboId(slotsWithBag);
+    const rightCombo = computeOutfitComboId(slotsWithBag, 'right');
+    const leftCombo = computeOutfitComboId(slotsWithBag, 'left-handed');
+    assert.equal(defaultCombo.outfitComboId, rightCombo.outfitComboId);
+    assert.notEqual(leftCombo.outfitComboId, rightCombo.outfitComboId);
   });
 
   it('avoids #94A3B8 cool-slate studio key backdrop when denim/indigo/blue pants are worn', () => {

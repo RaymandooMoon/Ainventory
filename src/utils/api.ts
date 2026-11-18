@@ -239,6 +239,7 @@ export async function apiFetch<T = Record<string, unknown>>(
   const method = String(options.method || 'GET').toUpperCase();
   const sampleDemo = isSampleDemoMode();
   const isAuthEndpoint = path.startsWith('/auth/');
+  const isProfileConfigEndpoint = path.startsWith('/profile/config');
   const isStatelessCompute =
     path === '/garments/analyze' ||
     path === '/shopping/analyze' ||
@@ -246,7 +247,14 @@ export async function apiFetch<T = Record<string, unknown>>(
     path === '/vton/synthesize';
 
   // In Sample / Default Local Closet Mode, state mutations persist in local IndexedDB
-  if (sampleDemo && method !== 'GET' && !isAuthEndpoint && !isStatelessCompute) {
+  // (`/profile/config` is excluded so server-side profile configuration persists on the server)
+  if (
+    sampleDemo &&
+    method !== 'GET' &&
+    !isAuthEndpoint &&
+    !isProfileConfigEndpoint &&
+    !isStatelessCompute
+  ) {
     if (path.startsWith('/garments')) {
       const existingDemo = await readCachedResponse<Record<string, unknown>>(
         'demo:/garments?closet=sample'
@@ -284,7 +292,7 @@ export async function apiFetch<T = Record<string, unknown>>(
 
   if (method === 'GET') {
     const cacheKey = sampleDemo ? `demo:${path}` : path;
-    if (sampleDemo && isSampleDemoMutated()) {
+    if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
       if (mutatedCached) {
         return coerceApiPayload<T>(mutatedCached);
@@ -337,11 +345,14 @@ export async function apiFetch<T = Record<string, unknown>>(
     }
   }
 
-  // Write / Auth operations (POST / PATCH / DELETE)
-  if (!isAuthEndpoint && isBrowserOffline) {
+  // Write / Auth / Profile Config operations (POST / PUT / PATCH / DELETE)
+  if (!isAuthEndpoint && !isProfileConfigEndpoint && isBrowserOffline) {
     return coerceApiPayload<T>(
       await applyOptimisticLocalMutation(path, method, options.body, true)
     );
+  }
+  if (isProfileConfigEndpoint && isBrowserOffline) {
+    return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
   }
 
   try {
@@ -349,7 +360,7 @@ export async function apiFetch<T = Record<string, unknown>>(
     return coerceApiPayload<T>(data);
   } catch (err) {
     if (isNetworkOrBackendUnavailable(err)) {
-      if (isAuthEndpoint || path === '/garments/import-samples') {
+      if (isAuthEndpoint || isProfileConfigEndpoint || path === '/garments/import-samples') {
         const res = await handleStandaloneApiFallback(path, options);
         if (path === '/garments/import-samples' && Array.isArray(res.garments)) {
           const first = res.garments[0] as GarmentRecord | undefined;

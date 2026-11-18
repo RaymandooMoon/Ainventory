@@ -23,8 +23,13 @@ import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
   bridgeLegacyPropsToAvatarSpec,
   computeAvatarConfigHash,
+  patchAvatarSpec,
   useAvatarSpec,
 } from '../services/avatarSpecStore.ts';
+import {
+  PROFILE_CONFIG_UPDATED_EVENT,
+  fetchServerProfileConfig,
+} from '../services/profileConfigService.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
   GEMINI_API_KEY_EVENT,
@@ -59,7 +64,11 @@ import {
   resolveStudioStatusCapsule,
   shouldShowStudioAngleDock,
 } from '../services/studioStatusCapsule.ts';
-import { resolveStageAuraTier } from '../services/vtonQualityControl.ts';
+import {
+  isBagGarmentItem,
+  normalizeHandedness,
+  resolveStageAuraTier,
+} from '../services/vtonQualityControl.ts';
 import {
   getWeatherStageBadgeMeta,
   resolveEffectiveWeatherFromRaw,
@@ -647,6 +656,27 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return () => window.removeEventListener(VTON_STYLE_PREF_EVENT, handleStylePrefUpdated);
   }, []);
 
+  // Sync server-side profile configuration (`handedness`) updates immediately into VTON pipeline
+  useEffect(() => {
+    const handleProfileConfigUpdated = (ev) => {
+      const detail = ev?.detail;
+      const nextHand = normalizeHandedness(detail?.handedness, 'right');
+      scenarioVtonSnapshotsRef.current = {};
+      setScenarioSnapEpoch((n) => n + 1);
+      if (resolvedAvatarSpec?.dominantHand !== nextHand) {
+        patchAvatarSpec({ dominantHand: nextHand });
+      }
+      setPinnedHistoryItem(null);
+      userApprovedGenRef.current = true;
+      forceBypassCacheRef.current = false;
+      setStageMode('ai-vton');
+      setRetryNonce((n) => n + 1);
+    };
+    window.addEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
+    return () =>
+      window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
+  }, [resolvedAvatarSpec?.dominantHand]);
+
   // Dismiss open `기록` popover cleanly on Escape key
   useEffect(() => {
     if (!historyOpen) return undefined;
@@ -772,8 +802,32 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [weather, resolvedLang]
   );
 
+  const activeHandedness = normalizeHandedness(resolvedAvatarSpec?.dominantHand, 'right');
+  const equippedBagEntry = useMemo(() => {
+    if (!vtonSlots || typeof vtonSlots !== 'object') return null;
+    for (const [slotKey, item] of Object.entries(vtonSlots)) {
+      if (
+        item &&
+        typeof item === 'object' &&
+        isBagGarmentItem({
+          slot: slotKey,
+          category: item.category,
+          subcategory: item.subcategory,
+          name: item.name,
+        })
+      ) {
+        return { slotKey, garment: item };
+      }
+    }
+    return null;
+  }, [vtonSlots]);
+  const hasEquippedBag = Boolean(equippedBagEntry);
+
   const normalizedScenarioKey = scenarioKey || 'live';
-  const { outfitComboId } = useMemo(() => computeOutfitComboId(vtonSlots), [vtonSlots]);
+  const { outfitComboId } = useMemo(
+    () => computeOutfitComboId(vtonSlots, activeHandedness),
+    [vtonSlots, activeHandedness]
+  );
   const scenarioVtonKey = `${normalizedScenarioKey}|${isStageOutdoor ? 'outdoor' : 'indoor'}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
   const scenarioVtonSnapshotsRef = useRef({});
   const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
@@ -901,9 +955,20 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const demoSliceUrl = useMemo(
     () =>
       demoShowcaseEnabled
-        ? peekShowcaseDemoVtonSlice(styleMode, canonicalSliceAngle)
+        ? peekShowcaseDemoVtonSlice(styleMode, canonicalSliceAngle, {
+            handedness: activeHandedness,
+            hasEquippedBag,
+            bagGarment: equippedBagEntry?.garment || null,
+          })
         : null,
-    [demoShowcaseEnabled, styleMode, canonicalSliceAngle]
+    [
+      demoShowcaseEnabled,
+      styleMode,
+      canonicalSliceAngle,
+      activeHandedness,
+      hasEquippedBag,
+      equippedBagEntry,
+    ]
   );
 
   const fallbackSameComboMemorySlice = useMemo(() => {
@@ -1142,9 +1207,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     if (demoShowcaseEnabled && !isForceBypass) {
       const activeDemoStyle = normalizeVtonStyleMode(snap.styleMode);
+      const snapHandedness = normalizeHandedness(
+        snap.resolvedAvatarSpec?.dominantHand,
+        'right'
+      );
       const cachedDemoUrl = peekShowcaseDemoVtonSlice(
         activeDemoStyle,
-        snap.canonicalSliceAngle
+        snap.canonicalSliceAngle,
+        {
+          handedness: snapHandedness,
+          hasEquippedBag,
+          bagGarment: equippedBagEntry?.garment || null,
+        }
       );
       if (cachedDemoUrl) {
         recordScenarioVtonSnapshot(
@@ -1319,9 +1393,47 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       const liveSnap = latestInputsRef.current;
 
       const applyShowcaseDemoSlices = () => {
-        // Strictly load ONLY the active style mode so `stylized_isometric` NEVER fetches `vton-showcase-3x2-photoreal.jpg`
+        // Explicitly check server-side profile configuration (`handedness`, default `'right'`) before rendering showcase character
         const activeStyle = normalizeVtonStyleMode(liveSnap.styleMode);
-        loadShowcaseDemoVtonSlices(activeStyle)
+        const fallbackHand = normalizeHandedness(
+          liveSnap.resolvedAvatarSpec?.dominantHand,
+          'right'
+        );
+        fetchServerProfileConfig(fallbackHand)
+          .then((serverCfg) => {
+            const resolvedHand = serverCfg.hasStoredRecord
+              ? serverCfg.handedness
+              : fallbackHand;
+            if (
+              serverCfg.hasStoredRecord &&
+              resolvedHand !== liveSnap.resolvedAvatarSpec?.dominantHand &&
+              !avatarSpec
+            ) {
+              patchAvatarSpec({ dominantHand: resolvedHand });
+            }
+            const liveSlots = liveSnap.slots || {};
+            let liveBagGarment = null;
+            for (const [slotKey, item] of Object.entries(liveSlots)) {
+              if (
+                item &&
+                typeof item === 'object' &&
+                isBagGarmentItem({
+                  slot: slotKey,
+                  category: item.category,
+                  subcategory: item.subcategory,
+                  name: item.name,
+                })
+              ) {
+                liveBagGarment = item;
+                break;
+              }
+            }
+            return loadShowcaseDemoVtonSlices(activeStyle, {
+              handedness: resolvedHand,
+              hasEquippedBag: Boolean(liveBagGarment),
+              bagGarment: liveBagGarment,
+            });
+          })
           .then((slices) => {
             if (controller.signal.aborted) return;
             forceBypassCacheRef.current = false;
@@ -1920,6 +2032,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-view-angle={viewAngleDeg}
       data-angle-scroll={angleScrollDeg}
       data-avatar-hash={resolvedAvatarHash}
+      data-vton-handedness={activeHandedness}
+      data-vton-bag-mirrored={hasEquippedBag && activeHandedness === 'left' ? 'true' : 'false'}
     >
       {/* Stage Base (z-0..2): Architectural Room Stage Backdrop + Time-of-Day Sky */}
       <div aria-hidden="true" className="studio-25d-keylight" />

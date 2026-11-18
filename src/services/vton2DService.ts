@@ -7,14 +7,24 @@ import {
   type AvatarSpec,
   bridgeLegacyPropsToAvatarSpec,
   computeAvatarConfigHash,
+  patchAvatarSpec,
   sanitizeAvatarSpec,
 } from './avatarSpecStore.ts';
 import {
+  fetchServerProfileConfig,
+  getCachedServerHandedness,
+} from './profileConfigService.ts';
+import {
+  type DominantHand,
   type TurnaroundConsistencyQcReport,
   type VtonQcSliceMetrics,
+  computeBagAssetPlacementBox,
   evaluateTurnaroundConsistencyQc,
   inspectPixelSliceQc,
+  isBagGarmentItem,
   logVtonQcFailure,
+  mirrorRgbaPixelBufferHorizontally,
+  normalizeHandedness,
   resolveBagCarryAnatomy,
 } from './vtonQualityControl.ts';
 import {
@@ -140,6 +150,8 @@ export interface GenderNeutralProfileInput extends PortraitLookupSources {
   shoulderScale?: number | null;
   waistScale?: number | null;
   hipScale?: number | null;
+  handedness?: AvatarDominantHand | 'right-handed' | 'left-handed' | string | null;
+  dominantHand?: AvatarDominantHand | 'right-handed' | 'left-handed' | string | null;
 }
 
 export interface AiVtonSynthesisRequest extends GenderNeutralProfileInput {
@@ -212,6 +224,8 @@ export interface AiVtonSynthesisOutcome {
   equippedCount: number;
   equippedSlotKeys: string[];
   profile: NormalizedVtonProfile;
+  handedness?: AvatarDominantHand;
+  bagAssetMirrored?: boolean;
   createdAt: number;
 }
 
@@ -224,6 +238,8 @@ interface VtonServerResponse {
   styleMode?: string;
   weatherMood?: string;
   geminiUsed?: boolean;
+  handedness?: string;
+  bagAssetMirrored?: boolean;
   fallbackReason?: string | null;
   compositeImageUrl?: string | null;
   afterImageUrl?: string | null;
@@ -847,8 +863,19 @@ export function normalizeGenderNeutralProfile(
     1.38
   );
 
+  const explicitHandCandidate =
+    input?.handedness ??
+    input?.dominantHand ??
+    input?.profile?.dominantHand ??
+    (input?.avatarSpec ? input.avatarSpec.dominantHand : null) ??
+    input?.user?.handedness ??
+    input?.user?.dominantHand ??
+    baseSpec.dominantHand;
+  const resolvedDominantHand = normalizeHandedness(explicitHandCandidate, baseSpec.dominantHand);
+
   const syncedSpec = sanitizeAvatarSpec({
     ...baseSpec,
+    dominantHand: resolvedDominantHand,
     anthropometrics: {
       ...baseSpec.anthropometrics,
       heightCm,
@@ -865,8 +892,11 @@ export function normalizeGenderNeutralProfile(
   });
 
   const avatarConfigHash =
-    (typeof input?.avatarConfigHash === 'string' && input.avatarConfigHash.trim()) ||
-    computeAvatarConfigHash(syncedSpec);
+    resolvedDominantHand === baseSpec.dominantHand &&
+    typeof input?.avatarConfigHash === 'string' &&
+    input.avatarConfigHash.trim()
+      ? input.avatarConfigHash.trim()
+      : computeAvatarConfigHash(syncedSpec);
 
   const portraitDataUrl =
     resolveReadOnlyUserPortrait(input) || syncedSpec.appearance.facePhotoUrl || null;
@@ -891,7 +921,11 @@ export function normalizeGenderNeutralProfile(
 }
 
 // oxlint-disable-next-line typescript/no-explicit-any
-export function computeOutfitComboId(slots?: Record<string, any> | null): {
+export function computeOutfitComboId(
+  // oxlint-disable-next-line typescript/no-explicit-any
+  slots?: Record<string, any> | null,
+  handedness?: unknown
+): {
   outfitComboId: string;
   equippedSlotKeys: string[];
   equippedGarments: Array<{ slotKey: string; garment: GarmentRecord }>;
@@ -921,12 +955,23 @@ export function computeOutfitComboId(slots?: Record<string, any> | null): {
     };
   }
 
-  const rawSig = equippedGarments
+  const normalizedHand = normalizeHandedness(handedness, 'right');
+  const hasBag = equippedGarments.some(({ slotKey, garment }) =>
+    isBagGarmentItem({
+      slot: slotKey,
+      category: garment.category,
+      subcategory: garment.subcategory,
+      name: garment.name,
+    })
+  );
+
+  const baseSig = equippedGarments
     .map(({ slotKey, garment }) => {
       const resolvedUrl = resolveGarmentCanonicalImageUrl(garment);
       return `${slotKey}:${garment.id ?? ''}:${garment.subcategory ?? ''}:${garment.color_hex ?? ''}:${resolvedUrl}`;
     })
     .join('|');
+  const rawSig = hasBag && normalizedHand === 'left' ? `${baseSig}|hand:left` : baseSig;
 
   return {
     outfitComboId: `outfit_${fnvHashHex(rawSig)}`,
@@ -4215,12 +4260,200 @@ export function isDemoVtonShowcaseActive(): boolean {
   return new URLSearchParams(window.location.search).get('demo_vton') === '1';
 }
 
-const showcaseMemorySlices: Partial<
-  Record<VtonStyleMode, Record<TurnaroundAngleDeg, string>>
-> = {};
+export interface ShowcaseDemoVtonOptions {
+  handedness?: DominantHand | 'right-handed' | 'left-handed' | string | null;
+  hasEquippedBag?: boolean;
+  bagGarment?: Partial<GarmentRecord> | null;
+}
+
+const showcaseMemorySlices: Partial<Record<string, Record<TurnaroundAngleDeg, string>>> = {};
 const showcaseInFlight: Partial<
-  Record<VtonStyleMode, Promise<Record<TurnaroundAngleDeg, string> | null>>
+  Record<string, Promise<Record<TurnaroundAngleDeg, string> | null>>
 > = {};
+
+function resolveShowcaseCacheKey(
+  styleMode: VtonStyleMode,
+  options?: ShowcaseDemoVtonOptions | null
+): { cacheKey: string; mirrorForLeftHanded: boolean } {
+  const hand = normalizeHandedness(
+    options?.handedness ?? getCachedServerHandedness('right'),
+    'right'
+  );
+  const hasBag = options?.hasEquippedBag !== false;
+  const mirrorForLeftHanded = hand === 'left' && hasBag;
+  return {
+    cacheKey: mirrorForLeftHanded ? `${styleMode}::left` : styleMode,
+    mirrorForLeftHanded,
+  };
+}
+
+export async function mirrorImageDataUrlHorizontally(
+  dataUrl: string,
+  mimeType: 'image/png' | 'image/jpeg' = 'image/png'
+): Promise<string> {
+  if (!dataUrl || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return dataUrl;
+  }
+  return new Promise<string>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) {
+          resolve(dataUrl);
+          return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const flipped = mirrorRgbaPixelBufferHorizontally(imgData.data, w, h);
+        imgData.data.set(flipped);
+        ctx.putImageData(imgData, 0, 0);
+        resolve(
+          mimeType === 'image/jpeg'
+            ? canvas.toDataURL('image/jpeg', 0.86)
+            : canvas.toDataURL('image/png')
+        );
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function compositeMirroredBagOnSideSlice(
+  sliceDataUrl: string,
+  angleDeg: 45 | 90,
+  bagGarment?: Partial<GarmentRecord> | null
+): Promise<string> {
+  if (
+    !sliceDataUrl ||
+    !bagGarment ||
+    typeof document === 'undefined' ||
+    typeof Image === 'undefined'
+  ) {
+    return sliceDataUrl;
+  }
+  const canonicalBagUrl = resolveGarmentCanonicalImageUrl(bagGarment);
+  const bagInlineUrl = await encodeImageUrlToInlineDataUrl(canonicalBagUrl);
+  if (!bagInlineUrl) return sliceDataUrl;
+
+  return new Promise<string>((resolve) => {
+    const baseImg = new Image();
+    baseImg.onload = () => {
+      const bagImg = new Image();
+      bagImg.onload = () => {
+        try {
+          const w = baseImg.naturalWidth || baseImg.width;
+          const h = baseImg.naturalHeight || baseImg.height;
+          const bw = bagImg.naturalWidth || bagImg.width;
+          const bh = bagImg.naturalHeight || bagImg.height;
+          if (!w || !h || !bw || !bh) {
+            resolve(sliceDataUrl);
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(sliceDataUrl);
+            return;
+          }
+          ctx.drawImage(baseImg, 0, 0, w, h);
+          const baseMetrics = inspectPixelSliceQc(ctx.getImageData(0, 0, w, h).data, w, h);
+          if (baseMetrics.fgPixels < 32 || baseMetrics.maxY <= baseMetrics.minY) {
+            resolve(sliceDataUrl);
+            return;
+          }
+
+          // Cut out solid packshot background & horizontally mirror the bag asset
+          const bagCanvas = document.createElement('canvas');
+          bagCanvas.width = bw;
+          bagCanvas.height = bh;
+          const bagCtx = bagCanvas.getContext('2d');
+          if (!bagCtx) {
+            resolve(sliceDataUrl);
+            return;
+          }
+          bagCtx.save();
+          bagCtx.translate(bw, 0);
+          bagCtx.scale(-1, 1);
+          bagCtx.drawImage(bagImg, 0, 0, bw, bh);
+          bagCtx.restore();
+          applyCornerBfsCutoutOnCanvas(bagCanvas);
+
+          const figH = Math.max(80, baseMetrics.maxY - baseMetrics.minY);
+          const headH = figH / 7.5;
+          const cx = baseMetrics.coreCenterXRatio * w;
+          const shoulderY = baseMetrics.minY + headH * 1.32;
+          const waistY = baseMetrics.minY + headH * 3.15;
+          const placement = computeBagAssetPlacementBox({
+            angleDeg,
+            handedness: 'left',
+            cx,
+            shoulderY,
+            waistY,
+            shoulderW: headH * 1.45,
+            hipW: headH * 1.25,
+            headH,
+            widthCompact: 0.92,
+          });
+          if (placement.visible && placement.bagRect) {
+            ctx.drawImage(
+              bagCanvas,
+              placement.bagRect.x,
+              placement.bagRect.y,
+              placement.bagRect.width,
+              placement.bagRect.height
+            );
+          }
+          resolve(canvas.toDataURL('image/png'));
+        } catch {
+          resolve(sliceDataUrl);
+        }
+      };
+      bagImg.onerror = () => resolve(sliceDataUrl);
+      bagImg.src = bagInlineUrl;
+    };
+    baseImg.onerror = () => resolve(sliceDataUrl);
+    baseImg.src = sliceDataUrl;
+  });
+}
+
+async function buildLeftHandedShowcaseSlices(
+  baseSlices: Record<TurnaroundAngleDeg, string>,
+  bagGarment?: Partial<GarmentRecord> | null
+): Promise<Record<TurnaroundAngleDeg, string>> {
+  const [mirrored0, mirrored180, mirroredFrom225For135, mirroredFrom135For225, side45, side90] =
+    await Promise.all([
+      mirrorImageDataUrlHorizontally(baseSlices[0], 'image/png'),
+      mirrorImageDataUrlHorizontally(baseSlices[180], 'image/png'),
+      mirrorImageDataUrlHorizontally(baseSlices[225], 'image/png'),
+      mirrorImageDataUrlHorizontally(baseSlices[135], 'image/png'),
+      compositeMirroredBagOnSideSlice(baseSlices[45], 45, bagGarment),
+      compositeMirroredBagOnSideSlice(baseSlices[90], 90, bagGarment),
+    ]);
+  return {
+    0: mirrored0,
+    45: side45,
+    90: side90,
+    135: mirroredFrom225For135,
+    180: mirrored180,
+    225: mirroredFrom135For225,
+  };
+}
 
 export function getShowcaseDemoSheetUrl(rawStyleMode?: string | null): string {
   const token = String(rawStyleMode || '')
@@ -4234,7 +4467,8 @@ export function getShowcaseDemoSheetUrl(rawStyleMode?: string | null): string {
 
 export function peekShowcaseDemoVtonSlice(
   styleMode: VtonStyleMode,
-  angleDeg: number
+  angleDeg: number,
+  options?: ShowcaseDemoVtonOptions | null
 ): string | null {
   const normalizedStyle: VtonStyleMode =
     String(styleMode || '')
@@ -4243,11 +4477,13 @@ export function peekShowcaseDemoVtonSlice(
       ? 'photorealistic'
       : 'stylized_isometric';
   const normalizedAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
-  return showcaseMemorySlices[normalizedStyle]?.[normalizedAngle] || null;
+  const { cacheKey } = resolveShowcaseCacheKey(normalizedStyle, options);
+  return showcaseMemorySlices[cacheKey]?.[normalizedAngle] || null;
 }
 
 export async function loadShowcaseDemoVtonSlices(
-  rawStyleMode?: string | null
+  rawStyleMode?: string | null,
+  options?: ShowcaseDemoVtonOptions | null
 ): Promise<Record<TurnaroundAngleDeg, string> | null> {
   const styleMode: VtonStyleMode =
     String(rawStyleMode || '')
@@ -4255,32 +4491,43 @@ export async function loadShowcaseDemoVtonSlices(
       .toLowerCase() === 'photorealistic'
       ? 'photorealistic'
       : 'stylized_isometric';
-  if (showcaseMemorySlices[styleMode]) {
-    return showcaseMemorySlices[styleMode]!;
+  const { cacheKey, mirrorForLeftHanded } = resolveShowcaseCacheKey(styleMode, options);
+  const cachedSlices = showcaseMemorySlices[cacheKey];
+  if (cachedSlices) {
+    return cachedSlices;
   }
-  if (showcaseInFlight[styleMode]) {
-    return showcaseInFlight[styleMode]!;
+  const inFlightJob = showcaseInFlight[cacheKey];
+  if (inFlightJob) {
+    return inFlightJob;
   }
 
   const job = (async (): Promise<Record<TurnaroundAngleDeg, string> | null> => {
     try {
-      const sheetUrl = getShowcaseDemoSheetUrl(styleMode);
-      const forceFlipAngles: TurnaroundAngleDeg[] =
-        styleMode === 'stylized_isometric' ? [45, 90, 135] : [45, 90];
-      const sliced = await sliceTurnaround2x2Sheet(sheetUrl, {
-        layout: 'turnaround_3x2',
-        forceFlipAngles,
-      });
-      showcaseMemorySlices[styleMode] = sliced;
-      return sliced;
+      let baseSlices = showcaseMemorySlices[styleMode];
+      if (!baseSlices) {
+        const sheetUrl = getShowcaseDemoSheetUrl(styleMode);
+        const forceFlipAngles: TurnaroundAngleDeg[] =
+          styleMode === 'stylized_isometric' ? [45, 90, 135] : [45, 90];
+        baseSlices = await sliceTurnaround2x2Sheet(sheetUrl, {
+          layout: 'turnaround_3x2',
+          forceFlipAngles,
+        });
+        showcaseMemorySlices[styleMode] = baseSlices;
+      }
+      if (!mirrorForLeftHanded) {
+        return baseSlices;
+      }
+      const leftSlices = await buildLeftHandedShowcaseSlices(baseSlices, options?.bagGarment);
+      showcaseMemorySlices[cacheKey] = leftSlices;
+      return leftSlices;
     } catch {
       return null;
     } finally {
-      delete showcaseInFlight[styleMode];
+      delete showcaseInFlight[cacheKey];
     }
   })();
 
-  showcaseInFlight[styleMode] = job;
+  showcaseInFlight[cacheKey] = job;
   return job;
 }
 
@@ -4478,14 +4725,28 @@ async function encodeImageUrlToInlineDataUrl(srcUrl: string): Promise<string | n
 }
 
 async function buildMultimodalSlotsPayload(
-  equippedGarments: Array<{ slotKey: string; garment: GarmentRecord }>
+  equippedGarments: Array<{ slotKey: string; garment: GarmentRecord }>,
+  rawHandedness: unknown = 'right'
 ): Promise<Record<string, Record<string, unknown>>> {
   const payload: Record<string, Record<string, unknown>> = {};
+  const handedness = normalizeHandedness(rawHandedness, 'right');
+  const bagAnatomy = resolveBagCarryAnatomy(handedness);
 
   await Promise.all(
     equippedGarments.map(async ({ slotKey, garment }) => {
       const canonicalUrl = resolveGarmentCanonicalImageUrl(garment);
-      const inlineDataUrl = await encodeImageUrlToInlineDataUrl(canonicalUrl);
+      const rawInlineDataUrl = await encodeImageUrlToInlineDataUrl(canonicalUrl);
+      const isBag = isBagGarmentItem({
+        slot: slotKey,
+        category: garment.category,
+        subcategory: garment.subcategory,
+        name: garment.name,
+      });
+      const shouldMirrorBagAsset = Boolean(isBag && handedness === 'left');
+      const inlineDataUrl =
+        shouldMirrorBagAsset && rawInlineDataUrl
+          ? await mirrorImageDataUrlHorizontally(rawInlineDataUrl, 'image/jpeg')
+          : rawInlineDataUrl;
       payload[slotKey] = {
         id: garment.id,
         name: garment.name,
@@ -4497,6 +4758,9 @@ async function buildMultimodalSlotsPayload(
         formality: garment.formality,
         brand: garment.brand,
         image_url: canonicalUrl,
+        isBag,
+        bagAssetMirrored: shouldMirrorBagAsset,
+        bagCarrySide: isBag ? bagAnatomy.carrySide : null,
         ...(inlineDataUrl ? { packshotDataUrl: inlineDataUrl } : {}),
       };
     })
@@ -4665,6 +4929,38 @@ function drawGuideSilhouetteMannequin(
     ctx.lineTo(heelX, footSoleY);
     ctx.closePath();
     ctx.fill();
+
+    // Foreground bag silhouette cue at 90° Right Side Profile when left-handed (`bagCarrySide === 'right'`)
+    if (bagCarrySide === 'left' || bagCarrySide === 'right') {
+      const sidePlacement = computeBagAssetPlacementBox({
+        angleDeg: 90,
+        handedness: bagCarrySide === 'right' ? 'left' : 'right',
+        cx,
+        shoulderY,
+        waistY,
+        shoulderW: sideTorsoW,
+        hipW: sideTorsoW,
+        headH,
+        widthCompact,
+      });
+      if (sidePlacement.visible && sidePlacement.bagRect) {
+        if (sidePlacement.strapRect) {
+          ctx.fillRect(
+            sidePlacement.strapRect.x,
+            sidePlacement.strapRect.y,
+            sidePlacement.strapRect.width,
+            sidePlacement.strapRect.height
+          );
+        }
+        ctx.fillRect(
+          sidePlacement.bagRect.x,
+          sidePlacement.bagRect.y,
+          sidePlacement.bagRect.width,
+          sidePlacement.bagRect.height
+        );
+      }
+    }
+
     ctx.restore();
     return;
   }
@@ -4763,30 +5059,33 @@ function drawGuideSilhouetteMannequin(
     ctx.fill();
   }
 
-  // Subtle anatomical bag placement block on IMAGE-RIGHT / IMAGE-LEFT so Gemini locks the bag to ONE shoulder across 360°
+  // Subtle anatomical bag placement block computed via `computeBagAssetPlacementBox` (mirrored across `cx` when left-handed)
   if (bagCarrySide === 'left' || bagCarrySide === 'right') {
-    const isFrontHalf = angleDeg === 0 || angleDeg === 45;
-    const isRearHalf = angleDeg === 135 || angleDeg === 180 || angleDeg === 225;
-    // Anatomical left = IMAGE-RIGHT (+1) on front half, IMAGE-LEFT (-1) on rear half; mirrored for anatomical right
-    const leftSign = isFrontHalf ? 1 : isRearHalf ? -1 : 0;
-    const screenDir = bagCarrySide === 'left' ? leftSign : -leftSign;
-    if (screenDir !== 0) {
-      const bagW = headH * 0.64 * widthCompact;
-      const bagH = headH * 0.86;
-      const bagCenterX = cx + screenDir * (hipW * 0.56 + bagW * 0.28);
-      const bagTopY = waistY + headH * 0.16;
-      const strapShoulderX = cx + screenDir * (shoulderW * 0.36);
+    const bagPlacement = computeBagAssetPlacementBox({
+      angleDeg,
+      handedness: bagCarrySide === 'right' ? 'left' : 'right',
+      cx,
+      shoulderY,
+      waistY,
+      shoulderW,
+      hipW,
+      headH,
+      widthCompact,
+    });
+    if (bagPlacement.visible && bagPlacement.bagRect) {
+      if (bagPlacement.strapRect) {
+        ctx.fillRect(
+          bagPlacement.strapRect.x,
+          bagPlacement.strapRect.y,
+          bagPlacement.strapRect.width,
+          bagPlacement.strapRect.height
+        );
+      }
       ctx.fillRect(
-        Math.round(Math.min(strapShoulderX, bagCenterX) - 2),
-        Math.round(shoulderY + 2),
-        Math.max(4, Math.round(Math.abs(bagCenterX - strapShoulderX) * 0.24)),
-        Math.round(bagTopY - shoulderY)
-      );
-      ctx.fillRect(
-        Math.round(bagCenterX - bagW * 0.5),
-        Math.round(bagTopY),
-        Math.round(bagW),
-        Math.round(bagH)
+        bagPlacement.bagRect.x,
+        bagPlacement.bagRect.y,
+        bagPlacement.bagRect.width,
+        bagPlacement.bagRect.height
       );
     }
   }
@@ -5523,10 +5822,51 @@ export async function synthesizeGeminiMultiAngleVton(
   const angleDeg = normalizeTurnaroundAngleDeg(request.viewAngleDeg, DEFAULT_TURNAROUND_ANGLE);
   const weatherMood = normalizeWeatherMoodKey(request.weather);
   const effectiveWeather = resolveEffectiveWeatherFromRaw(request.weather);
-  const profile = normalizeGenderNeutralProfile(request);
+  const baseProfile = normalizeGenderNeutralProfile(request);
+
+  // Step 0: Explicitly check server-side profile configuration (`handedness`, default: `'right'`)
+  // BEFORE cache lookup, slot serialization, or character rendering!
+  const serverProfileConfig = await fetchServerProfileConfig(baseProfile.dominantHand);
+  const explicitReqHand = request.handedness ?? request.dominantHand;
+  const resolvedHandedness: AvatarDominantHand =
+    explicitReqHand !== undefined &&
+    explicitReqHand !== null &&
+    String(explicitReqHand).trim() !== ''
+      ? normalizeHandedness(explicitReqHand, serverProfileConfig.handedness)
+      : serverProfileConfig.hasStoredRecord
+        ? serverProfileConfig.handedness
+        : baseProfile.dominantHand;
+
+  if (
+    serverProfileConfig.hasStoredRecord &&
+    serverProfileConfig.handedness !== baseProfile.dominantHand &&
+    !request.avatarSpec
+  ) {
+    patchAvatarSpec({ dominantHand: serverProfileConfig.handedness });
+  }
+
+  const profile =
+    resolvedHandedness !== baseProfile.dominantHand
+      ? normalizeGenderNeutralProfile({
+          ...request,
+          handedness: resolvedHandedness,
+          avatarConfigHash: null,
+        })
+      : baseProfile;
+
   const { outfitComboId, equippedSlotKeys, equippedGarments } = computeOutfitComboId(
-    request.slots
+    request.slots,
+    profile.dominantHand
   );
+  const hasEquippedBag = equippedGarments.some(({ slotKey, garment }) =>
+    isBagGarmentItem({
+      slot: slotKey,
+      category: garment.category,
+      subcategory: garment.subcategory,
+      name: garment.name,
+    })
+  );
+  const bagAssetMirrored = Boolean(hasEquippedBag && profile.dominantHand === 'left');
 
   const cacheKey = buildAiVtonCacheKey({
     avatarConfigHash: profile.avatarConfigHash,
@@ -5606,6 +5946,8 @@ export async function synthesizeGeminiMultiAngleVton(
           equippedCount: equippedGarments.length,
           equippedSlotKeys,
           profile,
+          handedness: profile.dominantHand,
+          bagAssetMirrored,
           createdAt: cachedHit.slice.updatedAt,
         };
       }
@@ -5647,6 +5989,8 @@ export async function synthesizeGeminiMultiAngleVton(
       equippedCount: equippedGarments.length,
       equippedSlotKeys,
       profile,
+      handedness: profile.dominantHand,
+      bagAssetMirrored,
       createdAt: Date.now(),
     };
   }
@@ -5654,7 +5998,7 @@ export async function synthesizeGeminiMultiAngleVton(
   const runPromise = (async (): Promise<AiVtonSynthesisOutcome> => {
     try {
       const [serializedSlots, encodedPortrait] = await Promise.all([
-        buildMultimodalSlotsPayload(equippedGarments),
+        buildMultimodalSlotsPayload(equippedGarments, profile.dominantHand),
         profile.portraitDataUrl
           ? encodeImageUrlToInlineDataUrl(profile.portraitDataUrl)
           : Promise.resolve(null),
@@ -5727,6 +6071,7 @@ export async function synthesizeGeminiMultiAngleVton(
         if (!isStaticStandalone) {
           const reqHeaders: Record<string, string> = {
             'X-Demo-Mode': 'sample',
+            'X-Profile-Key': serverProfileConfig.profileKey,
           };
           if (clientGeminiKey) {
             reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
@@ -5742,12 +6087,15 @@ export async function synthesizeGeminiMultiAngleVton(
                 viewAngleDeg: angleDeg,
                 turnaroundSheet: useTurnaroundSheet,
                 weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                profileKey: serverProfileConfig.profileKey,
+                handedness: effectiveProfile.dominantHand,
                 avatarSpec: effectiveProfile.avatarSpec,
                 avatarConfigHash: effectiveProfile.avatarConfigHash,
                 portraitDataUrl: effectivePortraitUrl,
                 profile: {
                   gender: effectiveProfile.gender,
                   dominantHand: effectiveProfile.dominantHand,
+                  handedness: effectiveProfile.dominantHand,
                   skinToneHex: effectiveProfile.skinToneHex,
                   personalColor: effectiveProfile.personalColor,
                   heightCm: effectiveProfile.heightCm,
@@ -6201,7 +6549,10 @@ export async function synthesizeGeminiMultiAngleVton(
           try {
             let rescueRaw: string | null = null;
             if (!isStaticStandalone) {
-              const reqHeaders: Record<string, string> = { 'X-Demo-Mode': 'sample' };
+              const reqHeaders: Record<string, string> = {
+                'X-Demo-Mode': 'sample',
+                'X-Profile-Key': serverProfileConfig.profileKey,
+              };
               if (clientGeminiKey) reqHeaders['X-Gemini-Api-Key'] = clientGeminiKey;
               const serverRescue = await apiFetch<VtonServerResponse>('/vton/synthesize', {
                 method: 'POST',
@@ -6212,12 +6563,15 @@ export async function synthesizeGeminiMultiAngleVton(
                   viewAngleDeg: 0,
                   turnaroundSheet: false,
                   weather: request.weather ?? { mood: weatherMood, effectiveWeather },
+                  profileKey: serverProfileConfig.profileKey,
+                  handedness: effectiveProfile.dominantHand,
                   avatarSpec: effectiveProfile.avatarSpec,
                   avatarConfigHash: effectiveProfile.avatarConfigHash,
                   portraitDataUrl: effectivePortraitUrl,
                   profile: {
                     gender: effectiveProfile.gender,
                     dominantHand: effectiveProfile.dominantHand,
+                    handedness: effectiveProfile.dominantHand,
                     skinToneHex: effectiveProfile.skinToneHex,
                     personalColor: effectiveProfile.personalColor,
                     heightCm: effectiveProfile.heightCm,
@@ -6312,6 +6666,8 @@ export async function synthesizeGeminiMultiAngleVton(
             equippedCount: equippedGarments.length,
             equippedSlotKeys,
             profile,
+            handedness: profile.dominantHand,
+            bagAssetMirrored,
             createdAt: now,
           };
         }
@@ -6337,6 +6693,8 @@ export async function synthesizeGeminiMultiAngleVton(
           equippedCount: equippedGarments.length,
           equippedSlotKeys,
           profile,
+          handedness: profile.dominantHand,
+          bagAssetMirrored,
           createdAt: Date.now(),
         };
       }
@@ -6366,6 +6724,8 @@ export async function synthesizeGeminiMultiAngleVton(
           equippedCount: equippedGarments.length,
           equippedSlotKeys,
           profile,
+          handedness: profile.dominantHand,
+          bagAssetMirrored,
           createdAt: now,
         };
       }
@@ -6391,6 +6751,8 @@ export async function synthesizeGeminiMultiAngleVton(
         equippedCount: equippedGarments.length,
         equippedSlotKeys,
         profile,
+        handedness: profile.dominantHand,
+        bagAssetMirrored,
         createdAt: now,
       };
     } catch (err) {
@@ -6428,6 +6790,8 @@ export async function synthesizeGeminiMultiAngleVton(
         equippedCount: equippedGarments.length,
         equippedSlotKeys,
         profile,
+        handedness: profile.dominantHand,
+        bagAssetMirrored,
         createdAt: Date.now(),
       };
     } finally {

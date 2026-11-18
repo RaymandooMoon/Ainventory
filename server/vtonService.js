@@ -1,7 +1,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import db, { DATA_DIR, ROOT_DIR, UPLOADS_DIR } from './db.js';
+import zlib from 'node:zlib';
+import db, {
+  DATA_DIR,
+  ROOT_DIR,
+  UPLOADS_DIR,
+  getServerProfileConfig,
+} from './db.js';
 import {
   FOOTWEAR_PAIR_SYMMETRY_LOCK,
   SOLO_SINGLE_PERSON_PER_CELL_LOCK,
@@ -9,7 +15,12 @@ import {
   normalizeCanonicalAvatarGender,
   selectOptimalStudioKeyHex,
 } from '../src/services/weatherPromptBuilder.ts';
-import { resolveBagCarryAnatomy } from '../src/services/vtonQualityControl.ts';
+import {
+  computeBagAssetPlacementBox,
+  isBagGarmentItem,
+  normalizeHandedness,
+  resolveBagCarryAnatomy,
+} from '../src/services/vtonQualityControl.ts';
 
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
@@ -981,12 +992,14 @@ export function normalizeVtonProfile(
     VALID_ARCHETYPES,
     bmi >= 30 ? 'plus_size' : bodyShape === 'muscular' ? 'athletic' : 'rectangle'
   );
-  const dominantHandToken = String(
-    rawAvatarSpec.dominantHand ?? src.dominantHand ?? extraOptions?.dominantHand ?? 'right'
-  )
-    .trim()
-    .toLowerCase();
-  const dominantHand = dominantHandToken === 'left' ? 'left' : 'right';
+  const dominantHand = normalizeHandedness(
+    extraOptions?.dominantHand ??
+      src.handedness ??
+      rawAvatarSpec.dominantHand ??
+      src.dominantHand ??
+      'right',
+    'right'
+  );
   const chestForm = normalizeEnumToken(
     anthro.chestForm,
     VALID_CHEST_FORMS,
@@ -1218,7 +1231,13 @@ function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
  * and loads security-validated packshot reference images.
  */
 export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
-  const { authorizedClosets = [], isSampleGuest = false, isAuthenticated } = authContext;
+  const {
+    authorizedClosets = [],
+    isSampleGuest = false,
+    isAuthenticated,
+    handedness: rawAuthHandedness,
+  } = authContext;
+  const activeHandedness = normalizeHandedness(rawAuthHandedness, 'right');
   const rawCandidateBySlot = new Map();
 
   const assignCandidate = (slotHint, entry) => {
@@ -1316,6 +1335,11 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       isAuthenticated,
     });
 
+    const isBag = isBagGarmentItem({ slot, category, subcategory, name });
+    const bagAssetMirrored = Boolean(isBag && activeHandedness === 'left');
+    const bagCarrySide = activeHandedness === 'left' ? 'right' : 'left';
+    const baseDigest = packshot ? packshot.imageDigest : 'none';
+
     resolvedSlots[slot] = {
       slot,
       id,
@@ -1327,10 +1351,13 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       fabric,
       formality,
       brand,
+      isBag,
+      bagAssetMirrored,
+      bagCarrySide,
       packshot: packshot
         ? { mimeType: packshot.mimeType, base64Data: packshot.base64Data }
         : null,
-      imageDigest: packshot ? packshot.imageDigest : 'none',
+      imageDigest: isBag ? `${baseDigest}:hand-${activeHandedness}` : baseDigest,
     };
   }
 
@@ -1943,7 +1970,9 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const backdropHex = selectOptimalStudioKeyHex(equippedColorInputs);
 
   const hasEquippedUmbrella = Boolean(resolvedSlots.acc_umbrella);
-  const hasEquippedBag = Boolean(resolvedSlots.accessory);
+  const hasEquippedBag =
+    equippedKeys.some((slot) => Boolean(resolvedSlots[slot]?.isBag)) ||
+    Boolean(resolvedSlots.accessory);
   const effectiveWeather = profile.weatherMood?.effectiveWeather || 'clear';
   const parts = [
     {
@@ -1955,6 +1984,20 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       ),
     },
   ];
+  if (hasEquippedBag) {
+    const bagSpatialGuide = buildServerBagPositionGuidePngPart(profile, backdropHex);
+    if (bagSpatialGuide) {
+      parts.push({
+        text:
+          profile.dominantHand === 'left'
+            ? '[MIRRORED BAG ASSET SPATIAL GUIDE — LEFT-HANDED PROFILE ACTIVE]: The attached spatial silhouette guide mirrors the bag asset position onto the wearer\'s ANATOMICAL RIGHT shoulder/arm/hand (highlighted in amber on IMAGE-LEFT at 0°/45°, foreground at 90°, and IMAGE-RIGHT at 135°/180°). Match this mirrored bag asset position strictly!'
+            : '[BAG ASSET SPATIAL GUIDE — RIGHT-HANDED PROFILE ACTIVE]: The attached spatial silhouette guide locks the bag asset position onto the wearer\'s ANATOMICAL LEFT shoulder/arm/hand (highlighted in amber on IMAGE-RIGHT at 0°/45°, behind torso at 90°, and IMAGE-LEFT at 135°/180°/225°). Match this bag asset position strictly!',
+      });
+      parts.push({
+        inlineData: bagSpatialGuide,
+      });
+    }
+  }
   appendPortraitParts(parts, profile);
 
   const onepieceItem = resolvedSlots.onepiece || resolvedSlots.dress || null;
@@ -2043,21 +2086,28 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   parts.push({ text: layeringRules.join('\n') });
 
   const bagAnatomy = resolveBagCarryAnatomy(profile.dominantHand);
-  if (resolvedSlots.accessory) {
+  if (hasEquippedBag) {
     parts.push({
-      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER & SCREEN-SIDE LOCK]: ${bagAnatomy.crossAngleLockPrompt}`,
+      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER & SCREEN-SIDE LOCK]: ${bagAnatomy.crossAngleLockPrompt}${
+        profile.dominantHand === 'left'
+          ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally (strap/handle slanting from the wearer\'s RIGHT shoulder to RIGHT hip/hand) so it sits naturally on the user\'s preferred side!'
+          : ''
+      }`,
     });
   }
   for (const slot of equippedKeys) {
     const item = resolvedSlots[slot];
     const placementCue =
-      slot === 'accessory'
+      item.isBag || slot === 'accessory'
         ? bagAnatomy.slotPrompt
         : ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
-    const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Material/Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.${placementCue ? `\nAnatomical Placement: ${placementCue}` : ''}`;
+    const mirrorNote = item.bagAssetMirrored
+      ? ' [MIRRORED BAG ASSET POSITION FOR LEFT-HANDED WEARER: mirror strap & body horizontally onto wearer\'s ANATOMICAL RIGHT side]'
+      : '';
+    const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Material/Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.${placementCue ? `\nAnatomical Placement: ${placementCue}${mirrorNote}` : ''}`;
     if (item.packshot) {
       parts.push({
-        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]. Reproduce its exact construction, ${item.fabric} material surface, details, and color ${item.colorHex} naturally worn at its exact anatomical position (${viewScopeText}):`,
+        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]${item.bagAssetMirrored ? ' (horizontally mirror its carry position & strap orientation onto the wearer\'s RIGHT shoulder/hand)' : ''}. Reproduce its exact construction, ${item.fabric} material surface, details, and color ${item.colorHex} naturally worn at its exact anatomical position (${viewScopeText}):`,
       });
       parts.push({
         inlineData: {
@@ -2077,6 +2127,218 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   });
 
   return parts;
+}
+
+const PNG_CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32Buf(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i += 1) {
+    c = PNG_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function makePngChunk(typeAscii, dataBuf) {
+  const typeBuf = Buffer.from(typeAscii, 'ascii');
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(dataBuf.length, 0);
+  const crcInput = Buffer.concat([typeBuf, dataBuf]);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32Buf(crcInput), 0);
+  return Buffer.concat([lenBuf, typeBuf, dataBuf, crcBuf]);
+}
+
+function encodeRgbPngBase64(width, height, rgbBuf) {
+  const stride = width * 3 + 1;
+  const rawScanlines = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const dstRow = y * stride;
+    rawScanlines[dstRow] = 0;
+    rgbBuf.copy(rawScanlines, dstRow + 1, y * width * 3, (y + 1) * width * 3);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB color type
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  const idat = zlib.deflateSync(rawScanlines, { level: 6 });
+  const pngSig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const full = Buffer.concat([
+    pngSig,
+    makePngChunk('IHDR', ihdr),
+    makePngChunk('IDAT', idat),
+    makePngChunk('IEND', Buffer.alloc(0)),
+  ]);
+  return full.toString('base64');
+}
+
+function parseHexToRgbTuple(hex, fallback = [148, 163, 184]) {
+  const clean = String(hex || '').trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(clean)) return fallback;
+  return [
+    Number.parseInt(clean.slice(1, 3), 16),
+    Number.parseInt(clean.slice(3, 5), 16),
+    Number.parseInt(clean.slice(5, 7), 16),
+  ];
+}
+
+function fillRgbRect(rgbBuf, imgW, imgH, x, y, w, h, rgb) {
+  const x0 = Math.max(0, Math.floor(x));
+  const y0 = Math.max(0, Math.floor(y));
+  const x1 = Math.min(imgW, Math.ceil(x + w));
+  const y1 = Math.min(imgH, Math.ceil(y + h));
+  for (let py = y0; py < y1; py += 1) {
+    const rowOff = py * imgW * 3;
+    for (let px = x0; px < x1; px += 1) {
+      const idx = rowOff + px * 3;
+      rgbBuf[idx] = rgb[0];
+      rgbBuf[idx + 1] = rgb[1];
+      rgbBuf[idx + 2] = rgb[2];
+    }
+  }
+}
+
+function paintGuideCellWithMirroredBag(rgbBuf, imgW, imgH, cellX, cellY, cellW, cellH, angleDeg, handedness) {
+  const cx = cellX + cellW * 0.5;
+  const topY = cellY + cellH * 0.1;
+  const botY = cellY + cellH * 0.9;
+  const figH = botY - topY;
+  const headH = figH / 7.5;
+  const isSide = angleDeg === 90;
+  const widthCompact = isSide ? 0.54 : angleDeg === 0 || angleDeg === 180 ? 1 : 0.85;
+  const shoulderW = headH * 1.95 * widthCompact;
+  const hipW = headH * 1.65 * widthCompact;
+  const shoulderY = topY + headH * 1.42;
+  const waistY = topY + headH * 3.1;
+  const crotchY = topY + headH * 4.05;
+  const bodyRgb = [108, 122, 142];
+  const bagRgb = [196, 132, 68];
+
+  // Head
+  fillRgbRect(rgbBuf, imgW, imgH, cx - headH * 0.34, topY, headH * 0.68, headH * 0.94, bodyRgb);
+  // Torso
+  fillRgbRect(rgbBuf, imgW, imgH, cx - shoulderW * 0.5, shoulderY, shoulderW, crotchY - shoulderY, bodyRgb);
+  // Legs
+  if (isSide) {
+    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.28, crotchY, hipW * 0.56, botY - crotchY, bodyRgb);
+  } else {
+    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.42, crotchY, hipW * 0.34, botY - crotchY, bodyRgb);
+    fillRgbRect(rgbBuf, imgW, imgH, cx + hipW * 0.08, crotchY, hipW * 0.34, botY - crotchY, bodyRgb);
+  }
+
+  const normalizedAngle =
+    angleDeg === -45
+      ? 45
+      : angleDeg === -90
+        ? 90
+        : angleDeg === -135
+          ? 225
+          : (TURNAROUND_ANGLES.includes(angleDeg) ? angleDeg : 0);
+  const placement = computeBagAssetPlacementBox({
+    angleDeg: /** @type {0 | 45 | 90 | 135 | 180 | 225} */ (normalizedAngle),
+    handedness: angleDeg === -45 ? (handedness === 'left' ? 'right' : 'left') : handedness,
+    cx,
+    shoulderY,
+    waistY,
+    shoulderW,
+    hipW,
+    headH,
+    widthCompact,
+  });
+  if (placement.visible && placement.bagRect) {
+    if (placement.strapRect) {
+      fillRgbRect(
+        rgbBuf,
+        imgW,
+        imgH,
+        placement.strapRect.x,
+        placement.strapRect.y,
+        placement.strapRect.width,
+        placement.strapRect.height,
+        bagRgb
+      );
+    }
+    fillRgbRect(
+      rgbBuf,
+      imgW,
+      imgH,
+      placement.bagRect.x,
+      placement.bagRect.y,
+      placement.bagRect.width,
+      placement.bagRect.height,
+      bagRgb
+    );
+  }
+}
+
+export function buildServerBagPositionGuidePngPart(profile, backdropHex = CUTOUT_STAGE_HEX) {
+  try {
+    const bgRgb = parseHexToRgbTuple(backdropHex, [148, 163, 184]);
+    const handedness = normalizeHandedness(profile?.dominantHand, 'right');
+    if (profile?.turnaroundSheet) {
+      const w = 360;
+      const h = 240;
+      const buf = Buffer.alloc(w * h * 3);
+      fillRgbRect(buf, w, h, 0, 0, w, h, bgRgb);
+      const cellW = w / 3;
+      const cellH = h / 2;
+      for (let i = 0; i < TURNAROUND_ANGLES.length; i += 1) {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        paintGuideCellWithMirroredBag(
+          buf,
+          w,
+          h,
+          col * cellW,
+          row * cellH,
+          cellW,
+          cellH,
+          TURNAROUND_ANGLES[i],
+          handedness
+        );
+      }
+      return {
+        mimeType: 'image/png',
+        data: encodeRgbPngBase64(w, h, buf),
+      };
+    }
+
+    const w = 180;
+    const h = 240;
+    const buf = Buffer.alloc(w * h * 3);
+    fillRgbRect(buf, w, h, 0, 0, w, h, bgRgb);
+    paintGuideCellWithMirroredBag(
+      buf,
+      w,
+      h,
+      0,
+      0,
+      w,
+      h,
+      normalizeIsoViewAngleDeg(profile?.viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE),
+      handedness
+    );
+    return {
+      mimeType: 'image/png',
+      data: encodeRgbPngBase64(w, h, buf),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -2392,12 +2654,35 @@ export function getVtonServiceStatus(options = {}) {
 export async function synthesizeVtonLook(params = {}) {
   const rawProfile =
     params.profile ?? params.bodyProfile ?? params.userProfile ?? params;
+
+  // Step 0: Explicitly check server-side profile configuration (`handedness`, default: `'right'`) before rendering!
+  const serverProfileConfig = getServerProfileConfig({
+    userId: params.userId ?? null,
+    profileKey: params.profileKey ?? rawProfile?.profileKey ?? null,
+  });
+  const explicitHandednessOverride =
+    params.handedness !== undefined && params.handedness !== null && params.handedness !== ''
+      ? normalizeHandedness(params.handedness, serverProfileConfig.handedness)
+      : null;
+  const resolvedHandedness =
+    explicitHandednessOverride ??
+    (serverProfileConfig.hasStoredRecord
+      ? serverProfileConfig.handedness
+      : normalizeHandedness(
+          rawProfile?.handedness ??
+            rawProfile?.dominantHand ??
+            params.avatarSpec?.dominantHand ??
+            rawProfile?.avatarSpec?.dominantHand,
+          serverProfileConfig.handedness
+        ));
+
   const normalizedProfile = normalizeVtonProfile(
     rawProfile,
     params.portraitDataUrl ?? params.faceDataUrl ?? null,
     {
       avatarSpec: params.avatarSpec ?? rawProfile?.avatarSpec ?? null,
       avatarConfigHash: params.avatarConfigHash ?? rawProfile?.avatarConfigHash ?? null,
+      dominantHand: resolvedHandedness,
       viewAngleDeg: params.viewAngleDeg ?? rawProfile?.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE,
       styleMode: params.styleMode ?? params.vtonStyle ?? rawProfile?.styleMode ?? null,
       weather: params.weather ?? params.weatherMood ?? rawProfile?.weather ?? null,
@@ -2413,9 +2698,12 @@ export async function synthesizeVtonLook(params = {}) {
       : [],
     isSampleGuest: Boolean(params.isSampleGuest),
     isAuthenticated: params.isAuthenticated,
+    handedness: normalizedProfile.dominantHand,
   };
 
   const resolvedSlots = resolveEquippedVtonSlots(params, authContext);
+  const hasEquippedBag = Object.values(resolvedSlots).some((item) => Boolean(item?.isBag));
+  const bagAssetMirrored = Boolean(hasEquippedBag && normalizedProfile.dominantHand === 'left');
   const { baseHash, comboHash } = computeVtonHashes(normalizedProfile, resolvedSlots);
 
   const includeBaseModel = Boolean(params.includeBaseModel);
@@ -2442,6 +2730,8 @@ export async function synthesizeVtonLook(params = {}) {
     baseHash,
     viewAngleDeg: normalizedProfile.viewAngleDeg,
     avatarConfigHash: normalizedProfile.avatarConfigHash,
+    handedness: normalizedProfile.dominantHand,
+    bagAssetMirrored,
     compositeImageUrl: null,
     baseModelImageUrl: null,
     fallbackReason,
@@ -2469,6 +2759,8 @@ export async function synthesizeVtonLook(params = {}) {
         baseHash,
         viewAngleDeg: normalizedProfile.viewAngleDeg,
         avatarConfigHash: normalizedProfile.avatarConfigHash,
+        handedness: normalizedProfile.dominantHand,
+        bagAssetMirrored,
         compositeImageUrl: cachedCombo.dataUrl,
         baseModelImageUrl: includeBaseModel
           ? cachedBase?.dataUrl || null
@@ -2568,6 +2860,8 @@ export async function synthesizeVtonLook(params = {}) {
           baseHash,
           viewAngleDeg: normalizedProfile.viewAngleDeg,
           avatarConfigHash: normalizedProfile.avatarConfigHash,
+          handedness: normalizedProfile.dominantHand,
+          bagAssetMirrored,
           compositeImageUrl: baseGen.dataUrl,
           baseModelImageUrl: baseGen.dataUrl,
           fallbackReason: null,
@@ -2686,6 +2980,8 @@ export async function synthesizeVtonLook(params = {}) {
         baseHash,
         viewAngleDeg: normalizedProfile.viewAngleDeg,
         avatarConfigHash: normalizedProfile.avatarConfigHash,
+        handedness: normalizedProfile.dominantHand,
+        bagAssetMirrored,
         compositeImageUrl: comboRes.dataUrl,
         baseModelImageUrl: resolvedBaseUrl,
         fallbackReason: null,

@@ -615,11 +615,19 @@ export function initDb() {
       hip_cm REAL DEFAULT NULL,
       head_cm REAL DEFAULT NULL,
       apple_sub TEXT DEFAULT NULL,
+      handedness TEXT NOT NULL DEFAULT 'right',
       auth_provider TEXT NOT NULL DEFAULT 'email',
       verify_last_sent_at TEXT DEFAULT NULL,
       verify_send_count INTEGER NOT NULL DEFAULT 0,
       verify_fail_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_configs (
+      profile_key TEXT PRIMARY KEY,
+      user_id INTEGER DEFAULT NULL,
+      handedness TEXT NOT NULL DEFAULT 'right',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -739,6 +747,7 @@ export function initDb() {
     'ALTER TABLE users ADD COLUMN hip_cm REAL DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN head_cm REAL DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN apple_sub TEXT DEFAULT NULL',
+    "ALTER TABLE users ADD COLUMN handedness TEXT NOT NULL DEFAULT 'right'",
     "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'",
     'ALTER TABLE users ADD COLUMN verify_last_sent_at TEXT DEFAULT NULL',
     'ALTER TABLE users ADD COLUMN verify_send_count INTEGER NOT NULL DEFAULT 0',
@@ -1328,6 +1337,152 @@ export function seedIfEmpty(forceReset = false) {
       'passed'
     );
   });
+}
+
+const VALID_LEFT_HANDED_VALUES = new Set([
+  'left',
+  'left-handed',
+  'left_handed',
+  'lefthanded',
+  'l',
+  '왼손',
+  '왼손잡이',
+]);
+
+const VALID_RIGHT_HANDED_VALUES = new Set([
+  'right',
+  'right-handed',
+  'right_handed',
+  'righthanded',
+  'r',
+  '오른손',
+  '오른손잡이',
+]);
+
+export function isValidHandednessInput(raw) {
+  if (typeof raw !== 'string') return false;
+  const token = raw.trim().toLowerCase();
+  return VALID_LEFT_HANDED_VALUES.has(token) || VALID_RIGHT_HANDED_VALUES.has(token);
+}
+
+export function normalizeHandednessConfig(raw, fallback = 'right') {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  const token = String(raw).trim().toLowerCase();
+  if (VALID_LEFT_HANDED_VALUES.has(token)) return 'left';
+  if (VALID_RIGHT_HANDED_VALUES.has(token)) return 'right';
+  return fallback;
+}
+
+export function resolveProfileConfigKey({ userId = null, profileKey = null } = {}) {
+  const numericUserId = Number(userId);
+  if (Number.isInteger(numericUserId) && numericUserId > 0) {
+    return `user:${numericUserId}`;
+  }
+  const cleanedKey = String(profileKey ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_:-]/g, '')
+    .slice(0, 64);
+  return cleanedKey || 'default';
+}
+
+export function getServerProfileConfig({ userId = null, profileKey = null } = {}) {
+  const numericUserId =
+    Number.isInteger(Number(userId)) && Number(userId) > 0 ? Number(userId) : null;
+  const resolvedKey = resolveProfileConfigKey({ userId: numericUserId, profileKey });
+
+  let configRow = null;
+  try {
+    configRow = db
+      .prepare('SELECT profile_key, user_id, handedness, updated_at FROM profile_configs WHERE profile_key = ?')
+      .get(resolvedKey);
+  } catch {
+    configRow = null;
+  }
+
+  let userRow = null;
+  if (numericUserId) {
+    try {
+      userRow = db.prepare('SELECT id, handedness FROM users WHERE id = ?').get(numericUserId);
+    } catch {
+      userRow = null;
+    }
+  }
+
+  // If guest session also supplied a client profileKey before/alongside login, check fallback row if user row not yet customized
+  let guestConfigRow = null;
+  if (numericUserId && !configRow && profileKey) {
+    const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
+    if (guestKey && guestKey !== resolvedKey) {
+      try {
+        guestConfigRow = db
+          .prepare('SELECT profile_key, user_id, handedness, updated_at FROM profile_configs WHERE profile_key = ?')
+          .get(guestKey);
+      } catch {
+        guestConfigRow = null;
+      }
+    }
+  }
+
+  const activeRow = configRow || guestConfigRow;
+  const rawHandedness = activeRow?.handedness ?? userRow?.handedness ?? 'right';
+  const handedness = normalizeHandednessConfig(rawHandedness, 'right');
+  const hasStoredRecord = Boolean(configRow || guestConfigRow || userRow?.handedness);
+
+  return {
+    profileKey: resolvedKey,
+    userId: numericUserId,
+    handedness,
+    handednessLabel: handedness === 'left' ? 'left-handed' : 'right-handed',
+    bagCarrySide: handedness === 'left' ? 'right' : 'left',
+    mirrorBagAsset: handedness === 'left',
+    hasStoredRecord,
+    updatedAt: activeRow?.updatedAt ?? activeRow?.updated_at ?? null,
+  };
+}
+
+export function saveServerProfileConfig({
+  userId = null,
+  profileKey = null,
+  handedness = 'right',
+} = {}) {
+  const numericUserId =
+    Number.isInteger(Number(userId)) && Number(userId) > 0 ? Number(userId) : null;
+  const resolvedKey = resolveProfileConfigKey({ userId: numericUserId, profileKey });
+  const normalizedHandedness = normalizeHandednessConfig(handedness, 'right');
+  const nowIso = new Date().toISOString();
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(profile_key) DO UPDATE SET
+         user_id = COALESCE(excluded.user_id, profile_configs.user_id),
+         handedness = excluded.handedness,
+         updated_at = excluded.updated_at`
+    ).run(resolvedKey, numericUserId, normalizedHandedness, nowIso);
+
+    if (numericUserId) {
+      db.prepare('UPDATE users SET handedness = ? WHERE id = ?').run(
+        normalizedHandedness,
+        numericUserId
+      );
+      if (profileKey) {
+        const guestKey = resolveProfileConfigKey({ userId: null, profileKey });
+        if (guestKey && guestKey !== resolvedKey) {
+          db.prepare(
+            `INSERT INTO profile_configs (profile_key, user_id, handedness, updated_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(profile_key) DO UPDATE SET
+               user_id = excluded.user_id,
+               handedness = excluded.handedness,
+               updated_at = excluded.updated_at`
+          ).run(guestKey, numericUserId, normalizedHandedness, nowIso);
+        }
+      }
+    }
+  });
+
+  return getServerProfileConfig({ userId: numericUserId, profileKey });
 }
 
 export default db;

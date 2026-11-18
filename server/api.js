@@ -20,8 +20,12 @@ import db, {
   UPLOADS_DIR,
   computeVerificationHash,
   ensureNewSubcategoryMaterialSeeds,
+  getServerProfileConfig,
   hashPassword,
   initDb,
+  isValidHandednessInput,
+  normalizeHandednessConfig,
+  saveServerProfileConfig,
   seedIfEmpty,
   verifyPassword,
 } from './db.js';
@@ -468,6 +472,8 @@ export function formatUserPayload(u) {
     waistCm: u.waist_cm !== null && u.waist_cm !== undefined ? Number(u.waist_cm) : null,
     hipCm: u.hip_cm !== null && u.hip_cm !== undefined ? Number(u.hip_cm) : null,
     headCm: u.head_cm !== null && u.head_cm !== undefined ? Number(u.head_cm) : null,
+    handedness: normalizeHandednessConfig(u.handedness, 'right'),
+    dominantHand: normalizeHandednessConfig(u.handedness, 'right'),
     resolvedBody,
   };
 }
@@ -503,6 +509,7 @@ function createGuestDemoUser() {
     height_cm: 175,
     weight_kg: 68,
     body_shape: 'standard_balanced',
+    handedness: 'right',
   };
   return { row: demoRow, payload: { ...formatUserPayload(demoRow), isSampleDemo: true } };
 }
@@ -676,15 +683,23 @@ function requireAuth(req, res, next) {
 
   // Unauthenticated Sample Closet Demo Mode: ONLY allow 'sample' (never 'husband'/'wife'!)
   const isDemoHeader = req.headers['x-demo-mode'] === 'sample';
+  const hasProfileKeyHeader = Boolean(String(req.headers['x-profile-key'] || '').trim());
   const closetQuery = String(req.query?.closet || '').trim();
   const isReadOnlyAnalyze =
     req.method === 'POST' &&
     isDemoHeader &&
     (req.path === '/shopping/analyze' || req.path === '/garments/analyze');
+  const isProfileConfigRoute =
+    req.path === '/profile/config' &&
+    (req.method === 'GET' ||
+      req.method === 'PUT' ||
+      req.method === 'POST' ||
+      req.method === 'PATCH');
 
   if (
     (req.method === 'GET' && (isDemoHeader || closetQuery === 'sample')) ||
-    isReadOnlyAnalyze
+    isReadOnlyAnalyze ||
+    (isProfileConfigRoute && (isDemoHeader || hasProfileKeyHeader || req.method === 'GET'))
   ) {
     const guest = createGuestDemoUser();
     req.userRow = guest.row;
@@ -1915,6 +1930,76 @@ export function createApiRouter(options = {}) {
     res.json({ user: req.user });
   });
 
+  // Server-side Profile Configuration (stores handedness, default: 'right')
+  router.get('/profile/config', (req, res) => {
+    const readRate = checkRateLimit(
+      `profilecfg:read:${req.user?.id || req.ip || 'local'}`,
+      MAX_ANALYTICS_READS_PER_WINDOW
+    );
+    if (!readRate.allowed) {
+      return res.status(429).json({
+        error: `프로필 설정 조회 요청이 너무 많습니다. ${readRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: readRate.retryAfterSec,
+      });
+    }
+
+    const userId =
+      req.user && !req.isSampleGuest && !req.isSampleDemo && req.user.id > 0 ? req.user.id : null;
+    const rawProfileKey = req.headers['x-profile-key'] || req.query?.profileKey || null;
+    const config = getServerProfileConfig({ userId, profileKey: rawProfileKey });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, config });
+  });
+
+  const handleSaveProfileConfig = (req, res) => {
+    const writeRate = checkRateLimit(
+      `profilecfg:write:${req.user?.id || req.ip || 'local'}`,
+      MAX_GARMENT_WRITES_PER_WINDOW
+    );
+    if (!writeRate.allowed) {
+      return res.status(429).json({
+        error: `프로필 설정 저장 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: writeRate.retryAfterSec,
+      });
+    }
+
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ error: '유효한 JSON 요청 본문이 필요합니다.' });
+    }
+
+    const rawHandedness =
+      body.handedness ?? body.dominantHand ?? body.dominant_hand;
+    if (rawHandedness === undefined || rawHandedness === null || rawHandedness === '') {
+      return res.status(400).json({
+        error: "손잡이 설정(handedness: 'right' | 'left') 값이 필요합니다.",
+      });
+    }
+    if (!isValidHandednessInput(rawHandedness)) {
+      return res.status(400).json({
+        error: "유효하지 않은 손잡이(handedness) 설정입니다. ('right' 또는 'left'만 허용)",
+      });
+    }
+
+    const userId =
+      req.user && !req.isSampleGuest && !req.isSampleDemo && req.user.id > 0 ? req.user.id : null;
+    const rawProfileKey =
+      req.headers['x-profile-key'] || body.profileKey || body.profile_key || null;
+    const config = saveServerProfileConfig({
+      userId,
+      profileKey: rawProfileKey,
+      handedness: rawHandedness,
+    });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, config });
+  };
+
+  router.put('/profile/config', handleSaveProfileConfig);
+  router.post('/profile/config', handleSaveProfileConfig);
+  router.patch('/profile/config', handleSaveProfileConfig);
+
   // 4c. Immediate Account & Personal Data Permanent Purge (Requirement 10.a: App Store & Play Store compliance)
   router.delete('/auth/account', requireStrictUserAuth, (req, res) => {
     if (req.body?.confirmPermanentDelete !== true) {
@@ -1972,6 +2057,7 @@ export function createApiRouter(options = {}) {
         db.prepare('DELETE FROM shopping_checks WHERE closet_owner = ?').run(closetKey);
         db.prepare('DELETE FROM packing_lists WHERE closet_owner = ?').run(closetKey);
       }
+      db.prepare('DELETE FROM profile_configs WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
@@ -2138,6 +2224,19 @@ export function createApiRouter(options = {}) {
     const headCm = parseOptNum(body.head_cm ?? body.headCm, 48, 66);
     const regenerateWardrobe = Boolean(body.regenerate_wardrobe || body.regenerateWardrobe);
 
+    const rawHandednessInput =
+      body.handedness ?? body.dominantHand ?? body.dominant_hand;
+    if (
+      rawHandednessInput !== undefined &&
+      rawHandednessInput !== null &&
+      rawHandednessInput !== '' &&
+      !isValidHandednessInput(rawHandednessInput)
+    ) {
+      return res.status(400).json({
+        error: "유효하지 않은 손잡이(handedness) 설정입니다. ('right' 또는 'left'만 허용)",
+      });
+    }
+
     const ownedUploadsToRemove = [];
     const { updated, generatedWardrobe } = db.transaction(() => {
       const prevRow = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) || {};
@@ -2167,6 +2266,12 @@ export function createApiRouter(options = {}) {
       const nextWaist = waistCm !== null ? waistCm : (prevRow.waist_cm ?? null);
       const nextHip = hipCm !== null ? hipCm : (prevRow.hip_cm ?? null);
       const nextHead = headCm !== null ? headCm : (prevRow.head_cm ?? null);
+      const nextHandedness =
+        rawHandednessInput !== undefined &&
+        rawHandednessInput !== null &&
+        rawHandednessInput !== ''
+          ? normalizeHandednessConfig(rawHandednessInput, 'right')
+          : normalizeHandednessConfig(prevRow.handedness, 'right');
 
       db.prepare(`
         UPDATE users
@@ -2184,6 +2289,7 @@ export function createApiRouter(options = {}) {
             waist_cm = ?,
             hip_cm = ?,
             head_cm = ?,
+            handedness = ?,
             profile_completed = 1
         WHERE id = ?
       `).run(
@@ -2201,8 +2307,15 @@ export function createApiRouter(options = {}) {
         nextWaist,
         nextHip,
         nextHead,
+        nextHandedness,
         req.user.id
       );
+
+      saveServerProfileConfig({
+        userId: req.user.id,
+        profileKey: req.headers['x-profile-key'] || body.profileKey || null,
+        handedness: nextHandedness,
+      });
 
       const userAfter = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
       const closetKey = userAfter.default_closet;

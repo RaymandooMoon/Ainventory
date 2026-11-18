@@ -128,7 +128,8 @@ function requireVtonSessionOrSample(req, res, next) {
              u.weight_kg,
              u.personal_color,
              u.skin_tone_hex,
-             u.body_shape
+             u.body_shape,
+             u.handedness
            FROM sessions s
            JOIN users u ON u.id = s.user_id
            WHERE s.token = ?`
@@ -293,6 +294,7 @@ export function createVtonRouter() {
           heightCm: req.vtonAuth.userRow.height_cm ?? undefined,
           weightKg: req.vtonAuth.userRow.weight_kg ?? undefined,
           bodyShape: req.vtonAuth.userRow.body_shape ?? undefined,
+          handedness: req.vtonAuth.userRow.handedness ?? undefined,
         }
       : {};
 
@@ -401,6 +403,16 @@ export function createVtonRouter() {
       geminiApiKey: String(
         req.headers?.['x-gemini-api-key'] || payload.geminiApiKey || ''
       ).trim(),
+      userId: req.vtonAuth.userRow?.id ?? null,
+      profileKey:
+        String(
+          req.headers?.['x-profile-key'] ||
+            payload.profileKey ||
+            payload.profile_key ||
+            rawClientProfile.profileKey ||
+            ''
+        ).trim() || null,
+      handedness: payload.handedness ?? payload.dominant_hand ?? undefined,
       authorizedClosets: req.vtonAuth.authorizedClosets,
       isSampleGuest: req.vtonAuth.isSampleGuest,
       isAuthenticated: req.vtonAuth.isAuthenticated,

@@ -4,11 +4,17 @@ import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
 import { BottomTabBar } from './components/ui/BottomTabBar.tsx';
 import {
+  getAvatarSpecSnapshot,
+  normalizeDominantHand,
+  patchAvatarSpec,
+} from './services/avatarSpecStore.ts';
+import {
   deriveBodySpecFromUser,
   getDefaultBodySpec,
   getStoredBodySpec,
   saveStoredBodySpec,
 } from './services/parametricAvatar3D.ts';
+import { fetchServerProfileConfig } from './services/profileConfigService.ts';
 import {
   getStoredSkinProfile,
   saveStoredSkinProfile,
@@ -57,6 +63,8 @@ const DEFAULT_LOCAL_USER = {
   closetName: 'MY WARDROBE',
   isSampleDemo: true,
   profileCompleted: true,
+  handedness: 'right',
+  dominantHand: 'right',
 };
 
 const FLOATING_TABS = [
@@ -158,6 +166,15 @@ export default function App() {
       deriveBodySpecFromUser(accountUser, getStoredBodySpec())
     );
     setBodySpec(syncedBody);
+
+    if (accountUser.handedness || accountUser.dominantHand) {
+      patchAvatarSpec({
+        dominantHand: normalizeDominantHand(
+          accountUser.handedness ?? accountUser.dominantHand,
+          'right'
+        ),
+      });
+    }
   }, []);
 
   // Native shell + theme + nav bar opacity + offline sync listener
@@ -225,6 +242,32 @@ export default function App() {
       cancelled = true;
     };
   }, [hasInitialToken, syncAccountToAvatar]);
+
+  // Hydrate server-side profile configuration (`handedness`, default: `'right'`)
+  useEffect(() => {
+    if (!authReady) return undefined;
+    let cancelled = false;
+    fetchServerProfileConfig(getAvatarSpecSnapshot().spec.dominantHand)
+      .then((cfg) => {
+        if (cancelled) return;
+        if (cfg.hasStoredRecord && cfg.handedness !== getAvatarSpecSnapshot().spec.dominantHand) {
+          patchAvatarSpec({ dominantHand: cfg.handedness });
+        }
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                handedness: cfg.handedness,
+                dominantHand: cfg.handedness,
+              }
+            : prev
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.id]);
 
   const activeCloset = user?.defaultCloset || 'sample';
 
@@ -312,6 +355,7 @@ export default function App() {
               personal_color: saved.personalColor,
               skin_tone_hex: saved.skinToneHex,
               gender: lockedGender,
+              handedness: getAvatarSpecSnapshot().spec.dominantHand,
             }),
           });
         } catch (err) {
@@ -370,6 +414,7 @@ export default function App() {
               height_cm: savedBody.heightCm,
               weight_kg: savedBody.weightKg,
               body_shape: savedBody.bodyShape,
+              handedness: getAvatarSpecSnapshot().spec.dominantHand,
             }),
           });
         } catch (err) {

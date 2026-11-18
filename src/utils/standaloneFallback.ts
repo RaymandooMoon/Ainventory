@@ -16,12 +16,19 @@ import {
 } from '../shared/garmentTaxonomy.js';
 import { LAYERED_10_CATALOG } from '../shared/layered10Catalog.js';
 import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
+import {
+  isValidHandednessToken,
+  normalizeHandedness,
+  resolveBagCarryAnatomy,
+} from '../services/vtonQualityControl.ts';
 import { readCachedResponse } from './offlineSync.ts';
 
 const LOCAL_USERS_KEY = 'ainventory_standalone_users_v2';
 const LOCAL_OTP_KEY = 'ainventory_standalone_otp_v1';
 const LOCAL_SESSION_KEY = 'ainventory_standalone_session_v1';
 const LOCAL_CUSTOM_GARMENTS_KEY = 'ainventory_standalone_custom_garments_v1';
+const LOCAL_PROFILE_HANDEDNESS_KEY = 'ainventory_server_handedness_v1';
+const LOCAL_PROFILE_SAVED_KEY = 'ainventory_standalone_profile_saved_v1';
 
 interface StoredStandaloneUser extends UserProfile {
   passwordHash?: string;
@@ -751,7 +758,7 @@ function computeStandaloneShoppingAnalysis(
 
 export async function handleStandaloneApiFallback(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
 ): Promise<Record<string, unknown>> {
   const method = String(options.method || 'GET').toUpperCase();
   const body = parseBody(options.body);
@@ -973,6 +980,17 @@ export async function handleStandaloneApiFallback(
     const u = getActiveSessionUser() || sanitizeUser(DEFAULT_STANDALONE_USERS[0])!;
     const pcKey = String(body.personal_color || body.personalColor || u.personalColor || 'autumn_warm');
     const pcLabels = getPersonalColorLabels(pcKey);
+    const rawHandedness = body.handedness ?? body.dominant_hand ?? body.dominantHand;
+    if (rawHandedness !== undefined && rawHandedness !== null && !isValidHandednessToken(rawHandedness)) {
+      throw createHttpError(
+        "handedness must be 'right' or 'left' (or 'right-handed' / 'left-handed').",
+        400
+      );
+    }
+    const resolvedHandedness =
+      rawHandedness !== undefined && rawHandedness !== null
+        ? normalizeHandedness(rawHandedness, 'right')
+        : normalizeHandedness(u.handedness ?? u.dominantHand, 'right');
     const updated: UserProfile = {
       ...u,
       ageGroup: String(body.age_group || body.ageGroup || u.ageGroup || '30s'),
@@ -991,10 +1009,98 @@ export async function handleStandaloneApiFallback(
       personalColorLabelEn: pcLabels.en,
       skinToneHex: String(body.skin_tone_hex || body.skinToneHex || u.skinToneHex || '#E2C6AE'),
       bodyShape: String(body.body_shape || body.bodyShape || u.bodyShape || 'standard_balanced'),
+      handedness: resolvedHandedness,
+      dominantHand: resolvedHandedness,
       profileCompleted: true,
     };
     setActiveSessionUser(updated);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(LOCAL_PROFILE_HANDEDNESS_KEY, resolvedHandedness);
+        localStorage.setItem(LOCAL_PROFILE_SAVED_KEY, '1');
+      }
+    } catch {
+      // ignore storage write error
+    }
     return { ok: true, user: updated, generatedWardrobe: null };
+  }
+
+  if (pathname === '/profile/config') {
+    const sessionUser = getActiveSessionUser();
+    const headerKey = String(
+      options?.headers?.['X-Profile-Key'] ||
+        options?.headers?.['x-profile-key'] ||
+        params.get('profileKey') ||
+        body.profileKey ||
+        (sessionUser ? `user:${sessionUser.id}` : 'default')
+    );
+    if (method === 'GET') {
+      let storedHand = sessionUser?.handedness || sessionUser?.dominantHand || null;
+      let hasStoredRecord = false;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const fromStorage = localStorage.getItem(LOCAL_PROFILE_HANDEDNESS_KEY);
+          if (fromStorage) storedHand = fromStorage;
+          hasStoredRecord = localStorage.getItem(LOCAL_PROFILE_SAVED_KEY) === '1';
+        }
+      } catch {
+        // ignore storage read error
+      }
+      const handedness = normalizeHandedness(storedHand, 'right');
+      const anatomy = resolveBagCarryAnatomy(handedness);
+      return {
+        ok: true,
+        config: {
+          profileKey: headerKey,
+          userId: sessionUser?.id ?? null,
+          handedness,
+          handednessLabel: handedness === 'left' ? 'left-handed' : 'right-handed',
+          bagCarrySide: anatomy.carrySide,
+          mirrorBagAsset: handedness === 'left',
+          hasStoredRecord,
+          updatedAt: hasStoredRecord ? new Date().toISOString() : null,
+        },
+      };
+    }
+    if (method === 'PUT' || method === 'POST' || method === 'PATCH') {
+      const rawHandedness = body.handedness ?? body.dominantHand ?? body.dominant_hand;
+      if (!isValidHandednessToken(rawHandedness)) {
+        throw createHttpError(
+          "handedness must be 'right' or 'left' (or 'right-handed' / 'left-handed').",
+          400
+        );
+      }
+      const handedness = normalizeHandedness(rawHandedness, 'right');
+      const anatomy = resolveBagCarryAnatomy(handedness);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(LOCAL_PROFILE_HANDEDNESS_KEY, handedness);
+          localStorage.setItem(LOCAL_PROFILE_SAVED_KEY, '1');
+        }
+      } catch {
+        // ignore storage write error
+      }
+      if (sessionUser) {
+        setActiveSessionUser({
+          ...sessionUser,
+          handedness,
+          dominantHand: handedness,
+        });
+      }
+      return {
+        ok: true,
+        config: {
+          profileKey: headerKey,
+          userId: sessionUser?.id ?? null,
+          handedness,
+          handednessLabel: handedness === 'left' ? 'left-handed' : 'right-handed',
+          bagCarrySide: anatomy.carrySide,
+          mirrorBagAsset: handedness === 'left',
+          hasStoredRecord: true,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    }
   }
 
   if (pathname === '/auth/account' && method === 'DELETE') {

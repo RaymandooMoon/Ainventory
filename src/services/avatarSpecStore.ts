@@ -293,6 +293,8 @@ export interface LegacyAvatarBridgeInput {
     faceImageUrl?: string | null;
     avatarUrl?: string | null;
     photoUrl?: string | null;
+    handedness?: string | null;
+    dominantHand?: string | null;
     isSampleDemo?: boolean;
   } | null;
   personReferenceUrl?: string | null;
@@ -992,8 +994,28 @@ export function normalizeDominantHand(
   const s = String(raw || '')
     .trim()
     .toLowerCase();
-  if (s === 'left' || s === 'l' || s === '왼손' || s === '왼손잡이') return 'left';
-  if (s === 'right' || s === 'r' || s === '오른손' || s === '오른손잡이') return 'right';
+  if (
+    s === 'left' ||
+    s === 'left-handed' ||
+    s === 'left_handed' ||
+    s === 'lefthanded' ||
+    s === 'l' ||
+    s === '왼손' ||
+    s === '왼손잡이'
+  ) {
+    return 'left';
+  }
+  if (
+    s === 'right' ||
+    s === 'right-handed' ||
+    s === 'right_handed' ||
+    s === 'righthanded' ||
+    s === 'r' ||
+    s === '오른손' ||
+    s === '오른손잡이'
+  ) {
+    return 'right';
+  }
   return fallback;
 }
 
@@ -2357,11 +2379,16 @@ export function bridgeLegacyPropsToAvatarSpec(
     sanitizePhotoUrl(user?.photoUrl);
 
   const facePhotoUrl = candidatePhoto || stored.appearance.facePhotoUrl || null;
+  const dominantHand =
+    !hasPersistedV2Spec && (user?.handedness || user?.dominantHand)
+      ? normalizeDominantHand(user.handedness ?? user.dominantHand, stored.dominantHand)
+      : stored.dominantHand;
 
   const mergedSpec = sanitizeAvatarSpec({
     ...stored,
     framePreset,
     archetypePreset,
+    dominantHand,
     anthropometrics: {
       ...stored.anthropometrics,
       heightCm,

@@ -221,6 +221,8 @@ export interface UserProfile {
   waistCm?: number | null;
   hipCm?: number | null;
   headCm?: number | null;
+  handedness?: 'right' | 'left' | string | null;
+  dominantHand?: 'right' | 'left' | string | null;
 }
 
 export interface GarmentRecord {

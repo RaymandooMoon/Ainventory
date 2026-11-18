@@ -6,6 +6,242 @@ const MAX_QC_LOG_ENTRIES = 30;
 
 export type BagViewerScreenPlacement = 'screen-left' | 'screen-right' | 'far-occluded';
 
+const LEFT_HANDED_TOKENS = new Set([
+  'left',
+  'left-handed',
+  'left_handed',
+  'lefthanded',
+  'l',
+  '왼손',
+  '왼손잡이',
+]);
+
+const RIGHT_HANDED_TOKENS = new Set([
+  'right',
+  'right-handed',
+  'right_handed',
+  'righthanded',
+  'r',
+  '오른손',
+  '오른손잡이',
+]);
+
+/**
+ * Normalizes any handedness token (`'right'`, `'left'`, `'right-handed'`, `'left-handed'`, Korean labels)
+ * to canonical `'right' | 'left'`, defaulting to `'right'`.
+ */
+export function normalizeHandedness(
+  raw?: unknown,
+  fallback: DominantHand = 'right'
+): DominantHand {
+  if (raw === null || raw === undefined || raw === '') {
+    return fallback;
+  }
+  const token = String(raw).trim().toLowerCase();
+  if (!token) return fallback;
+  if (LEFT_HANDED_TOKENS.has(token)) return 'left';
+  if (RIGHT_HANDED_TOKENS.has(token)) return 'right';
+  return fallback;
+}
+
+/**
+ * Validates whether an incoming API boundary value is an accepted handedness string.
+ */
+export function isValidHandednessToken(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false;
+  const token = raw.trim().toLowerCase();
+  return LEFT_HANDED_TOKENS.has(token) || RIGHT_HANDED_TOKENS.has(token);
+}
+
+const BAG_KEYWORD_RE =
+  /bag|tote|crossbody|briefcase|backpack|clutch|shoulder|messenger|duffel|satchel|pouch|handbag|가방|토트|크로스|브리프케이스|서류가방|백팩|숄더|클러치|파우치|핸드백|보스턴/i;
+const NON_BAG_ACCESSORY_RE =
+  /umbrella|parasol|watch|eyewear|sunglass|glasses|glove|belt|scarf|muffler|tie|hat|cap|beanie|earring|necklace|bracelet|ring|brooch|우산|양산|시계|안경|선글라스|장갑|벨트|머플러|스카프|넥타이|모자|비니|귀걸이|목걸이|팔찌|반지|브로치/i;
+
+/**
+ * Identifies whether a VTON slot/garment represents a carried bag asset whose position
+ * and orientation must follow the user's handedness preference.
+ */
+export function isBagGarmentItem(
+  item?: {
+    slot?: string | null;
+    slotKey?: string | null;
+    category?: string | null;
+    subcategory?: string | null;
+    name?: string | null;
+  } | null
+): boolean {
+  if (!item) return false;
+  const slot = String(item.slot ?? item.slotKey ?? '')
+    .trim()
+    .toLowerCase();
+  const category = String(item.category ?? '')
+    .trim()
+    .toLowerCase();
+  const subcategory = String(item.subcategory ?? '')
+    .trim()
+    .toLowerCase();
+  const name = String(item.name ?? '').trim();
+
+  if (category === 'bag' || slot === 'bag') return true;
+  const combined = `${category} ${subcategory} ${name}`;
+  if (BAG_KEYWORD_RE.test(combined)) return true;
+  if (slot === 'accessory' && !NON_BAG_ACCESSORY_RE.test(combined)) {
+    return true;
+  }
+  return false;
+}
+
+export interface BagAssetRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface BagAssetPlacementBox {
+  handedness: DominantHand;
+  carrySide: 'left' | 'right';
+  mirrored: boolean;
+  visible: boolean;
+  screenSide: BagViewerScreenPlacement;
+  screenSign: -1 | 0 | 1;
+  centerOffsetFromAxis: number;
+  bagCenterX: number;
+  strapRect: BagAssetRect | null;
+  bagRect: BagAssetRect | null;
+}
+
+/**
+ * Computes the exact camera-space bag asset bounding box for a given angle (`0..225°`)
+ * and mirrors the bag asset position horizontally across `cx` when `'left'` (`'left-handed'`)
+ * is selected so the bag consistently renders on the user's preferred side:
+ * - `'right'` (default): wearer's ANATOMICAL LEFT side (`screen-right` at `0°/45°`, occluded behind torso at `90°`, `screen-left` at `135°/180°/225°`).
+ * - `'left'` (`'left-handed'`): mirrored across `cx` onto wearer's ANATOMICAL RIGHT side (`screen-left` at `0°/45°`, foreground visible at `90°`, `screen-right` at `135°/180°`, occluded at `225°`).
+ */
+export function computeBagAssetPlacementBox(params: {
+  angleDeg: 0 | 45 | 90 | 135 | 180 | 225;
+  handedness?: unknown;
+  cx: number;
+  shoulderY: number;
+  waistY: number;
+  shoulderW: number;
+  hipW: number;
+  headH: number;
+  widthCompact?: number;
+}): BagAssetPlacementBox {
+  const handedness = normalizeHandedness(params.handedness, 'right');
+  const anatomy = resolveBagCarryAnatomy(handedness);
+  const mirrored = handedness === 'left';
+  const screenSide = anatomy.perAngleScreenSide[params.angleDeg];
+  const widthCompact = params.widthCompact ?? 0.85;
+  const bagW = Math.max(8, params.headH * 0.64 * widthCompact);
+  const bagH = Math.max(12, params.headH * 0.86);
+  const bagTopY = params.waistY + params.headH * 0.16;
+
+  if (screenSide === 'far-occluded') {
+    return {
+      handedness,
+      carrySide: anatomy.carrySide,
+      mirrored,
+      visible: false,
+      screenSide,
+      screenSign: 0,
+      centerOffsetFromAxis: 0,
+      bagCenterX: params.cx,
+      strapRect: null,
+      bagRect: null,
+    };
+  }
+
+  // At 90° right profile (facing right) when left-handed, the bag rests in foreground near cx + slight hip offset
+  if (params.angleDeg === 90) {
+    const profileOffset = params.hipW * 0.12;
+    const bagCenterX = params.cx + profileOffset;
+    const strapW = Math.max(4, Math.round(bagW * 0.22));
+    return {
+      handedness,
+      carrySide: anatomy.carrySide,
+      mirrored,
+      visible: true,
+      screenSide,
+      screenSign: 1,
+      centerOffsetFromAxis: profileOffset,
+      bagCenterX,
+      strapRect: {
+        x: Math.round(bagCenterX - strapW * 0.5),
+        y: Math.round(params.shoulderY + 2),
+        width: strapW,
+        height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
+      },
+      bagRect: {
+        x: Math.round(bagCenterX - bagW * 0.5),
+        y: Math.round(bagTopY),
+        width: Math.round(bagW),
+        height: Math.round(bagH),
+      },
+    };
+  }
+
+  const screenSign: -1 | 1 = screenSide === 'screen-left' ? -1 : 1;
+  const lateralOffset = params.hipW * 0.56 + bagW * 0.28;
+  const centerOffsetFromAxis = screenSign * lateralOffset;
+  const bagCenterX = params.cx + centerOffsetFromAxis;
+  const strapShoulderX = params.cx + screenSign * (params.shoulderW * 0.36);
+
+  return {
+    handedness,
+    carrySide: anatomy.carrySide,
+    mirrored,
+    visible: true,
+    screenSide,
+    screenSign,
+    centerOffsetFromAxis,
+    bagCenterX,
+    strapRect: {
+      x: Math.round(Math.min(strapShoulderX, bagCenterX) - 2),
+      y: Math.round(params.shoulderY + 2),
+      width: Math.max(4, Math.round(Math.abs(bagCenterX - strapShoulderX) * 0.24)),
+      height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
+    },
+    bagRect: {
+      x: Math.round(bagCenterX - bagW * 0.5),
+      y: Math.round(bagTopY),
+      width: Math.round(bagW),
+      height: Math.round(bagH),
+    },
+  };
+}
+
+/**
+ * Pure RGBA pixel-buffer horizontal flip (`x -> width - 1 - x`) used to mirror
+ * bag reference assets when `'left-handed'` (`'left'`) is selected.
+ */
+export function mirrorRgbaPixelBufferHorizontally(
+  pixels: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number
+): Uint8ClampedArray {
+  const w = Math.max(0, Math.floor(width));
+  const h = Math.max(0, Math.floor(height));
+  const out = new Uint8ClampedArray(w * h * 4);
+  if (w === 0 || h === 0 || pixels.length < w * h * 4) {
+    return out;
+  }
+  for (let y = 0; y < h; y += 1) {
+    const rowBase = y * w * 4;
+    for (let x = 0; x < w; x += 1) {
+      const srcIdx = rowBase + x * 4;
+      const dstIdx = rowBase + (w - 1 - x) * 4;
+      out[dstIdx] = pixels[srcIdx];
+      out[dstIdx + 1] = pixels[srcIdx + 1];
+      out[dstIdx + 2] = pixels[srcIdx + 2];
+      out[dstIdx + 3] = pixels[srcIdx + 3];
+    }
+  }
+  return out;
+}
+
 export interface BagCarryAnatomyDirective {
   dominantHand: DominantHand;
   carrySide: 'left' | 'right';
@@ -29,12 +265,7 @@ export interface BagCarryAnatomyDirective {
 export function resolveBagCarryAnatomy(
   rawDominantHand?: unknown
 ): BagCarryAnatomyDirective {
-  const normalized: DominantHand =
-    String(rawDominantHand || '')
-      .trim()
-      .toLowerCase() === 'left'
-      ? 'left'
-      : 'right';
+  const normalized: DominantHand = normalizeHandedness(rawDominantHand, 'right');
 
   if (normalized === 'left') {
     const perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement> = {

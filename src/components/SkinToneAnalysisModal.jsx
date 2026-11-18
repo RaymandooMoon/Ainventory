@@ -38,6 +38,7 @@ import {
   validateHeightCmInput,
 } from '../services/avatarSpecStore.ts';
 import { findClosestMstFromHex, getMstSwatch } from '../services/monkSkinTone.ts';
+import { saveServerHandednessConfig } from '../services/profileConfigService.ts';
 import {
   LIGHTING_CALIBRATION_MODES,
   SEASON_BEST_SWATCHES,
@@ -993,7 +994,7 @@ function ProfileModalContent({
       setAvatarSpec(cleanedSpec, { throwOnStorageError: true });
       setStoredVtonStylePreference(resolvedStyleToSave);
 
-      const pendingTasks = [];
+      const pendingTasks = [saveServerHandednessConfig(cleanedSpec.dominantHand)];
       if (primarySource === 'body') {
         if (skinChanged) {
           pendingTasks.push(
