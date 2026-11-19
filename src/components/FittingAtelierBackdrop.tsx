@@ -162,12 +162,13 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   ]);
 
   const fixtureEmitters: readonly StageFixtureEmitter[] = useMemo(() => {
-    if (resolvedOutdoor) return [];
+    if (resolvedOutdoor && !bgItem.lightingRig?.isNeonScene) return [];
     return bgItem.lightingRig?.fixtureEmitters || [];
   }, [resolvedOutdoor, bgItem.lightingRig]);
 
+  const isNeonScene = Boolean(lightingFrame.isNeonScene || bgItem.lightingRig?.isNeonScene);
+
   const showFixtureLights =
-    !resolvedOutdoor &&
     fixtureEmitters.length > 0 &&
     lightingFrame.fixtureOnFactor > 0.01 &&
     coverFrame.width > 0 &&
@@ -186,6 +187,10 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       '--stage-backdrop-brightness',
       lightingFrame.backdropBrightness.toFixed(3)
     );
+    el.style.setProperty(
+      '--stage-backdrop-saturate',
+      lightingFrame.backdropSaturate.toFixed(3)
+    );
     el.style.setProperty('--stage-light-tint', lightingFrame.backdropTintRgba);
     el.style.setProperty('--stage-night-fixture-glow', lightingFrame.nightFixtureGlowCss);
     el.style.setProperty('--stage-night-dim', lightingFrame.backdropNightDim.toFixed(3));
@@ -193,6 +198,146 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   }, [lightingFrame]);
 
   const hasCoverBox = coverFrame.width > 0 && coverFrame.height > 0;
+
+  const preparedEmitters = useMemo(() => {
+    if (!showFixtureLights) return [];
+    return fixtureEmitters.map((emitter) => {
+      const isNeonEmitter = emitter.kind === 'neon-tube' || emitter.kind === 'neon-sign';
+      let activeHex = lightingFrame.fixtureHex;
+      if (typeof emitter.kelvinHex === 'number') {
+        if (lightingFrame.preset === 'auto') {
+          activeHex = emitter.kelvinHex;
+        } else if (isNeonEmitter) {
+          // Keep distinct multi-color neon signage identity while tinting 38% toward user preset
+          const rA = (emitter.kelvinHex >> 16) & 255;
+          const gA = (emitter.kelvinHex >> 8) & 255;
+          const bA = emitter.kelvinHex & 255;
+          const rB = (lightingFrame.fixtureHex >> 16) & 255;
+          const gB = (lightingFrame.fixtureHex >> 8) & 255;
+          const bB = lightingFrame.fixtureHex & 255;
+          activeHex =
+            (Math.round(rA * 0.62 + rB * 0.38) << 16) |
+            (Math.round(gA * 0.62 + gB * 0.38) << 8) |
+            Math.round(bA * 0.62 + bB * 0.38);
+        }
+      }
+      const fxRgb = hexToRgbCss(activeHex);
+      const fxCoreRgb = mixWithWarmWhiteRgb(activeHex, isNeonEmitter ? 0.78 : 0.68);
+      const power = Math.max(0, lightingFrame.fixtureOnFactor * emitter.intensity);
+      // Smooth 0%..100% visibility: unmistakable bright incandescent/neon core even at 25%..50%, vivid at 100%
+      const normPower = Math.min(1.3, power);
+      const coreOpacity = Math.min(1, Math.max(0.72, 0.56 + normPower * 0.4));
+      const glowOpacity = Math.min(1, Math.max(0.38, 0.14 + normPower * 0.78));
+      const glowScale = Math.min(1.26, Math.max(0.68, 0.62 + normPower * 0.48));
+      const glowBrightness = Math.min(1.28, Math.max(0.84, 0.76 + normPower * 0.4));
+
+      const isLinear =
+        (emitter.kind === 'cove-strip' ||
+          emitter.kind === 'bar-sconce' ||
+          emitter.kind === 'neon-tube') &&
+        typeof emitter.x2Pct === 'number' &&
+        typeof emitter.y2Pct === 'number';
+
+      if (isLinear) {
+        const x1Px = (emitter.xPct / 100) * coverFrame.width;
+        const y1Px = (emitter.yPct / 100) * coverFrame.height;
+        const x2Px = ((emitter.x2Pct as number) / 100) * coverFrame.width;
+        const y2Px = ((emitter.y2Pct as number) / 100) * coverFrame.height;
+        const dx = x2Px - x1Px;
+        const dy = y2Px - y1Px;
+        const lenPx = Math.hypot(dx, dy);
+        const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        const bandH = Math.max(12, (emitter.radiusPct / 100) * coverFrame.width * 1.35);
+        const washH = Math.max(
+          bandH * 1.5,
+          ((emitter.washSpanPct || 16) / 100) * coverFrame.height * glowScale
+        );
+        return {
+          emitter,
+          isLinear: true as const,
+          coreOpacity,
+          glowOpacity,
+          baseStyle: {
+            left: `${x1Px.toFixed(1)}px`,
+            top: `${y1Px.toFixed(1)}px`,
+            width: `${lenPx.toFixed(1)}px`,
+            height: `${bandH.toFixed(1)}px`,
+            transform: `translate3d(0, -50%, 0) rotate(${angleDeg.toFixed(2)}deg)`,
+            ['--fx-rgb' as string]: fxRgb,
+            ['--fx-core-rgb' as string]: fxCoreRgb,
+            ['--fx-wash-h' as string]: `${washH.toFixed(1)}px`,
+            ['--fx-glow-scale' as string]: glowScale.toFixed(3),
+            ['--fx-glow-brightness' as string]: glowBrightness.toFixed(3),
+          },
+        };
+      }
+
+      const radiusPx = Math.max(16, (emitter.radiusPct / 100) * coverFrame.width);
+      const washPx = Math.max(
+        radiusPx * 1.4,
+        ((emitter.washSpanPct || 18) / 100) * coverFrame.height * glowScale
+      );
+      const shadeWPx = Math.max(8, ((emitter.shadeWidthPct ?? 2.35) / 100) * coverFrame.width);
+      const shadeHPx = Math.max(10, ((emitter.shadeHeightPct ?? 2.4) / 100) * coverFrame.height);
+      const tiltDeg = emitter.tiltDeg || 0;
+
+      return {
+        emitter,
+        isLinear: false as const,
+        coreOpacity,
+        glowOpacity,
+        baseStyle: {
+          left: `${emitter.xPct}%`,
+          top: `${emitter.yPct}%`,
+          width: `${(radiusPx * 2).toFixed(1)}px`,
+          height: `${(radiusPx * 2).toFixed(1)}px`,
+          ['--fx-rgb' as string]: fxRgb,
+          ['--fx-core-rgb' as string]: fxCoreRgb,
+          ['--fx-radius-px' as string]: `${(radiusPx * glowScale).toFixed(1)}px`,
+          ['--fx-wash-px' as string]: `${washPx.toFixed(1)}px`,
+          ['--fx-shade-w' as string]: `${shadeWPx.toFixed(2)}px`,
+          ['--fx-shade-h' as string]: `${shadeHPx.toFixed(2)}px`,
+          ['--fx-tilt-deg' as string]: `${tiltDeg}deg`,
+          ['--fx-glow-scale' as string]: glowScale.toFixed(3),
+          ['--fx-glow-brightness' as string]: glowBrightness.toFixed(3),
+        },
+      };
+    });
+  }, [
+    showFixtureLights,
+    fixtureEmitters,
+    lightingFrame.fixtureHex,
+    lightingFrame.preset,
+    lightingFrame.fixtureOnFactor,
+    coverFrame.width,
+    coverFrame.height,
+  ]);
+
+  const rigTransformStyle = useMemo(
+    () => ({
+      transformOrigin: stageFraming.backdropTransformOrigin,
+      transform: `translate3d(0, ${stageFraming.backdropTranslateYPct.toFixed(2)}%, 0) scale(${stageFraming.backdropScale.toFixed(3)})`,
+      transition: 'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1)',
+    }),
+    [
+      stageFraming.backdropTransformOrigin,
+      stageFraming.backdropTranslateYPct,
+      stageFraming.backdropScale,
+    ]
+  );
+
+  const coverBoxStyle = useMemo(
+    () =>
+      hasCoverBox
+        ? {
+            left: `${coverFrame.left}px`,
+            top: `${coverFrame.top}px`,
+            width: `${coverFrame.width}px`,
+            height: `${coverFrame.height}px`,
+          }
+        : undefined,
+    [hasCoverBox, coverFrame.left, coverFrame.top, coverFrame.width, coverFrame.height]
+  );
 
   return (
     <div
@@ -204,6 +349,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
         'has-dynamic-lighting',
         isDark ? 'is-dark' : 'is-light',
         resolvedOutdoor ? 'is-outdoor-sky' : 'is-indoor-ivory',
+        isNeonScene ? 'is-neon-scene' : '',
         `is-weather-${effectiveStageWeather}`,
         `is-regime-${lightingFrame.opticalRegime}`,
         `is-tod-${resolvedTod}`,
@@ -221,6 +367,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       data-backdrop-height-cm={String(stageFraming.clampedHeightCm)}
       data-backdrop-scale={stageFraming.backdropScale.toFixed(3)}
       data-stage-outdoor={resolvedOutdoor ? 'true' : 'false'}
+      data-stage-neon={isNeonScene ? 'true' : 'false'}
       data-stage-lighting={resolvedOutdoor ? 'outdoor-sky' : 'indoor-ivory'}
       data-optical-regime={lightingFrame.opticalRegime}
       data-lighting-preset={lightingFrame.preset}
@@ -236,27 +383,8 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       <div className="atelier-cyclorama-wall-cove" />
 
       {/* 1. Height-Linked Camera Rig wrapping the 3:4 Architectural Room Photo */}
-      <div
-        className="atelier-stage-camera-rig"
-        style={{
-          transformOrigin: stageFraming.backdropTransformOrigin,
-          transform: `translate3d(0, ${stageFraming.backdropTranslateYPct.toFixed(2)}%, 0) scale(${stageFraming.backdropScale.toFixed(3)})`,
-          transition: 'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-      >
-        <div
-          className="atelier-photo-cover-frame"
-          style={
-            hasCoverBox
-              ? {
-                  left: `${coverFrame.left}px`,
-                  top: `${coverFrame.top}px`,
-                  width: `${coverFrame.width}px`,
-                  height: `${coverFrame.height}px`,
-                }
-              : undefined
-          }
-        >
+      <div className="atelier-stage-camera-rig" style={rigTransformStyle}>
+        <div className="atelier-photo-cover-frame" style={coverBoxStyle}>
           <img
             src={withPublicBaseUrl(bgItem.imageUrl)}
             alt=""
@@ -272,7 +400,15 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
 
       {/* 1B. Outdoor Open-Sky Time-of-Day Wash OR Indoor Daytime Window / Post-Sunset Fixture Wash */}
       {resolvedOutdoor ? (
-        <div className="atelier-backdrop-tod-sky" />
+        <>
+          <div className="atelier-backdrop-tod-sky" />
+          {isNeonScene && (
+            <div
+              className="atelier-indoor-night-fixture-wash"
+              data-indoor-night-fixture={lightingFrame.indoorNightFixture}
+            />
+          )}
+        </>
       ) : (
         <>
           <div
@@ -304,116 +440,10 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       {/* 6. Rain moody slate studio ambiance (strictly activated ONLY on open-sky outdoor stages during rain) */}
       {isRain && <div className="atelier-backdrop-rain-tint" />}
 
-      {/* 7. Foreground Pixel-Locked Physical Indoor Fixtures (rendered ABOVE milky ambient washes & side vignettes!) */}
-      {showFixtureLights && (() => {
-        const rigTransformStyle = {
-          transformOrigin: stageFraming.backdropTransformOrigin,
-          transform: `translate3d(0, ${stageFraming.backdropTranslateYPct.toFixed(2)}%, 0) scale(${stageFraming.backdropScale.toFixed(3)})`,
-          transition: 'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1)',
-        };
-        const coverBoxStyle = hasCoverBox
-          ? {
-              left: `${coverFrame.left}px`,
-              top: `${coverFrame.top}px`,
-              width: `${coverFrame.width}px`,
-              height: `${coverFrame.height}px`,
-            }
-          : undefined;
-
-        const preparedEmitters = fixtureEmitters.map((emitter) => {
-          const activeHex =
-            lightingFrame.preset === 'auto' && typeof emitter.kelvinHex === 'number'
-              ? emitter.kelvinHex
-              : lightingFrame.fixtureHex;
-          const fxRgb = hexToRgbCss(activeHex);
-          const fxCoreRgb = mixWithWarmWhiteRgb(activeHex, 0.68);
-          const power = Math.max(0, lightingFrame.fixtureOnFactor * emitter.intensity);
-          // Smooth 0%..100% visibility: unmistakable bright incandescent shade even at 25%..50%, vivid at 100%
-          const normPower = Math.min(1.25, power);
-          const coreOpacity = Math.min(1, Math.max(0.78, 0.64 + normPower * 0.34));
-          const glowOpacity = Math.min(1, Math.max(0.42, 0.16 + normPower * 0.78));
-          const glowScale = Math.min(1.24, Math.max(0.7, 0.64 + normPower * 0.46));
-          const glowBrightness = Math.min(1.26, Math.max(0.86, 0.78 + normPower * 0.38));
-
-          if (
-            emitter.kind === 'cove-strip' &&
-            typeof emitter.x2Pct === 'number' &&
-            typeof emitter.y2Pct === 'number'
-          ) {
-            const x1Px = (emitter.xPct / 100) * coverFrame.width;
-            const y1Px = (emitter.yPct / 100) * coverFrame.height;
-            const x2Px = (emitter.x2Pct / 100) * coverFrame.width;
-            const y2Px = (emitter.y2Pct / 100) * coverFrame.height;
-            const dx = x2Px - x1Px;
-            const dy = y2Px - y1Px;
-            const lenPx = Math.hypot(dx, dy);
-            const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-            const bandH = Math.max(14, (emitter.radiusPct / 100) * coverFrame.width * 1.45);
-            const washH = Math.max(
-              bandH * 1.6,
-              ((emitter.washSpanPct || 16) / 100) * coverFrame.height * glowScale
-            );
-            return {
-              emitter,
-              isCove: true as const,
-              coreOpacity,
-              glowOpacity,
-              baseStyle: {
-                left: `${x1Px.toFixed(1)}px`,
-                top: `${y1Px.toFixed(1)}px`,
-                width: `${lenPx.toFixed(1)}px`,
-                height: `${bandH.toFixed(1)}px`,
-                transform: `translate3d(0, -50%, 0) rotate(${angleDeg.toFixed(2)}deg)`,
-                ['--fx-rgb' as string]: fxRgb,
-                ['--fx-core-rgb' as string]: fxCoreRgb,
-                ['--fx-wash-h' as string]: `${washH.toFixed(1)}px`,
-                ['--fx-glow-scale' as string]: glowScale.toFixed(3),
-                ['--fx-glow-brightness' as string]: glowBrightness.toFixed(3),
-              },
-            };
-          }
-
-          const radiusPx = Math.max(16, (emitter.radiusPct / 100) * coverFrame.width);
-          const washPx = Math.max(
-            radiusPx * 1.4,
-            ((emitter.washSpanPct || 18) / 100) * coverFrame.height * glowScale
-          );
-          const shadeWPx = Math.max(
-            8,
-            ((emitter.shadeWidthPct ?? 2.35) / 100) * coverFrame.width
-          );
-          const shadeHPx = Math.max(
-            10,
-            ((emitter.shadeHeightPct ?? 2.4) / 100) * coverFrame.height
-          );
-          const tiltDeg = emitter.tiltDeg || 0;
-
-          return {
-            emitter,
-            isCove: false as const,
-            coreOpacity,
-            glowOpacity,
-            baseStyle: {
-              left: `${emitter.xPct}%`,
-              top: `${emitter.yPct}%`,
-              width: `${(radiusPx * 2).toFixed(1)}px`,
-              height: `${(radiusPx * 2).toFixed(1)}px`,
-              ['--fx-rgb' as string]: fxRgb,
-              ['--fx-core-rgb' as string]: fxCoreRgb,
-              ['--fx-radius-px' as string]: `${(radiusPx * glowScale).toFixed(1)}px`,
-              ['--fx-wash-px' as string]: `${washPx.toFixed(1)}px`,
-              ['--fx-shade-w' as string]: `${shadeWPx.toFixed(2)}px`,
-              ['--fx-shade-h' as string]: `${shadeHPx.toFixed(2)}px`,
-              ['--fx-tilt-deg' as string]: `${tiltDeg}deg`,
-              ['--fx-glow-scale' as string]: glowScale.toFixed(3),
-              ['--fx-glow-brightness' as string]: glowBrightness.toFixed(3),
-            },
-          };
-        });
-
-        return (
-          <>
-            {/* Pass A (z-index 3, screen blend on rig): Warm wall cones, ambient lamp halos, top/bottom rim bulb spills */}
+      {/* 7. Foreground Pixel-Locked Physical Fixtures & Cyberpunk Neon Signage (rendered ABOVE ambient washes!) */}
+      {showFixtureLights && (
+        <>
+            {/* Pass A (z-index 3, screen blend on rig): Warm wall cones, pendant halos, chandelier shimmer & neon chromatic blooms */}
             <div
               className="atelier-stage-camera-rig atelier-stage-fixtures-glow-rig"
               style={rigTransformStyle}
@@ -423,7 +453,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
             >
               <div className="atelier-photo-cover-frame" style={coverBoxStyle}>
                 <div className="atelier-fixture-lights-layer atelier-fixture-glow-layer">
-                  {preparedEmitters.map(({ emitter, isCove, glowOpacity, baseStyle }) => (
+                  {preparedEmitters.map(({ emitter, isLinear, glowOpacity, baseStyle }) => (
                     <div
                       key={`${emitter.id}-glow`}
                       className={`atelier-fixture-emitter is-${emitter.kind} is-glow-pass`}
@@ -434,8 +464,16 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                         opacity: glowOpacity,
                       }}
                     >
-                      {isCove && <span className="atelier-fixture-cove-wash" />}
-                      {!isCove && emitter.kind === 'sconce' && (
+                      {isLinear && emitter.kind === 'cove-strip' && (
+                        <span className="atelier-fixture-cove-wash" />
+                      )}
+                      {isLinear && emitter.kind === 'bar-sconce' && (
+                        <span className="atelier-fixture-bar-wash" />
+                      )}
+                      {isLinear && emitter.kind === 'neon-tube' && (
+                        <span className="atelier-fixture-neon-tube-bloom" />
+                      )}
+                      {!isLinear && emitter.kind === 'sconce' && (
                         <>
                           <span className="atelier-fixture-sconce-cone-up" />
                           <span className="atelier-fixture-sconce-cone-down" />
@@ -444,21 +482,30 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                           <span className="atelier-fixture-bulb-spill" />
                         </>
                       )}
-                      {!isCove && emitter.kind === 'spot' && (
+                      {!isLinear && emitter.kind === 'pendant' && (
+                        <>
+                          <span className="atelier-fixture-pendant-cone" />
+                          <span className="atelier-fixture-halo" />
+                        </>
+                      )}
+                      {!isLinear && emitter.kind === 'spot' && (
                         <>
                           <span className="atelier-fixture-spot-beam" />
                           <span className="atelier-fixture-halo" />
                         </>
                       )}
-                      {!isCove && emitter.kind === 'chandelier' && (
+                      {!isLinear && emitter.kind === 'chandelier' && (
                         <>
                           <span className="atelier-fixture-halo" />
                           <span className="atelier-fixture-chandelier-spark" />
                         </>
                       )}
-                      {!isCove && emitter.kind === 'uplight' && (
+                      {!isLinear && emitter.kind === 'uplight' && (
+                        <span className="atelier-fixture-uplight-cone" />
+                      )}
+                      {!isLinear && emitter.kind === 'neon-sign' && (
                         <>
-                          <span className="atelier-fixture-uplight-cone" />
+                          <span className="atelier-fixture-neon-sign-bloom" />
                           <span className="atelier-fixture-halo" />
                         </>
                       )}
@@ -468,7 +515,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
               </div>
             </div>
 
-            {/* Pass B (z-index 4, normal blend): Unobstructed pure white-hot incandescent lampshade & LED lens cores */}
+            {/* Pass B (z-index 4, normal blend): Unobstructed crisp backlit shades, alabaster bars, globes, crystal candles & neon cores */}
             <div
               className="atelier-stage-camera-rig atelier-stage-fixtures-core-rig"
               style={rigTransformStyle}
@@ -476,7 +523,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
             >
               <div className="atelier-photo-cover-frame" style={coverBoxStyle}>
                 <div className="atelier-fixture-lights-layer atelier-fixture-core-layer">
-                  {preparedEmitters.map(({ emitter, isCove, coreOpacity, baseStyle }) => (
+                  {preparedEmitters.map(({ emitter, isLinear, coreOpacity, baseStyle }) => (
                     <div
                       key={`${emitter.id}-core`}
                       className={`atelier-fixture-emitter is-${emitter.kind} is-core-pass`}
@@ -485,27 +532,43 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                         opacity: coreOpacity,
                       }}
                     >
-                      {isCove && <span className="atelier-fixture-cove-bar" />}
-                      {!isCove && emitter.kind === 'sconce' && (
+                      {isLinear && emitter.kind === 'cove-strip' && (
+                        <span className="atelier-fixture-cove-bar" />
+                      )}
+                      {isLinear && emitter.kind === 'bar-sconce' && (
+                        <span className="atelier-fixture-bar-core" />
+                      )}
+                      {isLinear && emitter.kind === 'neon-tube' && (
+                        <span className="atelier-fixture-neon-tube-core" />
+                      )}
+                      {!isLinear && emitter.kind === 'sconce' && (
                         <>
                           <span className="atelier-fixture-shade-core" />
                           <span className="atelier-fixture-shade-rim-hot" />
                         </>
                       )}
-                      {!isCove &&
-                        (emitter.kind === 'spot' ||
-                          emitter.kind === 'chandelier' ||
-                          emitter.kind === 'uplight') && (
-                          <span className="atelier-fixture-pin-core" />
-                        )}
+                      {!isLinear && emitter.kind === 'pendant' && (
+                        <span className="atelier-fixture-pendant-core" />
+                      )}
+                      {!isLinear && emitter.kind === 'chandelier' && (
+                        <span className="atelier-fixture-chandelier-candles" />
+                      )}
+                      {!isLinear && emitter.kind === 'spot' && (
+                        <span className="atelier-fixture-pin-core" />
+                      )}
+                      {!isLinear && emitter.kind === 'uplight' && (
+                        <span className="atelier-fixture-uplight-base" />
+                      )}
+                      {!isLinear && emitter.kind === 'neon-sign' && (
+                        <span className="atelier-fixture-neon-sign-core" />
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-          </>
-        );
-      })()}
+        </>
+      )}
     </div>
   );
 });

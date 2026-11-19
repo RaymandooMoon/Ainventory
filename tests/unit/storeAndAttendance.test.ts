@@ -26,7 +26,7 @@ import {
 
 describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
   it('assigns + tiers (S+, A+, B+) to all roofless outdoor backgrounds and base tiers to indoor ones summing to 100% family weight', () => {
-    assert.equal(STAGE_BACKGROUNDS.length, 14);
+    assert.equal(STAGE_BACKGROUNDS.length, 18);
 
     const byExactTier: Record<string, number> = {
       'S+': 0,
@@ -61,10 +61,10 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
       }
     }
 
-    assert.equal(byExactTier['S+'], 1);
-    assert.equal(byExactTier.S, 1);
-    assert.equal(byExactTier['A+'], 2);
-    assert.equal(byExactTier.A, 1);
+    assert.equal(byExactTier['S+'], 2);
+    assert.equal(byExactTier.S, 2);
+    assert.equal(byExactTier['A+'], 3);
+    assert.equal(byExactTier.A, 2);
     assert.equal(byExactTier['B+'], 3);
     assert.equal(byExactTier.B, 2);
     assert.equal(byExactTier.C, 4);
@@ -82,15 +82,19 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
     const outdoorIds = STAGE_BACKGROUNDS.filter((b) => b.isOutdoor).map((b) => b.id).sort();
     const indoorIds = STAGE_BACKGROUNDS.filter((b) => !b.isOutdoor).map((b) => b.id);
     assert.deepEqual(outdoorIds, [
+      'a_cyber_neon_alley',
       'a_hannam_terrace_outdoor',
       'a_sunset_rooftop',
       'b_brick_courtyard',
       'b_seoul_plaza_outdoor',
       'b_stone_courtyard_outdoor',
+      's_cyber_megacity_plaza',
       's_palais_royal_outdoor',
     ]);
-    assert.equal(indoorIds.length, 8);
+    assert.equal(indoorIds.length, 10);
     assert.equal(indoorIds.includes('a_hannam_flagship'), true);
+    assert.equal(indoorIds.includes('a_cyber_arcade_lounge'), true);
+    assert.equal(indoorIds.includes('s_cyber_neon_atelier'), true);
     assert.equal(indoorIds.includes('c_atelier_plaster'), true);
 
     const init = createInitialEconomyState();
@@ -143,12 +147,17 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
     assert.equal(bPlusGacha.background.tier, 'B+');
     assert.equal(bPlusGacha.isNewUnlock, true);
 
-    // Unlocking base A ('a_hannam_flagship') unlocks A+, and base S ('s_paris_atelier') unlocks S+
-    const withBaseA = [...allBaseB, 'a_hannam_flagship'];
+    // Unlocking only 1 base A keeps A+ locked; unlocking ALL base A unlocks A+
+    const oneBaseA = [...allBaseB, 'a_hannam_flagship'];
+    assert.equal(isPlusTierEligibleForDraw('A+', oneBaseA), false);
+    const withBaseA = [...oneBaseA, 'a_cyber_arcade_lounge'];
     assert.equal(isPlusTierEligibleForDraw('A+', withBaseA), true);
     assert.equal(pickWeightedStageBackground(() => 0.16, withBaseA).tier, 'A+');
 
-    const withBaseS = [...withBaseA, 's_grand_paris_atelier'];
+    // Unlocking only 1 base S keeps S+ locked; unlocking ALL base S unlocks S+
+    const oneBaseS = [...withBaseA, 's_grand_paris_atelier'];
+    assert.equal(isPlusTierEligibleForDraw('S+', oneBaseS), false);
+    const withBaseS = [...oneBaseS, 's_cyber_neon_atelier'];
     assert.equal(isPlusTierEligibleForDraw('S+', withBaseS), true);
     assert.equal(pickWeightedStageBackground(() => 0.025, withBaseS).tier, 'S+');
   });

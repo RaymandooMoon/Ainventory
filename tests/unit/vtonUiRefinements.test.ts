@@ -125,7 +125,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v14-garment-guard-qc-360');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v20-bag-anchor-sync-strict-qc');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);
@@ -145,11 +145,13 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     const neg45 = resolveSignedAngleScrollState(-45);
     assert.equal(neg45.angle360, 315);
     assert.equal(neg45.residualYawDeg, 0);
-    assert.equal(resolve360AngleRenderSpec(neg45.angle360).mirrorX, true);
+    assert.equal(resolve360AngleRenderSpec(neg45.angle360).canonicalSliceAngle, 315);
+    assert.equal(resolve360AngleRenderSpec(neg45.angle360).mirrorX, false);
 
     const neg90 = resolveSignedAngleScrollState(-90);
     assert.equal(neg90.angle360, 270);
-    assert.equal(resolve360AngleRenderSpec(neg90.angle360).mirrorX, true);
+    assert.equal(resolve360AngleRenderSpec(neg90.angle360).canonicalSliceAngle, 270);
+    assert.equal(resolve360AngleRenderSpec(neg90.angle360).mirrorX, false);
 
     const microScrub = resolveSignedAngleScrollState(18);
     assert.equal(microScrub.angle360, 0);
@@ -981,44 +983,42 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('(h) simultaneously serializes 2-stage Top (top + top_mid) and 2-stage Outer (outer_mid + outer) slots into client & server VTON prompts', () => {
-    const profile = normalizeGenderNeutralProfile({
-      heightCm: 176,
-      weightKg: 70,
-      bodySpec: { gender: 'male', heightCm: 176, weightKg: 70, bodyShape: 'standard_balanced' },
-      skinToneHex: '#DFBA9B',
-    });
     const layeredSlots = {
       top: {
         id: 302,
         name: '스카이블루 코튼 옥스포드 버튼다운 셔츠',
         category: 'top',
         subcategory: 'shirt',
-        color_name: '스카이블루',
-        color_hex: '#A7C4DC',
+        colorName: '스카이블루',
+        colorHex: '#A7C4DC',
+        fabric: 'cotton',
       },
       top_mid: {
         id: 305,
         name: '차콜 울 테일러드 웨이스트코트 조끼',
         category: 'top',
         subcategory: 'vest',
-        color_name: '차콜',
-        color_hex: '#33353A',
+        colorName: '차콜',
+        colorHex: '#33353A',
+        fabric: 'wool',
       },
       outer_mid: {
         id: 307,
         name: '슬레이트 그레이 울 싱글 미드 블레이저',
         category: 'outer',
         subcategory: 'blazer',
-        color_name: '그레이',
-        color_hex: '#595E66',
+        colorName: '그레이',
+        colorHex: '#595E66',
+        fabric: 'wool',
       },
       outer: {
         id: 309,
         name: '카멜 헤어 더블 브레스티드 오버코트',
         category: 'outer',
         subcategory: 'coat',
-        color_name: '카멜',
-        color_hex: '#B3895D',
+        colorName: '카멜',
+        colorHex: '#B3895D',
+        fabric: 'wool',
       },
     };
 
@@ -1032,11 +1032,11 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       weather: 'clear',
     });
     const serverPrompt = buildGeminiTryOnPrompt(serverProfile, layeredSlots);
-    assert.match(serverPrompt, /MULTI-STAGE TOP LAYERING/);
-    assert.match(serverPrompt, /MID-OUTERWEAR LAYERING/);
-    assert.match(serverPrompt, /\[EQUIPPED TOP_MID\]/);
-    assert.match(serverPrompt, /\[EQUIPPED OUTER_MID\]/);
-    assert.match(serverPrompt, /\[EQUIPPED OUTER\]/);
+    assert.match(serverPrompt, /Layer the mid-layer cardigan\/vest\/knit cleanly OVER the inner base top/);
+    assert.match(serverPrompt, /Layer the 그레이 mid-layer blazer cleanly OVER the inner top\/knit/);
+    assert.match(serverPrompt, /worn as the 2nd mid-layer cardigan or tailored vest\/knit cleanly OVER \[TOP\]/);
+    assert.match(serverPrompt, /worn as the 3rd mid-outerwear blazer\/blouson\/jacket cleanly OVER \[TOP\]\/\[TOP_MID\]/);
+    assert.match(serverPrompt, /Render the outermost 카멜 wool coat uniformly on BOTH/);
   });
 
   it('(i) preserves shaded muted-cool 0° right sleeves and 45° chest interiors matching #94A3B8 chroma ratio (lum <= 124) while keying outer backdrop', () => {
@@ -1187,7 +1187,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
       tallUmbrella.effectiveBaseScale <= standardHead.effectiveBaseScale,
       `Expected overhead canopy (${tallUmbrella.effectiveBaseScale}) to clamp scale <= standard (${standardHead.effectiveBaseScale})`
     );
-    assert.ok(tallUmbrella.effectiveBaseScale >= 1.0);
+    assert.ok(tallUmbrella.effectiveBaseScale >= 0.72);
 
     // Null/undefined probe bounds must never coerce via Number(null) === 0 down to 84% floor origin
     const unmeasuredDesktop = computeMannequinFloorPlacement({

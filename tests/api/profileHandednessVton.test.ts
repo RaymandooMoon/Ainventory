@@ -256,7 +256,7 @@ describe('Server-Side Profile Handedness Configuration & Pre-Render VTON Bag Mir
     assert.match(promptText, /LEFT-HANDED/);
     assert.match(promptText, /ANATOMICAL RIGHT/);
     assert.match(promptText, /BAG ASSET MIRRORING ACTIVE/);
-    assert.match(promptText, /MIRRORED BAG ASSET POSITION FOR LEFT-HANDED WEARER/);
+    assert.match(promptText, /Horizontally mirror this bag onto the wearer's anatomical RIGHT shoulder\/hand/);
 
     const guidePart = buildServerBagPositionGuidePngPart(leftNormProfile, '#D8CFC4');
     assert.ok(guidePart);

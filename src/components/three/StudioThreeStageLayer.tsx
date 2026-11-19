@@ -872,7 +872,8 @@ export default function StudioThreeStageLayer({
         trimRing.rotation.y = -stageGroup.rotation.y;
 
         // Warm Indoor Fixture Floor Spotlight Pool (illuminates floor beneath shadow so cast shadow pops!)
-        const poolOpacity = !p.isOutdoor && lf.floorPoolStrength > 0.01 ? lf.floorPoolStrength : 0;
+        const poolOpacity =
+          (!p.isOutdoor || lf.isNeonScene) && lf.floorPoolStrength > 0.01 ? lf.floorPoolStrength : 0;
         fixturePoolMesh.visible = poolOpacity > 0.005;
         if (fixturePoolMesh.visible) {
           _targetFloorPoolColor.setHex(lf.floorPoolHex);

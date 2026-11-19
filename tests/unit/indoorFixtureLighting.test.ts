@@ -29,11 +29,19 @@ test('computeCoverPhotoFrame matches CSS object-fit: cover; object-position: cen
   assert.deepEqual(zero, { width: 0, height: 0, left: 0, top: 0 });
 });
 
-test('all 8 indoor backgrounds define valid physical fixtureEmitters within 0..100% photo coordinates', () => {
+test('all 10 indoor backgrounds and 2 outdoor cyberpunk neon stages define valid physical fixtureEmitters within 0..100% photo coordinates', () => {
   const indoorBgs = STAGE_BACKGROUNDS.filter((bg) => !bg.isOutdoor);
-  assert.equal(indoorBgs.length, 8);
+  assert.equal(indoorBgs.length, 10);
 
-  for (const bg of indoorBgs) {
+  const neonBgs = STAGE_BACKGROUNDS.filter((bg) => bg.lightingRig?.isNeonScene);
+  assert.equal(neonBgs.length, 4);
+
+  const litStageBgs = STAGE_BACKGROUNDS.filter(
+    (bg) => !bg.isOutdoor || Boolean(bg.lightingRig?.isNeonScene)
+  );
+  assert.equal(litStageBgs.length, 12);
+
+  for (const bg of litStageBgs) {
     assert.ok(bg.lightingRig, `${bg.id} must have lightingRig`);
     const emitters = bg.lightingRig?.fixtureEmitters;
     assert.ok(Array.isArray(emitters) && emitters.length > 0, `${bg.id} must define fixtureEmitters`);
@@ -41,14 +49,75 @@ test('all 8 indoor backgrounds define valid physical fixtureEmitters within 0..1
     for (const em of emitters) {
       assert.ok(em.xPct >= 0 && em.xPct <= 100, `${bg.id}/${em.id} xPct out of range`);
       assert.ok(em.yPct >= 0 && em.yPct <= 100, `${bg.id}/${em.id} yPct out of range`);
-      if (em.kind === 'cove-strip') {
-        assert.equal(typeof em.x2Pct, 'number', `${bg.id}/${em.id} cove-strip requires x2Pct`);
-        assert.equal(typeof em.y2Pct, 'number', `${bg.id}/${em.id} cove-strip requires y2Pct`);
+      if (em.kind === 'cove-strip' || em.kind === 'bar-sconce' || em.kind === 'neon-tube') {
+        assert.equal(typeof em.x2Pct, 'number', `${bg.id}/${em.id} ${em.kind} requires x2Pct`);
+        assert.equal(typeof em.y2Pct, 'number', `${bg.id}/${em.id} ${em.kind} requires y2Pct`);
         assert.ok((em.x2Pct as number) >= 0 && (em.x2Pct as number) <= 100);
         assert.ok((em.y2Pct as number) >= 0 && (em.y2Pct as number) <= 100);
       }
       assert.ok(em.radiusPct > 0 && em.intensity > 0);
     }
+  }
+});
+
+test('all 4 cyberpunk stages (S+, S, A+, A) illuminate diverse multi-color neon signs and dim cleanly from 100% to 0%', () => {
+  const cyberSpecs = [
+    { id: 's_cyber_megacity_plaza', tier: 'S+', isOutdoor: true },
+    { id: 's_cyber_neon_atelier', tier: 'S', isOutdoor: false },
+    { id: 'a_cyber_neon_alley', tier: 'A+', isOutdoor: true },
+    { id: 'a_cyber_arcade_lounge', tier: 'A', isOutdoor: false },
+  ] as const;
+
+  for (const spec of cyberSpecs) {
+    const bg = STAGE_BACKGROUNDS.find((b) => b.id === spec.id);
+    assert.ok(bg, `Missing cyberpunk stage ${spec.id}`);
+    assert.equal(bg?.tier, spec.tier);
+    assert.equal(bg?.isOutdoor, spec.isOutdoor);
+    assert.equal(bg?.lightingRig?.isNeonScene, true);
+
+    const distinctNeonColors = new Set(
+      (bg?.lightingRig?.fixtureEmitters || [])
+        .map((e) => e.kelvinHex)
+        .filter((h): h is number => typeof h === 'number')
+    );
+    assert.ok(
+      distinctNeonColors.size >= 3,
+      `${spec.id} should feature at least 3 distinct neon colors, found ${distinctNeonColors.size}`
+    );
+
+    const f100 = resolveStageLightingFrame({
+      backgroundId: spec.id,
+      isOutdoor: spec.isOutdoor,
+      timestampMs: NIGHT_LOCAL_MS,
+      theme: 'dark',
+      lightingPreset: 'auto',
+      lightingIntensity: 100,
+    });
+    const f50 = resolveStageLightingFrame({
+      backgroundId: spec.id,
+      isOutdoor: spec.isOutdoor,
+      timestampMs: NIGHT_LOCAL_MS,
+      theme: 'dark',
+      lightingPreset: 'auto',
+      lightingIntensity: 50,
+    });
+    const f0 = resolveStageLightingFrame({
+      backgroundId: spec.id,
+      isOutdoor: spec.isOutdoor,
+      timestampMs: NIGHT_LOCAL_MS,
+      theme: 'dark',
+      lightingPreset: 'auto',
+      lightingIntensity: 0,
+    });
+
+    assert.equal(f100.isNeonScene, true);
+    assert.ok(f100.fixtureOnFactor >= 1.0, `${spec.id} 100% neon should be brightly lit`);
+    assert.ok(f100.floorPoolStrength >= 0.3, `${spec.id} 100% neon should illuminate floor pool`);
+    assert.ok(f50.fixtureOnFactor > 0 && f50.fixtureOnFactor < f100.fixtureOnFactor);
+    assert.equal(f0.fixtureOnFactor, 0);
+    assert.equal(f0.floorPoolStrength, 0);
+    assert.ok(f0.backdropBrightness < f50.backdropBrightness && f50.backdropBrightness < f100.backdropBrightness);
+    assert.ok(f0.backdropSaturate < f100.backdropSaturate);
   }
 });
 
@@ -90,7 +159,7 @@ test('post-sunset dark basalt flagship casts crisp pin-spot shadow over warm flo
   assert.ok(frame.floorPoolStrength >= 0.3, `dark basalt floor needs warm pool, got ${frame.floorPoolStrength}`);
 });
 
-test('lightingIntensity 0% cleanly turns indoor lamps and floor pools OFF, and outdoor stages keep fixtures at 0', () => {
+test('lightingIntensity 0% cleanly turns indoor lamps and floor pools OFF, and natural outdoor stages keep fixtures at 0', () => {
   const offFrame = resolveStageLightingFrame({
     backgroundId: 'b_minimal_loft_window',
     isOutdoor: false,

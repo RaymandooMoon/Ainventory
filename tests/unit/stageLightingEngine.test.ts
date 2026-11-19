@@ -120,9 +120,9 @@ test('outdoor composite weather optics resolves bright overcast, bright fog, and
   );
 });
 
-test('all 8 indoor backgrounds define architectural lightingRig and switch from daytime window gobo to post-sunset fixtures', () => {
+test('all 10 indoor backgrounds define architectural lightingRig and switch from daytime window gobo to post-sunset fixtures', () => {
   const indoorBgs = STAGE_BACKGROUNDS.filter((bg) => !bg.isOutdoor);
-  assert.equal(indoorBgs.length, 8);
+  assert.equal(indoorBgs.length, 10);
   for (const bg of indoorBgs) {
     assert.ok(bg.lightingRig, `Missing lightingRig on indoor background ${bg.id}`);
   }

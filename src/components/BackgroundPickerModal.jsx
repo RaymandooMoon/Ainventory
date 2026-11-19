@@ -21,9 +21,9 @@ import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 /**
- * 14-Stage Architectural Backdrop & Spatial Lighting Picker Modal (`S+ / S / A+ / A / B+ / B / C`).
- * Lets users equip unlocked architectural rooms/courtyards AND customize 3D stage lighting color
- * temperature (`auto`, `5600K`, `3000K`, `2700K`, `6500K`, `4200K`) and brightness (`0%..200%`).
+ * 18-Stage Architectural & Cyberpunk Neon Backdrop & Spatial Lighting Picker Modal (`S+ / S / A+ / A / B+ / B / C`).
+ * Lets users equip unlocked architectural rooms/courtyards/cyberpunk stages AND customize 3D stage lighting color
+ * temperature (`auto`, `5600K`, `3000K`, `2700K`, `6500K`, `4200K`) and brightness (`0%..100%`).
  */
 export default function BackgroundPickerModal({
   open,
@@ -46,17 +46,21 @@ export default function BackgroundPickerModal({
   const isCustomLighting =
     activePreset !== DEFAULT_LIGHTING_PRESET || activeIntensity !== DEFAULT_LIGHTING_INTENSITY;
 
-  const rigDescription = equippedItem.isOutdoor
-    ? tx(
-        lang,
-        '오픈 스카이 · 계절별 태양 고도 및 실시간 기상(구름·안개·여우비) 광원 연동',
-        'Open-sky · Seasonal sun altitude & live composite weather lighting sync'
-      )
-    : lang === 'en'
-      ? equippedItem.lightingRig?.rigNoteEn ||
-        'Daytime window sunlight · Post-sunset interior fixture auto-switch'
-      : equippedItem.lightingRig?.rigNoteKo ||
-        '낮 시간대 창가 햇빛 이동 · 일몰 후 실내 조명 자동 점등';
+  const rigDescription = equippedItem.lightingRig?.isNeonScene
+    ? lang === 'en'
+      ? equippedItem.lightingRig.rigNoteEn
+      : equippedItem.lightingRig.rigNoteKo
+    : equippedItem.isOutdoor
+      ? tx(
+          lang,
+          '오픈 스카이 · 계절별 태양 고도 및 실시간 기상(구름·안개·여우비) 광원 연동',
+          'Open-sky · Seasonal sun altitude & live composite weather lighting sync'
+        )
+      : lang === 'en'
+        ? equippedItem.lightingRig?.rigNoteEn ||
+          'Daytime window sunlight · Post-sunset interior fixture auto-switch'
+        : equippedItem.lightingRig?.rigNoteKo ||
+          '낮 시간대 창가 햇빛 이동 · 일몰 후 실내 조명 자동 점등';
 
   const [isScrubbingBrightness, setIsScrubbingBrightness] = useState(false);
 
@@ -80,6 +84,10 @@ export default function BackgroundPickerModal({
   }, [open, isScrubbingBrightness]);
 
   const effectiveScrubbing = Boolean(open && isScrubbingBrightness);
+  const handleModalClose = () => {
+    setIsScrubbingBrightness(false);
+    onClose?.();
+  };
 
   const groupedByTier = TIER_ORDER.map((tier) => ({
     tier,
@@ -90,7 +98,7 @@ export default function BackgroundPickerModal({
     <ResponsiveSheetModal
       id="stage-background-picker-modal"
       open={open}
-      onClose={onClose}
+      onClose={handleModalClose}
       lang={lang}
       eyebrow={tx(lang, '스테이지 공간 배경', 'STAGE ENVIRONMENTS')}
       title={tx(lang, '캐릭터 배경 및 광원 설정', 'Stage Background & Lighting')}

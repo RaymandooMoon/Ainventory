@@ -1354,7 +1354,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const storeModal = page.locator('#stage-store-modal');
     await expect(storeModal).toBeVisible();
     await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText('0 i');
-    await expect(storeModal.locator('[data-store-collection-item]')).toHaveCount(14);
+    await expect(storeModal.locator('[data-store-collection-item]')).toHaveCount(18);
 
     const drawBtn = storeModal.locator('[data-store-draw-btn="true"]');
     await expect(drawBtn).toContainText(/무료 뽑기|Free Daily Draw/);
@@ -1373,19 +1373,19 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal).toHaveCount(0);
     await expect(freeBubble).toHaveCount(0);
 
-    // 3) Top-left Background Picker opens all 14 across S+/S/A+/A/B+/B/C, adjusts Lighting Color & Brightness, & equips C-tier background
+    // 3) Top-left Background Picker opens all 18 across S+/S/A+/A/B+/B/C, adjusts Lighting Color & Brightness, & equips C-tier background
     await studioCanvas.locator('[data-stage-bg-picker-btn="true"]').click();
     const bgPickerModal = page.locator('#stage-background-picker-modal');
     await expect(bgPickerModal).toBeVisible();
-    await expect(bgPickerModal.locator('[data-bg-tier-group="S+"] [data-bg-option-id]')).toHaveCount(1);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(1);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="A+"] [data-bg-option-id]')).toHaveCount(2);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(1);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S+"] [data-bg-option-id]')).toHaveCount(2);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(2);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A+"] [data-bg-option-id]')).toHaveCount(3);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(2);
     await expect(bgPickerModal.locator('[data-bg-tier-group="B+"] [data-bg-option-id]')).toHaveCount(3);
     await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(2);
     await expect(bgPickerModal.locator('[data-bg-tier-group="C"] [data-bg-option-id]')).toHaveCount(4);
 
-    // Verify user-adjustable Stage Lighting Preset (Color/Kelvin) & Brightness (0-200%) controls + Reset
+    // Verify user-adjustable Stage Lighting Preset (Color/Kelvin) & Brightness (0-100%) controls + Reset
     const lightingControls = bgPickerModal.locator('[data-bg-lighting-controls="true"]');
     await expect(lightingControls).toBeVisible();
     await lightingControls.locator('[data-lighting-preset-option="golden_amber"]').click();
@@ -1398,14 +1398,14 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
         window.HTMLInputElement.prototype,
         'value'
       )?.set;
-      setter?.call(input, '145');
+      setter?.call(input, '65');
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await expect(lightingControls.locator('[data-lighting-intensity-value="true"]')).toHaveText(
-      '145%'
+      '65%'
     );
-    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '145');
+    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '65');
 
     await lightingControls.locator('[data-lighting-reset-btn="true"]').click();
     await expect(studioCanvas).toHaveAttribute('data-lighting-preset', 'auto');
