@@ -368,11 +368,37 @@
 }
 
 .atelier-stage-backdrop.is-indoor-ivory.has-arch-backdrop .atelier-stage-environment-photo {
-  filter: brightness(1.02) saturate(1.03) sepia(0.06);
+  filter: brightness(var(--stage-backdrop-brightness, 1.02)) saturate(1.03) sepia(0.06);
 }
 
 .atelier-stage-backdrop.is-indoor-ivory.is-dark.has-arch-backdrop .atelier-stage-environment-photo {
-  filter: brightness(0.8) contrast(1.04) saturate(1.03) sepia(0.08);
+  filter: brightness(var(--stage-backdrop-brightness, 0.8)) contrast(1.04) saturate(1.03) sepia(0.08);
+}
+
+.atelier-stage-backdrop.is-outdoor-sky.has-dynamic-lighting .atelier-stage-environment-photo {
+  filter: brightness(var(--stage-backdrop-brightness, 1)) contrast(1.02);
+}
+
+.atelier-stage-backdrop.is-indoor-ivory.is-post-sunset .atelier-indoor-ivory-ambient {
+  opacity: 0.36;
+}
+
+.atelier-indoor-night-fixture-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  background: var(--stage-night-fixture-glow, none);
+  transition: opacity 0.5s ease, background 0.5s ease;
+}
+
+.atelier-stage-light-tint-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none !important;
+  background: var(--stage-light-tint, transparent);
+  transition: background 0.4s ease, opacity 0.4s ease;
 }
 
 .atelier-stage-backdrop.is-indoor-ivory .atelier-backdrop-skylight-wash {
@@ -1235,7 +1261,9 @@
   border-radius: 0;
   object-fit: contain;
   object-position: center bottom;
-  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16));
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16))
+    var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
+  transition: filter 0.35s ease;
 }
 
 .editorial-ai-vton-img.is-lookbook-tappable {
@@ -1244,7 +1272,8 @@
 }
 
 [data-theme='dark'] .editorial-ai-vton-img {
-  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56));
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56))
+    var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
 }
 
 /* Transient Non-Interactive 360° Swipe Angle Feedback Pill */
@@ -2514,11 +2543,11 @@ html[data-vibrancy-fallback='solid']
 .studio-vton-hud-right {
   position: relative;
   z-index: 8;
-  width: 42px;
-  height: 36px;
-  flex: 0 0 42px;
-  min-width: 42px;
-  max-width: 42px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  min-width: 38px;
+  max-width: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3421,7 +3450,7 @@ html[data-vibrancy-fallback='solid']
   left: 12px;
   right: auto;
   bottom: 64px;
-  z-index: 66;
+  z-index: 76;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -3481,12 +3510,12 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-look-selector-btn:hover:not(.is-open) {
-  background: rgba(34, 33, 30, 0.84);
+  background: rgba(34, 33, 30, 0.78);
   border-color: rgba(255, 255, 255, 0.36);
 }
 
 .studio-2d-vton-viewer[data-stage-theme='light'] .studio-look-selector-btn:hover:not(.is-open) {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.84);
   border-color: rgba(28, 28, 30, 0.26);
 }
 
@@ -3496,16 +3525,17 @@ html[data-vibrancy-fallback='solid']
 }
 
 .studio-look-selector-btn.is-open {
-  background: #ffffff;
-  color: #141413;
-  border-color: #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  background: rgba(34, 33, 30, clamp(0.24, var(--hig-nav-bg-opacity, 0.66), 0.9));
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 6px 18px rgba(0, 0, 0, 0.24);
 }
 
 .studio-2d-vton-viewer[data-stage-theme='light'] .studio-look-selector-btn.is-open {
-  background: #1d1d1f;
-  color: #ffffff;
-  border-color: #1d1d1f;
+  background: rgba(255, 255, 255, clamp(0.28, var(--hig-nav-bg-opacity, 0.72), 0.9));
+  color: #1d1d1f;
+  border-color: rgba(28, 28, 30, 0.44);
+  box-shadow: 0 0 0 1px rgba(28, 28, 30, 0.12), 0 6px 18px rgba(15, 23, 42, 0.12);
 }
 
 .studio-look-selector-btn:focus-visible {
@@ -3524,17 +3554,24 @@ html[data-vibrancy-fallback='solid']
   left: calc(100% + 8px);
   bottom: 0;
   z-index: 82;
-  min-width: 168px;
+  min-width: 174px;
   padding: 5px;
   border-radius: 15px;
-  background: var(--glass-bg-dense);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--elevation-md);
-  color: var(--ink-primary);
+  background: rgba(28, 28, 30, clamp(0.48, calc(var(--hig-nav-bg-opacity, 0.5) + 0.16), 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  color: #f7f7f5;
   display: flex;
   flex-direction: column;
   gap: 4px;
   pointer-events: auto;
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-look-selector-menu {
+  background: rgba(255, 255, 255, clamp(0.56, calc(var(--hig-nav-bg-opacity, 0.5) + 0.2), 0.92));
+  border-color: rgba(28, 28, 30, 0.16);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  color: #1d1d1f;
 }
 
 .studio-look-selector-option {
@@ -3543,23 +3580,36 @@ html[data-vibrancy-fallback='solid']
   border-radius: 11px;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--ink-primary);
+  color: inherit;
   display: flex;
   align-items: center;
   gap: 8px;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 0.14s var(--spring-ease), color 0.14s var(--spring-ease);
+  pointer-events: auto;
+  transition: background-color 0.14s var(--spring-ease), color 0.14s var(--spring-ease),
+    border-color 0.14s var(--spring-ease);
 }
 
 .studio-look-selector-option:hover:not(.is-selected) {
-  background: var(--accent-soft-bg);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-look-selector-option:hover:not(.is-selected) {
+  background: rgba(28, 28, 30, 0.06);
 }
 
 .studio-look-selector-option.is-selected {
-  background: var(--accent-mono);
-  color: var(--accent-mono-ink);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #ffffff;
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-look-selector-option.is-selected {
+  background: rgba(28, 28, 30, 0.1);
+  border-color: rgba(28, 28, 30, 0.26);
+  color: #1d1d1f;
 }
 
 .studio-look-option-copy {
@@ -4020,11 +4070,11 @@ html[data-vibrancy-fallback='solid']
 
   .studio-hud-left-slot,
   .studio-vton-hud-right {
-    width: 38px;
-    height: 34px;
-    flex: 0 0 38px;
-    min-width: 38px;
-    max-width: 38px;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    min-width: 36px;
+    max-width: 36px;
   }
 
   .atelier-stage-brand-cluster {
@@ -5978,6 +6028,26 @@ html[data-vibrancy-fallback='solid']
 }
 
 /* Background Picker Modal */
+/* Crisp solid-elevated Apple HIG sheet surfaces for Stage Background & Store modals (avoids GPU/SwiftShader backdrop-filter stalls over Three.js WebGL stage and prevents background bleed-through) */
+.ui-sheet-backdrop:has(#stage-background-picker-modal),
+.ui-sheet-backdrop:has(#stage-background-store-modal) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(15, 18, 24, 0.46);
+}
+
+#stage-background-picker-modal,
+#stage-background-store-modal {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(250, 249, 246, 0.98);
+}
+
+[data-theme='dark'] #stage-background-picker-modal,
+[data-theme='dark'] #stage-background-store-modal {
+  background: rgba(24, 24, 27, 0.98);
+}
+
 .stage-bg-picker-root,
 .stage-store-root {
   display: flex;
@@ -5994,7 +6064,7 @@ html[data-vibrancy-fallback='solid']
   gap: 12px;
   padding: 12px 14px;
   border-radius: 18px;
-  background: var(--accent-soft-bg);
+  background: var(--bg-surface);
   border: 1px solid var(--squircle-border);
   flex-wrap: wrap;
 }
@@ -6003,6 +6073,10 @@ html[data-vibrancy-fallback='solid']
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.stage-bg-picker-summary-text {
   min-width: 0;
 }
 
@@ -6021,6 +6095,203 @@ html[data-vibrancy-fallback='solid']
   margin-top: 2px;
   font-size: 0.72rem;
   color: var(--ink-secondary);
+}
+
+/* Spatial Lighting Type & Brightness Panel inside BackgroundPickerModal */
+.stage-bg-lighting-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--squircle-border);
+}
+
+.stage-bg-lighting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-bg-lighting-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.stage-bg-lighting-icon {
+  color: var(--ink-primary);
+  flex-shrink: 0;
+}
+
+.stage-bg-lighting-title {
+  font-size: 0.84rem;
+  font-weight: 740;
+  color: var(--ink-primary);
+}
+
+.stage-bg-lighting-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--squircle-border);
+  background: var(--bg-elevated);
+  color: var(--ink-secondary);
+  font-size: 0.73rem;
+  font-weight: 680;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.stage-bg-lighting-reset-btn:hover {
+  border-color: var(--squircle-border-hover);
+  color: var(--ink-primary);
+}
+
+.stage-bg-lighting-reset-btn:active {
+  transform: scale(0.97);
+}
+
+.stage-bg-lighting-note {
+  margin: -4px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+.stage-bg-lighting-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 599px) {
+  .stage-bg-lighting-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stage-bg-lighting-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--squircle-border);
+  color: var(--ink-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+.stage-bg-lighting-chip:hover {
+  border-color: var(--squircle-border-hover);
+}
+
+.stage-bg-lighting-chip:active {
+  transform: scale(0.98);
+}
+
+.stage-bg-lighting-chip.is-active {
+  border-color: var(--ink-primary);
+  background: var(--accent-soft-bg);
+  box-shadow: 0 0 0 1px var(--ink-primary);
+}
+
+.stage-bg-lighting-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+}
+
+[data-theme='dark'] .stage-bg-lighting-swatch {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.stage-bg-lighting-swatch.is-preset-auto {
+  background: linear-gradient(135deg, #fffdf7 0%, #ffe2ad 55%, #9eb8f0 100%);
+}
+.stage-bg-lighting-swatch.is-preset-daylight {
+  background: #fffdf7;
+}
+.stage-bg-lighting-swatch.is-preset-warm_white {
+  background: #ffe4b8;
+}
+.stage-bg-lighting-swatch.is-preset-golden_amber {
+  background: #ffc278;
+}
+.stage-bg-lighting-swatch.is-preset-cool_gallery {
+  background: #dcebff;
+}
+.stage-bg-lighting-swatch.is-preset-moonlight {
+  background: #9eb8f0;
+}
+
+.stage-bg-lighting-chip-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.stage-bg-lighting-chip-label {
+  font-size: 0.75rem;
+  font-weight: 720;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-bg-lighting-chip-kelvin {
+  font-size: 0.64rem;
+  font-weight: 660;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.stage-bg-lighting-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.stage-bg-lighting-slider-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-bg-lighting-slider-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.stage-bg-lighting-slider-value {
+  font-size: 0.76rem;
+  font-weight: 740;
+  color: var(--ink-primary);
+}
+
+.stage-bg-lighting-range {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--ink-primary);
+  cursor: pointer;
 }
 
 .stage-bg-tier-sections {

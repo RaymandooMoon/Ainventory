@@ -423,3 +423,129 @@ export function createStagePreviewCardTexture(
   tex.needsUpdate = true;
   return tex;
 }
+
+export type ProceduralGoboKind =
+  | 'overhead-skylight'
+  | 'clerestory-slit'
+  | 'full-glass-mullion'
+  | 'arched-grid-gobo'
+  | 'left-sheer-curtain'
+  | 'high-clerestory'
+  | 'windowless-salon'
+  | 'archway-sun';
+
+/**
+ * Generates a 100% procedural feathered architectural window gobo `CanvasTexture` (`SRGBColorSpace`)
+ * for indoor daytime floor sunlight projection (arched mullions, skylight grids, sheer curtains, arches).
+ */
+export function createWindowGoboTexture(
+  renderer: THREE.WebGLRenderer,
+  kind: ProceduralGoboKind
+): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  if (ctx && kind !== 'windowless-salon') {
+    ctx.clearRect(0, 0, size, size);
+
+    const drawSoftBase = (rx: number, ry: number, alphaPeak: number) => {
+      ctx.save();
+      ctx.translate(size * 0.5, size * 0.5);
+      ctx.scale(rx, ry);
+      const g = ctx.createRadialGradient(0, 0, size * 0.04, 0, 0, size * 0.48);
+      g.addColorStop(0, `rgba(255, 255, 255, ${alphaPeak})`);
+      g.addColorStop(0.56, `rgba(255, 255, 255, ${alphaPeak * 0.62})`);
+      g.addColorStop(0.84, `rgba(255, 255, 255, ${alphaPeak * 0.18})`);
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-size, -size, size * 2, size * 2);
+      ctx.restore();
+    };
+
+    if (kind === 'arched-grid-gobo') {
+      drawSoftBase(0.88, 0.96, 0.95);
+      // Carve steel arched window mullions
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+      ctx.lineWidth = 8;
+      for (const xFrac of [0.34, 0.5, 0.66]) {
+        ctx.beginPath();
+        ctx.moveTo(size * xFrac, size * 0.14);
+        ctx.lineTo(size * xFrac, size * 0.88);
+        ctx.stroke();
+      }
+      for (const yFrac of [0.38, 0.6, 0.78]) {
+        ctx.beginPath();
+        ctx.moveTo(size * 0.14, size * yFrac);
+        ctx.lineTo(size * 0.86, size * yFrac);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (kind === 'overhead-skylight') {
+      drawSoftBase(0.96, 0.92, 0.9);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.62)';
+      ctx.lineWidth = 6;
+      for (let i = 1; i <= 3; i += 1) {
+        const pos = (size / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(pos, size * 0.1);
+        ctx.lineTo(pos, size * 0.9);
+        ctx.moveTo(size * 0.1, pos);
+        ctx.lineTo(size * 0.9, pos);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (kind === 'full-glass-mullion') {
+      drawSoftBase(1.0, 0.88, 0.92);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.58)';
+      ctx.lineWidth = 7;
+      for (const xFrac of [0.32, 0.68]) {
+        ctx.beginPath();
+        ctx.moveTo(size * xFrac, size * 0.08);
+        ctx.lineTo(size * xFrac, size * 0.92);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (kind === 'clerestory-slit' || kind === 'high-clerestory') {
+      ctx.save();
+      ctx.translate(size * 0.5, size * 0.5);
+      ctx.rotate(kind === 'high-clerestory' ? -0.28 : 0.22);
+      const g = ctx.createLinearGradient(0, -size * 0.24, 0, size * 0.24);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.25, 'rgba(255,255,255,0.85)');
+      g.addColorStop(0.5, 'rgba(255,255,255,0.96)');
+      g.addColorStop(0.75, 'rgba(255,255,255,0.82)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-size * 0.42, -size * 0.22, size * 0.84, size * 0.44);
+      ctx.restore();
+      // Feather outer rim
+      ctx.globalCompositeOperation = 'destination-in';
+      drawSoftBase(0.95, 0.95, 1.0);
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (kind === 'archway-sun') {
+      drawSoftBase(0.78, 0.96, 0.92);
+    } else {
+      // 'left-sheer-curtain': soft diffused curtain-filtered stripes
+      drawSoftBase(0.92, 0.9, 0.84);
+      ctx.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 6; i += 1) {
+        const x = size * (0.2 + i * 0.11);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+        ctx.fillRect(x, size * 0.12, 8, size * 0.76);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.needsUpdate = true;
+  return tex;
+}

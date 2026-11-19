@@ -77,10 +77,15 @@ import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
 import { consumePostLoginReveal } from '../utils/logoTransition.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
+  DEFAULT_LIGHTING_INTENSITY,
+  DEFAULT_LIGHTING_PRESET,
   DEFAULT_STAGE_BACKGROUND_ID,
+  clampLightingIntensity,
   getStageBackgroundById,
+  normalizeLightingPreset,
   tierToCssSlug,
 } from '../utils/stageBackgroundCatalog.ts';
+import { resolveStageLightingFrame } from '../utils/stageLightingEngine.ts';
 import {
   formatWeatherCapsuleDateTime,
   resolveEffectiveClientTimeOfDay,
@@ -270,6 +275,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onOpenSkinToneModal,
   onOpenBodyModal: _legacyOpenBodyModal,
   stageBackgroundId = DEFAULT_STAGE_BACKGROUND_ID,
+  lightingPreset = DEFAULT_LIGHTING_PRESET,
+  lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
   onOpenBackgroundPicker,
   onOpenMobileDrawer,
   mobileDrawerOpen = false,
@@ -2114,8 +2121,48 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [clockNow, dayTarget, resolvedLang]
   );
 
+  const clockNowMs = clockNow instanceof Date ? clockNow.getTime() : Date.now();
+  const normalizedLightingPreset = normalizeLightingPreset(lightingPreset);
+  const clampedLightingIntensity = clampLightingIntensity(lightingIntensity);
+
+  const stageLightingFrame = useMemo(
+    () =>
+      resolveStageLightingFrame({
+        backgroundId: resolvedBgItem.id,
+        isOutdoor: isStageOutdoor,
+        weather: {
+          ...(weather || {}),
+          effectiveWeather,
+          scenarioKey,
+        },
+        timestampMs: clockNowMs,
+        lightingPreset: normalizedLightingPreset,
+        lightingIntensity: clampedLightingIntensity,
+        theme: resolvedTheme,
+      }),
+    [
+      resolvedBgItem.id,
+      isStageOutdoor,
+      weather,
+      effectiveWeather,
+      scenarioKey,
+      clockNowMs,
+      normalizedLightingPreset,
+      clampedLightingIntensity,
+      resolvedTheme,
+    ]
+  );
+
+  const viewerRootRef = useRef(null);
+  useEffect(() => {
+    const el = viewerRootRef.current;
+    if (!el) return;
+    el.style.setProperty('--stage-char-rim-shadow', stageLightingFrame.characterRimDropShadow);
+  }, [stageLightingFrame.characterRimDropShadow]);
+
   return (
     <div
+      ref={viewerRootRef}
       id={CARBON_DOM_CONTRACT.studio25dCanvasId}
       className={`studio-25d-canvas studio-2d-vton-viewer is-weather-${stageEffectiveWeather} ${isStageOutdoor ? `is-tod-${timeOfDay} is-outdoor-sky` : 'is-indoor-ivory'} ${isRainy ? 'is-weather-rain' : ''} ${isWindy ? 'is-weather-wind' : ''}`.trim()}
       data-fitting-mode={viewerMode}
@@ -2130,6 +2177,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-stage-bg-tier={resolvedBgItem.tier}
       data-stage-outdoor={isStageOutdoor ? 'true' : 'false'}
       data-stage-lighting={isStageOutdoor ? 'outdoor-sky' : 'indoor-ivory'}
+      data-optical-regime={stageLightingFrame.opticalRegime}
+      data-lighting-preset={stageLightingFrame.preset}
+      data-lighting-intensity={String(stageLightingFrame.intensityPct)}
+      data-post-sunset={stageLightingFrame.solar.isPostSunset ? 'true' : 'false'}
       data-lookbook-overlay={canReturnToCharacter ? 'true' : undefined}
       data-post-login-reveal={postLoginRevealActive ? 'true' : undefined}
       data-front-only-degraded={frontOnlyDegraded ? 'true' : undefined}
@@ -2159,6 +2210,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         timeOfDay={timeOfDay}
         backgroundId={resolvedBgItem.id}
         isOutdoor={isStageOutdoor}
+        weather={weather}
+        clockNowMs={clockNowMs}
+        lightingPreset={normalizedLightingPreset}
+        lightingIntensity={clampedLightingIntensity}
       />
 
       {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection + Contact AO Shadow */}
@@ -2189,11 +2244,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           isOutdoor={isStageOutdoor}
           weatherMode={stageEffectiveWeather}
           timeOfDay={timeOfDay}
-          auraTier={auraTier}
+          auraTier={resolvedBgItem?.tier || auraTier}
           theme={resolvedTheme}
           angleScrollDeg={angleScrollDeg}
           paused={false}
           hasCharacter={true}
+          stageBackgroundId={resolvedBgItem.id}
+          weather={weather}
+          clockNowMs={clockNowMs}
+          lightingPreset={normalizedLightingPreset}
+          lightingIntensity={clampedLightingIntensity}
         />
       )}
 
@@ -2898,6 +2958,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     aria-label={
                       isEn ? 'AI weather outfit recommendations' : 'AI 날씨 추천 Look 선택'
                     }
+                    onPointerDown={(e) => e.stopPropagation()}
                   >
                     {stageLookRecommendations.map((rec, idx) => {
                       const isSelected = idx === activeLookIdx;
@@ -2931,6 +2992,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                           className={`studio-look-selector-option tabular-nums ${
                             isSelected ? 'is-selected' : ''
                           }`.trim()}
+                          onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
                             setLookMenuOpen(false);

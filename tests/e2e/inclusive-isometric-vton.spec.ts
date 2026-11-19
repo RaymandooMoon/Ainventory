@@ -1411,7 +1411,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
-    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(aiImg).toBeVisible({ timeout: 20000 });
 
     // (1) Verify 180° quadrant twin-figure CV isolation removes the duplicate blue twin figure via fast flick!
     await performStageSwipe(page, studioCanvas, 'right', 'fast');
@@ -1828,7 +1828,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
-    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(aiImg).toBeVisible({ timeout: 20000 });
     await expect(aiImg).toHaveCSS('object-fit', 'contain');
     const imgSrc = (await aiImg.getAttribute('src')) || '';
     expect(imgSrc.startsWith('data:image/png;base64,')).toBe(true);

@@ -71,6 +71,7 @@ import {
   loadStoredEconomyState,
   rollBackgroundGacha,
   saveStoredEconomyState,
+  updateStageLightingSettings,
 } from '../utils/stageBackgroundCatalog.ts';
 import BackgroundPickerModal from './BackgroundPickerModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
@@ -1142,6 +1143,11 @@ export default function OutfitStudioView({
     },
     [lang, showToast]
   );
+
+  const handleUpdateStageLighting = useCallback((patch) => {
+    const next = updateStageLightingSettings(patch);
+    setEconomyState(next);
+  }, []);
 
   const handlePerformStoreDraw = useCallback(() => {
     const outcome = rollBackgroundGacha(economyState, getLocalDateKey());
@@ -2929,6 +2935,8 @@ export default function OutfitStudioView({
             }}
             onOpenBodyModal={handleOpenBodyModal}
             stageBackgroundId={economyState.equippedBackgroundId}
+            lightingPreset={economyState.lightingPreset}
+            lightingIntensity={economyState.lightingIntensity}
             onOpenBackgroundPicker={() => setBgPickerOpen(true)}
             onOpenMobileDrawer={() => setMobileSheetOpen(true)}
             mobileDrawerOpen={mobileSheetOpen}
@@ -3490,6 +3498,7 @@ export default function OutfitStudioView({
         lang={lang}
         economyState={economyState}
         onSelectBackground={handleSelectStageBackground}
+        onUpdateLighting={handleUpdateStageLighting}
         onOpenStore={() => setStoreOpen(true)}
       />
 

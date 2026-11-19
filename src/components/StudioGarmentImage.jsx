@@ -18,9 +18,39 @@ function smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-const MAX_TINTED_LRU_ENTRIES = 32;
+const MAX_TINTED_LRU_ENTRIES = 256;
 const TINTED_URL_CACHE = new Map();
 const PENDING_TINTS = new Map();
+
+const MAX_CONCURRENT_PACKSHOT_JOBS = 2;
+let activePackshotJobs = 0;
+const packshotJobQueue = [];
+
+function pumpPackshotQueue() {
+  while (activePackshotJobs < MAX_CONCURRENT_PACKSHOT_JOBS && packshotJobQueue.length > 0) {
+    const nextTask = packshotJobQueue.shift();
+    if (!nextTask) break;
+    activePackshotJobs += 1;
+    nextTask();
+  }
+}
+
+function enqueuePackshotWork(workFn) {
+  return new Promise((resolve) => {
+    packshotJobQueue.push(() => {
+      Promise.resolve()
+        .then(workFn)
+        .then(resolve)
+        .finally(() => {
+          window.setTimeout(() => {
+            activePackshotJobs = Math.max(0, activePackshotJobs - 1);
+            pumpPackshotQueue();
+          }, 4);
+        });
+    });
+    pumpPackshotQueue();
+  });
+}
 
 function readLruCachedUrl(key) {
   if (!TINTED_URL_CACHE.has(key)) return null;
@@ -250,40 +280,50 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
     }
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = async () => {
-      let canvas = null;
-      try {
-        const maxSide = 440;
-        const scale = Math.min(
-          1,
-          maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)
-        );
-        const w = Math.max(64, Math.round((img.naturalWidth || 300) * scale));
-        const h = Math.max(64, Math.round((img.naturalHeight || 400) * scale));
-        canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0, w, h);
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const d = imgData.data;
-        const nPx = w * h;
+    img.onload = () => {
+      enqueuePackshotWork(async () => {
+        let canvas = null;
+        try {
+          const maxSide = 280;
+          const scale = Math.min(
+            1,
+            maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)
+          );
+          const w = Math.max(64, Math.round((img.naturalWidth || 300) * scale));
+          const h = Math.max(64, Math.round((img.naturalHeight || 400) * scale));
+          canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const d = imgData.data;
+          const nPx = w * h;
 
-        const cornerIndices = [
-          0,
-          (w - 1) * 4,
-          (h - 1) * w * 4,
-          ((h - 1) * w + (w - 1)) * 4,
-        ];
-        let maxCornerAlpha = 0;
-        for (const ci of cornerIndices) {
-          if (d[ci + 3] > maxCornerAlpha) maxCornerAlpha = d[ci + 3];
-        }
-        let transparentPx = 0;
-        for (let p = 0; p < nPx; p++) {
-          if (d[p * 4 + 3] < 245) transparentPx++;
-        }
-        let hasValidAlpha = maxCornerAlpha < 40 && transparentPx > nPx * 0.03;
+          const cornerIndices = [
+            0,
+            (w - 1) * 4,
+            (h - 1) * w * 4,
+            ((h - 1) * w + (w - 1)) * 4,
+          ];
+          let maxCornerAlpha = 0;
+          for (const ci of cornerIndices) {
+            if (d[ci + 3] > maxCornerAlpha) maxCornerAlpha = d[ci + 3];
+          }
+          let transparentPx = 0;
+          for (let p = 0; p < nPx; p++) {
+            if (d[p * 4 + 3] < 245) transparentPx++;
+          }
+          let hasValidAlpha = maxCornerAlpha < 40 && transparentPx > nPx * 0.03;
+
+          if (hasValidAlpha && !shouldTint) {
+            canvas.width = 0;
+            canvas.height = 0;
+            const passthroughUrl = withPublicBaseUrl(srcUrl);
+            writeLruCachedUrl(key, passthroughUrl);
+            resolve(passthroughUrl);
+            return;
+          }
 
         if (!hasValidAlpha) {
           let preCornerLumSum = 0;
@@ -523,6 +563,10 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
           const specEnd = preserveDial ? 216 : 242;
           const specStrength = preserveDial ? 0.96 : 0.78;
           const exp = tgtLum < 45 ? 0.76 : 0.92;
+          const shadeLut = new Float32Array(256);
+          for (let l = 0; l < 256; l++) {
+            shadeLut[l] = Math.pow(Math.min(2.2, Math.max(0.12, l / meanFgLum)), exp);
+          }
 
           for (let p = 0; p < nPx; p++) {
             const m = masks[p];
@@ -537,7 +581,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
             const metalSpecularProtect =
               sat < 22 && lum > specStart ? smoothstep(specStart, specEnd, lum) * specStrength : 0;
             const blend = m * (1 - metalSpecularProtect) * 0.88;
-            const shadeRatio = Math.pow(Math.min(2.2, Math.max(0.12, lum / meanFgLum)), exp);
+            const shadeRatio = shadeLut[Math.min(255, Math.max(0, lum | 0))];
             const darkSheen = tgtLum < 42 ? Math.max(0, (lum - meanFgLum * 0.92) * 0.24) : 0;
             const specLift = Math.max(0, (lum - meanFgLum * 1.18) * 0.28) + darkSheen;
 
@@ -564,6 +608,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
       } finally {
         PENDING_TINTS.delete(key);
       }
+      });
     };
     img.onerror = () => {
       PENDING_TINTS.delete(key);
@@ -669,11 +714,39 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
 
   const cacheKey = `v4|${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
 
+  const containerRef = useRef(null);
+  const [isNearViewport, setIsNearViewport] = useState(
+    () => Boolean(eager) || typeof IntersectionObserver === 'undefined'
+  );
   const [asyncTinted, setAsyncTinted] = useState(null);
   const [failedKey, setFailedKey] = useState(null);
 
   useEffect(() => {
-    if (!needsCanvasProcessing || TINTED_URL_CACHE.has(cacheKey)) {
+    if (isNearViewport || !needsCanvasProcessing || TINTED_URL_CACHE.has(cacheKey)) {
+      return undefined;
+    }
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsNearViewport(true);
+      return undefined;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsNearViewport(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    obs.observe(el);
+    return () => {
+      obs.disconnect();
+    };
+  }, [isNearViewport, needsCanvasProcessing, cacheKey]);
+
+  useEffect(() => {
+    if (!needsCanvasProcessing || !isNearViewport || TINTED_URL_CACHE.has(cacheKey)) {
       return undefined;
     }
     let cancelled = false;
@@ -685,7 +758,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     return () => {
       cancelled = true;
     };
-  }, [resolvedSrc, targetHex, shouldTintSeed, needsCanvasProcessing, cacheKey, sub]);
+  }, [resolvedSrc, targetHex, shouldTintSeed, needsCanvasProcessing, isNearViewport, cacheKey, sub]);
 
   const cachedUrl = needsCanvasProcessing ? readLruCachedUrl(cacheKey) : null;
   const computedSrc = !needsCanvasProcessing
@@ -709,6 +782,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
 
   return (
     <div
+      ref={containerRef}
       className={`studio-garment-image ${className}`.trim()}
       style={{
         position: 'relative',

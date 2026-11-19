@@ -1,6 +1,143 @@
 export type BaseStageBackgroundTier = 'S' | 'A' | 'B' | 'C';
 export type StageBackgroundTier = 'S+' | 'S' | 'A+' | 'A' | 'B+' | 'B' | 'C';
 
+export type WindowApertureKind =
+  | 'overhead-skylight'
+  | 'clerestory-slit'
+  | 'full-glass-mullion'
+  | 'arched-grid-gobo'
+  | 'left-sheer-curtain'
+  | 'high-clerestory'
+  | 'windowless-salon'
+  | 'archway-sun';
+
+export type WindowSide = 'left' | 'right' | 'center' | 'overhead' | 'none';
+
+export type NightFixtureKind =
+  | 'chandelier-arcade'
+  | 'pin-spot'
+  | 'rail-pendant'
+  | 'wall-sconce'
+  | 'recessed-cove'
+  | 'gallery-wall-washer'
+  | 'louver-strip-cove'
+  | 'arch-uplight';
+
+export interface IndoorLightingRigSpec {
+  windowAperture: WindowApertureKind;
+  windowSide: WindowSide;
+  /** Compass azimuth (deg, 180 = South, 135 = SE, 225 = SW) where daylight enters strongest */
+  windowAzimuthDeg: number;
+  daylightStrength: number;
+  nightFixture: NightFixtureKind;
+  nightKelvinHex: number;
+  /** Selective photo exposure reduction (0..0.42) applied after sunset so indoor lamps read warmly */
+  nightPhotoDim: number;
+  rigNoteKo: string;
+  rigNoteEn: string;
+}
+
+export type StageLightingPresetId =
+  | 'auto'
+  | 'daylight'
+  | 'warm_white'
+  | 'golden_amber'
+  | 'cool_gallery'
+  | 'moonlight';
+
+export interface StageLightingPresetMeta {
+  id: StageLightingPresetId;
+  labelKo: string;
+  labelEn: string;
+  kelvinLabel: string;
+  swatchHex: string;
+  keyHex: number;
+  skyHex: number;
+  groundHex: number;
+  rimHex: number;
+  tintRgb: string;
+}
+
+export const DEFAULT_LIGHTING_PRESET: StageLightingPresetId = 'auto';
+export const DEFAULT_LIGHTING_INTENSITY = 100;
+export const MIN_LIGHTING_INTENSITY = 0;
+export const MAX_LIGHTING_INTENSITY = 200;
+
+export const STAGE_LIGHTING_PRESETS: readonly StageLightingPresetMeta[] = [
+  {
+    id: 'auto',
+    labelKo: '자동 연동',
+    labelEn: 'Auto Sync',
+    kelvinLabel: 'AUTO',
+    swatchHex: '#F3E7CE',
+    keyHex: 0xfff4e0,
+    skyHex: 0xd8e6fb,
+    groundHex: 0x46423d,
+    rimHex: 0xf4dcb0,
+    tintRgb: '255, 244, 224',
+  },
+  {
+    id: 'daylight',
+    labelKo: '자연 주광',
+    labelEn: 'Daylight',
+    kelvinLabel: '5600K',
+    swatchHex: '#FFFDF7',
+    keyHex: 0xfffbf2,
+    skyHex: 0xc8e0ff,
+    groundHex: 0x4b4f56,
+    rimHex: 0xffffff,
+    tintRgb: '255, 251, 242',
+  },
+  {
+    id: 'warm_white',
+    labelKo: '웜화이트',
+    labelEn: 'Warm White',
+    kelvinLabel: '3000K',
+    swatchHex: '#FFE4B8',
+    keyHex: 0xffe6be,
+    skyHex: 0xf7dcb4,
+    groundHex: 0x4c3f33,
+    rimHex: 0xffdba4,
+    tintRgb: '255, 230, 190',
+  },
+  {
+    id: 'golden_amber',
+    labelKo: '골든 앰버',
+    labelEn: 'Golden Amber',
+    kelvinLabel: '2700K',
+    swatchHex: '#FFC278',
+    keyHex: 0xffbc6e,
+    skyHex: 0xe6a87c,
+    groundHex: 0x453228,
+    rimHex: 0xffb35c,
+    tintRgb: '255, 188, 110',
+  },
+  {
+    id: 'cool_gallery',
+    labelKo: '쿨 갤러리',
+    labelEn: 'Cool Gallery',
+    kelvinLabel: '6500K',
+    swatchHex: '#DCEBFF',
+    keyHex: 0xe4f0ff,
+    skyHex: 0xb6d2f8,
+    groundHex: 0x3e4756,
+    rimHex: 0xd6e8ff,
+    tintRgb: '224, 238, 255',
+  },
+  {
+    id: 'moonlight',
+    labelKo: '문라이트',
+    labelEn: 'Moonlight',
+    kelvinLabel: '4200K',
+    swatchHex: '#9EB8F0',
+    keyHex: 0xaec6ff,
+    skyHex: 0x4a6294,
+    groundHex: 0x1e2538,
+    rimHex: 0x9ab6f5,
+    tintRgb: '166, 194, 255',
+  },
+] as const;
+
 export interface StageBackgroundItem {
   id: string;
   tier: StageBackgroundTier;
@@ -14,6 +151,7 @@ export interface StageBackgroundItem {
   weight: number;
   isDefaultUnlocked: boolean;
   isOutdoor: boolean;
+  lightingRig?: IndoorLightingRigSpec;
 }
 
 export const DEFAULT_STAGE_BACKGROUND_ID = 'c_atelier_plaster';
@@ -85,6 +223,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 2,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'overhead-skylight',
+      windowSide: 'overhead',
+      windowAzimuthDeg: 180,
+      daylightStrength: 0.92,
+      nightFixture: 'chandelier-arcade',
+      nightKelvinHex: 0xffd79c,
+      nightPhotoDim: 0.28,
+      rigNoteKo: '낮 천창 아케이드 채광 · 일몰 후 2800K 샹들리에 점등',
+      rigNoteEn: 'Daytime glass skylight · Post-sunset 2800K chandelier arcade',
+    },
   },
   {
     id: 's_palais_royal_outdoor',
@@ -113,6 +262,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 6,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'clerestory-slit',
+      windowSide: 'right',
+      windowAzimuthDeg: 205,
+      daylightStrength: 0.56,
+      nightFixture: 'pin-spot',
+      nightKelvinHex: 0xffe0b2,
+      nightPhotoDim: 0.34,
+      rigNoteKo: '낮 상부 슬릿 채광 · 일몰 후 3000K 핀스팟 트랙 조명 점등',
+      rigNoteEn: 'Daytime clerestory slit · Post-sunset 3000K museum pin-spot',
+    },
   },
   {
     id: 'a_sunset_rooftop',
@@ -155,6 +315,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'full-glass-mullion',
+      windowSide: 'right',
+      windowAzimuthDeg: 195,
+      daylightStrength: 0.96,
+      nightFixture: 'rail-pendant',
+      nightKelvinHex: 0xffdca8,
+      nightPhotoDim: 0.32,
+      rigNoteKo: '낮 통유리 커튼월 주광 · 일몰 후 2900K 레일 펜던트 점등',
+      rigNoteEn: 'Daytime curtain-wall sunlight · Post-sunset 2900K rail pendant',
+    },
   },
   {
     id: 'b_brick_courtyard',
@@ -183,6 +354,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 7,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'arched-grid-gobo',
+      windowSide: 'center',
+      windowAzimuthDeg: 170,
+      daylightStrength: 0.98,
+      nightFixture: 'wall-sconce',
+      nightKelvinHex: 0xffce8c,
+      nightPhotoDim: 0.33,
+      rigNoteKo: '낮 아치 격자창 고보 햇빛 · 일몰 후 2700K 월 스콘스 점등',
+      rigNoteEn: 'Daytime arched window grid sun · Post-sunset 2700K wall sconce',
+    },
   },
   {
     id: 'b_stone_courtyard_outdoor',
@@ -225,6 +407,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 12,
     isDefaultUnlocked: true,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'left-sheer-curtain',
+      windowSide: 'left',
+      windowAzimuthDeg: 145,
+      daylightStrength: 0.82,
+      nightFixture: 'recessed-cove',
+      nightKelvinHex: 0xffdcb0,
+      nightPhotoDim: 0.27,
+      rigNoteKo: '낮 좌측 쉬어 커튼 채광 · 일몰 후 2900K 매입 코브등 점등',
+      rigNoteEn: 'Daytime left sheer-curtain sun · Post-sunset 2900K recessed cove',
+    },
   },
   {
     id: 'c_concrete_gallery',
@@ -239,6 +432,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 11,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'high-clerestory',
+      windowSide: 'left',
+      windowAzimuthDeg: 155,
+      daylightStrength: 0.76,
+      nightFixture: 'gallery-wall-washer',
+      nightKelvinHex: 0xffe8c8,
+      nightPhotoDim: 0.29,
+      rigNoteKo: '낮 하이 클리어스토리 사선광 · 일몰 후 3200K 월워셔 점등',
+      rigNoteEn: 'Daytime high clerestory slash · Post-sunset 3200K wall washer',
+    },
   },
   {
     id: 'c_oak_dressing_room',
@@ -253,6 +457,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 11,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'windowless-salon',
+      windowSide: 'none',
+      windowAzimuthDeg: 180,
+      daylightStrength: 0,
+      nightFixture: 'louver-strip-cove',
+      nightKelvinHex: 0xffcf90,
+      nightPhotoDim: 0.24,
+      rigNoteKo: '무창 프라이빗 룸 · 낮 4000K 간접광 / 일몰 후 2700K 루버 무드등 전환',
+      rigNoteEn: 'Windowless dressing room · Day 4000K cove / Post-sunset 2700K louver',
+    },
   },
   {
     id: 'c_stone_boutique',
@@ -267,8 +482,43 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
     weight: 11,
     isDefaultUnlocked: false,
     isOutdoor: false,
+    lightingRig: {
+      windowAperture: 'archway-sun',
+      windowSide: 'right',
+      windowAzimuthDeg: 210,
+      daylightStrength: 0.8,
+      nightFixture: 'arch-uplight',
+      nightKelvinHex: 0xffd8a2,
+      nightPhotoDim: 0.28,
+      rigNoteKo: '낮 트래버틴 아치 채광 · 일몰 후 2850K 아치 업라이트 점등',
+      rigNoteEn: 'Daytime travertine arch sun · Post-sunset 2850K arch uplight',
+    },
   },
 ];
+
+const VALID_LIGHTING_PRESET_IDS = new Set<StageLightingPresetId>(
+  STAGE_LIGHTING_PRESETS.map((p) => p.id)
+);
+
+export function normalizeLightingPreset(value: unknown): StageLightingPresetId {
+  if (typeof value === 'string' && VALID_LIGHTING_PRESET_IDS.has(value as StageLightingPresetId)) {
+    return value as StageLightingPresetId;
+  }
+  return DEFAULT_LIGHTING_PRESET;
+}
+
+export function clampLightingIntensity(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_LIGHTING_INTENSITY;
+  return Math.round(Math.min(MAX_LIGHTING_INTENSITY, Math.max(MIN_LIGHTING_INTENSITY, parsed)));
+}
+
+export function getLightingPresetMeta(
+  presetId?: StageLightingPresetId | string | null
+): StageLightingPresetMeta {
+  const normalized = normalizeLightingPreset(presetId);
+  return STAGE_LIGHTING_PRESETS.find((p) => p.id === normalized) || STAGE_LIGHTING_PRESETS[0];
+}
 
 export interface StageEconomyState {
   iBalance: number;
@@ -279,6 +529,8 @@ export interface StageEconomyState {
   lastAttendanceDate: string | null;
   attendanceStreak: number;
   totalDraws: number;
+  lightingPreset: StageLightingPresetId;
+  lightingIntensity: number;
 }
 
 export function createInitialEconomyState(): StageEconomyState {
@@ -291,6 +543,8 @@ export function createInitialEconomyState(): StageEconomyState {
     lastAttendanceDate: null,
     attendanceStreak: 0,
     totalDraws: 0,
+    lightingPreset: DEFAULT_LIGHTING_PRESET,
+    lightingIntensity: DEFAULT_LIGHTING_INTENSITY,
   };
 }
 
@@ -348,6 +602,11 @@ export function normalizeEconomyState(
       typeof raw?.totalDraws === 'number' && Number.isFinite(raw.totalDraws) && raw.totalDraws >= 0
         ? Math.floor(raw.totalDraws)
         : 0,
+    lightingPreset: normalizeLightingPreset(raw?.lightingPreset),
+    lightingIntensity:
+      raw?.lightingIntensity === undefined
+        ? DEFAULT_LIGHTING_INTENSITY
+        : clampLightingIntensity(raw.lightingIntensity),
   };
 }
 
@@ -618,6 +877,24 @@ export function equipStageBackground(backgroundId: string): StageEconomyState {
   return saveStoredEconomyState({
     ...cur,
     equippedBackgroundId: backgroundId,
+  });
+}
+
+export function updateStageLightingSettings(patch: {
+  lightingPreset?: StageLightingPresetId | string;
+  lightingIntensity?: number;
+}): StageEconomyState {
+  const cur = loadStoredEconomyState();
+  return saveStoredEconomyState({
+    ...cur,
+    lightingPreset:
+      patch.lightingPreset !== undefined
+        ? normalizeLightingPreset(patch.lightingPreset)
+        : cur.lightingPreset,
+    lightingIntensity:
+      patch.lightingIntensity !== undefined
+        ? clampLightingIntensity(patch.lightingIntensity)
+        : cur.lightingIntensity,
   });
 }
 

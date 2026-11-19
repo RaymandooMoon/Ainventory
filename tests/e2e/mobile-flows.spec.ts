@@ -425,7 +425,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
     });
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
-    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-tier', 'A+');
+    await expect(studioCanvas.locator('.studio-25d-rain-layer')).toHaveCount(0);
 
     await weatherCapsule.click();
     await expect(weatherPanel).toBeVisible();
@@ -529,10 +530,16 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       studioCanvas.locator('.studio-hud-left-slot [data-stage-bg-picker-btn="true"]')
     ).toBeVisible();
 
-    await page.getByRole('button', { name: /피팅 새로고침|Refresh/i }).click();
-    await studioCanvas.locator('[data-vton-demo-btn="true"]').click();
+    await expect(page.locator('[data-outfit-vton-refresh="true"]')).toHaveCount(0);
+    const demoBtn = studioCanvas.locator('[data-vton-demo-btn="true"]');
+    if (await demoBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+      await demoBtn.click();
+    } else {
+      await page.goto('/outfits?demo_vton=1');
+    }
     const demoAiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(demoAiImg).toBeVisible();
+    await expect(studioCanvas.locator('[data-testid="studio-three-stage-layer"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
@@ -949,10 +956,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       if (tab === 'outfits') {
         await expect(page.locator('[data-atelier-weather-capsule="true"]')).toBeVisible();
         await expect(page.locator('[data-weather-look-dock="true"]')).toBeVisible();
-        const mobileSlotBtn = page.locator('.studio-mobile-slot-pill').first();
-        if (await mobileSlotBtn.isVisible()) {
-          await mobileSlotBtn.click();
-          await expect(page.locator('.ui-sheet-box .studio-mini-garment-card').first()).toBeVisible();
+        const mobileDrawerBtn = page.locator('[data-mobile-wardrobe-trigger="true"]').first();
+        if (await mobileDrawerBtn.isVisible()) {
+          await mobileDrawerBtn.click();
+          await expect(page.locator('#outfit-mobile-wardrobe-sheet .studio-mini-garment-card').first()).toBeVisible();
           await assertZeroHangulOnPage('admin-outfits-mobile-sheet-en');
           await page.keyboard.press('Escape');
         } else {
@@ -1269,8 +1276,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     // Impression 2: Confirm with 예 -> switches weather to tomorrow
     await page.goto('/?tod=night');
     await expect(studioCanvas).toHaveAttribute('data-time-of-day', 'night');
-    await expect(studioCanvas.locator('[data-weather-foreground]')).toHaveAttribute(
-      'data-weather-tod',
+    await expect(studioCanvas.locator('[data-atelier-backdrop="true"]')).toHaveAttribute(
+      'data-backdrop-tod',
       'night'
     );
     await expect(tomorrowModal).toBeVisible();
@@ -1366,7 +1373,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal).toHaveCount(0);
     await expect(freeBubble).toHaveCount(0);
 
-    // 3) Top-left Background Picker opens all 14 across S+/S/A+/A/B+/B/C & equips C-tier / unlocked background
+    // 3) Top-left Background Picker opens all 14 across S+/S/A+/A/B+/B/C, adjusts Lighting Color & Brightness, & equips C-tier background
     await studioCanvas.locator('[data-stage-bg-picker-btn="true"]').click();
     const bgPickerModal = page.locator('#stage-background-picker-modal');
     await expect(bgPickerModal).toBeVisible();
@@ -1378,20 +1385,50 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(2);
     await expect(bgPickerModal.locator('[data-bg-tier-group="C"] [data-bg-option-id]')).toHaveCount(4);
 
+    // Verify user-adjustable Stage Lighting Preset (Color/Kelvin) & Brightness (0-200%) controls + Reset
+    const lightingControls = bgPickerModal.locator('[data-bg-lighting-controls="true"]');
+    await expect(lightingControls).toBeVisible();
+    await lightingControls.locator('[data-lighting-preset-option="golden_amber"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-lighting-preset', 'golden_amber');
+
+    const intensitySlider = lightingControls.locator('[data-lighting-intensity-slider="true"]');
+    await intensitySlider.evaluate((el) => {
+      const input = el as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      setter?.call(input, '145');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(lightingControls.locator('[data-lighting-intensity-value="true"]')).toHaveText(
+      '145%'
+    );
+    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '145');
+
+    await lightingControls.locator('[data-lighting-reset-btn="true"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-lighting-preset', 'auto');
+    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '100');
+
     // Equip an unlocked option and confirm modal closes & stage attribute stays valid
     await bgPickerModal.locator('[data-bg-option-id="c_atelier_plaster"]').click();
     await expect(bgPickerModal).toHaveCount(0);
     await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 'c_atelier_plaster');
 
     // 4) Calendar tab -> Attendance check-in awards +10 i, increments streak, and stamps today
+    // Note: if the random Free Daily Draw above rolled already-unlocked `c_atelier_plaster`, duplicate refund awarded +5 i
     await page.locator('[data-nav-tab="calendar"]').click();
     await expect(page.locator('[data-calendar-attendance-card="true"]')).toBeVisible();
-    await expect(page.locator('[data-calendar-i-balance="true"]')).toHaveText('0 i');
+    const calBalanceEl = page.locator('[data-calendar-i-balance="true"]');
+    await expect(calBalanceEl).toHaveText(/^(0|5) i$/);
+    const preAttendanceBalance = Number.parseInt((await calBalanceEl.innerText()).trim(), 10) || 0;
+    const expectedPostAttendance = preAttendanceBalance + 10;
     const attendanceBtn = page.locator('[data-calendar-attendance-btn="true"]');
     await expect(attendanceBtn).toBeEnabled();
     await attendanceBtn.click();
 
-    await expect(page.locator('[data-calendar-i-balance="true"]')).toHaveText('10 i');
+    await expect(calBalanceEl).toHaveText(`${expectedPostAttendance} i`);
     await expect(page.locator('[data-calendar-streak="true"]')).toContainText(/1일|1d/);
     await expect(attendanceBtn).toBeDisabled();
     await expect(page.locator('[data-calendar-attended="true"]').first()).toBeVisible();
@@ -1400,7 +1437,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('[data-nav-tab="outfits"]').click();
     await page.locator('[data-open-store-btn="true"]').click();
     await expect(storeModal).toBeVisible();
-    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText('10 i');
+    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText(
+      `${expectedPostAttendance} i`
+    );
     await expect(storeModal.locator('[data-store-draw-btn="true"]')).toBeEnabled();
     await expect(storeModal.locator('[data-store-draw-btn="true"]')).toContainText('10 i');
     await storeModal.locator('[data-store-draw-btn="true"]').click();
@@ -1410,7 +1449,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       await skipSpinBtn.click();
     }
     await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible();
-    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText(/^(0|5) i$/);
+    await expect(storeModal.locator('[data-store-balance="true"]')).toHaveText(/^(0|5|10) i$/);
   });
 });
 

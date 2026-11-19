@@ -537,7 +537,7 @@ export async function fetchTomorrowWeather(
     };
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=Asia%2FSeoul&forecast_days=3`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,shortwave_radiation_sum&current=cloud_cover,visibility,is_day,precipitation,direct_radiation,diffuse_radiation&timezone=Asia%2FSeoul&forecast_days=3`;
       const res = await fetch(url, { signal: AbortSignal.timeout(OPEN_METEO_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -551,9 +551,37 @@ export async function fetchTomorrowWeather(
       }
       const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
       const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
+      const sunrise =
+        typeof json.daily?.sunrise?.[idx] === 'string' ? json.daily.sunrise[idx] : null;
+      const sunset =
+        typeof json.daily?.sunset?.[idx] === 'string' ? json.daily.sunset[idx] : null;
+      const shortwaveRadiationSum = Number.isFinite(
+        Number(json.daily?.shortwave_radiation_sum?.[idx])
+      )
+        ? Number(json.daily.shortwave_radiation_sum[idx])
+        : undefined;
+      const cur = json.current && typeof json.current === 'object' ? json.current : null;
+      const cloudCover =
+        cur && Number.isFinite(Number(cur.cloud_cover)) ? Math.round(Number(cur.cloud_cover)) : undefined;
+      const visibilityM =
+        cur && Number.isFinite(Number(cur.visibility)) ? Math.round(Number(cur.visibility)) : undefined;
+      const directRadiation =
+        cur && Number.isFinite(Number(cur.direct_radiation))
+          ? Math.round(Number(cur.direct_radiation))
+          : undefined;
+      const diffuseRadiation =
+        cur && Number.isFinite(Number(cur.diffuse_radiation))
+          ? Math.round(Number(cur.diffuse_radiation))
+          : undefined;
+      const currentPrecipitation =
+        cur && Number.isFinite(Number(cur.precipitation)) ? Number(cur.precipitation) : undefined;
+      const isDay = cur && (cur.is_day === 0 || cur.is_day === 1) ? Boolean(cur.is_day) : undefined;
+
       const data = {
         cityKey: hasCustom ? 'gps' : safeCityKey,
         cityName: city.name,
+        latitude: city.lat,
+        longitude: city.lon,
         date: json.daily.time[idx] || targetDateStr,
         dayTarget: resolvedDayTarget,
         scenarioKey: 'live',
@@ -564,6 +592,15 @@ export async function fetchTomorrowWeather(
         precipProb,
         windSpeed,
         humidity: precipProb >= 50 ? 78 : 50,
+        sunrise,
+        sunset,
+        shortwaveRadiationSum,
+        cloudCover,
+        visibilityM,
+        directRadiation,
+        diffuseRadiation,
+        currentPrecipitation,
+        isDay,
         isSimulated: false,
         recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
       };
@@ -577,6 +614,8 @@ export async function fetchTomorrowWeather(
       const fallbackData = {
         cityKey: hasCustom ? 'gps' : safeCityKey,
         cityName: city.name,
+        latitude: city.lat,
+        longitude: city.lon,
         date: targetDateStr,
         dayTarget: resolvedDayTarget,
         scenarioKey: 'live',
