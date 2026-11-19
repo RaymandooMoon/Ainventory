@@ -23,6 +23,39 @@ export type NightFixtureKind =
   | 'louver-strip-cove'
   | 'arch-uplight';
 
+export type StageFixtureEmitterKind =
+  | 'sconce'
+  | 'spot'
+  | 'chandelier'
+  | 'cove-strip'
+  | 'uplight';
+
+export interface StageFixtureEmitter {
+  id: string;
+  kind: StageFixtureEmitterKind;
+  /** Horizontal center on the raw 3:4 photograph (0..100%) */
+  xPct: number;
+  /** Vertical center on the raw 3:4 photograph (0..100%) */
+  yPct: number;
+  /** Optional end coordinates for linear `cove-strip` fixtures (0..100%) */
+  x2Pct?: number;
+  y2Pct?: number;
+  /** Base optical halo radius in % of photo width */
+  radiusPct: number;
+  /** Relative brightness weight (0.4..1.4) */
+  intensity: number;
+  /** Optional emitter-specific warm/cool Kelvin hex override */
+  kelvinHex?: number;
+  /** Directional wall/floor light-cone span in % of photo height */
+  washSpanPct?: number;
+  /** Aim/tilt angle in degrees for directional cones (0 = vertical) */
+  tiltDeg?: number;
+  /** Optional physical lampshade width in % of photo width (for pixel-locked backlit sconce shades) */
+  shadeWidthPct?: number;
+  /** Optional physical lampshade height in % of photo height (for pixel-locked backlit sconce shades) */
+  shadeHeightPct?: number;
+}
+
 export interface IndoorLightingRigSpec {
   windowAperture: WindowApertureKind;
   windowSide: WindowSide;
@@ -33,6 +66,10 @@ export interface IndoorLightingRigSpec {
   nightKelvinHex: number;
   /** Selective photo exposure reduction (0..0.42) applied after sunset so indoor lamps read warmly */
   nightPhotoDim: number;
+  /** Directional shadow crispness (0..1) cast by the room's active indoor lamps */
+  nightDirectRatio?: number;
+  /** Exact 3:4 photo-space coordinates of visible physical light fixtures to illuminate */
+  fixtureEmitters?: readonly StageFixtureEmitter[];
   rigNoteKo: string;
   rigNoteEn: string;
 }
@@ -61,7 +98,7 @@ export interface StageLightingPresetMeta {
 export const DEFAULT_LIGHTING_PRESET: StageLightingPresetId = 'auto';
 export const DEFAULT_LIGHTING_INTENSITY = 100;
 export const MIN_LIGHTING_INTENSITY = 0;
-export const MAX_LIGHTING_INTENSITY = 200;
+export const MAX_LIGHTING_INTENSITY = 100;
 
 export const STAGE_LIGHTING_PRESETS: readonly StageLightingPresetMeta[] = [
   {
@@ -231,6 +268,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'chandelier-arcade',
       nightKelvinHex: 0xffd79c,
       nightPhotoDim: 0.28,
+      nightDirectRatio: 0.74,
+      fixtureEmitters: [
+        { id: 'paris_ch_fl', kind: 'chandelier', xPct: 15.6, yPct: 49.6, radiusPct: 14, intensity: 1.05, washSpanPct: 22 },
+        { id: 'paris_sc_fl', kind: 'sconce', xPct: 10.8, yPct: 55.6, radiusPct: 6.2, intensity: 0.95, washSpanPct: 13, shadeWidthPct: 2.2, shadeHeightPct: 2.1 },
+        { id: 'paris_ch_ml', kind: 'chandelier', xPct: 28.2, yPct: 54.4, radiusPct: 10.5, intensity: 0.95, washSpanPct: 17 },
+        { id: 'paris_sc_ml', kind: 'sconce', xPct: 27.6, yPct: 58.6, radiusPct: 4.8, intensity: 0.86, washSpanPct: 10, shadeWidthPct: 1.6, shadeHeightPct: 1.6 },
+        { id: 'paris_ch_mr', kind: 'chandelier', xPct: 71.8, yPct: 54.4, radiusPct: 10.5, intensity: 0.95, washSpanPct: 17 },
+        { id: 'paris_sc_mr', kind: 'sconce', xPct: 72.4, yPct: 58.6, radiusPct: 4.8, intensity: 0.86, washSpanPct: 10, shadeWidthPct: 1.6, shadeHeightPct: 1.6 },
+        { id: 'paris_ch_fr', kind: 'chandelier', xPct: 84.4, yPct: 49.6, radiusPct: 14, intensity: 1.05, washSpanPct: 22 },
+        { id: 'paris_sc_fr', kind: 'sconce', xPct: 89.2, yPct: 55.6, radiusPct: 6.2, intensity: 0.95, washSpanPct: 13, shadeWidthPct: 2.2, shadeHeightPct: 2.1 },
+      ],
       rigNoteKo: '낮 천창 아케이드 채광 · 일몰 후 2800K 샹들리에 점등',
       rigNoteEn: 'Daytime glass skylight · Post-sunset 2800K chandelier arcade',
     },
@@ -270,6 +318,18 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'pin-spot',
       nightKelvinHex: 0xffe0b2,
       nightPhotoDim: 0.34,
+      nightDirectRatio: 0.88,
+      fixtureEmitters: [
+        { id: 'hannam_f1', kind: 'spot', xPct: 28.4, yPct: 12.2, radiusPct: 9.5, intensity: 1.0, washSpanPct: 36, tiltDeg: 6 },
+        { id: 'hannam_f2', kind: 'spot', xPct: 49.8, yPct: 12.2, radiusPct: 10.5, intensity: 1.15, washSpanPct: 40, tiltDeg: 0 },
+        { id: 'hannam_f3', kind: 'spot', xPct: 70.4, yPct: 12.2, radiusPct: 9.5, intensity: 1.0, washSpanPct: 36, tiltDeg: -6 },
+        { id: 'hannam_m1', kind: 'spot', xPct: 34.4, yPct: 22.9, radiusPct: 8.6, intensity: 1.12, washSpanPct: 38, tiltDeg: 4 },
+        { id: 'hannam_m2', kind: 'spot', xPct: 49.8, yPct: 22.9, radiusPct: 9.8, intensity: 1.25, washSpanPct: 44, tiltDeg: 0 },
+        { id: 'hannam_m3', kind: 'spot', xPct: 64.7, yPct: 22.9, radiusPct: 8.6, intensity: 1.12, washSpanPct: 38, tiltDeg: -4 },
+        { id: 'hannam_r1', kind: 'spot', xPct: 37.8, yPct: 28.6, radiusPct: 7.4, intensity: 1.05, washSpanPct: 34, tiltDeg: 3 },
+        { id: 'hannam_r2', kind: 'spot', xPct: 50.0, yPct: 28.6, radiusPct: 8.2, intensity: 1.15, washSpanPct: 38, tiltDeg: 0 },
+        { id: 'hannam_r3', kind: 'spot', xPct: 61.6, yPct: 28.6, radiusPct: 7.4, intensity: 1.05, washSpanPct: 34, tiltDeg: -3 },
+      ],
       rigNoteKo: '낮 상부 슬릿 채광 · 일몰 후 3000K 핀스팟 트랙 조명 점등',
       rigNoteEn: 'Daytime clerestory slit · Post-sunset 3000K museum pin-spot',
     },
@@ -323,6 +383,18 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'rail-pendant',
       nightKelvinHex: 0xffdca8,
       nightPhotoDim: 0.32,
+      nightDirectRatio: 0.84,
+      fixtureEmitters: [
+        { id: 'seongsu_f1', kind: 'spot', xPct: 14.4, yPct: 17.2, radiusPct: 9.5, intensity: 1.0, washSpanPct: 26, tiltDeg: 10 },
+        { id: 'seongsu_f2', kind: 'spot', xPct: 39.4, yPct: 17.2, radiusPct: 10.0, intensity: 1.12, washSpanPct: 28, tiltDeg: 2 },
+        { id: 'seongsu_f3', kind: 'spot', xPct: 64.5, yPct: 17.2, radiusPct: 9.5, intensity: 1.0, washSpanPct: 26, tiltDeg: -6 },
+        { id: 'seongsu_m1', kind: 'spot', xPct: 26.2, yPct: 27.8, radiusPct: 8.0, intensity: 1.05, washSpanPct: 24, tiltDeg: 6 },
+        { id: 'seongsu_m2', kind: 'spot', xPct: 43.2, yPct: 27.8, radiusPct: 8.6, intensity: 1.15, washSpanPct: 26, tiltDeg: 1 },
+        { id: 'seongsu_m3', kind: 'spot', xPct: 60.0, yPct: 27.8, radiusPct: 8.0, intensity: 1.0, washSpanPct: 24, tiltDeg: -4 },
+        { id: 'seongsu_r1', kind: 'spot', xPct: 32.0, yPct: 33.6, radiusPct: 6.5, intensity: 0.88, washSpanPct: 18, tiltDeg: 4 },
+        { id: 'seongsu_r2', kind: 'spot', xPct: 44.8, yPct: 33.6, radiusPct: 7.0, intensity: 0.94, washSpanPct: 20, tiltDeg: 0 },
+        { id: 'seongsu_r3', kind: 'spot', xPct: 57.6, yPct: 33.6, radiusPct: 6.5, intensity: 0.88, washSpanPct: 18, tiltDeg: -4 },
+      ],
       rigNoteKo: '낮 통유리 커튼월 주광 · 일몰 후 2900K 레일 펜던트 점등',
       rigNoteEn: 'Daytime curtain-wall sunlight · Post-sunset 2900K rail pendant',
     },
@@ -362,6 +434,13 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'wall-sconce',
       nightKelvinHex: 0xffce8c,
       nightPhotoDim: 0.33,
+      nightDirectRatio: 0.82,
+      fixtureEmitters: [
+        { id: 'loft_sc_fl', kind: 'sconce', xPct: 10.38, yPct: 38.0, radiusPct: 8.8, intensity: 1.15, washSpanPct: 21, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
+        { id: 'loft_sc_bl', kind: 'sconce', xPct: 24.22, yPct: 42.65, radiusPct: 7.0, intensity: 1.22, washSpanPct: 17.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
+        { id: 'loft_sc_br', kind: 'sconce', xPct: 75.78, yPct: 42.65, radiusPct: 7.0, intensity: 1.18, washSpanPct: 17.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
+        { id: 'loft_sc_fr', kind: 'sconce', xPct: 89.62, yPct: 38.0, radiusPct: 8.8, intensity: 1.12, washSpanPct: 21, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
+      ],
       rigNoteKo: '낮 아치 격자창 고보 햇빛 · 일몰 후 2700K 월 스콘스 점등',
       rigNoteEn: 'Daytime arched window grid sun · Post-sunset 2700K wall sconce',
     },
@@ -415,6 +494,10 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'recessed-cove',
       nightKelvinHex: 0xffdcb0,
       nightPhotoDim: 0.27,
+      nightDirectRatio: 0.64,
+      fixtureEmitters: [
+        { id: 'plaster_cove_main', kind: 'cove-strip', xPct: 23.5, yPct: 27.2, x2Pct: 86.5, y2Pct: 27.2, radiusPct: 10.0, intensity: 1.15, washSpanPct: 22 },
+      ],
       rigNoteKo: '낮 좌측 쉬어 커튼 채광 · 일몰 후 2900K 매입 코브등 점등',
       rigNoteEn: 'Daytime left sheer-curtain sun · Post-sunset 2900K recessed cove',
     },
@@ -440,6 +523,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'gallery-wall-washer',
       nightKelvinHex: 0xffe8c8,
       nightPhotoDim: 0.29,
+      nightDirectRatio: 0.8,
+      fixtureEmitters: [
+        { id: 'gallery_rail_l', kind: 'cove-strip', xPct: 25.2, yPct: 0.5, x2Pct: 44.4, y2Pct: 38.2, radiusPct: 6.2, intensity: 1.0, washSpanPct: 16 },
+        { id: 'gallery_rail_r', kind: 'cove-strip', xPct: 74.2, yPct: 0.5, x2Pct: 56.0, y2Pct: 38.2, radiusPct: 6.2, intensity: 1.0, washSpanPct: 16 },
+        { id: 'gallery_sp_l1', kind: 'spot', xPct: 34.2, yPct: 17.5, radiusPct: 7.5, intensity: 0.95, washSpanPct: 22, tiltDeg: -10 },
+        { id: 'gallery_sp_l2', kind: 'spot', xPct: 37.4, yPct: 24.0, radiusPct: 7.0, intensity: 1.05, washSpanPct: 20, tiltDeg: -8 },
+        { id: 'gallery_sp_l3', kind: 'spot', xPct: 40.1, yPct: 29.6, radiusPct: 6.2, intensity: 0.95, washSpanPct: 18, tiltDeg: -6 },
+        { id: 'gallery_sp_r1', kind: 'spot', xPct: 65.6, yPct: 17.5, radiusPct: 7.5, intensity: 0.95, washSpanPct: 22, tiltDeg: 10 },
+        { id: 'gallery_sp_r2', kind: 'spot', xPct: 62.6, yPct: 24.0, radiusPct: 7.0, intensity: 1.05, washSpanPct: 20, tiltDeg: 8 },
+        { id: 'gallery_sp_r3', kind: 'spot', xPct: 59.9, yPct: 29.6, radiusPct: 6.2, intensity: 0.95, washSpanPct: 18, tiltDeg: 6 },
+      ],
       rigNoteKo: '낮 하이 클리어스토리 사선광 · 일몰 후 3200K 월워셔 점등',
       rigNoteEn: 'Daytime high clerestory slash · Post-sunset 3200K wall washer',
     },
@@ -465,6 +559,15 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'louver-strip-cove',
       nightKelvinHex: 0xffcf90,
       nightPhotoDim: 0.24,
+      nightDirectRatio: 0.64,
+      fixtureEmitters: [
+        { id: 'oak_cove_back', kind: 'cove-strip', xPct: 29.0, yPct: 29.2, x2Pct: 71.0, y2Pct: 29.2, radiusPct: 8.5, intensity: 1.12, washSpanPct: 16 },
+        { id: 'oak_cove_left', kind: 'cove-strip', xPct: 1.0, yPct: 2.0, x2Pct: 29.0, y2Pct: 29.2, radiusPct: 7.5, intensity: 0.92, washSpanPct: 14 },
+        { id: 'oak_cove_right', kind: 'cove-strip', xPct: 99.0, yPct: 2.0, x2Pct: 71.0, y2Pct: 29.2, radiusPct: 7.5, intensity: 0.92, washSpanPct: 14 },
+        { id: 'oak_niche_top', kind: 'cove-strip', xPct: 35.2, yPct: 38.2, x2Pct: 64.6, y2Pct: 38.2, radiusPct: 7.0, intensity: 1.15, washSpanPct: 16 },
+        { id: 'oak_niche_l', kind: 'cove-strip', xPct: 35.6, yPct: 38.5, x2Pct: 35.6, y2Pct: 63.5, radiusPct: 5.2, intensity: 0.95, washSpanPct: 10 },
+        { id: 'oak_niche_r', kind: 'cove-strip', xPct: 64.2, yPct: 38.5, x2Pct: 64.2, y2Pct: 63.5, radiusPct: 5.2, intensity: 0.95, washSpanPct: 10 },
+      ],
       rigNoteKo: '무창 프라이빗 룸 · 낮 4000K 간접광 / 일몰 후 2700K 루버 무드등 전환',
       rigNoteEn: 'Windowless dressing room · Day 4000K cove / Post-sunset 2700K louver',
     },
@@ -490,6 +593,12 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightFixture: 'arch-uplight',
       nightKelvinHex: 0xffd8a2,
       nightPhotoDim: 0.28,
+      nightDirectRatio: 0.76,
+      fixtureEmitters: [
+        { id: 'stone_up_l', kind: 'uplight', xPct: 30.2, yPct: 61.4, radiusPct: 9.5, intensity: 1.15, washSpanPct: 26 },
+        { id: 'stone_up_r', kind: 'uplight', xPct: 46.8, yPct: 61.4, radiusPct: 9.5, intensity: 1.15, washSpanPct: 26 },
+        { id: 'stone_vault', kind: 'uplight', xPct: 38.5, yPct: 34.5, radiusPct: 10.5, intensity: 0.65, washSpanPct: 16 },
+      ],
       rigNoteKo: '낮 트래버틴 아치 채광 · 일몰 후 2850K 아치 업라이트 점등',
       rigNoteEn: 'Daytime travertine arch sun · Post-sunset 2850K arch uplight',
     },

@@ -409,6 +409,16 @@ export function createVtonRouter(options = {}) {
         payload.master_anchor_data_url ??
         rawClientProfile.masterAnchorDataUrl ??
         null,
+      secondaryAnchorDataUrl:
+        payload.secondaryAnchorDataUrl ??
+        payload.secondary_anchor_data_url ??
+        rawClientProfile.secondaryAnchorDataUrl ??
+        null,
+      secondaryAnchorAngleDeg:
+        payload.secondaryAnchorAngleDeg ??
+        payload.secondary_anchor_angle_deg ??
+        rawClientProfile.secondaryAnchorAngleDeg ??
+        null,
       skipVisionQc: Boolean(payload.skipVisionQc ?? false),
       slots: payload.slots,
       equipped: payload.equipped,

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Check, Lock, RotateCcw, Sparkles, Store, SunMedium } from 'lucide-react';
 import {
   DEFAULT_LIGHTING_INTENSITY,
@@ -57,6 +58,29 @@ export default function BackgroundPickerModal({
       : equippedItem.lightingRig?.rigNoteKo ||
         '낮 시간대 창가 햇빛 이동 · 일몰 후 실내 조명 자동 점등';
 
+  const [isScrubbingBrightness, setIsScrubbingBrightness] = useState(false);
+
+  useEffect(() => {
+    if (!open || !isScrubbingBrightness) return undefined;
+    const stopScrubbing = () => setIsScrubbingBrightness(false);
+    window.addEventListener('pointerup', stopScrubbing);
+    window.addEventListener('pointercancel', stopScrubbing);
+    window.addEventListener('mouseup', stopScrubbing);
+    window.addEventListener('touchend', stopScrubbing);
+    window.addEventListener('touchcancel', stopScrubbing);
+    window.addEventListener('blur', stopScrubbing);
+    return () => {
+      window.removeEventListener('pointerup', stopScrubbing);
+      window.removeEventListener('pointercancel', stopScrubbing);
+      window.removeEventListener('mouseup', stopScrubbing);
+      window.removeEventListener('touchend', stopScrubbing);
+      window.removeEventListener('touchcancel', stopScrubbing);
+      window.removeEventListener('blur', stopScrubbing);
+    };
+  }, [open, isScrubbingBrightness]);
+
+  const effectiveScrubbing = Boolean(open && isScrubbingBrightness);
+
   const groupedByTier = TIER_ORDER.map((tier) => ({
     tier,
     items: STAGE_BACKGROUNDS.filter((bg) => bg.tier === tier),
@@ -71,8 +95,13 @@ export default function BackgroundPickerModal({
       eyebrow={tx(lang, '스테이지 공간 배경', 'STAGE ENVIRONMENTS')}
       title={tx(lang, '캐릭터 배경 및 광원 설정', 'Stage Background & Lighting')}
       maxWidth={680}
+      peekThrough={effectiveScrubbing}
     >
-      <div className="stage-bg-picker-root" data-bg-picker-modal="true">
+      <div
+        className={`stage-bg-picker-root ${effectiveScrubbing ? 'is-lighting-scrubbing' : ''}`.trim()}
+        data-bg-picker-modal="true"
+        data-lighting-scrubbing={effectiveScrubbing ? 'true' : 'false'}
+      >
         {/* Top Equipped Summary & Store Shortcut Bar */}
         <div className="stage-bg-picker-summary">
           <div className="stage-bg-picker-summary-info">
@@ -177,7 +206,10 @@ export default function BackgroundPickerModal({
             })}
           </div>
 
-          <div className="stage-bg-lighting-slider-row">
+          <div
+            className={`stage-bg-lighting-slider-row ${effectiveScrubbing ? 'is-scrubbing' : ''}`.trim()}
+            data-lighting-slider-row="true"
+          >
             <div className="stage-bg-lighting-slider-labels">
               <label
                 htmlFor="stage-lighting-intensity-slider"
@@ -202,6 +234,13 @@ export default function BackgroundPickerModal({
               max={MAX_LIGHTING_INTENSITY}
               step={5}
               value={activeIntensity}
+              onPointerDown={() => setIsScrubbingBrightness(true)}
+              onTouchStart={() => setIsScrubbingBrightness(true)}
+              onMouseDown={() => setIsScrubbingBrightness(true)}
+              onPointerUp={() => setIsScrubbingBrightness(false)}
+              onTouchEnd={() => setIsScrubbingBrightness(false)}
+              onMouseUp={() => setIsScrubbingBrightness(false)}
+              onBlur={() => setIsScrubbingBrightness(false)}
               onChange={(e) => {
                 onUpdateLighting?.({ lightingIntensity: Number(e.target.value) });
               }}

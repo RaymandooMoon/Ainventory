@@ -246,7 +246,32 @@
   );
 }
 
-/* 0B. Equipped 3:4 Architectural Studio / Terrace Photograph */
+/* 0B. Equipped 3:4 Architectural Studio / Terrace Photograph + Pixel-Locked Physical Fixtures */
+.atelier-stage-camera-rig {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none !important;
+  will-change: transform;
+}
+
+.atelier-stage-fixtures-glow-rig {
+  z-index: 3;
+  mix-blend-mode: screen;
+}
+
+.atelier-stage-fixtures-core-rig {
+  z-index: 4;
+}
+
+.atelier-photo-cover-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none !important;
+}
+
 .atelier-stage-environment-photo {
   position: absolute;
   inset: 0;
@@ -254,11 +279,309 @@
   height: 100%;
   object-fit: cover;
   object-position: center bottom;
-  z-index: 0;
   pointer-events: none !important;
   user-select: none;
   -webkit-user-drag: none;
-  transition: filter 0.55s ease, opacity 0.45s ease;
+  transition: filter 0.28s ease, opacity 0.28s ease;
+}
+
+.atelier-fixture-lights-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+  overflow: visible;
+}
+
+.atelier-fixture-emitter {
+  position: absolute;
+  pointer-events: none !important;
+  transform: translate3d(-50%, -50%, 0);
+  transition: opacity 0.16s ease, filter 0.16s ease;
+}
+
+.atelier-fixture-emitter.is-glow-pass {
+  filter: brightness(var(--fx-glow-brightness, 1));
+}
+
+.atelier-fixture-emitter.is-core-pass {
+  filter: brightness(var(--fx-glow-brightness, 1));
+}
+
+.atelier-fixture-halo {
+  position: absolute;
+  inset: -46%;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    rgba(var(--fx-core-rgb, 255, 240, 208), 0.72) 0%,
+    rgba(var(--fx-rgb, 255, 198, 118), 0.4) 34%,
+    rgba(var(--fx-rgb, 255, 198, 118), 0.12) 64%,
+    transparent 96%
+  );
+}
+
+.atelier-fixture-pin-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26%;
+  height: 26%;
+  min-width: 9px;
+  min-height: 9px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    rgba(255, 253, 244, 0.99) 0%,
+    rgba(var(--fx-core-rgb, 255, 238, 198), 0.92) 44%,
+    rgba(var(--fx-rgb, 255, 196, 116), 0.42) 78%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 12px 3px rgba(var(--fx-core-rgb, 255, 238, 198), 0.78),
+    0 0 26px 8px rgba(var(--fx-rgb, 255, 196, 116), 0.52);
+}
+
+/* Wall Sconce: crisp incandescent backlit linen trapezoid shade + tight top/bottom aperture spills + hourglass plaster wall cones */
+.atelier-fixture-emitter.is-sconce .atelier-fixture-halo {
+  inset: -44%;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    rgba(255, 216, 136, 0.44) 0%,
+    rgba(255, 196, 108, 0.24) 36%,
+    rgba(var(--fx-rgb, 255, 190, 104), 0.1) 66%,
+    transparent 94%
+  );
+}
+
+.atelier-fixture-emitter.is-sconce .atelier-fixture-shade-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--fx-shade-w, 13px);
+  height: var(--fx-shade-h, 17px);
+  transform: translate3d(-50%, -50%, 0);
+  clip-path: polygon(16% 0%, 84% 0%, 100% 100%, 0% 100%);
+  background:
+    radial-gradient(
+      ellipse 56% 58% at 50% 54%,
+      #ffffff 0%,
+      rgba(255, 252, 232, 1) 36%,
+      rgba(255, 232, 162, 0.98) 68%,
+      rgba(250, 192, 92, 0.96) 100%
+    );
+  filter:
+    drop-shadow(0 0 1.2px rgba(255, 248, 218, 0.94))
+    drop-shadow(0 0 4.5px rgba(255, 214, 126, 0.78))
+    drop-shadow(0 0 11px rgba(var(--fx-rgb, 255, 194, 104), 0.62));
+}
+
+.atelier-fixture-emitter.is-sconce .atelier-fixture-shade-rim-hot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--fx-shade-w, 13px) * 0.9);
+  height: calc(var(--fx-shade-h, 17px) * 1.12);
+  transform: translate3d(-50%, -50%, 0);
+  background:
+    radial-gradient(
+      ellipse 68% 18% at 50% 4%,
+      rgba(255, 255, 252, 0.98) 0%,
+      rgba(255, 236, 176, 0.68) 56%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 86% 20% at 50% 96%,
+      rgba(255, 255, 252, 0.98) 0%,
+      rgba(255, 234, 168, 0.72) 56%,
+      transparent 100%
+    );
+  filter: blur(0.6px);
+}
+
+.atelier-fixture-emitter.is-sconce .atelier-fixture-bulb-spill-top {
+  position: absolute;
+  left: 50%;
+  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.44);
+  width: calc(var(--fx-shade-w, 13px) * 0.92);
+  height: calc(var(--fx-shade-h, 17px) * 0.48);
+  transform: translate3d(-50%, 16%, 0);
+  background: radial-gradient(
+    ellipse closest-side at 50% 85%,
+    rgba(255, 253, 238, 0.92) 0%,
+    rgba(255, 230, 158, 0.62) 55%,
+    transparent 96%
+  );
+  filter: blur(1.2px);
+}
+
+.atelier-fixture-emitter.is-sconce .atelier-fixture-bulb-spill {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--fx-shade-h, 17px) * 0.44);
+  width: calc(var(--fx-shade-w, 13px) * 1.12);
+  height: calc(var(--fx-shade-h, 17px) * 0.52);
+  transform: translate3d(-50%, -20%, 0);
+  background: radial-gradient(
+    ellipse closest-side at 50% 22%,
+    rgba(255, 253, 238, 0.94) 0%,
+    rgba(255, 228, 154, 0.66) 56%,
+    transparent 96%
+  );
+  filter: blur(1.2px);
+}
+
+.atelier-fixture-sconce-cone-up {
+  position: absolute;
+  left: 50%;
+  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.34);
+  width: calc(var(--fx-shade-w, 13px) * 5.8);
+  height: calc(var(--fx-wash-px, 96px) * 0.88);
+  transform: translate3d(-50%, 0, 0);
+  background:
+    radial-gradient(
+      ellipse 26% 76% at 50% 100%,
+      rgba(255, 255, 246, 0.98) 0%,
+      rgba(255, 236, 172, 0.72) 34%,
+      rgba(var(--fx-rgb, 255, 198, 118), 0.24) 66%,
+      transparent 94%
+    ),
+    radial-gradient(
+      ellipse 46% 92% at 50% 100%,
+      rgba(var(--fx-rgb, 255, 200, 118), 0.56) 0%,
+      rgba(var(--fx-rgb, 255, 194, 110), 0.18) 54%,
+      transparent 92%
+    );
+  filter: blur(3px);
+}
+
+.atelier-fixture-sconce-cone-down {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--fx-shade-h, 17px) * 0.34);
+  width: calc(var(--fx-shade-w, 13px) * 5.2);
+  height: calc(var(--fx-wash-px, 96px) * 0.78);
+  transform: translate3d(-50%, 0, 0);
+  background:
+    radial-gradient(
+      ellipse 25% 74% at 50% 0%,
+      rgba(255, 254, 242, 0.94) 0%,
+      rgba(255, 232, 166, 0.64) 34%,
+      rgba(var(--fx-rgb, 255, 196, 114), 0.2) 66%,
+      transparent 94%
+    ),
+    radial-gradient(
+      ellipse 44% 90% at 50% 0%,
+      rgba(var(--fx-rgb, 255, 198, 116), 0.48) 0%,
+      rgba(var(--fx-rgb, 255, 190, 108), 0.15) 54%,
+      transparent 92%
+    );
+  filter: blur(3.5px);
+}
+
+/* Ceiling Pin-Spot / Rail Spotlight: crisp LED lens core + silky feathered downward volumetric beam */
+.atelier-fixture-spot-beam {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: calc(var(--fx-radius-px, 36px) * 3.4);
+  height: calc(var(--fx-wash-px, 140px) * 1.45);
+  transform-origin: 50% 0%;
+  transform: translate3d(-50%, 0, 0) rotate(var(--fx-tilt-deg, 0deg));
+  background: radial-gradient(
+    ellipse 42% 88% at 50% 4%,
+    rgba(255, 240, 206, 0.44) 0%,
+    rgba(var(--fx-rgb, 255, 214, 154), 0.22) 34%,
+    rgba(var(--fx-rgb, 255, 210, 146), 0.06) 66%,
+    transparent 96%
+  );
+  filter: blur(10px);
+  mix-blend-mode: screen;
+}
+
+.atelier-fixture-emitter.is-spot .atelier-fixture-halo {
+  inset: -18%;
+  opacity: 0.88;
+}
+
+/* Crystal Chandelier: broad golden shimmer + crystal facet bloom */
+.atelier-fixture-chandelier-spark {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      ellipse 95% 24% at 50% 50%,
+      rgba(255, 250, 234, 0.68) 0%,
+      rgba(var(--fx-rgb, 255, 215, 156), 0.28) 54%,
+      transparent 92%
+    ),
+    radial-gradient(
+      ellipse 24% 85% at 50% 50%,
+      rgba(255, 250, 234, 0.58) 0%,
+      rgba(var(--fx-rgb, 255, 215, 156), 0.24) 54%,
+      transparent 92%
+    );
+  mix-blend-mode: screen;
+}
+
+/* Floor Arch Uplight: upward sculptural arch wash */
+.atelier-fixture-uplight-cone {
+  position: absolute;
+  left: 50%;
+  bottom: 46%;
+  width: calc(var(--fx-radius-px, 42px) * 2.4);
+  height: calc(var(--fx-wash-px, 145px) * 1.25);
+  transform: translate3d(-50%, 0, 0);
+  background: radial-gradient(
+    ellipse 52% 92% at 50% 100%,
+    rgba(255, 232, 178, 0.78) 0%,
+    rgba(var(--fx-rgb, 255, 208, 146), 0.42) 48%,
+    rgba(var(--fx-rgb, 255, 204, 140), 0.12) 80%,
+    transparent 100%
+  );
+  filter: blur(6px);
+}
+
+/* Linear Recessed Cove LED Strip */
+.atelier-fixture-emitter.is-cove-strip {
+  transform-origin: 0% 50%;
+}
+
+.atelier-fixture-cove-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 240, 204, 0.95) 8%,
+    rgba(255, 252, 242, 0.99) 50%,
+    rgba(255, 240, 204, 0.95) 92%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 12px 3px rgba(255, 234, 186, 0.8),
+    0 0 28px 8px rgba(var(--fx-rgb, 255, 206, 142), 0.54);
+}
+
+.atelier-fixture-cove-wash {
+  position: absolute;
+  left: -4%;
+  right: -4%;
+  top: 50%;
+  height: var(--fx-wash-h, 72px);
+  transform: translateY(-22%);
+  background: radial-gradient(
+    ellipse 54% 72% at 50% 18%,
+    rgba(255, 234, 184, 0.56) 0%,
+    rgba(var(--fx-rgb, 255, 206, 142), 0.28) 48%,
+    transparent 88%
+  );
+  filter: blur(7px);
 }
 
 .atelier-stage-backdrop.has-arch-backdrop.is-tod-day .atelier-stage-environment-photo {
@@ -379,8 +702,13 @@
   filter: brightness(var(--stage-backdrop-brightness, 1)) contrast(1.02);
 }
 
-.atelier-stage-backdrop.is-indoor-ivory.is-post-sunset .atelier-indoor-ivory-ambient {
-  opacity: 0.36;
+.atelier-stage-backdrop.is-indoor-ivory.is-post-sunset .atelier-indoor-ivory-ambient,
+.atelier-stage-backdrop.is-indoor-ivory.has-lit-fixtures .atelier-indoor-ivory-ambient {
+  opacity: 0.16;
+}
+
+.atelier-stage-backdrop.is-indoor-ivory.has-lit-fixtures .atelier-backdrop-skylight-wash {
+  opacity: 0.16;
 }
 
 .atelier-indoor-night-fixture-wash {
@@ -454,6 +782,22 @@
     radial-gradient(
       ellipse 92% 28% at 50% 80%,
       rgba(0, 0, 0, 0.38) 0%,
+      transparent 74%
+    );
+}
+
+.atelier-stage-backdrop.is-dark.has-lit-fixtures .atelier-cyclorama-side-depth {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.14) 0%,
+      transparent 14%,
+      transparent 86%,
+      rgba(0, 0, 0, 0.14) 100%
+    ),
+    radial-gradient(
+      ellipse 92% 28% at 50% 80%,
+      rgba(0, 0, 0, 0.3) 0%,
       transparent 74%
     );
 }
@@ -1625,7 +1969,22 @@
   overflow-y: auto;
   grid-template-rows: none;
   grid-auto-rows: minmax(92px, 1fr);
-  padding-right: 2px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 136, 0.42) transparent;
+}
+
+.editorial-flatlay-collage.is-scrollable::-webkit-scrollbar {
+  width: 5px;
+}
+
+.editorial-flatlay-collage.is-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editorial-flatlay-collage.is-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 136, 0.42);
+  border-radius: 999px;
 }
 
 .editorial-flatlay-collage[data-flatlay-count='5']:not(.is-scrollable) {
@@ -3422,13 +3781,27 @@ html[data-vibrancy-fallback='solid']
   top: 56px;
   bottom: 66px;
   left: auto;
-  right: 10px;
+  right: 8px;
   z-index: 64;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  pointer-events: none;
+  gap: 5px;
+  padding: 5px 4px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+[data-theme='dark'] .studio-2d-vton-viewer .studio-worn-slots-dock-shell,
+.studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-slots-dock-shell {
+  background: rgba(18, 18, 22, 0.38);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .studio-2d-vton-viewer[data-angle-dock-visible='false'] .studio-worn-slots-dock-shell {
@@ -3456,48 +3829,50 @@ html[data-vibrancy-fallback='solid']
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   scrollbar-width: none;
-  padding: 6px 7px 10px 6px;
+  padding: 7px 8px 6px 5px;
+  border-radius: 14px;
   box-sizing: border-box;
 }
 
 .studio-worn-dock-jump-btn {
   flex: 0 0 auto;
-  width: 34px;
+  width: calc(100% - 4px);
+  min-width: 44px;
   height: 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.62);
-  color: rgba(24, 24, 27, 0.9);
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.68);
+  color: rgba(24, 24, 27, 0.92);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  margin: 2px 0;
+  margin: 0;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   transition: transform 0.14s var(--spring-ease), background-color 0.16s ease, opacity 0.16s ease;
 }
 
 .studio-worn-dock-jump-btn:hover {
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .studio-worn-dock-jump-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
 }
 
 [data-theme='dark'] .studio-worn-dock-jump-btn,
 .studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-dock-jump-btn {
-  background: rgba(24, 24, 27, 0.62);
+  background: rgba(28, 28, 34, 0.78);
   border-color: rgba(255, 255, 255, 0.22);
-  color: rgba(245, 245, 247, 0.92);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.36);
+  color: rgba(245, 245, 247, 0.94);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
 }
 
 [data-theme='dark'] .studio-worn-dock-jump-btn:hover,
 .studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-dock-jump-btn:hover {
-  background: rgba(34, 34, 39, 0.84);
+  background: rgba(42, 42, 48, 0.92);
 }
 
 .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock-shell,
@@ -4397,10 +4772,13 @@ html[data-vibrancy-fallback='solid']
   }
 
   .studio-2d-vton-viewer .studio-worn-slots-dock-shell {
-    top: 52px;
+    top: 54px;
     bottom: 66px;
     left: auto;
-    right: 8px;
+    right: 6px;
+    gap: 4px;
+    padding: 4px 3px;
+    border-radius: 20px;
   }
 
   .studio-2d-vton-viewer[data-angle-dock-visible='false'] .studio-worn-slots-dock-shell {
@@ -4410,12 +4788,12 @@ html[data-vibrancy-fallback='solid']
   .studio-2d-vton-viewer .studio-worn-slots-dock {
     max-height: 100%;
     gap: 7px;
-    padding: 4px 6px 8px 6px;
+    padding: 6px 7px 5px 4px;
   }
 
   .studio-2d-vton-viewer[data-has-zoom-bar='false'] .studio-worn-slots-dock-shell,
   .studio-2d-vton-viewer[data-has-bg-picker='false'] .studio-worn-slots-dock-shell {
-    top: 52px;
+    top: 54px;
   }
 
   .studio-2d-layer {
@@ -4434,13 +4812,13 @@ html[data-vibrancy-fallback='solid']
   .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .editorial-flatlay-header {
-    right: 48px;
+    right: 12px;
   }
 
   .studio-2d-vton-viewer:not([data-equipped-count='0']):not([data-lookbook-overlay='true'])
     .studio-2d-model-stage.is-flatlay-stage
     .editorial-flatlay-collage {
-    right: 46px;
+    right: 8px;
   }
 
   .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-layer {
@@ -6498,6 +6876,89 @@ html[data-vibrancy-fallback='solid']
   margin: 0;
   accent-color: var(--ink-primary);
   cursor: pointer;
+}
+
+/* Live Peek-Through Mode: touching/dragging the lighting brightness slider makes the sheet & backdrop
+   transparent with ZERO layout shift so users watch stage lamps & shadows react in real time! */
+.ui-sheet-backdrop:has(#stage-background-picker-modal) {
+  transition: background 0.12s ease;
+}
+
+#stage-background-picker-modal {
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.ui-sheet-backdrop.is-peek-through,
+.ui-sheet-backdrop:has(#stage-background-picker-modal).is-peek-through {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#stage-background-picker-modal.is-peek-through {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#stage-background-picker-modal.is-peek-through .ui-sheet-content {
+  scrollbar-width: none;
+}
+
+#stage-background-picker-modal.is-peek-through .ui-sheet-content::-webkit-scrollbar {
+  display: none;
+}
+
+#stage-background-picker-modal .ui-sheet-drag-zone,
+#stage-background-picker-modal .modal-header,
+#stage-background-picker-modal .stage-bg-picker-summary,
+#stage-background-picker-modal .stage-bg-lighting-head,
+#stage-background-picker-modal .stage-bg-lighting-note,
+#stage-background-picker-modal .stage-bg-lighting-preset-grid,
+#stage-background-picker-modal .stage-bg-tier-sections {
+  transition: opacity 0.08s ease;
+}
+
+#stage-background-picker-modal.is-peek-through .ui-sheet-drag-zone,
+#stage-background-picker-modal.is-peek-through .modal-header,
+#stage-background-picker-modal.is-peek-through .stage-bg-picker-summary,
+#stage-background-picker-modal.is-peek-through .stage-bg-lighting-head,
+#stage-background-picker-modal.is-peek-through .stage-bg-lighting-note,
+#stage-background-picker-modal.is-peek-through .stage-bg-lighting-preset-grid,
+#stage-background-picker-modal.is-peek-through .stage-bg-tier-sections {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#stage-background-picker-modal.is-peek-through .stage-bg-lighting-panel {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#stage-background-picker-modal.is-peek-through .stage-bg-lighting-slider-row.is-scrubbing {
+  position: relative;
+  z-index: 5;
+  padding: 10px 14px;
+  margin: -9px -15px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+[data-theme='dark']
+  #stage-background-picker-modal.is-peek-through
+  .stage-bg-lighting-slider-row.is-scrubbing {
+  background: rgba(22, 22, 26, 0.76);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 .stage-bg-tier-sections {

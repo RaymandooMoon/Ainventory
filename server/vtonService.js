@@ -275,7 +275,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v16-8angle-norm-bagstrap';
+const CACHE_SCHEMA_VERSION = 'v20-bag-anchor-sync-strict-qc';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -646,12 +646,12 @@ export function resolveVertexAiConfig() {
   return { enabled: false, customEndpoint: '', project: '', location, accessToken: '', apiKey: '' };
 }
 
-export function resolveGeminiModelChain() {
-  const candidates = [
-    readServerEnvVar('GEMINI_VTON_MODEL'),
-    'gemini-3.1-flash-lite-image',
-    'gemini-nano-banana-2.1',
-  ].filter(Boolean);
+export function resolveGeminiModelChain(options = {}) {
+  const preferFallbackModel = Boolean(options?.preferFallbackModel);
+  const envModel = readServerEnvVar('GEMINI_VTON_MODEL');
+  const candidates = preferFallbackModel
+    ? ['gemini-nano-banana-2.1', envModel, 'gemini-3.1-flash-lite-image'].filter(Boolean)
+    : [envModel, 'gemini-3.1-flash-lite-image', 'gemini-nano-banana-2.1'].filter(Boolean);
   return [...new Set(candidates)];
 }
 
@@ -1107,6 +1107,20 @@ export function normalizeVtonProfile(
   const masterAnchorPart = rawMasterAnchor
     ? decodeValidatedDataUrl(rawMasterAnchor, MAX_DATA_URL_BYTES)
     : null;
+  const rawSecondaryAnchor =
+    !turnaroundSheet && viewAngleDeg !== 0
+      ? (extraOptions?.secondaryAnchorDataUrl ?? src.secondaryAnchorDataUrl ?? null)
+      : null;
+  const secondaryAnchorPart = rawSecondaryAnchor
+    ? decodeValidatedDataUrl(rawSecondaryAnchor, MAX_DATA_URL_BYTES)
+    : null;
+  const rawSecondaryAngle = Number(
+    extraOptions?.secondaryAnchorAngleDeg ?? src.secondaryAnchorAngleDeg ?? NaN
+  );
+  const secondaryAnchorAngleDeg =
+    secondaryAnchorPart && Number.isFinite(rawSecondaryAngle)
+      ? ((Math.round(rawSecondaryAngle) % 360) + 360) % 360
+      : null;
 
   return {
     viewAngleDeg,
@@ -1172,6 +1186,13 @@ export function normalizeVtonProfile(
         }
       : null,
     masterAnchorHash: masterAnchorPart ? masterAnchorPart.sha256.slice(0, 32) : null,
+    secondaryAnchorPart: secondaryAnchorPart
+      ? {
+          mimeType: secondaryAnchorPart.mimeType,
+          base64Data: secondaryAnchorPart.base64Data,
+        }
+      : null,
+    secondaryAnchorAngleDeg,
     qcCorrectionHint:
       typeof extraOptions?.qcCorrectionHint === 'string' && extraOptions.qcCorrectionHint.trim()
         ? extraOptions.qcCorrectionHint.trim().slice(0, 600)
@@ -1713,15 +1734,15 @@ function describeIsoCameraAngle(viewAngleDeg, backdropHex = CUTOUT_STAGE_HEX) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
-      return 'Strict FRONT-FACING 45-degree Front-Right horizontal-yaw full-body view (FACING TOWARD VIEWER-RIGHT / SCREEN-RIGHT ->). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head crown to shoe soles with 8–10% bottom margin. Face, both eyes, nose, chin, front lapels/chest, and shoe toes angle ~45° toward SCREEN-RIGHT ->. [ABSOLUTE NEGATIVE: NEVER crop shoes, NEVER show a back view, NEVER face screen-left].';
+      return "Strict RIGID FULL-BODY 45° THREE-QUARTER POSE FACING TOWARD THE RIGHT BORDER OF THE PHOTO (-> 3 O'CLOCK ON SCREEN, NEVER TOWARD THE LEFT BORDER!). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body head-to-shoe shot with 8–10% bottom margin. MANDATORY IMAGE-SPACE ORIENTATION & FULL-SKELETON 45° ROTATION: (1) NOSE, GAZE, CHEST BUTTONS, COAT LAPELS, PELVIS, AND BOTH SHOE TOES point unmistakably ~45° toward the RIGHT EDGE of the image frame (-> looking right across the photo toward the right border); (2) the shoulder on the LEFT side of the image (wearer's right shoulder/arm) is CLOSER to the camera in the foreground, while the shoulder on the RIGHT side of the image (wearer's left shoulder) recedes backward toward the right edge, narrowing torso width to ~78% of 0°; (3) staggered diagonal stance with BOTH boots/shoes pointing diagonally toward the RIGHT EDGE (->). [ABSOLUTE NEGATIVE: STRICTLY FORBIDDEN to face or point nose/toes toward the LEFT edge of the photo (<-)! NEVER turn only the head while leaving shoulders flat 0°! NEVER crop shoes or show back view].";
     case 0:
       return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible with 8–10% bottom margin.';
     case -45:
-      return 'Strict FRONT-FACING 315-degree (-45°) Front-Left horizontal-yaw full-body view (FACING TOWARD VIEWER-LEFT / SCREEN-LEFT <-). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head crown to shoe soles with 8–10% bottom margin. Face, both eyes, nose, chin, front lapels/chest, and shoe toes angle ~45° toward SCREEN-LEFT <-. [ABSOLUTE NEGATIVE: NEVER crop shoes, NEVER show a back view, NEVER face screen-right].';
+      return "Strict RIGID FULL-BODY 315° (-45°) THREE-QUARTER POSE FACING TOWARD THE LEFT BORDER OF THE PHOTO (<- 9 O'CLOCK ON SCREEN, NEVER TOWARD THE RIGHT BORDER!). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body head-to-shoe shot with 8–10% bottom margin. MANDATORY IMAGE-SPACE ORIENTATION & FULL-SKELETON 45° ROTATION: (1) NOSE, GAZE, CHEST BUTTONS, COAT LAPELS, PELVIS, AND BOTH SHOE TOES point unmistakably ~45° toward the LEFT EDGE of the image frame (<- looking left across the photo toward the left border); (2) the shoulder on the RIGHT side of the image (wearer's left shoulder/arm) is CLOSER to the camera in the foreground, while the shoulder on the LEFT side of the image (wearer's right shoulder) recedes backward toward the left edge, narrowing torso width to ~78% of 0°; (3) staggered diagonal stance with BOTH boots/shoes pointing diagonally toward the LEFT EDGE (<-). [ABSOLUTE NEGATIVE: STRICTLY FORBIDDEN to face or point nose/toes toward the RIGHT edge of the photo (->)! NEVER turn only the head while leaving shoulders flat 0°! NEVER crop shoes or show back view].";
     case 90:
-      return "Strict 90-degree PURE ORTHOGRAPHIC RIGHT LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S RIGHT (SCREEN-RIGHT ->). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE right eye, side nose bridge/tip protruding toward SCREEN-RIGHT ->, wearer's right arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward SCREEN-RIGHT -> with 8–10% bottom margin (NEVER face screen-left, NEVER show broad back of coat, NEVER rotate past 90° into a rear view).";
+      return "Strict 90-degree PURE ORTHOGRAPHIC SIDE-PROFILE full-body view FACING STRAIGHT TOWARD THE RIGHT BORDER OF THE PHOTO (-> 3 O'CLOCK ON SCREEN, NEVER LEFT!). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE eye, nose tip protruding straight toward the RIGHT EDGE of the image (->), wearer's right arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward the RIGHT BORDER (->) with 8–10% bottom margin (NEVER face left border, NEVER show broad back of coat).";
     case -90:
-      return "Strict 270-degree (-90°) PURE ORTHOGRAPHIC LEFT LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S LEFT (SCREEN-LEFT <-). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE left eye, side nose bridge/tip protruding toward SCREEN-LEFT <-, wearer's left arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward SCREEN-LEFT <- with 8–10% bottom margin (NEVER face screen-right, NEVER show broad back of coat, NEVER rotate past 270° into a rear view).";
+      return "Strict 270-degree (-90°) PURE ORTHOGRAPHIC SIDE-PROFILE full-body view FACING STRAIGHT TOWARD THE LEFT BORDER OF THE PHOTO (<- 9 O'CLOCK ON SCREEN, NEVER RIGHT!). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE eye, nose tip protruding straight toward the LEFT EDGE of the image (<-), wearer's left arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward the LEFT BORDER (<-) with 8–10% bottom margin (NEVER face right border, NEVER show broad back of coat).";
     case 135:
       return `Strict 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW (MODEL TURNED AWAY FROM CAMERA FACING BACK-RIGHT ->). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head crown to shoe soles with 8–10% bottom margin showing ONLY: (1) rear 3/4 back of head and hair silhouette + back of right ear turned away toward SCREEN-RIGHT -> (STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front torso/chest!), (2) diagonal rear back of outer coat/top with right shoulder blade and outer right sleeve prominent, and (3) rear heels & staggered shoes pointing away toward SCREEN-RIGHT -> on a flat ${backdropHex} backdrop.`;
     case -135:
@@ -2063,7 +2084,9 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       : '';
     const rearLockWarning = isSingleRearAngle
       ? ' ABSOLUTE REAR-VIEW ORIENTATION LOCK: The model MUST be turned STRICTLY AWAY from the camera showing ONLY the BACK of their head/hair, BACK of their coat/shoulders, and BACK of their trousers/heels. STRICTLY ZERO front face, ZERO eyes, ZERO nose/mouth facing camera, ZERO front shirt/chest buttons!'
-      : '';
+      : canonicalBagAngle === 45 || canonicalBagAngle === 315
+        ? ` ABSOLUTE FULL-BODY ${canonicalBagAngle}° QUARTER-TURN & IMAGE-BORDER DIRECTION LOCK: Rotate the ENTIRE SKELETON (head, nose, shoulders, chest/coat front, pelvis, legs, and BOTH shoe toes) a full 45° diagonally so the nose, chest, and BOTH shoe toes point unmistakably toward the ${canonicalBagAngle === 45 ? 'RIGHT BORDER OF THE PHOTO (-> 3 o’clock, NEVER toward the left border!)' : 'LEFT BORDER OF THE PHOTO (<- 9 o’clock, NEVER toward the right border!)'} — DO NOT copy flat 0° shoulders and DO NOT flip left/right!`
+        : '';
     parts.push({
       text: `[MASTER CHARACTER & OUTFIT ANCHOR — 0° FRONT VIEW ATTACHED IMMEDIATELY BELOW]:
 THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THIS EXACT SAME person to the requested ${canonicalBagAngle}° camera angle while preserving 100% identical hairstyle/hair color, skin tone, body proportions, exact coat/top/bottom/shoes colors and fabric textures, and exact anatomical side/carry-style of every bag, watch, and accessory.${bagLockForAngle}${rearLockWarning}`,
@@ -2076,22 +2099,53 @@ THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THI
     });
   }
 
+  if (!profile.turnaroundSheet && profile.secondaryAnchorPart && profile.viewAngleDeg !== 0) {
+    const secAngle = profile.secondaryAnchorAngleDeg;
+    const isBackAnchor = secAngle === 180 || secAngle === 135;
+    const secLabel = Number.isFinite(secAngle) ? `${secAngle}°` : 'ADJACENT';
+    parts.push({
+      text: `[SECONDARY SEQUENTIAL ANGLE ANCHOR — ${secLabel} VIEW ATTACHED IMMEDIATELY BELOW]:
+THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME PERSON AND OUTFIT. ${
+        isBackAnchor && isSingleRearAngle
+          ? `Use THIS ${secLabel} rear view directly as your primary reference for the back of the head/hair, rear coat seam, trousers, heels, and exact bag hand/side while rotating smoothly to ${canonicalBagAngle}° — NEVER revert to a front face!`
+          : `Maintain seamless 3D continuity from this ${secLabel} view as the camera rotates smoothly to ${canonicalBagAngle}° without switching bag hands, changing coat length, or altering silhouette.`
+      }`,
+    });
+    parts.push({
+      inlineData: {
+        mimeType: profile.secondaryAnchorPart.mimeType,
+        data: profile.secondaryAnchorPart.base64Data,
+      },
+    });
+  }
+
+  const isFarOccludedSingleAngleBag =
+    hasEquippedBag &&
+    !profile.turnaroundSheet &&
+    bagAnatomy.perAngleScreenSide[canonicalBagAngle] === 'far-occluded';
+
   if (hasEquippedBag) {
-    const bagSpatialGuide = buildServerBagPositionGuidePngPart(
-      profile,
-      backdropHex,
-      activeBagSpec
-    );
-    if (bagSpatialGuide) {
-      const singleAngleBagNote = !profile.turnaroundSheet
-        ? ` EXACT BAG POSITION FOR THIS ${canonicalBagAngle}° VIEW: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]}`
-        : '';
+    if (isFarOccludedSingleAngleBag) {
       parts.push({
-        text: `[PRE-NORMALIZATION BAG & HAND-ROLE SPATIAL GUIDE — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: ${bagAnatomy.dualHandRolePrompt}${singleAngleBagNote} Match the amber highlight zone in the attached spatial guide strictly — NEVER tuck the bag under the armpit and NEVER invent a strap when has_strap=false!`,
+        text: `[FAR-OCCLUDED SIDE PROFILE BAG RULE FOR ${canonicalBagAngle}° — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]} Because the camera is looking at the wearer's FREE ${bagAnatomy.freeSide.toUpperCase()} side, keep the foreground ${bagAnatomy.freeSide.toUpperCase()} shoulder and arm 100% empty and unobstructed (ZERO strap or handle on the foreground shoulder/arm; the bag remains mostly occluded behind the torso on the far ${bagAnatomy.carrySide.toUpperCase()} side).`,
       });
-      parts.push({
-        inlineData: bagSpatialGuide,
-      });
+    } else {
+      const bagSpatialGuide = buildServerBagPositionGuidePngPart(
+        profile,
+        backdropHex,
+        activeBagSpec
+      );
+      if (bagSpatialGuide) {
+        const singleAngleBagNote = !profile.turnaroundSheet
+          ? ` EXACT BAG POSITION FOR THIS ${canonicalBagAngle}° VIEW: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]}`
+          : '';
+        parts.push({
+          text: `[PRE-NORMALIZATION BAG & HAND-ROLE SPATIAL GUIDE — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: ${bagAnatomy.dualHandRolePrompt}${singleAngleBagNote} Match the amber highlight zone in the attached spatial guide strictly — NEVER tuck the bag under the armpit and NEVER invent a strap when has_strap=false!`,
+        });
+        parts.push({
+          inlineData: bagSpatialGuide,
+        });
+      }
     }
   }
   appendPortraitParts(parts, profile);
@@ -2210,8 +2264,12 @@ THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THI
     const mirrorNote = item.bagAssetMirrored
       ? ' Horizontally mirror this bag onto the wearer\'s anatomical RIGHT shoulder/hand.'
       : '';
+    const farOccludedNote =
+      (item.isBag || slot === 'accessory') && isFarOccludedSingleAngleBag
+        ? ` NOTE FOR ${canonicalBagAngle}° SIDE PROFILE: This bag hangs on the wearer's FAR ${bagAnatomy.carrySide.toUpperCase()} side behind the body — keep the foreground ${bagAnatomy.freeSide.toUpperCase()} shoulder/arm completely empty and unobstructed.`
+        : '';
     const garmentDesc = `${item.colorName} ${item.fabric} ${item.subcategory || item.category}`.trim();
-    const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${placementCue ? ` Placement: ${placementCue}${mirrorNote}` : ''}`;
+    const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${placementCue ? ` Placement: ${placementCue}${mirrorNote}${farOccludedNote}` : ''}`;
     if (item.packshot) {
       parts.push({
         text: `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} color from the reference image immediately below (${viewScopeText}). Do NOT render any text or labels in the output image:`,
@@ -2919,6 +2977,10 @@ export async function synthesizeVtonLook(params = {}) {
       ),
       masterAnchorDataUrl:
         params.masterAnchorDataUrl ?? rawProfile?.masterAnchorDataUrl ?? null,
+      secondaryAnchorDataUrl:
+        params.secondaryAnchorDataUrl ?? rawProfile?.secondaryAnchorDataUrl ?? null,
+      secondaryAnchorAngleDeg:
+        params.secondaryAnchorAngleDeg ?? rawProfile?.secondaryAnchorAngleDeg ?? null,
       qcCorrectionHint: params.qcCorrectionHint ?? null,
     }
   );
@@ -3038,7 +3100,9 @@ export async function synthesizeVtonLook(params = {}) {
     return buildFallbackResult('gemini_api_key_not_configured');
   }
 
-  const modelChain = resolveGeminiModelChain();
+  const modelChain = resolveGeminiModelChain({
+    preferFallbackModel: Boolean(params.preferFallbackModel),
+  });
   if (modelChain.length === 0) {
     return buildFallbackResult('gemini_model_not_configured');
   }

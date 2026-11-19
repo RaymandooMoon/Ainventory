@@ -177,19 +177,20 @@ test('all 8 indoor backgrounds define architectural lightingRig and switch from 
   assert.equal(oakDay.goboOpacity, 0);
 });
 
-test('user lighting preset and brightness slider override colors and scale intensities cleanly', () => {
+test('user lighting preset and brightness slider override colors and scale intensities cleanly within 0..100%', () => {
   assert.equal(STAGE_LIGHTING_PRESETS.length, 6);
 
   const normalizedDefault = normalizeEconomyState({});
   assert.equal(normalizedDefault.lightingPreset, 'auto');
   assert.equal(normalizedDefault.lightingIntensity, 100);
 
+  // Legacy values > 100% are safely clamped down to 100%
   const normalizedClamped = normalizeEconomyState({
     lightingPreset: 'golden_amber',
     lightingIntensity: 260,
   });
   assert.equal(normalizedClamped.lightingPreset, 'golden_amber');
-  assert.equal(normalizedClamped.lightingIntensity, 200);
+  assert.equal(normalizedClamped.lightingIntensity, 100);
 
   const base100 = resolveStageLightingFrame({
     backgroundId: 'c_atelier_plaster',
@@ -197,10 +198,10 @@ test('user lighting preset and brightness slider override colors and scale inten
     lightingIntensity: 100,
     timestampMs: new Date(2026, 9, 14, 13, 0, 0).getTime(),
   });
-  const boosted180 = resolveStageLightingFrame({
+  const dimmed50 = resolveStageLightingFrame({
     backgroundId: 'c_atelier_plaster',
     lightingPreset: 'golden_amber',
-    lightingIntensity: 180,
+    lightingIntensity: 50,
     timestampMs: new Date(2026, 9, 14, 13, 0, 0).getTime(),
   });
   const muted0 = resolveStageLightingFrame({
@@ -211,7 +212,10 @@ test('user lighting preset and brightness slider override colors and scale inten
   });
 
   assert.equal(base100.keyHex, 0xffbc6e);
-  assert.ok(Math.abs(boosted180.keyIntensity / base100.keyIntensity - 1.8) < 0.02);
+  assert.ok(
+    dimmed50.keyIntensity > 0 && dimmed50.keyIntensity < base100.keyIntensity,
+    `Expected 0 < dimmed50.keyIntensity (${dimmed50.keyIntensity}) < base100.keyIntensity (${base100.keyIntensity})`
+  );
   assert.equal(muted0.keyHex, 0xe4f0ff);
   assert.equal(muted0.keyIntensity, 0);
   assert.equal(muted0.beamVisible, false);

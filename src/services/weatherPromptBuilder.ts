@@ -20,8 +20,12 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v16-8angle-norm-bagstrap';
+export const CUTOUT_PIPELINE_VERSION = 'v20-bag-anchor-sync-strict-qc';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v19-facing-lock-archscale',
+  'v18-body45-scale-dock',
+  'v17-seq-8angle-3d-baglock',
+  'v16-8angle-norm-bagstrap',
   'v14-garment-guard-qc-360',
   'v13-qc-handedness-360',
   'v12-uniform-stature-360',

@@ -62,6 +62,7 @@ import {
   computeScrollbarLightingState,
   formatFirstLookCountdownSec,
   mapSignedTickToCanonicalSlice,
+  shouldResumeIncompleteTurnaround,
 } from '../services/vtonProgressiveState.ts';
 import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
 import {
@@ -819,6 +820,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       scenarioVtonSnapshotsRef.current = {};
+      completedProgressiveKeysRef.current.clear();
       setScenarioSnapEpoch((n) => n + 1);
       patchAvatarSpec({ dominantHand: nextHand });
       setPinnedHistoryItem(null);
@@ -991,6 +993,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
   const scenarioVtonKey = `${normalizedScenarioKey}|${isStageOutdoor ? 'outdoor' : 'indoor'}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
   const scenarioVtonSnapshotsRef = useRef({});
+  const completedProgressiveKeysRef = useRef(new Set());
   const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
 
   const recordScenarioVtonSnapshot = useCallback(
@@ -1308,6 +1311,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const isForceBypass = Boolean(snap.forceRefresh || forceBypassCacheRef.current);
     if (isForceBypass) {
       delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+      completedProgressiveKeysRef.current.delete(scenarioVtonKey);
     }
     const isUserApproved = Boolean(
       isForceBypass ||
@@ -1316,6 +1320,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         weatherTabJustChanged
     );
 
+    const alreadyCompletedRun =
+      !isForceBypass && completedProgressiveKeysRef.current.has(scenarioVtonKey);
+    let resumingIncompleteCache = false;
+
     const scenarioEntry = !isForceBypass ? scenarioVtonSnapshotsRef.current[scenarioVtonKey] : null;
     const scenarioExactUrl =
       scenarioEntry?.angleSlices?.[snap.canonicalSliceAngle] ||
@@ -1323,6 +1331,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       null;
 
     if (scenarioExactUrl) {
+      const needsRemainingAngles = shouldResumeIncompleteTurnaround({
+        cachedSlices: scenarioEntry?.angleSlices,
+        frontOnlyDegraded: Boolean(scenarioEntry?.frontOnlyDegraded),
+        alreadyExhaustedRun: alreadyCompletedRun,
+        demoShowcaseEnabled,
+      });
       forceBypassCacheRef.current = false;
       userApprovedGenRef.current = false;
       pendingFacePhotoApproveRef.current = null;
@@ -1331,7 +1345,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       hasInitialAutoRunRef.current = true;
       clearFirstLookCountdown();
       setStagedNeedsApply(false);
-      setProgressiveBgAnglesLoading(false);
+      setProgressiveBgAnglesLoading(needsRemainingAngles);
       if (scenarioEntry?.frontOnlyDegraded) {
         setFrontOnlyDegraded(true);
         if (scenarioEntry.notificationPopup) {
@@ -1356,25 +1370,29 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       });
       setStatusToast(null);
       setAiLoading(false);
-      return undefined;
+      if (!needsRemainingAngles) {
+        return undefined;
+      }
+      resumingIncompleteCache = true;
     }
 
-    const syncHit = !isForceBypass
-      ? peekMemoryAiVtonSlice({
-          avatarConfigHash: snap.resolvedAvatarHash,
-          outfitComboId,
-          styleMode: snap.styleMode,
-          effectiveWeather: snap.effectiveWeather,
-          angleDeg: snap.canonicalSliceAngle,
-        }) ||
-        peekMemoryAiVtonSlice({
-          avatarConfigHash: snap.resolvedAvatarHash,
-          outfitComboId,
-          styleMode: snap.styleMode,
-          effectiveWeather: snap.effectiveWeather,
-          angleDeg: 0,
-        })
-      : null;
+    const syncHit =
+      !isForceBypass && !resumingIncompleteCache
+        ? peekMemoryAiVtonSlice({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            effectiveWeather: snap.effectiveWeather,
+            angleDeg: snap.canonicalSliceAngle,
+          }) ||
+          peekMemoryAiVtonSlice({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            effectiveWeather: snap.effectiveWeather,
+            angleDeg: 0,
+          })
+        : null;
 
     if (syncHit) {
       const siblingMap = {};
@@ -1390,6 +1408,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           siblingMap[deg] = mem.imageUrl;
         }
       }
+      const needsRemainingAngles = shouldResumeIncompleteTurnaround({
+        cachedSlices: siblingMap,
+        alreadyExhaustedRun: alreadyCompletedRun,
+        demoShowcaseEnabled,
+      });
       recordScenarioVtonSnapshot(
         scenarioVtonKey,
         siblingMap[snap.canonicalSliceAngle] ? snap.canonicalSliceAngle : 0,
@@ -1404,7 +1427,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       hasInitialAutoRunRef.current = true;
       clearFirstLookCountdown();
       setStagedNeedsApply(false);
-      setProgressiveBgAnglesLoading(false);
+      setProgressiveBgAnglesLoading(needsRemainingAngles);
       clearFrontOnlyFallbackState();
       setAiState({
         cacheKey: `${buildAiVtonCacheKey({
@@ -1420,7 +1443,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       });
       setStatusToast(null);
       setAiLoading(false);
-      return undefined;
+      if (!needsRemainingAngles) {
+        return undefined;
+      }
+      resumingIncompleteCache = true;
     }
 
     if (demoShowcaseEnabled && !isForceBypass) {
@@ -1479,7 +1505,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     let delayTimerId = null;
 
     const runPipeline = async () => {
-      if (!isForceBypass) {
+      if (!isForceBypass && !resumingIncompleteCache) {
         const idbHit =
           (await readCachedAiVtonSlice({
             avatarConfigHash: snap.resolvedAvatarHash,
@@ -1500,46 +1526,48 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         if (idbHit) {
           const hitAngle = idbHit.slice.angleDeg ?? 0;
           const siblingAngles = TURNAROUND_ANGLES.filter((deg) => deg !== hitAngle);
-          const siblingPromises = siblingAngles.map((deg) =>
-            readCachedAiVtonSlice({
-              avatarConfigHash: snap.resolvedAvatarHash,
-              outfitComboId,
-              styleMode: snap.styleMode,
-              effectiveWeather: snap.effectiveWeather,
-              angleDeg: deg,
-            })
+          const siblingHits = await Promise.all(
+            siblingAngles.map((deg) =>
+              readCachedAiVtonSlice({
+                avatarConfigHash: snap.resolvedAvatarHash,
+                outfitComboId,
+                styleMode: snap.styleMode,
+                effectiveWeather: snap.effectiveWeather,
+                angleDeg: deg,
+              })
+            )
           );
-          recordScenarioVtonSnapshot(scenarioVtonKey, hitAngle, idbHit.slice.imageUrl);
-          void Promise.all(siblingPromises)
-            .then((hits) => {
-              if (controller.signal.aborted) return;
-              const siblingMap = {
-                [hitAngle]: idbHit.slice.imageUrl,
-              };
-              hits.forEach((h, idx) => {
-                if (h?.slice?.imageUrl) {
-                  siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
+          if (controller.signal.aborted) return;
+
+          const siblingMap = {
+            [hitAngle]: idbHit.slice.imageUrl,
+          };
+          siblingHits.forEach((h, idx) => {
+            if (h?.slice?.imageUrl) {
+              siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
+            }
+          });
+          const existingSnap = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+          recordScenarioVtonSnapshot(
+            scenarioVtonKey,
+            hitAngle,
+            idbHit.slice.imageUrl,
+            siblingMap,
+            existingSnap?.frontOnlyDegraded
+              ? {
+                  frontOnlyDegraded: true,
+                  notificationPopup: existingSnap.notificationPopup || null,
                 }
-              });
-              const existingSnap = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
-              recordScenarioVtonSnapshot(
-                scenarioVtonKey,
-                hitAngle,
-                idbHit.slice.imageUrl,
-                siblingMap,
-                existingSnap?.frontOnlyDegraded
-                  ? {
-                      frontOnlyDegraded: true,
-                      notificationPopup: existingSnap.notificationPopup || null,
-                    }
-                  : null
-              );
-              preloadImageUrls([
-                idbHit.slice.imageUrl,
-                ...hits.map((h) => h?.slice?.imageUrl).filter(Boolean),
-              ]);
-            })
-            .catch(() => {});
+              : null
+          );
+          preloadImageUrls(Object.values(siblingMap));
+
+          const needsRemainingAngles = shouldResumeIncompleteTurnaround({
+            cachedSlices: siblingMap,
+            frontOnlyDegraded: Boolean(existingSnap?.frontOnlyDegraded),
+            alreadyExhaustedRun: alreadyCompletedRun,
+            demoShowcaseEnabled,
+          });
 
           forceBypassCacheRef.current = false;
           userApprovedGenRef.current = false;
@@ -1549,7 +1577,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           hasInitialAutoRunRef.current = true;
           clearFirstLookCountdown();
           setStagedNeedsApply(false);
-          setProgressiveBgAnglesLoading(false);
+          setProgressiveBgAnglesLoading(needsRemainingAngles);
           clearFrontOnlyFallbackState();
           setAiState({
             cacheKey: `${buildAiVtonCacheKey({
@@ -1565,7 +1593,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           });
           setStatusToast(null);
           setAiLoading(false);
-          return;
+          if (!needsRemainingAngles) {
+            return;
+          }
+          resumingIncompleteCache = true;
         }
       }
 
@@ -1586,6 +1617,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       );
 
       if (
+        !resumingIncompleteCache &&
         !isUserApproved &&
         !isDirectDemoClick &&
         !hasSiblingComboSlice &&
@@ -1763,15 +1795,21 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           });
       };
 
-      if (isInitialRecommendedPreGen) {
-        if (!firstLookPreGenActiveRef.current) {
-          startFirstLookCountdown(FIRST_LOOK_DELAY_MS);
-        }
-      } else if (isExplicitUserTrigger || !firstLookPreGenActiveRef.current) {
+      if (resumingIncompleteCache) {
         clearFirstLookCountdown();
+        setAiLoading(false);
+        setProgressiveBgAnglesLoading(true);
+      } else {
+        if (isInitialRecommendedPreGen) {
+          if (!firstLookPreGenActiveRef.current) {
+            startFirstLookCountdown(FIRST_LOOK_DELAY_MS);
+          }
+        } else if (isExplicitUserTrigger || !firstLookPreGenActiveRef.current) {
+          clearFirstLookCountdown();
+        }
+        setAiLoading(true);
+        setProgressiveBgAnglesLoading(false);
       }
-      setAiLoading(true);
-      setProgressiveBgAnglesLoading(false);
 
       if (isInitialRecommendedPreGen) {
         // Yield briefly so the Flat-Lay + reverse-countdown banner commits & paints before garment rasterization
@@ -1862,6 +1900,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         setProgressiveBgAnglesLoading(false);
 
         if (outcome.ok && outcome.imageUrl) {
+          completedProgressiveKeysRef.current.add(liveSnap.scenarioVtonKey);
           if (outcome.angleSlices) {
             preloadImageUrls(Object.values(outcome.angleSlices));
           }
@@ -2022,6 +2061,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+      completedProgressiveKeysRef.current.delete(scenarioVtonKey);
       configBlockedRef.current = false;
       clearFirstLookCountdown();
       userCanceledPreGenRef.current = false;
@@ -2152,7 +2192,31 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleCloseFlatLay = useCallback(() => {
     setStageMode('ai-vton');
-  }, []);
+    if (canonicalSliceAngle !== 0) {
+      const snapEntry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+      const hasCurrentSlice = Boolean(
+        snapEntry?.angleSlices?.[canonicalSliceAngle] ||
+          peekMemoryAiVtonSlice({
+            avatarConfigHash: resolvedAvatarHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather: vtonEffectiveWeather,
+            angleDeg: canonicalSliceAngle,
+          })?.imageUrl
+      );
+      if (!hasCurrentSlice) {
+        commitAngleDeg(0);
+      }
+    }
+  }, [
+    canonicalSliceAngle,
+    scenarioVtonKey,
+    resolvedAvatarHash,
+    outfitComboId,
+    styleMode,
+    vtonEffectiveWeather,
+    commitAngleDeg,
+  ]);
 
   const isRainy = isStageOutdoor && effectiveWeather === 'rain';
   const isWindy =
@@ -2207,9 +2271,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     memorySlice?.imageUrl ||
     (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
     demoSliceUrl ||
-    (aiLoading || progressiveBgAnglesLoading
-      ? fallbackSameComboMemorySlice?.imageUrl
-      : null) ||
+    fallbackSameComboMemorySlice?.imageUrl ||
     null;
 
   const isHoldingForFirstLookCountdown = Boolean(
@@ -2220,7 +2282,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ? availableAiImageUrl
       : null;
   const canReturnToCharacter =
-    stageMode === 'flatlay' &&
+    !resolvedAiImageUrl &&
     Boolean(availableAiImageUrl) &&
     !isHoldingForFirstLookCountdown;
   const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
@@ -2539,7 +2601,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-has-top-banner={
         isHoldingForFirstLookCountdown ||
         aiLoading ||
-        progressiveBgAnglesLoading ||
         hasStagedBarVisible ||
         hasPinnedBannerVisible
           ? 'true'
@@ -2709,20 +2770,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </span>
           </div>
         </>
-      ) : progressiveBgAnglesLoading && Boolean(resolvedAiImageUrl) && !postLoginRevealActive ? (
-        <div
-          className="studio-vton-step-status is-bg-angles tabular-nums"
-          data-vton-bg-angles-pill="true"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="studio-vton-step-badge">
-            {scrollbarLighting.readyCount}/{scrollbarLighting.totalCount}
-          </span>
-          <span className="studio-vton-step-label">
-            {isEn ? 'Rendering side & back angles...' : '측면·뒷모습 순차 준비 중'}
-          </span>
-        </div>
       ) : null}
 
       {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [Wardrobe Drawer] */}

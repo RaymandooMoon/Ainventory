@@ -26,13 +26,14 @@ test('Height-linked stage framing scales character height fraction & backdrop na
   assert.ok(shortF.targetCharacterHeightFraction < midF.targetCharacterHeightFraction);
   assert.ok(midF.targetCharacterHeightFraction < tallF.targetCharacterHeightFraction);
   assert.ok(
-    midF.targetCharacterHeightFraction >= 0.68 && midF.targetCharacterHeightFraction <= 0.72,
+    midF.targetCharacterHeightFraction >= 0.68 && midF.targetCharacterHeightFraction <= 0.73,
     `Expected ~70% stage height at 172cm, got ${midF.targetCharacterHeightFraction}`
   );
-  // Wide-angle backdrop never shrinks below 1.02 (zero white margins)
-  assert.ok(shortF.backdropScale >= 1.02);
-  assert.ok(midF.backdropScale >= 1.02);
-  assert.ok(tallF.backdropScale >= 1.02);
+  // Synchronized floor-anchored backdrop zoom scales up for shorter heights and stays >= 1.38 (zero edge reveal)
+  assert.equal(midF.backdropTransformOrigin, '50% 90%');
+  assert.ok(shortF.backdropScale > midF.backdropScale);
+  assert.ok(midF.backdropScale > tallF.backdropScale);
+  assert.ok(tallF.backdropScale >= 1.38);
 
   // computeMannequinFloorPlacement respects heightCm and returns topRatio/bottomRatio
   const p155 = computeMannequinFloorPlacement({

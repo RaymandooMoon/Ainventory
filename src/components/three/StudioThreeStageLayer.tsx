@@ -76,6 +76,7 @@ const _targetAuraColor = new THREE.Color();
 const _targetBeamColor = new THREE.Color();
 const _targetHazeColor = new THREE.Color();
 const _targetGoboColor = new THREE.Color();
+const _targetFloorPoolColor = new THREE.Color();
 
 // Single-pass Volumetric Sunbeam / Interior Fixture Cone Shader (zero extra render passes)
 const VOLUMETRIC_BEAM_VERT = `
@@ -147,6 +148,9 @@ const SILHOUETTE_SHADOW_FRAG = `
   uniform float uCrownTopV;
   uniform vec2 uShadowDir;
   uniform float uShadowLength;
+  uniform vec2 uShadowDir2;
+  uniform float uShadowLength2;
+  uniform float uSecondaryWeight;
   uniform float uCharWidthMeters;
   uniform float uFootprintScale;
   uniform float uDirectRatio;
@@ -161,6 +165,47 @@ const SILHOUETTE_SHADOW_FRAG = `
     return smoothstep(0.18, 0.75, texture2D(uCutoutTex, uv).a);
   }
 
+  float projectSilhouette(vec2 p, vec2 rawDir, float shadowLen, float sharpness, bool highQuality) {
+    float dirLen = length(rawDir);
+    vec2 dir = dirLen > 0.001 ? (rawDir / dirLen) : vec2(0.0, -1.0);
+    vec2 perpDir = vec2(dir.y, -dir.x);
+
+    float along = dot(p, dir);
+    float across = dot(p, perpDir);
+    float t = along / max(0.45, shadowLen);
+    if (t <= -0.05 || t >= 1.08) {
+      return 0.0;
+    }
+
+    float tClamped = clamp(t, 0.0, 1.0);
+    float sampleV = mix(uSoleBottomV, uCrownTopV, tClamped);
+    float uRaw = 0.5 + (across / max(0.55, uCharWidthMeters));
+    float sampleU = uMirrorX > 0.5 ? (1.0 - uRaw) : uRaw;
+    vec2 baseUv = vec2(sampleU, sampleV);
+
+    float blurScale = mix(1.25, 0.72, sharpness);
+    float blurU = (0.009 + 0.034 * tClamped) * blurScale;
+    float blurV = (0.007 + 0.022 * tClamped) * blurScale;
+    float silAlpha = 0.0;
+    if (highQuality) {
+      float a0 = sampleCutoutAlpha(baseUv) * 0.36;
+      float a1 = sampleCutoutAlpha(baseUv + vec2(blurU, 0.0)) * 0.16;
+      float a2 = sampleCutoutAlpha(baseUv - vec2(blurU, 0.0)) * 0.16;
+      float a3 = sampleCutoutAlpha(baseUv + vec2(0.0, blurV)) * 0.16;
+      float a4 = sampleCutoutAlpha(baseUv - vec2(0.0, blurV)) * 0.16;
+      silAlpha = a0 + a1 + a2 + a3 + a4;
+    } else {
+      float b0 = sampleCutoutAlpha(baseUv) * 0.46;
+      float b1 = sampleCutoutAlpha(baseUv + vec2(blurU * 1.35, 0.0)) * 0.27;
+      float b2 = sampleCutoutAlpha(baseUv - vec2(blurU * 1.35, 0.0)) * 0.27;
+      silAlpha = b0 + b1 + b2;
+    }
+
+    float entryFade = smoothstep(-0.05, 0.04, t);
+    float tipFade = 1.0 - smoothstep(0.62, 1.08, t);
+    return silAlpha * entryFade * tipFade;
+  }
+
   void main() {
     vec2 p = vFloorXZ;
 
@@ -173,45 +218,28 @@ const SILHOUETTE_SHADOW_FRAG = `
     float softAo = exp(-dot(softCoord, softCoord) * 1.55) * 0.44;
     float contactAo = clamp(coreAo * 0.84 + softAo, 0.0, 1.0);
 
-    // 2. Light-direction projected Silhouette Cast Shadow from the active RGBA model cutout
+    // 2. Light-direction projected Silhouette Cast Shadow (+ optional opposing indoor fixture fill shadow)
     float castShadow = 0.0;
     if (uHasCutout > 0.5) {
-      float dirLen = length(uShadowDir);
-      vec2 dir = dirLen > 0.001 ? (uShadowDir / dirLen) : vec2(0.0, -1.0);
-      vec2 perpDir = vec2(dir.y, -dir.x);
+      float sharpness = clamp(uDirectRatio, 0.0, 1.0);
+      float directWeight = mix(0.42, 1.0, sharpness);
+      float primaryCast = projectSilhouette(p, uShadowDir, uShadowLength, sharpness, true) * directWeight;
 
-      float along = dot(p, dir);
-      float across = dot(p, perpDir);
-      float t = along / max(0.45, uShadowLength);
-
-      if (t > -0.05 && t < 1.06) {
-        float tClamped = clamp(t, 0.0, 1.0);
-        float sampleV = mix(uSoleBottomV, uCrownTopV, tClamped);
-        float uRaw = 0.5 + (across / max(0.55, uCharWidthMeters));
-        float sampleU = uMirrorX > 0.5 ? (1.0 - uRaw) : uRaw;
-        vec2 baseUv = vec2(sampleU, sampleV);
-
-        // Physically motivated distance-softening penumbra (crisp at ankles, soft at shoulders/head)
-        float blurU = 0.009 + 0.036 * tClamped;
-        float blurV = 0.007 + 0.024 * tClamped;
-        float a0 = sampleCutoutAlpha(baseUv) * 0.36;
-        float a1 = sampleCutoutAlpha(baseUv + vec2(blurU, 0.0)) * 0.16;
-        float a2 = sampleCutoutAlpha(baseUv - vec2(blurU, 0.0)) * 0.16;
-        float a3 = sampleCutoutAlpha(baseUv + vec2(0.0, blurV)) * 0.16;
-        float a4 = sampleCutoutAlpha(baseUv - vec2(0.0, blurV)) * 0.16;
-        float silAlpha = a0 + a1 + a2 + a3 + a4;
-
-        float entryFade = smoothstep(-0.05, 0.04, t);
-        float tipFade = 1.0 - smoothstep(0.42, 1.06, t);
-        float directWeight = mix(0.28, 0.92, clamp(uDirectRatio, 0.0, 1.0));
-        castShadow = silAlpha * entryFade * tipFade * directWeight;
+      float secondaryCast = 0.0;
+      if (uSecondaryWeight > 0.02) {
+        secondaryCast =
+          projectSilhouette(p, uShadowDir2, uShadowLength2, sharpness * 0.65, false) *
+          uSecondaryWeight *
+          directWeight;
       }
+
+      castShadow = clamp(max(primaryCast, secondaryCast) + min(primaryCast, secondaryCast) * 0.28, 0.0, 1.0);
     }
 
     // Smooth radial edge fade so the shadow quad border is never visible
-    float quadEdgeFade = 1.0 - smoothstep(1.25, 1.75, length(p));
-    float combined = max(contactAo * 0.9, castShadow * 0.74) + contactAo * castShadow * 0.12;
-    float finalAlpha = clamp(combined * uShadowOpacity * quadEdgeFade, 0.0, 0.78);
+    float quadEdgeFade = 1.0 - smoothstep(1.9, 2.62, length(p));
+    float combined = max(contactAo * 0.92, castShadow * 0.9) + contactAo * castShadow * 0.14;
+    float finalAlpha = clamp(combined * uShadowOpacity * quadEdgeFade, 0.0, 0.86);
     if (finalAlpha < 0.004) discard;
     gl_FragColor = vec4(uShadowColor, finalAlpha);
   }
@@ -537,9 +565,25 @@ export default function StudioThreeStageLayer({
       floorDisc.renderOrder = 1;
       stageGroup.add(floorDisc);
 
-      // Part 2: Single-Pass GLSL Silhouette Cast Shadow + Tight Dual-Foot Contact AO (y = 0.008)
+      // Part 1B: Indoor Fixture Floor Light Pool (y = 0.004, strictly BELOW cast shadow so shadow cuts cleanly through lit floor!)
+      const fixturePoolGeo = new THREE.PlaneGeometry(3.4, 2.5);
+      fixturePoolGeo.rotateX(-Math.PI / 2);
+      const fixturePoolMat = new THREE.MeshBasicMaterial({
+        color: 0xffd8a0,
+        map: auraGlowTex,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const fixturePoolMesh = new THREE.Mesh(fixturePoolGeo, fixturePoolMat);
+      fixturePoolMesh.position.set(0, 0.004, 0.05);
+      fixturePoolMesh.renderOrder = 1;
+      stageGroup.add(fixturePoolMesh);
+
+      // Part 2: Single-Pass GLSL Silhouette Cast Shadow + Tight Dual-Foot Contact AO (y = 0.009)
       // World origin (0, 0, 0) is calibrated via exact closed-form projection to 2D `soleStageTopPct` (0px gap!)
-      const silhouetteShadowGeo = new THREE.PlaneGeometry(3.6, 3.6);
+      const silhouetteShadowGeo = new THREE.PlaneGeometry(5.4, 5.4);
       silhouetteShadowGeo.rotateX(-Math.PI / 2);
       const silhouetteShadowMat = new THREE.ShaderMaterial({
         uniforms: {
@@ -550,6 +594,9 @@ export default function StudioThreeStageLayer({
           uCrownTopV: { value: 0.94 },
           uShadowDir: { value: new THREE.Vector2(0.0, -1.0) },
           uShadowLength: { value: 1.05 },
+          uShadowDir2: { value: new THREE.Vector2(0.0, -1.0) },
+          uShadowLength2: { value: 0.92 },
+          uSecondaryWeight: { value: 0.0 },
           uCharWidthMeters: { value: 1.18 },
           uFootprintScale: { value: 1.0 },
           uDirectRatio: { value: 0.75 },
@@ -562,7 +609,7 @@ export default function StudioThreeStageLayer({
         depthWrite: false,
       });
       const silhouetteShadowMesh = new THREE.Mesh(silhouetteShadowGeo, silhouetteShadowMat);
-      silhouetteShadowMesh.position.set(0, 0.008, 0);
+      silhouetteShadowMesh.position.set(0, 0.009, 0);
       silhouetteShadowMesh.renderOrder = 2;
       stageGroup.add(silhouetteShadowMesh);
 
@@ -583,7 +630,7 @@ export default function StudioThreeStageLayer({
       stageGroup.add(goboPatchMesh);
 
       // Part 3: Recessed Architectural Podium Trim Ring (y = 0.054, indoor salon stages only)
-      const trimGeo = new THREE.TorusGeometry(0.74, 0.008, 12, 56);
+      const trimGeo = new THREE.TorusGeometry(0.68, 0.0065, 12, 56);
       trimGeo.rotateX(Math.PI / 2);
       const trimMat: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial = isSoftwareGl
         ? new THREE.MeshLambertMaterial({
@@ -602,7 +649,7 @@ export default function StudioThreeStageLayer({
           });
       const trimRing = new THREE.Mesh(trimGeo, trimMat);
       trimRing.position.set(0, 0.054, 0.04);
-      trimRing.scale.set(1, 1, 0.58);
+      trimRing.scale.set(1, 1, 0.64);
       trimRing.renderOrder = 3;
       stageGroup.add(trimRing);
 
@@ -803,13 +850,15 @@ export default function StudioThreeStageLayer({
         }
 
         // Exact closed-form camera calibration so 3D floor origin (0,0,0) lands on 2D `soleStageTopPct` (0px gap!)
+        // Keep camera strictly centered at X=0 (zero lateral pan) so the horizontal floor ring stays 100% level
+        // parallel to the 2D room floor at every angle (-180°..+180°) without off-axis diagonal ellipse tilt.
         const targetYawRad = THREE.MathUtils.degToRad(
           THREE.MathUtils.clamp(p.angleScrollDeg || 0, -180, 180) * 0.12
         );
         currentYawRad = isSoftwareGl
           ? targetYawRad
           : THREE.MathUtils.damp(currentYawRad, targetYawRad, 7.5, dt);
-        const camPosZ = 4.55 - (1 - Math.cos(currentYawRad)) * 0.28;
+        const camPosZ = 4.55;
         const camPosY = 1.42;
         const floorCal = computeThreeCameraLookAtForSolePct({
           soleStageTopPct: p.soleStageTopPct,
@@ -817,36 +866,69 @@ export default function StudioThreeStageLayer({
           cameraPosZ: camPosZ,
           fovDeg: camera.fov,
         });
-        camera.position.set(Math.sin(currentYawRad) * 0.62, camPosY, camPosZ);
+        camera.position.set(0, camPosY, camPosZ);
         camera.lookAt(0, floorCal.lookAtY, 0);
         stageGroup.rotation.y = -currentYawRad * 0.65;
+        trimRing.rotation.y = -stageGroup.rotation.y;
 
-        // Single-Pass GLSL Silhouette Cast Shadow + Tight Contact AO driven by active light rig & cutout
+        // Warm Indoor Fixture Floor Spotlight Pool (illuminates floor beneath shadow so cast shadow pops!)
+        const poolOpacity = !p.isOutdoor && lf.floorPoolStrength > 0.01 ? lf.floorPoolStrength : 0;
+        fixturePoolMesh.visible = poolOpacity > 0.005;
+        if (fixturePoolMesh.visible) {
+          _targetFloorPoolColor.setHex(lf.floorPoolHex);
+          fixturePoolMat.color.lerp(_targetFloorPoolColor, blend);
+          fixturePoolMat.opacity = THREE.MathUtils.clamp(
+            poolOpacity * (isDark ? 1.12 : 0.92),
+            0,
+            0.48
+          );
+          fixturePoolMesh.position.set(
+            THREE.MathUtils.clamp(lf.keyPosX * 0.12, -0.35, 0.35),
+            0.004,
+            0.06
+          );
+        }
+
+        // Single-Pass GLSL Silhouette Cast Shadow + Dual-Fixture Fill Shadow + Tight Contact AO
         silhouetteShadowMesh.visible = Boolean(p.hasCharacter);
         if (silhouetteShadowMesh.visible) {
           // Cast shadow vector points horizontally AWAY from key light source `(keyPosX, keyPosZ)`
-          let castX = -lf.keyPosX * 0.52 + lf.shadowOffsetX * 1.4;
-          let castZ = -lf.keyPosZ * 0.36 + lf.shadowOffsetZ * 1.1;
+          // Stronger lateral X weight counteracts low-camera Z-foreshortening so room lamp shadows sweep visibly across floor
+          let castX = -lf.keyPosX * 0.72 + lf.shadowOffsetX * 1.35;
+          let castZ = -lf.keyPosZ * 0.34 + lf.shadowOffsetZ * 0.9;
           const castLen = Math.hypot(castX, castZ);
           if (castLen < 0.08) {
-            castX = 0.08;
-            castZ = -0.95;
+            castX = 0.32;
+            castZ = -0.94;
           }
           (silhouetteShadowMat.uniforms.uShadowDir.value as THREE.Vector2).set(castX, castZ);
 
-          // Longer shadow when sun/key light is low, shorter under overhead skylight/noon sun
-          const lightHeightFactor = THREE.MathUtils.clamp(3.9 / Math.max(1.4, lf.keyPosY), 0.52, 1.38);
+          // Longer shadow when lamp/sun is lower, shorter under overhead skylight/noon sun
+          const lightHeightFactor = THREE.MathUtils.clamp(3.9 / Math.max(1.4, lf.keyPosY), 0.68, 1.55);
           const stretchFactor = THREE.MathUtils.clamp(
-            (lf.shadowStretchX + lf.shadowStretchZ) * 0.52,
-            0.55,
-            1.45
+            (lf.shadowStretchX + lf.shadowStretchZ) * 0.58,
+            0.72,
+            1.58
           );
           const shadowLen = THREE.MathUtils.clamp(
-            p.stageFraming.shadowHeightMeters * 0.58 * lightHeightFactor * stretchFactor,
-            0.48,
-            1.65
+            p.stageFraming.shadowHeightMeters * 0.86 * lightHeightFactor * stretchFactor,
+            0.95,
+            2.15
           );
           silhouetteShadowMat.uniforms.uShadowLength.value = shadowLen;
+
+          // Optional opposing secondary indoor fixture shadow (twin wall sconces / chandeliers / dual rails)
+          (silhouetteShadowMat.uniforms.uShadowDir2.value as THREE.Vector2).set(
+            lf.secondaryShadowDirX,
+            lf.secondaryShadowDirZ
+          );
+          silhouetteShadowMat.uniforms.uShadowLength2.value = shadowLen * 0.88;
+          silhouetteShadowMat.uniforms.uSecondaryWeight.value = THREE.MathUtils.clamp(
+            lf.secondaryShadowWeight,
+            0,
+            0.55
+          );
+
           silhouetteShadowMat.uniforms.uFootprintScale.value = p.stageFraming.shadowFootprintScale;
           silhouetteShadowMat.uniforms.uCharWidthMeters.value =
             1.18 * p.stageFraming.shadowFootprintScale;
@@ -864,20 +946,22 @@ export default function StudioThreeStageLayer({
           silhouetteShadowMat.uniforms.uCrownTopV.value = 1.0 - safeTop;
           silhouetteShadowMat.uniforms.uDirectRatio.value = THREE.MathUtils.clamp(
             lf.directRatio,
-            0.1,
+            0.12,
             1.0
           );
 
-          const baseOpacity = isDark ? 0.58 : 0.46;
-          const intensityFactor = THREE.MathUtils.clamp(
-            0.55 + lf.intensityScale * 0.45,
-            0.35,
-            1.15
-          );
+          const baseOpacity = !p.isOutdoor
+            ? isDark
+              ? 0.66
+              : 0.56
+            : isDark
+              ? 0.58
+              : 0.46;
+          // Note: `lf.shadowOpacityScale` already encodes the smooth dimmer curve (avoid double-attenuating at 50%)
           silhouetteShadowMat.uniforms.uShadowOpacity.value = THREE.MathUtils.clamp(
-            baseOpacity * lf.shadowOpacityScale * intensityFactor,
-            0.22,
-            0.72
+            baseOpacity * lf.shadowOpacityScale,
+            0.24,
+            0.8
           );
 
           // Cool slate outdoor daytime shadow vs warm charcoal indoor/sunset shadow
@@ -888,8 +972,8 @@ export default function StudioThreeStageLayer({
                 ? 0x1d1614
                 : 0x131a26
             : isDark
-              ? 0x0b0a0a
-              : 0x1c1916;
+              ? 0x080706
+              : 0x1b1714;
           (silhouetteShadowMat.uniforms.uShadowColor.value as THREE.Color).setHex(shadowHex);
         }
 
@@ -1116,7 +1200,20 @@ export default function StudioThreeStageLayer({
           return false;
         }
         const yawSettled = Math.abs(targetYawRad - currentYawRad) < 0.0015;
-        return !p.paused && (showPrecip || !yawSettled || showMotes);
+        const lightingSettled =
+          Math.abs(keyLight.intensity - lf.keyIntensity) < 0.008 &&
+          Math.abs(hemiLight.intensity - lf.hemiIntensity) < 0.008 &&
+          Math.abs(keyLight.position.x - lf.keyPosX) < 0.01 &&
+          Math.abs(keyLight.position.y - lf.keyPosY) < 0.01 &&
+          Math.abs(keyLight.position.z - lf.keyPosZ) < 0.01 &&
+          Math.abs(keyLight.color.r - _targetKeyColor.r) < 0.006 &&
+          Math.abs(keyLight.color.g - _targetKeyColor.g) < 0.006 &&
+          Math.abs(keyLight.color.b - _targetKeyColor.b) < 0.006 &&
+          (!fixturePoolMesh.visible ||
+            (Math.abs(fixturePoolMat.color.r - _targetFloorPoolColor.r) < 0.006 &&
+              Math.abs(fixturePoolMat.color.g - _targetFloorPoolColor.g) < 0.006 &&
+              Math.abs(fixturePoolMat.color.b - _targetFloorPoolColor.b) < 0.006));
+        return !p.paused && (showPrecip || !yawSettled || !lightingSettled || showMotes);
       };
 
       const tickLoop = () => {
@@ -1153,7 +1250,11 @@ export default function StudioThreeStageLayer({
             return;
           }
           renderDirty = false;
-          const shouldLoop = stepScene(performance.now() * 0.001);
+          const wakeNowSec = performance.now() * 0.001;
+          if (wakeNowSec - lastTimeSec > 0.25) {
+            lastTimeSec = wakeNowSec - 0.016;
+          }
+          const shouldLoop = stepScene(wakeNowSec);
           renderer.render(scene, camera);
 
           const finishOneShot = () => {

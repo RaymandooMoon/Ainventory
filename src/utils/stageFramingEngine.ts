@@ -61,27 +61,29 @@ export function computeHeightAwareStageFraming(
   const isCompactViewport = stageWidth > 0 && stageWidth <= 595;
   const isTallMobile = isCompactViewport && stageHeight > stageWidth * 1.45;
 
-  // Editorial wide-angle architectural proportion:
-  // ~70% of stage height at 172cm (down from ~86% oversized look),
-  // gracefully scaling between ~62.5% (150cm) and ~78.5% (198cm).
-  const baseFraction = isTallMobile ? 0.68 : 0.705;
+  // Uniform camera zoom-in preserving authentic architectural proportion (railing at waist/lower-chest,
+  // indoor ceilings cleanly above head) while giving the character strong ~70% stage presence:
+  // - Character occupies ~69.5% (tall mobile) / ~70.5% (desktop) at 172cm (~70.8% at 177cm),
+  //   scaling smoothly from ~63.5% (150cm) to ~75.5% (198cm).
+  // - Floor-anchored backdrop zoom (transform-origin: 50% 90%, scale 1.38..1.58) zooms the room
+  //   by the exact same camera factor so character-to-railing & character-to-ceiling scale stays locked.
+  const baseFraction = isTallMobile ? 0.695 : 0.705;
   const targetCharacterHeightFraction =
-    Math.round(clamp(baseFraction + heightDeltaNorm * 0.082, 0.61, 0.79) * 1000) / 1000;
+    Math.round(clamp(baseFraction + heightDeltaNorm * 0.068, 0.62, 0.765) * 1000) / 1000;
 
   const statureMultiplier =
     Math.round((clampedHeightCm / REFERENCE_HEIGHT_CM) * 1000) / 1000;
 
-  // Taller stature pulls camera slightly wider & lowers floor slightly;
-  // shorter stature gently frames closer so architectural eye-line feels natural.
+  // Synchronized floor-anchored backdrop zoom (~1.48 at 172cm, 1.565 at 150cm, 1.38 at 198cm; zero edge gaps)
   const backdropScale =
-    Math.round(clamp(1.048 - heightDeltaNorm * 0.026, 1.022, 1.078) * 1000) / 1000;
+    Math.round(clamp(1.48 - heightDeltaNorm * 0.1, 1.38, 1.58) * 1000) / 1000;
   const backdropTranslateYPct =
-    Math.round(clamp(heightDeltaNorm * 1.65, -1.5, 1.75) * 100) / 100;
+    Math.round(clamp(heightDeltaNorm * 0.4, -0.35, 0.4) * 100) / 100;
 
   const shadowFootprintScale =
-    Math.round(clamp(0.92 + (statureMultiplier - 1) * 0.45, 0.84, 1.06) * 1000) / 1000;
+    Math.round(clamp(0.98 + (statureMultiplier - 1) * 0.42, 0.86, 1.12) * 1000) / 1000;
   const shadowHeightMeters =
-    Math.round(clamp(1.68 * statureMultiplier, 1.42, 1.98) * 1000) / 1000;
+    Math.round(clamp(1.72 * statureMultiplier, 1.48, 1.98) * 1000) / 1000;
 
   return {
     clampedHeightCm,
@@ -90,7 +92,7 @@ export function computeHeightAwareStageFraming(
     statureMultiplier,
     backdropScale,
     backdropTranslateYPct,
-    backdropTransformOrigin: '50% 68%',
+    backdropTransformOrigin: '50% 90%',
     shadowFootprintScale,
     shadowHeightMeters,
   };
@@ -151,5 +153,55 @@ export function computeThreeCameraLookAtForSolePct(
   return {
     lookAtY: Math.round(lookAtY * 10000) / 10000,
     targetNdcY: Math.round(targetNdcY * 10000) / 10000,
+  };
+}
+
+export interface CoverPhotoFrame {
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+}
+
+/**
+ * Pure geometry solver matching CSS `object-fit: cover; object-position: center bottom;`
+ * for a 3:4 (`photoAspect = 0.75`) architectural stage photograph inside any stage container.
+ * Used to lock physical background light-fixture overlays 1:1 to their photo pixels across
+ * mobile, tablet, and desktop aspect ratios without drift.
+ */
+export function computeCoverPhotoFrame(
+  stageWidth: number,
+  stageHeight: number,
+  photoAspect = 0.75
+): CoverPhotoFrame {
+  const safeW = Number.isFinite(stageWidth) && stageWidth > 0 ? stageWidth : 0;
+  const safeH = Number.isFinite(stageHeight) && stageHeight > 0 ? stageHeight : 0;
+  const safeAspect = Number.isFinite(photoAspect) && photoAspect > 0.1 ? photoAspect : 0.75;
+
+  if (safeW === 0 || safeH === 0) {
+    return { width: 0, height: 0, left: 0, top: 0 };
+  }
+
+  const stageAspect = safeW / safeH;
+  if (stageAspect >= safeAspect) {
+    // Stage is wider than 3:4 -> fit width, anchor bottom edge
+    const width = safeW;
+    const height = safeW / safeAspect;
+    return {
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100,
+      left: 0,
+      top: Math.round((safeH - height) * 100) / 100,
+    };
+  }
+
+  // Stage is taller than 3:4 (mobile portrait) -> fit height, center horizontally
+  const height = safeH;
+  const width = safeH * safeAspect;
+  return {
+    width: Math.round(width * 100) / 100,
+    height: Math.round(height * 100) / 100,
+    left: Math.round(((safeW - width) / 2) * 100) / 100,
+    top: 0,
   };
 }

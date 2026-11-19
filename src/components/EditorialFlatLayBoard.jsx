@@ -204,7 +204,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
               }}
             >
               <ArrowLeft size={13} aria-hidden="true" />
-              <span>{isEn ? 'Character' : '캐릭터 보기'}</span>
+              <span>{isEn ? 'Back to Character' : '캐릭터로 돌아가기'}</span>
             </button>
           )}
         </div>

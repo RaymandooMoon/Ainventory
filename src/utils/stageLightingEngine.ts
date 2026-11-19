@@ -122,16 +122,25 @@ export interface StageLightingFrame {
   goboScaleX: number;
   goboScaleZ: number;
 
-  // Indoor Post-Sunset Fixture Metadata
+  // Indoor Post-Sunset Fixture Metadata & Physical Lamp Illumination
   indoorNightFixture: NightFixtureKind | 'none';
   nightFixtureWeight: number;
+  /** 0..1.45 physical lamp glow intensity for visible background fixtures (0 = off / outdoor) */
+  fixtureOnFactor: number;
+  /** Resolved lamp filament/LED color hex for physical fixture emitters */
+  fixtureHex: number;
 
-  // Ground Contact Shadow & Wet/Sunshower Surface Controls
+  // Ground Contact Shadow, Dual-Fixture Fill Shadow & Floor Light Pool Controls
   shadowOffsetX: number;
   shadowOffsetZ: number;
   shadowStretchX: number;
   shadowStretchZ: number;
   shadowOpacityScale: number;
+  secondaryShadowWeight: number;
+  secondaryShadowDirX: number;
+  secondaryShadowDirZ: number;
+  floorPoolStrength: number;
+  floorPoolHex: number;
   wetSpecularBoost: number;
   rainSunGlint: number;
 
@@ -767,11 +776,18 @@ export function resolveStageLightingFrame(params: {
       goboScaleZ: 1,
       indoorNightFixture: 'none',
       nightFixtureWeight: nightWeight,
+      fixtureOnFactor: 0,
+      fixtureHex: keyHex,
       shadowOffsetX,
       shadowOffsetZ,
       shadowStretchX,
       shadowStretchZ,
       shadowOpacityScale,
+      secondaryShadowWeight: 0,
+      secondaryShadowDirX: 0,
+      secondaryShadowDirZ: -1,
+      floorPoolStrength: 0,
+      floorPoolHex: keyHex,
       wetSpecularBoost: optics.wetSpecularBoost,
       rainSunGlint: optics.rainSunGlint,
       backdropNightDim: 0,
@@ -797,107 +813,175 @@ export function resolveStageLightingFrame(params: {
   const baseSideSign =
     rig.windowSide === 'left' ? -1 : rig.windowSide === 'right' ? 1 : 0;
 
-  // Window key light originates from the room's actual window wall and drifts across the floor as sun moves
+  // Window key light originates from the room's actual window wall (back-center window casts forward!)
   const dayKeyX = isWindowless
-    ? 0.4
+    ? 0.65
     : rig.windowSide === 'overhead'
-      ? clamp(daySweep * 1.65, -1.8, 1.8)
-      : clamp(baseSideSign * 2.55 + daySweep * 0.85, -3.2, 3.2);
+      ? clamp(daySweep * 1.85 + (Math.abs(daySweep) < 0.18 ? 0.85 : 0), -2.1, 2.1)
+      : rig.windowSide === 'center'
+        ? clamp(daySweep * 1.65 - 1.15, -2.4, 2.4)
+        : clamp(baseSideSign * 2.65 + daySweep * 0.75, -3.2, 3.2);
   const dayKeyY = isWindowless
-    ? 4.8
+    ? 3.3
     : rig.windowSide === 'overhead'
-      ? 5.5
-      : clamp(2.4 + Math.sin(clamp(solar.altitudeDeg, 12, 72) * DEG2RAD) * 2.8, 2.2, 5.2);
-  const dayKeyZ = 2.5;
+      ? 4.4
+      : clamp(2.15 + Math.sin(clamp(solar.altitudeDeg, 12, 72) * DEG2RAD) * 2.1, 2.0, 4.3);
+  const dayKeyZ = isWindowless
+    ? -1.25
+    : rig.windowSide === 'center'
+      ? -1.65
+      : 1.15;
 
-  // Night fixture position & cone geometry per room fixture architecture
+  // Night fixture position, shadow geometry, opposing fill shadow & floor spotlight pool per room
   let nightKeyX = 0;
-  let nightKeyY = 4.5;
+  let nightKeyY = 3.2;
+  let nightKeyZ = 1.35;
   let nightBeamX = 0;
   let nightBeamTiltZ = 0;
   let nightBeamScaleX = 1.65;
   let nightConeStrength = 0.24;
   let nightWallWashStrength = 0.22;
   let fixtureGlowAnchor = '50% 8%';
+  let nightDirectRatio =
+    typeof rig.nightDirectRatio === 'number' && Number.isFinite(rig.nightDirectRatio)
+      ? clamp(rig.nightDirectRatio, 0.2, 1)
+      : 0.74;
+  let nightShadowStretchZ = 0.86;
+  let nightSecondaryWeight = 0;
+  let nightSecondaryDirX = 0;
+  let nightSecondaryDirZ = -1;
+  let nightFloorPoolStrength = 0.22;
 
   switch (rig.nightFixture) {
     case 'chandelier-arcade':
-      nightKeyX = 0;
-      nightKeyY = 5.1;
+      // Twin colonnade chandeliers + sconces on left & right arcades -> soft cross-lit shadows
+      nightKeyX = -1.65;
+      nightKeyY = 3.45;
+      nightKeyZ = 1.65;
       nightBeamX = 0;
       nightBeamScaleX = 2.4;
       nightConeStrength = 0.26;
       nightWallWashStrength = 0.26;
       fixtureGlowAnchor = '50% 10%';
+      nightShadowStretchZ = 0.88;
+      nightSecondaryWeight = 0.36;
+      nightSecondaryDirX = -0.78;
+      nightSecondaryDirZ = -0.62;
+      nightFloorPoolStrength = 0.26;
       break;
     case 'pin-spot':
-      nightKeyX = 0.35;
-      nightKeyY = 4.9;
-      nightBeamX = 0.08;
-      nightBeamTiltZ = -0.05;
-      nightBeamScaleX = 1.18;
-      nightConeStrength = 0.32;
-      nightWallWashStrength = 0.14;
-      fixtureGlowAnchor = '52% 6%';
+      // Recessed ceiling pin-spots angled from upper right-front -> crisp museum shadow to left-back + warm basalt pool
+      nightKeyX = 1.75;
+      nightKeyY = 2.75;
+      nightKeyZ = 1.15;
+      nightBeamX = 0.14;
+      nightBeamTiltZ = -0.09;
+      nightBeamScaleX = 1.32;
+      nightConeStrength = 0.36;
+      nightWallWashStrength = 0.18;
+      fixtureGlowAnchor = '52% 8%';
+      nightShadowStretchZ = 1.08;
+      nightSecondaryWeight = 0.2;
+      nightSecondaryDirX = 0.72;
+      nightSecondaryDirZ = -0.68;
+      nightFloorPoolStrength = 0.42;
       break;
     case 'rail-pendant':
-      nightKeyX = -0.55;
-      nightKeyY = 4.4;
-      nightBeamX = -0.18;
-      nightBeamTiltZ = 0.08;
-      nightBeamScaleX = 1.75;
-      nightConeStrength = 0.24;
-      nightWallWashStrength = 0.2;
-      fixtureGlowAnchor = '44% 10%';
+      // Overhead track spotlights slightly left-of-center -> crisp directional shadow to right-back
+      nightKeyX = -1.85;
+      nightKeyY = 2.85;
+      nightKeyZ = 1.25;
+      nightBeamX = -0.22;
+      nightBeamTiltZ = 0.11;
+      nightBeamScaleX = 1.82;
+      nightConeStrength = 0.28;
+      nightWallWashStrength = 0.22;
+      fixtureGlowAnchor = '44% 12%';
+      nightShadowStretchZ = 1.04;
+      nightSecondaryWeight = 0.22;
+      nightSecondaryDirX = -0.64;
+      nightSecondaryDirZ = -0.76;
+      nightFloorPoolStrength = 0.3;
       break;
     case 'wall-sconce':
-      nightKeyX = -1.75;
-      nightKeyY = 3.6;
-      nightBeamX = -0.52;
-      nightBeamTiltZ = 0.22;
-      nightBeamScaleX = 1.68;
+      // Brass wall sconces on left & right plaster walls (prominent left sconce visible on mobile!)
+      // Primary shadow sweeps clearly right-and-slightly-back across oak parquet; softer opposite sconce fill sweeps left
+      nightKeyX = -2.75;
+      nightKeyY = 2.2;
+      nightKeyZ = 0.65;
+      nightBeamX = -0.58;
+      nightBeamTiltZ = 0.26;
+      nightBeamScaleX = 1.72;
       nightConeStrength = 0.25;
       nightWallWashStrength = 0.26;
-      fixtureGlowAnchor = '28% 22%';
+      fixtureGlowAnchor = '24% 38%';
+      nightShadowStretchZ = 1.15;
+      nightSecondaryWeight = 0.36;
+      nightSecondaryDirX = -0.92;
+      nightSecondaryDirZ = -0.38;
+      nightFloorPoolStrength = 0.26;
       break;
     case 'gallery-wall-washer':
-      nightKeyX = 0.9;
-      nightKeyY = 4.7;
-      nightBeamX = 0.22;
-      nightBeamTiltZ = -0.1;
+      // Parallel left & right ceiling gallery tracks -> clean architectural dual-rail shadow
+      nightKeyX = -1.45;
+      nightKeyY = 3.55;
+      nightKeyZ = 1.55;
+      nightBeamX = -0.18;
+      nightBeamTiltZ = 0.09;
       nightBeamScaleX = 2.05;
-      nightConeStrength = 0.22;
-      nightWallWashStrength = 0.28;
-      fixtureGlowAnchor = '56% 12%';
+      nightConeStrength = 0.24;
+      nightWallWashStrength = 0.26;
+      fixtureGlowAnchor = '50% 14%';
+      nightShadowStretchZ = 0.88;
+      nightSecondaryWeight = 0.32;
+      nightSecondaryDirX = -0.74;
+      nightSecondaryDirZ = -0.67;
+      nightFloorPoolStrength = 0.26;
       break;
     case 'louver-strip-cove':
-      nightKeyX = 0;
-      nightKeyY = 4.3;
+      // Back alcove & perimeter ceiling coves -> warm forward-projecting soft shadow
+      nightKeyX = 0.18;
+      nightKeyY = 3.2;
+      nightKeyZ = -1.25;
       nightBeamX = 0;
       nightBeamScaleX = 2.25;
-      nightConeStrength = 0.18;
+      nightConeStrength = 0.2;
       nightWallWashStrength = 0.3;
-      fixtureGlowAnchor = '50% 16%';
+      fixtureGlowAnchor = '50% 24%';
+      nightShadowStretchZ = 0.84;
+      nightSecondaryWeight = 0;
+      nightFloorPoolStrength = 0.24;
       break;
     case 'arch-uplight':
-      nightKeyX = 0;
-      nightKeyY = 3.9;
-      nightBeamX = 0;
+      // Back travertine arched niche floor uplights (slightly left of center) -> dramatic forward-right shadow
+      nightKeyX = -0.95;
+      nightKeyY = 2.4;
+      nightKeyZ = -1.65;
+      nightBeamX = -0.18;
+      nightBeamTiltZ = 0.08;
       nightBeamScaleX = 1.9;
-      nightConeStrength = 0.24;
+      nightConeStrength = 0.25;
       nightWallWashStrength = 0.28;
-      fixtureGlowAnchor = '50% 24%';
+      fixtureGlowAnchor = '38% 54%';
+      nightShadowStretchZ = 1.04;
+      nightSecondaryWeight = 0;
+      nightFloorPoolStrength = 0.28;
       break;
     case 'recessed-cove':
     default:
-      nightKeyX = 0.45;
-      nightKeyY = 4.6;
-      nightBeamX = 0.12;
-      nightBeamTiltZ = -0.04;
+      // Back-wall horizontal ceiling cove -> soft forward-left shadow across microcement floor
+      nightKeyX = 0.65;
+      nightKeyY = 3.2;
+      nightKeyZ = -1.35;
+      nightBeamX = 0.14;
+      nightBeamTiltZ = -0.05;
       nightBeamScaleX = 1.95;
-      nightConeStrength = 0.22;
+      nightConeStrength = 0.23;
       nightWallWashStrength = 0.25;
-      fixtureGlowAnchor = '54% 9%';
+      fixtureGlowAnchor = '54% 24%';
+      nightShadowStretchZ = 0.86;
+      nightSecondaryWeight = 0;
+      nightFloorPoolStrength = 0.24;
       break;
   }
 
@@ -938,15 +1022,76 @@ export function resolveStageLightingFrame(params: {
   // Wall-wash / ambient glow behind character rises after sunset when room lamps turn on
   const hazeOpacityBase = dayWeight * 0.06 + nightWeight * nightWallWashStrength;
 
-  // Contact shadow shifts away from active window in daytime, then centers softly beneath ceiling fixture at night
-  const keyPosX = dayWeight * dayKeyX + nightWeight * nightKeyX;
-  const keyPosY = dayWeight * dayKeyY + nightWeight * nightKeyY;
-  const shadowOffsetX = clamp((-keyPosX / 3.4) * 0.18, -0.22, 0.22);
-  const shadowOffsetZ = clamp(0.08 - dayWeight * 0.03, 0.03, 0.1);
-  const shadowStretchX = clamp(0.96 + Math.abs(shadowOffsetX) * 0.55, 0.94, 1.18);
-  const shadowStretchZ = clamp(0.56 + dayWeight * (lowSunStretch - 0.85) * 0.32, 0.52, 0.82);
+  // Physical lamp power factor: interior architectural lamps stay genuinely ON whenever lightingIntensity > 0
+  // (warm sculptural salon glow in daytime -> full dramatic 2700K-3200K brilliance after sunset / in dark mode).
+  const hasVisibleFixtures = Boolean(rig.fixtureEmitters && rig.fixtureEmitters.length > 0);
+  const daytimeFixtureBase = isWindowless
+    ? 0.9
+    : preset !== 'auto' && preset !== 'daylight'
+      ? 0.9
+      : isDark
+        ? 0.86
+        : 0.76;
+  const rawFixtureOn = hasVisibleFixtures
+    ? dayWeight * daytimeFixtureBase + nightWeight * 1.18
+    : 0;
+  // Smooth perceptual 0%..100% dimmer curve:
+  // 0% turns lamps strictly OFF; 10%..100% transitions smoothly from intimate warm glow to full salon brilliance.
+  const clampedScale = clamp(intensityScale, 0, 1);
+  const fixtureDimmerCurve =
+    clampedScale <= 0.001 ? 0 : 0.3 + 0.7 * Math.pow(clampedScale, 0.72);
+  const ambientDimmerCurve =
+    clampedScale <= 0.001 ? 0 : 0.24 + 0.76 * Math.pow(clampedScale, 0.82);
+  const fixtureOnFactor =
+    clampedScale <= 0.001 ? 0 : clamp(rawFixtureOn * fixtureDimmerCurve, 0, 1.3);
 
-  let backdropTintRgba = `rgba(${hexToRgbTriplet(keyHex)}, ${(0.08 + nightWeight * 0.12).toFixed(3)})`;
+  // Active key-light position blends daytime window sun + active indoor fixtures
+  // (even during daytime, lit salon fixtures noticeably ground the directional cast shadow & floor pool!)
+  const fixtureShadowWeight = isWindowless
+    ? Math.max(nightWeight, 0.92)
+    : clamp(nightWeight + dayWeight * (isDark ? 0.62 : 0.45), 0, 1);
+  const windowShadowWeight = 1 - fixtureShadowWeight;
+  const keyPosX = windowShadowWeight * dayKeyX + fixtureShadowWeight * nightKeyX;
+  const keyPosY = windowShadowWeight * dayKeyY + fixtureShadowWeight * nightKeyY;
+  const keyPosZ = windowShadowWeight * dayKeyZ + fixtureShadowWeight * nightKeyZ;
+
+  const shadowOffsetX = clamp((-keyPosX / 3.0) * 0.28, -0.34, 0.34);
+  const shadowOffsetZ = clamp((-keyPosZ / 3.0) * 0.16 + 0.02, -0.22, 0.22);
+  const shadowStretchX = clamp(1.04 + Math.abs(shadowOffsetX) * 0.72, 0.98, 1.32);
+  const shadowStretchZ = clamp(
+    windowShadowWeight * (0.78 + (lowSunStretch - 0.85) * 0.36) +
+      fixtureShadowWeight * nightShadowStretchZ,
+    0.72,
+    1.28
+  );
+
+  // Direct shadow crispness stays strong whenever physical room lamps are lit!
+  const directRatio = clamp(
+    windowShadowWeight * Math.max(0.55, rig.daylightStrength) +
+      fixtureShadowWeight * nightDirectRatio,
+    0.45,
+    1
+  );
+
+  // Opposing secondary fixture shadow (twin wall sconces / colonnade chandeliers / dual gallery tracks)
+  const secondaryShadowWeight =
+    clampedScale <= 0.001
+      ? 0
+      : clamp(fixtureShadowWeight * nightSecondaryWeight * ambientDimmerCurve, 0, 0.52);
+
+  // Warm fixture spotlight pool on the floor around the character's feet (crucial on dark stone floors!)
+  const floorPoolStrength =
+    clampedScale <= 0.001
+      ? 0
+      : clamp(
+          (fixtureShadowWeight * nightFloorPoolStrength +
+            windowShadowWeight * nightFloorPoolStrength * 0.52) *
+            ambientDimmerCurve,
+          0,
+          0.54
+        );
+
+  let backdropTintRgba = `rgba(${hexToRgbTriplet(keyHex)}, ${((0.06 + nightWeight * 0.1) * (0.35 + 0.65 * ambientDimmerCurve)).toFixed(3)})`;
 
   if (preset !== 'auto') {
     const pm = getLightingPresetMeta(preset);
@@ -955,41 +1100,53 @@ export function resolveStageLightingFrame(params: {
     groundHex = pm.groundHex;
     rimHex = pm.rimHex;
     fogHex = lerpRgbHex(fogHex, pm.groundHex, 0.5);
-    backdropTintRgba = `rgba(${pm.tintRgb}, ${clamp(0.16 * intensityScale, 0, 0.34).toFixed(3)})`;
+    backdropTintRgba = `rgba(${pm.tintRgb}, ${clamp(0.14 * ambientDimmerCurve, 0, 0.32).toFixed(3)})`;
   }
 
-  const keyIntensityBase = dayWeight * (isWindowless ? 1.15 : 1.48) + nightWeight * 1.36;
-  const hemiIntensityBase = dayWeight * 0.88 + nightWeight * 0.68;
-  const keyIntensity = keyIntensityBase * intensityScale;
-  const hemiIntensity = hemiIntensityBase * (0.35 + 0.65 * intensityScale);
+  const fixtureHex = preset === 'auto' ? rig.nightKelvinHex : keyHex;
+  const floorPoolHex = fixtureHex;
 
-  // Selective raw photo dimming after sunset so daytime room photos look authentically lit by night fixtures
+  const keyIntensityBase = dayWeight * (isWindowless ? 1.15 : 1.48) + nightWeight * 1.48;
+  const hemiIntensityBase = dayWeight * 0.88 + nightWeight * 0.68;
+  const keyIntensity = keyIntensityBase * (clampedScale <= 0.001 ? 0 : ambientDimmerCurve);
+  const hemiIntensity = hemiIntensityBase * (0.35 + 0.65 * clampedScale);
+
+  // Selective raw photo dimming after sunset (and slight evening richness even in light mode) so lit
+  // lampshades & hourglass wall cones keep unmistakable luminance headroom instead of washing out on pale plaster.
   const backdropNightDim =
     preset === 'daylight' || preset === 'cool_gallery'
       ? nightWeight * rig.nightPhotoDim * 0.35
       : preset === 'moonlight'
-        ? Math.max(nightWeight * rig.nightPhotoDim, 0.28)
+        ? Math.max(nightWeight * rig.nightPhotoDim, 0.3)
         : nightWeight * rig.nightPhotoDim;
 
+  const litContrastAnchor = hasVisibleFixtures && nightWeight > 0.35 ? (isDark ? 0.78 : 0.9) : isDark ? 0.84 : 1.0;
   const backdropBrightness = clamp(
-    (isDark ? 0.84 : 1.02) * (1 - backdropNightDim * 0.55) * (0.74 + 0.26 * intensityScale),
-    0.48,
-    1.28
+    litContrastAnchor * (1 - backdropNightDim * 0.64) * (0.76 + 0.24 * clampedScale),
+    0.46,
+    1.04
   );
 
-  const fixtureRgb = hexToRgbTriplet(preset === 'auto' ? rig.nightKelvinHex : keyHex);
-  const fixtureGlowAlpha = clamp(
-    (preset === 'auto' ? nightWeight : Math.max(nightWeight, 0.55)) * 0.42 * intensityScale,
-    0,
-    0.58
-  );
+  const fixtureRgb = hexToRgbTriplet(fixtureHex);
+  const ambientWashScale = rig.nightFixture === 'wall-sconce' ? 0.24 : 0.28;
+  const fixtureGlowWeight =
+    preset === 'auto'
+      ? Math.max(nightWeight, hasVisibleFixtures ? fixtureOnFactor * 0.48 : 0)
+      : Math.max(nightWeight, 0.6);
+  const fixtureGlowAlpha =
+    clampedScale <= 0.001
+      ? 0
+      : clamp(fixtureGlowWeight * ambientWashScale * ambientDimmerCurve, 0, 0.36);
   const nightFixtureGlowCss =
     fixtureGlowAlpha > 0.01
-      ? `radial-gradient(ellipse 72% 48% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.36).toFixed(3)}) 48%, transparent 82%)`
+      ? `radial-gradient(ellipse 68% 44% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.38).toFixed(3)}) 48%, transparent 82%)`
       : 'none';
 
-  const rimEdgePx = Math.round(clamp(-keyPosX * 1.35, -4, 4));
-  const rimAlpha = clamp(0.22 * intensityScale, 0, 0.4);
+  const rimEdgePx = Math.round(clamp(-keyPosX * 1.45, -5, 5));
+  const rimAlpha =
+    clampedScale <= 0.001
+      ? 0
+      : clamp((0.22 + fixtureShadowWeight * 0.08) * ambientDimmerCurve, 0, 0.44);
   const characterRimDropShadow = `drop-shadow(${rimEdgePx}px -1px 6px rgba(${hexToRgbTriplet(rimHex)}, ${rimAlpha.toFixed(3)}))`;
 
   return {
@@ -999,43 +1156,43 @@ export function resolveStageLightingFrame(params: {
     opticalRegime: nightWeight >= 0.5 ? 'indoor_night_fixture' : 'indoor_day_window',
     preset,
     intensityPct,
-    intensityScale,
+    intensityScale: clampedScale,
     keyHex,
     keyIntensity,
     keyPosX,
     keyPosY,
-    keyPosZ: dayKeyZ,
+    keyPosZ,
     skyHex,
     groundHex,
     hemiIntensity,
     rimHex,
-    rimScale: clamp(0.72 + 0.48 * intensityScale, 0, 1.85),
+    rimScale: clamp(0.65 + 0.55 * clampedScale, 0, 1.35),
     fogHex,
     fogDensity: 0.022,
-    directRatio: dayWeight * rig.daylightStrength,
+    directRatio,
     diffuseRatio: 0.68,
     mieScattering: nightWeight * 0.35,
-    beamVisible: beamOpacityBase * intensityScale > 0.02,
+    beamVisible: beamOpacityBase * ambientDimmerCurve > 0.02,
     beamHex: keyHex,
-    beamOpacity: clamp(beamOpacityBase * intensityScale, 0, 0.42),
+    beamOpacity: clamp(beamOpacityBase * ambientDimmerCurve, 0, 0.42),
     beamPosX,
     beamPosY: 2.38,
     beamPosZ: -0.2,
     beamTiltZ,
     beamScaleX,
     beamScaleY: 3.7,
-    hazeVisible: (hazeOpacityBase > 0.08 || preset !== 'auto') && intensityScale > 0.05,
+    hazeVisible: (hazeOpacityBase > 0.08 || preset !== 'auto') && clampedScale > 0.001,
     hazeHex: keyHex,
     hazeOpacity: clamp(
-      (preset === 'auto' ? hazeOpacityBase : Math.max(hazeOpacityBase, 0.16)) * intensityScale,
+      (preset === 'auto' ? hazeOpacityBase : Math.max(hazeOpacityBase, 0.16)) * ambientDimmerCurve,
       0,
       0.38
     ),
     hazeFocusY: 0.58,
-    goboVisible: goboOpacityBase * intensityScale > 0.015,
+    goboVisible: goboOpacityBase * ambientDimmerCurve > 0.015,
     goboKind: rig.windowAperture,
     goboHex: preset === 'auto' ? dayWindowHex : keyHex,
-    goboOpacity: clamp(goboOpacityBase * intensityScale, 0, 0.42),
+    goboOpacity: clamp(goboOpacityBase * ambientDimmerCurve, 0, 0.42),
     goboPosX,
     goboPosZ,
     goboRotY,
@@ -1043,11 +1200,25 @@ export function resolveStageLightingFrame(params: {
     goboScaleZ,
     indoorNightFixture: rig.nightFixture,
     nightFixtureWeight: nightWeight,
+    fixtureOnFactor,
+    fixtureHex,
     shadowOffsetX,
     shadowOffsetZ,
     shadowStretchX,
     shadowStretchZ,
-    shadowOpacityScale: clamp(0.85 + 0.18 * intensityScale, 0.5, 1.2),
+    shadowOpacityScale:
+      clampedScale <= 0.001
+        ? 0.52
+        : clamp(
+            (0.86 + fixtureShadowWeight * 0.16) * (0.68 + 0.32 * ambientDimmerCurve),
+            0.52,
+            1.22
+          ),
+    secondaryShadowWeight,
+    secondaryShadowDirX: nightSecondaryDirX,
+    secondaryShadowDirZ: nightSecondaryDirZ,
+    floorPoolStrength,
+    floorPoolHex,
     wetSpecularBoost: 0,
     rainSunGlint: 0,
     backdropNightDim,

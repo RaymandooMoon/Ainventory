@@ -119,6 +119,7 @@ export function ResponsiveSheetModal({
   expandable,
   defaultExpanded = false,
   onExpandedChange,
+  peekThrough = false,
   children,
   footer,
 }) {
@@ -519,13 +520,15 @@ export function ResponsiveSheetModal({
     hasEntered ? 'is-entered' : '',
     isDragging ? 'is-dragging' : '',
     isDismissing ? 'is-dismissing' : '',
+    peekThrough ? 'is-peek-through' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const modalMarkup = (
     <div
-      className="modal-backdrop ui-sheet-backdrop"
+      className={`modal-backdrop ui-sheet-backdrop ${peekThrough ? 'is-peek-through' : ''}`.trim()}
+      data-sheet-peek={peekThrough ? 'true' : undefined}
       onClick={() => {
         if (suppressBackdropClickRef.current || isDismissingRef.current) return;
         onCloseRef.current?.();
@@ -540,6 +543,7 @@ export function ResponsiveSheetModal({
         aria-label={title || eyebrow || tx(lang, '시트 대화상자', 'Sheet Dialog')}
         data-sheet-panel="true"
         data-sheet-expanded={isSheetExpandable ? (isExpanded ? 'true' : 'false') : undefined}
+        data-sheet-peek={peekThrough ? 'true' : undefined}
         className={sheetClassName}
         style={{
           maxWidth,

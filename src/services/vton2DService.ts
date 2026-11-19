@@ -61,7 +61,10 @@ import {
   resolveEffectiveWeatherFromRaw,
   selectOptimalStudioKeyHex,
 } from './weatherPromptBuilder.ts';
-import { PROGRESSIVE_ANGLE_WAVES } from './vtonProgressiveState.ts';
+import {
+  PROGRESSIVE_ANGLE_WAVES,
+  selectSecondaryAnchorAngle,
+} from './vtonProgressiveState.ts';
 
 export type CanonicalViewerMode = '2d-vton';
 
@@ -273,6 +276,7 @@ interface VtonServerResponse {
   panelImages?: Partial<Record<string, string>>;
   latencyMs?: number;
   angleQcFailed?: boolean;
+  effectiveBagHandedness?: 'right' | 'left' | null;
 }
 
 const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
@@ -652,7 +656,7 @@ export function computeMannequinFloorPlacement(params?: {
   const soleStageTopPct =
     Math.round(clamp((soleStageY / Math.max(1, sh)) * 100, 72, 96) * 100) / 100;
 
-  // Architectural height-linked target stature (~70% of stage height at 172cm)
+  // Architectural height-linked target stature (~55–57% of stage height at 172–177cm)
   const aboveSolePx = Math.max(24, (effectiveSoleFrac - topFrac) * renderedContentH);
   const targetCharacterPx = sh * framing.targetCharacterHeightFraction;
   const heightDrivenScale = targetCharacterPx / aboveSolePx;
@@ -677,8 +681,8 @@ export function computeMannequinFloorPlacement(params?: {
           maxBottomSafeScale,
           maxHorizontalScale
         ),
-        0.64,
-        1.28
+        0.48,
+        1.32
       ) * 1000
     ) / 1000;
 
@@ -7008,10 +7012,14 @@ export async function synthesizeProgressiveMultiAngleVton(
     'X-Profile-Key': serverProfileConfig.profileKey,
   });
 
+  const PER_ANGLE_FETCH_TIMEOUT_MS = 125_000;
+
   const synthesizeSingleAngleOnServer = async (
     targetAngle: TurnaroundAngleDeg,
     masterAnchorDataUrl: string | null,
-    masterLandmarks?: MasterAnchorLandmarks | null
+    masterLandmarks?: MasterAnchorLandmarks | null,
+    secondaryAnchor?: { angleDeg: TurnaroundAngleDeg; imageDataUrl: string } | null,
+    handednessOverride?: 'right' | 'left' | null
   ): Promise<{
     rawImageUrl: string | null;
     cutoutUrl: string | null;
@@ -7019,12 +7027,31 @@ export async function synthesizeProgressiveMultiAngleVton(
     cached: boolean;
     latencyMs: number;
     reason: string | null;
+    effectiveBagHandedness: 'right' | 'left' | null;
   }> => {
+    const angleController = new AbortController();
+    const onParentAbort = () => angleController.abort();
+    if (request.signal) {
+      if (request.signal.aborted) {
+        angleController.abort();
+      } else {
+        request.signal.addEventListener('abort', onParentAbort, { once: true });
+      }
+    }
+    const timeoutId = setTimeout(() => {
+      angleController.abort();
+    }, PER_ANGLE_FETCH_TIMEOUT_MS);
+
+    const activeAngleHandedness =
+      handednessOverride === 'left' || handednessOverride === 'right'
+        ? handednessOverride
+        : effectiveProfile.dominantHand;
+
     try {
       const json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
         method: 'POST',
         headers: reqHeaders,
-        ...(request.signal ? { signal: request.signal } : {}),
+        signal: angleController.signal,
         body: JSON.stringify({
           mode,
           styleMode,
@@ -7032,15 +7059,21 @@ export async function synthesizeProgressiveMultiAngleVton(
           turnaroundSheet: false,
           weather: serializedWeatherPayload,
           profileKey: serverProfileConfig.profileKey,
-          handedness: effectiveProfile.dominantHand,
+          handedness: activeAngleHandedness,
           avatarSpec: effectiveProfile.avatarSpec,
           avatarConfigHash: effectiveProfile.avatarConfigHash,
           portraitDataUrl: effectivePortraitUrl,
           ...(masterAnchorDataUrl ? { masterAnchorDataUrl } : {}),
+          ...(secondaryAnchor
+            ? {
+                secondaryAnchorDataUrl: secondaryAnchor.imageDataUrl,
+                secondaryAnchorAngleDeg: secondaryAnchor.angleDeg,
+              }
+            : {}),
           profile: {
             gender: effectiveProfile.gender,
-            dominantHand: effectiveProfile.dominantHand,
-            handedness: effectiveProfile.dominantHand,
+            dominantHand: activeAngleHandedness,
+            handedness: activeAngleHandedness,
             skinToneHex: effectiveProfile.skinToneHex,
             personalColor: effectiveProfile.personalColor,
             heightCm: effectiveProfile.heightCm,
@@ -7063,6 +7096,10 @@ export async function synthesizeProgressiveMultiAngleVton(
           forceRefresh: Boolean(request.forceRefresh),
         }),
       });
+      const resolvedBagHand: 'right' | 'left' | null =
+        json?.effectiveBagHandedness === 'left' || json?.effectiveBagHandedness === 'right'
+          ? json.effectiveBagHandedness
+          : null;
       const rawUrl = sanitizeImageCandidate(
         json?.compositeImageUrl ?? json?.afterImageUrl ?? null
       );
@@ -7074,6 +7111,7 @@ export async function synthesizeProgressiveMultiAngleVton(
           cached: false,
           latencyMs: Number(json?.latencyMs) || 0,
           reason: json?.fallbackReason || 'gemini_synthesis_failed',
+          effectiveBagHandedness: resolvedBagHand,
         };
       }
       if (request.signal?.aborted) {
@@ -7084,6 +7122,7 @@ export async function synthesizeProgressiveMultiAngleVton(
           cached: false,
           latencyMs: 0,
           reason: 'aborted',
+          effectiveBagHandedness: resolvedBagHand,
         };
       }
       const cutout = await ensureTransparentCutout(await removeModelBackgroundToPng(rawUrl));
@@ -7102,19 +7141,30 @@ export async function synthesizeProgressiveMultiAngleVton(
         cached: Boolean(json?.cached),
         latencyMs: Number(json?.latencyMs) || 0,
         reason: null,
+        effectiveBagHandedness: resolvedBagHand,
       };
     } catch (err) {
-      const isAbort =
-        Boolean(request.signal?.aborted) ||
-        (err instanceof Error && err.name === 'AbortError');
+      const isParentAbort = Boolean(request.signal?.aborted);
+      const isTimeoutAbort =
+        !isParentAbort &&
+        (angleController.signal.aborted ||
+          (err instanceof Error && err.name === 'AbortError'));
       return {
         rawImageUrl: null,
         cutoutUrl: null,
         modelName: 'gemini-3.1-flash-lite-image',
         cached: false,
         latencyMs: 0,
-        reason: isAbort ? 'aborted' : 'network_or_runtime_error',
+        reason: isParentAbort
+          ? 'aborted'
+          : isTimeoutAbort
+            ? 'angle_timeout'
+            : 'network_or_runtime_error',
+        effectiveBagHandedness: null,
       };
+    } finally {
+      clearTimeout(timeoutId);
+      request.signal?.removeEventListener('abort', onParentAbort);
     }
   };
 
@@ -7155,6 +7205,7 @@ export async function synthesizeProgressiveMultiAngleVton(
   // Stage 1: Generate 0° Master Anchor first (unless already cached)
   let rawMasterAnchorUrl: string | null = null;
   let frontFromCache = Boolean(collectedSlices[0]);
+  let syncedBagHandedness: 'right' | 'left' | null = null;
   if (!collectedSlices[0]) {
     const frontRes = await synthesizeSingleAngleOnServer(0, null);
     if (request.signal?.aborted || frontRes.reason === 'aborted') {
@@ -7165,6 +7216,7 @@ export async function synthesizeProgressiveMultiAngleVton(
     }
     rawMasterAnchorUrl = frontRes.rawImageUrl;
     frontFromCache = frontRes.cached;
+    syncedBagHandedness = frontRes.effectiveBagHandedness;
     collectedSlices[0] = frontRes.cutoutUrl;
     await persistSingleSlice(0, frontRes.cutoutUrl, frontRes.modelName);
 
@@ -7193,41 +7245,106 @@ export async function synthesizeProgressiveMultiAngleVton(
     rawMasterAnchorUrl = collectedSlices[0];
   }
 
+  // Track raw generated images per angle so downstream sequential waves can condition on
+  // both 0° Master Anchor and the closest already-verified side/back anchor (e.g. 180° -> 225°).
+  const rawAnchorByAngle: Partial<Record<TurnaroundAngleDeg, string>> = {};
+  if (rawMasterAnchorUrl) {
+    rawAnchorByAngle[0] = rawMasterAnchorUrl;
+  }
+  for (const angle of TURNAROUND_ANGLES) {
+    if (angle !== 0 && collectedSlices[angle]) {
+      rawAnchorByAngle[angle] = collectedSlices[angle];
+    }
+  }
+
   // Measure 0° Master Anchor landmarks for Post-Normalization alignment across all non-0° waves
   const masterLandmarks = collectedSlices[0]
     ? await measureMasterAnchorLandmarksFromDataUrl(collectedSlices[0])
     : null;
 
-  // Stage 2: Anchor-Conditioned Progressive Expansion in bounded outward waves (True 8-Angle)
+  const fatalWaveReasons = new Set([
+    'gemini_api_key_not_configured',
+    'gemini_invalid_api_key',
+    'gemini_leaked_key',
+    'gemini_billing_required',
+    'gemini_http_401',
+    'gemini_http_403',
+  ]);
+  const transientFailedAngles: TurnaroundAngleDeg[] = [];
+  let hitFatalCredentialError = false;
+
+  const runAngleTarget = async (
+    targetAngle: TurnaroundAngleDeg,
+    recordFailureForRescue: boolean
+  ): Promise<void> => {
+    if (request.signal?.aborted || hitFatalCredentialError) return;
+    const readyAngleSet = new Set<number>(getReadyAnglesList());
+    const secondaryAngle = selectSecondaryAnchorAngle(targetAngle, readyAngleSet);
+    const secondaryImageUrl =
+      secondaryAngle !== null
+        ? (rawAnchorByAngle[secondaryAngle] ?? collectedSlices[secondaryAngle] ?? null)
+        : null;
+    const secondaryAnchor =
+      secondaryAngle !== null && secondaryImageUrl
+        ? { angleDeg: secondaryAngle, imageDataUrl: secondaryImageUrl }
+        : null;
+    const res = await synthesizeSingleAngleOnServer(
+      targetAngle,
+      rawMasterAnchorUrl,
+      masterLandmarks,
+      secondaryAnchor,
+      syncedBagHandedness
+    );
+    if (request.signal?.aborted) return;
+    if (res.reason && fatalWaveReasons.has(res.reason)) {
+      hitFatalCredentialError = true;
+      return;
+    }
+    if (!res.cutoutUrl) {
+      if (recordFailureForRescue) {
+        transientFailedAngles.push(targetAngle);
+      }
+      return;
+    }
+    collectedSlices[targetAngle] = res.cutoutUrl;
+    if (res.rawImageUrl) {
+      rawAnchorByAngle[targetAngle] = res.rawImageUrl;
+    }
+    await persistSingleSlice(targetAngle, res.cutoutUrl, res.modelName);
+    if (request.signal?.aborted) return;
+    callbacks?.onAngleReady?.({
+      angleDeg: targetAngle,
+      imageUrl: res.cutoutUrl,
+      isMasterAnchor: false,
+      readyAngles: getReadyAnglesList(),
+      elapsedMs: Date.now() - startedAt,
+      allSlices: { ...collectedSlices },
+      fromCache: res.cached,
+      serverLatencyMs: res.latencyMs,
+    });
+  };
+
+  // Stage 2 -> 3 -> 4: Front (0°) -> Right ([45°, 90°] -> 135°) -> Back (180°) -> Left ([315°, 270°, 225°])
   for (const wave of PROGRESSIVE_ANGLE_WAVES) {
-    if (request.signal?.aborted) break;
+    if (request.signal?.aborted || hitFatalCredentialError) break;
     const missingInWave = wave.filter((a) => !collectedSlices[a]);
     if (missingInWave.length === 0) continue;
 
-    await Promise.all(
-      missingInWave.map(async (targetAngle) => {
-        if (request.signal?.aborted) return;
-        const res = await synthesizeSingleAngleOnServer(
-          targetAngle,
-          rawMasterAnchorUrl,
-          masterLandmarks
-        );
-        if (request.signal?.aborted || !res.cutoutUrl) return;
-        collectedSlices[targetAngle] = res.cutoutUrl;
-        await persistSingleSlice(targetAngle, res.cutoutUrl, res.modelName);
-        if (request.signal?.aborted) return;
-        callbacks?.onAngleReady?.({
-          angleDeg: targetAngle,
-          imageUrl: res.cutoutUrl,
-          isMasterAnchor: false,
-          readyAngles: getReadyAnglesList(),
-          elapsedMs: Date.now() - startedAt,
-          allSlices: { ...collectedSlices },
-          fromCache: res.cached,
-          serverLatencyMs: res.latencyMs,
-        });
-      })
-    );
+    await Promise.all(missingInWave.map((targetAngle) => runAngleTarget(targetAngle, true)));
+  }
+
+  // Single bounded rescue pass for up to 3 transiently failed non-0° angles using newly available anchors
+  if (
+    !request.signal?.aborted &&
+    !hitFatalCredentialError &&
+    transientFailedAngles.length > 0
+  ) {
+    const rescueTargets = transientFailedAngles
+      .filter((a) => !collectedSlices[a])
+      .slice(0, 3);
+    if (rescueTargets.length > 0) {
+      await Promise.all(rescueTargets.map((targetAngle) => runAngleTarget(targetAngle, false)));
+    }
   }
 
   if (request.signal?.aborted && !collectedSlices[0]) {

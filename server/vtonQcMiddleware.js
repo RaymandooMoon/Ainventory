@@ -20,7 +20,9 @@ import {
 } from '../src/services/vton2DService.ts';
 
 export const VISION_QC_MODEL = 'gemini-3.1-flash-lite';
-const VISION_QC_TIMEOUT_MS = 8500;
+const VISION_QC_TIMEOUT_MS = 25000;
+const VISION_QC_RETRY_TIMEOUT_MS = 20000;
+const VISION_QC_MAX_ANCHOR_BYTES = 750 * 1024;
 
 export const DEFAULT_VTON_QC_LOG_PATH = path.join(DATA_DIR, 'vton-qc-failures.log');
 export const DEFAULT_MAX_QC_ATTEMPTS = 3;
@@ -659,9 +661,21 @@ export function buildQcCorrectionHint(reasons = []) {
       'CRITICAL FIX: Render every garment (especially denim trousers, jackets, and shirts) with crisp, solid, high-contrast fabric color completely distinct from the studio backdrop — NEVER blend studio backdrop hues onto pant legs or garment folds.'
     );
   }
-  if (tokens.includes('front_face_in_rear_view') || tokens.includes('wrong_orientation')) {
+  if (tokens.includes('front_face_in_rear_view')) {
     cues.push(
-      'CRITICAL ORIENTATION FIX: The previous attempt rendered the wrong body rotation (e.g. showing a front face/eyes/chest on a rear 135°/180°/225° angle). Turn the model STRICTLY AWAY from the camera showing ONLY the back of the head/hair, rear shoulders, back of coat, and rear heels — ZERO front face, ZERO eyes, ZERO front buttons!'
+      'CRITICAL ORIENTATION FIX: The previous attempt rendered a front face/eyes/chest on a rear 135°/180°/225° angle. Turn the model STRICTLY AWAY from the camera showing ONLY the back of the head/hair, rear shoulders, back of coat, and rear heels — ZERO front face, ZERO eyes, ZERO front buttons!'
+    );
+  } else if (tokens.includes('reversed_horizontal_facing')) {
+    cues.push(
+      'CRITICAL HORIZONTAL REVERSAL FIX: The previous attempt pointed the person’s nose, chest, and shoe toes toward the WRONG BORDER of the photo! Flip the body yaw horizontally so the nose tip, coat lapels, and BOTH shoe toes point unmistakably toward the EXACT TARGET PHOTO BORDER (RIGHT BORDER -> for 45°/90°, LEFT BORDER <- for 315°/270°)!'
+    );
+  } else if (tokens.includes('head_only_turn')) {
+    cues.push(
+      'CRITICAL FULL-BODY 45° TORSO ROTATION FIX: The previous attempt turned ONLY the head/neck while leaving the shoulders, coat, pelvis, and shoes facing flat straight forward (0°)! Physically rotate the ENTIRE BODY as a rigid 45° diagonal three-quarter pose — near shoulder forward, far shoulder clearly receded behind torso, coat lapels angled diagonally, and both feet/toes angled 45° toward the target photo border!'
+    );
+  } else if (tokens.includes('wrong_orientation')) {
+    cues.push(
+      'CRITICAL ORIENTATION FIX: The previous attempt faced the wrong horizontal direction (e.g. facing left photo border instead of right photo border, or straight front instead of 45°/90°/270°/315°). Match the EXACT requested yaw angle and photo border direction (-> RIGHT BORDER or <- LEFT BORDER) strictly!'
     );
   }
   if (tokens.includes('wrong_bag_side')) {
@@ -716,11 +730,251 @@ function resolveExpectedBagScreenRule(angleDeg, dominantHand, bagSpec = null) {
   };
 }
 
+const EXPECTED_FACING_BY_ANGLE = Object.freeze({
+  0: ['front'],
+  45: ['front_right'],
+  90: ['right_profile'],
+  135: ['back_right'],
+  180: ['back'],
+  225: ['back_left'],
+  270: ['left_profile'],
+  315: ['front_left'],
+});
+
+/**
+ * Pure deterministic server-side evaluator for Vision QC structured verdicts.
+ * Prevents LLM boolean rubber-stamping (e.g. confusing anatomical-left with image-left at 45°)
+ * by explicitly checking objective pixel-space `bagObservedImageSide` and `facingDirection`
+ * against our exact 3D trigonometry rules.
+ *
+ * @param {{
+ *   verdict: Record<string, any> | null | undefined;
+ *   canonicalAngle?: number;
+ *   hasEquippedBag?: boolean;
+ *   anatomy?: { perAngleScreenSide?: Record<number, string>; bagCarryStyle?: string } | null;
+ * }} params
+ */
+export function evaluateVisionQcVerdict({
+  verdict,
+  canonicalAngle = 0,
+  hasEquippedBag = false,
+  anatomy = null,
+}) {
+  const reasons = [];
+  const isRearAngle = canonicalAngle === 135 || canonicalAngle === 180 || canonicalAngle === 225;
+  const facing = String(verdict?.facingDirection || '')
+    .trim()
+    .toLowerCase();
+  const expectedFacings = EXPECTED_FACING_BY_ANGLE[canonicalAngle] || ['front'];
+
+  const isFrontQuarterAngle = canonicalAngle === 45 || canonicalAngle === 315;
+  const noseDir = String(verdict?.noseAndToesImageDirection || '')
+    .trim()
+    .toLowerCase();
+  const expectedNoseEdge =
+    canonicalAngle === 45 || canonicalAngle === 90
+      ? 'toward_right_edge'
+      : canonicalAngle === 315 || canonicalAngle === 270
+        ? 'toward_left_edge'
+        : null;
+
+  if (isRearAngle) {
+    const isFrontFacing =
+      facing === 'front' || facing === 'front_right' || facing === 'front_left';
+    if (verdict?.isRearNotFront === false || isFrontFacing || noseDir === 'straight_at_viewer') {
+      reasons.push(`${canonicalAngle}:front_face_in_rear_view`);
+    } else if (verdict?.orientationValid === false || (facing && !expectedFacings.includes(facing))) {
+      reasons.push(`${canonicalAngle}:wrong_orientation`);
+    }
+  } else if (expectedNoseEdge && noseDir && noseDir !== expectedNoseEdge) {
+    reasons.push(
+      noseDir === 'toward_left_edge' || noseDir === 'toward_right_edge'
+        ? `${canonicalAngle}:reversed_horizontal_facing`
+        : `${canonicalAngle}:wrong_orientation`
+    );
+  } else if (isFrontQuarterAngle && verdict?.torsoBodyRotated === false) {
+    reasons.push(`${canonicalAngle}:head_only_turn`);
+  } else if (
+    verdict?.orientationValid === false ||
+    (facing && !expectedFacings.includes(facing))
+  ) {
+    reasons.push(`${canonicalAngle}:wrong_orientation`);
+  }
+
+  if (hasEquippedBag) {
+    const expectedScreenSide = anatomy?.perAngleScreenSide?.[canonicalAngle] || null;
+    const observedSide = String(verdict?.bagObservedImageSide || '')
+      .trim()
+      .toLowerCase();
+
+    let bagSideMismatch = verdict?.bagSideValid === false;
+    if (expectedScreenSide === 'screen-right' && observedSide === 'image_left') {
+      bagSideMismatch = true;
+    } else if (expectedScreenSide === 'screen-left' && observedSide === 'image_right') {
+      bagSideMismatch = true;
+    } else if (
+      expectedScreenSide === 'center-back' &&
+      (observedSide === 'image_left' || observedSide === 'image_right')
+    ) {
+      bagSideMismatch = true;
+    } else if (
+      expectedScreenSide === 'front-straps-only' &&
+      (observedSide === 'image_left' || observedSide === 'image_right')
+    ) {
+      bagSideMismatch = true;
+    }
+    // Note: For `expectedScreenSide === 'far-occluded'` (e.g. 90° right-facing profile with bag on
+    // far left side, or 270° left-facing profile with bag on far right side), a bag partially peeking
+    // behind the back naturally sits on `image_left` at 90° and `image_right` at 270°. Do NOT
+    // deterministically reject based on `observedSide` there — rely on `verdict.bagSideValid === false`
+    // (foreground shoulder/arm violation) only.
+
+    if (bagSideMismatch) {
+      reasons.push(`${canonicalAngle}:wrong_bag_side`);
+    }
+    if (verdict?.armpitTuckDetected === true) {
+      reasons.push(`${canonicalAngle}:bag_armpit_tuck`);
+    }
+    if (verdict?.strapMatchesSpec === false) {
+      reasons.push(`${canonicalAngle}:bag_strap_mismatch`);
+    }
+  }
+
+  if (verdict?.outfitConsistent === false) {
+    reasons.push(
+      verdict?.defectCode === 'cropped_body'
+        ? `${canonicalAngle}:half_body`
+        : `${canonicalAngle}:outfit_mismatch`
+    );
+  }
+  if (verdict?.hasTextOrLabels === true) {
+    reasons.push(`${canonicalAngle}:text_overlay_in_image`);
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+  };
+}
+
+const SOFT_BAG_DEFECT_TOKENS = new Set([
+  'wrong_bag_side',
+  'bag_armpit_tuck',
+  'bag_strap_mismatch',
+]);
+
+/**
+ * Returns true ONLY when every Vision QC failure reason is a non-fatal bag-placement nuance
+ * (zero orientation errors, zero front-face-in-rear, zero reversed facing, zero head-only turn,
+ * zero cropped body, zero outfit mismatch, zero text overlay, and zero Vision QC error).
+ */
+export function isOnlySoftBagQcFailure(reasons = []) {
+  if (!Array.isArray(reasons) || reasons.length === 0) return false;
+  return reasons.every((raw) => {
+    const token = String(raw || '').trim();
+    if (!token) return false;
+    const colonIdx = token.indexOf(':');
+    const code = colonIdx >= 0 ? token.slice(colonIdx + 1) : token;
+    return SOFT_BAG_DEFECT_TOKENS.has(code);
+  });
+}
+
+/**
+ * Soft bag tolerance on the final attempt is ONLY allowed for `far-occluded` side profiles
+ * (e.g. 90° for right-handed / 270° for left-handed where the bag hangs behind the torso and
+ * slight back-edge peeking is ambiguous). All visible-bag angles (0°, 45°, 135°, 180°, 225°, 315°,
+ * and foreground 90°/270°) MUST strictly enforce exact bag shoulder/hand placement.
+ * @param {object} options
+ * @param {string[]} [options.reasons]
+ * @param {number} [options.viewAngleDeg]
+ * @param {string} [options.dominantHand]
+ * @param {boolean | null} [options.bagHasStrap]
+ * @param {string | null} [options.bagCarryStyle]
+ */
+export function canApplySoftBagTolerance({
+  reasons = [],
+  viewAngleDeg = 0,
+  dominantHand = 'right',
+  bagHasStrap = null,
+  bagCarryStyle = null,
+}) {
+  if (!isOnlySoftBagQcFailure(reasons)) return false;
+  const { canonicalAngle, anatomy } = resolveExpectedBagScreenRule(viewAngleDeg, dominantHand, {
+    hasStrap: bagHasStrap,
+    bagCarryStyle,
+  });
+  return anatomy?.perAngleScreenSide?.[canonicalAngle] === 'far-occluded';
+}
+
+/**
+ * Resolves the effective anatomical bag handedness (`'right' | 'left'`) to lock onto downstream
+ * 45°..315° waves when 0° Master Anchor falls back after exhausting bag-side retries.
+ * - `bagObservedImageSide === 'image_left'` at 0° means wearer's RIGHT side -> `'left'` handedness carry rule.
+ * - `bagObservedImageSide === 'image_right'` at 0° means wearer's LEFT side -> `'right'` handedness carry rule.
+ * @param {object} options
+ * @param {string} [options.requestedHandedness]
+ * @param {{ bagObservedImageSide?: string | null } | null} [options.verdict]
+ * @param {string | null} [options.bagCarryStyle]
+ */
+export function resolveEffectiveHandednessFromFrontVerdict({
+  requestedHandedness = 'right',
+  verdict = null,
+  bagCarryStyle = null,
+}) {
+  const normalized = normalizeHandedness(requestedHandedness, 'right');
+  if (bagCarryStyle === 'backpack') return normalized;
+  const observed = String(verdict?.bagObservedImageSide || '')
+    .trim()
+    .toLowerCase();
+  if (observed === 'image_left') return 'left';
+  if (observed === 'image_right') return 'right';
+  return normalized;
+}
+
+export function isAbortOrTimeoutError(err) {
+  if (!err) return false;
+  const name = String(err?.name || '');
+  const code = String(err?.code || '');
+  const message = String(err?.message || err || '');
+  return (
+    name === 'AbortError' ||
+    name === 'TimeoutError' ||
+    code === 'ABORT_ERR' ||
+    code === 'ETIMEDOUT' ||
+    /this operation was aborted|aborted|abort_err|timed?\s*out|timeout/i.test(message)
+  );
+}
+
+function buildCombinedAbortSignal(timeoutMs, callerSignal = null) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!callerSignal) return timeoutSignal;
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([callerSignal, timeoutSignal]);
+  }
+  return callerSignal.aborted ? callerSignal : timeoutSignal;
+}
+
 /**
  * Hardened Multimodal Vision QC judge (works on PNG, JPEG, and WebP) using `gemini-3.1-flash-lite`.
- * Verifies 8-angle body orientation (`facingDirection`, `isRearNotFront`), anatomical bag screen-side,
- * anti-armpit-tuck (`armpitTuckDetected`), strap spec fidelity (`strapMatchesSpec`), and outfit consistency.
- * Fail-closed on non-0° Vision QC errors so broken rear/side angles never silently leak through.
+ * Verifies 8-angle body orientation (`facingDirection`, `isRearNotFront`), explicit pixel-space
+ * `bagObservedImageSide`, anti-armpit-tuck (`armpitTuckDetected`), strap spec fidelity (`strapMatchesSpec`),
+ * and outfit consistency. Guards against oversized PNG anchor timeouts with a candidate-only retry
+ * and degrades gracefully if the upstream Vision QC inspector times out so pixel-verified images
+ * are not discarded and spurious abort errors are not emitted.
+ *
+ * @param {object} options
+ * @param {string} options.compositeImageUrl
+ * @param {string | null} [options.masterAnchorDataUrl]
+ * @param {number} [options.viewAngleDeg]
+ * @param {boolean} [options.hasEquippedBag]
+ * @param {string} [options.dominantHand]
+ * @param {boolean | null} [options.bagHasStrap]
+ * @param {string | null} [options.bagCarryStyle]
+ * @param {AbortSignal | null} [options.signal]
+ * @param {((payload: any) => Promise<{ text?: string | null }>) | null} [options.generateContentImpl]
+ * @param {number} [options.timeoutMs]
+ * @param {number} [options.retryTimeoutMs]
+ * @returns {Promise<{ ok: boolean; skipped: boolean; reasons: string[]; verdict?: any; timedOut?: boolean; aborted?: boolean }>}
  */
 export async function runGeminiVisionAngleQc({
   compositeImageUrl,
@@ -730,11 +984,23 @@ export async function runGeminiVisionAngleQc({
   dominantHand = 'right',
   bagHasStrap = null,
   bagCarryStyle = null,
+  signal = null,
+  generateContentImpl = null,
+  timeoutMs = VISION_QC_TIMEOUT_MS,
+  retryTimeoutMs = VISION_QC_RETRY_TIMEOUT_MS,
 }) {
-  const apiKey = getServerGeminiApiKey();
-  const client = apiKey ? getServerGeminiClient(apiKey) : null;
-  if (!client) {
-    return { ok: true, skipped: true, reasons: [] };
+  if (signal?.aborted) {
+    return { ok: true, skipped: true, aborted: true, reasons: [] };
+  }
+
+  let generateContent = typeof generateContentImpl === 'function' ? generateContentImpl : null;
+  if (!generateContent) {
+    const apiKey = getServerGeminiApiKey();
+    const client = apiKey ? getServerGeminiClient(apiKey) : null;
+    if (!client) {
+      return { ok: true, skipped: true, reasons: [] };
+    }
+    generateContent = (reqPayload) => client.models.generateContent(reqPayload);
   }
 
   const parsedCandidate = parseImageDataUrl(compositeImageUrl);
@@ -742,7 +1008,15 @@ export async function runGeminiVisionAngleQc({
     return { ok: false, skipped: false, reasons: ['invalid_image_data_url'] };
   }
 
-  const parsedAnchor = masterAnchorDataUrl ? parseImageDataUrl(masterAnchorDataUrl) : null;
+  const rawParsedAnchor = masterAnchorDataUrl ? parseImageDataUrl(masterAnchorDataUrl) : null;
+  // Oversized uncompressed RGBA PNG anchors (e.g. >750KB from cached cutouts) frequently push
+  // concurrent multimodal Vision QC calls past the timeout window; keep Vision QC lean by skipping
+  // bloated anchors while still inspecting orientation, framing, bag pixel-side, and canvas hygiene.
+  const compactAnchor =
+    rawParsedAnchor && rawParsedAnchor.buffer.length <= VISION_QC_MAX_ANCHOR_BYTES
+      ? rawParsedAnchor
+      : null;
+
   const bagSpec = hasEquippedBag
     ? {
         hasStrap: bagHasStrap,
@@ -773,148 +1047,204 @@ export async function runGeminiVisionAngleQc({
                   ? 'STRICT 315° FRONT-LEFT THREE-QUARTER VIEW: Model angled ~45° toward VIEWER-LEFT (<-), front face & chest visible (NOT facing viewer-right, NOT back).'
                   : 'STRICT 0° DIRECT FRONT VIEW: Full symmetrical front-facing full-body portrait.';
 
-  const parts = [];
-  if (parsedAnchor) {
+  const buildParts = (anchorToAttach) => {
+    const parts = [];
+    if (anchorToAttach) {
+      parts.push({
+        text: '[IMAGE 1 — MASTER 0° FRONT ANCHOR REFERENCE]: Reference person, outfit colors, and bag.',
+      });
+      parts.push({
+        inlineData: {
+          mimeType: anchorToAttach.mimeType,
+          data: anchorToAttach.buffer.toString('base64'),
+        },
+      });
+    }
     parts.push({
-      text: '[IMAGE 1 — MASTER 0° FRONT ANCHOR REFERENCE]: Reference person, outfit colors, and bag.',
+      text: `[IMAGE ${anchorToAttach ? '2' : '1'} — CANDIDATE IMAGE TO INSPECT FOR TARGET ANGLE ${canonicalAngle}°]:`,
     });
     parts.push({
       inlineData: {
-        mimeType: parsedAnchor.mimeType,
-        data: parsedAnchor.buffer.toString('base64'),
+        mimeType: parsedCandidate.mimeType,
+        data: parsedCandidate.buffer.toString('base64'),
       },
     });
-  }
-  parts.push({
-    text: `[IMAGE ${parsedAnchor ? '2' : '1'} — CANDIDATE IMAGE TO INSPECT FOR TARGET ANGLE ${canonicalAngle}°]:`,
-  });
-  parts.push({
-    inlineData: {
-      mimeType: parsedCandidate.mimeType,
-      data: parsedCandidate.buffer.toString('base64'),
-    },
-  });
-  parts.push({
-    text: [
-      `You are a strict automated Visual QC Inspector for an 8-angle 360° virtual try-on avatar at target angle ${canonicalAngle}°.`,
-      `1. ORIENTATION & FACING DIRECTION CHECK: ${orientationSpec}`,
-      '   Report facingDirection as one of: "front", "front_right", "right_profile", "back_right", "back", "back_left", "left_profile", "front_left".',
-      isRearAngle
-        ? '   CRITICAL REAR CHECK: Set isRearNotFront=true ONLY if the model is genuinely facing AWAY from the camera (back of head/hair & rear torso visible, ZERO front eyes/chest). If a front face or front chest is visible, you MUST set isRearNotFront=false, orientationValid=false, and defectCode="front_face_in_rear_view"!'
-        : '   Set isRearNotFront=true (not a rear view check) and set orientationValid=false with defectCode="wrong_orientation" if facingDirection does not match the target angle (especially if left/right direction is reversed!).',
-      hasEquippedBag
-        ? `2. BAG SIDE, ARMPIT-TUCK & STRAP CHECK (REQUIRED): Expected bag rule for ${canonicalAngle}° (has_strap=${anatomy.hasStrap}, carry_style=${anatomy.bagCarryStyle}): ${screenRule}.
-   - Set bagSideValid=false (defectCode="wrong_bag_side") if the bag is placed on the wrong side of the body/screen.
+    parts.push({
+      text: [
+        `You are a strict automated Visual QC Inspector for an 8-angle 360° virtual try-on avatar at target angle ${canonicalAngle}°.`,
+        `1. ORIENTATION & PIXEL-SPACE FACING DIRECTION CHECK: ${orientationSpec}`,
+        '   FIRST report noseAndToesImageDirection strictly in 2D VIEWER IMAGE PIXEL SPACE (IGNORE anatomical left/right!):',
+        '     * "toward_right_edge" = the tip of the person’s NOSE, chest front, and SHOE TOES point toward the RIGHT BORDER (->) of the image frame.',
+        '     * "toward_left_edge" = the tip of the person’s NOSE, chest front, and SHOE TOES point toward the LEFT BORDER (<-) of the image frame.',
+        '     * "straight_at_viewer" = nose & toes face straight forward at the camera (0°).',
+        '     * "away_from_viewer" = back of head / rear coat facing camera (135°/180°/225°).',
+        '   Report facingDirection as one of: "front", "front_right" (pointing toward RIGHT BORDER ->), "right_profile" (pointing toward RIGHT BORDER ->), "back_right", "back", "back_left", "left_profile" (pointing toward LEFT BORDER <-), "front_left" (pointing toward LEFT BORDER <-).',
+        isRearAngle
+          ? '   CRITICAL REAR CHECK: Set isRearNotFront=true ONLY if the model is genuinely facing AWAY from the camera (back of head/hair & rear torso visible, ZERO front eyes/chest). If a front face or front chest is visible, you MUST set isRearNotFront=false, orientationValid=false, and defectCode="front_face_in_rear_view"! Set torsoBodyRotated=true for genuine rear views.'
+          : canonicalAngle === 45 || canonicalAngle === 315
+            ? `   CRITICAL FULL-BODY QUARTER-TURN & BORDER CHECK (${canonicalAngle}°): Target requires noseAndToesImageDirection="${canonicalAngle === 45 ? 'toward_right_edge' : 'toward_left_edge'}". If the nose/toes point toward the OPPOSITE photo border, you MUST set orientationValid=false and defectCode="reversed_horizontal_facing"! Also inspect SHOULDERS, CHEST/COAT FRONT, HIPS, and FEET — set torsoBodyRotated=true ONLY if the shoulders, torso, coat, pelvis, and shoes are genuinely turned ~45° diagonally (if shoulders stayed flat 0° while only the head turned, set torsoBodyRotated=false, orientationValid=false, defectCode="head_only_turn"). Set isRearNotFront=true.`
+            : '   Set isRearNotFront=true and torsoBodyRotated=true (for 0°/90°/270°), and set orientationValid=false with defectCode="reversed_horizontal_facing" if noseAndToesImageDirection points to the opposite photo border!',
+        hasEquippedBag
+          ? `2. BAG PIXEL-SIDE, ARMPIT-TUCK & STRAP CHECK (REQUIRED):
+   - FIRST report bagObservedImageSide strictly in VIEWER IMAGE PIXEL COORDINATES (NOT wearer anatomy):
+     * "image_left" = the bag body sits on the LEFT half of the image frame (viewer's left <-).
+     * "image_right" = the bag body sits on the RIGHT half of the image frame (viewer's right ->).
+     * "center_back" = backpack centered on the middle of the wearer's back.
+     * "occluded_or_none" = bag is hidden behind the torso or only shoulder straps are visible on front.
+   - Expected rule for ${canonicalAngle}° (has_strap=${anatomy.hasStrap}, carry_style=${anatomy.bagCarryStyle}): ${screenRule}.${
+              anatomy.perAngleScreenSide[canonicalAngle] === 'far-occluded'
+                ? `\n   - FAR-OCCLUDED SIDE PROFILE TOLERANCE (${canonicalAngle}°): Because the bag hangs on the FAR side behind the torso, if the bag is occluded behind the body OR only partially peeking behind/past the torso while the FOREGROUND shoulder/arm facing the camera stays empty, set bagSideValid=true! Set bagSideValid=false ONLY if the bag or its strap is clearly worn on the FOREGROUND shoulder/arm facing the camera.`
+                : ''
+            }
+   - Set bagSideValid=false (defectCode="wrong_bag_side") if the bag is placed on the wrong side of the body/screen or switched hands compared to IMAGE 1.
    - Set armpitTuckDetected=true (defectCode="bag_armpit_tuck") if the bag is awkwardly clamped/wedged high under the armpit or crushed into the upper torso instead of hanging naturally at hand/thigh or hip level.
    - Set strapMatchesSpec=false (defectCode="bag_strap_mismatch") if has_strap=false yet a shoulder/crossbody strap is drawn, OR if carry_style=backpack yet the backpack is carried in one hand instead of worn on the back.`
-        : '2. BAG CHECK: No bag equipped; set bagSideValid=true, armpitTuckDetected=false, strapMatchesSpec=true.',
-      '3. OUTFIT & FULL-BODY CHECK: Verify full head-to-shoe framing (not cropped at waist/thigh) and consistent coat/outfit colors matching the reference (if provided). Set outfitConsistent=false if coat color changed dramatically or body is cropped.',
-      '4. CLEAN CANVAS / NO TEXT CHECK: Set hasTextOrLabels=true if ANY text, Korean/English captions, garment spec labels, or #hex color codes are drawn anywhere in the image.',
-      'Return strict JSON only.',
-    ].join('\n'),
-  });
+          : '2. BAG CHECK: No bag equipped; set bagObservedImageSide="occluded_or_none", bagSideValid=true, armpitTuckDetected=false, strapMatchesSpec=true.',
+        '3. OUTFIT & FULL-BODY CHECK: Verify full head-to-shoe framing (not cropped at waist/thigh) and consistent coat/outfit colors matching the reference (if provided). Set outfitConsistent=false if coat color changed dramatically or body is cropped.',
+        '4. CLEAN CANVAS / NO TEXT CHECK: Set hasTextOrLabels=true if ANY text, Korean/English captions, garment spec labels, or #hex color codes are drawn anywhere in the image.',
+        'Return strict JSON only.',
+      ].join('\n'),
+    });
+    return parts;
+  };
 
-  try {
-    const response = await client.models.generateContent({
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      noseAndToesImageDirection: {
+        type: Type.STRING,
+        description:
+          'Pure 2D image-border direction that nose tip and shoe toes point toward: toward_right_edge, toward_left_edge, straight_at_viewer, or away_from_viewer',
+      },
+      facingDirection: {
+        type: Type.STRING,
+        description:
+          'Detected facing direction: front, front_right, right_profile, back_right, back, back_left, left_profile, front_left',
+      },
+      orientationValid: { type: Type.BOOLEAN },
+      isRearNotFront: { type: Type.BOOLEAN },
+      torsoBodyRotated: {
+        type: Type.BOOLEAN,
+        description:
+          'For 45°/315°: true ONLY if shoulders, chest/coat, hips, and feet rotated diagonally ~45° (false if only the head turned while shoulders stayed flat 0°)',
+      },
+      bagObservedImageSide: {
+        type: Type.STRING,
+        description:
+          'Observed pixel location of bag body in image frame: image_left, image_right, center_back, occluded_or_none',
+      },
+      bagSideValid: { type: Type.BOOLEAN },
+      armpitTuckDetected: { type: Type.BOOLEAN },
+      strapMatchesSpec: { type: Type.BOOLEAN },
+      outfitConsistent: { type: Type.BOOLEAN },
+      hasTextOrLabels: { type: Type.BOOLEAN },
+      defectCode: {
+        type: Type.STRING,
+        description:
+          'One of: none, front_face_in_rear_view, reversed_horizontal_facing, head_only_turn, wrong_orientation, wrong_bag_side, bag_armpit_tuck, bag_strap_mismatch, outfit_mismatch, cropped_body, text_overlay_in_image',
+      },
+    },
+    required: [
+      'noseAndToesImageDirection',
+      'facingDirection',
+      'orientationValid',
+      'isRearNotFront',
+      'torsoBodyRotated',
+      'bagObservedImageSide',
+      'bagSideValid',
+      'armpitTuckDetected',
+      'strapMatchesSpec',
+      'outfitConsistent',
+      'hasTextOrLabels',
+      'defectCode',
+    ],
+  };
+
+  const invokeVisionQc = async (anchorToAttach, callTimeoutMs) => {
+    const parts = buildParts(anchorToAttach);
+    return generateContent({
       model: VISION_QC_MODEL,
       contents: [{ role: 'user', parts }],
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            facingDirection: {
-              type: Type.STRING,
-              description:
-                'Detected facing direction: front, front_right, right_profile, back_right, back, back_left, left_profile, front_left',
-            },
-            orientationValid: { type: Type.BOOLEAN },
-            isRearNotFront: { type: Type.BOOLEAN },
-            bagSideValid: { type: Type.BOOLEAN },
-            armpitTuckDetected: { type: Type.BOOLEAN },
-            strapMatchesSpec: { type: Type.BOOLEAN },
-            outfitConsistent: { type: Type.BOOLEAN },
-            hasTextOrLabels: { type: Type.BOOLEAN },
-            defectCode: {
-              type: Type.STRING,
-              description:
-                'One of: none, front_face_in_rear_view, wrong_orientation, wrong_bag_side, bag_armpit_tuck, bag_strap_mismatch, outfit_mismatch, cropped_body, text_overlay_in_image',
-            },
-          },
-          required: [
-            'facingDirection',
-            'orientationValid',
-            'isRearNotFront',
-            'bagSideValid',
-            'armpitTuckDetected',
-            'strapMatchesSpec',
-            'outfitConsistent',
-            'hasTextOrLabels',
-            'defectCode',
-          ],
-        },
-        abortSignal: AbortSignal.timeout(VISION_QC_TIMEOUT_MS),
+        responseSchema,
+        abortSignal: buildCombinedAbortSignal(callTimeoutMs, signal),
       },
     });
-    const rawText = String(response?.text || '').trim();
-    if (!rawText) {
-      if (canonicalAngle !== 0) {
+  };
+
+  const attempts = compactAnchor
+    ? [
+        { anchor: compactAnchor, callTimeoutMs: timeoutMs },
+        { anchor: null, callTimeoutMs: retryTimeoutMs },
+      ]
+    : [{ anchor: null, callTimeoutMs: timeoutMs }];
+
+  let lastErr = null;
+  for (let i = 0; i < attempts.length; i += 1) {
+    if (signal?.aborted) {
+      return { ok: true, skipped: true, aborted: true, reasons: [] };
+    }
+    const { anchor, callTimeoutMs } = attempts[i];
+    try {
+      const response = await invokeVisionQc(anchor, callTimeoutMs);
+      const rawText = String(response?.text || '').trim();
+      if (!rawText) {
+        if (canonicalAngle !== 0) {
+          return {
+            ok: false,
+            skipped: false,
+            reasons: [`${canonicalAngle}:vision_qc_empty_response`],
+          };
+        }
+        return { ok: true, skipped: true, reasons: [] };
+      }
+      const verdict = JSON.parse(rawText);
+      const evaluated = evaluateVisionQcVerdict({
+        verdict,
+        canonicalAngle,
+        hasEquippedBag,
+        anatomy,
+      });
+      return {
+        ok: evaluated.ok,
+        skipped: false,
+        reasons: evaluated.reasons,
+        verdict,
+      };
+    } catch (err) {
+      lastErr = err;
+      if (signal?.aborted) {
+        return { ok: true, skipped: true, aborted: true, reasons: [] };
+      }
+      if (isAbortOrTimeoutError(err)) {
+        // Retry once without the anchor image if the multi-image payload timed out
+        if (i + 1 < attempts.length) {
+          continue;
+        }
+        // Vision QC timed out even on the lightweight candidate-only pass: degrade gracefully
+        // without emitting a noisy abort error or throwing away a pixel-verified image.
         return {
-          ok: false,
-          skipped: false,
-          reasons: [`${canonicalAngle}:vision_qc_empty_response`],
+          ok: true,
+          skipped: true,
+          timedOut: true,
+          reasons: [],
         };
       }
-      return { ok: true, skipped: true, reasons: [] };
+      break;
     }
-    const verdict = JSON.parse(rawText);
-    const reasons = [];
-    if (isRearAngle && verdict.isRearNotFront === false) {
-      reasons.push(`${canonicalAngle}:front_face_in_rear_view`);
-    } else if (verdict.orientationValid === false) {
-      reasons.push(
-        isRearAngle
-          ? `${canonicalAngle}:front_face_in_rear_view`
-          : `${canonicalAngle}:wrong_orientation`
-      );
-    }
-    if (hasEquippedBag && verdict.bagSideValid === false) {
-      reasons.push(`${canonicalAngle}:wrong_bag_side`);
-    }
-    if (hasEquippedBag && verdict.armpitTuckDetected === true) {
-      reasons.push(`${canonicalAngle}:bag_armpit_tuck`);
-    }
-    if (hasEquippedBag && verdict.strapMatchesSpec === false) {
-      reasons.push(`${canonicalAngle}:bag_strap_mismatch`);
-    }
-    if (verdict.outfitConsistent === false) {
-      reasons.push(
-        verdict.defectCode === 'cropped_body'
-          ? `${canonicalAngle}:half_body`
-          : `${canonicalAngle}:outfit_mismatch`
-      );
-    }
-    if (verdict.hasTextOrLabels === true) {
-      reasons.push(`${canonicalAngle}:text_overlay_in_image`);
-    }
-    return {
-      ok: reasons.length === 0,
-      skipped: false,
-      reasons,
-      verdict,
-    };
-  } catch (err) {
-    console.warn('[VTON Vision QC] inspector error:', err?.message || err);
-    if (canonicalAngle !== 0) {
-      return {
-        ok: false,
-        skipped: false,
-        reasons: [`${canonicalAngle}:vision_qc_error`],
-      };
-    }
-    return { ok: true, skipped: true, reasons: [] };
   }
+
+  console.warn('[VTON Vision QC] inspector error:', lastErr?.message || lastErr);
+  if (canonicalAngle !== 0) {
+    return {
+      ok: false,
+      skipped: false,
+      reasons: [`${canonicalAngle}:vision_qc_error`],
+    };
+  }
+  return { ok: true, skipped: true, reasons: [] };
 }
 
 export function sanitizeQcLogString(value, maxLen = 160) {
@@ -998,6 +1328,16 @@ export function createVtonQcMiddleware({
   const attemptLimit = Math.max(1, Math.min(5, Math.round(Number(maxAttempts) || 3)));
 
   return async function vtonQualityControlMiddleware(req, res, next) {
+    const requestAbortController = new AbortController();
+    const handleClientClose = () => {
+      if (!res?.writableEnded && !requestAbortController.signal.aborted) {
+        requestAbortController.abort(new Error('client_disconnected'));
+      }
+    };
+    if (typeof res?.on === 'function') {
+      res.on('close', handleClientClose);
+    }
+
     try {
       const baseParams = req.vtonSynthesisParams;
       if (!baseParams || typeof baseParams !== 'object') {
@@ -1008,19 +1348,35 @@ export function createVtonQcMiddleware({
         !baseParams.turnaroundSheet &&
         Number.isFinite(Number(baseParams.viewAngleDeg)) &&
         Number(baseParams.viewAngleDeg) !== 0;
-      const effectiveAttemptLimit = isSingleNonZeroAngle ? Math.min(attemptLimit, 2) : attemptLimit;
+      const effectiveAttemptLimit = attemptLimit;
 
       let lastResult = null;
       let lastReport = null;
+      let lastVisionVerdict = null;
       let bestFrontCutoutUrl = null;
       let correctionHint = '';
 
       for (let attempt = 1; attempt <= effectiveAttemptLimit; attempt += 1) {
+        if (requestAbortController.signal.aborted) {
+          return undefined;
+        }
+        const hadFrontBagFailure =
+          !isSingleNonZeroAngle &&
+          !baseParams.turnaroundSheet &&
+          Array.isArray(lastReport?.reasons) &&
+          isOnlySoftBagQcFailure(lastReport.reasons);
+        const escalateToFallbackModel =
+          (isSingleNonZeroAngle && effectiveAttemptLimit >= 3 && attempt === effectiveAttemptLimit) ||
+          (hadFrontBagFailure && attempt >= 2);
         const result = await synthesizeLook({
           ...baseParams,
           forceRefresh: attempt > 1 ? true : Boolean(baseParams.forceRefresh),
+          ...(escalateToFallbackModel ? { preferFallbackModel: true } : {}),
           ...(correctionHint ? { qcCorrectionHint: correctionHint } : {}),
         });
+        if (requestAbortController.signal.aborted) {
+          return undefined;
+        }
         lastResult = result;
 
         // Pass through immediate non-Gemini flatlay fallbacks without retrying or logging QC errors
@@ -1037,12 +1393,20 @@ export function createVtonQcMiddleware({
 
         const report = validateSynthesizedVtonPayload(result);
 
-        // Run Multimodal Vision Orientation & Bag-Side QC on live single non-0° angles (catches JPEG/WebP too!)
+        const hasEquippedBagForQc = Boolean(
+          result.hasEquippedBag ||
+            (Array.isArray(result.equippedSlots) &&
+              result.equippedSlots.includes('accessory'))
+        );
+
+        // Run Multimodal Vision Orientation & Bag-Side QC on all live non-0° angles AND on 0° Master Anchor
+        // whenever a bag is equipped (so 0° NEVER locks in a swapped-hand or armpit-tucked bag that would
+        // contradict every downstream 45°..315° angle!).
         const shouldRunVisionQc =
           report.ok &&
           !baseParams.skipVisionQc &&
           !result.cached &&
-          isSingleNonZeroAngle &&
+          (isSingleNonZeroAngle || (hasEquippedBagForQc && !baseParams.turnaroundSheet)) &&
           (typeof visionQcImpl === 'function' || Boolean(getServerGeminiApiKey()));
 
         if (shouldRunVisionQc) {
@@ -1050,17 +1414,20 @@ export function createVtonQcMiddleware({
             typeof visionQcImpl === 'function' ? visionQcImpl : runGeminiVisionAngleQc;
           const visionReport = await runVision({
             compositeImageUrl: result.compositeImageUrl,
-            masterAnchorDataUrl: baseParams.masterAnchorDataUrl || null,
+            masterAnchorDataUrl: isSingleNonZeroAngle ? baseParams.masterAnchorDataUrl || null : null,
             viewAngleDeg: result.viewAngleDeg ?? baseParams.viewAngleDeg ?? 0,
-            hasEquippedBag: Boolean(
-              result.hasEquippedBag ||
-                (Array.isArray(result.equippedSlots) &&
-                  result.equippedSlots.includes('accessory'))
-            ),
+            hasEquippedBag: hasEquippedBagForQc,
             dominantHand: result.handedness || baseParams.handedness || 'right',
             bagHasStrap: result.bagHasStrap ?? null,
             bagCarryStyle: result.bagCarryStyle ?? null,
+            signal: requestAbortController.signal,
           });
+          if (requestAbortController.signal.aborted) {
+            return undefined;
+          }
+          if (visionReport && 'verdict' in visionReport && visionReport.verdict) {
+            lastVisionVerdict = visionReport.verdict;
+          }
           if (visionReport && visionReport.ok === false) {
             report.ok = false;
             report.reasons = [
@@ -1080,6 +1447,10 @@ export function createVtonQcMiddleware({
         if (report.ok) {
           res.locals.vtonResult = {
             ...result,
+            effectiveBagHandedness: normalizeHandedness(
+              result.handedness || baseParams.handedness,
+              'right'
+            ),
             qcStatus: 'passed',
             qcPassed: true,
             qcAttempts: attempt,
@@ -1100,6 +1471,34 @@ export function createVtonQcMiddleware({
         }
 
         correctionHint = buildQcCorrectionHint(report.reasons);
+      }
+
+      // On the final attempt of a `far-occluded` side profile ONLY (e.g. 90° right-handed or
+      // 270° left-handed where the bag hangs behind the torso), accept verified-orientation images
+      // with soft bag ambiguity instead of leaving a dead angle. Visible angles (45°/135°/180°/225°/315°)
+      // NEVER accept wrong_bag_side so opposite-shoulder bugs cannot leak through!
+      if (
+        isSingleNonZeroAngle &&
+        lastResult?.compositeImageUrl &&
+        lastReport?.visionQcRejected &&
+        canApplySoftBagTolerance({
+          reasons: lastReport.reasons,
+          viewAngleDeg: lastResult.viewAngleDeg ?? baseParams.viewAngleDeg ?? 0,
+          dominantHand: lastResult.handedness || baseParams.handedness || 'right',
+          bagHasStrap: lastResult.bagHasStrap ?? null,
+          bagCarryStyle: lastResult.bagCarryStyle ?? null,
+        })
+      ) {
+        res.locals.vtonResult = {
+          ...lastResult,
+          qcStatus: 'passed_soft_bag_tolerance',
+          qcPassed: true,
+          qcAttempts: effectiveAttemptLimit,
+          qcReasons: lastReport.reasons || [],
+          failedAngles: [],
+          frontOnlyDegraded: false,
+        };
+        return next();
       }
 
       // All QC attempts failed -> log failure to file
@@ -1231,6 +1630,12 @@ export function createVtonQcMiddleware({
         return next();
       }
 
+      const effectiveBagHandedness = resolveEffectiveHandednessFromFrontVerdict({
+        requestedHandedness: lastResult?.handedness || baseParams.handedness || 'right',
+        verdict: lastVisionVerdict,
+        bagCarryStyle: lastResult?.bagCarryStyle ?? null,
+      });
+
       res.locals.vtonResult = {
         ...lastResult,
         ok: true,
@@ -1238,6 +1643,7 @@ export function createVtonQcMiddleware({
         viewAngleDeg: 0,
         compositeImageUrl: positiveOnlyImageUrl,
         baseModelImageUrl: null,
+        effectiveBagHandedness,
         frontOnlyDegraded: true,
         fallbackView: 'positive-only',
         qcStatus: 'fallback_positive_only',
@@ -1250,7 +1656,16 @@ export function createVtonQcMiddleware({
       };
       return next();
     } catch (err) {
+      if (requestAbortController.signal.aborted) {
+        return undefined;
+      }
       return next(err);
+    } finally {
+      if (typeof res?.off === 'function') {
+        res.off('close', handleClientClose);
+      } else if (typeof res?.removeListener === 'function') {
+        res.removeListener('close', handleClientClose);
+      }
     }
   };
 }
