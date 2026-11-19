@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MoveHorizontal, Sparkles } from 'lucide-react';
+import { ArrowLeft, MoveHorizontal } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
@@ -424,6 +424,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   onZoomChange,
   onPanChange,
   onFloorPlacementChange,
+  threeStageAvailable = true,
   auraTier = 'C',
   postLoginRevealActive = false,
   postLoginProgress = 0,
@@ -505,15 +506,13 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [resolvedLayers]
   );
 
-  const safeZoom = clamp(Number(zoom) || 1, 1, 3);
-  const safePanX = Number.isFinite(pan?.x) ? pan.x : 0;
-  const safePanY = Number.isFinite(pan?.y) ? pan.y : 0;
+  const safeZoom = 1;
+  const safePanX = 0;
+  const safePanY = 0;
   const safeSplit = clamp(Number(compareSplitPct) || 50, 5, 95);
 
   const hasAiImage = Boolean(stageMode === 'ai-vton' && aiImageUrl);
-  const canPinchZoom = Boolean(
-    stageMode === 'ai-vton' && hasAiImage && !compareActive && onZoomChange
-  );
+  const canPinchZoom = false;
 
   const stageRef = useRef(null);
   const aiImgRef = useRef(null);
@@ -693,6 +692,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         imageAspectRatio: aiImgAspect,
         topRatio: activeContentBounds?.topRatio ?? null,
         bottomRatio: activeContentBounds?.bottomRatio ?? null,
+        heightCm: resolvedHeightCm,
       }),
     [
       stageSize.width,
@@ -700,6 +700,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       aiImgAspect,
       activeContentBounds?.topRatio,
       activeContentBounds?.bottomRatio,
+      resolvedHeightCm,
     ]
   );
 
@@ -736,35 +737,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     };
   }, []);
 
-  const handleStageWheel = useCallback(
-    (e) => {
-      // Zoom applies strictly ONLY to the AI character — never zoom the Flat-Lay board!
-      if (!hasAiImage || compareActive || !onZoomChange) return;
-      e.preventDefault();
-      clearRecenterTimer();
-      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-      const rawNext = clamp(Number((safeZoom * factor).toFixed(2)), 1, 3);
-      const next = rawNext <= 1.01 ? 1 : rawNext;
-      liveZoomRef.current = next;
-      onZoomChange(next);
-      if (next <= 1.01) {
-        onPanChange?.({ x: 0, y: 0 });
-      } else if (onPanChange) {
-        onPanChange(clampPanOffset(safePanX, safePanY, next));
-      }
-    },
-    [
-      hasAiImage,
-      compareActive,
-      safeZoom,
-      safePanX,
-      safePanY,
-      onZoomChange,
-      onPanChange,
-      clampPanOffset,
-      clearRecenterTimer,
-    ]
-  );
+  const handleStageWheel = useCallback(() => {
+    // Character zoom is intentionally disabled to preserve wide-angle architectural framing.
+  }, []);
 
   const suppressNextClickRef = useRef(false);
 
@@ -1386,7 +1361,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             ? `360-degree virtual fitting stage (${angleSpec.fullEn}). Swipe horizontally to rotate.`
             : `360도 가상 피팅 스테이지 (${angleSpec.fullKo}). 좌우 드래그하여 회전하세요.`
       }
-      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${hasAiImage && safeZoom > 1.01 ? 'is-zoomed' : 'is-zoomable'} ${isPanning || isPinching || isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
+      className={`studio-2d-model-stage editorial-vton-stage ${hasAiImage ? 'is-ai-stage' : 'is-flatlay-stage'} ${isRotatingDrag || isScrollScrubbing ? 'is-panning' : ''} ${isRotatingDrag ? 'is-swipe-rotating' : ''}`.trim()}
       data-viewer-mode={viewerMode}
       data-stage-view={hasAiImage ? 'ai-vton' : 'flatlay'}
       data-requested-stage-view={stageMode}
@@ -1421,12 +1396,14 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         <div className="studio-2d-layer studio-2d-layer-after">
           {hasAiImage ? (
             <>
-              <div
-                aria-hidden="true"
-                data-floor-contact-shadow="true"
-                className="studio-floor-contact-shadow"
-                style={shadowTransformStyle}
-              />
+              {!threeStageAvailable && (
+                <div
+                  aria-hidden="true"
+                  data-floor-contact-shadow="true"
+                  className="studio-floor-contact-shadow"
+                  style={shadowTransformStyle}
+                />
+              )}
               <div
                 className="studio-stage-aura"
                 data-aura-tier={auraTier}
@@ -1550,30 +1527,6 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         </>
       )}
 
-      {/* Glassmorphism Shimmer Loading Overlay on top of Flat-Lay Board during Gemini Synthesis */}
-      {aiLoading && (
-        <div
-          className="editorial-vton-shimmer-overlay"
-          data-vton-shimmer-overlay="true"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="editorial-vton-shimmer-card">
-            <div className="editorial-vton-shimmer-sweep" aria-hidden="true" />
-            <div className="editorial-vton-shimmer-icon" aria-hidden="true">
-              <Sparkles size={16} />
-            </div>
-            <p className="editorial-vton-shimmer-title tabular-nums">
-              {isEn
-                ? `Styling tailored weather look (${safeAngleDeg}°)`
-                : `체형에 맞춰 드레이핑하는 중 (${safeAngleDeg}°)`}
-            </p>
-            <p className="editorial-vton-shimmer-sub tabular-nums">
-              {styleLabel} · {resolvedHeightCm}cm / {resolvedWeightKg}kg · {mstSwatch.code}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 });

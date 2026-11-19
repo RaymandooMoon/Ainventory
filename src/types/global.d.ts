@@ -8,8 +8,6 @@ declare global {
     readonly VITE_BG_REMOVAL_API_URL?: string;
     readonly VITE_BG_REMOVAL_API_KEY?: string;
     readonly VITE_VTON_API_URL?: string;
-    readonly VITE_VTON_API_KEY?: string;
-    readonly VITE_GEMINI_API_KEY?: string;
     readonly VITE_GOOGLE_CLIENT_ID?: string;
     readonly VITE_APPLE_CLIENT_ID?: string;
   }

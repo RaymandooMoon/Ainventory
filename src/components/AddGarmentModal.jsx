@@ -13,11 +13,23 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  BAG_CARRY_STYLES,
+  BAG_SUBCATEGORY_SET,
+  inferBagCarrySpec,
+} from '../shared/garmentTaxonomy.js';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const ACCESSORY_SUBTYPE_OPTIONS = [
-  { key: 'bag', ko: '가방 · 허리', en: 'Bag & Waist' },
+  { key: 'bag', ko: '크로스·숄더백', en: 'Crossbody / Shoulder' },
+  { key: 'tote', ko: '토트백', en: 'Tote' },
+  { key: 'briefcase', ko: '브리프케이스', en: 'Briefcase' },
+  { key: 'backpack', ko: '백팩', en: 'Backpack' },
+  { key: 'messenger', ko: '메신저백', en: 'Messenger' },
+  { key: 'clutch', ko: '클러치', en: 'Clutch' },
+  { key: 'duffel', ko: '더플백', en: 'Duffel' },
+  { key: 'hobo', ko: '호보백', en: 'Hobo' },
   { key: 'umbrella', ko: '우산 · 양산', en: 'Umbrella' },
   { key: 'watch', ko: '손목시계', en: 'Watch' },
   { key: 'gloves', ko: '장갑', en: 'Gloves' },
@@ -58,6 +70,20 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const [material, setMaterial] = useState('Fabric');
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
+  const [hasStrap, setHasStrap] = useState(true);
+  const [bagCarryStyle, setBagCarryStyle] = useState('shoulder');
+
+  const isBagSelection =
+    category === 'bag' || (category === 'accessory' && BAG_SUBCATEGORY_SET.has(subpart));
+
+  const handleSelectSubpart = (nextSub) => {
+    setSubpart(nextSub);
+    if (BAG_SUBCATEGORY_SET.has(nextSub)) {
+      const inferred = inferBagCarrySpec({ category: 'accessory', subcategory: nextSub });
+      setHasStrap(Boolean(inferred.has_strap));
+      setBagCarryStyle(inferred.bag_carry_style || 'hand_only');
+    }
+  };
 
   const categoryOptions = [
     ...WARDROBE_CATEGORY_OPTIONS,
@@ -71,7 +97,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const handleSelectCategory = (nextCat) => {
     setCategory(nextCat);
     if (nextCat === 'accessory') {
-      setSubpart('bag');
+      handleSelectSubpart('bag');
       setMaterial('Leather');
     } else if (nextCat === 'jewelry') {
       setSubpart('necklace');
@@ -148,6 +174,12 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           color_name: processedAsset.dominantColorName,
           image_data: processedAsset.cutoutDataUrl,
           custom_texture: true,
+          ...(isBagSelection
+            ? {
+                has_strap: hasStrap,
+                bag_carry_style: hasStrap ? bagCarryStyle : 'hand_only',
+              }
+            : {}),
         }),
       });
 
@@ -344,13 +376,67 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   data-add-subpart-btn={opt.key}
                   aria-pressed={selected}
                   className={`hig-filter-pill ${selected ? 'active' : ''}`}
-                  onClick={() => setSubpart(opt.key)}
+                  onClick={() => handleSelectSubpart(opt.key)}
                 >
                   {tx(lang, opt.ko, opt.en)}
                 </button>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Bag Strap & Carry Style Selector */}
+      {isBagSelection && (
+        <div className="hig-field-group" data-add-bag-strap-group="true">
+          <label className="hig-field-label">
+            {tx(lang, '가방끈 유무 · 착용 방식', 'Bag Strap & Carry Style')}
+          </label>
+          <div className="hig-grid-2" style={{ marginBottom: 8 }}>
+            <button
+              type="button"
+              className={`hig-filter-pill ${hasStrap ? 'active' : ''}`}
+              aria-pressed={hasStrap}
+              onClick={() => {
+                setHasStrap(true);
+                if (bagCarryStyle === 'hand_only') setBagCarryStyle('shoulder');
+              }}
+            >
+              {tx(lang, '가방끈 있음', 'Has Strap')}
+            </button>
+            <button
+              type="button"
+              className={`hig-filter-pill ${!hasStrap ? 'active' : ''}`}
+              aria-pressed={!hasStrap}
+              onClick={() => {
+                setHasStrap(false);
+                setBagCarryStyle('hand_only');
+              }}
+            >
+              {tx(lang, '가방끈 없음 (핸드캐리)', 'No Strap (Hand-carry)')}
+            </button>
+          </div>
+          {hasStrap && (
+            <div className="hig-pill-row" role="radiogroup" aria-label="Bag Carry Style">
+              {Object.values(BAG_CARRY_STYLES)
+                .filter((s) => s.hasStrap)
+                .map((styleOpt) => {
+                  const active = bagCarryStyle === styleOpt.key;
+                  return (
+                    <button
+                      key={styleOpt.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      className={`hig-filter-pill ${active ? 'active' : ''}`}
+                      onClick={() => setBagCarryStyle(styleOpt.key)}
+                    >
+                      {lang === 'en' ? styleOpt.labelEn : styleOpt.labelKo}
+                    </button>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 

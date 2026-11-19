@@ -14,7 +14,6 @@ import {
   CANONICAL_PORTRAIT_ASPECT_RATIO,
   CHARACTER_IDENTITY_ANCHOR_STORAGE_KEY,
   angle360ToSignedScrollDeg,
-  buildDirectClientGeminiParts,
   buildTurnaround3x2LayoutGuideDataUrl,
   computeCharacterIdentityAnchorKey,
   computeCoreAnatomicalCenterXInBuffer,
@@ -559,35 +558,6 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.ok(SOLO_SINGLE_PERSON_PER_CELL_LOCK.includes('20% empty solid backdrop gutter'));
     assert.ok(FOOTWEAR_PAIR_SYMMETRY_LOCK.includes('IDENTICAL MATCHED PAIR'));
 
-    const clientProfile = normalizeGenderNeutralProfile({
-      heightCm: 176,
-      weightKg: 70,
-      bodySpec: { gender: 'male', heightCm: 176, weightKg: 70, bodyShape: 'standard_balanced' },
-      skinToneHex: '#DFBA9B',
-    });
-    const clientParts = buildDirectClientGeminiParts({
-      profile: clientProfile,
-      styleMode: 'stylized_isometric',
-      weatherMood: 'clear',
-      angleDeg: 0,
-      turnaroundSheet: true,
-      serializedSlots: {
-        shoes: {
-          name: '화이트 러닝 스니커즈',
-          category: 'shoes',
-          subcategory: '스니커즈',
-          color_name: '화이트',
-          color_hex: '#F8FAFC',
-        },
-      },
-    });
-    const clientJoinedText = clientParts
-      .map((p) => (typeof p.text === 'string' ? p.text : ''))
-      .join('\n');
-    assert.match(clientJoinedText, /FOOTWEAR PAIR SYMMETRY LOCK/);
-    assert.match(clientJoinedText, /SOLO SINGLE PERSON PER CELL LOCK/);
-    assert.doesNotMatch(clientJoinedText, /\(#94A3B8\)/);
-
     const serverProfile = normalizeVtonProfile({
       gender: 'male',
       heightCm: 176,
@@ -1051,21 +1021,6 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
         color_hex: '#B3895D',
       },
     };
-
-    const clientParts = buildDirectClientGeminiParts({
-      profile,
-      styleMode: 'stylized_isometric',
-      weatherMood: 'clear',
-      angleDeg: 0,
-      turnaroundSheet: true,
-      serializedSlots: layeredSlots,
-    });
-    const clientJoined = clientParts.map((p) => (typeof p.text === 'string' ? p.text : '')).join('\n');
-    assert.match(clientJoined, /TOP_MID|Mid-Layer Top/i);
-    assert.match(clientJoined, /OUTER_MID|Mid-Layer Outerwear/i);
-    assert.match(clientJoined, /웨이스트코트|조끼/);
-    assert.match(clientJoined, /블레이저/);
-    assert.match(clientJoined, /오버코트/);
 
     const serverProfile = normalizeVtonProfile({
       gender: 'male',

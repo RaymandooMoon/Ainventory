@@ -4,7 +4,70 @@ export type StageAuraTier = 'C' | 'B' | 'A' | 'S';
 export const VTON_QC_LOG_STORAGE_KEY = 'ainventory_vton_qc_failures_v1';
 const MAX_QC_LOG_ENTRIES = 30;
 
-export type BagViewerScreenPlacement = 'screen-left' | 'screen-right' | 'far-occluded';
+export type BagViewerScreenPlacement =
+  | 'screen-left'
+  | 'screen-right'
+  | 'far-occluded'
+  | 'center-back'
+  | 'front-straps-only';
+
+export type BagCarryStyle =
+  | 'hand_only'
+  | 'shoulder'
+  | 'crossbody'
+  | 'backpack'
+  | 'convertible_hand_strap';
+
+export type Turnaround8AngleDeg = 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315;
+
+export interface BagCarrySpecInput {
+  hasStrap?: boolean | null;
+  has_strap?: boolean | number | null;
+  bagCarryStyle?: BagCarryStyle | string | null;
+  bag_carry_style?: BagCarryStyle | string | null;
+}
+
+export interface NormalizedBagCarrySpec {
+  hasStrap: boolean;
+  bagCarryStyle: BagCarryStyle;
+}
+
+const VALID_BAG_CARRY_STYLES = new Set<BagCarryStyle>([
+  'hand_only',
+  'shoulder',
+  'crossbody',
+  'backpack',
+  'convertible_hand_strap',
+]);
+
+export function normalizeBagCarrySpecInput(
+  raw?: BagCarrySpecInput | null
+): NormalizedBagCarrySpec {
+  const rawStyle = String(raw?.bagCarryStyle ?? raw?.bag_carry_style ?? '')
+    .trim()
+    .toLowerCase() as BagCarryStyle;
+  const rawStrapVal = raw?.hasStrap ?? raw?.has_strap;
+  const hasExplicitStrap =
+    rawStrapVal === true ||
+    rawStrapVal === false ||
+    rawStrapVal === 1 ||
+    rawStrapVal === 0;
+
+  let bagCarryStyle: BagCarryStyle = VALID_BAG_CARRY_STYLES.has(rawStyle)
+    ? rawStyle
+    : 'shoulder';
+  let hasStrap = hasExplicitStrap
+    ? Boolean(Number(rawStrapVal))
+    : bagCarryStyle !== 'hand_only';
+
+  if (hasExplicitStrap && !hasStrap && bagCarryStyle !== 'hand_only') {
+    bagCarryStyle = 'hand_only';
+  }
+  if (bagCarryStyle === 'hand_only' && !hasExplicitStrap) {
+    hasStrap = false;
+  }
+  return { hasStrap, bagCarryStyle };
+}
 
 const LEFT_HANDED_TOKENS = new Set([
   'left',
@@ -54,7 +117,7 @@ export function isValidHandednessToken(raw: unknown): boolean {
 }
 
 const BAG_KEYWORD_RE =
-  /bag|tote|crossbody|briefcase|backpack|clutch|shoulder|messenger|duffel|satchel|pouch|handbag|가방|토트|크로스|브리프케이스|서류가방|백팩|숄더|클러치|파우치|핸드백|보스턴/i;
+  /bag|tote|crossbody|briefcase|backpack|clutch|shoulder|messenger|duffel|duffle|weekender|hobo|satchel|pouch|handbag|가방|토트|크로스|브리프케이스|서류가방|백팩|배낭|숄더|클러치|파우치|핸드백|보스턴|메신저|더플|호보/i;
 const NON_BAG_ACCESSORY_RE =
   /umbrella|parasol|watch|eyewear|sunglass|glasses|glove|belt|scarf|muffler|tie|hat|cap|beanie|earring|necklace|bracelet|ring|brooch|우산|양산|시계|안경|선글라스|장갑|벨트|머플러|스카프|넥타이|모자|비니|귀걸이|목걸이|팔찌|반지|브로치/i;
 
@@ -102,6 +165,8 @@ export interface BagAssetRect {
 export interface BagAssetPlacementBox {
   handedness: DominantHand;
   carrySide: 'left' | 'right';
+  hasStrap: boolean;
+  bagCarryStyle: BagCarryStyle;
   mirrored: boolean;
   visible: boolean;
   screenSide: BagViewerScreenPlacement;
@@ -109,19 +174,32 @@ export interface BagAssetPlacementBox {
   centerOffsetFromAxis: number;
   bagCenterX: number;
   strapRect: BagAssetRect | null;
+  secondaryStrapRect?: BagAssetRect | null;
   bagRect: BagAssetRect | null;
 }
 
+function normalize8AngleDeg(angleDeg: number): Turnaround8AngleDeg {
+  if (angleDeg === -45 || angleDeg === 315) return 315;
+  if (angleDeg === -90 || angleDeg === 270) return 270;
+  if (angleDeg === -135 || angleDeg === 225) return 225;
+  if (angleDeg === 45) return 45;
+  if (angleDeg === 90) return 90;
+  if (angleDeg === 135) return 135;
+  if (angleDeg === 180 || angleDeg === -180) return 180;
+  return 0;
+}
+
 /**
- * Computes the exact camera-space bag asset bounding box for a given angle (`0..225°`)
- * and mirrors the bag asset position horizontally across `cx` when `'left'` (`'left-handed'`)
- * is selected so the bag consistently renders on the user's preferred side:
- * - `'right'` (default): wearer's ANATOMICAL LEFT side (`screen-right` at `0°/45°`, occluded behind torso at `90°`, `screen-left` at `135°/180°/225°`).
- * - `'left'` (`'left-handed'`): mirrored across `cx` onto wearer's ANATOMICAL RIGHT side (`screen-left` at `0°/45°`, foreground visible at `90°`, `screen-right` at `135°/180°`, occluded at `225°`).
+ * Pre-Normalization Layer:
+ * Computes the exact camera-space bag asset bounding box for ALL 8 true angles (`0..315°`),
+ * branched by `hasStrap` and `bagCarryStyle` (`hand_only`, `shoulder`, `crossbody`, `backpack`,
+ * `convertible_hand_strap`), preventing armpit-tuck and hallucinated shoulder straps on strapless bags.
  */
 export function computeBagAssetPlacementBox(params: {
-  angleDeg: 0 | 45 | 90 | 135 | 180 | 225;
+  angleDeg: Turnaround8AngleDeg | -45 | -90 | -135 | -180;
   handedness?: unknown;
+  hasStrap?: boolean | null;
+  bagCarryStyle?: BagCarryStyle | string | null;
   cx: number;
   shoulderY: number;
   waistY: number;
@@ -130,19 +208,120 @@ export function computeBagAssetPlacementBox(params: {
   headH: number;
   widthCompact?: number;
 }): BagAssetPlacementBox {
+  const angle = normalize8AngleDeg(params.angleDeg);
   const handedness = normalizeHandedness(params.handedness, 'right');
-  const anatomy = resolveBagCarryAnatomy(handedness);
+  const spec = normalizeBagCarrySpecInput({
+    hasStrap: params.hasStrap,
+    bagCarryStyle: params.bagCarryStyle,
+  });
+  const anatomy = resolveBagCarryAnatomy(handedness, spec);
   const mirrored = handedness === 'left';
-  const screenSide = anatomy.perAngleScreenSide[params.angleDeg];
+  const screenSide = anatomy.perAngleScreenSide[angle];
   const widthCompact = params.widthCompact ?? 0.85;
   const bagW = Math.max(8, params.headH * 0.64 * widthCompact);
   const bagH = Math.max(12, params.headH * 0.86);
-  const bagTopY = params.waistY + params.headH * 0.16;
+
+  // Backpack physics: centered on upper-mid back on rear views, protruding behind torso on side profiles,
+  // dual vertical shoulder straps ONLY on front views (ZERO hip bag hanging on front!).
+  if (spec.bagCarryStyle === 'backpack') {
+    const strapW = Math.max(3, Math.round(params.headH * 0.14));
+    const strapH = Math.max(10, Math.round((params.waistY - params.shoulderY) * 0.72));
+    if (angle === 0 || angle === 45 || angle === 315) {
+      const shift = angle === 45 ? params.shoulderW * 0.06 : angle === 315 ? -params.shoulderW * 0.06 : 0;
+      const leftStrapX = Math.round(params.cx - params.shoulderW * 0.34 + shift);
+      const rightStrapX = Math.round(params.cx + params.shoulderW * 0.34 - strapW + shift);
+      return {
+        handedness,
+        carrySide: anatomy.carrySide,
+        hasStrap: true,
+        bagCarryStyle: 'backpack',
+        mirrored,
+        visible: true,
+        screenSide: 'front-straps-only',
+        screenSign: 0,
+        centerOffsetFromAxis: 0,
+        bagCenterX: params.cx,
+        strapRect: {
+          x: leftStrapX,
+          y: Math.round(params.shoulderY + 2),
+          width: strapW,
+          height: strapH,
+        },
+        secondaryStrapRect: {
+          x: rightStrapX,
+          y: Math.round(params.shoulderY + 2),
+          width: strapW,
+          height: strapH,
+        },
+        bagRect: null,
+      };
+    }
+    if (angle === 90 || angle === 270) {
+      // At 90° facing screen-right, back is on screen-left (-1); at 270° facing screen-left, back is on screen-right (+1)
+      const backSign: -1 | 1 = angle === 90 ? -1 : 1;
+      const packW = Math.max(10, Math.round(params.headH * 0.54));
+      const packH = Math.max(18, Math.round(params.headH * 1.48));
+      const packCenterX = params.cx + backSign * (params.shoulderW * 0.44 + packW * 0.36);
+      const packTopY = Math.round(params.shoulderY + params.headH * 0.14);
+      return {
+        handedness,
+        carrySide: anatomy.carrySide,
+        hasStrap: true,
+        bagCarryStyle: 'backpack',
+        mirrored,
+        visible: true,
+        screenSide: backSign === -1 ? 'screen-left' : 'screen-right',
+        screenSign: backSign,
+        centerOffsetFromAxis: packCenterX - params.cx,
+        bagCenterX: packCenterX,
+        strapRect: {
+          x: Math.round(params.cx - strapW * 0.5),
+          y: Math.round(params.shoulderY + 2),
+          width: strapW,
+          height: strapH,
+        },
+        bagRect: {
+          x: Math.round(packCenterX - packW * 0.5),
+          y: packTopY,
+          width: packW,
+          height: packH,
+        },
+      };
+    }
+    // 135°, 180°, 225° rear views: backpack centered on upper-mid back
+    const rearShift =
+      angle === 135 ? -params.shoulderW * 0.1 : angle === 225 ? params.shoulderW * 0.1 : 0;
+    const packW = Math.max(14, Math.round(params.shoulderW * 0.68));
+    const packH = Math.max(20, Math.round(params.headH * 1.52));
+    const packCenterX = params.cx + rearShift;
+    const packTopY = Math.round(params.shoulderY + params.headH * 0.16);
+    return {
+      handedness,
+      carrySide: anatomy.carrySide,
+      hasStrap: true,
+      bagCarryStyle: 'backpack',
+      mirrored,
+      visible: true,
+      screenSide: 'center-back',
+      screenSign: 0,
+      centerOffsetFromAxis: rearShift,
+      bagCenterX: packCenterX,
+      strapRect: null,
+      bagRect: {
+        x: Math.round(packCenterX - packW * 0.5),
+        y: packTopY,
+        width: packW,
+        height: packH,
+      },
+    };
+  }
 
   if (screenSide === 'far-occluded') {
     return {
       handedness,
       carrySide: anatomy.carrySide,
+      hasStrap: spec.hasStrap,
+      bagCarryStyle: spec.bagCarryStyle,
       mirrored,
       visible: false,
       screenSide,
@@ -154,26 +333,45 @@ export function computeBagAssetPlacementBox(params: {
     };
   }
 
-  // At 90° right profile (facing right) when left-handed, the bag rests in foreground near cx + slight hip offset
-  if (params.angleDeg === 90) {
-    const profileOffset = params.hipW * 0.12;
+  // Vertical hang height strictly separated by carry style so bags NEVER tuck into armpits:
+  // - hand_only / convertible_hand_strap: lowered hand/thigh level (waistY + 0.92 * headH)
+  // - shoulder / crossbody: natural below-hip hang (waistY + 0.34 * headH), NEVER armpit!
+  const isHandLowered =
+    !spec.hasStrap ||
+    spec.bagCarryStyle === 'hand_only' ||
+    spec.bagCarryStyle === 'convertible_hand_strap';
+  const bagTopY = isHandLowered
+    ? params.waistY + params.headH * 0.92
+    : params.waistY + params.headH * 0.34;
+  const emitStrap =
+    spec.hasStrap &&
+    (spec.bagCarryStyle === 'shoulder' || spec.bagCarryStyle === 'crossbody');
+
+  // Lateral profile views (90° right profile or 270° left profile when bag is on foreground side)
+  if (angle === 90 || angle === 270) {
+    const profileSign: -1 | 1 = angle === 90 ? 1 : -1;
+    const profileOffset = profileSign * params.hipW * 0.12;
     const bagCenterX = params.cx + profileOffset;
     const strapW = Math.max(4, Math.round(bagW * 0.22));
     return {
       handedness,
       carrySide: anatomy.carrySide,
+      hasStrap: spec.hasStrap,
+      bagCarryStyle: spec.bagCarryStyle,
       mirrored,
       visible: true,
       screenSide,
-      screenSign: 1,
+      screenSign: profileSign,
       centerOffsetFromAxis: profileOffset,
       bagCenterX,
-      strapRect: {
-        x: Math.round(bagCenterX - strapW * 0.5),
-        y: Math.round(params.shoulderY + 2),
-        width: strapW,
-        height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
-      },
+      strapRect: emitStrap
+        ? {
+            x: Math.round(bagCenterX - strapW * 0.5),
+            y: Math.round(params.shoulderY + 2),
+            width: strapW,
+            height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
+          }
+        : null,
       bagRect: {
         x: Math.round(bagCenterX - bagW * 0.5),
         y: Math.round(bagTopY),
@@ -184,26 +382,39 @@ export function computeBagAssetPlacementBox(params: {
   }
 
   const screenSign: -1 | 1 = screenSide === 'screen-left' ? -1 : 1;
-  const lateralOffset = params.hipW * 0.56 + bagW * 0.28;
+  const lateralOffset = params.hipW * 0.58 + bagW * 0.3;
   const centerOffsetFromAxis = screenSign * lateralOffset;
   const bagCenterX = params.cx + centerOffsetFromAxis;
-  const strapShoulderX = params.cx + screenSign * (params.shoulderW * 0.36);
+  // Crossbody strap originates from the OPPOSITE shoulder across the torso; shoulder strap from SAME shoulder
+  const strapOriginSign = spec.bagCarryStyle === 'crossbody' ? -screenSign : screenSign;
+  const strapShoulderX = params.cx + strapOriginSign * (params.shoulderW * 0.36);
 
   return {
     handedness,
     carrySide: anatomy.carrySide,
+    hasStrap: spec.hasStrap,
+    bagCarryStyle: spec.bagCarryStyle,
     mirrored,
     visible: true,
     screenSide,
     screenSign,
     centerOffsetFromAxis,
     bagCenterX,
-    strapRect: {
-      x: Math.round(Math.min(strapShoulderX, bagCenterX) - 2),
-      y: Math.round(params.shoulderY + 2),
-      width: Math.max(4, Math.round(Math.abs(bagCenterX - strapShoulderX) * 0.24)),
-      height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
-    },
+    strapRect: emitStrap
+      ? {
+          x: Math.round(Math.min(strapShoulderX, bagCenterX) - 2),
+          y: Math.round(params.shoulderY + 2),
+          width: Math.max(
+            4,
+            Math.round(
+              spec.bagCarryStyle === 'crossbody'
+                ? Math.abs(bagCenterX - strapShoulderX) * 0.16
+                : Math.abs(bagCenterX - strapShoulderX) * 0.24
+            )
+          ),
+          height: Math.max(8, Math.round(bagTopY - params.shoulderY)),
+        }
+      : null,
     bagRect: {
       x: Math.round(bagCenterX - bagW * 0.5),
       y: Math.round(bagTopY),
@@ -246,88 +457,279 @@ export interface BagCarryAnatomyDirective {
   dominantHand: DominantHand;
   carrySide: 'left' | 'right';
   freeSide: 'right' | 'left';
+  hasStrap: boolean;
+  bagCarryStyle: BagCarryStyle;
   carryLabelKo: string;
   carryLabelEn: string;
+  dualHandRolePrompt: string;
   slotPrompt: string;
   crossAngleLockPrompt: string;
-  perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement>;
-  perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string>;
+  perAngleScreenSide: Record<Turnaround8AngleDeg, BagViewerScreenPlacement>;
+  perAngleScreenPrompt: Record<Turnaround8AngleDeg, string>;
+}
+
+function buildStyleCarryPhysicsCue(
+  spec: NormalizedBagCarrySpec,
+  carrySideUpper: 'LEFT' | 'RIGHT',
+  freeSideUpper: 'RIGHT' | 'LEFT'
+): string {
+  if (spec.bagCarryStyle === 'backpack') {
+    return (
+      `BACKPACK CARRY PHYSICS (DUAL-SHOULDER BACKPACK — has_strap=true): Wear symmetrically on the model's upper-mid BACK with BOTH shoulder straps resting flat over both left and right shoulders. BOTH HANDS (${carrySideUpper} HAND and ${freeSideUpper} HAND) hang completely free, relaxed, and empty at the sides — NEVER carry a backpack in one hand or tuck under an armpit.`
+    );
+  }
+  if (!spec.hasStrap || spec.bagCarryStyle === 'hand_only') {
+    return (
+      `STRAPLESS HAND-CARRY PHYSICS (has_strap=FALSE, carry_style=hand_only — STRICTLY ZERO SHOULDER STRAP, ZERO CROSSBODY STRAP, ZERO ARMPIT TUCK): ` +
+      `CARRYING HAND (wearer's ANATOMICAL ${carrySideUpper} HAND) hangs extended straight downward gripping the bag's top handle/body naturally at MID-THIGH / LOWER-HIP HEIGHT with clear arm extension; ` +
+      `FREE HAND (wearer's ANATOMICAL ${freeSideUpper} HAND) hangs completely relaxed, open, and 100% empty at the opposite side. ` +
+      `STRICTLY FORBIDDEN: NEVER invent or draw a shoulder strap, NEVER hang from the shoulder, and NEVER clamp/tuck the bag up under the armpit or bent elbow!`
+    );
+  }
+  if (spec.bagCarryStyle === 'crossbody') {
+    return (
+      `CROSSBODY STRAP PHYSICS (has_strap=TRUE, carry_style=crossbody — ZERO ARMPIT TUCK): ` +
+      `ONE diagonal strap runs cleanly from the wearer's ANATOMICAL ${freeSideUpper} SHOULDER diagonally across the chest/back down to the bag resting smoothly at/below the ANATOMICAL ${carrySideUpper} HIP (waist-to-upper-thigh height, clearly BELOW the armpit). ` +
+      `CARRYING SIDE (${carrySideUpper} HAND) rests relaxed beside or lightly steadying the hip bag; FREE HAND (${freeSideUpper} HAND) hangs completely free and empty.`
+    );
+  }
+  if (spec.bagCarryStyle === 'convertible_hand_strap') {
+    return (
+      `CONVERTIBLE DUFFEL/WEEKENDER CARRY PHYSICS (has_strap=TRUE, carry_style=convertible_hand_strap — ZERO ARMPIT TUCK): ` +
+      `CARRYING HAND (wearer's ANATOMICAL ${carrySideUpper} HAND) holds the top twin handles lowered naturally at mid-thigh/knee height (with optional detached/relaxed strap draping below), NEVER squeezed into the armpit; ` +
+      `FREE HAND (wearer's ANATOMICAL ${freeSideUpper} HAND) hangs completely relaxed and 100% empty.`
+    );
+  }
+  return (
+    `SHOULDER-BAG STRAP PHYSICS (has_strap=TRUE, carry_style=shoulder — ZERO ARMPIT TUCK): ` +
+    `Single shoulder strap rests cleanly atop the wearer's ANATOMICAL ${carrySideUpper} SHOULDER with the bag body hanging naturally AT/BELOW HIP-WAIST LEVEL (clearly separated below the armpit, NEVER crushed or wedged into the armpit!). ` +
+    `CARRYING SIDE (${carrySideUpper} HAND) hangs naturally beside the bag; FREE HAND (wearer's ANATOMICAL ${freeSideUpper} HAND) hangs completely relaxed and 100% empty.`
+  );
 }
 
 /**
- * Enforces realistic anatomical handedness AND explicit per-angle viewer screen-left/screen-right
- * coordinates for bag carry so multi-angle generation never swaps shoulders between front and back:
- * - Right-handed wearer keeps right arm/hand free and carries bags on ANATOMICAL LEFT arm/shoulder
- *   (VIEWER'S RIGHT on 0°/45°, occluded behind torso on 90°, VIEWER'S LEFT on 135°/180°/225°).
- * - Left-handed wearer keeps left arm/hand free and carries bags on ANATOMICAL RIGHT arm/shoulder
- *   (VIEWER'S LEFT on 0°/45°, foreground right side on 90°, VIEWER'S RIGHT on 135°/180°, far right on 225°).
+ * Pre-Normalization Layer:
+ * Enforces realistic anatomical handedness, explicit 8-angle viewer screen-left/screen-right
+ * coordinates (`0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°`), bag strap/carry-style physics,
+ * and dual-hand role conditioning (carrying hand vs free hand, zero armpit tuck).
  */
 export function resolveBagCarryAnatomy(
-  rawDominantHand?: unknown
+  rawDominantHand?: unknown,
+  rawBagSpec?: BagCarrySpecInput | null
 ): BagCarryAnatomyDirective {
   const normalized: DominantHand = normalizeHandedness(rawDominantHand, 'right');
+  const spec = normalizeBagCarrySpecInput(rawBagSpec);
+  const carrySide: 'left' | 'right' = normalized === 'left' ? 'right' : 'left';
+  const freeSide: 'right' | 'left' = normalized === 'left' ? 'left' : 'right';
+  const carrySideUpper = carrySide === 'left' ? 'LEFT' : 'RIGHT';
+  const freeSideUpper = freeSide === 'left' ? 'LEFT' : 'RIGHT';
+  const dualHandRolePrompt = buildStyleCarryPhysicsCue(spec, carrySideUpper, freeSideUpper);
+
+  if (spec.bagCarryStyle === 'backpack') {
+    const perAngleScreenSide: Record<Turnaround8AngleDeg, BagViewerScreenPlacement> = {
+      0: 'front-straps-only',
+      45: 'front-straps-only',
+      90: 'screen-left',
+      135: 'center-back',
+      180: 'center-back',
+      225: 'center-back',
+      270: 'screen-right',
+      315: 'front-straps-only',
+    };
+    const perAngleScreenPrompt: Record<Turnaround8AngleDeg, string> = {
+      0: '0° Front: Show ONLY the two symmetrical backpack shoulder straps curving cleanly over both shoulders; main backpack body stays hidden behind the back; BOTH hands 100% empty.',
+      45: '45° Front-Right: Show backpack shoulder straps over shoulders and slight side depth behind the rear-left shoulder; BOTH hands 100% empty.',
+      90: '90° Right Side Profile (facing SCREEN-RIGHT ->): Backpack body sits cleanly on the wearer\'s BACK protruding on SCREEN-LEFT behind the torso with strap over shoulder; hands 100% empty.',
+      135: '135° Back-Right Rear View: Full backpack centered cleanly on the wearer\'s upper-mid back facing camera; hands 100% empty.',
+      180: '180° Straight Back: Full backpack centered symmetrically on the wearer\'s upper-mid back; hands 100% empty.',
+      225: '225° Back-Left Rear View: Full backpack centered cleanly on the wearer\'s upper-mid back facing camera; hands 100% empty.',
+      270: '270° Left Side Profile (facing SCREEN-LEFT <-): Backpack body sits cleanly on the wearer\'s BACK protruding on SCREEN-RIGHT behind the torso with strap over shoulder; hands 100% empty.',
+      315: '315° Front-Left: Show backpack shoulder straps over shoulders and slight side depth behind the rear-right shoulder; BOTH hands 100% empty.',
+    };
+    return {
+      dominantHand: normalized,
+      carrySide,
+      freeSide,
+      hasStrap: true,
+      bagCarryStyle: 'backpack',
+      carryLabelKo: '양어깨 백팩 착용',
+      carryLabelEn: 'Dual-shoulder backpack (back)',
+      dualHandRolePrompt,
+      slotPrompt: `worn symmetrically on the back as a backpack across ALL 8 angles. ${dualHandRolePrompt}`,
+      crossAngleLockPrompt: `BACKPACK 8-ANGLE LOCK: ${dualHandRolePrompt} Exact per-angle positions: ${Object.values(perAngleScreenPrompt).join(' ')}`,
+      perAngleScreenSide,
+      perAngleScreenPrompt,
+    };
+  }
+
+  const carryDesc = !spec.hasStrap || spec.bagCarryStyle === 'hand_only'
+    ? `held lowered in wearer's ANATOMICAL ${carrySideUpper} HAND at mid-thigh height (ZERO shoulder strap, ZERO armpit tuck)`
+    : spec.bagCarryStyle === 'crossbody'
+      ? `slung crossbody from ${freeSideUpper} shoulder to wearer's ANATOMICAL ${carrySideUpper} HIP (ZERO armpit tuck)`
+      : spec.bagCarryStyle === 'convertible_hand_strap'
+        ? `held lowered in wearer's ANATOMICAL ${carrySideUpper} HAND at mid-thigh height (ZERO armpit tuck)`
+        : `carried on wearer's ANATOMICAL ${carrySideUpper} SHOULDER hanging naturally at/below hip height (ZERO armpit tuck)`;
 
   if (normalized === 'left') {
-    const perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement> = {
+    const perAngleScreenSide: Record<Turnaround8AngleDeg, BagViewerScreenPlacement> = {
       0: 'screen-left',
       45: 'screen-left',
       90: 'screen-right',
       135: 'screen-right',
       180: 'screen-right',
       225: 'far-occluded',
+      270: 'far-occluded',
+      315: 'screen-left',
     };
-    const perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string> = {
-      0: "0° Front: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL RIGHT shoulder/arm/hand); wearer's left arm on IMAGE-RIGHT MUST be 100% empty.",
-      45: "45° Front-Right: Bag MUST sit in foreground on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL RIGHT shoulder/arm/hand); far left arm on IMAGE-RIGHT is 100% empty.",
-      90: "90° Right Side Profile: Wearer's right side faces camera so the bag is CLEARLY VISIBLE in foreground on the right shoulder/hand.",
-      135: "135° Back-Right: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL RIGHT shoulder/arm/hand); left shoulder on IMAGE-LEFT is 100% empty.",
-      180: "180° Straight Back: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL RIGHT shoulder/arm/hand); left side on IMAGE-LEFT is 100% empty.",
-      225: "225° Back-Left: Foreground left shoulder/arm on IMAGE-LEFT MUST be 100% empty; bag stays on wearer's far right side (IMAGE-RIGHT ->).",
+    const perAngleScreenPrompt: Record<Turnaround8AngleDeg, string> = {
+      0: `0° Front: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; wearer's free LEFT arm/hand on IMAGE-RIGHT MUST be 100% empty.`,
+      45: `45° Front-Right (facing SCREEN-RIGHT ->): Bag MUST sit in foreground on VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; far LEFT arm on IMAGE-RIGHT is 100% empty.`,
+      90: `90° Right Side Profile (facing SCREEN-RIGHT ->): Wearer's right side faces camera so bag is CLEARLY VISIBLE in foreground, ${carryDesc}.`,
+      135: `135° Back-Right Rear View: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->), ${carryDesc}; LEFT shoulder/arm on IMAGE-LEFT is 100% empty.`,
+      180: `180° Straight Back: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->), ${carryDesc}; LEFT side on IMAGE-LEFT is 100% empty.`,
+      225: `225° Back-Left Rear View: Foreground LEFT shoulder/arm on IMAGE-LEFT MUST be 100% empty; bag stays on wearer's far RIGHT side (IMAGE-RIGHT ->).`,
+      270: `270° Left Side Profile (facing SCREEN-LEFT <-): Foreground LEFT shoulder/arm facing camera MUST be 100% empty; bag stays occluded behind torso on wearer's far RIGHT side.`,
+      315: `315° Front-Left (facing SCREEN-LEFT <-): Bag stays on far VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; foreground LEFT arm/hand on IMAGE-RIGHT is 100% empty.`,
     };
     return {
       dominantHand: 'left',
       carrySide: 'right',
       freeSide: 'left',
+      hasStrap: spec.hasStrap,
+      bagCarryStyle: spec.bagCarryStyle,
       carryLabelKo: '오른팔 · 오른손 (왼손잡이)',
-      carryLabelEn: 'Right arm / shoulder (Left-handed)',
-      slotPrompt:
-        `carried EXCLUSIVELY on the model's ANATOMICAL RIGHT shoulder / RIGHT forearm / RIGHT hand across ALL turnaround angles — STRICT IMAGE-SIDE COORDINATES: [0° Front = IMAGE-LEFT <- | 45° = IMAGE-LEFT <- | 90° Right Profile = FOREGROUND VISIBLE | 135° Back-Right = IMAGE-RIGHT -> | 180° Back = IMAGE-RIGHT -> | 225° Back-Left = FAR RIGHT SIDE, NEVER on foreground left shoulder!]`,
-      crossAngleLockPrompt:
-        `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (LEFT-HANDED WEARER -> RIGHT SIDE CARRY): Keep the wearer's dominant ANATOMICAL LEFT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/crossbody/briefcase MUST stay locked to the wearer's ANATOMICAL RIGHT shoulder/arm/hand with exact camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
+      carryLabelEn: 'Right arm / hand (Left-handed)',
+      dualHandRolePrompt,
+      slotPrompt: `carried EXCLUSIVELY on the model's ANATOMICAL RIGHT side across ALL 8 angles (${carryDesc}). ${dualHandRolePrompt} STRICT IMAGE-SIDE COORDINATES: [0°=IMAGE-LEFT <- | 45°=IMAGE-LEFT <- | 90°=FOREGROUND VISIBLE | 135°=IMAGE-RIGHT -> | 180°=IMAGE-RIGHT -> | 225°=FAR RIGHT | 270°=BEHIND TORSO | 315°=IMAGE-LEFT <-]`,
+      crossAngleLockPrompt: `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (LEFT-HANDED WEARER -> RIGHT SIDE CARRY): ${dualHandRolePrompt} Exact 8-angle camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
       perAngleScreenSide,
       perAngleScreenPrompt,
     };
   }
 
-  const perAngleScreenSide: Record<0 | 45 | 90 | 135 | 180 | 225, BagViewerScreenPlacement> = {
+  const perAngleScreenSide: Record<Turnaround8AngleDeg, BagViewerScreenPlacement> = {
     0: 'screen-right',
     45: 'screen-right',
     90: 'far-occluded',
     135: 'screen-left',
     180: 'screen-left',
     225: 'screen-left',
+    270: 'screen-left',
+    315: 'screen-right',
   };
-  const perAngleScreenPrompt: Record<0 | 45 | 90 | 135 | 180 | 225, string> = {
-    0: "0° Front: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->, wearer's ANATOMICAL LEFT shoulder/arm/hand); wearer's right arm on IMAGE-LEFT MUST be 100% empty (NEVER place bag on IMAGE-LEFT at 0°!).",
-    45: "45° Front-Right: Bag MUST stay on FAR IMAGE-RIGHT side (wearer's ANATOMICAL LEFT shoulder/arm/hand); foreground right arm on IMAGE-LEFT is 100% empty.",
-    90: "90° Right Side Profile: Foreground right shoulder/arm facing camera MUST be 100% empty (ZERO bag strap over right shoulder); bag stays behind torso on far left side.",
-    135: "135° Back-Right: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand); foreground right shoulder on IMAGE-RIGHT is 100% empty.",
-    180: "180° Straight Back: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand); right side on IMAGE-RIGHT is 100% empty.",
-    225: "225° Back-Left: Bag is PROMINENT in foreground on VIEWER'S LEFT (IMAGE-LEFT <-, wearer's ANATOMICAL LEFT shoulder/arm/hand).",
+  const perAngleScreenPrompt: Record<Turnaround8AngleDeg, string> = {
+    0: `0° Front: Bag MUST sit on VIEWER'S RIGHT (IMAGE-RIGHT ->), ${carryDesc}; wearer's free RIGHT arm/hand on IMAGE-LEFT MUST be 100% empty (NEVER place bag on IMAGE-LEFT at 0°!).`,
+    45: `45° Front-Right (facing SCREEN-RIGHT ->): Bag MUST stay on FAR VIEWER'S RIGHT (IMAGE-RIGHT ->), ${carryDesc}; foreground RIGHT arm/hand on IMAGE-LEFT is 100% empty.`,
+    90: `90° Right Side Profile (facing SCREEN-RIGHT ->): Foreground RIGHT shoulder/arm facing camera MUST be 100% empty (ZERO bag strap over right shoulder); bag stays behind torso on wearer's far LEFT side.`,
+    135: `135° Back-Right Rear View: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; foreground RIGHT shoulder/arm on IMAGE-RIGHT is 100% empty.`,
+    180: `180° Straight Back: Bag MUST sit on VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; RIGHT side on IMAGE-RIGHT is 100% empty.`,
+    225: `225° Back-Left Rear View: Bag is PROMINENT in foreground on VIEWER'S LEFT (IMAGE-LEFT <-), ${carryDesc}; far RIGHT arm on IMAGE-RIGHT is 100% empty.`,
+    270: `270° Left Side Profile (facing SCREEN-LEFT <-): Wearer's LEFT side faces camera so bag is CLEARLY VISIBLE in foreground, ${carryDesc}.`,
+    315: `315° Front-Left (facing SCREEN-LEFT <-): Bag is PROMINENT in foreground on VIEWER'S RIGHT (IMAGE-RIGHT ->), ${carryDesc}; far RIGHT arm/hand on IMAGE-LEFT is 100% empty.`,
   };
 
   return {
     dominantHand: 'right',
     carrySide: 'left',
     freeSide: 'right',
+    hasStrap: spec.hasStrap,
+    bagCarryStyle: spec.bagCarryStyle,
     carryLabelKo: '왼팔 · 왼손 (오른손잡이)',
-    carryLabelEn: 'Left arm / shoulder (Right-handed)',
-    slotPrompt:
-      `carried EXCLUSIVELY on the model's ANATOMICAL LEFT shoulder / LEFT forearm / LEFT hand across ALL turnaround angles — STRICT IMAGE-SIDE COORDINATES: [0° Front = IMAGE-RIGHT -> (NEVER IMAGE-LEFT!) | 45° = IMAGE-RIGHT -> | 90° Right Profile = BEHIND TORSO, foreground right arm EMPTY | 135° Back-Right = IMAGE-LEFT <- | 180° Back = IMAGE-LEFT <- | 225° Back-Left = FOREGROUND IMAGE-LEFT <-]`,
-    crossAngleLockPrompt:
-      `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (RIGHT-HANDED WEARER -> LEFT SIDE CARRY): Keep the wearer's dominant ANATOMICAL RIGHT arm/hand completely free and unburdened across ALL turnaround views (0°, 45°, 90°, 135°, 180°, 225°). Every equipped bag/tote/crossbody/briefcase MUST stay locked to the wearer's ANATOMICAL LEFT shoulder/arm/hand with exact camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
+    carryLabelEn: 'Left arm / hand (Right-handed)',
+    dualHandRolePrompt,
+    slotPrompt: `carried EXCLUSIVELY on the model's ANATOMICAL LEFT side across ALL 8 angles (${carryDesc}). ${dualHandRolePrompt} STRICT IMAGE-SIDE COORDINATES: [0°=IMAGE-RIGHT -> | 45°=IMAGE-RIGHT -> | 90°=BEHIND TORSO | 135°=IMAGE-LEFT <- | 180°=IMAGE-LEFT <- | 225°=FOREGROUND IMAGE-LEFT <- | 270°=FOREGROUND VISIBLE | 315°=FOREGROUND IMAGE-RIGHT ->]`,
+    crossAngleLockPrompt: `ANATOMICAL HANDEDNESS BAG-CARRY LOCK (RIGHT-HANDED WEARER -> LEFT SIDE CARRY): ${dualHandRolePrompt} Exact 8-angle camera-space coordinates: ${Object.values(perAngleScreenPrompt).join(' ')}`,
     perAngleScreenSide,
     perAngleScreenPrompt,
+  };
+}
+
+export interface MasterAnchorLandmarks {
+  crownYRatio: number;
+  soleYRatio: number;
+  statureRatio: number;
+  coreCenterXRatio: number;
+}
+
+export interface MasterLandmarkAlignment {
+  scale: number;
+  dstW: number;
+  dstH: number;
+  dstX: number;
+  dstY: number;
+  targetSoleY: number;
+  targetCrownY: number;
+}
+
+/**
+ * Post-Normalization Layer:
+ * Computes exact scale + (dstX, dstY) translation to lock any non-0° VTON slice (`45°..315°`)
+ * onto the `0°` Master Anchor's exact silhouette crown Y, sole Y baseline, stature height,
+ * and lower-ankle spine center X — eliminating scale jumps and floor baseline jitter on rotation.
+ */
+export function computeMasterLandmarkAlignment(params: {
+  sourceWidth: number;
+  sourceHeight: number;
+  sliceCrownY: number;
+  sliceSoleY: number;
+  sliceCoreCx: number;
+  sliceMinX: number;
+  sliceMaxX: number;
+  sliceMinY: number;
+  canonicalW: number;
+  canonicalH: number;
+  masterLandmarks: MasterAnchorLandmarks;
+}): MasterLandmarkAlignment {
+  const {
+    sourceWidth,
+    sourceHeight,
+    sliceCrownY,
+    sliceSoleY,
+    sliceCoreCx,
+    sliceMinX,
+    sliceMaxX,
+    sliceMinY,
+    canonicalW,
+    canonicalH,
+    masterLandmarks,
+  } = params;
+  const targetSoleY = canonicalH * Math.max(0.84, Math.min(0.98, masterLandmarks.soleYRatio));
+  const targetStatureH = canonicalH * Math.max(0.55, Math.min(0.88, masterLandmarks.statureRatio));
+  const targetCrownY = targetSoleY - targetStatureH;
+  const targetCx = canonicalW * Math.max(0.38, Math.min(0.62, masterLandmarks.coreCenterXRatio));
+
+  const rawStatureH = Math.max(16, sliceSoleY - sliceCrownY + 1);
+  const rawFgH = Math.max(16, sliceSoleY - sliceMinY + 1);
+  const rawFgW = Math.max(16, sliceMaxX - sliceMinX + 1);
+
+  const desiredScale = targetStatureH / rawStatureH;
+  const maxTopSafeScale = (targetSoleY - canonicalH * 0.015) / rawFgH;
+  const maxWidthSafeScale = (canonicalW * 0.94) / rawFgW;
+  const scale = Math.max(
+    0.48,
+    Math.min(1.85, Math.min(desiredScale, maxTopSafeScale, maxWidthSafeScale))
+  );
+
+  const dstW = Math.round(sourceWidth * scale);
+  const dstH = Math.round(sourceHeight * scale);
+  const rawDstX = targetCx - sliceCoreCx * scale;
+  const minSafeDstX = 2 - sliceMinX * scale;
+  const maxSafeDstX = canonicalW - 3 - sliceMaxX * scale;
+  const dstX = Math.round(
+    minSafeDstX <= maxSafeDstX
+      ? Math.max(minSafeDstX, Math.min(maxSafeDstX, rawDstX))
+      : targetCx - (sliceMinX + rawFgW * 0.5) * scale
+  );
+  const dstY = Math.round(targetSoleY - sliceSoleY * scale);
+
+  return {
+    scale,
+    dstW,
+    dstH,
+    dstX,
+    dstY,
+    targetSoleY,
+    targetCrownY,
   };
 }
 

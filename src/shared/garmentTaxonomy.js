@@ -152,6 +152,11 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'bag', label: '크로스백 · 숄더백' },
     { value: 'tote', label: '토트백 · 쇼퍼백' },
     { value: 'briefcase', label: '서류가방 · 브리프케이스' },
+    { value: 'backpack', label: '백팩 · 데이팩' },
+    { value: 'messenger', label: '메신저백 · 플랩백' },
+    { value: 'clutch', label: '클러치 · 포트폴리오백' },
+    { value: 'duffel', label: '더플백 · 위켄더백' },
+    { value: 'hobo', label: '호보백 · 커브드 숄더백' },
     { value: 'umbrella', label: '우산 · 양산' },
     { value: 'watch', label: '손목시계 · 워치' },
     { value: 'gloves', label: '장갑 · 핸드웨어' },
@@ -173,8 +178,134 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'briefcase', label: '서류가방 · 브리프케이스' },
     { value: 'tote', label: '토트백 · 쇼퍼백' },
     { value: 'bag', label: '크로스백 · 숄더백' },
+    { value: 'backpack', label: '백팩 · 데이팩' },
+    { value: 'messenger', label: '메신저백 · 플랩백' },
+    { value: 'clutch', label: '클러치 · 포트폴리오백' },
+    { value: 'duffel', label: '더플백 · 위켄더백' },
+    { value: 'hobo', label: '호보백 · 커브드 숄더백' },
   ],
 };
+
+export const BAG_SUBCATEGORY_SET = new Set([
+  'bag',
+  'tote',
+  'briefcase',
+  'backpack',
+  'messenger',
+  'clutch',
+  'duffel',
+  'hobo',
+  'crossbody',
+  'shoulder',
+]);
+
+export const BAG_CARRY_STYLES = Object.freeze({
+  hand_only: {
+    key: 'hand_only',
+    hasStrap: false,
+    labelKo: '핸드캐리 (끈 없음)',
+    labelEn: 'Hand-carry (No strap)',
+  },
+  shoulder: {
+    key: 'shoulder',
+    hasStrap: true,
+    labelKo: '숄더 스트랩',
+    labelEn: 'Shoulder strap',
+  },
+  crossbody: {
+    key: 'crossbody',
+    hasStrap: true,
+    labelKo: '크로스바디 스트랩',
+    labelEn: 'Crossbody strap',
+  },
+  backpack: {
+    key: 'backpack',
+    hasStrap: true,
+    labelKo: '양어깨 백팩 스트랩',
+    labelEn: 'Dual-shoulder backpack',
+  },
+  convertible_hand_strap: {
+    key: 'convertible_hand_strap',
+    hasStrap: true,
+    labelKo: '핸들 + 탈부착 스트랩',
+    labelEn: 'Top handle + detachable strap',
+  },
+});
+
+export function isBagGarmentItem(item) {
+  if (!item || typeof item !== 'object') return false;
+  const cat = String(item.category || '').toLowerCase().trim();
+  const sub = String(item.subcategory || '').toLowerCase().trim();
+  const name = `${item.name || ''} ${item.name_en || ''}`.toLowerCase();
+  if (cat === 'bag' || BAG_SUBCATEGORY_SET.has(sub)) return true;
+  if (cat === 'accessory' && /(백|가방|토트|브리프|클러치|백팩|더플|호보|메신저|bag|tote|briefcase|clutch|backpack|duffel|hobo|messenger|satchel|pouch)/i.test(name)) {
+    return true;
+  }
+  return false;
+}
+
+export function inferBagCarrySpec(item) {
+  const isBag = isBagGarmentItem(item);
+  if (!isBag) {
+    return {
+      isBag: false,
+      has_strap: false,
+      bag_carry_style: null,
+      labelKo: '',
+      labelEn: '',
+    };
+  }
+  const sub = String(item?.subcategory || '').toLowerCase().trim();
+  const name = `${item?.name || ''} ${item?.name_en || ''} ${item?.notes || ''}`.toLowerCase();
+  const explicitStyle = String(item?.bag_carry_style || '').toLowerCase().trim();
+  const hasExplicitStrap =
+    item?.has_strap === true ||
+    item?.has_strap === false ||
+    item?.has_strap === 1 ||
+    item?.has_strap === 0;
+
+  let carryStyle = BAG_CARRY_STYLES[explicitStyle] ? explicitStyle : '';
+  if (!carryStyle) {
+    if (sub === 'backpack' || /백팩|배낭|데이팩|backpack|rucksack|daypack/i.test(name)) {
+      carryStyle = 'backpack';
+    } else if (sub === 'clutch' || /클러치|포트폴리오|파우치|clutch|portfolio|folio/i.test(name)) {
+      carryStyle = 'hand_only';
+    } else if (sub === 'duffel' || /더플|위켄더|보스턴|duffel|duffle|weekender|boston/i.test(name)) {
+      carryStyle = 'convertible_hand_strap';
+    } else if (sub === 'messenger' || /메신저|크로스|사첼|새들|체인|미니백|messenger|crossbody|satchel|saddle|chain/i.test(name)) {
+      carryStyle = 'crossbody';
+    } else if (sub === 'hobo' || /호보|숄더|hobo|shoulder/i.test(name)) {
+      carryStyle = 'shoulder';
+    } else if (sub === 'briefcase' || /서류가방|브리프|briefcase|brief bag|attache/i.test(name)) {
+      carryStyle = 'hand_only';
+    } else if (sub === 'tote' || /토트|쇼퍼|tote|shopper/i.test(name)) {
+      carryStyle = 'hand_only';
+    } else {
+      carryStyle = 'shoulder';
+    }
+  }
+
+  let hasStrap = hasExplicitStrap
+    ? Boolean(Number(item.has_strap))
+    : BAG_CARRY_STYLES[carryStyle].hasStrap;
+
+  // Enforce consistency: if user explicitly marked no strap, force hand_only unless backpack
+  if (hasExplicitStrap && !hasStrap && carryStyle !== 'hand_only') {
+    carryStyle = 'hand_only';
+  }
+  if (carryStyle === 'hand_only' && !hasExplicitStrap) {
+    hasStrap = false;
+  }
+
+  const meta = BAG_CARRY_STYLES[carryStyle] || BAG_CARRY_STYLES.hand_only;
+  return {
+    isBag: true,
+    has_strap: hasStrap,
+    bag_carry_style: carryStyle,
+    labelKo: hasStrap ? meta.labelKo : BAG_CARRY_STYLES.hand_only.labelKo,
+    labelEn: hasStrap ? meta.labelEn : BAG_CARRY_STYLES.hand_only.labelEn,
+  };
+}
 
 export const FOUR_SEASONS = ['봄', '여름', '가을', '겨울'];
 
@@ -273,6 +404,11 @@ export const STUDIO_SEED_BY_SUBCATEGORY = {
   briefcase: '/seed/studio-briefcase.jpg',
   tote: '/seed/studio-tote.jpg',
   bag: '/seed/studio-bag.jpg',
+  backpack: '/seed/s5-66-black-ballistic-backpack.webp',
+  messenger: '/seed/s5-67-charcoal-waxed-messenger.webp',
+  clutch: '/seed/s5-68-espresso-leather-clutch.webp',
+  duffel: '/seed/s5-69-olive-weekender-duffel.webp',
+  hobo: '/seed/s5-70-stone-suede-hobo.webp',
   sunglasses: '/seed/s4-summer-30-black-uv-sunglasses.webp',
   eyewear: '/seed/s5-16-gold-round-glasses.webp',
   umbrella: '/seed/s5-01-maple-fabric-umbrella.webp',
@@ -401,6 +537,11 @@ export function resolveStudioSeedUrl(itemOrUrl, category = 'top', subcategory = 
   if (sub === 'bag' && name) {
     if (/서류가방|브리프케이스|briefcase/i.test(name)) sub = 'briefcase';
     else if (/토트|쇼퍼|tote/i.test(name)) sub = 'tote';
+    else if (/백팩|배낭|backpack/i.test(name)) sub = 'backpack';
+    else if (/메신저|플랩|messenger/i.test(name)) sub = 'messenger';
+    else if (/클러치|포트폴리오|clutch/i.test(name)) sub = 'clutch';
+    else if (/더플|위켄더|duffel|weekender/i.test(name)) sub = 'duffel';
+    else if (/호보|hobo/i.test(name)) sub = 'hobo';
   }
 
   const normalizedBagCheck = rawUrl.replace(/\.(jpe?g|png|webp)$/i, '');
@@ -522,6 +663,11 @@ export const MANIFEST_SLOT_GLB_BY_SUB = {
   briefcase: { slotKey: 'accessory', baseGlb: 'accessory_briefcase', physicsPreset: 'pendulum_briefcase' },
   tote: { slotKey: 'accessory', baseGlb: 'accessory_tote', physicsPreset: 'pendulum_tote' },
   bag: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_crossbody' },
+  backpack: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'rigid_fitted' },
+  messenger: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_crossbody' },
+  clutch: { slotKey: 'accessory', baseGlb: 'accessory_briefcase', physicsPreset: 'pendulum_briefcase' },
+  duffel: { slotKey: 'accessory', baseGlb: 'accessory_briefcase', physicsPreset: 'pendulum_briefcase' },
+  hobo: { slotKey: 'accessory', baseGlb: 'accessory_tote', physicsPreset: 'pendulum_tote' },
   sunglasses: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
   eyewear: { slotKey: 'accessory', baseGlb: 'accessory_glasses', physicsPreset: 'rigid_fitted' },
   umbrella: { slotKey: 'accessory', baseGlb: 'accessory_bag', physicsPreset: 'pendulum_briefcase' },

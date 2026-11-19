@@ -8,6 +8,7 @@ import db, {
   UPLOADS_DIR,
   getServerProfileConfig,
 } from './db.js';
+import { getServerGeminiApiKey, getServerGeminiClient } from './geminiClient.js';
 import {
   FOOTWEAR_PAIR_SYMMETRY_LOCK,
   SOLO_SINGLE_PERSON_PER_CELL_LOCK,
@@ -21,11 +22,13 @@ import {
   normalizeHandedness,
   resolveBagCarryAnatomy,
 } from '../src/services/vtonQualityControl.ts';
+import { inferBagCarrySpec } from '../src/shared/garmentTaxonomy.js';
 
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
 export const VALID_VTON_STYLE_MODES = new Set(['photorealistic', 'stylized_isometric']);
-export const TURNAROUND_ANGLES = Object.freeze([0, 45, 90, 135, 180, 225]);
+export const TURNAROUND_ANGLES = Object.freeze([0, 45, 90, 135, 180, 225, 270, 315]);
+const LEGACY_SHEET_6_ANGLES = Object.freeze([0, 45, 90, 135, 180, 225]);
 export const VTON_CACHE_DIR = path.join(DATA_DIR, 'vton-cache');
 export const SEED_DIR = path.join(ROOT_DIR, 'public', 'seed');
 
@@ -272,7 +275,7 @@ const GEMINI_TIMEOUT_MS = 60000;
 const MAX_TOTAL_SYNTHESIS_MS = 110000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v13-qc-handedness-360';
+const CACHE_SCHEMA_VERSION = 'v16-8angle-norm-bagstrap';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -622,26 +625,8 @@ function readServerEnvVar(key) {
   return typeof fromFile === 'string' ? fromFile.trim() : '';
 }
 
-export function sanitizeClientGeminiKey(rawKey) {
-  if (typeof rawKey !== 'string') return '';
-  const trimmed = rawKey.trim();
-  if (trimmed.length < 12 || trimmed.length > 256) return '';
-  if (/[\r\n\s]/.test(trimmed)) return '';
-  return trimmed;
-}
-
-export function resolveGeminiApiKey(overrideKey = '') {
-  const explicit = sanitizeClientGeminiKey(overrideKey);
-  if (explicit) return explicit;
-  const raw =
-    readServerEnvVar('GEMINI_API_KEY') ||
-    readServerEnvVar('GOOGLE_API_KEY') ||
-    readServerEnvVar('GOOGLE_GENAI_API_KEY') ||
-    readServerEnvVar('VITE_GEMINI_API_KEY') ||
-    readServerEnvVar('VITE_GOOGLE_API_KEY') ||
-    readServerEnvVar('VITE_VTON_API_KEY') ||
-    '';
-  return String(raw).trim();
+export function resolveGeminiApiKey() {
+  return getServerGeminiApiKey();
 }
 
 export function resolveVertexAiConfig() {
@@ -664,8 +649,8 @@ export function resolveVertexAiConfig() {
 export function resolveGeminiModelChain() {
   const candidates = [
     readServerEnvVar('GEMINI_VTON_MODEL'),
-    'gemini-3.1-flash-image-preview',
-    'gemini-2.5-flash-image',
+    'gemini-3.1-flash-lite-image',
+    'gemini-nano-banana-2.1',
   ].filter(Boolean);
   return [...new Set(candidates)];
 }
@@ -1115,6 +1100,13 @@ export function normalizeVtonProfile(
   const characterAnchorPart = rawCharacterAnchor
     ? decodeValidatedDataUrl(rawCharacterAnchor, 256 * 1024)
     : null;
+  const rawMasterAnchor =
+    !turnaroundSheet && viewAngleDeg !== 0
+      ? (extraOptions?.masterAnchorDataUrl ?? src.masterAnchorDataUrl ?? null)
+      : null;
+  const masterAnchorPart = rawMasterAnchor
+    ? decodeValidatedDataUrl(rawMasterAnchor, MAX_DATA_URL_BYTES)
+    : null;
 
   return {
     viewAngleDeg,
@@ -1173,6 +1165,13 @@ export function normalizeVtonProfile(
           base64Data: characterAnchorPart.base64Data,
         }
       : null,
+    masterAnchorPart: masterAnchorPart
+      ? {
+          mimeType: masterAnchorPart.mimeType,
+          base64Data: masterAnchorPart.base64Data,
+        }
+      : null,
+    masterAnchorHash: masterAnchorPart ? masterAnchorPart.sha256.slice(0, 32) : null,
     qcCorrectionHint:
       typeof extraOptions?.qcCorrectionHint === 'string' && extraOptions.qcCorrectionHint.trim()
         ? extraOptions.qcCorrectionHint.trim().slice(0, 600)
@@ -1340,7 +1339,20 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
     });
 
     const isBag = isBagGarmentItem({ slot, category, subcategory, name });
-    const bagAssetMirrored = Boolean(isBag && activeHandedness === 'left');
+    const bagSpec = isBag
+      ? inferBagCarrySpec({
+          category,
+          subcategory,
+          name,
+          has_strap: rawItem.has_strap ?? rawItem.hasStrap,
+          bag_carry_style: rawItem.bag_carry_style ?? rawItem.bagCarryStyle,
+        })
+      : null;
+    const bagHasStrap = bagSpec ? Boolean(bagSpec.has_strap) : null;
+    const bagCarryStyle = bagSpec ? bagSpec.bag_carry_style : null;
+    const bagAssetMirrored = Boolean(
+      isBag && activeHandedness === 'left' && bagCarryStyle !== 'backpack'
+    );
     const bagCarrySide = activeHandedness === 'left' ? 'right' : 'left';
     const baseDigest = packshot ? packshot.imageDigest : 'none';
 
@@ -1356,12 +1368,16 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       formality,
       brand,
       isBag,
+      hasStrap: bagHasStrap,
+      bagCarryStyle,
       bagAssetMirrored,
       bagCarrySide,
       packshot: packshot
         ? { mimeType: packshot.mimeType, base64Data: packshot.base64Data }
         : null,
-      imageDigest: isBag ? `${baseDigest}:hand-${activeHandedness}` : baseDigest,
+      imageDigest: isBag
+        ? `${baseDigest}:hand-${activeHandedness}:strap-${bagHasStrap ? 1 : 0}:${bagCarryStyle || 'shoulder'}`
+        : baseDigest,
     };
   }
 
@@ -1464,6 +1480,7 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
       layoutKey,
       studioKeyHex,
       baseHash,
+      masterAnchorHash: normalizedProfile.masterAnchorHash || null,
       slots: sortedSlotSignatures,
     })
   );
@@ -1696,23 +1713,23 @@ function describeIsoCameraAngle(viewAngleDeg, backdropHex = CUTOUT_STAGE_HEX) {
   const angle = normalizeIsoViewAngleDeg(viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE);
   switch (angle) {
     case 45:
-      return 'Strict FRONT-FACING 45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].';
+      return 'Strict FRONT-FACING 45-degree Front-Right horizontal-yaw full-body view (FACING TOWARD VIEWER-RIGHT / SCREEN-RIGHT ->). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head crown to shoe soles with 8–10% bottom margin. Face, both eyes, nose, chin, front lapels/chest, and shoe toes angle ~45° toward SCREEN-RIGHT ->. [ABSOLUTE NEGATIVE: NEVER crop shoes, NEVER show a back view, NEVER face screen-left].';
     case 0:
-      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.';
+      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face looking straight ahead, entire front of outfit, and both shoes completely visible with 8–10% bottom margin.';
     case -45:
-      return 'Strict FRONT-FACING -45-degree horizontal-yaw full-body view (EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt, and identical focal length/distance as 0°, 90°, and 180° — NEVER high-angle looking downward, NEVER crop feet or shoes). Full-body shot from head to toe, shoes and feet completely visible on the floor with 10% bottom margin, consistent scale across all angles. The model MUST face toward the camera so the FACE, BOTH EYES, NOSE, CHIN, and FRONT CHEST/LAPELS/ZIPPER of the outfit are clearly visible while the body and feet stand turned 40–45 degrees horizontally to viewer-left on the flat floor plane. [ABSOLUTE NEGATIVE CONSTRAINT: NEVER crop ankles/shoes, NEVER tilt camera downward, NEVER show a back view or rear view].';
+      return 'Strict FRONT-FACING 315-degree (-45°) Front-Left horizontal-yaw full-body view (FACING TOWARD VIEWER-LEFT / SCREEN-LEFT <-). Eye-to-waist level, straight-on horizontal camera, zero tilt. Full-body shot from head crown to shoe soles with 8–10% bottom margin. Face, both eyes, nose, chin, front lapels/chest, and shoe toes angle ~45° toward SCREEN-LEFT <-. [ABSOLUTE NEGATIVE: NEVER crop shoes, NEVER show a back view, NEVER face screen-right].';
     case 90:
-      return "Strict 90-degree PURE ORTHOGRAPHIC LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S RIGHT (SCREEN-RIGHT ->). Camera perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE right eye, side nose bridge/tip protruding right, single right sleeve centered down torso dividing front chest edge on right from upper back on left, and both shoes in pure horizontal side profile pointing right with 10% bottom margin (NEVER show broad back of coat or center-back vent; NEVER rotate past 90° into a rear view).";
+      return "Strict 90-degree PURE ORTHOGRAPHIC RIGHT LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S RIGHT (SCREEN-RIGHT ->). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE right eye, side nose bridge/tip protruding toward SCREEN-RIGHT ->, wearer's right arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward SCREEN-RIGHT -> with 8–10% bottom margin (NEVER face screen-left, NEVER show broad back of coat, NEVER rotate past 90° into a rear view).";
     case -90:
-      return "Strict -90-degree PURE ORTHOGRAPHIC LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S LEFT (SCREEN-LEFT <-). Camera perpendicular (-90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE left eye, side nose bridge/tip protruding left, single left sleeve centered down torso dividing front chest edge on left from upper back on right, and both shoes in pure horizontal side profile pointing left with 10% bottom margin (NEVER show broad back of coat or center-back vent; NEVER rotate past -90° into a rear view).";
+      return "Strict 270-degree (-90°) PURE ORTHOGRAPHIC LEFT LATERAL SIDE-PROFILE full-body view facing straight toward VIEWER'S LEFT (SCREEN-LEFT <-). Camera strictly perpendicular (90.0°) to shoulder axis (~50% of front width); show EXACTLY ONE left eye, side nose bridge/tip protruding toward SCREEN-LEFT <-, wearer's left arm/shoulder closest to camera, and both shoes in pure horizontal side profile pointing straight toward SCREEN-LEFT <- with 8–10% bottom margin (NEVER face screen-right, NEVER show broad back of coat, NEVER rotate past 270° into a rear view).";
     case 135:
-      return `Diagonal 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW turned away toward BACK-RIGHT (VIEWER'S RIGHT / SCREEN-RIGHT -> — midway between 90° right profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-RIGHT, (2) rear back of outfit rotated 45 degrees diagonally with RIGHT SHOULDER and full outer RIGHT SLEEVE prominent in foreground, and (3) staggered shoes with RIGHT SHOE outer side & toe pointing away toward SCREEN-RIGHT on a flat ${backdropHex} backdrop.`;
+      return `Strict 135-degree BACK-RIGHT THREE-QUARTER REAR VIEW (MODEL TURNED AWAY FROM CAMERA FACING BACK-RIGHT ->). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head crown to shoe soles with 8–10% bottom margin showing ONLY: (1) rear 3/4 back of head and hair silhouette + back of right ear turned away toward SCREEN-RIGHT -> (STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front torso/chest!), (2) diagonal rear back of outer coat/top with right shoulder blade and outer right sleeve prominent, and (3) rear heels & staggered shoes pointing away toward SCREEN-RIGHT -> on a flat ${backdropHex} backdrop.`;
     case -135:
-      return `Diagonal 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW turned away toward BACK-LEFT (VIEWER'S LEFT / SCREEN-LEFT <- — midway between -90° left profile and 180° straight back, MUST BE UNMISTAKABLY DISTINCT FROM 180° STRAIGHT BACK). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head to toe with 8–10% bottom margin showing: (1) back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE contour in lost-profile facing away toward SCREEN-LEFT, (2) rear back of outfit rotated 45 degrees diagonally with LEFT SHOULDER and full outer LEFT SLEEVE prominent in foreground (preserving exact anatomical left/right bag and watch placement), and (3) staggered shoes with LEFT SHOE outer side & toe pointing away toward SCREEN-LEFT on a flat ${backdropHex} backdrop.`;
+      return `Strict 225-degree (-135°) BACK-LEFT THREE-QUARTER REAR VIEW (MODEL TURNED AWAY FROM CAMERA FACING BACK-LEFT <-). Eye-to-waist level, straight-on horizontal camera, zero tilt, full-body shot from head crown to shoe soles with 8–10% bottom margin showing ONLY: (1) rear 3/4 back of head and hair silhouette + back of left ear turned away toward SCREEN-LEFT <- (STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front torso/chest!), (2) diagonal rear back of outer coat/top with left shoulder blade and outer left sleeve prominent, and (3) rear heels & staggered shoes pointing away toward SCREEN-LEFT <- on a flat ${backdropHex} backdrop.`;
     case 180:
-      return 'Strict symmetrical 180-degree PURE STRAIGHT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with perpendicular shoulders and back 100% turned directly toward camera (center-back seam vertical down spine) showing ONLY symmetrical back of hair, level back shoulders, rear garment tailoring, and straight rear heels of both shoes with 8–10% bottom margin (ZERO side cheek/jawline contour, ZERO shoe toe side-profile, ZERO front face).';
+      return 'Strict symmetrical 180-degree PURE STRAIGHT REAR BACK-FACING full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; model standing with perpendicular shoulders and back 100% turned directly toward camera (center-back seam vertical down spine) showing ONLY symmetrical back of hair, level back shoulders, rear garment back, and straight rear heels of both shoes with 8–10% bottom margin (STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front buttons or collar).';
     default:
-      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible on the floor with 10% bottom margin.';
+      return 'Strict 0-degree direct front-facing full-body view. Eye-to-waist level, straight-on horizontal camera, zero tilt; symmetrical frontal stance, full face, entire front of outfit, and both shoes completely visible with 8–10% bottom margin.';
   }
 }
 
@@ -1861,9 +1878,9 @@ function buildEditorialStyleAndBodyPrompt(
         `  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[45]}]` : ''}`,
         `  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[90]}]` : ''} [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]`,
         '- BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (100% FULL-BODY WITH FULL HEAD & SHOES INSIDE BOTTOM ROW):',
-        `  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show back-left 2/3 of head/hair PLUS distinct RIGHT EAR and outer RIGHT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-RIGHT, diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[135]}]` : ''}`,
-        `  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO side cheek/jaw contour, ZERO shoe toe side-profile, ZERO front face).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[180]}]` : ''}`,
-        `  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between -90° left profile and 180° straight back; show back-right 2/3 of head/hair PLUS distinct LEFT EAR and outer LEFT CHEEKBONE/JAWLINE lost-profile facing away toward SCREEN-LEFT, diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left (preserving exact anatomical left/right bag and watch placement), and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[225]}]` : ''}`,
+        `  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show ONLY rear back-left 2/3 of head/hair and back of RIGHT EAR turned away toward SCREEN-RIGHT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[135]}]` : ''}`,
+        `  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO eyes, ZERO nose, ZERO mouth, ZERO front buttons).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[180]}]` : ''}`,
+        `  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between 270° left profile and 180° straight back; show ONLY rear back-right 2/3 of head/hair and back of LEFT EAR turned away toward SCREEN-LEFT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left, and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[225]}]` : ''}`,
         '- Render ZERO grid lines, ZERO white/grey divider bars, ZERO text, and ZERO angle numbers.',
       ]
     : [
@@ -1913,35 +1930,39 @@ function appendPortraitParts(parts, profile) {
   const featureSummary = `Gender: ${profile.gender || 'unisex'}; Head shape: ${profile.headShape}; Hair: ${hairDesc} in exact color ${profile.hairColorHex}; Facial hair: ${facialHairDesc}; Eye shape: ${profile.eyeShape} (scale ${profile.eyeSizeScale}); Nose width scale: ${profile.noseWidthScale}; Lip fullness scale: ${profile.lipFullnessScale}; Brow strength: ${profile.browStrength}.`;
 
   if (profile.portraitPart) {
-    parts.push({
-      text: [
-        '[CRITICAL USER FACE IDENTITY LOCK — REAL UPLOADED USER PORTRAIT ATTACHED IMMEDIATELY BELOW]:',
-        'THE ATTACHED PORTRAIT PHOTO IS THE REAL USER. You MUST render the model\'s face with 100% recognizable likeness to this exact uploaded user face photo — do NOT replace their face with a generic fashion stock model!',
-        'Reproduce their exact eye shape & spacing, nose bridge & tip, lip contour, jawline/cheekbone structure, brow arch, hairstyle & hair parting/length/color from the photo, facial hair (if present), and eyeglasses (if worn in the photo unless overridden by equipped eyewear).',
-        isTurnaround
-          ? `Maintain this exact user's unmistakable face likeness across 0° front, 45° screen-right quarter, and 90° screen-right side profile on the Top Row; on Bottom-Left (135° Back-Right) and Bottom-Right (225° Back-Left) show their matching rear-three-quarter hair silhouette plus outer ear and cheek/jawline lost-profile facing away; and on Bottom-Center (180° Back) render ONLY the symmetrical back of their head & hair silhouette (ZERO front face on 180° back), in ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
-          : isPureBack
-            ? `Because the camera is at 180° full rear view, render ONLY the back of this exact user's head, hair silhouette/color from the attached photo, ears, and neck with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) — show ZERO front facial features.`
-            : isBackQuarter
-              ? `At ${angle}° back-quarter view, match this exact user's rear/side hair silhouette and outer cheek/jawline contour from the attached photo with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}) without twisting the neck forward.`
-              : `Render this exact user's unmistakable facial identity, expression warmth, and hair from the attached photo at ${angle}° in unified ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
-      ].join(' '),
-    });
-    parts.push({
-      inlineData: {
-        mimeType: profile.portraitPart.mimeType,
-        data: profile.portraitPart.base64Data,
-      },
-    });
+    if (isPureBack || isBackQuarter) {
+      parts.push({
+        text: isPureBack
+          ? `[REAR HEAD & HAIR SILHOUETTE LOCK — 180° PURE BACK VIEW]: Render ONLY the symmetrical back of the head, hair silhouette/color (${hairDesc}, ${profile.hairColorHex}), rear ears, and nape of neck with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}). STRICTLY ZERO front face, ZERO eyes, ZERO nose, ZERO lips!`
+          : `[REAR-QUARTER HEAD & HAIR SILHOUETTE LOCK — ${angle === -135 ? 225 : 135}° BACK-QUARTER VIEW]: Model is turned strictly AWAY from camera. Render ONLY the rear 3/4 back of the head, hair silhouette/color (${hairDesc}, ${profile.hairColorHex}), and outer back ear with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}). STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO head-turn toward camera!`,
+      });
+    } else {
+      parts.push({
+        text: [
+          '[CRITICAL USER FACE IDENTITY LOCK — REAL UPLOADED USER PORTRAIT ATTACHED IMMEDIATELY BELOW]:',
+          'THE ATTACHED PORTRAIT PHOTO IS THE REAL USER. You MUST render the model\'s face with 100% recognizable likeness to this exact uploaded user face photo — do NOT replace their face with a generic fashion stock model!',
+          'Reproduce their exact eye shape & spacing, nose bridge & tip, lip contour, jawline/cheekbone structure, brow arch, hairstyle & hair parting/length/color from the photo, facial hair (if present), and eyeglasses (if worn in the photo unless overridden by equipped eyewear).',
+          isTurnaround
+            ? `Maintain this exact user's unmistakable face likeness across 0° front, 45° screen-right quarter, and 90° screen-right side profile on the Top Row; on Bottom-Left (135° Back-Right), Bottom-Center (180° Back), and Bottom-Right (225° Back-Left) render ONLY the rear back of their head & hair silhouette facing away (ZERO front face on rear row), in ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+            : `Render this exact user's unmistakable facial identity, expression warmth, and hair from the attached photo at ${angle}° in unified ${mediumLabel} style with skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
+        ].join(' '),
+      });
+      parts.push({
+        inlineData: {
+          mimeType: profile.portraitPart.mimeType,
+          data: profile.portraitPart.base64Data,
+        },
+      });
+    }
   } else {
     parts.push({
       text: isTurnaround
         ? `[FACE & HAIR IDENTITY LOCK — 6-VIEW 3x2 TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, 135° back-right quarter, 180° straight back, and 225° back-left quarter views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
-        : isPureBack
-          ? `[HEAD & HAIR DIRECTION — 180° REAR VIEW]: Render the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}), with ZERO front face features.`
+        : isPureBack || isBackQuarter
+          ? `[REAR HEAD & HAIR SILHOUETTE LOCK — ${isPureBack ? '180° BACK' : `${angle === -135 ? 225 : 135}° BACK-QUARTER`} VIEW]: Render ONLY the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the nape/neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}). STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front face!`
           : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, natural editorial lookbook expression matching camera angle ${angle}° in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
     });
-    if (profile.styleMode === 'stylized_isometric' && profile.characterAnchorPart) {
+    if (profile.styleMode === 'stylized_isometric' && profile.characterAnchorPart && !isPureBack && !isBackQuarter) {
       parts.push({
         text: `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head body build from this reference — ONLY change the outfit to the newly equipped garments and adjust stance for the weather.`,
       });
@@ -1995,9 +2016,20 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   const backdropHex = selectOptimalStudioKeyHex(equippedColorInputs);
 
   const hasEquippedUmbrella = Boolean(resolvedSlots.acc_umbrella);
-  const hasEquippedBag =
-    equippedKeys.some((slot) => Boolean(resolvedSlots[slot]?.isBag)) ||
-    Boolean(resolvedSlots.accessory);
+  const equippedBagItem =
+    equippedKeys
+      .map((slot) => resolvedSlots[slot])
+      .find((item) => Boolean(item?.isBag)) ||
+    resolvedSlots.accessory ||
+    null;
+  const hasEquippedBag = Boolean(equippedBagItem);
+  const activeBagSpec = hasEquippedBag
+    ? {
+        hasStrap: equippedBagItem?.hasStrap ?? true,
+        bagCarryStyle: equippedBagItem?.bagCarryStyle ?? 'shoulder',
+      }
+    : null;
+  const bagAnatomy = resolveBagCarryAnatomy(profile.dominantHand, activeBagSpec);
   const effectiveWeather = profile.weatherMood?.effectiveWeather || 'clear';
   const parts = [
     {
@@ -2009,14 +2041,53 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       ),
     },
   ];
+  const canonicalBagAngle =
+    profile.viewAngleDeg === -135
+      ? 225
+      : profile.viewAngleDeg === -90
+        ? 270
+        : profile.viewAngleDeg === -45
+          ? 315
+          : TURNAROUND_ANGLES.includes(profile.viewAngleDeg)
+            ? profile.viewAngleDeg
+            : 0;
+  const isSingleRearAngle =
+    !profile.turnaroundSheet &&
+    (canonicalBagAngle === 135 ||
+      canonicalBagAngle === 180 ||
+      canonicalBagAngle === 225);
+
+  if (!profile.turnaroundSheet && profile.masterAnchorPart && profile.viewAngleDeg !== 0) {
+    const bagLockForAngle = hasEquippedBag
+      ? ` BAG SCREEN-SIDE & HAND-ROLE LOCK FOR ${canonicalBagAngle}°: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]} ${bagAnatomy.dualHandRolePrompt}`
+      : '';
+    const rearLockWarning = isSingleRearAngle
+      ? ' ABSOLUTE REAR-VIEW ORIENTATION LOCK: The model MUST be turned STRICTLY AWAY from the camera showing ONLY the BACK of their head/hair, BACK of their coat/shoulders, and BACK of their trousers/heels. STRICTLY ZERO front face, ZERO eyes, ZERO nose/mouth facing camera, ZERO front shirt/chest buttons!'
+      : '';
+    parts.push({
+      text: `[MASTER CHARACTER & OUTFIT ANCHOR — 0° FRONT VIEW ATTACHED IMMEDIATELY BELOW]:
+THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THIS EXACT SAME person to the requested ${canonicalBagAngle}° camera angle while preserving 100% identical hairstyle/hair color, skin tone, body proportions, exact coat/top/bottom/shoes colors and fabric textures, and exact anatomical side/carry-style of every bag, watch, and accessory.${bagLockForAngle}${rearLockWarning}`,
+    });
+    parts.push({
+      inlineData: {
+        mimeType: profile.masterAnchorPart.mimeType,
+        data: profile.masterAnchorPart.base64Data,
+      },
+    });
+  }
+
   if (hasEquippedBag) {
-    const bagSpatialGuide = buildServerBagPositionGuidePngPart(profile, backdropHex);
+    const bagSpatialGuide = buildServerBagPositionGuidePngPart(
+      profile,
+      backdropHex,
+      activeBagSpec
+    );
     if (bagSpatialGuide) {
+      const singleAngleBagNote = !profile.turnaroundSheet
+        ? ` EXACT BAG POSITION FOR THIS ${canonicalBagAngle}° VIEW: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]}`
+        : '';
       parts.push({
-        text:
-          profile.dominantHand === 'left'
-            ? '[MIRRORED BAG ASSET SPATIAL GUIDE — LEFT-HANDED PROFILE ACTIVE]: The attached spatial silhouette guide mirrors the bag asset position onto the wearer\'s ANATOMICAL RIGHT shoulder/arm/hand (highlighted in amber on IMAGE-LEFT at 0°/45°, foreground at 90°, and IMAGE-RIGHT at 135°/180°). Match this mirrored bag asset position strictly!'
-            : '[BAG ASSET SPATIAL GUIDE — RIGHT-HANDED PROFILE ACTIVE]: The attached spatial silhouette guide locks the bag asset position onto the wearer\'s ANATOMICAL LEFT shoulder/arm/hand (highlighted in amber on IMAGE-RIGHT at 0°/45°, behind torso at 90°, and IMAGE-LEFT at 135°/180°/225°). Match this bag asset position strictly!',
+        text: `[PRE-NORMALIZATION BAG & HAND-ROLE SPATIAL GUIDE — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: ${bagAnatomy.dualHandRolePrompt}${singleAngleBagNote} Match the amber highlight zone in the attached spatial guide strictly — NEVER tuck the bag under the armpit and NEVER invent a strap when has_strap=false!`,
       });
       parts.push({
         inlineData: bagSpatialGuide,
@@ -2062,15 +2133,15 @@ function buildCompositeLookParts(profile, resolvedSlots) {
 
   if (hasTop && hasTopMid) {
     layeringRules.push(
-      '- MULTI-STAGE TOP LAYERING: Layer [TOP_MID] (cardigan/vest/mid-knit) cleanly OVER the inner base [TOP] so the inner shirt collar/cuffs/hem remain naturally visible underneath.'
+      '- Layer the mid-layer cardigan/vest/knit cleanly OVER the inner base top so the inner collar, cuffs, and hem remain naturally visible underneath.'
     );
   }
   if (hasOuterMid && (hasAnyTop || hasOnepiece)) {
     const outerMidItem = resolvedSlots.outer_mid;
     layeringRules.push(
-      `- MID-OUTERWEAR LAYERING: Layer [OUTER_MID] ("${outerMidItem.name}", ${outerMidItem.colorHex}) cleanly OVER [TOP] and [TOP_MID] (or [ONEPIECE]) with relaxed open front draping so inner collar, buttons, and vest/cardigan depth remain clearly legible.${
+      `- Layer the ${outerMidItem.colorName} mid-layer ${outerMidItem.subcategory || 'jacket'} cleanly OVER the inner top/knit with relaxed open front draping so inner collar and cardigan depth remain legible.${
         hasOuter
-          ? ` Because [OUTER] ("${resolvedSlots.outer.name}", ${resolvedSlots.outer.colorHex}) is worn outside [OUTER_MID], keep BOTH shoulders and sleeves in [OUTER]'s single color ${resolvedSlots.outer.colorHex} while [OUTER_MID] (${outerMidItem.colorHex}) peeks ONLY gently at the inner chest lapels underneath.`
+          ? ` Because the ${resolvedSlots.outer.colorName} outer coat is worn outside it, keep BOTH shoulders and sleeves uniformly in the outer coat's ${resolvedSlots.outer.colorName} color while the ${outerMidItem.colorName} mid-layer peeks gently at the inner chest lapels underneath.`
           : ''
       }`
     );
@@ -2078,7 +2149,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   if (hasOuter) {
     const outerItem = resolvedSlots.outer;
     layeringRules.push(
-      `- OUTERMOST COAT COLOR & LEFT-RIGHT SYMMETRY LOCK: Render [OUTER] ("${outerItem.name}", exact single color ${outerItem.colorName} ${outerItem.colorHex}) uniformly on BOTH the entire wearer-left side AND entire wearer-right side (both sleeves, both shoulders, both front panels, and full back) across EVERY turnaround view (${viewScopeText}). STRICTLY FORBIDDEN: NEVER split the coat into two different colors left-vs-right (e.g., half grey / half camel), and NEVER drop/swap [OUTER] for [OUTER_MID] on 45°/90°/135°/180°/225° angles!`
+      `- Render the outermost ${outerItem.colorName} ${outerItem.fabric} ${outerItem.subcategory || 'coat'} uniformly on BOTH the entire wearer-left side AND entire wearer-right side (both sleeves, both shoulders, both front panels, and full back) across EVERY view (${viewScopeText}). NEVER split the coat into two different colors left-vs-right, and NEVER drop the outer coat on side or rear views.`
     );
   }
   if (hasEquippedUmbrella || effectiveWeather === 'rain') {
@@ -2121,12 +2192,11 @@ function buildCompositeLookParts(profile, resolvedSlots) {
   }
   parts.push({ text: layeringRules.join('\n') });
 
-  const bagAnatomy = resolveBagCarryAnatomy(profile.dominantHand);
   if (hasEquippedBag) {
     parts.push({
-      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER & SCREEN-SIDE LOCK]: ${bagAnatomy.crossAngleLockPrompt}${
-        profile.dominantHand === 'left'
-          ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally (strap/handle slanting from the wearer\'s RIGHT shoulder to RIGHT hip/hand) so it sits naturally on the user\'s preferred side!'
+      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER, STRAP & HAND-ROLE LOCK]: ${bagAnatomy.crossAngleLockPrompt}${
+        profile.dominantHand === 'left' && bagAnatomy.bagCarryStyle !== 'backpack'
+          ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally onto the wearer\'s RIGHT side!'
           : ''
       }`,
     });
@@ -2138,12 +2208,13 @@ function buildCompositeLookParts(profile, resolvedSlots) {
         ? bagAnatomy.slotPrompt
         : ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
     const mirrorNote = item.bagAssetMirrored
-      ? ' [MIRRORED BAG ASSET POSITION FOR LEFT-HANDED WEARER: mirror strap & body horizontally onto wearer\'s ANATOMICAL RIGHT side]'
+      ? ' Horizontally mirror this bag onto the wearer\'s anatomical RIGHT shoulder/hand.'
       : '';
-    const specLine = `[EQUIPPED ${slot.toUpperCase()}]: "${item.name}" | Type: ${item.category} (${item.subcategory}) | Exact Color: ${item.colorName} (${item.colorHex}) | Material/Fabric: ${item.fabric} | Formality: ${item.formality}${item.brand ? ` | Brand mood: ${item.brand}` : ''}.${placementCue ? `\nAnatomical Placement: ${placementCue}${mirrorNote}` : ''}`;
+    const garmentDesc = `${item.colorName} ${item.fabric} ${item.subcategory || item.category}`.trim();
+    const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${placementCue ? ` Placement: ${placementCue}${mirrorNote}` : ''}`;
     if (item.packshot) {
       parts.push({
-        text: `${specLine}\nAttached below is the real cutout photograph of [${slot.toUpperCase()}]${item.bagAssetMirrored ? ' (horizontally mirror its carry position & strap orientation onto the wearer\'s RIGHT shoulder/hand)' : ''}. Reproduce its exact construction, ${item.fabric} material surface, details, and color ${item.colorHex} naturally worn at its exact anatomical position (${viewScopeText}):`,
+        text: `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} color from the reference image immediately below (${viewScopeText}). Do NOT render any text or labels in the output image:`,
       });
       parts.push({
         inlineData: {
@@ -2153,19 +2224,19 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       });
     } else {
       parts.push({
-        text: `${specLine}\nRender this [${slot.toUpperCase()}] (${viewScopeText}) with authentic ${item.fabric} material sheen, construction details, and exact color ${item.colorHex}.`,
+        text: `${specLine} Render with authentic ${item.fabric} texture and ${item.colorName} color (${viewScopeText}).`,
       });
     }
   }
 
   if (profile.qcCorrectionHint) {
     parts.push({
-      text: `[SERVER QC RETRY CORRECTION — FIX PREVIOUS DEFECT]: ${profile.qcCorrectionHint}`,
+      text: `Correction directive for this retry: ${profile.qcCorrectionHint}`,
     });
   }
 
   parts.push({
-    text: '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly (with strictly ONE solitary model per view/quadrant) without asking follow-up questions.',
+    text: 'Final output rule: Generate ONLY the solitary full-body person wearing the garments on a completely blank solid uniform backdrop. STRICTLY ZERO text, ZERO captions, ZERO garment names, ZERO Korean or English letters, ZERO hex color codes, ZERO arrows, ZERO infographic callouts, and ZERO watermarks anywhere in the image.',
   });
 
   return parts;
@@ -2254,14 +2325,35 @@ function fillRgbRect(rgbBuf, imgW, imgH, x, y, w, h, rgb) {
   }
 }
 
-function paintGuideCellWithMirroredBag(rgbBuf, imgW, imgH, cellX, cellY, cellW, cellH, angleDeg, handedness) {
+function paintGuideCellWithMirroredBag(
+  rgbBuf,
+  imgW,
+  imgH,
+  cellX,
+  cellY,
+  cellW,
+  cellH,
+  angleDeg,
+  handedness,
+  bagSpec = null
+) {
   const cx = cellX + cellW * 0.5;
   const topY = cellY + cellH * 0.1;
   const botY = cellY + cellH * 0.9;
   const figH = botY - topY;
   const headH = figH / 7.5;
-  const isSide = angleDeg === 90;
-  const widthCompact = isSide ? 0.54 : angleDeg === 0 || angleDeg === 180 ? 1 : 0.85;
+  const normalizedAngle =
+    angleDeg === -45
+      ? 315
+      : angleDeg === -90
+        ? 270
+        : angleDeg === -135
+          ? 225
+          : TURNAROUND_ANGLES.includes(angleDeg)
+            ? angleDeg
+            : 0;
+  const isSide = normalizedAngle === 90 || normalizedAngle === 270;
+  const widthCompact = isSide ? 0.54 : normalizedAngle === 0 || normalizedAngle === 180 ? 1 : 0.85;
   const shoulderW = headH * 1.95 * widthCompact;
   const hipW = headH * 1.65 * widthCompact;
   const shoulderY = topY + headH * 1.42;
@@ -2282,17 +2374,11 @@ function paintGuideCellWithMirroredBag(rgbBuf, imgW, imgH, cellX, cellY, cellW, 
     fillRgbRect(rgbBuf, imgW, imgH, cx + hipW * 0.08, crotchY, hipW * 0.34, botY - crotchY, bodyRgb);
   }
 
-  const normalizedAngle =
-    angleDeg === -45
-      ? 45
-      : angleDeg === -90
-        ? 90
-        : angleDeg === -135
-          ? 225
-          : (TURNAROUND_ANGLES.includes(angleDeg) ? angleDeg : 0);
   const placement = computeBagAssetPlacementBox({
-    angleDeg: /** @type {0 | 45 | 90 | 135 | 180 | 225} */ (normalizedAngle),
-    handedness: angleDeg === -45 ? (handedness === 'left' ? 'right' : 'left') : handedness,
+    angleDeg: normalizedAngle,
+    handedness,
+    hasStrap: bagSpec?.hasStrap,
+    bagCarryStyle: bagSpec?.bagCarryStyle,
     cx,
     shoulderY,
     waistY,
@@ -2301,7 +2387,7 @@ function paintGuideCellWithMirroredBag(rgbBuf, imgW, imgH, cellX, cellY, cellW, 
     headH,
     widthCompact,
   });
-  if (placement.visible && placement.bagRect) {
+  if (placement.visible) {
     if (placement.strapRect) {
       fillRgbRect(
         rgbBuf,
@@ -2314,20 +2400,38 @@ function paintGuideCellWithMirroredBag(rgbBuf, imgW, imgH, cellX, cellY, cellW, 
         bagRgb
       );
     }
-    fillRgbRect(
-      rgbBuf,
-      imgW,
-      imgH,
-      placement.bagRect.x,
-      placement.bagRect.y,
-      placement.bagRect.width,
-      placement.bagRect.height,
-      bagRgb
-    );
+    if (placement.secondaryStrapRect) {
+      fillRgbRect(
+        rgbBuf,
+        imgW,
+        imgH,
+        placement.secondaryStrapRect.x,
+        placement.secondaryStrapRect.y,
+        placement.secondaryStrapRect.width,
+        placement.secondaryStrapRect.height,
+        bagRgb
+      );
+    }
+    if (placement.bagRect) {
+      fillRgbRect(
+        rgbBuf,
+        imgW,
+        imgH,
+        placement.bagRect.x,
+        placement.bagRect.y,
+        placement.bagRect.width,
+        placement.bagRect.height,
+        bagRgb
+      );
+    }
   }
 }
 
-export function buildServerBagPositionGuidePngPart(profile, backdropHex = CUTOUT_STAGE_HEX) {
+export function buildServerBagPositionGuidePngPart(
+  profile,
+  backdropHex = CUTOUT_STAGE_HEX,
+  bagSpec = null
+) {
   try {
     const bgRgb = parseHexToRgbTuple(backdropHex, [148, 163, 184]);
     const handedness = normalizeHandedness(profile?.dominantHand, 'right');
@@ -2338,7 +2442,7 @@ export function buildServerBagPositionGuidePngPart(profile, backdropHex = CUTOUT
       fillRgbRect(buf, w, h, 0, 0, w, h, bgRgb);
       const cellW = w / 3;
       const cellH = h / 2;
-      for (let i = 0; i < TURNAROUND_ANGLES.length; i += 1) {
+      for (let i = 0; i < LEGACY_SHEET_6_ANGLES.length; i += 1) {
         const col = i % 3;
         const row = Math.floor(i / 3);
         paintGuideCellWithMirroredBag(
@@ -2349,8 +2453,9 @@ export function buildServerBagPositionGuidePngPart(profile, backdropHex = CUTOUT
           row * cellH,
           cellW,
           cellH,
-          TURNAROUND_ANGLES[i],
-          handedness
+          LEGACY_SHEET_6_ANGLES[i],
+          handedness,
+          bagSpec
         );
       }
       return {
@@ -2372,7 +2477,8 @@ export function buildServerBagPositionGuidePngPart(profile, backdropHex = CUTOUT
       w,
       h,
       normalizeIsoViewAngleDeg(profile?.viewAngleDeg, DEFAULT_ISO_VIEW_ANGLE),
-      handedness
+      handedness,
+      bagSpec
     );
     return {
       mimeType: 'image/png',
@@ -2429,16 +2535,7 @@ function extractInlineImageFromGeminiResponse(payload) {
   return null;
 }
 
-function buildModelRequestTarget(model, apiKey, vertexCfg) {
-  if (apiKey) {
-    return {
-      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-    };
-  }
+function buildVertexRequestTarget(model, vertexCfg) {
   if (vertexCfg?.enabled) {
     const baseUrl = vertexCfg.customEndpoint
       ? vertexCfg.customEndpoint.replace(/\{model\}/g, encodeURIComponent(model))
@@ -2454,6 +2551,55 @@ function buildModelRequestTarget(model, apiKey, vertexCfg) {
     return { url, headers };
   }
   return null;
+}
+
+function classifyGeminiHttpError(statusCode, errStatus, errMsg, generationConfig) {
+  const combinedErr = `${errStatus} ${errMsg}`.toLowerCase();
+
+  if (
+    statusCode === 400 &&
+    (combinedErr.includes('api key not valid') ||
+      combinedErr.includes('api_key_invalid') ||
+      combinedErr.includes('invalid api key'))
+  ) {
+    return { action: 'return', reason: 'gemini_invalid_api_key' };
+  }
+
+  // If a model version rejects `imageConfig`, retry seamlessly without `imageConfig`
+  if (statusCode === 400 && generationConfig?.imageConfig) {
+    return { action: 'continue', reason: null };
+  }
+
+  if (statusCode === 401 || statusCode === 403) {
+    if (combinedErr.includes('leaked') || combinedErr.includes('blocked')) {
+      return { action: 'return', reason: 'gemini_leaked_key' };
+    }
+    const isBilling =
+      combinedErr.includes('billing') ||
+      combinedErr.includes('paid') ||
+      combinedErr.includes('billing_disabled');
+    return {
+      action: 'return',
+      reason: isBilling ? 'gemini_billing_required' : `gemini_http_${statusCode}`,
+    };
+  }
+
+  if (statusCode === 429) {
+    const isZeroFreeQuota =
+      combinedErr.includes('billing') ||
+      combinedErr.includes('free_tier') ||
+      combinedErr.includes('limit: 0') ||
+      combinedErr.includes('limit:0');
+    return {
+      action: 'break',
+      reason: isZeroFreeQuota ? 'gemini_billing_required' : 'gemini_http_429',
+    };
+  }
+
+  return {
+    action: 'break',
+    reason: statusCode ? `gemini_http_${statusCode}` : null,
+  };
 }
 
 function isFatalCredentialReason(reason) {
@@ -2479,6 +2625,7 @@ async function generateWithGeminiModelChain(
   const startedAt = Date.now();
   let lastReason = 'gemini_no_image_generated';
   const isTurnaroundSheet = Boolean(options?.turnaroundSheet);
+  const geminiClient = apiKey ? getServerGeminiClient(apiKey) : null;
 
   for (const model of modelChain) {
     const elapsed = Date.now() - startedAt;
@@ -2490,53 +2637,86 @@ async function generateWithGeminiModelChain(
       GEMINI_TIMEOUT_MS,
       Math.max(5000, MAX_TOTAL_SYNTHESIS_MS - elapsed)
     );
-    const target = buildModelRequestTarget(model, apiKey, vertexCfg);
-    if (!target) {
+    const vertexTarget = !geminiClient ? buildVertexRequestTarget(model, vertexCfg) : null;
+    if (!geminiClient && !vertexTarget) {
       lastReason = 'gemini_api_key_not_configured';
       break;
     }
 
+    const supportsImageSize =
+      model === 'gemini-nano-banana-2.1' ||
+      model === 'gemini-3-pro-image' ||
+      model.includes('pro-image');
+
     const requestConfigs = isTurnaroundSheet
-      ? [
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
-          },
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '3:2' },
-          },
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '4:3' },
-          },
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-          },
-          {
-            responseModalities: ['IMAGE'],
-            imageConfig: { aspectRatio: '3:2' },
-          },
-          {
-            responseModalities: ['IMAGE'],
-          },
-        ]
-      : [
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '3:4', imageSize: '1K' },
-          },
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '3:4' },
-          },
-          {
-            responseModalities: ['TEXT', 'IMAGE'],
-          },
-          {
-            responseModalities: ['IMAGE'],
-          },
-        ];
+      ? supportsImageSize
+        ? [
+            {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:2' },
+            },
+            {
+              responseModalities: ['IMAGE'],
+            },
+          ]
+        : [
+            {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '3:2' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:2' },
+            },
+            {
+              responseModalities: ['IMAGE'],
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+            },
+          ]
+      : supportsImageSize
+        ? [
+            {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '3:4', imageSize: '1K' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:4', imageSize: '1K' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:4' },
+            },
+            {
+              responseModalities: ['IMAGE'],
+            },
+          ]
+        : [
+            {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: '3:4' },
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+              imageConfig: { aspectRatio: '3:4' },
+            },
+            {
+              responseModalities: ['IMAGE'],
+            },
+            {
+              responseModalities: ['TEXT', 'IMAGE'],
+            },
+          ];
 
     for (let stratIdx = 0; stratIdx < requestConfigs.length; stratIdx += 1) {
       const generationConfig = requestConfigs[stratIdx];
@@ -2552,86 +2732,72 @@ async function generateWithGeminiModelChain(
       );
 
       try {
-        const res = await fetch(target.url, {
-          method: 'POST',
-          headers: target.headers,
-          signal: AbortSignal.timeout(attemptTimeoutMs),
-          body: JSON.stringify({
+        let json = null;
+
+        if (geminiClient) {
+          json = await geminiClient.models.generateContent({
+            model,
             contents: [{ role: 'user', parts }],
-            generationConfig,
-          }),
-        });
+            config: {
+              responseModalities,
+              ...(generationConfig.imageConfig
+                ? { imageConfig: generationConfig.imageConfig }
+                : {}),
+              abortSignal: AbortSignal.timeout(attemptTimeoutMs),
+            },
+          });
+        } else if (vertexTarget) {
+          const res = await fetch(vertexTarget.url, {
+            method: 'POST',
+            headers: vertexTarget.headers,
+            signal: AbortSignal.timeout(attemptTimeoutMs),
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+              generationConfig,
+            }),
+          });
 
-        if (!res.ok) {
-          const errPayload = await res.json().catch(() => null);
-          const errMsg = String(errPayload?.error?.message || '');
-          const errStatus = String(errPayload?.error?.status || '');
-          const combinedErr = `${errStatus} ${errMsg}`.toLowerCase();
-
-          console.warn(
-            `[VTON Gemini] ${model} HTTP ${res.status} (${errStatus || 'ERR'}): ${errMsg.slice(0, 180)}`
-          );
-
-          if (
-            res.status === 400 &&
-            (combinedErr.includes('api key not valid') ||
-              combinedErr.includes('api_key_invalid') ||
-              combinedErr.includes('invalid api key'))
-          ) {
-            return {
-              ok: false,
-              model: null,
-              dataUrl: null,
-              reason: 'gemini_invalid_api_key',
-            };
-          }
-
-          // If a model version rejects `imageConfig`, retry seamlessly without `imageConfig`
-          if (res.status === 400 && generationConfig.imageConfig) {
-            continue;
-          }
-
-          if (res.status === 401 || res.status === 403) {
-            if (combinedErr.includes('leaked') || combinedErr.includes('blocked')) {
-              return {
-                ok: false,
-                model: null,
-                dataUrl: null,
-                reason: 'gemini_leaked_key',
-              };
+          if (!res.ok) {
+            const errPayload = await res.json().catch(() => null);
+            const errMsg = String(errPayload?.error?.message || '');
+            const errStatus = String(errPayload?.error?.status || '');
+            console.warn(
+              `[VTON Gemini] ${model} HTTP ${res.status} (${errStatus || 'ERR'}): ${errMsg.slice(0, 180)}`
+            );
+            const decision = classifyGeminiHttpError(
+              res.status,
+              errStatus,
+              errMsg,
+              generationConfig
+            );
+            if (decision.action === 'return') {
+              return { ok: false, model: null, dataUrl: null, reason: decision.reason };
             }
-            const isBilling =
-              combinedErr.includes('billing') ||
-              combinedErr.includes('paid') ||
-              combinedErr.includes('billing_disabled');
-            return {
-              ok: false,
-              model: null,
-              dataUrl: null,
-              reason: isBilling ? 'gemini_billing_required' : `gemini_http_${res.status}`,
-            };
+            if (decision.action === 'continue') {
+              continue;
+            }
+            if (
+              decision.reason &&
+              (decision.reason === 'gemini_billing_required' ||
+                decision.reason === 'gemini_http_429' ||
+                (lastReason !== 'gemini_billing_required' && lastReason !== 'gemini_http_429'))
+            ) {
+              lastReason = decision.reason;
+            }
+            break;
           }
-
-          if (res.status === 429) {
-            const isZeroFreeQuota =
-              combinedErr.includes('billing') ||
-              combinedErr.includes('free_tier') ||
-              combinedErr.includes('limit: 0') ||
-              combinedErr.includes('limit:0');
-            lastReason = isZeroFreeQuota ? 'gemini_billing_required' : 'gemini_http_429';
-            break; // move to next model in modelChain
-          }
-
-          if (lastReason !== 'gemini_billing_required' && lastReason !== 'gemini_http_429') {
-            lastReason = `gemini_http_${res.status}`;
-          }
-          break; // move to next model in modelChain
+          json = await res.json();
         }
 
-        const json = await res.json();
         const dataUrl = extractInlineImageFromGeminiResponse(json);
         if (dataUrl) {
-          return { ok: true, model, dataUrl, reason: null };
+          return {
+            ok: true,
+            model,
+            dataUrl,
+            reason: null,
+            latencyMs: Date.now() - startedAt,
+          };
         }
 
         const finishReason = String(
@@ -2649,19 +2815,39 @@ async function generateWithGeminiModelChain(
 
         // Retry with ['IMAGE']-only modality if ['TEXT','IMAGE'] returned a plain text STOP
         if (responseModalities.includes('TEXT') && finishReason.toUpperCase() === 'STOP') {
-          stratIdx = requestConfigs.findIndex(
-            (cfg) => !cfg.responseModalities.includes('TEXT')
-          ) - 1;
+          stratIdx =
+            requestConfigs.findIndex((cfg) => !cfg.responseModalities.includes('TEXT')) - 1;
           if (stratIdx >= 0) continue;
         }
         break;
       } catch (err) {
+        const statusCode = Number(err?.status ?? err?.statusCode ?? 0) || 0;
+        const errMsg = String(err?.message || '');
+        if (statusCode >= 400) {
+          console.warn(`[VTON Gemini] ${model} SDK HTTP ${statusCode}: ${errMsg.slice(0, 180)}`);
+          const decision = classifyGeminiHttpError(statusCode, '', errMsg, generationConfig);
+          if (decision.action === 'return') {
+            return { ok: false, model: null, dataUrl: null, reason: decision.reason };
+          }
+          if (decision.action === 'continue') {
+            continue;
+          }
+          if (
+            decision.reason &&
+            (decision.reason === 'gemini_billing_required' ||
+              decision.reason === 'gemini_http_429' ||
+              (lastReason !== 'gemini_billing_required' && lastReason !== 'gemini_http_429'))
+          ) {
+            lastReason = decision.reason;
+          }
+          break;
+        }
         const isAbort =
           err?.name === 'TimeoutError' ||
           err?.name === 'AbortError' ||
-          String(err?.message || '').toLowerCase().includes('timeout');
+          errMsg.toLowerCase().includes('timeout');
         lastReason = isAbort ? 'gemini_timeout' : 'gemini_network_error';
-        console.warn(`[VTON Gemini] ${model} fetch exception (${lastReason}):`, err?.message || err);
+        console.warn(`[VTON Gemini] ${model} exception (${lastReason}):`, errMsg || err);
         break; // try next faster model in modelChain if budget remains
       }
     }
@@ -2670,8 +2856,8 @@ async function generateWithGeminiModelChain(
   return { ok: false, model: null, dataUrl: null, reason: lastReason };
 }
 
-export function getVtonServiceStatus(options = {}) {
-  const apiKey = resolveGeminiApiKey(options?.geminiApiKey);
+export function getVtonServiceStatus() {
+  const apiKey = resolveGeminiApiKey();
   const vertexCfg = resolveVertexAiConfig();
   const modelChain = resolveGeminiModelChain();
   return {
@@ -2682,7 +2868,7 @@ export function getVtonServiceStatus(options = {}) {
     turnaroundAngles: [...TURNAROUND_ANGLES],
     geminiConfigured: Boolean(apiKey || vertexCfg.enabled),
     vertexConfigured: Boolean(vertexCfg.enabled),
-    model: modelChain[0] || 'gemini-3.1-flash-image',
+    model: modelChain[0] || 'gemini-3.1-flash-lite-image',
     cacheEntries: countTotalCacheEntries(),
   };
 }
@@ -2731,6 +2917,8 @@ export async function synthesizeVtonLook(params = {}) {
       turnaroundSheet: Boolean(
         params.turnaroundSheet ?? rawProfile?.turnaroundSheet ?? false
       ),
+      masterAnchorDataUrl:
+        params.masterAnchorDataUrl ?? rawProfile?.masterAnchorDataUrl ?? null,
       qcCorrectionHint: params.qcCorrectionHint ?? null,
     }
   );
@@ -2745,8 +2933,14 @@ export async function synthesizeVtonLook(params = {}) {
   };
 
   const resolvedSlots = resolveEquippedVtonSlots(params, authContext);
-  const hasEquippedBag = Object.values(resolvedSlots).some((item) => Boolean(item?.isBag));
-  const bagAssetMirrored = Boolean(hasEquippedBag && normalizedProfile.dominantHand === 'left');
+  const equippedBagSlot =
+    Object.values(resolvedSlots).find((item) => Boolean(item?.isBag)) || null;
+  const hasEquippedBag = Boolean(equippedBagSlot);
+  const bagHasStrap = equippedBagSlot ? equippedBagSlot.hasStrap : null;
+  const bagCarryStyle = equippedBagSlot ? equippedBagSlot.bagCarryStyle : null;
+  const bagAssetMirrored = Boolean(
+    hasEquippedBag && normalizedProfile.dominantHand === 'left' && bagCarryStyle !== 'backpack'
+  );
   const { baseHash, comboHash } = computeVtonHashes(normalizedProfile, resolvedSlots);
 
   const includeBaseModel = Boolean(params.includeBaseModel);
@@ -2830,12 +3024,15 @@ export async function synthesizeVtonLook(params = {}) {
             : null,
         fallbackReason: null,
         equippedSlots,
+        hasEquippedBag,
+        bagHasStrap,
+        bagCarryStyle,
       };
     }
   }
 
   // 2. Check Gemini / Vertex AI configuration
-  const apiKey = resolveGeminiApiKey(params.geminiApiKey);
+  const apiKey = resolveGeminiApiKey();
   const vertexCfg = resolveVertexAiConfig();
   if (!apiKey && !vertexCfg.enabled) {
     return buildFallbackResult('gemini_api_key_not_configured');
@@ -3054,6 +3251,10 @@ export async function synthesizeVtonLook(params = {}) {
         baseModelImageUrl: resolvedBaseUrl,
         fallbackReason: null,
         equippedSlots,
+        hasEquippedBag,
+        bagHasStrap,
+        bagCarryStyle,
+        latencyMs: Number(comboRes.latencyMs) || 0,
       };
     } catch {
       return buildFallbackResult('gemini_unexpected_error');

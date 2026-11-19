@@ -6,6 +6,7 @@ import {
   ACCESSORY_JEWELRY_CATALOG,
   getPersonalColorLabels,
   getStudioSeedImageForGarment,
+  inferBagCarrySpec,
   resolveManifestSlotAndGlb,
 } from '../src/shared/garmentTaxonomy.js';
 import {
@@ -393,6 +394,7 @@ function parseGarmentRow(row) {
     imageUrl = getStudioSeedImageForGarment(row.category, row.subcategory);
   }
   const manifestSpec = resolveManifestSlotAndGlb(row.category, row.subcategory);
+  const bagSpec = inferBagCarrySpec(row);
   const resolvedNotes = row.notes || '';
   const seasonalMeta = SEASONAL_120_BY_IMAGE_URL[imageUrl] || null;
   return {
@@ -419,6 +421,8 @@ function parseGarmentRow(row) {
     custom_texture: Boolean(row.custom_texture || String(imageUrl).startsWith('/uploads/')),
     water_resistant: Boolean(row.water_resistant),
     is_favorite: Boolean(row.is_favorite),
+    has_strap: bagSpec.isBag ? bagSpec.has_strap : null,
+    bag_carry_style: bagSpec.isBag ? bagSpec.bag_carry_style : null,
     cpw,
   };
 }
@@ -2598,13 +2602,23 @@ export function createApiRouter(options = {}) {
         ? Boolean(custom_texture)
         : savedUrl.startsWith('/uploads/');
 
+    const bagSpec = inferBagCarrySpec({
+      name,
+      category: resolvedCategory,
+      subcategory: resolvedSubcategory,
+      notes: resolvedNotes,
+      has_strap: req.body?.has_strap,
+      bag_carry_style: req.body?.bag_carry_style,
+    });
+
     const result = db.prepare(`
       INSERT INTO garments (
         closet_owner, name, category, subcategory, color_name, color_hex,
         seasons, min_temp, max_temp, water_resistant, formality,
         brand, size, price, wear_count, status, image_url, notes,
-        fabric, slot_key, base_glb, physics_preset, custom_texture
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        fabric, slot_key, base_glb, physics_preset, custom_texture,
+        has_strap, bag_carry_style
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       targetCloset,
       String(name).trim().slice(0, 120),
@@ -2628,7 +2642,9 @@ export function createApiRouter(options = {}) {
       slot_key || spec.slotKey,
       base_glb || spec.baseGlb,
       physics_preset || spec.physicsPreset,
-      isCustomTex ? 1 : 0
+      isCustomTex ? 1 : 0,
+      bagSpec.isBag ? (bagSpec.has_strap ? 1 : 0) : null,
+      bagSpec.isBag ? bagSpec.bag_carry_style : null
     );
 
     const created = db.prepare('SELECT * FROM garments WHERE id = ?').get(result.lastInsertRowid);
@@ -2685,10 +2701,21 @@ export function createApiRouter(options = {}) {
         ? Math.max(0, Number(body.wear_count) || 0)
         : existing.wear_count;
 
+    const nextBagSpec = inferBagCarrySpec({
+      name: nextName,
+      category: nextCategory,
+      subcategory: nextSubcategory,
+      notes: nextNotes,
+      has_strap: body.has_strap !== undefined ? body.has_strap : existing.has_strap,
+      bag_carry_style:
+        body.bag_carry_style !== undefined ? body.bag_carry_style : existing.bag_carry_style,
+    });
+
     db.prepare(`
       UPDATE garments
       SET name = ?, category = ?, subcategory = ?, slot_key = ?, status = ?, is_favorite = ?,
-          price = ?, brand = ?, size = ?, notes = ?, wear_count = ?
+          price = ?, brand = ?, size = ?, notes = ?, wear_count = ?,
+          has_strap = ?, bag_carry_style = ?
       WHERE id = ?
     `).run(
       nextName,
@@ -2702,6 +2729,8 @@ export function createApiRouter(options = {}) {
       nextSize,
       nextNotes,
       nextWearCount,
+      nextBagSpec.isBag ? (nextBagSpec.has_strap ? 1 : 0) : null,
+      nextBagSpec.isBag ? nextBagSpec.bag_carry_style : null,
       id
     );
 

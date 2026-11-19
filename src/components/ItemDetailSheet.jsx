@@ -16,6 +16,7 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { BAG_CARRY_STYLES, inferBagCarrySpec } from '../shared/garmentTaxonomy.js';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
@@ -35,13 +36,20 @@ function ItemDetailContent({
   const rawMemoSource = garment.memo ?? garment.notes ?? '';
   const initialDisplayMemo = localizeGarmentMemo(rawMemoSource, lang);
 
+  const initialBagSpec = inferBagCarrySpec(garment);
   const [name, setName] = useState(() => initialDisplayName);
   const [brand, setBrand] = useState(() => initialDisplayBrand);
   const [category, setCategory] = useState(() => normalizeWardrobeCategoryKey(garment.category));
   const [size, setSize] = useState(() => garment.size || '');
   const [memo, setMemo] = useState(() => initialDisplayMemo);
+  const [hasStrap, setHasStrap] = useState(() => Boolean(initialBagSpec.has_strap));
+  const [bagCarryStyle, setBagCarryStyle] = useState(
+    () => initialBagSpec.bag_carry_style || 'hand_only'
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const isBagItem = initialBagSpec.isBag;
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -70,6 +78,12 @@ function ItemDetailContent({
         size: size.trim(),
         memo: resolvedMemo,
         notes: resolvedMemo,
+        ...(isBagItem
+          ? {
+              has_strap: hasStrap,
+              bag_carry_style: hasStrap ? bagCarryStyle : 'hand_only',
+            }
+          : {}),
       };
 
       const res = await apiFetch(`/garments/${garment.id}`, {
@@ -232,6 +246,59 @@ function ItemDetailContent({
             })}
           </div>
         </div>
+
+        {isBagItem && (
+          <div className="hig-field-group" data-bag-strap-editor="true">
+            <label className="hig-field-label">
+              {tx(lang, '가방끈 유무 · 착용 방식', 'Bag Strap & Carry Style')}
+            </label>
+            <div className="hig-grid-2" style={{ marginBottom: 8 }}>
+              <button
+                type="button"
+                className={`hig-filter-pill ${hasStrap ? 'active' : ''}`}
+                aria-pressed={hasStrap}
+                onClick={() => {
+                  setHasStrap(true);
+                  if (bagCarryStyle === 'hand_only') setBagCarryStyle('shoulder');
+                }}
+              >
+                {tx(lang, '가방끈 있음', 'Has Strap')}
+              </button>
+              <button
+                type="button"
+                className={`hig-filter-pill ${!hasStrap ? 'active' : ''}`}
+                aria-pressed={!hasStrap}
+                onClick={() => {
+                  setHasStrap(false);
+                  setBagCarryStyle('hand_only');
+                }}
+              >
+                {tx(lang, '가방끈 없음 (핸드캐리)', 'No Strap (Hand-carry)')}
+              </button>
+            </div>
+            {hasStrap && (
+              <div className="hig-pill-row" role="radiogroup" aria-label="Bag Carry Style">
+                {Object.values(BAG_CARRY_STYLES)
+                  .filter((s) => s.hasStrap)
+                  .map((styleOpt) => {
+                    const active = bagCarryStyle === styleOpt.key;
+                    return (
+                      <button
+                        key={styleOpt.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        className={`hig-filter-pill ${active ? 'active' : ''}`}
+                        onClick={() => setBagCarryStyle(styleOpt.key)}
+                      >
+                        {lang === 'en' ? styleOpt.labelEn : styleOpt.labelKo}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="hig-field-group">
           <label htmlFor="detail-size-input" className="hig-field-label">

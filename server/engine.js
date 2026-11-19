@@ -919,7 +919,17 @@ export function buildWeatherRecommendations(
   const isUmbrellaItem = (g) =>
     String(g.subcategory || '') === 'umbrella' ||
     /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
-  const bagSubs = new Set(['bag', 'tote', 'crossbody', 'briefcase', 'backpack']);
+  const bagSubs = new Set([
+    'bag',
+    'tote',
+    'crossbody',
+    'briefcase',
+    'backpack',
+    'messenger',
+    'clutch',
+    'duffel',
+    'hobo',
+  ]);
   const headSubs = new Set(['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat']);
   const neckSubs = new Set(['neckwear', 'scarf', 'muffler', 'tie', 'necktie']);
   const gloveSubs = new Set(['gloves', 'leather_gloves', 'mittens']);
@@ -1259,6 +1269,11 @@ export function getSubcategoryLabel(sub) {
     slides: '슬라이드 · 슬리퍼',
     flip_flops: '쪼리 · 플립플랍',
     briefcase: '서류가방 · 브리프케이스',
+    backpack: '백팩 · 데이팩',
+    messenger: '메신저백 · 플랩백',
+    clutch: '클러치 · 포트폴리오백',
+    duffel: '더플백 · 위켄더백',
+    hobo: '호보백 · 커브드 숄더백',
     tote: '토트백 · 쇼퍼백',
     bag: '가방 · 크로스백',
     sunglasses: '선글라스',

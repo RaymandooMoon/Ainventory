@@ -20,17 +20,16 @@ export interface StageGroundDeckProps {
   compareSplitPct?: number;
   hasArchitecturalBackdrop?: boolean;
   isOutdoor?: boolean;
+  /** When true, Three.js renders the unified GLSL silhouette + Contact AO shadow so static CSS AO is omitted */
+  suppressContactShadow?: boolean;
 }
 
 /**
- * Perspective Studio Floor Deck, Contact AO Shadow & Real-Time Wet Mirror Reflection (`StageGroundDeck`)
+ * Perspective Studio Floor Deck & Real-Time Wet Mirror Reflection (`StageGroundDeck`)
  * - Positioned across the perspective floor zone (`top: 76% -> 100%`, `z-index: 10`, `pointer-events: none`),
- *   directly behind the RGBA cutout model (`z-20`) and beneath the foreground weather canvas (`z-30`).
- * - Aligns horizon & dual-layer Contact AO Shadow with the normalized shoe sole baseline so all
- *   8 swipe angles (`0°..315°`) ground naturally onto the studio floor plane without floating or clipping.
- * - `rain` (on open-sky outdoor stages): Wet reflective stone/slate floor + upside-down `scaleY(-0.30)` real-time mirror reflection + dense sole Contact AO Shadow.
- * - `coldwave` / `snow` (outdoor): Frosted ice glaze / accumulated snow sheen + pressed-snow AO shadow.
- * - Enclosed indoor stages (`!isOutdoor`) / clear outdoor: Dry architectural studio floor satin + warm ivory ambient bounce.
+ *   directly behind the RGBA cutout model (`z-20`).
+ * - Contact AO & directional cast shadows are owned exclusively by Three.js (`StudioThreeStageLayer.tsx`);
+ *   the CSS AO ellipse only activates as a fallback if WebGL is unavailable.
  */
 export function StageGroundDeck({
   effectiveWeather,
@@ -51,6 +50,7 @@ export function StageGroundDeck({
   compareSplitPct = 50,
   hasArchitecturalBackdrop = true,
   isOutdoor = true,
+  suppressContactShadow = true,
 }: StageGroundDeckProps) {
   if (stageMode !== 'ai-vton') {
     return null;
@@ -68,14 +68,14 @@ export function StageGroundDeck({
 
   const safeZoom = Number.isFinite(zoom) ? Math.max(1, Math.min(3, zoom)) : 1;
   const safeBaseScale = Number.isFinite(idealBaseScale)
-    ? Math.max(1, Math.min(1.65, idealBaseScale))
+    ? Math.max(0.6, Math.min(1.65, idealBaseScale))
     : 1;
   const safeSoleOrigin =
     typeof soleTransformOrigin === 'string' && soleTransformOrigin.trim()
       ? soleTransformOrigin
       : '50% 95.5%';
   const safeSoleStageTopPct = Number.isFinite(soleStageTopPct)
-    ? Math.max(70, Math.min(96, soleStageTopPct))
+    ? Math.max(68, Math.min(96, soleStageTopPct))
     : 85.5;
   const panX = pan && Number.isFinite(pan.x) ? pan.x : 0;
   const panY = pan && Number.isFinite(pan.y) ? pan.y : 0;
@@ -139,8 +139,8 @@ export function StageGroundDeck({
       }
     : { pointerEvents: 'none' };
 
-  const reflClipTopPct = Math.max(75, Math.min(94.5, safeSoleStageTopPct - 1.2));
-  const reflMaskZeroPct = Math.max(74, reflClipTopPct - 0.5).toFixed(1);
+  const reflClipTopPct = Math.max(74, Math.min(94.5, safeSoleStageTopPct - 0.8));
+  const reflMaskZeroPct = Math.max(73, reflClipTopPct - 0.5).toFixed(1);
   const reflMaskPeakPct = Math.min(96.5, reflClipTopPct + 2.8).toFixed(1);
   const reflMaskMidPct = Math.min(98.8, reflClipTopPct + 8.5).toFixed(1);
   const reflMaskExpr = `linear-gradient(180deg, transparent ${reflMaskZeroPct}%, rgba(0, 0, 0, 0.78) ${reflMaskPeakPct}%, rgba(0, 0, 0, 0.34) ${reflMaskMidPct}%, transparent 99.5%)`;
@@ -226,14 +226,14 @@ export function StageGroundDeck({
         </div>
       )}
 
-      {/* Grounded Elliptical Contact AO Shadow directly beneath model shoes */}
-      {hasModelImage && (
+      {/* Fallback-only Contact AO Shadow (omitted whenever Three.js WebGL shadow engine is active) */}
+      {hasModelImage && !suppressContactShadow && (
         <div
           data-ground-ao-shadow="true"
           className="studio-ground-contact-ao-shadow"
           style={{
             pointerEvents: 'none',
-            top: `calc(${safeSoleStageTopPct.toFixed(2)}% - 13px)`,
+            top: `calc(${safeSoleStageTopPct.toFixed(2)}% - 10px)`,
             bottom: 'auto',
             ...(aoTransform ? { transform: aoTransform } : {}),
           }}

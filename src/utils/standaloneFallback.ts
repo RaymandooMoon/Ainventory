@@ -240,7 +240,14 @@ const STANDALONE_SUB_ALIASES: Readonly<Record<string, readonly string[]>> = {
   headwear: ['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat'],
   neckwear: ['neckwear', 'scarf', 'muffler', 'tie', 'necktie'],
   belt: ['belt'],
-  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack'],
+  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack', 'messenger', 'clutch', 'duffel', 'hobo'],
+  tote: ['tote'],
+  briefcase: ['briefcase'],
+  backpack: ['backpack'],
+  messenger: ['messenger'],
+  clutch: ['clutch'],
+  duffel: ['duffel'],
+  hobo: ['hobo'],
   earring: ['earring'],
   necklace: ['necklace'],
   bracelet: ['bracelet'],
@@ -1364,7 +1371,17 @@ export async function handleStandaloneApiFallback(
     const isUmbrellaItem = (g: GarmentRecord) =>
       String(g.subcategory || '') === 'umbrella' ||
       /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
-    const bagSubs = new Set(['bag', 'tote', 'crossbody', 'briefcase', 'backpack']);
+    const bagSubs = new Set([
+      'bag',
+      'tote',
+      'crossbody',
+      'briefcase',
+      'backpack',
+      'messenger',
+      'clutch',
+      'duffel',
+      'hobo',
+    ]);
     const headSubs = new Set(['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat']);
     const neckSubs = new Set(['neckwear', 'scarf', 'muffler', 'tie', 'necktie']);
     const gloveSubs = new Set(['gloves', 'leather_gloves', 'mittens']);

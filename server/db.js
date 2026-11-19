@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ACCESSORY_JEWELRY_BY_SUBCATEGORY,
+  inferBagCarrySpec,
   resolveManifestSlotAndGlb,
 } from '../src/shared/garmentTaxonomy.js';
 import { LAYERED_10_CATALOG } from '../src/shared/layered10Catalog.js';
@@ -281,7 +282,14 @@ const SUBCATEGORY_MATERIAL_SEED_ALIASES = Object.freeze({
   headwear: ['headwear', 'cap', 'hat', 'beanie', 'beret', 'bucket_hat'],
   neckwear: ['neckwear', 'scarf', 'muffler', 'tie', 'necktie'],
   belt: ['belt'],
-  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack'],
+  bag: ['bag', 'tote', 'crossbody', 'briefcase', 'backpack', 'messenger', 'clutch', 'duffel', 'hobo'],
+  tote: ['tote'],
+  briefcase: ['briefcase'],
+  backpack: ['backpack'],
+  messenger: ['messenger'],
+  clutch: ['clutch'],
+  duffel: ['duffel'],
+  hobo: ['hobo'],
   earring: ['earring'],
   necklace: ['necklace'],
   bracelet: ['bracelet'],
@@ -314,8 +322,8 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
       closet_owner, name, category, subcategory, color_name, color_hex,
       seasons, min_temp, max_temp, water_resistant, formality,
       brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
-      fabric, slot_key, base_glb, physics_preset, custom_texture
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0)
+      fabric, slot_key, base_glb, physics_preset, custom_texture, has_strap, bag_carry_style
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, '샘플 체험용 캡슐 아틀리에 아이템', ?, ?, ?, ?, 0, ?, ?)
   `);
 
   let insertedCount = 0;
@@ -334,6 +342,7 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
     for (const item of items) {
       if (existingUrls.has(item.image_url)) continue;
       const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+      const bagSpec = inferBagCarrySpec(item);
       const wearCount = ((item.idOffset * 3) % 16) + 1;
       const lastWornDate = fmtDate(((item.idOffset * 2) % 24) + 1);
       const isFav = item.idOffset % 5 === 1 ? 1 : 0;
@@ -358,7 +367,9 @@ export function ensureNewSubcategoryMaterialSeeds(closetOwner = 'sample') {
         item.fabric,
         spec.slotKey,
         spec.baseGlb,
-        spec.physicsPreset
+        spec.physicsPreset,
+        bagSpec.isBag ? (bagSpec.has_strap ? 1 : 0) : null,
+        bagSpec.isBag ? bagSpec.bag_carry_style : null
       );
       existingUrls.add(item.image_url);
       insertedCount += 1;
@@ -665,6 +676,8 @@ export function initDb() {
       base_glb TEXT DEFAULT NULL,
       physics_preset TEXT NOT NULL DEFAULT 'rigid_fitted',
       custom_texture INTEGER NOT NULL DEFAULT 0,
+      has_strap INTEGER DEFAULT NULL,
+      bag_carry_style TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -758,6 +771,8 @@ export function initDb() {
     'ALTER TABLE garments ADD COLUMN base_glb TEXT DEFAULT NULL',
     "ALTER TABLE garments ADD COLUMN physics_preset TEXT NOT NULL DEFAULT 'rigid_fitted'",
     'ALTER TABLE garments ADD COLUMN custom_texture INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE garments ADD COLUMN has_strap INTEGER DEFAULT NULL',
+    'ALTER TABLE garments ADD COLUMN bag_carry_style TEXT DEFAULT NULL',
     "ALTER TABLE wear_logs ADD COLUMN status TEXT NOT NULL DEFAULT 'worn'",
   ];
 
@@ -888,6 +903,24 @@ export function initDb() {
     );
     for (const [legacyGlb, nextGlb, nextPreset] of glbFixes) {
       updateGlbStmt.run(nextGlb, nextPreset, legacyGlb);
+    }
+
+    // Backfill has_strap and bag_carry_style for all existing bag rows missing explicit metadata
+    const bagCandidates = db
+      .prepare(
+        "SELECT id, name, category, subcategory, notes, has_strap, bag_carry_style FROM garments WHERE (has_strap IS NULL OR bag_carry_style IS NULL) AND (category IN ('accessory', 'bag') OR subcategory IN ('bag', 'tote', 'briefcase', 'backpack', 'messenger', 'clutch', 'duffel', 'hobo'))"
+      )
+      .all();
+    if (bagCandidates.length > 0) {
+      const updateBagMeta = db.prepare(
+        'UPDATE garments SET has_strap = ?, bag_carry_style = ? WHERE id = ?'
+      );
+      for (const row of bagCandidates) {
+        const bagSpec = inferBagCarrySpec(row);
+        if (bagSpec.isBag) {
+          updateBagMeta.run(bagSpec.has_strap ? 1 : 0, bagSpec.bag_carry_style, row.id);
+        }
+      }
     }
   } catch {
     // ignore migration error

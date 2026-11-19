@@ -3,6 +3,7 @@ import {
   Award,
   Briefcase,
   ChevronDown,
+  ChevronUp,
   Cloud,
   CloudRain,
   CloudSun,
@@ -32,7 +33,6 @@ import {
 } from '../services/profileConfigService.ts';
 import {
   DEFAULT_TURNAROUND_ANGLE,
-  GEMINI_API_KEY_EVENT,
   TURNAROUND_ANGLES,
   VTON_STYLE_PREF_EVENT,
   angle360ToSignedScrollDeg,
@@ -40,7 +40,6 @@ import {
   computeOutfitComboId,
   deleteCachedAiVtonOutfit,
   fetchServerGeminiConfigured,
-  getStoredClientGeminiApiKey,
   getStoredVtonStylePreference,
   isDemoVtonShowcaseActive,
   listCachedAiVtonOutfits,
@@ -52,12 +51,18 @@ import {
   peekShowcaseDemoVtonSlice,
   readCachedAiVtonSlice,
   resolve360AngleRenderSpec,
-  resolveClientGeminiApiKey,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
-  synthesizeGeminiMultiAngleVton,
+  synthesizeProgressiveMultiAngleVton,
   trackFlatLayComboVisit,
 } from '../services/vton2DService.ts';
+import {
+  ANGLE_SCROLL_TICKS,
+  FIRST_LOOK_DELAY_MS,
+  computeScrollbarLightingState,
+  formatFirstLookCountdownSec,
+  mapSignedTickToCanonicalSlice,
+} from '../services/vtonProgressiveState.ts';
 import { SUB_SLOT_META_BY_KEY } from '../services/fittingRenderer.ts';
 import {
   isStudioKeyActionableReason,
@@ -272,7 +277,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   onUnequipSlot,
   onRestoreHistorySlots,
   onQuickSelectPreset: _legacyQuickSelectPreset,
-  onOpenSkinToneModal,
+  onOpenSkinToneModal: _legacyOpenSkinToneModal,
   onOpenBodyModal: _legacyOpenBodyModal,
   stageBackgroundId = DEFAULT_STAGE_BACKGROUND_ID,
   lightingPreset = DEFAULT_LIGHTING_PRESET,
@@ -509,31 +514,93 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const [aiState, setAiState] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [loadingStepIdx, setLoadingStepIdx] = useState(0);
+  const [progressiveBgAnglesLoading, setProgressiveBgAnglesLoading] = useState(false);
+  const [firstLookCountdownActive, setFirstLookCountdownActive] = useState(false);
+  const [firstLookRemainingMs, setFirstLookRemainingMs] = useState(FIRST_LOOK_DELAY_MS);
+  const [justLitAngles, setJustLitAngles] = useState([]);
   const [statusToast, setStatusToast] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  useEffect(() => {
-    if (!aiLoading) {
-      setLoadingStepIdx(0);
-      return undefined;
+  const firstLookDeadlineRef = useRef(0);
+  const firstLookTimerRef = useRef(null);
+  const firstLookPreGenActiveRef = useRef(false);
+  const userCanceledPreGenRef = useRef(false);
+  const justLitTimersRef = useRef([]);
+
+  const clearFirstLookCountdown = useCallback(() => {
+    if (firstLookTimerRef.current) {
+      clearInterval(firstLookTimerRef.current);
+      firstLookTimerRef.current = null;
     }
-    setLoadingStepIdx(0);
-    const step2Timer = setTimeout(() => setLoadingStepIdx(1), 1400);
-    const step3Timer = setTimeout(() => setLoadingStepIdx(2), 3600);
+    firstLookDeadlineRef.current = 0;
+    firstLookPreGenActiveRef.current = false;
+    setFirstLookCountdownActive(false);
+    setFirstLookRemainingMs(0);
+  }, []);
+
+  const startFirstLookCountdown = useCallback(
+    (durationMs = FIRST_LOOK_DELAY_MS) => {
+      if (firstLookTimerRef.current) {
+        clearInterval(firstLookTimerRef.current);
+        firstLookTimerRef.current = null;
+      }
+      const clampedMs = Math.max(1000, Number(durationMs) || FIRST_LOOK_DELAY_MS);
+      let remainingMs = clampedMs;
+      let lastTickAt = Date.now();
+      firstLookDeadlineRef.current = lastTickAt + clampedMs;
+      firstLookPreGenActiveRef.current = true;
+      setFirstLookRemainingMs(clampedMs);
+      setFirstLookCountdownActive(true);
+      firstLookTimerRef.current = setInterval(() => {
+        const now = Date.now();
+        // Cap per-tick step so main-thread garment image encoding cannot skip the visible 5→4→3→2→1 countdown
+        const elapsed = Math.min(250, Math.max(50, now - lastTickAt));
+        lastTickAt = now;
+        remainingMs = Math.max(0, remainingMs - elapsed);
+        firstLookDeadlineRef.current = now + remainingMs;
+        setFirstLookRemainingMs(remainingMs);
+        if (remainingMs <= 0) {
+          if (firstLookTimerRef.current) {
+            clearInterval(firstLookTimerRef.current);
+            firstLookTimerRef.current = null;
+          }
+          firstLookPreGenActiveRef.current = false;
+          setFirstLookCountdownActive(false);
+        }
+      }, 100);
+    },
+    []
+  );
+
+  const flashJustLitAngle = useCallback((angleDeg) => {
+    const normalized = Number(angleDeg);
+    if (!Number.isFinite(normalized)) return;
+    setJustLitAngles((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]));
+    const tid = setTimeout(() => {
+      setJustLitAngles((prev) => prev.filter((a) => a !== normalized));
+    }, 1500);
+    justLitTimersRef.current.push(tid);
+  }, []);
+
+  useEffect(() => {
     return () => {
-      clearTimeout(step2Timer);
-      clearTimeout(step3Timer);
+      if (firstLookTimerRef.current) {
+        clearInterval(firstLookTimerRef.current);
+        firstLookTimerRef.current = null;
+      }
+      for (const tid of justLitTimersRef.current) {
+        clearTimeout(tid);
+      }
+      justLitTimersRef.current = [];
     };
-  }, [aiLoading]);
+  }, []);
 
   const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(() =>
     isDemoVtonShowcaseActive()
   );
-  const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
-    Boolean(getStoredClientGeminiApiKey())
-  );
   const [hasServerConfiguredKey, setHasServerConfiguredKey] = useState(false);
+  const hasServerConfiguredKeyRef = useRef(false);
+  hasServerConfiguredKeyRef.current = hasServerConfiguredKey;
 
   // Smart Credit-Saver & Persistent History Gallery state
   const [autoGenEnabled, setAutoGenEnabled] = useState(() => readStoredAutoGenEnabled());
@@ -551,13 +618,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return () => clearInterval(id);
   }, []);
 
-  const [zoom, setZoom] = useState(1);
+  const zoom = 1;
+  const pan = useMemo(() => ({ x: 0, y: 0 }), []);
+  const [threeStageAvailable, setThreeStageAvailable] = useState(true);
   const [floorPlacement, setFloorPlacement] = useState(() => ({
     effectiveBaseScale: 1,
     soleTransformOrigin: '50% 95.5%',
     soleStageTopPct: 85.5,
     renderedContentW: null,
     renderedContentH: null,
+    topRatio: null,
+    bottomRatio: null,
   }));
   const handleFloorPlacementChange = useCallback((next) => {
     if (!next || typeof next !== 'object') return;
@@ -567,18 +638,62 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         prev.soleTransformOrigin === next.soleTransformOrigin &&
         prev.soleStageTopPct === next.soleStageTopPct &&
         prev.renderedContentW === next.renderedContentW &&
-        prev.renderedContentH === next.renderedContentH
+        prev.renderedContentH === next.renderedContentH &&
+        prev.topRatio === next.topRatio &&
+        prev.bottomRatio === next.bottomRatio
       ) {
         return prev;
       }
       return next;
     });
   }, []);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [compareActive, setCompareActive] = useState(false);
   const [compareSplitPct, setCompareSplitPct] = useState(50);
   const [activeHudTouchId, setActiveHudTouchId] = useState(null);
   const [isAngleInteracting, setIsAngleInteracting] = useState(false);
+
+  const wornSlotsDockRef = useRef(null);
+  const [wornDockOverflow, setWornDockOverflow] = useState({
+    canScrollUp: false,
+    canScrollDown: false,
+  });
+
+  const syncWornDockOverflow = useCallback(() => {
+    const el = wornSlotsDockRef.current;
+    if (!el) {
+      setWornDockOverflow((prev) =>
+        prev.canScrollUp || prev.canScrollDown
+          ? { canScrollUp: false, canScrollDown: false }
+          : prev
+      );
+      return;
+    }
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    const hasVerticalOverflow = maxScrollTop > 4;
+    const nextUp = hasVerticalOverflow && el.scrollTop > 4;
+    const nextDown = hasVerticalOverflow && el.scrollTop < maxScrollTop - 4;
+    setWornDockOverflow((prev) =>
+      prev.canScrollUp === nextUp && prev.canScrollDown === nextDown
+        ? prev
+        : { canScrollUp: nextUp, canScrollDown: nextDown }
+    );
+  }, []);
+
+  const handleWornDockJumpTop = useCallback((e) => {
+    e.stopPropagation();
+    const el = wornSlotsDockRef.current;
+    if (!el) return;
+    triggerHaptic('selection');
+    el.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleWornDockJumpBottom = useCallback((e) => {
+    e.stopPropagation();
+    const el = wornSlotsDockRef.current;
+    if (!el) return;
+    triggerHaptic('selection');
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   const handleHudTouchStart = useCallback((touchId) => {
     setActiveHudTouchId(touchId);
@@ -911,7 +1026,21 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
 
-  // Manual garment changes in the wardrobe unpin history and return to primary stage flow
+  const cancelInitialBackgroundPreGenToStaged = useCallback(() => {
+    if (!firstLookPreGenActiveRef.current) return false;
+    abortControllerRef.current?.abort();
+    clearFirstLookCountdown();
+    userCanceledPreGenRef.current = true;
+    hasInitialAutoRunRef.current = true;
+    setAiLoading(false);
+    setProgressiveBgAnglesLoading(false);
+    setStagedNeedsApply(true);
+    setStatusToast(null);
+    setStageMode('ai-vton');
+    return true;
+  }, [clearFirstLookCountdown]);
+
+  // Manual garment changes in the wardrobe unpin history, abort initial countdown pre-gen, and return to primary stage flow
   useEffect(() => {
     if (prevOutfitComboRef.current !== outfitComboId) {
       prevOutfitComboRef.current = outfitComboId;
@@ -921,42 +1050,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       } else {
         setPinnedHistoryItem(null);
         setHistoryOverrideStyle(null);
-        if (
+        const isScenarioHydration =
           pendingScenarioSlotHydrationRef.current &&
-          Date.now() <= pendingScenarioHydrationUntilRef.current
-        ) {
+          Date.now() <= pendingScenarioHydrationUntilRef.current;
+        if (isScenarioHydration) {
           pendingScenarioSlotHydrationRef.current = false;
           pendingScenarioApproveRef.current = normalizedScenarioKey;
+        } else if (firstLookPreGenActiveRef.current) {
+          cancelInitialBackgroundPreGenToStaged();
         }
         if (!postLoginRevealActiveRef.current) {
           setStageMode('ai-vton');
         }
       }
     }
-  }, [outfitComboId, normalizedScenarioKey, clearFrontOnlyFallbackState]);
-
-  // Sync Gemini API Key updates saved in Profile modal
-  useEffect(() => {
-    const handleApiKeyUpdated = () => {
-      const nextKey = getStoredClientGeminiApiKey();
-      const hasKey = Boolean(nextKey);
-      setHasSavedClientKey(hasKey);
-      configBlockedRef.current = false;
-      setPinnedHistoryItem(null);
-      setStagedNeedsApply(false);
-      setDemoShowcaseEnabled(false);
-      setStatusToast(null);
-      clearFrontOnlyFallbackState();
-      if (hasKey && equippedCount > 0) {
-        userApprovedGenRef.current = true;
-        forceBypassCacheRef.current = false;
-        setStageMode('ai-vton');
-        setRetryNonce((n) => n + 1);
-      }
-    };
-    window.addEventListener(GEMINI_API_KEY_EVENT, handleApiKeyUpdated);
-    return () => window.removeEventListener(GEMINI_API_KEY_EVENT, handleApiKeyUpdated);
-  }, [equippedCount, clearFrontOnlyFallbackState]);
+  }, [
+    outfitComboId,
+    normalizedScenarioKey,
+    clearFrontOnlyFallbackState,
+    cancelInitialBackgroundPreGenToStaged,
+  ]);
 
   const currentAiCacheKey = useMemo(
     () =>
@@ -1170,6 +1283,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     if (!isVtonPipelineActive || equippedCount === 0) {
       setAiLoading(false);
+      setProgressiveBgAnglesLoading(false);
       setStagedNeedsApply(false);
       return undefined;
     }
@@ -1185,6 +1299,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           pinnedHistoryItem.effectiveWeather !== vtonEffectiveWeather))
     ) {
       setAiLoading(false);
+      setProgressiveBgAnglesLoading(false);
       setStagedNeedsApply(false);
       return undefined;
     }
@@ -1202,7 +1317,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     );
 
     const scenarioEntry = !isForceBypass ? scenarioVtonSnapshotsRef.current[scenarioVtonKey] : null;
-    const scenarioExactUrl = scenarioEntry?.angleSlices?.[snap.canonicalSliceAngle] || null;
+    const scenarioExactUrl =
+      scenarioEntry?.angleSlices?.[snap.canonicalSliceAngle] ||
+      scenarioEntry?.angleSlices?.[0] ||
+      null;
 
     if (scenarioExactUrl) {
       forceBypassCacheRef.current = false;
@@ -1211,7 +1329,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingWeatherApproveRef.current = null;
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
+      clearFirstLookCountdown();
       setStagedNeedsApply(false);
+      setProgressiveBgAnglesLoading(false);
       if (scenarioEntry?.frontOnlyDegraded) {
         setFrontOnlyDegraded(true);
         if (scenarioEntry.notificationPopup) {
@@ -1221,7 +1341,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         clearFrontOnlyFallbackState();
       }
       setAiState({
-        cacheKey: currentAiCacheKey,
+        cacheKey: `${buildAiVtonCacheKey({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
+          angleDeg: scenarioEntry?.angleSlices?.[snap.canonicalSliceAngle]
+            ? snap.canonicalSliceAngle
+            : 0,
+        })}|sc:${snap.normalizedScenarioKey}|${snap.isStageOutdoor ? 'outdoor' : 'indoor'}`,
         imageUrl: scenarioExactUrl,
         fromCache: true,
         provider: 'gemini-vton',
@@ -1238,6 +1366,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           styleMode: snap.styleMode,
           effectiveWeather: snap.effectiveWeather,
           angleDeg: snap.canonicalSliceAngle,
+        }) ||
+        peekMemoryAiVtonSlice({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
+          angleDeg: 0,
         })
       : null;
 
@@ -1257,7 +1392,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       recordScenarioVtonSnapshot(
         scenarioVtonKey,
-        snap.canonicalSliceAngle,
+        siblingMap[snap.canonicalSliceAngle] ? snap.canonicalSliceAngle : 0,
         syncHit.imageUrl,
         siblingMap
       );
@@ -1267,10 +1402,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       pendingWeatherApproveRef.current = null;
       pendingScenarioApproveRef.current = null;
       hasInitialAutoRunRef.current = true;
+      clearFirstLookCountdown();
       setStagedNeedsApply(false);
+      setProgressiveBgAnglesLoading(false);
       clearFrontOnlyFallbackState();
       setAiState({
-        cacheKey: currentAiCacheKey,
+        cacheKey: `${buildAiVtonCacheKey({
+          avatarConfigHash: snap.resolvedAvatarHash,
+          outfitComboId,
+          styleMode: snap.styleMode,
+          effectiveWeather: snap.effectiveWeather,
+          angleDeg: siblingMap[snap.canonicalSliceAngle] ? snap.canonicalSliceAngle : 0,
+        })}|sc:${snap.normalizedScenarioKey}|${snap.isStageOutdoor ? 'outdoor' : 'indoor'}`,
         imageUrl: syncHit.imageUrl,
         fromCache: true,
         provider: 'gemini-vton',
@@ -1307,10 +1450,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pendingWeatherApproveRef.current = null;
         pendingScenarioApproveRef.current = null;
         hasInitialAutoRunRef.current = true;
+        clearFirstLookCountdown();
         setStagedNeedsApply(false);
+        setProgressiveBgAnglesLoading(false);
         clearFrontOnlyFallbackState();
         setAiState({
-          cacheKey: currentAiCacheKey,
+          cacheKey: `${buildAiVtonCacheKey({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            effectiveWeather: snap.effectiveWeather,
+            angleDeg: snap.canonicalSliceAngle,
+          })}|sc:${snap.normalizedScenarioKey}|${snap.isStageOutdoor ? 'outdoor' : 'indoor'}`,
           imageUrl: cachedDemoUrl,
           fromCache: true,
           provider: 'gemini-vton',
@@ -1329,19 +1480,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     const runPipeline = async () => {
       if (!isForceBypass) {
-        const idbHit = await readCachedAiVtonSlice({
-          avatarConfigHash: snap.resolvedAvatarHash,
-          outfitComboId,
-          styleMode: snap.styleMode,
-          effectiveWeather: snap.effectiveWeather,
-          angleDeg: snap.canonicalSliceAngle,
-        });
+        const idbHit =
+          (await readCachedAiVtonSlice({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            effectiveWeather: snap.effectiveWeather,
+            angleDeg: snap.canonicalSliceAngle,
+          })) ||
+          (await readCachedAiVtonSlice({
+            avatarConfigHash: snap.resolvedAvatarHash,
+            outfitComboId,
+            styleMode: snap.styleMode,
+            effectiveWeather: snap.effectiveWeather,
+            angleDeg: 0,
+          }));
         if (controller.signal.aborted) return;
 
         if (idbHit) {
-          const siblingAngles = TURNAROUND_ANGLES.filter(
-            (deg) => deg !== snap.canonicalSliceAngle
-          );
+          const hitAngle = idbHit.slice.angleDeg ?? 0;
+          const siblingAngles = TURNAROUND_ANGLES.filter((deg) => deg !== hitAngle);
           const siblingPromises = siblingAngles.map((deg) =>
             readCachedAiVtonSlice({
               avatarConfigHash: snap.resolvedAvatarHash,
@@ -1351,16 +1509,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               angleDeg: deg,
             })
           );
-          recordScenarioVtonSnapshot(
-            scenarioVtonKey,
-            snap.canonicalSliceAngle,
-            idbHit.slice.imageUrl
-          );
+          recordScenarioVtonSnapshot(scenarioVtonKey, hitAngle, idbHit.slice.imageUrl);
           void Promise.all(siblingPromises)
             .then((hits) => {
               if (controller.signal.aborted) return;
               const siblingMap = {
-                [snap.canonicalSliceAngle]: idbHit.slice.imageUrl,
+                [hitAngle]: idbHit.slice.imageUrl,
               };
               hits.forEach((h, idx) => {
                 if (h?.slice?.imageUrl) {
@@ -1370,7 +1524,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               const existingSnap = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
               recordScenarioVtonSnapshot(
                 scenarioVtonKey,
-                snap.canonicalSliceAngle,
+                hitAngle,
                 idbHit.slice.imageUrl,
                 siblingMap,
                 existingSnap?.frontOnlyDegraded
@@ -1393,10 +1547,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           pendingWeatherApproveRef.current = null;
           pendingScenarioApproveRef.current = null;
           hasInitialAutoRunRef.current = true;
+          clearFirstLookCountdown();
           setStagedNeedsApply(false);
+          setProgressiveBgAnglesLoading(false);
           clearFrontOnlyFallbackState();
           setAiState({
-            cacheKey: currentAiCacheKey,
+            cacheKey: `${buildAiVtonCacheKey({
+              avatarConfigHash: snap.resolvedAvatarHash,
+              outfitComboId,
+              styleMode: snap.styleMode,
+              effectiveWeather: snap.effectiveWeather,
+              angleDeg: hitAngle,
+            })}|sc:${snap.normalizedScenarioKey}|${snap.isStageOutdoor ? 'outdoor' : 'indoor'}`,
             imageUrl: idbHit.slice.imageUrl,
             fromCache: true,
             provider: 'gemini-vton',
@@ -1409,30 +1571,32 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       const hasSiblingComboSlice = TURNAROUND_ANGLES.some(
         (deg) =>
-          deg !== snap.canonicalSliceAngle &&
-          (Boolean(
+          Boolean(
             scenarioVtonSnapshotsRef.current[scenarioVtonKey]?.angleSlices?.[deg]
           ) ||
-            Boolean(
-              peekMemoryAiVtonSlice({
-                avatarConfigHash: snap.resolvedAvatarHash,
-                outfitComboId,
-                styleMode: snap.styleMode,
-                effectiveWeather: snap.effectiveWeather,
-                angleDeg: deg,
-              })
-            ))
+          Boolean(
+            peekMemoryAiVtonSlice({
+              avatarConfigHash: snap.resolvedAvatarHash,
+              outfitComboId,
+              styleMode: snap.styleMode,
+              effectiveWeather: snap.effectiveWeather,
+              angleDeg: deg,
+            })
+          )
       );
 
       if (
         !isUserApproved &&
         !isDirectDemoClick &&
         !hasSiblingComboSlice &&
-        hasInitialAutoRunRef.current &&
+        ((hasInitialAutoRunRef.current && !firstLookPreGenActiveRef.current) ||
+          userCanceledPreGenRef.current) &&
         !autoGenEnabled &&
         !demoShowcaseEnabled
       ) {
+        clearFirstLookCountdown();
         setAiLoading(false);
+        setProgressiveBgAnglesLoading(false);
         setStagedNeedsApply(true);
         setStatusToast(null);
         return;
@@ -1447,12 +1611,30 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ) {
         pendingWeatherApproveRef.current = null;
         pendingScenarioApproveRef.current = null;
+        clearFirstLookCountdown();
         setAiLoading(false);
+        setProgressiveBgAnglesLoading(false);
         return;
       }
 
+      const isExplicitUserTrigger = Boolean(
+        isForceBypass || userApprovedGenRef.current || facePhotoJustApplied
+      );
+      const isInitialRecommendedPreGen = Boolean(
+        (!hasInitialAutoRunRef.current || firstLookPreGenActiveRef.current) &&
+          !userCanceledPreGenRef.current &&
+          !isExplicitUserTrigger &&
+          !isDirectDemoClick &&
+          !demoShowcaseEnabled &&
+          !autoGenEnabled &&
+          !postLoginRevealActiveRef.current
+      );
+
       const delayMs =
-        isDirectDemoClick || isForceBypass || demoShowcaseEnabled
+        isInitialRecommendedPreGen ||
+        isDirectDemoClick ||
+        isForceBypass ||
+        demoShowcaseEnabled
           ? 0
           : weatherTabJustChanged
             ? 210
@@ -1525,7 +1707,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             pendingFacePhotoApproveRef.current = null;
             pendingWeatherApproveRef.current = null;
             pendingScenarioApproveRef.current = null;
+            clearFirstLookCountdown();
             setAiLoading(false);
+            setProgressiveBgAnglesLoading(false);
             if (slices) {
               preloadImageUrls(Object.values(slices));
             }
@@ -1544,7 +1728,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               );
               configBlockedRef.current = false;
               setAiState({
-                cacheKey: currentAiCacheKey,
+                cacheKey: `${buildAiVtonCacheKey({
+                  avatarConfigHash: liveSnap.resolvedAvatarHash,
+                  outfitComboId,
+                  styleMode: liveSnap.styleMode,
+                  effectiveWeather: liveSnap.effectiveWeather,
+                  angleDeg: liveSnap.canonicalSliceAngle,
+                })}|sc:${liveSnap.normalizedScenarioKey}|${liveSnap.isStageOutdoor ? 'outdoor' : 'indoor'}`,
                 imageUrl: targetUrl,
                 fromCache: true,
                 provider: 'gemini-vton',
@@ -1567,59 +1757,118 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             pendingFacePhotoApproveRef.current = null;
             pendingWeatherApproveRef.current = null;
             pendingScenarioApproveRef.current = null;
+            clearFirstLookCountdown();
             setAiLoading(false);
+            setProgressiveBgAnglesLoading(false);
           });
       };
 
+      if (isInitialRecommendedPreGen) {
+        if (!firstLookPreGenActiveRef.current) {
+          startFirstLookCountdown(FIRST_LOOK_DELAY_MS);
+        }
+      } else if (isExplicitUserTrigger || !firstLookPreGenActiveRef.current) {
+        clearFirstLookCountdown();
+      }
       setAiLoading(true);
+      setProgressiveBgAnglesLoading(false);
 
-      if (demoShowcaseEnabled && (isDirectDemoClick || !resolveClientGeminiApiKey())) {
+      if (isInitialRecommendedPreGen) {
+        // Yield briefly so the Flat-Lay + reverse-countdown banner commits & paints before garment rasterization
+        await new Promise((resolve) => {
+          delayTimerId = setTimeout(resolve, 48);
+        });
+        if (controller.signal.aborted) return;
+      }
+
+      if (demoShowcaseEnabled && (isDirectDemoClick || !hasServerConfiguredKeyRef.current)) {
         applyShowcaseDemoSlices();
         return;
       }
 
+      const zeroCacheKeyForCombo = `${buildAiVtonCacheKey({
+        avatarConfigHash: liveSnap.resolvedAvatarHash,
+        outfitComboId,
+        styleMode: liveSnap.styleMode,
+        effectiveWeather: liveSnap.effectiveWeather,
+        angleDeg: 0,
+      })}|sc:${liveSnap.normalizedScenarioKey}|${liveSnap.isStageOutdoor ? 'outdoor' : 'indoor'}`;
+
       try {
-        const outcome = await synthesizeGeminiMultiAngleVton({
-          slots: liveSnap.slots,
-          skinProfile: liveSnap.skinProfile,
-          bodySpec: liveSnap.bodySpec,
-          user: liveSnap.user,
-          avatarSpec: liveSnap.resolvedAvatarSpec,
-          avatarConfigHash: liveSnap.resolvedAvatarHash,
-          viewAngleDeg: liveSnap.canonicalSliceAngle,
-          styleMode: liveSnap.styleMode,
-          weather: liveSnap.weather,
-          turnaroundSheet: true,
-          theme: liveSnap.resolvedTheme,
-          legacyMode: liveSnap.rawLegacyMode,
-          forceRefresh: isForceBypass,
-          signal: controller.signal,
-        });
+        const outcome = await synthesizeProgressiveMultiAngleVton(
+          {
+            slots: liveSnap.slots,
+            skinProfile: liveSnap.skinProfile,
+            bodySpec: liveSnap.bodySpec,
+            user: liveSnap.user,
+            avatarSpec: liveSnap.resolvedAvatarSpec,
+            avatarConfigHash: liveSnap.resolvedAvatarHash,
+            viewAngleDeg: 0,
+            styleMode: liveSnap.styleMode,
+            weather: liveSnap.weather,
+            turnaroundSheet: false,
+            theme: liveSnap.resolvedTheme,
+            legacyMode: liveSnap.rawLegacyMode,
+            forceRefresh: isForceBypass,
+            signal: controller.signal,
+          },
+          {
+            onAngleReady: (payload) => {
+              if (controller.signal.aborted) return;
+              preloadImageUrls([payload.imageUrl]);
+              recordScenarioVtonSnapshot(
+                liveSnap.scenarioVtonKey,
+                payload.angleDeg,
+                payload.imageUrl,
+                payload.allSlices || null,
+                {
+                  frontOnlyDegraded: false,
+                  notificationPopup: null,
+                }
+              );
+              flashJustLitAngle(payload.angleDeg);
+              const stillStreaming = payload.readyAngles.length < TURNAROUND_ANGLES.length;
+              setProgressiveBgAnglesLoading(stillStreaming);
+
+              if (payload.isMasterAnchor) {
+                setAiLoading(false);
+                configBlockedRef.current = false;
+                setStagedNeedsApply(false);
+                clearFrontOnlyFallbackState();
+                setAiState({
+                  cacheKey: zeroCacheKeyForCombo,
+                  imageUrl: payload.imageUrl,
+                  fromCache: payload.fromCache,
+                  provider: 'gemini-vton',
+                });
+                setStatusToast(null);
+                refreshHistoryList();
+                liveSnap.onAiLookGenerated?.({
+                  imageUrl: payload.imageUrl,
+                  styleMode: liveSnap.styleMode,
+                  fromCache: Boolean(payload.fromCache),
+                  slots: liveSnap.slots,
+                });
+              }
+            },
+          }
+        );
         if (controller.signal.aborted) return;
         forceBypassCacheRef.current = false;
         userApprovedGenRef.current = false;
         pendingFacePhotoApproveRef.current = null;
         pendingWeatherApproveRef.current = null;
         pendingScenarioApproveRef.current = null;
+        setProgressiveBgAnglesLoading(false);
 
         if (outcome.ok && outcome.imageUrl) {
           if (outcome.angleSlices) {
             preloadImageUrls(Object.values(outcome.angleSlices));
           }
           const isFrontOnly = Boolean(outcome.frontOnlyDegraded);
-          const effectiveRecordedAngle = isFrontOnly ? 0 : liveSnap.canonicalSliceAngle;
-          const resolvedOutcomeCacheKey = isFrontOnly
-            ? `${buildAiVtonCacheKey({
-                avatarConfigHash: liveSnap.resolvedAvatarHash,
-                outfitComboId,
-                styleMode: liveSnap.styleMode,
-                effectiveWeather: liveSnap.effectiveWeather,
-                angleDeg: 0,
-              })}|sc:${liveSnap.normalizedScenarioKey}|${liveSnap.isStageOutdoor ? 'outdoor' : 'indoor'}`
-            : currentAiCacheKey;
           recordScenarioVtonSnapshot(
             liveSnap.scenarioVtonKey,
-            effectiveRecordedAngle,
+            0,
             outcome.imageUrl,
             outcome.angleSlices || null,
             {
@@ -1652,19 +1901,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             setFrontOnlyToastVisible(false);
           }
           setAiState({
-            cacheKey: resolvedOutcomeCacheKey,
+            cacheKey: zeroCacheKeyForCombo,
             imageUrl: outcome.imageUrl,
             fromCache: outcome.fromCache,
             provider: 'gemini-vton',
           });
           setStatusToast(null);
           refreshHistoryList();
-          liveSnap.onAiLookGenerated?.({
-            imageUrl: outcome.imageUrl,
-            styleMode: liveSnap.styleMode,
-            fromCache: Boolean(outcome.fromCache),
-            slots: liveSnap.slots,
-          });
           return;
         }
 
@@ -1673,6 +1916,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           return;
         }
 
+        clearFirstLookCountdown();
         setAiLoading(false);
         if (outcome.reason !== 'aborted') {
           if (isKeyActionableReason(outcome.reason)) {
@@ -1684,6 +1928,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         if (controller.signal.aborted) return;
         forceBypassCacheRef.current = false;
         userApprovedGenRef.current = false;
+        clearFirstLookCountdown();
+        setProgressiveBgAnglesLoading(false);
         if (demoShowcaseEnabled) {
           applyShowcaseDemoSlices();
           return;
@@ -1703,7 +1949,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   }, [
     isVtonPipelineActive,
-    currentAiCacheKey,
+    isStageOutdoor,
     scenarioVtonKey,
     normalizedScenarioKey,
     outfitComboId,
@@ -1716,6 +1962,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     demoShowcaseEnabled,
     autoGenEnabled,
     pinnedHistoryItem,
+    clearFirstLookCountdown,
+    startFirstLookCountdown,
+    flashJustLitAngle,
     clearFrontOnlyFallbackState,
     commitAngleDeg,
     recordScenarioVtonSnapshot,
@@ -1751,6 +2000,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         return;
       }
       configBlockedRef.current = false;
+      clearFirstLookCountdown();
+      userCanceledPreGenRef.current = false;
       clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
@@ -1760,7 +2011,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, clearFrontOnlyFallbackState, showToast]
+    [equippedCount, clearFirstLookCountdown, clearFrontOnlyFallbackState, showToast]
   );
 
   const handleRetryAiSynthesis = useCallback(
@@ -1772,6 +2023,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       delete scenarioVtonSnapshotsRef.current[scenarioVtonKey];
       configBlockedRef.current = false;
+      clearFirstLookCountdown();
+      userCanceledPreGenRef.current = false;
       clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
@@ -1782,7 +2035,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, scenarioVtonKey, clearFrontOnlyFallbackState, showToast]
+    [
+      equippedCount,
+      scenarioVtonKey,
+      clearFirstLookCountdown,
+      clearFrontOnlyFallbackState,
+      showToast,
+    ]
   );
 
   useEffect(() => {
@@ -1948,12 +2207,89 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     memorySlice?.imageUrl ||
     (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
     demoSliceUrl ||
-    (aiLoading ? fallbackSameComboMemorySlice?.imageUrl : null) ||
+    (aiLoading || progressiveBgAnglesLoading
+      ? fallbackSameComboMemorySlice?.imageUrl
+      : null) ||
     null;
 
-  const resolvedAiImageUrl = stageMode === 'ai-vton' ? availableAiImageUrl : null;
-  const canReturnToCharacter = stageMode === 'flatlay' && Boolean(availableAiImageUrl);
+  const isHoldingForFirstLookCountdown = Boolean(
+    firstLookCountdownActive && firstLookRemainingMs > 0
+  );
+  const resolvedAiImageUrl =
+    stageMode === 'ai-vton' && !isHoldingForFirstLookCountdown
+      ? availableAiImageUrl
+      : null;
+  const canReturnToCharacter =
+    stageMode === 'flatlay' &&
+    Boolean(availableAiImageUrl) &&
+    !isHoldingForFirstLookCountdown;
   const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
+
+  const readyCanonicalAngles = useMemo(() => {
+    void scenarioSnapEpoch;
+    void historyCount;
+    const set = new Set();
+    if (isShowingPinnedHistory && pinnedHistoryItem?.angleSlices) {
+      for (const deg of TURNAROUND_ANGLES) {
+        if (pinnedHistoryItem.angleSlices[deg]) set.add(deg);
+      }
+      return Array.from(set);
+    }
+    if (demoShowcaseEnabled && demoSliceUrl) {
+      return [...TURNAROUND_ANGLES];
+    }
+    const snapEntry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    if (snapEntry?.angleSlices) {
+      for (const deg of TURNAROUND_ANGLES) {
+        if (snapEntry.angleSlices[deg]) set.add(deg);
+      }
+    }
+    if (!forceRefresh) {
+      for (const deg of TURNAROUND_ANGLES) {
+        if (
+          !set.has(deg) &&
+          peekMemoryAiVtonSlice({
+            avatarConfigHash: resolvedAvatarHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather: vtonEffectiveWeather,
+            angleDeg: deg,
+          })?.imageUrl
+        ) {
+          set.add(deg);
+        }
+      }
+    }
+    return Array.from(set);
+  }, [
+    scenarioSnapEpoch,
+    historyCount,
+    isShowingPinnedHistory,
+    pinnedHistoryItem,
+    demoShowcaseEnabled,
+    demoSliceUrl,
+    scenarioVtonKey,
+    forceRefresh,
+    resolvedAvatarHash,
+    outfitComboId,
+    styleMode,
+    vtonEffectiveWeather,
+  ]);
+
+  const scrollbarLighting = useMemo(
+    () => computeScrollbarLightingState(readyCanonicalAngles),
+    [readyCanonicalAngles]
+  );
+
+  const handleSelectFlatLaySlot = useCallback(
+    (slotKey) => {
+      if (firstLookPreGenActiveRef.current) {
+        cancelInitialBackgroundPreGenToStaged();
+      }
+      onSelectSlot?.(slotKey);
+    },
+    [cancelInitialBackgroundPreGenToStaged, onSelectSlot]
+  );
 
   const handleUserInteractFlatLay = useCallback(() => {
     setPostLoginRevealActive(false);
@@ -2052,10 +2388,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return isEn ? pair.en : pair.ko;
   }, [effectiveWeather, scenarioKey, isEn]);
 
-  const hasConfiguredGeminiKey =
-    hasSavedClientKey ||
-    hasServerConfiguredKey ||
-    Boolean(resolveClientGeminiApiKey());
+  const hasConfiguredGeminiKey = hasServerConfiguredKey;
   void hasConfiguredGeminiKey;
 
   const showAngleDock =
@@ -2063,7 +2396,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     shouldShowStudioAngleDock({
       stageMode,
       hasAiImage: Boolean(resolvedAiImageUrl),
-      aiLoading: Boolean(aiLoading),
+      aiLoading: Boolean(aiLoading || isHoldingForFirstLookCountdown),
       demoShowcaseActive: Boolean(demoShowcaseEnabled),
     });
 
@@ -2160,6 +2493,38 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     el.style.setProperty('--stage-char-rim-shadow', stageLightingFrame.characterRimDropShadow);
   }, [stageLightingFrame.characterRimDropShadow]);
 
+  useEffect(() => {
+    const el = wornSlotsDockRef.current;
+    if (!el || equippedCount === 0) {
+      setWornDockOverflow((prev) =>
+        prev.canScrollUp || prev.canScrollDown
+          ? { canScrollUp: false, canScrollDown: false }
+          : prev
+      );
+      return undefined;
+    }
+    syncWornDockOverflow();
+    const rafId =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame(syncWornDockOverflow)
+        : null;
+    el.addEventListener('scroll', syncWornDockOverflow, { passive: true });
+    let ro = null;
+    if (typeof ResizeObserver === 'function') {
+      ro = new ResizeObserver(syncWornDockOverflow);
+      ro.observe(el);
+    }
+    window.addEventListener('resize', syncWornDockOverflow);
+    return () => {
+      if (rafId !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(rafId);
+      }
+      el.removeEventListener('scroll', syncWornDockOverflow);
+      ro?.disconnect();
+      window.removeEventListener('resize', syncWornDockOverflow);
+    };
+  }, [equippedCount, showAngleDock, stageMode, syncWornDockOverflow]);
+
   return (
     <div
       ref={viewerRootRef}
@@ -2171,7 +2536,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
       data-has-status-capsule={hasStatusCapsuleVisible ? 'true' : 'false'}
       data-has-staged-bar={hasStagedBarVisible ? 'true' : 'false'}
-      data-has-top-banner={aiLoading || hasStagedBarVisible || hasPinnedBannerVisible ? 'true' : 'false'}
+      data-has-top-banner={
+        isHoldingForFirstLookCountdown ||
+        aiLoading ||
+        progressiveBgAnglesLoading ||
+        hasStagedBarVisible ||
+        hasPinnedBannerVisible
+          ? 'true'
+          : 'false'
+      }
+      data-first-look-countdown={isHoldingForFirstLookCountdown ? 'true' : 'false'}
       data-has-bg-picker={showStageBgPickerBtn ? 'true' : 'false'}
       data-stage-bg-id={resolvedBgItem.id}
       data-stage-bg-tier={resolvedBgItem.tier}
@@ -2193,7 +2567,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       data-equipped-count={equippedCount}
       data-vton-provider={activeProvider}
       data-vton-cached={isCachedHit ? 'true' : 'false'}
-      data-vton-loading={aiLoading && !postLoginRevealActive ? 'true' : 'false'}
+      data-vton-loading={
+        (aiLoading || isHoldingForFirstLookCountdown) && !postLoginRevealActive
+          ? 'true'
+          : 'false'
+      }
+      data-vton-bg-angles-loading={progressiveBgAnglesLoading ? 'true' : 'false'}
       data-view-angle={viewAngleDeg}
       data-angle-scroll={angleScrollDeg}
       data-avatar-hash={resolvedAvatarHash}
@@ -2214,9 +2593,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         clockNowMs={clockNowMs}
         lightingPreset={normalizedLightingPreset}
         lightingIntensity={clampedLightingIntensity}
+        heightCm={
+          bodySpec?.heightCm ??
+          resolvedAvatarSpec?.body?.heightCm ??
+          user?.heightCm ??
+          172
+        }
       />
 
-      {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection + Contact AO Shadow */}
+      {/* Layer 1A (z-10): Feathered Cyclorama Floor Deck + Wet Mirror Reflection (Contact AO delegated to Three.js) */}
       <StageGroundDeck
         effectiveWeather={stageEffectiveWeather}
         scenarioKey={scenarioKey}
@@ -2236,9 +2621,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         compareSplitPct={compareSplitPct}
         hasArchitecturalBackdrop={true}
         isOutdoor={isStageOutdoor}
+        suppressContactShadow={threeStageAvailable}
       />
 
-      {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Ground Contact, Camera Parallax & Volumetric Weather */}
+      {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Single GLSL Silhouette Cast Shadow + Contact AO & Volumetric Weather */}
       {Boolean(resolvedAiImageUrl) && stageMode === 'ai-vton' && !canReturnToCharacter && (
         <StudioThreeStageLayer
           isOutdoor={isStageOutdoor}
@@ -2254,11 +2640,59 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           clockNowMs={clockNowMs}
           lightingPreset={normalizedLightingPreset}
           lightingIntensity={clampedLightingIntensity}
+          modelImageUrl={resolvedAiImageUrl}
+          soleStageTopPct={floorPlacement.soleStageTopPct}
+          topRatio={floorPlacement.topRatio}
+          bottomRatio={floorPlacement.bottomRatio}
+          heightCm={
+            bodySpec?.heightCm ??
+            resolvedAvatarSpec?.body?.heightCm ??
+            user?.heightCm ??
+            172
+          }
+          mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
+          onWebGlAvailabilityChange={setThreeStageAvailable}
         />
       )}
 
-      {/* Top Synthesis Progress Line & Step-by-Step Status Pill during Gemini AI VTON Generation */}
-      {aiLoading && !postLoginRevealActive && (
+      {/* Top Status Pill:
+          1) Initial recommended flat-lay First-Look reverse countdown (auto pre-gen notice; touch any garment to cancel)
+          2) Active 0° front synthesis status
+          3) Subtle progressive side/back readiness indicator once 0° front is revealed */}
+      {isHoldingForFirstLookCountdown && !postLoginRevealActive ? (
+        <>
+          <div aria-hidden="true" className="studio-vton-progress-track">
+            <div
+              className="studio-vton-progress-fill is-countdown"
+              style={{
+                width: `${Math.max(
+                  0,
+                  Math.min(100, (firstLookRemainingMs / FIRST_LOOK_DELAY_MS) * 100)
+                )}%`,
+              }}
+            />
+          </div>
+          <div
+            className="studio-vton-step-status is-first-look-countdown tabular-nums"
+            data-vton-first-look-pill="true"
+            data-first-look-remaining-ms={firstLookRemainingMs}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="studio-vton-step-label">
+              {isEn
+                ? "We'll generate this look unless you change items"
+                : '옷을 변경하지 않으면 이 코디로 모델을 생성해 드려요'}
+            </span>
+            <span
+              className="studio-vton-countdown-badge tabular-nums"
+              data-first-look-countdown-sec="true"
+            >
+              {formatFirstLookCountdownSec(firstLookRemainingMs, resolvedLang)}
+            </span>
+          </div>
+        </>
+      ) : aiLoading && !postLoginRevealActive ? (
         <>
           <div aria-hidden="true" className="studio-vton-progress-track">
             <div className="studio-vton-progress-fill is-indeterminate" />
@@ -2266,27 +2700,30 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <div
             className="studio-vton-step-status tabular-nums"
             data-vton-loading-steps="true"
-            data-loading-step={loadingStepIdx + 1}
             role="status"
             aria-live="polite"
           >
-            <span className="studio-vton-step-badge">{loadingStepIdx + 1}/3</span>
+            <span className="studio-vton-step-badge">0°</span>
             <span className="studio-vton-step-label">
-              {loadingStepIdx === 0
-                ? isEn
-                  ? 'Selecting fabric & silhouette...'
-                  : '옷감을 고르는 중'
-                : loadingStepIdx === 1
-                  ? isEn
-                    ? 'Draping tailored to your silhouette...'
-                    : '체형에 맞춰 드레이핑하는 중'
-                  : isEn
-                    ? 'Adjusting atelier studio lighting...'
-                    : '조명을 맞추는 중'}
+              {isEn ? 'Rendering front model...' : '정면 모델을 준비하고 있어요'}
             </span>
           </div>
         </>
-      )}
+      ) : progressiveBgAnglesLoading && Boolean(resolvedAiImageUrl) && !postLoginRevealActive ? (
+        <div
+          className="studio-vton-step-status is-bg-angles tabular-nums"
+          data-vton-bg-angles-pill="true"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="studio-vton-step-badge">
+            {scrollbarLighting.readyCount}/{scrollbarLighting.totalCount}
+          </span>
+          <span className="studio-vton-step-label">
+            {isEn ? 'Rendering side & back angles...' : '측면·뒷모습 순차 준비 중'}
+          </span>
+        </div>
+      ) : null}
 
       {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [Wardrobe Drawer] */}
       <div className="studio-stage-top-hud">
@@ -2434,11 +2871,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         slots={slots}
         layers={layers}
         activeSlotKey={activeSlotKey}
-        onSelectSlot={onSelectSlot}
+        onSelectSlot={handleSelectFlatLaySlot}
         stageMode={stageMode}
         styleMode={styleMode}
         aiImageUrl={resolvedAiImageUrl}
-        aiLoading={aiLoading && !postLoginRevealActive}
+        aiLoading={(aiLoading || isHoldingForFirstLookCountdown) && !postLoginRevealActive}
         effectiveWeather={effectiveWeather}
         theme={resolvedTheme}
         skinToneHex={
@@ -2467,11 +2904,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         compareActive={effectiveCompareActive}
         compareSplitPct={compareSplitPct}
         onCompareSplitChange={setCompareSplitPct}
-        zoom={zoom}
+        zoom={1}
         pan={pan}
-        onZoomChange={setZoom}
-        onPanChange={setPan}
         onFloorPlacementChange={handleFloorPlacementChange}
+        threeStageAvailable={threeStageAvailable}
         auraTier={auraTier}
         postLoginRevealActive={postLoginRevealActive}
         postLoginProgress={postLoginProgress}
@@ -2588,15 +3024,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 type="button"
                 data-vton-open-key-btn="true"
                 className="studio-status-capsule-cta"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setHistoryOpen(false);
-                  setStatusToast(null);
-                  onOpenSkinToneModal?.('api-key');
-                }}
+                onClick={handleRetryAiSynthesis}
               >
-                <Sparkles size={13} aria-hidden="true" />
-                <span>{statusCapsuleSpec.actionLabel}</span>
+                <RefreshCw size={13} aria-hidden="true" />
+                <span>{isEn ? 'Try again' : '다시 입혀보기'}</span>
               </button>
             )}
             {statusCapsuleSpec.action === 'retry' && (
@@ -2769,109 +3200,145 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Left Vertically Scrollable Worn-Slot Chips Dock */}
+      {/* Right Vertically Scrollable Worn-Slot Chips Dock with Responsive Top/Bottom Jump Arrows */}
       {equippedCount > 0 && (
         <div
-          className="studio-worn-slots-dock"
-          data-worn-slots-dock="true"
-          aria-label={isEn ? 'Equipped garments' : '착용 아이템'}
+          className="studio-worn-slots-dock-shell"
+          data-worn-slots-shell="true"
+          data-can-scroll-up={wornDockOverflow.canScrollUp ? 'true' : 'false'}
+          data-can-scroll-down={wornDockOverflow.canScrollDown ? 'true' : 'false'}
           onPointerDown={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onWheel={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          {layers.map((layer) => {
-            const isSelectedSlot = activeSlotKey === layer.slotKey;
-            const displayGarmentName =
-              isEn && layer.garment.name_en
-                ? layer.garment.name_en
-                : localizeGarmentName(layer.garment.name, resolvedLang);
-            const subMeta = SUB_SLOT_META_BY_KEY[layer.slotKey];
-            const slotSide = layer.slotKey.endsWith('_left')
-              ? 'left'
-              : layer.slotKey.endsWith('_right')
-                ? 'right'
-                : null;
-            const sideBadge = slotSide === 'left' ? 'L' : slotSide === 'right' ? 'R' : null;
-            const slotFullTitle = subMeta
-              ? `${isEn ? subMeta.labelEn : subMeta.labelKo}: ${displayGarmentName}`
-              : displayGarmentName;
-            return (
-              <div
-                key={`${layer.slotKey}-${layer.garment.id}`}
-                role="button"
-                tabIndex={0}
-                aria-label={slotFullTitle}
-                aria-pressed={isSelectedSlot}
-                data-studio-slot={layer.slotKey}
-                data-slot-side={slotSide || undefined}
-                className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''} ${
-                  activeHudTouchId === `slot-${layer.slotKey}` ? 'is-interacting' : ''
-                }`.trim()}
-                title={slotFullTitle}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  handleHudTouchStart(`slot-${layer.slotKey}`);
-                }}
-                onPointerUp={handleHudTouchEnd}
-                onPointerCancel={handleHudTouchEnd}
-                onPointerLeave={handleHudTouchEnd}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectSlot?.(layer.slotKey);
-                }}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onSelectSlot?.(layer.slotKey);
-                  }
-                }}
-              >
-                <StudioGarmentImage
-                  item={layer.garment}
-                  alt={displayGarmentName}
-                  allowStorePhoto={Boolean(
-                    layer.garment.image_url &&
-                      (layer.garment.image_url.startsWith('data:') ||
-                        layer.garment.image_url.startsWith('/uploads/'))
-                  )}
-                  style={{ width: '100%', height: '100%' }}
-                />
-                {sideBadge && (
-                  <span
-                    className="studio-worn-slot-side-tag"
-                    data-slot-side={sideBadge}
-                    aria-hidden="true"
-                  >
-                    {sideBadge}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="studio-worn-slot-remove"
-                  aria-label={
-                    isEn
-                      ? `Remove ${displayGarmentName}`
-                      : `${layer.garment.name} 착장 해제`
-                  }
+          {wornDockOverflow.canScrollUp && (
+            <button
+              type="button"
+              className="studio-worn-dock-jump-btn is-up"
+              data-worn-dock-jump="top"
+              aria-label={isEn ? 'Scroll equipped items to top' : '착용 아이템 맨 위로 이동'}
+              title={isEn ? 'Scroll to top' : '맨 위로 이동'}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleWornDockJumpTop}
+            >
+              <ChevronUp size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
+          <div
+            ref={wornSlotsDockRef}
+            className="studio-worn-slots-dock"
+            data-worn-slots-dock="true"
+            aria-label={isEn ? 'Equipped garments' : '착용 아이템'}
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {layers.map((layer) => {
+              const isSelectedSlot = activeSlotKey === layer.slotKey;
+              const displayGarmentName =
+                isEn && layer.garment.name_en
+                  ? layer.garment.name_en
+                  : localizeGarmentName(layer.garment.name, resolvedLang);
+              const subMeta = SUB_SLOT_META_BY_KEY[layer.slotKey];
+              const slotSide = layer.slotKey.endsWith('_left')
+                ? 'left'
+                : layer.slotKey.endsWith('_right')
+                  ? 'right'
+                  : null;
+              const sideBadge = slotSide === 'left' ? 'L' : slotSide === 'right' ? 'R' : null;
+              const slotFullTitle = subMeta
+                ? `${isEn ? subMeta.labelEn : subMeta.labelKo}: ${displayGarmentName}`
+                : displayGarmentName;
+              return (
+                <div
+                  key={`${layer.slotKey}-${layer.garment.id}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={slotFullTitle}
+                  aria-pressed={isSelectedSlot}
+                  data-studio-slot={layer.slotKey}
+                  data-slot-side={slotSide || undefined}
+                  className={`studio-worn-slot-chip ${isSelectedSlot ? 'is-focused' : ''} ${
+                    activeHudTouchId === `slot-${layer.slotKey}` ? 'is-interacting' : ''
+                  }`.trim()}
+                  title={slotFullTitle}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    triggerHaptic('selection');
+                    handleHudTouchStart(`slot-${layer.slotKey}`);
                   }}
+                  onPointerUp={handleHudTouchEnd}
+                  onPointerCancel={handleHudTouchEnd}
+                  onPointerLeave={handleHudTouchEnd}
                   onClick={(e) => {
                     e.stopPropagation();
-                    pendingScenarioSlotHydrationRef.current = false;
-                    pendingScenarioHydrationUntilRef.current = 0;
-                    onUnequipSlot?.(layer.slotKey);
+                    onSelectSlot?.(layer.slotKey);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelectSlot?.(layer.slotKey);
+                    }
                   }}
                 >
-                  <X size={10} strokeWidth={2.6} />
-                </button>
-              </div>
-            );
-          })}
+                  <StudioGarmentImage
+                    item={layer.garment}
+                    alt={displayGarmentName}
+                    allowStorePhoto={Boolean(
+                      layer.garment.image_url &&
+                        (layer.garment.image_url.startsWith('data:') ||
+                          layer.garment.image_url.startsWith('/uploads/'))
+                    )}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                  {sideBadge && (
+                    <span
+                      className="studio-worn-slot-side-tag"
+                      data-slot-side={sideBadge}
+                      aria-hidden="true"
+                    >
+                      {sideBadge}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="studio-worn-slot-remove"
+                    aria-label={
+                      isEn
+                        ? `Remove ${displayGarmentName}`
+                        : `${layer.garment.name} 착장 해제`
+                    }
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('selection');
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pendingScenarioSlotHydrationRef.current = false;
+                      pendingScenarioHydrationUntilRef.current = 0;
+                      onUnequipSlot?.(layer.slotKey);
+                    }}
+                  >
+                    <X size={10} strokeWidth={2.6} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {wornDockOverflow.canScrollDown && (
+            <button
+              type="button"
+              className="studio-worn-dock-jump-btn is-down"
+              data-worn-dock-jump="bottom"
+              aria-label={isEn ? 'Scroll equipped items to bottom' : '착용 아이템 맨 아래로 이동'}
+              title={isEn ? 'Scroll to bottom' : '맨 아래로 이동'}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleWornDockJumpBottom}
+            >
+              <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
@@ -3070,13 +3537,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom Sleek Architectural Angle Slider (-180° Back .. 0° Front .. +180° Back) */}
+      {/* Bottom Sleek Architectural Angle Slider (-180° Back .. 0° Front .. +180° Back) with Progressive Readiness Lighting */}
       <div
         className={`studio-angle-scroll-dock is-sleek-dial ${!showAngleDock ? 'is-hidden' : ''} ${
           isAngleInteracting ? 'is-interacting' : ''
+        } ${scrollbarLighting.frontReady ? 'has-front-ready' : ''} ${
+          scrollbarLighting.allReady ? 'is-all-ready' : ''
         }`.trim()}
         data-angle-scroll-dock="true"
         data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
+        data-ready-angles={readyCanonicalAngles.join(',')}
+        data-front-ready={scrollbarLighting.frontReady ? 'true' : 'false'}
+        data-back-ready={scrollbarLighting.backReady ? 'true' : 'false'}
         aria-hidden={!showAngleDock ? 'true' : undefined}
         inert={!showAngleDock}
         onClick={(e) => e.stopPropagation()}
@@ -3085,7 +3557,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="left-back"
-            className={`studio-angle-end-label ${angleScrollDeg <= -158 ? 'is-active' : ''}`}
+            data-angle-ready={scrollbarLighting.backReady ? 'true' : 'false'}
+            className={`studio-angle-end-label ${angleScrollDeg <= -158 ? 'is-active' : ''} ${
+              scrollbarLighting.backReady ? 'is-ready-lit' : ''
+            } ${justLitAngles.includes(180) ? 'is-just-lit' : ''}`.trim()}
             onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(-180)}
           >
@@ -3095,9 +3570,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-center-reset="true"
+            data-angle-ready={scrollbarLighting.frontReady ? 'true' : 'false'}
             className={`studio-angle-center-pill tabular-nums ${
               viewAngleDeg === 0 && Math.abs(angleScrollDeg) <= 12 ? 'is-front' : ''
-            }`}
+            } ${scrollbarLighting.frontReady ? 'is-ready-lit' : ''} ${
+              justLitAngles.includes(0) ? 'is-just-lit' : ''
+            }`.trim()}
             title={isEn ? 'Reset to 0° Front' : '0° 정면으로 이동'}
             onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(0)}
@@ -3108,7 +3586,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           <button
             type="button"
             data-angle-end-btn="right-back"
-            className={`studio-angle-end-label ${angleScrollDeg >= 158 ? 'is-active' : ''}`}
+            data-angle-ready={scrollbarLighting.backReady ? 'true' : 'false'}
+            className={`studio-angle-end-label ${angleScrollDeg >= 158 ? 'is-active' : ''} ${
+              scrollbarLighting.backReady ? 'is-ready-lit' : ''
+            } ${justLitAngles.includes(180) ? 'is-just-lit' : ''}`.trim()}
             onPointerDown={() => triggerHaptic('selection')}
             onClick={() => handleJumpAngleScroll(180)}
           >
@@ -3117,16 +3598,35 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
 
         <div className="studio-angle-scroll-track-wrap">
+          {scrollbarLighting.frontReady && (
+            <div
+              aria-hidden="true"
+              className="studio-angle-ready-glow-bar"
+              data-angle-ready-glow-bar="true"
+              style={{
+                left: `${50 - scrollbarLighting.leftReachPct}%`,
+                width: `${scrollbarLighting.leftReachPct + scrollbarLighting.rightReachPct}%`,
+              }}
+            />
+          )}
           <div className="studio-angle-scroll-ticks" aria-hidden="true">
-            <span className="studio-angle-tick is-end" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick is-center" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick" />
-            <span className="studio-angle-tick is-end" />
+            {ANGLE_SCROLL_TICKS.map((tickDeg) => {
+              const canonical = mapSignedTickToCanonicalSlice(tickDeg);
+              const isTickReady = Boolean(scrollbarLighting.readyTicks[tickDeg]);
+              const isTickJustLit = justLitAngles.includes(canonical);
+              return (
+                <span
+                  key={tickDeg}
+                  data-tick-angle={tickDeg}
+                  data-tick-ready={isTickReady ? 'true' : 'false'}
+                  className={`studio-angle-tick ${tickDeg === 0 ? 'is-center' : ''} ${
+                    Math.abs(tickDeg) === 180 ? 'is-end' : ''
+                  } ${isTickReady ? 'is-ready-lit' : ''} ${
+                    isTickJustLit ? 'is-just-lit' : ''
+                  }`.trim()}
+                />
+              );
+            })}
           </div>
           <input
             type="range"

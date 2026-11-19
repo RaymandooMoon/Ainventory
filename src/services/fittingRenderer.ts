@@ -585,8 +585,21 @@ export function classifyAccessoryOrJewelryPart(
   }
   if (
     cat === 'bag' ||
-    ['bag', 'tote', 'briefcase', 'backpack'].includes(sub) ||
-    /가방|토트|브리프|크로스백|숄더백|백팩|클러치|파우치|서류가방|bag|tote|briefcase/i.test(name)
+    [
+      'bag',
+      'tote',
+      'briefcase',
+      'backpack',
+      'messenger',
+      'clutch',
+      'duffel',
+      'hobo',
+      'crossbody',
+      'shoulder_bag',
+    ].includes(sub) ||
+    /가방|토트|브리프|크로스백|숄더백|백팩|클러치|파우치|서류가방|메신저|더플|위켄더|호보|bag|tote|briefcase|backpack|messenger|clutch|duffel|weekender|hobo|crossbody/i.test(
+      name
+    )
   ) {
     return 'bag';
   }

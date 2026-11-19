@@ -44,6 +44,7 @@ import {
 } from '../services/fittingRenderer.ts';
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { formatKoreanDistrictLocation } from '../services/vtonQualityControl.ts';
+import { inferBagCarrySpec, isBagGarmentItem } from '../shared/garmentTaxonomy.js';
 import { CITY_COORDS, apiFetch } from '../utils/api.ts';
 import {
   localizeApiMessage,
@@ -218,10 +219,10 @@ const STUDIO_OCCASION_TABS = [
 ];
 
 const DAILY_KEYWORDS_RE =
-  /daily|casual|sport|tshirt|t-shirt|tee|hood|sweat|denim|jean|short|sneaker|sandal|flip_flop|cap|beanie|bucket|windbreaker|parka|padding|puffer|cardigan|knit|tote|backpack|swim|bikini|rashguard|데일리|캐주얼|티셔츠|데님|청바지|스니커즈|후드|맨투맨|패딩|볼캡|비니|버킷햇|윈드브레이커|가디건|니트|토트|수영복/i;
+  /daily|casual|sport|tshirt|t-shirt|tee|hood|sweat|denim|jean|short|sneaker|sandal|flip_flop|cap|beanie|bucket|windbreaker|parka|padding|puffer|cardigan|knit|tote|backpack|messenger|duffel|weekender|hobo|swim|bikini|rashguard|데일리|캐주얼|티셔츠|데님|청바지|스니커즈|후드|맨투맨|패딩|볼캡|비니|버킷햇|윈드브레이커|가디건|니트|토트|백팩|메신저|더플|위켄더|호보|수영복/i;
 
 const OFFICE_KEYWORDS_RE =
-  /office|smart|business|shirt|blouse|slacks|trouser|blazer|trench|coat|loafer|derby|oxford|heel|pump|briefcase|shoulder|watch|belt|eyewear|glasses|scarf|cardigan|skirt|pleat|dress|onepiece|오피스|출근|셔츠|블라우스|슬랙스|블레이저|트렌치|코트|로퍼|브리프케이스|숄더백|안경|아이웨어|시계|벨트|스커트|원피스/i;
+  /office|smart|business|shirt|blouse|slacks|trouser|blazer|trench|coat|loafer|derby|oxford|heel|pump|briefcase|shoulder|messenger|backpack|watch|belt|eyewear|glasses|scarf|cardigan|skirt|pleat|dress|onepiece|오피스|출근|셔츠|블라우스|슬랙스|블레이저|트렌치|코트|로퍼|브리프케이스|숄더백|메신저|백팩|안경|아이웨어|시계|벨트|스커트|원피스/i;
 
 const FORMAL_KEYWORDS_RE =
   /formal|ceremony|evening|suit|blazer|coat|dress|onepiece|silk|cashmere|wool|necktie|tie|oxford|derby|heel|pump|boot|clutch|briefcase|pearl|diamond|gold|silver|platinum|brooch|necklace|earring|ring|bracelet|watch|포멀|정장|수트|하객|블레이저|핸드메이드|실크|캐시미어|타이|넥타이|옥스포드|더비|힐|부츠|원피스|브로치|목걸이|귀걸이|반지|진주|골드|실버/i;
@@ -428,7 +429,10 @@ const SUBCATEGORY_DISPLAY_MAP = {
   crossbody: { ko: '크로스백', en: 'Crossbody Bag' },
   shoulder_bag: { ko: '숄더백', en: 'Shoulder Bag' },
   backpack: { ko: '백팩', en: 'Backpack' },
-  clutch: { ko: '클러치', en: 'Clutch' },
+  messenger: { ko: '메신저백', en: 'Messenger Bag' },
+  clutch: { ko: '클러치백', en: 'Clutch' },
+  duffel: { ko: '더플백', en: 'Duffel Bag' },
+  hobo: { ko: '호보백', en: 'Hobo Bag' },
   scarf: { ko: '스카프·머플러', en: 'Scarf' },
   muffler: { ko: '머플러', en: 'Scarf' },
   necktie: { ko: '넥타이', en: 'Necktie' },
@@ -2570,6 +2574,25 @@ export default function OutfitStudioView({
                 </span>
                 <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
                 <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
+                {isBagGarmentItem(equippedItem) && (() => {
+                  const carrySpec = inferBagCarrySpec(equippedItem);
+                  const carryLabelMap = {
+                    hand_only: tx(lang, '끈 없음 · 핸드캐리', 'No Strap · Hand Carry'),
+                    shoulder: tx(lang, '끈 있음 · 숄더', 'Strap · Shoulder'),
+                    crossbody: tx(lang, '끈 있음 · 크로스', 'Strap · Crossbody'),
+                    backpack: tx(lang, '끈 있음 · 백팩', 'Dual Straps · Backpack'),
+                    convertible_hand_strap: tx(lang, '끈 있음 · 핸드/숄더', 'Strap · Convertible'),
+                  };
+                  return (
+                    <span
+                      className="atelier-spec-meta-pill"
+                      data-bag-strap-badge={carrySpec.hasStrap ? 'strap' : 'no-strap'}
+                      data-bag-carry-style={carrySpec.carryStyle}
+                    >
+                      {carryLabelMap[carrySpec.carryStyle] || carryLabelMap.hand_only}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

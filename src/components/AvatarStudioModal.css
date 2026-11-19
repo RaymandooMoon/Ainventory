@@ -862,27 +862,38 @@ html[data-theme='dark']
 
 #profile-studio-sheet .atelier-portrait-quick-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: minmax(0, 1.16fr) minmax(0, 0.94fr);
+  gap: 5px;
 }
 
 #profile-studio-sheet .atelier-compact-action-btn {
   min-height: 36px;
-  padding: 4px 8px;
+  min-width: 0;
+  padding: 4px 5px;
   border-radius: 9px;
   background: var(--profile-surface-pill);
   border: 1px solid var(--profile-hairline-strong);
   color: var(--profile-ink-primary);
-  font-size: 0.73rem;
+  font-size: 0.7rem;
   font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+  word-break: keep-all;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 3px;
   cursor: pointer;
   transition:
     background-color 0.16s ease,
     border-color 0.16s ease;
+}
+
+#profile-studio-sheet .atelier-compact-action-btn svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
 }
 
 #profile-studio-sheet .atelier-compact-action-btn:hover:not(:disabled) {
@@ -2680,22 +2691,28 @@ html[data-theme='dark']
 
 .profile-photo-guide-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   padding-top: 4px;
 }
 
 .profile-photo-guide-secondary-btn {
+  min-width: 0;
   min-height: 44px;
-  padding: 0 12px;
+  padding: 8px 10px;
   border-radius: 12px;
   border: 1px solid var(--profile-hairline-strong);
   background: var(--profile-surface-pill);
   color: var(--profile-ink-primary);
   font-size: 0.78rem;
   font-weight: 660;
+  line-height: 1.25;
+  text-align: center;
   cursor: pointer;
   white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease;
@@ -2707,10 +2724,29 @@ html[data-theme='dark']
 }
 
 .profile-photo-guide-primary-btn {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 0.81rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: center;
   white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 460px) {
+  .profile-photo-guide-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-photo-guide-secondary-btn,
+  .profile-photo-guide-primary-btn {
+    white-space: normal;
+  }
 }

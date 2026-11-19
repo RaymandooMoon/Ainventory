@@ -76,3 +76,41 @@ export function getPersonalColorLabels(key?: string | null): {
   macro: PersonalColorMacroKey;
 };
 export function resolveManifestSlotAndGlb(category?: string, subcategory?: string): ManifestSlotGlbSpec;
+
+export type BagCarryStyle =
+  | 'hand_only'
+  | 'shoulder'
+  | 'crossbody'
+  | 'backpack'
+  | 'convertible_hand_strap';
+
+export interface BagCarryStyleMeta {
+  value: BagCarryStyle;
+  hasStrap: boolean;
+  labelKo: string;
+  shortKo: string;
+  labelEn: string;
+}
+
+export interface BagCarrySpec {
+  has_strap: boolean;
+  bag_carry_style: BagCarryStyle;
+}
+
+export const BAG_SUBCATEGORY_SET: ReadonlySet<string>;
+export const BAG_CARRY_STYLES: Readonly<Record<BagCarryStyle, BagCarryStyleMeta>>;
+
+export function isBagGarmentItem(
+  item?: { category?: string | null; subcategory?: string | null } | null
+): boolean;
+
+export function inferBagCarrySpec(
+  item?: {
+    category?: string | null;
+    subcategory?: string | null;
+    name?: string | null;
+    has_strap?: boolean | number | string | null;
+    bag_carry_style?: string | null;
+  } | null
+): BagCarrySpec;
+

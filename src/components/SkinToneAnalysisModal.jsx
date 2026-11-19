@@ -4,9 +4,7 @@ import {
   AlertTriangle,
   Camera,
   Check,
-  ChevronDown,
   ChevronLeft,
-  ExternalLink,
   Loader2,
   Palette,
   RotateCcw,
@@ -15,7 +13,6 @@ import {
   Upload,
   User,
   UserRound,
-  X,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -51,13 +48,9 @@ import {
   translateSubTypeLabel,
 } from '../services/skinToneAnalyzer.ts';
 import {
-  GEMINI_API_KEY_EVENT,
   VTON_STYLE_PREF_EVENT,
-  fetchServerGeminiConfigured,
-  getStoredClientGeminiApiKey,
   getStoredVtonStylePreference,
   resolveEffectiveVtonStyleMode,
-  setStoredClientGeminiApiKey,
   setStoredVtonStylePreference,
 } from '../services/vton2DService.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
@@ -195,10 +188,8 @@ function ProfileModalContent({
   const faceHeroSectionRef = useRef(null);
   const manualToneSectionRef = useRef(null);
   const heightInputRef = useRef(null);
-  const apiKeyInputRef = useRef(null);
   const errorConfirmBtnRef = useRef(null);
   const photoGuideRegisterBtnRef = useRef(null);
-  const apiKeySavedTimerRef = useRef(null);
   const analysisSeqRef = useRef(0);
   const fileReaderRef = useRef(null);
 
@@ -216,9 +207,6 @@ function ProfileModalContent({
     () => () => {
       fileReaderRef.current?.abort?.();
       fileReaderRef.current = null;
-      if (apiKeySavedTimerRef.current) {
-        clearTimeout(apiKeySavedTimerRef.current);
-      }
       void disposeMediaPipeLandmarker();
     },
     []
@@ -248,50 +236,19 @@ function ProfileModalContent({
   const [photoGuideModalOpen, setPhotoGuideModalOpen] = useState(false);
   const [pendingPhotoForRealism, setPendingPhotoForRealism] = useState(false);
 
-  // Gemini API Key configuration moved cleanly into Profile
-  const [apiKeyPanelOpen, setApiKeyPanelOpen] = useState(() => initialTab === 'api-key');
-  const [draftApiKey, setDraftApiKey] = useState(() => getStoredClientGeminiApiKey());
-  const [hasSavedClientKey, setHasSavedClientKey] = useState(() =>
-    Boolean(getStoredClientGeminiApiKey())
-  );
-  const [hasServerConfiguredKey, setHasServerConfiguredKey] = useState(false);
-  const [apiKeySavedFlash, setApiKeySavedFlash] = useState(false);
-
   useEffect(() => {
-    let mounted = true;
-    fetchServerGeminiConfigured()
-      .then((configured) => {
-        if (mounted) setHasServerConfiguredKey(Boolean(configured));
-      })
-      .catch(() => {});
     const onStyleSync = () => {
       setDraftStylePref(getStoredVtonStylePreference());
     };
-    const onKeySync = () => {
-      const current = getStoredClientGeminiApiKey();
-      setDraftApiKey(current);
-      setHasSavedClientKey(Boolean(current));
-    };
     if (typeof window !== 'undefined') {
       window.addEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
-      window.addEventListener(GEMINI_API_KEY_EVENT, onKeySync);
     }
     return () => {
-      mounted = false;
       if (typeof window !== 'undefined') {
         window.removeEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
-        window.removeEventListener(GEMINI_API_KEY_EVENT, onKeySync);
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (initialTab !== 'api-key' || typeof window === 'undefined') return;
-    window.requestAnimationFrame(() => {
-      apiKeyInputRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-      apiKeyInputRef.current?.focus?.();
-    });
-  }, [initialTab]);
 
   const [heightInputText, setHeightInputText] = useState(() =>
     String(
@@ -471,8 +428,6 @@ function ProfileModalContent({
     [draftStylePref, isFacePhotoActive]
   );
 
-  const hasConfiguredGeminiKey = hasSavedClientKey || hasServerConfiguredKey;
-
   const committedFacePhotoUrl = useMemo(
     () =>
       bridgeLegacyPropsToAvatarSpec({
@@ -535,27 +490,6 @@ function ProfileModalContent({
         galleryInputRef.current?.click?.();
       });
     }
-  };
-
-  const handleSaveProfileApiKey = (e) => {
-    e?.preventDefault?.();
-    triggerHaptic('selection');
-    const saved = setStoredClientGeminiApiKey(draftApiKey);
-    setDraftApiKey(saved);
-    setHasSavedClientKey(Boolean(saved));
-    setApiKeySavedFlash(true);
-    if (apiKeySavedTimerRef.current) clearTimeout(apiKeySavedTimerRef.current);
-    apiKeySavedTimerRef.current = setTimeout(() => {
-      setApiKeySavedFlash(false);
-    }, 2200);
-  };
-
-  const handleClearProfileApiKey = () => {
-    triggerHaptic('selection');
-    setStoredClientGeminiApiKey('');
-    setDraftApiKey('');
-    setHasSavedClientKey(false);
-    setApiKeySavedFlash(false);
   };
 
   const handleStepPreviewAngle = (direction) => {
@@ -1327,134 +1261,6 @@ function ProfileModalContent({
                     'Fits outfits on a character simulation tailored to your body & skin tone.'
                   )}
             </p>
-          </div>
-
-          <div className="profile-ai-divider" role="separator" />
-
-          <div
-            className="profile-api-key-block"
-            data-profile-api-key-section="true"
-          >
-            <button
-              id="open-vton-api-key-btn"
-              type="button"
-              data-profile-api-key-toggle="true"
-              aria-expanded={apiKeyPanelOpen}
-              className="profile-api-key-summary-btn"
-              onClick={() => {
-                triggerHaptic('selection');
-                setApiKeyPanelOpen((prev) => !prev);
-              }}
-            >
-              <span className="profile-api-key-summary-left">
-                <Sparkles size={14} aria-hidden="true" />
-                <span>{tx(lang, 'AI 모델 피팅 활성화', 'Enable AI Model Fitting')}</span>
-                <span
-                  className={`profile-api-key-dot-badge ${
-                    hasConfiguredGeminiKey ? 'is-connected' : ''
-                  }`}
-                >
-                  {apiKeySavedFlash
-                    ? tx(lang, '저장됨', 'Saved')
-                    : hasConfiguredGeminiKey
-                      ? tx(lang, '켜짐', 'On')
-                      : tx(lang, '꺼짐', 'Off')}
-                </span>
-              </span>
-              <ChevronDown
-                size={15}
-                className={`profile-api-key-chevron ${apiKeyPanelOpen ? 'is-open' : ''}`}
-                aria-hidden="true"
-              />
-            </button>
-
-            {apiKeyPanelOpen && (
-              <form
-                className="profile-api-key-form"
-                data-vton-key-popover="true"
-                onSubmit={handleSaveProfileApiKey}
-              >
-                <p className="profile-api-key-desc">
-                  {tx(
-                    lang,
-                    'Google AI Studio의 Gemini 키를 연결하면 내 체형으로 AI 모델을 만들어 옷을 입혀 드려요. 키는 이 기기 브라우저에만 보관됩니다.',
-                    'Connect a Google AI Studio Gemini key to tailor an AI model to your body and dress it. The key stays in this browser only.'
-                  )}
-                </p>
-                <div className="profile-api-key-input-row">
-                  <input
-                    ref={apiKeyInputRef}
-                    type="password"
-                    autoComplete="off"
-                    spellCheck={false}
-                    data-vton-key-input="true"
-                    value={draftApiKey}
-                    onChange={(e) => setDraftApiKey(e.target.value)}
-                    placeholder={tx(lang, 'AIzaSy... API 키 입력', 'Enter AIzaSy... API key')}
-                    aria-label={tx(lang, 'Gemini API 키 입력', 'Enter Gemini API key')}
-                    className="profile-api-key-input"
-                  />
-                  {draftApiKey && (
-                    <button
-                      type="button"
-                      className="profile-api-key-inline-clear"
-                      aria-label={tx(lang, '입력 지우기', 'Clear input')}
-                      onClick={() => {
-                        setDraftApiKey('');
-                        apiKeyInputRef.current?.focus?.();
-                      }}
-                    >
-                      <X size={13} aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="profile-api-key-footer-row">
-                  <div className="profile-api-key-links">
-                    <a
-                      href="https://aistudio.google.com/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-vton-aistudio-link="true"
-                      className="profile-api-key-link"
-                    >
-                      <span>AI Studio</span>
-                      <ExternalLink size={11} aria-hidden="true" />
-                    </a>
-                    <a
-                      href="https://console.cloud.google.com/billing"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="profile-api-key-link"
-                    >
-                      <span>{tx(lang, '결제 연동', 'Billing')}</span>
-                      <ExternalLink size={11} aria-hidden="true" />
-                    </a>
-                  </div>
-
-                  <div className="profile-api-key-actions">
-                    {hasSavedClientKey && (
-                      <button
-                        type="button"
-                        data-vton-key-clear="true"
-                        className="profile-api-key-btn is-subtle"
-                        onClick={handleClearProfileApiKey}
-                      >
-                        {tx(lang, '초기화', 'Clear')}
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      data-vton-key-save="true"
-                      data-vton-save-key-btn="true"
-                      className="profile-api-key-btn is-primary"
-                    >
-                      {tx(lang, '저장', 'Save')}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
           </div>
         </section>
 

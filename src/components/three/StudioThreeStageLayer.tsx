@@ -12,9 +12,12 @@ import {
   resolveStageLightingFrame,
 } from '../../utils/stageLightingEngine.ts';
 import {
+  computeHeightAwareStageFraming,
+  computeThreeCameraLookAtForSolePct,
+} from '../../utils/stageFramingEngine.ts';
+import {
   type StageTierCode,
   createRadialAuraGlowTexture,
-  createRadialContactShadowTexture,
   createStoneMicroReliefTexture,
   createStudioEnvironmentTexture,
   createWindowGoboTexture,
@@ -38,6 +41,13 @@ export interface StudioThreeStageLayerProps {
   clockNowMs?: number;
   lightingPreset?: StageLightingPresetId | string;
   lightingIntensity?: number;
+  modelImageUrl?: string | null;
+  soleStageTopPct?: number;
+  topRatio?: number | null;
+  bottomRatio?: number | null;
+  heightCm?: number;
+  mirrorX?: boolean;
+  onWebGlAvailabilityChange?: (available: boolean) => void;
 }
 
 const PRECIP_COUNT = 84;
@@ -116,6 +126,94 @@ const MIE_HAZE_FRAG = `
     float horizonVeil = (1.0 - smoothstep(0.0, 0.88, vUv.y)) * (1.0 - smoothstep(0.25, 0.52, abs(vUv.x - 0.5)));
     float alpha = (mieCore * 0.78 + horizonVeil * 0.34) * uOpacity;
     gl_FragColor = vec4(uColor, clamp(alpha, 0.0, 1.0));
+  }
+`;
+
+// Single-pass GLSL Grounded Character Silhouette Cast Shadow + Tight Dual-Foot Contact AO
+// Zero extra render passes; works identically on hardware GPU and SwiftShader WebGL.
+const SILHOUETTE_SHADOW_VERT = `
+  varying vec2 vFloorXZ;
+  void main() {
+    vFloorXZ = position.xz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SILHOUETTE_SHADOW_FRAG = `
+  uniform sampler2D uCutoutTex;
+  uniform float uHasCutout;
+  uniform float uMirrorX;
+  uniform float uSoleBottomV;
+  uniform float uCrownTopV;
+  uniform vec2 uShadowDir;
+  uniform float uShadowLength;
+  uniform float uCharWidthMeters;
+  uniform float uFootprintScale;
+  uniform float uDirectRatio;
+  uniform float uShadowOpacity;
+  uniform vec3 uShadowColor;
+  varying vec2 vFloorXZ;
+
+  float sampleCutoutAlpha(vec2 uv) {
+    if (uv.x <= 0.01 || uv.x >= 0.99 || uv.y <= 0.005 || uv.y >= 0.995) {
+      return 0.0;
+    }
+    return smoothstep(0.18, 0.75, texture2D(uCutoutTex, uv).a);
+  }
+
+  void main() {
+    vec2 p = vFloorXZ;
+
+    // 1. Tight grounded Contact AO strictly under shoe soles (world origin 0,0 = exact 2D soleStageTopPct)
+    float fp = max(0.75, uFootprintScale);
+    vec2 coreCoord = vec2(p.x / (0.26 * fp), (p.y - 0.01) / (0.088 * fp));
+    float coreAo = exp(-dot(coreCoord, coreCoord) * 2.25);
+
+    vec2 softCoord = vec2(p.x / (0.44 * fp), (p.y - 0.015) / (0.155 * fp));
+    float softAo = exp(-dot(softCoord, softCoord) * 1.55) * 0.44;
+    float contactAo = clamp(coreAo * 0.84 + softAo, 0.0, 1.0);
+
+    // 2. Light-direction projected Silhouette Cast Shadow from the active RGBA model cutout
+    float castShadow = 0.0;
+    if (uHasCutout > 0.5) {
+      float dirLen = length(uShadowDir);
+      vec2 dir = dirLen > 0.001 ? (uShadowDir / dirLen) : vec2(0.0, -1.0);
+      vec2 perpDir = vec2(dir.y, -dir.x);
+
+      float along = dot(p, dir);
+      float across = dot(p, perpDir);
+      float t = along / max(0.45, uShadowLength);
+
+      if (t > -0.05 && t < 1.06) {
+        float tClamped = clamp(t, 0.0, 1.0);
+        float sampleV = mix(uSoleBottomV, uCrownTopV, tClamped);
+        float uRaw = 0.5 + (across / max(0.55, uCharWidthMeters));
+        float sampleU = uMirrorX > 0.5 ? (1.0 - uRaw) : uRaw;
+        vec2 baseUv = vec2(sampleU, sampleV);
+
+        // Physically motivated distance-softening penumbra (crisp at ankles, soft at shoulders/head)
+        float blurU = 0.009 + 0.036 * tClamped;
+        float blurV = 0.007 + 0.024 * tClamped;
+        float a0 = sampleCutoutAlpha(baseUv) * 0.36;
+        float a1 = sampleCutoutAlpha(baseUv + vec2(blurU, 0.0)) * 0.16;
+        float a2 = sampleCutoutAlpha(baseUv - vec2(blurU, 0.0)) * 0.16;
+        float a3 = sampleCutoutAlpha(baseUv + vec2(0.0, blurV)) * 0.16;
+        float a4 = sampleCutoutAlpha(baseUv - vec2(0.0, blurV)) * 0.16;
+        float silAlpha = a0 + a1 + a2 + a3 + a4;
+
+        float entryFade = smoothstep(-0.05, 0.04, t);
+        float tipFade = 1.0 - smoothstep(0.42, 1.06, t);
+        float directWeight = mix(0.28, 0.92, clamp(uDirectRatio, 0.0, 1.0));
+        castShadow = silAlpha * entryFade * tipFade * directWeight;
+      }
+    }
+
+    // Smooth radial edge fade so the shadow quad border is never visible
+    float quadEdgeFade = 1.0 - smoothstep(1.25, 1.75, length(p));
+    float combined = max(contactAo * 0.9, castShadow * 0.74) + contactAo * castShadow * 0.12;
+    float finalAlpha = clamp(combined * uShadowOpacity * quadEdgeFade, 0.0, 0.78);
+    if (finalAlpha < 0.004) discard;
+    gl_FragColor = vec4(uShadowColor, finalAlpha);
   }
 `;
 
@@ -220,8 +318,17 @@ export default function StudioThreeStageLayer({
   clockNowMs,
   lightingPreset = DEFAULT_LIGHTING_PRESET,
   lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
+  modelImageUrl = null,
+  soleStageTopPct = 85.5,
+  topRatio = null,
+  bottomRatio = null,
+  heightCm = 172,
+  mirrorX = false,
+  onWebGlAvailabilityChange,
 }: StudioThreeStageLayerProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const onWebGlAvailabilityChangeRef = useRef(onWebGlAvailabilityChange);
+  onWebGlAvailabilityChangeRef.current = onWebGlAvailabilityChange;
 
   const lightingFrame = useMemo(() => {
     const mergedWeather: WeatherOpticalInput = {
@@ -248,6 +355,15 @@ export default function StudioThreeStageLayer({
     theme,
   ]);
 
+  const stageFraming = useMemo(
+    () =>
+      computeHeightAwareStageFraming({
+        heightCm,
+        isOutdoor,
+      }),
+    [heightCm, isOutdoor]
+  );
+
   const propsRef = useRef({
     isOutdoor,
     weatherMode,
@@ -258,6 +374,12 @@ export default function StudioThreeStageLayer({
     paused,
     hasCharacter,
     lightingFrame,
+    stageFraming,
+    modelImageUrl,
+    soleStageTopPct,
+    topRatio,
+    bottomRatio,
+    mirrorX,
   });
   propsRef.current = {
     isOutdoor,
@@ -269,9 +391,16 @@ export default function StudioThreeStageLayer({
     paused,
     hasCharacter,
     lightingFrame,
+    stageFraming,
+    modelImageUrl,
+    soleStageTopPct,
+    topRatio,
+    bottomRatio,
+    mirrorX,
   };
 
   const triggerWakeRef = useRef<(() => void) | null>(null);
+  const syncCutoutTexRef = useRef<((url: string | null | undefined) => void) | null>(null);
   const [isSoftwareGlAttr, setIsSoftwareGlAttr] = useState<boolean>(
     () => peekCachedSoftwareWebGl() ?? true
   );
@@ -296,9 +425,11 @@ export default function StudioThreeStageLayer({
           powerPreference: 'high-performance',
         });
       } catch {
+        onWebGlAvailabilityChangeRef.current?.(false);
         return;
       }
 
+      onWebGlAvailabilityChangeRef.current?.(true);
       const isSoftwareGl = detectSoftwareWebGlFromContext(renderer.getContext());
       setIsSoftwareGlAttr(isSoftwareGl);
 
@@ -348,9 +479,12 @@ export default function StudioThreeStageLayer({
       scene.add(stageGroup);
 
       const stoneBumpTex = isSoftwareGl ? null : createStoneMicroReliefTexture(renderer);
-      const shadowDarkTex = createRadialContactShadowTexture(renderer, true);
-      const shadowLightTex = createRadialContactShadowTexture(renderer, false);
       const auraGlowTex = createRadialAuraGlowTexture(renderer);
+
+      // 1x1 transparent placeholder texture until active RGBA cutout image decodes
+      const dummyCutoutData = new Uint8Array([0, 0, 0, 0]);
+      const dummyCutoutTex = new THREE.DataTexture(dummyCutoutData, 1, 1, THREE.RGBAFormat);
+      dummyCutoutTex.needsUpdate = true;
 
       const goboTextures = new Map<WindowApertureKind, THREE.CanvasTexture>();
       for (const kind of GOBO_KINDS) {
@@ -403,21 +537,34 @@ export default function StudioThreeStageLayer({
       floorDisc.renderOrder = 1;
       stageGroup.add(floorDisc);
 
-      // Part 2: Grounded Character Contact Shadow Disc (y = 0.020) — dynamically stretched/offset by sun & window angle
-      const contactGeo = new THREE.CircleGeometry(0.66, 32);
-      contactGeo.rotateX(-Math.PI / 2);
-      const contactMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        map: propsRef.current.theme === 'dark' ? shadowDarkTex : shadowLightTex,
+      // Part 2: Single-Pass GLSL Silhouette Cast Shadow + Tight Dual-Foot Contact AO (y = 0.008)
+      // World origin (0, 0, 0) is calibrated via exact closed-form projection to 2D `soleStageTopPct` (0px gap!)
+      const silhouetteShadowGeo = new THREE.PlaneGeometry(3.6, 3.6);
+      silhouetteShadowGeo.rotateX(-Math.PI / 2);
+      const silhouetteShadowMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uCutoutTex: { value: dummyCutoutTex },
+          uHasCutout: { value: 0.0 },
+          uMirrorX: { value: 0.0 },
+          uSoleBottomV: { value: 0.045 },
+          uCrownTopV: { value: 0.94 },
+          uShadowDir: { value: new THREE.Vector2(0.0, -1.0) },
+          uShadowLength: { value: 1.05 },
+          uCharWidthMeters: { value: 1.18 },
+          uFootprintScale: { value: 1.0 },
+          uDirectRatio: { value: 0.75 },
+          uShadowOpacity: { value: 0.46 },
+          uShadowColor: { value: new THREE.Color(0x161412) },
+        },
+        vertexShader: SILHOUETTE_SHADOW_VERT,
+        fragmentShader: SILHOUETTE_SHADOW_FRAG,
         transparent: true,
-        opacity: 0.52,
         depthWrite: false,
       });
-      const contactDisc = new THREE.Mesh(contactGeo, contactMat);
-      contactDisc.position.set(0, 0.02, 0.08);
-      contactDisc.scale.set(1.0, 1.0, 0.56);
-      contactDisc.renderOrder = 2;
-      stageGroup.add(contactDisc);
+      const silhouetteShadowMesh = new THREE.Mesh(silhouetteShadowGeo, silhouetteShadowMat);
+      silhouetteShadowMesh.position.set(0, 0.008, 0);
+      silhouetteShadowMesh.renderOrder = 2;
+      stageGroup.add(silhouetteShadowMesh);
 
       // Part 2B: Projected Architectural Window Gobo Floor Patch (y = 0.036, indoor daytime only)
       const goboGeo = new THREE.PlaneGeometry(2.35, 1.55);
@@ -655,28 +802,96 @@ export default function StudioThreeStageLayer({
           scene.fog.density = lf.fogDensity;
         }
 
-        // Smoothly damp camera parallax & podium rotation from -180°..+180° angle slider
+        // Exact closed-form camera calibration so 3D floor origin (0,0,0) lands on 2D `soleStageTopPct` (0px gap!)
         const targetYawRad = THREE.MathUtils.degToRad(
           THREE.MathUtils.clamp(p.angleScrollDeg || 0, -180, 180) * 0.12
         );
         currentYawRad = isSoftwareGl
           ? targetYawRad
           : THREE.MathUtils.damp(currentYawRad, targetYawRad, 7.5, dt);
-        camera.position.x = Math.sin(currentYawRad) * 0.62;
-        camera.position.z = 4.55 - (1 - Math.cos(currentYawRad)) * 0.28;
-        camera.lookAt(0, 1.04, 0);
+        const camPosZ = 4.55 - (1 - Math.cos(currentYawRad)) * 0.28;
+        const camPosY = 1.42;
+        const floorCal = computeThreeCameraLookAtForSolePct({
+          soleStageTopPct: p.soleStageTopPct,
+          cameraPosY: camPosY,
+          cameraPosZ: camPosZ,
+          fovDeg: camera.fov,
+        });
+        camera.position.set(Math.sin(currentYawRad) * 0.62, camPosY, camPosZ);
+        camera.lookAt(0, floorCal.lookAtY, 0);
         stageGroup.rotation.y = -currentYawRad * 0.65;
 
-        // Ground Contact Shadow — reflects seasonal sun height & indoor window/fixture direction
-        contactMat.map = isDark ? shadowDarkTex : shadowLightTex;
-        contactDisc.visible = Boolean(p.hasCharacter);
-        contactDisc.position.set(lf.shadowOffsetX, 0.02, lf.shadowOffsetZ);
-        contactDisc.scale.set(lf.shadowStretchX, 1.0, lf.shadowStretchZ);
-        contactMat.opacity = THREE.MathUtils.clamp(
-          (isDark ? 0.56 : 0.48) * lf.shadowOpacityScale,
-          0.22,
-          0.74
-        );
+        // Single-Pass GLSL Silhouette Cast Shadow + Tight Contact AO driven by active light rig & cutout
+        silhouetteShadowMesh.visible = Boolean(p.hasCharacter);
+        if (silhouetteShadowMesh.visible) {
+          // Cast shadow vector points horizontally AWAY from key light source `(keyPosX, keyPosZ)`
+          let castX = -lf.keyPosX * 0.52 + lf.shadowOffsetX * 1.4;
+          let castZ = -lf.keyPosZ * 0.36 + lf.shadowOffsetZ * 1.1;
+          const castLen = Math.hypot(castX, castZ);
+          if (castLen < 0.08) {
+            castX = 0.08;
+            castZ = -0.95;
+          }
+          (silhouetteShadowMat.uniforms.uShadowDir.value as THREE.Vector2).set(castX, castZ);
+
+          // Longer shadow when sun/key light is low, shorter under overhead skylight/noon sun
+          const lightHeightFactor = THREE.MathUtils.clamp(3.9 / Math.max(1.4, lf.keyPosY), 0.52, 1.38);
+          const stretchFactor = THREE.MathUtils.clamp(
+            (lf.shadowStretchX + lf.shadowStretchZ) * 0.52,
+            0.55,
+            1.45
+          );
+          const shadowLen = THREE.MathUtils.clamp(
+            p.stageFraming.shadowHeightMeters * 0.58 * lightHeightFactor * stretchFactor,
+            0.48,
+            1.65
+          );
+          silhouetteShadowMat.uniforms.uShadowLength.value = shadowLen;
+          silhouetteShadowMat.uniforms.uFootprintScale.value = p.stageFraming.shadowFootprintScale;
+          silhouetteShadowMat.uniforms.uCharWidthMeters.value =
+            1.18 * p.stageFraming.shadowFootprintScale;
+          silhouetteShadowMat.uniforms.uMirrorX.value = p.mirrorX ? 1.0 : 0.0;
+
+          const safeBottom =
+            typeof p.bottomRatio === 'number' && Number.isFinite(p.bottomRatio)
+              ? THREE.MathUtils.clamp(p.bottomRatio, 0.72, 0.995)
+              : 0.955;
+          const safeTop =
+            typeof p.topRatio === 'number' && Number.isFinite(p.topRatio)
+              ? THREE.MathUtils.clamp(p.topRatio, 0.01, 0.45)
+              : 0.06;
+          silhouetteShadowMat.uniforms.uSoleBottomV.value = 1.0 - safeBottom;
+          silhouetteShadowMat.uniforms.uCrownTopV.value = 1.0 - safeTop;
+          silhouetteShadowMat.uniforms.uDirectRatio.value = THREE.MathUtils.clamp(
+            lf.directRatio,
+            0.1,
+            1.0
+          );
+
+          const baseOpacity = isDark ? 0.58 : 0.46;
+          const intensityFactor = THREE.MathUtils.clamp(
+            0.55 + lf.intensityScale * 0.45,
+            0.35,
+            1.15
+          );
+          silhouetteShadowMat.uniforms.uShadowOpacity.value = THREE.MathUtils.clamp(
+            baseOpacity * lf.shadowOpacityScale * intensityFactor,
+            0.22,
+            0.72
+          );
+
+          // Cool slate outdoor daytime shadow vs warm charcoal indoor/sunset shadow
+          const shadowHex = p.isOutdoor
+            ? lf.solar.isPostSunset
+              ? 0x0b101c
+              : lf.solar.goldenHourWeight > 0.35
+                ? 0x1d1614
+                : 0x131a26
+            : isDark
+              ? 0x0b0a0a
+              : 0x1c1916;
+          (silhouetteShadowMat.uniforms.uShadowColor.value as THREE.Color).setHex(shadowHex);
+        }
 
         // Projected Indoor Window Gobo Patch (daytime rooms with windows only; 0 after sunset or windowless)
         goboPatchMesh.visible = lf.goboVisible;
@@ -964,6 +1179,63 @@ export default function StudioThreeStageLayer({
         });
       };
 
+      let activeCutoutUrl: string | null = null;
+      let activeCutoutTex: THREE.Texture | null = null;
+      let cutoutLoadToken = 0;
+
+      const syncCutoutTexture = (nextUrl: string | null | undefined) => {
+        const cleanUrl = typeof nextUrl === 'string' && nextUrl.trim() ? nextUrl.trim() : null;
+        if (cleanUrl === activeCutoutUrl) return;
+        activeCutoutUrl = cleanUrl;
+        cutoutLoadToken += 1;
+        const myToken = cutoutLoadToken;
+
+        if (!cleanUrl) {
+          silhouetteShadowMat.uniforms.uCutoutTex.value = dummyCutoutTex;
+          silhouetteShadowMat.uniforms.uHasCutout.value = 0.0;
+          if (activeCutoutTex) {
+            activeCutoutTex.dispose();
+            activeCutoutTex = null;
+          }
+          requestRender();
+          return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.decoding = 'async';
+        img.onload = () => {
+          if (disposed || myToken !== cutoutLoadToken) return;
+          const nextTex = new THREE.Texture(img);
+          nextTex.colorSpace = THREE.SRGBColorSpace;
+          nextTex.minFilter = THREE.LinearFilter;
+          nextTex.magFilter = THREE.LinearFilter;
+          nextTex.wrapS = THREE.ClampToEdgeWrapping;
+          nextTex.wrapT = THREE.ClampToEdgeWrapping;
+          nextTex.generateMipmaps = false;
+          nextTex.needsUpdate = true;
+
+          const prevTex = activeCutoutTex;
+          activeCutoutTex = nextTex;
+          silhouetteShadowMat.uniforms.uCutoutTex.value = nextTex;
+          silhouetteShadowMat.uniforms.uHasCutout.value = 1.0;
+          if (prevTex) {
+            prevTex.dispose();
+          }
+          requestRender();
+        };
+        img.onerror = () => {
+          if (disposed || myToken !== cutoutLoadToken) return;
+          silhouetteShadowMat.uniforms.uCutoutTex.value = dummyCutoutTex;
+          silhouetteShadowMat.uniforms.uHasCutout.value = 0.0;
+          requestRender();
+        };
+        img.src = cleanUrl;
+      };
+
+      syncCutoutTexRef.current = syncCutoutTexture;
+      syncCutoutTexture(propsRef.current.modelImageUrl);
+
       triggerWakeRef.current = () => {
         if (propsRef.current.paused) {
           cancelScheduledFrames();
@@ -989,10 +1261,12 @@ export default function StudioThreeStageLayer({
       const onContextLost = (ev: Event) => {
         ev.preventDefault();
         contextLost = true;
+        onWebGlAvailabilityChangeRef.current?.(false);
         cancelScheduledFrames();
       };
       const onContextRestored = () => {
         contextLost = false;
+        onWebGlAvailabilityChangeRef.current?.(true);
         lastTimeSec = performance.now() * 0.001;
         requestRender();
       };
@@ -1006,14 +1280,18 @@ export default function StudioThreeStageLayer({
       cleanupStage = () => {
         disposed = true;
         triggerWakeRef.current = null;
+        syncCutoutTexRef.current = null;
         cancelScheduledFrames();
         resizeObserver?.disconnect();
         canvas.removeEventListener('webglcontextlost', onContextLost, false);
         canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
         scene.environment = null;
         envTexture?.dispose();
-        shadowDarkTex.dispose();
-        shadowLightTex.dispose();
+        dummyCutoutTex.dispose();
+        if (activeCutoutTex) {
+          activeCutoutTex.dispose();
+          activeCutoutTex = null;
+        }
         for (const tex of goboTextures.values()) {
           tex.dispose();
         }
@@ -1038,6 +1316,10 @@ export default function StudioThreeStageLayer({
   }, []);
 
   useEffect(() => {
+    syncCutoutTexRef.current?.(modelImageUrl);
+  }, [modelImageUrl]);
+
+  useEffect(() => {
     triggerWakeRef.current?.();
   }, [
     isOutdoor,
@@ -1049,6 +1331,11 @@ export default function StudioThreeStageLayer({
     paused,
     hasCharacter,
     lightingFrame,
+    stageFraming,
+    soleStageTopPct,
+    topRatio,
+    bottomRatio,
+    mirrorX,
   ]);
 
   return (

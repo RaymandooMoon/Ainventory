@@ -11,6 +11,7 @@ import {
   resolveStageLightingFrame,
 } from '../utils/stageLightingEngine.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
+import { computeHeightAwareStageFraming } from '../utils/stageFramingEngine.ts';
 import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
 
 export interface FittingAtelierBackdropProps {
@@ -24,11 +25,13 @@ export interface FittingAtelierBackdropProps {
   clockNowMs?: number;
   lightingPreset?: StageLightingPresetId | string;
   lightingIntensity?: number;
+  heightCm?: number;
 }
 
 /**
  * Architectural Stage Room Backdrop (`z-index: 2`) combining:
- * - Equipped S+/S/A+/A/B+/B/C Architectural Room or Open-Sky Courtyard photo (`/assets/backgrounds/*.jpg`)
+ * - Equipped S+/S/A+/A/B+/B/C Wide-Angle 24mm Architectural Room or Open-Sky Courtyard photo (`/assets/backgrounds/*.jpg`)
+ * - Height-linked dynamic framing (`heightCm` 150..198cm adjusts room scale & eye-level horizon smoothly)
  * - Seasonal & Composite Weather atmospheric tint (open-sky outdoor stages only)
  * - Per-room daytime window sunlight vs post-sunset selective room dimming & warm fixture glow (indoor stages)
  * - User-configurable lighting color temperature preset & brightness intensity (`0%..200%`)
@@ -45,6 +48,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   clockNowMs,
   lightingPreset = DEFAULT_LIGHTING_PRESET,
   lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
+  heightCm = 172,
 }: FittingAtelierBackdropProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === 'dark';
@@ -57,6 +61,15 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
     timeOfDay === 'sunrise' || timeOfDay === 'sunset' || timeOfDay === 'night'
       ? timeOfDay
       : 'day';
+
+  const stageFraming = useMemo(
+    () =>
+      computeHeightAwareStageFraming({
+        heightCm,
+        isOutdoor: resolvedOutdoor,
+      }),
+    [heightCm, resolvedOutdoor]
+  );
 
   const lightingFrame = useMemo(() => {
     const mergedWeather: WeatherOpticalInput = {
@@ -126,6 +139,8 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       data-backdrop-style="architectural-stage"
       data-backdrop-bg-id={bgItem.id}
       data-backdrop-bg-tier={bgItem.tier}
+      data-backdrop-height-cm={String(stageFraming.clampedHeightCm)}
+      data-backdrop-scale={stageFraming.backdropScale.toFixed(3)}
       data-stage-outdoor={resolvedOutdoor ? 'true' : 'false'}
       data-stage-lighting={resolvedOutdoor ? 'outdoor-sky' : 'indoor-ivory'}
       data-optical-regime={lightingFrame.opticalRegime}
@@ -140,7 +155,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       {/* 0. Fallback Infinity-Cove Cyclorama Wall-to-Floor Sweep */}
       <div className="atelier-cyclorama-wall-cove" />
 
-      {/* 1. Equipped 3:4 Architectural Studio / Terrace Photograph */}
+      {/* 1. Equipped Wide-Angle 24mm Architectural Studio / Terrace Photograph (Height-Linked Framing) */}
       <img
         src={withPublicBaseUrl(bgItem.imageUrl)}
         alt=""
@@ -149,6 +164,11 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
         className="atelier-stage-environment-photo"
         data-stage-bg-id={bgItem.id}
         data-stage-bg-tier={bgItem.tier}
+        style={{
+          transformOrigin: stageFraming.backdropTransformOrigin,
+          transform: `translate3d(0, ${stageFraming.backdropTranslateYPct.toFixed(2)}%, 0) scale(${stageFraming.backdropScale.toFixed(3)})`,
+          transition: 'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease',
+        }}
       />
 
       {/* 1B. Outdoor Open-Sky Time-of-Day Wash OR Indoor Daytime Window / Post-Sunset Fixture Wash */}

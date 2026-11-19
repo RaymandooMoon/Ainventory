@@ -22,7 +22,7 @@ const APP_CSP = [
   "font-src 'self' data:",
   "media-src 'self' blob: data:",
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data: https://api.open-meteo.com https://generativelanguage.googleapis.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net",
+  "connect-src 'self' blob: data: https://api.open-meteo.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net",
   "object-src 'none'",
   "base-uri 'self'",
   process.env.ALLOW_PREVIEW_IFRAME === '1' ? '' : "frame-ancestors 'none'",

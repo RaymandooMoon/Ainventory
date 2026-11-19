@@ -2145,7 +2145,36 @@ html[data-vibrancy-fallback='solid'] .ui-sheet-backdrop {
   gap: 8px;
 }
 
-@media (max-width: 359px) {
+.hig-grid-3 > .btn,
+.hig-grid-2 > .btn {
+  min-width: 0;
+  white-space: nowrap;
+  word-break: keep-all;
+  padding-inline: 8px;
+  gap: 5px;
+  font-size: 0.79rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hig-grid-3 > .btn svg,
+.hig-grid-2 > .btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 420px) {
+  .hig-grid-3 {
+    gap: 6px;
+  }
+
+  .hig-grid-3 > .btn {
+    padding-inline: 6px;
+    gap: 4px;
+    font-size: 0.74rem;
+  }
+}
+
+@media (max-width: 340px) {
   .hig-grid-3,
   .hig-grid-2 {
     grid-template-columns: 1fr;
