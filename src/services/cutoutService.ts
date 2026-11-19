@@ -771,36 +771,55 @@ function purgeEnclosedBackdropHoles(
       continue;
     }
 
+    const inCentralLegCleftZone =
+      pxY >= subjectTopY + 0.48 * subjectHeight &&
+      pxY <= subjectTopY + 0.96 * subjectHeight &&
+      Math.abs(pxX - torsoCenterX) <= torsoMidWidth * 0.22;
+    const inOffCenterLowerGarmentLeg =
+      pxY >= subjectTopY + 0.46 * subjectHeight &&
+      Math.abs(pxX - torsoCenterX) > torsoMidWidth * 0.22;
+
+    // Guard 1F: Protect blue/indigo/sky denim and cyan fabrics from green-key interior hole erosion,
+    // and never punch shaded backdrop holes inside off-center left/right pant legs unless the pixel
+    // is an exact unshaded match to the row backdrop (e.g. flat studio wall inside a low bag handle).
+    if (isChromaticGreenKey && b >= g - 4 && b >= r + 14) {
+      continue;
+    }
+    if (inOffCenterLowerGarmentLeg && bgDist > 18) {
+      continue;
+    }
+
     const inNeutralLegCleftBand =
       !isChromaticStudioKey &&
-      pxY >= subjectTopY + 0.52 * subjectHeight &&
-      pxY <= subjectTopY + 0.96 * subjectHeight &&
-      Math.abs(pxX - torsoCenterX) <= torsoMidWidth * 0.22 &&
+      inCentralLegCleftZone &&
       !(eB >= eR + 6 && r >= b);
 
     const effectiveHoleTol = inUmbrellaUnderCanopyZone
       ? Math.min(28, holePixelTol)
-      : isChromaticStudioKey
-        ? inUpperGarmentBand && !isChromaticGreenKey
-          ? Math.min(18, holePixelTol)
-          : holePixelTol
-        : inNeutralLegCleftBand
-          ? 16
-          : Math.min(11, holePixelTol);
+      : inOffCenterLowerGarmentLeg
+        ? 16
+        : isChromaticStudioKey
+          ? inUpperGarmentBand && !isChromaticGreenKey
+            ? Math.min(18, holePixelTol)
+            : holePixelTol
+          : inNeutralLegCleftBand
+            ? 16
+            : Math.min(11, holePixelTol);
     if (bgDist <= effectiveHoleTol) {
       candidate[p] = 1;
       candidateTotal += 1;
       continue;
     }
 
-    // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy (~10–64 lum darker)
-    const inLowerBodyCleftZone = pxY >= subjectTopY + 0.42 * subjectHeight;
+    // Also catch enclosed gaps slightly shaded by surrounding limbs/coat/umbrella canopy,
+    // strictly requiring true green dominance (G >> R and G >> B, never blue denim) and central cleft geometry.
     const isShadedGreenStudioPocket =
-      g >= r + 7 &&
-      g >= b + 4 &&
+      !inOffCenterLowerGarmentLeg &&
+      g >= r + 14 &&
+      g >= b + 12 &&
       b >= r &&
-      Math.hypot(r - 94, g - 156, b - 126) <= 68 &&
-      (isChromaticGreenKey || inLowerBodyCleftZone || inUmbrellaUnderCanopyZone);
+      Math.hypot(r - 94, g - 156, b - 126) <= 72 &&
+      (isChromaticGreenKey || inCentralLegCleftZone || inUmbrellaUnderCanopyZone);
 
     if (isShadedGreenStudioPocket) {
       candidate[p] = 1;
@@ -809,29 +828,30 @@ function purgeEnclosedBackdropHoles(
     }
 
     const allowShadedChromaBand =
-      isChromaticGreenKey || inUmbrellaUnderCanopyZone || pxY > subjectTopY + 0.56 * subjectHeight;
+      !inOffCenterLowerGarmentLeg &&
+      (isChromaticGreenKey || inUmbrellaUnderCanopyZone || inCentralLegCleftZone);
     if (
       (isChromaticStudioKey || inUmbrellaUnderCanopyZone) &&
       allowShadedChromaBand &&
-      lum >= expLum - 64 &&
+      lum >= expLum - 52 &&
       lum <= expLum + 18 &&
-      lum > 38 &&
+      lum > 42 &&
       lum < 218
     ) {
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      const satTol = Math.max(24, Math.round(expSat * 0.5));
-      if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(58, expSat + 32)) {
+      const satTol = Math.max(22, Math.round(expSat * 0.45));
+      if (Math.abs(sat - expSat) <= satTol && sat <= Math.max(54, expSat + 28)) {
         const chromaDist = Math.hypot(
           r / lum - eR / expLum,
           g / lum - eG / expLum,
           b / lum - eB / expLum
         );
         const maxChromaDist =
-          isChromaticGreenKey && g > r + 7 && g > b + 4
-            ? 0.118
+          isChromaticGreenKey && g >= r + 14 && g >= b + 12
+            ? 0.095
             : inUmbrellaUnderCanopyZone
               ? 0.088
-              : 0.068;
+              : 0.062;
         if (chromaDist <= maxChromaDist) {
           candidate[p] = 1;
           candidateTotal += 1;
@@ -948,29 +968,35 @@ function purgeEnclosedBackdropHoles(
     const seedExpSat = Math.max(sER, sEG, sEB) - Math.min(sER, sEG, sEB);
     const cx = (minX + maxX) * 0.5;
     const cy = (minY + maxY) * 0.5;
+    const isOffCenterLowerLegComponent =
+      cy >= subjectTopY + 0.46 * subjectHeight &&
+      Math.abs(cx - torsoCenterX) > torsoMidWidth * 0.22;
     const isLowerLegCleftPocket =
-      cy >= subjectTopY + 0.42 * subjectHeight &&
+      cy >= subjectTopY + 0.46 * subjectHeight &&
+      !isOffCenterLowerLegComponent &&
       area <= Math.round(nPx * 0.085) &&
-      meanG >= meanR + 7 &&
-      meanG >= meanB + 4 &&
+      meanG >= meanR + 14 &&
+      meanG >= meanB + 10 &&
       meanB >= meanR &&
-      Math.hypot(meanR - 94, meanG - 156, meanB - 126) <= 68;
+      Math.hypot(meanR - 94, meanG - 156, meanB - 126) <= 72;
     const isChromaticBackdropHole =
       isLowerLegCleftPocket ||
-      (seedExpSat >= 42 &&
+      (!isOffCenterLowerLegComponent &&
+        seedExpSat >= 42 &&
         meanSat >= 28 &&
-        meanG >= meanR + 7 &&
-        meanG >= meanB + 4 &&
-        meanChromaDist <= 0.115 &&
-        meanLum >= sExpLum - 64 &&
-        meanLum <= sExpLum + 26);
+        meanG >= meanR + 14 &&
+        meanG >= meanB + 10 &&
+        meanChromaDist <= 0.095 &&
+        meanLum >= sExpLum - 52 &&
+        meanLum <= sExpLum + 24);
 
-    // Guard 5 (Footwear Zone Guard): Protect shoe tongues, grey suede panels, laces, and white
-    // sneaker interiors in the lower shoe/foot band from ever being punched out as backdrop holes,
-    // EXCEPT: (a) vertical leg/calf gaps extending above 0.82*subjectHeight, or (b) unmistakable
-    // chromatic studio key islands (e.g. #5E9C7E green triangles trapped between calves/ankles).
+    // Guard 5 (Footwear & Trouser Leg Zone Guard): Protect shoe tongues, grey suede panels, laces,
+    // white sneaker interiors, and off-center trouser legs from being punched out as backdrop holes.
     const startsInShoeBand = minY >= subjectTopY + 0.82 * subjectHeight;
     if ((cy >= subjectFootwearBandY || cy >= canvasFootwearBandY) && !isChromaticBackdropHole && startsInShoeBand) {
+      continue;
+    }
+    if (isOffCenterLowerLegComponent && meanDistToBg > 18) {
       continue;
     }
 
@@ -992,19 +1018,19 @@ function purgeEnclosedBackdropHoles(
       Math.abs(cx - torsoCenterX) > torsoMidWidth * 0.15;
 
     // Guard 3: Flatness check — studio backdrop inside enclosed holes is smooth, whereas
-    // woven/pleated garments have higher pixel-to-pixel micro-texture variation.
+    // woven/pleated garments (denim twill, wool, suede) have higher pixel-to-pixel micro-texture variation.
     const isUpperNonGreenPocket =
       !isChromaticBackdropHole &&
       !isOverheadUmbrellaHole &&
       cy < subjectTopY + 0.56 * subjectHeight;
     const maxAllowedStepDiff = isChromaticBackdropHole
-      ? 15.5
+      ? 9.5
       : isOverheadUmbrellaHole
         ? 10.5
         : isUpperNonGreenPocket
           ? 5.5
           : seedIsChromaticStudioKey
-            ? 10.5
+            ? 8.5
             : isNeutralLegCleftPocket
               ? 7.5
               : 4.5;
@@ -1022,7 +1048,7 @@ function purgeEnclosedBackdropHoles(
 
     // Guard 2: Verify strong foreground edge enclosure & close match to expected row backdrop
     const maxAllowedMeanDist = isChromaticBackdropHole
-      ? 68
+      ? 72
       : isOverheadUmbrellaHole
         ? 52
         : isUpperNonGreenPocket
@@ -1037,7 +1063,7 @@ function purgeEnclosedBackdropHoles(
     if (meanDistToBg > maxAllowedMeanDist) continue;
 
     const minSharpRatio = isChromaticBackdropHole
-      ? 0.24
+      ? 0.36
       : isOverheadUmbrellaHole
         ? 0.28
         : isUpperNonGreenPocket
@@ -1170,11 +1196,12 @@ export function cutoutStudioBackdropToRgba(
             d[i + 2] = 0;
             d[i + 3] = 0;
           } else {
-            const safeAlpha = Math.max(0.15, alpha);
+            const isBlueDenimEdge = b >= g - 2 && b >= r + 12;
+            const safeAlpha = isGreenKey && isBlueDenimEdge ? Math.max(0.58, alpha) : Math.max(0.15, alpha);
             const uR = clampByte((r - (1 - safeAlpha) * keyR) / safeAlpha);
             let uG = clampByte((g - (1 - safeAlpha) * keyG) / safeAlpha);
             const uB = clampByte((b - (1 - safeAlpha) * keyB) / safeAlpha);
-            if (isGreenKey && uG > Math.max(uR, uB) + 4) {
+            if (isGreenKey && !isBlueDenimEdge && uG > Math.max(uR, uB) + 4) {
               uG = Math.max(uR, uB) + 4;
             }
             d[i] = uR;
@@ -1182,7 +1209,7 @@ export function cutoutStudioBackdropToRgba(
             d[i + 2] = uB;
             d[i + 3] = outAlpha;
           }
-        } else if (isGreenKey && g > Math.max(r, b) + 6) {
+        } else if (isGreenKey && !(b >= r + 12) && g > Math.max(r, b) + 6) {
           d[i + 1] = Math.round((Math.max(r, b) + g) * 0.5);
         }
       }
@@ -1319,17 +1346,36 @@ export function cutoutStudioBackdropToRgba(
       return;
     }
 
-    // Absorb subtle studio cast shadows ONLY on chromatic studio backdrops or in the lower floor zone
-    // (`py >= 0.72*h`). Never treat upper-wall neutral garments (grey blazers, blue shirts) as cast shadow!
-    if ((isChromaticBg || inFloorShadowZone) && sobel[p] < SOBEL_EDGE_BARRIER_THRESHOLD * 0.68) {
+    // Absorb subtle studio cast shadows ONLY on chromatic studio backdrops or near the shoe contact floor.
+    // Above the shoe contact plane (`py < 0.88 * h`), cap dark-shift tightly and protect blue denim on green keys.
+    const inShoeContactFloorZone = py >= Math.round(h * 0.88);
+    const isGreenExp = eG > eR + 12 && eG > eB + 6;
+    const isBlueGarmentOnGreenBg = isGreenExp && b >= g - 4 && b >= r + 14;
+    const shadowSobelCap = inShoeContactFloorZone
+      ? SOBEL_EDGE_BARRIER_THRESHOLD * 0.68
+      : SOBEL_EDGE_BARRIER_THRESHOLD * 0.48;
+    if (
+      !isBlueGarmentOnGreenBg &&
+      (isChromaticBg || inFloorShadowZone) &&
+      sobel[p] < shadowSobelCap
+    ) {
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
       const expLum = Math.max(1, 0.299 * eR + 0.587 * eG + 0.114 * eB);
-      const isGreenExp = eG > eR + 12 && eG > eB + 6;
-      const maxDarkShift = isGreenExp && g > r + 6 && g > b + 4 ? 68 : isChromaticBg ? 44 : 38;
-      const maxChromaLimit = isGreenExp && g > r + 6 && g > b + 4 ? 0.095 : isChromaticBg ? 0.068 : 0.055;
+      const maxDarkShift =
+        isGreenExp && g >= r + 12 && g >= b + 10
+          ? 56
+          : inShoeContactFloorZone
+            ? 38
+            : 22;
+      const maxChromaLimit =
+        isGreenExp && g >= r + 12 && g >= b + 10
+          ? 0.088
+          : isChromaticBg
+            ? 0.058
+            : 0.048;
       if (lum >= expLum - maxDarkShift && lum <= expLum + 2 && lum > 36 && lum < 244) {
         const sat = Math.max(r, g, b) - Math.min(r, g, b);
-        if (sat <= (isGreenExp ? 56 : isChromaticBg ? 40 : 28)) {
+        if (sat <= (isGreenExp ? 52 : isChromaticBg ? 36 : 26)) {
           const chromaDist = Math.hypot(
             r / lum - eR / expLum,
             g / lum - eG / expLum,
@@ -1539,12 +1585,17 @@ export function cutoutStudioBackdropToRgba(
 
       // Pass 4: Crisp Color Unmixing (`C_clean = clamp((C_orig - (1 - alpha) * C_bg) / alpha)`)
       // Removes mixed studio backdrop color (#5E9C7E / #94A3B8 / #B38368 / #8E6F9E) from boundary pixels
+      // while safeguarding blue/cyan denim from green-channel subtraction turning into purple fringe.
+      const isBlueDenimBoundary = b >= g - 2 && b >= r + 12;
       if (alpha < 0.985) {
-        const safeAlpha = Math.max(0.18, alpha);
+        const safeAlpha =
+          isGreenStudioBg && isBlueDenimBoundary
+            ? Math.max(0.58, alpha)
+            : Math.max(0.18, alpha);
         let uR = clampByte((r - (1 - safeAlpha) * cBgR) / safeAlpha);
         let uG = clampByte((g - (1 - safeAlpha) * cBgG) / safeAlpha);
         let uB = clampByte((b - (1 - safeAlpha) * cBgB) / safeAlpha);
-        if (isGreenStudioBg && uG > Math.max(uR, uB) + 2) {
+        if (isGreenStudioBg && !isBlueDenimBoundary && uG > Math.max(uR, uB) + 2) {
           uG = Math.max(uR, uB) + 1;
         } else if (isSlateBlueBg && uB > Math.max(uR, uG) + 4 && dist < outerTol * 1.15) {
           uB = Math.round((uR + uG) * 0.5 + 2);
@@ -1557,7 +1608,7 @@ export function cutoutStudioBackdropToRgba(
         d[i] = uR;
         d[i + 1] = uG;
         d[i + 2] = uB;
-      } else if (isGreenStudioBg && g > Math.max(r, b) + 4) {
+      } else if (isGreenStudioBg && !isBlueDenimBoundary && g > Math.max(r, b) + 4) {
         d[i + 1] = Math.max(r, b) + 1;
       }
       d[i + 3] = outAlpha;

@@ -646,6 +646,11 @@ export function buildQcCorrectionHint(reasons = []) {
       'CRITICAL FIX: Frame ALL figures cleanly from head crown to shoe soles with 8–10% top and bottom padding; NEVER crop heads, ankles, or thighs.'
     );
   }
+  if (tokens.includes('garment_cutout_hole')) {
+    cues.push(
+      'CRITICAL FIX: Render every garment (especially denim trousers, jackets, and shirts) with crisp, solid, high-contrast fabric color completely distinct from the studio backdrop — NEVER blend studio backdrop hues onto pant legs or garment folds.'
+    );
+  }
   if (tokens.includes('palette_drift') || tokens.includes('height_mismatch')) {
     cues.push(
       'CRITICAL FIX: Match exact garment palette and full-body stature height identically across all 6 panels (0°, 45°, 90°, 135°, 180°, 225°).'

@@ -11,7 +11,6 @@ import {
   LocateFixed,
   Moon,
   Plus,
-  RefreshCw,
   RotateCcw,
   Search,
   Snowflake,
@@ -1071,7 +1070,6 @@ export default function OutfitStudioView({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [weatherPopupOpen, setWeatherPopupOpen] = useState(false);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
-  const [vtonRefreshNonce, setVtonRefreshNonce] = useState(0);
   const [lookStyleConfig, setLookStyleConfig] = useState(() => readStoredLookStyleConfig());
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
@@ -2060,20 +2058,6 @@ export default function OutfitStudioView({
     setSlots({ ...slots, [slotKey]: null });
   };
 
-  const handleClearAll = () => {
-    if (equippedItems.length === 0) return;
-    delete scenarioSnapshotsRef.current[weatherSnapshotScopeKey];
-    autoEquippedUmbrellaIdRef.current = null;
-    userModifiedSlotsRef.current = true;
-    activeRecIdRef.current = null;
-    setActiveRecId(null);
-    setSelectedInspectorId(null);
-    setHasExplicitSlotState(true);
-    setManualRainUmbrellaCleared(true);
-    triggerHaptic('selection');
-    setSlots({ ...EMPTY_STUDIO_SLOTS });
-  };
-
   const handleSaveOutfit = async (e) => {
     e?.preventDefault?.();
     if (equippedItems.length === 0) return;
@@ -2827,37 +2811,46 @@ export default function OutfitStudioView({
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>
           )}
-          {equippedItems.length > 0 && (
-            <>
+          <div className="store-header-btn-wrap">
+            <button
+              type="button"
+              data-open-store-btn="true"
+              className={`hig-circle-icon-btn is-subtle store-header-btn ${
+                freeDailyDrawAvailable ? 'has-free-draw' : ''
+              }`.trim()}
+              onClick={() => {
+                triggerHaptic('selection');
+                setStoreOpen(true);
+              }}
+              title={tx(lang, '배경 스토어', 'Backdrop Store')}
+              aria-label={tx(lang, '배경 스토어 열기', 'Open Backdrop Store')}
+            >
+              <Store size={17} />
+              {freeDailyDrawAvailable && (
+                <span className="store-header-dot" aria-hidden="true" />
+              )}
+            </button>
+
+            {freeDailyDrawAvailable && (
               <button
                 type="button"
-                data-outfit-vton-refresh="true"
-                className="hig-circle-icon-btn is-subtle"
+                data-store-free-draw-bubble="true"
+                className="store-free-draw-bubble"
                 onClick={() => {
                   triggerHaptic('selection');
-                  setVtonRefreshNonce((n) => n + 1);
+                  setStoreOpen(true);
                 }}
-                title={tx(
-                  lang,
-                  '날씨 포즈·투명 배경제거 새로고침',
-                  'Regenerate Weather Pose & Cutout'
-                )}
-                aria-label={tx(lang, '피팅 새로고침', 'Refresh Try-On')}
               >
-                <RefreshCw size={16} />
+                <span>
+                  {tx(
+                    lang,
+                    '오늘의 무료 뽑기 상품이 남았어요!',
+                    'Free daily draw left!'
+                  )}
+                </span>
               </button>
-              <button
-                type="button"
-                data-outfit-clear-all="true"
-                className="hig-circle-icon-btn is-subtle"
-                onClick={handleClearAll}
-                title={tx(lang, '착장 초기화', 'Reset Outfit')}
-                aria-label={tx(lang, '착장 초기화', 'Reset Outfit')}
-              >
-                <RotateCcw size={16} />
-              </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="hig-top-bar-titles">
@@ -2871,48 +2864,6 @@ export default function OutfitStudioView({
             lang={lang}
             onOpenProfile={onOpenProfile}
             onOpenAccount={onOpenAccount}
-            extraActions={
-              <div className="store-header-btn-wrap">
-                <button
-                  type="button"
-                  data-open-store-btn="true"
-                  className={`hig-circle-icon-btn is-subtle store-header-btn ${
-                    freeDailyDrawAvailable ? 'has-free-draw' : ''
-                  }`.trim()}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setStoreOpen(true);
-                  }}
-                  title={tx(lang, '배경 스토어', 'Backdrop Store')}
-                  aria-label={tx(lang, '배경 스토어 열기', 'Open Backdrop Store')}
-                >
-                  <Store size={17} />
-                  {freeDailyDrawAvailable && (
-                    <span className="store-header-dot" aria-hidden="true" />
-                  )}
-                </button>
-
-                {freeDailyDrawAvailable && (
-                  <button
-                    type="button"
-                    data-store-free-draw-bubble="true"
-                    className="store-free-draw-bubble"
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      setStoreOpen(true);
-                    }}
-                  >
-                    <span>
-                      {tx(
-                        lang,
-                        '오늘의 무료 뽑기 상품이 남았어요!',
-                        'Free daily draw left!'
-                      )}
-                    </span>
-                  </button>
-                )}
-              </div>
-            }
           />
         </div>
       </header>
@@ -2955,7 +2906,7 @@ export default function OutfitStudioView({
                 );
               }
             }}
-            forceRefreshNonce={vtonRefreshNonce}
+            forceRefreshNonce={0}
             activeSlotKey={activeSlotKey}
             onSelectSlot={(slotKey) => {
               setSelectedInspectorId(null);
@@ -2982,44 +2933,6 @@ export default function OutfitStudioView({
             onOpenMobileDrawer={() => setMobileSheetOpen(true)}
             mobileDrawerOpen={mobileSheetOpen}
           />
-
-          {/* Mobile Slot Dock (< 600px) */}
-          <div className="studio-mobile-slot-bar">
-            {FITTING_SLOTS.map((slot) => {
-              const count = equippedCountByParentTab[slot.key] || 0;
-              const isSelected = activeParentTab === slot.key;
-              const labelPair = PARENT_CATEGORY_HEADER_LABELS[slot.key];
-              const slotText = labelPair
-                ? tx(lang, labelPair.ko, labelPair.en)
-                : lang === 'en'
-                  ? slot.label
-                  : slot.labelKo;
-              return (
-                <button
-                  key={slot.key}
-                  type="button"
-                  data-mobile-slot-btn={slot.key}
-                  aria-haspopup="dialog"
-                  aria-expanded={mobileSheetOpen}
-                  aria-controls="outfit-mobile-wardrobe-sheet"
-                  className={`studio-mobile-slot-pill ${isSelected ? 'active' : ''} ${count > 0 ? 'filled' : ''}`}
-                  onClick={() => {
-                    handleSelectTopFittingTab(slot.key);
-                    setMobileSheetOpen(true);
-                  }}
-                >
-                  <span>{slotText}</span>
-                  {count > 1 ? (
-                    <span className="studio-slot-count-badge">{count}</span>
-                  ) : count === 1 ? (
-                    <span className="studio-slot-dot" />
-                  ) : (
-                    <Plus size={12} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Right Side (>= 600px): 42% Dark Smoked-Glass Wardrobe Drawer */}

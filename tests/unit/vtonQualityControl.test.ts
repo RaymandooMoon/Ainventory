@@ -304,12 +304,15 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
     assert.equal(mThighCut.halfBody, true);
   });
 
-  it('resolves backdrop aura tier from explicit grade letters or stage IDs', () => {
+  it('resolves backdrop aura tier from explicit grade letters (including + tiers) or stage IDs', () => {
     assert.equal(resolveStageAuraTier('S'), 'S');
+    assert.equal(resolveStageAuraTier('S+'), 'S');
     assert.equal(resolveStageAuraTier('s_palais_royal_outdoor'), 'S');
     assert.equal(resolveStageAuraTier('A'), 'A');
+    assert.equal(resolveStageAuraTier('A+'), 'A');
     assert.equal(resolveStageAuraTier('a_hannam_flagship'), 'A');
     assert.equal(resolveStageAuraTier('B'), 'B');
+    assert.equal(resolveStageAuraTier('B+'), 'B');
     assert.equal(resolveStageAuraTier('b_seoul_plaza_outdoor'), 'B');
     assert.equal(resolveStageAuraTier('C'), 'C');
     assert.equal(resolveStageAuraTier('c_atelier_plaster'), 'C');
@@ -636,5 +639,107 @@ describe('VTON Quality Control, Anatomy, Aura Tiers, GPS District Formatting & R
 
     const mMatted = inspectPixelSliceQc(mattedBuf, w, h, { studioBackdropHex: '#94A3B8' });
     assert.ok((mMatted.umbrellaGapChromaRatio ?? 1) <= 0.01);
+  });
+
+  it('protects shaded light-blue denim trousers from studio cutout holes/purple edge crush and flags garment_cutout_hole in QC', () => {
+    // 1) Studio key selection avoids #5E9C7E green bounce when cyan/light-blue denim is worn
+    const studioHex = selectOptimalStudioKeyHex([
+      { name: '다크 브라운 스웨이드 블루종', color: '브라운', color_hex: '#3E2E24' },
+      { name: '라이트 블루 워시드 데님 팬츠', color: '라이트 블루', color_hex: '#6FA4BD' },
+      { name: '화이트 레더 스니커즈', color: '화이트', color_hex: '#F4F4F2' },
+    ]);
+    assert.equal(studioHex.toUpperCase(), '#8E6F9E');
+
+    // 2) Even if a slice is rendered against #5E9C7E sage-green with green-bounced shaded folds on the right denim calf,
+    //    cutoutStudioBackdropToRgba keeps 100% of both trouser legs opaque with zero purple fringe while clearing the central leg gap!
+    const w = 120;
+    const h = 180;
+    const buf = new Uint8ClampedArray(w * h * 4);
+    const sageBg: [number, number, number] = [94, 156, 126]; // #5E9C7E
+    for (let p = 0; p < w * h; p += 1) {
+      const i = p * 4;
+      buf[i] = sageBg[0];
+      buf[i + 1] = sageBg[1];
+      buf[i + 2] = sageBg[2];
+      buf[i + 3] = 255;
+    }
+    const fillRect = (
+      x0: number,
+      x1: number,
+      y0: number,
+      y1: number,
+      rgb: [number, number, number],
+      alpha = 255
+    ) => {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const i = (y * w + x) * 4;
+          buf[i] = rgb[0];
+          buf[i + 1] = rgb[1];
+          buf[i + 2] = rgb[2];
+          buf[i + 3] = alpha;
+        }
+      }
+    };
+
+    // Head + brown suede blouson + left/right denim trouser legs (with central sage-green gap at x=58..61) + white sneakers
+    fillRect(50, 70, 14, 38, [68, 52, 44]); // hair/head
+    fillRect(38, 82, 39, 98, [74, 54, 42]); // brown blouson
+    fillRect(43, 57, 99, 156, [104, 148, 172]); // left denim leg
+    fillRect(62, 77, 99, 156, [104, 148, 172]); // right denim leg
+    // Shaded green-bounced folds inside right denim calf (simulating image_83d1af23.png)
+    fillRect(65, 74, 122, 148, [78, 126, 134]);
+    fillRect(43, 57, 157, 168, [242, 242, 240]); // left white sneaker
+    fillRect(62, 77, 157, 168, [242, 242, 240]); // right white sneaker
+
+    cutoutStudioBackdropToRgba(buf, w, h);
+
+    // Outer background & central leg cleft must be transparent
+    assert.equal(buf[(20 * w + 10) * 4 + 3], 0);
+    assert.equal(buf[(130 * w + 59) * 4 + 3], 0);
+
+    // Every interior pixel of both denim legs + white sneakers must remain solid opaque with zero purple crush
+    let purpleCrushedPx = 0;
+    for (let y = 104; y <= 152; y += 1) {
+      for (const x of [46, 50, 54, 65, 69, 73]) {
+        const idx = (y * w + x) * 4;
+        assert.ok(
+          buf[idx + 3] >= 245,
+          `Expected solid denim pixel at (${x},${y}), got alpha=${buf[idx + 3]}`
+        );
+        if (buf[idx + 1] < 45 && buf[idx + 2] > 95) {
+          purpleCrushedPx += 1;
+        }
+      }
+    }
+    assert.equal(purpleCrushedPx, 0);
+    assert.equal(buf[(162 * w + 50) * 4 + 3], 255);
+    assert.equal(buf[(162 * w + 70) * 4 + 3], 255);
+
+    const mCleanDenim = inspectPixelSliceQc(buf, w, h, { studioBackdropHex: '#5E9C7E' });
+    assert.equal(mCleanDenim.garmentCutoutHoleRatio, 0);
+    assert.equal(
+      evaluateTurnaroundConsistencyQc({ 0: mCleanDenim, 135: mCleanDenim }).ok,
+      true
+    );
+
+    // 3) Punching an off-center transparent crater inside the right trouser calf MUST fail QC with `garment_cutout_hole`
+    const punchedBuf = new Uint8ClampedArray(buf);
+    for (let y = 124; y <= 148; y += 1) {
+      for (let x = 66; x <= 73; x += 1) {
+        const idx = (y * w + x) * 4;
+        punchedBuf[idx + 3] = 0;
+      }
+    }
+    const mPunched135 = inspectPixelSliceQc(punchedBuf, w, h, { studioBackdropHex: '#5E9C7E' });
+    assert.ok((mPunched135.garmentCutoutHoleRatio ?? 0) > 0.0045);
+
+    const holeReport = evaluateTurnaroundConsistencyQc({
+      0: mCleanDenim,
+      135: mPunched135,
+    });
+    assert.equal(holeReport.ok, false);
+    assert.ok(holeReport.failedAngles.includes(135));
+    assert.ok(holeReport.reasons.includes('135:garment_cutout_hole'));
   });
 });

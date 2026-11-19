@@ -156,7 +156,8 @@
 
   .hig-outfits-screen .studio-mobile-slot-bar,
   .hig-outfits-screen .studio-mobile-save-row,
-  .hig-outfits-screen .atelier-mobile-drawer-trigger-row {
+  .hig-outfits-screen .atelier-mobile-drawer-trigger-row,
+  .hig-outfits-screen .studio-2d-vton-viewer [data-mobile-wardrobe-trigger='true'] {
     display: none !important;
   }
 

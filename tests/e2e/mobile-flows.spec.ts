@@ -236,13 +236,17 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(studioCanvas).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
 
-    // Combine an Accessories slot item via mobile bottom sheet or desktop right panel
-    const mobileAccSlotBtn = page.locator('[data-mobile-slot-btn="accessory"]');
-    if (await mobileAccSlotBtn.isVisible()) {
-      await mobileAccSlotBtn.click();
-      const firstCard = page.locator('.ui-sheet-box [data-slot-garment-id]').first();
+    // Combine an Accessories slot item via top-right mobile wardrobe drawer trigger or desktop right panel
+    await expect(page.locator('.studio-mobile-slot-bar')).toHaveCount(0);
+    const mobileWardrobeBtn = studioCanvas.locator('[data-mobile-wardrobe-trigger="true"]');
+    if (await mobileWardrobeBtn.isVisible()) {
+      await mobileWardrobeBtn.click();
+      const sheet = page.locator('#outfit-mobile-wardrobe-sheet');
+      await expect(sheet).toBeVisible();
+      await sheet.locator('[data-mobile-sheet-slot-tab="accessory"]').click();
+      const firstCard = sheet.locator('[data-slot-garment-id]').first();
       await firstCard.click();
-      await page.locator('.ui-sheet-box [data-equip-inspector-btn="true"]').first().click();
+      await sheet.locator('[data-equip-inspector-btn="true"]').first().click();
     } else {
       await page.locator('[data-outfit-slot-tab="accessory"]').click();
       const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
@@ -349,7 +353,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     ).toBeVisible();
 
     await expect(
-      studioCanvas.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+      studioCanvas.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
 
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
@@ -1330,9 +1334,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page.locator('[data-nav-opacity-value="true"]')).toHaveText('50%');
     await page.keyboard.press('Escape');
 
-    // 2) Top-right Store button + Unclaimed daily free-draw speech bubble -> opens #stage-store-modal & claims free 0 i draw
-    const storeBtn = page.locator('[data-open-store-btn="true"]');
-    const freeBubble = page.locator('[data-store-free-draw-bubble="true"]');
+    // 2) Top-left Store button + Unclaimed daily free-draw speech bubble -> opens #stage-store-modal & claims free 0 i draw
+    const storeBtn = page.locator('.hig-top-bar-left [data-open-store-btn="true"]');
+    const freeBubble = page.locator('.hig-top-bar-left [data-store-free-draw-bubble="true"]');
+    await expect(page.locator('[data-outfit-vton-refresh="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-outfit-clear-all="true"]')).toHaveCount(0);
     await expect(storeBtn).toBeVisible();
     await expect(freeBubble).toBeVisible();
     await expect(freeBubble).toContainText(/무료 뽑기|Free daily draw/);
@@ -1351,6 +1357,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal.locator('[data-store-draw-result="true"]')).toBeVisible({
       timeout: 6000,
     });
+    // First draw before collecting all base tiers must never drop a '+' tier (`S+`/`A+`/`B+`)
     await expect(storeModal.locator('[data-store-reveal-tier]')).toHaveAttribute(
       'data-store-reveal-tier',
       /^[SABC]$/
@@ -1359,13 +1366,16 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(storeModal).toHaveCount(0);
     await expect(freeBubble).toHaveCount(0);
 
-    // 3) Top-left Background Picker opens all 14 (S×2, A×3, B×5, C×4) & equips C-tier / unlocked background
+    // 3) Top-left Background Picker opens all 14 across S+/S/A+/A/B+/B/C & equips C-tier / unlocked background
     await studioCanvas.locator('[data-stage-bg-picker-btn="true"]').click();
     const bgPickerModal = page.locator('#stage-background-picker-modal');
     await expect(bgPickerModal).toBeVisible();
-    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(2);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(3);
-    await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(5);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S+"] [data-bg-option-id]')).toHaveCount(1);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="S"] [data-bg-option-id]')).toHaveCount(1);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A+"] [data-bg-option-id]')).toHaveCount(2);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="A"] [data-bg-option-id]')).toHaveCount(1);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="B+"] [data-bg-option-id]')).toHaveCount(3);
+    await expect(bgPickerModal.locator('[data-bg-tier-group="B"] [data-bg-option-id]')).toHaveCount(2);
     await expect(bgPickerModal.locator('[data-bg-tier-group="C"] [data-bg-option-id]')).toHaveCount(4);
 
     // Equip an unlocked option and confirm modal closes & stage attribute stays valid

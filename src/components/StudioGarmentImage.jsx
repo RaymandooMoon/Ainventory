@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { cutoutStudioBackdropToRgba } from '../services/cutoutService.ts';
 import { hexToRgb } from '../shared/colorMath.js';
 import {
   getNativeSeedHex,
@@ -233,7 +234,7 @@ function encodeCanvasObjectUrl(canvas) {
 }
 
 function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcategory = '') {
-  const key = `${srcUrl}|${shouldTint ? (targetHex || '').toUpperCase() : 'RAW_CUTOUT'}`;
+  const key = `v4|${srcUrl}|${shouldTint ? (targetHex || '').toUpperCase() : 'RAW_CUTOUT'}`;
   const cached = readLruCachedUrl(key);
   if (cached) {
     return Promise.resolve(cached);
@@ -268,11 +269,121 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
         const d = imgData.data;
         const nPx = w * h;
 
+        const cornerIndices = [
+          0,
+          (w - 1) * 4,
+          (h - 1) * w * 4,
+          ((h - 1) * w + (w - 1)) * 4,
+        ];
+        let maxCornerAlpha = 0;
+        for (const ci of cornerIndices) {
+          if (d[ci + 3] > maxCornerAlpha) maxCornerAlpha = d[ci + 3];
+        }
         let transparentPx = 0;
         for (let p = 0; p < nPx; p++) {
           if (d[p * 4 + 3] < 245) transparentPx++;
         }
-        const hasPreBakedAlpha = transparentPx > nPx * 0.03;
+        let hasValidAlpha = maxCornerAlpha < 40 && transparentPx > nPx * 0.03;
+
+        if (!hasValidAlpha) {
+          let preCornerLumSum = 0;
+          let bgR = 0;
+          let bgG = 0;
+          let bgB = 0;
+          for (const ci of cornerIndices) {
+            bgR += d[ci];
+            bgG += d[ci + 1];
+            bgB += d[ci + 2];
+            preCornerLumSum += 0.299 * d[ci] + 0.587 * d[ci + 1] + 0.114 * d[ci + 2];
+          }
+          bgR /= cornerIndices.length;
+          bgG /= cornerIndices.length;
+          bgB /= cornerIndices.length;
+          const preCornerLum = preCornerLumSum / cornerIndices.length;
+
+          const nativeHexHint = getNativeSeedHex(srcUrl) || targetHex || '';
+          const nativeRgbHint = nativeHexHint ? hexToRgb(nativeHexHint) : null;
+          const isLightGarment =
+            srcUrl.includes('white') ||
+            srcUrl.includes('ivory') ||
+            srcUrl.includes('cream') ||
+            (nativeRgbHint &&
+              0.299 * nativeRgbHint.r + 0.587 * nativeRgbHint.g + 0.114 * nativeRgbHint.b > 192);
+
+          if (preCornerLum > 220 && isLightGarment) {
+            // Protect bright cotton/silk highlights above bgLum + 3.5 on white/ivory garments
+            const tightRes = runBorderFloodFill(d, w, h, bgR, bgG, bgB, {
+              distLimit: 7.5,
+              stepLimit: 3.8,
+              shadowLumDrop: 24,
+              chromaLimit: 0.02,
+            });
+            if (tightRes.bgCount > nPx * 0.04 && tightRes.coreBgRatio <= 0.14) {
+              for (let p = 0; p < nPx; p++) {
+                if (!tightRes.bgMask[p]) continue;
+                const i = p * 4;
+                const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                if (lum <= preCornerLum + 3.8) {
+                  d[i + 3] = 0;
+                }
+              }
+            }
+          } else {
+            cutoutStudioBackdropToRgba(d, w, h);
+          }
+
+          if (preCornerLum > 220 && !isLightGarment) {
+            for (let pass = 0; pass < 3; pass++) {
+              const toClear = [];
+              for (let y = 1; y < h - 1; y++) {
+                const row = y * w;
+                for (let x = 1; x < w - 1; x++) {
+                  const p = row + x;
+                  const i = p * 4;
+                  if (d[i + 3] === 0) continue;
+                  const touchesBg =
+                    d[(p - 1) * 4 + 3] < 80 ||
+                    d[(p + 1) * 4 + 3] < 80 ||
+                    d[(p - w) * 4 + 3] < 80 ||
+                    d[(p + w) * 4 + 3] < 80;
+                  if (!touchesBg) continue;
+                  const r = d[i];
+                  const g = d[i + 1];
+                  const b = d[i + 2];
+                  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                  const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                  if (sat <= 20 && lum >= 168) {
+                    toClear.push(i);
+                  } else if (lum >= 135 && sat <= 24) {
+                    const edgeA = Math.max(0.25, Math.min(0.85, (230 - lum) / 95));
+                    d[i + 3] = Math.round(d[i + 3] * edgeA);
+                    const inv = 1 / Math.max(0.35, edgeA);
+                    d[i] = Math.max(0, Math.min(255, Math.round((r - 250 * (1 - edgeA)) * inv)));
+                    d[i + 1] = Math.max(0, Math.min(255, Math.round((g - 250 * (1 - edgeA)) * inv)));
+                    d[i + 2] = Math.max(0, Math.min(255, Math.round((b - 250 * (1 - edgeA)) * inv)));
+                  }
+                }
+              }
+              if (toClear.length === 0) break;
+              for (const idx of toClear) {
+                d[idx + 3] = 0;
+              }
+            }
+          }
+
+          let postCutoutTransparent = 0;
+          for (let p = 0; p < nPx; p++) {
+            if (d[p * 4 + 3] < 245) postCutoutTransparent++;
+          }
+          let postCornerMaxAlpha = 0;
+          for (const ci of cornerIndices) {
+            if (d[ci + 3] > postCornerMaxAlpha) postCornerMaxAlpha = d[ci + 3];
+          }
+          if (postCornerMaxAlpha < 40 && postCutoutTransparent > nPx * 0.04) {
+            hasValidAlpha = true;
+          }
+        }
+
         const preserveDial = subcategory === 'watch' || srcUrl.includes('studio-watch');
         const isEyewear =
           subcategory === 'glasses' ||
@@ -284,8 +395,8 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
         let fgWeightSum = 0;
         const masks = new Float32Array(nPx);
 
-        if (hasPreBakedAlpha) {
-          // Ground-truth pre-matted `.webp` cutout: zero flood-fill needed, zero shadow contamination!
+        if (hasValidAlpha) {
+          // Pre-matted or Sobel-matted RGBA cutout: zero flood-fill erosion, zero shadow contamination!
           for (let p = 0; p < nPx; p++) {
             const i = p * 4;
             const a = d[i + 3];
@@ -299,7 +410,6 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
             const sat = Math.max(r, g, b) - Math.min(r, g, b);
             const alphaNorm = a / 255;
-            // Full tint mask across pre-decontaminated alpha contour prevents any light edge halo!
             masks[p] = 1;
             if (alphaNorm > 0.35 && !(preserveDial && sat < 22 && lum > 180)) {
               fgLumSum += lum * alphaNorm;
@@ -307,7 +417,7 @@ function getGarmentTintedPackshot(srcUrl, targetHex, shouldTint = true, subcateg
             }
           }
         } else {
-          // Legacy fallback for opaque non-alpha packshots
+          // Legacy fallback for high-variance non-studio backgrounds
           let bgR = 0;
           let bgG = 0;
           let bgB = 0;
@@ -510,7 +620,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     );
   }, [rawSrc, cat, sub, item?.name, allowStorePhoto]);
 
-  const isProcessableSeed = useMemo(() => {
+  const isTintableCatalogSeed = useMemo(() => {
     if (!resolvedSrc.startsWith('/seed/')) return false;
     if (
       allowStorePhoto ||
@@ -522,8 +632,20 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     return true;
   }, [resolvedSrc, allowStorePhoto]);
 
+  const isCutoutEligibleSource = useMemo(() => {
+    if (!resolvedSrc || resolvedSrc.startsWith('data:image/svg+xml')) return false;
+    if (
+      resolvedSrc.startsWith('/seed/') ||
+      resolvedSrc.startsWith('/uploads/') ||
+      resolvedSrc.startsWith('data:image/')
+    ) {
+      return true;
+    }
+    return false;
+  }, [resolvedSrc]);
+
   const shouldTintSeed = useMemo(() => {
-    if (!targetHex || !isProcessableSeed) return false;
+    if (!targetHex || !isTintableCatalogSeed) return false;
     const nativeHex = getNativeSeedHex(resolvedSrc);
     if (nativeHex) {
       if (rgbDist(hexToRgb(targetHex), hexToRgb(nativeHex)) < 40) {
@@ -531,13 +653,21 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
       }
     }
     return true;
-  }, [resolvedSrc, targetHex, isProcessableSeed]);
+  }, [resolvedSrc, targetHex, isTintableCatalogSeed]);
 
-  // Pre-matted `.webp` studio seeds that match their native color require zero Canvas work!
-  const isPreCutoutWebp = isProcessableSeed && resolvedSrc.endsWith('.webp');
-  const needsCanvasProcessing = isProcessableSeed && (!isPreCutoutWebp || shouldTintSeed);
+  // All `/seed/{studio,layer,s4,s5}-*.webp` files have pre-baked VP8X RGBA alpha; `.jpg`, `.png`,
+  // `store-*.jpg`, and user uploads run Canvas RGBA background removal!
+  const isKnownPreBakedStudioWebp =
+    isTintableCatalogSeed &&
+    resolvedSrc.endsWith('.webp') &&
+    (resolvedSrc.startsWith('/seed/studio-') ||
+      resolvedSrc.startsWith('/seed/layer-') ||
+      resolvedSrc.startsWith('/seed/s4-') ||
+      resolvedSrc.startsWith('/seed/s5-'));
+  const needsCanvasProcessing =
+    isCutoutEligibleSource && (!isKnownPreBakedStudioWebp || shouldTintSeed);
 
-  const cacheKey = `${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
+  const cacheKey = `v4|${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
 
   const [asyncTinted, setAsyncTinted] = useState(null);
   const [failedKey, setFailedKey] = useState(null);

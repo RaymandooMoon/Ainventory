@@ -338,9 +338,9 @@ export function resolveStageAuraTier(rawTierOrId?: unknown): StageAuraTier {
   const token = String(rawTierOrId || '')
     .trim()
     .toUpperCase();
-  if (token === 'S' || token.startsWith('S_')) return 'S';
-  if (token === 'A' || token.startsWith('A_')) return 'A';
-  if (token === 'B' || token.startsWith('B_')) return 'B';
+  if (token === 'S+' || token === 'S' || token.startsWith('S_')) return 'S';
+  if (token === 'A+' || token === 'A' || token.startsWith('A_')) return 'A';
+  if (token === 'B+' || token === 'B' || token.startsWith('B_')) return 'B';
   return 'C';
 }
 
@@ -359,6 +359,7 @@ export interface VtonQcSliceMetrics {
   clippedBottom: boolean;
   halfBody: boolean;
   interiorChromaRatio: number;
+  garmentCutoutHoleRatio?: number;
   outfitMeanRgb: [number, number, number] | null;
   hasWideOverheadCanopy?: boolean;
   umbrellaGapChromaRatio?: number;
@@ -440,6 +441,7 @@ export function inspectPixelSliceQc(
       clippedBottom: false,
       halfBody: true,
       interiorChromaRatio: 0,
+      garmentCutoutHoleRatio: 0,
       outfitMeanRgb: null,
       hasWideOverheadCanopy: false,
       umbrellaGapChromaRatio: 0,
@@ -485,6 +487,7 @@ export function inspectPixelSliceQc(
       clippedBottom: false,
       halfBody: true,
       interiorChromaRatio: 0,
+      garmentCutoutHoleRatio: 0,
       outfitMeanRgb: null,
       hasWideOverheadCanopy: false,
       umbrellaGapChromaRatio: 0,
@@ -776,6 +779,128 @@ export function inspectPixelSliceQc(
         ) / 10
       : 0;
 
+  // Garment Cutout Punch-Through Detector:
+  // Detects transparent or Swiss-cheese eroded holes (`alpha <= 150`) punched INSIDE solid garment interiors:
+  // 1) Central torso core (`0.25..0.44 * fgH` within `|x - coreCenterX| <= torsoHalfSpan * 0.30`), avoiding outer arm-waist gaps.
+  // 2) Lower trouser/calf columns (`0.64..0.85 * fgH`): a standing silhouette has at most ONE central inter-leg cleft near
+  //    `coreCenterX`. Any additional internal hole inside a left/right pant leg—or an off-center crater when `coreCenterX`
+  //    itself is solid opaque—is flagged as `garmentCutoutHoleRatio`.
+  const calfSpans: number[] = [];
+  for (let y = cxY0; y <= cxY1; y += 1) {
+    if (rowSpans[y] > 0) calfSpans.push(rowSpans[y]);
+  }
+  calfSpans.sort((a, b) => a - b);
+  const medianCalfSpan =
+    calfSpans.length > 0 ? calfSpans[Math.floor(calfSpans.length / 2)] : torsoHalfSpan;
+  const calfHalfSpan = Math.max(6, Math.round(medianCalfSpan * 0.52));
+  const torsoHoleY0 = Math.min(maxY, Math.round(minY + fgH * 0.25));
+  const torsoHoleY1 = Math.max(torsoHoleY0, Math.round(minY + fgH * 0.44));
+  const legHoleY0 = Math.min(maxY, Math.round(minY + fgH * 0.64));
+  const legHoleY1 = Math.max(legHoleY0, Math.round(minY + fgH * 0.85));
+
+  let garmentHolePixels = 0;
+  let garmentScannedPixels = 0;
+
+  // Scan 1: Central chest/stomach column
+  const chestCoreLimit = Math.max(3, Math.round(torsoHalfSpan * 0.3));
+  for (let y = torsoHoleY0; y <= torsoHoleY1; y += 1) {
+    const rowOff = y * width;
+    const x0 = Math.max(minX, Math.round(coreCenterX - chestCoreLimit));
+    const x1 = Math.min(maxX, Math.round(coreCenterX + chestCoreLimit));
+    let leftSolid = -1;
+    let rightSolid = -1;
+    for (let x = x0; x <= x1; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 180) {
+        if (leftSolid === -1) leftSolid = x;
+        rightSolid = x;
+      }
+    }
+    if (leftSolid !== -1 && rightSolid - leftSolid >= 4) {
+      for (let x = leftSolid + 1; x < rightSolid; x += 1) {
+        garmentScannedPixels += 1;
+        if (data[(rowOff + x) * 4 + 3] <= 150) {
+          garmentHolePixels += 1;
+        }
+      }
+    }
+  }
+
+  // Scan 2: Lower trouser / calf columns (below handbag/briefcase hang level)
+  for (let y = legHoleY0; y <= legHoleY1; y += 1) {
+    const rowOff = y * width;
+    const lx0 = Math.max(minX, Math.round(coreCenterX - calfHalfSpan));
+    const lx1 = Math.min(maxX, Math.round(coreCenterX + calfHalfSpan));
+    let firstSolid = -1;
+    let lastSolid = -1;
+    for (let x = lx0; x <= lx1; x += 1) {
+      if (data[(rowOff + x) * 4 + 3] > 140) {
+        if (firstSolid === -1) firstSolid = x;
+        lastSolid = x;
+      }
+    }
+    if (firstSolid === -1 || lastSolid - firstSolid < 6) continue;
+    garmentScannedPixels += lastSolid - firstSolid + 1;
+
+    const gaps: Array<{ start: number; end: number; width: number; centerDist: number }> = [];
+    let gx = firstSolid + 1;
+    while (gx < lastSolid) {
+      if (data[(rowOff + gx) * 4 + 3] <= 135) {
+        const gStart = gx;
+        while (gx < lastSolid && data[(rowOff + gx) * 4 + 3] <= 135) {
+          gx += 1;
+        }
+        const gEnd = gx - 1;
+        // Require >= 2px garment fabric wall (including Pass-4 ~161 feathered border) on both sides
+        const hasLeftWall =
+          gStart - 1 >= firstSolid &&
+          data[(rowOff + gStart - 1) * 4 + 3] > 140 &&
+          (gStart - 2 < lx0 || data[(rowOff + gStart - 2) * 4 + 3] > 140);
+        const hasRightWall =
+          gEnd + 1 <= lastSolid &&
+          data[(rowOff + gEnd + 1) * 4 + 3] > 140 &&
+          (gEnd + 2 > lx1 || data[(rowOff + gEnd + 2) * 4 + 3] > 140);
+        if (hasLeftWall && hasRightWall) {
+          const gCenter = (gStart + gEnd) * 0.5;
+          gaps.push({
+            start: gStart,
+            end: gEnd,
+            width: gEnd - gStart + 1,
+            centerDist: Math.abs(gCenter - coreCenterX),
+          });
+        }
+      } else {
+        gx += 1;
+      }
+    }
+
+    if (gaps.length >= 2) {
+      // Allow at most 1 central inter-leg cleft (the gap closest to coreCenterX if within 0.30 * calfHalfSpan);
+      // every other internal gap is punched through the left or right trouser leg!
+      let cleftIdx = -1;
+      let bestCleftDist = Infinity;
+      for (let gi = 0; gi < gaps.length; gi += 1) {
+        if (gaps[gi].centerDist <= calfHalfSpan * 0.3 && gaps[gi].centerDist < bestCleftDist) {
+          bestCleftDist = gaps[gi].centerDist;
+          cleftIdx = gi;
+        }
+      }
+      for (let gi = 0; gi < gaps.length; gi += 1) {
+        if (gi === cleftIdx) continue;
+        garmentHolePixels += gaps[gi].width;
+      }
+    } else if (gaps.length === 1) {
+      const onlyGap = gaps[0];
+      const straddlesCenterAxis =
+        onlyGap.start <= coreCenterX + 2 && onlyGap.end >= coreCenterX - 2;
+      if (!straddlesCenterAxis && onlyGap.centerDist > Math.max(3.5, calfHalfSpan * 0.28)) {
+        garmentHolePixels += onlyGap.width;
+      }
+    }
+  }
+
+  const garmentCutoutHoleRatio =
+    garmentScannedPixels > 0 ? garmentHolePixels / garmentScannedPixels : 0;
+
   return {
     width,
     height,
@@ -791,6 +916,7 @@ export function inspectPixelSliceQc(
     clippedBottom,
     halfBody,
     interiorChromaRatio,
+    garmentCutoutHoleRatio,
     outfitMeanRgb,
     hasWideOverheadCanopy,
     umbrellaGapChromaRatio,
@@ -836,6 +962,7 @@ export function evaluateTurnaroundConsistencyQc(
   const frontSplitCoat = (front.upperTorsoLeftRightDiff ?? 0) > 58;
   const frontUmbrellaGap =
     Boolean(front.hasWideOverheadCanopy) && (front.umbrellaGapChromaRatio ?? 0) > 0.035;
+  const frontGarmentHole = (front.garmentCutoutHoleRatio ?? 0) > 0.0045;
 
   const frontComplete =
     !front.clippedTop &&
@@ -843,6 +970,7 @@ export function evaluateTurnaroundConsistencyQc(
     !front.halfBody &&
     front.fgHeightRatio >= 0.48 &&
     front.interiorChromaRatio <= 0.045 &&
+    !frontGarmentHole &&
     !frontSplitCoat &&
     !frontUmbrellaGap;
 
@@ -853,6 +981,7 @@ export function evaluateTurnaroundConsistencyQc(
     if (front.halfBody) reasons.push('0:half_body');
     if (front.fgHeightRatio < 0.48) reasons.push('0:too_small');
     if (front.interiorChromaRatio > 0.045) reasons.push('0:interior_chroma_hole');
+    if (frontGarmentHole) reasons.push('0:garment_cutout_hole');
     if (frontSplitCoat) reasons.push('0:split_outerwear_color');
     if (frontUmbrellaGap) reasons.push('0:umbrella_gap_cutout_failed');
   }
@@ -880,6 +1009,10 @@ export function evaluateTurnaroundConsistencyQc(
     if (m.interiorChromaRatio > 0.045) {
       failedAnglesSet.add(angle);
       reasons.push(`${angle}:interior_chroma_hole`);
+    }
+    if (angle !== 0 && (m.garmentCutoutHoleRatio ?? 0) > 0.0045) {
+      failedAnglesSet.add(angle);
+      reasons.push(`${angle}:garment_cutout_hole`);
     }
     if (m.hasWideOverheadCanopy && (m.umbrellaGapChromaRatio ?? 0) > 0.035 && angle !== 0) {
       failedAnglesSet.add(angle);

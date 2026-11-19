@@ -6954,7 +6954,8 @@ export async function synthesizeGeminiMultiAngleVton(
                   !m.clippedBottom &&
                   !m.halfBody &&
                   m.fgHeightRatio >= 0.48 &&
-                  m.interiorChromaRatio <= 0.045;
+                  m.interiorChromaRatio <= 0.045 &&
+                  (m.garmentCutoutHoleRatio ?? 0) <= 0.0045;
                 if (singleOk && (angleSlices[0] || angleSlices[angleDeg])) {
                   bestValidZeroSlice = angleSlices[0] || angleSlices[angleDeg] || bestValidZeroSlice;
                 }

@@ -13,35 +13,71 @@ import {
   claimDailyAttendance,
   clampNavOpacity,
   createInitialEconomyState,
+  getBaseStageTier,
+  getEligibleGachaPool,
   hasFreeDailyDrawRemaining,
+  isPlusStageTier,
+  isPlusTierEligibleForDraw,
   pickWeightedStageBackground,
   rollBackgroundGacha,
   shiftDateKeyDays,
+  tierToCssSlug,
 } from '../../src/utils/stageBackgroundCatalog.ts';
 
 describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
-  it('defines 14 architectural + open-sky outdoor backgrounds across S(2), A(3), B(5), C(4) summing to 100% weight with C-tier default', () => {
+  it('assigns + tiers (S+, A+, B+) to all roofless outdoor backgrounds and base tiers to indoor ones summing to 100% family weight', () => {
     assert.equal(STAGE_BACKGROUNDS.length, 14);
 
-    const byTier = { S: 0, A: 0, B: 0, C: 0 };
-    const weightByTier = { S: 0, A: 0, B: 0, C: 0 };
+    const byExactTier: Record<string, number> = {
+      'S+': 0,
+      S: 0,
+      'A+': 0,
+      A: 0,
+      'B+': 0,
+      B: 0,
+      C: 0,
+    };
+    const weightByBaseTier = { S: 0, A: 0, B: 0, C: 0 };
     let totalWeight = 0;
 
     for (const bg of STAGE_BACKGROUNDS) {
-      byTier[bg.tier] += 1;
-      weightByTier[bg.tier] += bg.weight;
+      byExactTier[bg.tier] += 1;
+      const base = getBaseStageTier(bg.tier);
+      weightByBaseTier[base] += bg.weight;
       totalWeight += bg.weight;
+
+      if (bg.isOutdoor) {
+        assert.equal(
+          isPlusStageTier(bg.tier),
+          true,
+          `Expected roofless outdoor background ${bg.id} to have + tier, got ${bg.tier}`
+        );
+      } else {
+        assert.equal(
+          isPlusStageTier(bg.tier),
+          false,
+          `Expected roofed indoor background ${bg.id} to have base tier, got ${bg.tier}`
+        );
+      }
     }
 
-    assert.equal(byTier.S, 2);
-    assert.equal(byTier.A, 3);
-    assert.equal(byTier.B, 5);
-    assert.equal(byTier.C, 4);
+    assert.equal(byExactTier['S+'], 1);
+    assert.equal(byExactTier.S, 1);
+    assert.equal(byExactTier['A+'], 2);
+    assert.equal(byExactTier.A, 1);
+    assert.equal(byExactTier['B+'], 3);
+    assert.equal(byExactTier.B, 2);
+    assert.equal(byExactTier.C, 4);
     assert.equal(totalWeight, 100);
-    assert.equal(weightByTier.S, TIER_DROP_RATES.S);
-    assert.equal(weightByTier.A, TIER_DROP_RATES.A);
-    assert.equal(weightByTier.B, TIER_DROP_RATES.B);
-    assert.equal(weightByTier.C, TIER_DROP_RATES.C);
+    assert.equal(weightByBaseTier.S, TIER_DROP_RATES.S);
+    assert.equal(weightByBaseTier.A, TIER_DROP_RATES.A);
+    assert.equal(weightByBaseTier.B, TIER_DROP_RATES.B);
+    assert.equal(weightByBaseTier.C, TIER_DROP_RATES.C);
+
+    assert.equal(tierToCssSlug('B+'), 'b-plus');
+    assert.equal(tierToCssSlug('A+'), 'a-plus');
+    assert.equal(tierToCssSlug('S+'), 's-plus');
+    assert.equal(tierToCssSlug('B'), 'b');
 
     const outdoorIds = STAGE_BACKGROUNDS.filter((b) => b.isOutdoor).map((b) => b.id).sort();
     const indoorIds = STAGE_BACKGROUNDS.filter((b) => !b.isOutdoor).map((b) => b.id);
@@ -66,12 +102,63 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
     assert.equal(defaultBg?.isOutdoor, false);
   });
 
+  it('gates B+, A+, and S+ gacha drops until all base backgrounds of the same letter are collected', () => {
+    const init = createInitialEconomyState();
+    assert.equal(isPlusTierEligibleForDraw('B+', init.unlockedIds), false);
+    assert.equal(isPlusTierEligibleForDraw('A+', init.unlockedIds), false);
+    assert.equal(isPlusTierEligibleForDraw('S+', init.unlockedIds), false);
+
+    // Before collecting base tiers, eligible gacha pool contains ZERO + tier backgrounds
+    const initialPool = getEligibleGachaPool(init.unlockedIds);
+    assert.equal(initialPool.some((bg) => isPlusStageTier(bg.tier)), false);
+    for (let i = 0; i < 100; i += 1) {
+      const picked = pickWeightedStageBackground(() => i / 100, init.unlockedIds);
+      assert.equal(isPlusStageTier(picked.tier), false);
+    }
+
+    // Unlocking only 1 of the 2 base B backgrounds STILL keeps B+ locked
+    const oneBaseB = ['c_atelier_plaster', 'b_seoul_cafe_terrace'];
+    assert.equal(isPlusTierEligibleForDraw('B+', oneBaseB), false);
+    for (let r = 20; r < 55; r += 1) {
+      const pickedB = pickWeightedStageBackground(() => r / 100, oneBaseB);
+      assert.equal(pickedB.tier, 'B');
+    }
+
+    // Unlocking ALL base B backgrounds ('b_seoul_cafe_terrace' + 'b_minimal_loft_window') unlocks B+ in gacha!
+    const allBaseB = ['c_atelier_plaster', 'b_seoul_cafe_terrace', 'b_minimal_loft_window'];
+    assert.equal(isPlusTierEligibleForDraw('B+', allBaseB), true);
+    assert.equal(isPlusTierEligibleForDraw('A+', allBaseB), false);
+    assert.equal(isPlusTierEligibleForDraw('S+', allBaseB), false);
+
+    const pickedBPlus = pickWeightedStageBackground(() => 0.48, allBaseB);
+    assert.equal(pickedBPlus.tier, 'B+');
+    assert.equal(pickedBPlus.isOutdoor, true);
+
+    const bPlusGacha = rollBackgroundGacha(
+      { ...init, unlockedIds: allBaseB },
+      '2026-11-18',
+      () => 0.48
+    );
+    assert.equal(bPlusGacha.ok, true);
+    assert.equal(bPlusGacha.background.tier, 'B+');
+    assert.equal(bPlusGacha.isNewUnlock, true);
+
+    // Unlocking base A ('a_hannam_flagship') unlocks A+, and base S ('s_paris_atelier') unlocks S+
+    const withBaseA = [...allBaseB, 'a_hannam_flagship'];
+    assert.equal(isPlusTierEligibleForDraw('A+', withBaseA), true);
+    assert.equal(pickWeightedStageBackground(() => 0.16, withBaseA).tier, 'A+');
+
+    const withBaseS = [...withBaseA, 's_grand_paris_atelier'];
+    assert.equal(isPlusTierEligibleForDraw('S+', withBaseS), true);
+    assert.equal(pickWeightedStageBackground(() => 0.025, withBaseS).tier, 'S+');
+  });
+
   it('uses 1 free daily draw, then costs 10 i per paid draw, equips new unlocks, and refunds 5 i on duplicates', () => {
     const today = '2026-11-17';
     const s0 = createInitialEconomyState();
     assert.equal(hasFreeDailyDrawRemaining(s0, today), true);
 
-    // 1) Free daily draw hits S-tier at rng=0.01 (first 3% weight)
+    // 1) Free daily draw hits base S-tier at rng=0.01 (first 3% family weight, S+ gated)
     const freeRes = rollBackgroundGacha(s0, today, () => 0.01);
     assert.equal(freeRes.ok, true);
     assert.equal(freeRes.usedFreeDraw, true);
@@ -88,7 +175,7 @@ describe('Stage Background Catalog, Gacha & Attendance Economy', () => {
 
     // 3) Give 10 i and draw an already unlocked C-tier default -> refunds 5 i
     const funded = { ...freeRes.nextState, iBalance: STORE_DRAW_COST_I };
-    const pickedDefault = pickWeightedStageBackground(() => 0.56);
+    const pickedDefault = pickWeightedStageBackground(() => 0.56, funded.unlockedIds);
     assert.equal(pickedDefault.id, DEFAULT_STAGE_BACKGROUND_ID);
 
     const dupRes = rollBackgroundGacha(funded, today, () => 0.56);

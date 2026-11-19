@@ -1,4 +1,5 @@
-export type StageBackgroundTier = 'S' | 'A' | 'B' | 'C';
+export type BaseStageBackgroundTier = 'S' | 'A' | 'B' | 'C';
+export type StageBackgroundTier = 'S+' | 'S' | 'A+' | 'A' | 'B+' | 'B' | 'C';
 
 export interface StageBackgroundItem {
   id: string;
@@ -31,14 +32,44 @@ export const NAV_OPACITY_STORAGE_KEY = 'ainventory_nav_opacity_v1';
 export const ECONOMY_STATE_EVENT = 'ainventory:economy-updated';
 export const NAV_OPACITY_EVENT = 'ainventory:nav-opacity-updated';
 
-export const TIER_DROP_RATES: Record<StageBackgroundTier, number> = {
+export const TIER_DROP_RATES: Record<BaseStageBackgroundTier, number> = {
   S: 3,
   A: 17,
   B: 35,
   C: 45,
 };
 
-export const TIER_ORDER: readonly StageBackgroundTier[] = ['S', 'A', 'B', 'C'] as const;
+export const BASE_TIER_ORDER: readonly BaseStageBackgroundTier[] = ['S', 'A', 'B', 'C'] as const;
+export const TIER_ORDER: readonly StageBackgroundTier[] = [
+  'S+',
+  'S',
+  'A+',
+  'A',
+  'B+',
+  'B',
+  'C',
+] as const;
+
+export function getBaseStageTier(tier: StageBackgroundTier | string): BaseStageBackgroundTier {
+  const clean = String(tier || 'C')
+    .trim()
+    .toUpperCase();
+  if (clean.startsWith('S')) return 'S';
+  if (clean.startsWith('A')) return 'A';
+  if (clean.startsWith('B')) return 'B';
+  return 'C';
+}
+
+export function isPlusStageTier(tier: StageBackgroundTier | string): boolean {
+  return String(tier || '').trim().endsWith('+');
+}
+
+export function tierToCssSlug(tier: StageBackgroundTier | string): string {
+  const clean = String(tier || 'C')
+    .trim()
+    .toLowerCase();
+  return clean.endsWith('+') ? `${clean.slice(0, -1)}-plus` : clean;
+}
 
 export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   {
@@ -57,11 +88,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 's_palais_royal_outdoor',
-    tier: 'S',
+    tier: 'S+',
     nameKo: '파리 팔레 루아얄 콜로네이드',
     nameEn: 'Palais-Royal Colonnade Plaza',
-    subtitleKo: '오픈 스카이 라임스톤 아케이드 & 파리지앵 플라자',
-    subtitleEn: 'Open-Sky Limestone Colonnade & Parisian Courtyard',
+    subtitleKo: '날씨 반응형 오픈 스카이 아케이드 & 파리지앵 코트야드',
+    subtitleEn: 'Weather-Active Limestone Colonnade & Parisian Courtyard',
     imageUrl: '/assets/backgrounds/s_palais_royal_outdoor.jpg',
     floorToneLight: 'rgba(210, 198, 178, 0.26)',
     floorToneDark: 'rgba(40, 36, 31, 0.44)',
@@ -85,11 +116,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 'a_sunset_rooftop',
-    tier: 'A',
+    tier: 'A+',
     nameKo: '노을 루프탑 테라스',
     nameEn: 'Sunset Rooftop Terrace',
-    subtitleKo: '골든아워 오픈 스카이 & 슬레이트 루프탑',
-    subtitleEn: 'Open-Sky Sunset Terrace & Slate Floor',
+    subtitleKo: '날씨 반응형 골든아워 오픈 스카이 & 슬레이트 테라스',
+    subtitleEn: 'Weather-Active Open-Sky Terrace & Slate Floor',
     imageUrl: '/assets/backgrounds/a_sunset_rooftop.jpg',
     floorToneLight: 'rgba(184, 146, 114, 0.22)',
     floorToneDark: 'rgba(48, 36, 32, 0.44)',
@@ -99,11 +130,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 'a_hannam_terrace_outdoor',
-    tier: 'A',
+    tier: 'A+',
     nameKo: '한남 갤러리 스카이 테라스',
     nameEn: 'Hannam Sky Terrace',
-    subtitleKo: '오픈 스카이 파노라마 & 혼드 그라나이트 데크',
-    subtitleEn: 'Open-Sky Terrace & Honed Granite Deck',
+    subtitleKo: '날씨 반응형 오픈 스카이 정원 & 혼드 그라나이트 데크',
+    subtitleEn: 'Weather-Active Courtyard Terrace & Honed Granite Deck',
     imageUrl: '/assets/backgrounds/a_hannam_terrace_outdoor.jpg',
     floorToneLight: 'rgba(174, 178, 184, 0.22)',
     floorToneDark: 'rgba(30, 33, 38, 0.44)',
@@ -127,11 +158,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 'b_brick_courtyard',
-    tier: 'B',
+    tier: 'B+',
     nameKo: '유럽 브릭 코트야드',
     nameEn: 'European Brick Courtyard',
-    subtitleKo: '오픈 스카이 중정 & 코블스톤 플라자',
-    subtitleEn: 'Open-Sky Brick Arcade & Cobblestone Floor',
+    subtitleKo: '날씨 반응형 오픈 스카이 중정 & 코블스톤 플라자',
+    subtitleEn: 'Weather-Active Brick Arcade & Cobblestone Floor',
     imageUrl: '/assets/backgrounds/b_brick_courtyard.jpg',
     floorToneLight: 'rgba(176, 154, 134, 0.2)',
     floorToneDark: 'rgba(42, 34, 28, 0.38)',
@@ -155,11 +186,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 'b_stone_courtyard_outdoor',
-    tier: 'B',
+    tier: 'B+',
     nameKo: '트래버틴 오픈 중정',
     nameEn: 'Travertine Open Courtyard',
-    subtitleKo: '오픈 스카이 스톤 월 & 그레이 페이빙 플라자',
-    subtitleEn: 'Open-Sky Stone Walls & Slate Paving Courtyard',
+    subtitleKo: '날씨 반응형 오픈 스카이 스톤 월 & 페이빙 중정',
+    subtitleEn: 'Weather-Active Limestone Walls & Slate Paving Courtyard',
     imageUrl: '/assets/backgrounds/b_stone_courtyard_outdoor.jpg',
     floorToneLight: 'rgba(188, 182, 172, 0.2)',
     floorToneDark: 'rgba(34, 33, 31, 0.4)',
@@ -169,11 +200,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
   },
   {
     id: 'b_seoul_plaza_outdoor',
-    tier: 'B',
+    tier: 'B+',
     nameKo: '광화문 스톤 플라자',
     nameEn: 'Seoul Stone-Paved Plaza',
-    subtitleKo: '오픈 스카이 도심 석재 광장 & 오픈 에어 테라스',
-    subtitleEn: 'Open-Sky Granite Plaza & Architectural Terrace',
+    subtitleKo: '날씨 반응형 오픈 스카이 석재 아케이드 & 플라자',
+    subtitleEn: 'Weather-Active Granite Colonnade & Plaza',
     imageUrl: '/assets/backgrounds/b_seoul_plaza_outdoor.jpg',
     floorToneLight: 'rgba(178, 180, 184, 0.2)',
     floorToneDark: 'rgba(32, 34, 38, 0.42)',
@@ -352,19 +383,78 @@ export interface GachaRollOutcome {
   nextState: StageEconomyState;
 }
 
+/**
+ * Checks whether a `+` outdoor weather-active tier (`S+`, `A+`, `B+`) is unlocked in the gacha pool.
+ * Base tiers (`S`, `A`, `B`, `C`) are always eligible (`true`).
+ * `+` tiers (`B+`, `A+`, `S+`) ONLY enter the draw pool after ALL base backgrounds of the same
+ * letter (`B`, `A`, `S`) have been collected in `unlockedIds`.
+ */
+export function isPlusTierEligibleForDraw(
+  tier: StageBackgroundTier,
+  unlockedIds?: Iterable<string> | null
+): boolean {
+  if (!isPlusStageTier(tier)) return true;
+  if (!unlockedIds) return false;
+  const unlockedSet = unlockedIds instanceof Set ? unlockedIds : new Set(unlockedIds);
+  const baseTier = getBaseStageTier(tier);
+  const baseItems = STAGE_BACKGROUNDS.filter((bg) => bg.tier === baseTier);
+  if (baseItems.length === 0) return true;
+  return baseItems.every((bg) => unlockedSet.has(bg.id));
+}
+
+export function getEligibleGachaPool(
+  unlockedIds?: Iterable<string> | null
+): StageBackgroundItem[] {
+  return STAGE_BACKGROUNDS.filter((item) => isPlusTierEligibleForDraw(item.tier, unlockedIds));
+}
+
 export function pickWeightedStageBackground(
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  unlockedIds?: Iterable<string> | null
 ): StageBackgroundItem {
-  const totalWeight = STAGE_BACKGROUNDS.reduce((sum, item) => sum + item.weight, 0);
-  const raw = Math.min(0.999999999, Math.max(0, rng())) * totalWeight;
+  // Roll family bucket first (`S/S+` 3%, `A/A+` 17%, `B/B+` 35%, `C` 45% = 100%)
+  // and distribute that family's probability across currently eligible items in the family
+  // so `B+` has 0% chance until all base `B` items are unlocked (and likewise for `A+` / `S+`).
+  const totalFamilyWeight = BASE_TIER_ORDER.reduce((sum, t) => sum + TIER_DROP_RATES[t], 0);
+  const clampedRoll = Math.min(0.999999999, Math.max(0, rng())) * totalFamilyWeight;
+
+  let chosenFamily: BaseStageBackgroundTier = 'C';
+  let familyStart = 0;
+  for (const baseTier of BASE_TIER_ORDER) {
+    const bucketWeight = TIER_DROP_RATES[baseTier];
+    if (clampedRoll < familyStart + bucketWeight) {
+      chosenFamily = baseTier;
+      break;
+    }
+    familyStart += bucketWeight;
+  }
+
+  const familyBucketWeight = Math.max(1, TIER_DROP_RATES[chosenFamily]);
+  const withinBucketFraction = Math.min(
+    0.999999999,
+    Math.max(0, (clampedRoll - familyStart) / familyBucketWeight)
+  );
+
+  const familyEligible = STAGE_BACKGROUNDS.filter(
+    (item) =>
+      getBaseStageTier(item.tier) === chosenFamily &&
+      isPlusTierEligibleForDraw(item.tier, unlockedIds)
+  );
+  const pool =
+    familyEligible.length > 0
+      ? familyEligible
+      : STAGE_BACKGROUNDS.filter((item) => getBaseStageTier(item.tier) === chosenFamily);
+
+  const poolWeight = pool.reduce((sum, item) => sum + item.weight, 0);
+  const targetInPool = withinBucketFraction * Math.max(1, poolWeight);
   let acc = 0;
-  for (const item of STAGE_BACKGROUNDS) {
+  for (const item of pool) {
     acc += item.weight;
-    if (raw < acc) {
+    if (targetInPool < acc) {
       return item;
     }
   }
-  return STAGE_BACKGROUNDS[STAGE_BACKGROUNDS.length - 1];
+  return pool[pool.length - 1] || STAGE_BACKGROUNDS[STAGE_BACKGROUNDS.length - 1];
 }
 
 export function rollBackgroundGacha(
@@ -389,7 +479,7 @@ export function rollBackgroundGacha(
     };
   }
 
-  const picked = pickWeightedStageBackground(rng);
+  const picked = pickWeightedStageBackground(rng, normalized.unlockedIds);
   const alreadyUnlocked = normalized.unlockedIds.includes(picked.id);
   const isNewUnlock = !alreadyUnlocked;
   const refundI = alreadyUnlocked ? DUPLICATE_REFUND_I : 0;

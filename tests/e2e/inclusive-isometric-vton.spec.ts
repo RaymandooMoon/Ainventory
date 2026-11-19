@@ -177,11 +177,12 @@ async function selectStudioSlotAndPickItem(
   slotKey: 'outer' | 'top' | 'bottom' | 'onepiece' | 'shoes' | 'accessory',
   options?: { season?: 'all' | '봄' | '여름' | '가을' | '겨울'; matchText?: RegExp }
 ): Promise<string> {
-  const mobileSlotBtn = page.locator(`[data-mobile-slot-btn="${slotKey}"]`);
-  if (await mobileSlotBtn.isVisible()) {
-    await mobileSlotBtn.click();
-    const sheet = page.locator('.ui-sheet-box');
+  const mobileWardrobeBtn = page.locator('[data-mobile-wardrobe-trigger="true"]');
+  if (await mobileWardrobeBtn.isVisible()) {
+    await mobileWardrobeBtn.click();
+    const sheet = page.locator('#outfit-mobile-wardrobe-sheet');
     await expect(sheet).toBeVisible();
+    await sheet.locator(`[data-mobile-sheet-slot-tab="${slotKey}"]`).click();
     if (options?.season) {
       await sheet.locator('[data-outfit-season-select="true"]').selectOption(options.season);
     }
@@ -232,6 +233,16 @@ async function selectStudioSlotAndPickItem(
   await expect(wearBtn).toBeVisible();
   await wearBtn.click();
   return pickedId;
+}
+
+async function clearEquippedSlotsManually(
+  studioCanvas: ReturnType<Page['locator']>
+): Promise<void> {
+  const removeBtns = studioCanvas.locator('.studio-worn-slot-remove');
+  for (let guard = 0; guard < 16; guard += 1) {
+    if ((await removeBtns.count()) === 0) break;
+    await removeBtns.first().click();
+  }
 }
 
 function setRangeSliderValue(page: Page, sliderSelector: string, nextValue: number) {
@@ -355,16 +366,20 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
     await expect(modelStage).toBeVisible();
 
-    // Strictly ZERO procedural drawing <canvas> or SVG human fallback elements on stage;
-    // Layer 3 foreground weather physics canvas is present with pointer-events: none
+    // Strictly ZERO procedural drawing <canvas>, legacy 2D weather canvas, or SVG human fallback elements on stage
     await expect(
-      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+      studioCanvas.locator('canvas:not(.studio-three-stage-mount canvas)')
     ).toHaveCount(0);
     await expect(
       studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
-    ).toHaveCSS('pointer-events', 'none');
+    ).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('.character-25d-fallback-svg')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-atelier-backdrop="true"]')).toBeVisible();
+    await expect(page.locator('[data-outfit-vton-refresh="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-outfit-clear-all="true"]')).toHaveCount(0);
+    await expect(page.locator('.studio-mobile-slot-bar')).toHaveCount(0);
+    await expect(page.locator('.hig-top-bar-left [data-open-store-btn="true"]')).toBeVisible();
 
     // Decluttered stage invariants:
     // - Top-left `Outfits / Virtual Studio` text lockup removed
@@ -388,10 +403,17 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(topHudText).not.toMatch(/Outfits|Virtual Studio/i);
 
     const hudNonOverlapping = await studioCanvas.evaluate((root) => {
-      const left = root.querySelector('.atelier-stage-brand-cluster')?.getBoundingClientRect();
-      const right = root.querySelector('[data-vton-history-btn="true"]')?.getBoundingClientRect();
-      if (!left || !right) return false;
-      return left.right <= right.left;
+      const leftSlot = root.querySelector('.studio-hud-left-slot')?.getBoundingClientRect();
+      const capsule = root
+        .querySelector('[data-atelier-weather-capsule="true"]')
+        ?.getBoundingClientRect();
+      if (!leftSlot || !capsule) return false;
+      const rightBtn = root.querySelector('[data-mobile-wardrobe-trigger="true"]') as HTMLElement | null;
+      const rightRect =
+        rightBtn && window.getComputedStyle(rightBtn).display !== 'none'
+          ? rightBtn.getBoundingClientRect()
+          : null;
+      return leftSlot.right <= capsule.left && (!rightRect || capsule.right <= rightRect.left);
     });
     expect(hudNonOverlapping).toBe(true);
 
@@ -443,7 +465,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       await expect(studioCanvas).toHaveAttribute('data-view-angle', expectedDeg);
       await expect(modelStage).toHaveAttribute('data-view-angle', expectedDeg);
       await expect(
-        studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+        studioCanvas.locator('canvas:not(.studio-three-stage-mount canvas)')
       ).toHaveCount(0);
     }
     await expect(angleInput).toHaveValue('0');
@@ -554,12 +576,16 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toBeVisible();
 
     // Verify Accessories slot contains ZERO underwear / socks items
-    const mobileAccBtn = page.locator('[data-mobile-slot-btn="accessory"]');
-    if (await mobileAccBtn.isVisible()) {
-      await mobileAccBtn.click();
-      const sheetText = await page.locator('.ui-sheet-box').innerText();
+    const mobileWardrobeBtn = studioCanvas.locator('[data-mobile-wardrobe-trigger="true"]');
+    if (await mobileWardrobeBtn.isVisible()) {
+      await mobileWardrobeBtn.click();
+      const sheet = page.locator('#outfit-mobile-wardrobe-sheet');
+      await expect(sheet).toBeVisible();
+      await sheet.locator('[data-mobile-sheet-slot-tab="accessory"]').click();
+      const sheetText = await sheet.innerText();
       expect(sheetText).not.toMatch(/이너탑|언더웨어|크루 삭스|앵클 삭스|Underwear|Socks/i);
       await page.keyboard.press('Escape');
+      await expect(sheet).toHaveCount(0);
     } else {
       await page.locator('[data-outfit-slot-tab="accessory"]').click();
       const pickerText = await page
@@ -569,11 +595,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     }
 
     await expect(
-      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
-    const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
-    await expect(resetBtn).toBeVisible();
-    await resetBtn.click();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await clearEquippedSlotsManually(studioCanvas);
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
     await expect(studioCanvas.locator('[data-flatlay-empty="true"]')).toBeVisible();
 
@@ -641,7 +666,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
     await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
 
@@ -651,7 +676,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
     await expect(
-      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+      studioCanvas.locator('canvas:not(.studio-three-stage-mount canvas)')
     ).toHaveCount(0);
 
     // Clicking [API 키 설정] on the stage toast opens Profile directly with the Gemini API Key section expanded!
@@ -734,7 +759,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
-    await page.locator('[data-outfit-vton-refresh="true"]').click();
+    // Trigger synthesis via single Look selector menu (Look 2) since header Refresh was removed
+    await studioCanvas.locator('[data-look-selector-trigger="true"]').click();
+    await studioCanvas
+      .locator('[data-look-selector-menu="true"] [data-weather-rec-id]')
+      .nth(1)
+      .click();
     await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toBeVisible();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
@@ -880,11 +910,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
-    const resetBtn = page.getByRole('button', { name: /착장 초기화|Reset Outfit/i });
-    await expect(resetBtn).toBeVisible();
-    await resetBtn.click();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await clearEquippedSlotsManually(studioCanvas);
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
 
     await selectStudioSlotAndPickItem(page, 'outer', {
@@ -1088,7 +1117,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first()
+      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
 
     // 1. Initial entry auto-generates Look A once
@@ -1126,8 +1155,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const lookBSrc0 = await aiImg.getAttribute('src');
     expect(lookBSrc0).not.toBe(lookASrc0);
 
-    // 4. Switch back to Look 1 -> automatic 0ms cache reuse with ZERO extra API calls!
-    await page.locator('[data-weather-look-dock="true"] [data-weather-rec-id]').first().click();
+    // 4. Switch back to Look 1 via single Look selector menu -> automatic 0ms cache reuse with ZERO extra API calls!
+    await studioCanvas.locator('[data-look-selector-trigger="true"]').click();
+    await studioCanvas
+      .locator('[data-look-selector-menu="true"] [data-weather-rec-id]')
+      .first()
+      .click();
     await expect(aiImg).toBeVisible();
     await expect(studioCanvas).toHaveAttribute('data-vton-cached', 'true');
     expect(await aiImg.getAttribute('src')).toBe(lookASrc0);
@@ -1435,11 +1468,15 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'indoor-ivory');
     await expect(studioCanvas.locator('[data-indoor-ivory-light="true"]')).toBeVisible();
+    const threeStageLayer = studioCanvas.locator('[data-testid="studio-three-stage-layer"]');
+    await expect(threeStageLayer).toHaveAttribute('data-stage-outdoor', 'false');
+    await expect(threeStageLayer).toHaveAttribute('data-weather-mode', 'indoor-ivory');
     await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-slot="acc_umbrella"]')).toHaveCount(0);
 
-    // (4) Switch to open-sky outdoor stage (b_brick_courtyard) -> rain particles, wet mirror, and auto-umbrella activate!
+    // (4) Switch to open-sky B+ outdoor stage (b_brick_courtyard) -> Three.js rain, wet mirror, and auto-umbrella activate!
     await page.evaluate(() => {
       const key = 'ainventory_stage_economy_v1';
       const raw = window.localStorage.getItem(key);
@@ -1457,12 +1494,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
     await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 'b_brick_courtyard');
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
-    const rainLayer = studioCanvas.locator('[data-studio-rain-layer="true"]');
-    await expect(rainLayer).toBeVisible();
-    const rainZIndex = await rainLayer.evaluate((el) =>
-      Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
-    );
-    expect(rainZIndex).toBeGreaterThanOrEqual(30);
+    await expect(threeStageLayer).toHaveAttribute('data-stage-outdoor', 'true');
+    await expect(threeStageLayer).toHaveAttribute('data-aura-tier', 'B+');
+    await expect(threeStageLayer).toHaveAttribute('data-weather-mode', 'rain');
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-slot="acc_umbrella"]')).toBeVisible();
   });
 
@@ -1529,11 +1564,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       subSlotKey: string,
       cardIndex: number
     ) => {
-      const mobileBtn = page.locator(`[data-mobile-slot-btn="${parentTab}"]`);
-      if (await mobileBtn.isVisible()) {
-        await mobileBtn.click();
-        const sheet = page.locator('.ui-sheet-box');
+      const mobileWardrobeBtn = studioCanvas.locator('[data-mobile-wardrobe-trigger="true"]');
+      if (await mobileWardrobeBtn.isVisible()) {
+        await mobileWardrobeBtn.click();
+        const sheet = page.locator('#outfit-mobile-wardrobe-sheet');
         await expect(sheet).toBeVisible();
+        await sheet.locator(`[data-mobile-sheet-slot-tab="${parentTab}"]`).click();
         await sheet.locator(`[data-subtree-select="${parentTab}"]`).selectOption(subSlotKey);
         const cards = sheet.locator('[data-slot-garment-id]');
         const target = cards.nth(cardIndex);
@@ -1608,10 +1644,13 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await page.keyboard.press('Escape');
 
-    const mobileJwlBtn = page.locator('[data-mobile-slot-btn="jewelry"]');
-    if (await mobileJwlBtn.isVisible()) {
-      await mobileJwlBtn.click();
-      await expect(page.locator('.ui-sheet-box [data-jewelry-subtree="true"]')).toBeVisible();
+    const mobileWardrobeJwlBtn = studioCanvas.locator('[data-mobile-wardrobe-trigger="true"]');
+    if (await mobileWardrobeJwlBtn.isVisible()) {
+      await mobileWardrobeJwlBtn.click();
+      const sheet = page.locator('#outfit-mobile-wardrobe-sheet');
+      await expect(sheet).toBeVisible();
+      await sheet.locator('[data-mobile-sheet-slot-tab="jewelry"]').click();
+      await expect(sheet.locator('[data-jewelry-subtree="true"]')).toBeVisible();
     }
 
     const hangulLeaks = await page.evaluate(() => {
@@ -1848,18 +1887,19 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(alphaAudit.whiteSnowOpaquePixels).toBeGreaterThan(80);
     expect(alphaAudit.darkCoatOpaquePixels).toBeGreaterThan(600);
 
-    // (D) Verify 4-Layer stage z-stack & pointer-events: none on Contact Shadow + Foreground Canvas
+    // (D) Verify Three.js Stage Layer & complete removal of legacy 2D weather foreground canvas
     const contactShadow = studioCanvas.locator('[data-floor-contact-shadow="true"]');
     await expect(contactShadow).toHaveCount(1);
     await expect(contactShadow).toHaveCSS('pointer-events', 'none');
 
-    const fgCanvas = studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]');
-    await expect(fgCanvas).toHaveCount(1);
-    await expect(fgCanvas).toHaveCSS('pointer-events', 'none');
-    const fgZIndex = await fgCanvas.evaluate((el) =>
-      Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
-    );
-    expect(fgZIndex).toBeGreaterThanOrEqual(30);
+    await expect(
+      studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
+    ).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
+
+    const threeLayer = studioCanvas.locator('[data-testid="studio-three-stage-layer"]');
+    await expect(threeLayer).toHaveCount(1);
+    await expect(threeLayer).toHaveCSS('pointer-events', 'none');
 
     // (E) Toggle Dark Mode -> verify dark responsive stage (luminance < 40) & zero white box behind model
     await page.getByRole('button', { name: '다크 모드로 전환' }).click();
@@ -1884,20 +1924,21 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.getByRole('button', { name: '라이트 모드로 전환' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-    // (F) Verify indoor vs open-sky outdoor weather gating on `비` (`rainy_cool`):
-    //     Indoors keeps weather readout `rain` but suppresses rain particles/wet floor + activates warm ivory ambient light
+    // (F) Verify indoor vs open-sky outdoor Three.js weather gating on `비` (`rainy_cool`):
+    //     Indoors keeps weather readout `rain` but sets Three.js stage to `indoor-ivory` + warm ivory ambient light
     await selectWeatherScenarioViaCapsulePopup(page, 'rainy_cool');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'indoor-ivory');
     await expect(studioCanvas.locator('[data-indoor-ivory-light="true"]')).toBeVisible();
-    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'clear');
+    await expect(threeLayer).toHaveAttribute('data-stage-outdoor', 'false');
+    await expect(threeLayer).toHaveAttribute('data-weather-mode', 'indoor-ivory');
     await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toHaveCount(0);
     const rainBadge = studioCanvas.locator('[data-weather-stage-badge="rain"]');
     await expect(rainBadge).toContainText('비');
     await expect(rainBadge).toHaveAttribute('aria-label', /우산 코디/);
 
-    // Switch to open-sky outdoor stage (`a_sunset_rooftop`) -> outdoor sky lighting & weather overlays run!
+    // Switch to open-sky A+ outdoor stage (`a_sunset_rooftop`) -> outdoor sky lighting & Three.js rain run!
     await page.evaluate(() => {
       const key = 'ainventory_stage_economy_v1';
       const raw = window.localStorage.getItem(key);
@@ -1914,13 +1955,15 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       window.dispatchEvent(new CustomEvent('ainventory:economy-updated', { detail: next }));
     });
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
-    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'rain');
-    await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toBeVisible();
+    await expect(threeLayer).toHaveAttribute('data-stage-outdoor', 'true');
+    await expect(threeLayer).toHaveAttribute('data-aura-tier', 'A+');
+    await expect(threeLayer).toHaveAttribute('data-weather-mode', 'rain');
+    await expect(studioCanvas.locator('[data-wet-mirror-reflection="true"]')).toBeVisible();
 
-    // (G) Switch to `한파` (`winter_cold`) -> verify coldwave foreground mode + sub-zero `-10°/-4°` badge + VTON trigger
+    // (G) Switch to `한파` (`winter_cold`) -> verify coldwave Three.js mode + sub-zero `-10°/-4°` badge + VTON trigger
     await selectWeatherScenarioViaCapsulePopup(page, 'winter_cold');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'coldwave');
-    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'coldwave');
+    await expect(threeLayer).toHaveAttribute('data-weather-mode', 'coldwave');
     const coldwaveBadge = studioCanvas.locator('[data-weather-stage-badge="coldwave"]');
     await expect(coldwaveBadge).toContainText('한파');
     await expect(coldwaveBadge).toHaveAttribute('aria-label', /방한 코디/);
@@ -1932,7 +1975,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     // (H) Verify `눈` (`snowy_winter`), `흐림` (`cloudy_overcast`), and `폭염` (`summer_heatwave`) tabs
     await selectWeatherScenarioViaCapsulePopup(page, 'snowy_winter');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'snow');
-    await expect(fgCanvas).toHaveAttribute('data-weather-mode', 'snow');
+    await expect(threeLayer).toHaveAttribute('data-weather-mode', 'snow');
 
     await selectWeatherScenarioViaCapsulePopup(page, 'cloudy_overcast');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'cloudy');
@@ -1940,13 +1983,10 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await selectWeatherScenarioViaCapsulePopup(page, 'summer_heatwave');
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'heatwave');
 
-    // (I) Click Top `새로고침` (`[data-outfit-vton-refresh="true"]`) -> verify cache-bypass `forceRefresh: true`
-    const refreshBtn = page.locator('[data-outfit-vton-refresh="true"]');
-    await expect(refreshBtn).toBeVisible();
-    await refreshBtn.click();
-    await expect
-      .poll(() => capturedPayloads.some((p) => p.forceRefresh === true))
-      .toBe(true);
+    // (I) Verify Top Refresh & Reset buttons are removed and Store button resides on the left side of top bar
+    await expect(page.locator('[data-outfit-vton-refresh="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-outfit-clear-all="true"]')).toHaveCount(0);
+    await expect(page.locator('.hig-top-bar-left [data-open-store-btn="true"]')).toBeVisible();
   });
 
   test('12. Unified Profile Height Direct Input & Error Modal Popup: validates empty/NaN/out-of-range (<100, >230) and storage/save failures via alertdialog modal', async ({

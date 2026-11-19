@@ -2,7 +2,11 @@ import { Check, Lock, Sparkles, Store } from 'lucide-react';
 import {
   STAGE_BACKGROUNDS,
   TIER_ORDER,
+  getBaseStageTier,
   getStageBackgroundById,
+  isPlusStageTier,
+  isPlusTierEligibleForDraw,
+  tierToCssSlug,
 } from '../utils/stageBackgroundCatalog.ts';
 import { tx } from '../utils/i18n.ts';
 import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
@@ -45,7 +49,7 @@ export default function BackgroundPickerModal({
         {/* Top Equipped Summary & Store Shortcut Bar */}
         <div className="stage-bg-picker-summary">
           <div className="stage-bg-picker-summary-info">
-            <span className={`stage-tier-badge is-tier-${equippedItem.tier.toLowerCase()}`}>
+            <span className={`stage-tier-badge is-tier-${tierToCssSlug(equippedItem.tier)}`}>
               {equippedItem.tier}
             </span>
             <div style={{ minWidth: 0 }}>
@@ -83,15 +87,21 @@ export default function BackgroundPickerModal({
             <section key={tier} className="stage-bg-tier-group" data-bg-tier-group={tier}>
               <header className="stage-bg-tier-head">
                 <div className="stage-bg-tier-title-wrap">
-                  <span className={`stage-tier-badge is-tier-${tier.toLowerCase()}`}>{tier}</span>
+                  <span className={`stage-tier-badge is-tier-${tierToCssSlug(tier)}`}>{tier}</span>
                   <strong className="stage-bg-tier-label">
-                    {tier === 'S'
-                      ? tx(lang, 'S등급 · 마스터 아틀리에', 'S-Tier · Master Atelier')
-                      : tier === 'A'
-                        ? tx(lang, 'A등급 · 시그니처 살롱', 'A-Tier · Signature Salon')
-                        : tier === 'B'
-                          ? tx(lang, 'B등급 · 에디토리얼 테라스', 'B-Tier · Editorial Terrace')
-                          : tx(lang, 'C등급 · 베이직 스튜디오', 'C-Tier · Basic Studio')}
+                    {tier === 'S+'
+                      ? tx(lang, 'S+등급 · 오픈 스카이 마스터 플라자 (날씨 효과)', 'S+ Tier · Open-Sky Master Plaza (Weather)')
+                      : tier === 'S'
+                        ? tx(lang, 'S등급 · 마스터 아틀리에', 'S-Tier · Master Atelier')
+                        : tier === 'A+'
+                          ? tx(lang, 'A+등급 · 오픈 스카이 테라스 (날씨 효과)', 'A+ Tier · Open-Sky Terrace (Weather)')
+                          : tier === 'A'
+                            ? tx(lang, 'A등급 · 시그니처 살롱', 'A-Tier · Signature Salon')
+                            : tier === 'B+'
+                              ? tx(lang, 'B+등급 · 오픈 스카이 코트야드 (날씨 효과)', 'B+ Tier · Open-Sky Courtyard (Weather)')
+                              : tier === 'B'
+                                ? tx(lang, 'B등급 · 에디토리얼 테라스', 'B-Tier · Editorial Terrace')
+                                : tx(lang, 'C등급 · 베이직 스튜디오', 'C-Tier · Basic Studio')}
                   </strong>
                 </div>
                 <span className="stage-bg-tier-count tabular-nums">
@@ -105,6 +115,11 @@ export default function BackgroundPickerModal({
                   const isEquipped = bg.id === equippedId;
                   const title = lang === 'en' ? bg.nameEn : bg.nameKo;
                   const subtitle = lang === 'en' ? bg.subtitleEn : bg.subtitleKo;
+                  const isPlusLocked =
+                    !unlocked &&
+                    isPlusStageTier(bg.tier) &&
+                    !isPlusTierEligibleForDraw(bg.tier, unlockedSet);
+                  const baseTierLabel = getBaseStageTier(bg.tier);
 
                   return (
                     <button
@@ -134,7 +149,7 @@ export default function BackgroundPickerModal({
                     >
                       <div className="stage-bg-card-media">
                         <img src={withPublicBaseUrl(bg.imageUrl)} alt={title} loading="lazy" />
-                        <span className={`stage-tier-badge is-tier-${bg.tier.toLowerCase()}`}>
+                        <span className={`stage-tier-badge is-tier-${tierToCssSlug(bg.tier)}`}>
                           {bg.tier}
                         </span>
                         {isEquipped && (
@@ -146,7 +161,11 @@ export default function BackgroundPickerModal({
                         {!unlocked && (
                           <span className="stage-bg-lock-overlay" aria-hidden="true">
                             <Lock size={16} />
-                            <span>{tx(lang, '스토어 뽑기', 'Draw in Store')}</span>
+                            <span>
+                              {isPlusLocked
+                                ? tx(lang, `${baseTierLabel}등급 완성 필요`, `Complete ${baseTierLabel}-Tier`)
+                                : tx(lang, '스토어 뽑기', 'Draw in Store')}
+                            </span>
                           </span>
                         )}
                       </div>
@@ -157,7 +176,15 @@ export default function BackgroundPickerModal({
                         {!unlocked && (
                           <span className="stage-bg-card-cta">
                             <Sparkles size={11} aria-hidden="true" />
-                            <span>{tx(lang, '뽑기에서 잠금 해제', 'Unlock via Gacha')}</span>
+                            <span>
+                              {isPlusLocked
+                                ? tx(
+                                    lang,
+                                    `${baseTierLabel}등급 모두 수집 후 뽑기 등장`,
+                                    `Collect all ${baseTierLabel}-Tier first`
+                                  )
+                                : tx(lang, '뽑기에서 잠금 해제', 'Unlock via Gacha')}
+                            </span>
                           </span>
                         )}
                       </div>

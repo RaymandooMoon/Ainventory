@@ -5,8 +5,13 @@ import {
   STAGE_BACKGROUNDS,
   STORE_DRAW_COST_I,
   TIER_DROP_RATES,
+  getBaseStageTier,
+  getEligibleGachaPool,
   getStageBackgroundById,
   hasFreeDailyDrawRemaining,
+  isPlusStageTier,
+  isPlusTierEligibleForDraw,
+  tierToCssSlug,
 } from '../utils/stageBackgroundCatalog.ts';
 import { tx } from '../utils/i18n.ts';
 import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
@@ -22,13 +27,17 @@ const ROULETTE_START_INDEX = 1;
 const ROULETTE_DURATION_MS = 2050;
 const ROULETTE_REDUCED_DURATION_MS = 180;
 
-function buildRouletteReelCards(targetBg) {
-  const pool = STAGE_BACKGROUNDS.filter((bg) => bg.id !== targetBg.id);
+function buildRouletteReelCards(targetBg, unlockedIds) {
+  const eligiblePool = getEligibleGachaPool(unlockedIds).filter((bg) => bg.id !== targetBg.id);
+  const pool =
+    eligiblePool.length > 0
+      ? eligiblePool
+      : STAGE_BACKGROUNDS.filter((bg) => bg.id !== targetBg.id);
   const byTierPriority = [
     ...pool.filter((bg) => bg.tier === 'C'),
-    ...pool.filter((bg) => bg.tier === 'B'),
-    ...pool.filter((bg) => bg.tier === 'A'),
-    ...pool.filter((bg) => bg.tier === 'S'),
+    ...pool.filter((bg) => bg.tier === 'B' || bg.tier === 'B+'),
+    ...pool.filter((bg) => bg.tier === 'A' || bg.tier === 'A+'),
+    ...pool.filter((bg) => bg.tier === 'S' || bg.tier === 'S+'),
   ];
   const fallbackPool = byTierPriority.length > 0 ? byTierPriority : STAGE_BACKGROUNDS;
 
@@ -38,7 +47,6 @@ function buildRouletteReelCards(targetBg) {
       cards.push(targetBg);
       continue;
     }
-    // Place tantalizing high-tier near-misses around target landing without duplicating targetBg
     const offsetSeed = i === ROULETTE_TARGET_INDEX - 1 || i === ROULETTE_TARGET_INDEX + 1
       ? fallbackPool[(fallbackPool.length - 1 - (i % 2)) % fallbackPool.length]
       : fallbackPool[(i * 5 + 3) % fallbackPool.length];
@@ -107,12 +115,13 @@ export default function StoreModal({
     cancelSpinTimers();
     if (!res?.drawnItem) return;
     const tier = res.drawnItem.tier;
+    const baseTier = getBaseStageTier(tier);
     pendingResultRef.current = null;
     setPendingResult(null);
     setDrawResult(res);
     setDrawPhase('revealed');
     setAnimatingTier(tier);
-    triggerHaptic(tier === 'S' || tier === 'A' ? 'heavy' : 'medium');
+    triggerHaptic(baseTier === 'S' || baseTier === 'A' ? 'heavy' : 'medium');
     animTimerRef.current = setTimeout(() => {
       setAnimatingTier(null);
       animTimerRef.current = null;
@@ -201,7 +210,7 @@ export default function StoreModal({
     triggerHaptic('selection');
     setDrawResult(null);
     setAnimatingTier(null);
-    setReelCards(buildRouletteReelCards(res.drawnItem));
+    setReelCards(buildRouletteReelCards(res.drawnItem, unlockedSet));
     setActiveReelIdx(ROULETTE_START_INDEX);
     setPendingResult(res);
     setDrawPhase('spinning');
@@ -287,8 +296,8 @@ export default function StoreModal({
           className={[
             'stage-store-hero-card',
             `is-phase-${drawPhase}`,
-            revealItem ? `has-reveal is-tier-${revealItem.tier.toLowerCase()}` : '',
-            animatingTier ? `is-animating is-animating-${animatingTier.toLowerCase()}` : '',
+            revealItem ? `has-reveal is-tier-${tierToCssSlug(revealItem.tier)}` : '',
+            animatingTier ? `is-animating is-animating-${tierToCssSlug(animatingTier)}` : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -309,7 +318,7 @@ export default function StoreModal({
               <div className="stage-store-roulette-top">
                 <div className="stage-store-roulette-status">
                   <span
-                    className={`stage-tier-badge is-tier-${(activeReelCard?.tier || 'C').toLowerCase()}`}
+                    className={`stage-tier-badge is-tier-${tierToCssSlug(activeReelCard?.tier || 'C')}`}
                     data-store-roulette-live-tier={activeReelCard?.tier || 'C'}
                   >
                     {activeReelCard?.tier || 'C'} TIER
@@ -342,12 +351,13 @@ export default function StoreModal({
                   {reelCards.map((card, idx) => {
                     const isCenter = idx === activeReelIdx;
                     const cardName = lang === 'en' ? card.nameEn : card.nameKo;
+                    const cardTierSlug = tierToCssSlug(card.tier);
                     return (
                       <div
                         key={`${card.id}-${idx}`}
                         className={[
                           'stage-store-roulette-card',
-                          `is-tier-${card.tier.toLowerCase()}`,
+                          `is-tier-${cardTierSlug}`,
                           isCenter ? 'is-center-active' : '',
                         ]
                           .filter(Boolean)
@@ -356,7 +366,7 @@ export default function StoreModal({
                         data-roulette-tier={card.tier}
                       >
                         <img src={withPublicBaseUrl(card.imageUrl)} alt={cardName} />
-                        <span className={`stage-tier-badge is-tier-${card.tier.toLowerCase()}`}>
+                        <span className={`stage-tier-badge is-tier-${cardTierSlug}`}>
                           {card.tier}
                         </span>
                         <span className="stage-store-roulette-card-label">{cardName}</span>
@@ -370,7 +380,7 @@ export default function StoreModal({
             <div className="stage-store-reveal-content" data-store-draw-result="true">
               <div className="stage-store-reveal-preview">
                 <img src={withPublicBaseUrl(revealItem.imageUrl)} alt={revealTitle} />
-                <span className={`stage-tier-badge is-large is-tier-${revealItem.tier.toLowerCase()}`}>
+                <span className={`stage-tier-badge is-large is-tier-${tierToCssSlug(revealItem.tier)}`}>
                   {revealItem.tier} TIER
                 </span>
               </div>
@@ -453,11 +463,15 @@ export default function StoreModal({
           {/* Drop-rate Transparency Strip + Primary Draw CTA */}
           <div className="stage-store-action-footer">
             <div className="stage-store-odds-row tabular-nums" aria-label="Drop rates">
-              {(['S', 'A', 'B', 'C']).map((t) => (
-                <span key={t} className={`stage-odds-chip is-tier-${t.toLowerCase()}`}>
-                  <strong>{t}</strong> {TIER_DROP_RATES[t]}%
-                </span>
-              ))}
+              {(['S', 'A', 'B', 'C']).map((t) => {
+                const plusEligible =
+                  t !== 'C' && isPlusTierEligibleForDraw(`${t}+`, unlockedSet);
+                return (
+                  <span key={t} className={`stage-odds-chip is-tier-${t.toLowerCase()}`}>
+                    <strong>{plusEligible ? `${t}/${t}+` : t}</strong> {TIER_DROP_RATES[t]}%
+                  </span>
+                );
+              })}
             </div>
 
             <div className="stage-store-cta-row">
@@ -536,11 +550,17 @@ export default function StoreModal({
             const unlocked = unlockedSet.has(bg.id);
             const isEquipped = bg.id === equippedId;
             const title = lang === 'en' ? bg.nameEn : bg.nameKo;
+            const isPlusLocked =
+              !unlocked &&
+              isPlusStageTier(bg.tier) &&
+              !isPlusTierEligibleForDraw(bg.tier, unlockedSet);
+            const baseTierLabel = getBaseStageTier(bg.tier);
             return (
               <button
                 key={bg.id}
                 type="button"
                 data-store-collection-item={bg.id}
+                data-bg-tier={bg.tier}
                 data-bg-unlocked={unlocked ? 'true' : 'false'}
                 className={`stage-bg-card ${isEquipped ? 'is-equipped' : ''} ${
                   !unlocked ? 'is-locked' : ''
@@ -556,7 +576,7 @@ export default function StoreModal({
               >
                 <div className="stage-bg-card-media">
                   <img src={withPublicBaseUrl(bg.imageUrl)} alt={title} loading="lazy" />
-                  <span className={`stage-tier-badge is-tier-${bg.tier.toLowerCase()}`}>
+                  <span className={`stage-tier-badge is-tier-${tierToCssSlug(bg.tier)}`}>
                     {bg.tier}
                   </span>
                   {isEquipped && (
@@ -578,7 +598,13 @@ export default function StoreModal({
                       ? isEquipped
                         ? tx(lang, '현재 스테이지 적용 중', 'Currently equipped')
                         : tx(lang, '보유 중 · 탭하여 적용', 'Owned · Tap to equip')
-                      : tx(lang, '뽑기에서 획득 가능', 'Obtainable from draw')}
+                      : isPlusLocked
+                        ? tx(
+                            lang,
+                            `${baseTierLabel}등급 모두 수집 후 뽑기 등장`,
+                            `Collect all ${baseTierLabel}-Tier to unlock in draw`
+                          )
+                        : tx(lang, '뽑기에서 획득 가능', 'Obtainable from draw')}
                   </span>
                 </div>
               </button>

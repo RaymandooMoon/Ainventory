@@ -79,6 +79,7 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   DEFAULT_STAGE_BACKGROUND_ID,
   getStageBackgroundById,
+  tierToCssSlug,
 } from '../utils/stageBackgroundCatalog.ts';
 import {
   formatWeatherCapsuleDateTime,
@@ -89,7 +90,6 @@ import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import StudioThreeStageLayer from './three/StudioThreeStageLayer.tsx';
-import WeatherCanvasOverlay from './WeatherCanvasOverlay.tsx';
 import '../styles/atelierTokens.css';
 import './Studio2DFittingViewer.css';
 
@@ -533,6 +533,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [stagedNeedsApply, setStagedNeedsApply] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [lookMenuOpen, setLookMenuOpen] = useState(false);
   const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
   const [dayKey, setDayKey] = useState(() => getLocalDayKey());
   const [clockNow, setClockNow] = useState(() => new Date());
@@ -710,9 +711,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
   }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
-  // Dismiss open `기록` popover cleanly on Escape key
+  // Dismiss open `기록` or `Look 1/2` popover cleanly on Escape key
   useEffect(() => {
-    if (!historyOpen) return undefined;
+    if (!historyOpen && !lookMenuOpen) return undefined;
     const handleKeyDown = (ev) => {
       if (ev.key !== 'Escape' || ev.defaultPrevented) return;
       if (
@@ -727,10 +728,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ev.stopPropagation();
       ev.stopImmediatePropagation?.();
       setHistoryOpen(false);
+      setLookMenuOpen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyOpen]);
+  }, [historyOpen, lookMenuOpen]);
 
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
@@ -800,12 +802,6 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [weather]
   );
   const stageEffectiveWeather = isStageOutdoor ? effectiveWeather : 'clear';
-  const weatherOverlayMode = useMemo(() => {
-    if (scenarioKey === 'warm_spring') return 'mild';
-    if (scenarioKey === 'live' && effectiveWeather === 'clear') return 'forecast';
-    return effectiveWeather;
-  }, [scenarioKey, effectiveWeather]);
-  const stageWeatherOverlayMode = isStageOutdoor ? weatherOverlayMode : 'clear';
 
   const vtonWeather = useMemo(() => {
     if (isStageOutdoor || effectiveWeather !== 'rain' || !weather || typeof weather !== 'object') {
@@ -1802,6 +1798,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     (e) => {
       e?.preventDefault?.();
       e?.stopPropagation?.();
+      setLookMenuOpen(false);
       setHistoryOpen((prev) => {
         const next = !prev;
         if (next) {
@@ -2231,7 +2228,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </>
       )}
 
-      {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [History⁰] */}
+      {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [Wardrobe Drawer] */}
       <div className="studio-stage-top-hud">
         <div className="studio-hud-left-slot">
           {showStageBgPickerBtn && (
@@ -2239,7 +2236,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               type="button"
               data-stage-bg-picker-btn="true"
               data-stage-bg-tier={resolvedBgItem.tier}
-              className={`studio-stage-bg-picker-btn tabular-nums is-tier-${resolvedBgItem.tier.toLowerCase()} ${
+              className={`studio-stage-bg-picker-btn tabular-nums is-tier-${tierToCssSlug(resolvedBgItem.tier)} ${
                 activeHudTouchId === 'bg-picker' ? 'is-interacting' : ''
               }`.trim()}
               aria-label={
@@ -2262,6 +2259,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               onClick={(e) => {
                 e.stopPropagation();
                 setHistoryOpen(false);
+                setLookMenuOpen(false);
                 onOpenBackgroundPicker?.();
               }}
             >
@@ -2298,6 +2296,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             onClick={(e) => {
               e.stopPropagation();
               setHistoryOpen(false);
+              setLookMenuOpen(false);
               onOpenWeatherPopup?.();
             }}
           >
@@ -2327,43 +2326,35 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
 
         <div className="studio-vton-hud-right">
-          <button
-            type="button"
-            data-vton-history-btn="true"
-            aria-haspopup="dialog"
-            aria-expanded={historyOpen}
-            aria-label={
-              isEn
-                ? `Saved AI Try-On outfits (today ${dailyHistoryBadgeCount})`
-                : `이전 AI 피팅 기록 (오늘 ${dailyHistoryBadgeCount})`
-            }
-            title={
-              isEn
-                ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits instantly without extra generation`
-                : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 추가 생성 없이 즉시 불러오기`
-            }
-            className={`studio-vton-history-pill-btn tabular-nums ${
-              historyOpen ? 'is-active' : ''
-            } ${activeHudTouchId === 'history-btn' ? 'is-interacting' : ''}`.trim()}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              handleHudTouchStart('history-btn');
-            }}
-            onPointerUp={handleHudTouchEnd}
-            onPointerCancel={handleHudTouchEnd}
-            onPointerLeave={handleHudTouchEnd}
-            onClick={handleToggleHistoryPopover}
-          >
-            <span className="studio-vton-history-icon-wrap">
-              <History size={15} strokeWidth={2.1} aria-hidden="true" />
-              <sup
-                className="studio-vton-history-sup tabular-nums"
-                data-vton-history-count={dailyHistoryBadgeCount}
-              >
-                {dailyHistoryBadgeCount}
-              </sup>
-            </span>
-          </button>
+          {onOpenMobileDrawer && (
+            <button
+              type="button"
+              data-mobile-wardrobe-trigger="true"
+              aria-haspopup="dialog"
+              aria-expanded={Boolean(mobileDrawerOpen)}
+              aria-controls="outfit-mobile-wardrobe-sheet"
+              aria-label={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
+              title={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
+              className={`studio-top-wardrobe-drawer-btn ${
+                mobileDrawerOpen ? 'is-active' : ''
+              } ${activeHudTouchId === 'mobile-drawer-hud' ? 'is-interacting' : ''}`.trim()}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                handleHudTouchStart('mobile-drawer-hud');
+              }}
+              onPointerUp={handleHudTouchEnd}
+              onPointerCancel={handleHudTouchEnd}
+              onPointerLeave={handleHudTouchEnd}
+              onClick={(e) => {
+                e.stopPropagation();
+                setHistoryOpen(false);
+                setLookMenuOpen(false);
+                onOpenMobileDrawer?.();
+              }}
+            >
+              <Layers size={15} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -2429,19 +2420,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         lang={resolvedLang}
       />
 
-      {/* Layer 3 (z-30 Standalone Weather Environment Overlay — pointer-events: none) */}
-      <WeatherCanvasOverlay
-        weather={stageWeatherOverlayMode}
-        isDark={resolvedTheme === 'dark'}
-        timeOfDay={timeOfDay}
-        isIndoorStage={!isStageOutdoor}
-        umbrellaCollisionEnabled={
-          isStageOutdoor && stageMode === 'ai-vton' && Boolean(resolvedAiImageUrl || slots?.acc_umbrella)
-        }
-      />
-
-      {/* Click-outside dismiss scrim for open `기록` popover */}
-      {historyOpen && (
+      {/* Click-outside dismiss scrim for open `기록` or `Look 1/2` popover */}
+      {(historyOpen || lookMenuOpen) && (
         <div
           aria-hidden="true"
           data-vton-popover-backdrop="true"
@@ -2449,6 +2429,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           onClick={(e) => {
             e.stopPropagation();
             setHistoryOpen(false);
+            setLookMenuOpen(false);
           }}
         />
       )}
@@ -2834,98 +2815,180 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom-Left Vertical Compact Icon AI Look 1 / Look 2 Switcher */}
-      {stageLookRecommendations.length > 0 && (
-        <div
-          className="studio-weather-look-dock is-vertical"
-          data-weather-look-dock="true"
-          data-look-dock-orientation="vertical"
-          role="group"
-          aria-label={isEn ? 'AI weather outfit recommendations' : 'AI 날씨 추천 코디'}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {stageLookRecommendations.map((rec, idx) => {
-            const isSelected = activeRecId === rec.id;
-            const styleKey =
-              rec.presetKey ||
-              (idx === 0
+      {/* Bottom-Left HUD Stack: [Single Look 1/2 Selector Button] above [Saved AI Fitting History Button] */}
+      <div
+        className="studio-bottom-left-hud-stack"
+        data-bottom-left-hud="true"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {stageLookRecommendations.length > 0 &&
+          (() => {
+            const foundIdx = stageLookRecommendations.findIndex((r) => r.id === activeRecId);
+            const activeLookIdx = foundIdx >= 0 ? foundIdx : 0;
+            const activeRec =
+              stageLookRecommendations[activeLookIdx] || stageLookRecommendations[0];
+            const activeStyleKey =
+              activeRec?.presetKey ||
+              (activeLookIdx === 0
                 ? lookStyleConfig?.look1Style || 'business_casual'
                 : lookStyleConfig?.look2Style || 'comfortable_casual');
-            const presetMeta =
-              LOOK_STYLE_TITLE_LABELS[styleKey] || LOOK_STYLE_TITLE_LABELS.business_casual;
-            const presetTitle = isEn
-              ? rec.presetLabelEn || presetMeta.en
-              : rec.presetLabelKo || presetMeta.ko;
-            const LookStyleIcon =
-              styleKey === 'comfortable_casual'
+            const activePresetMeta =
+              LOOK_STYLE_TITLE_LABELS[activeStyleKey] || LOOK_STYLE_TITLE_LABELS.business_casual;
+            const activePresetTitle = isEn
+              ? activeRec?.presetLabelEn || activePresetMeta.en
+              : activeRec?.presetLabelKo || activePresetMeta.ko;
+            const ActiveLookIcon =
+              activeStyleKey === 'comfortable_casual'
                 ? Coffee
-                : styleKey === 'formal_office'
+                : activeStyleKey === 'formal_office'
                   ? Award
-                  : styleKey === 'minimal_daily'
+                  : activeStyleKey === 'minimal_daily'
                     ? Sparkles
                     : Briefcase;
-            return (
-              <button
-                key={rec.id || `look-${idx + 1}`}
-                type="button"
-                data-weather-rec-id={rec.id}
-                aria-pressed={isSelected}
-                aria-label={`Look ${idx + 1}: ${presetTitle}`}
-                title={`Look ${idx + 1} · ${presetTitle}`}
-                className={`studio-weather-look-pill is-icon-compact tabular-nums ${
-                  isSelected ? 'is-selected' : ''
-                } ${activeHudTouchId === `look-${idx + 1}` ? 'is-interacting' : ''}`.trim()}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  handleHudTouchStart(`look-${idx + 1}`);
-                }}
-                onPointerUp={handleHudTouchEnd}
-                onPointerCancel={handleHudTouchEnd}
-                onPointerLeave={handleHudTouchEnd}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onApplyRecommendation?.(rec);
-                }}
-              >
-                <LookStyleIcon size={13} strokeWidth={2.2} aria-hidden="true" />
-                <span className="studio-weather-look-num" aria-hidden="true">
-                  {idx + 1}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Mobile Wardrobe Drawer Trigger HUD Icon (Bottom-Right above angle slider) */}
-      {onOpenMobileDrawer && (
+            return (
+              <div
+                className="studio-weather-look-dock is-single-selector"
+                data-weather-look-dock="true"
+                data-look-dock-orientation="single"
+              >
+                <button
+                  type="button"
+                  data-look-selector-trigger="true"
+                  aria-haspopup="menu"
+                  aria-expanded={lookMenuOpen}
+                  aria-label={
+                    isEn
+                      ? `Select AI Look 1 or 2 (current Look ${activeLookIdx + 1}: ${activePresetTitle})`
+                      : `Look 1/2 선택 (현재 Look ${activeLookIdx + 1}: ${activePresetTitle})`
+                  }
+                  title={
+                    isEn
+                      ? `Look ${activeLookIdx + 1} · ${activePresetTitle} (Click to choose Look 1 or 2)`
+                      : `Look ${activeLookIdx + 1} · ${activePresetTitle} (클릭하여 Look 1·2 선택)`
+                  }
+                  className={`studio-look-selector-btn tabular-nums ${
+                    lookMenuOpen ? 'is-open' : ''
+                  } ${activeHudTouchId === 'look-selector' ? 'is-interacting' : ''}`.trim()}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleHudTouchStart('look-selector');
+                  }}
+                  onPointerUp={handleHudTouchEnd}
+                  onPointerCancel={handleHudTouchEnd}
+                  onPointerLeave={handleHudTouchEnd}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setHistoryOpen(false);
+                    setLookMenuOpen((prev) => !prev);
+                  }}
+                >
+                  <ActiveLookIcon size={14} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="studio-weather-look-num" aria-hidden="true">
+                    {activeLookIdx + 1}
+                  </span>
+                </button>
+
+                {lookMenuOpen && (
+                  <div
+                    className="studio-look-selector-menu"
+                    data-look-selector-menu="true"
+                    role="menu"
+                    aria-label={
+                      isEn ? 'AI weather outfit recommendations' : 'AI 날씨 추천 Look 선택'
+                    }
+                  >
+                    {stageLookRecommendations.map((rec, idx) => {
+                      const isSelected = idx === activeLookIdx;
+                      const styleKey =
+                        rec.presetKey ||
+                        (idx === 0
+                          ? lookStyleConfig?.look1Style || 'business_casual'
+                          : lookStyleConfig?.look2Style || 'comfortable_casual');
+                      const presetMeta =
+                        LOOK_STYLE_TITLE_LABELS[styleKey] ||
+                        LOOK_STYLE_TITLE_LABELS.business_casual;
+                      const presetTitle = isEn
+                        ? rec.presetLabelEn || presetMeta.en
+                        : rec.presetLabelKo || presetMeta.ko;
+                      const LookStyleIcon =
+                        styleKey === 'comfortable_casual'
+                          ? Coffee
+                          : styleKey === 'formal_office'
+                            ? Award
+                            : styleKey === 'minimal_daily'
+                              ? Sparkles
+                              : Briefcase;
+                      return (
+                        <button
+                          key={rec.id || `look-${idx + 1}`}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={isSelected}
+                          data-weather-rec-id={rec.id}
+                          aria-label={`Look ${idx + 1}: ${presetTitle}`}
+                          className={`studio-look-selector-option tabular-nums ${
+                            isSelected ? 'is-selected' : ''
+                          }`.trim()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLookMenuOpen(false);
+                            onApplyRecommendation?.(rec);
+                          }}
+                        >
+                          <LookStyleIcon size={13} strokeWidth={2.1} aria-hidden="true" />
+                          <span className="studio-look-option-copy">
+                            <strong>Look {idx + 1}</strong>
+                            <span>{presetTitle}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
         <button
           type="button"
-          data-mobile-wardrobe-trigger="true"
+          data-vton-history-btn="true"
           aria-haspopup="dialog"
-          aria-expanded={Boolean(mobileDrawerOpen)}
-          aria-controls="outfit-mobile-wardrobe-sheet"
-          aria-label={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
-          title={isEn ? 'Open Wardrobe Drawer' : '옷장 서랍 열기'}
-          className={`studio-mobile-drawer-hud-btn ${
-            activeHudTouchId === 'mobile-drawer-hud' ? 'is-interacting' : ''
-          }`.trim()}
+          aria-expanded={historyOpen}
+          aria-label={
+            isEn
+              ? `Saved AI Try-On outfits (today ${dailyHistoryBadgeCount})`
+              : `오늘 생성한 AI 피팅 불러오기 (오늘 ${dailyHistoryBadgeCount})`
+          }
+          title={
+            isEn
+              ? `Today's AI Try-Ons: ${dailyHistoryBadgeCount} · Reuse saved outfits instantly without extra generation`
+              : `오늘 생성한 AI 피팅 ${dailyHistoryBadgeCount}건 · 추가 생성 없이 즉시 불러오기`
+          }
+          className={`studio-vton-history-pill-btn is-bottom-left-docked tabular-nums ${
+            historyOpen ? 'is-active' : ''
+          } ${activeHudTouchId === 'history-btn' ? 'is-interacting' : ''}`.trim()}
           onPointerDown={(e) => {
             e.stopPropagation();
-            handleHudTouchStart('mobile-drawer-hud');
+            handleHudTouchStart('history-btn');
           }}
           onPointerUp={handleHudTouchEnd}
           onPointerCancel={handleHudTouchEnd}
           onPointerLeave={handleHudTouchEnd}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenMobileDrawer?.();
-          }}
+          onClick={handleToggleHistoryPopover}
         >
-          <Layers size={15} strokeWidth={2.1} aria-hidden="true" />
+          <span className="studio-vton-history-icon-wrap">
+            <History size={15} strokeWidth={2.1} aria-hidden="true" />
+            <sup
+              className="studio-vton-history-sup tabular-nums"
+              data-vton-history-count={dailyHistoryBadgeCount}
+            >
+              {dailyHistoryBadgeCount}
+            </sup>
+          </span>
         </button>
-      )}
+      </div>
 
       {/* 3s Auto-Dismiss Toast for Front-Only Degraded Multi-Angle Fallback */}
       {frontOnlyToastVisible && (

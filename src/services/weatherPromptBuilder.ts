@@ -20,8 +20,9 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v13-qc-handedness-360';
+export const CUTOUT_PIPELINE_VERSION = 'v14-garment-guard-qc-360';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v13-qc-handedness-360',
   'v12-uniform-stature-360',
   'v11-fullbody-cleanhole-360',
   'v10-fullbody-cleanhole-360',
@@ -227,6 +228,13 @@ export function selectOptimalStudioKeyHex(
     return CUTOUT_STAGE_BACKDROP_HEX;
   }
 
+  const hasBlueDenimOrCyan = parsedEquipped.some(
+    ([r, g, b]) => b >= r + 24 && g >= r + 12 && b >= g
+  );
+  const hasPlumOrMauve = parsedEquipped.some(
+    ([r, g, b]) => r >= g + 16 && b >= g + 16
+  );
+
   let bestHex: string = COLLISION_SAFE_STUDIO_KEY_CANDIDATES[1];
   let bestScore = -Infinity;
 
@@ -243,7 +251,11 @@ export function selectOptimalStudioKeyHex(
     // so human skin tones (R > G > B) maintain maximal chromatic separation during matting.
     const candidateIsWarmSkinAdjacent = cRgb[0] > cRgb[1] + 8 && cRgb[1] > cRgb[2] + 8;
     const skinSafetyBonus = candidateIsWarmSkinAdjacent ? 0 : 24;
-    const score = minDist + (minDist >= 64 ? skinSafetyBonus : 0);
+    // When light-blue/sky denim is equipped (and no plum/mauve clothes are worn), green studio bounce
+    // pushes shaded denim folds closer to #5E9C7E; penalize #5E9C7E so #8E6F9E mauve wins cleanly.
+    const greenDenimBouncePenalty =
+      candidateHex === '#5E9C7E' && hasBlueDenimOrCyan && !hasPlumOrMauve ? 26 : 0;
+    const score = minDist + (minDist >= 48 ? skinSafetyBonus : 0) - greenDenimBouncePenalty;
     if (score > bestScore) {
       bestScore = score;
       bestHex = candidateHex;

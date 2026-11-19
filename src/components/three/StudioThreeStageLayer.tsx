@@ -152,11 +152,11 @@ function resolveStageLightingPalette(params: {
     _targetFogColor.setHex(isOvercast ? 0x7c8da3 : 0xa9c3e2);
   }
 
-  if (auraTier === 'S') {
+  if (auraTier === 'S' || auraTier === 'S+') {
     _targetAuraColor.setHex(0xf4d27a);
-  } else if (auraTier === 'A') {
+  } else if (auraTier === 'A' || auraTier === 'A+') {
     _targetAuraColor.setHex(0xd8e6fb);
-  } else if (auraTier === 'B') {
+  } else if (auraTier === 'B' || auraTier === 'B+') {
     _targetAuraColor.setHex(0xf5efe4);
   } else {
     _targetAuraColor.setHex(0xffffff);
@@ -311,30 +311,30 @@ export default function StudioThreeStageLayer({
     floorDisc.renderOrder = 1;
     stageGroup.add(floorDisc);
 
-    // Part 2: Grounded Character Contact Shadow Disc (y = 0.022)
-    const contactGeo = new THREE.CircleGeometry(0.92, 32);
+    // Part 2: Grounded Character Contact Shadow Disc (y = 0.022) — compact human foot span
+    const contactGeo = new THREE.CircleGeometry(0.66, 32);
     contactGeo.rotateX(-Math.PI / 2);
     const contactMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       map: propsRef.current.theme === 'dark' ? shadowDarkTex : shadowLightTex,
       transparent: true,
-      opacity: 0.56,
+      opacity: 0.52,
       depthWrite: false,
     });
     const contactDisc = new THREE.Mesh(contactGeo, contactMat);
     contactDisc.position.set(0, 0.022, 0.08);
-    contactDisc.scale.set(1.0, 1.0, 0.58);
+    contactDisc.scale.set(1.0, 1.0, 0.56);
     contactDisc.renderOrder = 2;
     stageGroup.add(contactDisc);
 
-    // Part 3: Recessed Architectural Podium Trim Ring (y = 0.044)
-    const trimGeo = new THREE.TorusGeometry(1.18, 0.012, 12, 56);
+    // Part 3: Recessed Architectural Podium Trim Ring (y = 0.044, indoor salon stages only)
+    const trimGeo = new THREE.TorusGeometry(0.74, 0.008, 12, 56);
     trimGeo.rotateX(Math.PI / 2);
     const trimMat: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial = isSoftwareGl
       ? new THREE.MeshLambertMaterial({
           color: 0xe6dfd3,
           transparent: true,
-          opacity: 0.42,
+          opacity: 0.28,
           depthWrite: false,
         })
       : new THREE.MeshStandardMaterial({
@@ -342,12 +342,12 @@ export default function StudioThreeStageLayer({
           roughness: 0.24,
           metalness: 0.88,
           transparent: true,
-          opacity: 0.42,
+          opacity: 0.28,
           depthWrite: false,
         });
     const trimRing = new THREE.Mesh(trimGeo, trimMat);
     trimRing.position.set(0, 0.044, 0.04);
-    trimRing.scale.set(1, 1, 0.62);
+    trimRing.scale.set(1, 1, 0.58);
     trimRing.renderOrder = 3;
     stageGroup.add(trimRing);
 
@@ -541,49 +541,62 @@ export default function StudioThreeStageLayer({
         floorMat.roughness = isOutdoorRain ? 0.16 : isOutdoorSnow ? 0.84 : 0.72;
         floorMat.metalness = isOutdoorRain ? 0.52 : 0.14;
       }
-      floorMat.opacity = isOutdoorRain ? 0.34 : isDark ? 0.24 : 0.18;
+      // On dry outdoor courtyards, hide floorDisc so real stone/cobblestone paving stays 100% crisp at human scale
+      floorDisc.visible = !p.isOutdoor || isOutdoorRain || isOutdoorSnow;
+      floorMat.opacity = isOutdoorRain
+        ? 0.28
+        : isOutdoorSnow
+          ? 0.22
+          : isDark
+            ? 0.16
+            : 0.12;
       floorMat.color.copy(p.isOutdoor ? _targetSkyColor : _targetKeyColor);
 
-      // Tiered 3D Aura calibration (C = none, B = subtle rim, A = platinum, S = luxury gold)
+      // Tiered 3D Aura calibration (C = none, B/B+ = subtle rim, A/A+ = platinum, S/S+ = luxury gold)
+      // Hide artificial showroom trimRing on outdoor courtyards so real stone ground scale is never miniaturized.
       floorAuraMat.color.copy(_targetAuraColor);
       backAuraMat.color.copy(_targetAuraColor);
       rimLight.color.copy(_targetAuraColor);
       trimMat.color.copy(_targetAuraColor);
+
+      const isTierS = p.auraTier === 'S' || p.auraTier === 'S+';
+      const isTierA = p.auraTier === 'A' || p.auraTier === 'A+';
+      const isTierB = p.auraTier === 'B' || p.auraTier === 'B+';
 
       if (p.auraTier === 'C') {
         floorAuraMesh.visible = false;
         backAuraMesh.visible = false;
         trimRing.visible = false;
         rimLight.intensity = 0.28;
-      } else if (p.auraTier === 'B') {
-        floorAuraMesh.visible = true;
+      } else if (isTierB) {
+        floorAuraMesh.visible = !p.isOutdoor;
         backAuraMesh.visible = true;
-        trimRing.visible = true;
-        floorAuraMat.opacity = isDark ? 0.16 : 0.22;
-        backAuraMat.opacity = isDark ? 0.12 : 0.18;
-        trimMat.opacity = 0.26;
+        trimRing.visible = !p.isOutdoor;
+        floorAuraMat.opacity = isDark ? 0.12 : 0.16;
+        backAuraMat.opacity = isDark ? 0.1 : 0.14;
+        trimMat.opacity = 0.2;
         rimLight.intensity = 0.62;
-      } else if (p.auraTier === 'A') {
-        floorAuraMesh.visible = true;
+      } else if (isTierA) {
+        floorAuraMesh.visible = !p.isOutdoor;
         backAuraMesh.visible = true;
-        trimRing.visible = true;
-        floorAuraMat.opacity = isDark ? 0.28 : 0.34;
-        backAuraMat.opacity = isDark ? 0.24 : 0.3;
-        trimMat.opacity = 0.48;
+        trimRing.visible = !p.isOutdoor;
+        floorAuraMat.opacity = isDark ? 0.2 : 0.26;
+        backAuraMat.opacity = isDark ? 0.2 : 0.26;
+        trimMat.opacity = 0.34;
         rimLight.intensity = 1.05;
       } else {
-        // S-tier luxury gold volumetric stage aura
+        // S / S+ luxury gold volumetric stage aura
         const shimmerWave = 0.92 + Math.sin(nowSec * 1.9) * 0.08;
-        floorAuraMesh.visible = true;
+        floorAuraMesh.visible = !p.isOutdoor;
         backAuraMesh.visible = true;
-        trimRing.visible = true;
-        floorAuraMat.opacity = (isDark ? 0.38 : 0.44) * shimmerWave;
-        backAuraMat.opacity = (isDark ? 0.34 : 0.4) * shimmerWave;
-        trimMat.opacity = 0.68;
+        trimRing.visible = !p.isOutdoor;
+        floorAuraMat.opacity = (isDark ? 0.28 : 0.34) * shimmerWave;
+        backAuraMat.opacity = (isDark ? 0.3 : 0.36) * shimmerWave;
+        trimMat.opacity = 0.48;
         rimLight.intensity = 1.38 * shimmerWave;
       }
 
-      // 3D Weather Precipitation (strictly outdoor only!)
+      // 3D Weather Precipitation (strictly outdoor + tiers only!)
       const showPrecip = p.isOutdoor && (isOutdoorRain || isOutdoorSnow || isOutdoorWind);
       precipMesh.visible = showPrecip;
       if (showPrecip) {
@@ -650,16 +663,16 @@ export default function StudioThreeStageLayer({
         rippleMesh.instanceMatrix.needsUpdate = true;
       }
 
-      // Tier A / S Floating Shimmer Motes
-      const showMotes = p.auraTier === 'S' || p.auraTier === 'A';
+      // Tier A/A+ / S/S+ Floating Shimmer Motes
+      const showMotes = isTierS || isTierA;
       moteMesh.visible = showMotes;
       if (showMotes) {
-        const activeCount = p.auraTier === 'S' ? MOTE_COUNT : 18;
+        const activeCount = isTierS ? MOTE_COUNT : 18;
         moteMat.color.copy(_targetAuraColor);
         if (moteMat instanceof THREE.MeshStandardMaterial) {
           moteMat.emissive.copy(_targetAuraColor);
         }
-        moteMat.opacity = p.auraTier === 'S' ? 0.78 : 0.46;
+        moteMat.opacity = isTierS ? 0.78 : 0.46;
         for (let i = 0; i < MOTE_COUNT; i += 1) {
           if (i >= activeCount) {
             _dummy.scale.set(0, 0, 0);
@@ -674,7 +687,7 @@ export default function StudioThreeStageLayer({
           const my = m.baseY + Math.sin(nowSec * m.bobSpeed + m.angle) * 0.12;
           _dummy.position.set(mx, my, mz);
           _dummy.rotation.set(nowSec * 0.7 + i, theta, 0);
-          _dummy.scale.setScalar(m.scale * (p.auraTier === 'S' ? 1.05 : 0.82));
+          _dummy.scale.setScalar(m.scale * (isTierS ? 1.05 : 0.82));
           _dummy.updateMatrix();
           moteMesh.setMatrixAt(i, _dummy.matrix);
         }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-export type StageTierCode = 'S' | 'A' | 'B' | 'C';
+export type StageTierCode = 'S+' | 'S' | 'A+' | 'A' | 'B+' | 'B' | 'C';
 
 let cachedIsSoftwareGl: boolean | null = null;
 
@@ -325,6 +325,13 @@ export function createStagePreviewCardTexture(
       StageTierCode,
       { top: string; mid: string; floor: string; accent: string; arch: string }
     > = {
+      'S+': {
+        top: '#1D2942',
+        mid: '#3B5278',
+        floor: '#171410',
+        accent: '#F7DC88',
+        arch: 'rgba(247, 220, 136, 0.74)',
+      },
       S: {
         top: params.isOutdoor ? '#1D2942' : '#1E1A14',
         mid: params.isOutdoor ? '#3B5278' : '#3A3022',
@@ -332,12 +339,26 @@ export function createStagePreviewCardTexture(
         accent: '#E7C469',
         arch: 'rgba(239, 206, 122, 0.65)',
       },
+      'A+': {
+        top: '#20324A',
+        mid: '#4B6B8E',
+        floor: '#141820',
+        accent: '#E4EEFF',
+        arch: 'rgba(228, 238, 255, 0.64)',
+      },
       A: {
         top: params.isOutdoor ? '#20324A' : '#1A202B',
         mid: params.isOutdoor ? '#4B6B8E' : '#313B4D',
         floor: '#141820',
         accent: '#DCE6F5',
         arch: 'rgba(216, 228, 246, 0.56)',
+      },
+      'B+': {
+        top: '#2D3E52',
+        mid: '#5A7692',
+        floor: '#1C1B19',
+        accent: '#C6DDFB',
+        arch: 'rgba(198, 221, 251, 0.52)',
       },
       B: {
         top: params.isOutdoor ? '#2D3E52' : '#262422',

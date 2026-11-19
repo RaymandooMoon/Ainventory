@@ -232,13 +232,19 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(centerAndScale.idealScale).toBeGreaterThanOrEqual(1);
     expect(centerAndScale.centerDeltaPx).toBeLessThanOrEqual(4);
 
-    // 4) Top HUD 1:1 Symmetry (Background Picker Badge vs Icon-Only History Button) + Modal + 2-Finger Pinch Zoom
+    // 4) HUD Symmetry & Placement: Top-left Background Picker, Top-right Wardrobe Drawer (mobile <600px), Bottom-left Look + History Stack
     const bgPickerBtn = studioCanvas.locator(
       '.studio-hud-left-slot [data-stage-bg-picker-btn="true"]'
     );
-    const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
+    const historyBtn = studioCanvas.locator(
+      '[data-bottom-left-hud="true"] [data-vton-history-btn="true"]'
+    );
+    const lookTriggerBtn = studioCanvas.locator(
+      '[data-bottom-left-hud="true"] [data-look-selector-trigger="true"]'
+    );
     await expect(bgPickerBtn).toBeVisible();
     await expect(bgPickerBtn).toHaveAttribute('data-stage-bg-tier', 'C');
+    await expect(lookTriggerBtn).toBeVisible();
     await expect(historyBtn).toBeVisible();
 
     const historyText = (await historyBtn.innerText()).trim();
@@ -249,19 +255,34 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(supCountNum).toBeGreaterThanOrEqual(0);
     expect(supCountNum).toBeLessThanOrEqual(99);
 
-    const [canvasBox, bgBtnBox, histBox] = await Promise.all([
+    const [canvasBox, bgBtnBox, lookBtnBox, histBox] = await Promise.all([
       studioCanvas.boundingBox(),
       bgPickerBtn.boundingBox(),
+      lookTriggerBtn.boundingBox(),
       historyBtn.boundingBox(),
     ]);
     expect(canvasBox).not.toBeNull();
     expect(bgBtnBox).not.toBeNull();
+    expect(lookBtnBox).not.toBeNull();
     expect(histBox).not.toBeNull();
     expect(Math.abs(bgBtnBox!.width - histBox!.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(bgBtnBox!.height - histBox!.height)).toBeLessThanOrEqual(1);
-    const leftInset = bgBtnBox!.x - canvasBox!.x;
-    const rightInset = canvasBox!.x + canvasBox!.width - (histBox!.x + histBox!.width);
-    expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(2);
+    // History sits directly below Look selector on the bottom-left side of stage
+    expect(histBox!.y).toBeGreaterThanOrEqual(lookBtnBox!.y + lookBtnBox!.height);
+    expect(histBox!.x + histBox!.width / 2).toBeLessThan(canvasBox!.x + canvasBox!.width / 2);
+
+    const vpCheck = page.viewportSize();
+    if (vpCheck && vpCheck.width < 600) {
+      const mobileWardrobeHudBtn = studioCanvas.locator(
+        '.studio-vton-hud-right [data-mobile-wardrobe-trigger="true"]'
+      );
+      await expect(mobileWardrobeHudBtn).toBeVisible();
+      const mwBox = await mobileWardrobeHudBtn.boundingBox();
+      expect(mwBox).not.toBeNull();
+      const leftInset = bgBtnBox!.x - canvasBox!.x;
+      const rightInset = canvasBox!.x + canvasBox!.width - (mwBox!.x + mwBox!.width);
+      expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(2);
+    }
 
     // Clicking Background Picker opens 14-stage architectural backdrop catalog modal
     await bgPickerBtn.click();
@@ -511,11 +532,11 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
     await expect(
-      studioCanvas.locator('canvas:not([data-weather-foreground-canvas="true"])')
+      studioCanvas.locator('canvas:not(.studio-three-stage-mount canvas)')
     ).toHaveCount(0);
     await expect(
       studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
-    ).toHaveCSS('pointer-events', 'none');
+    ).toHaveCount(0);
     await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
     const lightLum = await studioCanvas.evaluate((el) => {
@@ -674,28 +695,44 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
 
-    // (2) Compact Icon `Look 1` / `Look 2` Dock Positioned at Bottom-Left Above Angle Scrollbar & Worn Dock on Right
+    // (2) Single Look Selector Button + History Button Positioned at Bottom-Left Above Angle Scrollbar & Worn Dock on Right
     await expect(lookDock).toBeVisible();
-    await expect(lookDock.locator('[data-weather-rec-id]')).toHaveCount(2);
+    const lookTrigger = lookDock.locator('[data-look-selector-trigger="true"]');
+    const historyBtn = studioCanvas.locator(
+      '[data-bottom-left-hud="true"] [data-vton-history-btn="true"]'
+    );
+    await expect(lookTrigger).toBeVisible();
+    await expect(historyBtn).toBeVisible();
+    await expect(lookDock.locator('[data-look-selector-menu="true"]')).toHaveCount(0);
+    // Clicking the single Look trigger opens the 2-option Look 1 / Look 2 selector menu
+    await lookTrigger.click();
+    await expect(lookDock.locator('[data-look-selector-menu="true"]')).toBeVisible();
+    await expect(lookDock.locator('[data-look-selector-menu="true"] [data-weather-rec-id]')).toHaveCount(2);
+    await lookTrigger.click();
+    await expect(lookDock.locator('[data-look-selector-menu="true"]')).toHaveCount(0);
+
     await expect(scrollDock).toBeVisible();
     const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
     await expect(wornDock).toBeVisible();
-    const [lookRect, scrollRect, wornRect, firstLookPillRect] = await Promise.all([
+    const [lookRect, histRect, scrollRect, wornRect, lookTriggerRect] = await Promise.all([
       lookDock.boundingBox(),
+      historyBtn.boundingBox(),
       scrollDock.boundingBox(),
       wornDock.boundingBox(),
-      lookDock.locator('[data-weather-rec-id]').first().boundingBox(),
+      lookTrigger.boundingBox(),
     ]);
     expect(lookRect).not.toBeNull();
+    expect(histRect).not.toBeNull();
     expect(scrollRect).not.toBeNull();
     expect(wornRect).not.toBeNull();
-    expect(firstLookPillRect).not.toBeNull();
-    expect(lookRect!.y + lookRect!.height).toBeLessThanOrEqual(scrollRect!.y + 6);
+    expect(lookTriggerRect).not.toBeNull();
+    expect(histRect!.y).toBeGreaterThanOrEqual(lookRect!.y + lookRect!.height);
+    expect(histRect!.y + histRect!.height).toBeLessThanOrEqual(scrollRect!.y + 6);
     expect(Math.abs(lookRect!.x - scrollRect!.x)).toBeLessThanOrEqual(12);
     expect(lookRect!.x + lookRect!.width / 2).toBeLessThan(
       stageBox!.x + stageBox!.width / 2
     );
-    expect(firstLookPillRect!.width).toBeLessThanOrEqual(42);
+    expect(lookTriggerRect!.width).toBeLessThanOrEqual(42);
     expect(wornRect!.x + wornRect!.width / 2).toBeGreaterThan(
       stageBox!.x + stageBox!.width / 2
     );
@@ -838,8 +875,9 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       : page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
 
     if (isMobileViewport) {
-      await page.locator('[data-mobile-slot-btn="outer"]').click();
+      await studioCanvas.locator('[data-mobile-wardrobe-trigger="true"]').click();
       await expect(drawerRoot).toBeVisible();
+      await drawerRoot.locator('[data-mobile-sheet-slot-tab="outer"]').click();
       await drawerRoot.evaluate(async (el) => {
         await Promise.all(
           el

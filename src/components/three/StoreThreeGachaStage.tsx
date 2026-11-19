@@ -57,14 +57,14 @@ function buildSparkSeeds(): SparkSeed[] {
 }
 
 function resolveTierColors(tier: StageTierCode) {
-  if (tier === 'S') {
-    _tierColor.setHex(0xf5d06b);
+  if (tier === 'S' || tier === 'S+') {
+    _tierColor.setHex(tier === 'S+' ? 0xf8dc82 : 0xf5d06b);
     _metalColor.setHex(0xe5bf62);
-  } else if (tier === 'A') {
-    _tierColor.setHex(0xd9e7fb);
+  } else if (tier === 'A' || tier === 'A+') {
+    _tierColor.setHex(tier === 'A+' ? 0xe5effe : 0xd9e7fb);
     _metalColor.setHex(0xcbd7e8);
-  } else if (tier === 'B') {
-    _tierColor.setHex(0x9ec5fb);
+  } else if (tier === 'B' || tier === 'B+') {
+    _tierColor.setHex(tier === 'B+' ? 0xb4d4fd : 0x9ec5fb);
     _metalColor.setHex(0xb8c5d6);
   } else {
     _tierColor.setHex(0xe4e0d8);
@@ -587,25 +587,28 @@ export default function StoreThreeGachaStage({
       innerGimbal.rotation.y -= dt * (p.phase === 'spinning' ? 6.8 : 0.55);
       innerGimbal.rotation.z = Math.PI * 0.22 + Math.cos(nowSec * 1.1) * 0.12;
 
-      const tierIntensityBoost =
-        p.activeTier === 'S' ? 1.55 : p.activeTier === 'A' ? 1.25 : p.activeTier === 'B' ? 1.0 : 0.78;
+      const isTierS = p.activeTier === 'S' || p.activeTier === 'S+';
+      const isTierA = p.activeTier === 'A' || p.activeTier === 'A+';
+      const isTierB = p.activeTier === 'B' || p.activeTier === 'B+';
+
+      const tierIntensityBoost = isTierS ? 1.55 : isTierA ? 1.25 : isTierB ? 1.0 : 0.78;
       coreAccentLight.intensity =
         (p.phase === 'revealed' ? 2.1 : p.phase === 'spinning' ? 1.7 : 1.1) * tierIntensityBoost;
       backHaloMat.opacity =
         (p.phase === 'revealed' ? 0.46 : p.phase === 'spinning' ? 0.34 : 0.18) *
-        (p.activeTier === 'S' ? 1.15 : 0.9);
+        (isTierS ? 1.15 : 0.9);
 
       // Update celebration sparks
       const activeSparks =
         p.phase === 'idle'
-          ? p.activeTier === 'S'
+          ? isTierS
             ? 14
             : 8
-          : p.activeTier === 'S'
+          : isTierS
             ? SPARK_COUNT
-            : p.activeTier === 'A'
+            : isTierA
               ? 30
-              : p.activeTier === 'B'
+              : isTierB
                 ? 20
                 : 12;
 
@@ -768,9 +771,13 @@ export default function StoreThreeGachaStage({
     wakeRenderRef.current?.();
   }, [phase, theme]);
 
+  const tierSlug = activeTier.endsWith('+')
+    ? `${activeTier.slice(0, -1).toLowerCase()}-plus`
+    : activeTier.toLowerCase();
+
   return (
     <div
-      className={`store-three-gacha-stage is-phase-${phase} is-tier-${activeTier.toLowerCase()}`}
+      className={`store-three-gacha-stage is-phase-${phase} is-tier-${tierSlug}`}
       data-testid="store-three-gacha-stage"
       data-gacha-phase={phase}
       data-gacha-tier={activeTier}

@@ -1331,6 +1331,7 @@ img {
   box-shadow: var(--squircle-inset-rim), var(--elevation-sm);
   background: radial-gradient(circle at 46% 24%, #FFFFFF 0%, #F3F4F7 56%, #E6E8EE 100%);
   overflow: hidden;
+  overflow: clip;
   user-select: none;
 }
 
