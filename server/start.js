@@ -14,6 +14,9 @@ const distDir = path.join(ROOT_DIR, 'dist');
 const SESSION_SWEEP_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 app.disable('x-powered-by');
+if (process.env.TRUST_PROXY === '1' || process.env.RENDER === 'true') {
+  app.set('trust proxy', 1);
+}
 
 const APP_CSP = [
   "default-src 'self'",
@@ -83,9 +86,19 @@ app.use(
   })
 );
 
-app.get('/{*splat}', (_req, res) => {
+app.get('/{*splat}', (req, res) => {
   const indexPath = path.join(distDir, 'index.html');
   if (!fs.existsSync(indexPath)) {
+    if (req.path === '/') {
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(200).json({
+        ok: true,
+        service: 'ainventory-api',
+        mode: 'api-only',
+        healthCheck: '/api/build-info',
+      });
+      return;
+    }
     res.status(404).type('text/plain').send('Build output not found. Run npm run build first.');
     return;
   }
