@@ -665,6 +665,16 @@ const LOOK_STYLE_PRESETS = [
     ko: '미니멀 데일리',
     en: 'Minimal Daily',
   },
+  {
+    key: 'street',
+    ko: '스트릿',
+    en: 'Street',
+  },
+  {
+    key: 'hiphop',
+    ko: '힙합',
+    en: 'Hip-Hop',
+  },
 ];
 
 const VALID_LOOK_STYLE_KEYS = new Set(LOOK_STYLE_PRESETS.map((p) => p.key));
@@ -766,6 +776,36 @@ function scoreGarmentForLookPreset(garment, styleKey, avgTemp) {
       score += 14;
     }
     if (/logo|graphic|neon|형광|그래픽/i.test(blob)) score -= 18;
+  } else if (styleKey === 'street') {
+    const isStreetPackshot = String(garment.image_url || '').includes('/seed/st-');
+    const streetBlob = `${blob} ${garment.brand || ''}`;
+    if (isStreetPackshot) score += 26;
+    if (doesGarmentMatchOccasion(garment, 'daily')) score += 16;
+    if (
+      /bomber|windbreaker|track|ripstop|parka|overshirt|denim|trucker|utility|vest|sweatshirt|hoodie|boxy|cargo|parachute|jogger|chunky|runner|sneaker|combat|cap|sling|duffel|street|보머|윈드브레이커|트랙|립스톱|파카|오버셔츠|유틸리티|베스트|맨투맨|스웨트|후드|박시|카고|파라슈트|조거|청키|러너|스니커즈|컴뱃|캡|슬링|더플|스트릿|stone island|prada|balenciaga|stussy|off-white|fear of god|rick owens|chrome hearts/i.test(
+        streetBlob
+      )
+    ) {
+      score += 24;
+    }
+    if (STRICT_FORMAL_RE.test(blob) || /briefcase|loafer|derby|blazer|suit|서류가방|로퍼|더비|블레이저|정장/i.test(blob)) {
+      score -= 28;
+    }
+  } else if (styleKey === 'hiphop') {
+    const isStreetPackshot = String(garment.image_url || '').includes('/seed/st-');
+    const hiphopBlob = `${blob} ${garment.brand || ''}`;
+    if (isStreetPackshot) score += 28;
+    if (doesGarmentMatchOccasion(garment, 'daily')) score += 14;
+    if (
+      /varsity|puffer|oversized|heavy|wide|baggy|loose|hoodie|fleece|bauhaus|cargo|jogger|geobasket|hightop|high-top|melting|hiphop|hip-hop|work boots|nubuck|chunky|combat|cross|cap|sling|duffel|chain|바시티|푸퍼|오버사이즈|헤비|와이드|배기|루즈|후드|플리스|바우하우스|카고|조거|지오바스켓|하이탑|멜팅|힙합|워크부츠|누벅|청키|컴뱃|크로스|캡|슬링|더플|체인|rick owens|balenciaga|fear of god|chrome hearts|mihara|timberland|amiri|off-white|dior|gucci/i.test(
+        hiphopBlob
+      )
+    ) {
+      score += 28;
+    }
+    if (STRICT_FORMAL_RE.test(blob) || /briefcase|loafer|derby|blazer|suit|slacks|trench|서류가방|로퍼|더비|블레이저|정장|슬랙스|트렌치/i.test(blob)) {
+      score -= 34;
+    }
   }
 
   return score;

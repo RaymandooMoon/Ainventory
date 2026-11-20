@@ -112,6 +112,18 @@ const EDITORIAL_MOODS_BY_STYLE: Record<
     { ko: '클린 데일리 실루엣', en: 'Clean Daily Silhouette' },
     { ko: '큐레이티드 데일리', en: 'Curated Daily' },
   ],
+  street: [
+    { ko: '어반 스트릿 에디트', en: 'Urban Street Edit' },
+    { ko: '네오 스트릿 레이어드', en: 'Neo Street Layered' },
+    { ko: '시티 유틸리티 룩', en: 'City Utility Look' },
+    { ko: '하이엔드 스트릿 무드', en: 'High-End Street Mood' },
+  ],
+  hiphop: [
+    { ko: '오버사이즈 힙합 무드', en: 'Oversized Hip-Hop Mood' },
+    { ko: '볼드 스웨그 에디트', en: 'Bold Swag Edit' },
+    { ko: '헤비웨이트 힙합 룩', en: 'Heavyweight Hip-Hop Look' },
+    { ko: '스트릿 힙합 시그니처', en: 'Street Hip-Hop Signature' },
+  ],
 };
 
 const WEATHER_ACCENT_MOODS: Record<string, Array<{ ko: string; en: string }>> = {

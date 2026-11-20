@@ -275,9 +275,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     out vec3 outNormal,
     out float outEdgeBand
   ) {
-    // 2-ring alpha SDF gradient (gives silky smooth rounded 3D silhouette curvature)
-    vec2 r1 = texel * 2.8;
-    vec2 r2 = texel * 8.0;
+    // Smooth 3-radius alpha SDF falloff (eliminates hard 8px stripe banding on trousers/sleeves)
+    vec2 r1 = texel * 1.25;
+    vec2 r2 = texel * 2.85;
+    vec2 r3 = texel * 5.20;
 
     float aL1 = safeSample(map, uv + vec2(-r1.x, 0.0)).a;
     float aR1 = safeSample(map, uv + vec2( r1.x, 0.0)).a;
@@ -289,38 +290,46 @@ const FRAGMENT_SHADER = /* glsl */ `
     float aD2 = safeSample(map, uv + vec2(0.0, -r2.y)).a;
     float aU2 = safeSample(map, uv + vec2(0.0,  r2.y)).a;
 
-    float aTL = safeSample(map, uv + vec2(-r2.x,  r2.y)).a;
-    float aTR = safeSample(map, uv + vec2( r2.x,  r2.y)).a;
-    float aBL = safeSample(map, uv + vec2(-r2.x, -r2.y)).a;
-    float aBR = safeSample(map, uv + vec2( r2.x, -r2.y)).a;
+    float aTL2 = safeSample(map, uv + vec2(-r2.x,  r2.y)).a;
+    float aTR2 = safeSample(map, uv + vec2( r2.x,  r2.y)).a;
+    float aBL2 = safeSample(map, uv + vec2(-r2.x, -r2.y)).a;
+    float aBR2 = safeSample(map, uv + vec2( r2.x, -r2.y)).a;
+
+    float aL3 = safeSample(map, uv + vec2(-r3.x, 0.0)).a;
+    float aR3 = safeSample(map, uv + vec2( r3.x, 0.0)).a;
+    float aD3 = safeSample(map, uv + vec2(0.0, -r3.y)).a;
+    float aU3 = safeSample(map, uv + vec2(0.0,  r3.y)).a;
 
     float innerAvg1 = 0.25 * (aL1 + aR1 + aD1 + aU1);
-    float innerAvg2 = 0.125 * (aL2 + aR2 + aD2 + aU2 + aTL + aTR + aBL + aBR);
-    float alphaCore = clamp(innerAvg1 * 0.45 + innerAvg2 * 0.55, 0.0, 1.0);
+    float innerAvg2 = 0.125 * (aL2 + aR2 + aD2 + aU2 + aTL2 + aTR2 + aBL2 + aBR2);
+    float innerAvg3 = 0.25 * (aL3 + aR3 + aD3 + aU3);
+    float innerSmooth = clamp(innerAvg1 * 0.52 + innerAvg2 * 0.33 + innerAvg3 * 0.15, 0.0, 1.0);
+    float alphaCore = clamp(innerAvg1 * 0.45 + innerAvg2 * 0.35 + innerAvg3 * 0.20, 0.0, 1.0);
 
-    // Outward-facing silhouette normal in texture space
-    float gxA = (aL1 - aR1) * 0.55 + (aL2 - aR2) * 0.45 + (aTL + aBL - aTR - aBR) * 0.22;
-    float gyA = (aD1 - aU1) * 0.55 + (aD2 - aU2) * 0.45 + (aBL + aBR - aTL - aTR) * 0.22;
+    // Smooth outward-facing silhouette normal in texture space
+    float gxA = (aL1 - aR1) * 0.50 + (aL2 - aR2) * 0.35 + (aL3 - aR3) * 0.15 + (aTL2 + aBL2 - aTR2 - aBR2) * 0.14;
+    float gyA = (aD1 - aU1) * 0.50 + (aD2 - aU2) * 0.35 + (aD3 - aU3) * 0.15 + (aBL2 + aBR2 - aTL2 - aTR2) * 0.14;
 
     // Micro fold / facial / lapel relief via luminance gradient
-    vec2 rL = texel * 1.8;
+    vec2 rL = texel * 1.6;
     float lL = calcLuma(safeSample(map, uv + vec2(-rL.x, 0.0)).rgb);
     float lR = calcLuma(safeSample(map, uv + vec2( rL.x, 0.0)).rgb);
     float lD = calcLuma(safeSample(map, uv + vec2(0.0, -rL.y)).rgb);
     float lU = calcLuma(safeSample(map, uv + vec2(0.0,  rL.y)).rgb);
     float lC = calcLuma(safeSample(map, uv).rgb);
 
-    float gxL = (lL - lR) * 1.45;
-    float gyL = (lD - lU) * 1.45;
+    float gxL = (lL - lR) * 1.25;
+    float gyL = (lD - lU) * 1.25;
 
     // Flip X normal back to screen space if texture is horizontally mirrored
     float screenFlipX = mirrorFlag > 0.5 ? -1.0 : 1.0;
-    float nx = (gxA * 1.55 + gxL * 0.42) * screenFlipX + vCylCurveX * 0.24;
-    float ny = (gyA * 1.15 + gyL * 0.35);
-    float nz = clamp(0.42 + alphaCore * 0.58, 0.22, 1.0);
+    float nx = (gxA * 1.40 + gxL * 0.36) * screenFlipX + vCylCurveX * 0.18;
+    float ny = (gyA * 1.05 + gyL * 0.30);
+    float nz = clamp(0.48 + alphaCore * 0.52, 0.25, 1.0);
 
     outNormal = normalize(vec3(nx, ny, nz));
-    outEdgeBand = clamp(1.0 - innerAvg2, 0.0, 1.0);
+    // Exponential grazing falloff: crisp silky 1-4px highlight instead of a blocky 8px stripe
+    outEdgeBand = pow(clamp(1.0 - innerSmooth, 0.0, 1.0), 2.15);
     // Depth combines silhouette volume + torso/head central bulge + luminance highlight relief
     float centralBulge = clamp(1.0 - abs(vPlaneUv.x - 0.5) * 2.2, 0.0, 1.0);
     outDepth = clamp(alphaCore * 0.62 + centralBulge * 0.20 + lC * 0.18, 0.0, 1.0);
@@ -428,29 +437,33 @@ const FRAGMENT_SHADER = /* glsl */ `
     float neonFlag = clamp(uIsNeon, 0.0, 1.0);
 
     // 1. Environmental Exposure & Moody Room Contrast
-    // On cyberpunk neon scenes, pull bright daylight studio exposure down naturally (0.76..0.88)
-    // so the subject sits INSIDE the dark neon stage instead of floating like daylight cutout.
+    // On non-neon daylight/salon scenes, keep original studio garment & skin exposure faithful (<= 1.0).
+    // On cyberpunk neon scenes, pull bright daylight exposure down naturally (0.76..0.88)
+    // so the subject sits INSIDE the dark neon stage instead of floating like a daylight cutout.
     float targetExposure = mix(
-      clamp(uAmbientBrightness, 0.80, 1.02),
-      mix(0.74, 0.86, clamp(uAmbientBrightness - 0.12, 0.0, 1.0)),
+      clamp(uAmbientBrightness, 0.72, 1.00),
+      mix(0.76, 0.88, clamp(uAmbientBrightness - 0.12, 0.0, 1.0)),
       neonFlag * strength
     );
     vec3 lit = albedo * targetExposure;
 
-    // Gentle shadow-biased ambient chromatic bounce (preserves garment midtones & skin legibility)
+    // Highlight protection prevents blowing out bright faces, hands, and cream/white fabrics
+    float highlightProtect = 1.0 - smoothstep(0.60, 0.92, luma) * 0.78;
+
+    // Gentle shadow-biased ambient chromatic bounce
     vec3 leftLin = uLeftRimColor;
     vec3 rightLin = uRightRimColor;
     vec3 ambLin = uAmbientTintColor;
     vec3 keyLin = uKeyLightColor;
     vec3 floorLin = uFloorBounceColor;
 
-    float shadowWeight = clamp(1.0 - luma * 0.62, 0.18, 1.0);
+    float shadowWeight = clamp(1.0 - luma * 0.65, 0.16, 1.0);
     vec3 spatialNeonWash = mix(leftLin, rightLin, smoothstep(0.18, 0.82, vPlaneUv.x));
     vec3 envTint = mix(ambLin, spatialNeonWash, neonFlag);
-    float tintAmount = mix(0.06, 0.24, neonFlag) * strength * shadowWeight;
-    lit = mix(lit, lit * (vec3(0.55) + envTint * 0.95) + envTint * 0.032, tintAmount);
+    float tintAmount = mix(0.025, 0.22, neonFlag) * strength * shadowWeight;
+    lit = mix(lit, lit * (vec3(0.58) + envTint * 0.90) + envTint * (0.024 * neonFlag), tintAmount);
 
-    // 2. Dual-Side Directional Diffuse + High-Definition Fresnel Inner Rim Light Wrap
+    // 2. Dual-Side Directional Diffuse + Silky Fresnel Inner Rim Light Wrap
     vec3 Lleft = normalize(vec3(-0.88, 0.18, 0.44));
     vec3 Lright = normalize(vec3(0.88, 0.18, 0.44));
     vec3 Lkey = normalize(uKeyLightDir);
@@ -459,41 +472,44 @@ const FRAGMENT_SHADER = /* glsl */ `
     float ndlRight = max(dot(N, Lright), 0.0);
     float ndlKey = max(dot(N, Lkey), 0.0);
 
-    float leftSpatial = smoothstep(0.86, 0.08, vPlaneUv.x);
-    float rightSpatial = smoothstep(0.14, 0.92, vPlaneUv.x);
+    float leftSpatial = smoothstep(0.84, 0.10, vPlaneUv.x);
+    float rightSpatial = smoothstep(0.16, 0.90, vPlaneUv.x);
 
-    // Fresnel grazing factor + inner silhouette light wrap (wraps neon inward across cheek/shoulder/coat/bag)
-    float fresnel = pow(clamp(1.0 - N.z, 0.0, 1.0), 1.65);
-    float leftFacing = clamp(max(-N.x, 0.0) * 1.15 + leftSpatial * 0.35, 0.0, 1.0);
-    float rightFacing = clamp(max(N.x, 0.0) * 1.15 + rightSpatial * 0.35, 0.0, 1.0);
+    // Pure grazing Fresnel + silky exponential edge wrap (zero hard side-stripe on trousers!)
+    float fresnel = pow(clamp(1.0 - N.z, 0.0, 1.0), 2.25);
+    float leftFacing = clamp(max(-N.x, 0.0) * 1.10 + leftSpatial * 0.22 * neonFlag, 0.0, 1.0);
+    float rightFacing = clamp(max(N.x, 0.0) * 1.10 + rightSpatial * 0.22 * neonFlag, 0.0, 1.0);
 
-    float innerRimMask = clamp(edgeBand * 0.78 + fresnel * 0.68, 0.0, 1.0);
-    float leftRimWeight = innerRimMask * leftFacing * leftSpatial;
-    float rightRimWeight = innerRimMask * rightFacing * rightSpatial;
+    float innerRimMask = clamp(edgeBand * 0.72 + fresnel * 0.52, 0.0, 1.0);
+    // On non-neon scenes, only catch a whisper-thin rim from the dominant key side (never twin stripes on pants)
+    float keyBiasLeft = mix(smoothstep(0.2, -0.35, Lkey.x), 1.0, neonFlag);
+    float keyBiasRight = mix(smoothstep(-0.2, 0.35, Lkey.x), 1.0, neonFlag);
+    float leftRimWeight = innerRimMask * leftFacing * leftSpatial * keyBiasLeft;
+    float rightRimWeight = innerRimMask * rightFacing * rightSpatial * keyBiasRight;
 
-    // Broad side-diffuse bounce across folds, lapels, cheekbones, sleeves
-    float diffuseScale = mix(0.08, 0.26, neonFlag) * strength;
+    // Broad side-diffuse bounce across folds, lapels, cheekbones, sleeves (subtle in daylight, vivid in neon)
+    float diffuseScale = mix(0.025, 0.24, neonFlag) * strength;
     vec3 sideDiffuse =
-      leftLin * (ndlLeft * leftSpatial * diffuseScale) +
-      rightLin * (ndlRight * rightSpatial * diffuseScale);
+      leftLin * (ndlLeft * leftSpatial * diffuseScale * keyBiasLeft) +
+      rightLin * (ndlRight * rightSpatial * diffuseScale * keyBiasRight);
 
-    // Subtle 3D key-light fold specular
+    // Subtle 3D key-light fold specular (protected against skin blowout)
     vec3 Hkey = normalize(Lkey + vec3(0.0, 0.0, 1.0));
-    float keySpec = pow(max(dot(N, Hkey), 0.0), 14.0) * mix(0.07, 0.16, neonFlag) * strength;
-    lit += albedo * sideDiffuse + keyLin * (ndlKey * 0.045 * strength + keySpec * (0.28 + luma * 0.72));
+    float keySpec = pow(max(dot(N, Hkey), 0.0), 18.0) * mix(0.02, 0.14, neonFlag) * strength * highlightProtect;
+    lit += albedo * sideDiffuse + keyLin * (ndlKey * 0.015 * neonFlag * strength + keySpec * (0.25 + luma * 0.55));
 
-    // Silky photographic screen-blended Fresnel Inner Rim Glow (zero harsh clipping on bright clothes!)
-    float rimIntensity = mix(0.24, 0.78, neonFlag) * strength;
+    // Silky photographic screen-blended Fresnel Inner Rim Glow
+    float rimIntensity = mix(0.055, 0.68, neonFlag) * strength;
     vec3 rimGlow =
       leftLin * (leftRimWeight * rimIntensity) +
       rightLin * (rightRimWeight * rimIntensity);
-    lit = softScreen(lit, rimGlow * (0.62 + 0.38 * (1.0 - luma * 0.35)));
+    lit = softScreen(lit, rimGlow * highlightProtect * (0.58 + 0.42 * (1.0 - luma * 0.35)));
 
-    // 3. Floor Bounce Uplight (neon ring / terrazzo reflection rising onto shoes & lower trousers)
-    float floorMask = pow(clamp(1.0 - vPlaneUv.y / 0.32, 0.0, 1.0), 1.55);
-    float underFacing = clamp(-N.y * 0.55 + 0.62, 0.15, 1.0);
-    vec3 floorBounce = floorLin * (floorMask * underFacing * uFloorBounceStrength * mix(0.18, 0.42, neonFlag));
-    lit = softScreen(lit, floorBounce * (0.45 + 0.55 * (1.0 - luma * 0.4)));
+    // 3. Floor Bounce Uplight (neon ring / subtle terrazzo reflection rising onto shoes & hems)
+    float floorMask = pow(clamp(1.0 - vPlaneUv.y / 0.28, 0.0, 1.0), 1.75);
+    float underFacing = clamp(-N.y * 0.55 + 0.55, 0.12, 1.0);
+    vec3 floorBounce = floorLin * (floorMask * underFacing * uFloorBounceStrength * mix(0.04, 0.38, neonFlag));
+    lit = softScreen(lit, floorBounce * highlightProtect * (0.42 + 0.58 * (1.0 - luma * 0.4)));
 
     // Final linear -> sRGB output encoding via Three.js standard fragment chunk
     gl_FragColor = vec4(clamp(lit, 0.0, 1.0), blended.a);

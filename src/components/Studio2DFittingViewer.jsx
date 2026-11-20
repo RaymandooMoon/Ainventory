@@ -252,6 +252,14 @@ const LOOK_STYLE_TITLE_LABELS = {
     ko: '미니멀 데일리',
     en: 'Minimal Daily',
   },
+  street: {
+    ko: '스트릿',
+    en: 'Street',
+  },
+  hiphop: {
+    ko: '힙합',
+    en: 'Hip-Hop',
+  },
 };
 
 /**
@@ -3691,7 +3699,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   ? Award
                   : activeStyleKey === 'minimal_daily'
                     ? Sparkles
-                    : Briefcase;
+                    : activeStyleKey === 'street'
+                      ? Zap
+                      : activeStyleKey === 'hiphop'
+                        ? Flame
+                        : Briefcase;
 
             return (
               <div
@@ -3766,7 +3778,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                             ? Award
                             : styleKey === 'minimal_daily'
                               ? Sparkles
-                              : Briefcase;
+                              : styleKey === 'street'
+                                ? Zap
+                                : styleKey === 'hiphop'
+                                  ? Flame
+                                  : Briefcase;
                       return (
                         <button
                           key={rec.id || `look-${idx + 1}`}

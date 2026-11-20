@@ -382,7 +382,7 @@ function resolveFourColSpansServer(clusters, headClusters, w) {
 function sliceTurnaroundPanelsInServerBuffer(rgba, w, h, layout) {
   const working = new Uint8ClampedArray(rgba);
   if (w >= 256 && h >= 256) {
-    eraseSheetGridDividerLinesInBuffer(working, w, h);
+    eraseSheetGridDividerLinesInBuffer(working, w, h, { layout });
   }
   const isExplicit4x2 = layout === 'turnaround_4x2' && w >= 256 && h >= 256;
   const isExplicit2x2 = layout === 'turnaround_2x2' || w < 256 || h < 256;

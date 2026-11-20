@@ -336,6 +336,52 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
     assert.equal(remainingLineOpaque, 0);
     // Main human center remains 100% opaque
     assert.equal(slice[(180 * cw + 120) * 4 + 3], 255);
+
+    // 3) Regression: 4x2 turnaround sheet with all-black monochrome outfits in columns 1 & 2
+    //    overlapping w/3 (0.333) and 2w/3 (0.667) must have ZERO human pixels erased (both with & without layout).
+    const fw = 600;
+    const fh = 448;
+    const buildBlack4x2Sheet = () => {
+      const buf = new Uint8ClampedArray(fw * fh * 4);
+      for (let i = 0; i < fw * fh; i += 1) {
+        buf[i * 4] = 142;
+        buf[i * 4 + 1] = 111;
+        buf[i * 4 + 2] = 158;
+        buf[i * 4 + 3] = 255;
+      }
+      const colCenters = [75, 225, 375, 525];
+      const rowSpans: Array<[number, number]> = [
+        [14, 212],
+        [236, 434],
+      ];
+      for (const [ry0, ry1] of rowSpans) {
+        for (const cx of colCenters) {
+          for (let y = ry0; y <= ry1; y += 1) {
+            for (let x = cx - 32; x <= cx + 32; x += 1) {
+              const idx = (y * fw + x) * 4;
+              buf[idx] = 24;
+              buf[idx + 1] = 24;
+              buf[idx + 2] = 26;
+              buf[idx + 3] = 255;
+            }
+          }
+        }
+      }
+      return buf;
+    };
+
+    for (const opts of [{ layout: 'turnaround_4x2' }, undefined]) {
+      const orig4x2 = buildBlack4x2Sheet();
+      const test4x2 = new Uint8ClampedArray(orig4x2);
+      eraseSheetGridDividerLinesInBuffer(test4x2, fw, fh, opts);
+      let changedPx = 0;
+      for (let i = 0; i < test4x2.length; i += 4) {
+        if (test4x2[i] !== orig4x2[i] || test4x2[i + 1] !== orig4x2[i + 1] || test4x2[i + 2] !== orig4x2[i + 2]) {
+          changedPx += 1;
+        }
+      }
+      assert.equal(changedPx, 0, `Expected 0 erased pixels on monochrome 4x2 sheet (layout=${opts?.layout ?? 'auto'})`);
+    }
   });
 
   it('detects right-facing lateral direction accurately even when cel-shaded warm brown hair occupies the back-left of the head', () => {

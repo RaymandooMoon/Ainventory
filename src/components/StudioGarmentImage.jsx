@@ -700,7 +700,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     return true;
   }, [resolvedSrc, targetHex, isTintableCatalogSeed]);
 
-  // All `/seed/{studio,layer,s4,s5}-*.webp` files have pre-baked VP8X RGBA alpha; `.jpg`, `.png`,
+  // All `/seed/{studio,layer,s4,s5,st}-*.webp` files have pre-baked VP8X RGBA alpha; `.jpg`, `.png`,
   // `store-*.jpg`, and user uploads run Canvas RGBA background removal!
   const isKnownPreBakedStudioWebp =
     isTintableCatalogSeed &&
@@ -708,7 +708,8 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
     (resolvedSrc.startsWith('/seed/studio-') ||
       resolvedSrc.startsWith('/seed/layer-') ||
       resolvedSrc.startsWith('/seed/s4-') ||
-      resolvedSrc.startsWith('/seed/s5-'));
+      resolvedSrc.startsWith('/seed/s5-') ||
+      resolvedSrc.startsWith('/seed/st-'));
   const needsCanvasProcessing =
     isCutoutEligibleSource && (!isKnownPreBakedStudioWebp || shouldTintSeed);
 

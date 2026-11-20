@@ -287,7 +287,7 @@ interface VtonServerResponse {
   effectiveBagHandedness?: 'right' | 'left' | null;
 }
 
-const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v3';
+const VTON_IDB_NAME = 'ainventory_gemini_vton_cache_v5';
 const VTON_IDB_VERSION = 1;
 const VTON_IDB_STORE = 'vton_slices';
 const L1_MAX_ENTRIES = 36;
@@ -3136,13 +3136,17 @@ async function flipDataUrlHorizontally(dataUrl: string): Promise<string> {
 
 /**
  * Pre-crop full-sheet divider line eraser: detects thin vertical/horizontal grid lines drawn by
- * image models along panel boundaries (`0`, `w/3`, `w/2`, `2w/3`, `w-1`, `h/2`) and replaces them
- * with the median studio backdrop color so cluster detection and panel crops never inherit white poles.
+ * image models along panel boundaries (`0`, `w/4`, `w/3`, `w/2`, `2w/3`, `3w/4`, `w-1`, `h/2`)
+ * and replaces them with the studio backdrop color so cluster detection and panel crops never
+ * inherit white/black divider poles. Enforces strict two-sided backdrop isolation and thin-line
+ * width caps so monochrome human silhouettes (e.g. all-black street/hip-hop outfits positioned
+ * near `w/3` or `2w/3` on 4x2 sheets) are NEVER misidentified as divider lines.
  */
 export function eraseSheetGridDividerLinesInBuffer(
   data: Uint8ClampedArray,
   w: number,
-  h: number
+  h: number,
+  options?: { layout?: string }
 ): void {
   if (w < 120 || h < 120) return;
 
@@ -3177,20 +3181,36 @@ export function eraseSheetGridDividerLinesInBuffer(
   const bgG = gSamples[mid];
   const bgB = bSamples[mid];
 
+  const layout = String(options?.layout || '').trim();
   const isNearVerticalGridZone = (x: number): boolean => {
     const nx = x / w;
+    if (nx <= 0.032 || nx >= 0.968) return true;
+    if (layout === 'turnaround_4x2') {
+      return (
+        Math.abs(nx - 0.25) <= 0.035 ||
+        Math.abs(nx - 0.5) <= 0.035 ||
+        Math.abs(nx - 0.75) <= 0.035
+      );
+    }
+    if (layout === 'turnaround_3x2') {
+      return Math.abs(nx - 1 / 3) <= 0.045 || Math.abs(nx - 2 / 3) <= 0.045;
+    }
+    if (layout === 'turnaround_2x2') {
+      return Math.abs(nx - 0.5) <= 0.045;
+    }
     return (
-      nx <= 0.035 ||
-      nx >= 0.965 ||
-      Math.abs(nx - 1 / 3) <= 0.085 ||
-      Math.abs(nx - 0.5) <= 0.065 ||
-      Math.abs(nx - 2 / 3) <= 0.085 ||
-      Math.abs(nx - 0.25) <= 0.045 ||
-      Math.abs(nx - 0.75) <= 0.045
+      Math.abs(nx - 0.25) <= 0.035 ||
+      Math.abs(nx - 1 / 3) <= 0.045 ||
+      Math.abs(nx - 0.5) <= 0.045 ||
+      Math.abs(nx - 2 / 3) <= 0.045 ||
+      Math.abs(nx - 0.75) <= 0.035
     );
   };
 
   const isVerticalRuleCol = new Uint8Array(w);
+  const colMeanR = new Float32Array(w);
+  const colMeanG = new Float32Array(w);
+  const colMeanB = new Float32Array(w);
   const yStep = Math.max(1, Math.floor(h / 180));
   const totalSampleRows = Math.max(1, Math.ceil(h / yStep));
 
@@ -3213,7 +3233,7 @@ export function eraseSheetGridDividerLinesInBuffer(
         sumB += data[idx + 2];
       }
     }
-    if (nonBgCount / totalSampleRows < 0.46) continue;
+    if (nonBgCount / totalSampleRows < 0.68) continue;
 
     const meanR = sumR / nonBgCount;
     const meanG = sumG / nonBgCount;
@@ -3234,12 +3254,15 @@ export function eraseSheetGridDividerLinesInBuffer(
         consistentCount += 1;
       }
     }
-    if (consistentCount / nonBgCount >= 0.72) {
+    if (consistentCount / nonBgCount >= 0.78) {
       isVerticalRuleCol[x] = 1;
+      colMeanR[x] = meanR;
+      colMeanG[x] = meanG;
+      colMeanB[x] = meanB;
     }
   }
 
-  const maxRuleW = Math.max(12, Math.round(w * 0.022));
+  const maxRuleW = Math.min(20, Math.max(10, Math.round(w * 0.012)));
   let vx = 0;
   while (vx < w) {
     if (!isVerticalRuleCol[vx]) {
@@ -3253,30 +3276,90 @@ export function eraseSheetGridDividerLinesInBuffer(
     if (vxEnd - vx + 1 <= maxRuleW) {
       const wipeX0 = Math.max(0, vx - 1);
       const wipeX1 = Math.min(w - 1, vxEnd + 1);
-      for (let y = 0; y < h; y += 1) {
-        const leftRefX = Math.max(0, wipeX0 - 2);
-        const rightRefX = Math.min(w - 1, wipeX1 + 2);
-        const lIdx = (y * w + leftRefX) * 4;
-        const rIdx = (y * w + rightRefX) * 4;
-        const lDiff =
+      const isLeftBorder = vx <= 2;
+      const isRightBorder = vxEnd >= w - 3;
+      const leftProbeX = Math.max(0, wipeX0 - 3);
+      const rightProbeX = Math.min(w - 1, wipeX1 + 3);
+
+      // Two-sided background isolation check: a true grid divider runs through empty backdrop
+      // corridors on BOTH sides (never along the outer edge of a solid human silhouette).
+      let activeLineRows = 0;
+      let isolatedLineRows = 0;
+      let bandR = 0;
+      let bandG = 0;
+      let bandB = 0;
+      const bandCols = vxEnd - vx + 1;
+      for (let x = vx; x <= vxEnd; x += 1) {
+        bandR += colMeanR[x];
+        bandG += colMeanG[x];
+        bandB += colMeanB[x];
+      }
+      bandR /= bandCols;
+      bandG /= bandCols;
+      bandB /= bandCols;
+      const midCol = Math.floor((vx + vxEnd) * 0.5);
+
+      for (let y = 0; y < h; y += yStep) {
+        const cIdx = (y * w + midCol) * 4;
+        const cDiff =
+          Math.abs(data[cIdx] - bgR) +
+          Math.abs(data[cIdx + 1] - bgG) +
+          Math.abs(data[cIdx + 2] - bgB);
+        if (cDiff <= 26) continue;
+        activeLineRows += 1;
+        const lIdx = (y * w + leftProbeX) * 4;
+        const rIdx = (y * w + rightProbeX) * 4;
+        const lIsBg =
+          isLeftBorder ||
           Math.abs(data[lIdx] - bgR) +
-          Math.abs(data[lIdx + 1] - bgG) +
-          Math.abs(data[lIdx + 2] - bgB);
-        const rDiff =
+            Math.abs(data[lIdx + 1] - bgG) +
+            Math.abs(data[lIdx + 2] - bgB) <=
+            38;
+        const rIsBg =
+          isRightBorder ||
           Math.abs(data[rIdx] - bgR) +
-          Math.abs(data[rIdx + 1] - bgG) +
-          Math.abs(data[rIdx + 2] - bgB);
-        // Only overwrite rows where at least one side of the rule is background (protects crossing sleeves!)
-        if (lDiff <= 38 || rDiff <= 38) {
-          const fillR = lDiff <= rDiff ? data[lIdx] : data[rIdx];
-          const fillG = lDiff <= rDiff ? data[lIdx + 1] : data[rIdx + 1];
-          const fillB = lDiff <= rDiff ? data[lIdx + 2] : data[rIdx + 2];
-          const useFill = Math.min(lDiff, rDiff) <= 38;
+            Math.abs(data[rIdx + 1] - bgG) +
+            Math.abs(data[rIdx + 2] - bgB) <=
+            38;
+        if (lIsBg && rIsBg) {
+          isolatedLineRows += 1;
+        }
+      }
+
+      if (activeLineRows > 0 && isolatedLineRows / activeLineRows >= 0.55) {
+        for (let y = 0; y < h; y += 1) {
+          const lIdx = (y * w + leftProbeX) * 4;
+          const rIdx = (y * w + rightProbeX) * 4;
+          const lDiff = isLeftBorder
+            ? 0
+            : Math.abs(data[lIdx] - bgR) +
+              Math.abs(data[lIdx + 1] - bgG) +
+              Math.abs(data[lIdx + 2] - bgB);
+          const rDiff = isRightBorder
+            ? 0
+            : Math.abs(data[rIdx] - bgR) +
+              Math.abs(data[rIdx + 1] - bgG) +
+              Math.abs(data[rIdx + 2] - bgB);
+          const bothBg = lDiff <= 38 && rDiff <= 38;
+          const oneBg = lDiff <= 38 || rDiff <= 38;
+          if (!oneBg) continue;
+          const fillR = isLeftBorder ? data[rIdx] : isRightBorder ? data[lIdx] : lDiff <= rDiff ? data[lIdx] : data[rIdx];
+          const fillG = isLeftBorder ? data[rIdx + 1] : isRightBorder ? data[lIdx + 1] : lDiff <= rDiff ? data[lIdx + 1] : data[rIdx + 1];
+          const fillB = isLeftBorder ? data[rIdx + 2] : isRightBorder ? data[lIdx + 2] : lDiff <= rDiff ? data[lIdx + 2] : data[rIdx + 2];
           for (let x = wipeX0; x <= wipeX1; x += 1) {
             const pIdx = (y * w + x) * 4;
-            data[pIdx] = useFill ? fillR : bgR;
-            data[pIdx + 1] = useFill ? fillG : bgG;
-            data[pIdx + 2] = useFill ? fillB : bgB;
+            if (!bothBg) {
+              // When only one flank is background (e.g. a sleeve grazing the divider), only wipe
+              // pixels whose color matches the divider line itself.
+              const diffToLine =
+                Math.abs(data[pIdx] - bandR) +
+                Math.abs(data[pIdx + 1] - bandG) +
+                Math.abs(data[pIdx + 2] - bandB);
+              if (diffToLine > 52) continue;
+            }
+            data[pIdx] = fillR;
+            data[pIdx + 1] = fillG;
+            data[pIdx + 2] = fillB;
             data[pIdx + 3] = 255;
           }
         }
@@ -3287,6 +3370,9 @@ export function eraseSheetGridDividerLinesInBuffer(
 
   // Horizontal divider row scan near top, middle (h/2), and bottom borders
   const isHorizontalRuleRow = new Uint8Array(h);
+  const rowMeanR = new Float32Array(h);
+  const rowMeanG = new Float32Array(h);
+  const rowMeanB = new Float32Array(h);
   const xStep = Math.max(1, Math.floor(w / 180));
   const totalSampleCols = Math.max(1, Math.ceil(w / xStep));
   const isHorizontalBandRowAt = (y: number): boolean => {
@@ -3308,7 +3394,7 @@ export function eraseSheetGridDividerLinesInBuffer(
         sumB += data[idx + 2];
       }
     }
-    if (nonBgCount / totalSampleCols < 0.46) return false;
+    if (nonBgCount / totalSampleCols < 0.68) return false;
     const meanR = sumR / nonBgCount;
     const meanG = sumG / nonBgCount;
     const meanB = sumB / nonBgCount;
@@ -3326,17 +3412,23 @@ export function eraseSheetGridDividerLinesInBuffer(
         Math.abs(data[idx + 2] - meanB);
       if (diffMean <= 44) consistentCount += 1;
     }
-    return consistentCount / nonBgCount >= 0.72;
+    if (consistentCount / nonBgCount >= 0.78) {
+      rowMeanR[y] = meanR;
+      rowMeanG[y] = meanG;
+      rowMeanB[y] = meanB;
+      return true;
+    }
+    return false;
   };
   for (let y = 0; y < h; y += 1) {
     const ny = y / h;
-    if (!(ny <= 0.035 || ny >= 0.965 || Math.abs(ny - 0.5) <= 0.075)) continue;
+    if (!(ny <= 0.032 || ny >= 0.968 || Math.abs(ny - 0.5) <= 0.055)) continue;
     if (isHorizontalBandRowAt(y)) {
       isHorizontalRuleRow[y] = 1;
     }
   }
 
-  const maxRuleH = Math.max(12, Math.round(h * 0.024));
+  const maxRuleH = Math.min(20, Math.max(10, Math.round(h * 0.014)));
   let hy = 0;
   while (hy < h) {
     if (!isHorizontalRuleRow[hy]) {
@@ -3366,22 +3458,69 @@ export function eraseSheetGridDividerLinesInBuffer(
     if (trueHyEnd - trueHyStart + 1 <= maxRuleH) {
       const wipeY0 = Math.max(0, hy - 1);
       const wipeY1 = Math.min(h - 1, hyEnd + 1);
-      for (let x = 0; x < w; x += 1) {
-        const topRefY = Math.max(0, wipeY0 - 2);
-        const botRefY = Math.min(h - 1, wipeY1 + 2);
-        const tIdx = (topRefY * w + x) * 4;
-        const bIdx = (botRefY * w + x) * 4;
-        const tDiff =
+      const isTopBorder = hy <= 2;
+      const isBotBorder = hyEnd >= h - 3;
+      const topProbeY = Math.max(0, wipeY0 - 3);
+      const botProbeY = Math.min(h - 1, wipeY1 + 3);
+      const midRow = Math.floor((hy + hyEnd) * 0.5);
+      const bandR = rowMeanR[midRow];
+      const bandG = rowMeanG[midRow];
+      const bandB = rowMeanB[midRow];
+
+      let activeLineCols = 0;
+      let isolatedLineCols = 0;
+      for (let x = 0; x < w; x += xStep) {
+        const cIdx = (midRow * w + x) * 4;
+        const cDiff =
+          Math.abs(data[cIdx] - bgR) +
+          Math.abs(data[cIdx + 1] - bgG) +
+          Math.abs(data[cIdx + 2] - bgB);
+        if (cDiff <= 26) continue;
+        activeLineCols += 1;
+        const tIdx = (topProbeY * w + x) * 4;
+        const bIdx = (botProbeY * w + x) * 4;
+        const tIsBg =
+          isTopBorder ||
           Math.abs(data[tIdx] - bgR) +
-          Math.abs(data[tIdx + 1] - bgG) +
-          Math.abs(data[tIdx + 2] - bgB);
-        const bDiff =
+            Math.abs(data[tIdx + 1] - bgG) +
+            Math.abs(data[tIdx + 2] - bgB) <=
+            38;
+        const bIsBg =
+          isBotBorder ||
           Math.abs(data[bIdx] - bgR) +
-          Math.abs(data[bIdx + 1] - bgG) +
-          Math.abs(data[bIdx + 2] - bgB);
-        if (tDiff <= 38 || bDiff <= 38) {
+            Math.abs(data[bIdx + 1] - bgG) +
+            Math.abs(data[bIdx + 2] - bgB) <=
+            38;
+        if (tIsBg && bIsBg) {
+          isolatedLineCols += 1;
+        }
+      }
+
+      if (activeLineCols > 0 && isolatedLineCols / activeLineCols >= 0.55) {
+        for (let x = 0; x < w; x += 1) {
+          const tIdx = (topProbeY * w + x) * 4;
+          const bIdx = (botProbeY * w + x) * 4;
+          const tDiff = isTopBorder
+            ? 0
+            : Math.abs(data[tIdx] - bgR) +
+              Math.abs(data[tIdx + 1] - bgG) +
+              Math.abs(data[tIdx + 2] - bgB);
+          const bDiff = isBotBorder
+            ? 0
+            : Math.abs(data[bIdx] - bgR) +
+              Math.abs(data[bIdx + 1] - bgG) +
+              Math.abs(data[bIdx + 2] - bgB);
+          const bothBg = tDiff <= 38 && bDiff <= 38;
+          if (!(tDiff <= 38 || bDiff <= 38)) continue;
           for (let y = wipeY0; y <= wipeY1; y += 1) {
             const pIdx = (y * w + x) * 4;
+            if (!bothBg) {
+              const diffToLine =
+                Math.abs(data[pIdx] - bandR) +
+                Math.abs(data[pIdx + 1] - bandG) +
+                Math.abs(data[pIdx + 2] - bandB);
+              if (diffToLine > 52) continue;
+            }
             data[pIdx] = bgR;
             data[pIdx + 1] = bgG;
             data[pIdx + 2] = bgB;
@@ -4498,7 +4637,9 @@ export async function sliceTurnaround2x2Sheet(
             try {
               const sheetImgData = sheetCtx.getImageData(0, 0, w, h);
               if (w >= 256 && h >= 256) {
-                eraseSheetGridDividerLinesInBuffer(sheetImgData.data, w, h);
+                eraseSheetGridDividerLinesInBuffer(sheetImgData.data, w, h, {
+                  layout: options?.layout,
+                });
                 sheetCtx.putImageData(sheetImgData, 0, 0);
               }
               fullSheetRgba = sheetImgData.data;

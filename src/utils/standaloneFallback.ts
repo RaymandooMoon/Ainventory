@@ -434,7 +434,9 @@ type LookStylePresetKey =
   | 'business_casual'
   | 'comfortable_casual'
   | 'formal_office'
-  | 'minimal_daily';
+  | 'minimal_daily'
+  | 'street'
+  | 'hiphop';
 
 interface LookStylePresetSpec {
   key: LookStylePresetKey;
@@ -477,6 +479,22 @@ const LOOK_STYLE_PRESETS: Readonly<Record<LookStylePresetKey, LookStylePresetSpe
     title: '단정한 미니멀 데일리 코디',
     titleEn: 'Clean Monochrome Minimal Daily Look',
     preferredFormality: 'smart',
+  },
+  street: {
+    key: 'street',
+    badge: '스트릿 · 어반 룩',
+    badgeEn: 'Street · Urban Edit',
+    title: '감각적인 어반 스트릿 코디',
+    titleEn: 'Curated Urban Streetwear Look',
+    preferredFormality: 'casual',
+  },
+  hiphop: {
+    key: 'hiphop',
+    badge: '힙합 · 오버사이즈',
+    badgeEn: 'Hip-Hop · Oversized',
+    title: '볼드한 오버사이즈 힙합 코디',
+    titleEn: 'Bold Oversized Hip-Hop Look',
+    preferredFormality: 'casual',
   },
 };
 
@@ -556,6 +574,40 @@ function computeStandaloneStylePresetBonus(
       )
     ) {
       bonus += 12;
+    }
+  } else if (presetKey === 'street') {
+    const isStreetAsset = String(item.image_url || '').includes('/seed/st-');
+    const streetText = `${text} ${String(item.brand || '').toLowerCase()}`;
+    if (formality === 'casual') bonus += 20;
+    else if (formality === 'formal') bonus -= 22;
+    if (isStreetAsset) bonus += 24;
+
+    if (
+      /bomber|windbreaker|track|ripstop|parka|overshirt|denim|trucker|utility|vest|sweatshirt|hoodie|boxy|cargo|parachute|jogger|chunky|runner|sneaker|combat|cap|sling|duffel|street|보머|윈드브레이커|트랙|립스톱|파카|오버셔츠|유틸리티|베스트|맨투맨|스웨트|후드|박시|카고|파라슈트|조거|청키|러너|스니커즈|컴뱃|캡|슬링|더플|스트릿|stone island|prada|balenciaga|stussy|off-white|fear of god|rick owens|chrome hearts/.test(
+        streetText
+      )
+    ) {
+      bonus += 24;
+    }
+    if (/briefcase|suit|oxford_shoes|derby|loafer|blazer|tie|서류가방|정장|더비|로퍼|블레이저|타이/.test(text)) {
+      bonus -= 26;
+    }
+  } else if (presetKey === 'hiphop') {
+    const isStreetAsset = String(item.image_url || '').includes('/seed/st-');
+    const hiphopText = `${text} ${String(item.brand || '').toLowerCase()}`;
+    if (formality === 'casual') bonus += 22;
+    else if (formality === 'formal') bonus -= 26;
+    if (isStreetAsset) bonus += 26;
+
+    if (
+      /varsity|puffer|oversized|heavy|wide|baggy|loose|hoodie|fleece|bauhaus|cargo|jogger|geobasket|hightop|high-top|melting|hiphop|hip-hop|work boots|nubuck|chunky|combat|cross|cap|sling|duffel|chain|바시티|푸퍼|오버사이즈|헤비|와이드|배기|루즈|후드|플리스|바우하우스|카고|조거|지오바스켓|하이탑|멜팅|힙합|워크부츠|누벅|청키|컴뱃|크로스|캡|슬링|더플|체인|rick owens|balenciaga|fear of god|chrome hearts|mihara|timberland|amiri|off-white|dior|gucci/.test(
+        hiphopText
+      )
+    ) {
+      bonus += 28;
+    }
+    if (/briefcase|suit|oxford_shoes|derby|loafer|blazer|slacks|trench|tie|서류가방|정장|더비|로퍼|블레이저|슬랙스|트렌치|타이/.test(text)) {
+      bonus -= 30;
     }
   }
 
