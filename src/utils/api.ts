@@ -17,11 +17,21 @@ import {
   writeCachedResponse,
 } from './offlineSync.ts';
 import { handleStandaloneApiFallback } from './standaloneFallback.ts';
+import { resolveApiRuntimeConfig } from './apiRuntimeConfig.ts';
 
 const TOKEN_KEY = 'ainventory_auth_token';
 const SAMPLE_DEMO_KEY = 'ainventory_sample_demo_mode';
 const SAMPLE_DEMO_MUTATED_KEY = 'ainventory_sample_demo_mutated';
-const API_BASE_URL = String(import.meta.env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const API_RUNTIME_CONFIG = resolveApiRuntimeConfig(import.meta.env);
+const API_BASE_URL = API_RUNTIME_CONFIG.apiBaseUrl;
+
+export function getConfiguredApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+export function isStaticStandaloneWithoutApi(): boolean {
+  return API_RUNTIME_CONFIG.isStaticStandaloneWithoutApi;
+}
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
@@ -123,8 +133,7 @@ function markSampleDemoMutated(): void {
   }
 }
 
-const STATIC_STANDALONE_BUILD =
-  import.meta.env?.VITE_STATIC_STANDALONE === '1' && !import.meta.env?.VITE_API_BASE_URL;
+const STATIC_STANDALONE_BUILD = API_RUNTIME_CONFIG.isStaticStandaloneWithoutApi;
 
 async function rawNetworkFetch(
   path: string,
@@ -292,18 +301,24 @@ export async function apiFetch<T = Record<string, unknown>>(
   const isBrowserOffline = isEffectivelyOffline();
 
   if (method === 'GET') {
+    const isLiveStatusEndpoint =
+      path === '/vton/status' || path.startsWith('/vton/status?') || path === '/build-info';
     const cacheKey = sampleDemo ? `demo:${path}` : path;
-    if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint) {
+    if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !isLiveStatusEndpoint) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
       if (mutatedCached) {
         return coerceApiPayload<T>(mutatedCached);
       }
     }
     if (isBrowserOffline) {
-      const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-      if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+      if (!isLiveStatusEndpoint) {
+        const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
+        if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+      }
       const localData = await handleStandaloneApiFallback(path, options);
-      await writeCachedResponse(cacheKey, localData).catch(() => {});
+      if (!isLiveStatusEndpoint) {
+        await writeCachedResponse(cacheKey, localData).catch(() => {});
+      }
       return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });
     }
     try {
@@ -315,15 +330,21 @@ export async function apiFetch<T = Record<string, unknown>>(
         }
       }
       const data = await rawNetworkFetch(path, options);
-      writeCachedResponse(cacheKey, data).catch(() => {});
+      if (!isLiveStatusEndpoint) {
+        writeCachedResponse(cacheKey, data).catch(() => {});
+      }
       return coerceApiPayload<T>(data);
     } catch (err) {
       // Network failure or missing backend fallback (never swallow genuine HTTP 401/4xx JSON API errors)
       if (isNetworkOrBackendUnavailable(err)) {
-        const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-        if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+        if (!isLiveStatusEndpoint) {
+          const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
+          if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+        }
         const localData = await handleStandaloneApiFallback(path, options);
-        await writeCachedResponse(cacheKey, localData).catch(() => {});
+        if (!isLiveStatusEndpoint) {
+          await writeCachedResponse(cacheKey, localData).catch(() => {});
+        }
         return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });
       }
       throw err;

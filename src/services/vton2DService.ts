@@ -5,7 +5,12 @@ import {
   resolveStudioSeedUrl,
 } from '../shared/garmentTaxonomy.js';
 import { computeHeightAwareStageFraming } from '../utils/stageFramingEngine.ts';
-import { apiFetch, getStoredToken, isSampleDemoMode } from '../utils/api.ts';
+import {
+  apiFetch,
+  getStoredToken,
+  isSampleDemoMode,
+  isStaticStandaloneWithoutApi,
+} from '../utils/api.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import {
   type AvatarDominantHand,
@@ -4903,8 +4908,7 @@ function buildVtonRequestAuthHeaders(
 }
 
 export async function fetchServerGeminiConfigured(): Promise<boolean> {
-  const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
-  if (String(envBag.VITE_STATIC_STANDALONE || '') === '1') {
+  if (isStaticStandaloneWithoutApi()) {
     return false;
   }
   try {
@@ -5940,8 +5944,7 @@ export async function synthesizeGeminiMultiAngleVton(
           ? { ...profile, portraitDataUrl: effectivePortraitUrl }
           : profile;
 
-      const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
-      const isStaticStandalone = String(envBag.VITE_STATIC_STANDALONE || '') === '1';
+      const isStaticStandalone = isStaticStandaloneWithoutApi();
 
       const characterAnchorKey =
         styleMode === 'stylized_isometric' && !effectivePortraitUrl
@@ -6971,9 +6974,7 @@ export async function synthesizeProgressiveMultiAngleVton(
       ? { ...profile, portraitDataUrl: effectivePortraitUrl }
       : profile;
 
-  const envBag = (import.meta.env || {}) as Record<string, string | undefined>;
-  const isStaticStandalone = String(envBag.VITE_STATIC_STANDALONE || '') === '1';
-  if (isStaticStandalone) {
+  if (isStaticStandaloneWithoutApi()) {
     return buildEmptyOutcome('gemini_api_key_not_configured');
   }
 

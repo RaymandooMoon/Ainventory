@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApiRouter } from './api.js';
+import { createCorsMiddleware } from './cors.js';
 import db, { ROOT_DIR, UPLOADS_DIR, closeAndFlushDatabase } from './db.js';
 import { createVtonRouter } from './vtonRouter.js';
 
@@ -46,6 +47,10 @@ app.use((req, res, next) => {
   next();
 });
 
+const apiCorsMiddleware = createCorsMiddleware();
+const uploadsCorsMiddleware = createCorsMiddleware({ methods: 'GET, HEAD, OPTIONS' });
+app.use('/api', apiCorsMiddleware);
+
 app.get('/api/build-info', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ architecture: 'hig-2.5d', version: '2.5.0' });
@@ -59,6 +64,7 @@ app.use('/api', (_req, res) => {
 
 app.use(
   '/uploads',
+  uploadsCorsMiddleware,
   (_req, res, next) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('X-Content-Type-Options', 'nosniff');

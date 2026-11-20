@@ -3,6 +3,8 @@
  * (Requirements 9.a, 11.a, 13.b, 14.b)
  */
 
+import { resolveApiRuntimeConfig } from './apiRuntimeConfig.ts';
+
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type EffectiveTheme = 'light' | 'dark';
 export type HapticKind = 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'warning';
@@ -291,14 +293,18 @@ export const acknowledgeCameraNotice = setAcknowledgedCameraNotice;
 const RAW_PUBLIC_BASE_URL = String(import.meta.env?.BASE_URL || '/');
 const PUBLIC_BASE_PREFIX =
   RAW_PUBLIC_BASE_URL === '/' ? '' : RAW_PUBLIC_BASE_URL.replace(/\/+$/, '');
+const EXTERNAL_API_ORIGIN = resolveApiRuntimeConfig(import.meta.env).apiOrigin;
 
 /**
- * Resolves root-relative public static assets (`/seed/...`, `/uploads/...`, `/icon.svg`)
- * against Vite's `BASE_URL` (e.g. `/Ainventory/` on GitHub Pages) while staying a zero-overhead
- * identity function when `BASE_URL === '/'`.
+ * Resolves root-relative public static assets (`/seed/...`, `/assets/...`, `/icon.svg`)
+ * against Vite's `BASE_URL` (e.g. `/Ainventory/` on GitHub Pages) while routing backend-served
+ * `/uploads/...` images to `VITE_API_BASE_URL`'s origin whenever an external API server is active.
  */
 export function withPublicBaseUrl(rawUrl: string | null | undefined): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
+  if (rawUrl.startsWith('/uploads/') && EXTERNAL_API_ORIGIN) {
+    return `${EXTERNAL_API_ORIGIN}${rawUrl}`;
+  }
   if (!PUBLIC_BASE_PREFIX) return rawUrl;
   if (
     rawUrl.startsWith('data:') ||

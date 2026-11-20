@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Coins, Download, Flame, Plus } from 'lucide-react';
-import { apiFetch, getStoredToken } from '../utils/api.ts';
+import {
+  apiFetch,
+  getConfiguredApiBaseUrl,
+  getStoredToken,
+  isStaticStandaloneWithoutApi,
+} from '../utils/api.ts';
 import {
   localizeApiMessage,
   localizeCalendarNote,
@@ -359,11 +364,14 @@ export default function CalendarView({
   const handleExportIcs = async () => {
     let ics = '';
     const token = getStoredToken();
-    if (token && lang !== 'en') {
+    if (token && lang !== 'en' && !isStaticStandaloneWithoutApi()) {
       try {
-        const res = await fetch(`/api/calendar/ics?closet=${encodeURIComponent(activeCloset)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${getConfiguredApiBaseUrl()}/calendar/ics?closet=${encodeURIComponent(activeCloset)}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         if (res.ok) ics = await res.text();
       } catch {
         // Fallback to local ICS synthesis
