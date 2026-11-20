@@ -271,12 +271,61 @@ const BODY_SHAPE_DESCRIPTIONS = Object.freeze({
 
 const MAX_PACKSHOT_FILE_BYTES = 4 * 1024 * 1024; // 4MB max for disk garment packshots
 const MAX_DATA_URL_BYTES = 5 * 1024 * 1024; // 5MB max for inline data URLs
-const GEMINI_TIMEOUT_MS = 60000;
-const MAX_TOTAL_SYNTHESIS_MS = 110000;
+const GEMINI_TIMEOUT_MS = 90000;
+const MAX_TOTAL_SYNTHESIS_MS = 120000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v20-bag-anchor-sync-strict-qc';
+const CACHE_SCHEMA_VERSION = 'v23-nanobanana-4x2-blueprint-thinking';
 const CUTOUT_STAGE_HEX = '#94A3B8';
+const VALID_SHEET_IMAGE_SIZES = new Set(['1K', '2K', '4K']);
+const VALID_THINKING_LEVELS = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
+const POSE_BLUEPRINT_4X2_PATH = path.join(
+  ROOT_DIR,
+  'server',
+  'assets',
+  'turnaround-4x2-pose-blueprint.png'
+);
+let cachedPoseBlueprint4x2Part = null;
+
+export function resolveTurnaroundSheetImageSize() {
+  const raw = String(readServerEnvVar('GEMINI_VTON_SHEET_IMAGE_SIZE') || '2K')
+    .trim()
+    .toUpperCase();
+  return VALID_SHEET_IMAGE_SIZES.has(raw) ? raw : '2K';
+}
+
+export function resolveTurnaroundThinkingLevel() {
+  const raw = String(readServerEnvVar('GEMINI_VTON_THINKING_LEVEL') || 'HIGH')
+    .trim()
+    .toUpperCase();
+  if (raw === 'OFF' || raw === 'NONE' || raw === 'DISABLED') return null;
+  return VALID_THINKING_LEVELS.has(raw) ? raw : 'HIGH';
+}
+
+/**
+ * @param {Record<string, any> | null} [profile]
+ */
+export function buildServerPoseBlueprintPart(profile = null) {
+  if (profile && (!profile.turnaroundSheet || profile.turnaroundLayout === 'turnaround_3x2')) {
+    return null;
+  }
+  if (cachedPoseBlueprint4x2Part) {
+    return { ...cachedPoseBlueprint4x2Part };
+  }
+  try {
+    if (!fs.existsSync(POSE_BLUEPRINT_4X2_PATH)) return null;
+    const buffer = fs.readFileSync(POSE_BLUEPRINT_4X2_PATH);
+    const mimeType = detectImageMimeType(buffer);
+    if (!mimeType || buffer.length === 0) return null;
+    cachedPoseBlueprint4x2Part = {
+      mimeType,
+      data: buffer.toString('base64'),
+    };
+    return { ...cachedPoseBlueprint4x2Part };
+  } catch {
+    return null;
+  }
+}
 
 const SAFE_BASENAME_RE = /^[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
 const SAFE_SEED_REL_RE = /^(?:[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|webp)$/;
@@ -650,8 +699,8 @@ export function resolveGeminiModelChain(options = {}) {
   const preferFallbackModel = Boolean(options?.preferFallbackModel);
   const envModel = readServerEnvVar('GEMINI_VTON_MODEL');
   const candidates = preferFallbackModel
-    ? ['gemini-nano-banana-2.1', envModel, 'gemini-3.1-flash-lite-image'].filter(Boolean)
-    : [envModel, 'gemini-3.1-flash-lite-image', 'gemini-nano-banana-2.1'].filter(Boolean);
+    ? ['gemini-3.1-flash-lite-image', envModel, 'gemini-nano-banana-2.1'].filter(Boolean)
+    : [envModel, 'gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image'].filter(Boolean);
   return [...new Set(candidates)];
 }
 
@@ -1122,11 +1171,21 @@ export function normalizeVtonProfile(
       ? ((Math.round(rawSecondaryAngle) % 360) + 360) % 360
       : null;
 
+  const rawTurnaroundLayout = String(
+    extraOptions?.turnaroundLayout ?? src.turnaroundLayout ?? ''
+  ).trim();
+  const turnaroundLayout = turnaroundSheet
+    ? rawTurnaroundLayout === 'turnaround_3x2'
+      ? 'turnaround_3x2'
+      : 'turnaround_4x2'
+    : 'single';
+
   return {
     viewAngleDeg,
     styleMode,
     weatherMood,
     turnaroundSheet,
+    turnaroundLayout,
     avatarConfigHash: rawAvatarHash || null,
     gender,
     framePreset,
@@ -1410,7 +1469,9 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
  */
 export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
   const layoutKey = normalizedProfile.turnaroundSheet
-    ? 'turnaround_3x2'
+    ? normalizedProfile.turnaroundLayout === 'turnaround_3x2'
+      ? 'turnaround_3x2'
+      : 'turnaround_4x2'
     : `single_${normalizedProfile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}`;
   const styleMode = normalizedProfile.styleMode || VTON_STYLE_PRESET;
   const weatherKey =
@@ -1825,7 +1886,8 @@ function buildEditorialStyleAndBodyPrompt(
   profile,
   hasEquippedUmbrella = false,
   backdropHex = CUTOUT_STAGE_HEX,
-  hasEquippedBag = false
+  hasEquippedBag = false,
+  activeBagSpec = null
 ) {
   const pcDesc =
     PERSONAL_COLOR_DESCRIPTIONS[profile.personalColor] ||
@@ -1886,24 +1948,50 @@ function buildEditorialStyleAndBodyPrompt(
         '- Render a real, lifelike adult fashion model matching the exact casting profile below — ZERO CGI mannequin plastic sheen and ZERO cartoon outlines.',
       ];
 
+  const is4x2Sheet =
+    Boolean(profile.turnaroundSheet) && profile.turnaroundLayout !== 'turnaround_3x2';
+  const sheetBagAnatomy = hasEquippedBag
+    ? resolveBagCarryAnatomy(profile.dominantHand, activeBagSpec)
+    : null;
+
   const cameraBlock = profile.turnaroundSheet
-    ? [
-        'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (3:2 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
-        `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free studio (${backdropHex}) backdrop, including 100% flat shadowless ${backdropHex} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
-        '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER half-body, NEVER waist-up, NEVER thigh-up, NEVER crop heads, ankles, or shoes). Top Row (0°, 45°, 90°) sits strictly within y=2%..46%; Bottom Row (135°, 180°, 225°) sits strictly within y=54%..98%, leaving a clean >=6% horizontal background gutter around y=50% so Row 1 shoes and Row 2 head crowns NEVER touch or get clipped! Mandatory full-body head-to-shoe silhouette (~80% of each row height), both shoes completely visible.',
-        `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
-        `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
-        '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
-        '- TOP ROW (y=2%..46%) = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
-        `  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[0]}]` : ''}`,
-        `  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[45]}]` : ''}`,
-        `  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[90]}]` : ''} [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]`,
-        '- BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (100% FULL-BODY WITH FULL HEAD & SHOES INSIDE BOTTOM ROW):',
-        `  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show ONLY rear back-left 2/3 of head/hair and back of RIGHT EAR turned away toward SCREEN-RIGHT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[135]}]` : ''}`,
-        `  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO eyes, ZERO nose, ZERO mouth, ZERO front buttons).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[180]}]` : ''}`,
-        `  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between 270° left profile and 180° straight back; show ONLY rear back-right 2/3 of head/hair and back of LEFT EAR turned away toward SCREEN-LEFT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left, and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).${hasEquippedBag ? ` [BAG LOCK: ${resolveBagCarryAnatomy(profile.dominantHand).perAngleScreenPrompt[225]}]` : ''}`,
-        '- Render ZERO grid lines, ZERO white/grey divider bars, ZERO text, and ZERO angle numbers.',
-      ]
+    ? is4x2Sheet
+      ? [
+          'CAMERA & 8-ANGLE 4x2 FULL-BODY TURNAROUND SHEET (4:3 BORDERLESS CANVAS — EQUAL-SCALE FULL-BODY BOTH-ROWS):',
+          `- Photograph one seamless, borderless 4:3 studio turnaround contact sheet containing 8 full-body views of the same solitary subject arranged in 4 equal columns by 2 equal rows on a completely flat, solid, shadow-free ${backdropHex} studio backdrop (with flat ${backdropHex} filling every enclosed gap between arms, legs, and straps).`,
+          '- Reference Role Mapping: Use Image 1 (the 4x2 grey clay mannequin blueprint) exclusively for the 4x2 grid spacing, identical 1:1 head-to-shoe scale (~42% of total canvas height in both rows), camera angles, and head/torso/foot facing directions; replace the grey mannequin entirely with the target character identity, skin tone, hair, and equipped garments from the garment reference photos.',
+          '- Framing & EQUAL-SCALE FULL-BODY BOTH-ROWS alignment: Use one uniform eye-to-waist straight-on horizontal studio camera across all 8 figures. Top Row (0°, 45°, 90°, 135°): head crowns align at y=4% and both shoe soles rest cleanly at y=46%. Bottom Row (180°, 225°, 270°, 315°): head crowns align at y=54% and both shoe soles rest cleanly at y=96%, leaving an open horizontal gutter between rows and clear vertical gutters between all 4 columns.',
+          `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
+          `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
+          '- TOP ROW (y=4%..46%, full-body head-to-shoes, rotating clockwise toward the RIGHT edge):',
+          `  * [Row 1, Col 1 — 0° Direct Front]: Symmetrical frontal stance looking straight at the camera with full outfit front, legs, and both shoes grounded at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[0]}]` : ''}`,
+          `  * [Row 1, Col 2 — 45° Front-Right Three-Quarter]: Whole body turned 45° clockwise so nose, gaze, coat lapels, torso, and both shoe toes point diagonally toward the RIGHT border (3 o'clock); the wearer's right shoulder stands closer in the foreground on the cell's left side, both shoes grounded at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[45]}]` : ''}`,
+          `  * [Row 1, Col 3 — 90° Right Side Profile]: Pure perpendicular side profile facing straight toward the RIGHT border (3 o'clock) with one eye, nose tip, chest profile, and both shoes pointing straight right; the wearer's right shoulder and right arm face the camera directly at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[90]}]` : ''}`,
+          `  * [Row 1, Col 4 — 135° Back-Right Three-Quarter Rear]: Turned 135° away toward the RIGHT border (2 o'clock), showing the rear back of the head/hair with the back of the RIGHT EAR visible on the right edge of the head, the right shoulder blade and rear coat panel facing camera, and both shoes angled away toward the RIGHT border at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[135]}]` : ''}`,
+          '- BOTTOM ROW (y=54%..96%, full-body head-to-shoes, continuing clockwise toward the LEFT edge):',
+          `  * [Row 2, Col 1 — 180° Straight Rear Back]: Symmetrical pure back view facing directly away from camera showing the back of head/hair, centered vertical back seam, rear trousers, and both shoe heels grounded at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[180]}]` : ''}`,
+          `  * [Row 2, Col 2 — 225° Back-Left Three-Quarter Rear]: Turned away toward the LEFT border (10 o'clock), showing the rear back of the head/hair with the back of the LEFT EAR visible on the left edge of the head, the left shoulder blade and rear coat panel facing camera, and both shoes angled away toward the LEFT border at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[225]}]` : ''}`,
+          `  * [Row 2, Col 3 — 270° Left Side Profile]: Pure perpendicular side profile facing straight toward the LEFT border (9 o'clock) with one eye, nose tip, chest profile, and both shoes pointing straight left; the wearer's left shoulder and left arm face the camera directly at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[270]}]` : ''}`,
+          `  * [Row 2, Col 4 — 315° Front-Left Three-Quarter]: Whole body turned 45° counter-clockwise from front so nose, gaze, coat lapels, torso, and both shoe toes point diagonally toward the LEFT border (9 o'clock); the wearer's left shoulder stands closer in the foreground on the cell's right side, both shoes grounded at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[315]}]` : ''}`,
+          '- Keep the entire 4:3 canvas cleanly borderless and free of grid lines, divider bars, text, or numbers.',
+        ]
+      : [
+          'CAMERA & 6-ANGLE 3x2 UNDIVIDED TURNAROUND STUDIO SHEET LOCK (3:2 LANDSCAPE — 3 COLUMNS BY 2 ROWS = 6 EQUAL PORTRAIT ZONES ON ONE CONTINUOUS BORDERLESS CANVAS):',
+          `- Compose ONE continuous, completely undivided 3:2 Turnaround Studio Sheet arranged in STRICTLY 3 EQUAL COLUMNS BY 2 EQUAL ROWS = EXACTLY 6 FIGURES TOTAL (3 on Top Row, 3 on Bottom Row — NEVER 4 columns, NEVER 8 figures) directly on a 100% flat solid uniform chromakey-free studio (${backdropHex}) backdrop, including 100% flat shadowless ${backdropHex} inside EVERY enclosed gap — STRICTLY ZERO white/grey/black vertical dividing lines, ZERO horizontal dividing lines, ZERO panel borders, ZERO frames, NO studio floor horizon line, NO wall-to-floor seam, NO vignette, NO cast floor shadow, and ZERO airborne weather particles in the background.`,
+          '- CAMERA HEIGHT & FULL-BODY FRAMING LOCK: Lock ALL 6 figures (0°, 45°, 90°, 135°, 180°, 225°) to the EXACT SAME eye-to-waist level, straight-on horizontal camera, zero tilt (NEVER half-body, NEVER waist-up, NEVER thigh-up, NEVER crop heads, ankles, or shoes). Top Row (0°, 45°, 90°) sits strictly within y=2%..46%; Bottom Row (135°, 180°, 225°) sits strictly within y=54%..98%, leaving a clean >=6% horizontal background gutter around y=50% so Row 1 shoes and Row 2 head crowns NEVER touch or get clipped! Mandatory full-body head-to-shoe silhouette (~80% of each row height), both shoes completely visible.',
+          `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
+          `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
+          '- STRICT SINGLE-SUBJECT RULE (CRITICAL — ZERO DUPLICATE/TWIN MODELS): Render EXACTLY ONE (1) solitary person centered horizontally in each of the 6 zones (total 6 figures in the entire image — NEVER place two models in one zone).',
+          '- TOP ROW (y=2%..46%) = FRONT & PURE 90° LATERAL SIDE PROFILE ONLY (STRICTLY ZERO REAR VIEWS ON TOP ROW):',
+          `  * [Top-Left (Row 1, Col 1) — 0° Direct Front]: Symmetrical frontal stance, full face looking straight ahead, entire front of outfit, both shoes with 8–10% bottom margin.${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[0]}]` : ''}`,
+          `  * [Top-Center (Row 1, Col 2) — 45° Front-Right Quarter (FACING SCREEN-RIGHT ->)]: Turned 40–45° right; face, both eyes, nose, chin, front chest/lapels, and shoe toes angle clearly toward SCREEN-RIGHT (NEVER back view).${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[45]}]` : ''}`,
+          `  * [Top-Right (Row 1, Col 3) — 90° STRICT PURE ORTHOGRAPHIC SIDE PROFILE (FACING SCREEN-RIGHT ->)]: Camera strictly perpendicular (90.0°) to shoulder axis (~55% of front shoulder width); show EXACTLY ONE (1) right eye, crisp side nose bridge & tip protruding right, single right sleeve centered vertically down torso dividing front chest/lapel edge on right from upper back edge on left, and both shoes in pure horizontal side profile pointing straight to SCREEN-RIGHT.${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[90]}]` : ''} [ABSOLUTE NEGATIVE ON 90°: NEVER show broad back of both shoulders, NEVER show center-back coat vent/seam, NEVER rotate past 90° into a rear view!]`,
+          '- BOTTOM ROW (y=54%..98%) = REAR-QUARTER & SYMMETRICAL BACK VIEWS (100% FULL-BODY WITH FULL HEAD & SHOES INSIDE BOTTOM ROW):',
+          `  * [Bottom-Left (Row 2, Col 1) — 135° Back-Right Three-Quarter Rear View (FACING AWAY RIGHT ->)]: Midway between 90° right profile and 180° straight back; show ONLY rear back-left 2/3 of head/hair and back of RIGHT EAR turned away toward SCREEN-RIGHT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with RIGHT SHOULDER & outer RIGHT SLEEVE prominent, and staggered shoes pointing away right.${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[135]}]` : ''}`,
+          `  * [Bottom-Center (Row 2, Col 2) — 180° Strict Symmetrical Rear Back (ZERO FACE)]: Perpendicular shoulders, center-back seam vertical down spine, symmetrical back of head/hair, rear garment back, and straight rear shoe heels (ZERO eyes, ZERO nose, ZERO mouth, ZERO front buttons).${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[180]}]` : ''}`,
+          `  * [Bottom-Right (Row 2, Col 3) — 225° Back-Left Three-Quarter Rear View (FACING AWAY LEFT <-, OPPOSITE OF COL 1)]: Midway between 270° left profile and 180° straight back; show ONLY rear back-right 2/3 of head/hair and back of LEFT EAR turned away toward SCREEN-LEFT (ZERO eyes, ZERO nose, ZERO mouth), diagonal rear outfit with LEFT SHOULDER & outer LEFT SLEEVE prominent on the left, and staggered shoes pointing away toward SCREEN-LEFT <- (NEVER facing right!).${sheetBagAnatomy ? ` [BAG LOCK: ${sheetBagAnatomy.perAngleScreenPrompt[225]}]` : ''}`,
+          '- Render ZERO grid lines, ZERO white/grey divider bars, ZERO text, and ZERO angle numbers.',
+        ]
     : [
         'CAMERA & MULTI-ANGLE STUDIO POSE LOCK (EYE-TO-WAIST ZERO-TILT FULL-BODY & ENCLOSED-HOLE RGBA CUTOUT BACKDROP RULE):',
         `- Exact View Angle (${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°): ${cameraLock}`,
@@ -1978,14 +2066,18 @@ function appendPortraitParts(parts, profile) {
   } else {
     parts.push({
       text: isTurnaround
-        ? `[FACE & HAIR IDENTITY LOCK — 6-VIEW 3x2 TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, 135° back-right quarter, 180° straight back, and 225° back-left quarter views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+        ? profile.turnaroundLayout === 'turnaround_3x2'
+          ? `[FACE & HAIR IDENTITY LOCK — 6-VIEW 3x2 TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across 0°, 45°, 90° side profile, 135° back-right quarter, 180° straight back, and 225° back-left quarter views in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
+          : `[FACE & HAIR IDENTITY LOCK — 8-VIEW 4x2 TURNAROUND]: ${featureSummary} Maintain 100% identical facial features, cranial depth, and ${hairDesc} volume across all 8 turnaround angles (0°, 45°, 90°, 135° on top row; 180°, 225°, 270°, 315° on bottom row) in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`
         : isPureBack || isBackQuarter
           ? `[REAR HEAD & HAIR SILHOUETTE LOCK — ${isPureBack ? '180° BACK' : `${angle === -135 ? 225 : 135}° BACK-QUARTER`} VIEW]: Render ONLY the back of the head and ${hairDesc} in exact color ${profile.hairColorHex} above the nape/neck in skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}). STRICTLY ZERO eyes, ZERO nose, ZERO mouth, ZERO front face!`
           : `[FACE & HAIR IDENTITY LOCK — ${angle}° VIEW]: ${featureSummary} Render calm, natural editorial lookbook expression matching camera angle ${angle}° in ${mediumLabel} style with exact skin tone ${profile.skinToneHex} (MST-${profile.mstLevel}).`,
     });
     if (profile.styleMode === 'stylized_isometric' && profile.characterAnchorPart && !isPureBack && !isBackQuarter) {
       parts.push({
-        text: `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head body build from this reference — ONLY change the outfit to the newly equipped garments and adjust stance for the weather.`,
+        text: isTurnaround
+          ? `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head full-body build from this reference across ALL 8 FULL-BODY HEAD-TO-SHOE figures on both rows of the 4x2 sheet — ONLY change the outfit to the newly equipped garments and NEVER zoom in or crop legs/shoes on the Top Row.`
+          : `[CHARACTER IDENTITY, BODY PROPORTION & ART-STYLE ANCHOR]: Keep the EXACT SAME character face, haircut/length, matte 3D-stylized art style, and ${profile.heightCm}cm/${profile.weightKg}kg 7.5-head body build from this reference — ONLY change the outfit to the newly equipped garments and adjust stance for the weather.`,
       });
       parts.push({
         inlineData: {
@@ -1999,9 +2091,20 @@ function appendPortraitParts(parts, profile) {
 
 function buildBaseModelParts(profile) {
   const parts = [{ text: buildEditorialStyleAndBodyPrompt(profile) }];
+  const poseBlueprintPart = buildServerPoseBlueprintPart(profile);
+  if (poseBlueprintPart) {
+    parts.push({
+      text: '[IMAGE 1 — 8-ANGLE 4x2 POSE, FACING & SCALE BLUEPRINT ONLY]: Copy the exact 4-column × 2-row layout, equal full-body scale, standing posture, and head/torso/foot facing direction from Image 1 across all 8 cells. Discard the neutral grey mannequin appearance and render the specified character identity and studio base attire.',
+    });
+    parts.push({
+      inlineData: poseBlueprintPart,
+    });
+  }
   appendPortraitParts(parts, profile);
   const viewLabel = profile.turnaroundSheet
-    ? 'all 6 turnaround views (3x2 grid: 0°, 45°, 90° on top row; 135°, 180°, 225° on bottom row) with ONE solitary person per panel'
+    ? profile.turnaroundLayout === 'turnaround_3x2'
+      ? 'all 6 turnaround views (3x2 grid: 0°, 45°, 90° on top row; 135°, 180°, 225° on bottom row) with ONE solitary person per panel'
+      : 'all 8 turnaround views (4x2 grid: 0°, 45°, 90°, 135° on top row; 180°, 225°, 270°, 315° on bottom row) with ONE solitary person per panel'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}°`;
   parts.push({
     text: [
@@ -2058,7 +2161,8 @@ function buildCompositeLookParts(profile, resolvedSlots) {
         profile,
         hasEquippedUmbrella,
         backdropHex,
-        hasEquippedBag
+        hasEquippedBag,
+        activeBagSpec
       ),
     },
   ];
@@ -2119,12 +2223,24 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
     });
   }
 
+  const is4x2TurnaroundSheet =
+    Boolean(profile.turnaroundSheet) && profile.turnaroundLayout !== 'turnaround_3x2';
+  const poseBlueprintPart = is4x2TurnaroundSheet ? buildServerPoseBlueprintPart(profile) : null;
+  if (poseBlueprintPart) {
+    parts.push({
+      text: '[IMAGE 1 — 8-ANGLE 4x2 POSE, FACING & SCALE BLUEPRINT ONLY]: Copy the exact 4-column × 2-row grid spacing, equal full-body head-to-shoe scale, standing posture, and exact head/nose/foot facing direction of every cell from Image 1. Discard the neutral grey clay mannequin appearance completely and render the target character wearing the attached garment references.',
+    });
+    parts.push({
+      inlineData: poseBlueprintPart,
+    });
+  }
+
   const isFarOccludedSingleAngleBag =
     hasEquippedBag &&
     !profile.turnaroundSheet &&
     bagAnatomy.perAngleScreenSide[canonicalBagAngle] === 'far-occluded';
 
-  if (hasEquippedBag) {
+  if (hasEquippedBag && !poseBlueprintPart) {
     if (isFarOccludedSingleAngleBag) {
       parts.push({
         text: `[FAR-OCCLUDED SIDE PROFILE BAG RULE FOR ${canonicalBagAngle}° — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]} Because the camera is looking at the wearer's FREE ${bagAnatomy.freeSide.toUpperCase()} side, keep the foreground ${bagAnatomy.freeSide.toUpperCase()} shoulder and arm 100% empty and unobstructed (ZERO strap or handle on the foreground shoulder/arm; the bag remains mostly occluded behind the torso on the far ${bagAnatomy.carrySide.toUpperCase()} side).`,
@@ -2167,7 +2283,9 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
     Boolean(resolvedSlots.jwl_wrist_left && resolvedSlots.jwl_wrist_right) ||
     Boolean(resolvedSlots.jwl_ring_left && resolvedSlots.jwl_ring_right);
   const viewScopeText = profile.turnaroundSheet
-    ? 'ALL 6 TURNAROUND VIEWS (3x2 grid: 0° Front, 45° Quarter, 90° Side on Top Row; 135° Back-Right, 180° Back, 225° Back-Left on Bottom Row — ONE solitary person per panel)'
+    ? profile.turnaroundLayout === 'turnaround_3x2'
+      ? 'ALL 6 TURNAROUND VIEWS (3x2 grid: 0° Front, 45° Quarter, 90° Side on Top Row; 135° Back-Right, 180° Back, 225° Back-Left on Bottom Row — ONE solitary person per panel)'
+      : 'ALL 8 TURNAROUND VIEWS (4x2 grid: 0° Front, 45° Front-Right, 90° Right Side, 135° Back-Right on Top Row; 180° Back, 225° Back-Left, 270° Left Side, 315° Front-Left on Bottom Row — ONE solitary person per panel)'
     : `${profile.viewAngleDeg ?? DEFAULT_ISO_VIEW_ANGLE}° VIEW`;
 
   const layeringRules = [
@@ -2248,11 +2366,17 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
 
   if (hasEquippedBag) {
     parts.push({
-      text: `[CRITICAL CROSS-ANGLE BAG SHOULDER, STRAP & HAND-ROLE LOCK]: ${bagAnatomy.crossAngleLockPrompt}${
-        profile.dominantHand === 'left' && bagAnatomy.bagCarryStyle !== 'backpack'
-          ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally onto the wearer\'s RIGHT side!'
-          : ''
-      }`,
+      text: is4x2TurnaroundSheet
+        ? `[BAG CARRY & HANDEDNESS LOCK — has_strap=${bagAnatomy.hasStrap}, carry_style=${bagAnatomy.bagCarryStyle}, dominant_hand=${bagAnatomy.dominantHand}]: Keep the bag consistently on the wearer's ANATOMICAL ${bagAnatomy.carrySide.toUpperCase()} side across all 8 angles while keeping the wearer's ANATOMICAL ${bagAnatomy.freeSide.toUpperCase()} side free, matching each cell's [Bag: ...] note above.${
+            profile.dominantHand === 'left' && bagAnatomy.bagCarryStyle !== 'backpack'
+              ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally onto the wearer\'s ANATOMICAL RIGHT side!'
+              : ''
+          }`
+        : `[CRITICAL CROSS-ANGLE BAG SHOULDER, STRAP & HAND-ROLE LOCK]: ${bagAnatomy.crossAngleLockPrompt}${
+            profile.dominantHand === 'left' && bagAnatomy.bagCarryStyle !== 'backpack'
+              ? ' [BAG ASSET MIRRORING ACTIVE]: Because the user profile handedness is set to LEFT-HANDED, mirror the attached bag reference asset horizontally onto the wearer\'s RIGHT side!'
+              : ''
+          }`,
     });
   }
   for (const slot of equippedKeys) {
@@ -2418,18 +2542,56 @@ function paintGuideCellWithMirroredBag(
   const waistY = topY + headH * 3.1;
   const crotchY = topY + headH * 4.05;
   const bodyRgb = [108, 122, 142];
+  const shoeRgb = [44, 52, 64];
   const bagRgb = [196, 132, 68];
+  const shoeH = Math.max(4, headH * 0.42);
+  const ankleY = botY - shoeH;
 
-  // Head
+  // Head + anatomically accurate facing cue: nose protrusion on facing edge, ear on rear edge
   fillRgbRect(rgbBuf, imgW, imgH, cx - headH * 0.34, topY, headH * 0.68, headH * 0.94, bodyRgb);
+  const obliqueFacingSign =
+    normalizedAngle === 45 || normalizedAngle === 90 || normalizedAngle === 135
+      ? 1
+      : normalizedAngle === 225 || normalizedAngle === 270 || normalizedAngle === 315
+        ? -1
+        : 0;
+  if (obliqueFacingSign !== 0) {
+    const noseX = obliqueFacingSign > 0 ? cx + headH * 0.30 : cx - headH * 0.42;
+    const earX = obliqueFacingSign > 0 ? cx - headH * 0.34 : cx + headH * 0.22;
+    fillRgbRect(rgbBuf, imgW, imgH, noseX, topY + headH * 0.36, headH * 0.12, headH * 0.20, bodyRgb);
+    fillRgbRect(rgbBuf, imgW, imgH, earX, topY + headH * 0.34, headH * 0.12, headH * 0.28, shoeRgb);
+  }
   // Torso
   fillRgbRect(rgbBuf, imgW, imgH, cx - shoulderW * 0.5, shoulderY, shoulderW, crotchY - shoulderY, bodyRgb);
-  // Legs
+  // Legs + distinct directional dark shoes at bottom of every cell (anchors full-body scale & facing in both rows)
   if (isSide) {
-    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.28, crotchY, hipW * 0.56, botY - crotchY, bodyRgb);
+    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.28, crotchY, hipW * 0.56, ankleY - crotchY, bodyRgb);
+    const toeShift = normalizedAngle === 90 ? 0.14 : -0.34;
+    fillRgbRect(rgbBuf, imgW, imgH, cx + hipW * toeShift, ankleY, hipW * 0.72, shoeH, shoeRgb);
   } else {
-    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.42, crotchY, hipW * 0.34, botY - crotchY, bodyRgb);
-    fillRgbRect(rgbBuf, imgW, imgH, cx + hipW * 0.08, crotchY, hipW * 0.34, botY - crotchY, bodyRgb);
+    fillRgbRect(rgbBuf, imgW, imgH, cx - hipW * 0.42, crotchY, hipW * 0.34, ankleY - crotchY, bodyRgb);
+    fillRgbRect(rgbBuf, imgW, imgH, cx + hipW * 0.08, crotchY, hipW * 0.34, ankleY - crotchY, bodyRgb);
+    const obliqueToeShift = obliqueFacingSign * hipW * 0.14;
+    fillRgbRect(
+      rgbBuf,
+      imgW,
+      imgH,
+      cx - hipW * 0.46 + obliqueToeShift,
+      ankleY,
+      hipW * 0.42,
+      shoeH,
+      shoeRgb
+    );
+    fillRgbRect(
+      rgbBuf,
+      imgW,
+      imgH,
+      cx + hipW * 0.04 + obliqueToeShift,
+      ankleY,
+      hipW * 0.42,
+      shoeH,
+      shoeRgb
+    );
   }
 
   const placement = computeBagAssetPlacementBox({
@@ -2485,6 +2647,11 @@ function paintGuideCellWithMirroredBag(
   }
 }
 
+/**
+ * @param {Record<string, any>} profile
+ * @param {string} [backdropHex]
+ * @param {{ hasStrap?: boolean | null, bagCarryStyle?: string | null } | null} [bagSpec]
+ */
 export function buildServerBagPositionGuidePngPart(
   profile,
   backdropHex = CUTOUT_STAGE_HEX,
@@ -2494,15 +2661,18 @@ export function buildServerBagPositionGuidePngPart(
     const bgRgb = parseHexToRgbTuple(backdropHex, [148, 163, 184]);
     const handedness = normalizeHandedness(profile?.dominantHand, 'right');
     if (profile?.turnaroundSheet) {
-      const w = 360;
-      const h = 240;
+      const is3x2 = profile?.turnaroundLayout === 'turnaround_3x2';
+      const cols = is3x2 ? 3 : 4;
+      const angles = is3x2 ? LEGACY_SHEET_6_ANGLES : TURNAROUND_ANGLES;
+      const w = is3x2 ? 360 : 480;
+      const h = is3x2 ? 240 : 360;
       const buf = Buffer.alloc(w * h * 3);
       fillRgbRect(buf, w, h, 0, 0, w, h, bgRgb);
-      const cellW = w / 3;
+      const cellW = w / cols;
       const cellH = h / 2;
-      for (let i = 0; i < LEGACY_SHEET_6_ANGLES.length; i += 1) {
-        const col = i % 3;
-        const row = Math.floor(i / 3);
+      for (let i = 0; i < angles.length; i += 1) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
         paintGuideCellWithMirroredBag(
           buf,
           w,
@@ -2511,7 +2681,7 @@ export function buildServerBagPositionGuidePngPart(
           row * cellH,
           cellW,
           cellH,
-          LEGACY_SHEET_6_ANGLES[i],
+          angles[i],
           handedness,
           bagSpec
         );
@@ -2623,8 +2793,8 @@ function classifyGeminiHttpError(statusCode, errStatus, errMsg, generationConfig
     return { action: 'return', reason: 'gemini_invalid_api_key' };
   }
 
-  // If a model version rejects `imageConfig`, retry seamlessly without `imageConfig`
-  if (statusCode === 400 && generationConfig?.imageConfig) {
+  // If a model version rejects `imageConfig` or `thinkingConfig`, retry seamlessly with the next fallback config
+  if (statusCode === 400 && (generationConfig?.imageConfig || generationConfig?.thinkingConfig)) {
     return { action: 'continue', reason: null };
   }
 
@@ -2705,21 +2875,35 @@ async function generateWithGeminiModelChain(
       model === 'gemini-nano-banana-2.1' ||
       model === 'gemini-3-pro-image' ||
       model.includes('pro-image');
+    const is4x2Sheet = isTurnaroundSheet && options?.turnaroundLayout !== 'turnaround_3x2';
+    const sheetAspectRatio = is4x2Sheet ? '4:3' : '3:2';
+    const sheetImageSize = resolveTurnaroundSheetImageSize();
+    const sheetThinkingLevel = isTurnaroundSheet ? resolveTurnaroundThinkingLevel() : null;
+    const thinkingCfgObj =
+      supportsImageSize && sheetThinkingLevel
+        ? { thinkingConfig: { thinkingLevel: sheetThinkingLevel } }
+        : {};
 
     const requestConfigs = isTurnaroundSheet
       ? supportsImageSize
         ? [
             {
               responseModalities: ['IMAGE'],
-              imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
+              imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
+              ...thinkingCfgObj,
             },
             {
               responseModalities: ['TEXT', 'IMAGE'],
-              imageConfig: { aspectRatio: '3:2', imageSize: '1K' },
+              imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
+              ...thinkingCfgObj,
+            },
+            {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
             },
             {
               responseModalities: ['TEXT', 'IMAGE'],
-              imageConfig: { aspectRatio: '3:2' },
+              imageConfig: { aspectRatio: sheetAspectRatio },
             },
             {
               responseModalities: ['IMAGE'],
@@ -2728,11 +2912,11 @@ async function generateWithGeminiModelChain(
         : [
             {
               responseModalities: ['IMAGE'],
-              imageConfig: { aspectRatio: '3:2' },
+              imageConfig: { aspectRatio: sheetAspectRatio },
             },
             {
               responseModalities: ['TEXT', 'IMAGE'],
-              imageConfig: { aspectRatio: '3:2' },
+              imageConfig: { aspectRatio: sheetAspectRatio },
             },
             {
               responseModalities: ['IMAGE'],
@@ -2800,6 +2984,9 @@ async function generateWithGeminiModelChain(
               responseModalities,
               ...(generationConfig.imageConfig
                 ? { imageConfig: generationConfig.imageConfig }
+                : {}),
+              ...(generationConfig.thinkingConfig
+                ? { thinkingConfig: generationConfig.thinkingConfig }
                 : {}),
               abortSignal: AbortSignal.timeout(attemptTimeoutMs),
             },
@@ -2926,7 +3113,7 @@ export function getVtonServiceStatus() {
     turnaroundAngles: [...TURNAROUND_ANGLES],
     geminiConfigured: Boolean(apiKey || vertexCfg.enabled),
     vertexConfigured: Boolean(vertexCfg.enabled),
-    model: modelChain[0] || 'gemini-3.1-flash-lite-image',
+    model: modelChain[0] || 'gemini-nano-banana-2.1',
     cacheEntries: countTotalCacheEntries(),
   };
 }
@@ -2975,6 +3162,8 @@ export async function synthesizeVtonLook(params = {}) {
       turnaroundSheet: Boolean(
         params.turnaroundSheet ?? rawProfile?.turnaroundSheet ?? false
       ),
+      turnaroundLayout:
+        params.turnaroundLayout ?? rawProfile?.turnaroundLayout ?? null,
       masterAnchorDataUrl:
         params.masterAnchorDataUrl ?? rawProfile?.masterAnchorDataUrl ?? null,
       secondaryAnchorDataUrl:
@@ -3010,7 +3199,9 @@ export async function synthesizeVtonLook(params = {}) {
   const skipCacheWrite = Boolean(params.skipCacheWrite);
   const equippedSlots = Object.keys(resolvedSlots);
   const isBaseOnlyLook = equippedSlots.length === 0;
-  const layout = normalizedProfile.turnaroundSheet ? 'turnaround_3x2' : 'single';
+  const layout = normalizedProfile.turnaroundSheet
+    ? normalizedProfile.turnaroundLayout
+    : 'single';
 
   const studioBackdropHex = selectOptimalStudioKeyHex(
     equippedSlots.map((slot) => {
@@ -3130,7 +3321,10 @@ export async function synthesizeVtonLook(params = {}) {
               apiKey,
               modelChain,
               vertexCfg,
-              { turnaroundSheet: normalizedProfile.turnaroundSheet }
+              {
+                turnaroundSheet: normalizedProfile.turnaroundSheet,
+                turnaroundLayout: normalizedProfile.turnaroundLayout,
+              }
             );
         let finalLayout = layout;
         let finalBaseCacheKey = baseCacheKey;
@@ -3208,7 +3402,10 @@ export async function synthesizeVtonLook(params = {}) {
             apiKey,
             modelChain,
             vertexCfg,
-            { turnaroundSheet: normalizedProfile.turnaroundSheet }
+            {
+              turnaroundSheet: normalizedProfile.turnaroundSheet,
+              turnaroundLayout: normalizedProfile.turnaroundLayout,
+            }
           );
 
       const basePromise = !includeBaseModel
@@ -3225,7 +3422,10 @@ export async function synthesizeVtonLook(params = {}) {
               apiKey,
               modelChain,
               vertexCfg,
-              { turnaroundSheet: normalizedProfile.turnaroundSheet }
+              {
+                turnaroundSheet: normalizedProfile.turnaroundSheet,
+                turnaroundLayout: normalizedProfile.turnaroundLayout,
+              }
             );
 
       const [initialComboRes, baseRes] = await Promise.all([comboPromise, basePromise]);

@@ -20,8 +20,10 @@ export interface WeatherContextInput {
   liveCondition?: EffectiveWeatherMode;
 }
 
-export const CUTOUT_PIPELINE_VERSION = 'v20-bag-anchor-sync-strict-qc';
+export const CUTOUT_PIPELINE_VERSION = 'v23-nanobanana-4x2-rear-order';
 export const LEGACY_CUTOUT_PIPELINE_VERSIONS = [
+  'v22-nanobanana-4x2-4x3-fullbody',
+  'v20-bag-anchor-sync-strict-qc',
   'v19-facing-lock-archscale',
   'v18-body45-scale-dock',
   'v17-seq-8angle-3d-baglock',

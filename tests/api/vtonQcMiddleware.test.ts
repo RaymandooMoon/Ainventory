@@ -441,4 +441,46 @@ describe('Server-Side VTON QC Middleware (3x Retry, Failure Logging & Positive-O
     assert.equal(flatEntry.frontOnlyDegraded, false);
     assert.deepEqual(flatEntry.reasons, ['0:clipped_top forged_line']);
   });
+
+  it('caps Nano Banana 4x2 turnaround sheets to strictly 1 API call with zero paid retries or cache eviction', async () => {
+    scenario = 'all_fail_rescue';
+    observedCalls = [];
+    invalidatedCacheKeys = [];
+    if (fs.existsSync(qcLogPath)) fs.rmSync(qcLogPath);
+
+    const res = await fetch(`${baseUrl}/api/vton/synthesize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Mode': 'sample',
+      },
+      body: JSON.stringify({
+        turnaroundSheet: true,
+        turnaroundLayout: 'turnaround_4x2',
+        skipVisionQc: true,
+        viewAngleDeg: 0,
+        slots: { outer: { id: 1, category: 'outer', name: '카멜 코트', color_hex: '#B08048' } },
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      ok?: boolean;
+      qcStatus?: string;
+      qcPassed?: boolean;
+      qcAttempts?: number;
+      frontOnlyDegraded?: boolean;
+      compositeImageUrl?: string;
+    };
+
+    assert.equal(body.ok, true);
+    assert.equal(body.qcStatus, 'single_shot_budget_pass');
+    assert.equal(body.qcPassed, true);
+    assert.equal(body.qcAttempts, 1);
+    assert.equal(body.frontOnlyDegraded, false);
+    assert.match(String(body.compositeImageUrl), /^data:image\/png;base64,/);
+    assert.equal(observedCalls.length, 1);
+    assert.equal(invalidatedCacheKeys.length, 0);
+    assert.equal(fs.existsSync(qcLogPath), false);
+  });
 });

@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Award,
   Briefcase,
@@ -8,8 +9,10 @@ import {
   CloudRain,
   CloudSun,
   Coffee,
+  Download,
   Flame,
   History,
+  Image as ImageIcon,
   Layers,
   RefreshCw,
   Snowflake,
@@ -19,6 +22,8 @@ import {
   Wind,
   X,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import {
@@ -96,6 +101,10 @@ import {
   formatWeatherCapsuleDateTime,
   resolveEffectiveClientTimeOfDay,
 } from '../utils/tomorrowPromptPolicy.ts';
+import {
+  stepTurnaroundInertia,
+  wrapSignedAngleDeg,
+} from '../utils/turnaroundPhysics.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
@@ -138,6 +147,9 @@ function preloadImageUrls(urls) {
       const img = new Image();
       img.decoding = 'async';
       img.src = url;
+      if (typeof img.decode === 'function') {
+        img.decode().catch(() => {});
+      }
     }
   }
 }
@@ -343,13 +355,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     angle360ToSignedScrollDeg(viewAngleDeg, 0)
   );
   const [scrollResidualYawDeg, setScrollResidualYawDeg] = useState(0);
+  const [angularVelocityDegPerSec, setAngularVelocityDegPerSec] = useState(0);
   const isScrubbingScrollRef = useRef(false);
+  const isInertiaActiveRef = useRef(false);
   const angleScrollRef = useRef(angleScrollDeg);
+  const lastScrollSampleRef = useRef({ deg: angleScrollDeg, ts: 0 });
+  const inertiaRafRef = useRef(null);
 
   const viewAngleRef = useRef(viewAngleDeg);
   useEffect(() => {
     viewAngleRef.current = viewAngleDeg;
-    if (!isScrubbingScrollRef.current) {
+    if (!isScrubbingScrollRef.current && !isInertiaActiveRef.current) {
       setAngleScrollDeg((prev) => {
         const next = angle360ToSignedScrollDeg(viewAngleDeg, prev);
         angleScrollRef.current = next;
@@ -374,7 +390,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearTimeout(id);
     }
     spinTimersRef.current = [];
+    if (inertiaRafRef.current !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(inertiaRafRef.current);
+      inertiaRafRef.current = null;
+    }
+    isInertiaActiveRef.current = false;
+    setAngularVelocityDegPerSec(0);
   }, []);
+
+  useEffect(() => clearSpinTimers, [clearSpinTimers]);
 
   const flashSwipeAngleBadge = useCallback(() => {
     setSwipeHudBadgeVisible(true);
@@ -400,30 +424,87 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const handleSwipeRotate = useCallback(
-    ({ stepSign, fastFlick }) => {
+    ({ stepSign, fastFlick, velocityPxPerMs }) => {
       clearSpinTimers();
       isScrubbingScrollRef.current = false;
-      setScrollResidualYawDeg(0);
       const sign = stepSign >= 0 ? 1 : -1;
       const startAngle = viewAngleRef.current;
       flashSwipeAngleBadge();
 
-      if (!fastFlick) {
-        commitAngleDeg(startAngle + sign * 45);
+      const reducedMotion =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (reducedMotion || typeof requestAnimationFrame !== 'function') {
+        setScrollResidualYawDeg(0);
+        setAngularVelocityDegPerSec(0);
+        commitAngleDeg(fastFlick ? startAngle + 180 : startAngle + sign * 45);
+        triggerHaptic('selection');
         return;
       }
 
-      // Fast flick (velocity >= 0.8 px/ms): rapid 4-step 180° opposite-view spin
-      const step1 = normalizeTurnaround360Angle(startAngle + sign * 45);
-      const step2 = normalizeTurnaround360Angle(startAngle + sign * 90);
-      const step3 = normalizeTurnaround360Angle(startAngle + sign * 135);
-      const step4Opposite = normalizeTurnaround360Angle(startAngle + 180);
+      const safeSpeed = Number.isFinite(velocityPxPerMs) ? Math.abs(velocityPxPerMs) : 0.45;
+      const startContinuous = angleScrollRef.current;
+      let physicsState = fastFlick
+        ? {
+            angleDeg: startContinuous,
+            velocityDegPerSec: Math.min(1080, Math.max(660, safeSpeed * 660)) * sign,
+            targetDetentDeg: null,
+          }
+        : {
+            angleDeg: startContinuous,
+            velocityDegPerSec: Math.min(440, Math.max(240, safeSpeed * 420)) * sign,
+            targetDetentDeg: Math.round(startContinuous / 45) * 45 + sign * 45,
+          };
 
-      commitAngleDeg(step1);
-      const t2 = setTimeout(() => commitAngleDeg(step2), 28);
-      const t3 = setTimeout(() => commitAngleDeg(step3), 56);
-      const t4 = setTimeout(() => commitAngleDeg(step4Opposite), 84);
-      spinTimersRef.current = [t2, t3, t4];
+      // Immediately advance one 45° step on normal swipe so tap/swipe feedback feels zero-latency
+      if (!fastFlick) {
+        commitAngleDeg(startAngle + sign * 45);
+        triggerHaptic('selection');
+      }
+
+      isInertiaActiveRef.current = true;
+      let lastCommitted360 = viewAngleRef.current;
+      let lastTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+      const stepFrame = (nowTs) => {
+        const dtSec = Math.min(0.05, Math.max(0.004, (nowTs - lastTs) / 1000));
+        lastTs = nowTs;
+
+        const next = stepTurnaroundInertia(physicsState, {
+          dtSec,
+          reducedMotion: false,
+        });
+        physicsState = {
+          angleDeg: next.angleDeg,
+          velocityDegPerSec: next.velocityDegPerSec,
+          targetDetentDeg: next.targetDetentDeg,
+        };
+
+        const wrappedScroll = wrapSignedAngleDeg(next.angleDeg);
+        angleScrollRef.current = wrappedScroll;
+        setAngleScrollDeg(wrappedScroll);
+        setScrollResidualYawDeg(next.residualYawDeg);
+        setAngularVelocityDegPerSec(next.velocityDegPerSec);
+
+        if (next.snappedAngle360 !== lastCommitted360) {
+          lastCommitted360 = next.snappedAngle360;
+          commitAngleDeg(next.snappedAngle360);
+          triggerHaptic('selection');
+        }
+
+        if (next.settled) {
+          inertiaRafRef.current = null;
+          isInertiaActiveRef.current = false;
+          setScrollResidualYawDeg(0);
+          setAngularVelocityDegPerSec(0);
+          return;
+        }
+        inertiaRafRef.current = requestAnimationFrame(stepFrame);
+      };
+
+      inertiaRafRef.current = requestAnimationFrame(stepFrame);
     },
     [clearSpinTimers, commitAngleDeg, flashSwipeAngleBadge]
   );
@@ -433,12 +514,23 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearSpinTimers();
       const rawVal = Number(e.target.value);
       const nextScroll = resolveSignedAngleScrollState(rawVal);
+      const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const prevSample = lastScrollSampleRef.current;
+      const dtSec = prevSample.ts > 0 ? Math.max(0.008, (nowTs - prevSample.ts) / 1000) : 0.016;
+      const instVel =
+        prevSample.ts > 0 && nowTs - prevSample.ts < 140
+          ? (nextScroll.clampedScrollDeg - prevSample.deg) / dtSec
+          : 0;
+      lastScrollSampleRef.current = { deg: nextScroll.clampedScrollDeg, ts: nowTs };
+
       isScrubbingScrollRef.current = true;
       angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
       setScrollResidualYawDeg(nextScroll.residualYawDeg);
+      setAngularVelocityDegPerSec(instVel);
       if (viewAngleRef.current !== nextScroll.angle360) {
         commitAngleDeg(nextScroll.angle360);
+        triggerHaptic('selection');
       }
       flashSwipeAngleBadge();
     },
@@ -447,6 +539,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleAngleScrollRelease = useCallback(() => {
     isScrubbingScrollRef.current = false;
+    setAngularVelocityDegPerSec(0);
     if (Math.abs(angleScrollRef.current) >= 158) {
       const snappedEnd = angleScrollRef.current < 0 ? -180 : 180;
       angleScrollRef.current = snappedEnd;
@@ -463,7 +556,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
       setScrollResidualYawDeg(0);
+      setAngularVelocityDegPerSec(0);
       commitAngleDeg(nextScroll.angle360);
+      triggerHaptic('selection');
       flashSwipeAngleBadge();
     },
     [clearSpinTimers, commitAngleDeg, flashSwipeAngleBadge]
@@ -609,6 +704,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [historyItems, setHistoryItems] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [lookMenuOpen, setLookMenuOpen] = useState(false);
+  const [originalModalOpen, setOriginalModalOpen] = useState(false);
+  const [originalModalZoomed, setOriginalModalZoomed] = useState(false);
+  const [originalImgDims, setOriginalImgDims] = useState(null);
   const [pinnedHistoryItem, setPinnedHistoryItem] = useState(null);
   const [dayKey, setDayKey] = useState(() => getLocalDayKey());
   const [clockNow, setClockNow] = useState(() => new Date());
@@ -835,11 +933,19 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
   }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
-  // Dismiss open `기록` or `Look 1/2` popover cleanly on Escape key
+  // Dismiss open `기록`, `Look 1/2` popover, or `원본 보기` lightbox cleanly on Escape key
   useEffect(() => {
-    if (!historyOpen && !lookMenuOpen) return undefined;
+    if (!historyOpen && !lookMenuOpen && !originalModalOpen) return undefined;
     const handleKeyDown = (ev) => {
       if (ev.key !== 'Escape' || ev.defaultPrevented) return;
+      if (originalModalOpen) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation?.();
+        setOriginalModalOpen(false);
+        setOriginalModalZoomed(false);
+        return;
+      }
       if (
         typeof document !== 'undefined' &&
         document.querySelector(
@@ -856,7 +962,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyOpen, lookMenuOpen]);
+  }, [historyOpen, lookMenuOpen, originalModalOpen]);
 
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
@@ -1009,6 +1115,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
       scenarioVtonSnapshotsRef.current[targetKey] = {
         imageUrl: imageUrl || prev.imageUrl || nextSlices[0] || null,
+        sheetImageUrl: meta?.sheetImageUrl ?? prev.sheetImageUrl ?? null,
         angleSlices: nextSlices,
         frontOnlyDegraded: Boolean(meta?.frontOnlyDegraded),
         notificationPopup: meta?.frontOnlyDegraded ? meta.notificationPopup || null : null,
@@ -1396,6 +1503,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
     if (syncHit) {
       const siblingMap = {};
+      let foundSheetUrl = syncHit.sheetImageUrl || null;
       for (const deg of TURNAROUND_ANGLES) {
         const mem = peekMemoryAiVtonSlice({
           avatarConfigHash: snap.resolvedAvatarHash,
@@ -1407,6 +1515,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         if (mem?.imageUrl) {
           siblingMap[deg] = mem.imageUrl;
         }
+        if (mem?.sheetImageUrl && (deg === 0 || !foundSheetUrl)) {
+          foundSheetUrl = mem.sheetImageUrl;
+        }
       }
       const needsRemainingAngles = shouldResumeIncompleteTurnaround({
         cachedSlices: siblingMap,
@@ -1417,7 +1528,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         scenarioVtonKey,
         siblingMap[snap.canonicalSliceAngle] ? snap.canonicalSliceAngle : 0,
         syncHit.imageUrl,
-        siblingMap
+        siblingMap,
+        foundSheetUrl ? { sheetImageUrl: foundSheetUrl } : null
       );
       forceBypassCacheRef.current = false;
       userApprovedGenRef.current = false;
@@ -1542,9 +1654,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           const siblingMap = {
             [hitAngle]: idbHit.slice.imageUrl,
           };
+          let foundSheetUrl = idbHit.slice.sheetImageUrl || null;
           siblingHits.forEach((h, idx) => {
             if (h?.slice?.imageUrl) {
               siblingMap[siblingAngles[idx]] = h.slice.imageUrl;
+            }
+            if (h?.slice?.sheetImageUrl && (siblingAngles[idx] === 0 || !foundSheetUrl)) {
+              foundSheetUrl = h.slice.sheetImageUrl;
             }
           });
           const existingSnap = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
@@ -1553,12 +1669,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             hitAngle,
             idbHit.slice.imageUrl,
             siblingMap,
-            existingSnap?.frontOnlyDegraded
-              ? {
-                  frontOnlyDegraded: true,
-                  notificationPopup: existingSnap.notificationPopup || null,
-                }
-              : null
+            {
+              ...(existingSnap?.frontOnlyDegraded
+                ? {
+                    frontOnlyDegraded: true,
+                    notificationPopup: existingSnap.notificationPopup || null,
+                  }
+                : {}),
+              ...(foundSheetUrl ? { sheetImageUrl: foundSheetUrl } : {}),
+            }
           );
           preloadImageUrls(Object.values(siblingMap));
 
@@ -1844,7 +1963,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             viewAngleDeg: 0,
             styleMode: liveSnap.styleMode,
             weather: liveSnap.weather,
-            turnaroundSheet: false,
+            turnaroundSheet: true,
+            turnaroundLayout: 'turnaround_4x2',
             theme: liveSnap.resolvedTheme,
             legacyMode: liveSnap.rawLegacyMode,
             forceRefresh: isForceBypass,
@@ -1862,6 +1982,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 {
                   frontOnlyDegraded: false,
                   notificationPopup: null,
+                  sheetImageUrl: payload.sheetImageUrl || null,
                 }
               );
               flashJustLitAngle(payload.angleDeg);
@@ -1913,6 +2034,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             {
               frontOnlyDegraded: isFrontOnly,
               notificationPopup: isFrontOnly ? outcome.notificationPopup || null : null,
+              sheetImageUrl: outcome.sheetImageUrl || null,
             }
           );
           setAiLoading(false);
@@ -2281,10 +2403,108 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     stageMode === 'ai-vton' && !isHoldingForFirstLookCountdown
       ? availableAiImageUrl
       : null;
+
+  const resolvedOriginalSheetUrl = useMemo(() => {
+    void scenarioSnapEpoch;
+    void historyCount;
+    if (isShowingPinnedHistory && pinnedHistoryItem) {
+      return pinnedHistoryItem.sheetImageUrl || null;
+    }
+    const snapEntry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    if (snapEntry?.sheetImageUrl) {
+      return snapEntry.sheetImageUrl;
+    }
+    if (!forceRefresh) {
+      const zeroMem = peekMemoryAiVtonSlice({
+        avatarConfigHash: resolvedAvatarHash,
+        outfitComboId,
+        styleMode,
+        effectiveWeather: vtonEffectiveWeather,
+        angleDeg: 0,
+      });
+      if (zeroMem?.sheetImageUrl) return zeroMem.sheetImageUrl;
+      if (memorySlice?.sheetImageUrl) return memorySlice.sheetImageUrl;
+      const matchingHistory = historyItems.find(
+        (it) =>
+          it.outfitComboId === outfitComboId &&
+          it.avatarConfigHash === resolvedAvatarHash &&
+          it.styleMode === styleMode &&
+          (!it.effectiveWeather || it.effectiveWeather === vtonEffectiveWeather) &&
+          Boolean(it.sheetImageUrl)
+      );
+      if (matchingHistory?.sheetImageUrl) return matchingHistory.sheetImageUrl;
+    }
+    return null;
+  }, [
+    scenarioSnapEpoch,
+    historyCount,
+    isShowingPinnedHistory,
+    pinnedHistoryItem,
+    scenarioVtonKey,
+    forceRefresh,
+    resolvedAvatarHash,
+    outfitComboId,
+    styleMode,
+    vtonEffectiveWeather,
+    memorySlice,
+    historyItems,
+  ]);
+
+  const originalModalImageUrl = resolvedOriginalSheetUrl || resolvedAiImageUrl || null;
+  const hasRawOriginalSheet = Boolean(resolvedOriginalSheetUrl);
   const canReturnToCharacter =
     !resolvedAiImageUrl &&
     Boolean(availableAiImageUrl) &&
     !isHoldingForFirstLookCountdown;
+  const showOriginalImageLink = Boolean(
+    resolvedAiImageUrl && stageMode === 'ai-vton' && !canReturnToCharacter && !postLoginRevealActive
+  );
+  const effectiveOriginalModalOpen = Boolean(originalModalOpen && originalModalImageUrl);
+
+  const handleOpenOriginalImage = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    triggerHaptic('selection');
+    setHistoryOpen(false);
+    setLookMenuOpen(false);
+    setOriginalModalZoomed(false);
+    setOriginalModalOpen(true);
+  }, []);
+
+  const handleCloseOriginalModal = useCallback((e) => {
+    e?.stopPropagation?.();
+    setOriginalModalOpen(false);
+    setOriginalModalZoomed(false);
+  }, []);
+
+  const handleDownloadOriginalImage = useCallback(
+    async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!originalModalImageUrl || typeof document === 'undefined') return;
+      try {
+        const resp = await fetch(originalModalImageUrl);
+        const blob = await resp.blob();
+        const ext = blob.type.includes('webp')
+          ? 'webp'
+          : blob.type.includes('jpeg') || blob.type.includes('jpg')
+            ? 'jpg'
+            : 'png';
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `invtry-nanobanana-original-${Date.now()}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+      } catch {
+        // Ignore download failure on restricted environments
+      }
+    },
+    [originalModalImageUrl]
+  );
+
   const showStageBgPickerBtn = Boolean(stageMode !== 'flatlay' && !canReturnToCharacter);
 
   const readyCanonicalAngles = useMemo(() => {
@@ -2561,7 +2781,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     const el = viewerRootRef.current;
     if (!el) return;
     el.style.setProperty('--stage-char-rim-shadow', stageLightingFrame.characterRimDropShadow);
-  }, [stageLightingFrame.characterRimDropShadow]);
+    el.style.setProperty(
+      '--stage-char-ambient-brightness',
+      stageLightingFrame.characterAmbientBrightness.toFixed(3)
+    );
+  }, [stageLightingFrame.characterRimDropShadow, stageLightingFrame.characterAmbientBrightness]);
 
   useEffect(() => {
     const el = wornSlotsDockRef.current;
@@ -2964,6 +3188,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         onFloorPlacementChange={handleFloorPlacementChange}
         threeStageAvailable={threeStageAvailable}
         auraTier={auraTier}
+        angularVelocityDegPerSec={angularVelocityDegPerSec}
         postLoginRevealActive={postLoginRevealActive}
         postLoginProgress={postLoginProgress}
         onUserInteractFlatLay={handleUserInteractFlatLay}
@@ -3397,13 +3622,51 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom-Left HUD Stack: [Single Look 1/2 Selector Button] above [Saved AI Fitting History Button] */}
+      {/* Bottom-Left HUD Stack: [Original Image Link] above [Single Look 1/2 Selector Button] above [Saved AI Fitting History Button] */}
       <div
         className="studio-bottom-left-hud-stack"
         data-bottom-left-hud="true"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
+        {showOriginalImageLink && (
+          <a
+            href="#vton-original-image"
+            role="button"
+            data-vton-original-link="true"
+            data-has-raw-sheet={hasRawOriginalSheet ? 'true' : 'false'}
+            aria-haspopup="dialog"
+            aria-expanded={effectiveOriginalModalOpen}
+            aria-label={
+              isEn
+                ? 'View Nano Banana original generated image'
+                : '나노바나나 생성 원본 이미지 보기'
+            }
+            title={
+              hasRawOriginalSheet
+                ? isEn
+                  ? 'View raw Nano Banana 8-angle turnaround sheet'
+                  : '나노바나나 8각도 원본 시트 보기'
+                : isEn
+                  ? 'View loaded character source image'
+                  : '불러온 캐릭터 원본 보기'
+            }
+            className={`studio-vton-original-link ${
+              activeHudTouchId === 'original-link' ? 'is-interacting' : ''
+            }`.trim()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleHudTouchStart('original-link');
+            }}
+            onPointerUp={handleHudTouchEnd}
+            onPointerCancel={handleHudTouchEnd}
+            onPointerLeave={handleHudTouchEnd}
+            onClick={handleOpenOriginalImage}
+          >
+            <ImageIcon size={13} strokeWidth={2.1} aria-hidden="true" />
+            <span>{isEn ? 'Original' : '원본 보기'}</span>
+          </a>
+        )}
         {stageLookRecommendations.length > 0 &&
           (() => {
             const foundIdx = stageLookRecommendations.findIndex((r) => r.id === activeRecId);
@@ -3722,6 +3985,162 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           />
         </div>
       </div>
+
+      {/* Full-Viewport Lightbox Modal for Viewing Raw Nano Banana Original Generated Sheet */}
+      {effectiveOriginalModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="studio-original-lightbox-backdrop"
+            data-vton-original-modal="true"
+            data-stage-theme={resolvedTheme}
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              isEn ? 'Nano Banana generated original image' : '나노바나나 생성 원본 이미지'
+            }
+            onClick={handleCloseOriginalModal}
+          >
+            <div
+              className="studio-original-lightbox-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="studio-original-lightbox-header">
+                <div className="studio-original-lightbox-title-group">
+                  <strong className="studio-original-lightbox-title">
+                    {hasRawOriginalSheet
+                      ? isEn
+                        ? 'Nano Banana Original Sheet'
+                        : '나노바나나 생성 원본'
+                      : isEn
+                        ? 'Loaded Character Image'
+                        : '불러온 캐릭터 이미지'}
+                  </strong>
+                  <span className="studio-original-lightbox-meta tabular-nums">
+                    {hasRawOriginalSheet
+                      ? isEn
+                        ? 'Raw 4×2 8-Angle Output'
+                        : '4×2 8각도 원본 시트'
+                      : isEn
+                        ? 'Cached Cutout'
+                        : '기존 캐시 컷아웃'}
+                    {originalImgDims && originalImgDims.src === originalModalImageUrl
+                      ? ` · ${originalImgDims.width} × ${originalImgDims.height}`
+                      : ''}
+                  </span>
+                </div>
+                <div className="studio-original-lightbox-actions">
+                  <button
+                    type="button"
+                    className="studio-original-lightbox-btn"
+                    data-vton-original-zoom="true"
+                    aria-pressed={originalModalZoomed}
+                    aria-label={
+                      originalModalZoomed
+                        ? isEn
+                          ? 'Fit to screen'
+                          : '화면에 맞추기'
+                        : isEn
+                          ? 'Zoom to 100%'
+                          : '원본 크기 확대'
+                    }
+                    title={
+                      originalModalZoomed
+                        ? isEn
+                          ? 'Fit to screen'
+                          : '화면에 맞추기'
+                        : isEn
+                          ? 'Zoom to 100%'
+                          : '원본 크기 확대'
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOriginalModalZoomed((prev) => !prev);
+                    }}
+                  >
+                    {originalModalZoomed ? (
+                      <ZoomOut size={15} aria-hidden="true" />
+                    ) : (
+                      <ZoomIn size={15} aria-hidden="true" />
+                    )}
+                    <span>
+                      {originalModalZoomed
+                        ? isEn
+                          ? 'Fit'
+                          : '화면 맞춤'
+                        : isEn
+                          ? '100%'
+                          : '원본 확대'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-original-lightbox-btn"
+                    data-vton-original-download="true"
+                    aria-label={isEn ? 'Download original image' : '원본 이미지 저장'}
+                    title={isEn ? 'Download original image' : '원본 이미지 저장'}
+                    onClick={handleDownloadOriginalImage}
+                  >
+                    <Download size={15} aria-hidden="true" />
+                    <span>{isEn ? 'Save' : '저장'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-original-lightbox-close"
+                    data-vton-original-close="true"
+                    aria-label={isEn ? 'Close original viewer' : '원본 보기 닫기'}
+                    onClick={handleCloseOriginalModal}
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+
+              {!hasRawOriginalSheet && (
+                <div className="studio-original-lightbox-note">
+                  {isEn
+                    ? 'This cached look was saved before raw sheet archiving. Newly generated outfits will display the full 4×2 Nano Banana original sheet here.'
+                    : '이전 캐시 항목에는 8각도 원본 시트가 저장되어 있지 않아 현재 이미지를 표시합니다. 새로 생성되는 코디부터 나노바나나 원본 시트가 그대로 표시됩니다.'}
+                </div>
+              )}
+
+              <div
+                className={`studio-original-lightbox-canvas ${
+                  originalModalZoomed ? 'is-zoomed' : ''
+                }`.trim()}
+              >
+                <img
+                  src={originalModalImageUrl}
+                  alt={
+                    hasRawOriginalSheet
+                      ? isEn
+                        ? 'Nano Banana raw generated turnaround sheet'
+                        : '나노바나나에서 생성된 8각도 원본 시트 이미지'
+                      : isEn
+                        ? 'Loaded AI fitting character image'
+                        : '불러온 AI 피팅 캐릭터 이미지'
+                  }
+                  className="studio-original-lightbox-img"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOriginalModalZoomed((prev) => !prev);
+                  }}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                      setOriginalImgDims({
+                        src: originalModalImageUrl,
+                        width: img.naturalWidth,
+                        height: img.naturalHeight,
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 });

@@ -170,7 +170,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
 
   const showFixtureLights =
     fixtureEmitters.length > 0 &&
-    lightingFrame.fixtureOnFactor > 0.01 &&
+    lightingFrame.fixtureOnFactor > 0.002 &&
     coverFrame.width > 0 &&
     coverFrame.height > 0;
 
@@ -224,12 +224,23 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       const fxRgb = hexToRgbCss(activeHex);
       const fxCoreRgb = mixWithWarmWhiteRgb(activeHex, isNeonEmitter ? 0.78 : 0.68);
       const power = Math.max(0, lightingFrame.fixtureOnFactor * emitter.intensity);
-      // Smooth 0%..100% visibility: unmistakable bright incandescent/neon core even at 25%..50%, vivid at 100%
-      const normPower = Math.min(1.3, power);
-      const coreOpacity = Math.min(1, Math.max(0.72, 0.56 + normPower * 0.4));
-      const glowOpacity = Math.min(1, Math.max(0.38, 0.14 + normPower * 0.78));
-      const glowScale = Math.min(1.26, Math.max(0.68, 0.62 + normPower * 0.48));
-      const glowBrightness = Math.min(1.28, Math.max(0.84, 0.76 + normPower * 0.4));
+      // Zero-continuous perceptual emitter response calibrated so 100% matches refined natural glow
+      // (eliminates abrupt 0% -> 5% floor jump and prevents blown-out walls at 100%).
+      const fullPowerRef = isNeonEmitter ? 0.86 : 0.56;
+      const normPower = Math.min(1.08, power / fullPowerRef);
+      const t = Math.min(1, normPower);
+      const coreOpacity = isNeonEmitter
+        ? Math.min(0.95, Math.pow(t, 0.9) * 0.95)
+        : Math.min(0.76, Math.pow(t, 0.88) * 0.76);
+      const glowOpacity = isNeonEmitter
+        ? Math.min(0.84, Math.pow(t, 0.98) * 0.84)
+        : Math.min(0.48, Math.pow(t, 1.05) * 0.48);
+      const glowScale = isNeonEmitter
+        ? Math.min(1.04, 0.56 + t * 0.44)
+        : Math.min(0.88, 0.56 + t * 0.3);
+      const glowBrightness = isNeonEmitter
+        ? Math.min(1.1, 0.8 + t * 0.28)
+        : Math.min(0.96, 0.78 + t * 0.18);
 
       const isLinear =
         (emitter.kind === 'cove-strip' ||

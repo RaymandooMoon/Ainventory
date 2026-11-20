@@ -346,16 +346,60 @@ function resolveThreeColSpansServer(clusters, headClusters, w) {
   ];
 }
 
+function resolveFourColSpansServer(clusters, headClusters, w) {
+  if (clusters.length === 4) {
+    const m01 = Math.round((clusters[0].x1 + clusters[1].x0) * 0.5);
+    const m12 = Math.round((clusters[1].x1 + clusters[2].x0) * 0.5);
+    const m23 = Math.round((clusters[2].x1 + clusters[3].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, m23 - 1) },
+      { x0: m23 + 1, x1: Math.max(m23 + 17, w - 3) },
+    ];
+  }
+  if (headClusters.length === 4) {
+    const m01 = Math.round((headClusters[0].x1 + headClusters[1].x0) * 0.5);
+    const m12 = Math.round((headClusters[1].x1 + headClusters[2].x0) * 0.5);
+    const m23 = Math.round((headClusters[2].x1 + headClusters[3].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, m23 - 1) },
+      { x0: m23 + 1, x1: Math.max(m23 + 17, w - 3) },
+    ];
+  }
+  const colW = Math.floor(w / 4);
+  const trimX = Math.max(2, Math.round(colW * 0.015));
+  return [
+    { x0: trimX, x1: colW - trimX },
+    { x0: colW + trimX, x1: colW * 2 - trimX },
+    { x0: colW * 2 + trimX, x1: colW * 3 - trimX },
+    { x0: colW * 3 + trimX, x1: w - trimX },
+  ];
+}
+
 function sliceTurnaroundPanelsInServerBuffer(rgba, w, h, layout) {
   const working = new Uint8ClampedArray(rgba);
   if (w >= 256 && h >= 256) {
     eraseSheetGridDividerLinesInBuffer(working, w, h);
   }
+  const isExplicit4x2 = layout === 'turnaround_4x2' && w >= 256 && h >= 256;
   const isExplicit2x2 = layout === 'turnaround_2x2' || w < 256 || h < 256;
-  const isHorizontal1x6 = !isExplicit2x2 && w / h >= 3.15;
-  const isHorizontal1x4 = !isHorizontal1x6 && w / h >= 2.15;
+  const isHorizontal1x6 = !isExplicit4x2 && !isExplicit2x2 && w / h >= 3.15;
+  const isHorizontal1x4 = !isExplicit4x2 && !isHorizontal1x6 && w / h >= 2.15;
   const splitY = resolveTurnaroundRowSplitYInBuffer(working, w, h);
   const gridDecision = resolveTurnaroundSheetGridDecisionInBuffer(working, w, h, { layout });
+  const use4x2Grid =
+    isExplicit4x2 ||
+    (!isExplicit2x2 &&
+      !isHorizontal1x6 &&
+      !isHorizontal1x4 &&
+      layout !== 'turnaround_3x2' &&
+      (gridDecision.topClusters.length === 4 ||
+        gridDecision.botClusters.length === 4 ||
+        gridDecision.topHeadClusters.length === 4 ||
+        gridDecision.botHeadClusters.length === 4));
 
   const rects = [];
   if (isHorizontal1x6) {
@@ -372,6 +416,40 @@ function sliceTurnaroundPanelsInServerBuffer(rgba, w, h, layout) {
         ch: Math.max(16, h - trimY * 2),
       });
     }
+  } else if (use4x2Grid) {
+    const trimTop = Math.max(1, Math.round(splitY * 0.012));
+    const botH = h - splitY;
+    const trimBot = Math.max(1, Math.round(botH * 0.012));
+    const topCh = Math.max(16, splitY - trimTop * 2);
+    const botCh = Math.max(16, botH - trimBot * 2);
+    const topSpans = resolveFourColSpansServer(
+      gridDecision.topClusters,
+      gridDecision.topHeadClusters,
+      w
+    );
+    const botSpans = resolveFourColSpansServer(
+      gridDecision.botClusters,
+      gridDecision.botHeadClusters,
+      w
+    );
+    [0, 45, 90, 135].forEach((angle, i) => {
+      rects.push({
+        angle,
+        sx: topSpans[i].x0,
+        sy: trimTop,
+        cw: Math.max(16, topSpans[i].x1 - topSpans[i].x0),
+        ch: topCh,
+      });
+    });
+    [180, 225, 270, 315].forEach((angle, i) => {
+      rects.push({
+        angle,
+        sx: botSpans[i].x0,
+        sy: splitY + trimBot,
+        cw: Math.max(16, botSpans[i].x1 - botSpans[i].x0),
+        ch: botCh,
+      });
+    });
   } else if (gridDecision.use3x2Grid) {
     const trimTop = Math.max(1, Math.round(splitY * 0.012));
     const botH = h - splitY;
@@ -467,7 +545,9 @@ export function validateSynthesizedVtonPayload(result) {
 
   const studioBackdropHex = result.studioBackdropHex || null;
   const isTurnaround =
-    result.layout === 'turnaround_3x2' || result.layout === 'turnaround_2x2';
+    result.layout === 'turnaround_4x2' ||
+    result.layout === 'turnaround_3x2' ||
+    result.layout === 'turnaround_2x2';
 
   if (result.panelImages && typeof result.panelImages === 'object') {
     const metricsByAngle = {};
@@ -1322,10 +1402,15 @@ export function createVtonQcMiddleware({
   synthesizeLook,
   invalidateCache,
   logFilePath,
-  maxAttempts = DEFAULT_MAX_QC_ATTEMPTS,
+  maxAttempts,
   visionQcImpl = null,
 }) {
-  const attemptLimit = Math.max(1, Math.min(5, Math.round(Number(maxAttempts) || 3)));
+  const hasExplicitMaxAttempts =
+    maxAttempts !== undefined && maxAttempts !== null && Number.isFinite(Number(maxAttempts));
+  const attemptLimit = Math.max(
+    1,
+    Math.min(5, Math.round(Number(maxAttempts) || DEFAULT_MAX_QC_ATTEMPTS))
+  );
 
   return async function vtonQualityControlMiddleware(req, res, next) {
     const requestAbortController = new AbortController();
@@ -1348,7 +1433,16 @@ export function createVtonQcMiddleware({
         !baseParams.turnaroundSheet &&
         Number.isFinite(Number(baseParams.viewAngleDeg)) &&
         Number(baseParams.viewAngleDeg) !== 0;
-      const effectiveAttemptLimit = attemptLimit;
+      const isSingleShot4x2Sheet =
+        Boolean(baseParams.turnaroundSheet) &&
+        baseParams.turnaroundLayout === 'turnaround_4x2';
+      const envSheetMaxAttempts = Number(process.env.GEMINI_VTON_SHEET_MAX_QC_ATTEMPTS);
+      const sheetAttemptCap =
+        Number.isFinite(envSheetMaxAttempts) && envSheetMaxAttempts >= 1
+          ? Math.min(3, Math.round(envSheetMaxAttempts))
+          : 1;
+      const effectiveAttemptLimit =
+        !hasExplicitMaxAttempts && isSingleShot4x2Sheet ? sheetAttemptCap : attemptLimit;
 
       let lastResult = null;
       let lastReport = null;
@@ -1461,8 +1555,12 @@ export function createVtonQcMiddleware({
           return next();
         }
 
-        // Invalidate broken sheet/angle in server cache before retrying so defective images are never reused
-        if (typeof invalidateCache === 'function' && result.cacheKey) {
+        const willPassSingleShotBudget =
+          isSingleShot4x2Sheet && effectiveAttemptLimit === 1 && Boolean(result.compositeImageUrl);
+
+        // Invalidate broken sheet/angle in server cache before retrying so defective images are never reused.
+        // Skip invalidation for single-shot 4x2 budget passes so cached sheets remain reusable at $0 cost.
+        if (typeof invalidateCache === 'function' && result.cacheKey && !willPassSingleShotBudget) {
           try {
             invalidateCache(result.cacheKey);
           } catch {
@@ -1495,6 +1593,26 @@ export function createVtonQcMiddleware({
           qcPassed: true,
           qcAttempts: effectiveAttemptLimit,
           qcReasons: lastReport.reasons || [],
+          failedAngles: [],
+          frontOnlyDegraded: false,
+        };
+        return next();
+      }
+
+      // Cost-safe single-shot 4x2 Nano Banana 2.1 sheet: return the generated 8-panel sheet
+      // directly so the client slices all 8 angles locally at $0 extra API cost instead of triggering
+      // paid retries or single-angle rescue calls.
+      if (isSingleShot4x2Sheet && effectiveAttemptLimit === 1 && lastResult?.compositeImageUrl) {
+        res.locals.vtonResult = {
+          ...lastResult,
+          effectiveBagHandedness: normalizeHandedness(
+            lastResult.handedness || baseParams.handedness,
+            'right'
+          ),
+          qcStatus: 'single_shot_budget_pass',
+          qcPassed: true,
+          qcAttempts: 1,
+          qcReasons: lastReport?.reasons || [],
           failedAngles: [],
           frontOnlyDegraded: false,
         };
@@ -1574,7 +1692,9 @@ export function createVtonQcMiddleware({
 
       if (!positiveOnlyImageUrl) {
         const isLastTurnaround =
-          lastResult?.layout === 'turnaround_3x2' || lastResult?.layout === 'turnaround_2x2';
+          lastResult?.layout === 'turnaround_4x2' ||
+          lastResult?.layout === 'turnaround_3x2' ||
+          lastResult?.layout === 'turnaround_2x2';
         if (isLastTurnaround) {
           const panelZero = lastResult?.panelImages?.['0'];
           if (typeof panelZero === 'string' && panelZero.startsWith('data:image/')) {

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, MoveHorizontal } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
@@ -13,6 +13,11 @@ import {
   resolve360AngleRenderSpec,
 } from '../services/vton2DService.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import {
+  computeCrossfadeBridgeState,
+  computeDirectionalBlurPx,
+  shortestAngleDeltaDeg,
+} from '../utils/turnaroundPhysics.ts';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 
 const SWIPE_MIN_DISTANCE_PX = 40;
@@ -426,6 +431,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   onFloorPlacementChange,
   threeStageAvailable = true,
   auraTier = 'C',
+  angularVelocityDegPerSec = 0,
   postLoginRevealActive = false,
   postLoginProgress = 0,
   onUserInteractFlatLay,
@@ -516,6 +522,10 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
 
   const stageRef = useRef(null);
   const aiImgRef = useRef(null);
+  const outgoingGhostImgRef = useRef(null);
+  const motionBlurFeRef = useRef(null);
+  const bridgeRafRef = useRef(null);
+  const prevCommittedFrameRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [aiImgAspect, setAiImgAspect] = useState(0.76);
   const [aiContentBounds, setAiContentBounds] = useState(null);
@@ -1269,28 +1279,65 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     : 0;
   const isScrollScrubbing = Math.abs(safeScrollResidualYaw) >= 0.1;
 
-  const modelTransformStyle = useMemo(() => {
-    const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
-    const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
-    const totalYawDeg = angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
-    const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
-    const parts = [];
-    if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
-      parts.push(
-        `translate3d(${(safePanX + dragNudgeX).toFixed(1)}px, ${safePanY.toFixed(1)}px, 0)`
-      );
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
+
+  const kineticBlurPx = useMemo(
+    () => computeDirectionalBlurPx(angularVelocityDegPerSec, prefersReducedMotion),
+    [angularVelocityDegPerSec, prefersReducedMotion]
+  );
+
+  useEffect(() => {
+    const fe = motionBlurFeRef.current;
+    if (!fe) return;
+    if (kineticBlurPx > 0.05) {
+      fe.setAttribute('stdDeviation', `${kineticBlurPx.toFixed(2)} 0`);
+    } else {
+      fe.setAttribute('stdDeviation', '0 0');
     }
-    if (Math.abs(effectiveScale - 1) > 0.002) {
-      parts.push(`scale(${effectiveScale.toFixed(3)})`);
-    }
-    if (Math.abs(totalYawDeg) >= 0.05) {
-      parts.push(`perspective(980px) rotateY(${totalYawDeg.toFixed(1)}deg)`);
-    }
-    if (effectiveMirrorX) {
-      parts.push('scaleX(-1)');
-    }
-    return {
-      ...(floorPlacement.renderedContentW && floorPlacement.renderedContentH
+  }, [kineticBlurPx]);
+
+  const buildLayerTransformString = useCallback(
+    ({ mirrorXFlag, extraYawDeg = 0 }) => {
+      const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
+      const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
+      const totalYawDeg =
+        angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw + extraYawDeg;
+      const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
+      const parts = [];
+      if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
+        parts.push(
+          `translate3d(${(safePanX + dragNudgeX).toFixed(1)}px, ${safePanY.toFixed(1)}px, 0)`
+        );
+      }
+      if (Math.abs(effectiveScale - 1) > 0.002) {
+        parts.push(`scale(${effectiveScale.toFixed(3)})`);
+      }
+      if (Math.abs(totalYawDeg) >= 0.05) {
+        parts.push(`perspective(980px) rotateY(${totalYawDeg.toFixed(1)}deg)`);
+      }
+      if (mirrorXFlag) {
+        parts.push('scaleX(-1)');
+      }
+      return parts.length > 0 ? parts.join(' ') : 'none';
+    },
+    [
+      angleSpec.perspectiveYawDeg,
+      isRotatingDrag,
+      swipeDragPx,
+      safeScrollResidualYaw,
+      safePanX,
+      safePanY,
+      safeZoom,
+      floorPlacement.effectiveBaseScale,
+    ]
+  );
+
+  const modelSizeStyle = useMemo(
+    () =>
+      floorPlacement.renderedContentW && floorPlacement.renderedContentH
         ? {
             width: `${floorPlacement.renderedContentW}px`,
             height: `${floorPlacement.renderedContentH}px`,
@@ -1298,23 +1345,134 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
             maxHeight: '100%',
             flex: '0 0 auto',
           }
-        : {}),
+        : {},
+    [floorPlacement.renderedContentW, floorPlacement.renderedContentH]
+  );
+
+  const modelTransformStyle = useMemo(
+    () => ({
+      ...modelSizeStyle,
       transformOrigin: floorPlacement.soleTransformOrigin,
-      transform: parts.length > 0 ? parts.join(' ') : 'none',
+      transform: buildLayerTransformString({ mirrorXFlag: effectiveMirrorX, extraYawDeg: 0 }),
+    }),
+    [
+      modelSizeStyle,
+      floorPlacement.soleTransformOrigin,
+      buildLayerTransformString,
+      effectiveMirrorX,
+    ]
+  );
+
+  // Dual-layer counter-rotating 2.5D rotateY bridge + 105ms smoothstep S-curve crossfade
+  // runs imperatively in rAF so angle transitions trigger zero extra React re-renders.
+  useLayoutEffect(() => {
+    const incomingEl = aiImgRef.current;
+    const ghostEl = outgoingGhostImgRef.current;
+    if (bridgeRafRef.current !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(bridgeRafRef.current);
+      bridgeRafRef.current = null;
+    }
+
+    const identityKey = `${profile.avatarConfigHash}::${outfitComboId}`;
+    const prev = prevCommittedFrameRef.current;
+    const nextFrame =
+      hasAiImage && aiImageUrl
+        ? {
+            src: aiImageUrl,
+            angleDeg: safeAngleDeg,
+            mirrorX: effectiveMirrorX,
+            identityKey,
+          }
+        : null;
+    prevCommittedFrameRef.current = nextFrame;
+
+    const resetVisuals = () => {
+      if (ghostEl) {
+        ghostEl.style.opacity = '0';
+        ghostEl.style.visibility = 'hidden';
+      }
+      if (incomingEl) {
+        incomingEl.style.opacity = '1';
+        incomingEl.style.transform = buildLayerTransformString({
+          mirrorXFlag: effectiveMirrorX,
+          extraYawDeg: 0,
+        });
+      }
+    };
+
+    if (
+      !nextFrame ||
+      !prev ||
+      !incomingEl ||
+      !ghostEl ||
+      prefersReducedMotion ||
+      prev.identityKey !== nextFrame.identityKey ||
+      prev.src === nextFrame.src ||
+      prev.angleDeg === nextFrame.angleDeg ||
+      typeof requestAnimationFrame !== 'function'
+    ) {
+      resetVisuals();
+      return undefined;
+    }
+
+    const delta = shortestAngleDeltaDeg(prev.angleDeg, nextFrame.angleDeg);
+    const directionSign = delta >= 0 ? 1 : -1;
+    const durationMs = Math.abs(angularVelocityDegPerSec) > 360 ? 92 : 112;
+
+    ghostEl.src = prev.src;
+    ghostEl.style.visibility = 'visible';
+    ghostEl.style.transformOrigin = floorPlacement.soleTransformOrigin;
+    incomingEl.style.transformOrigin = floorPlacement.soleTransformOrigin;
+
+    const startTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const tick = (nowTs) => {
+      const elapsed = Math.max(0, nowTs - startTs);
+      const progress = Math.min(1, elapsed / durationMs);
+      const bridge = computeCrossfadeBridgeState({
+        progress,
+        directionSign,
+        reducedMotion: false,
+      });
+
+      ghostEl.style.opacity = String(bridge.outgoingOpacity);
+      ghostEl.style.transform = buildLayerTransformString({
+        mirrorXFlag: prev.mirrorX,
+        extraYawDeg: bridge.outgoingYawDeg,
+      });
+
+      incomingEl.style.opacity = String(bridge.incomingOpacity);
+      incomingEl.style.transform = buildLayerTransformString({
+        mirrorXFlag: nextFrame.mirrorX,
+        extraYawDeg: bridge.incomingYawDeg,
+      });
+
+      if (!bridge.done) {
+        bridgeRafRef.current = requestAnimationFrame(tick);
+      } else {
+        bridgeRafRef.current = null;
+        resetVisuals();
+      }
+    };
+
+    tick(startTs);
+
+    return () => {
+      if (bridgeRafRef.current !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(bridgeRafRef.current);
+        bridgeRafRef.current = null;
+      }
     };
   }, [
+    hasAiImage,
+    aiImageUrl,
+    safeAngleDeg,
     effectiveMirrorX,
-    angleSpec.perspectiveYawDeg,
-    isRotatingDrag,
-    swipeDragPx,
-    safeScrollResidualYaw,
-    safePanX,
-    safePanY,
-    safeZoom,
-    floorPlacement.effectiveBaseScale,
+    profile.avatarConfigHash,
+    outfitComboId,
+    prefersReducedMotion,
+    angularVelocityDegPerSec,
     floorPlacement.soleTransformOrigin,
-    floorPlacement.renderedContentW,
-    floorPlacement.renderedContentH,
+    buildLayerTransformString,
   ]);
 
   const shadowTransformStyle = useMemo(() => {
@@ -1409,30 +1567,73 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 data-aura-tier={auraTier}
                 aria-hidden="true"
               />
-              <img
-                ref={aiImgRef}
-                src={aiImageUrl}
-                onLoad={handleAiImageLoad}
-                alt={
-                  isEn
-                    ? `Gemini AI virtual try-on (${angleSpec.fullEn})`
-                    : `Gemini AI 가상 피팅 (${angleSpec.fullKo})`
-                }
-                title={
-                  placements.length > 0
-                    ? isEn
-                      ? 'Tap to open unfolded Flat-Lay Lookbook'
-                      : '터치하여 플랫레이 룩북 전체 보기'
-                    : undefined
-                }
-                data-vton-after-img="true"
-                data-ai-vton-img="true"
-                className={`studio-2d-media-el editorial-ai-vton-img ${
-                  placements.length > 0 && !compareActive ? 'is-lookbook-tappable' : ''
-                }`}
-                draggable={false}
-                style={modelTransformStyle}
-              />
+              <svg
+                aria-hidden="true"
+                width="0"
+                height="0"
+                className="studio-vton-svg-filters"
+                focusable="false"
+              >
+                <defs>
+                  <filter
+                    id="studio-vton-motion-blur"
+                    x="-12%"
+                    y="-4%"
+                    width="124%"
+                    height="108%"
+                    colorInterpolationFilters="sRGB"
+                  >
+                    <feGaussianBlur
+                      ref={motionBlurFeRef}
+                      in="SourceGraphic"
+                      stdDeviation="0 0"
+                    />
+                  </filter>
+                </defs>
+              </svg>
+              <div
+                className={`studio-vton-turnaround-stack ${
+                  kineticBlurPx > 0.05 ? 'is-kinetic-blur' : ''
+                }`.trim()}
+                data-kinetic-blur={kineticBlurPx > 0.05 ? kineticBlurPx.toFixed(2) : '0'}
+                style={modelSizeStyle}
+              >
+                <img
+                  ref={outgoingGhostImgRef}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="studio-2d-media-el editorial-ai-vton-img editorial-ai-vton-img-ghost"
+                  style={{
+                    ...modelSizeStyle,
+                    transformOrigin: floorPlacement.soleTransformOrigin,
+                  }}
+                />
+                <img
+                  ref={aiImgRef}
+                  src={aiImageUrl}
+                  onLoad={handleAiImageLoad}
+                  alt={
+                    isEn
+                      ? `Gemini AI virtual try-on (${angleSpec.fullEn})`
+                      : `Gemini AI 가상 피팅 (${angleSpec.fullKo})`
+                  }
+                  title={
+                    placements.length > 0
+                      ? isEn
+                        ? 'Tap to open unfolded Flat-Lay Lookbook'
+                        : '터치하여 플랫레이 룩북 전체 보기'
+                      : undefined
+                  }
+                  data-vton-after-img="true"
+                  data-ai-vton-img="true"
+                  className={`studio-2d-media-el editorial-ai-vton-img ${
+                    placements.length > 0 && !compareActive ? 'is-lookbook-tappable' : ''
+                  }`}
+                  draggable={false}
+                  style={modelTransformStyle}
+                />
+              </div>
             </>
           ) : (
             <FlatLayLookbookSurface

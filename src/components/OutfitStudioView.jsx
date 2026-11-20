@@ -57,6 +57,7 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { buildAutoOutfitTitle } from '../utils/outfitTitleGenerator.ts';
 import {
   getLocalDateKey,
   incrementTomorrowPromptShownCount,
@@ -118,75 +119,6 @@ const CITY_EN_NAMES = {
   newyork: 'New York · SoHo',
   paris: 'Paris · Le Marais',
 };
-
-const LOOK_STYLE_SHORT_TITLES = {
-  business_casual: { ko: '비즈니스 캐주얼', en: 'Business Casual' },
-  comfortable_casual: { ko: '편한 캐주얼', en: 'Casual' },
-  formal_office: { ko: '포멀 정장', en: 'Formal' },
-  minimal_daily: { ko: '미니멀 데일리', en: 'Minimal Daily' },
-};
-
-function buildAutoOutfitTitle({
-  styleMode,
-  weather,
-  scenarioKey,
-  slots,
-  activeRecommendation,
-  resolvedCityDisplayLabel,
-  lang,
-}) {
-  const recPresetKey = activeRecommendation?.presetKey;
-  const stylePair = recPresetKey ? LOOK_STYLE_SHORT_TITLES[recPresetKey] : null;
-  const styleLabel = stylePair
-    ? lang === 'en'
-      ? stylePair.en
-      : stylePair.ko
-    : styleMode === 'stylized_isometric'
-      ? lang === 'en'
-        ? 'AI Character Look'
-        : 'AI 캐릭터 코디'
-      : lang === 'en'
-        ? 'AI Fitting Look'
-        : 'AI 피팅 코디';
-
-  const cityShort = String(resolvedCityDisplayLabel || (lang === 'en' ? 'Seoul' : '서울'))
-    .replace(/\s*·\s*/g, ' ')
-    .trim();
-
-  const tempVal =
-    typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)
-      ? Math.round(weather.avgTemp)
-      : null;
-  const condPair = SHORT_SCENARIO_LABELS[scenarioKey || weather?.scenarioKey || 'live'];
-  const condWord = condPair
-    ? lang === 'en'
-      ? condPair.en
-      : condPair.ko
-    : weather?.isRainy
-      ? lang === 'en'
-        ? 'Rain'
-        : '비'
-      : weather?.isSnowy
-        ? lang === 'en'
-          ? 'Snow'
-          : '눈'
-        : lang === 'en'
-          ? 'Look'
-          : '데일리';
-
-  const keyGarment =
-    slots?.outer || slots?.outer_mid || slots?.onepiece || slots?.top_mid || slots?.top;
-  const garmentShort = keyGarment ? resolveGarmentDisplayName(keyGarment, lang) : '';
-
-  const parts = [cityShort, styleLabel];
-  if (tempVal != null) {
-    parts.push(`${condWord} ${tempVal}°C`);
-  } else if (garmentShort) {
-    parts.push(garmentShort);
-  }
-  const composed = parts.filter(Boolean).join(' · ');
-  return composed.length > 76 ? `${composed.slice(0, 73).trim()}...` : composed;
-}
 
 const SHORT_SCENARIO_LABELS = {
   live: { ko: '예보', en: 'Live' },
@@ -1102,9 +1034,43 @@ export default function OutfitStudioView({
 
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [outfitTitle, setOutfitTitle] = useState('');
+  const [goldTitleAnimNonce, setGoldTitleAnimNonce] = useState(0);
+  const [isGoldTitleWriting, setIsGoldTitleWriting] = useState(false);
   const [savingOutfit, setSavingOutfit] = useState(false);
   const [calendarSavedModal, setCalendarSavedModal] = useState(null);
   const hasCustomOutfitTitleRef = useRef(false);
+  const outfitTitleRef = useRef('');
+  const titleGenCounterRef = useRef(0);
+  const goldTitleTimerRef = useRef(null);
+  const prevEquippedTitleSigRef = useRef('');
+
+  useEffect(() => {
+    outfitTitleRef.current = outfitTitle;
+  }, [outfitTitle]);
+
+  useEffect(() => {
+    return () => {
+      if (goldTitleTimerRef.current) {
+        clearTimeout(goldTitleTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerGoldAutoOutfitTitle = useCallback((nextTitle) => {
+    const clean = String(nextTitle || '').trim();
+    if (!clean) return;
+    setOutfitTitle(clean);
+    outfitTitleRef.current = clean;
+    setGoldTitleAnimNonce((n) => n + 1);
+    setIsGoldTitleWriting(true);
+    if (goldTitleTimerRef.current) {
+      clearTimeout(goldTitleTimerRef.current);
+    }
+    goldTitleTimerRef.current = setTimeout(() => {
+      setIsGoldTitleWriting(false);
+      goldTitleTimerRef.current = null;
+    }, 1250);
+  }, []);
 
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
@@ -1652,6 +1618,21 @@ export default function OutfitStudioView({
     isEquippedStageOutdoor,
     manualRainUmbrellaCleared,
   ]);
+
+  const equippedTitleSig = useMemo(
+    () =>
+      ALL_EQUIPPABLE_SLOT_KEYS.map((slotKey) => `${slotKey}:${slots[slotKey]?.id ?? ''}`).join(
+        '|'
+      ),
+    [slots]
+  );
+
+  useEffect(() => {
+    if (prevEquippedTitleSigRef.current && prevEquippedTitleSigRef.current !== equippedTitleSig) {
+      hasCustomOutfitTitleRef.current = false;
+    }
+    prevEquippedTitleSigRef.current = equippedTitleSig;
+  }, [equippedTitleSig]);
 
   const totalWearableCount = useMemo(
     () => garments.filter((g) => isWearableStudioGarment(g)).length,
@@ -2564,7 +2545,112 @@ export default function OutfitStudioView({
     </div>
   );
 
-  const renderPinnedEquippedCard = () => {
+  const renderPinnedEquippedCard = (closeOnPick = false) => {
+    const inspectedItem =
+      selectedInspectorId != null
+        ? slotGarments.find((g) => g.id === selectedInspectorId) || null
+        : null;
+
+    if (inspectedItem) {
+      const specs = resolveGarmentInspectorSpecs(inspectedItem, lang);
+      const oppositeSlotKey = getOppositeSideSubSlot(activeSlotKey);
+      const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
+      const isEquippedOpposite = Boolean(oppositeItem && oppositeItem.id === inspectedItem.id);
+      const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
+        ? tx(lang, 'L 착용', 'Worn L')
+        : tx(lang, 'R 착용', 'Worn R');
+
+      return (
+        <div className="atelier-pinned-equipped-dock">
+          <div
+            className="atelier-inventory-spec-card is-pinned is-inspecting"
+            data-pinned-inspector-card={inspectedItem.id}
+            role="region"
+            aria-label={tx(lang, '선택한 아이템 상세 정보', 'Selected item details')}
+          >
+            <div className="atelier-spec-status-bar">
+              <div className="atelier-spec-status-left">
+                <span className="atelier-spec-status-pill is-selected">
+                  <span>{tx(lang, '선택됨', 'Selected')}</span>
+                </span>
+                {isEquippedOpposite && (
+                  <span className="atelier-spec-opposite-chip">{oppositeBadgeLabel}</span>
+                )}
+              </div>
+              <div className="atelier-spec-status-actions">
+                <button
+                  type="button"
+                  data-equip-inspector-btn="true"
+                  className="atelier-spec-equip-btn"
+                  onClick={() => {
+                    handleToggleEquip(inspectedItem);
+                    if (closeOnPick) setMobileSheetOpen(false);
+                  }}
+                >
+                  {tx(lang, '착용', 'Wear')}
+                </button>
+                <button
+                  type="button"
+                  className="atelier-spec-dismiss-btn"
+                  aria-label={tx(lang, '선택 닫기', 'Close preview')}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setSelectedInspectorId(null);
+                  }}
+                >
+                  <X size={13} strokeWidth={2.4} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="atelier-spec-main-row">
+              <div className="atelier-spec-info-col">
+                <span className="atelier-spec-item-name">{specs.displayName}</span>
+                <span className="atelier-spec-brand-line">
+                  {`${specs.brandLabel} · ${specs.subcategoryLabel}`}
+                </span>
+                <div className="atelier-spec-meta-pills">
+                  <span className="atelier-spec-meta-pill">
+                    <span
+                      className="atelier-spec-color-dot"
+                      style={{ backgroundColor: specs.colorHex }}
+                      aria-hidden="true"
+                    />
+                    <span>{specs.colorLabel}</span>
+                  </span>
+                  <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
+                  <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
+                  {isBagGarmentItem(inspectedItem) && (() => {
+                    const carrySpec = inferBagCarrySpec(inspectedItem);
+                    const carryLabelMap = {
+                      hand_only: tx(lang, '끈 없음 · 핸드캐리', 'No Strap · Hand Carry'),
+                      shoulder: tx(lang, '끈 있음 · 숄더', 'Strap · Shoulder'),
+                      crossbody: tx(lang, '끈 있음 · 크로스', 'Strap · Crossbody'),
+                      backpack: tx(lang, '끈 있음 · 백팩', 'Dual Straps · Backpack'),
+                      convertible_hand_strap: tx(lang, '끈 있음 · 핸드/숄더', 'Strap · Convertible'),
+                    };
+                    return (
+                      <span
+                        className="atelier-spec-meta-pill"
+                        data-bag-strap-badge={carrySpec.hasStrap ? 'strap' : 'no-strap'}
+                        data-bag-carry-style={carrySpec.carryStyle}
+                      >
+                        {carryLabelMap[carrySpec.carryStyle] || carryLabelMap.hand_only}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="atelier-spec-thumb-squircle">
+                <GarmentObject25D item={inspectedItem} alt={specs.displayName} padding="8%" />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (!pinnedSlotInfo?.item) return null;
     const equippedItem = pinnedSlotInfo.item;
     const specs = resolveGarmentInspectorSpecs(equippedItem, lang);
@@ -2643,7 +2729,7 @@ export default function OutfitStudioView({
     );
   };
 
-  const renderSlotInventoryGrid = (closeOnPick = false) => {
+  const renderSlotInventoryGrid = () => {
     const oppositeSlotKey = getOppositeSideSubSlot(activeSlotKey);
     const oppositeItem = oppositeSlotKey ? slots[oppositeSlotKey] : null;
     const showMaterialBadge =
@@ -2748,98 +2834,28 @@ export default function OutfitStudioView({
           const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
             ? tx(lang, 'L 착용', 'Worn L')
             : tx(lang, 'R 착용', 'Worn R');
-
-          if (isExpanded) {
-            const specs = resolveGarmentInspectorSpecs(item, lang);
-            return (
-              <div
-                key={item.id}
-                role="button"
-                tabIndex={0}
-                data-slot-garment-id={item.id}
-                aria-expanded="true"
-                className="studio-mini-garment-card atelier-packshot-card atelier-unfolded-spec-card is-expanded"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setSelectedInspectorId((prev) => (prev === item.id ? null : item.id));
-                }}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    triggerHaptic('selection');
-                    setSelectedInspectorId((prev) => (prev === item.id ? null : item.id));
-                  }
-                }}
-              >
-                <div className="atelier-spec-status-bar">
-                  <div className="atelier-spec-status-left">
-                    <span className="atelier-spec-status-pill is-selected">
-                      <span>{tx(lang, '선택됨', 'Selected')}</span>
-                    </span>
-                    {isEquippedOpposite && (
-                      <span className="atelier-spec-opposite-chip">{oppositeBadgeLabel}</span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    data-equip-inspector-btn="true"
-                    className="atelier-spec-equip-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleEquip(item);
-                      if (closeOnPick) setMobileSheetOpen(false);
-                    }}
-                  >
-                    {tx(lang, '착용', 'Wear')}
-                  </button>
-                </div>
-
-                <div className="atelier-spec-main-row">
-                  <div className="atelier-spec-info-col">
-                    <span className="hig-garment-name atelier-spec-item-name">
-                      {specs.displayName}
-                    </span>
-                    <span className="atelier-spec-brand-line">
-                      {`${specs.brandLabel} · ${specs.subcategoryLabel}`}
-                    </span>
-                    <div className="atelier-spec-meta-pills">
-                      <span className="atelier-spec-meta-pill">
-                        <span
-                          className="atelier-spec-color-dot"
-                          style={{ backgroundColor: specs.colorHex }}
-                          aria-hidden="true"
-                        />
-                        <span>{specs.colorLabel}</span>
-                      </span>
-                      <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
-                      <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
-                    </div>
-                  </div>
-
-                  <div className="atelier-spec-thumb-squircle">
-                    <GarmentObject25D item={item} alt={specs.displayName} padding="8%" />
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
           const displayName = resolveGarmentDisplayName(item, lang);
           return (
             <button
               key={item.id}
               type="button"
               data-slot-garment-id={item.id}
-              aria-expanded="false"
-              className="studio-mini-garment-card atelier-packshot-card"
+              aria-expanded={isExpanded ? 'true' : 'false'}
+              className={`studio-mini-garment-card atelier-packshot-card${
+                isExpanded ? ' is-inspector-selected' : ''
+              }`}
               onClick={() => {
                 triggerHaptic('selection');
-                setSelectedInspectorId(item.id);
+                setSelectedInspectorId((prev) => (prev === item.id ? null : item.id));
               }}
             >
               <div className="studio-mini-squircle">
                 <GarmentObject25D item={item} alt={displayName} padding="10%" />
+                {isExpanded && (
+                  <span className="atelier-packshot-selected-tag">
+                    {tx(lang, '선택', 'Pick')}
+                  </span>
+                )}
                 {isEquippedOpposite && (
                   <span className="studio-opposite-side-badge">{oppositeBadgeLabel}</span>
                 )}
@@ -2960,17 +2976,19 @@ export default function OutfitStudioView({
             onAiLookGenerated={(meta) => {
               markTodayOutfitGenerated();
               if (!hasCustomOutfitTitleRef.current) {
-                setOutfitTitle(
-                  buildAutoOutfitTitle({
-                    styleMode: meta?.styleMode,
-                    weather,
-                    scenarioKey,
-                    slots: meta?.slots || slots,
-                    activeRecommendation,
-                    resolvedCityDisplayLabel,
-                    lang,
-                  })
-                );
+                titleGenCounterRef.current += 1;
+                const nextTitle = buildAutoOutfitTitle({
+                  styleMode: meta?.styleMode,
+                  weather,
+                  scenarioKey,
+                  slots: meta?.slots || slots,
+                  activeRecommendation,
+                  resolvedCityDisplayLabel,
+                  lang,
+                  previousTitle: outfitTitleRef.current,
+                  generationNonce: titleGenCounterRef.current,
+                });
+                triggerGoldAutoOutfitTitle(nextTitle);
               }
             }}
             forceRefreshNonce={0}
@@ -3027,13 +3045,17 @@ export default function OutfitStudioView({
               onSelectTab={handleSelectTopFittingTab}
             />
             <div className="atelier-drawer-grid-col">
-              {renderPinnedEquippedCard()}
-              <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(false)}</div>
+              {renderPinnedEquippedCard(false)}
+              <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid()}</div>
             </div>
           </div>
 
           <form onSubmit={handleSaveOutfit} className="studio-save-bar">
-            <div className="studio-clearable-input-wrap">
+            <div
+              className={`studio-clearable-input-wrap${
+                isGoldTitleWriting ? ' is-gold-writing' : ''
+              }`}
+            >
               <input
                 ref={desktopTitleInputRef}
                 type="text"
@@ -3044,10 +3066,21 @@ export default function OutfitStudioView({
                 onChange={(e) => {
                   const val = e.target.value;
                   hasCustomOutfitTitleRef.current = val.trim().length > 0;
+                  setIsGoldTitleWriting(false);
                   setOutfitTitle(val);
                 }}
                 maxLength={80}
               />
+              {isGoldTitleWriting && outfitTitle.length > 0 && (
+                <span
+                  key={goldTitleAnimNonce}
+                  className="studio-gold-title-overlay"
+                  aria-hidden="true"
+                  data-gold-title-writing="true"
+                >
+                  <span className="studio-gold-title-text">{outfitTitle}</span>
+                </span>
+              )}
               {outfitTitle.length > 0 && (
                 <button
                   type="button"
@@ -3057,6 +3090,7 @@ export default function OutfitStudioView({
                   onClick={() => {
                     triggerHaptic('selection');
                     hasCustomOutfitTitleRef.current = false;
+                    setIsGoldTitleWriting(false);
                     setOutfitTitle('');
                     desktopTitleInputRef.current?.focus?.();
                   }}
@@ -3111,7 +3145,11 @@ export default function OutfitStudioView({
 
       {/* Mobile Save Bar (< 600px) */}
       <form onSubmit={handleSaveOutfit} className="studio-mobile-save-row">
-        <div className="studio-clearable-input-wrap">
+        <div
+          className={`studio-clearable-input-wrap${
+            isGoldTitleWriting ? ' is-gold-writing' : ''
+          }`}
+        >
           <input
             ref={mobileTitleInputRef}
             type="text"
@@ -3122,10 +3160,21 @@ export default function OutfitStudioView({
             onChange={(e) => {
               const val = e.target.value;
               hasCustomOutfitTitleRef.current = val.trim().length > 0;
+              setIsGoldTitleWriting(false);
               setOutfitTitle(val);
             }}
             maxLength={80}
           />
+          {isGoldTitleWriting && outfitTitle.length > 0 && (
+            <span
+              key={goldTitleAnimNonce}
+              className="studio-gold-title-overlay"
+              aria-hidden="true"
+              data-gold-title-writing="true"
+            >
+              <span className="studio-gold-title-text">{outfitTitle}</span>
+            </span>
+          )}
           {outfitTitle.length > 0 && (
             <button
               type="button"
@@ -3135,6 +3184,7 @@ export default function OutfitStudioView({
               onClick={() => {
                 triggerHaptic('selection');
                 hasCustomOutfitTitleRef.current = false;
+                setIsGoldTitleWriting(false);
                 setOutfitTitle('');
                 mobileTitleInputRef.current?.focus?.();
               }}
@@ -3520,8 +3570,8 @@ export default function OutfitStudioView({
             onSelectTab={handleSelectTopFittingTab}
           />
           <div className="atelier-drawer-grid-col">
-            {renderPinnedEquippedCard()}
-            <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid(true)}</div>
+            {renderPinnedEquippedCard(true)}
+            <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid()}</div>
           </div>
         </div>
       </ResponsiveSheetModal>

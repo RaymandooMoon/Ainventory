@@ -154,7 +154,8 @@ const SILHOUETTE_SHADOW_FRAG = `
   uniform float uCharWidthMeters;
   uniform float uFootprintScale;
   uniform float uDirectRatio;
-  uniform float uShadowOpacity;
+  uniform float uContactAoOpacity;
+  uniform float uCastShadowOpacity;
   uniform vec3 uShadowColor;
   varying vec2 vFloorXZ;
 
@@ -219,8 +220,9 @@ const SILHOUETTE_SHADOW_FRAG = `
     float contactAo = clamp(coreAo * 0.84 + softAo, 0.0, 1.0);
 
     // 2. Light-direction projected Silhouette Cast Shadow (+ optional opposing indoor fixture fill shadow)
+    // Strictly disabled when uCastShadowOpacity <= 0.004 (unlit 0% night / windowless / neon blackout)
     float castShadow = 0.0;
-    if (uHasCutout > 0.5) {
+    if (uHasCutout > 0.5 && uCastShadowOpacity > 0.004) {
       float sharpness = clamp(uDirectRatio, 0.0, 1.0);
       float directWeight = mix(0.42, 1.0, sharpness);
       float primaryCast = projectSilhouette(p, uShadowDir, uShadowLength, sharpness, true) * directWeight;
@@ -238,8 +240,9 @@ const SILHOUETTE_SHADOW_FRAG = `
 
     // Smooth radial edge fade so the shadow quad border is never visible
     float quadEdgeFade = 1.0 - smoothstep(1.9, 2.62, length(p));
-    float combined = max(contactAo * 0.92, castShadow * 0.9) + contactAo * castShadow * 0.14;
-    float finalAlpha = clamp(combined * uShadowOpacity * quadEdgeFade, 0.0, 0.86);
+    float aoAlpha = contactAo * uContactAoOpacity;
+    float castAlpha = castShadow * uCastShadowOpacity;
+    float finalAlpha = clamp((max(aoAlpha, castAlpha) + min(aoAlpha, castAlpha) * 0.22) * quadEdgeFade, 0.0, 0.84);
     if (finalAlpha < 0.004) discard;
     gl_FragColor = vec4(uShadowColor, finalAlpha);
   }
@@ -600,7 +603,8 @@ export default function StudioThreeStageLayer({
           uCharWidthMeters: { value: 1.18 },
           uFootprintScale: { value: 1.0 },
           uDirectRatio: { value: 0.75 },
-          uShadowOpacity: { value: 0.46 },
+          uContactAoOpacity: { value: 0.44 },
+          uCastShadowOpacity: { value: 0.42 },
           uShadowColor: { value: new THREE.Color(0x161412) },
         },
         vertexShader: SILHOUETTE_SHADOW_VERT,
@@ -913,7 +917,7 @@ export default function StudioThreeStageLayer({
           );
           const shadowLen = THREE.MathUtils.clamp(
             p.stageFraming.shadowHeightMeters * 0.86 * lightHeightFactor * stretchFactor,
-            0.95,
+            0.85,
             2.15
           );
           silhouetteShadowMat.uniforms.uShadowLength.value = shadowLen;
@@ -927,7 +931,7 @@ export default function StudioThreeStageLayer({
           silhouetteShadowMat.uniforms.uSecondaryWeight.value = THREE.MathUtils.clamp(
             lf.secondaryShadowWeight,
             0,
-            0.55
+            0.5
           );
 
           silhouetteShadowMat.uniforms.uFootprintScale.value = p.stageFraming.shadowFootprintScale;
@@ -951,19 +955,30 @@ export default function StudioThreeStageLayer({
             1.0
           );
 
-          const baseOpacity = !p.isOutdoor
+          const baseContactOpacity = !p.isOutdoor
             ? isDark
-              ? 0.66
-              : 0.56
+              ? 0.54
+              : 0.48
             : isDark
-              ? 0.58
-              : 0.46;
-          // Note: `lf.shadowOpacityScale` already encodes the smooth dimmer curve (avoid double-attenuating at 50%)
-          silhouetteShadowMat.uniforms.uShadowOpacity.value = THREE.MathUtils.clamp(
-            baseOpacity * lf.shadowOpacityScale,
-            0.24,
-            0.8
+              ? 0.5
+              : 0.44;
+          const baseCastOpacity = !p.isOutdoor
+            ? isDark
+              ? 0.62
+              : 0.52
+            : isDark
+              ? 0.54
+              : 0.44;
+          // 2-channel shadows: Contact AO stays softly grounded at 0%, while directional Cast Shadow drops strictly to 0
+          silhouetteShadowMat.uniforms.uContactAoOpacity.value = THREE.MathUtils.clamp(
+            baseContactOpacity * lf.contactAoScale,
+            0.16,
+            0.66
           );
+          silhouetteShadowMat.uniforms.uCastShadowOpacity.value =
+            lf.castShadowScale <= 0.002
+              ? 0
+              : THREE.MathUtils.clamp(baseCastOpacity * lf.castShadowScale, 0, 0.74);
 
           // Cool slate outdoor daytime shadow vs warm charcoal indoor/sunset shadow
           const shadowHex = p.isOutdoor

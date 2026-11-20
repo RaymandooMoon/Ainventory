@@ -120,20 +120,67 @@ test('computeScrollbarLightingState advances contiguously and NEVER falsely ligh
   assert.equal(allReady.readyTicks[180], true);
 });
 
-test('Server model chain prioritizes flash-lite by default and promotes nano-banana-2.1 on QC fallback escalation', () => {
+test('Server model chain prioritizes nano-banana-2.1 by default for high-res 4x2 sheets and falls back to flash-lite', async () => {
+  const { resolveTurnaroundSheetImageSize, buildGeminiTryOnPrompt, buildServerBagPositionGuidePngPart } =
+    await import('../../server/vtonService.js');
   const prev = process.env.GEMINI_VTON_MODEL;
+  const prevSize = process.env.GEMINI_VTON_SHEET_IMAGE_SIZE;
   delete process.env.GEMINI_VTON_MODEL;
+  delete process.env.GEMINI_VTON_SHEET_IMAGE_SIZE;
   try {
     const chain = resolveGeminiModelChain();
-    assert.equal(chain[0], 'gemini-3.1-flash-lite-image');
-    assert.equal(chain[1], 'gemini-nano-banana-2.1');
+    assert.equal(chain[0], 'gemini-nano-banana-2.1');
+    assert.equal(chain[1], 'gemini-3.1-flash-lite-image');
 
-    const rescueChain = resolveGeminiModelChain({ preferFallbackModel: true });
-    assert.equal(rescueChain[0], 'gemini-nano-banana-2.1');
-    assert.equal(rescueChain[1], 'gemini-3.1-flash-lite-image');
+    const fallbackChain = resolveGeminiModelChain({ preferFallbackModel: true });
+    assert.equal(fallbackChain[0], 'gemini-3.1-flash-lite-image');
+    assert.equal(fallbackChain[1], 'gemini-nano-banana-2.1');
+
+    // High-res 2K default for 8-angle 4x2 sheets (configurable to 4K via env)
+    assert.equal(resolveTurnaroundSheetImageSize(), '2K');
+    process.env.GEMINI_VTON_SHEET_IMAGE_SIZE = '4K';
+    assert.equal(resolveTurnaroundSheetImageSize(), '4K');
+
+    // Default turnaround sheet prompt locks 8-angle 4x2 4:3 full-body grid (0°..315°)
+    const prompt4x2 = buildGeminiTryOnPrompt({
+      turnaroundSheet: true,
+      turnaroundLayout: 'turnaround_4x2',
+    });
+    assert.match(prompt4x2, /8-ANGLE 4x2/i);
+    assert.match(prompt4x2, /4:3/);
+    assert.match(prompt4x2, /EQUAL-SCALE FULL-BODY BOTH-ROWS/i);
+    assert.match(prompt4x2, /RIGHT EAR/i);
+    assert.match(prompt4x2, /LEFT EAR/i);
+    assert.match(prompt4x2, /270°/);
+    assert.match(prompt4x2, /315°/);
+
+    // 4x2 spatial bag guide PNG renders 4:3 (480x360 -> 120x180 2:3 full-body cells)
+    const guidePart = buildServerBagPositionGuidePngPart(
+      { turnaroundSheet: true, turnaroundLayout: 'turnaround_4x2', dominantHand: 'right' },
+      '#94A3B8',
+      { hasStrap: true, bagCarryStyle: 'shoulder' }
+    );
+    assert.ok(guidePart && guidePart.mimeType === 'image/png' && guidePart.data.length > 100);
+    const pngBuf = Buffer.from(guidePart.data, 'base64');
+    assert.equal(pngBuf.readUInt32BE(16), 480);
+    assert.equal(pngBuf.readUInt32BE(20), 360);
+
+    // Handedness-safe mirrored pair swap guard catches swapped 135°/225° without false positives
+    const { shouldSwapMirroredAnglePair } = await import('../../src/services/vton2DService.ts');
+    assert.equal(shouldSwapMirroredAnglePair('left', 'right'), true);
+    assert.equal(shouldSwapMirroredAnglePair('right', 'left'), false);
+    assert.equal(shouldSwapMirroredAnglePair('left', 'neutral'), false);
+    assert.equal(shouldSwapMirroredAnglePair('neutral', 'right'), false);
   } finally {
     if (prev !== undefined) {
       process.env.GEMINI_VTON_MODEL = prev;
+    } else {
+      delete process.env.GEMINI_VTON_MODEL;
+    }
+    if (prevSize !== undefined) {
+      process.env.GEMINI_VTON_SHEET_IMAGE_SIZE = prevSize;
+    } else {
+      delete process.env.GEMINI_VTON_SHEET_IMAGE_SIZE;
     }
   }
 });

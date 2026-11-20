@@ -791,22 +791,24 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   aspect-ratio: auto !important;
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 11px !important;
+  padding: 10px 12px !important;
   border-radius: 16px !important;
-  background-color: rgba(255, 255, 255, clamp(0.15, var(--hig-nav-bg-opacity, 0.9), 0.98)) !important;
-  border: 1.5px solid #1c1c1e !important;
-  color: #1c1c1e !important;
+  background-color: rgba(24, 24, 28, 0.94) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #f5f5f7 !important;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.72),
-    0 8px 20px rgba(0, 0, 0, 0.2) !important;
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.36) !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
   justify-content: flex-start !important;
-  gap: 7px !important;
+  gap: 8px !important;
   overflow: visible !important;
   text-align: left !important;
-  animation: atelierSpecCardUnfold 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: atelierSpecCardUnfold 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transition:
     transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -814,10 +816,18 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
     background-color 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.atelier-inventory-spec-card.is-pinned.is-inspecting {
+  background-color: rgba(28, 28, 34, 0.96) !important;
+  border-color: rgba(212, 175, 55, 0.54) !important;
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.22),
+    0 10px 26px rgba(0, 0, 0, 0.42) !important;
+}
+
 #studio-slot-picker .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped),
 #outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-unfolded-spec-card.is-expanded:not(.is-equipped) {
-  background-color: rgba(245, 245, 247, clamp(0.15, var(--hig-nav-bg-opacity, 0.9), 0.96)) !important;
-  border-color: rgba(28, 28, 30, 0.34) !important;
+  background-color: rgba(28, 28, 34, 0.96) !important;
+  border-color: rgba(212, 175, 55, 0.48) !important;
 }
 
 .atelier-spec-status-bar {
@@ -828,7 +838,8 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   width: 100%;
 }
 
-.atelier-spec-status-left {
+.atelier-spec-status-left,
+.atelier-spec-status-actions {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -839,65 +850,84 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 20px;
+  min-height: 21px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 0.64rem;
+  font-size: 0.65rem;
   font-weight: 740;
   letter-spacing: -0.01em;
   line-height: 1;
 }
 
 .atelier-spec-status-pill.is-equipped {
-  background: #1c1c1e;
-  color: #ffffff;
+  background: #f5f5f7;
+  color: #141416;
 }
 
 .atelier-spec-status-pill.is-selected {
-  background: #ffffff;
-  color: #1c1c1e;
-  border: 1px solid rgba(28, 28, 30, 0.2);
+  background: rgba(212, 175, 55, 0.18);
+  color: #f5dc8c;
+  border: 1px solid rgba(212, 175, 55, 0.46);
 }
 
 .atelier-spec-unequip-btn,
-.atelier-spec-equip-btn {
-  min-height: 24px;
+.atelier-spec-equip-btn,
+.atelier-spec-dismiss-btn {
+  min-height: 26px;
   padding: 0 11px;
   border-radius: 999px;
   font-family: var(--atelier-font-sans);
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   font-weight: 740;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease,
     transform 120ms ease;
 }
 
+.atelier-spec-dismiss-btn {
+  width: 26px;
+  min-width: 26px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #d4d4d8;
+}
+
+.atelier-spec-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 .atelier-spec-unequip-btn {
-  background: #f5f5f7;
-  border: 1px solid rgba(28, 28, 30, 0.14);
-  color: #1c1c1e;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #f5f5f7;
 }
 
 .atelier-spec-unequip-btn:hover {
-  background: #1c1c1e;
-  color: #ffffff;
-  border-color: #1c1c1e;
+  background: #ffffff;
+  color: #141416;
+  border-color: #ffffff;
 }
 
 .atelier-spec-equip-btn {
-  background: #1c1c1e;
-  border: 1px solid #1c1c1e;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  background: #ffffff;
+  border: 1px solid #ffffff;
+  color: #141416;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
 }
 
 .atelier-spec-equip-btn:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .atelier-spec-equip-btn:active,
-.atelier-spec-unequip-btn:active {
+.atelier-spec-unequip-btn:active,
+.atelier-spec-dismiss-btn:active {
   transform: scale(0.95);
 }
 
@@ -917,9 +947,9 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   min-height: 20px;
   padding: 0 7px;
   border-radius: 999px;
-  background: #f5f5f7;
-  border: 1px solid rgba(28, 28, 30, 0.12);
-  color: #1c1c1e;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f5f5f7;
   font-size: 0.62rem;
   font-weight: 680;
   display: inline-flex;
@@ -941,7 +971,7 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
   text-align: left;
 }
 
@@ -956,10 +986,10 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   border: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  color: #1c1c1e !important;
-  font-size: 0.81rem !important;
+  color: #f5f5f7 !important;
+  font-size: 0.84rem !important;
   font-weight: 740 !important;
-  line-height: 1.3 !important;
+  line-height: 1.32 !important;
   min-height: 0 !important;
   text-align: left !important;
   white-space: normal !important;
@@ -976,10 +1006,10 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
 }
 
 .atelier-spec-brand-line {
-  font-size: 0.69rem;
-  font-weight: 620;
+  font-size: 0.71rem;
+  font-weight: 600;
   line-height: 1.28;
-  color: #6e6e73;
+  color: #b4b4bc;
   white-space: normal;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -998,28 +1028,23 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 20px;
-  padding: 1px 7px;
+  min-height: 21px;
+  padding: 1px 8px;
   border-radius: 999px;
-  background: #f5f5f7;
-  border: 1px solid rgba(28, 28, 30, 0.09);
-  color: #1c1c1e;
-  font-size: 0.64rem;
-  font-weight: 650;
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f2f2f7;
+  font-size: 0.65rem;
+  font-weight: 640;
   line-height: 1.2;
   white-space: nowrap;
-}
-
-#studio-slot-picker .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-meta-pill,
-#outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-meta-pill {
-  background: #ffffff;
 }
 
 .atelier-spec-color-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 1px solid rgba(28, 28, 30, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   flex-shrink: 0;
   forced-color-adjust: none;
 }
@@ -1031,7 +1056,7 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   min-height: 58px;
   border-radius: 14px;
   background: #f5f5f7;
-  border: 1px solid rgba(28, 28, 30, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1039,9 +1064,30 @@ html[data-theme='light'] #outfit-mobile-wardrobe-sheet .ui-sheet-drag-handle {
   flex-shrink: 0;
 }
 
-#studio-slot-picker .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-thumb-squircle,
-#outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card.is-expanded:not(.is-equipped) .atelier-spec-thumb-squircle {
-  background: #ffffff;
+/* Selected packshot ring inside grid while details stay pinned at top */
+#studio-slot-picker .studio-mini-garment-card.atelier-packshot-card.is-inspector-selected,
+#outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-packshot-card.is-inspector-selected {
+  background-color: #ffffff !important;
+  border: 2px solid #d4af37 !important;
+  box-shadow:
+    0 0 0 1.5px rgba(212, 175, 55, 0.45),
+    0 8px 20px rgba(0, 0, 0, 0.34) !important;
+}
+
+.atelier-packshot-selected-tag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 6;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #141416;
+  border: 1px solid rgba(212, 175, 55, 0.65);
+  color: #f5dc8c;
+  font-size: 0.56rem;
+  font-weight: 740;
+  line-height: 1.2;
+  pointer-events: none;
 }
 
 #studio-slot-picker .atelier-packshot-card .studio-equipped-badge,
@@ -1805,4 +1851,207 @@ html[data-theme='light'] #studio-slot-picker .studio-saved-look-del {
 
 html[data-theme='light'] #studio-slot-picker .studio-saved-look-del:hover {
   color: #1d1d1f;
+}
+
+/* Light-mode high-contrast pinned inspector card */
+html[data-theme='light'] .atelier-inventory-spec-card.is-pinned,
+html[data-theme='light'] #studio-slot-picker .studio-mini-garment-card.atelier-unfolded-spec-card,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .studio-mini-garment-card.atelier-unfolded-spec-card {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(28, 28, 30, 0.22) !important;
+  color: #1c1c1e !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 8px 20px rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme='light'] .atelier-inventory-spec-card.is-pinned.is-inspecting {
+  border-color: rgba(168, 127, 28, 0.62) !important;
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.26),
+    0 8px 22px rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme='light'] .atelier-inventory-spec-card .atelier-spec-item-name,
+html[data-theme='light'] #studio-slot-picker .atelier-unfolded-spec-card .hig-garment-name.atelier-spec-item-name,
+html[data-theme='light'] #outfit-mobile-wardrobe-sheet .atelier-unfolded-spec-card .hig-garment-name.atelier-spec-item-name {
+  color: #1c1c1e !important;
+}
+
+html[data-theme='light'] .atelier-spec-brand-line {
+  color: #52525b;
+}
+
+html[data-theme='light'] .atelier-spec-status-pill.is-equipped {
+  background: #1c1c1e;
+  color: #ffffff;
+}
+
+html[data-theme='light'] .atelier-spec-status-pill.is-selected {
+  background: rgba(212, 175, 55, 0.14);
+  color: #7a590d;
+  border-color: rgba(168, 127, 28, 0.42);
+}
+
+html[data-theme='light'] .atelier-spec-meta-pill,
+html[data-theme='light'] .atelier-spec-opposite-chip {
+  background: #f2f2f7;
+  border-color: rgba(28, 28, 30, 0.1);
+  color: #1c1c1e;
+}
+
+html[data-theme='light'] .atelier-spec-color-dot {
+  border-color: rgba(28, 28, 30, 0.22);
+}
+
+html[data-theme='light'] .atelier-spec-unequip-btn {
+  background: #f2f2f7;
+  border-color: rgba(28, 28, 30, 0.16);
+  color: #1c1c1e;
+}
+
+html[data-theme='light'] .atelier-spec-unequip-btn:hover {
+  background: #1c1c1e;
+  color: #ffffff;
+  border-color: #1c1c1e;
+}
+
+html[data-theme='light'] .atelier-spec-equip-btn {
+  background: #1c1c1e;
+  border-color: #1c1c1e;
+  color: #ffffff;
+}
+
+html[data-theme='light'] .atelier-spec-dismiss-btn {
+  background: rgba(28, 28, 30, 0.06);
+  border-color: rgba(28, 28, 30, 0.14);
+  color: #52525b;
+}
+
+html[data-theme='light'] .atelier-spec-dismiss-btn:hover {
+  background: rgba(28, 28, 30, 0.14);
+  color: #1c1c1e;
+}
+
+html[data-theme='light'] .atelier-spec-thumb-squircle {
+  border-color: rgba(28, 28, 30, 0.08);
+}
+
+/* ==========================================================================
+   11. Gold Ink-Writing Reveal Animation for Newly Generated Outfit Titles
+   ========================================================================== */
+@keyframes atelierGoldTitleWriteSweep {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.92;
+  }
+  72% {
+    clip-path: inset(0 0% 0 0);
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0% 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes atelierGoldInkShimmer {
+  0% {
+    background-position: 180% 50%;
+  }
+  100% {
+    background-position: -40% 50%;
+  }
+}
+
+@keyframes atelierGoldBorderPulse {
+  0% {
+    border-color: rgba(212, 175, 55, 0.78);
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.28), 0 0 14px rgba(212, 175, 55, 0.18);
+  }
+  100% {
+    border-color: var(--atelier-hairline);
+    box-shadow: none;
+  }
+}
+
+.studio-clearable-input-wrap.is-gold-writing .hig-native-input {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #d4af37;
+  animation: atelierGoldBorderPulse 1250ms ease-out 1;
+}
+
+.studio-clearable-input-wrap.is-gold-writing .hig-native-input:focus {
+  color: var(--atelier-ink-on-dark) !important;
+  -webkit-text-fill-color: var(--atelier-ink-on-dark) !important;
+}
+
+html[data-theme='light'] .studio-clearable-input-wrap.is-gold-writing .hig-native-input:focus {
+  color: #1d1d1f !important;
+  -webkit-text-fill-color: #1d1d1f !important;
+}
+
+.studio-gold-title-overlay {
+  position: absolute;
+  inset: 0 34px 0 12px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.studio-clearable-input-wrap.is-gold-writing .hig-native-input:focus + .studio-gold-title-overlay {
+  opacity: 0;
+}
+
+.studio-gold-title-text {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background-image: linear-gradient(
+    96deg,
+    #b68b2a 0%,
+    #e6c35c 26%,
+    #fff4c2 50%,
+    #d4af37 74%,
+    #9f7822 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.34));
+  animation:
+    atelierGoldTitleWriteSweep 920ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    atelierGoldInkShimmer 1150ms ease-out forwards;
+}
+
+html[data-theme='light'] .studio-gold-title-text {
+  background-image: linear-gradient(
+    96deg,
+    #7f5c10 0%,
+    #b5891d 28%,
+    #e0b94b 50%,
+    #9e7315 74%,
+    #6e4d0a 100%
+  );
+  filter: drop-shadow(0 0 4px rgba(181, 137, 29, 0.24));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-gold-title-text {
+    animation: none;
+    clip-path: none;
+  }
+  .studio-clearable-input-wrap.is-gold-writing .hig-native-input {
+    animation: none;
+  }
 }

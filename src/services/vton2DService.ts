@@ -176,6 +176,7 @@ export interface AiVtonSynthesisRequest extends GenderNeutralProfileInput {
   // oxlint-disable-next-line typescript/no-explicit-any
   weather?: Record<string, any> | string | null;
   turnaroundSheet?: boolean;
+  turnaroundLayout?: 'turnaround_4x2' | 'turnaround_3x2';
   theme?: 'light' | 'dark';
   legacyMode?: unknown;
   mode?: unknown;
@@ -214,6 +215,7 @@ export interface AiVtonHistoryEntry {
   slotGarmentIds?: Record<string, number | string>;
   equippedCount: number;
   thumbnailUrl: string;
+  sheetImageUrl?: string | null;
   angleSlices: Partial<Record<TurnaroundAngleDeg, string>>;
   availableAngles: TurnaroundAngleDeg[];
   updatedAt: number;
@@ -246,6 +248,7 @@ export interface AiVtonSynthesisOutcome {
   fromCache: boolean;
   cacheLayer: VtonCacheLayer;
   imageUrl: string | null;
+  sheetImageUrl?: string | null;
   angleSlices: Partial<Record<TurnaroundAngleDeg, string>>;
   equippedCount: number;
   equippedSlotKeys: string[];
@@ -260,7 +263,7 @@ interface VtonServerResponse {
   cached?: boolean;
   provider?: string;
   model?: string | null;
-  layout?: 'turnaround_3x2' | 'turnaround_2x2' | 'single' | string;
+  layout?: 'turnaround_4x2' | 'turnaround_3x2' | 'turnaround_2x2' | 'single' | string;
   styleMode?: string;
   weatherMood?: string;
   geminiUsed?: boolean;
@@ -1430,6 +1433,7 @@ export async function listCachedAiVtonOutfits(limit = 120): Promise<AiVtonHistor
         ...(rec.slotGarmentIds ? { slotGarmentIds: { ...rec.slotGarmentIds } } : {}),
         equippedCount: rec.equippedCount || labels.length || 1,
         thumbnailUrl: rec.imageUrl,
+        sheetImageUrl: rec.sheetImageUrl || null,
         angleSlices: {},
         availableAngles: [],
         updatedAt: rec.updatedAt || 0,
@@ -1438,6 +1442,12 @@ export async function listCachedAiVtonOutfits(limit = 120): Promise<AiVtonHistor
     }
 
     group.angleSlices[rec.angleDeg] = rec.imageUrl;
+    if (
+      rec.sheetImageUrl &&
+      (rec.angleDeg === 0 || !group.sheetImageUrl || (rec.updatedAt || 0) >= group.updatedAt)
+    ) {
+      group.sheetImageUrl = rec.sheetImageUrl;
+    }
     if (!group.availableAngles.includes(rec.angleDeg)) {
       group.availableAngles.push(rec.angleDeg);
       group.availableAngles.sort((a, b) => a - b);
@@ -3757,6 +3767,189 @@ function detectLateralCanvasFacingDirection(
   }
 }
 
+export type LateralFacingDirection = 'left' | 'right' | 'neutral';
+
+export interface SlicedTurnaroundQcResult {
+  passedAngles: TurnaroundAngleDeg[];
+  failedAngles: TurnaroundAngleDeg[];
+  reasonsByAngle: Partial<Record<TurnaroundAngleDeg, string>>;
+}
+
+/**
+ * Returns true when a mirrored pair of turnaround slices (e.g. `135°` right-rear vs `225°` left-rear,
+ * or `45°` front-right vs `315°` front-left) were placed in each other's slots by the generator.
+ * Swapping the two whole slices (instead of horizontally flipping) preserves asymmetric bag handedness
+ * 100% because both members of each pair carry the bag on the exact same viewer screen side.
+ */
+export function shouldSwapMirroredAnglePair(
+  rightSlotDetectedDir: LateralFacingDirection,
+  leftSlotDetectedDir: LateralFacingDirection
+): boolean {
+  return rightSlotDetectedDir === 'left' && leftSlotDetectedDir === 'right';
+}
+
+export interface LocalTurnaroundRecoveryPlan {
+  swaps: Array<[TurnaroundAngleDeg, TurnaroundAngleDeg]>;
+  mirrorCopies: Array<{ targetAngle: TurnaroundAngleDeg; sourceAngle: TurnaroundAngleDeg }>;
+  flipInPlace: TurnaroundAngleDeg[];
+}
+
+const MIRRORED_LATERAL_PAIRS: ReadonlyArray<readonly [TurnaroundAngleDeg, TurnaroundAngleDeg]> = [
+  [45, 315],
+  [90, 270],
+  [135, 225],
+];
+
+/**
+ * Pure $0 local directional safety-net planner for sliced 8-angle turnaround sheets.
+ * - For all outfits (including bags): swaps `[135, 225]` or `[45, 315]` when they land in each
+ *   other's slots (preserving anatomical bag side).
+ * - For bag-free symmetric outfits (`!hasEquippedBag`): also swaps `[90, 270]` on full-row flip,
+ *   horizontally mirrors a verified twin into a duplicated/ambiguous opposite slot (e.g. both 135°
+ *   and 225° facing right -> mirror 135° into 225°), or flips an inverted slice in place.
+ */
+export function planLocalTurnaroundDirectionalRecovery(
+  directionsByAngle: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>>,
+  options?: { hasEquippedBag?: boolean }
+): LocalTurnaroundRecoveryPlan {
+  const hasEquippedBag = Boolean(options?.hasEquippedBag);
+  const dirs: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>> = {
+    ...directionsByAngle,
+  };
+  const swaps: Array<[TurnaroundAngleDeg, TurnaroundAngleDeg]> = [];
+  const mirrorCopies: Array<{ targetAngle: TurnaroundAngleDeg; sourceAngle: TurnaroundAngleDeg }> =
+    [];
+  const flipInPlace: TurnaroundAngleDeg[] = [];
+
+  for (const [rightAngle, leftAngle] of MIRRORED_LATERAL_PAIRS) {
+    const rightDir = dirs[rightAngle];
+    const leftDir = dirs[leftAngle];
+    if (!rightDir || !leftDir) continue;
+
+    // 1) Whole-slice swap when pair is transposed (90°<->270° only when bag-free because side occlusion differs)
+    const pairSwapSafe = !hasEquippedBag || (rightAngle !== 90 && leftAngle !== 270);
+    if (pairSwapSafe && shouldSwapMirroredAnglePair(rightDir, leftDir)) {
+      swaps.push([rightAngle, leftAngle]);
+      dirs[rightAngle] = leftDir;
+      dirs[leftAngle] = rightDir;
+      continue;
+    }
+
+    if (hasEquippedBag) continue;
+
+    // 2) Symmetric $0 mirror recovery when one side is verified and its twin faces the same/neutral side
+    if (rightDir === 'right' && leftDir !== 'left') {
+      mirrorCopies.push({ targetAngle: leftAngle, sourceAngle: rightAngle });
+      dirs[leftAngle] = 'left';
+    } else if (leftDir === 'left' && rightDir !== 'right') {
+      mirrorCopies.push({ targetAngle: rightAngle, sourceAngle: leftAngle });
+      dirs[rightAngle] = 'right';
+    } else {
+      // 3) Fallback single-slice horizontal flip when both are inverted or neutral
+      if (rightDir === 'left') {
+        flipInPlace.push(rightAngle);
+        dirs[rightAngle] = 'right';
+      }
+      if (leftDir === 'right') {
+        flipInPlace.push(leftAngle);
+        dirs[leftAngle] = 'left';
+      }
+    }
+  }
+
+  return { swaps, mirrorCopies, flipInPlace };
+}
+
+/**
+ * Deterministic $0 orientation QC for sliced 8-angle turnaround sheets and repaired single angles.
+ * Blocks inverted or duplicated rear-quarter / profile views (especially 135° vs 225°) from being
+ * displayed to the user until verified or repaired.
+ */
+export function evaluateSlicedTurnaroundOrientationQc(
+  directionsByAngle: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>>,
+  availableAngles: readonly TurnaroundAngleDeg[] = TURNAROUND_ANGLES
+): SlicedTurnaroundQcResult {
+  const passedAngles: TurnaroundAngleDeg[] = [];
+  const failedAngles: TurnaroundAngleDeg[] = [];
+  const reasonsByAngle: Partial<Record<TurnaroundAngleDeg, string>> = {};
+
+  const dir135 = directionsByAngle[135];
+  const dir225 = directionsByAngle[225];
+  const hasRearQuarterDuplicate =
+    Boolean(dir135 && dir225 && dir135 !== 'neutral' && dir135 === dir225);
+
+  for (const angle of availableAngles) {
+    if (angle === 0 || angle === 180) {
+      passedAngles.push(angle);
+      continue;
+    }
+    const dir = directionsByAngle[angle] ?? 'neutral';
+    const expectsRight = angle === 45 || angle === 90 || angle === 135;
+    const expectsLeft = angle === 225 || angle === 270 || angle === 315;
+
+    if (expectsRight && dir === 'left') {
+      failedAngles.push(angle);
+      reasonsByAngle[angle] =
+        angle === 135 && hasRearQuarterDuplicate
+          ? 'rear_quarter_duplicate_facing_left'
+          : 'facing_opposite_left';
+      continue;
+    }
+    if (expectsLeft && dir === 'right') {
+      failedAngles.push(angle);
+      reasonsByAngle[angle] =
+        angle === 225 && hasRearQuarterDuplicate
+          ? 'rear_quarter_duplicate_facing_right'
+          : 'facing_opposite_right';
+      continue;
+    }
+    passedAngles.push(angle);
+  }
+
+  return { passedAngles, failedAngles, reasonsByAngle };
+}
+
+export async function detectDataUrlLateralFacingDirection(
+  dataUrl: string
+): Promise<LateralFacingDirection> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined' || !dataUrl) {
+    return 'neutral';
+  }
+  return new Promise<LateralFacingDirection>((resolve) => {
+    const img = new Image();
+    if (!dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (w < 16 || h < 16) {
+          resolve('neutral');
+          return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          resolve('neutral');
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const dir = detectLateralCanvasFacingDirection(canvas);
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(dir);
+      } catch {
+        resolve('neutral');
+      }
+    };
+    img.onerror = () => resolve('neutral');
+    img.src = dataUrl;
+  });
+}
+
 export interface HorizontalSpan {
   x0: number;
   x1: number;
@@ -4204,18 +4397,60 @@ function resolveThreeColumnCropSpans(
   ];
 }
 
+function resolveFourColumnCropSpans(
+  clusters: HorizontalSpan[],
+  headClusters: HorizontalSpan[],
+  w: number
+): [HorizontalSpan, HorizontalSpan, HorizontalSpan, HorizontalSpan] {
+  if (clusters.length === 4) {
+    const m01 = Math.round((clusters[0].x1 + clusters[1].x0) * 0.5);
+    const m12 = Math.round((clusters[1].x1 + clusters[2].x0) * 0.5);
+    const m23 = Math.round((clusters[2].x1 + clusters[3].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, m23 - 1) },
+      { x0: m23 + 1, x1: Math.max(m23 + 17, w - 3) },
+    ];
+  }
+  if (headClusters.length === 4) {
+    const m01 = Math.round((headClusters[0].x1 + headClusters[1].x0) * 0.5);
+    const m12 = Math.round((headClusters[1].x1 + headClusters[2].x0) * 0.5);
+    const m23 = Math.round((headClusters[2].x1 + headClusters[3].x0) * 0.5);
+    return [
+      { x0: 2, x1: Math.max(18, m01 - 1) },
+      { x0: m01 + 1, x1: Math.max(m01 + 17, m12 - 1) },
+      { x0: m12 + 1, x1: Math.max(m12 + 17, m23 - 1) },
+      { x0: m23 + 1, x1: Math.max(m23 + 17, w - 3) },
+    ];
+  }
+  const colW = Math.floor(w / 4);
+  const trimX = Math.max(2, Math.round(colW * 0.015));
+  return [
+    { x0: trimX, x1: colW - trimX },
+    { x0: colW + trimX, x1: colW * 2 - trimX },
+    { x0: colW * 2 + trimX, x1: colW * 3 - trimX },
+    { x0: colW * 3 + trimX, x1: w - trimX },
+  ];
+}
+
 /**
- * Crops an AI-generated 3x2 Turnaround Studio Sheet (6 panels: `0°, 45°, 90°, 135°, 180°, 225°`)
- * — or a legacy/mock 2x2 sheet (`0°, 45°, 90°, 180°`) — into 6 individual RGBA PNG angle slices:
- * - Row 1: `0°` (Front), `45°` (Front-Right), `90°` (Right Side)
- * - Row 2: `135°` (Back-Right `우후면`), `180°` (Straight Back `후면`), `225°` (Back-Left `좌후면`)
+ * Crops an AI-generated 4x2 (8 panels: `0°, 45°, 90°, 135°` / `180°, 225°, 270°, 315°`),
+ * 3x2 (6 panels), or legacy 2x2 Turnaround Studio Sheet into individual RGBA PNG angle slices.
  * Runs pre-crop sheet divider-line erasing + `isolateSingleSubjectInSlice` + V4 hole-aware
  * `applyCornerBfsCutoutOnCanvas` + `scrubCutoutArtifactsOnCanvas` + post-cutout touching-twin
  * `isolateSingleSubjectInSlice` + gaze-direction normalization + `normalizeTurnaroundCanvasesToFloorBaseline`.
  */
 export async function sliceTurnaround2x2Sheet(
   sheetDataUrl: string,
-  options?: { layout?: string; forceFlipAngles?: TurnaroundAngleDeg[] }
+  options?: {
+    layout?: string;
+    forceFlipAngles?: TurnaroundAngleDeg[];
+    hasEquippedBag?: boolean;
+    onSliceOrientationMeta?: (
+      dirs: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>>
+    ) => void;
+  }
 ): Promise<Record<TurnaroundAngleDeg, string>> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
     return {
@@ -4273,9 +4508,10 @@ export async function sliceTurnaround2x2Sheet(
           }
         }
 
+        const isExplicit4x2 = options?.layout === 'turnaround_4x2' && w >= 256 && h >= 256;
         const isExplicit2x2 = options?.layout === 'turnaround_2x2' || w < 256 || h < 256;
-        const isHorizontal1x6Strip = !isExplicit2x2 && w / h >= 3.15;
-        const isHorizontal1x4Strip = !isHorizontal1x6Strip && w / h >= 2.15;
+        const isHorizontal1x6Strip = !isExplicit4x2 && !isExplicit2x2 && w / h >= 3.15;
+        const isHorizontal1x4Strip = !isExplicit4x2 && !isHorizontal1x6Strip && w / h >= 2.15;
 
         let topClusters: HorizontalSpan[] = [];
         let botClusters: HorizontalSpan[] = [];
@@ -4301,17 +4537,30 @@ export async function sliceTurnaround2x2Sheet(
           }
         }
 
-        const use3x2Grid = evaluateTurnaroundGridDecisionFromStats({
-          w,
-          h,
-          layout: options?.layout,
-          topClusters,
-          botClusters,
-          topHeadClusters,
-          botHeadClusters,
-          topCenterDensity,
-          botCenterDensity,
-        });
+        const use4x2Grid =
+          isExplicit4x2 ||
+          (!isExplicit2x2 &&
+            !isHorizontal1x6Strip &&
+            !isHorizontal1x4Strip &&
+            options?.layout !== 'turnaround_3x2' &&
+            (topClusters.length === 4 ||
+              botClusters.length === 4 ||
+              topHeadClusters.length === 4 ||
+              botHeadClusters.length === 4));
+
+        const use3x2Grid =
+          !use4x2Grid &&
+          evaluateTurnaroundGridDecisionFromStats({
+            w,
+            h,
+            layout: options?.layout,
+            topClusters,
+            botClusters,
+            topHeadClusters,
+            botHeadClusters,
+            topCenterDensity,
+            botCenterDensity,
+          });
 
         let panels: Array<{
           angle: TurnaroundAngleDeg;
@@ -4334,6 +4583,42 @@ export async function sliceTurnaround2x2Sheet(
             cw,
             ch,
           }));
+        } else if (use4x2Grid) {
+          const trimTop = Math.max(1, Math.round(splitY * 0.012));
+          const botTotalH = h - splitY;
+          const trimBot = Math.max(1, Math.round(botTotalH * 0.012));
+          const topCh = Math.max(16, splitY - trimTop * 2);
+          const botCh = Math.max(16, botTotalH - trimBot * 2);
+          const topSpans = resolveFourColumnCropSpans(topClusters, topHeadClusters, w);
+          const botSpans = resolveFourColumnCropSpans(botClusters, botHeadClusters, w);
+          const topAngles: [
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+          ] = [0, 45, 90, 135];
+          const botAngles: [
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+            TurnaroundAngleDeg,
+          ] = [180, 225, 270, 315];
+          panels = [
+            ...topAngles.map((angle, i) => ({
+              angle,
+              sx: topSpans[i].x0,
+              sy: trimTop,
+              cw: Math.max(16, topSpans[i].x1 - topSpans[i].x0),
+              ch: topCh,
+            })),
+            ...botAngles.map((angle, i) => ({
+              angle,
+              sx: botSpans[i].x0,
+              sy: splitY + trimBot,
+              cw: Math.max(16, botSpans[i].x1 - botSpans[i].x0),
+              ch: botCh,
+            })),
+          ];
         } else if (use3x2Grid) {
           const trimTop = Math.max(1, Math.round(splitY * 0.012));
           const botTotalH = h - splitY;
@@ -4425,22 +4710,71 @@ export async function sliceTurnaround2x2Sheet(
             extraCanvases.push(finalCanvas);
           }
 
-          // Normalize canonical gaze: `45°`, `90°`, `135°` face screen-right; `225°` faces screen-left!
+          // Respect explicit forceFlipAngles; automatic directional reconciliation runs right below
+          // once all 8 slices are cut so mirrored pairs can swap or mirror cleanly at $0 cost.
           if (forceFlipSet.has(p.angle)) {
-            flipCanvasHorizontallyInPlace(finalCanvas);
-          } else if (
-            (p.angle === 45 || p.angle === 90 || p.angle === 135) &&
-            detectLateralCanvasFacingDirection(finalCanvas) === 'left'
-          ) {
-            flipCanvasHorizontallyInPlace(finalCanvas);
-          } else if (
-            p.angle === 225 &&
-            detectLateralCanvasFacingDirection(finalCanvas) === 'right'
-          ) {
             flipCanvasHorizontallyInPlace(finalCanvas);
           }
 
           cutCanvases[p.angle] = finalCanvas;
+        }
+
+        // Local $0 directional safety net across all lateral pairs ([45,315], [90,270], [135,225]):
+        // 1) Handedness-safe whole-slice swap when a mirrored pair landed in each other's cells.
+        // 2) For bag-free outfits, $0 horizontal mirror recovery when one side was duplicated or inverted.
+        const preRecoveryDirs: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>> = {};
+        for (const angle of TURNAROUND_ANGLES) {
+          const c = cutCanvases[angle];
+          if (c && angle !== 0 && angle !== 180) {
+            preRecoveryDirs[angle] = detectLateralCanvasFacingDirection(c);
+          }
+        }
+        const recoveryPlan = planLocalTurnaroundDirectionalRecovery(preRecoveryDirs, {
+          hasEquippedBag: Boolean(options?.hasEquippedBag),
+        });
+        for (const [rightAngle, leftAngle] of recoveryPlan.swaps) {
+          const tmp = cutCanvases[rightAngle];
+          cutCanvases[rightAngle] = cutCanvases[leftAngle];
+          cutCanvases[leftAngle] = tmp;
+        }
+        for (const { targetAngle, sourceAngle } of recoveryPlan.mirrorCopies) {
+          const srcCanvas = cutCanvases[sourceAngle];
+          if (!srcCanvas) continue;
+          const mirrored = document.createElement('canvas');
+          mirrored.width = srcCanvas.width;
+          mirrored.height = srcCanvas.height;
+          const mCtx = mirrored.getContext('2d', { willReadFrequently: true });
+          if (mCtx) {
+            mCtx.translate(mirrored.width, 0);
+            mCtx.scale(-1, 1);
+            mCtx.drawImage(srcCanvas, 0, 0);
+            const prevTarget = cutCanvases[targetAngle];
+            if (prevTarget) extraCanvases.push(prevTarget);
+            cutCanvases[targetAngle] = mirrored;
+          } else {
+            mirrored.width = 0;
+            mirrored.height = 0;
+          }
+        }
+        for (const flipAngle of recoveryPlan.flipInPlace) {
+          const target = cutCanvases[flipAngle];
+          if (target) {
+            flipCanvasHorizontallyInPlace(target);
+          }
+        }
+
+        if (typeof options?.onSliceOrientationMeta === 'function') {
+          const detectedDirs: Partial<Record<TurnaroundAngleDeg, LateralFacingDirection>> = {};
+          for (const angle of TURNAROUND_ANGLES) {
+            const c = cutCanvases[angle];
+            if (c) {
+              detectedDirs[angle] =
+                angle === 0 || angle === 180
+                  ? 'neutral'
+                  : detectLateralCanvasFacingDirection(c);
+            }
+          }
+          options.onSliceOrientationMeta(detectedDirs);
         }
 
         normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
@@ -5759,6 +6093,7 @@ export async function synthesizeGeminiMultiAngleVton(
       const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {
         [angleDeg]: cachedHit.slice.imageUrl,
       };
+      let cachedSheetImageUrl: string | null = cachedHit.slice.sheetImageUrl || null;
       await Promise.all(
         TURNAROUND_ANGLES.map(async (candidateAngle) => {
           if (candidateAngle === angleDeg) return;
@@ -5771,6 +6106,9 @@ export async function synthesizeGeminiMultiAngleVton(
           });
           if (other) {
             angleSlices[candidateAngle] = other.slice.imageUrl;
+            if (other.slice.sheetImageUrl && (candidateAngle === 0 || !cachedSheetImageUrl)) {
+              cachedSheetImageUrl = other.slice.sheetImageUrl;
+            }
           }
         })
       );
@@ -5813,6 +6151,7 @@ export async function synthesizeGeminiMultiAngleVton(
           fromCache: true,
           cacheLayer: cachedHit.layer,
           imageUrl: cachedHit.slice.imageUrl,
+          sheetImageUrl: cachedSheetImageUrl,
           angleSlices,
           equippedCount: equippedGarments.length,
           equippedSlotKeys,
@@ -5976,7 +6315,7 @@ export async function synthesizeGeminiMultiAngleVton(
         reason === 'gemini_leaked_key' ||
         reason === 'gemini_billing_required';
 
-      const maxQcAttempts = 3;
+      const maxQcAttempts = useTurnaroundSheet ? 1 : 3;
       const serializedWeatherPayload =
         request.weather && typeof request.weather === 'object'
           ? {
@@ -6024,6 +6363,9 @@ export async function synthesizeGeminiMultiAngleVton(
                 styleMode,
                 viewAngleDeg: angleDeg,
                 turnaroundSheet: useTurnaroundSheet,
+                ...(useTurnaroundSheet
+                  ? { turnaroundLayout: request.turnaroundLayout || 'turnaround_4x2' }
+                  : {}),
                 weather: serializedWeatherPayload,
                 profileKey: serverProfileConfig.profileKey,
                 handedness: effectiveProfile.dominantHand,
@@ -6101,12 +6443,14 @@ export async function synthesizeGeminiMultiAngleVton(
           continue;
         }
 
-        const modelName = String(json.model || 'gemini-3.1-flash-lite-image');
+        const modelName = String(json.model || 'gemini-nano-banana-2.1');
         lastModelName = modelName;
         const angleSlices: Partial<Record<TurnaroundAngleDeg, string>> = {};
         const entriesToPersist: CachedAiVtonSlice[] = [];
         const isTurnaroundResponse = json.layout
-          ? json.layout === 'turnaround_3x2' || json.layout === 'turnaround_2x2'
+          ? json.layout === 'turnaround_4x2' ||
+            json.layout === 'turnaround_3x2' ||
+            json.layout === 'turnaround_2x2'
           : useTurnaroundSheet;
 
         if (
@@ -6208,22 +6552,27 @@ export async function synthesizeGeminiMultiAngleVton(
             }
           }
         } else if (rawComposite && isTurnaroundResponse) {
+          const resolvedSheetLayout = json.layout || request.turnaroundLayout || 'turnaround_4x2';
           const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
-            layout: json.layout || 'turnaround_3x2',
+            layout: resolvedSheetLayout,
+            hasEquippedBag,
           });
 
-          // Verify full-body head-to-shoe integrity on every slice and auto-repair defective angles
-          const integrityEntries = await Promise.all(
-            TURNAROUND_ANGLES.map(async (a) => {
-              const url = sliced[a];
-              if (!url) return [a, { ok: false, reason: 'too_small', fgHeightRatio: 0 }] as const;
-              const rep = await inspectCutoutDataUrlIntegrity(url);
-              return [a, rep] as const;
-            })
-          );
-          const badAngles = integrityEntries
-            .filter(([, rep]) => !rep.ok)
-            .map(([a]) => a);
+          // Cost-safe single-shot 4x2 mode: skip per-angle paid repair fan-out (1 sheet call = 1 charge)
+          const badAngles: TurnaroundAngleDeg[] = [];
+          if (resolvedSheetLayout !== 'turnaround_4x2') {
+            const integrityEntries = await Promise.all(
+              TURNAROUND_ANGLES.map(async (a) => {
+                const url = sliced[a];
+                if (!url) return [a, { ok: false, reason: 'too_small', fgHeightRatio: 0 }] as const;
+                const rep = await inspectCutoutDataUrlIntegrity(url);
+                return [a, rep] as const;
+              })
+            );
+            for (const [a, rep] of integrityEntries) {
+              if (!rep.ok) badAngles.push(a);
+            }
+          }
 
           if (badAngles.length > 0 && !effectiveSignal?.aborted) {
             const repairTargets =
@@ -6409,7 +6758,7 @@ export async function synthesizeGeminiMultiAngleVton(
               weatherMood,
               effectiveWeather,
               imageUrl: sliceUrl,
-              sheetImageUrl: null,
+              sheetImageUrl: a === 0 ? rawComposite : null,
               outfitLabel,
               garmentLabels,
               slotGarmentIds,
@@ -6443,7 +6792,7 @@ export async function synthesizeGeminiMultiAngleVton(
             weatherMood,
             effectiveWeather,
             imageUrl: normalizedSingle,
-            sheetImageUrl: null,
+            sheetImageUrl: rawComposite,
             outfitLabel,
             garmentLabels,
             slotGarmentIds,
@@ -6740,6 +7089,11 @@ export async function synthesizeGeminiMultiAngleVton(
         fromCache: passedCached,
         cacheLayer: passedCached ? 'server' : 'fresh',
         imageUrl: finalImg,
+        sheetImageUrl:
+          passedEntries.find((entry) => entry.angleDeg === 0 && entry.sheetImageUrl)
+            ?.sheetImageUrl ??
+          passedEntries.find((entry) => Boolean(entry.sheetImageUrl))?.sheetImageUrl ??
+          null,
         angleSlices: passedSlices,
         equippedCount: equippedGarments.length,
         equippedSlotKeys,
@@ -6805,6 +7159,7 @@ export async function synthesizeGeminiMultiAngleVton(
 export interface ProgressiveAngleReadyPayload {
   angleDeg: TurnaroundAngleDeg;
   imageUrl: string;
+  sheetImageUrl?: string | null;
   isMasterAnchor: boolean;
   readyAngles: TurnaroundAngleDeg[];
   elapsedMs: number;
@@ -6913,17 +7268,22 @@ export async function synthesizeProgressiveMultiAngleVton(
           effectiveWeather,
           angleDeg: a,
         });
-        return [a, hit?.slice?.imageUrl || null] as const;
+        return [a, hit?.slice?.imageUrl || null, hit?.slice?.sheetImageUrl || null] as const;
       })
     );
     if (request.signal?.aborted) return buildEmptyOutcome('aborted');
-    for (const [a, url] of cachedHits) {
+    let cachedSheetImageUrl: string | null = null;
+    for (const [a, url, sheetUrl] of cachedHits) {
       if (url) collectedSlices[a] = url;
+      if (sheetUrl && (a === 0 || !cachedSheetImageUrl)) {
+        cachedSheetImageUrl = sheetUrl;
+      }
     }
     if (collectedSlices[0]) {
       callbacks?.onAngleReady?.({
         angleDeg: 0,
         imageUrl: collectedSlices[0],
+        sheetImageUrl: cachedSheetImageUrl,
         isMasterAnchor: true,
         readyAngles: getReadyAnglesList(),
         elapsedMs: Date.now() - startedAt,
@@ -6948,6 +7308,7 @@ export async function synthesizeProgressiveMultiAngleVton(
           fromCache: true,
           cacheLayer: 'indexeddb',
           imageUrl: collectedSlices[0],
+          sheetImageUrl: cachedSheetImageUrl,
           angleSlices: { ...collectedSlices },
           equippedCount: equippedGarments.length,
           equippedSlotKeys,
@@ -7020,7 +7381,8 @@ export async function synthesizeProgressiveMultiAngleVton(
     masterAnchorDataUrl: string | null,
     masterLandmarks?: MasterAnchorLandmarks | null,
     secondaryAnchor?: { angleDeg: TurnaroundAngleDeg; imageDataUrl: string } | null,
-    handednessOverride?: 'right' | 'left' | null
+    handednessOverride?: 'right' | 'left' | null,
+    singleOpts?: { skipVisionQc?: boolean }
   ): Promise<{
     rawImageUrl: string | null;
     cutoutUrl: string | null;
@@ -7058,6 +7420,7 @@ export async function synthesizeProgressiveMultiAngleVton(
           styleMode,
           viewAngleDeg: targetAngle,
           turnaroundSheet: false,
+          ...(singleOpts?.skipVisionQc ? { skipVisionQc: true } : {}),
           weather: serializedWeatherPayload,
           profileKey: serverProfileConfig.profileKey,
           handedness: activeAngleHandedness,
@@ -7108,7 +7471,7 @@ export async function synthesizeProgressiveMultiAngleVton(
         return {
           rawImageUrl: null,
           cutoutUrl: null,
-          modelName: String(json?.model || 'gemini-3.1-flash-lite-image'),
+          modelName: String(json?.model || 'gemini-nano-banana-2.1'),
           cached: false,
           latencyMs: Number(json?.latencyMs) || 0,
           reason: json?.fallbackReason || 'gemini_synthesis_failed',
@@ -7119,7 +7482,7 @@ export async function synthesizeProgressiveMultiAngleVton(
         return {
           rawImageUrl: null,
           cutoutUrl: null,
-          modelName: String(json?.model || 'gemini-3.1-flash-lite-image'),
+          modelName: String(json?.model || 'gemini-nano-banana-2.1'),
           cached: false,
           latencyMs: 0,
           reason: 'aborted',
@@ -7138,7 +7501,7 @@ export async function synthesizeProgressiveMultiAngleVton(
       return {
         rawImageUrl: rawUrl,
         cutoutUrl: normalizedCutout,
-        modelName: String(json?.model || 'gemini-3.1-flash-lite-image'),
+        modelName: String(json?.model || 'gemini-nano-banana-2.1'),
         cached: Boolean(json?.cached),
         latencyMs: Number(json?.latencyMs) || 0,
         reason: null,
@@ -7153,7 +7516,7 @@ export async function synthesizeProgressiveMultiAngleVton(
       return {
         rawImageUrl: null,
         cutoutUrl: null,
-        modelName: 'gemini-3.1-flash-lite-image',
+        modelName: 'gemini-nano-banana-2.1',
         cached: false,
         latencyMs: 0,
         reason: isParentAbort
@@ -7165,9 +7528,231 @@ export async function synthesizeProgressiveMultiAngleVton(
       };
     } finally {
       clearTimeout(timeoutId);
-      request.signal?.removeEventListener('abort', onParentAbort);
+      if (request.signal) {
+        request.signal.removeEventListener('abort', onParentAbort);
+      }
     }
   };
+
+  // Single-Shot High-Res 8-Angle 4x2 Nano Banana 2.1 Mode (1 API call -> slice 8 angles locally, $0 QC retries)
+  const useSingleShot4x2Sheet = request.turnaroundSheet !== false;
+  if (useSingleShot4x2Sheet) {
+    const sheetController = new AbortController();
+    const sheetTimeoutId = setTimeout(() => sheetController.abort(), 135_000);
+    const onParentSheetAbort = () => sheetController.abort();
+    request.signal?.addEventListener('abort', onParentSheetAbort, { once: true });
+
+    try {
+      const targetSheetLayout = request.turnaroundLayout || 'turnaround_4x2';
+      const json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+        method: 'POST',
+        headers: reqHeaders,
+        signal: sheetController.signal,
+        body: JSON.stringify({
+          mode,
+          styleMode,
+          viewAngleDeg: 0,
+          turnaroundSheet: true,
+          turnaroundLayout: targetSheetLayout,
+          skipVisionQc: true,
+          weather: serializedWeatherPayload,
+          profileKey: serverProfileConfig.profileKey,
+          handedness: effectiveProfile.dominantHand,
+          avatarSpec: effectiveProfile.avatarSpec,
+          avatarConfigHash: effectiveProfile.avatarConfigHash,
+          portraitDataUrl: effectivePortraitUrl,
+          profile: {
+            gender: effectiveProfile.gender,
+            dominantHand: effectiveProfile.dominantHand,
+            handedness: effectiveProfile.dominantHand,
+            skinToneHex: effectiveProfile.skinToneHex,
+            personalColor: effectiveProfile.personalColor,
+            heightCm: effectiveProfile.heightCm,
+            weightKg: effectiveProfile.weightKg,
+            bodyShape: effectiveProfile.bodyShape,
+            shoulderScale: effectiveProfile.shoulderScale,
+            waistScale: effectiveProfile.waistScale,
+            hipScale: effectiveProfile.hipScale,
+            portraitDataUrl: effectivePortraitUrl,
+            ...(storedCharacterAnchorUrl
+              ? { characterAnchorDataUrl: storedCharacterAnchorUrl }
+              : {}),
+            avatarSpec: effectiveProfile.avatarSpec,
+            avatarConfigHash: effectiveProfile.avatarConfigHash,
+            styleMode,
+            viewAngleDeg: 0,
+            turnaroundSheet: true,
+            turnaroundLayout: targetSheetLayout,
+          },
+          slots: serializedSlots,
+          forceRefresh: Boolean(request.forceRefresh),
+        }),
+      });
+
+      if (request.signal?.aborted) return buildEmptyOutcome('aborted');
+
+      const rawComposite = sanitizeImageCandidate(
+        json?.compositeImageUrl ?? json?.afterImageUrl ?? null
+      );
+      if (
+        !rawComposite ||
+        json?.geminiUsed === false ||
+        json?.provider === 'flatlay-fallback'
+      ) {
+        return buildEmptyOutcome(json?.fallbackReason || 'gemini_synthesis_failed');
+      }
+
+      const modelName = String(json?.model || 'gemini-nano-banana-2.1');
+      const resolvedLayout = json?.layout || targetSheetLayout;
+      const isSheetPayload =
+        resolvedLayout === 'turnaround_4x2' ||
+        resolvedLayout === 'turnaround_3x2' ||
+        resolvedLayout === 'turnaround_2x2';
+      const nowTs = Date.now();
+      const entriesToPersist: CachedAiVtonSlice[] = [];
+
+      if (isSheetPayload && !json?.frontOnlyDegraded && json?.fallbackView !== 'positive-only') {
+        const sliced = await sliceTurnaround2x2Sheet(rawComposite, {
+          layout: resolvedLayout,
+          hasEquippedBag,
+        });
+        if (request.signal?.aborted) return buildEmptyOutcome('aborted');
+
+        for (const angle of TURNAROUND_ANGLES) {
+          const sliceUrl = sliced[angle];
+          if (!sliceUrl) continue;
+          const entryCacheKey = buildAiVtonCacheKey({
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather,
+            angleDeg: angle,
+          });
+          markCacheKeyTransparentVerified(entryCacheKey);
+          collectedSlices[angle] = sliceUrl;
+          entriesToPersist.push({
+            cacheKey: entryCacheKey,
+            avatarConfigHash: profile.avatarConfigHash,
+            outfitComboId,
+            styleMode,
+            angleDeg: angle,
+            weatherMood,
+            effectiveWeather,
+            imageUrl: sliceUrl,
+            sheetImageUrl: angle === 0 ? rawComposite : null,
+            outfitLabel,
+            garmentLabels,
+            slotGarmentIds,
+            equippedCount: equippedGarments.length,
+            model: modelName,
+            updatedAt: nowTs,
+          });
+        }
+      } else {
+        const zeroCut = await ensureTransparentCutout(
+          await removeModelBackgroundToPng(rawComposite)
+        );
+        if (request.signal?.aborted) return buildEmptyOutcome('aborted');
+        const zeroMap: Partial<Record<TurnaroundAngleDeg, string>> = { 0: zeroCut };
+        await normalizeTurnaroundDataUrlsToFloorBaseline(zeroMap);
+        const finalZero = zeroMap[0] || zeroCut;
+        collectedSlices[0] = finalZero;
+        markCacheKeyTransparentVerified(zeroCacheKey);
+        entriesToPersist.push({
+          cacheKey: zeroCacheKey,
+          avatarConfigHash: profile.avatarConfigHash,
+          outfitComboId,
+          styleMode,
+          angleDeg: 0,
+          weatherMood,
+          effectiveWeather,
+          imageUrl: finalZero,
+          sheetImageUrl: rawComposite,
+          outfitLabel,
+          garmentLabels,
+          slotGarmentIds,
+          equippedCount: equippedGarments.length,
+          model: modelName,
+          updatedAt: nowTs,
+        });
+      }
+
+      if (entriesToPersist.length > 0) {
+        await persistAiVtonSlices(entriesToPersist);
+      }
+
+      const finalZeroUrl = collectedSlices[0] || null;
+      if (!finalZeroUrl) {
+        return buildEmptyOutcome('gemini_synthesis_failed');
+      }
+
+      if (characterAnchorKey) {
+        const anchorBackdropHex = selectOptimalStudioKeyHex(
+          extractStudioKeyColorInputs(serializedSlots)
+        );
+        void saveCharacterIdentityAnchorFromZeroSlice({
+          anchorKey: characterAnchorKey,
+          zeroSliceDataUrl: finalZeroUrl,
+          backdropHex: anchorBackdropHex,
+        });
+      }
+
+      callbacks?.onAngleReady?.({
+        angleDeg: 0,
+        imageUrl: finalZeroUrl,
+        sheetImageUrl: rawComposite,
+        isMasterAnchor: true,
+        readyAngles: getReadyAnglesList(),
+        elapsedMs: Date.now() - startedAt,
+        allSlices: { ...collectedSlices },
+        fromCache: Boolean(json?.cached),
+        serverLatencyMs: Number(json?.latencyMs) || 0,
+      });
+
+      return {
+        ok: true,
+        fallbackToFlatLay: false,
+        frontOnlyDegraded: getReadyAnglesList().length <= 1,
+        reason: null,
+        mode,
+        provider: 'gemini-vton',
+        styleMode,
+        angleDeg: 0,
+        weatherMood,
+        effectiveWeather,
+        avatarConfigHash: profile.avatarConfigHash,
+        outfitComboId,
+        cacheKey: zeroCacheKey,
+        fromCache: Boolean(json?.cached),
+        cacheLayer: json?.cached ? 'server' : 'fresh',
+        imageUrl: finalZeroUrl,
+        sheetImageUrl: rawComposite,
+        angleSlices: { ...collectedSlices },
+        equippedCount: equippedGarments.length,
+        equippedSlotKeys,
+        profile,
+        handedness: profile.dominantHand,
+        bagAssetMirrored,
+        createdAt: Date.now(),
+      };
+    } catch (err) {
+      const isParentAbort = Boolean(request.signal?.aborted);
+      const isTimeoutAbort =
+        !isParentAbort &&
+        (sheetController.signal.aborted ||
+          (err instanceof Error && err.name === 'AbortError'));
+      return buildEmptyOutcome(
+        isParentAbort
+          ? 'aborted'
+          : isTimeoutAbort
+            ? 'angle_timeout'
+            : 'network_or_runtime_error'
+      );
+    } finally {
+      clearTimeout(sheetTimeoutId);
+      request.signal?.removeEventListener('abort', onParentSheetAbort);
+    }
+  }
 
   const persistSingleSlice = async (
     targetAngle: TurnaroundAngleDeg,

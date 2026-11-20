@@ -398,6 +398,11 @@ export function createVtonRouter(options = {}) {
           rawClientProfile.turnaroundSheet ??
           false
       ),
+      turnaroundLayout:
+        payload.turnaroundLayout ??
+        payload.turnaround_layout ??
+        rawClientProfile.turnaroundLayout ??
+        null,
       portraitDataUrl:
         rawClientProfile.portraitDataUrl ??
         payload.portraitDataUrl ??

@@ -125,7 +125,7 @@ describe('Outfits & Profile VTON Style Gate and Symmetrical Angle Scrollbar', ()
   });
 
   it('aligns slider direction with head/gaze direction and enforces strict 90° pure orthographic side-profile rules', () => {
-    assert.equal(CUTOUT_PIPELINE_VERSION, 'v20-bag-anchor-sync-strict-qc');
+    assert.equal(CUTOUT_PIPELINE_VERSION, 'v23-nanobanana-4x2-rear-order');
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[45], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /SCREEN-RIGHT/i);
     assert.match(CANONICAL_ANGLE_PROMPT_DIRECTIVES[90], /EXACTLY ONE.*EYE/i);

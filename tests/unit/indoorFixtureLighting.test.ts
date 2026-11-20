@@ -111,17 +111,19 @@ test('all 4 cyberpunk stages (S+, S, A+, A) illuminate diverse multi-color neon 
     });
 
     assert.equal(f100.isNeonScene, true);
-    assert.ok(f100.fixtureOnFactor >= 1.0, `${spec.id} 100% neon should be brightly lit`);
-    assert.ok(f100.floorPoolStrength >= 0.3, `${spec.id} 100% neon should illuminate floor pool`);
-    assert.ok(f50.fixtureOnFactor > 0 && f50.fixtureOnFactor < f100.fixtureOnFactor);
+    assert.ok(f100.fixtureOnFactor >= 0.8 && f100.fixtureOnFactor <= 0.96, `${spec.id} 100% neon should stay punchy without blowout, got ${f100.fixtureOnFactor}`);
+    assert.ok(f100.floorPoolStrength >= 0.25, `${spec.id} 100% neon should illuminate floor pool`);
+    assert.ok(f50.fixtureOnFactor > 0.25 && f50.fixtureOnFactor < f100.fixtureOnFactor * 0.65, `${spec.id} 50% neon should visibly dim near midpoint`);
     assert.equal(f0.fixtureOnFactor, 0);
     assert.equal(f0.floorPoolStrength, 0);
+    assert.equal(f0.castShadowScale, 0, `${spec.id} unlit 0% night neon must have zero directional cast shadow`);
+    assert.ok(f0.contactAoScale >= 0.4 && f0.contactAoScale < f100.contactAoScale, `${spec.id} unlit 0% keeps subtle shoe Contact AO`);
     assert.ok(f0.backdropBrightness < f50.backdropBrightness && f50.backdropBrightness < f100.backdropBrightness);
-    assert.ok(f0.backdropSaturate < f100.backdropSaturate);
+    assert.ok(f0.backdropSaturate < f50.backdropSaturate && f50.backdropSaturate < f100.backdropSaturate);
   }
 });
 
-test('post-sunset wall-sconce loft turns lamps ON and casts strong directional + secondary fill shadows', () => {
+test('post-sunset wall-sconce loft turns lamps ON with refined headroom and casts directional + secondary fill shadows', () => {
   const frame = resolveStageLightingFrame({
     backgroundId: 'b_minimal_loft_window',
     isOutdoor: false,
@@ -133,14 +135,15 @@ test('post-sunset wall-sconce loft turns lamps ON and casts strong directional +
   });
 
   assert.equal(frame.opticalRegime, 'indoor_night_fixture');
-  assert.ok(frame.fixtureOnFactor >= 0.9, `expected lit sconces, got ${frame.fixtureOnFactor}`);
-  assert.ok(frame.directRatio >= 0.78, `night indoor directRatio must stay crisp, got ${frame.directRatio}`);
+  assert.ok(frame.fixtureOnFactor >= 0.5 && frame.fixtureOnFactor <= 0.64, `expected refined 100% sconce level, got ${frame.fixtureOnFactor}`);
+  assert.ok(frame.directRatio >= 0.78, `night indoor directRatio must stay crisp at 100%, got ${frame.directRatio}`);
   // Left wall sconce sits on negative X, casting primary shadow to positive X (right)
   assert.ok(frame.keyPosX < -1.8, `expected left wall sconce keyPosX < -1.8, got ${frame.keyPosX}`);
   // Opposing right wall sconce casts softer secondary fill shadow to the left
   assert.ok(frame.secondaryShadowWeight >= 0.25, `expected secondary fill shadow, got ${frame.secondaryShadowWeight}`);
   assert.ok(frame.secondaryShadowDirX < -0.5);
-  assert.ok(frame.floorPoolStrength > 0.15);
+  assert.ok(frame.floorPoolStrength > 0.14);
+  assert.ok(frame.castShadowScale >= 0.9, `expected full directional cast shadow at 100%, got ${frame.castShadowScale}`);
 });
 
 test('post-sunset dark basalt flagship casts crisp pin-spot shadow over warm floor spotlight pool', () => {
@@ -154,14 +157,15 @@ test('post-sunset dark basalt flagship casts crisp pin-spot shadow over warm flo
     weather: { latitude: 37.5665, longitude: 126.978 },
   });
 
-  assert.ok(frame.fixtureOnFactor >= 0.9);
+  assert.ok(frame.fixtureOnFactor >= 0.5 && frame.fixtureOnFactor <= 0.64);
   assert.ok(frame.directRatio >= 0.84, `pin-spot directRatio should be crisp, got ${frame.directRatio}`);
-  assert.ok(frame.floorPoolStrength >= 0.3, `dark basalt floor needs warm pool, got ${frame.floorPoolStrength}`);
+  assert.ok(frame.floorPoolStrength >= 0.2, `dark basalt floor needs warm pool, got ${frame.floorPoolStrength}`);
+  assert.ok(frame.castShadowScale >= 0.9);
 });
 
-test('lightingIntensity 0% cleanly turns indoor lamps and floor pools OFF, and natural outdoor stages keep fixtures at 0', () => {
+test('lightingIntensity 0% turns indoor lamps and night directional cast shadow OFF while keeping grounded Contact AO, and natural outdoor keeps fixtures at 0', () => {
   const offFrame = resolveStageLightingFrame({
-    backgroundId: 'b_minimal_loft_window',
+    backgroundId: 'b_seoul_cafe_terrace',
     isOutdoor: false,
     timestampMs: NIGHT_LOCAL_MS,
     theme: 'dark',
@@ -173,6 +177,23 @@ test('lightingIntensity 0% cleanly turns indoor lamps and floor pools OFF, and n
   assert.equal(offFrame.fixtureOnFactor, 0);
   assert.equal(offFrame.floorPoolStrength, 0);
   assert.equal(offFrame.secondaryShadowWeight, 0);
+  assert.equal(offFrame.castShadowScale, 0, 'unlit night indoor room must have 0 directional cast shadow');
+  assert.ok(offFrame.contactAoScale >= 0.4 && offFrame.contactAoScale <= 0.5, 'unlit room retains subtle grounded Contact AO');
+  assert.equal(offFrame.characterRimDropShadow, 'drop-shadow(0 0 0 rgba(0, 0, 0, 0))');
+  assert.ok(offFrame.characterAmbientBrightness < 0.9, 'unlit room subtly dims character ambient brightness');
+
+  // Daytime windowed salon at 0% dimmer still retains soft window-daylight cast shadow
+  const dayWindowOff = resolveStageLightingFrame({
+    backgroundId: 'b_minimal_loft_window',
+    isOutdoor: false,
+    timestampMs: NOON_LOCAL_MS,
+    theme: 'light',
+    lightingPreset: 'auto',
+    lightingIntensity: 0,
+    weather: { latitude: 37.5665, longitude: 126.978 },
+  });
+  assert.equal(dayWindowOff.fixtureOnFactor, 0);
+  assert.ok(dayWindowOff.castShadowScale > 0.3, 'daytime windowed room keeps natural window directional shadow even when artificial lamps are off');
 
   const outdoorFrame = resolveStageLightingFrame({
     backgroundId: 'a_sunset_rooftop',
@@ -197,44 +218,57 @@ test('lightingIntensity 0% cleanly turns indoor lamps and floor pools OFF, and n
     lightingIntensity: 100,
     weather: { latitude: 37.5665, longitude: 126.978 },
   });
-  assert.ok(dressingDay.fixtureOnFactor >= 0.7, `windowless room lamps should stay lit in daytime`);
+  assert.ok(dressingDay.fixtureOnFactor >= 0.44, `windowless room lamps should stay lit in daytime, got ${dressingDay.fixtureOnFactor}`);
   assert.ok(dressingDay.directRatio >= 0.5);
 });
 
-test('dimming lightingIntensity across 0%..100% keeps wall sconces, wall wash, floor pool, and shadows clearly lit with preserved wall contrast', () => {
-  const levels = [0, 25, 50, 75, 100];
+test('zero-continuous dimming across 0%..5%..50%..100% eliminates low-end floor jump, keeps 100% refined, and scales cast shadow cleanly', () => {
+  const levels = [0, 5, 25, 50, 75, 100];
   const frames = levels.map((lightingIntensity) =>
     resolveStageLightingFrame({
-      backgroundId: 'b_minimal_loft_window',
+      backgroundId: 'b_seoul_cafe_terrace',
       isOutdoor: false,
       timestampMs: NIGHT_LOCAL_MS,
-      theme: 'light',
+      theme: 'dark',
       lightingPreset: 'auto',
       lightingIntensity,
       weather: { latitude: 37.5665, longitude: 126.978 },
     })
   );
 
-  const [f0, f25, f50, f75, f100] = frames;
+  const [f0, f5, f25, f50, f75, f100] = frames;
 
-  // 0% strictly OFF
+  // 0% strictly OFF (zero directional cast shadow, subtle grounded Contact AO only)
   assert.equal(f0.fixtureOnFactor, 0);
   assert.equal(f0.floorPoolStrength, 0);
   assert.equal(f0.nightFixtureGlowCss, 'none');
+  assert.equal(f0.castShadowScale, 0);
+  assert.ok(f0.contactAoScale > 0.35 && f0.contactAoScale < f100.contactAoScale);
 
-  // 50% stays genuinely lit (does NOT extinguish sconce glow, beam, haze, floor pool, or cast shadow)
-  assert.ok(f50.fixtureOnFactor >= 0.8, `50% fixtureOnFactor should stay >= 0.8, got ${f50.fixtureOnFactor}`);
-  assert.ok(f50.floorPoolStrength >= 0.16, `50% floorPoolStrength should stay >= 0.16, got ${f50.floorPoolStrength}`);
+  // 5% is genuinely whisper-dim (< 10% of 100% output, no abrupt floor jump)
+  assert.ok(f5.fixtureOnFactor > 0 && f5.fixtureOnFactor < f100.fixtureOnFactor * 0.1, `5% fixtureOnFactor (${f5.fixtureOnFactor}) must be whisper-dim vs 100% (${f100.fixtureOnFactor})`);
+  assert.ok(f5.castShadowScale > 0 && f5.castShadowScale < f100.castShadowScale * 0.1, `5% castShadowScale (${f5.castShadowScale}) must be faint vs 100% (${f100.castShadowScale})`);
+
+  // 50% sits cleanly near halfway across fixture glow, wall wash, floor pool, and cast shadow
+  assert.ok(f50.fixtureOnFactor > f100.fixtureOnFactor * 0.4 && f50.fixtureOnFactor < f100.fixtureOnFactor * 0.6, `50% fixtureOnFactor (${f50.fixtureOnFactor}) should sit near midpoint of 100% (${f100.fixtureOnFactor})`);
+  assert.ok(f50.castShadowScale > f100.castShadowScale * 0.4 && f50.castShadowScale < f100.castShadowScale * 0.6);
   assert.notEqual(f50.nightFixtureGlowCss, 'none');
   assert.equal(f50.beamVisible, true);
   assert.equal(f50.hazeVisible, true);
-  assert.ok(f50.shadowOpacityScale >= 0.78, `50% shadowOpacityScale should stay >= 0.78, got ${f50.shadowOpacityScale}`);
 
-  // Strictly monotonic perceptual progression 0% < 25% < 50% < 75% < 100%
+  // Strictly monotonic progression 0% < 5% < 25% < 50% < 75% < 100%
   for (let i = 1; i < frames.length; i += 1) {
     assert.ok(
       frames[i].fixtureOnFactor > frames[i - 1].fixtureOnFactor,
       `fixtureOnFactor must increase from ${levels[i - 1]}% to ${levels[i]}%`
+    );
+    assert.ok(
+      frames[i].castShadowScale > frames[i - 1].castShadowScale,
+      `castShadowScale must increase from ${levels[i - 1]}% to ${levels[i]}%`
+    );
+    assert.ok(
+      frames[i].contactAoScale > frames[i - 1].contactAoScale,
+      `contactAoScale must increase from ${levels[i - 1]}% to ${levels[i]}%`
     );
     assert.ok(
       frames[i].floorPoolStrength > frames[i - 1].floorPoolStrength,
@@ -244,15 +278,35 @@ test('dimming lightingIntensity across 0%..100% keeps wall sconces, wall wash, f
       frames[i].keyIntensity > frames[i - 1].keyIntensity,
       `keyIntensity must increase from ${levels[i - 1]}% to ${levels[i]}%`
     );
+    assert.ok(
+      frames[i].characterAmbientBrightness > frames[i - 1].characterAmbientBrightness,
+      `characterAmbientBrightness must increase from ${levels[i - 1]}% to ${levels[i]}%`
+    );
   }
 
-  // 100% delivers full incandescent brilliance while keeping room wall luminance restrained for crisp shade contrast
-  assert.ok(f25.fixtureOnFactor > 0.6, `25% fixtureOnFactor should stay > 0.6, got ${f25.fixtureOnFactor}`);
+  // 100% stays refined (calibrated to former ~5% natural luminance headroom, zero ceiling blowout)
+  assert.ok(f25.fixtureOnFactor > f5.fixtureOnFactor);
   assert.ok(f75.fixtureOnFactor > f50.fixtureOnFactor);
-  assert.ok(f100.fixtureOnFactor >= 1.05, `100% fixtureOnFactor should be >= 1.05, got ${f100.fixtureOnFactor}`);
+  assert.ok(f100.fixtureOnFactor >= 0.5 && f100.fixtureOnFactor <= 0.64, `100% indoor fixtureOnFactor (${f100.fixtureOnFactor}) must stay refined`);
   assert.ok(
-    f100.backdropBrightness <= 0.94,
-    `100% night light-mode loft wall brightness (${f100.backdropBrightness}) must preserve contrast headroom for lit sconces`
+    f100.backdropBrightness <= 0.85,
+    `100% night dark-mode cafe brightness (${f100.backdropBrightness}) must avoid wall/ceiling overexposure`
   );
+  assert.equal(f100.characterAmbientBrightness, 1);
+
+  // Physical geometric invariance: at night, dimming a fixed lamp must NEVER drift light direction or shadow shape
+  for (const f of frames) {
+    assert.equal(f.keyPosX, f100.keyPosX, `night keyPosX must stay locked to lamp across dimmer (${f.intensityPct}%)`);
+    assert.equal(f.keyPosY, f100.keyPosY, `night keyPosY must stay locked to lamp across dimmer (${f.intensityPct}%)`);
+    assert.equal(f.keyPosZ, f100.keyPosZ, `night keyPosZ must stay locked to lamp across dimmer (${f.intensityPct}%)`);
+    assert.equal(f.shadowOffsetX, f100.shadowOffsetX, `night shadowOffsetX must not drift with dimmer (${f.intensityPct}%)`);
+    assert.equal(f.shadowOffsetZ, f100.shadowOffsetZ, `night shadowOffsetZ must not drift with dimmer (${f.intensityPct}%)`);
+    assert.equal(f.shadowStretchX, f100.shadowStretchX, `night shadowStretchX must not drift with dimmer (${f.intensityPct}%)`);
+    assert.equal(f.shadowStretchZ, f100.shadowStretchZ, `night shadowStretchZ must not drift with dimmer (${f.intensityPct}%)`);
+    assert.ok(
+      f.directRatio >= f100.directRatio * 0.88,
+      `night directRatio (${f.directRatio}) must stay geometrically consistent with 100% (${f100.directRatio})`
+    );
+  }
 });
 

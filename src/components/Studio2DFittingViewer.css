@@ -1667,6 +1667,7 @@
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .atelier-weather-capsule,
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-top-wardrobe-drawer-btn,
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-vton-history-pill-btn,
+.studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-vton-original-link,
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-look-selector-btn,
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-weather-look-dock,
 .studio-2d-vton-viewer[data-stage-view='ai-vton'] .studio-angle-scroll-dock {
@@ -1706,6 +1707,7 @@
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-vton-zoom-level='true'],
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-hud-left-slot [data-stage-bg-picker-btn='true'],
 .studio-2d-vton-viewer[data-lookbook-overlay='true']:not([data-post-login-reveal='true']) .studio-weather-look-dock,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-original-link,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-pinned-banner,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-staged-bar,
 .studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-vton-status-toast,
@@ -1872,6 +1874,33 @@
   -webkit-user-drag: none;
 }
 
+/* Hidden SVG defs for pure X-axis horizontal kinetic motion blur (zero cost at rest) */
+.studio-vton-svg-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Dual-layer GPU compositor stack for 2.5D counter-rotating crossfade turnaround */
+.studio-vton-turnaround-stack {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: none;
+}
+
+.studio-vton-turnaround-stack.is-kinetic-blur {
+  filter: url(#studio-vton-motion-blur);
+  will-change: filter;
+}
+
 /* Layer 2 (z-index: 20): True RGBA Transparent Model Image grounded on studio floor baseline */
 .editorial-ai-vton-img {
   position: relative;
@@ -1880,9 +1909,20 @@
   border-radius: 0;
   object-fit: contain;
   object-position: center bottom;
-  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16))
+  will-change: transform, opacity;
+  filter: brightness(var(--stage-char-ambient-brightness, 1))
+    drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16))
     var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
   transition: filter 0.35s ease;
+}
+
+.editorial-ai-vton-img-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none !important;
 }
 
 .editorial-ai-vton-img.is-lookbook-tappable {
@@ -1891,8 +1931,18 @@
 }
 
 [data-theme='dark'] .editorial-ai-vton-img {
-  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56))
+  filter: brightness(var(--stage-char-ambient-brightness, 1))
+    drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56))
     var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-vton-turnaround-stack.is-kinetic-blur {
+    filter: none;
+  }
+  .editorial-ai-vton-img-ghost {
+    display: none;
+  }
 }
 
 /* Transient Non-Interactive 360° Swipe Angle Feedback Pill */
@@ -4029,18 +4079,19 @@ html[data-vibrancy-fallback='solid']
   gap: 5px;
   padding: 5px 4px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, clamp(0.12, calc(var(--hig-nav-bg-opacity, 0.56) * 0.72), 0.92));
+  border: 1px solid rgba(255, 255, 255, clamp(0.14, calc(var(--hig-nav-bg-opacity, 0.56) * 0.55), 0.44));
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   box-sizing: border-box;
   pointer-events: auto;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
 }
 
 [data-theme='dark'] .studio-2d-vton-viewer .studio-worn-slots-dock-shell,
 .studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-slots-dock-shell {
-  background: rgba(18, 18, 22, 0.38);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(18, 18, 22, clamp(0.12, calc(var(--hig-nav-bg-opacity, 0.56) * 0.82), 0.92));
+  border-color: rgba(255, 255, 255, clamp(0.08, calc(var(--hig-nav-bg-opacity, 0.56) * 0.28), 0.24));
 }
 
 .studio-2d-vton-viewer[data-angle-dock-visible='false'] .studio-worn-slots-dock-shell {
@@ -4079,8 +4130,10 @@ html[data-vibrancy-fallback='solid']
   min-width: 44px;
   height: 22px;
   border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, clamp(0.16, var(--hig-nav-bg-opacity, 0.56), 0.44));
+  background: rgba(255, 255, 255, clamp(0.15, var(--hig-nav-bg-opacity, 0.68), 0.94));
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
   color: rgba(24, 24, 27, 0.92);
   display: inline-flex;
   align-items: center;
@@ -4103,8 +4156,8 @@ html[data-vibrancy-fallback='solid']
 
 [data-theme='dark'] .studio-worn-dock-jump-btn,
 .studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-dock-jump-btn {
-  background: rgba(28, 28, 34, 0.78);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(28, 28, 34, clamp(0.15, var(--hig-nav-bg-opacity, 0.72), 0.94));
+  border-color: rgba(255, 255, 255, clamp(0.1, calc(var(--hig-nav-bg-opacity, 0.56) * 0.34), 0.28));
   color: rgba(245, 245, 247, 0.94);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
 }
@@ -4123,6 +4176,15 @@ html[data-vibrancy-fallback='solid']
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
+  background: rgba(255, 255, 255, clamp(0.15, var(--hig-nav-bg-opacity, 0.56), 0.94));
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+}
+
+[data-theme='dark'] .studio-2d-vton-viewer .studio-worn-slot-chip,
+.studio-2d-vton-viewer[data-stage-theme='dark'] .studio-worn-slot-chip {
+  background: rgba(28, 28, 32, clamp(0.15, var(--hig-nav-bg-opacity, 0.56), 0.94));
+  border-color: rgba(255, 255, 255, clamp(0.1, calc(var(--hig-nav-bg-opacity, 0.56) * 0.3), 0.26));
 }
 
 .studio-2d-vton-viewer[data-stage-view='flatlay'][data-angle-dock-visible='false']:not([data-lookbook-overlay='true'])
@@ -7946,3 +8008,298 @@ html[data-vibrancy-fallback='solid']
   height: 100%;
   display: block;
 }
+
+/* ==========================================================================
+   Nano Banana Raw Original Image Link & Full-Viewport Lightbox Modal
+   ========================================================================== */
+.studio-vton-original-link {
+  position: relative;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px 0 8px;
+  border-radius: 10px;
+  background: rgba(34, 33, 30, clamp(0.15, var(--hig-nav-bg-opacity, 0.66), 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--hig-overlay-blur, 8px));
+  color: #f7f7f5;
+  font-size: 0.7rem;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.16s var(--spring-ease), color 0.18s var(--spring-ease),
+    border-color 0.18s var(--spring-ease), transform 0.14s var(--spring-ease),
+    box-shadow 0.16s var(--spring-ease);
+}
+
+.studio-vton-original-link::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-vton-original-link {
+  background: rgba(255, 255, 255, clamp(0.15, var(--hig-nav-bg-opacity, 0.72), 0.96));
+  border-color: rgba(28, 28, 30, 0.16);
+  color: #1d1d1f;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.studio-vton-original-link:hover {
+  background: rgba(34, 33, 30, 0.82);
+  border-color: rgba(255, 255, 255, 0.42);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-vton-original-link:hover {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(28, 28, 30, 0.3);
+}
+
+.studio-vton-original-link:active,
+.studio-vton-original-link.is-interacting {
+  transform: scale(1.04) !important;
+}
+
+.studio-vton-original-link:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.studio-2d-vton-viewer[data-stage-theme='light'] .studio-vton-original-link:focus-visible {
+  outline-color: #1d1d1f;
+}
+
+.studio-original-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(10, 10, 12, 0.84);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 2.5vw, 28px);
+  box-sizing: border-box;
+}
+
+.studio-original-lightbox-dialog {
+  width: min(1160px, 100%);
+  max-height: min(92vh, 920px);
+  border-radius: 20px;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.58);
+  color: #f5f5f7;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-dialog {
+  background: #faf9f6;
+  border-color: rgba(28, 28, 30, 0.14);
+  color: #1d1d1f;
+  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.28);
+}
+
+.studio-original-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-header {
+  border-bottom-color: rgba(28, 28, 30, 0.1);
+}
+
+.studio-original-lightbox-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.studio-original-lightbox-title {
+  font-size: 0.92rem;
+  font-weight: 740;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.studio-original-lightbox-meta {
+  font-size: 0.72rem;
+  font-weight: 560;
+  color: rgba(245, 245, 247, 0.68);
+  line-height: 1.25;
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-meta {
+  color: rgba(29, 29, 31, 0.62);
+}
+
+.studio-original-lightbox-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.studio-original-lightbox-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 640;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+
+.studio-original-lightbox-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-btn {
+  border-color: rgba(28, 28, 30, 0.16);
+  background: rgba(28, 28, 30, 0.05);
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-btn:hover {
+  background: rgba(28, 28, 30, 0.1);
+  border-color: rgba(28, 28, 30, 0.28);
+}
+
+.studio-original-lightbox-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.studio-original-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-close {
+  border-color: rgba(28, 28, 30, 0.16);
+  background: rgba(28, 28, 30, 0.05);
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-close:hover {
+  background: rgba(28, 28, 30, 0.12);
+}
+
+.studio-original-lightbox-note {
+  padding: 10px 16px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 245, 247, 0.78);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-note {
+  background: rgba(28, 28, 30, 0.04);
+  color: rgba(29, 29, 31, 0.74);
+  border-bottom-color: rgba(28, 28, 30, 0.08);
+}
+
+.studio-original-lightbox-canvas {
+  flex: 1 1 auto;
+  min-height: 240px;
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0e0e10;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+.studio-original-lightbox-backdrop[data-stage-theme='light'] .studio-original-lightbox-canvas {
+  background-color: #efeee9;
+  background-image:
+    linear-gradient(45deg, rgba(0, 0, 0, 0.045) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.045) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.045) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.045) 75%);
+}
+
+.studio-original-lightbox-canvas.is-zoomed {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.studio-original-lightbox-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92vh - 110px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  cursor: zoom-in;
+}
+
+.studio-original-lightbox-canvas.is-zoomed .studio-original-lightbox-img {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+
+@media (max-width: 640px) {
+  .studio-original-lightbox-header {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+
+  .studio-original-lightbox-btn span {
+    display: none;
+  }
+
+  .studio-original-lightbox-btn {
+    padding: 0 10px;
+  }
+
+  .studio-original-lightbox-canvas {
+    padding: 10px;
+  }
+}
+
