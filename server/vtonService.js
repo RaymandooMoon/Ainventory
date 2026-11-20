@@ -275,7 +275,7 @@ const GEMINI_TIMEOUT_MS = 90000;
 const MAX_TOTAL_SYNTHESIS_MS = 120000;
 const MAX_MEM_CACHE = 32;
 const MAX_DISK_CACHE = 120;
-const CACHE_SCHEMA_VERSION = 'v23-nanobanana-4x2-blueprint-thinking';
+const CACHE_SCHEMA_VERSION = 'v24-nanobanana-4x2-relaxed-stance';
 const CUTOUT_STAGE_HEX = '#94A3B8';
 const VALID_SHEET_IMAGE_SIZES = new Set(['1K', '2K', '4K']);
 const VALID_THINKING_LEVELS = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
@@ -1959,7 +1959,7 @@ function buildEditorialStyleAndBodyPrompt(
       ? [
           'CAMERA & 8-ANGLE 4x2 FULL-BODY TURNAROUND SHEET (4:3 BORDERLESS CANVAS — EQUAL-SCALE FULL-BODY BOTH-ROWS):',
           `- Photograph one seamless, borderless 4:3 studio turnaround contact sheet containing 8 full-body views of the same solitary subject arranged in 4 equal columns by 2 equal rows on a completely flat, solid, shadow-free ${backdropHex} studio backdrop (with flat ${backdropHex} filling every enclosed gap between arms, legs, and straps).`,
-          '- Reference Role Mapping: Use Image 1 (the 4x2 grey clay mannequin blueprint) exclusively for the 4x2 grid spacing, identical 1:1 head-to-shoe scale (~42% of total canvas height in both rows), camera angles, and head/torso/foot facing directions; replace the grey mannequin entirely with the target character identity, skin tone, hair, and equipped garments from the garment reference photos.',
+          '- Reference Role Mapping [IMAGE 1 — 8-ANGLE 4x2 POSE, FACING & SCALE BLUEPRINT ONLY]: Use Image 1 (the 4x2 grey clay mannequin blueprint) exclusively for the 4x2 grid spacing, identical 1:1 head-to-shoe scale (~42% of total canvas height in both rows), camera angles, relaxed arms-down standing posture, and head/torso/foot facing directions. Keep shoulders relaxed and both arms hanging naturally and loosely close alongside the torso and hips with soft relaxed fingers near the outer thighs like a calm luxury lookbook model (never wide splayed A-pose or stiff T-pose). Replace the grey mannequin entirely with the target character identity, skin tone, hair, and equipped garments from the garment reference photos.',
           '- Framing & EQUAL-SCALE FULL-BODY BOTH-ROWS alignment: Use one uniform eye-to-waist straight-on horizontal studio camera across all 8 figures. Top Row (0°, 45°, 90°, 135°): head crowns align at y=4% and both shoe soles rest cleanly at y=46%. Bottom Row (180°, 225°, 270°, 315°): head crowns align at y=54% and both shoe soles rest cleanly at y=96%, leaving an open horizontal gutter between rows and clear vertical gutters between all 4 columns.',
           `- ${SOLO_SINGLE_PERSON_PER_CELL_LOCK}`,
           `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
@@ -2228,7 +2228,7 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
   const poseBlueprintPart = is4x2TurnaroundSheet ? buildServerPoseBlueprintPart(profile) : null;
   if (poseBlueprintPart) {
     parts.push({
-      text: '[IMAGE 1 — 8-ANGLE 4x2 POSE, FACING & SCALE BLUEPRINT ONLY]: Copy the exact 4-column × 2-row grid spacing, equal full-body head-to-shoe scale, standing posture, and exact head/nose/foot facing direction of every cell from Image 1. Discard the neutral grey clay mannequin appearance completely and render the target character wearing the attached garment references.',
+      text: '[IMAGE 1 — 8-ANGLE 4x2 POSE, FACING & SCALE BLUEPRINT ONLY]: Copy the exact 4-column × 2-row grid spacing, equal full-body head-to-shoe scale, natural relaxed arms-down editorial standing posture (arms resting loosely close to the body and thighs, relaxed soft fingers — never stiff wide A-pose), and exact head/nose/foot facing direction of every cell from Image 1. Discard the neutral grey clay mannequin appearance completely and render the target character wearing the attached garment references.',
     });
     parts.push({
       inlineData: poseBlueprintPart,

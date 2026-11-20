@@ -159,6 +159,18 @@ export interface StageLightingFrame {
   characterRimDropShadow: string;
   /** Environmental luminance sync for 2D character image (0.84 unlit dark room -> 1.0 lit) */
   characterAmbientBrightness: number;
+  /** Left-side chromatic light color (0xRRGGBB) for Three.js GLSL character relighting */
+  characterLeftRimHex: number;
+  /** Right-side chromatic light color (0xRRGGBB) for Three.js GLSL character relighting */
+  characterRightRimHex: number;
+  /** Soft environmental shadow/ambient color tint (0xRRGGBB) for Three.js GLSL character relighting */
+  characterAmbientTintHex: number;
+  /** Normalized 0..1 relighting intensity (vivid on cyberpunk neon, subtle on bright daylight) */
+  characterRelightStrength: number;
+  /** Floor bounce uplight color (0xRRGGBB) reflected onto shoes & lower trousers */
+  characterFloorBounceHex: number;
+  /** Floor bounce uplight intensity (0..1) */
+  characterFloorBounceStrength: number;
 }
 
 const DEG2RAD = Math.PI / 180;
@@ -902,6 +914,32 @@ export function resolveStageLightingFrame(params: {
       nightFixtureGlowCss: outdoorNightGlowCss,
       characterRimDropShadow,
       characterAmbientBrightness: outdoorCharacterBrightness,
+      characterLeftRimHex: isOutdoorNeon
+        ? preset === 'auto'
+          ? primaryNeonHex
+          : keyHex
+        : solarStageX <= 0
+          ? keyHex
+          : rimHex,
+      characterRightRimHex: isOutdoorNeon
+        ? preset === 'auto'
+          ? secondaryNeonHex
+          : rimHex
+        : solarStageX > 0
+          ? keyHex
+          : rimHex,
+      characterAmbientTintHex: isOutdoorNeon
+        ? lerpRgbHex(primaryNeonHex, secondaryNeonHex, 0.5)
+        : skyHex,
+      characterRelightStrength: isOutdoorNeon
+        ? clamp(0.92 * outdoorAmbientDimmer, 0, 1)
+        : clamp((0.16 + nightWeight * 0.24 + (preset !== 'auto' ? 0.16 : 0)) * intensityScale, 0, 0.72),
+      characterFloorBounceHex: isOutdoorNeon
+        ? lerpRgbHex(primaryNeonHex, secondaryNeonHex, 0.45)
+        : groundHex,
+      characterFloorBounceStrength: isOutdoorNeon
+        ? clamp(0.62 * outdoorAmbientDimmer, 0, 0.75)
+        : clamp(0.14 * intensityScale, 0, 0.28),
     };
   }
 
@@ -1477,5 +1515,34 @@ export function resolveStageLightingFrame(params: {
     nightFixtureGlowCss,
     characterRimDropShadow,
     characterAmbientBrightness,
+    characterLeftRimHex: isNeonScene
+      ? fixtureHex
+      : keyPosX <= 0
+        ? keyHex
+        : rimHex,
+    characterRightRimHex: isNeonScene
+      ? preset === 'auto'
+        ? secondaryNeonHex
+        : rimHex
+      : keyPosX > 0
+        ? keyHex
+        : rimHex,
+    characterAmbientTintHex: isNeonScene
+      ? lerpRgbHex(fixtureHex, preset === 'auto' ? secondaryNeonHex : rimHex, 0.52)
+      : lerpRgbHex(skyHex, fixtureHex, nightWeight * 0.6),
+    characterRelightStrength: isNeonScene
+      ? clamp(0.95 * ambientDimmerCurve, 0, 1)
+      : clamp(
+          (0.16 + nightWeight * 0.28 + (preset !== 'auto' ? 0.18 : 0)) *
+            Math.max(daylightWindowCastBase * 0.65, ambientDimmerCurve),
+          0,
+          0.74
+        ),
+    characterFloorBounceHex: isNeonScene
+      ? lerpRgbHex(floorPoolHex, preset === 'auto' ? secondaryNeonHex : rimHex, 0.42)
+      : floorPoolHex,
+    characterFloorBounceStrength: isNeonScene
+      ? clamp(0.66 * ambientDimmerCurve, 0, 0.8)
+      : clamp(floorPoolStrength * 0.45 * ambientDimmerCurve, 0, 0.34),
   };
 }

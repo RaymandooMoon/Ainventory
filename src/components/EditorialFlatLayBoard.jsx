@@ -19,6 +19,7 @@ import {
   shortestAngleDeltaDeg,
 } from '../utils/turnaroundPhysics.ts';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
+import StudioCharacterRelightCanvas from './three/StudioCharacterRelightCanvas.tsx';
 
 const SWIPE_MIN_DISTANCE_PX = 40;
 const SWIPE_FAST_FLICK_VELOCITY_PX_PER_MS = 0.8;
@@ -430,6 +431,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   onPanChange,
   onFloorPlacementChange,
   threeStageAvailable = true,
+  stageLightingFrame = null,
   auraTier = 'C',
   angularVelocityDegPerSec = 0,
   postLoginRevealActive = false,
@@ -519,6 +521,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
 
   const hasAiImage = Boolean(stageMode === 'ai-vton' && aiImageUrl);
   const canPinchZoom = false;
+  const [relightCanvasReady, setRelightCanvasReady] = useState(false);
+  const isRelightCanvasActive = Boolean(hasAiImage && relightCanvasReady);
 
   const stageRef = useRef(null);
   const aiImgRef = useRef(null);
@@ -1363,6 +1367,38 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     ]
   );
 
+  // Continuous drag + scroll yaw passed into the Three.js curved Cylinder mesh
+  const relightExternalYawDeg = useMemo(() => {
+    const dragYawDeg = isRotatingDrag ? clamp(swipeDragPx * 0.08, -7, 7) : 0;
+    return angleSpec.perspectiveYawDeg + dragYawDeg + safeScrollResidualYaw;
+  }, [angleSpec.perspectiveYawDeg, isRotatingDrag, swipeDragPx, safeScrollResidualYaw]);
+
+  // Scale/translate transform for the WebGL character canvas WITHOUT rotateY or scaleX(-1)
+  // so cylinder Y-rotation and mirrorX execute inside the GLSL shader and screen-left/right neon lights stay accurate.
+  const relightCanvasTransformStyle = useMemo(() => {
+    const dragNudgeX = isRotatingDrag ? clamp(swipeDragPx * 0.14, -12, 12) : 0;
+    const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
+    const parts = [];
+    if (safeZoom > 1.001 || safePanX !== 0 || safePanY !== 0 || dragNudgeX !== 0) {
+      parts.push(
+        `translate3d(${(safePanX + dragNudgeX).toFixed(1)}px, ${safePanY.toFixed(1)}px, 0)`
+      );
+    }
+    if (Math.abs(effectiveScale - 1) > 0.002) {
+      parts.push(`scale(${effectiveScale.toFixed(3)})`);
+    }
+    return parts.length > 0 ? parts.join(' ') : 'none';
+  }, [
+    isRotatingDrag,
+    swipeDragPx,
+    floorPlacement.effectiveBaseScale,
+    safeZoom,
+    safePanX,
+    safePanY,
+  ]);
+
+  const relightIdentityKey = `${profile.avatarConfigHash}::${outfitComboId}`;
+
   // Dual-layer counter-rotating 2.5D rotateY bridge + 105ms smoothstep S-curve crossfade
   // runs imperatively in rAF so angle transitions trigger zero extra React re-renders.
   useLayoutEffect(() => {
@@ -1401,6 +1437,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     };
 
     if (
+      isRelightCanvasActive ||
       !nextFrame ||
       !prev ||
       !incomingEl ||
@@ -1473,6 +1510,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     angularVelocityDegPerSec,
     floorPlacement.soleTransformOrigin,
     buildLayerTransformString,
+    isRelightCanvasActive,
   ]);
 
   const shadowTransformStyle = useMemo(() => {
@@ -1593,17 +1631,35 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               </svg>
               <div
                 className={`studio-vton-turnaround-stack ${
-                  kineticBlurPx > 0.05 ? 'is-kinetic-blur' : ''
-                }`.trim()}
+                  !isRelightCanvasActive && kineticBlurPx > 0.05 ? 'is-kinetic-blur' : ''
+                } ${isRelightCanvasActive ? 'is-relight-webgl-active' : ''}`.trim()}
                 data-kinetic-blur={kineticBlurPx > 0.05 ? kineticBlurPx.toFixed(2) : '0'}
+                data-relight-webgl={isRelightCanvasActive ? 'active' : 'fallback'}
                 style={modelSizeStyle}
               >
+                <StudioCharacterRelightCanvas
+                  imageUrl={aiImageUrl}
+                  angleDeg={safeAngleDeg}
+                  mirrorX={effectiveMirrorX}
+                  identityKey={relightIdentityKey}
+                  lightingFrame={stageLightingFrame}
+                  externalYawDeg={relightExternalYawDeg}
+                  kineticBlurPx={kineticBlurPx}
+                  widthPx={floorPlacement.renderedContentW || null}
+                  heightPx={floorPlacement.renderedContentH || null}
+                  transformOrigin={floorPlacement.soleTransformOrigin}
+                  transformStyle={relightCanvasTransformStyle}
+                  prefersReducedMotion={prefersReducedMotion}
+                  onWebGlReadyChange={setRelightCanvasReady}
+                />
                 <img
                   ref={outgoingGhostImgRef}
                   alt=""
                   aria-hidden="true"
                   draggable={false}
-                  className="studio-2d-media-el editorial-ai-vton-img editorial-ai-vton-img-ghost"
+                  className={`studio-2d-media-el editorial-ai-vton-img editorial-ai-vton-img-ghost ${
+                    isRelightCanvasActive ? 'is-relight-canvas-backed' : ''
+                  }`.trim()}
                   style={{
                     ...modelSizeStyle,
                     transformOrigin: floorPlacement.soleTransformOrigin,
@@ -1629,7 +1685,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                   data-ai-vton-img="true"
                   className={`studio-2d-media-el editorial-ai-vton-img ${
                     placements.length > 0 && !compareActive ? 'is-lookbook-tappable' : ''
-                  }`}
+                  } ${isRelightCanvasActive ? 'is-relight-canvas-backed' : ''}`.trim()}
                   draggable={false}
                   style={modelTransformStyle}
                 />

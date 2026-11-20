@@ -3187,6 +3187,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         pan={pan}
         onFloorPlacementChange={handleFloorPlacementChange}
         threeStageAvailable={threeStageAvailable}
+        stageLightingFrame={stageLightingFrame}
         auraTier={auraTier}
         angularVelocityDegPerSec={angularVelocityDegPerSec}
         postLoginRevealActive={postLoginRevealActive}

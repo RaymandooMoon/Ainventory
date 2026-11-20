@@ -1901,6 +1901,24 @@
   will-change: filter;
 }
 
+/* Layer 2 WebGL Single-Pass Relighting + 2.5D Cylinder Turnaround Canvas */
+.studio-character-relight-host {
+  position: absolute;
+  inset: 0;
+  z-index: 21;
+  pointer-events: none;
+  overflow: visible;
+  will-change: transform;
+}
+
+.studio-character-relight-webgl-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  pointer-events: none;
+}
+
 /* Layer 2 (z-index: 20): True RGBA Transparent Model Image grounded on studio floor baseline */
 .editorial-ai-vton-img {
   position: relative;
@@ -1914,6 +1932,12 @@
     drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16))
     var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
   transition: filter 0.35s ease;
+}
+
+/* When Three.js GLSL relight canvas is ready, hide raw <img> visually while keeping DOM hit-target & tests intact */
+.editorial-ai-vton-img.is-relight-canvas-backed {
+  opacity: 0 !important;
+  filter: none !important;
 }
 
 .editorial-ai-vton-img-ghost {
@@ -1934,6 +1958,10 @@
   filter: brightness(var(--stage-char-ambient-brightness, 1))
     drop-shadow(0 14px 28px rgba(0, 0, 0, 0.56))
     var(--stage-char-rim-shadow, drop-shadow(0 0 0 rgba(0, 0, 0, 0)));
+}
+
+[data-theme='dark'] .editorial-ai-vton-img.is-relight-canvas-backed {
+  filter: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
