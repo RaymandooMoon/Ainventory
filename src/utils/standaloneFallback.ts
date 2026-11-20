@@ -15,6 +15,7 @@ import {
   resolveManifestSlotAndGlb,
 } from '../shared/garmentTaxonomy.js';
 import { LAYERED_10_CATALOG } from '../shared/layered10Catalog.js';
+import { LUXURY_STREET_CATALOG } from '../shared/luxuryStreetCatalog.js';
 import { SEASONAL_120_CATALOG } from '../shared/seasonal120Catalog.js';
 import {
   isValidHandednessToken,
@@ -162,6 +163,7 @@ export const STANDALONE_SAMPLE_GARMENTS: SampleCatalogGarment[] = [
   ...SEASONAL_120_CATALOG,
   ...ACCESSORY_JEWELRY_CATALOG,
   ...LAYERED_10_CATALOG,
+  ...LUXURY_STREET_CATALOG,
 ].map((item) => {
   const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
   const wearCount = ((item.idOffset * 3) % 24) + 2;

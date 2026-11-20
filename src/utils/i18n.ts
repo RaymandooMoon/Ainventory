@@ -12,8 +12,9 @@ export function preloadCatalogTranslations(): Promise<void> {
     import('../shared/seasonal120Catalog.js'),
     import('../shared/accessoryJewelryCatalog.js'),
     import('../shared/layered10Catalog.js'),
+    import('../shared/luxuryStreetCatalog.js'),
   ])
-    .then(([seasonalMod, accessoryMod, layeredMod]) => {
+    .then(([seasonalMod, accessoryMod, layeredMod, streetMod]) => {
       for (const item of seasonalMod.SEASONAL_120_CATALOG || []) {
         if (item.name && item.name_en) {
           CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
@@ -25,6 +26,11 @@ export function preloadCatalogTranslations(): Promise<void> {
         }
       }
       for (const item of layeredMod.LAYERED_10_CATALOG || []) {
+        if (item.name && item.name_en) {
+          CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
+        }
+      }
+      for (const item of streetMod.LUXURY_STREET_CATALOG || []) {
         if (item.name && item.name_en) {
           CATALOG_GARMENT_KO_TO_EN[item.name] = item.name_en;
         }

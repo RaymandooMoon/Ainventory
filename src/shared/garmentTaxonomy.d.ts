@@ -13,6 +13,12 @@ export {
   type Layered10CatalogItem,
 } from './layered10Catalog.js';
 export {
+  LUXURY_STREET_BY_IMAGE_URL,
+  LUXURY_STREET_CATALOG,
+  LUXURY_STREET_NATIVE_HEX_MAP,
+  type LuxuryStreetCatalogItem,
+} from './luxuryStreetCatalog.js';
+export {
   SEASONAL_120_BY_IMAGE_URL,
   SEASONAL_120_BY_SEASON,
   SEASONAL_120_CATALOG,

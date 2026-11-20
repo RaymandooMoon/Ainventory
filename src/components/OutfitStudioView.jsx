@@ -152,7 +152,7 @@ const STUDIO_OCCASION_TABS = [
 ];
 
 const DAILY_KEYWORDS_RE =
-  /daily|casual|sport|tshirt|t-shirt|tee|hood|sweat|denim|jean|short|sneaker|sandal|flip_flop|cap|beanie|bucket|windbreaker|parka|padding|puffer|cardigan|knit|tote|backpack|messenger|duffel|weekender|hobo|swim|bikini|rashguard|데일리|캐주얼|티셔츠|데님|청바지|스니커즈|후드|맨투맨|패딩|볼캡|비니|버킷햇|윈드브레이커|가디건|니트|토트|백팩|메신저|더플|위켄더|호보|수영복/i;
+  /daily|casual|sport|street|hiphop|hip-hop|bomber|varsity|teddy|oversized|cargo|jogger|track|sling|trucker|combat|tshirt|t-shirt|tee|hood|sweat|denim|jean|short|sneaker|sandal|flip_flop|cap|beanie|bucket|windbreaker|parka|padding|puffer|cardigan|knit|tote|backpack|messenger|duffel|weekender|hobo|swim|bikini|rashguard|데일리|캐주얼|스트릿|힙합|보머|바시티|오버사이즈|카고|조거|트랙|슬링백|트러커|컴뱃|티셔츠|데님|청바지|스니커즈|후드|맨투맨|패딩|푸퍼|볼캡|비니|버킷햇|윈드브레이커|가디건|니트|토트|백팩|메신저|더플|위켄더|호보|수영복/i;
 
 const OFFICE_KEYWORDS_RE =
   /office|smart|business|shirt|blouse|slacks|trouser|blazer|trench|coat|loafer|derby|oxford|heel|pump|briefcase|shoulder|messenger|backpack|watch|belt|eyewear|glasses|scarf|cardigan|skirt|pleat|dress|onepiece|오피스|출근|셔츠|블라우스|슬랙스|블레이저|트렌치|코트|로퍼|브리프케이스|숄더백|메신저|백팩|안경|아이웨어|시계|벨트|스커트|원피스/i;

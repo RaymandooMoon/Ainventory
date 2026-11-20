@@ -20,6 +20,7 @@ import db, {
   SQLITE_DRIVER,
   UPLOADS_DIR,
   computeVerificationHash,
+  ensureLuxuryStreetSeeds,
   ensureNewSubcategoryMaterialSeeds,
   getServerProfileConfig,
   hashPassword,
@@ -2476,6 +2477,7 @@ export function createApiRouter(options = {}) {
     for (const c of authz.closets) {
       if (c === 'sample' || c === 'husband' || c === 'wife') {
         ensureNewSubcategoryMaterialSeeds(c);
+        ensureLuxuryStreetSeeds(c);
       } else {
         const hasAny = db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
         if (hasAny) {
@@ -2517,7 +2519,8 @@ export function createApiRouter(options = {}) {
         return res.status(writeAuthz.status).json({ error: writeAuthz.error });
       }
     }
-    const insertedCount = ensureNewSubcategoryMaterialSeeds(targetCloset);
+    const insertedCount =
+      ensureNewSubcategoryMaterialSeeds(targetCloset) + ensureLuxuryStreetSeeds(targetCloset);
     const rows = db
       .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
       .all(targetCloset)
@@ -3000,6 +3003,7 @@ export function createApiRouter(options = {}) {
 
     if (closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife') {
       ensureNewSubcategoryMaterialSeeds(closetOwner);
+      ensureLuxuryStreetSeeds(closetOwner);
     } else if (
       db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(closetOwner)
     ) {
