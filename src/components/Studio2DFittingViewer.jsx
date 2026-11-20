@@ -2427,6 +2427,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const capsuleTempC = useMemo(() => {
+    if (
+      scenarioKey === 'live' &&
+      weather?.dayTarget !== 'tomorrow' &&
+      typeof weather?.currentTemp === 'number' &&
+      Number.isFinite(weather.currentTemp)
+    ) {
+      return Math.round(weather.currentTemp);
+    }
     if (typeof weather?.avgTemp === 'number' && Number.isFinite(weather.avgTemp)) {
       return Math.round(weather.avgTemp);
     }

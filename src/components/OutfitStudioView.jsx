@@ -46,6 +46,7 @@ import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { formatKoreanDistrictLocation } from '../services/vtonQualityControl.ts';
 import { inferBagCarrySpec, isBagGarmentItem } from '../shared/garmentTaxonomy.js';
 import { CITY_COORDS, apiFetch } from '../utils/api.ts';
+import { fetchDirectOpenMeteoWeather } from '../utils/liveWeatherClient.ts';
 import {
   localizeApiMessage,
   localizeBrandName,
@@ -1314,8 +1315,45 @@ export default function OutfitStudioView({
     }
 
     apiFetch(`/weather/recommendations?${params.toString()}`)
-      .then((data) => {
+      .then(async (rawData) => {
         if (cancelled) return;
+        let data = rawData;
+        if (scenarioKey === 'live' && rawData?.weather?.fallbackUsed) {
+          const fallbackCity =
+            CITY_COORDS.find((c) => c.key === cityKey) ||
+            CITY_COORDS.find((c) => c.key === 'seoul') ||
+            CITY_COORDS[0];
+          const rescueLat =
+            cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lat))
+              ? Number(gpsCoords.lat)
+              : Number(rawData?.weather?.latitude ?? fallbackCity?.lat ?? 37.5665);
+          const rescueLon =
+            cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lon))
+              ? Number(gpsCoords.lon)
+              : Number(rawData?.weather?.longitude ?? fallbackCity?.lon ?? 126.978);
+          const rescueName =
+            (cityKey === 'gps' && gpsCoords?.label) ||
+            rawData?.weather?.cityName ||
+            fallbackCity?.name ||
+            '서울';
+          const rescuedWeather = await fetchDirectOpenMeteoWeather({
+            cityKey,
+            cityName: rescueName,
+            lat: rescueLat,
+            lon: rescueLon,
+            dayTarget,
+          });
+          if (cancelled) return;
+          if (rescuedWeather) {
+            data = {
+              ...rawData,
+              weather: {
+                ...(rawData?.weather || {}),
+                ...rescuedWeather,
+              },
+            };
+          }
+        }
         setWeatherPayload(data);
 
         const effectiveW = {
@@ -3203,15 +3241,28 @@ export default function OutfitStudioView({
                       </span>
                     </div>
                     <span className="weather-popup-env-meta tabular-nums">
-                      {tx(
-                        lang,
-                        `평균 ${Math.round(weather?.avgTemp ?? 13)}°C · 강수 ${
-                          weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                        }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
-                        `Avg ${Math.round(weather?.avgTemp ?? 13)}°C · Precip ${
-                          weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                        }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
-                      )}
+                      {scenarioKey === 'live' &&
+                      dayTarget !== 'tomorrow' &&
+                      typeof weather?.currentTemp === 'number' &&
+                      Number.isFinite(weather.currentTemp)
+                        ? tx(
+                            lang,
+                            `현재 ${Math.round(weather.currentTemp)}°C · 강수 ${
+                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                            }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
+                            `Now ${Math.round(weather.currentTemp)}°C · Precip ${
+                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                            }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
+                          )
+                        : tx(
+                            lang,
+                            `평균 ${Math.round(weather?.avgTemp ?? 13)}°C · 강수 ${
+                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                            }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
+                            `Avg ${Math.round(weather?.avgTemp ?? 13)}°C · Precip ${
+                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                            }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
+                          )}
                     </span>
                   </div>
                 </div>
@@ -3264,11 +3315,17 @@ export default function OutfitStudioView({
               </p>
 
               <p className="weather-popup-source-caption" data-weather-source-caption="true">
-                {tx(
-                  lang,
-                  '기상 정보 출처: Open-Meteo 예보 API (기상청·글로벌 수치예보 연동)',
-                  'Weather source: Open-Meteo Forecast API (KMA & Global NWP)'
-                )}
+                {weather?.fallbackUsed && scenarioKey === 'live'
+                  ? tx(
+                      lang,
+                      '기상 정보: 오프라인 기본 예보 (네트워크 연결 확인 필요)',
+                      'Weather source: Offline fallback estimate (check network connection)'
+                    )
+                  : tx(
+                      lang,
+                      '기상 정보 출처: Open-Meteo 예보 API (기상청·글로벌 수치예보 연동)',
+                      'Weather source: Open-Meteo Forecast API (KMA & Global NWP)'
+                    )}
               </p>
             </div>
 

@@ -303,20 +303,26 @@ export async function apiFetch<T = Record<string, unknown>>(
   if (method === 'GET') {
     const isLiveStatusEndpoint =
       path === '/vton/status' || path.startsWith('/vton/status?') || path === '/build-info';
+    const isLiveWeatherEndpoint =
+      path === '/weather/recommendations' ||
+      path.startsWith('/weather/recommendations?') ||
+      path === '/weather-styling' ||
+      path.startsWith('/weather-styling?');
+    const skipStaleIdbCache = isLiveStatusEndpoint || isLiveWeatherEndpoint;
     const cacheKey = sampleDemo ? `demo:${path}` : path;
-    if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !isLiveStatusEndpoint) {
+    if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !skipStaleIdbCache) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
       if (mutatedCached) {
         return coerceApiPayload<T>(mutatedCached);
       }
     }
     if (isBrowserOffline) {
-      if (!isLiveStatusEndpoint) {
+      if (!skipStaleIdbCache) {
         const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
         if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
       }
       const localData = await handleStandaloneApiFallback(path, options);
-      if (!isLiveStatusEndpoint) {
+      if (!skipStaleIdbCache) {
         await writeCachedResponse(cacheKey, localData).catch(() => {});
       }
       return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });
@@ -330,19 +336,19 @@ export async function apiFetch<T = Record<string, unknown>>(
         }
       }
       const data = await rawNetworkFetch(path, options);
-      if (!isLiveStatusEndpoint) {
+      if (!skipStaleIdbCache) {
         writeCachedResponse(cacheKey, data).catch(() => {});
       }
       return coerceApiPayload<T>(data);
     } catch (err) {
       // Network failure or missing backend fallback (never swallow genuine HTTP 401/4xx JSON API errors)
       if (isNetworkOrBackendUnavailable(err)) {
-        if (!isLiveStatusEndpoint) {
+        if (!skipStaleIdbCache) {
           const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
           if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
         }
         const localData = await handleStandaloneApiFallback(path, options);
-        if (!isLiveStatusEndpoint) {
+        if (!skipStaleIdbCache) {
           await writeCachedResponse(cacheKey, localData).catch(() => {});
         }
         return coerceApiPayload<T>({ ...localData, _fromOfflineCache: true });

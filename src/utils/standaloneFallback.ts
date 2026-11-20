@@ -21,6 +21,7 @@ import {
   normalizeHandedness,
   resolveBagCarryAnatomy,
 } from '../services/vtonQualityControl.ts';
+import { fetchDirectOpenMeteoWeather } from './liveWeatherClient.ts';
 import { readCachedResponse } from './offlineSync.ts';
 
 const LOCAL_USERS_KEY = 'ainventory_standalone_users_v2';
@@ -1293,14 +1294,58 @@ export async function handleStandaloneApiFallback(
     const rawScKey = params.get('scenario') || 'live';
     const dayTarget = params.get('day_target') === 'tomorrow' ? 'tomorrow' : 'today';
     const normalizedScKey = rawScKey === 'mild_spring' ? 'warm_spring' : rawScKey;
+    const cityKey = params.get('city') || 'seoul';
+    const matchedCity = CITY_COORDS.find((c) => c.key === cityKey) || CITY_COORDS[0];
+    const resolvedCityName =
+      params.get('location_label') || matchedCity?.name || LIVE_WEATHER_SCENARIO.cityName;
+
+    const rawLat = params.get('lat');
+    const rawLon = params.get('lon');
+    const parsedLat = rawLat !== null ? Number(rawLat) : NaN;
+    const parsedLon = rawLon !== null ? Number(rawLon) : NaN;
+    const resolvedLat =
+      Number.isFinite(parsedLat) && Math.abs(parsedLat) <= 90
+        ? parsedLat
+        : matchedCity?.lat ?? 37.5665;
+    const resolvedLon =
+      Number.isFinite(parsedLon) && Math.abs(parsedLon) <= 180
+        ? parsedLon
+        : matchedCity?.lon ?? 126.978;
+
+    const directLiveWeather =
+      normalizedScKey === 'live'
+        ? await fetchDirectOpenMeteoWeather({
+            cityKey,
+            cityName: resolvedCityName,
+            lat: resolvedLat,
+            lon: resolvedLon,
+            dayTarget,
+          })
+        : null;
+
     const baseSpec =
       normalizedScKey === 'live'
         ? LIVE_WEATHER_SCENARIO
         : (Object.hasOwn(WEATHER_SCENARIOS, normalizedScKey)
             ? WEATHER_SCENARIOS[normalizedScKey]
             : null) || LIVE_WEATHER_SCENARIO;
-    const spec =
-      normalizedScKey === 'live' && dayTarget === 'tomorrow'
+    const spec: StandaloneScenarioSpec = directLiveWeather
+      ? {
+          key: 'live',
+          label: dayTarget === 'tomorrow' ? '실시간 내일 예보' : '실시간 오늘 예보',
+          cityName: directLiveWeather.cityName,
+          condition: directLiveWeather.condition,
+          weatherCode: directLiveWeather.weatherCode,
+          tempMin: directLiveWeather.tempMin,
+          tempMax: directLiveWeather.tempMax,
+          windSpeed: directLiveWeather.windSpeed,
+          precipProb: directLiveWeather.precipProb,
+          humidity: directLiveWeather.humidity,
+          recommendedMotion: directLiveWeather.recommendedMotion,
+          weatherTip: directLiveWeather.weatherTip,
+          isSnowy: directLiveWeather.isSnowy,
+        }
+      : normalizedScKey === 'live' && dayTarget === 'tomorrow'
         ? {
             ...baseSpec,
             label: '실시간 내일 예보',
@@ -1313,29 +1358,26 @@ export async function handleStandaloneApiFallback(
     const look1Style = resolveLookStylePresetKey(params.get('look1_style'), 'business_casual');
     const look2Style = resolveLookStylePresetKey(params.get('look2_style'), 'comfortable_casual');
 
-    const cityKey = params.get('city') || 'seoul';
-    const matchedCity = CITY_COORDS.find((c) => c.key === cityKey);
-    const resolvedCityName = params.get('location_label') || matchedCity?.name || spec.cityName;
-
     const pcKey =
       params.get('personal_color') || activeUser?.personalColor || 'autumn_warm';
     const pcLabels = getPersonalColorLabels(pcKey);
     const resolvedSkinHex =
       params.get('skin_tone_hex') || activeUser?.skinToneHex || '#DFBA9B';
 
-    const avgTemp = Math.round(spec.tempMin * 0.45 + spec.tempMax * 0.55);
-    const isRainy = spec.precipProb >= 45;
-    const isWindy = spec.windSpeed >= 22;
+    const avgTemp =
+      directLiveWeather?.avgTemp ?? Math.round(spec.tempMin * 0.45 + spec.tempMax * 0.55);
+    const isRainy = directLiveWeather ? directLiveWeather.isRainy : spec.precipProb >= 45;
+    const isWindy = directLiveWeather ? directLiveWeather.isWindy : spec.windSpeed >= 22;
     const needOuter =
       (spec.tempMax < 23 && (avgTemp <= 19 || spec.tempMax - spec.tempMin >= 8)) ||
       isRainy ||
       isWindy;
     const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
-    const targetDateStr = new Date(
-      Date.now() + (dayTarget === 'tomorrow' ? 86400000 : 0)
-    )
-      .toISOString()
-      .slice(0, 10);
+    const targetDateStr =
+      directLiveWeather?.date ||
+      new Date(Date.now() + (dayTarget === 'tomorrow' ? 86400000 : 0))
+        .toISOString()
+        .slice(0, 10);
 
     const openSummerShoes = new Set(['flip_flops', 'slides', 'sandals']);
     const scoreStandaloneItem = (item: GarmentRecord, presetKey: LookStylePresetKey): number => {
@@ -1537,31 +1579,37 @@ export async function handleStandaloneApiFallback(
     })();
 
     return {
-      weather: {
-        cityKey,
-        cityName: resolvedCityName,
-        date: targetDateStr,
-        dayTarget,
-        scenarioKey: normalizedScKey,
-        condition: spec.condition,
-        weatherCode: spec.weatherCode,
-        tempMin: spec.tempMin,
-        tempMax: spec.tempMax,
-        avgTemp,
-        tempC: avgTemp,
-        diurnalSwing: spec.tempMax - spec.tempMin,
-        precipProb: spec.precipProb,
-        windSpeed: spec.windSpeed,
-        humidity: spec.humidity,
-        isRainy,
-        isRaining: isRainy,
-        isSnowy: Boolean(spec.isSnowy),
-        isWindy,
-        summary: spec.weatherTip,
-        weatherTip: spec.weatherTip,
-        recommendedMotion: spec.recommendedMotion,
-        isSimulated: normalizedScKey !== 'live',
-      },
+      weather: directLiveWeather
+        ? { ...directLiveWeather }
+        : {
+            cityKey,
+            cityName: resolvedCityName,
+            latitude: resolvedLat,
+            longitude: resolvedLon,
+            date: targetDateStr,
+            dayTarget,
+            scenarioKey: normalizedScKey,
+            condition: spec.condition,
+            weatherCode: spec.weatherCode,
+            tempMin: spec.tempMin,
+            tempMax: spec.tempMax,
+            avgTemp,
+            tempC: avgTemp,
+            diurnalSwing: spec.tempMax - spec.tempMin,
+            precipProb: spec.precipProb,
+            windSpeed: spec.windSpeed,
+            humidity: spec.humidity,
+            isRainy,
+            isRaining: isRainy,
+            isSnowy: Boolean(spec.isSnowy),
+            isWindy,
+            summary: spec.weatherTip,
+            weatherTip: spec.weatherTip,
+            recommendedMotion: spec.recommendedMotion,
+            isSimulated: normalizedScKey !== 'live',
+            fallbackUsed: normalizedScKey === 'live',
+            weatherUnavailable: normalizedScKey === 'live',
+          },
       stylingProfile: {
         personalColor: pcKey,
         personalColorLabel: `${pcLabels.ko || '가을 웜톤'} (${pcLabels.en || 'Autumn Warm'})`,

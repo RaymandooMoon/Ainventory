@@ -173,8 +173,8 @@ const weatherCache = new Map();
 const weatherInFlight = new Map();
 const WEATHER_CACHE_MAX = 120;
 const WEATHER_SUCCESS_TTL_MS = 20 * 60 * 1000;
-const WEATHER_FALLBACK_TTL_MS = 2 * 60 * 1000;
-const OPEN_METEO_TIMEOUT_MS = 1600;
+const WEATHER_FALLBACK_TTL_MS = 15 * 1000;
+const OPEN_METEO_TIMEOUT_MS = 6500;
 
 function computeColorSimilarityRatio(hexA, hexB, nameA = '', nameB = '') {
   const rgbA = hexToRgb(hexA);
@@ -537,12 +537,43 @@ export async function fetchTomorrowWeather(
     };
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,shortwave_radiation_sum&current=cloud_cover,visibility,is_day,precipitation,direct_radiation,diffuse_radiation&timezone=Asia%2FSeoul&forecast_days=3`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(OPEN_METEO_TIMEOUT_MS) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,shortwave_radiation_sum&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,cloud_cover,visibility,is_day,precipitation,direct_radiation,diffuse_radiation&timezone=auto&forecast_days=3`;
+      let res = null;
+      let lastFetchErr = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          res = await fetch(url, { signal: AbortSignal.timeout(OPEN_METEO_TIMEOUT_MS) });
+          if (res.ok) break;
+          lastFetchErr = new Error(`HTTP ${res.status}`);
+          if (res.status < 500 && res.status !== 429) break;
+        } catch (fetchErr) {
+          lastFetchErr = fetchErr;
+        }
+      }
+      if (!res || !res.ok) throw lastFetchErr || new Error('Open-Meteo request failed');
       const json = await res.json();
       const idx = resolvedDayTarget === 'tomorrow' && json.daily?.time?.length > 1 ? 1 : 0;
-      const code = json.daily.weather_code[idx] ?? 1;
+      const cur =
+        resolvedDayTarget === 'today' && json.current && typeof json.current === 'object'
+          ? json.current
+          : null;
+      const currentTemp =
+        cur && Number.isFinite(Number(cur.temperature_2m))
+          ? Math.round(Number(cur.temperature_2m)) || 0
+          : undefined;
+      const currentWeatherCode =
+        cur && Number.isFinite(Number(cur.weather_code)) ? Number(cur.weather_code) : undefined;
+      const currentWindSpeed =
+        cur && Number.isFinite(Number(cur.wind_speed_10m))
+          ? Math.round(Number(cur.wind_speed_10m))
+          : undefined;
+      const currentHumidity =
+        cur && Number.isFinite(Number(cur.relative_humidity_2m))
+          ? Math.round(Number(cur.relative_humidity_2m))
+          : undefined;
+
+      const dailyCode = json.daily.weather_code?.[idx] ?? 1;
+      const code = currentWeatherCode ?? dailyCode;
       const condition = weatherCodeToKorean(code);
       const minRaw = Number(json.daily.temperature_2m_min?.[idx]);
       const maxRaw = Number(json.daily.temperature_2m_max?.[idx]);
@@ -550,7 +581,9 @@ export async function fetchTomorrowWeather(
         throw new Error('Invalid Open-Meteo temperature payload');
       }
       const precipProb = Math.round(json.daily.precipitation_probability_max?.[idx] ?? 10);
-      const windSpeed = Math.round(json.daily.wind_speed_10m_max?.[idx] ?? 10);
+      const windSpeed = Math.round(
+        json.daily.wind_speed_10m_max?.[idx] ?? currentWindSpeed ?? 10
+      );
       const sunrise =
         typeof json.daily?.sunrise?.[idx] === 'string' ? json.daily.sunrise[idx] : null;
       const sunset =
@@ -560,7 +593,6 @@ export async function fetchTomorrowWeather(
       )
         ? Number(json.daily.shortwave_radiation_sum[idx])
         : undefined;
-      const cur = json.current && typeof json.current === 'object' ? json.current : null;
       const cloudCover =
         cur && Number.isFinite(Number(cur.cloud_cover)) ? Math.round(Number(cur.cloud_cover)) : undefined;
       const visibilityM =
@@ -587,11 +619,14 @@ export async function fetchTomorrowWeather(
         scenarioKey: 'live',
         condition,
         weatherCode: code,
-        tempMin: Math.round(minRaw),
-        tempMax: Math.round(maxRaw),
+        tempMin: Math.round(minRaw) || 0,
+        tempMax: Math.round(maxRaw) || 0,
+        ...(currentTemp !== undefined ? { currentTemp } : {}),
+        ...(currentWeatherCode !== undefined ? { currentWeatherCode } : {}),
+        ...(currentWindSpeed !== undefined ? { currentWindSpeed } : {}),
         precipProb,
         windSpeed,
-        humidity: precipProb >= 50 ? 78 : 50,
+        humidity: currentHumidity ?? (precipProb >= 50 ? 78 : 50),
         sunrise,
         sunset,
         shortwaveRadiationSum,
@@ -602,6 +637,8 @@ export async function fetchTomorrowWeather(
         currentPrecipitation,
         isDay,
         isSimulated: false,
+        fallbackUsed: false,
+        weatherUnavailable: false,
         recommendedMotion: inferWeatherMotion(code, precipProb, windSpeed, condition),
       };
       storeCache(data, WEATHER_SUCCESS_TTL_MS);
@@ -773,7 +810,7 @@ export function buildWeatherRecommendations(
   options = {}
 ) {
   const active = closetGarments.filter((g) => g.status === 'active');
-  const avgTemp = Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55);
+  const avgTemp = Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55) || 0;
   const diurnalSwing = weather.tempMax - weather.tempMin;
   const isRainy =
     weather.precipProb >= 45 || (weather.weatherCode >= 51 && weather.weatherCode <= 82);
