@@ -142,6 +142,18 @@ export interface StageLightingFrame {
   contactAoScale: number;
   /** Directional projected silhouette cast shadow multiplier (strictly 0 when unlit at night / windowless / neon 0%) */
   castShadowScale: number;
+  /** Strictly decoupled Natural Daylight / Window Sun cast shadow channel (NEVER drifts with artificial lamp dimmer) */
+  naturalShadowDirX: number;
+  naturalShadowDirZ: number;
+  naturalShadowLengthScale: number;
+  naturalShadowOpacity: number;
+  naturalShadowDirectRatio: number;
+  /** Strictly decoupled Artificial Fixture cast shadow channel (fixed direction per room rig; opacity scales with dimmer only) */
+  fixtureShadowDirX: number;
+  fixtureShadowDirZ: number;
+  fixtureShadowLengthScale: number;
+  fixtureShadowOpacity: number;
+  fixtureShadowDirectRatio: number;
   secondaryShadowWeight: number;
   secondaryShadowDirX: number;
   secondaryShadowDirZ: number;
@@ -898,6 +910,19 @@ export function resolveStageLightingFrame(params: {
       shadowOpacityScale: outdoorEffectiveShadowScale,
       contactAoScale: outdoorContactAoScale,
       castShadowScale: outdoorCastShadowScale,
+      naturalShadowDirX: isOutdoorNeon ? 0 : -solarStageX * 0.72 + shadowOffsetX * 1.35,
+      naturalShadowDirZ: isOutdoorNeon ? -1 : -solarStageZ * 0.34 + shadowOffsetZ * 0.9,
+      naturalShadowLengthScale: isOutdoorNeon
+        ? 1
+        : clamp(3.9 / Math.max(1.4, solarStageY), 0.68, 1.55) *
+          clamp((shadowStretchX + shadowStretchZ) * 0.58, 0.72, 1.58),
+      naturalShadowOpacity: isOutdoorNeon ? 0 : outdoorCastShadowScale,
+      naturalShadowDirectRatio: optics.directRatio,
+      fixtureShadowDirX: isOutdoorNeon ? -(-2.35) * 0.72 + 0.16 * 1.35 : 0,
+      fixtureShadowDirZ: isOutdoorNeon ? -1.45 * 0.34 - 0.06 * 0.9 : -1,
+      fixtureShadowLengthScale: isOutdoorNeon ? 1.08 : 1,
+      fixtureShadowOpacity: isOutdoorNeon ? outdoorCastShadowScale : 0,
+      fixtureShadowDirectRatio: isOutdoorNeon ? outdoorRig?.nightDirectRatio ?? 0.84 : 0.75,
       secondaryShadowWeight: isOutdoorNeon && clampedOutdoorScale > 0.001 ? clamp(0.32 * outdoorAmbientDimmer, 0, 0.38) : 0,
       secondaryShadowDirX: isOutdoorNeon ? -0.84 : 0,
       secondaryShadowDirZ: isOutdoorNeon ? -0.54 : -1,
@@ -1262,50 +1287,65 @@ export function resolveStageLightingFrame(params: {
   const fixtureOnFactor =
     clampedScale <= 0.001 ? 0 : clamp(rawFixtureOn * fixtureDimmerCurve, 0, 0.96);
 
-  // Active key-light position blends ONLY real competing light sources:
-  // - At night / windowless / neon rooms (windowLightEnergy === 0), the physical lamp position is fixed
-  //   so dimming changes shadow contrast/opacity ONLY — never drifting toward a non-existent daytime window.
-  // - During daytime in a windowed room, dimming artificial lamps hands off shadow direction to real window sun.
+  // STRICT PHYSICAL SEPARATION OF NATURAL SUNLIGHT VS ARTIFICIAL FIXTURE SHADOWS:
+  // 1) Natural Window Sunlight Shadow (`naturalShadow*`): direction, length & opacity depend SOLELY on
+  //    solar ephemeris, room window aperture, and dayWeight — NEVER altered by the artificial lamp dimmer!
+  // 2) Artificial Fixture Shadow (`fixtureShadow*` + `secondaryShadow*`): direction & length stay LOCKED
+  //    to the room's physical lamp geometry (`nightKeyX/Y/Z`), while the lamp dimmer scales ONLY opacity!
+  // 3) `keyPosX/Y/Z` stays geometrically invariant across 0%..100% lamp dimming (locked to window sun in
+  //    daytime windowed rooms, locked to physical lamps at night / windowless / neon rooms) — zero drift!
   const windowLightEnergy =
     isWindowless || isNeonScene
       ? 0
       : clamp(dayWeight * rig.daylightStrength, 0, 1);
-  const fixtureDominanceBase =
-    isWindowless || isNeonScene
-      ? 1
-      : clamp(nightWeight + dayWeight * (isDark ? 0.62 : 0.45), 0, 1);
-  const activeFixtureEnergy =
-    clampedScale <= 0.001
-      ? 0
-      : fixtureDominanceBase * Math.pow(clampedScale, 0.55);
-  const fixtureShadowWeight =
-    windowLightEnergy <= 0.001
-      ? 1
-      : clamp(activeFixtureEnergy / (windowLightEnergy + activeFixtureEnergy), 0, 1);
-  const windowShadowWeight = 1 - fixtureShadowWeight;
-  const keyPosX = windowShadowWeight * dayKeyX + fixtureShadowWeight * nightKeyX;
-  const keyPosY = windowShadowWeight * dayKeyY + fixtureShadowWeight * nightKeyY;
-  const keyPosZ = windowShadowWeight * dayKeyZ + fixtureShadowWeight * nightKeyZ;
+  const useDaylightPrimaryAxis = windowLightEnergy > 0.001;
+  const keyPosX = useDaylightPrimaryAxis ? dayKeyX : nightKeyX;
+  const keyPosY = useDaylightPrimaryAxis ? dayKeyY : nightKeyY;
+  const keyPosZ = useDaylightPrimaryAxis ? dayKeyZ : nightKeyZ;
 
-  const shadowOffsetX = clamp((-keyPosX / 3.0) * 0.28, -0.34, 0.34);
-  const shadowOffsetZ = clamp((-keyPosZ / 3.0) * 0.16 + 0.02, -0.22, 0.22);
-  const shadowStretchX = clamp(1.04 + Math.abs(shadowOffsetX) * 0.72, 0.98, 1.32);
-  const shadowStretchZ = clamp(
-    windowShadowWeight * (0.78 + (lowSunStretch - 0.85) * 0.36) +
-      fixtureShadowWeight * nightShadowStretchZ,
-    0.72,
-    1.28
-  );
-
-  // 2-Channel Shadow Model:
-  // 1) Grounded Contact AO directly beneath shoe soles stays softly visible at 0% so model never floats.
-  // 2) Directional Cast Shadow scales cleanly with actual light energy:
-  //    - Night / windowless / neon 0%: strictly 0.0 (no phantom cast shadow in an unlit dark room!)
-  //    - Daytime windowed room at 0%: retains soft window-sunlight directional shadow only.
-  const daylightWindowCastBase =
+  // Natural Sunlight / Window Shadow Channel (100% invariant to artificial lamp dimmer)
+  const natShadowOffsetX = clamp((-dayKeyX / 3.0) * 0.28, -0.34, 0.34);
+  const natShadowOffsetZ = clamp((-dayKeyZ / 3.0) * 0.16 + 0.02, -0.22, 0.22);
+  const natShadowStretchX = clamp(1.04 + Math.abs(natShadowOffsetX) * 0.72, 0.98, 1.32);
+  const natShadowStretchZ = clamp(0.78 + (lowSunStretch - 0.85) * 0.36, 0.72, 1.28);
+  const naturalShadowDirX = -dayKeyX * 0.72 + natShadowOffsetX * 1.35;
+  const naturalShadowDirZ = -dayKeyZ * 0.34 + natShadowOffsetZ * 0.9;
+  const naturalShadowLengthScale =
+    clamp(3.9 / Math.max(1.4, dayKeyY), 0.68, 1.55) *
+    clamp((natShadowStretchX + natShadowStretchZ) * 0.58, 0.72, 1.58);
+  const naturalShadowOpacity =
     isWindowless || isNeonScene
       ? 0
       : clamp(dayWeight * rig.daylightStrength * 0.66, 0, 0.66);
+  const naturalShadowDirectRatio = clamp(Math.max(0.55, rig.daylightStrength), 0.45, 1);
+
+  // Artificial Indoor Fixture Shadow Channel (fixed room fixture angle; dimmer scales opacity ONLY)
+  const fixShadowOffsetX = clamp((-nightKeyX / 3.0) * 0.28, -0.34, 0.34);
+  const fixShadowOffsetZ = clamp((-nightKeyZ / 3.0) * 0.16 + 0.02, -0.22, 0.22);
+  const fixShadowStretchX = clamp(1.04 + Math.abs(fixShadowOffsetX) * 0.72, 0.98, 1.32);
+  const fixShadowStretchZ = clamp(nightShadowStretchZ, 0.72, 1.28);
+  const fixtureShadowDirX = -nightKeyX * 0.72 + fixShadowOffsetX * 1.35;
+  const fixtureShadowDirZ = -nightKeyZ * 0.34 + fixShadowOffsetZ * 0.9;
+  const fixtureShadowLengthScale =
+    clamp(3.9 / Math.max(1.4, nightKeyY), 0.68, 1.55) *
+    clamp((fixShadowStretchX + fixShadowStretchZ) * 0.58, 0.72, 1.58);
+  const fixtureCastDominance =
+    isWindowless || isNeonScene
+      ? isNeonScene
+        ? 0.92
+        : 0.96
+      : clamp(nightWeight * 0.96 + dayWeight * (isDark ? 0.58 : 0.46), 0.42, 0.96);
+  const fixtureShadowOpacity =
+    clampedScale <= 0.001 ? 0 : clamp(fixtureCastDominance * ambientDimmerCurve, 0, 0.96);
+  const fixtureShadowDirectRatio = clamp(nightDirectRatio, 0.45, 1);
+
+  const shadowOffsetX = useDaylightPrimaryAxis ? natShadowOffsetX : fixShadowOffsetX;
+  const shadowOffsetZ = useDaylightPrimaryAxis ? natShadowOffsetZ : fixShadowOffsetZ;
+  const shadowStretchX = useDaylightPrimaryAxis ? natShadowStretchX : fixShadowStretchX;
+  const shadowStretchZ = useDaylightPrimaryAxis ? natShadowStretchZ : fixShadowStretchZ;
+
+  // Legacy aggregate scalar kept monotonic & backward-compatible for unit/telemetry consumers
+  const daylightWindowCastBase = naturalShadowOpacity;
   const fixtureCastPower = clamp((isNeonScene ? 0.92 : 0.96) * ambientDimmerCurve, 0, 1);
   const castShadowScale = clamp(Math.max(daylightWindowCastBase, fixtureCastPower), 0, 1.05);
   const contactAoScale = clamp(
@@ -1314,14 +1354,8 @@ export function resolveStageLightingFrame(params: {
     1.0
   );
 
-  // Direct shadow sharpness is governed by light source geometry (lamp/window aperture),
-  // so dimming preserves consistent penumbra shape with only subtle ambient-fill softening (~10%).
-  const litDirectTarget = clamp(
-    windowShadowWeight * Math.max(0.55, rig.daylightStrength) +
-      fixtureShadowWeight * nightDirectRatio,
-    0.45,
-    1
-  );
+  // Direct shadow sharpness stays locked to the active primary physical source geometry
+  const litDirectTarget = useDaylightPrimaryAxis ? naturalShadowDirectRatio : fixtureShadowDirectRatio;
   const directRatio = clamp(
     litDirectTarget * (0.9 + 0.1 * Math.max(daylightWindowCastBase, clampedScale)),
     0.45,
@@ -1332,15 +1366,21 @@ export function resolveStageLightingFrame(params: {
   const secondaryShadowWeight =
     clampedScale <= 0.001
       ? 0
-      : clamp(fixtureShadowWeight * nightSecondaryWeight * ambientDimmerCurve, 0, 0.44);
+      : clamp(
+          nightSecondaryWeight *
+            (useDaylightPrimaryAxis ? 0.52 : 1.0) *
+            ambientDimmerCurve,
+          0,
+          0.44
+        );
 
   // Warm / neon fixture spotlight pool on the floor around the character's feet
   const floorPoolStrength =
     clampedScale <= 0.001
       ? 0
       : clamp(
-          (fixtureShadowWeight * nightFloorPoolStrength +
-            windowShadowWeight * nightFloorPoolStrength * 0.42) *
+          nightFloorPoolStrength *
+            (useDaylightPrimaryAxis ? 0.52 : 1.0) *
             (isNeonScene ? 0.85 : 0.72) *
             ambientDimmerCurve,
           0,
@@ -1399,27 +1439,31 @@ export function resolveStageLightingFrame(params: {
 
   const fixtureRgb = hexToRgbTriplet(fixtureHex);
   const secondaryRgb = hexToRgbTriplet(preset === 'auto' ? secondaryNeonHex : rimHex);
-  const ambientWashScale = isNeonScene ? 0.13 : rig.nightFixture === 'wall-sconce' ? 0.1 : 0.105;
+  const ambientWashScale = isNeonScene ? 0.13 : rig.nightFixture === 'wall-sconce' ? 0.064 : 0.068;
   const fixtureGlowWeight =
     preset === 'auto'
-      ? Math.max(nightWeight, hasVisibleFixtures ? fixtureOnFactor * 0.82 : 0)
-      : Math.max(nightWeight, 0.6);
+      ? Math.max(nightWeight, hasVisibleFixtures ? fixtureOnFactor * 0.75 : 0)
+      : Math.max(nightWeight, 0.55);
   const fixtureGlowAlpha =
     clampedScale <= 0.001
       ? 0
-      : clamp(fixtureGlowWeight * ambientWashScale * ambientDimmerCurve, 0, 0.15);
+      : clamp(
+          fixtureGlowWeight * ambientWashScale * ambientDimmerCurve,
+          0,
+          isNeonScene ? 0.15 : 0.09
+        );
   const nightFixtureGlowCss =
     fixtureGlowAlpha > 0.003
       ? isNeonScene
         ? `radial-gradient(ellipse 62% 48% at 24% 46%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.95).toFixed(3)}) 0%, transparent 72%), radial-gradient(ellipse 62% 48% at 76% 46%, rgba(${secondaryRgb}, ${(fixtureGlowAlpha * 0.95).toFixed(3)}) 0%, transparent 72%)`
-        : `radial-gradient(ellipse 64% 42% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.36).toFixed(3)}) 46%, transparent 80%)`
+        : `radial-gradient(ellipse 56% 36% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.34).toFixed(3)}) 46%, transparent 78%)`
       : 'none';
 
   const rimEdgePx = Math.round(clamp(-keyPosX * 1.45, -5, 5));
   const rimAlpha =
     clampedScale <= 0.001
       ? 0
-      : clamp((0.18 + fixtureShadowWeight * 0.06) * ambientDimmerCurve, 0, 0.28);
+      : clamp((0.18 + (useDaylightPrimaryAxis ? 0.02 : 0.06)) * ambientDimmerCurve, 0, 0.28);
   const characterRimDropShadow =
     clampedScale <= 0.001
       ? 'drop-shadow(0 0 0 rgba(0, 0, 0, 0))'
@@ -1476,10 +1520,10 @@ export function resolveStageLightingFrame(params: {
       0.16
     ),
     hazeFocusY: 0.58,
-    goboVisible: goboOpacityBase * ambientDimmerCurve > 0.015,
+    goboVisible: goboOpacityBase > 0.015,
     goboKind: rig.windowAperture,
-    goboHex: preset === 'auto' ? dayWindowHex : keyHex,
-    goboOpacity: clamp(goboOpacityBase * ambientDimmerCurve, 0, 0.34),
+    goboHex: dayWindowHex,
+    goboOpacity: clamp(goboOpacityBase, 0, 0.34),
     goboPosX,
     goboPosZ,
     goboRotY,
@@ -1501,6 +1545,16 @@ export function resolveStageLightingFrame(params: {
     ),
     contactAoScale,
     castShadowScale,
+    naturalShadowDirX,
+    naturalShadowDirZ,
+    naturalShadowLengthScale,
+    naturalShadowOpacity,
+    naturalShadowDirectRatio,
+    fixtureShadowDirX,
+    fixtureShadowDirZ,
+    fixtureShadowLengthScale,
+    fixtureShadowOpacity,
+    fixtureShadowDirectRatio,
     secondaryShadowWeight,
     secondaryShadowDirX: nightSecondaryDirX,
     secondaryShadowDirZ: nightSecondaryDirZ,

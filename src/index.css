@@ -4766,6 +4766,74 @@ html[data-theme-transitioning='1'] *::after {
   }
 }
 
+/* Choreographed 2-Second Login Portal Overlay & Circular Wave Reveal */
+.atelier-login-host {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.atelier-login-portal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.hig-native-shell.is-login-portal-preloading {
+  pointer-events: none;
+}
+
+.hig-native-shell.is-login-wave-revealing {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  z-index: 9600;
+  transform: translateZ(0);
+  will-change: clip-path;
+  pointer-events: none;
+}
+
+.atelier-login-wave-ring {
+  position: fixed;
+  z-index: 9700;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 1px solid rgba(235, 222, 198, 0.44);
+  box-shadow: 0 0 22px rgba(235, 222, 198, 0.22);
+  background: radial-gradient(
+    circle,
+    transparent 84%,
+    rgba(255, 255, 255, 0.08) 96%,
+    rgba(235, 222, 198, 0.14) 100%
+  );
+  transform: scale(0);
+  opacity: 0.78;
+  will-change: transform, opacity;
+  animation: atelierLoginWaveExpand 1.06s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes atelierLoginWaveExpand {
+  0% {
+    transform: scale(0);
+    opacity: 0.78;
+  }
+  52% {
+    opacity: 0.36;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
 .hig-logo-img-fallback-guard {
   display: block;
 }

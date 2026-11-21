@@ -38,9 +38,18 @@ export type StageFixtureEmitterKind =
   | 'neon-tube'
   | 'neon-sign';
 
+export type StageShadeOpticsKind =
+  | 'translucent-dome'
+  | 'opal-globe'
+  | 'linen-sconce'
+  | 'alabaster-torch'
+  | 'candle-cluster';
+
 export interface StageFixtureEmitter {
   id: string;
   kind: StageFixtureEmitterKind;
+  /** Physical shade optics model so bulbs glow INSIDE the lampshade without blowing out outer texture */
+  shadeOptics?: StageShadeOpticsKind;
   /** Horizontal center on the raw 3:4 photograph (0..100%) */
   xPct: number;
   /** Vertical center on the raw 3:4 photograph (0..100%) */
@@ -282,14 +291,14 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightPhotoDim: 0.32,
       nightDirectRatio: 0.78,
       fixtureEmitters: [
-        { id: 'paris_ch_fl', kind: 'chandelier', xPct: 15.6, yPct: 49.4, radiusPct: 11.5, intensity: 1.05, washSpanPct: 20, shadeWidthPct: 6.2, shadeHeightPct: 5.2 },
-        { id: 'paris_sc_fl', kind: 'sconce', xPct: 11.0, yPct: 55.4, radiusPct: 6.4, intensity: 0.96, washSpanPct: 13, shadeWidthPct: 2.8, shadeHeightPct: 2.1 },
-        { id: 'paris_ch_ml', kind: 'chandelier', xPct: 28.5, yPct: 54.4, radiusPct: 8.5, intensity: 1.0, washSpanPct: 16, shadeWidthPct: 3.6, shadeHeightPct: 3.4 },
-        { id: 'paris_sc_ml', kind: 'sconce', xPct: 27.6, yPct: 58.6, radiusPct: 4.8, intensity: 0.9, washSpanPct: 10, shadeWidthPct: 1.8, shadeHeightPct: 1.5 },
-        { id: 'paris_ch_mr', kind: 'chandelier', xPct: 71.8, yPct: 54.4, radiusPct: 8.5, intensity: 1.0, washSpanPct: 16, shadeWidthPct: 3.6, shadeHeightPct: 3.4 },
-        { id: 'paris_sc_mr', kind: 'sconce', xPct: 72.4, yPct: 58.6, radiusPct: 4.8, intensity: 0.9, washSpanPct: 10, shadeWidthPct: 1.8, shadeHeightPct: 1.5 },
-        { id: 'paris_ch_fr', kind: 'chandelier', xPct: 84.4, yPct: 49.4, radiusPct: 11.5, intensity: 1.05, washSpanPct: 20, shadeWidthPct: 6.2, shadeHeightPct: 5.2 },
-        { id: 'paris_sc_fr', kind: 'sconce', xPct: 89.2, yPct: 55.4, radiusPct: 6.4, intensity: 0.96, washSpanPct: 13, shadeWidthPct: 2.8, shadeHeightPct: 2.1 },
+        { id: 'paris_ch_fl', kind: 'chandelier', xPct: 15.6, yPct: 49.4, radiusPct: 9.2, intensity: 1.0, washSpanPct: 18, shadeWidthPct: 6.2, shadeHeightPct: 5.2 },
+        { id: 'paris_sc_fl', kind: 'sconce', shadeOptics: 'candle-cluster', xPct: 11.0, yPct: 55.4, radiusPct: 4.8, intensity: 0.94, washSpanPct: 11, shadeWidthPct: 2.8, shadeHeightPct: 2.1 },
+        { id: 'paris_ch_ml', kind: 'chandelier', xPct: 28.5, yPct: 54.4, radiusPct: 7.0, intensity: 0.96, washSpanPct: 14, shadeWidthPct: 3.6, shadeHeightPct: 3.4 },
+        { id: 'paris_sc_ml', kind: 'sconce', shadeOptics: 'candle-cluster', xPct: 27.6, yPct: 58.6, radiusPct: 3.8, intensity: 0.88, washSpanPct: 8.5, shadeWidthPct: 1.8, shadeHeightPct: 1.5 },
+        { id: 'paris_ch_mr', kind: 'chandelier', xPct: 71.8, yPct: 54.4, radiusPct: 7.0, intensity: 0.96, washSpanPct: 14, shadeWidthPct: 3.6, shadeHeightPct: 3.4 },
+        { id: 'paris_sc_mr', kind: 'sconce', shadeOptics: 'candle-cluster', xPct: 72.4, yPct: 58.6, radiusPct: 3.8, intensity: 0.88, washSpanPct: 8.5, shadeWidthPct: 1.8, shadeHeightPct: 1.5 },
+        { id: 'paris_ch_fr', kind: 'chandelier', xPct: 84.4, yPct: 49.4, radiusPct: 9.2, intensity: 1.0, washSpanPct: 18, shadeWidthPct: 6.2, shadeHeightPct: 5.2 },
+        { id: 'paris_sc_fr', kind: 'sconce', shadeOptics: 'candle-cluster', xPct: 89.2, yPct: 55.4, radiusPct: 4.8, intensity: 0.94, washSpanPct: 11, shadeWidthPct: 2.8, shadeHeightPct: 2.1 },
       ],
       rigNoteKo: '낮 천창 아케이드 채광 · 일몰 후 2800K 크리스탈 샹들리에 & 촛대 스콘스 점등',
       rigNoteEn: 'Daytime glass skylight · Post-sunset 2800K crystal chandeliers & brass candle sconces',
@@ -560,17 +569,17 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightPhotoDim: 0.33,
       nightDirectRatio: 0.84,
       fixtureEmitters: [
-        { id: 'seongsu_globe_l', kind: 'pendant', xPct: 23.4, yPct: 40.4, radiusPct: 12.0, intensity: 1.22, washSpanPct: 34, shadeWidthPct: 5.5, shadeHeightPct: 4.1 },
-        { id: 'seongsu_globe_r', kind: 'pendant', xPct: 58.0, yPct: 40.4, radiusPct: 12.0, intensity: 1.22, washSpanPct: 34, shadeWidthPct: 5.4, shadeHeightPct: 4.1 },
-        { id: 'seongsu_wall_sc', kind: 'sconce', xPct: 32.0, yPct: 45.6, radiusPct: 7.5, intensity: 1.12, washSpanPct: 18, shadeWidthPct: 1.8, shadeHeightPct: 3.1 },
-        { id: 'seongsu_art_1', kind: 'spot', xPct: 17.2, yPct: 28.9, radiusPct: 6.2, intensity: 0.92, washSpanPct: 22, tiltDeg: 18 },
-        { id: 'seongsu_art_2', kind: 'spot', xPct: 21.1, yPct: 31.3, radiusPct: 5.6, intensity: 0.88, washSpanPct: 20, tiltDeg: 16 },
-        { id: 'seongsu_f1', kind: 'spot', xPct: 14.4, yPct: 17.5, radiusPct: 7.2, intensity: 0.85, washSpanPct: 22, tiltDeg: 8 },
-        { id: 'seongsu_f2', kind: 'spot', xPct: 39.4, yPct: 17.5, radiusPct: 7.8, intensity: 0.92, washSpanPct: 24, tiltDeg: 0 },
-        { id: 'seongsu_f3', kind: 'spot', xPct: 64.4, yPct: 17.5, radiusPct: 7.2, intensity: 0.85, washSpanPct: 22, tiltDeg: -6 },
-        { id: 'seongsu_m1', kind: 'spot', xPct: 26.1, yPct: 28.1, radiusPct: 6.0, intensity: 0.84, washSpanPct: 20, tiltDeg: 4 },
-        { id: 'seongsu_m2', kind: 'spot', xPct: 43.1, yPct: 28.1, radiusPct: 6.4, intensity: 0.9, washSpanPct: 22, tiltDeg: 0 },
-        { id: 'seongsu_m3', kind: 'spot', xPct: 59.9, yPct: 28.1, radiusPct: 6.0, intensity: 0.84, washSpanPct: 20, tiltDeg: -4 },
+        { id: 'seongsu_globe_l', kind: 'pendant', shadeOptics: 'opal-globe', xPct: 23.4, yPct: 40.4, radiusPct: 7.4, intensity: 1.04, washSpanPct: 22, shadeWidthPct: 5.5, shadeHeightPct: 4.1 },
+        { id: 'seongsu_globe_r', kind: 'pendant', shadeOptics: 'opal-globe', xPct: 58.0, yPct: 40.4, radiusPct: 7.4, intensity: 1.04, washSpanPct: 22, shadeWidthPct: 5.4, shadeHeightPct: 4.1 },
+        { id: 'seongsu_wall_sc', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 32.0, yPct: 45.6, radiusPct: 5.4, intensity: 0.98, washSpanPct: 14, shadeWidthPct: 1.8, shadeHeightPct: 3.1 },
+        { id: 'seongsu_art_1', kind: 'spot', xPct: 17.2, yPct: 28.9, radiusPct: 5.0, intensity: 0.86, washSpanPct: 18, tiltDeg: 18 },
+        { id: 'seongsu_art_2', kind: 'spot', xPct: 21.1, yPct: 31.3, radiusPct: 4.6, intensity: 0.82, washSpanPct: 16, tiltDeg: 16 },
+        { id: 'seongsu_f1', kind: 'spot', xPct: 14.4, yPct: 17.5, radiusPct: 5.8, intensity: 0.78, washSpanPct: 18, tiltDeg: 8 },
+        { id: 'seongsu_f2', kind: 'spot', xPct: 39.4, yPct: 17.5, radiusPct: 6.2, intensity: 0.84, washSpanPct: 20, tiltDeg: 0 },
+        { id: 'seongsu_f3', kind: 'spot', xPct: 64.4, yPct: 17.5, radiusPct: 5.8, intensity: 0.78, washSpanPct: 18, tiltDeg: -6 },
+        { id: 'seongsu_m1', kind: 'spot', xPct: 26.1, yPct: 28.1, radiusPct: 4.8, intensity: 0.76, washSpanPct: 16, tiltDeg: 4 },
+        { id: 'seongsu_m2', kind: 'spot', xPct: 43.1, yPct: 28.1, radiusPct: 5.2, intensity: 0.82, washSpanPct: 18, tiltDeg: 0 },
+        { id: 'seongsu_m3', kind: 'spot', xPct: 59.9, yPct: 28.1, radiusPct: 4.8, intensity: 0.76, washSpanPct: 16, tiltDeg: -4 },
       ],
       rigNoteKo: '낮 통유리 커튼월 주광 · 일몰 후 2900K 오팔 글로브 펜던트 & 월 스콘스 점등',
       rigNoteEn: 'Daytime curtain-wall sunlight · Post-sunset 2900K opal globe pendants & wall sconce',
@@ -613,10 +622,10 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightPhotoDim: 0.33,
       nightDirectRatio: 0.82,
       fixtureEmitters: [
-        { id: 'loft_sc_fl', kind: 'sconce', xPct: 10.38, yPct: 38.0, radiusPct: 8.8, intensity: 1.15, washSpanPct: 21, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
-        { id: 'loft_sc_bl', kind: 'sconce', xPct: 24.22, yPct: 42.65, radiusPct: 7.0, intensity: 1.22, washSpanPct: 17.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
-        { id: 'loft_sc_br', kind: 'sconce', xPct: 75.78, yPct: 42.65, radiusPct: 7.0, intensity: 1.18, washSpanPct: 17.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
-        { id: 'loft_sc_fr', kind: 'sconce', xPct: 89.62, yPct: 38.0, radiusPct: 8.8, intensity: 1.12, washSpanPct: 21, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
+        { id: 'loft_sc_fl', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 10.38, yPct: 38.0, radiusPct: 6.0, intensity: 1.02, washSpanPct: 15, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
+        { id: 'loft_sc_bl', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 24.22, yPct: 42.65, radiusPct: 4.8, intensity: 1.06, washSpanPct: 12.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
+        { id: 'loft_sc_br', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 75.78, yPct: 42.65, radiusPct: 4.8, intensity: 1.04, washSpanPct: 12.5, shadeWidthPct: 2.4, shadeHeightPct: 2.45 },
+        { id: 'loft_sc_fr', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 89.62, yPct: 38.0, radiusPct: 6.0, intensity: 1.0, washSpanPct: 15, shadeWidthPct: 3.55, shadeHeightPct: 3.25 },
       ],
       rigNoteKo: '낮 아치 격자창 고보 햇빛 · 일몰 후 2700K 월 스콘스 점등',
       rigNoteEn: 'Daytime arched window grid sun · Post-sunset 2700K wall sconce',
@@ -673,9 +682,9 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightPhotoDim: 0.33,
       nightDirectRatio: 0.78,
       fixtureEmitters: [
-        { id: 'plaster_dome_pendant', kind: 'pendant', xPct: 34.8, yPct: 41.2, radiusPct: 18.0, intensity: 1.24, washSpanPct: 36, shadeWidthPct: 14.5, shadeHeightPct: 7.2 },
-        { id: 'plaster_floor_lantern', kind: 'sconce', xPct: 75.2, yPct: 48.2, radiusPct: 13.0, intensity: 1.18, washSpanPct: 26, shadeWidthPct: 5.0, shadeHeightPct: 5.8 },
-        { id: 'plaster_cove_main', kind: 'cove-strip', xPct: 23.6, yPct: 27.1, x2Pct: 86.4, y2Pct: 27.1, radiusPct: 9.0, intensity: 1.05, washSpanPct: 20 },
+        { id: 'plaster_dome_pendant', kind: 'pendant', shadeOptics: 'translucent-dome', xPct: 34.8, yPct: 41.2, radiusPct: 11.8, intensity: 1.06, washSpanPct: 24, shadeWidthPct: 14.5, shadeHeightPct: 7.2 },
+        { id: 'plaster_floor_lantern', kind: 'sconce', shadeOptics: 'linen-sconce', xPct: 75.2, yPct: 48.2, radiusPct: 8.0, intensity: 1.02, washSpanPct: 18, shadeWidthPct: 5.0, shadeHeightPct: 5.8 },
+        { id: 'plaster_cove_main', kind: 'cove-strip', xPct: 23.6, yPct: 27.1, x2Pct: 86.4, y2Pct: 27.1, radiusPct: 7.5, intensity: 0.96, washSpanPct: 16 },
       ],
       rigNoteKo: '낮 쉬어 커튼 채광 · 일몰 후 2700K 한지 돔 펜던트 · 스탠드 랜턴 · 코브등 점등',
       rigNoteEn: 'Daytime sheer-curtain sun · Post-sunset 2700K dome pendant, floor lantern & cove',
@@ -781,11 +790,11 @@ export const STAGE_BACKGROUNDS: readonly StageBackgroundItem[] = [
       nightPhotoDim: 0.33,
       nightDirectRatio: 0.82,
       fixtureEmitters: [
-        { id: 'stone_torch_l', kind: 'sconce', xPct: 9.5, yPct: 29.8, radiusPct: 15.0, intensity: 1.18, washSpanPct: 28, shadeWidthPct: 7.4, shadeHeightPct: 15.2 },
-        { id: 'stone_torch_r', kind: 'sconce', xPct: 63.4, yPct: 41.4, radiusPct: 11.0, intensity: 1.22, washSpanPct: 22, shadeWidthPct: 3.5, shadeHeightPct: 6.4 },
-        { id: 'stone_arch_pendant', kind: 'pendant', xPct: 37.8, yPct: 38.5, radiusPct: 10.5, intensity: 1.18, washSpanPct: 26, shadeWidthPct: 3.1, shadeHeightPct: 2.5 },
-        { id: 'stone_up_l', kind: 'uplight', xPct: 30.2, yPct: 61.2, radiusPct: 7.5, intensity: 1.05, washSpanPct: 24 },
-        { id: 'stone_up_r', kind: 'uplight', xPct: 46.8, yPct: 61.2, radiusPct: 7.5, intensity: 1.05, washSpanPct: 24 },
+        { id: 'stone_torch_l', kind: 'sconce', shadeOptics: 'alabaster-torch', xPct: 9.5, yPct: 29.8, radiusPct: 9.4, intensity: 1.04, washSpanPct: 19, shadeWidthPct: 7.4, shadeHeightPct: 15.2 },
+        { id: 'stone_torch_r', kind: 'sconce', shadeOptics: 'alabaster-torch', xPct: 63.4, yPct: 41.4, radiusPct: 7.0, intensity: 1.06, washSpanPct: 15, shadeWidthPct: 3.5, shadeHeightPct: 6.4 },
+        { id: 'stone_arch_pendant', kind: 'pendant', shadeOptics: 'opal-globe', xPct: 37.8, yPct: 38.5, radiusPct: 6.4, intensity: 1.02, washSpanPct: 18, shadeWidthPct: 3.1, shadeHeightPct: 2.5 },
+        { id: 'stone_up_l', kind: 'uplight', xPct: 30.2, yPct: 61.2, radiusPct: 7.2, intensity: 1.0, washSpanPct: 22 },
+        { id: 'stone_up_r', kind: 'uplight', xPct: 46.8, yPct: 61.2, radiusPct: 7.2, intensity: 1.0, washSpanPct: 22 },
       ],
       rigNoteKo: '낮 트래버틴 아치 채광 · 일몰 후 2800K 알라바스터 토치 스콘스 · 볼트 펜던트 · 업라이트',
       rigNoteEn: 'Daytime travertine arch sun · Post-sunset 2800K alabaster torches, pendant & uplights',

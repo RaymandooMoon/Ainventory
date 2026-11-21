@@ -341,15 +341,15 @@
     0 0 26px 8px rgba(var(--fx-rgb, 255, 196, 116), 0.52);
 }
 
-/* Wall Sconce: crisp incandescent backlit linen trapezoid shade + tight top/bottom aperture spills + hourglass plaster wall cones */
+/* Wall Sconce: localized internal incandescent bulb inside shade + soft subsurface transmission preserving shade texture + clean aperture cones */
 .atelier-fixture-emitter.is-sconce .atelier-fixture-halo {
-  inset: -44%;
+  inset: -14%;
   background: radial-gradient(
     circle closest-side at 50% 50%,
-    rgba(255, 216, 136, 0.44) 0%,
-    rgba(255, 196, 108, 0.24) 36%,
-    rgba(var(--fx-rgb, 255, 190, 104), 0.1) 66%,
-    transparent 94%
+    rgba(255, 210, 128, 0.24) 0%,
+    rgba(255, 192, 102, 0.12) 40%,
+    rgba(var(--fx-rgb, 255, 186, 98), 0.04) 70%,
+    transparent 96%
   );
 }
 
@@ -360,119 +360,176 @@
   width: var(--fx-shade-w, 13px);
   height: var(--fx-shade-h, 17px);
   transform: translate3d(-50%, -50%, 0);
-  clip-path: polygon(16% 0%, 84% 0%, 100% 100%, 0% 100%);
+  clip-path: polygon(14% 0%, 86% 0%, 100% 100%, 0% 100%);
+  mix-blend-mode: soft-light;
   background:
     radial-gradient(
-      ellipse 56% 58% at 50% 54%,
-      #ffffff 0%,
-      rgba(255, 252, 232, 1) 36%,
-      rgba(255, 232, 162, 0.98) 68%,
-      rgba(250, 192, 92, 0.96) 100%
+      ellipse 46% 52% at 50% 52%,
+      rgba(255, 240, 194, 0.86) 0%,
+      rgba(255, 214, 134, 0.56) 44%,
+      rgba(var(--fx-rgb, 250, 188, 92), 0.24) 76%,
+      transparent 100%
     );
+}
+
+.atelier-fixture-emitter.is-sconce.is-optics-alabaster-torch .atelier-fixture-shade-core {
+  clip-path: none;
+  border-radius: 38% / 14%;
+  background:
+    radial-gradient(
+      ellipse 44% 58% at 50% 48%,
+      rgba(255, 238, 188, 0.82) 0%,
+      rgba(255, 206, 122, 0.48) 48%,
+      rgba(var(--fx-rgb, 248, 184, 92), 0.16) 80%,
+      transparent 100%
+    );
+}
+
+.atelier-fixture-emitter.is-sconce.is-optics-candle-cluster .atelier-fixture-shade-core {
+  display: none;
+}
+
+.atelier-fixture-emitter.is-sconce .atelier-fixture-bulb-filament {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: calc(var(--fx-shade-w, 13px) * 0.44);
+  height: calc(var(--fx-shade-h, 17px) * 0.42);
+  min-width: 5px;
+  min-height: 6px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse closest-side at 50% 50%,
+    rgba(255, 254, 246, 0.98) 0%,
+    rgba(255, 236, 172, 0.84) 38%,
+    rgba(var(--fx-rgb, 255, 196, 108), 0.34) 72%,
+    transparent 100%
+  );
   filter:
-    drop-shadow(0 0 1.2px rgba(255, 248, 218, 0.94))
-    drop-shadow(0 0 4.5px rgba(255, 214, 126, 0.78))
-    drop-shadow(0 0 11px rgba(var(--fx-rgb, 255, 194, 104), 0.62));
+    drop-shadow(0 0 2.5px rgba(255, 244, 204, 0.85))
+    drop-shadow(0 0 6px rgba(var(--fx-rgb, 255, 196, 106), 0.42));
+}
+
+.atelier-fixture-emitter.is-sconce.is-optics-alabaster-torch .atelier-fixture-bulb-filament {
+  top: 48%;
+  width: calc(var(--fx-shade-w, 13px) * 0.36);
+  height: calc(var(--fx-shade-h, 17px) * 0.46);
+}
+
+.atelier-fixture-emitter.is-sconce.is-optics-candle-cluster .atelier-fixture-bulb-filament {
+  top: 44%;
+  width: var(--fx-shade-w, 13px);
+  height: var(--fx-shade-h, 17px);
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 26% 42%, #ffffff 0%, rgba(255, 232, 162, 0.85) 16%, transparent 36%),
+    radial-gradient(circle at 74% 42%, #ffffff 0%, rgba(255, 232, 162, 0.85) 16%, transparent 36%);
+  filter: drop-shadow(0 0 4px rgba(var(--fx-rgb, 255, 206, 124), 0.65));
 }
 
 .atelier-fixture-emitter.is-sconce .atelier-fixture-shade-rim-hot {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(var(--fx-shade-w, 13px) * 0.9);
-  height: calc(var(--fx-shade-h, 17px) * 1.12);
+  width: calc(var(--fx-shade-w, 13px) * 0.78);
+  height: calc(var(--fx-shade-h, 17px) * 1.06);
   transform: translate3d(-50%, -50%, 0);
   background:
     radial-gradient(
-      ellipse 68% 18% at 50% 4%,
-      rgba(255, 255, 252, 0.98) 0%,
-      rgba(255, 236, 176, 0.68) 56%,
+      ellipse 64% 12% at 50% 2%,
+      rgba(255, 248, 224, 0.78) 0%,
+      rgba(255, 224, 148, 0.36) 56%,
       transparent 100%
     ),
     radial-gradient(
-      ellipse 86% 20% at 50% 96%,
-      rgba(255, 255, 252, 0.98) 0%,
-      rgba(255, 234, 168, 0.72) 56%,
+      ellipse 78% 14% at 50% 98%,
+      rgba(255, 248, 224, 0.82) 0%,
+      rgba(255, 222, 142, 0.38) 56%,
       transparent 100%
     );
   filter: blur(0.6px);
 }
 
+.atelier-fixture-emitter.is-sconce.is-optics-candle-cluster .atelier-fixture-shade-rim-hot {
+  display: none;
+}
+
 .atelier-fixture-emitter.is-sconce .atelier-fixture-bulb-spill-top {
   position: absolute;
   left: 50%;
-  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.44);
-  width: calc(var(--fx-shade-w, 13px) * 0.92);
-  height: calc(var(--fx-shade-h, 17px) * 0.48);
-  transform: translate3d(-50%, 16%, 0);
+  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.48);
+  width: calc(var(--fx-shade-w, 13px) * 0.76);
+  height: calc(var(--fx-shade-h, 17px) * 0.4);
+  transform: translate3d(-50%, 10%, 0);
   background: radial-gradient(
-    ellipse closest-side at 50% 85%,
-    rgba(255, 253, 238, 0.92) 0%,
-    rgba(255, 230, 158, 0.62) 55%,
+    ellipse closest-side at 50% 90%,
+    rgba(255, 246, 212, 0.72) 0%,
+    rgba(255, 218, 138, 0.36) 56%,
     transparent 96%
   );
-  filter: blur(1.2px);
+  filter: blur(1.4px);
 }
 
 .atelier-fixture-emitter.is-sconce .atelier-fixture-bulb-spill {
   position: absolute;
   left: 50%;
-  top: calc(50% + var(--fx-shade-h, 17px) * 0.44);
-  width: calc(var(--fx-shade-w, 13px) * 1.12);
-  height: calc(var(--fx-shade-h, 17px) * 0.52);
-  transform: translate3d(-50%, -20%, 0);
+  top: calc(50% + var(--fx-shade-h, 17px) * 0.48);
+  width: calc(var(--fx-shade-w, 13px) * 0.92);
+  height: calc(var(--fx-shade-h, 17px) * 0.44);
+  transform: translate3d(-50%, -10%, 0);
   background: radial-gradient(
-    ellipse closest-side at 50% 22%,
-    rgba(255, 253, 238, 0.94) 0%,
-    rgba(255, 228, 154, 0.66) 56%,
+    ellipse closest-side at 50% 14%,
+    rgba(255, 246, 212, 0.76) 0%,
+    rgba(255, 216, 134, 0.38) 56%,
     transparent 96%
   );
-  filter: blur(1.2px);
+  filter: blur(1.4px);
 }
 
 .atelier-fixture-sconce-cone-up {
   position: absolute;
   left: 50%;
-  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.34);
-  width: calc(var(--fx-shade-w, 13px) * 5.8);
-  height: calc(var(--fx-wash-px, 96px) * 0.88);
+  bottom: calc(50% + var(--fx-shade-h, 17px) * 0.46);
+  width: calc(var(--fx-shade-w, 13px) * 3.8);
+  height: calc(var(--fx-wash-px, 96px) * 0.76);
   transform: translate3d(-50%, 0, 0);
   background:
     radial-gradient(
-      ellipse 26% 76% at 50% 100%,
-      rgba(255, 255, 246, 0.98) 0%,
-      rgba(255, 236, 172, 0.72) 34%,
-      rgba(var(--fx-rgb, 255, 198, 118), 0.24) 66%,
+      ellipse 24% 72% at 50% 100%,
+      rgba(255, 246, 214, 0.74) 0%,
+      rgba(255, 224, 152, 0.42) 38%,
+      rgba(var(--fx-rgb, 255, 194, 112), 0.14) 68%,
       transparent 94%
     ),
     radial-gradient(
-      ellipse 46% 92% at 50% 100%,
-      rgba(var(--fx-rgb, 255, 200, 118), 0.56) 0%,
-      rgba(var(--fx-rgb, 255, 194, 110), 0.18) 54%,
+      ellipse 42% 88% at 50% 100%,
+      rgba(var(--fx-rgb, 255, 196, 114), 0.32) 0%,
+      rgba(var(--fx-rgb, 255, 190, 106), 0.1) 56%,
       transparent 92%
     );
-  filter: blur(3px);
+  filter: blur(3.5px);
 }
 
 .atelier-fixture-sconce-cone-down {
   position: absolute;
   left: 50%;
-  top: calc(50% + var(--fx-shade-h, 17px) * 0.34);
-  width: calc(var(--fx-shade-w, 13px) * 5.2);
-  height: calc(var(--fx-wash-px, 96px) * 0.78);
+  top: calc(50% + var(--fx-shade-h, 17px) * 0.46);
+  width: calc(var(--fx-shade-w, 13px) * 3.5);
+  height: calc(var(--fx-wash-px, 96px) * 0.68);
   transform: translate3d(-50%, 0, 0);
   background:
     radial-gradient(
-      ellipse 25% 74% at 50% 0%,
-      rgba(255, 254, 242, 0.94) 0%,
-      rgba(255, 232, 166, 0.64) 34%,
-      rgba(var(--fx-rgb, 255, 196, 114), 0.2) 66%,
+      ellipse 24% 70% at 50% 0%,
+      rgba(255, 244, 210, 0.7) 0%,
+      rgba(255, 220, 148, 0.38) 38%,
+      rgba(var(--fx-rgb, 255, 192, 110), 0.12) 68%,
       transparent 94%
     ),
     radial-gradient(
-      ellipse 44% 90% at 50% 0%,
-      rgba(var(--fx-rgb, 255, 198, 116), 0.48) 0%,
-      rgba(var(--fx-rgb, 255, 190, 108), 0.15) 54%,
+      ellipse 40% 86% at 50% 0%,
+      rgba(var(--fx-rgb, 255, 194, 112), 0.28) 0%,
+      rgba(var(--fx-rgb, 255, 188, 104), 0.08) 56%,
       transparent 92%
     );
   filter: blur(3.5px);
@@ -483,51 +540,51 @@
   position: absolute;
   left: 50%;
   top: 48%;
-  width: calc(var(--fx-radius-px, 36px) * 3.4);
-  height: calc(var(--fx-wash-px, 140px) * 1.45);
+  width: calc(var(--fx-radius-px, 36px) * 2.8);
+  height: calc(var(--fx-wash-px, 140px) * 1.28);
   transform-origin: 50% 0%;
   transform: translate3d(-50%, 0, 0) rotate(var(--fx-tilt-deg, 0deg));
   background: radial-gradient(
-    ellipse 42% 88% at 50% 4%,
-    rgba(255, 240, 206, 0.44) 0%,
-    rgba(var(--fx-rgb, 255, 214, 154), 0.22) 34%,
-    rgba(var(--fx-rgb, 255, 210, 146), 0.06) 66%,
+    ellipse 40% 86% at 50% 4%,
+    rgba(255, 238, 200, 0.36) 0%,
+    rgba(var(--fx-rgb, 255, 210, 148), 0.18) 36%,
+    rgba(var(--fx-rgb, 255, 206, 140), 0.05) 68%,
     transparent 96%
   );
-  filter: blur(10px);
+  filter: blur(9px);
 }
 
 .atelier-fixture-emitter.is-spot .atelier-fixture-halo {
-  inset: -18%;
-  opacity: 0.88;
+  inset: -8%;
+  opacity: 0.64;
 }
 
 /* Crystal Chandelier: refined multi-candle filament cluster + crystal cross-starburst (zero opaque blob) */
 .atelier-fixture-emitter.is-chandelier .atelier-fixture-halo {
-  inset: -34%;
+  inset: -18%;
   background: radial-gradient(
     circle closest-side at 50% 52%,
-    rgba(255, 226, 158, 0.42) 0%,
-    rgba(var(--fx-rgb, 255, 210, 142), 0.2) 44%,
+    rgba(255, 222, 152, 0.32) 0%,
+    rgba(var(--fx-rgb, 255, 206, 138), 0.14) 46%,
     transparent 90%
   );
 }
 
 .atelier-fixture-chandelier-spark {
   position: absolute;
-  inset: -14%;
+  inset: -10%;
   border-radius: 50%;
   background:
     radial-gradient(
-      ellipse 90% 14% at 50% 52%,
-      rgba(255, 250, 232, 0.56) 0%,
-      rgba(var(--fx-rgb, 255, 215, 156), 0.22) 48%,
+      ellipse 88% 12% at 50% 52%,
+      rgba(255, 248, 228, 0.48) 0%,
+      rgba(var(--fx-rgb, 255, 212, 150), 0.18) 48%,
       transparent 88%
     ),
     radial-gradient(
-      ellipse 14% 78% at 50% 52%,
-      rgba(255, 250, 232, 0.44) 0%,
-      rgba(var(--fx-rgb, 255, 215, 156), 0.18) 48%,
+      ellipse 12% 76% at 50% 52%,
+      rgba(255, 248, 228, 0.38) 0%,
+      rgba(var(--fx-rgb, 255, 212, 150), 0.14) 48%,
       transparent 88%
     );
 }
@@ -545,18 +602,18 @@
     radial-gradient(circle at 76% 58%, #ffffff 0%, rgba(255, 236, 174, 0.85) 14%, transparent 32%),
     radial-gradient(circle at 38% 72%, rgba(255, 252, 236, 0.92) 0%, rgba(255, 224, 148, 0.6) 15%, transparent 34%),
     radial-gradient(circle at 62% 72%, rgba(255, 252, 236, 0.92) 0%, rgba(255, 224, 148, 0.6) 15%, transparent 34%),
-    radial-gradient(ellipse 68% 48% at 50% 56%, rgba(255, 232, 166, 0.42) 0%, transparent 78%);
-  filter: drop-shadow(0 0 6px rgba(var(--fx-rgb, 255, 212, 142), 0.65));
+    radial-gradient(ellipse 64% 44% at 50% 56%, rgba(255, 230, 162, 0.34) 0%, transparent 78%);
+  filter: drop-shadow(0 0 5px rgba(var(--fx-rgb, 255, 210, 140), 0.58));
 }
 
-/* Sculptural Globe / Organic Dome Pendant: backlit translucent diffuser shade + silky downward pool cone */
+/* Sculptural Dome / Opal Globe Pendant: focal internal bulb glowing INSIDE shade + soft subsurface warmth preserving shade ribs & silhouette */
 .atelier-fixture-emitter.is-pendant .atelier-fixture-halo {
-  inset: -40%;
+  inset: -12%;
   background: radial-gradient(
-    circle closest-side at 50% 50%,
-    rgba(255, 230, 168, 0.48) 0%,
-    rgba(var(--fx-rgb, 255, 206, 134), 0.24) 40%,
-    rgba(var(--fx-rgb, 255, 200, 126), 0.08) 70%,
+    circle closest-side at 50% 58%,
+    rgba(255, 220, 148, 0.24) 0%,
+    rgba(var(--fx-rgb, 255, 198, 122), 0.12) 42%,
+    rgba(var(--fx-rgb, 255, 192, 116), 0.04) 72%,
     transparent 96%
   );
 }
@@ -565,38 +622,100 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: var(--fx-shade-w, 24px);
-  height: var(--fx-shade-h, 24px);
+  width: calc(var(--fx-shade-w, 24px) * 0.92);
+  height: calc(var(--fx-shade-h, 24px) * 0.9);
   transform: translate3d(-50%, -50%, 0);
-  border-radius: 50% 50% 44% 44% / 58% 58% 42% 42%;
+  border-radius: 50% 50% 42% 42% / 60% 60% 40% 40%;
+  mix-blend-mode: soft-light;
   background:
     radial-gradient(
-      ellipse 62% 58% at 50% 54%,
-      #ffffff 0%,
-      rgba(255, 252, 236, 0.96) 36%,
-      rgba(255, 232, 168, 0.88) 70%,
-      rgba(var(--fx-rgb, 255, 204, 128), 0.72) 100%
+      ellipse 50% 54% at 50% 64%,
+      rgba(255, 242, 196, 0.88) 0%,
+      rgba(255, 214, 134, 0.58) 44%,
+      rgba(var(--fx-rgb, 255, 194, 112), 0.24) 76%,
+      transparent 100%
     );
+}
+
+.atelier-fixture-emitter.is-pendant.is-optics-opal-globe .atelier-fixture-pendant-core {
+  width: calc(var(--fx-shade-w, 24px) * 0.9);
+  height: calc(var(--fx-shade-h, 24px) * 0.9);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle closest-side at 50% 52%,
+      rgba(255, 246, 208, 0.86) 0%,
+      rgba(255, 220, 146, 0.54) 48%,
+      rgba(var(--fx-rgb, 255, 198, 120), 0.18) 80%,
+      transparent 100%
+    );
+}
+
+.atelier-fixture-emitter.is-pendant .atelier-fixture-bulb-filament {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: calc(var(--fx-shade-w, 24px) * 0.28);
+  height: calc(var(--fx-shade-h, 24px) * 0.36);
+  min-width: 7px;
+  min-height: 7px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse closest-side at 50% 52%,
+    rgba(255, 254, 244, 0.98) 0%,
+    rgba(255, 236, 170, 0.84) 36%,
+    rgba(var(--fx-rgb, 255, 196, 108), 0.34) 70%,
+    transparent 100%
+  );
   filter:
-    drop-shadow(0 0 2px rgba(255, 248, 224, 0.9))
-    drop-shadow(0 0 9px rgba(var(--fx-rgb, 255, 208, 136), 0.72));
+    drop-shadow(0 0 3px rgba(255, 244, 202, 0.85))
+    drop-shadow(0 0 8px rgba(var(--fx-rgb, 255, 198, 112), 0.45));
+}
+
+.atelier-fixture-emitter.is-pendant.is-optics-opal-globe .atelier-fixture-bulb-filament {
+  top: 50%;
+  width: calc(var(--fx-shade-w, 24px) * 0.38);
+  height: calc(var(--fx-shade-h, 24px) * 0.38);
+}
+
+.atelier-fixture-pendant-aperture-rim {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--fx-shade-h, 24px) * 0.42);
+  width: calc(var(--fx-shade-w, 24px) * 0.72);
+  height: calc(var(--fx-shade-h, 24px) * 0.18);
+  min-height: 3px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse closest-side at 50% 50%,
+    rgba(255, 248, 222, 0.82) 0%,
+    rgba(255, 220, 142, 0.46) 54%,
+    transparent 100%
+  );
+  filter: blur(1.2px);
+}
+
+.atelier-fixture-emitter.is-pendant.is-optics-opal-globe .atelier-fixture-pendant-aperture-rim {
+  display: none;
 }
 
 .atelier-fixture-pendant-cone {
   position: absolute;
   left: 50%;
-  top: calc(50% + var(--fx-shade-h, 24px) * 0.24);
-  width: calc(var(--fx-shade-w, 24px) * 4.4);
-  height: calc(var(--fx-wash-px, 140px) * 1.15);
+  top: calc(50% + var(--fx-shade-h, 24px) * 0.42);
+  width: calc(var(--fx-shade-w, 24px) * 2.5);
+  height: calc(var(--fx-wash-px, 140px) * 0.96);
   transform: translate3d(-50%, 0, 0);
   background: radial-gradient(
-    ellipse 46% 88% at 50% 6%,
-    rgba(255, 246, 214, 0.56) 0%,
-    rgba(var(--fx-rgb, 255, 212, 144), 0.28) 38%,
-    rgba(var(--fx-rgb, 255, 204, 132), 0.08) 72%,
+    ellipse 40% 86% at 50% 4%,
+    rgba(255, 240, 198, 0.42) 0%,
+    rgba(var(--fx-rgb, 255, 204, 130), 0.2) 38%,
+    rgba(var(--fx-rgb, 255, 196, 120), 0.06) 70%,
     transparent 96%
   );
-  filter: blur(7px);
+  filter: blur(8px);
 }
 
 /* Floor Arch Uplight: pure upward grazing sculptural arch wash + recessed floor pinhole (no floating mid-air orb) */

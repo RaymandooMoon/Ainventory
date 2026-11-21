@@ -146,16 +146,22 @@ const SILHOUETTE_SHADOW_FRAG = `
   uniform float uMirrorX;
   uniform float uSoleBottomV;
   uniform float uCrownTopV;
-  uniform vec2 uShadowDir;
-  uniform float uShadowLength;
-  uniform vec2 uShadowDir2;
-  uniform float uShadowLength2;
-  uniform float uSecondaryWeight;
+  // Channel A: Strictly decoupled Natural Daylight / Window Sun shadow
+  uniform vec2 uSunShadowDir;
+  uniform float uSunShadowLength;
+  uniform float uSunShadowOpacity;
+  uniform float uSunDirectRatio;
+  // Channel B: Strictly decoupled Artificial Indoor Fixture shadow (+ opposing fill fixture)
+  uniform vec2 uLampShadowDir;
+  uniform float uLampShadowLength;
+  uniform float uLampShadowOpacity;
+  uniform float uLampDirectRatio;
+  uniform vec2 uLampShadowDir2;
+  uniform float uLampShadowLength2;
+  uniform float uLampShadowOpacity2;
   uniform float uCharWidthMeters;
   uniform float uFootprintScale;
-  uniform float uDirectRatio;
   uniform float uContactAoOpacity;
-  uniform float uCastShadowOpacity;
   uniform vec3 uShadowColor;
   varying vec2 vFloorXZ;
 
@@ -219,29 +225,48 @@ const SILHOUETTE_SHADOW_FRAG = `
     float softAo = exp(-dot(softCoord, softCoord) * 1.55) * 0.44;
     float contactAo = clamp(coreAo * 0.84 + softAo, 0.0, 1.0);
 
-    // 2. Light-direction projected Silhouette Cast Shadow (+ optional opposing indoor fixture fill shadow)
-    // Strictly disabled when uCastShadowOpacity <= 0.004 (unlit 0% night / windowless / neon blackout)
-    float castShadow = 0.0;
-    if (uHasCutout > 0.5 && uCastShadowOpacity > 0.004) {
-      float sharpness = clamp(uDirectRatio, 0.0, 1.0);
-      float directWeight = mix(0.42, 1.0, sharpness);
-      float primaryCast = projectSilhouette(p, uShadowDir, uShadowLength, sharpness, true) * directWeight;
+    // 2A. Independent Natural Sunlight / Window Cast Shadow (fixed by solar + window geometry)
+    float sunAlpha = 0.0;
+    if (uHasCutout > 0.5 && uSunShadowOpacity > 0.004) {
+      float sunSharp = clamp(uSunDirectRatio, 0.0, 1.0);
+      float sunDirect = mix(0.42, 1.0, sunSharp);
+      sunAlpha =
+        projectSilhouette(p, uSunShadowDir, uSunShadowLength, sunSharp, true) *
+        sunDirect *
+        uSunShadowOpacity;
+    }
 
-      float secondaryCast = 0.0;
-      if (uSecondaryWeight > 0.02) {
-        secondaryCast =
-          projectSilhouette(p, uShadowDir2, uShadowLength2, sharpness * 0.65, false) *
-          uSecondaryWeight *
-          directWeight;
+    // 2B. Independent Artificial Fixture Cast Shadow (+ optional opposing indoor fixture fill)
+    float lampAlpha = 0.0;
+    if (uHasCutout > 0.5 && uLampShadowOpacity > 0.004) {
+      float lampSharp = clamp(uLampDirectRatio, 0.0, 1.0);
+      float lampDirect = mix(0.42, 1.0, lampSharp);
+      float lampPrimary =
+        projectSilhouette(p, uLampShadowDir, uLampShadowLength, lampSharp, true) *
+        lampDirect *
+        uLampShadowOpacity;
+
+      float lampSecondary = 0.0;
+      if (uLampShadowOpacity2 > 0.004) {
+        lampSecondary =
+          projectSilhouette(p, uLampShadowDir2, uLampShadowLength2, lampSharp * 0.65, false) *
+          lampDirect *
+          uLampShadowOpacity2;
       }
 
-      castShadow = clamp(max(primaryCast, secondaryCast) + min(primaryCast, secondaryCast) * 0.28, 0.0, 1.0);
+      lampAlpha = clamp(
+        max(lampPrimary, lampSecondary) + min(lampPrimary, lampSecondary) * 0.26,
+        0.0,
+        0.78
+      );
     }
 
     // Smooth radial edge fade so the shadow quad border is never visible
     float quadEdgeFade = 1.0 - smoothstep(1.9, 2.62, length(p));
     float aoAlpha = contactAo * uContactAoOpacity;
-    float castAlpha = castShadow * uCastShadowOpacity;
+    // Physical superposition: natural sun shadow stays anchored in place while artificial lamp
+    // shadow fades in independently along its own fixed fixture angle (zero angular drift!)
+    float castAlpha = clamp(sunAlpha + lampAlpha - sunAlpha * lampAlpha * 0.55, 0.0, 0.78);
     float finalAlpha = clamp((max(aoAlpha, castAlpha) + min(aoAlpha, castAlpha) * 0.22) * quadEdgeFade, 0.0, 0.84);
     if (finalAlpha < 0.004) discard;
     gl_FragColor = vec4(uShadowColor, finalAlpha);
@@ -595,16 +620,20 @@ export default function StudioThreeStageLayer({
           uMirrorX: { value: 0.0 },
           uSoleBottomV: { value: 0.045 },
           uCrownTopV: { value: 0.94 },
-          uShadowDir: { value: new THREE.Vector2(0.0, -1.0) },
-          uShadowLength: { value: 1.05 },
-          uShadowDir2: { value: new THREE.Vector2(0.0, -1.0) },
-          uShadowLength2: { value: 0.92 },
-          uSecondaryWeight: { value: 0.0 },
+          uSunShadowDir: { value: new THREE.Vector2(0.0, -1.0) },
+          uSunShadowLength: { value: 1.05 },
+          uSunShadowOpacity: { value: 0.0 },
+          uSunDirectRatio: { value: 0.75 },
+          uLampShadowDir: { value: new THREE.Vector2(0.0, -1.0) },
+          uLampShadowLength: { value: 1.05 },
+          uLampShadowOpacity: { value: 0.0 },
+          uLampDirectRatio: { value: 0.75 },
+          uLampShadowDir2: { value: new THREE.Vector2(0.0, -1.0) },
+          uLampShadowLength2: { value: 0.92 },
+          uLampShadowOpacity2: { value: 0.0 },
           uCharWidthMeters: { value: 1.18 },
           uFootprintScale: { value: 1.0 },
-          uDirectRatio: { value: 0.75 },
           uContactAoOpacity: { value: 0.44 },
-          uCastShadowOpacity: { value: 0.42 },
           uShadowColor: { value: new THREE.Color(0x161412) },
         },
         vertexShader: SILHOUETTE_SHADOW_VERT,
@@ -894,45 +923,87 @@ export default function StudioThreeStageLayer({
           );
         }
 
-        // Single-Pass GLSL Silhouette Cast Shadow + Dual-Fixture Fill Shadow + Tight Contact AO
+        // Single-Pass GLSL 3-Channel Silhouette Shadow:
+        // Contact AO + Decoupled Natural Sun Cast Shadow + Decoupled Artificial Lamp Primary/Secondary Shadows
         silhouetteShadowMesh.visible = Boolean(p.hasCharacter);
         if (silhouetteShadowMesh.visible) {
-          // Cast shadow vector points horizontally AWAY from key light source `(keyPosX, keyPosZ)`
-          // Stronger lateral X weight counteracts low-camera Z-foreshortening so room lamp shadows sweep visibly across floor
-          let castX = -lf.keyPosX * 0.72 + lf.shadowOffsetX * 1.35;
-          let castZ = -lf.keyPosZ * 0.34 + lf.shadowOffsetZ * 0.9;
-          const castLen = Math.hypot(castX, castZ);
-          if (castLen < 0.08) {
-            castX = 0.32;
-            castZ = -0.94;
-          }
-          (silhouetteShadowMat.uniforms.uShadowDir.value as THREE.Vector2).set(castX, castZ);
+          const baseContactOpacity = !p.isOutdoor
+            ? isDark
+              ? 0.54
+              : 0.48
+            : isDark
+              ? 0.5
+              : 0.44;
+          const baseCastOpacity = !p.isOutdoor
+            ? isDark
+              ? 0.62
+              : 0.52
+            : isDark
+              ? 0.54
+              : 0.44;
 
-          // Longer shadow when lamp/sun is lower, shorter under overhead skylight/noon sun
-          const lightHeightFactor = THREE.MathUtils.clamp(3.9 / Math.max(1.4, lf.keyPosY), 0.68, 1.55);
-          const stretchFactor = THREE.MathUtils.clamp(
-            (lf.shadowStretchX + lf.shadowStretchZ) * 0.58,
-            0.72,
-            1.58
-          );
-          const shadowLen = THREE.MathUtils.clamp(
-            p.stageFraming.shadowHeightMeters * 0.86 * lightHeightFactor * stretchFactor,
+          // Channel A: Natural Sunlight / Window Shadow (direction & opacity strictly invariant to lamp dimmer)
+          let sunX = lf.naturalShadowDirX;
+          let sunZ = lf.naturalShadowDirZ;
+          if (Math.hypot(sunX, sunZ) < 0.08) {
+            sunX = 0.32;
+            sunZ = -0.94;
+          }
+          (silhouetteShadowMat.uniforms.uSunShadowDir.value as THREE.Vector2).set(sunX, sunZ);
+          const sunLen = THREE.MathUtils.clamp(
+            p.stageFraming.shadowHeightMeters * 0.86 * lf.naturalShadowLengthScale,
             0.85,
             2.15
           );
-          silhouetteShadowMat.uniforms.uShadowLength.value = shadowLen;
+          silhouetteShadowMat.uniforms.uSunShadowLength.value = sunLen;
+          silhouetteShadowMat.uniforms.uSunDirectRatio.value = THREE.MathUtils.clamp(
+            lf.naturalShadowDirectRatio,
+            0.12,
+            1.0
+          );
+          silhouetteShadowMat.uniforms.uSunShadowOpacity.value =
+            lf.naturalShadowOpacity <= 0.002
+              ? 0
+              : THREE.MathUtils.clamp(baseCastOpacity * lf.naturalShadowOpacity, 0, 0.72);
 
-          // Optional opposing secondary indoor fixture shadow (twin wall sconces / chandeliers / dual rails)
-          (silhouetteShadowMat.uniforms.uShadowDir2.value as THREE.Vector2).set(
+          // Channel B: Artificial Indoor Fixture Primary + Opposing Fill Shadow (direction fixed; dimmer scales opacity only)
+          let lampX = lf.fixtureShadowDirX;
+          let lampZ = lf.fixtureShadowDirZ;
+          if (Math.hypot(lampX, lampZ) < 0.08) {
+            lampX = -0.32;
+            lampZ = -0.94;
+          }
+          (silhouetteShadowMat.uniforms.uLampShadowDir.value as THREE.Vector2).set(lampX, lampZ);
+          const lampLen = THREE.MathUtils.clamp(
+            p.stageFraming.shadowHeightMeters * 0.86 * lf.fixtureShadowLengthScale,
+            0.85,
+            2.15
+          );
+          silhouetteShadowMat.uniforms.uLampShadowLength.value = lampLen;
+          silhouetteShadowMat.uniforms.uLampDirectRatio.value = THREE.MathUtils.clamp(
+            lf.fixtureShadowDirectRatio,
+            0.12,
+            1.0
+          );
+          const lampPrimaryOpacity =
+            lf.fixtureShadowOpacity <= 0.002
+              ? 0
+              : THREE.MathUtils.clamp(baseCastOpacity * lf.fixtureShadowOpacity, 0, 0.74);
+          silhouetteShadowMat.uniforms.uLampShadowOpacity.value = lampPrimaryOpacity;
+
+          (silhouetteShadowMat.uniforms.uLampShadowDir2.value as THREE.Vector2).set(
             lf.secondaryShadowDirX,
             lf.secondaryShadowDirZ
           );
-          silhouetteShadowMat.uniforms.uShadowLength2.value = shadowLen * 0.88;
-          silhouetteShadowMat.uniforms.uSecondaryWeight.value = THREE.MathUtils.clamp(
-            lf.secondaryShadowWeight,
-            0,
-            0.5
-          );
+          silhouetteShadowMat.uniforms.uLampShadowLength2.value = lampLen * 0.88;
+          silhouetteShadowMat.uniforms.uLampShadowOpacity2.value =
+            lampPrimaryOpacity <= 0.002 || lf.secondaryShadowWeight <= 0.005
+              ? 0
+              : THREE.MathUtils.clamp(
+                  lampPrimaryOpacity * THREE.MathUtils.clamp(lf.secondaryShadowWeight, 0, 0.55),
+                  0,
+                  0.44
+                );
 
           silhouetteShadowMat.uniforms.uFootprintScale.value = p.stageFraming.shadowFootprintScale;
           silhouetteShadowMat.uniforms.uCharWidthMeters.value =
@@ -949,36 +1020,13 @@ export default function StudioThreeStageLayer({
               : 0.06;
           silhouetteShadowMat.uniforms.uSoleBottomV.value = 1.0 - safeBottom;
           silhouetteShadowMat.uniforms.uCrownTopV.value = 1.0 - safeTop;
-          silhouetteShadowMat.uniforms.uDirectRatio.value = THREE.MathUtils.clamp(
-            lf.directRatio,
-            0.12,
-            1.0
-          );
 
-          const baseContactOpacity = !p.isOutdoor
-            ? isDark
-              ? 0.54
-              : 0.48
-            : isDark
-              ? 0.5
-              : 0.44;
-          const baseCastOpacity = !p.isOutdoor
-            ? isDark
-              ? 0.62
-              : 0.52
-            : isDark
-              ? 0.54
-              : 0.44;
-          // 2-channel shadows: Contact AO stays softly grounded at 0%, while directional Cast Shadow drops strictly to 0
+          // Contact AO stays softly grounded beneath shoe soles even when lamps are OFF
           silhouetteShadowMat.uniforms.uContactAoOpacity.value = THREE.MathUtils.clamp(
             baseContactOpacity * lf.contactAoScale,
             0.16,
             0.66
           );
-          silhouetteShadowMat.uniforms.uCastShadowOpacity.value =
-            lf.castShadowScale <= 0.002
-              ? 0
-              : THREE.MathUtils.clamp(baseCastOpacity * lf.castShadowScale, 0, 0.74);
 
           // Cool slate outdoor daytime shadow vs warm charcoal indoor/sunset shadow
           const shadowHex = p.isOutdoor

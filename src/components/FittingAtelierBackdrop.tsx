@@ -224,23 +224,23 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       const fxRgb = hexToRgbCss(activeHex);
       const fxCoreRgb = mixWithWarmWhiteRgb(activeHex, isNeonEmitter ? 0.78 : 0.68);
       const power = Math.max(0, lightingFrame.fixtureOnFactor * emitter.intensity);
-      // Zero-continuous perceptual emitter response calibrated so 100% matches refined natural glow
-      // (eliminates abrupt 0% -> 5% floor jump and prevents blown-out walls at 100%).
-      const fullPowerRef = isNeonEmitter ? 0.86 : 0.56;
-      const normPower = Math.min(1.08, power / fullPowerRef);
+      // Zero-continuous perceptual emitter response calibrated so 100% keeps internal bulb depth
+      // and lampshade rib/edge texture intact (zero full-shade white clipping).
+      const fullPowerRef = isNeonEmitter ? 0.86 : 0.78;
+      const normPower = Math.min(1.04, power / fullPowerRef);
       const t = Math.min(1, normPower);
       const coreOpacity = isNeonEmitter
         ? Math.min(0.95, Math.pow(t, 0.9) * 0.95)
-        : Math.min(0.76, Math.pow(t, 0.88) * 0.76);
+        : Math.min(0.84, Math.pow(t, 0.92) * 0.84);
       const glowOpacity = isNeonEmitter
         ? Math.min(0.84, Math.pow(t, 0.98) * 0.84)
-        : Math.min(0.48, Math.pow(t, 1.05) * 0.48);
+        : Math.min(0.36, Math.pow(t, 1.08) * 0.36);
       const glowScale = isNeonEmitter
         ? Math.min(1.04, 0.56 + t * 0.44)
-        : Math.min(0.88, 0.56 + t * 0.3);
+        : Math.min(0.82, 0.52 + t * 0.28);
       const glowBrightness = isNeonEmitter
         ? Math.min(1.1, 0.8 + t * 0.28)
-        : Math.min(0.96, 0.78 + t * 0.18);
+        : Math.min(0.98, 0.82 + t * 0.16);
 
       const isLinear =
         (emitter.kind === 'cove-strip' ||
@@ -467,9 +467,10 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                   {preparedEmitters.map(({ emitter, isLinear, glowOpacity, baseStyle }) => (
                     <div
                       key={`${emitter.id}-glow`}
-                      className={`atelier-fixture-emitter is-${emitter.kind} is-glow-pass`}
+                      className={`atelier-fixture-emitter is-${emitter.kind} is-glow-pass${emitter.shadeOptics ? ` is-optics-${emitter.shadeOptics}` : ''}`}
                       data-fixture-id={emitter.id}
                       data-fixture-kind={emitter.kind}
+                      data-fixture-optics={emitter.shadeOptics || 'default'}
                       style={{
                         ...baseStyle,
                         opacity: glowOpacity,
@@ -537,7 +538,8 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                   {preparedEmitters.map(({ emitter, isLinear, coreOpacity, baseStyle }) => (
                     <div
                       key={`${emitter.id}-core`}
-                      className={`atelier-fixture-emitter is-${emitter.kind} is-core-pass`}
+                      className={`atelier-fixture-emitter is-${emitter.kind} is-core-pass${emitter.shadeOptics ? ` is-optics-${emitter.shadeOptics}` : ''}`}
+                      data-fixture-optics={emitter.shadeOptics || 'default'}
                       style={{
                         ...baseStyle,
                         opacity: coreOpacity,
@@ -555,11 +557,16 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
                       {!isLinear && emitter.kind === 'sconce' && (
                         <>
                           <span className="atelier-fixture-shade-core" />
+                          <span className="atelier-fixture-bulb-filament" />
                           <span className="atelier-fixture-shade-rim-hot" />
                         </>
                       )}
                       {!isLinear && emitter.kind === 'pendant' && (
-                        <span className="atelier-fixture-pendant-core" />
+                        <>
+                          <span className="atelier-fixture-pendant-core" />
+                          <span className="atelier-fixture-bulb-filament" />
+                          <span className="atelier-fixture-pendant-aperture-rim" />
+                        </>
                       )}
                       {!isLinear && emitter.kind === 'chandelier' && (
                         <span className="atelier-fixture-chandelier-candles" />

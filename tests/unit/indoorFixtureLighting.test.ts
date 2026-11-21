@@ -310,3 +310,76 @@ test('zero-continuous dimming across 0%..5%..50%..100% eliminates low-end floor 
   }
 });
 
+test('daytime windowed rooms strictly separate natural sunlight shadow from artificial fixture shadow across 0%..100% dimmer (0° drift)', () => {
+  const windowedRooms = [
+    'b_seoul_cafe_terrace',
+    'c_atelier_plaster',
+    'b_minimal_loft_window',
+    'c_stone_boutique',
+    's_grand_paris_atelier',
+  ] as const;
+
+  const levels = [0, 25, 50, 75, 100];
+  for (const bgId of windowedRooms) {
+    const frames = levels.map((lightingIntensity) =>
+      resolveStageLightingFrame({
+        backgroundId: bgId,
+        isOutdoor: false,
+        timestampMs: NOON_LOCAL_MS,
+        theme: 'light',
+        lightingPreset: 'auto',
+        lightingIntensity,
+        weather: { latitude: 37.5665, longitude: 126.978 },
+      })
+    );
+    const [f0, , , , f100] = frames;
+
+    assert.ok(f0.naturalShadowOpacity > 0.35, `${bgId} daytime natural sunlight shadow must remain visible at 0% lamp dimmer`);
+    assert.equal(f0.fixtureShadowOpacity, 0, `${bgId} artificial fixture shadow must be strictly 0 at 0% lamp dimmer`);
+    assert.ok(f100.fixtureShadowOpacity > 0.35, `${bgId} artificial fixture shadow must emerge cleanly at 100% lamp dimmer`);
+
+    for (let i = 0; i < frames.length; i += 1) {
+      const f = frames[i];
+      // Natural sunlight shadow & daytime window gobo MUST be 100% invariant to artificial lamp brightness
+      assert.equal(f.naturalShadowDirX, f0.naturalShadowDirX, `${bgId} naturalShadowDirX must not drift at ${f.intensityPct}%`);
+      assert.equal(f.naturalShadowDirZ, f0.naturalShadowDirZ, `${bgId} naturalShadowDirZ must not drift at ${f.intensityPct}%`);
+      assert.equal(f.naturalShadowLengthScale, f0.naturalShadowLengthScale, `${bgId} naturalShadowLengthScale must not drift at ${f.intensityPct}%`);
+      assert.equal(f.naturalShadowOpacity, f0.naturalShadowOpacity, `${bgId} naturalShadowOpacity must not change with lamp dimmer at ${f.intensityPct}%`);
+      assert.equal(f.goboOpacity, f0.goboOpacity, `${bgId} daytime window goboOpacity must stay independent of lamp dimmer at ${f.intensityPct}%`);
+      // Artificial lamp shadow angle & length MUST also stay locked to physical fixture geometry
+      assert.equal(f.fixtureShadowDirX, f100.fixtureShadowDirX, `${bgId} fixtureShadowDirX must stay fixed at ${f.intensityPct}%`);
+      assert.equal(f.fixtureShadowDirZ, f100.fixtureShadowDirZ, `${bgId} fixtureShadowDirZ must stay fixed at ${f.intensityPct}%`);
+      assert.equal(f.fixtureShadowLengthScale, f100.fixtureShadowLengthScale, `${bgId} fixtureShadowLengthScale must stay fixed at ${f.intensityPct}%`);
+      // Artificial lamp shadow opacity increases strictly monotonically with lamp dimmer
+      if (i > 0) {
+        assert.ok(
+          f.fixtureShadowOpacity > frames[i - 1].fixtureShadowOpacity,
+          `${bgId} fixtureShadowOpacity must increase monotonically from ${levels[i - 1]}% to ${levels[i]}%`
+        );
+      }
+    }
+  }
+});
+
+test('shaded indoor pendants and sconces declare shadeOptics and restrained halo radii to prevent whole-shade whiteout', () => {
+  const shadedRooms = [
+    'c_atelier_plaster',
+    'b_seoul_cafe_terrace',
+    'b_minimal_loft_window',
+    'c_stone_boutique',
+    's_grand_paris_atelier',
+  ] as const;
+
+  for (const bgId of shadedRooms) {
+    const bg = STAGE_BACKGROUNDS.find((b) => b.id === bgId);
+    assert.ok(bg?.lightingRig?.fixtureEmitters);
+    for (const em of bg.lightingRig.fixtureEmitters) {
+      if (em.kind === 'pendant' || em.kind === 'sconce') {
+        assert.ok(em.shadeOptics, `${bgId}/${em.id} must declare shadeOptics for internal bulb optics`);
+        assert.ok(em.radiusPct <= 12.5, `${bgId}/${em.id} radiusPct (${em.radiusPct}) must stay restrained to avoid wall blowout`);
+      }
+    }
+  }
+});
+
+

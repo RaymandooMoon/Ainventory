@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   Mail,
   Moon,
   RotateCcw,
+  Sparkles,
   Sun,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
@@ -19,6 +20,7 @@ import BrandLogo from './auth/BrandLogo.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
 import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
 import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
+import { normalizeLoginThreeVariant } from './auth/loginThreeScenes.ts';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
 import { resolveInitialAuthStage } from '../utils/authStage.ts';
@@ -41,6 +43,8 @@ export default function LoginView({
   onChangeLang,
   effectiveTheme = 'light',
   onToggleTheme,
+  portalPhase = 'idle',
+  onPortalTargetResolved,
 }) {
   const isEn = lang === 'en';
   const isLocalHost =
@@ -52,6 +56,13 @@ export default function LoginView({
   const [authStage, setAuthStage] = useState(() =>
     resolveInitialAuthStage(typeof window !== 'undefined' ? window.location.search : '')
   ); // 'intro' | 'auth'
+  const [loginMotionVariant, setLoginMotionVariant] = useState(() => {
+    if (typeof window === 'undefined') return 'luxury';
+    const params = new URLSearchParams(window.location.search);
+    return normalizeLoginThreeVariant(params.get('login_motion'));
+  });
+  const [variantChangeOrigin, setVariantChangeOrigin] = useState(null);
+  const [portalSurgeOrigin, setPortalSurgeOrigin] = useState(null);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -86,6 +97,8 @@ export default function LoginView({
   const regPasswordRef = useRef(null);
   const shakeTimerRef = useRef(null);
   const brandLogoRef = useRef(null);
+  const authRootRef = useRef(null);
+  const uiAlphaRef = useRef(0.5);
 
   const loading = Boolean(loadingAction);
 
@@ -113,6 +126,180 @@ export default function LoginView({
       }
     };
   }, []);
+
+  const isPortalExiting = portalPhase !== 'idle';
+
+  // Global scroll-anywhere opacity gesture:
+  // Default 50% (0.50). Scroll/swipe UP -> more transparent (down to 10%), Scroll/swipe DOWN -> more opaque (up to 96%).
+  useEffect(() => {
+    if (typeof window === 'undefined' || isPortalExiting) return undefined;
+    const rootEl = authRootRef.current;
+    if (!rootEl) return undefined;
+
+    const applyAlpha = (next) => {
+      const clamped = Math.max(0.1, Math.min(0.96, next));
+      uiAlphaRef.current = clamped;
+      rootEl.style.setProperty('--atelier-ui-alpha', clamped.toFixed(3));
+    };
+
+    applyAlpha(uiAlphaRef.current);
+
+    let touchStartY = null;
+    let touchLastY = null;
+
+    const onWheel = (e) => {
+      if (!Number.isFinite(e.deltaY) || e.deltaY === 0) return;
+      // deltaY < 0 (scroll up) -> more transparent; deltaY > 0 (scroll down) -> more opaque
+      const step = (e.deltaY / 420) * 0.45;
+      applyAlpha(uiAlphaRef.current + step);
+    };
+
+    const onTouchStart = (e) => {
+      const targetTag = e.target?.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+        touchStartY = null;
+        touchLastY = null;
+        return;
+      }
+      const t = e.touches?.[0];
+      if (!t) return;
+      touchStartY = t.clientY;
+      touchLastY = t.clientY;
+    };
+
+    const onTouchMove = (e) => {
+      if (touchLastY === null || touchStartY === null) return;
+      const t = e.touches?.[0];
+      if (!t) return;
+      const dy = t.clientY - touchLastY;
+      touchLastY = t.clientY;
+      if (Math.abs(dy) < 0.5) return;
+      // Swipe finger UP (dy < 0) -> more transparent; Swipe finger DOWN (dy > 0) -> more opaque
+      const step = (dy / 300) * 0.52;
+      applyAlpha(uiAlphaRef.current + step);
+    };
+
+    const onTouchEnd = () => {
+      touchStartY = null;
+      touchLastY = null;
+    };
+
+    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isPortalExiting]);
+
+  // Choreographed Login Portal Flight: dissolve UI except logo, then glide logo to exact App Header position
+  useLayoutEffect(() => {
+    if (!isPortalExiting || typeof window === 'undefined') return undefined;
+    const logoEl = brandLogoRef.current;
+    if (!logoEl) return undefined;
+
+    const srcRect = logoEl.getBoundingClientRect();
+    const vw = Math.max(1, window.innerWidth);
+    const vh = Math.max(1, window.innerHeight);
+
+    const srcCx = srcRect.left + srcRect.width * 0.5;
+    const srcCy = srcRect.top + srcRect.height * 0.5;
+    setPortalSurgeOrigin({
+      x: (srcCx / vw) * 2 - 1,
+      y: -((srcCy / vh) * 2 - 1),
+    });
+
+    let cancelled = false;
+    let pollFrames = 0;
+    let rafId = 0;
+    let activeAnim = null;
+
+    const findHeaderLogoRect = () => {
+      const targetEl =
+        document.querySelector('.hig-native-shell [data-header-brand-btn="true"] .hig-shell-brand-logo') ||
+        document.querySelector('.hig-native-shell [data-header-brand-btn="true"]');
+      if (!targetEl) return null;
+      const r = targetEl.getBoundingClientRect();
+      if (r.width > 12 && r.height > 10 && r.top >= 0 && r.top < vh * 0.4) {
+        return r;
+      }
+      return null;
+    };
+
+    const launchFlight = (targetRect) => {
+      if (cancelled) return;
+      const targetCx = targetRect ? targetRect.left + targetRect.width * 0.5 : vw * 0.5;
+      const targetCy = targetRect ? targetRect.top + targetRect.height * 0.5 : 34;
+      const targetH = targetRect ? targetRect.height : 34;
+      const targetW = targetRect ? targetRect.width : 112;
+
+      onPortalTargetResolved?.({
+        x: Math.round(targetCx),
+        y: Math.round(targetCy),
+      });
+
+      const dx = targetCx - srcCx;
+      const dy = targetCy - srcCy;
+      const scaleW = srcRect.width > 0 ? targetW / srcRect.width : 0.62;
+      const scaleH = srcRect.height > 0 ? targetH / srcRect.height : 0.62;
+      const uniformScale = Math.max(0.36, Math.min(0.95, Math.min(scaleW, scaleH)));
+
+      if (typeof logoEl.animate === 'function') {
+        activeAnim = logoEl.animate(
+          [
+            {
+              transform: 'translate3d(0px, 0px, 0) scale(1)',
+              filter: 'drop-shadow(0 0 0px rgba(232, 207, 160, 0))',
+            },
+            {
+              transform: `translate3d(${(dx * 0.54).toFixed(2)}px, ${(dy * 0.52).toFixed(2)}px, 0) scale(${(
+                1 +
+                (uniformScale - 1) * 0.45
+              ).toFixed(4)})`,
+              filter: 'drop-shadow(0 0 18px rgba(238, 220, 186, 0.44))',
+              offset: 0.48,
+            },
+            {
+              transform: `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0) scale(${uniformScale.toFixed(4)})`,
+              filter: 'drop-shadow(0 0 6px rgba(238, 220, 186, 0.16))',
+            },
+          ],
+          {
+            duration: 900,
+            delay: 60,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            fill: 'forwards',
+          }
+        );
+      }
+    };
+
+    const pollForTarget = () => {
+      if (cancelled) return;
+      const found = findHeaderLogoRect();
+      pollFrames += 1;
+      if (found || pollFrames >= 12) {
+        launchFlight(found);
+        return;
+      }
+      rafId = window.requestAnimationFrame(pollForTarget);
+    };
+
+    rafId = window.requestAnimationFrame(pollForTarget);
+
+    return () => {
+      cancelled = true;
+      if (rafId) window.cancelAnimationFrame(rafId);
+      if (activeAnim) activeAnim.cancel();
+    };
+  }, [isPortalExiting, onPortalTargetResolved]);
 
   useEffect(() => {
     if (cooldownSec <= 0) return undefined;
@@ -472,15 +659,64 @@ export default function LoginView({
 
   return (
     <div
-      className="atelier-auth-root"
+      ref={authRootRef}
+      className={`atelier-auth-root ${isPortalExiting ? 'is-portal-exiting' : ''}`}
       data-auth-theme={effectiveTheme}
       data-auth-stage={authStage}
+      data-portal-phase={portalPhase}
     >
-      {/* Seamless Fullscreen Kinetic Silk/Cashmere Canvas + 3D Parallax Couture Curation Stage */}
-      <LoginBackdropCanvas effectiveTheme={effectiveTheme} lang={lang} stage={authStage} />
+      {/* Seamless Fullscreen Three.js 3D Draped Silk Cloth Stage */}
+      <LoginBackdropCanvas
+        effectiveTheme={effectiveTheme}
+        lang={lang}
+        stage={isPortalExiting ? 'portal' : authStage}
+        motionVariant={loginMotionVariant}
+        variantChangeOrigin={variantChangeOrigin}
+        portalSurgeOrigin={portalSurgeOrigin}
+      />
 
-      {/* Top Utility Controls (>= 48x48px Touch Targets, 8px Gap) */}
+      {/* Top Utility Controls: Single Silk Palette Toggle (Left) + Theme & Lang (Right) */}
       <header className="atelier-topbar">
+        <div className="atelier-utility-group">
+          <button
+            type="button"
+            className="atelier-utility-btn atelier-silk-toggle-btn"
+            data-motion-option={loginMotionVariant}
+            aria-label={
+              isEn
+                ? `Switch silk backdrop (${loginMotionVariant === 'luxury' ? 'Luxury' : 'Aurora'})`
+                : `실크 배경 전환 (현재 ${loginMotionVariant === 'luxury' ? '럭셔리' : '오로라'})`
+            }
+            onClick={(e) => {
+              triggerHaptic('selection');
+              if (typeof window !== 'undefined') {
+                const vw = Math.max(1, window.innerWidth);
+                const vh = Math.max(1, window.innerHeight);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const cx = rect.left + rect.width * 0.5;
+                const cy = rect.top + rect.height * 0.5;
+                setVariantChangeOrigin({
+                  x: (cx / vw) * 2 - 1,
+                  y: -((cy / vh) * 2 - 1),
+                  seq: Date.now(),
+                });
+              }
+              setLoginMotionVariant((prev) => (prev === 'luxury' ? 'aurora' : 'luxury'));
+            }}
+          >
+            <Sparkles size={14} />
+            <span>
+              {loginMotionVariant === 'luxury'
+                ? isEn
+                  ? 'Luxury'
+                  : '럭셔리'
+                : isEn
+                  ? 'Aurora'
+                  : '오로라'}
+            </span>
+          </button>
+        </div>
+
         <div className="atelier-utility-group">
           <button
             id={CARBON_DOM_CONTRACT.loginThemeToggleId}

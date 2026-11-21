@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, Calendar, Layers, LayoutGrid } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
@@ -41,9 +41,16 @@ import {
   triggerHaptic,
 } from './utils/nativeBridge.ts';
 import { subscribeOfflineSync } from './utils/offlineSync.ts';
-import { resolveInitialTabFromPath, triggerPostLoginReveal } from './utils/logoTransition.ts';
+import {
+  clearPendingLogoFlight,
+  resolveInitialTabFromPath,
+  triggerPostLoginReveal,
+} from './utils/logoTransition.ts';
 import { applyNavOpacityCss, getStoredNavOpacity } from './utils/stageBackgroundCatalog.ts';
-import { runCircularThemeTransition } from './utils/themeTransition.ts';
+import {
+  computeCircleRevealRadius,
+  runCircularThemeTransition,
+} from './utils/themeTransition.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
 const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
@@ -497,37 +504,166 @@ export default function App() {
     setLang(normalized);
   }, []);
 
-  const handleEnterSampleCloset = useCallback(() => {
-    triggerPostLoginReveal();
-    setStoredToken(null);
-    setSampleDemoMode(true);
-    setUser(DEFAULT_LOCAL_USER);
-    setShowAuthScreen(false);
-    setSelectedItemId(null);
-    setActiveTab('outfits');
-    if (typeof window !== 'undefined') {
-      window.history.replaceState({}, '', '/');
+  // Choreographed 2-second Login -> App Portal Transition State
+  // phase: 'flying' (0..1340ms: app preloads underneath while logo glides to header)
+  //      -> 'revealing' (1340..2120ms: radial liquid wave reveals preloaded app from logo center)
+  const [loginPortal, setLoginPortal] = useState(null);
+  const appShellRef = useRef(null);
+  const portalOriginRef = useRef(null);
+  const portalTimersRef = useRef([]);
+
+  const clearPortalTimers = useCallback(() => {
+    for (const id of portalTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    portalTimersRef.current = [];
+  }, []);
+
+  useEffect(() => clearPortalTimers, [clearPortalTimers]);
+
+  const handlePortalTargetResolved = useCallback((origin) => {
+    if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
+      portalOriginRef.current = origin;
     }
   }, []);
 
-  const handleLoginSuccess = useCallback(
-    (loggedInUser) => {
+  const startLoginPortalTransition = useCallback(
+    (commitAppState) => {
+      clearPortalTimers();
+      const reducedMotion = Boolean(
+        typeof window !== 'undefined' &&
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+
+      if (reducedMotion || typeof window === 'undefined') {
+        commitAppState();
+        setLoginPortal(null);
+        setShowAuthScreen(false);
+        return;
+      }
+
+      // Prevent duplicate AppHeaderBrand FLIP when our 2-second portal handles the logo flight directly
+      clearPendingLogoFlight();
+
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      const fallbackOrigin = { x: Math.round(vw * 0.5), y: 34 };
+      portalOriginRef.current = fallbackOrigin;
+
+      // Mount & preload the default Outfits landing screen immediately underneath the Login portal
+      commitAppState();
+      setLoginPortal({
+        phase: 'flying',
+        origin: fallbackOrigin,
+        maxRadius: computeCircleRevealRadius(fallbackOrigin.x, fallbackOrigin.y, vw, vh),
+      });
+
+      const revealTimer = window.setTimeout(() => {
+        const curVw = Math.max(1, window.innerWidth);
+        const curVh = Math.max(1, window.innerHeight);
+        const headerBrandEl =
+          document.querySelector('.hig-native-shell [data-header-brand-btn="true"] .hig-shell-brand-logo') ||
+          document.querySelector('.hig-native-shell [data-header-brand-btn="true"]');
+        let resolvedOrigin = portalOriginRef.current || { x: Math.round(curVw * 0.5), y: 34 };
+        if (headerBrandEl) {
+          const r = headerBrandEl.getBoundingClientRect();
+          if (r.width > 10 && r.height > 10) {
+            resolvedOrigin = {
+              x: Math.round(r.left + r.width * 0.5),
+              y: Math.round(r.top + r.height * 0.5),
+            };
+          }
+        }
+        const maxRadius = computeCircleRevealRadius(resolvedOrigin.x, resolvedOrigin.y, curVw, curVh);
+        triggerHaptic('medium');
+        setLoginPortal({
+          phase: 'revealing',
+          origin: resolvedOrigin,
+          maxRadius,
+        });
+      }, 860);
+
+      const finishTimer = window.setTimeout(() => {
+        setLoginPortal(null);
+        setShowAuthScreen(false);
+      }, 1940);
+
+      portalTimersRef.current = [revealTimer, finishTimer];
+    },
+    [clearPortalTimers]
+  );
+
+  // Execute hardware-accelerated circular clip-path wave reveal originating seamlessly from the docking logo
+  useLayoutEffect(() => {
+    if (loginPortal?.phase !== 'revealing') return undefined;
+    const shellEl = appShellRef.current;
+    if (!shellEl) return undefined;
+
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo(0, 0);
+    }
+
+    const { origin, maxRadius } = loginPortal;
+    shellEl.style.clipPath = `circle(0px at ${origin.x}px ${origin.y}px)`;
+    let anim = null;
+    if (typeof shellEl.animate === 'function') {
+      anim = shellEl.animate(
+        {
+          clipPath: [
+            `circle(0px at ${origin.x}px ${origin.y}px)`,
+            `circle(${maxRadius}px at ${origin.x}px ${origin.y}px)`,
+          ],
+        },
+        {
+          duration: 1060,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'both',
+        }
+      );
+    }
+
+    return () => {
+      if (anim) anim.cancel();
+      shellEl.style.clipPath = '';
+    };
+  }, [loginPortal]);
+
+  const handleEnterSampleCloset = useCallback(() => {
+    startLoginPortalTransition(() => {
       triggerPostLoginReveal();
-      setSampleDemoMode(false);
-      setUser(loggedInUser);
-      syncAccountToAvatar(loggedInUser);
-      setShowAuthScreen(false);
+      setStoredToken(null);
+      setSampleDemoMode(true);
+      setUser(DEFAULT_LOCAL_USER);
       setSelectedItemId(null);
       setActiveTab('outfits');
-      setRefreshKey((k) => k + 1);
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/');
       }
+    });
+  }, [startLoginPortalTransition]);
+
+  const handleLoginSuccess = useCallback(
+    (loggedInUser) => {
+      startLoginPortalTransition(() => {
+        triggerPostLoginReveal();
+        setSampleDemoMode(false);
+        setUser(loggedInUser);
+        syncAccountToAvatar(loggedInUser);
+        setSelectedItemId(null);
+        setActiveTab('outfits');
+        setRefreshKey((k) => k + 1);
+        if (typeof window !== 'undefined') {
+          window.history.replaceState({}, '', '/');
+        }
+      });
     },
-    [syncAccountToAvatar]
+    [startLoginPortalTransition, syncAccountToAvatar]
   );
 
   const handleLogout = useCallback(async () => {
+    clearPortalTimers();
+    setLoginPortal(null);
     try {
       if (!user?.isSampleDemo) {
         await apiFetch('/auth/logout', { method: 'POST' });
@@ -542,7 +678,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, '', '/?auth=1');
     }
-  }, [user]);
+  }, [clearPortalTimers, user]);
 
   const handleAccountDeleted = useCallback(() => {
     garmentsMutationSeqRef.current += 1;
@@ -622,27 +758,59 @@ export default function App() {
     return <div className="hig-boot-screen" aria-busy="true" />;
   }
 
-  if (showAuthScreen) {
-    return (
-      <>
-        <StatusCapsule />
-        <Suspense fallback={<div className="hig-boot-screen" aria-busy="true" />}>
-          <LoginView
-            onLoginSuccess={handleLoginSuccess}
-            onEnterSampleDemo={handleEnterSampleCloset}
-            lang={lang}
-            onChangeLang={handleChangeLang}
-            effectiveTheme={resolvedTheme}
-            onToggleTheme={handleToggleTheme}
-          />
-        </Suspense>
-      </>
-    );
-  }
+  const shouldRenderLogin = showAuthScreen || Boolean(loginPortal);
+  const shouldRenderAppShell = !showAuthScreen || Boolean(loginPortal);
+
+  const portalShellClass =
+    loginPortal?.phase === 'revealing'
+      ? 'is-login-wave-revealing'
+      : loginPortal?.phase === 'flying'
+        ? 'is-login-portal-preloading'
+        : '';
 
   return (
-    <div className="hig-native-shell">
-      <StatusCapsule />
+    <>
+      {shouldRenderLogin && (
+        <div
+          className={
+            loginPortal
+              ? `atelier-login-portal-overlay is-phase-${loginPortal.phase}`
+              : 'atelier-login-host'
+          }
+          aria-hidden={Boolean(loginPortal) || undefined}
+        >
+          {!loginPortal && <StatusCapsule />}
+          <Suspense fallback={<div className="hig-boot-screen" aria-busy="true" />}>
+            <LoginView
+              onLoginSuccess={handleLoginSuccess}
+              onEnterSampleDemo={handleEnterSampleCloset}
+              lang={lang}
+              onChangeLang={handleChangeLang}
+              effectiveTheme={resolvedTheme}
+              onToggleTheme={handleToggleTheme}
+              portalPhase={loginPortal?.phase || 'idle'}
+              onPortalTargetResolved={handlePortalTargetResolved}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {loginPortal?.phase === 'revealing' && (
+        <span
+          className="atelier-login-wave-ring"
+          style={{
+            width: `${loginPortal.maxRadius * 2}px`,
+            height: `${loginPortal.maxRadius * 2}px`,
+            left: `${loginPortal.origin.x - loginPortal.maxRadius}px`,
+            top: `${loginPortal.origin.y - loginPortal.maxRadius}px`,
+          }}
+          aria-hidden="true"
+        />
+      )}
+
+      {shouldRenderAppShell && (
+        <div ref={appShellRef} className={`hig-native-shell ${portalShellClass}`.trim()}>
+          <StatusCapsule />
 
       <main className="hig-native-viewport">
         <Suspense fallback={<div className="hig-screen-container" aria-busy="true" />}>
@@ -787,6 +955,8 @@ export default function App() {
         targetOwner={activeCloset}
         onImported={handleClosetUpdated}
       />
-    </div>
+        </div>
+      )}
+    </>
   );
 }
