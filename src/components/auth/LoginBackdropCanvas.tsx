@@ -1,10 +1,12 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
+import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import {
   createLoginThreeController,
   DEFAULT_LOGIN_THREE_VARIANT,
   type LoginThreeController,
   type LoginThreeVariantId,
+  type MarbleStepSnapshot,
 } from './loginThreeScenes.ts';
 
 export interface LoginBackdropCanvasProps {
@@ -56,6 +58,10 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   const initialDarkRef = useRef(isDark);
   const initialStageRef = useRef<'intro' | 'auth' | 'portal'>(stage);
   const initialVariantRef = useRef<LoginThreeVariantId>(motionVariant);
+  const stageModeRef = useRef<'intro' | 'auth' | 'portal'>(stage);
+  const pausedModeRef = useRef(paused);
+  const stageCooldownUntilRef = useRef(0);
+  const invalidateButtonCacheRef = useRef<(() => void) | null>(null);
 
   // Sync theme transitions cleanly (instant snap during View Transition circle reveal)
   useEffect(() => {
@@ -65,10 +71,17 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   }, [isDark]);
 
   useEffect(() => {
+    if (stageModeRef.current !== stage) {
+      stageModeRef.current = stage;
+      // Give incoming/dismissing auth panels time to settle before marble can strike new buttons
+      stageCooldownUntilRef.current = performance.now() + 720;
+      invalidateButtonCacheRef.current?.();
+    }
     controllerRef.current?.setStage(stage);
   }, [stage]);
 
   useEffect(() => {
+    pausedModeRef.current = paused;
     controllerRef.current?.setPaused(paused);
   }, [paused]);
 
@@ -96,11 +109,226 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         window.matchMedia('(prefers-reduced-motion: reduce)').matches
     );
 
+    // --- Real-Time Marble-to-Login-Button Collision & Trigger Engine ---
+    interface CachedButtonTarget {
+      el: HTMLButtonElement;
+      rect: DOMRect;
+    }
+    let cachedButtons: CachedButtonTarget[] = [];
+    let cachedStageRect: DOMRect | null = null;
+    let buttonCacheTimestamp = 0;
+    let globalHitCooldownUntil = 0;
+    const perButtonCooldown = new WeakMap<HTMLButtonElement, number>();
+    const activeHitTimers = new Set<number>();
+
+    const invalidateButtonCache = () => {
+      buttonCacheTimestamp = 0;
+    };
+    invalidateButtonCacheRef.current = invalidateButtonCache;
+
+    const refreshButtonTargets = (now: number) => {
+      cachedStageRect = stageEl.getBoundingClientRect();
+      const authRoot = stageEl.closest('.atelier-auth-root') as HTMLElement | null;
+      const currentStage = stageModeRef.current;
+      if (
+        !authRoot ||
+        currentStage === 'portal' ||
+        !cachedStageRect.width ||
+        !cachedStageRect.height
+      ) {
+        cachedButtons = [];
+        buttonCacheTimestamp = now;
+        return;
+      }
+
+      const vw = window.innerWidth || cachedStageRect.width;
+      const vh = window.innerHeight || cachedStageRect.height;
+      // Allow marble strike triggers ONLY on:
+      // - Top utility pills (.atelier-topbar: Luxury/Aurora, Light/Dark, EN/KO) in both intro & auth stages
+      // - Intro CTA (.atelier-intro-dock: Get started / 시작하기) in intro stage only
+      // Never include login panel buttons (Google/Apple, tabs, quick seed, submit, sample closet, etc.).
+      const selector =
+        currentStage === 'intro'
+          ? '.atelier-intro-dock button:not([disabled]), .atelier-topbar button:not([disabled])'
+          : '.atelier-topbar button:not([disabled])';
+      const candidates = authRoot.querySelectorAll<HTMLButtonElement>(selector);
+      const next: CachedButtonTarget[] = [];
+
+      for (let i = 0; i < candidates.length; i += 1) {
+        const btn = candidates[i];
+        if (btn.getAttribute('aria-disabled') === 'true' || btn.getAttribute('aria-busy') === 'true') {
+          continue;
+        }
+        if (btn.closest('[inert], [aria-hidden="true"], .is-hidden, .is-dismissed')) {
+          continue;
+        }
+        const rect = btn.getBoundingClientRect();
+        if (rect.width < 16 || rect.height < 16) continue;
+        if (rect.bottom <= 0 || rect.top >= vh || rect.right <= 0 || rect.left >= vw) continue;
+
+        const style = window.getComputedStyle(btn);
+        if (style.visibility === 'hidden' || style.display === 'none' || style.pointerEvents === 'none') {
+          continue;
+        }
+        if (Number.parseFloat(style.opacity || '1') < 0.25) continue;
+
+        next.push({ el: btn, rect });
+      }
+
+      cachedButtons = next;
+      buttonCacheTimestamp = now;
+    };
+
+    const handleMarbleStep = (snap: MarbleStepSnapshot) => {
+      const ctrl = controllerRef.current;
+      if (!ctrl || pausedModeRef.current || stageModeRef.current === 'portal') return;
+      const minStrikeSpeed = snap.isGrabbing ? 0.04 : 0.16;
+      if (!snap.userDriven || snap.elapsed < 0.45 || snap.speed < minStrikeSpeed) return;
+
+      const now = performance.now();
+      if (now < globalHitCooldownUntil || now < stageCooldownUntilRef.current) return;
+
+      // Skip background button triggers while any modal dialog is open
+      if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
+
+      if (now - buttonCacheTimestamp > 90 || !cachedStageRect) {
+        refreshButtonTargets(now);
+      }
+      const stageRect = cachedStageRect;
+      if (!stageRect || !stageRect.width || !stageRect.height || cachedButtons.length === 0) {
+        return;
+      }
+
+      const mx = stageRect.left + snap.u * stageRect.width;
+      const my = stageRect.top + (1 - snap.v) * stageRect.height;
+      const radiusPx = snap.radiusNormY * stageRect.height;
+      const hitRadiusPx = radiusPx * 0.9;
+      const hitRadiusSq = hitRadiusPx * hitRadiusPx;
+      const pxPerWorld = stageRect.height * 0.5;
+      const velPxX = snap.vx * pxPerWorld;
+      const velPxY = -snap.vy * pxPerWorld;
+
+      for (let i = 0; i < cachedButtons.length; i += 1) {
+        const { el: btn, rect } = cachedButtons[i];
+        const btnCooldownUntil = perButtonCooldown.get(btn) || 0;
+        if (now < btnCooldownUntil) continue;
+
+        // Closest point on button AABB to marble center
+        const cx = Math.max(rect.left, Math.min(mx, rect.right));
+        const cy = Math.max(rect.top, Math.min(my, rect.bottom));
+        const dx = mx - cx;
+        const dy = my - cy;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq > hitRadiusSq) continue;
+
+        // Compute outward unit normal & penetration depth in CSS screen space
+        let nxPx = 0;
+        let nyPx = -1;
+        let overlapPx = 0;
+        let isInsideRect = false;
+
+        if (distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          nxPx = dx / dist;
+          nyPx = dy / dist;
+          overlapPx = hitRadiusPx - dist;
+        } else {
+          // Marble center penetrated inside button: push out along nearest edge
+          isInsideRect = true;
+          const dLeft = Math.abs(mx - rect.left);
+          const dRight = Math.abs(rect.right - mx);
+          const dTop = Math.abs(my - rect.top);
+          const dBottom = Math.abs(rect.bottom - my);
+          const minEdge = Math.min(dLeft, dRight, dTop, dBottom);
+          if (minEdge === dTop) {
+            nxPx = 0;
+            nyPx = -1;
+            overlapPx = dTop + hitRadiusPx;
+          } else if (minEdge === dBottom) {
+            nxPx = 0;
+            nyPx = 1;
+            overlapPx = dBottom + hitRadiusPx;
+          } else if (minEdge === dLeft) {
+            nxPx = -1;
+            nyPx = 0;
+            overlapPx = dLeft + hitRadiusPx;
+          } else {
+            nxPx = 1;
+            nyPx = 0;
+            overlapPx = dRight + hitRadiusPx;
+          }
+        }
+
+        // Only strike when approaching the button (or penetrating into it), never while bouncing away
+        const approachDot = velPxX * nxPx + velPxY * nyPx;
+        if (!isInsideRect && approachDot > 24) continue;
+
+        // Re-verify live button state right before triggering
+        if (btn.disabled || btn.getAttribute('aria-busy') === 'true') continue;
+
+        const isGetStartedBtn = btn.id === CARBON_DOM_CONTRACT.introGetStartedBtnId;
+        const worldPerPx = 2.0 / Math.max(1, stageRect.height);
+        const normalWorldX = nxPx;
+        const normalWorldY = -nyPx;
+        const pushPx = Math.min(overlapPx + 3, radiusPx * 2.2);
+        const sepWorldX = nxPx * pushPx * worldPerPx;
+        const sepWorldY = -nyPx * pushPx * worldPerPx;
+
+        ctrl.bounceMarble?.(
+          normalWorldX,
+          normalWorldY,
+          sepWorldX,
+          sepWorldY,
+          isGetStartedBtn ? 0.96 : 0.84,
+          isGetStartedBtn ? 0.94 : 0.64
+        );
+
+        globalHitCooldownUntil = now + 340;
+        perButtonCooldown.set(btn, now + 950);
+        if (isGetStartedBtn) {
+          stageCooldownUntilRef.current = now + 760;
+        }
+        invalidateButtonCache();
+
+        // Crisp visual button strike feedback + haptic tap
+        btn.classList.remove('is-marble-hit');
+        void btn.offsetWidth;
+        btn.classList.add('is-marble-hit');
+        const hitTimer = window.setTimeout(() => {
+          btn.classList.remove('is-marble-hit');
+          activeHitTimers.delete(hitTimer);
+        }, 380);
+        activeHitTimers.add(hitTimer);
+
+        triggerHaptic('selection');
+
+        // Dispatch a real click event at the exact marble contact point so React onClick,
+        // form submission, and radial theme/mode transitions execute naturally!
+        try {
+          btn.dispatchEvent(
+            new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              clientX: cx,
+              clientY: cy,
+              view: window,
+            })
+          );
+        } catch {
+          btn.click();
+        }
+        return;
+      }
+    };
+
     const controller = createLoginThreeController(canvas, {
       initialDark: initialDarkRef.current,
       initialStage: initialStageRef.current,
       initialVariant: initialVariantRef.current,
       reducedMotion,
+      onMarbleStep: handleMarbleStep,
     });
 
     if (!controller) {
@@ -318,6 +546,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     }
 
     const handleResize = () => {
+      invalidateButtonCache();
       const rect = stageEl.getBoundingClientRect();
       controller.resize(
         Math.max(1, Math.round(rect.width || window.innerWidth)),
@@ -331,6 +560,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       resizeObserver.observe(stageEl);
     }
     window.addEventListener('resize', handleResize, { passive: true });
+    document.addEventListener('scroll', invalidateButtonCache, { passive: true, capture: true });
     window.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
@@ -343,7 +573,11 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     window.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
     return () => {
+      invalidateButtonCacheRef.current = null;
+      activeHitTimers.forEach((tid) => window.clearTimeout(tid));
+      activeHitTimers.clear();
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('scroll', invalidateButtonCache, true);
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);

@@ -40,6 +40,19 @@ export function normalizeLoginThreeVariant(raw?: string | null): LoginThreeVaria
   return 'luxury';
 }
 
+export interface MarbleStepSnapshot {
+  u: number;
+  v: number;
+  radiusNormY: number;
+  vx: number;
+  vy: number;
+  speed: number;
+  aspect: number;
+  isGrabbing: boolean;
+  userDriven: boolean;
+  elapsed: number;
+}
+
 export interface LoginThreeController {
   setTheme: (isDark: boolean, snapImmediately?: boolean) => void;
   setStage: (stage: 'intro' | 'auth' | 'portal') => void;
@@ -50,6 +63,14 @@ export interface LoginThreeController {
   pushDirectionalSwipe?: (dxWorldNorm: number, dyWorldNorm: number) => void;
   pushScrollImpulse: (nx: number, deltaY: number) => void;
   setTilt: (tx: number, ty: number, dtx: number, dty: number) => void;
+  bounceMarble?: (
+    normalWorldX: number,
+    normalWorldY: number,
+    sepWorldX: number,
+    sepWorldY: number,
+    impactStrength?: number,
+    minBounceSpeed?: number
+  ) => void;
   triggerPulse: (nx: number, ny: number, strength?: number) => void;
   triggerLoginSurge: (nx: number, ny: number) => void;
   resize: (width: number, height: number) => void;
@@ -269,8 +290,8 @@ const SILK_CLOTH_VERT = /* glsl */ `
 
   void main() {
     vUv = uv;
-    float energy = mix(1.0, 0.74, uAuthBlend) + uSurge * 0.35;
-    float t = uTime * (0.85 + uSurge * 0.65);
+    float energy = mix(1.0, 0.74, uAuthBlend);
+    float t = uTime * 0.85;
 
     vec3 displaced = evalSilkDisplace(position.xy, t, energy);
 
@@ -596,14 +617,10 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       col += causticTint * causticCore * mix(0.24, 0.36, uThemeDark);
     }
 
-    // Celebratory gentle glow during login portal surge
-    float radialCenter = length((suv - vec2(0.5, 0.48)) * aspectScale);
-    float surgeGlow = exp(-radialCenter * radialCenter * 1.8) * uSurge;
-    col += mix(vec3(0.98, 0.95, 0.90), vec3(0.75, 0.68, 0.56), uThemeDark) * (surgeGlow * 0.16);
-
     // Subtle auth-stage center calm (pure #000000 OLED in dark mode!)
+    float radialCenter = length((suv - vec2(0.5, 0.48)) * aspectScale);
     float centerSoft = 1.0 - smoothstep(0.18, 0.92, radialCenter);
-    float authCalm = uAuthBlend * (1.0 - uSurge);
+    float authCalm = max(uAuthBlend, uSurge * 0.65);
     vec3 calmTarget = mix(vec3(0.94, 0.935, 0.928), vec3(0.0, 0.0, 0.0), uThemeDark);
     col = mix(col, calmTarget, authCalm * (0.14 + centerSoft * 0.18));
 
@@ -790,9 +807,10 @@ export function createLoginThreeController(
     initialStage: 'intro' | 'auth' | 'portal';
     initialVariant: LoginThreeVariantId;
     reducedMotion: boolean;
+    onMarbleStep?: (snapshot: MarbleStepSnapshot) => void;
   }
 ): LoginThreeController | null {
-  const { reducedMotion } = options;
+  const { reducedMotion, onMarbleStep } = options;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
@@ -1033,6 +1051,7 @@ export function createLoginThreeController(
   // Pointer grab / directional swipe / flick control for rolling the marble by hand
   let isPointerDown = false;
   let isGrabbingMarble = false;
+  let userDrivenMarble = false;
   let pointerWorldX = 0;
   let pointerWorldY = -0.28;
   let lastPointerWorldX = 0;
@@ -1041,6 +1060,18 @@ export function createLoginThreeController(
   let pointerDownWorldY = -0.28;
   let pointerTotalDragDist = 0;
   const ptrSamples: Array<{ x: number; y: number; t: number }> = [];
+  const marbleSnapshot: MarbleStepSnapshot = {
+    u: 0.5,
+    v: 0.36,
+    radiusNormY: marbleR,
+    vx: 0,
+    vy: 0,
+    speed: 0,
+    aspect: initialAspect,
+    isGrabbing: false,
+    userDriven: false,
+    elapsed: 0,
+  };
 
   const recordPtrSample = (wx: number, wy: number) => {
     const now = performance.now();
@@ -1268,6 +1299,22 @@ export function createLoginThreeController(
     // Smooth opacity: full crystal presence in Intro, subtle in Auth, fades cleanly on Portal open
     const targetMarbleOpacity = clamp((1.0 - currentSurge * 1.35) * (1.0 - currentAuthBlend * 0.35), 0, 1);
     marbleOpacity += (targetMarbleOpacity - marbleOpacity) * clamp(dt * 8.0, 0, 1);
+
+    // Notify DOM button collision layer before rendering so bounces apply on the exact impact frame
+    if (onMarbleStep && !reducedMotion && marbleOpacity > 0.08 && targetSurge < 0.5) {
+      const [preU, preV] = worldToUv(marbleX, marbleY);
+      marbleSnapshot.u = preU;
+      marbleSnapshot.v = preV;
+      marbleSnapshot.radiusNormY = marbleR;
+      marbleSnapshot.vx = marbleVx;
+      marbleSnapshot.vy = marbleVy;
+      marbleSnapshot.speed = Math.hypot(marbleVx, marbleVy);
+      marbleSnapshot.aspect = currentAspect;
+      marbleSnapshot.isGrabbing = isGrabbingMarble;
+      marbleSnapshot.userDriven = userDrivenMarble;
+      marbleSnapshot.elapsed = elapsed;
+      onMarbleStep(marbleSnapshot);
+    }
 
     const [marbleU, marbleV] = worldToUv(marbleX, marbleY);
 
@@ -1515,6 +1562,9 @@ export function createLoginThreeController(
       if (isPointerDown) {
         pointerTotalDragDist += moveDist;
         recordPtrSample(wx, wy);
+        if (moveDist > 0.0008) {
+          userDrivenMarble = true;
+        }
 
         if (!isGrabbingMarble && moveDist > 0.0008) {
           // Swiping anywhere on the open screen rolls the marble in the EXACT direction of your hand!
@@ -1526,6 +1576,7 @@ export function createLoginThreeController(
         const distToMarble = Math.hypot(wx - marbleX, wy - marbleY);
         const touchRange = marbleR * 3.4;
         if (distToMarble < touchRange) {
+          userDrivenMarble = true;
           const proximity = 0.35 + 0.65 * (1.0 - distToMarble / touchRange);
           marbleVx = clamp(marbleVx + dx * 14.5 * proximity, -3.2, 3.2);
           marbleVy = clamp(marbleVy + dy * 14.5 * proximity, -3.2, 3.2);
@@ -1548,6 +1599,9 @@ export function createLoginThreeController(
           recordPtrSample(wx, wy);
           const distToMarble = Math.hypot(wx - marbleX, wy - marbleY);
           isGrabbingMarble = distToMarble <= marbleR * 4.6;
+          if (isGrabbingMarble) {
+            userDrivenMarble = true;
+          }
         }
       } else {
         if (isPointerDown) {
@@ -1556,6 +1610,7 @@ export function createLoginThreeController(
 
           if (pointerTotalDragDist < 0.04 && flickSpeed < 0.18 && !isGrabbingMarble) {
             // Quick tap without dragging: emit ripple & gently roll marble toward the tapped spot
+            userDrivenMarble = true;
             const [u, v] = worldToUv(pointerDownWorldX, pointerDownWorldY);
             pendingBurstU = u;
             pendingBurstV = v;
@@ -1571,6 +1626,7 @@ export function createLoginThreeController(
             }
           } else if (flickSpeed > 0.08) {
             // Hand flick / directional push release: launch cleanly in exact swipe direction!
+            userDrivenMarble = true;
             const blend = isGrabbingMarble ? 0.92 : 0.72;
             marbleVx = clamp(marbleVx * (1 - blend) + flickVx * blend, -3.5, 3.5);
             marbleVy = clamp(marbleVy * (1 - blend) + flickVy * blend, -3.5, 3.5);
@@ -1584,6 +1640,7 @@ export function createLoginThreeController(
     },
     pushDirectionalSwipe(dxWorldNorm: number, dyWorldNorm: number) {
       if (!Number.isFinite(dxWorldNorm) || !Number.isFinite(dyWorldNorm)) return;
+      userDrivenMarble = true;
       const dx = dxWorldNorm * currentAspect;
       const dy = dyWorldNorm;
       marbleVx = clamp(marbleVx + dx * 12.0, -3.4, 3.4);
@@ -1591,6 +1648,7 @@ export function createLoginThreeController(
     },
     pushScrollImpulse(_nx: number, deltaY: number) {
       if (!Number.isFinite(deltaY) || deltaY === 0) return;
+      userDrivenMarble = true;
       const impulse = clamp(-deltaY / 240, -1.15, 1.15);
       marbleVy = clamp(marbleVy + impulse * 0.95, -2.6, 2.6);
       marbleVx = clamp(marbleVx + Math.sin(elapsed * 2.1) * Math.abs(impulse) * 0.22, -2.6, 2.6);
@@ -1599,6 +1657,54 @@ export function createLoginThreeController(
       // Strictly feeds gravity to the glass marble ONLY (zero cloth/camera/wave slosh!)
       targetGyroX = clamp(tx, -1, 1);
       targetGyroY = clamp(ty, -1, 1);
+      if (Math.hypot(targetGyroX, targetGyroY) > 0.09) {
+        userDrivenMarble = true;
+      }
+    },
+    bounceMarble(
+      normalWorldX: number,
+      normalWorldY: number,
+      sepWorldX: number,
+      sepWorldY: number,
+      impactStrength = 0.85,
+      minBounceSpeed = 0.62
+    ) {
+      const nLen = Math.hypot(normalWorldX, normalWorldY) || 1;
+      const nx = normalWorldX / nLen;
+      const ny = normalWorldY / nLen;
+
+      // Release active grab so dragging the marble into a button clicks cleanly and bounces away
+      isGrabbingMarble = false;
+
+      const pad = marbleR * 2.2;
+      marbleX = clamp(marbleX + sepWorldX, -currentAspect + pad, currentAspect - pad);
+      marbleY = clamp(marbleY + sepWorldY, -1.0 + pad, 1.0 - pad);
+
+      // Reflect incoming velocity across the button surface normal with glassy elastic restitution
+      const vn = marbleVx * nx + marbleVy * ny;
+      const restitution = 0.68;
+      if (vn < 0) {
+        marbleVx -= (1 + restitution) * vn * nx;
+        marbleVy -= (1 + restitution) * vn * ny;
+      }
+
+      // Guarantee a crisp visible rebound away from the struck button
+      const outSpeed = marbleVx * nx + marbleVy * ny;
+      if (outSpeed < minBounceSpeed) {
+        const boost = minBounceSpeed - outSpeed;
+        marbleVx += nx * boost;
+        marbleVy += ny * boost;
+      }
+
+      marbleVx = clamp(marbleVx, -3.5, 3.5);
+      marbleVy = clamp(marbleVy, -3.5, 3.5);
+
+      const [bu, bv] = worldToUv(marbleX, marbleY);
+      pendingBurstU = bu;
+      pendingBurstV = bv;
+      pendingBurstStrength = clamp(impactStrength, 0.35, 1.05);
+      pendingBurstRadius = marbleR * 1.32;
+      fboEnergyTimer = 4.5;
     },
     triggerPulse(nx: number, ny: number, strength = 0.72) {
       const u = clamp(nx * 0.5 + 0.5, 0.02, 0.98);
@@ -1611,15 +1717,9 @@ export function createLoginThreeController(
         renderFrame(0.016);
       }
     },
-    triggerLoginSurge(nx: number, ny: number) {
+    triggerLoginSurge(_nx: number, _ny: number) {
+      // Calmly fade marble during logo flight without emitting a duplicate pre-flight FBO ripple
       targetSurge = 1;
-      const u = Number.isFinite(nx) ? clamp(nx * 0.5 + 0.5, 0.05, 0.95) : 0.5;
-      const v = Number.isFinite(ny) ? clamp(ny * 0.5 + 0.5, 0.05, 0.95) : 0.88;
-      pendingBurstU = u;
-      pendingBurstV = v;
-      pendingBurstStrength = 1.05;
-      pendingBurstRadius = 0.044;
-      fboEnergyTimer = 4.5;
     },
     resize,
     dispose() {

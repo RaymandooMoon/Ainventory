@@ -62,7 +62,6 @@ export default function LoginView({
     return normalizeLoginThreeVariant(params.get('login_motion'));
   });
   const [variantChangeOrigin, setVariantChangeOrigin] = useState(null);
-  const [portalSurgeOrigin, setPortalSurgeOrigin] = useState(null);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -211,10 +210,6 @@ export default function LoginView({
 
     const srcCx = srcRect.left + srcRect.width * 0.5;
     const srcCy = srcRect.top + srcRect.height * 0.5;
-    setPortalSurgeOrigin({
-      x: (srcCx / vw) * 2 - 1,
-      y: -((srcCy / vh) * 2 - 1),
-    });
 
     let cancelled = false;
     let pollFrames = 0;
@@ -236,7 +231,7 @@ export default function LoginView({
     const launchFlight = (targetRect) => {
       if (cancelled) return;
       const isCompactMobile = vw <= 560;
-      const fallbackW = isCompactMobile ? 78 : 112;
+      const fallbackW = isCompactMobile ? 108 : 142;
       const fallbackH = fallbackW * (394 / 1120);
       const targetCx = targetRect ? targetRect.left + targetRect.width * 0.5 : vw * 0.5;
       const targetCy = targetRect ? targetRect.top + targetRect.height * 0.5 : isCompactMobile ? 42 : 44;
@@ -666,7 +661,6 @@ export default function LoginView({
         paused={portalPhase === 'revealing'}
         motionVariant={loginMotionVariant}
         variantChangeOrigin={variantChangeOrigin}
-        portalSurgeOrigin={portalSurgeOrigin}
       />
 
       {/* Top Utility Controls: Single Silk Palette Toggle (Left) + Theme & Lang (Right) */}
@@ -1308,10 +1302,10 @@ export default function LoginView({
           id={CARBON_DOM_CONTRACT.introGetStartedBtnId}
           type="button"
           className="atelier-get-started-btn"
-          aria-label={isEn ? 'Get started' : '시작하기 (Get started)'}
+          aria-label={isEn ? 'Get started' : '시작하기'}
           onClick={handleGetStarted}
         >
-          <span>Get started</span>
+          <span>{isEn ? 'Get started' : '시작하기'}</span>
         </button>
       </div>
 

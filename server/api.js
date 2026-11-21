@@ -38,6 +38,11 @@ import {
   fetchTomorrowWeather,
 } from './engine.js';
 import {
+  analyzeGarmentPhotos,
+  generateStudioCutoutImage,
+  lookupOfficialGarmentOnWeb,
+} from './garmentVisionService.js';
+import {
   AGE_GROUPS,
   BODY_SHAPE_OPTIONS,
   WEAR_SLOTS,
@@ -358,8 +363,10 @@ function unlinkUploadIfUnreferenced(imageUrl) {
 
   // Never delete if another garment or shopping_check row still references this upload
   const stillReferencedByGarment = db
-    .prepare('SELECT 1 FROM garments WHERE image_url = ? LIMIT 1')
-    .get(imageUrl);
+    .prepare(
+      'SELECT 1 FROM garments WHERE image_url = ? OR back_image_url = ? OR original_front_url = ? LIMIT 1'
+    )
+    .get(imageUrl, imageUrl, imageUrl);
   if (stillReferencedByGarment) return;
 
   const stillReferencedByCheck = db
@@ -382,6 +389,56 @@ function unlinkUploadIfUnreferenced(imageUrl) {
   }
 }
 
+function safeParseJsonObject(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(String(raw));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function sanitizeGarmentDetailsInput(raw) {
+  const obj = safeParseJsonObject(raw);
+  const clean = {};
+  const allowedStringKeys = [
+    'waist_type',
+    'rise',
+    'length_profile',
+    'neckline',
+    'sleeve_length',
+    'tuck_in',
+    'coat_length',
+    'closure_type',
+    'heel_height',
+    'shaft_height',
+    'back_detail',
+  ];
+  for (const key of allowedStringKeys) {
+    if (obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim()) {
+      clean[key] = String(obj[key]).trim().slice(0, 120);
+    }
+  }
+  if (typeof obj.belt_compatible === 'boolean') {
+    clean.belt_compatible = obj.belt_compatible;
+  }
+  return clean;
+}
+
+function sanitizeSafeHttpsUrl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'https:') return '';
+    return u.toString().slice(0, 500);
+  } catch {
+    return '';
+  }
+}
+
 function parseGarmentRow(row) {
   if (!row) return null;
   const seasons = safeParseJsonArray(row.seasons, ['봄', '가을']);
@@ -397,6 +454,7 @@ function parseGarmentRow(row) {
   const manifestSpec = resolveManifestSlotAndGlb(row.category, row.subcategory);
   const bagSpec = inferBagCarrySpec(row);
   const resolvedNotes = row.notes || '';
+  const garmentDetails = safeParseJsonObject(row.garment_details_json);
   const seasonalMeta = SEASONAL_120_BY_IMAGE_URL[imageUrl] || null;
   return {
     ...row,
@@ -411,11 +469,28 @@ function parseGarmentRow(row) {
         }
       : {}),
     image_url: imageUrl,
+    back_image_url: row.back_image_url || null,
+    original_front_url: row.original_front_url || null,
     seasons,
     size: row.size || '',
+    price: Number(row.price || 0),
+    purchase_price: Number(row.price || 0),
     notes: resolvedNotes,
     memo: resolvedNotes,
     fabric: row.fabric || 'cotton',
+    fit: row.fit || '',
+    texture_feel: row.texture_feel || '',
+    material_composition: row.material_composition || '',
+    thickness: row.thickness || 'medium',
+    style_mood: row.style_mood || 'minimal',
+    purchase_date: row.purchase_date || '',
+    purchase_store: row.purchase_store || '',
+    product_code: row.product_code || '',
+    care_tip: row.care_tip || '',
+    fit_note: row.fit_note || '',
+    garment_details: garmentDetails,
+    official_source_url: row.official_source_url || '',
+    cutout_source: row.cutout_source || 'local',
     slot_key: row.slot_key || manifestSpec.slotKey,
     base_glb: row.base_glb || manifestSpec.baseGlb,
     physics_preset: row.physics_preset || manifestSpec.physicsPreset,
@@ -898,7 +973,7 @@ export async function verifyGoogleIdToken(credential, expectedClientId) {
 
 export function createApiRouter(options = {}) {
   const router = express.Router();
-  router.use(express.json({ limit: '10mb' }));
+  router.use(express.json({ limit: '24mb' }));
   const googleVerifier = options.verifyGoogleIdToken || verifyGoogleIdToken;
 
   // Health check
@@ -2467,6 +2542,113 @@ export function createApiRouter(options = {}) {
     });
   });
 
+  // Multimodal Front + Back + Neck/Care Tag Vision Analysis (Server-side Gemini 4 Hydrogen)
+  router.post('/garments/vision-analyze', requireStrictUserAuth, async (req, res) => {
+    const rate = checkRateLimit(
+      `garmentvision:${req.user?.id || req.ip || 'local'}`,
+      MAX_GARMENT_WRITES_PER_WINDOW
+    );
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `AI 의류 분석 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { front_image, back_image = null, tag_images = [], lang = 'ko' } = req.body || {};
+      const analysis = await analyzeGarmentPhotos({
+        frontImage: front_image,
+        backImage: back_image,
+        tagImages: tag_images,
+        lang: lang === 'en' ? 'en' : 'ko',
+      });
+      res.json({ ok: true, analysis });
+    } catch (err) {
+      const status = Number(err?.status) || 500;
+      res.status(status).json({
+        error: err?.message || 'AI 의류 분석 중 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  // Official Retail Product Web Search via Gemini Google Search Grounding + SSRF-Safe Image Fetch
+  router.post('/garments/web-lookup', requireStrictUserAuth, async (req, res) => {
+    const rate = checkRateLimit(
+      `garmentweblookup:${req.user?.id || req.ip || 'local'}`,
+      MAX_GARMENT_WRITES_PER_WINDOW
+    );
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `공식 상품 검색 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const {
+        brand = '',
+        product_code = '',
+        query = '',
+        name = '',
+        category = '',
+        color_name = '',
+        material = '',
+        lang = 'ko',
+      } = req.body || {};
+      const match = await lookupOfficialGarmentOnWeb({
+        brand,
+        productCode: product_code,
+        query,
+        name,
+        category,
+        colorName: color_name,
+        material,
+        lang: lang === 'en' ? 'en' : 'ko',
+      });
+      res.json({ ok: true, match });
+    } catch (err) {
+      const status = Number(err?.status) || 500;
+      res.status(status).json({
+        error: err?.message || '공식 상품 검색 중 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  // AI Studio Cutout Refinement (Server-side gemini-3.1-flash-lite-image)
+  router.post('/garments/studio-cutout', requireStrictUserAuth, async (req, res) => {
+    const rate = checkRateLimit(
+      `garmentcutout:${req.user?.id || req.ip || 'local'}`,
+      MAX_GARMENT_WRITES_PER_WINDOW
+    );
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `AI 스튜디오 보정 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const {
+        image_data,
+        category = 'garment',
+        side = 'front',
+        color_name = '',
+        material = '',
+      } = req.body || {};
+      const result = await generateStudioCutoutImage({
+        imageData: image_data,
+        category,
+        side: side === 'back' ? 'back' : 'front',
+        colorName: color_name,
+        material,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      const status = Number(err?.status) || 500;
+      res.status(status).json({
+        error: err?.message || 'AI 스튜디오 누끼 보정 중 오류가 발생했습니다.',
+      });
+    }
+  });
+
   // Garments CRUD
   router.get('/garments', (req, res) => {
     const authz = resolveAuthorizedClosets(req, req.query.closet, { mode: 'read' });
@@ -2558,12 +2740,29 @@ export function createApiRouter(options = {}) {
       wear_count = 0,
       status = 'active',
       fabric = 'cotton',
+      fit = '',
+      texture_feel = '',
+      material_composition = '',
+      thickness = 'medium',
+      style_mood = 'minimal',
+      purchase_date = '',
+      purchase_store = '',
+      product_code = '',
+      care_tip = '',
+      fit_note = '',
+      garment_details = {},
+      official_source_url = '',
+      cutout_source = 'local',
       slot_key,
       base_glb,
       physics_preset,
       custom_texture,
       image_data,
       image_url,
+      back_image_data,
+      back_image_url,
+      original_front_data,
+      original_front_url,
       notes = '',
       memo,
     } = req.body || {};
@@ -2584,6 +2783,7 @@ export function createApiRouter(options = {}) {
       outer: 'coat',
       shoes: 'sneakers',
       accessory: 'bag',
+      jewelry: 'necklace',
     };
     const resolvedCategory = String(category || 'top').trim();
     const resolvedSubcategory = String(
@@ -2599,6 +2799,24 @@ export function createApiRouter(options = {}) {
       return res.status(uploadRes.status).json({ error: uploadRes.error });
     }
     const savedUrl = uploadRes.url;
+
+    let savedBackUrl = null;
+    if (back_image_data || back_image_url) {
+      const backUploadRes = saveDataUrlImage(back_image_data || back_image_url, targetCloset, '');
+      if (!backUploadRes.ok) {
+        return res.status(backUploadRes.status).json({ error: backUploadRes.error });
+      }
+      savedBackUrl = backUploadRes.url || null;
+    }
+
+    let savedOriginalFrontUrl = null;
+    if (original_front_data || original_front_url) {
+      const origRes = saveDataUrlImage(original_front_data || original_front_url, targetCloset, '');
+      if (origRes.ok && origRes.url) {
+        savedOriginalFrontUrl = origRes.url;
+      }
+    }
+
     const spec = resolveManifestSlotAndGlb(resolvedCategory, resolvedSubcategory);
     const isCustomTex =
       custom_texture !== undefined
@@ -2613,6 +2831,7 @@ export function createApiRouter(options = {}) {
       has_strap: req.body?.has_strap,
       bag_carry_style: req.body?.bag_carry_style,
     });
+    const cleanDetails = sanitizeGarmentDetailsInput(garment_details);
 
     const result = db.prepare(`
       INSERT INTO garments (
@@ -2620,20 +2839,23 @@ export function createApiRouter(options = {}) {
         seasons, min_temp, max_temp, water_resistant, formality,
         brand, size, price, wear_count, status, image_url, notes,
         fabric, slot_key, base_glb, physics_preset, custom_texture,
-        has_strap, bag_carry_style
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        has_strap, bag_carry_style,
+        back_image_url, original_front_url, fit, texture_feel, material_composition,
+        thickness, style_mood, purchase_date, purchase_store, product_code,
+        care_tip, fit_note, garment_details_json, official_source_url, cutout_source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       targetCloset,
       String(name).trim().slice(0, 120),
       resolvedCategory,
       resolvedSubcategory,
-      String(color_name).trim(),
-      String(color_hex).trim(),
+      String(color_name).trim().slice(0, 32),
+      String(color_hex).trim().slice(0, 16),
       JSON.stringify(Array.isArray(seasons) ? seasons : ['봄', '가을']),
       Number.isFinite(Number(min_temp)) ? Number(min_temp) : 8,
       Number.isFinite(Number(max_temp)) ? Number(max_temp) : 20,
       water_resistant ? 1 : 0,
-      String(formality || 'smart').trim(),
+      String(formality || 'smart').trim().slice(0, 24),
       String(brand || '').trim().slice(0, 80),
       String(size || '').trim().slice(0, 32),
       Math.max(0, Number(price) || 0),
@@ -2641,13 +2863,28 @@ export function createApiRouter(options = {}) {
       String(status || 'active').trim(),
       savedUrl,
       resolvedNotes,
-      String(fabric || 'cotton').trim(),
+      String(fabric || 'cotton').trim().slice(0, 48),
       slot_key || spec.slotKey,
       base_glb || spec.baseGlb,
       physics_preset || spec.physicsPreset,
       isCustomTex ? 1 : 0,
       bagSpec.isBag ? (bagSpec.has_strap ? 1 : 0) : null,
-      bagSpec.isBag ? bagSpec.bag_carry_style : null
+      bagSpec.isBag ? bagSpec.bag_carry_style : null,
+      savedBackUrl,
+      savedOriginalFrontUrl,
+      String(fit || '').trim().slice(0, 32),
+      String(texture_feel || '').trim().slice(0, 32),
+      String(material_composition || '').trim().slice(0, 140),
+      String(thickness || 'medium').trim().slice(0, 24),
+      String(style_mood || 'minimal').trim().slice(0, 32),
+      String(purchase_date || '').trim().slice(0, 20),
+      String(purchase_store || '').trim().slice(0, 80),
+      String(product_code || '').trim().slice(0, 64),
+      String(care_tip || '').trim().slice(0, 240),
+      String(fit_note || '').trim().slice(0, 300),
+      JSON.stringify(cleanDetails),
+      sanitizeSafeHttpsUrl(official_source_url),
+      String(cutout_source || 'local').trim().slice(0, 32)
     );
 
     const created = db.prepare('SELECT * FROM garments WHERE id = ?').get(result.lastInsertRowid);
@@ -2669,6 +2906,7 @@ export function createApiRouter(options = {}) {
       outer: 'coat',
       shoes: 'sneakers',
       accessory: 'bag',
+      jewelry: 'necklace',
     };
     const nextCategory =
       body.category !== undefined ? String(body.category).trim() : existing.category;
@@ -2703,6 +2941,72 @@ export function createApiRouter(options = {}) {
       body.wear_count !== undefined
         ? Math.max(0, Number(body.wear_count) || 0)
         : existing.wear_count;
+    const nextColorName =
+      body.color_name !== undefined ? String(body.color_name).trim().slice(0, 32) : existing.color_name;
+    const nextColorHex =
+      body.color_hex !== undefined ? String(body.color_hex).trim().slice(0, 16) : existing.color_hex;
+    const nextFabric =
+      body.fabric !== undefined ? String(body.fabric).trim().slice(0, 48) : existing.fabric;
+    const nextSeasons =
+      Array.isArray(body.seasons) && body.seasons.length > 0
+        ? JSON.stringify(body.seasons)
+        : existing.seasons;
+    const nextMinTemp =
+      body.min_temp !== undefined && Number.isFinite(Number(body.min_temp))
+        ? Number(body.min_temp)
+        : existing.min_temp;
+    const nextMaxTemp =
+      body.max_temp !== undefined && Number.isFinite(Number(body.max_temp))
+        ? Number(body.max_temp)
+        : existing.max_temp;
+    const nextFormality =
+      body.formality !== undefined ? String(body.formality).trim().slice(0, 24) : existing.formality;
+    const nextFit =
+      body.fit !== undefined ? String(body.fit).trim().slice(0, 32) : existing.fit || '';
+    const nextTextureFeel =
+      body.texture_feel !== undefined
+        ? String(body.texture_feel).trim().slice(0, 32)
+        : existing.texture_feel || '';
+    const nextComposition =
+      body.material_composition !== undefined
+        ? String(body.material_composition).trim().slice(0, 140)
+        : existing.material_composition || '';
+    const nextThickness =
+      body.thickness !== undefined
+        ? String(body.thickness).trim().slice(0, 24)
+        : existing.thickness || 'medium';
+    const nextStyleMood =
+      body.style_mood !== undefined
+        ? String(body.style_mood).trim().slice(0, 32)
+        : existing.style_mood || 'minimal';
+    const nextPurchaseDate =
+      body.purchase_date !== undefined
+        ? String(body.purchase_date).trim().slice(0, 20)
+        : existing.purchase_date || '';
+    const nextPurchaseStore =
+      body.purchase_store !== undefined
+        ? String(body.purchase_store).trim().slice(0, 80)
+        : existing.purchase_store || '';
+    const nextProductCode =
+      body.product_code !== undefined
+        ? String(body.product_code).trim().slice(0, 64)
+        : existing.product_code || '';
+    const nextCareTip =
+      body.care_tip !== undefined
+        ? String(body.care_tip).trim().slice(0, 240)
+        : existing.care_tip || '';
+    const nextFitNote =
+      body.fit_note !== undefined
+        ? String(body.fit_note).trim().slice(0, 300)
+        : existing.fit_note || '';
+    const nextDetailsJson =
+      body.garment_details !== undefined
+        ? JSON.stringify(sanitizeGarmentDetailsInput(body.garment_details))
+        : existing.garment_details_json || '{}';
+    const nextOfficialUrl =
+      body.official_source_url !== undefined
+        ? sanitizeSafeHttpsUrl(body.official_source_url)
+        : existing.official_source_url || '';
 
     const nextBagSpec = inferBagCarrySpec({
       name: nextName,
@@ -2718,7 +3022,11 @@ export function createApiRouter(options = {}) {
       UPDATE garments
       SET name = ?, category = ?, subcategory = ?, slot_key = ?, status = ?, is_favorite = ?,
           price = ?, brand = ?, size = ?, notes = ?, wear_count = ?,
-          has_strap = ?, bag_carry_style = ?
+          has_strap = ?, bag_carry_style = ?,
+          color_name = ?, color_hex = ?, fabric = ?, seasons = ?, min_temp = ?, max_temp = ?,
+          formality = ?, fit = ?, texture_feel = ?, material_composition = ?, thickness = ?,
+          style_mood = ?, purchase_date = ?, purchase_store = ?, product_code = ?,
+          care_tip = ?, fit_note = ?, garment_details_json = ?, official_source_url = ?
       WHERE id = ?
     `).run(
       nextName,
@@ -2734,6 +3042,25 @@ export function createApiRouter(options = {}) {
       nextWearCount,
       nextBagSpec.isBag ? (nextBagSpec.has_strap ? 1 : 0) : null,
       nextBagSpec.isBag ? nextBagSpec.bag_carry_style : null,
+      nextColorName,
+      nextColorHex,
+      nextFabric,
+      nextSeasons,
+      nextMinTemp,
+      nextMaxTemp,
+      nextFormality,
+      nextFit,
+      nextTextureFeel,
+      nextComposition,
+      nextThickness,
+      nextStyleMood,
+      nextPurchaseDate,
+      nextPurchaseStore,
+      nextProductCode,
+      nextCareTip,
+      nextFitNote,
+      nextDetailsJson,
+      nextOfficialUrl,
       id
     );
 
@@ -2775,8 +3102,12 @@ export function createApiRouter(options = {}) {
     }
 
     const imageUrl = existing.image_url;
+    const backImageUrl = existing.back_image_url;
+    const originalFrontUrl = existing.original_front_url;
     db.prepare('DELETE FROM garments WHERE id = ?').run(id);
     unlinkUploadIfUnreferenced(imageUrl);
+    unlinkUploadIfUnreferenced(backImageUrl);
+    unlinkUploadIfUnreferenced(originalFrontUrl);
     res.json({ ok: true });
   });
 

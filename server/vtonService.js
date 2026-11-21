@@ -1311,7 +1311,7 @@ function lookupAuthorizedGarmentById(garmentId, authorizedClosets = []) {
     return (
       db
         .prepare(
-          `SELECT id, closet_owner, name, category, subcategory, color_name, color_hex, fabric, formality, brand, image_url, slot_key
+          `SELECT id, closet_owner, name, category, subcategory, color_name, color_hex, fabric, formality, brand, image_url, back_image_url, slot_key, fit, texture_feel, fit_note, garment_details_json
            FROM garments
            WHERE id = ? AND closet_owner IN (${placeholders})
            LIMIT 1`
@@ -1450,6 +1450,24 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
     const bagCarrySide = activeHandedness === 'left' ? 'right' : 'left';
     const baseDigest = packshot ? packshot.imageDigest : 'none';
 
+    const fit = sanitizeText(rawItem.fit, 32, '');
+    const textureFeel = sanitizeText(rawItem.texture_feel ?? rawItem.textureFeel, 32, '');
+    const fitNote = sanitizeText(rawItem.fit_note ?? rawItem.fitNote, 180, '');
+    let garmentDetails = {};
+    const rawDetails = rawItem.garment_details ?? rawItem.garment_details_json;
+    if (rawDetails && typeof rawDetails === 'object' && !Array.isArray(rawDetails)) {
+      garmentDetails = rawDetails;
+    } else if (typeof rawDetails === 'string' && rawDetails.trim()) {
+      try {
+        const parsedDetails = JSON.parse(rawDetails);
+        if (parsedDetails && typeof parsedDetails === 'object' && !Array.isArray(parsedDetails)) {
+          garmentDetails = parsedDetails;
+        }
+      } catch {
+        garmentDetails = {};
+      }
+    }
+
     resolvedSlots[slot] = {
       slot,
       id,
@@ -1461,6 +1479,10 @@ export function resolveEquippedVtonSlots(rawInput = {}, authContext = {}) {
       fabric,
       formality,
       brand,
+      fit,
+      textureFeel,
+      fitNote,
+      garmentDetails,
       isBag,
       hasStrap: bagHasStrap,
       bagCarryStyle,
@@ -2406,8 +2428,22 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
       (item.isBag || slot === 'accessory') && isFarOccludedSingleAngleBag
         ? ` NOTE FOR ${canonicalBagAngle}° SIDE PROFILE: This bag hangs on the wearer's FAR ${bagAnatomy.carrySide.toUpperCase()} side behind the body — keep the foreground ${bagAnatomy.freeSide.toUpperCase()} shoulder/arm completely empty and unobstructed.`
         : '';
+    const detailCues = [];
+    if (item.fit) detailCues.push(`${item.fit} fit`);
+    if (item.textureFeel) detailCues.push(`${item.textureFeel} drape/handfeel`);
+    const det = item.garmentDetails || {};
+    if (det.waist_type === 'elastic') detailCues.push('full elastic waistband');
+    else if (det.waist_type === 'semi_elastic') detailCues.push('clean front with back-elastic waistband');
+    else if (det.waist_type === 'drawstring') detailCues.push('drawstring waist');
+    if (det.belt_compatible === false) detailCues.push('NO belt loops, do NOT render a belt');
+    if (det.rise) detailCues.push(`${det.rise} rise`);
+    if (det.length_profile) detailCues.push(`${det.length_profile} hem length`);
+    if (det.back_detail) detailCues.push(`back detail: ${det.back_detail}`);
+    if (item.fitNote) detailCues.push(`personal wearing fit note: ${item.fitNote}`);
+    const extraFitDirective = detailCues.length > 0 ? ` Construction & Fit: ${detailCues.join(', ')}.` : '';
+
     const garmentDesc = `${item.colorName} ${item.fabric} ${item.subcategory || item.category}`.trim();
-    const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${placementCue ? ` Placement: ${placementCue}${mirrorNote}${farOccludedNote}` : ''}`;
+    const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${extraFitDirective}${placementCue ? ` Placement: ${placementCue}${mirrorNote}${farOccludedNote}` : ''}`;
     if (item.packshot) {
       parts.push({
         text: `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} color from the reference image immediately below (${viewScopeText}). Do NOT render any text or labels in the output image:`,
