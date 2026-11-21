@@ -4777,60 +4777,162 @@ html[data-theme-transitioning='1'] *::after {
   position: fixed;
   inset: 0;
   z-index: 9500;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
   overflow: hidden;
   pointer-events: auto;
+}
+
+.atelier-login-portal-overlay.is-phase-revealing {
+  pointer-events: none;
 }
 
 .hig-native-shell.is-login-portal-preloading {
   pointer-events: none;
 }
 
-.hig-native-shell.is-login-wave-revealing {
+.hig-native-shell.is-login-portal-preloading:not(.is-login-portal-revealing) {
+  opacity: 0;
+}
+
+.hig-native-shell.is-login-portal-revealing {
+  position: relative;
+  z-index: 9550;
+  opacity: 1;
+  will-change: clip-path;
+}
+
+.hig-native-shell.is-login-portal-preloading .hig-screen-container {
+  animation: none !important;
+  transform: none !important;
+}
+
+.atelier-login-particle-wave {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
   z-index: 9600;
-  transform: translateZ(0);
-  will-change: clip-path;
   pointer-events: none;
+  display: block;
 }
 
-.atelier-login-wave-ring {
-  position: fixed;
-  z-index: 9700;
-  border-radius: 9999px;
-  pointer-events: none;
-  border: 1px solid rgba(235, 222, 198, 0.44);
-  box-shadow: 0 0 22px rgba(235, 222, 198, 0.22);
-  background: radial-gradient(
-    circle,
-    transparent 84%,
-    rgba(255, 255, 255, 0.08) 96%,
-    rgba(235, 222, 198, 0.14) 100%
-  );
-  transform: scale(0);
-  opacity: 0.78;
-  will-change: transform, opacity;
-  animation: atelierLoginWaveExpand 1.06s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+/* ==========================================================================
+   ZERO-G ANTI-GRAVITY FLOATING & SLOW 3D ROTATION FOR GARMENTS & ITEMS
+   Synced 1:1 with scroll & touch acceleration via --ag-* harmonic channels
+   ========================================================================== */
+.hig-native-shell[data-anti-gravity='active'] {
+  --ag-y-0: 0px;
+  --ag-rx-0: 0deg;
+  --ag-ry-0: 0deg;
+  --ag-rz-0: 0deg;
+  --ag-sh-0: 1;
+  --ag-sh-op-0: 0.9;
 }
 
-@keyframes atelierLoginWaveExpand {
-  0% {
-    transform: scale(0);
-    opacity: 0.78;
-  }
-  52% {
-    opacity: 0.36;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0;
+/* Default Zero-G channel (Channel 0) for 2.5D garment cutouts & breathing contact shadows */
+.hig-native-shell[data-anti-gravity='active'] .garment-object-25d:not(.is-interactive) .garment-25d-plane {
+  transform: translate3d(0, var(--ag-y-0, 0px), 0)
+    rotateX(var(--ag-rx-0, 0deg))
+    rotateY(var(--ag-ry-0, 0deg))
+    rotateZ(var(--ag-rz-0, 0deg));
+  will-change: transform;
+  transition: none;
+}
+
+.hig-native-shell[data-anti-gravity='active'] .garment-object-25d:not(.is-interactive) .garment-25d-floor-shadow {
+  transform: translate3d(-50%, 0, 0) scale(var(--ag-sh-0, 1));
+  opacity: var(--ag-sh-op-0, 0.9);
+  transition: none;
+}
+
+/* Staggered organic phases across Wardrobe grid & Studio picker cards (4 independent harmonic channels) */
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 2) .garment-25d-plane,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 2) .garment-25d-plane {
+  transform: translate3d(0, var(--ag-y-1, 0px), 0)
+    rotateX(var(--ag-rx-1, 0deg))
+    rotateY(var(--ag-ry-1, 0deg))
+    rotateZ(var(--ag-rz-1, 0deg));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 2) .garment-25d-floor-shadow,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 2) .garment-25d-floor-shadow {
+  transform: translate3d(-50%, 0, 0) scale(var(--ag-sh-1, 1));
+  opacity: var(--ag-sh-op-1, 0.9);
+}
+
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 3) .garment-25d-plane,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 3) .garment-25d-plane {
+  transform: translate3d(0, var(--ag-y-2, 0px), 0)
+    rotateX(var(--ag-rx-2, 0deg))
+    rotateY(var(--ag-ry-2, 0deg))
+    rotateZ(var(--ag-rz-2, 0deg));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 3) .garment-25d-floor-shadow,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 3) .garment-25d-floor-shadow {
+  transform: translate3d(-50%, 0, 0) scale(var(--ag-sh-2, 1));
+  opacity: var(--ag-sh-op-2, 0.9);
+}
+
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 4) .garment-25d-plane,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 4) .garment-25d-plane {
+  transform: translate3d(0, var(--ag-y-3, 0px), 0)
+    rotateX(var(--ag-rx-3, 0deg))
+    rotateY(var(--ag-ry-3, 0deg))
+    rotateZ(var(--ag-rz-3, 0deg));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:nth-child(4n + 4) .garment-25d-floor-shadow,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:nth-child(4n + 4) .garment-25d-floor-shadow {
+  transform: translate3d(-50%, 0, 0) scale(var(--ag-sh-3, 1));
+  opacity: var(--ag-sh-op-3, 0.9);
+}
+
+/* Main Screen Right Floating Equipped Garment Chips: weightless hover & gentle 3D turn */
+.hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip {
+  perspective: 420px;
+}
+
+.hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip > .studio-garment-image {
+  will-change: transform;
+  transform-style: preserve-3d;
+  transform: translate3d(0, calc(var(--ag-y-0, 0px) * 0.45), 0)
+    rotateX(calc(var(--ag-rx-0, 0deg) * 0.85))
+    rotateY(calc(var(--ag-ry-0, 0deg) * 1.25))
+    rotateZ(calc(var(--ag-rz-0, 0deg) * 1.1));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip:nth-child(4n + 2) > .studio-garment-image {
+  transform: translate3d(0, calc(var(--ag-y-1, 0px) * 0.45), 0)
+    rotateX(calc(var(--ag-rx-1, 0deg) * 0.85))
+    rotateY(calc(var(--ag-ry-1, 0deg) * 1.25))
+    rotateZ(calc(var(--ag-rz-1, 0deg) * 1.1));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip:nth-child(4n + 3) > .studio-garment-image {
+  transform: translate3d(0, calc(var(--ag-y-2, 0px) * 0.45), 0)
+    rotateX(calc(var(--ag-rx-2, 0deg) * 0.85))
+    rotateY(calc(var(--ag-ry-2, 0deg) * 1.25))
+    rotateZ(calc(var(--ag-rz-2, 0deg) * 1.1));
+}
+
+.hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip:nth-child(4n + 4) > .studio-garment-image {
+  transform: translate3d(0, calc(var(--ag-y-3, 0px) * 0.45), 0)
+    rotateX(calc(var(--ag-rx-3, 0deg) * 0.85))
+    rotateY(calc(var(--ag-ry-3, 0deg) * 1.25))
+    rotateZ(calc(var(--ag-rz-3, 0deg) * 1.1));
+}
+
+/* Smooth hover lift override so clicking/inspecting any garment remains crisp */
+.hig-native-shell[data-anti-gravity='active'] .hig-wardrobe-card:hover .garment-25d-plane,
+.hig-native-shell[data-anti-gravity='active'] .studio-mini-garment-card:hover .garment-25d-plane {
+  transform: translate3d(0, -5px, 0) scale(1.045);
+  transition: transform 0.28s var(--spring-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hig-native-shell[data-anti-gravity='active'] .garment-25d-plane,
+  .hig-native-shell[data-anti-gravity='active'] .studio-worn-slot-chip > .studio-garment-image {
+    transform: none !important;
   }
 }
 

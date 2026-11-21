@@ -206,7 +206,7 @@ export default function LoginView({
     if (!logoEl) return undefined;
 
     const srcRect = logoEl.getBoundingClientRect();
-    const vw = Math.max(1, window.innerWidth);
+    const vw = Math.max(1, document.documentElement.clientWidth || window.innerWidth);
     const vh = Math.max(1, window.innerHeight);
 
     const srcCx = srcRect.left + srcRect.width * 0.5;
@@ -235,10 +235,13 @@ export default function LoginView({
 
     const launchFlight = (targetRect) => {
       if (cancelled) return;
+      const isCompactMobile = vw <= 560;
+      const fallbackW = isCompactMobile ? 78 : 112;
+      const fallbackH = fallbackW * (394 / 1120);
       const targetCx = targetRect ? targetRect.left + targetRect.width * 0.5 : vw * 0.5;
-      const targetCy = targetRect ? targetRect.top + targetRect.height * 0.5 : 34;
-      const targetH = targetRect ? targetRect.height : 34;
-      const targetW = targetRect ? targetRect.width : 112;
+      const targetCy = targetRect ? targetRect.top + targetRect.height * 0.5 : isCompactMobile ? 42 : 44;
+      const targetH = targetRect ? targetRect.height : fallbackH;
+      const targetW = targetRect ? targetRect.width : fallbackW;
 
       onPortalTargetResolved?.({
         x: Math.round(targetCx),
@@ -247,34 +250,24 @@ export default function LoginView({
 
       const dx = targetCx - srcCx;
       const dy = targetCy - srcCy;
-      const scaleW = srcRect.width > 0 ? targetW / srcRect.width : 0.62;
-      const scaleH = srcRect.height > 0 ? targetH / srcRect.height : 0.62;
-      const uniformScale = Math.max(0.36, Math.min(0.95, Math.min(scaleW, scaleH)));
+      const scaleW = srcRect.width > 0 ? targetW / srcRect.width : 0.42;
+      const scaleH = srcRect.height > 0 ? targetH / srcRect.height : 0.42;
+      const uniformScale = Math.max(0.22, Math.min(1.0, Math.min(scaleW, scaleH)));
 
       if (typeof logoEl.animate === 'function') {
         activeAnim = logoEl.animate(
           [
             {
               transform: 'translate3d(0px, 0px, 0) scale(1)',
-              filter: 'drop-shadow(0 0 0px rgba(232, 207, 160, 0))',
-            },
-            {
-              transform: `translate3d(${(dx * 0.54).toFixed(2)}px, ${(dy * 0.52).toFixed(2)}px, 0) scale(${(
-                1 +
-                (uniformScale - 1) * 0.45
-              ).toFixed(4)})`,
-              filter: 'drop-shadow(0 0 18px rgba(238, 220, 186, 0.44))',
-              offset: 0.48,
             },
             {
               transform: `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0) scale(${uniformScale.toFixed(4)})`,
-              filter: 'drop-shadow(0 0 6px rgba(238, 220, 186, 0.16))',
             },
           ],
           {
-            duration: 900,
-            delay: 60,
-            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            duration: 740,
+            delay: 140,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
             fill: 'forwards',
           }
         );
@@ -285,7 +278,7 @@ export default function LoginView({
       if (cancelled) return;
       const found = findHeaderLogoRect();
       pollFrames += 1;
-      if (found || pollFrames >= 12) {
+      if (found || pollFrames >= 32) {
         launchFlight(found);
         return;
       }
@@ -670,6 +663,7 @@ export default function LoginView({
         effectiveTheme={effectiveTheme}
         lang={lang}
         stage={isPortalExiting ? 'portal' : authStage}
+        paused={portalPhase === 'revealing'}
         motionVariant={loginMotionVariant}
         variantChangeOrigin={variantChangeOrigin}
         portalSurgeOrigin={portalSurgeOrigin}

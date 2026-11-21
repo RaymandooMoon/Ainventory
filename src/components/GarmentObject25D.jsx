@@ -125,7 +125,7 @@ const GarmentObject25D = memo(function GarmentObject25D({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        perspective: interactive ? '960px' : undefined,
+        perspective: interactive ? '960px' : '720px',
         touchAction: interactive ? 'none' : 'manipulation',
         userSelect: 'none',
         ...style,
@@ -157,11 +157,13 @@ const GarmentObject25D = memo(function GarmentObject25D({
       <div
         aria-hidden="true"
         className="garment-25d-floor-shadow"
-        style={{
-          transform: interactive
-            ? `translate3d(calc(-50% + ${Math.round(-tilt.nx * 10)}px), 0, 0) scale(${tilt.active ? 1.04 : 1})`
-            : 'translate3d(-50%, 0, 0)',
-        }}
+        style={
+          interactive
+            ? {
+                transform: `translate3d(calc(-50% + ${Math.round(-tilt.nx * 10)}px), 0, 0) scale(${tilt.active ? 1.04 : 1})`,
+              }
+            : undefined
+        }
       />
 
       {/* 2.5D Volumetric Garment Plane */}
@@ -180,9 +182,11 @@ const GarmentObject25D = memo(function GarmentObject25D({
           transform: interactive
             ? `rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${tilt.active ? 1.03 : 1})`
             : undefined,
-          transition: tilt.active
-            ? 'transform 80ms linear'
-            : 'transform 460ms cubic-bezier(0.32, 0.72, 0, 1)',
+          transition: interactive
+            ? tilt.active
+              ? 'transform 80ms linear'
+              : 'transform 460ms cubic-bezier(0.32, 0.72, 0, 1)'
+            : undefined,
         }}
       >
         <StudioGarmentImage

@@ -11,6 +11,7 @@ export interface LoginBackdropCanvasProps {
   effectiveTheme: 'light' | 'dark' | string;
   lang?: 'ko' | 'en' | string;
   stage?: 'intro' | 'auth' | 'portal';
+  paused?: boolean;
   motionVariant?: LoginThreeVariantId;
   variantChangeOrigin?: { x: number; y: number; seq: number } | null;
   portalSurgeOrigin?: { x: number; y: number } | null;
@@ -31,16 +32,16 @@ function getScreenOrientationAngle(): number {
 }
 
 /**
- * Interactive Three.js 2-Pass Ping-Pong FBO Fluid Gradient Stage
- * - Dual selectable fluid palettes: A (Luxury Fluid) & B (Aurora Prism), both Light & Dark calibrated
- * - Continuous pointer/touch fluid brush + click radial wave bursts
- * - Mobile Gyroscope / Tilt reaction with Auto-Zero neutral pose calibration
- *   and iOS Safari automatic requestPermission() inside the first user click/tap gesture
+ * Interactive Three.js 3D Silk Cloth + Analytical Unbroken Fluid Ribbon Stage
+ * - Dual selectable palettes: A (Luxury Fluid) & B (Aurora Prism), Light & True OLED Dark calibrated
+ * - Analytical float32 silk ribbon on drag & wheel scroll (zero stepping/banding) + FBO fingertip ripples
+ * - Mobile Gyroscope / Tilt reaction with Auto-Zero calibration and iOS first-gesture permission
  */
 const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   effectiveTheme,
   lang = 'ko',
   stage = 'intro',
+  paused = false,
   motionVariant = DEFAULT_LOGIN_THREE_VARIANT,
   variantChangeOrigin = null,
   portalSurgeOrigin = null,
@@ -68,6 +69,10 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   }, [stage]);
 
   useEffect(() => {
+    controllerRef.current?.setPaused(paused);
+  }, [paused]);
+
+  useEffect(() => {
     controllerRef.current?.setVariant(
       motionVariant,
       variantChangeOrigin?.x,
@@ -75,36 +80,10 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     );
   }, [motionVariant, variantChangeOrigin]);
 
-  // Celebratory liquid swirl & upward wake trail during 2-second login transition
+  // Subtle ambient lift during login portal flight (no heavy burst contention right before reveal)
   useEffect(() => {
     if (!portalSurgeOrigin) return;
-    const ctrl = controllerRef.current;
-    if (!ctrl) return;
-    ctrl.triggerLoginSurge(portalSurgeOrigin.x, portalSurgeOrigin.y);
-
-    // Follow ascending logo path toward top-center header with a velvety fluid wake
-    let frame = 0;
-    const totalFrames = 42;
-    let raf = 0;
-    const startY = portalSurgeOrigin.y;
-    const endY = 0.88; // top-center normalized Y (+1 = top edge)
-    const step = () => {
-      frame += 1;
-      const t = Math.min(1, frame / totalFrames);
-      const ease = 1 - Math.pow(1 - t, 3);
-      const curY = startY + (endY - startY) * ease;
-      const curX = portalSurgeOrigin.x * (1 - ease);
-      ctrl.setPointer(curX, curY, 0.36 * (1 - t * 0.55));
-      if (frame < totalFrames) {
-        raf = window.requestAnimationFrame(step);
-      } else {
-        ctrl.triggerPulse(0, 0.9, 1.35);
-      }
-    };
-    raf = window.requestAnimationFrame(step);
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf);
-    };
+    controllerRef.current?.triggerLoginSurge(portalSurgeOrigin.x, portalSurgeOrigin.y);
   }, [portalSurgeOrigin]);
 
   useEffect(() => {
@@ -135,12 +114,17 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     let lastNormX = 0;
     let lastNormY = 0;
 
-    const pushPointer = (clientX: number, clientY: number, emitPulse = false) => {
+    const pushPointer = (
+      clientX: number,
+      clientY: number,
+      emitPulse = false,
+      allowBrush = true
+    ) => {
       const vw = Math.max(1, window.innerWidth);
       const vh = Math.max(1, window.innerHeight);
       const nx = (clientX / vw) * 2 - 1;
       const ny = -((clientY / vh) * 2 - 1);
-      const velocity = Math.hypot(nx - lastNormX, ny - lastNormY);
+      const velocity = allowBrush ? Math.hypot(nx - lastNormX, ny - lastNormY) : 0;
       lastNormX = nx;
       lastNormY = ny;
 
@@ -156,21 +140,70 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       }
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      pushPointer(e.clientX, e.clientY, false);
+    const onWheel = (e: WheelEvent) => {
+      if (!Number.isFinite(e.deltaY) || e.deltaY === 0) return;
+      const vw = Math.max(1, window.innerWidth);
+      const scrollX =
+        Number.isFinite(e.clientX) && e.clientX > 0 ? (e.clientX / vw) * 2 - 1 : lastNormX;
+      controller.pushScrollImpulse(scrollX, e.deltaY);
     };
+    let touchFallbackActive = false;
+    let lastTouchNx = 0;
+    let lastTouchNy = 0;
+
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && typeof target.closest === 'function' && target.closest('button, input, a, select')) {
+      if (target && typeof target.closest === 'function' && target.closest('button, input, a, select, label')) {
         return;
       }
-      pushPointer(e.clientX, e.clientY, true);
+      touchFallbackActive = false;
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      const nx = (e.clientX / vw) * 2 - 1;
+      const ny = -((e.clientY / vh) * 2 - 1);
+      controller.setPointerDown?.(true, nx, ny);
+      pushPointer(e.clientX, e.clientY, false, false);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      pushPointer(e.clientX, e.clientY, false, true);
+    };
+    const onPointerUp = () => {
+      touchFallbackActive = false;
+      controller.setPointerDown?.(false);
+    };
+    const onPointerCancel = () => {
+      // Mobile browsers fire pointercancel when scrolling takes over a touch drag:
+      // release flick cleanly & enable passive touchmove so thumb direction still rolls the marble!
+      controller.setPointerDown?.(false);
+      touchFallbackActive = true;
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      lastTouchNx = (t.clientX / vw) * 2 - 1;
+      lastTouchNy = -((t.clientY / vh) * 2 - 1);
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (!touchFallbackActive || e.touches.length !== 1) return;
       const t = e.touches[0];
-      if (t) pushPointer(t.clientX, t.clientY, false);
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      const nx = (t.clientX / vw) * 2 - 1;
+      const ny = -((t.clientY / vh) * 2 - 1);
+      const dx = nx - lastTouchNx;
+      const dy = ny - lastTouchNy;
+      lastTouchNx = nx;
+      lastTouchNy = ny;
+      controller.pushDirectionalSwipe?.(dx, dy);
+    };
+    const onTouchEnd = () => {
+      touchFallbackActive = false;
     };
     const onPointerLeave = () => {
+      touchFallbackActive = false;
+      controller.setPointerDown?.(false);
       controller.setPointer(0, 0, 0);
       const authRoot = stageEl.closest('.atelier-auth-root') as HTMLElement | null;
       if (authRoot) {
@@ -179,7 +212,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       }
     };
 
-    // --- Mobile Gyroscope / DeviceOrientation with Auto-Zero Calibration & iOS First-Click Permission ---
+    // --- Mobile Gyroscope / DeviceOrientation exclusively for rolling the glass marble ---
     let gyroAttached = false;
     let gyroPermissionRequested = false;
     let calibSamples = 0;
@@ -192,7 +225,7 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
       if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return;
 
-      // Auto-zero neutral holding angle on first 5 samples so sitting/lying/standing feels centered
+      // Auto-zero neutral holding posture on first 5 samples so sitting/lying/standing feels balanced
       if (calibSamples < 5) {
         calibSamples += 1;
         baseBeta += (e.beta - baseBeta) / calibSamples;
@@ -204,14 +237,15 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       const relBeta = e.beta - baseBeta; // front-back tilt (-180..180)
       const angle = getScreenOrientationAngle();
 
-      let rawX = relGamma / 32;
-      let rawY = -relBeta / 32;
+      // Snappy marble rolling response (~24° full-tilt range)
+      let rawX = relGamma / 24;
+      let rawY = -relBeta / 24;
       if (angle === 90) {
-        rawX = relBeta / 32;
-        rawY = relGamma / 32;
+        rawX = relBeta / 24;
+        rawY = relGamma / 24;
       } else if (angle === -90 || angle === 270) {
-        rawX = -relBeta / 32;
-        rawY = -relGamma / 32;
+        rawX = -relBeta / 24;
+        rawY = -relGamma / 24;
       } else if (angle === 180) {
         rawX = -rawX;
         rawY = -rawY;
@@ -224,9 +258,11 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       prevTiltX = tx;
       prevTiltY = ty;
 
-      // Gently re-center baseline over very long periods to prevent drift
-      baseBeta += (e.beta - baseBeta) * 0.0025;
-      baseGamma += (e.gamma - baseGamma) * 0.0025;
+      // Only gently absorb slow drift while held nearly level so intentional sustained tilts keep rolling the marble
+      if (Math.abs(rawX) < 0.14 && Math.abs(rawY) < 0.14) {
+        baseBeta += (e.beta - baseBeta) * 0.004;
+        baseGamma += (e.gamma - baseGamma) * 0.004;
+      }
 
       controller.setTilt(tx, ty, dtx, dty);
     };
@@ -295,17 +331,29 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
       resizeObserver.observe(stageEl);
     }
     window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', onPointerCancel, { passive: true });
     window.addEventListener('pointerleave', onPointerLeave, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
       window.removeEventListener('pointerleave', onPointerLeave);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
       window.removeEventListener('click', requestIosGyroOnFirstGesture, true);
       window.removeEventListener('touchend', requestIosGyroOnFirstGesture, true);
       if (gyroAttached) {

@@ -44,13 +44,14 @@ import { subscribeOfflineSync } from './utils/offlineSync.ts';
 import {
   clearPendingLogoFlight,
   resolveInitialTabFromPath,
-  triggerPostLoginReveal,
 } from './utils/logoTransition.ts';
 import { applyNavOpacityCss, getStoredNavOpacity } from './utils/stageBackgroundCatalog.ts';
 import {
   computeCircleRevealRadius,
   runCircularThemeTransition,
 } from './utils/themeTransition.ts';
+import LoginPortalParticleWave from './components/auth/LoginPortalParticleWave.tsx';
+import { attachAntiGravityField } from './services/antiGravityMotion.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
 const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
@@ -116,6 +117,7 @@ export default function App() {
   const [user, setUser] = useState(() => (hasInitialToken ? null : DEFAULT_LOCAL_USER));
   const [authReady, setAuthReady] = useState(() => !hasInitialToken);
   const [showAuthScreen, setShowAuthScreen] = useState(initialLoc.showAuth);
+  const [loginPortal, setLoginPortal] = useState(null);
 
   const [activeTab, setActiveTab] = useState(initialLoc.tab);
   const [selectedItemId, setSelectedItemId] = useState(initialLoc.itemId);
@@ -278,9 +280,25 @@ export default function App() {
 
   const activeCloset = user?.defaultCloset || 'sample';
 
-  // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats
+  // Quietly pre-warm main landing chunks while user is on the Login screen so login transition has zero bundle-load stall
   useEffect(() => {
-    if (!authReady || showAuthScreen) return undefined;
+    if (!showAuthScreen || typeof window === 'undefined') return undefined;
+    let cancelled = false;
+    const warm = () => {
+      if (cancelled) return;
+      void import('./components/OutfitStudioView.jsx');
+      void import('./components/WardrobeView.jsx');
+    };
+    const timer = window.setTimeout(warm, 320);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [showAuthScreen]);
+
+  // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats (also preloads immediately during loginPortal!)
+  useEffect(() => {
+    if (!authReady || (showAuthScreen && !loginPortal)) return undefined;
     let cancelled = false;
     const seqAtStart = garmentsMutationSeqRef.current;
     const q = encodeURIComponent(activeCloset);
@@ -307,7 +325,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeCloset, authReady, showAuthScreen, refreshKey, lang, showToast]);
+  }, [activeCloset, authReady, showAuthScreen, loginPortal, refreshKey, lang, showToast]);
 
   const selectedGarment = useMemo(() => {
     if (selectedItemId === null || selectedItemId === undefined) return null;
@@ -504,11 +522,12 @@ export default function App() {
     setLang(normalized);
   }, []);
 
-  // Choreographed 2-second Login -> App Portal Transition State
-  // phase: 'flying' (0..1340ms: app preloads underneath while logo glides to header)
-  //      -> 'revealing' (1340..2120ms: radial liquid wave reveals preloaded app from logo center)
-  const [loginPortal, setLoginPortal] = useState(null);
+  // Choreographed 2-second Login -> App Portal Transition Refs
+  // phase: 'flying' (0..880ms: app preloads underneath while logo glides to header)
+  //      -> 'revealing' (GPU clip-path circle reveal frame-locked with fluid particle wave)
   const appShellRef = useRef(null);
+  const portalOverlayRef = useRef(null);
+  const particleWaveRef = useRef(null);
   const portalOriginRef = useRef(null);
   const portalTimersRef = useRef([]);
 
@@ -546,9 +565,16 @@ export default function App() {
       // Prevent duplicate AppHeaderBrand FLIP when our 2-second portal handles the logo flight directly
       clearPendingLogoFlight();
 
-      const vw = Math.max(1, window.innerWidth);
+      if (typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+      }
+
+      const vw = Math.max(1, document.documentElement.clientWidth || window.innerWidth);
       const vh = Math.max(1, window.innerHeight);
-      const fallbackOrigin = { x: Math.round(vw * 0.5), y: 34 };
+      const fallbackOrigin = { x: Math.round(vw * 0.5), y: vw <= 560 ? 42 : 44 };
+      const activeLoginVariant =
+        document.querySelector('[data-motion-variant]')?.getAttribute('data-motion-variant') ||
+        'luxury';
       portalOriginRef.current = fallbackOrigin;
 
       // Mount & preload the default Outfits landing screen immediately underneath the Login portal
@@ -557,81 +583,136 @@ export default function App() {
         phase: 'flying',
         origin: fallbackOrigin,
         maxRadius: computeCircleRevealRadius(fallbackOrigin.x, fallbackOrigin.y, vw, vh),
+        variant: activeLoginVariant,
       });
 
       const revealTimer = window.setTimeout(() => {
-        const curVw = Math.max(1, window.innerWidth);
-        const curVh = Math.max(1, window.innerHeight);
-        const headerBrandEl =
-          document.querySelector('.hig-native-shell [data-header-brand-btn="true"] .hig-shell-brand-logo') ||
-          document.querySelector('.hig-native-shell [data-header-brand-btn="true"]');
-        let resolvedOrigin = portalOriginRef.current || { x: Math.round(curVw * 0.5), y: 34 };
-        if (headerBrandEl) {
-          const r = headerBrandEl.getBoundingClientRect();
-          if (r.width > 10 && r.height > 10) {
-            resolvedOrigin = {
-              x: Math.round(r.left + r.width * 0.5),
-              y: Math.round(r.top + r.height * 0.5),
+        // Wait 2 clean animation frames after logo dock so OutfitStudioView & Three.js first draw finish before reveal starts
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            const curVw = Math.max(1, document.documentElement.clientWidth || window.innerWidth);
+            const curVh = Math.max(1, window.innerHeight);
+            const headerBrandEl =
+              document.querySelector('.hig-native-shell [data-header-brand-btn="true"] .hig-shell-brand-logo') ||
+              document.querySelector('.hig-native-shell [data-header-brand-btn="true"]');
+            let resolvedOrigin = portalOriginRef.current || {
+              x: Math.round(curVw * 0.5),
+              y: curVw <= 560 ? 42 : 44,
             };
-          }
-        }
-        const maxRadius = computeCircleRevealRadius(resolvedOrigin.x, resolvedOrigin.y, curVw, curVh);
-        triggerHaptic('medium');
-        setLoginPortal({
-          phase: 'revealing',
-          origin: resolvedOrigin,
-          maxRadius,
+            if (headerBrandEl) {
+              const r = headerBrandEl.getBoundingClientRect();
+              if (r.width > 10 && r.height > 10) {
+                resolvedOrigin = {
+                  x: Math.round(r.left + r.width * 0.5),
+                  y: Math.round(r.top + r.height * 0.5),
+                };
+              }
+            }
+            const maxRadius = computeCircleRevealRadius(resolvedOrigin.x, resolvedOrigin.y, curVw, curVh);
+            triggerHaptic('medium');
+            setLoginPortal({
+              phase: 'revealing',
+              origin: resolvedOrigin,
+              maxRadius,
+              variant: activeLoginVariant,
+            });
+          });
         });
       }, 860);
 
-      const finishTimer = window.setTimeout(() => {
+      // Safety fallback in case browser tab was backgrounded during reveal RAF
+      const finishFallbackTimer = window.setTimeout(() => {
         setLoginPortal(null);
         setShowAuthScreen(false);
-      }, 1940);
+      }, 3600);
 
-      portalTimersRef.current = [revealTimer, finishTimer];
+      portalTimersRef.current = [revealTimer, finishFallbackTimer];
     },
     [clearPortalTimers]
   );
 
-  // Execute hardware-accelerated circular clip-path wave reveal originating seamlessly from the docking logo
+  // Hardware-accelerated GPU clip-path circular reveal on .hig-native-shell (zero WebGL mask-image readback stall!)
+  // Frame-locked 1:1 with LoginPortalParticleWave (radius + instantaneous velocity) in a single RAF loop.
   useLayoutEffect(() => {
     if (loginPortal?.phase !== 'revealing') return undefined;
     const shellEl = appShellRef.current;
     if (!shellEl) return undefined;
 
-    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
-      window.scrollTo(0, 0);
-    }
-
     const { origin, maxRadius } = loginPortal;
-    shellEl.style.clipPath = `circle(0px at ${origin.x}px ${origin.y}px)`;
-    let anim = null;
-    if (typeof shellEl.animate === 'function') {
-      anim = shellEl.animate(
-        {
-          clipPath: [
-            `circle(0px at ${origin.x}px ${origin.y}px)`,
-            `circle(${maxRadius}px at ${origin.x}px ${origin.y}px)`,
-          ],
-        },
-        {
-          duration: 1060,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-          fill: 'both',
-        }
-      );
-    }
+    const totalTarget = maxRadius + 96;
+    // Unhurried, serene concentric silk-wave expansion into the main studio
+    const durationMs = 1850;
+    let startMs = 0;
+    let prevNow = 0;
+    let prevRadius = 0;
+    let rafId = 0;
+    let cancelled = false;
+
+    const easePortalReveal = (t) => {
+      const sCurve = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2.35) / 2;
+      return 0.14 * t + 0.86 * sCurve;
+    };
+
+    const applyClipAt = (radiusPx) => {
+      const clip = `circle(${radiusPx.toFixed(1)}px at ${origin.x}px ${origin.y}px)`;
+      shellEl.style.webkitClipPath = clip;
+      shellEl.style.clipPath = clip;
+    };
+
+    // Synchronously apply initial 0px clip before first paint so there is zero flash
+    applyClipAt(0);
+    particleWaveRef.current?.renderStep(0, 0, 0);
+
+    const step = (now) => {
+      if (cancelled) return;
+      if (startMs === 0) {
+        startMs = now;
+        prevNow = now;
+      }
+      const t = Math.min(1, Math.max(0, (now - startMs) / durationMs));
+      const dtSec = Math.max(0.004, (now - prevNow) / 1000);
+      prevNow = now;
+
+      const eased = easePortalReveal(t);
+      const radiusPx = eased * totalTarget;
+      const velocityPx = Math.max(0, (radiusPx - prevRadius) / dtSec);
+      prevRadius = radiusPx;
+
+      applyClipAt(radiusPx);
+      particleWaveRef.current?.renderStep(t, radiusPx, velocityPx);
+
+      if (t < 1) {
+        rafId = window.requestAnimationFrame(step);
+      } else {
+        particleWaveRef.current?.renderStep(1, totalTarget, 0);
+        clearPortalTimers();
+        setLoginPortal(null);
+        setShowAuthScreen(false);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(step);
 
     return () => {
-      if (anim) anim.cancel();
+      cancelled = true;
+      if (rafId) window.cancelAnimationFrame(rafId);
+      shellEl.style.webkitClipPath = '';
       shellEl.style.clipPath = '';
     };
-  }, [loginPortal]);
+  }, [loginPortal, clearPortalTimers]);
+
+  // Attach Zero-G Anti-Gravity Physics Field to main app shell (garments gently float & rotate, accelerating on scroll/touch)
+  const antiGravityEnabled =
+    authReady && (!showAuthScreen || loginPortal?.phase === 'revealing');
+  useEffect(() => {
+    if (!antiGravityEnabled) return undefined;
+    const shellEl = appShellRef.current;
+    if (!shellEl) return undefined;
+    return attachAntiGravityField(shellEl);
+  }, [antiGravityEnabled]);
 
   const handleEnterSampleCloset = useCallback(() => {
     startLoginPortalTransition(() => {
-      triggerPostLoginReveal();
       setStoredToken(null);
       setSampleDemoMode(true);
       setUser(DEFAULT_LOCAL_USER);
@@ -646,7 +727,6 @@ export default function App() {
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
       startLoginPortalTransition(() => {
-        triggerPostLoginReveal();
         setSampleDemoMode(false);
         setUser(loggedInUser);
         syncAccountToAvatar(loggedInUser);
@@ -762,16 +842,17 @@ export default function App() {
   const shouldRenderAppShell = !showAuthScreen || Boolean(loginPortal);
 
   const portalShellClass =
-    loginPortal?.phase === 'revealing'
-      ? 'is-login-wave-revealing'
-      : loginPortal?.phase === 'flying'
-        ? 'is-login-portal-preloading'
+    loginPortal?.phase === 'flying'
+      ? 'is-login-portal-preloading'
+      : loginPortal?.phase === 'revealing'
+        ? 'is-login-portal-preloading is-login-portal-revealing'
         : '';
 
   return (
     <>
       {shouldRenderLogin && (
         <div
+          ref={portalOverlayRef}
           className={
             loginPortal
               ? `atelier-login-portal-overlay is-phase-${loginPortal.phase}`
@@ -796,15 +877,12 @@ export default function App() {
       )}
 
       {loginPortal?.phase === 'revealing' && (
-        <span
-          className="atelier-login-wave-ring"
-          style={{
-            width: `${loginPortal.maxRadius * 2}px`,
-            height: `${loginPortal.maxRadius * 2}px`,
-            left: `${loginPortal.origin.x - loginPortal.maxRadius}px`,
-            top: `${loginPortal.origin.y - loginPortal.maxRadius}px`,
-          }}
-          aria-hidden="true"
+        <LoginPortalParticleWave
+          ref={particleWaveRef}
+          origin={loginPortal.origin}
+          maxRadius={loginPortal.maxRadius}
+          theme={resolvedTheme}
+          variant={loginPortal.variant}
         />
       )}
 

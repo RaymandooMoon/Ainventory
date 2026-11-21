@@ -188,32 +188,24 @@
 
 .atelier-auth-root.is-portal-exiting .atelier-topbar,
 .atelier-auth-root.is-portal-exiting .atelier-auth-reveal,
-.atelier-auth-root.is-portal-exiting .atelier-intro-cta-wrap,
+.atelier-auth-root.is-portal-exiting .atelier-intro-dock,
 .atelier-auth-root.is-portal-exiting .atelier-flank-cards {
   opacity: 0 !important;
-  transform: translate3d(0, 18px, 0) scale(0.95) !important;
-  filter: blur(10px) !important;
+  transform: translate3d(0, 14px, 0) scale(0.975) !important;
   pointer-events: none !important;
   transition:
-    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.34s ease !important;
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 .atelier-auth-root.is-portal-exiting .atelier-hero {
   position: relative;
   z-index: 25;
   opacity: 1 !important;
-  transition: opacity 0.16s ease-out;
-}
-
-.atelier-auth-root[data-portal-phase='revealing'] .atelier-hero {
-  opacity: 0 !important;
-  transition: opacity 0.18s ease-out 0.08s;
 }
 
 .atelier-auth-root.is-portal-exiting .atelier-brand-logo {
-  will-change: transform, filter;
+  will-change: transform;
 }
 
 /* ==========================================================================
@@ -522,7 +514,7 @@
   transform: translate3d(0, clamp(104px, 19dvh, 188px), 0) scale(1.16);
 }
 
-.atelier-logo-frame {
+.atelier-auth-root .atelier-logo-frame {
   position: relative;
   display: inline-block;
   width: clamp(174px, 44vw, 222px);
