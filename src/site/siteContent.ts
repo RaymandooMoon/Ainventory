@@ -4,12 +4,19 @@ export type LegalDocKind = 'privacy' | 'terms';
 export type SiteViewId = 'home' | 'studio' | 'technology' | 'benchmarks' | 'about';
 export type AppPreviewScreenId = 'outfits' | 'closet' | 'stats' | 'profile';
 
+const PREVIEW_FILE_PREFIX: Readonly<Record<AppPreviewScreenId, string>> = {
+  outfits: 'app-fitting-live',
+  closet: 'app-closet',
+  stats: 'app-stats',
+  profile: 'app-profile',
+};
+
 export function resolveAppPreviewSrc(
   screenId: AppPreviewScreenId,
   lang: SiteLang,
   theme: SiteTheme
 ): string {
-  return `/assets/previews/app-${screenId}-${lang}-${theme}.webp`;
+  return `/assets/previews/${PREVIEW_FILE_PREFIX[screenId]}-${lang}-${theme}.webp`;
 }
 
 export interface SiteMeta {

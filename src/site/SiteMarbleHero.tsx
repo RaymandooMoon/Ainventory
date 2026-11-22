@@ -263,12 +263,32 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       }
     };
 
+    let floorRailCooldownUntil = 0;
+
+    const handleFloorBounce = () => {
+      const now = performance.now();
+      if (now < floorRailCooldownUntil) return;
+      floorRailCooldownUntil = now + 260;
+      const rootEl = viewportRootRef.current ?? stageEl.parentElement;
+      const railEl = rootEl?.querySelector<HTMLElement>('[data-marble-floor="true"]');
+      if (!railEl) return;
+      railEl.classList.remove('is-rail-hit');
+      void railEl.offsetWidth;
+      railEl.classList.add('is-rail-hit');
+      const timer = window.setTimeout(() => {
+        railEl.classList.remove('is-rail-hit');
+        activeHitTimers.delete(timer);
+      }, 280);
+      activeHitTimers.add(timer);
+    };
+
     const controller = createLoginThreeController(canvas, {
       initialDark: initialDarkRef.current,
       initialStage: 'intro',
       initialVariant: initialVariantRef.current,
       reducedMotion,
       onMarbleStep: handleMarbleStep,
+      onFloorBounce: handleFloorBounce,
     });
 
     if (!controller) {
@@ -277,6 +297,21 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     }
 
     controllerRef.current = controller;
+
+    const syncFloorBounds = () => {
+      const stageRect = stageEl.getBoundingClientRect();
+      const rootEl = viewportRootRef.current ?? stageEl.parentElement;
+      const floorEl = rootEl?.querySelector<HTMLElement>('[data-marble-floor="true"]');
+      if (!floorEl || stageRect.height <= 0) return;
+      const floorRect = floorEl.getBoundingClientRect();
+      const bottomInsetPx = Math.max(0, stageRect.bottom - floorRect.top);
+      const bottomInsetWorld = (bottomInsetPx / stageRect.height) * 2.0;
+      controller.setPlayBounds?.({ bottomInsetWorld });
+    };
+
+    syncFloorBounds();
+    const initialBoundsTimer = window.setTimeout(syncFloorBounds, 120);
+    activeHitTimers.add(initialBoundsTimer);
 
     let lastNormX = 0;
     let lastNormY = 0;
@@ -478,6 +513,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         Math.max(1, Math.round(rect.width || window.innerWidth)),
         Math.max(1, Math.round(rect.height || window.innerHeight))
       );
+      syncFloorBounds();
     };
 
     const handleVisibility = () => {

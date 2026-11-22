@@ -733,60 +733,62 @@ export default function AinvtrySiteApp() {
             ))}
           </nav>
 
-          <footer className="site-bottombar">
-            <div className="site-bottombar-left">
-              <span className="site-bottombar-rights">{copy.footer.rights}</span>
-              <a
-                href={`mailto:${SITE_META.contactEmail}`}
-                className="site-bottombar-link site-bottombar-email"
-              >
-                {SITE_META.contactEmail}
-              </a>
-              <button
-                type="button"
-                className="site-bottombar-link"
-                onClick={() => setLegalDoc('privacy')}
-              >
-                {copy.footer.privacy}
-              </button>
-              <button
-                type="button"
-                className="site-bottombar-link"
-                onClick={() => setLegalDoc('terms')}
-              >
-                {copy.footer.terms}
-              </button>
-            </div>
+          <div className="site-bottombar-tray" data-marble-floor="true">
+            <footer className="site-bottombar">
+              <div className="site-bottombar-left">
+                <span className="site-bottombar-rights">{copy.footer.rights}</span>
+                <a
+                  href={`mailto:${SITE_META.contactEmail}`}
+                  className="site-bottombar-link site-bottombar-email"
+                >
+                  {SITE_META.contactEmail}
+                </a>
+                <button
+                  type="button"
+                  className="site-bottombar-link"
+                  onClick={() => setLegalDoc('privacy')}
+                >
+                  {copy.footer.privacy}
+                </button>
+                <button
+                  type="button"
+                  className="site-bottombar-link"
+                  onClick={() => setLegalDoc('terms')}
+                >
+                  {copy.footer.terms}
+                </button>
+              </div>
 
-            <button
-              type="button"
-              role="slider"
-              aria-label={copy.nav.opacityHint}
-              aria-valuemin={4}
-              aria-valuemax={90}
-              aria-valuenow={transparencyPct}
-              aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
-              title={copy.nav.opacityHint}
-              data-no-marble="true"
-              className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
-              onPointerDown={handleOpacityPointerDown}
-              onPointerMove={handleOpacityPointerMove}
-              onPointerUp={handleOpacityPointerUp}
-              onPointerCancel={handleOpacityPointerUp}
-              onKeyDown={handleOpacityKeyDown}
-            >
-              <span className="site-opacity-meter" aria-hidden="true">
-                <span
-                  className="site-opacity-meter-fill"
-                  style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
-                />
-              </span>
-              <ChevronsUpDown size={14} />
-              <span className="site-opacity-label">
-                {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
-              </span>
-            </button>
-          </footer>
+              <button
+                type="button"
+                role="slider"
+                aria-label={copy.nav.opacityHint}
+                aria-valuemin={4}
+                aria-valuemax={90}
+                aria-valuenow={transparencyPct}
+                aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
+                title={copy.nav.opacityHint}
+                data-no-marble="true"
+                className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
+                onPointerDown={handleOpacityPointerDown}
+                onPointerMove={handleOpacityPointerMove}
+                onPointerUp={handleOpacityPointerUp}
+                onPointerCancel={handleOpacityPointerUp}
+                onKeyDown={handleOpacityKeyDown}
+              >
+                <span className="site-opacity-meter" aria-hidden="true">
+                  <span
+                    className="site-opacity-meter-fill"
+                    style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
+                  />
+                </span>
+                <ChevronsUpDown size={14} />
+                <span className="site-opacity-label">
+                  {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
+                </span>
+              </button>
+            </footer>
+          </div>
         </div>
       </div>
 

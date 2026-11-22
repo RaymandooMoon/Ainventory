@@ -26,10 +26,11 @@ describe('ainvtry.com official site content & IR architecture contract', () => {
     const publicDir = path.resolve(import.meta.dirname, '../../site/public');
 
     for (const screen of screens) {
+      const prefix = screen === 'outfits' ? 'app-fitting-live' : `app-${screen}`;
       for (const lang of langs) {
         for (const theme of themes) {
           const src = resolveAppPreviewSrc(screen, lang, theme);
-          assert.equal(src, `/assets/previews/app-${screen}-${lang}-${theme}.webp`);
+          assert.equal(src, `/assets/previews/${prefix}-${lang}-${theme}.webp`);
           const diskPath = path.join(publicDir, src.replace(/^\//, ''));
           assert.ok(fs.existsSync(diskPath), `Missing preview asset on disk: ${diskPath}`);
         }
