@@ -1,6 +1,11 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { fetchGoogleMapsBrowserKey } from '../services/mapsClientService.ts';
+import {
+  STREET_VIEW_LIVE_ZOOM,
+  STREET_VIEW_PORTRAIT_PITCH,
+  computePlaceBackdropOptics,
+} from '../utils/placeBackdropOptics.ts';
 
 export interface MapsLiveBackdropStatus {
   available: boolean;
@@ -15,6 +20,7 @@ export interface MapsLiveBackdropLayerProps {
   panoId?: string | null;
   heading?: number;
   blurPx: number;
+  heightCm?: number;
   theme?: 'light' | 'dark';
   onStatusChange?: (status: MapsLiveBackdropStatus) => void;
 }
@@ -110,15 +116,15 @@ function EyeLevelStreetViewCanvas({
 
     const mountPanorama = (resolvedPanoId: string, copyrightText: string) => {
       if (cancelled || !containerRef.current) return;
-      // 1:1 human-scale street-portrait telephoto calibration (~85mm full-frame equivalent):
-      // zoom 2.5 brings nearby street sedans & 1st-floor storefronts up to natural chest/waist scale next to the avatar;
-      // pitch -2° aligns road/sidewalk perspective cleanly beneath the character's shoes
-      const pov = { heading, pitch: -2 };
+      // 1:1 human-scale street-portrait telephoto calibration (~135mm equivalent, fov ≈ 16.5°):
+      // zoom 3.45 enlarges landmarks (e.g. Gwanghwamun Gate, street storefronts) to real human scale;
+      // pitch -4° lifts horizon up to the standing avatar's eye level (~30%) while grounding the shoes.
+      const pov = { heading, pitch: STREET_VIEW_PORTRAIT_PITCH };
       if (!panoramaRef.current) {
         panoramaRef.current = new streetViewLib.StreetViewPanorama(containerRef.current, {
           pano: resolvedPanoId,
           pov,
-          zoom: 2.5,
+          zoom: STREET_VIEW_LIVE_ZOOM,
           disableDefaultUI: true,
           clickToGo: false,
           linksControl: false,
@@ -135,7 +141,7 @@ function EyeLevelStreetViewCanvas({
       } else {
         panoramaRef.current.setPano(resolvedPanoId);
         panoramaRef.current.setPov(pov);
-        panoramaRef.current.setZoom?.(2.5);
+        panoramaRef.current.setZoom?.(STREET_VIEW_LIVE_ZOOM);
       }
       setReady(true);
       onStatusRef.current?.({
@@ -187,7 +193,8 @@ function EyeLevelStreetViewCanvas({
 
   useEffect(() => {
     if (panoramaRef.current && ready && !hasErrorOverlay) {
-      panoramaRef.current.setPov({ heading, pitch: -2 });
+      panoramaRef.current.setPov({ heading, pitch: STREET_VIEW_PORTRAIT_PITCH });
+      panoramaRef.current.setZoom?.(STREET_VIEW_LIVE_ZOOM);
     }
   }, [heading, ready, hasErrorOverlay]);
 
@@ -221,12 +228,23 @@ const MapsLiveBackdropLayer = memo(function MapsLiveBackdropLayer({
   panoId = null,
   heading = 0,
   blurPx,
+  heightCm = 172,
   theme = 'light',
   onStatusChange,
 }: MapsLiveBackdropLayerProps) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [domErrorDetected, setDomErrorDetected] = useState(false);
   const [svVisible, setSvVisible] = useState(false);
+
+  const optics = useMemo(
+    () =>
+      computePlaceBackdropOptics({
+        heightCm,
+        sourceMode: 'street_view',
+        blurPx,
+      }),
+    [heightCm, blurPx]
+  );
 
   useEffect(() => {
     let active = true;
@@ -252,8 +270,6 @@ const MapsLiveBackdropLayer = memo(function MapsLiveBackdropLayer({
     return null;
   }
 
-  const safeBlur = Math.max(0, Math.min(24, Math.round(Number(blurPx) || 0)));
-  const scaleFactor = 1.05 + (safeBlur / 24) * 0.08;
   const isDark = theme === 'dark';
 
   return (
@@ -261,29 +277,34 @@ const MapsLiveBackdropLayer = memo(function MapsLiveBackdropLayer({
       className="atelier-place-backdrop-layer is-live-streetview"
       data-place-backdrop-active={svVisible ? 'true' : 'false'}
       data-place-backdrop-source="street_view"
-      data-place-backdrop-blur={String(safeBlur)}
+      data-place-backdrop-blur={String(optics.blurPx)}
       style={{
         position: 'absolute',
         inset: 0,
         zIndex: 2,
         overflow: 'hidden',
         pointerEvents: 'none',
+        isolation: 'isolate',
         opacity: svVisible ? 1 : 0,
         transition: 'opacity 0.24s ease',
       }}
     >
-      {/* 1:1 eye-level street vista shifted slightly upward so horizon (~44%) matches standing portrait framing */}
+      {/* 1:1 eye-level telephoto vista overscanned past bottom edge so Google's inner bar stays off-stage */}
       <div
         style={{
           position: 'absolute',
-          left: '-6%',
-          right: '-6%',
-          top: '-10%',
-          height: '108%',
-          filter: `blur(${safeBlur}px) saturate(${isDark ? 0.9 : 0.95}) contrast(1.02)`,
-          transform: `scale(${scaleFactor.toFixed(3)})`,
-          transformOrigin: '50% 62%',
-          transition: 'filter 0.14s ease-out, transform 0.18s ease-out',
+          left: '-8%',
+          right: '-8%',
+          top: `${optics.liveTopOffsetPct}%`,
+          bottom: '-18%',
+          filter:
+            optics.liveBaseBlurPx > 0
+              ? `blur(${optics.liveBaseBlurPx}px) saturate(${isDark ? 0.92 : 0.96}) contrast(1.02)`
+              : `saturate(${isDark ? 0.92 : 0.96}) contrast(1.02)`,
+          transform: `translate3d(0, 0, 0) scale(${optics.edgeBleedScale.toFixed(3)})`,
+          transformOrigin: optics.transformOrigin,
+          transition:
+            'filter 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
           willChange: 'filter, transform',
         }}
       >
@@ -297,6 +318,27 @@ const MapsLiveBackdropLayer = memo(function MapsLiveBackdropLayer({
           />
         </APIProvider>
       </div>
+
+      {/* Real-time GPU composited optical bokeh layer (guarantees silky 60fps 3-step blur on WebGL canvases, tapering softly toward shoes) */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          backdropFilter:
+            optics.liveDofOverlayBlurPx > 0 ? `blur(${optics.liveDofOverlayBlurPx}px)` : 'none',
+          WebkitBackdropFilter:
+            optics.liveDofOverlayBlurPx > 0 ? `blur(${optics.liveDofOverlayBlurPx}px)` : 'none',
+          opacity: optics.blurPx > 0 ? 1 : 0,
+          maskImage:
+            'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 62%, rgba(0,0,0,0.52) 82%, rgba(0,0,0,0.2) 100%)',
+          WebkitMaskImage:
+            'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.96) 62%, rgba(0,0,0,0.52) 82%, rgba(0,0,0,0.2) 100%)',
+          transition:
+            'backdrop-filter 180ms cubic-bezier(0.22, 1, 0.36, 1), -webkit-backdrop-filter 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out',
+        }}
+      />
 
       {/* Perspective-matched grounded sidewalk / plaza floor deck aligned to avatar shoe soles (~85.5%) */}
       <div

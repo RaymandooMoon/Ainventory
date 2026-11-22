@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MoveHorizontal, X } from 'lucide-react';
+import { ArrowLeft, Check, MoveHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
@@ -164,8 +164,10 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   saggingFit = false,
   asPrimaryStageTarget,
   transformStyle,
+  outfitSaveBar = null,
 }) {
   const isEn = resolvedLang === 'en';
+  const titleInputRef = useRef(null);
   const { cols, rows } = useMemo(
     () => resolveFlatLayGridMetrics(placements.length),
     [placements.length]
@@ -183,45 +185,104 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
       data-vton-after-img={asPrimaryStageTarget ? 'true' : undefined}
       style={transformStyle}
     >
-      {/* Editorial Masthead + Leading Left Return-to-Character Action */}
-      <div className="editorial-flatlay-header">
+      {/* Compact Header: Icon-only Back Button + Outfit Title & Save Form */}
+      <div
+        className="editorial-flatlay-header"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="editorial-flatlay-header-left">
           {canReturnToCharacter && onCloseFlatLay && (
             <button
               type="button"
               data-flatlay-close-btn="true"
-              className="editorial-flatlay-close-btn"
+              className="editorial-flatlay-close-btn is-icon-only"
               aria-label={isEn ? 'Return to character fitting view' : '캐릭터 피팅 화면으로 돌아가기'}
+              title={isEn ? 'Back to Character' : '캐릭터로 돌아가기'}
               onClick={(e) => {
                 e.stopPropagation();
                 onCloseFlatLay();
               }}
             >
-              <ArrowLeft size={13} aria-hidden="true" />
-              <span>{isEn ? 'Back to Character' : '캐릭터로 돌아가기'}</span>
+              <ArrowLeft size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
-          )}
-          <span className="editorial-flatlay-kicker">
-            {isEn ? 'FLAT-LAY LOOKBOOK' : '플랫레이 룩북'}
-          </span>
-          {placements.length > 0 && (
-            <span className="editorial-flatlay-count-chip tabular-nums">
-              {isEn ? `${placements.length} ITEMS` : `${placements.length}종 전체보기`}
-            </span>
           )}
         </div>
 
-        <div className="editorial-flatlay-header-right">
-          <span className="editorial-flatlay-meta tabular-nums" aria-hidden="true">
-            <span
-              className="editorial-flatlay-mst-dot"
-              style={{ backgroundColor: mstSwatch.hex }}
-            />
-            <span>
-              {heightCm}·{weightKg} · {angleDeg}°
+        {asPrimaryStageTarget && outfitSaveBar && typeof outfitSaveBar.onSave === 'function' ? (
+          <form
+            className="editorial-flatlay-save-bar"
+            data-flatlay-save-bar="true"
+            onSubmit={outfitSaveBar.onSave}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={`studio-clearable-input-wrap editorial-flatlay-save-input-wrap${
+                outfitSaveBar.isGoldTitleWriting ? ' is-gold-writing' : ''
+              }`}
+            >
+              <input
+                ref={titleInputRef}
+                type="text"
+                className="editorial-flatlay-save-input"
+                placeholder={isEn ? 'Outfit Name' : '코디 이름'}
+                aria-label={isEn ? 'Outfit Name' : '코디 이름'}
+                value={outfitSaveBar.title || ''}
+                onChange={(e) => outfitSaveBar.onTitleChange?.(e.target.value)}
+                maxLength={80}
+              />
+              {outfitSaveBar.isGoldTitleWriting && (outfitSaveBar.title || '').length > 0 && (
+                <span
+                  key={outfitSaveBar.goldTitleAnimNonce}
+                  className="studio-gold-title-overlay"
+                  aria-hidden="true"
+                  data-gold-title-writing="true"
+                >
+                  <span className="studio-gold-title-text">{outfitSaveBar.title}</span>
+                </span>
+              )}
+              {(outfitSaveBar.title || '').length > 0 && (
+                <button
+                  type="button"
+                  data-clear-outfit-title="true"
+                  className="editorial-flatlay-save-clear-btn"
+                  aria-label={isEn ? 'Clear outfit name' : '코디 이름 지우기'}
+                  onClick={() => {
+                    outfitSaveBar.onClearTitle?.();
+                    titleInputRef.current?.focus?.();
+                  }}
+                >
+                  <X size={13} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <button
+              id={CARBON_DOM_CONTRACT.studioSaveOutfitBtnId}
+              data-testid="mobile-save-outfit-btn"
+              type="submit"
+              className="editorial-flatlay-save-submit"
+              disabled={Boolean(outfitSaveBar.saving) || !outfitSaveBar.canSave}
+              aria-label={isEn ? 'Save outfit' : '코디 저장'}
+              title={isEn ? 'Save outfit' : '저장'}
+            >
+              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              <span>{isEn ? 'Save' : '저장'}</span>
+            </button>
+          </form>
+        ) : (
+          <div className="editorial-flatlay-header-right">
+            <span className="editorial-flatlay-meta tabular-nums" aria-hidden="true">
+              <span
+                className="editorial-flatlay-mst-dot"
+                style={{ backgroundColor: mstSwatch.hex }}
+              />
+              <span>
+                {heightCm}·{weightKg} · {angleDeg}°
+              </span>
             </span>
-          </span>
-        </div>
+          </div>
+        )}
       </div>
 
       {postLoginRevealActive && (
@@ -235,7 +296,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
           aria-label={
             isEn
               ? 'Lookbook preview before showing character'
-              : '플랫레이 룩북 확인 후 캐릭터로 전환'
+              : '착장 확인 후 캐릭터로 전환'
           }
         >
           <div className="editorial-flatlay-countdown-track">
@@ -247,7 +308,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
           <span className="editorial-flatlay-countdown-copy">
             {isEn
               ? 'Switching to your styled character · Tap an item to edit'
-              : '룩북 확인 중 · 편집하지 않으면 곧 캐릭터를 보여드려요'}
+              : '착장 확인 중 · 편집하지 않으면 곧 캐릭터를 보여드려요'}
           </span>
         </div>
       )}
@@ -260,12 +321,12 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
             aria-hidden="true"
           />
           <p className="editorial-flatlay-empty-title">
-            {isEn ? 'Editorial Flat-Lay Styling Board' : '에디토리얼 플랫레이 룩북 보드'}
+            {isEn ? 'Outfit Board' : '아이템을 선택해 코디를 완성해 보세요'}
           </p>
           <p className="editorial-flatlay-empty-desc">
             {isEn
-              ? 'Tap garments in your wardrobe to compose a zero-latency lookbook or run Gemini AI Try-On.'
-              : '옷장에서 아이템을 선택하면 원본 비율 그대로 한눈에 펼쳐지며, AI 피팅으로 다각도 착장을 생성할 수 있습니다.'}
+              ? 'Tap garments in your wardrobe to compose a look or run AI Try-On.'
+              : '옷장에서 아이템을 선택하면 한눈에 펼쳐지며, AI 피팅으로 다각도 착장을 생성할 수 있습니다.'}
           </p>
         </div>
       ) : (
@@ -481,6 +542,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   saggingFit = false,
   legacyMode,
   lang,
+  outfitSaveBar = null,
 }) {
   const viewerMode = normalizeViewerMode(legacyMode);
   const resolvedStyleMode = normalizeVtonStyleMode(styleMode);
@@ -1770,6 +1832,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               saggingFit={Boolean(saggingFit)}
               asPrimaryStageTarget
               transformStyle={undefined}
+              outfitSaveBar={outfitSaveBar}
             />
           )}
         </div>

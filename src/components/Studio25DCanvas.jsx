@@ -41,6 +41,13 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   lightingPreset,
   lightingIntensity,
   placeBackdrop = null,
+  onUpdatePlaceBackdropBlur,
+  placeMapAdjusterOpen = false,
+  onTogglePlaceMapAdjuster,
+  onClosePlaceMapAdjuster,
+  onSelectPlaceMapSpot,
+  onChangePlaceBackdropHeading,
+  onResetPlaceMapSpot,
   onOpenBackgroundPicker,
   onOpenMobileDrawer,
   mobileDrawerOpen = false,
@@ -59,6 +66,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   stylingPref = null,
   onUpdateStylingPref,
   selectedPlace = null,
+  outfitSaveBar = null,
 }) {
   const normalizedMode = normalizeViewerMode(legacyMode ?? mode ?? viewMode ?? renderMode);
 
@@ -96,6 +104,13 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       lightingPreset={lightingPreset}
       lightingIntensity={lightingIntensity}
       placeBackdrop={placeBackdrop}
+      onUpdatePlaceBackdropBlur={onUpdatePlaceBackdropBlur}
+      placeMapAdjusterOpen={placeMapAdjusterOpen}
+      onTogglePlaceMapAdjuster={onTogglePlaceMapAdjuster}
+      onClosePlaceMapAdjuster={onClosePlaceMapAdjuster}
+      onSelectPlaceMapSpot={onSelectPlaceMapSpot}
+      onChangePlaceBackdropHeading={onChangePlaceBackdropHeading}
+      onResetPlaceMapSpot={onResetPlaceMapSpot}
       onOpenBackgroundPicker={onOpenBackgroundPicker}
       onOpenMobileDrawer={onOpenMobileDrawer}
       mobileDrawerOpen={mobileDrawerOpen}
@@ -111,6 +126,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       stylingPref={stylingPref}
       onUpdateStylingPref={onUpdateStylingPref}
       selectedPlace={selectedPlace}
+      outfitSaveBar={outfitSaveBar}
     />
   );
 });

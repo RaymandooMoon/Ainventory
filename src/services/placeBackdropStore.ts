@@ -189,6 +189,8 @@ export function resolveActivePlaceBackdropVisual({
   fallbackLat = null,
   fallbackLng = null,
   fallbackPlaceName = '',
+  fallbackStreetViewPanoId = null,
+  fallbackStreetViewCopyright = null,
   liveStreetViewUnavailable = false,
   buildPhotoUrl,
   buildStreetViewUrl,
@@ -198,6 +200,8 @@ export function resolveActivePlaceBackdropVisual({
   fallbackLat?: number | null;
   fallbackLng?: number | null;
   fallbackPlaceName?: string;
+  fallbackStreetViewPanoId?: string | null;
+  fallbackStreetViewCopyright?: string | null;
   liveStreetViewUnavailable?: boolean;
   buildPhotoUrl: (photoName: string) => string;
   buildStreetViewUrl: (panoId: string, heading: number) => string;
@@ -242,13 +246,26 @@ export function resolveActivePlaceBackdropVisual({
 
   const photos = Array.isArray(data.photos) ? data.photos : [];
   const sv = data.streetView;
+  const cleanFallbackPano =
+    typeof fallbackStreetViewPanoId === 'string' && fallbackStreetViewPanoId.trim().length >= 8
+      ? fallbackStreetViewPanoId.trim()
+      : null;
+  const effectiveSvPanoId = sv?.available && sv.panoId ? sv.panoId : cleanFallbackPano;
+  const effectiveSvCopyright = sv?.copyright || fallbackStreetViewCopyright || '© Google';
+  const effectiveSvReportUrl =
+    sv?.reportProblemLink ||
+    (effectiveSvPanoId
+      ? `https://cbks0.googleapis.com/cbk?output=report&panoid=${encodeURIComponent(
+          effectiveSvPanoId
+        )}&cb_client=api&cbp=1,0,,0,0`
+      : null);
 
-  // 1. Explicit Street View (server Static proxy if available, else eye-level outdoor Maps JS StreetViewPanorama)
+  // 1. Explicit Street View (fast Static proxy via server/verified panoId, else eye-level outdoor Maps JS StreetViewPanorama)
   if (pref.sourceMode === 'street_view') {
-    if (sv?.available && sv.panoId) {
+    if (effectiveSvPanoId) {
       return {
         active: true,
-        imageUrl: buildStreetViewUrl(sv.panoId, heading),
+        imageUrl: buildStreetViewUrl(effectiveSvPanoId, heading),
         liveMapMode: null,
         lat: resolvedLat,
         lng: resolvedLng,
@@ -257,8 +274,8 @@ export function resolveActivePlaceBackdropVisual({
         sourceMode: 'street_view',
         placeName,
         attributions: [],
-        streetViewCopyright: sv.copyright || '© Google',
-        streetViewReportUrl: sv.reportProblemLink || null,
+        streetViewCopyright: effectiveSvCopyright,
+        streetViewReportUrl: effectiveSvReportUrl,
         photoIndex: 0,
         photoCount: photos.length,
       };
@@ -275,7 +292,7 @@ export function resolveActivePlaceBackdropVisual({
         sourceMode: 'street_view',
         placeName,
         attributions: [],
-        streetViewCopyright: '© Google',
+        streetViewCopyright: effectiveSvCopyright,
         streetViewReportUrl: null,
         photoIndex: 0,
         photoCount: photos.length,
@@ -305,11 +322,11 @@ export function resolveActivePlaceBackdropVisual({
     };
   }
 
-  // 3. Fallback to eye-level Outdoor Street View when Place Photos are empty
-  if (sv?.available && sv.panoId) {
+  // 3. Fallback to eye-level Outdoor Street View when Place Photos are empty (or still loading with verified panoId)
+  if (effectiveSvPanoId) {
     return {
       active: true,
-      imageUrl: buildStreetViewUrl(sv.panoId, heading),
+      imageUrl: buildStreetViewUrl(effectiveSvPanoId, heading),
       liveMapMode: null,
       lat: resolvedLat,
       lng: resolvedLng,
@@ -318,8 +335,8 @@ export function resolveActivePlaceBackdropVisual({
       sourceMode: 'street_view',
       placeName,
       attributions: [],
-      streetViewCopyright: sv.copyright || '© Google',
-      streetViewReportUrl: sv.reportProblemLink || null,
+      streetViewCopyright: effectiveSvCopyright,
+      streetViewReportUrl: effectiveSvReportUrl,
       photoIndex: 0,
       photoCount: 0,
     };
@@ -337,7 +354,7 @@ export function resolveActivePlaceBackdropVisual({
       sourceMode: 'street_view',
       placeName,
       attributions: [],
-      streetViewCopyright: '© Google',
+      streetViewCopyright: effectiveSvCopyright,
       streetViewReportUrl: null,
       photoIndex: 0,
       photoCount: 0,

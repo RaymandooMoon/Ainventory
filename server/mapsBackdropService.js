@@ -247,13 +247,22 @@ async function lookupPlacePhotos({ apiKey, placeId, lat, lng, query, languageCod
   };
 }
 
+export function isOfficialGroundStreetViewMetadata(panoId, copyright) {
+  const id = String(panoId || '').trim();
+  if (!id) return false;
+  if (/^(CAoS|CIHM|AF1Qip)/i.test(id) || id.length > 34) return false;
+  const copy = String(copyright || '').trim();
+  if (copy && !/google/i.test(copy)) return false;
+  return true;
+}
+
 async function lookupStreetViewMetadata({ apiKey, lat, lng }) {
   if (lat === null || lng === null) {
     return normalizeStreetViewMetadata(null);
   }
-  const queryWithRadius = async (radius) => {
+  const queryAt = async (qLat, qLng, radius) => {
     const qs = new URLSearchParams({
-      location: `${lat},${lng}`,
+      location: `${qLat},${qLng}`,
       radius: String(radius),
       source: 'outdoor',
       key: apiKey,
@@ -271,9 +280,33 @@ async function lookupStreetViewMetadata({ apiKey, lat, lng }) {
   };
 
   try {
-    const near = await queryWithRadius(160);
-    if (near.available) return near;
-    return await queryWithRadius(320);
+    let best = await queryAt(lat, lng, 120);
+    if (!best.available) {
+      best = await queryAt(lat, lng, 280);
+    }
+
+    // If the nearest outdoor hit looks like an elevated/rooftop UGC photosphere, probe 4 nearby
+    // street offsets (~44m N/S/E/W) in parallel to lock onto a ground-level Google street camera.
+    if (best.available && !isOfficialGroundStreetViewMetadata(best.panoId, best.copyright)) {
+      const delta = 0.0004;
+      const offsetResults = await Promise.allSettled([
+        queryAt(lat + delta, lng, 95),
+        queryAt(lat - delta, lng, 95),
+        queryAt(lat, lng + delta, 95),
+        queryAt(lat, lng - delta, 95),
+      ]);
+      for (const entry of offsetResults) {
+        if (
+          entry.status === 'fulfilled' &&
+          entry.value?.available &&
+          isOfficialGroundStreetViewMetadata(entry.value.panoId, entry.value.copyright)
+        ) {
+          return entry.value;
+        }
+      }
+    }
+
+    return best;
   } catch (err) {
     if (err?.status === 429 || err?.code === 'RESOURCE_EXHAUSTED') {
       throw err;
@@ -304,22 +337,44 @@ export async function fetchPlaceBackdropBundle({
     throw createBackdropError(400, 'INVALID_BACKDROP_QUERY', '장소 ID, 좌표 또는 검색어가 필요합니다.');
   }
 
-  const placeResult = await lookupPlacePhotos({
-    apiKey,
-    placeId,
-    lat: validLat,
-    lng: validLng,
-    query,
-    languageCode,
-  });
+  // Parallelize Place Photos + Street View metadata lookup when coordinates are already known
+  // (~50% lower server TTFB). Only re-check Street View if Place Photos resolves noticeably shifted coords.
+  const hasInitialCoords = validLat !== null && validLng !== null;
+  const [placeResult, initialStreetView] = await Promise.all([
+    lookupPlacePhotos({
+      apiKey,
+      placeId,
+      lat: validLat,
+      lng: validLng,
+      query,
+      languageCode,
+    }),
+    hasInitialCoords
+      ? lookupStreetViewMetadata({
+          apiKey,
+          lat: validLat,
+          lng: validLng,
+        })
+      : Promise.resolve(null),
+  ]);
 
   const targetLat = placeResult.lat ?? validLat;
   const targetLng = placeResult.lng ?? validLng;
-  const streetView = await lookupStreetViewMetadata({
-    apiKey,
-    lat: targetLat,
-    lng: targetLng,
-  });
+
+  let streetView = initialStreetView;
+  const coordsShiftedSignificantly =
+    hasInitialCoords &&
+    targetLat !== null &&
+    targetLng !== null &&
+    (Math.abs(targetLat - validLat) > 0.0005 || Math.abs(targetLng - validLng) > 0.0005);
+
+  if (!streetView || (!streetView.available && coordsShiftedSignificantly)) {
+    streetView = await lookupStreetViewMetadata({
+      apiKey,
+      lat: targetLat,
+      lng: targetLng,
+    });
+  }
 
   return {
     placeId: placeResult.placeId,
@@ -334,7 +389,7 @@ export async function fetchPlaceBackdropBundle({
 /**
  * Streams a Google Place Photo (New) image through the server without exposing API keys.
  */
-export async function proxyPlacePhotoMedia({ photoName, maxWidthPx = 1280, maxHeightPx = 1280 }) {
+export async function proxyPlacePhotoMedia({ photoName, maxWidthPx = 960, maxHeightPx = 1280 }) {
   const apiKey = getServerGoogleMapsApiKey();
   if (!apiKey) {
     throw createBackdropError(503, 'MAPS_NOT_CONFIGURED', 'Google Maps API 키가 설정되지 않았습니다.');
@@ -391,8 +446,8 @@ export async function proxyPlacePhotoMedia({ photoName, maxWidthPx = 1280, maxHe
 export async function proxyStreetViewImage({
   panoId,
   heading = 0,
-  pitch = -2,
-  fov = 26,
+  pitch = -4,
+  fov = 16,
   width = 480,
   height = 640,
 }) {
@@ -408,10 +463,10 @@ export async function proxyStreetViewImage({
   const safeHeading = clampStreetViewHeading(heading);
   const safePitch = Number.isFinite(Number(pitch))
     ? Math.max(-30, Math.min(45, Math.round(Number(pitch))))
-    : -2;
+    : -4;
   const safeFov = Number.isFinite(Number(fov))
-    ? Math.max(22, Math.min(110, Math.round(Number(fov))))
-    : 26;
+    ? Math.max(12, Math.min(110, Math.round(Number(fov))))
+    : 16;
   const { width: safeW, height: safeH } = clampBackdropImageSize(width, height, 640, 640);
 
   const qs = new URLSearchParams({

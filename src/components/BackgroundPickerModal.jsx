@@ -69,6 +69,7 @@ export default function BackgroundPickerModal({
   gpsCoords = null,
   onSelectVerifiedPlace,
   onUpdatePlaceBackdropPref,
+  onOpenMapAdjuster,
   onRefreshPlaceBackdrop,
 }) {
   const unlockedSet = new Set(economyState?.unlockedIds || ['c_atelier_plaster']);
@@ -280,6 +281,36 @@ export default function BackgroundPickerModal({
                       onSelectVerifiedPlace(candidate);
                     }}
                   />
+                )}
+
+                {/* Direct 1-Tap Launch to Bottom-Floating Interactive Google Map Adjuster */}
+                {onOpenMapAdjuster && (
+                  <button
+                    type="button"
+                    data-open-stage-map-adjuster="true"
+                    className="stage-bg-place-map-launch-btn"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onOpenMapAdjuster();
+                    }}
+                  >
+                    <span className="stage-bg-place-map-launch-left">
+                      <MapPin size={14} strokeWidth={2.2} aria-hidden="true" />
+                      <span>
+                        <strong>
+                          {tx(lang, '하단 구글 맵에서 내 위치 직접 조절', 'Adjust Standing Spot on Google Map')}
+                        </strong>
+                        <small>
+                          {tx(
+                            lang,
+                            '캐릭터를 보면서 파란 거리뷰 도로로 핀을 옮겨 공중/실내 뷰를 피할 수 있습니다',
+                            'Move your pin onto blue ground-level streets while viewing the stage live'
+                          )}
+                        </small>
+                      </span>
+                    </span>
+                    <Compass size={14} aria-hidden="true" />
+                  </button>
                 )}
 
                 {/* Source Mode Segmented Tabs: Place Photos / Eye-Level Street View */}

@@ -2172,7 +2172,7 @@ export function createApiRouter(options = {}) {
     try {
       const { buffer, contentType } = await proxyPlacePhotoMedia({
         photoName: typeof req.query.name === 'string' ? req.query.name : '',
-        maxWidthPx: req.query.maxWidthPx !== undefined ? Number(req.query.maxWidthPx) : 1280,
+        maxWidthPx: req.query.maxWidthPx !== undefined ? Number(req.query.maxWidthPx) : 960,
         maxHeightPx: req.query.maxHeightPx !== undefined ? Number(req.query.maxHeightPx) : 1280,
       });
       res.setHeader('Content-Type', contentType);
@@ -2200,9 +2200,9 @@ export function createApiRouter(options = {}) {
       const { buffer, contentType } = await proxyStreetViewImage({
         panoId: typeof req.query.panoId === 'string' ? req.query.panoId : '',
         heading: req.query.heading !== undefined ? Number(req.query.heading) : 0,
-        pitch: req.query.pitch !== undefined ? Number(req.query.pitch) : 4,
-        fov: req.query.fov !== undefined ? Number(req.query.fov) : 90,
-        width: req.query.width !== undefined ? Number(req.query.width) : 640,
+        pitch: req.query.pitch !== undefined ? Number(req.query.pitch) : -4,
+        fov: req.query.fov !== undefined ? Number(req.query.fov) : 16,
+        width: req.query.width !== undefined ? Number(req.query.width) : 480,
         height: req.query.height !== undefined ? Number(req.query.height) : 640,
       });
       res.setHeader('Content-Type', contentType);

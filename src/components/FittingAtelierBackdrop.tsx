@@ -17,6 +17,7 @@ import {
   computeHeightAwareStageFraming,
 } from '../utils/stageFramingEngine.ts';
 import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
+import { computePlaceBackdropOptics } from '../utils/placeBackdropOptics.ts';
 import MapsLiveBackdropLayer from './MapsLiveBackdropLayer.tsx';
 
 function hexToRgbCss(hex: number): string {
@@ -97,7 +98,11 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
     width: 0,
     height: 0,
   });
-  const [placeImageLoadedUrl, setPlaceImageLoadedUrl] = useState<string | null>(null);
+  const [committedPlaceImage, setCommittedPlaceImage] = useState<{
+    url: string;
+    sourceMode: 'place_photo' | 'street_view';
+  } | null>(null);
+  const [incomingReadyUrl, setIncomingReadyUrl] = useState<string | null>(null);
   const hasLiveMapBackdrop = Boolean(
     placeBackdrop?.active &&
       !placeBackdrop?.imageUrl &&
@@ -111,9 +116,49 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
     placeBackdrop?.active && (placeBackdrop?.imageUrl || hasLiveMapBackdrop)
   );
   const placeBlurPx = Math.max(0, Math.min(24, Math.round(Number(placeBackdrop?.blurPx ?? 8))));
-  const placeImageReady = Boolean(
-    hasActivePlaceBackdrop && placeBackdrop?.imageUrl && placeImageLoadedUrl === placeBackdrop.imageUrl
+  const activeImageUrl = placeBackdrop?.active ? placeBackdrop.imageUrl || null : null;
+  const activeSourceMode: 'place_photo' | 'street_view' =
+    placeBackdrop?.sourceMode === 'place_photo' ? 'place_photo' : 'street_view';
+
+  useEffect(() => {
+    if (!placeBackdrop?.active || !activeImageUrl) {
+      setCommittedPlaceImage(null);
+      setIncomingReadyUrl(null);
+    }
+  }, [placeBackdrop?.active, activeImageUrl]);
+
+  const placeOptics = useMemo(
+    () =>
+      computePlaceBackdropOptics({
+        heightCm,
+        sourceMode: activeSourceMode,
+        blurPx: placeBlurPx,
+      }),
+    [heightCm, activeSourceMode, placeBlurPx]
   );
+
+  const committedOptics = useMemo(
+    () =>
+      computePlaceBackdropOptics({
+        heightCm,
+        sourceMode: committedPlaceImage?.sourceMode ?? activeSourceMode,
+        blurPx: placeBlurPx,
+      }),
+    [heightCm, committedPlaceImage?.sourceMode, activeSourceMode, placeBlurPx]
+  );
+
+  const isSameCommittedImage = Boolean(
+    activeImageUrl && committedPlaceImage && committedPlaceImage.url === activeImageUrl
+  );
+  const isIncomingImageReady = Boolean(
+    activeImageUrl && (isSameCommittedImage || incomingReadyUrl === activeImageUrl)
+  );
+  const isBackdropLoading = Boolean(activeImageUrl && !isIncomingImageReady);
+  const displayStableImageUrl = isSameCommittedImage
+    ? activeImageUrl
+    : isIncomingImageReady
+      ? activeImageUrl
+      : committedPlaceImage?.url || null;
 
   const isDark = theme === 'dark';
   const bgItem = getStageBackgroundById(backgroundId);
@@ -451,36 +496,108 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       </div>
 
       {/* 1A. Live Google Maps Eye-Level Real-Place Out-of-Focus Backdrop Layer (Client UI Overlay Only — Never Sent to AI VTON) */}
-      {hasActivePlaceBackdrop && placeBackdrop?.imageUrl && (
+      {hasActivePlaceBackdrop && activeImageUrl && (
         <div
           className="absolute inset-0 z-[2] overflow-hidden pointer-events-none"
           data-maps-place-backdrop="true"
-          data-maps-backdrop-source={placeBackdrop.sourceMode}
-          data-maps-backdrop-blur={String(placeBlurPx)}
+          data-maps-backdrop-source={activeSourceMode}
+          data-maps-backdrop-blur={String(placeOptics.blurPx)}
+          data-maps-backdrop-loading={isBackdropLoading ? 'true' : 'false'}
         >
+          {/* Buffer A: Committed stable backdrop stays visible beneath incoming image (zero blank flash on place/heading change) */}
+          {committedPlaceImage && committedPlaceImage.url !== activeImageUrl && (
+            <img
+              src={committedPlaceImage.url}
+              alt=""
+              draggable={false}
+              decoding="async"
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 w-full h-full object-cover motion-reduce:transition-none"
+              style={{
+                opacity: 1,
+                objectPosition: committedOptics.objectPosition,
+                filter:
+                  committedOptics.blurPx > 0 ? `blur(${committedOptics.blurPx}px)` : 'none',
+                transform: `translate3d(0, 0, 0) scale(${committedOptics.edgeBleedScale})`,
+                transformOrigin: committedOptics.transformOrigin,
+                transition:
+                  'filter 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+                willChange: 'filter, transform',
+              }}
+            />
+          )}
+
+          {/* Buffer B: Active/Incoming backdrop fades smoothly over Buffer A once decoded */}
           <img
-            key={placeBackdrop.imageUrl}
-            src={placeBackdrop.imageUrl}
-            alt={placeBackdrop.placeName ? `${placeBackdrop.placeName} backdrop` : ''}
+            key={activeImageUrl}
+            src={activeImageUrl}
+            alt={placeBackdrop?.placeName ? `${placeBackdrop.placeName} backdrop` : ''}
             draggable={false}
             decoding="async"
+            fetchPriority="high"
             referrerPolicy="no-referrer"
-            onLoad={() => setPlaceImageLoadedUrl(placeBackdrop.imageUrl)}
-            onError={() => {
-              setPlaceImageLoadedUrl(null);
-              placeBackdrop.onImageError?.();
+            onLoad={(e) => {
+              const imgEl = e.currentTarget;
+              const commitLoaded = () => {
+                setIncomingReadyUrl(activeImageUrl);
+                setCommittedPlaceImage({
+                  url: activeImageUrl,
+                  sourceMode: activeSourceMode,
+                });
+              };
+              if (typeof imgEl.decode === 'function') {
+                imgEl.decode().then(commitLoaded, commitLoaded);
+              } else {
+                commitLoaded();
+              }
             }}
-            className="w-full h-full object-cover transition-opacity duration-200 motion-reduce:transition-none"
+            onError={() => {
+              setIncomingReadyUrl(null);
+              placeBackdrop?.onImageError?.();
+            }}
+            className="absolute inset-0 w-full h-full object-cover motion-reduce:transition-none"
             style={{
-              opacity: placeImageReady ? 1 : 0,
-              objectPosition:
-                placeBackdrop.sourceMode === 'street_view' ? 'center 56%' : 'center 46%',
-              filter: placeBlurPx > 0 ? `blur(${placeBlurPx}px)` : 'none',
-              transform:
-                placeBackdrop.sourceMode === 'street_view' ? 'scale(1.18)' : 'scale(1.12)',
-              transformOrigin: '50% 62%',
+              opacity: isIncomingImageReady ? 1 : 0,
+              objectPosition: placeOptics.objectPosition,
+              filter: placeOptics.blurPx > 0 ? `blur(${placeOptics.blurPx}px)` : 'none',
+              transform: `translate3d(0, 0, 0) scale(${placeOptics.edgeBleedScale})`,
+              transformOrigin: placeOptics.transformOrigin,
+              transition:
+                'opacity 220ms ease-out, filter 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+              willChange: 'filter, transform, opacity',
             }}
           />
+
+          {/* Natural f/2.0 optical depth-of-field ground focus taper near avatar shoes (~72%..100%) */}
+          {displayStableImageUrl && placeOptics.blurPx >= 4 && (
+            <img
+              src={displayStableImageUrl}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              decoding="async"
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none motion-reduce:transition-none"
+              style={{
+                opacity: 0.72,
+                objectPosition: placeOptics.objectPosition,
+                filter:
+                  placeOptics.groundFocusBlurPx > 0
+                    ? `blur(${placeOptics.groundFocusBlurPx}px)`
+                    : 'none',
+                transform: `translate3d(0, 0, 0) scale(${placeOptics.edgeBleedScale})`,
+                transformOrigin: placeOptics.transformOrigin,
+                maskImage:
+                  'linear-gradient(180deg, transparent 0%, transparent 68%, rgba(0,0,0,0.48) 84%, rgba(0,0,0,0.88) 100%)',
+                WebkitMaskImage:
+                  'linear-gradient(180deg, transparent 0%, transparent 68%, rgba(0,0,0,0.48) 84%, rgba(0,0,0,0.88) 100%)',
+                transition:
+                  'filter 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out',
+                willChange: 'filter, transform',
+              }}
+            />
+          )}
+
           {/* Subtle top/bottom legibility scrim keeping real street asphalt visible under shoes */}
           <div
             className="absolute inset-0 pointer-events-none"
@@ -501,7 +618,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
             className="absolute inset-0 z-[2] overflow-hidden pointer-events-none"
             data-maps-place-backdrop="true"
             data-maps-backdrop-source="street_view"
-            data-maps-backdrop-blur={String(placeBlurPx)}
+            data-maps-backdrop-blur={String(placeOptics.blurPx)}
           >
             <MapsLiveBackdropLayer
               key={`${placeBackdrop.lat}|${placeBackdrop.lng}|${placeBackdrop.streetViewPanoId ?? ''}`}
@@ -509,7 +626,8 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
               lng={placeBackdrop.lng}
               panoId={placeBackdrop.streetViewPanoId ?? null}
               heading={placeBackdrop.streetViewHeading ?? 0}
-              blurPx={placeBlurPx}
+              blurPx={placeOptics.blurPx}
+              heightCm={heightCm}
               theme={theme}
               onStatusChange={placeBackdrop.onLiveStatusChange}
             />

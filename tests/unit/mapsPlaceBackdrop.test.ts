@@ -9,6 +9,7 @@ import {
   clampBackdropImageSize,
   normalizePlacePhotosList,
   normalizeStreetViewMetadata,
+  isOfficialGroundStreetViewMetadata,
 } from '../../server/mapsBackdropService.js';
 import {
   clampPlaceBackdropBlurPx,
@@ -16,7 +17,16 @@ import {
   sanitizePlaceBackdropPref,
   resolveActivePlaceBackdropVisual,
 } from '../../src/services/placeBackdropStore.ts';
-import { filterPlacesByEyeLevelStreetView } from '../../src/services/streetViewProbeService.ts';
+import {
+  classifyStreetViewPano,
+  filterPlacesByEyeLevelStreetView,
+} from '../../src/services/streetViewProbeService.ts';
+import {
+  STREET_VIEW_LIVE_ZOOM,
+  STREET_VIEW_PORTRAIT_FOV,
+  STREET_VIEW_PORTRAIT_PITCH,
+  computePlaceBackdropOptics,
+} from '../../src/utils/placeBackdropOptics.ts';
 
 test('mapsBackdropService validators block SSRF / injection payloads and accept valid Google Maps IDs', () => {
   assert.equal(
@@ -274,3 +284,157 @@ test('filterPlacesByEyeLevelStreetView retains only verified outdoor Street View
   assert.equal(verified.places[0].streetViewLat, 37.5447);
 });
 
+test('computePlaceBackdropOptics aligns eye-level horizon by avatar height and scales edge-bleed across 3 blur steps', () => {
+  assert.equal(STREET_VIEW_PORTRAIT_FOV, 16);
+  assert.equal(STREET_VIEW_PORTRAIT_PITCH, -4);
+  assert.ok(STREET_VIEW_LIVE_ZOOM >= 3.4);
+
+  const sharp = computePlaceBackdropOptics({
+    heightCm: 172,
+    sourceMode: 'street_view',
+    blurPx: 0,
+  });
+  const soft = computePlaceBackdropOptics({
+    heightCm: 172,
+    sourceMode: 'street_view',
+    blurPx: 8,
+  });
+  const strong = computePlaceBackdropOptics({
+    heightCm: 172,
+    sourceMode: 'street_view',
+    blurPx: 16,
+  });
+
+  // 3-step blur increases overscan edge-bleed scale monotonically and splits DoF naturally
+  assert.equal(sharp.blurPx, 0);
+  assert.equal(sharp.groundFocusBlurPx, 0);
+  assert.equal(sharp.liveDofOverlayBlurPx, 0);
+  assert.ok(soft.edgeBleedScale > sharp.edgeBleedScale);
+  assert.ok(strong.edgeBleedScale > soft.edgeBleedScale);
+  assert.ok(strong.groundFocusBlurPx > 0 && strong.groundFocusBlurPx < strong.blurPx);
+  assert.ok(strong.liveDofOverlayBlurPx > soft.liveDofOverlayBlurPx);
+  assert.equal(sharp.transformOrigin, '50% 34%');
+
+  // Height-coupled eye-level perspective alignment
+  const shorter = computePlaceBackdropOptics({
+    heightCm: 155,
+    sourceMode: 'street_view',
+    blurPx: 8,
+  });
+  const taller = computePlaceBackdropOptics({
+    heightCm: 192,
+    sourceMode: 'street_view',
+    blurPx: 8,
+  });
+  assert.ok(taller.objectPositionY > shorter.objectPositionY);
+  assert.ok(taller.liveTopOffsetPct < shorter.liveTopOffsetPct);
+});
+
+test('resolveActivePlaceBackdropVisual fast-paths verified fallbackStreetViewPanoId to Static proxy immediately', () => {
+  const loadingData = {
+    placeId: null,
+    placeName: '',
+    lat: null,
+    lng: null,
+    photos: [],
+    streetView: {
+      available: false,
+      panoId: null,
+      copyright: null,
+      date: null,
+      reportProblemLink: null,
+    },
+    loading: true,
+    error: null,
+    quotaExceeded: false,
+  };
+
+  const fastPath = resolveActivePlaceBackdropVisual({
+    pref: { enabled: true, sourceMode: 'street_view', blurPx: 8, selectedPhotoIndex: 0, streetViewHeading: 90 },
+    data: loadingData,
+    fallbackLat: 37.5759,
+    fallbackLng: 126.9768,
+    fallbackPlaceName: '경복궁 광화문',
+    fallbackStreetViewPanoId: 'gwanghwamun_verified_pano_01',
+    fallbackStreetViewCopyright: '© 2026 Google',
+    buildPhotoUrl: (n) => `/api/maps/place-photo?name=${encodeURIComponent(n)}`,
+    buildStreetViewUrl: (p, h) => `/api/maps/streetview?panoId=${p}&heading=${h}`,
+  });
+
+  assert.equal(fastPath.active, true);
+  assert.equal(fastPath.liveMapMode, null);
+  assert.equal(
+    fastPath.imageUrl,
+    '/api/maps/streetview?panoId=gwanghwamun_verified_pano_01&heading=90'
+  );
+  assert.equal(fastPath.streetViewCopyright, '© 2026 Google');
+  assert.match(String(fastPath.streetViewReportUrl), /panoid=gwanghwamun_verified_pano_01/);
+});
+
+test('classifyStreetViewPano and isOfficialGroundStreetViewMetadata distinguish ground streets from floating/UGC photospheres', () => {
+  // Official Google connected ground-level Street View car/trekker pano
+  assert.equal(
+    classifyStreetViewPano({
+      panoId: 'rZ9KeTyhA11i0VppYNzsSg',
+      copyright: '© 2026 Google',
+      linksCount: 2,
+    }),
+    'ground_street'
+  );
+  assert.equal(
+    isOfficialGroundStreetViewMetadata('rZ9KeTyhA11i0VppYNzsSg', '© 2026 Google'),
+    true
+  );
+
+  // User-uploaded photosphere ID prefixes (drone/rooftop/balcony)
+  assert.equal(
+    classifyStreetViewPano({
+      panoId: 'CAoSLEFGMVFpcE9aY0Z1aHdqbWRpWTVyWUp6',
+      copyright: '© 2026 Google',
+      linksCount: 2,
+    }),
+    'user_photosphere'
+  );
+  assert.equal(
+    isOfficialGroundStreetViewMetadata('CAoSLEFGMVFpcE9aY0Z1aHdqbWRpWTVyWUp6', '© 2026 Google'),
+    false
+  );
+  assert.equal(
+    classifyStreetViewPano({
+      panoId: 'CIHM0ogKEICAgIDg57a3qwE',
+      copyright: '© 2026 Google',
+      linksCount: 1,
+    }),
+    'user_photosphere'
+  );
+  assert.equal(
+    isOfficialGroundStreetViewMetadata('CIHM0ogKEICAgIDg57a3qwE', '© 2026 Google'),
+    false
+  );
+
+  // Third-party copyright author or isolated 0-link photosphere
+  assert.equal(
+    classifyStreetViewPano({
+      panoId: 'rZ9KeTyhA11i0VppYNzsSg',
+      copyright: '© SD "SDKM" KIM',
+      linksCount: 1,
+    }),
+    'user_photosphere'
+  );
+  assert.equal(
+    isOfficialGroundStreetViewMetadata('rZ9KeTyhA11i0VppYNzsSg', '© SD "SDKM" KIM'),
+    false
+  );
+  assert.equal(
+    classifyStreetViewPano({
+      panoId: 'rZ9KeTyhA11i0VppYNzsSg',
+      copyright: '© 2026 Google',
+      linksCount: 0,
+    }),
+    'user_photosphere'
+  );
+
+  // Empty panoId
+  assert.equal(classifyStreetViewPano({ panoId: '', copyright: '© 2026 Google' }), 'none');
+  assert.equal(isOfficialGroundStreetViewMetadata('', '© 2026 Google'), false);
+});

@@ -107,15 +107,23 @@ import {
   fetchDestinationPlaceDetails,
   fetchPlaceBackdropBundle,
   notifyGmpQuotaExceeded,
+  peekCachedPlaceBackdropBundle,
+  preloadBackdropImage,
   searchDestinationPlacesWithLocation,
 } from '../services/mapsClientService.ts';
 import { filterPlacesByEyeLevelStreetView } from '../services/streetViewProbeService.ts';
 import {
   EMPTY_PLACE_BACKDROP_DATA,
+  STREET_VIEW_HEADING_OPTIONS,
   getStoredPlaceBackdropPref,
   resolveActivePlaceBackdropVisual,
   saveStoredPlaceBackdropPref,
 } from '../services/placeBackdropStore.ts';
+import {
+  PLACE_PHOTO_PROXY_MAX_HEIGHT,
+  PLACE_PHOTO_PROXY_MAX_WIDTH,
+  STREET_VIEW_PORTRAIT_PITCH,
+} from '../utils/placeBackdropOptics.ts';
 import {
   classifyUvLevelClient,
   formatUvLevelLabel,
@@ -1144,8 +1152,6 @@ export default function OutfitStudioView({
   const forceAutoApplyWeatherRef = useRef(false);
   const scenarioSnapshotsRef = useRef({});
   const ensuredSeedClosetsRef = useRef(new Set());
-  const desktopTitleInputRef = useRef(null);
-  const mobileTitleInputRef = useRef(null);
   const desktopSearchInputRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
 
@@ -1245,10 +1251,18 @@ export default function OutfitStudioView({
   const [liveSvUnavailableKey, setLiveSvUnavailableKey] = useState('');
   const [liveSvBillingError, setLiveSvBillingError] = useState(false);
   const [liveSvCopyright, setLiveSvCopyright] = useState(null);
+  const [mapAdjusterOpen, setMapAdjusterOpen] = useState(false);
+  const [customBackdropSpot, setCustomBackdropSpot] = useState(null);
   const prevBackdropTargetKeyRef = useRef('');
 
   const handleUpdatePlaceBackdropPref = useCallback((patch) => {
-    setPlaceBackdropPref((prev) => saveStoredPlaceBackdropPref({ ...prev, ...patch }));
+    setPlaceBackdropPref((prev) => {
+      const next = saveStoredPlaceBackdropPref({ ...prev, ...patch });
+      if (!next.enabled) {
+        setMapAdjusterOpen(false);
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -1760,9 +1774,6 @@ export default function OutfitStudioView({
     let cancelled = false;
 
     const loadBackdrop = async () => {
-      await Promise.resolve();
-      if (cancelled || controller.signal.aborted) return;
-
       if (targetChanged) {
         setPlaceBackdropPref((prev) =>
           prev.selectedPhotoIndex === 0
@@ -1771,6 +1782,30 @@ export default function OutfitStudioView({
         );
         setFailedBackdropUrls(new Set());
       }
+
+      // Instant 0ms hydration when the destination was already loaded in this session
+      const cachedBundle =
+        placeBackdropRefreshNonce === 0
+          ? peekCachedPlaceBackdropBundle({
+              placeId: backdropTargetPlaceId || null,
+              lat: backdropTargetLat,
+              lng: backdropTargetLng,
+              query: backdropTargetQuery,
+              lang,
+            })
+          : null;
+      if (cachedBundle) {
+        setPlaceBackdropData({
+          ...cachedBundle,
+          loading: false,
+          error: null,
+          quotaExceeded: false,
+        });
+        return;
+      }
+
+      await Promise.resolve();
+      if (cancelled || controller.signal.aborted) return;
 
       setPlaceBackdropData((prev) => ({
         ...prev,
@@ -1787,6 +1822,7 @@ export default function OutfitStudioView({
           query: backdropTargetQuery,
           lang,
           signal: controller.signal,
+          bypassCache: placeBackdropRefreshNonce > 0,
         });
         if (cancelled || controller.signal.aborted) return;
         setPlaceBackdropData({
@@ -1839,24 +1875,61 @@ export default function OutfitStudioView({
     liveSvUnavailableKey && liveSvUnavailableKey === backdropTargetKey
   );
 
+  const activeCustomSpot =
+    customBackdropSpot && customBackdropSpot.targetKey === backdropTargetKey
+      ? customBackdropSpot
+      : null;
+
   const activePlaceBackdrop = useMemo(() => {
-    const resolvedLat =
+    const initialLat =
       typeof selectedPlace?.streetViewLat === 'number' && Number.isFinite(selectedPlace.streetViewLat)
         ? selectedPlace.streetViewLat
         : backdropTargetLat ?? 37.5636;
-    const resolvedLng =
+    const initialLng =
       typeof selectedPlace?.streetViewLng === 'number' && Number.isFinite(selectedPlace.streetViewLng)
         ? selectedPlace.streetViewLng
         : backdropTargetLng ?? 126.9826;
+    const resolvedLat = activeCustomSpot ? activeCustomSpot.lat : initialLat;
+    const resolvedLng = activeCustomSpot ? activeCustomSpot.lng : initialLng;
+
+    // When the user manually drags/taps a spot on the bottom Google Map adjuster,
+    // override Street View panoId immediately with zero extra Places API roundtrips.
+    const effectiveBackdropData = activeCustomSpot
+      ? {
+          ...placeBackdropData,
+          lat: activeCustomSpot.lat,
+          lng: activeCustomSpot.lng,
+          streetView: {
+            available: true,
+            panoId: activeCustomSpot.panoId,
+            copyright: activeCustomSpot.copyright || '© Google',
+            date: null,
+            reportProblemLink: `https://cbks0.googleapis.com/cbk?output=report&panoid=${encodeURIComponent(
+              activeCustomSpot.panoId
+            )}&cb_client=api&cbp=1,0,,0,0`,
+          },
+        }
+      : placeBackdropData;
+
     const resolved = resolveActivePlaceBackdropVisual({
       pref: placeBackdropPref,
-      data: placeBackdropData,
+      data: effectiveBackdropData,
       fallbackLat: resolvedLat,
       fallbackLng: resolvedLng,
       fallbackPlaceName: backdropTargetQuery || selectedPlace?.name || weather?.cityName || '',
+      fallbackStreetViewPanoId:
+        activeCustomSpot?.panoId || selectedPlace?.streetViewPanoId || null,
+      fallbackStreetViewCopyright:
+        activeCustomSpot?.copyright || selectedPlace?.streetViewCopyright || null,
       liveStreetViewUnavailable: isLiveSvUnavailableForTarget || liveSvBillingError,
-      buildPhotoUrl: (photoName) => buildPlacePhotoProxyUrl(photoName, 1280, 1280),
-      buildStreetViewUrl: (panoId, heading) => buildStreetViewProxyUrl(panoId, heading, -2),
+      buildPhotoUrl: (photoName) =>
+        buildPlacePhotoProxyUrl(
+          photoName,
+          PLACE_PHOTO_PROXY_MAX_WIDTH,
+          PLACE_PHOTO_PROXY_MAX_HEIGHT
+        ),
+      buildStreetViewUrl: (panoId, heading) =>
+        buildStreetViewProxyUrl(panoId, heading, STREET_VIEW_PORTRAIT_PITCH),
     });
     const isBrokenImage = Boolean(resolved.imageUrl && failedBackdropUrls.has(resolved.imageUrl));
     if (!resolved.active || (!resolved.imageUrl && !resolved.liveMapMode) || isBrokenImage) {
@@ -1864,9 +1937,22 @@ export default function OutfitStudioView({
     }
     return {
       ...resolved,
-      streetViewPanoId: selectedPlace?.streetViewPanoId || null,
+      lat: resolvedLat,
+      lng: resolvedLng,
+      initialLat,
+      initialLng,
+      hasCustomSpot: Boolean(activeCustomSpot),
+      panoQuality: activeCustomSpot?.panoQuality || null,
+      streetViewPanoId:
+        activeCustomSpot?.panoId ||
+        placeBackdropData?.streetView?.panoId ||
+        selectedPlace?.streetViewPanoId ||
+        null,
       streetViewCopyright:
-        liveSvCopyright || selectedPlace?.streetViewCopyright || resolved.streetViewCopyright,
+        activeCustomSpot?.copyright ||
+        liveSvCopyright ||
+        selectedPlace?.streetViewCopyright ||
+        resolved.streetViewCopyright,
       onLiveStatusChange: (status) => {
         if (status?.billingError || status?.authFailed) {
           setLiveSvBillingError(true);
@@ -1900,6 +1986,7 @@ export default function OutfitStudioView({
       },
     };
   }, [
+    activeCustomSpot,
     placeBackdropPref,
     placeBackdropData,
     backdropTargetKey,
@@ -1917,6 +2004,92 @@ export default function OutfitStudioView({
     liveSvCopyright,
     failedBackdropUrls,
     handleUpdatePlaceBackdropPref,
+  ]);
+
+  const handleSelectPlaceMapSpot = useCallback(
+    (spot) => {
+      if (!spot?.panoId || !Number.isFinite(spot.lat) || !Number.isFinite(spot.lng)) return;
+      setCustomBackdropSpot({
+        targetKey: backdropTargetKey,
+        lat: spot.lat,
+        lng: spot.lng,
+        panoId: spot.panoId,
+        copyright: spot.copyright || '© Google',
+        panoQuality: spot.panoQuality || 'ground_street',
+      });
+      setLiveSvUnavailableKey('');
+      setLiveSvBillingError(false);
+      setLiveSvCopyright(spot.copyright || '© Google');
+      handleUpdatePlaceBackdropPref({ enabled: true, sourceMode: 'street_view' });
+    },
+    [backdropTargetKey, handleUpdatePlaceBackdropPref]
+  );
+
+  const handleResetPlaceMapSpot = useCallback(() => {
+    setCustomBackdropSpot(null);
+  }, []);
+
+  const handleChangePlaceBackdropHeading = useCallback(
+    (nextHeading) => {
+      handleUpdatePlaceBackdropPref({ streetViewHeading: nextHeading });
+    },
+    [handleUpdatePlaceBackdropPref]
+  );
+
+  const handleOpenMapAdjusterFromPicker = useCallback(() => {
+    setBgPickerOpen(false);
+    handleUpdatePlaceBackdropPref({ enabled: true, sourceMode: 'street_view' });
+    setMapAdjusterOpen(true);
+  }, [handleUpdatePlaceBackdropPref]);
+
+  // Low-priority background preload of sibling Street View headings (0°/90°/180°/270°) & next Place Photo
+  // so changing viewing direction or cycling photos applies instantaneously (0ms blank flash).
+  useEffect(() => {
+    if (!placeBackdropPref.enabled || !activePlaceBackdrop?.active || !activePlaceBackdrop?.imageUrl) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      if (activePlaceBackdrop.sourceMode === 'street_view' && activePlaceBackdrop.streetViewPanoId) {
+        const currentHeading = activePlaceBackdrop.streetViewHeading ?? 0;
+        for (const opt of STREET_VIEW_HEADING_OPTIONS) {
+          if (opt.heading === currentHeading) continue;
+          preloadBackdropImage(
+            buildStreetViewProxyUrl(
+              activePlaceBackdrop.streetViewPanoId,
+              opt.heading,
+              STREET_VIEW_PORTRAIT_PITCH
+            )
+          );
+        }
+      } else if (
+        activePlaceBackdrop.sourceMode === 'place_photo' &&
+        Array.isArray(placeBackdropData.photos) &&
+        placeBackdropData.photos.length > 1
+      ) {
+        const nextIdx = (activePlaceBackdrop.photoIndex + 1) % placeBackdropData.photos.length;
+        const nextPhoto = placeBackdropData.photos[nextIdx];
+        if (nextPhoto?.photoName) {
+          preloadBackdropImage(
+            buildPlacePhotoProxyUrl(
+              nextPhoto.photoName,
+              PLACE_PHOTO_PROXY_MAX_WIDTH,
+              PLACE_PHOTO_PROXY_MAX_HEIGHT
+            )
+          );
+        }
+      }
+    }, 320);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    placeBackdropPref.enabled,
+    activePlaceBackdrop?.active,
+    activePlaceBackdrop?.imageUrl,
+    activePlaceBackdrop?.sourceMode,
+    activePlaceBackdrop?.streetViewPanoId,
+    activePlaceBackdrop?.streetViewHeading,
+    activePlaceBackdrop?.photoIndex,
+    placeBackdropData.photos,
   ]);
 
   // Auto-seed 5 material items per newly created sub-slot (including rainy-day umbrellas) when empty
@@ -2372,6 +2545,7 @@ export default function OutfitStudioView({
     setLiveSvUnavailableKey('');
     setLiveSvBillingError(false);
     setLiveSvCopyright(nextPlace.streetViewCopyright || null);
+    setCustomBackdropSpot(null);
     setSelectedPlace(nextPlace);
     saveStoredSelectedPlace(nextPlace);
     setPlaceQuery('');
@@ -3976,6 +4150,13 @@ export default function OutfitStudioView({
             lightingPreset={economyState.lightingPreset}
             lightingIntensity={economyState.lightingIntensity}
             placeBackdrop={activePlaceBackdrop}
+            onUpdatePlaceBackdropBlur={(blurPx) => handleUpdatePlaceBackdropPref({ blurPx })}
+            placeMapAdjusterOpen={mapAdjusterOpen}
+            onTogglePlaceMapAdjuster={() => setMapAdjusterOpen((prev) => !prev)}
+            onClosePlaceMapAdjuster={() => setMapAdjusterOpen(false)}
+            onSelectPlaceMapSpot={handleSelectPlaceMapSpot}
+            onChangePlaceBackdropHeading={handleChangePlaceBackdropHeading}
+            onResetPlaceMapSpot={handleResetPlaceMapSpot}
             onOpenBackgroundPicker={() => setBgPickerOpen(true)}
             onOpenMobileDrawer={() => setMobileSheetOpen(true)}
             mobileDrawerOpen={mobileSheetOpen}
@@ -3983,6 +4164,25 @@ export default function OutfitStudioView({
             stylingPref={stylingPref}
             onUpdateStylingPref={handleUpdateStylingPref}
             selectedPlace={selectedPlace}
+            outfitSaveBar={{
+              title: outfitTitle,
+              onTitleChange: (val) => {
+                hasCustomOutfitTitleRef.current = val.trim().length > 0;
+                setIsGoldTitleWriting(false);
+                setOutfitTitle(val);
+              },
+              onClearTitle: () => {
+                triggerHaptic('selection');
+                hasCustomOutfitTitleRef.current = false;
+                setIsGoldTitleWriting(false);
+                setOutfitTitle('');
+              },
+              onSave: handleSaveOutfit,
+              saving: savingOutfit,
+              canSave: equippedItems.length > 0,
+              isGoldTitleWriting,
+              goldTitleAnimNonce,
+            }}
           />
 
           {/* Non-intrusive UV Smart Accessory 1-Tap Suggestion Card */}
@@ -4024,66 +4224,6 @@ export default function OutfitStudioView({
             </div>
           </div>
 
-          <form onSubmit={handleSaveOutfit} className="studio-save-bar">
-            <div
-              className={`studio-clearable-input-wrap${
-                isGoldTitleWriting ? ' is-gold-writing' : ''
-              }`}
-            >
-              <input
-                ref={desktopTitleInputRef}
-                type="text"
-                className="hig-native-input has-clear-btn"
-                placeholder={tx(lang, '코디 이름', 'Outfit Name')}
-                aria-label={tx(lang, '코디 이름', 'Outfit Name')}
-                value={outfitTitle}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  hasCustomOutfitTitleRef.current = val.trim().length > 0;
-                  setIsGoldTitleWriting(false);
-                  setOutfitTitle(val);
-                }}
-                maxLength={80}
-              />
-              {isGoldTitleWriting && outfitTitle.length > 0 && (
-                <span
-                  key={goldTitleAnimNonce}
-                  className="studio-gold-title-overlay"
-                  aria-hidden="true"
-                  data-gold-title-writing="true"
-                >
-                  <span className="studio-gold-title-text">{outfitTitle}</span>
-                </span>
-              )}
-              {outfitTitle.length > 0 && (
-                <button
-                  type="button"
-                  data-clear-outfit-title="true"
-                  className="studio-input-clear-btn"
-                  aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    hasCustomOutfitTitleRef.current = false;
-                    setIsGoldTitleWriting(false);
-                    setOutfitTitle('');
-                    desktopTitleInputRef.current?.focus?.();
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-            <button
-              id={CARBON_DOM_CONTRACT.studioSaveOutfitBtnId}
-              type="submit"
-              className="hig-primary-cta-btn studio-save-submit"
-              disabled={savingOutfit || equippedItems.length === 0}
-            >
-              <Check size={16} />
-              <span>{tx(lang, '저장', 'Save')}</span>
-            </button>
-          </form>
-
           {uniqueSavedOutfits.length > 0 && (
             <div className="studio-saved-looks-rail" aria-label="Saved Outfits">
               {uniqueSavedOutfits.map((outfit) => {
@@ -4116,67 +4256,6 @@ export default function OutfitStudioView({
           )}
         </aside>
       </div>
-
-      {/* Mobile Save Bar (< 600px) */}
-      <form onSubmit={handleSaveOutfit} className="studio-mobile-save-row">
-        <div
-          className={`studio-clearable-input-wrap${
-            isGoldTitleWriting ? ' is-gold-writing' : ''
-          }`}
-        >
-          <input
-            ref={mobileTitleInputRef}
-            type="text"
-            className="hig-native-input has-clear-btn"
-            placeholder={tx(lang, '코디 이름', 'Outfit Name')}
-            aria-label={tx(lang, '코디 이름', 'Outfit Name')}
-            value={outfitTitle}
-            onChange={(e) => {
-              const val = e.target.value;
-              hasCustomOutfitTitleRef.current = val.trim().length > 0;
-              setIsGoldTitleWriting(false);
-              setOutfitTitle(val);
-            }}
-            maxLength={80}
-          />
-          {isGoldTitleWriting && outfitTitle.length > 0 && (
-            <span
-              key={goldTitleAnimNonce}
-              className="studio-gold-title-overlay"
-              aria-hidden="true"
-              data-gold-title-writing="true"
-            >
-              <span className="studio-gold-title-text">{outfitTitle}</span>
-            </span>
-          )}
-          {outfitTitle.length > 0 && (
-            <button
-              type="button"
-              data-clear-outfit-title="true"
-              className="studio-input-clear-btn"
-              aria-label={tx(lang, '코디 이름 전체 지우기', 'Clear outfit name')}
-              onClick={() => {
-                triggerHaptic('selection');
-                hasCustomOutfitTitleRef.current = false;
-                setIsGoldTitleWriting(false);
-                setOutfitTitle('');
-                mobileTitleInputRef.current?.focus?.();
-              }}
-            >
-              <X size={15} />
-            </button>
-          )}
-        </div>
-        <button
-          type="submit"
-          data-testid="mobile-save-outfit-btn"
-          className="hig-primary-cta-btn studio-save-submit"
-          disabled={savingOutfit || equippedItems.length === 0}
-        >
-          <Check size={16} />
-          <span>{tx(lang, '저장', 'Save')}</span>
-        </button>
-      </form>
 
       {/* Weather · Location · AI Look 1/2 Unified Settings Popup */}
       <ResponsiveSheetModal
@@ -4932,6 +5011,7 @@ export default function OutfitStudioView({
         gpsCoords={gpsCoords}
         onSelectVerifiedPlace={handleSelectVerifiedStreetViewPlace}
         onUpdatePlaceBackdropPref={handleUpdatePlaceBackdropPref}
+        onOpenMapAdjuster={handleOpenMapAdjusterFromPicker}
         onRefreshPlaceBackdrop={() => {
           setLiveSvUnavailableKey('');
           setLiveSvBillingError(false);

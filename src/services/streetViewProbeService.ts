@@ -3,6 +3,8 @@ import {
   type PlaceSearchCandidate,
 } from './mapsClientService.ts';
 
+export type StreetViewPanoQuality = 'ground_street' | 'user_photosphere' | 'none';
+
 export interface StreetViewProbeResult {
   available: boolean;
   panoId: string | null;
@@ -10,6 +12,42 @@ export interface StreetViewProbeResult {
   snappedLng: number | null;
   copyright: string | null;
   source: 'outdoor' | 'none';
+  panoQuality?: StreetViewPanoQuality;
+}
+
+/**
+ * Distinguishes official Google ground-level Street View car/trekker panoramas from
+ * third-party user-uploaded 360° photospheres (which are frequently captured from
+ * rooftops, balconies, elevated decks, or drones and make the avatar appear floating).
+ */
+export function classifyStreetViewPano({
+  panoId,
+  copyright,
+  linksCount,
+}: {
+  panoId?: string | null;
+  copyright?: string | null;
+  linksCount?: number | null;
+}): StreetViewPanoQuality {
+  const id = String(panoId || '').trim();
+  if (!id) return 'none';
+
+  // User-contributed photospheres use long base64-like IDs prefixed with CAoS / CIHM / AF1Qip
+  const isUgcPanoId = /^(CAoS|CIHM|AF1Qip)/i.test(id) || id.length > 34;
+  if (isUgcPanoId) return 'user_photosphere';
+
+  const copy = String(copyright || '').trim();
+  if (copy && !/google/i.test(copy)) {
+    return 'user_photosphere';
+  }
+
+  // Connected ground-level road panoramas carry navigation links to adjacent street nodes;
+  // isolated rooftop/balcony/drone photospheres have 0 street links.
+  if (typeof linksCount === 'number' && Number.isFinite(linksCount) && linksCount === 0) {
+    return 'user_photosphere';
+  }
+
+  return 'ground_street';
 }
 
 interface GoogleStreetViewServiceLike {
@@ -26,6 +64,7 @@ interface GoogleStreetViewServiceLike {
           pano?: string;
           latLng?: { lat: () => number; lng: () => number };
         };
+        links?: Array<unknown>;
         copyright?: string;
       } | null,
       status: string
@@ -105,19 +144,24 @@ async function ensureStreetViewLibrary(): Promise<GoogleMapsStreetViewGlobal | n
   return mapsJsLoadPromise;
 }
 
-function getCacheKey(lat: number, lng: number, radius: number): string {
-  return `${lat.toFixed(4)},${lng.toFixed(4)}:${Math.round(radius)}`;
+function getCacheKey(lat: number, lng: number, radius: number, preferGround: boolean): string {
+  return `${lat.toFixed(5)},${lng.toFixed(5)}:${Math.round(radius)}:${preferGround ? 'g' : 'a'}`;
 }
 
 /**
  * Pure coordinate-based outdoor eye-level Street View verifier.
- * Strictly uses `StreetViewSource.OUTDOOR` so indoor malls, rooftops, and 3rd-floor user photospheres
- * are never falsely marked as ground-level eye-level street views.
+ * Strictly uses `StreetViewSource.OUTDOOR` and prefers official connected ground-level
+ * Google street panoramas (`panoQuality === 'ground_street'`) over isolated user-uploaded
+ * rooftop/balcony/drone photospheres so the avatar stands naturally on real streets.
  */
 export async function probeEyeLevelStreetView(
   lat: number,
   lng: number,
-  options: { primaryRadius?: number; expandedRadius?: number } = {}
+  options: {
+    primaryRadius?: number;
+    expandedRadius?: number;
+    preferGroundStreet?: boolean;
+  } = {}
 ): Promise<StreetViewProbeResult> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return {
@@ -127,15 +171,17 @@ export async function probeEyeLevelStreetView(
       snappedLng: null,
       copyright: null,
       source: 'none',
+      panoQuality: 'none',
     };
   }
 
-  const primaryRadius = Math.max(50, Math.min(400, Math.round(options.primaryRadius ?? 160)));
+  const primaryRadius = Math.max(25, Math.min(400, Math.round(options.primaryRadius ?? 120)));
   const expandedRadius = Math.max(
     primaryRadius,
-    Math.min(500, Math.round(options.expandedRadius ?? 320))
+    Math.min(500, Math.round(options.expandedRadius ?? 260))
   );
-  const cacheKey = getCacheKey(lat, lng, expandedRadius);
+  const preferGroundStreet = options.preferGroundStreet !== false;
+  const cacheKey = getCacheKey(lat, lng, expandedRadius, preferGroundStreet);
   const cached = probeCache.get(cacheKey);
   if (cached) return cached;
 
@@ -148,6 +194,7 @@ export async function probeEyeLevelStreetView(
       snappedLng: null,
       copyright: null,
       source: 'none',
+      panoQuality: 'none',
     };
   }
 
@@ -159,7 +206,7 @@ export async function probeEyeLevelStreetView(
   const outdoorSource = maps.StreetViewSource?.OUTDOOR ?? 'outdoor';
   const nearestPref = maps.StreetViewPreference?.NEAREST ?? 'nearest';
 
-  const runQuery = (radius: number) =>
+  const runQueryAt = (qLat: number, qLng: number, radius: number) =>
     new Promise<StreetViewProbeResult | null>((resolve) => {
       let settled = false;
       const timer =
@@ -175,7 +222,7 @@ export async function probeEyeLevelStreetView(
       try {
         sv.getPanorama(
           {
-            location: { lat, lng },
+            location: { lat: qLat, lng: qLng },
             radius,
             source: outdoorSource,
             preference: nearestPref,
@@ -189,18 +236,22 @@ export async function probeEyeLevelStreetView(
               const sLat =
                 typeof data?.location?.latLng?.lat === 'function'
                   ? data.location.latLng.lat()
-                  : lat;
+                  : qLat;
               const sLng =
                 typeof data?.location?.latLng?.lng === 'function'
                   ? data.location.latLng.lng()
-                  : lng;
+                  : qLng;
+              const copyright = String(data?.copyright || '© Google').trim() || '© Google';
+              const linksCount = Array.isArray(data?.links) ? data.links.length : null;
+              const panoQuality = classifyStreetViewPano({ panoId, copyright, linksCount });
               resolve({
                 available: true,
                 panoId,
-                snappedLat: Number.isFinite(sLat) ? sLat : lat,
-                snappedLng: Number.isFinite(sLng) ? sLng : lng,
-                copyright: String(data?.copyright || '© Google').trim() || '© Google',
+                snappedLat: Number.isFinite(sLat) ? sLat : qLat,
+                snappedLng: Number.isFinite(sLng) ? sLng : qLng,
+                copyright,
                 source: 'outdoor',
+                panoQuality,
               });
             } else {
               resolve(null);
@@ -216,9 +267,27 @@ export async function probeEyeLevelStreetView(
       }
     });
 
-  let found = await runQuery(primaryRadius);
+  let found = await runQueryAt(lat, lng, primaryRadius);
   if (!found && expandedRadius > primaryRadius) {
-    found = await runQuery(expandedRadius);
+    found = await runQueryAt(lat, lng, expandedRadius);
+  }
+
+  // If the nearest outdoor hit is an elevated/isolated user photosphere, probe 4 nearby street
+  // offsets (~42m N/S/E/W) in parallel to lock onto a true connected ground-level street camera.
+  if (preferGroundStreet && found && found.panoQuality === 'user_photosphere') {
+    const delta = 0.00038;
+    const offsetCandidates = await Promise.all([
+      runQueryAt(lat + delta, lng, 90),
+      runQueryAt(lat - delta, lng, 90),
+      runQueryAt(lat, lng + delta, 90),
+      runQueryAt(lat, lng - delta, 90),
+    ]);
+    const groundMatch = offsetCandidates.find(
+      (item) => item && item.available && item.panoQuality === 'ground_street'
+    );
+    if (groundMatch) {
+      found = groundMatch;
+    }
   }
 
   const result: StreetViewProbeResult = found ?? {
@@ -228,6 +297,7 @@ export async function probeEyeLevelStreetView(
     snappedLng: null,
     copyright: null,
     source: 'none',
+    panoQuality: 'none',
   };
 
   if (probeCache.size > 200) {

@@ -1,5 +1,13 @@
 import { getConfiguredApiBaseUrl } from '../utils/api.ts';
 import type { CareMapServiceType } from '../utils/garmentCareEngine.ts';
+import {
+  PLACE_PHOTO_PROXY_MAX_HEIGHT,
+  PLACE_PHOTO_PROXY_MAX_WIDTH,
+  STREET_VIEW_PORTRAIT_FOV,
+  STREET_VIEW_PORTRAIT_PITCH,
+  STREET_VIEW_PROXY_HEIGHT,
+  STREET_VIEW_PROXY_WIDTH,
+} from '../utils/placeBackdropOptics.ts';
 
 export interface PlaceSuggestion {
   placeId: string;
@@ -271,6 +279,59 @@ export interface PlaceBackdropBundleResponse {
   streetView: PlaceBackdropStreetViewResponse;
 }
 
+// Transient memory-only session cache (never written to localStorage/IndexedDB per Google Maps ToS)
+const BACKDROP_BUNDLE_CACHE_TTL_MS = 5 * 60 * 1000;
+const BACKDROP_BUNDLE_CACHE_MAX_ENTRIES = 24;
+const backdropBundleMemoryCache = new Map<
+  string,
+  { expiresAt: number; value: PlaceBackdropBundleResponse }
+>();
+const inflightBackdropBundleRequests = new Map<string, Promise<PlaceBackdropBundleResponse>>();
+const preloadedBackdropImageUrls = new Set<string>();
+const MAX_PRELOADED_BACKDROP_URLS = 48;
+
+function makeBackdropBundleCacheKey({
+  placeId,
+  lat,
+  lng,
+  query,
+  lang,
+}: {
+  placeId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  query?: string | null;
+  lang: string;
+}): string {
+  const latKey = typeof lat === 'number' && Number.isFinite(lat) ? lat.toFixed(4) : '';
+  const lngKey = typeof lng === 'number' && Number.isFinite(lng) ? lng.toFixed(4) : '';
+  const qKey = String(query || '').trim().toLowerCase().slice(0, 80);
+  return `${lang}|${String(placeId || '').trim()}|${latKey}|${lngKey}|${qKey}`;
+}
+
+export function peekCachedPlaceBackdropBundle(params: {
+  placeId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  query?: string | null;
+  lang?: string;
+}): PlaceBackdropBundleResponse | null {
+  const key = makeBackdropBundleCacheKey({
+    ...params,
+    lang: params.lang === 'en' ? 'en' : 'ko',
+  });
+  const entry = backdropBundleMemoryCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    backdropBundleMemoryCache.delete(key);
+    return null;
+  }
+  // Refresh LRU order
+  backdropBundleMemoryCache.delete(key);
+  backdropBundleMemoryCache.set(key, entry);
+  return entry.value;
+}
+
 export async function fetchPlaceBackdropBundle({
   placeId,
   lat,
@@ -278,6 +339,7 @@ export async function fetchPlaceBackdropBundle({
   query,
   lang = 'ko',
   signal,
+  bypassCache = false,
 }: {
   placeId?: string | null;
   lat?: number | null;
@@ -285,49 +347,86 @@ export async function fetchPlaceBackdropBundle({
   query?: string | null;
   lang?: string;
   signal?: AbortSignal;
+  bypassCache?: boolean;
 }): Promise<PlaceBackdropBundleResponse> {
+  const safeLang = lang === 'en' ? 'en' : 'ko';
+  const cacheKey = makeBackdropBundleCacheKey({ placeId, lat, lng, query, lang: safeLang });
+
+  if (!bypassCache) {
+    const cached = peekCachedPlaceBackdropBundle({ placeId, lat, lng, query, lang: safeLang });
+    if (cached) {
+      return cached;
+    }
+    const inflight = inflightBackdropBundleRequests.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
+  }
+
   const qs = new URLSearchParams({
-    languageCode: lang === 'en' ? 'en' : 'ko',
+    languageCode: safeLang,
   });
   if (placeId) qs.set('placeId', placeId);
   if (typeof lat === 'number' && Number.isFinite(lat)) qs.set('lat', String(lat));
   if (typeof lng === 'number' && Number.isFinite(lng)) qs.set('lng', String(lng));
   if (query) qs.set('query', String(query).trim().slice(0, 100));
 
-  const res = await fetch(resolveApiUrl(`/maps/place-backdrop?${qs.toString()}`), {
-    signal,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (checkAndNotifyQuota(res.status, data)) {
-      throw new Error('QUOTA_EXCEEDED');
+  const requestPromise = (async (): Promise<PlaceBackdropBundleResponse> => {
+    const res = await fetch(resolveApiUrl(`/maps/place-backdrop?${qs.toString()}`), {
+      signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (checkAndNotifyQuota(res.status, data)) {
+        throw new Error('QUOTA_EXCEEDED');
+      }
+      throw new Error(String(data?.error || '장소 배경 정보를 불러오지 못했습니다.'));
     }
-    throw new Error(String(data?.error || '장소 배경 정보를 불러오지 못했습니다.'));
-  }
 
-  return {
-    placeId: typeof data?.placeId === 'string' ? data.placeId : null,
-    placeName: String(data?.placeName || query || '').trim(),
-    lat: typeof data?.lat === 'number' ? data.lat : null,
-    lng: typeof data?.lng === 'number' ? data.lng : null,
-    photos: Array.isArray(data?.photos) ? data.photos : [],
-    streetView: {
-      available: Boolean(data?.streetView?.available && data?.streetView?.panoId),
-      panoId: typeof data?.streetView?.panoId === 'string' ? data.streetView.panoId : null,
-      copyright: typeof data?.streetView?.copyright === 'string' ? data.streetView.copyright : null,
-      date: typeof data?.streetView?.date === 'string' ? data.streetView.date : null,
-      reportProblemLink:
-        typeof data?.streetView?.reportProblemLink === 'string'
-          ? data.streetView.reportProblemLink
-          : null,
-    },
-  };
+    const normalized: PlaceBackdropBundleResponse = {
+      placeId: typeof data?.placeId === 'string' ? data.placeId : null,
+      placeName: String(data?.placeName || query || '').trim(),
+      lat: typeof data?.lat === 'number' ? data.lat : null,
+      lng: typeof data?.lng === 'number' ? data.lng : null,
+      photos: Array.isArray(data?.photos) ? data.photos : [],
+      streetView: {
+        available: Boolean(data?.streetView?.available && data?.streetView?.panoId),
+        panoId: typeof data?.streetView?.panoId === 'string' ? data.streetView.panoId : null,
+        copyright:
+          typeof data?.streetView?.copyright === 'string' ? data.streetView.copyright : null,
+        date: typeof data?.streetView?.date === 'string' ? data.streetView.date : null,
+        reportProblemLink:
+          typeof data?.streetView?.reportProblemLink === 'string'
+            ? data.streetView.reportProblemLink
+            : null,
+      },
+    };
+
+    if (backdropBundleMemoryCache.size >= BACKDROP_BUNDLE_CACHE_MAX_ENTRIES) {
+      const oldestKey = backdropBundleMemoryCache.keys().next().value;
+      if (oldestKey) backdropBundleMemoryCache.delete(oldestKey);
+    }
+    backdropBundleMemoryCache.set(cacheKey, {
+      expiresAt: Date.now() + BACKDROP_BUNDLE_CACHE_TTL_MS,
+      value: normalized,
+    });
+    return normalized;
+  })();
+
+  inflightBackdropBundleRequests.set(cacheKey, requestPromise);
+  try {
+    return await requestPromise;
+  } finally {
+    if (inflightBackdropBundleRequests.get(cacheKey) === requestPromise) {
+      inflightBackdropBundleRequests.delete(cacheKey);
+    }
+  }
 }
 
 export function buildPlacePhotoProxyUrl(
   photoName: string,
-  maxWidthPx = 1280,
-  maxHeightPx = 1280
+  maxWidthPx = PLACE_PHOTO_PROXY_MAX_WIDTH,
+  maxHeightPx = PLACE_PHOTO_PROXY_MAX_HEIGHT
 ): string {
   const qs = new URLSearchParams({
     name: String(photoName || '').trim(),
@@ -340,16 +439,37 @@ export function buildPlacePhotoProxyUrl(
 export function buildStreetViewProxyUrl(
   panoId: string,
   heading = 0,
-  pitch = -2
+  pitch = STREET_VIEW_PORTRAIT_PITCH,
+  fov = STREET_VIEW_PORTRAIT_FOV
 ): string {
   const qs = new URLSearchParams({
     panoId: String(panoId || '').trim(),
     heading: String(((Math.round(heading) % 360) + 360) % 360),
     pitch: String(Math.max(-30, Math.min(45, Math.round(pitch)))),
-    fov: '26',
-    width: '480',
-    height: '640',
+    fov: String(Math.max(12, Math.min(110, Math.round(fov)))),
+    width: String(STREET_VIEW_PROXY_WIDTH),
+    height: String(STREET_VIEW_PROXY_HEIGHT),
   });
   return resolveApiUrl(`/maps/streetview?${qs.toString()}`);
 }
+
+/**
+ * Low-priority background image preloader for sibling Street View headings & Place Photos.
+ * Uses browser's transient HTTP cache only (strictly no persistent storage).
+ */
+export function preloadBackdropImage(url: string | null | undefined): void {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') return;
+  const cleanUrl = String(url || '').trim();
+  if (!cleanUrl || preloadedBackdropImageUrls.has(cleanUrl)) return;
+  if (preloadedBackdropImageUrls.size >= MAX_PRELOADED_BACKDROP_URLS) {
+    const oldest = preloadedBackdropImageUrls.values().next().value;
+    if (oldest) preloadedBackdropImageUrls.delete(oldest);
+  }
+  preloadedBackdropImageUrls.add(cleanUrl);
+  const img = new Image();
+  img.decoding = 'async';
+  img.referrerPolicy = 'no-referrer';
+  img.src = cleanUrl;
+}
+
 

@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Layers,
   Map as MapIcon,
+  MapPin,
   RefreshCw,
   SlidersHorizontal,
   Snowflake,
@@ -117,6 +118,7 @@ import { buildOutfitRationaleNote } from '../utils/outfitRationaleEngine.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
+import StageStreetViewMapSheet from './StageStreetViewMapSheet.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import StudioThreeStageLayer from './three/StudioThreeStageLayer.tsx';
 import '../styles/atelierTokens.css';
@@ -316,6 +318,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   lightingPreset = DEFAULT_LIGHTING_PRESET,
   lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
   placeBackdrop = null,
+  onUpdatePlaceBackdropBlur,
+  placeMapAdjusterOpen = false,
+  onTogglePlaceMapAdjuster,
+  onClosePlaceMapAdjuster,
+  onSelectPlaceMapSpot,
+  onChangePlaceBackdropHeading,
+  onResetPlaceMapSpot,
   onOpenBackgroundPicker,
   onOpenMobileDrawer,
   mobileDrawerOpen = false,
@@ -335,6 +344,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   stylingPref = null,
   onUpdateStylingPref,
   selectedPlace = null,
+  outfitSaveBar = null,
 }) {
   void _legacyQuickSelectPreset;
   void _legacyOpenBodyModal;
@@ -342,6 +352,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   void _legacyPresetNonce;
   void _legacyOnUserOrbit;
   void _legacyGender;
+  void onUpdatePlaceBackdropBlur;
 
   const rawLegacyMode = legacyMode ?? mode ?? viewMode ?? renderMode;
   const viewerMode = normalizeViewerMode(rawLegacyMode);
@@ -1046,7 +1057,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
   }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
-  // Dismiss open `기록`, `Look 1/2`, `밀도`, `코디안` popover, `원본 보기`, or `교정` modal cleanly on Escape key
+  // Dismiss open `기록`, `Look 1/2`, `밀도`, `코디안` popover, bottom Google Map adjuster, `원본 보기`, or `교정` modal cleanly on Escape key
   useEffect(() => {
     if (
       !historyOpen &&
@@ -1054,7 +1065,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       !densityMenuOpen &&
       !rationaleOpen &&
       !originalModalOpen &&
-      !fixModalOpen
+      !fixModalOpen &&
+      !placeMapAdjusterOpen
     ) {
       return undefined;
     }
@@ -1086,6 +1098,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ev.preventDefault();
       ev.stopPropagation();
       ev.stopImmediatePropagation?.();
+      if (placeMapAdjusterOpen) {
+        onClosePlaceMapAdjuster?.();
+      }
       setHistoryOpen(false);
       setLookMenuOpen(false);
       setDensityMenuOpen(false);
@@ -1093,7 +1108,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyOpen, lookMenuOpen, densityMenuOpen, rationaleOpen, originalModalOpen, fixModalOpen]);
+  }, [
+    historyOpen,
+    lookMenuOpen,
+    densityMenuOpen,
+    rationaleOpen,
+    originalModalOpen,
+    fixModalOpen,
+    placeMapAdjusterOpen,
+    onClosePlaceMapAdjuster,
+  ]);
 
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
@@ -3546,13 +3570,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             >
               <span className="studio-vton-history-icon-wrap">
                 {placeBackdrop?.active ? (
-                  <MapIcon size={16} strokeWidth={2.05} aria-hidden="true" />
+                  <MapIcon size={17} strokeWidth={2.05} aria-hidden="true" />
                 ) : (
-                  <Layers size={14} strokeWidth={2.1} aria-hidden="true" />
+                  <Layers size={16} strokeWidth={2.05} aria-hidden="true" />
                 )}
-                <sup className="studio-vton-history-sup">
-                  {placeBackdrop?.active ? 'MAP' : resolvedBgItem.tier}
-                </sup>
               </span>
             </button>
           )}
@@ -3671,72 +3692,100 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       </div>
 
-      {/* Upper-Left Utility Row: Original Image Viewer & AI Correction (kept high and clear of bottom HUD) */}
-      {showOriginalImageLink && (
+      {/* Upper-Left Vertical Icon Stack: Original -> Map Spot Adjuster -> Fix */}
+      {(showOriginalImageLink ||
+        (placeBackdrop?.active && typeof onTogglePlaceMapAdjuster === 'function')) && (
         <div
-          className="studio-top-left-vton-utility-row"
+          className="studio-top-left-vton-utility-stack"
           data-top-left-vton-utility="true"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <a
-            href="#vton-original-image"
-            role="button"
-            data-vton-original-link="true"
-            data-has-raw-sheet={hasRawOriginalSheet ? 'true' : 'false'}
-            aria-haspopup="dialog"
-            aria-expanded={effectiveOriginalModalOpen}
-            aria-label={
-              isEn
-                ? 'View Nano Banana original generated image'
-                : '나노바나나 생성 원본 이미지 보기'
-            }
-            title={
-              hasRawOriginalSheet
-                ? isEn
-                  ? 'View raw Nano Banana 8-angle turnaround sheet'
-                  : '나노바나나 8각도 원본 시트 보기'
-                : isEn
-                  ? 'View loaded character source image'
-                  : '불러온 캐릭터 원본 보기'
-            }
-            className={`studio-vton-original-link ${
-              activeHudTouchId === 'original-link' ? 'is-interacting' : ''
-            }`.trim()}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              handleHudTouchStart('original-link');
-            }}
-            onPointerUp={handleHudTouchEnd}
-            onPointerCancel={handleHudTouchEnd}
-            onPointerLeave={handleHudTouchEnd}
-            onClick={handleOpenOriginalImage}
-          >
-            <ImageIcon size={12} strokeWidth={2.1} aria-hidden="true" />
-            <span>{isEn ? 'Original' : '원본 보기'}</span>
-          </a>
-          <button
-            type="button"
-            data-vton-fix-trigger="true"
-            aria-haspopup="dialog"
-            aria-expanded={fixModalOpen}
-            aria-label={isEn ? 'Fix generated fitting image' : '생성 이미지 교정'}
-            title={
-              isEn
-                ? 'Repair current angle or regenerate with correction'
-                : '잘못 생성된 각도 빠른 교정 또는 전체 재생성'
-            }
-            className={`studio-vton-original-link studio-vton-fix-btn ${
-              isRepairingAngle ? 'is-busy' : ''
-            }`.trim()}
-            disabled={aiLoading || isRepairingAngle}
-            onClick={handleOpenFixModal}
-          >
-            <Wrench size={12} strokeWidth={2.1} aria-hidden="true" />
-            <span>
-              {isRepairingAngle ? (isEn ? 'Fixing...' : '교정 중') : isEn ? 'Fix' : '교정'}
-            </span>
-          </button>
+          {showOriginalImageLink && (
+            <a
+              href="#vton-original-image"
+              role="button"
+              data-vton-original-link="true"
+              data-has-raw-sheet={hasRawOriginalSheet ? 'true' : 'false'}
+              aria-haspopup="dialog"
+              aria-expanded={effectiveOriginalModalOpen}
+              aria-label={
+                isEn
+                  ? 'View Nano Banana original generated image'
+                  : '원본 이미지 보기'
+              }
+              title={
+                hasRawOriginalSheet
+                  ? isEn
+                    ? 'View original 8-angle turnaround sheet'
+                    : '원본 시트 보기'
+                  : isEn
+                    ? 'View original image'
+                    : '원본 보기'
+              }
+              className={`studio-vton-original-link ${
+                activeHudTouchId === 'original-link' ? 'is-interacting' : ''
+              }`.trim()}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                handleHudTouchStart('original-link');
+              }}
+              onPointerUp={handleHudTouchEnd}
+              onPointerCancel={handleHudTouchEnd}
+              onPointerLeave={handleHudTouchEnd}
+              onClick={handleOpenOriginalImage}
+            >
+              <ImageIcon size={16} strokeWidth={2.05} aria-hidden="true" />
+            </a>
+          )}
+
+          {placeBackdrop?.active && typeof onTogglePlaceMapAdjuster === 'function' && (
+            <button
+              type="button"
+              className={`studio-stage-map-toggle-btn ${
+                placeMapAdjusterOpen ? 'is-active' : ''
+              }`.trim()}
+              data-stage-map-adjuster-toggle="true"
+              aria-pressed={placeMapAdjusterOpen}
+              aria-label={
+                isEn ? 'Adjust standing location on Google Map' : '구글 맵 위치 조절'
+              }
+              title={
+                isEn
+                  ? 'Adjust standing location on Google Map'
+                  : '위치 조절'
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic('selection');
+                onTogglePlaceMapAdjuster();
+              }}
+            >
+              <MapPin size={16} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+          )}
+
+          {showOriginalImageLink && (
+            <button
+              type="button"
+              data-vton-fix-trigger="true"
+              aria-haspopup="dialog"
+              aria-expanded={fixModalOpen}
+              aria-label={isEn ? 'Fix generated fitting image' : '생성 이미지 교정'}
+              title={
+                isEn
+                  ? 'Fix generated fitting image'
+                  : '이미지 교정'
+              }
+              className={`studio-vton-original-link studio-vton-fix-btn ${
+                isRepairingAngle ? 'is-busy' : ''
+              }`.trim()}
+              disabled={aiLoading || isRepairingAngle}
+              onClick={handleOpenFixModal}
+            >
+              <Wrench size={15} strokeWidth={2.05} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
@@ -3806,6 +3855,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         saggingFit={Boolean(saggingFit)}
         legacyMode={viewerMode}
         lang={resolvedLang}
+        outfitSaveBar={outfitSaveBar}
       />
 
       {/* Click-outside dismiss scrim for open stage HUD popovers */}
@@ -4264,6 +4314,16 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   data-studio-density-trigger="true"
                   aria-haspopup="dialog"
                   aria-expanded={densityMenuOpen}
+                  aria-label={
+                    isEn
+                      ? `Styling Density (${activeDensityMeta.labelEn})`
+                      : `착장 밀도 (${activeDensityMeta.labelKo})`
+                  }
+                  title={
+                    isEn
+                      ? `Styling Density: ${activeDensityMeta.labelEn}`
+                      : `착장 밀도: ${activeDensityMeta.labelKo}`
+                  }
                   className={`studio-stage-hud-chip-btn ${densityMenuOpen ? 'is-open' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -4274,8 +4334,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     setDensityMenuOpen((prev) => !prev);
                   }}
                 >
-                  <SlidersHorizontal size={12} strokeWidth={2.1} aria-hidden="true" />
-                  <span>{isEn ? activeDensityMeta.labelEn : activeDensityMeta.labelKo}</span>
+                  <SlidersHorizontal size={16} strokeWidth={2.05} aria-hidden="true" />
                 </button>
 
                 {densityMenuOpen && (
@@ -4362,6 +4421,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     data-studio-rationale-trigger="true"
                     aria-haspopup="dialog"
                     aria-expanded={rationaleOpen}
+                    aria-label={isEn ? 'Style Note' : '코디안'}
+                    title={isEn ? 'Style Note' : '코디안'}
                     className={`studio-stage-hud-chip-btn ${rationaleOpen ? 'is-open' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -4372,8 +4433,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                       setRationaleOpen((prev) => !prev);
                     }}
                   >
-                    <FileText size={12} strokeWidth={2.1} aria-hidden="true" />
-                    <span>{isEn ? 'Style Note' : '코디안'}</span>
+                    <FileText size={16} strokeWidth={2.05} aria-hidden="true" />
                   </button>
 
                   {rationaleOpen && (
@@ -4614,7 +4674,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       )}
 
       {/* Subtle Google Maps Required Attribution Micro-Caption (unobtrusive, ToS-compliant, never covers shoes or right rail) */}
-      {placeBackdrop?.active && (
+      {placeBackdrop?.active && !placeMapAdjusterOpen && (
         <div
           className="studio-place-attribution-bar"
           data-maps-stage-attribution="true"
@@ -4669,20 +4729,45 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
+      {/* Bottom-Floating Interactive Google Map Position Adjuster (avatar & live street backdrop stay visible above) */}
+      {placeBackdrop?.active &&
+        placeMapAdjusterOpen &&
+        typeof placeBackdrop.lat === 'number' &&
+        typeof placeBackdrop.lng === 'number' &&
+        typeof onSelectPlaceMapSpot === 'function' && (
+          <StageStreetViewMapSheet
+            open={placeMapAdjusterOpen}
+            onClose={() => onClosePlaceMapAdjuster?.()}
+            lat={placeBackdrop.lat}
+            lng={placeBackdrop.lng}
+            initialLat={placeBackdrop.initialLat ?? null}
+            initialLng={placeBackdrop.initialLng ?? null}
+            placeName={placeBackdrop.placeName}
+            heading={placeBackdrop.streetViewHeading ?? 0}
+            panoQuality={placeBackdrop.panoQuality ?? null}
+            lang={resolvedLang}
+            theme={resolvedTheme}
+            onSelectSpot={onSelectPlaceMapSpot}
+            onChangeHeading={(nextDeg) => onChangePlaceBackdropHeading?.(nextDeg)}
+            onResetSpot={onResetPlaceMapSpot}
+            hasCustomSpot={Boolean(placeBackdrop.hasCustomSpot)}
+          />
+        )}
+
       {/* Bottom Sleek Architectural Angle Slider (-180° Back .. 0° Front .. +180° Back) with Progressive Readiness Lighting */}
       <div
-        className={`studio-angle-scroll-dock is-sleek-dial ${!showAngleDock ? 'is-hidden' : ''} ${
+        className={`studio-angle-scroll-dock is-sleek-dial ${!showAngleDock || placeMapAdjusterOpen ? 'is-hidden' : ''} ${
           isAngleInteracting ? 'is-interacting' : ''
         } ${scrollbarLighting.frontReady ? 'has-front-ready' : ''} ${
           scrollbarLighting.allReady ? 'is-all-ready' : ''
         }`.trim()}
         data-angle-scroll-dock="true"
-        data-angle-dock-visible={showAngleDock ? 'true' : 'false'}
+        data-angle-dock-visible={showAngleDock && !placeMapAdjusterOpen ? 'true' : 'false'}
         data-ready-angles={readyCanonicalAngles.join(',')}
         data-front-ready={scrollbarLighting.frontReady ? 'true' : 'false'}
         data-back-ready={scrollbarLighting.backReady ? 'true' : 'false'}
-        aria-hidden={!showAngleDock ? 'true' : undefined}
-        inert={!showAngleDock}
+        aria-hidden={!showAngleDock || placeMapAdjusterOpen ? 'true' : undefined}
+        inert={!showAngleDock || placeMapAdjusterOpen}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="studio-angle-scroll-labels">
