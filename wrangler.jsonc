@@ -1,0 +1,9 @@
+{
+  // Cloudflare Workers Static Assets deployment config for https://ainvtry.com
+  "name": "ainventory",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist-site",
+    "not_found_handling": "single-page-application"
+  }
+}
