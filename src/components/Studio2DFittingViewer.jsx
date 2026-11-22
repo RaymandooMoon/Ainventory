@@ -102,6 +102,7 @@ import {
   resolveEffectiveClientTimeOfDay,
 } from '../utils/tomorrowPromptPolicy.ts';
 import {
+  snapToNearest45Deg,
   stepTurnaroundInertia,
   wrapSignedAngleDeg,
 } from '../utils/turnaroundPhysics.ts';
@@ -364,6 +365,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
   const [scrollResidualYawDeg, setScrollResidualYawDeg] = useState(0);
   const [angularVelocityDegPerSec, setAngularVelocityDegPerSec] = useState(0);
+  const [isScrubbingScroll, setIsScrubbingScroll] = useState(false);
   const isScrubbingScrollRef = useRef(false);
   const isInertiaActiveRef = useRef(false);
   const angleScrollRef = useRef(angleScrollDeg);
@@ -432,9 +434,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const handleSwipeRotate = useCallback(
-    ({ stepSign, fastFlick, velocityPxPerMs }) => {
+    ({ stepSign, fastFlick, velocityPxPerMs, startOffsetDeg = 0 }) => {
       clearSpinTimers();
       isScrubbingScrollRef.current = false;
+      setIsScrubbingScroll(false);
       const sign = stepSign >= 0 ? 1 : -1;
       const startAngle = viewAngleRef.current;
       flashSwipeAngleBadge();
@@ -453,12 +456,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       }
 
       const safeSpeed = Number.isFinite(velocityPxPerMs) ? Math.abs(velocityPxPerMs) : 0.45;
-      const startContinuous = angleScrollRef.current;
+      const safeStartOffset = Number.isFinite(startOffsetDeg) ? startOffsetDeg : 0;
+      const baseContinuous = angleScrollRef.current;
+      const startContinuous = fastFlick ? baseContinuous : baseContinuous + safeStartOffset;
       const nextStepAngle360 = normalizeTurnaround360Angle(
         startAngle + sign * 45,
         DEFAULT_TURNAROUND_ANGLE
       );
-      const currentMod360 = ((startContinuous % 360) + 360) % 360;
+      const currentMod360 = ((baseContinuous % 360) + 360) % 360;
       const forwardDelta = ((nextStepAngle360 - currentMod360) * sign + 360) % 360;
       const signedStepDelta =
         forwardDelta === 0 ? 45 : forwardDelta > 180 ? forwardDelta - 360 : forwardDelta;
@@ -472,7 +477,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         : {
             angleDeg: startContinuous,
             velocityDegPerSec: Math.min(440, Math.max(240, safeSpeed * 420)) * sign,
-            targetDetentDeg: startContinuous + sign * signedStepDelta,
+            targetDetentDeg: baseContinuous + sign * signedStepDelta,
           };
 
       // Immediately advance one 45° step on normal swipe so tap/swipe feedback feels zero-latency
@@ -542,6 +547,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       lastScrollSampleRef.current = { deg: nextScroll.clampedScrollDeg, ts: nowTs };
 
       isScrubbingScrollRef.current = true;
+      setIsScrubbingScroll(true);
       angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
       setScrollResidualYawDeg(nextScroll.residualYawDeg);
@@ -557,19 +563,81 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const handleAngleScrollRelease = useCallback(() => {
     isScrubbingScrollRef.current = false;
+    setIsScrubbingScroll(false);
     setAngularVelocityDegPerSec(0);
-    if (Math.abs(angleScrollRef.current) >= 158) {
-      const snappedEnd = angleScrollRef.current < 0 ? -180 : 180;
+    const curScroll = angleScrollRef.current;
+    if (Math.abs(curScroll) >= 158) {
+      const snappedEnd = curScroll < 0 ? -180 : 180;
       angleScrollRef.current = snappedEnd;
       setAngleScrollDeg(snappedEnd);
       setScrollResidualYawDeg(0);
+      return;
     }
-  }, []);
+
+    // Gently settle intermediate scrub releases onto the nearest 45° canonical detent so the resting
+    // frame always locks crisp & razor-sharp onto a native AI render without residual morph blur.
+    const targetDetent = snapToNearest45Deg(curScroll);
+    if (Math.abs(targetDetent - curScroll) < 0.4) {
+      setScrollResidualYawDeg(0);
+      return;
+    }
+
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reducedMotion || typeof requestAnimationFrame !== 'function') {
+      const wrapped = wrapSignedAngleDeg(targetDetent);
+      angleScrollRef.current = wrapped;
+      setAngleScrollDeg(wrapped);
+      setScrollResidualYawDeg(0);
+      return;
+    }
+
+    clearSpinTimers();
+    let physicsState = {
+      angleDeg: curScroll,
+      velocityDegPerSec: 0,
+      targetDetentDeg: targetDetent,
+    };
+    isInertiaActiveRef.current = true;
+    let lastTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    const settleFrame = (nowTs) => {
+      const dtSec = Math.min(0.05, Math.max(0.004, (nowTs - lastTs) / 1000));
+      lastTs = nowTs;
+      const next = stepTurnaroundInertia(physicsState, {
+        dtSec,
+        reducedMotion: false,
+      });
+      physicsState = {
+        angleDeg: next.angleDeg,
+        velocityDegPerSec: next.velocityDegPerSec,
+        targetDetentDeg: next.targetDetentDeg,
+      };
+      const wrapped = wrapSignedAngleDeg(next.angleDeg);
+      angleScrollRef.current = wrapped;
+      setAngleScrollDeg(wrapped);
+      setScrollResidualYawDeg(next.residualYawDeg);
+      if (next.settled) {
+        inertiaRafRef.current = null;
+        isInertiaActiveRef.current = false;
+        setScrollResidualYawDeg(0);
+        setAngularVelocityDegPerSec(0);
+        return;
+      }
+      inertiaRafRef.current = requestAnimationFrame(settleFrame);
+    };
+
+    inertiaRafRef.current = requestAnimationFrame(settleFrame);
+  }, [clearSpinTimers]);
 
   const handleJumpAngleScroll = useCallback(
     (targetSignedDeg) => {
       clearSpinTimers();
       isScrubbingScrollRef.current = false;
+      setIsScrubbingScroll(false);
       const nextScroll = resolveSignedAngleScrollState(targetSignedDeg);
       angleScrollRef.current = nextScroll.clampedScrollDeg;
       setAngleScrollDeg(nextScroll.clampedScrollDeg);
@@ -2581,6 +2649,73 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     [readyCanonicalAngles]
   );
 
+  const resolvedAngleSlices = useMemo(() => {
+    void scenarioSnapEpoch;
+    void historyCount;
+    const map = {};
+    if (isShowingPinnedHistory && pinnedHistoryItem?.angleSlices) {
+      for (const deg of TURNAROUND_ANGLES) {
+        const u = pinnedHistoryItem.angleSlices[deg];
+        if (u) map[deg] = u;
+      }
+      return map;
+    }
+    if (demoShowcaseEnabled && demoSliceUrl) {
+      for (const deg of TURNAROUND_ANGLES) {
+        const u = peekShowcaseDemoVtonSlice(styleMode, deg, {
+          handedness: activeHandedness,
+          hasEquippedBag,
+          bagGarment: equippedBagEntry?.garment || null,
+        });
+        if (u) map[deg] = u;
+      }
+      if (Object.keys(map).length > 0) return map;
+    }
+    const snapEntry = scenarioVtonSnapshotsRef.current[scenarioVtonKey];
+    if (snapEntry?.angleSlices) {
+      for (const deg of TURNAROUND_ANGLES) {
+        const u = snapEntry.angleSlices[deg];
+        if (u) map[deg] = u;
+      }
+    }
+    if (!forceRefresh) {
+      for (const deg of TURNAROUND_ANGLES) {
+        if (!map[deg]) {
+          const memUrl = peekMemoryAiVtonSlice({
+            avatarConfigHash: resolvedAvatarHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather: vtonEffectiveWeather,
+            angleDeg: deg,
+          })?.imageUrl;
+          if (memUrl) map[deg] = memUrl;
+        }
+      }
+    }
+    if (resolvedAiImageUrl && !map[canonicalSliceAngle]) {
+      map[canonicalSliceAngle] = resolvedAiImageUrl;
+    }
+    return map;
+  }, [
+    scenarioSnapEpoch,
+    historyCount,
+    isShowingPinnedHistory,
+    pinnedHistoryItem,
+    demoShowcaseEnabled,
+    demoSliceUrl,
+    styleMode,
+    activeHandedness,
+    hasEquippedBag,
+    equippedBagEntry,
+    scenarioVtonKey,
+    forceRefresh,
+    resolvedAvatarHash,
+    outfitComboId,
+    vtonEffectiveWeather,
+    resolvedAiImageUrl,
+    canonicalSliceAngle,
+  ]);
+
   const handleSelectFlatLaySlot = useCallback(
     (slotKey) => {
       if (firstLookPreGenActiveRef.current) {
@@ -3192,6 +3327,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         avatarConfigHash={resolvedAvatarHash}
         personReferenceUrl={activeFacePhotoUrl}
         viewAngleDeg={viewAngleDeg}
+        angleSlices={resolvedAngleSlices}
+        continuousAngleDeg={angleScrollDeg}
+        isAngleScrubbing={isScrubbingScroll}
         scrollResidualYawDeg={scrollResidualYawDeg}
         forceMirrorX={pinnedHistoryForceMirrorX}
         onSwipeRotate={frontOnlyDegraded ? undefined : handleSwipeRotate}

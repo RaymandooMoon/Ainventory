@@ -18,6 +18,7 @@ import {
   computeDirectionalBlurPx,
   shortestAngleDeltaDeg,
 } from '../utils/turnaroundPhysics.ts';
+import { computeGroundShadowScaleX } from '../utils/turnaroundMorph.ts';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
 import StudioCharacterRelightCanvas from './three/StudioCharacterRelightCanvas.tsx';
 
@@ -416,6 +417,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   avatarConfigHash = null,
   personReferenceUrl = null,
   viewAngleDeg = DEFAULT_TURNAROUND_ANGLE,
+  angleSlices = null,
+  continuousAngleDeg,
+  isAngleScrubbing = false,
   scrollResidualYawDeg = 0,
   forceMirrorX = false,
   onSwipeRotate,
@@ -1108,6 +1112,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
           fastFlick,
           velocityPxPerMs,
           dx,
+          startOffsetDeg: clamp(dx * 0.34, -40, 40),
         });
       }
     },
@@ -1513,16 +1518,28 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     isRelightCanvasActive,
   ]);
 
+  const liveContinuousAngleDeg = useMemo(() => {
+    const baseAngle =
+      typeof continuousAngleDeg === 'number' && Number.isFinite(continuousAngleDeg)
+        ? continuousAngleDeg
+        : safeAngleDeg;
+    const dragOffset = isRotatingDrag ? clamp(swipeDragPx * 0.34, -40, 40) : 0;
+    return baseAngle + dragOffset;
+  }, [continuousAngleDeg, safeAngleDeg, isRotatingDrag, swipeDragPx]);
+
   const shadowTransformStyle = useMemo(() => {
     const effectiveScale = floorPlacement.effectiveBaseScale * safeZoom;
     const shadowScale = 1 + (effectiveScale - 1) * 0.55;
+    const shadowAngleScaleX = computeGroundShadowScaleX(liveContinuousAngleDeg);
+    const scaleX = shadowScale * shadowAngleScaleX;
+    const scaleY = shadowScale;
     const hasTranslation = safePanX !== 0 || safePanY !== 0;
     return {
       top: `calc(${floorPlacement.soleStageTopPct.toFixed(2)}% - 13px)`,
       bottom: 'auto',
-      ...(hasTranslation || Math.abs(shadowScale - 1) > 0.005
+      ...(hasTranslation || Math.abs(scaleX - 1) > 0.005 || Math.abs(scaleY - 1) > 0.005
         ? {
-            transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${shadowScale.toFixed(3)})`,
+            transform: `translate3d(${safePanX.toFixed(1)}px, ${safePanY.toFixed(1)}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
           }
         : {}),
     };
@@ -1530,6 +1547,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     safePanX,
     safePanY,
     safeZoom,
+    liveContinuousAngleDeg,
     floorPlacement.effectiveBaseScale,
     floorPlacement.soleStageTopPct,
   ]);
@@ -1642,6 +1660,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                   angleDeg={safeAngleDeg}
                   mirrorX={effectiveMirrorX}
                   identityKey={relightIdentityKey}
+                  angleSlices={angleSlices}
+                  continuousAngleDeg={liveContinuousAngleDeg}
+                  isLiveScrubbing={Boolean(isAngleScrubbing || isRotatingDrag)}
                   lightingFrame={stageLightingFrame}
                   externalYawDeg={relightExternalYawDeg}
                   kineticBlurPx={kineticBlurPx}
