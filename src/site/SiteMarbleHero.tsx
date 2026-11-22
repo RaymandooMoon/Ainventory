@@ -7,13 +7,14 @@ import {
   type MarbleStepSnapshot,
 } from '../components/auth/loginThreeScenes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
-import type { SiteTheme } from './siteContent.ts';
+import type { SiteTheme, SiteViewId } from './siteContent.ts';
 
 export interface SiteMarbleHeroProps {
   readonly theme: SiteTheme;
   readonly motionVariant: LoginThreeVariantId;
   readonly variantChangeOrigin: { readonly x: number; readonly y: number; readonly seq: number } | null;
-  readonly heroRootRef: React.RefObject<HTMLElement | null>;
+  readonly activeView: SiteViewId;
+  readonly viewportRootRef: React.RefObject<HTMLElement | null>;
 }
 
 interface DeviceOrientationConstructorWithPermission {
@@ -30,17 +31,24 @@ function getScreenOrientationAngle(): number {
   return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : 0;
 }
 
+function isMarbleExcludedElement(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.closest !== 'function') return false;
+  return Boolean(el.closest('[data-no-marble="true"], [role="dialog"], [aria-modal="true"]'));
+}
+
 /**
- * Full-viewport Hero Intro 3D Silk Cloth + Rolling Glass Marble Canvas.
- * Reuses the exact Three.js shader & physics engine from the Ainventory login intro
- * (`createLoginThreeController`) with bounding-rect coordinates, marble-to-button
- * collision bounces, mobile gyroscope tilt, and IntersectionObserver GPU pause.
+ * Persistent Full-Viewport Shared 3D Silk Cloth + Rolling Glass Marble Canvas.
+ * Runs continuously behind every view of ainvtry.com using the exact Three.js shader
+ * and rolling marble physics engine (`createLoginThreeController`) from the login intro,
+ * allowing users to roll/flick/tilt the crystal marble into navigation pills and buttons.
  */
 const SiteMarbleHero = memo(function SiteMarbleHero({
   theme,
   motionVariant = DEFAULT_LOGIN_THREE_VARIANT,
   variantChangeOrigin = null,
-  heroRootRef,
+  activeView,
+  viewportRootRef,
 }: SiteMarbleHeroProps) {
   const isDark = theme === 'dark';
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -50,7 +58,8 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
   const initialDarkRef = useRef(isDark);
   const initialVariantRef = useRef<LoginThreeVariantId>(motionVariant);
-  const isVisibleRef = useRef(true);
+  const viewCooldownUntilRef = useRef(0);
+  const invalidateCacheRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     controllerRef.current?.setTheme(isDark, false);
@@ -63,6 +72,12 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       variantChangeOrigin?.y
     );
   }, [motionVariant, variantChangeOrigin]);
+
+  // Brief cooldown & immediate target re-scan whenever the active view switches
+  useEffect(() => {
+    viewCooldownUntilRef.current = performance.now() + 620;
+    invalidateCacheRef.current?.();
+  }, [activeView]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -89,21 +104,23 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     const invalidateCache = () => {
       cacheTimestamp = 0;
     };
+    invalidateCacheRef.current = invalidateCache;
 
     const refreshTargets = (now: number) => {
       cachedStageRect = stageEl.getBoundingClientRect();
-      const heroEl = heroRootRef.current ?? stageEl.parentElement;
-      if (!heroEl || !cachedStageRect.width || !cachedStageRect.height) {
+      const rootEl = viewportRootRef.current ?? stageEl.parentElement;
+      if (!rootEl || !cachedStageRect.width || !cachedStageRect.height) {
         cachedTargets = [];
         cacheTimestamp = now;
         return;
       }
 
-      const nodes = heroEl.querySelectorAll<HTMLElement>('[data-marble-target="true"]');
+      const nodes = rootEl.querySelectorAll<HTMLElement>('[data-marble-target="true"]');
       const next: CachedButtonTarget[] = [];
       for (let i = 0; i < nodes.length; i += 1) {
         const el = nodes[i];
         if (el.getAttribute('aria-disabled') === 'true') continue;
+        if (el.closest('[inert], [aria-hidden="true"]')) continue;
         const rect = el.getBoundingClientRect();
         if (rect.width < 16 || rect.height < 16) continue;
         if (
@@ -115,7 +132,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           continue;
         }
         const style = window.getComputedStyle(el);
-        if (style.visibility === 'hidden' || style.display === 'none') continue;
+        if (style.visibility === 'hidden' || style.display === 'none' || style.pointerEvents === 'none') {
+          continue;
+        }
+        if (Number.parseFloat(style.opacity || '1') < 0.25) continue;
         next.push({ el, rect });
       }
       cachedTargets = next;
@@ -124,15 +144,15 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
     const handleMarbleStep = (snap: MarbleStepSnapshot) => {
       const ctrl = controllerRef.current;
-      if (!ctrl || !isVisibleRef.current) return;
-      const minStrikeSpeed = snap.isGrabbing ? 0.04 : 0.16;
+      if (!ctrl || document.hidden) return;
+      const minStrikeSpeed = snap.isGrabbing ? 0.04 : 0.14;
       if (!snap.userDriven || snap.elapsed < 0.45 || snap.speed < minStrikeSpeed) return;
 
       const now = performance.now();
-      if (now < globalHitCooldownUntil) return;
+      if (now < globalHitCooldownUntil || now < viewCooldownUntilRef.current) return;
       if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
 
-      if (now - cacheTimestamp > 100 || !cachedStageRect) {
+      if (now - cacheTimestamp > 90 || !cachedStageRect) {
         refreshTargets(now);
       }
       const stageRect = cachedStageRect;
@@ -143,7 +163,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const mx = stageRect.left + snap.u * stageRect.width;
       const my = stageRect.top + (1 - snap.v) * stageRect.height;
       const radiusPx = snap.radiusNormY * stageRect.height;
-      const hitRadiusPx = radiusPx * 0.9;
+      const hitRadiusPx = radiusPx * 0.92;
       const hitRadiusSq = hitRadiusPx * hitRadiusPx;
       const pxPerWorld = stageRect.height * 0.5;
       const velPxX = snap.vx * pxPerWorld;
@@ -204,12 +224,12 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           -nyPx,
           nxPx * pushPx * worldPerPx,
           -nyPx * pushPx * worldPerPx,
-          0.88,
-          0.68
+          0.9,
+          0.7
         );
 
-        globalHitCooldownUntil = now + 360;
-        perTargetCooldown.set(el, now + 950);
+        globalHitCooldownUntil = now + 380;
+        perTargetCooldown.set(el, now + 980);
         invalidateCache();
 
         el.classList.remove('is-marble-hit');
@@ -223,7 +243,6 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
         triggerHaptic('selection');
 
-        // Only trigger toggle controls (silk/theme/lang) on marble hit; CTA buttons bounce without surprise scroll jumps
         if (el.dataset.marbleAction === 'click') {
           try {
             el.dispatchEvent(
@@ -259,28 +278,21 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
     controllerRef.current = controller;
 
-    // Normalize pointer coordinates against the hero stage bounds (handles scroll offset cleanly)
     let lastNormX = 0;
     let lastNormY = 0;
 
-    const toHeroNorm = (clientX: number, clientY: number) => {
+    const toStageNorm = (clientX: number, clientY: number) => {
       const rect = stageEl.getBoundingClientRect();
       const w = Math.max(1, rect.width);
       const h = Math.max(1, rect.height);
       const nx = ((clientX - rect.left) / w) * 2 - 1;
       const ny = -(((clientY - rect.top) / h) * 2 - 1);
-      const inside =
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom;
-      return { nx, ny, inside };
+      return { nx, ny };
     };
 
     const pushPointer = (clientX: number, clientY: number, allowBrush = true) => {
-      if (!isVisibleRef.current) return;
-      const { nx, ny, inside } = toHeroNorm(clientX, clientY);
-      if (!inside) return;
+      if (document.hidden) return;
+      const { nx, ny } = toStageNorm(clientX, clientY);
       const velocity = allowBrush ? Math.hypot(nx - lastNormX, ny - lastNormY) : 0;
       lastNormX = nx;
       lastNormY = ny;
@@ -288,10 +300,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (!isVisibleRef.current || !Number.isFinite(e.deltaY) || e.deltaY === 0) return;
-      const { nx, inside } = toHeroNorm(e.clientX, e.clientY);
-      if (!inside) return;
-      controller.pushScrollImpulse(nx, e.deltaY * 0.6);
+      if (document.hidden || !Number.isFinite(e.deltaY) || e.deltaY === 0) return;
+      if (isMarbleExcludedElement(e.target)) return;
+      const { nx } = toStageNorm(e.clientX, e.clientY);
+      controller.pushScrollImpulse(nx, e.deltaY * 0.45);
     };
 
     let touchFallbackActive = false;
@@ -299,7 +311,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     let lastTouchNy = 0;
 
     const onPointerDown = (e: PointerEvent) => {
-      if (!isVisibleRef.current) return;
+      if (document.hidden || isMarbleExcludedElement(e.target)) return;
       const target = e.target as HTMLElement | null;
       if (target && typeof target.closest === 'function') {
         const marbleTarget = target.closest<HTMLElement>('[data-marble-target="true"]');
@@ -309,18 +321,18 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           globalHitCooldownUntil = Math.max(globalHitCooldownUntil, now + 500);
           return;
         }
-        if (target.closest('button, a, input')) {
+        if (target.closest('button, a, input, textarea, select')) {
           return;
         }
       }
-      const { nx, ny, inside } = toHeroNorm(e.clientX, e.clientY);
-      if (!inside) return;
+      const { nx, ny } = toStageNorm(e.clientX, e.clientY);
       touchFallbackActive = false;
       controller.setPointerDown?.(true, nx, ny);
       pushPointer(e.clientX, e.clientY, false);
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (document.hidden || isMarbleExcludedElement(e.target)) return;
       if (e.buttons === 0) {
         const target = e.target as HTMLElement | null;
         if (target && typeof target.closest === 'function' && target.closest('button, a, input')) {
@@ -341,19 +353,18 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (!isVisibleRef.current || e.touches.length !== 1) return;
+      if (document.hidden || e.touches.length !== 1 || isMarbleExcludedElement(e.target)) return;
       const t = e.touches[0];
-      const { nx, ny, inside } = toHeroNorm(t.clientX, t.clientY);
-      if (!inside) return;
+      const { nx, ny } = toStageNorm(t.clientX, t.clientY);
       lastTouchNx = nx;
       lastTouchNy = ny;
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!isVisibleRef.current || !touchFallbackActive || e.touches.length !== 1) return;
+      if (document.hidden || !touchFallbackActive || e.touches.length !== 1) return;
+      if (isMarbleExcludedElement(e.target)) return;
       const t = e.touches[0];
-      const { nx, ny, inside } = toHeroNorm(t.clientX, t.clientY);
-      if (!inside) return;
+      const { nx, ny } = toStageNorm(t.clientX, t.clientY);
       const dx = nx - lastTouchNx;
       const dy = ny - lastTouchNy;
       lastTouchNx = nx;
@@ -375,7 +386,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     let prevTiltY = 0;
 
     const onDeviceOrientation = (e: DeviceOrientationEvent) => {
-      if (!isVisibleRef.current) return;
+      if (document.hidden) return;
       if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
       if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return;
 
@@ -469,29 +480,19 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       );
     };
 
+    const handleVisibility = () => {
+      controller.setPaused(document.hidden);
+      if (!document.hidden) invalidateCache();
+    };
+
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver === 'function') {
       resizeObserver = new ResizeObserver(handleResize);
       resizeObserver.observe(stageEl);
     }
 
-    let intersectionObserver: IntersectionObserver | null = null;
-    if (typeof IntersectionObserver === 'function') {
-      intersectionObserver = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          const visible = Boolean(entry && entry.isIntersecting);
-          isVisibleRef.current = visible;
-          controller.setPaused(!visible);
-          if (visible) invalidateCache();
-        },
-        { threshold: 0.02 }
-      );
-      intersectionObserver.observe(stageEl);
-    }
-
     window.addEventListener('resize', handleResize, { passive: true });
-    window.addEventListener('scroll', invalidateCache, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
@@ -503,10 +504,11 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     window.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
     return () => {
+      invalidateCacheRef.current = null;
       activeHitTimers.forEach((tid) => window.clearTimeout(tid));
       activeHitTimers.clear();
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', invalidateCache);
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);
@@ -522,11 +524,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         window.removeEventListener('deviceorientation', onDeviceOrientation);
       }
       resizeObserver?.disconnect();
-      intersectionObserver?.disconnect();
       controller.dispose();
       controllerRef.current = null;
     };
-  }, [heroRootRef]);
+  }, [viewportRootRef]);
 
   return (
     <div

@@ -1,6 +1,7 @@
 export type SiteLang = 'en' | 'ko';
 export type SiteTheme = 'dark' | 'light';
 export type LegalDocKind = 'privacy' | 'terms';
+export type SiteViewId = 'home' | 'studio' | 'technology' | 'benchmarks' | 'about';
 
 export interface SiteMeta {
   readonly brandName: string;
@@ -39,6 +40,7 @@ export interface SitePillarCopy {
 
 export interface SiteCopy {
   readonly nav: {
+    readonly homeAria: string;
     readonly studio: string;
     readonly technology: string;
     readonly metrics: string;
@@ -48,10 +50,18 @@ export interface SiteCopy {
     readonly switchToLight: string;
     readonly switchToDark: string;
     readonly switchLang: string;
+    readonly opacityLabel: string;
+    readonly opacityHint: string;
+  };
+  readonly subtabs: {
+    readonly studioAtelier: string;
+    readonly studioIntel: string;
+    readonly techIngestion: string;
+    readonly techPrivacy: string;
+    readonly aboutMission: string;
+    readonly aboutFounder: string;
   };
   readonly hero: {
-    readonly statusBarLeft: string;
-    readonly statusBarRight: string;
     readonly kicker: string;
     readonly titleLead: string;
     readonly titleAccent: string;
@@ -60,7 +70,6 @@ export interface SiteCopy {
     readonly marbleHint: string;
     readonly primaryCta: string;
     readonly secondaryCta: string;
-    readonly scrollCue: string;
   };
   readonly capabilities: {
     readonly sectionCode: string;
@@ -159,6 +168,7 @@ export interface SiteCopy {
 export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
   en: {
     nav: {
+      homeAria: 'Return to first page',
       studio: 'Studio',
       technology: 'Architecture',
       metrics: 'Benchmarks',
@@ -168,20 +178,27 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       switchToLight: 'Light',
       switchToDark: 'Dark',
       switchLang: 'KO',
+      opacityLabel: 'Glass',
+      opacityHint: 'Drag up for more transparency, drag down for less',
+    },
+    subtabs: {
+      studioAtelier: '01 3D Atelier',
+      studioIntel: '02 Wardrobe Intel',
+      techIngestion: '01 AI Cutout & VTON',
+      techPrivacy: '02 Local WASM',
+      aboutMission: 'Vision',
+      aboutFounder: 'Founder & Beta',
     },
     hero: {
-      statusBarLeft: 'REAL-TIME 3D SILK & CAUSTIC MARBLE ENGINE',
-      statusBarRight: 'Drag, scroll, or tilt to roll the marble',
       kicker: 'AINVTRY.COM · PRIVATE 3D WARDROBE ATELIER',
       titleLead: 'Your Private ',
       titleAccent: '3D Digital Atelier',
       titleTail: ' & AI Styling Studio',
       subtitle:
         'Tactile cloth kinematics, multi-angle Gemini Virtual Try-On, and on-device privacy-first wardrobe intelligence.',
-      marbleHint: 'Drag, scroll, or tilt to roll the crystal marble across draped silk',
+      marbleHint: 'Roll the crystal marble into any menu pill or tap to explore',
       primaryCta: 'Explore the Atelier',
       secondaryCta: 'Contact Founder',
-      scrollCue: 'SCROLL TO UNFOLD',
     },
     capabilities: {
       sectionCode: '01 / 04 ARCHITECTURE REVEAL',
@@ -386,6 +403,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
   },
   ko: {
     nav: {
+      homeAria: '첫 페이지로 돌아가기',
       studio: '스튜디오',
       technology: '아키텍처',
       metrics: '핵심 스펙',
@@ -395,20 +413,27 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       switchToLight: '라이트',
       switchToDark: '다크',
       switchLang: 'EN',
+      opacityLabel: '투명도',
+      opacityHint: '위로 드래그하면 투명도 상승, 아래로 내리면 하락',
+    },
+    subtabs: {
+      studioAtelier: '01 3D 피팅',
+      studioIntel: '02 옷장 인텔리전스',
+      techIngestion: '01 AI 누끼 · VTON',
+      techPrivacy: '02 로컬 프라이버시',
+      aboutMission: '비전',
+      aboutFounder: '창업자 · 베타',
     },
     hero: {
-      statusBarLeft: '실시간 3D 실크 & 굴절 유리 구슬 물리 엔진',
-      statusBarRight: '드래그·스크롤·기울기로 구슬을 굴려보세요',
       kicker: 'AINVTRY.COM · 프라이빗 3D 디지털 옷장 아틀리에',
       titleLead: '나만의 ',
       titleAccent: '3D 디지털 아틀리에',
       titleTail: ' & AI 피팅 스튜디오',
       subtitle:
         '실제 원단의 드레이프 물리, 멀티앵글 Gemini AI 가상 피팅, 그리고 얼굴 데이터를 기기 밖으로 보내지 않는 로컬 퍼스널컬러 인텔리전스.',
-      marbleHint: '화면을 드래그하거나 기울여 실크 위 유리 구슬을 굴려보세요',
+      marbleHint: '유리 구슬을 굴려 메뉴를 맞추거나 버튼을 눌러 둘러보세요',
       primaryCta: '아틀리에 둘러보기',
       secondaryCta: '창업자 문의',
-      scrollCue: '스크롤하여 살펴보기',
     },
     capabilities: {
       sectionCode: '01 / 04 아키텍처 프리뷰',

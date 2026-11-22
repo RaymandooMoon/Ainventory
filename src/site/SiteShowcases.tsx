@@ -73,6 +73,8 @@ export function AtelierShowcasePanel({
                 key={id}
                 type="button"
                 className={`site-stance-pill ${stance === id ? 'is-active' : ''}`}
+                data-marble-target="true"
+                data-marble-action="click"
                 aria-pressed={stance === id}
                 onClick={() => setStance(id)}
               >
@@ -108,7 +110,7 @@ export function IngestionShowcasePanel({
 
   return (
     <div className="site-showcase-frame site-showcase-ingestion">
-      <div className="site-compare-viewport">
+      <div className="site-compare-viewport" data-no-marble="true">
         {/* After layer: Alpha-matted studio WebP cutout on precision alpha grid */}
         <div className="site-compare-layer site-compare-after">
           <img
