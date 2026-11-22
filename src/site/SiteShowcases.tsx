@@ -38,8 +38,6 @@ export function AppPreviewShowcasePanel({
                 role="tab"
                 aria-selected={isSelected}
                 className={`site-preview-card-btn ${isSelected ? 'is-active' : ''}`}
-                data-marble-target="true"
-                data-marble-action="click"
                 onClick={() => setActiveId(screen.id)}
               >
                 <span className="site-preview-card-index">0{idx + 1}</span>
@@ -63,7 +61,8 @@ export function AppPreviewShowcasePanel({
               alt={activeScreen.imageAlt}
               width={520}
               height={1125}
-              decoding="async"
+              decoding="sync"
+              fetchPriority="high"
               className="site-phone-screen-img"
             />
           </div>
@@ -90,8 +89,6 @@ export function AppPreviewShowcasePanel({
                 role="tab"
                 aria-selected={isSelected}
                 className={`site-preview-mobile-pill ${isSelected ? 'is-active' : ''}`}
-                data-marble-target="true"
-                data-marble-action="click"
                 onClick={() => setActiveId(screen.id)}
               >
                 {screen.tabLabel}
@@ -167,8 +164,6 @@ export function AtelierShowcasePanel({
                 key={id}
                 type="button"
                 className={`site-stance-pill ${stance === id ? 'is-active' : ''}`}
-                data-marble-target="true"
-                data-marble-action="click"
                 aria-pressed={stance === id}
                 onClick={() => setStance(id)}
               >

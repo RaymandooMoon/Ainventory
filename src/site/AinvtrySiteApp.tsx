@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight,
   ArrowUpRight,
   Check,
   ChevronsUpDown,
@@ -358,22 +357,6 @@ export default function AinvtrySiteApp() {
               </button>
             </div>
 
-            <nav className="site-nav-links site-nav-links--desktop" aria-label="Primary navigation">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`site-nav-btn ${activeView === item.id ? 'is-active' : ''}`}
-                  data-marble-target="true"
-                  data-marble-action="click"
-                  aria-current={activeView === item.id ? 'page' : undefined}
-                  onClick={() => handleNavigate(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-
             <div className="site-topbar-right">
               <button
                 type="button"
@@ -425,16 +408,6 @@ export default function AinvtrySiteApp() {
 
               <div className="site-hero-dock">
                 <div className="site-hero-cta-row">
-                  <button
-                    type="button"
-                    className="site-btn-primary site-btn-primary--desktop-only"
-                    data-marble-target="true"
-                    data-marble-action="click"
-                    onClick={() => handleNavigate('studio')}
-                  >
-                    <span>{copy.hero.primaryCta}</span>
-                    <ArrowRight size={16} />
-                  </button>
                   {/* Contact Founder intentionally excluded from marble-hit triggers */}
                   <a href={betaMailto} className="site-btn-secondary">
                     <Mail size={15} />
@@ -455,8 +428,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={studioTab === 'preview'}
                       className={`site-subtab-pill ${studioTab === 'preview' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setStudioTab('preview');
@@ -469,8 +440,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={studioTab === 'atelier'}
                       className={`site-subtab-pill ${studioTab === 'atelier' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setStudioTab('atelier');
@@ -483,8 +452,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={studioTab === 'intelligence'}
                       className={`site-subtab-pill ${studioTab === 'intelligence' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setStudioTab('intelligence');
@@ -542,8 +509,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={techTab === 'ingestion'}
                       className={`site-subtab-pill ${techTab === 'ingestion' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setTechTab('ingestion');
@@ -556,8 +521,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={techTab === 'privacy'}
                       className={`site-subtab-pill ${techTab === 'privacy' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setTechTab('privacy');
@@ -630,8 +593,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={aboutMobileTab === 'mission'}
                       className={`site-subtab-pill ${aboutMobileTab === 'mission' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setAboutMobileTab('mission');
@@ -644,8 +605,6 @@ export default function AinvtrySiteApp() {
                       role="tab"
                       aria-selected={aboutMobileTab === 'founder'}
                       className={`site-subtab-pill ${aboutMobileTab === 'founder' ? 'is-active' : ''}`}
-                      data-marble-target="true"
-                      data-marble-action="click"
                       onClick={() => {
                         triggerHaptic('selection');
                         setAboutMobileTab('founder');
@@ -714,18 +673,15 @@ export default function AinvtrySiteApp() {
         </main>
 
         {/* ================================================================
-            MOBILE BOTTOM PINBALL BUMPER NAV + LEGAL & OPACITY BAR
+            UNIFIED BOTTOM PINBALL BUMPER NAV (PC & MOBILE) + LEGAL & OPACITY BAR
            ================================================================ */}
         <div className="site-bottom-stack">
-          <nav
-            className="site-nav-links site-nav-links--mobile"
-            aria-label="Mobile pinball navigation"
-          >
+          <nav className="site-pinball-dock" aria-label="Primary pinball navigation">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={`site-nav-btn site-nav-btn--bumper ${activeView === item.id ? 'is-active' : ''}`}
+                className={`site-pinball-bumper ${activeView === item.id ? 'is-active' : ''}`}
                 data-marble-target="true"
                 data-marble-action="click"
                 aria-current={activeView === item.id ? 'page' : undefined}
