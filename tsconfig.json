@@ -19,6 +19,7 @@
     "capacitor.config.ts",
     "vite.config.ts",
     "vite.config.js",
+    "vite.site.config.ts",
     "playwright.config.ts",
     "playwright.config.js",
     "src/**/*.ts",
@@ -33,6 +34,7 @@
   "exclude": [
     "node_modules",
     "dist",
+    "dist-site",
     "android",
     "data",
     "test-results",
