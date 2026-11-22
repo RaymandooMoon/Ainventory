@@ -577,6 +577,9 @@ export default function App() {
         'luxury';
       portalOriginRef.current = fallbackOrigin;
 
+      // Reset viewport scroll before preloading so landing studio settles cleanly at scrollY = 0
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+
       // Mount & preload the default Outfits landing screen immediately underneath the Login portal
       commitAppState();
       setLoginPortal({
@@ -616,17 +619,23 @@ export default function App() {
               maxRadius,
               variant: activeLoginVariant,
             });
+            // Chain post-reveal fallback after revealing begins so slow preloads never skip the silk wave
+            const revealFinishFallback = window.setTimeout(() => {
+              setLoginPortal(null);
+              setShowAuthScreen(false);
+            }, 3400);
+            portalTimersRef.current.push(revealFinishFallback);
           });
         });
       }, 860);
 
-      // Safety fallback in case browser tab was backgrounded during reveal RAF
-      const finishFallbackTimer = window.setTimeout(() => {
+      // Hard safety ceiling in case browser tab was backgrounded before reveal RAF fired
+      const safetyCeilingTimer = window.setTimeout(() => {
         setLoginPortal(null);
         setShowAuthScreen(false);
-      }, 3600);
+      }, 7500);
 
-      portalTimersRef.current = [revealTimer, finishFallbackTimer];
+      portalTimersRef.current = [revealTimer, safetyCeilingTimer];
     },
     [clearPortalTimers]
   );

@@ -163,25 +163,67 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const initialCountText = await countEl.innerText();
     const initialCount = Number.parseInt(initialCountText, 10);
 
-    // Step A: Register new garment via '+' modal
+    // Step A: Register new garment via '+' guided 2-photo modal
+    // Stub AI vision/web endpoints so Test #2 stays fast and deterministic offline
+    await page.route('**/api/garments/vision-analyze', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          analysis: {
+            category: 'outer',
+            subcategory: 'coat',
+            name_ko: '네이비 트렌치 코트',
+            name_en: 'Navy Trench Coat',
+            color_name: '네이비',
+            color_hex: '#1F2A44',
+            material: 'Cotton',
+            texture_feel: 'structured',
+            fit: 'relaxed',
+            seasons: ['봄', '가을'],
+            thickness: 'medium',
+            water_resistant: true,
+            style_mood: 'minimal',
+            formality: 'smart',
+            garment_details: { coat_length: 'long', closure_type: 'button' },
+            has_identifiable_product: false,
+            background_quality: { hasClutterOrBodyPart: false },
+          },
+        }),
+      })
+    );
+
     await page.locator(`#${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`).click();
 
-    const fileInput = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeGalleryInputId}`);
-    await fileInput.setInputFiles({
-      name: 'navy-trench-coat.png',
+    const frontFileInput = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeGalleryInputId}`);
+    await frontFileInput.setInputFiles({
+      name: 'navy-trench-front.png',
+      mimeType: 'image/png',
+      buffer: createTestGarmentPngBuffer(),
+    });
+    const backFileInput = page.locator('.hig-add-garment-form input[type="file"]').nth(2);
+    await backFileInput.setInputFiles({
+      name: 'navy-trench-back.png',
       mimeType: 'image/png',
       buffer: createTestGarmentPngBuffer(),
     });
 
-    // Wait for 1:1 2.5D preview cutout to appear
+    const startGuidedBtn = page.locator('.hig-capture-step button.hig-primary-cta-btn');
+    await expect(startGuidedBtn).toBeEnabled();
+    await startGuidedBtn.click();
+
+    // Wait for sticky 2.5D preview cutout bar to appear in Step 1
     await expect(
-      page.locator(`#${CARBON_DOM_CONTRACT.addGarmentPreviewId} .garment-object-25d img`)
+      page.locator('.hig-reg-sticky-preview .garment-object-25d img')
     ).toBeVisible();
 
     await page
-      .locator('.hig-add-garment-form [role="radiogroup"] button', { hasText: 'Outerwear' })
+      .locator('.hig-add-garment-form [role="radiogroup"] button', { hasText: /Outerwear|아우터/ })
       .click();
     await page.locator('#add-garment-name-input').fill('Studio Gabardine Trench');
+
+    // Jump to Step 3 (Purchase & Care) to fill brand & submit
+    await page.locator('.hig-step-bar [role="tab"]').nth(2).click();
     await page.locator('#add-garment-brand-input').fill('Lemaire');
     await page.locator(`#${CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}`).click();
 
@@ -234,7 +276,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(1);
 
     // Combine an Accessories slot item via top-right mobile wardrobe drawer trigger or desktop right panel
     await expect(page.locator('.studio-mobile-slot-bar')).toHaveCount(0);
@@ -253,7 +296,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       await picker.locator('[data-slot-garment-id]').first().click();
       await picker.locator('[data-equip-inspector-btn="true"]').first().click();
     }
-    await expect(studioCanvas.locator('[data-studio-slot="accessory"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="accessory"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="accessory"]')).toHaveCount(1);
 
     // Save combined outfit -> opens save-to-calendar confirmation modal
     const mobileSaveBtn = page.getByTestId('mobile-save-outfit-btn');
@@ -352,9 +396,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       )
     ).toBeVisible();
 
-    await expect(
-      studioCanvas.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
-    ).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
 
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
     await expect(weatherCapsule).toBeVisible();
@@ -367,8 +409,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const initialLiveWeather =
       (await studioCanvas.getAttribute('data-effective-weather')) || 'clear';
 
-    // Wait for Today's Weather #1 recommendation to dress the 2D VTON model
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    // Wait for Today's Weather #1 recommendation to dress the 2D VTON model (visible on Flat-Lay board)
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toHaveCount(1);
 
     // 2. Open unified Weather · Location · Look 1/2 popup via capsule and verify Today default + 비 -> 예보 clearing + Warm Spring
     await weatherCapsule.click();
@@ -412,7 +455,8 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
-    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(1);
 
     await page.evaluate(() => {
       const key = 'ainventory_stage_economy_v1';
@@ -539,6 +583,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     }
     const demoAiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(demoAiImg).toBeVisible();
+    await expect(
+      studioCanvas.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
+    ).toBeVisible();
     await expect(studioCanvas.locator('[data-testid="studio-three-stage-layer"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
@@ -552,7 +599,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     const box10 = await demoAiImg.boundingBox();
     expect(box10).not.toBeNull();
 
-    // Verify 2-finger pinch zoom scales character smoothly (`1.00 -> 1.35 -> 1.00`)
+    // Verify wide-angle architectural framing stays cleanly locked at 1.00x under pinch touch gestures
     await mannequin.evaluate((stageEl) => {
       const rect = stageEl.getBoundingClientRect();
       const midX = rect.left + rect.width / 2;
@@ -590,55 +637,11 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       emit('touchmove', 67.5);
       emit('touchend', null);
     });
-    await expect(mannequin).toHaveAttribute('data-zoom', '1.35');
-    await expect
-      .poll(
-        async () => {
-          const box = await demoAiImg.boundingBox();
-          return box ? box.width / box10!.width : 0;
-        },
-        { timeout: 2500 }
-      )
-      .toBeGreaterThanOrEqual(1.25);
-
-    await mannequin.evaluate((stageEl) => {
-      const rect = stageEl.getBoundingClientRect();
-      const midX = rect.left + rect.width / 2;
-      const midY = rect.top + rect.height / 2;
-      const emit = (type: 'touchstart' | 'touchmove' | 'touchend', halfSpanPx: number | null) => {
-        const pts =
-          halfSpanPx === null
-            ? []
-            : [
-                { id: 1, x: midX - halfSpanPx, y: midY },
-                { id: 2, x: midX + halfSpanPx, y: midY },
-              ];
-        const tl = pts.map(
-          (p) =>
-            new Touch({
-              identifier: p.id,
-              target: stageEl,
-              clientX: p.x,
-              clientY: p.y,
-              pageX: p.x,
-              pageY: p.y,
-            })
-        );
-        stageEl.dispatchEvent(
-          new TouchEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            touches: tl,
-            targetTouches: tl,
-            changedTouches: tl,
-          })
-        );
-      };
-      emit('touchstart', 80);
-      emit('touchmove', 50);
-      emit('touchend', null);
-    });
     await expect(mannequin).toHaveAttribute('data-zoom', '1.00');
+    await expect(mannequin).toHaveAttribute('data-pan-offset', '0,0');
+    const boxAfter = await demoAiImg.boundingBox();
+    expect(boxAfter).not.toBeNull();
+    expect(Math.abs(boxAfter!.width - box10!.width)).toBeLessThanOrEqual(4);
 
     // Unequipping Tops leaves an unbroken 2D editorial base model
     await studioCanvas.locator('[data-studio-slot="top"] .studio-worn-slot-remove').click();
@@ -955,7 +958,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       await page.locator(`[data-nav-tab="${tab}"]`).click();
       if (tab === 'outfits') {
         await expect(page.locator('[data-atelier-weather-capsule="true"]')).toBeVisible();
-        await expect(page.locator('[data-weather-look-dock="true"]')).toBeVisible();
+        await expect(page.locator('[data-flatlay-board="true"]')).toBeVisible();
         const mobileDrawerBtn = page.locator('[data-mobile-wardrobe-trigger="true"]').first();
         if (await mobileDrawerBtn.isVisible()) {
           await mobileDrawerBtn.click();

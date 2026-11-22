@@ -7818,7 +7818,12 @@ export async function synthesizeProgressiveMultiAngleVton(
         });
       }
 
-      if (entriesToPersist.length > 0) {
+      const isDegradedFrontOnly =
+        Boolean(json?.frontOnlyDegraded) ||
+        json?.fallbackView === 'positive-only' ||
+        getReadyAnglesList().length <= 1;
+
+      if (!isDegradedFrontOnly && entriesToPersist.length > 0) {
         await persistAiVtonSlices(entriesToPersist);
       }
 
@@ -7838,23 +7843,73 @@ export async function synthesizeProgressiveMultiAngleVton(
         });
       }
 
-      callbacks?.onAngleReady?.({
-        angleDeg: 0,
-        imageUrl: finalZeroUrl,
-        sheetImageUrl: rawComposite,
-        isMasterAnchor: true,
-        readyAngles: getReadyAnglesList(),
-        elapsedMs: Date.now() - startedAt,
-        allSlices: { ...collectedSlices },
-        fromCache: Boolean(json?.cached),
-        serverLatencyMs: Number(json?.latencyMs) || 0,
-      });
+      if (isDegradedFrontOnly) {
+        logVtonQcFailure({
+          outfitComboId,
+          avatarConfigHash: profile.avatarConfigHash,
+          attempts: Number(json?.qcAttempts) || 3,
+          reasons:
+            Array.isArray(json?.qcReasons) && json.qcReasons.length > 0
+              ? json.qcReasons
+              : [json?.fallbackReason || 'qc_front_only_fallback'],
+          failedAngles: Array.isArray(json?.failedAngles) ? json.failedAngles : [],
+          frontOnlyFallback: true,
+        });
+        if (!isStaticStandaloneWithoutApi()) {
+          void apiFetch('/vton/qc-failure-log', {
+            method: 'POST',
+            headers: buildVtonRequestAuthHeaders({
+              'Content-Type': 'application/json',
+              'X-Profile-Key': serverProfileConfig.profileKey,
+            }),
+            body: JSON.stringify({
+              comboHash: outfitComboId,
+              avatarConfigHash: profile.avatarConfigHash,
+              attempts: Number(json?.qcAttempts) || 3,
+              reasons:
+                Array.isArray(json?.qcReasons) && json.qcReasons.length > 0
+                  ? json.qcReasons
+                  : [json?.fallbackReason || 'qc_front_only_fallback'],
+              failedAngles: Array.isArray(json?.failedAngles) ? json.failedAngles : [],
+              equippedSlots: equippedSlotKeys,
+              handedness: profile.dominantHand,
+              frontOnlyFallback: true,
+              provider: 'server-vton-qc',
+              model: modelName,
+            }),
+          }).catch(() => {});
+        }
+      } else {
+        callbacks?.onAngleReady?.({
+          angleDeg: 0,
+          imageUrl: finalZeroUrl,
+          sheetImageUrl: rawComposite,
+          isMasterAnchor: true,
+          readyAngles: getReadyAnglesList(),
+          elapsedMs: Date.now() - startedAt,
+          allSlices: { ...collectedSlices },
+          fromCache: Boolean(json?.cached),
+          serverLatencyMs: Number(json?.latencyMs) || 0,
+        });
+      }
 
       return {
         ok: true,
         fallbackToFlatLay: false,
-        frontOnlyDegraded: getReadyAnglesList().length <= 1,
-        reason: null,
+        frontOnlyDegraded: isDegradedFrontOnly,
+        ...(isDegradedFrontOnly
+          ? {
+              fallbackView: json?.fallbackView || 'positive-only',
+              notificationPopup: json?.notificationPopup ?? {
+                code: 'QC_FRONT_ONLY_FALLBACK',
+                durationMs: 3000,
+                messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+                messageEn: 'Due to a temporary connection issue, only the front view is shown.',
+              },
+              qcAttempts: Number(json?.qcAttempts) || 3,
+            }
+          : {}),
+        reason: isDegradedFrontOnly ? json?.fallbackReason || 'qc_front_only_fallback' : null,
         mode,
         provider: 'gemini-vton',
         styleMode,

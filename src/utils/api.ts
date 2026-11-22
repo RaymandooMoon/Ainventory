@@ -251,6 +251,9 @@ export async function apiFetch<T = Record<string, unknown>>(
   const isProfileConfigEndpoint = path.startsWith('/profile/config');
   const isStatelessCompute =
     path === '/garments/analyze' ||
+    path === '/garments/vision-analyze' ||
+    path === '/garments/web-lookup' ||
+    path === '/garments/studio-cutout' ||
     path === '/shopping/analyze' ||
     path === '/shopping-check' ||
     path === '/vton/synthesize' ||

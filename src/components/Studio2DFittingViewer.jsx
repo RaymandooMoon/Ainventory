@@ -454,6 +454,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
       const safeSpeed = Number.isFinite(velocityPxPerMs) ? Math.abs(velocityPxPerMs) : 0.45;
       const startContinuous = angleScrollRef.current;
+      const nextStepAngle360 = normalizeTurnaround360Angle(
+        startAngle + sign * 45,
+        DEFAULT_TURNAROUND_ANGLE
+      );
+      const currentMod360 = ((startContinuous % 360) + 360) % 360;
+      const forwardDelta = ((nextStepAngle360 - currentMod360) * sign + 360) % 360;
+      const signedStepDelta =
+        forwardDelta === 0 ? 45 : forwardDelta > 180 ? forwardDelta - 360 : forwardDelta;
+
       let physicsState = fastFlick
         ? {
             angleDeg: startContinuous,
@@ -463,12 +472,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         : {
             angleDeg: startContinuous,
             velocityDegPerSec: Math.min(440, Math.max(240, safeSpeed * 420)) * sign,
-            targetDetentDeg: Math.round(startContinuous / 45) * 45 + sign * 45,
+            targetDetentDeg: startContinuous + sign * signedStepDelta,
           };
 
       // Immediately advance one 45° step on normal swipe so tap/swipe feedback feels zero-latency
+      // and consecutive swipes never drop or flicker backward while the scrollbar glides to detent.
       if (!fastFlick) {
-        commitAngleDeg(startAngle + sign * 45);
+        commitAngleDeg(nextStepAngle360);
         triggerHaptic('selection');
       }
 
@@ -496,7 +506,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         setScrollResidualYawDeg(next.residualYawDeg);
         setAngularVelocityDegPerSec(next.velocityDegPerSec);
 
-        if (next.snappedAngle360 !== lastCommitted360) {
+        if (fastFlick && next.snappedAngle360 !== lastCommitted360) {
           lastCommitted360 = next.snappedAngle360;
           commitAngleDeg(next.snappedAngle360);
           triggerHaptic('selection');

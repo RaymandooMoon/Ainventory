@@ -1031,19 +1031,46 @@ export function localizeMaterialLabel(
   if (/pearl|onyx|진주|오닉스/.test(s)) {
     return isEn ? 'Pearl & Onyx' : '진주·오닉스';
   }
+  if (/corduroy|코듀로이|골덴/.test(s)) {
+    return isEn ? 'Corduroy' : '코듀로이';
+  }
+  if (/denim|데님/.test(s)) {
+    return isEn ? 'Denim' : '데님';
+  }
   if (/cashmere|캐시미어/.test(s)) {
     return isEn ? 'Cashmere' : '캐시미어';
   }
   if (/wool|merino|울/.test(s)) {
     return isEn ? 'Wool' : '울';
   }
-  if (/leather|calf|nappa|suede|가죽/.test(s)) {
+  if (/knit|니트/.test(s)) {
+    return isEn ? 'Knit' : '니트';
+  }
+  if (/fleece|플리스|기모/.test(s)) {
+    return isEn ? 'Fleece' : '플리스';
+  }
+  if (/suede|nubuck|스웨이드/.test(s)) {
+    return isEn ? 'Suede' : '스웨이드';
+  }
+  if (/leather|calf|nappa|가죽/.test(s)) {
     return isEn ? 'Leather' : '가죽';
   }
-  if (/silk|실크/.test(s)) {
+  if (/silk|satin|실크/.test(s)) {
     return isEn ? 'Silk' : '실크';
   }
-  if (/fabric|canvas|cotton|nylon|gabardine|linen|패브릭/.test(s)) {
+  if (/linen|린넨/.test(s)) {
+    return isEn ? 'Linen' : '린넨';
+  }
+  if (/cotton|면|코튼/.test(s)) {
+    return isEn ? 'Cotton' : '코튼';
+  }
+  if (/nylon|gore|나일론/.test(s)) {
+    return isEn ? 'Nylon' : '나일론';
+  }
+  if (/polyester|폴리/.test(s)) {
+    return isEn ? 'Polyester' : '폴리';
+  }
+  if (/fabric|canvas|gabardine|패브릭/.test(s)) {
     return isEn ? 'Fabric' : '패브릭';
   }
   if (/acetate|horn/.test(s)) {

@@ -78,6 +78,7 @@ export interface LoginThreeController {
 }
 
 const TRAIL_NODE_COUNT = 26;
+const ANALYTIC_WAVE_COUNT = 12;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -222,10 +223,10 @@ const FLUID_SIM_FRAG = /* glsl */ `
       nextH += (coreDip + ringCrest) * uMarbleWaveStrength * 0.52;
     }
 
-    // Gentle edge damping so waves fade cleanly at viewport borders
+    // Soft edge damping so waves fade invisibly at viewport borders without edge seams
     vec2 edge = min(vUv, 1.0 - vUv);
-    float edgeMask = smoothstep(0.0, 0.045, min(edge.x, edge.y));
-    nextH *= mix(0.84, 1.0, edgeMask);
+    float edgeMask = smoothstep(0.0, 0.075, min(edge.x, edge.y));
+    nextH *= mix(0.92, 1.0, edgeMask);
 
     gl_FragColor = encodeState(vec4(nextH, prevH, 0.0, 0.0));
   }
@@ -339,6 +340,11 @@ const SILK_CLOTH_FRAG = /* glsl */ `
   // C-infinity analytical wake ribbon behind the rolling marble
   uniform vec4 uTrailPts[${TRAIL_NODE_COUNT}];
   uniform float uTrailActive;
+
+  // High-precision analytical concentric ripple buffer (used whenever HalfFloat FBO is unavailable)
+  uniform float uUseFluidFbo;
+  uniform vec4 uAnalyticWaves[${ANALYTIC_WAVE_COUNT}];
+  uniform float uAnalyticActive;
 
   // Button-Originated Radial Transition Wave (Luxury <-> Aurora)
   uniform float uPrevVariant;
@@ -460,17 +466,60 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     grad = (satK * satExp * sumGrad * 0.0115) * uTrailActive;
   }
 
+  // Zero-quantization analytical concentric ripples (eliminates 8-bit FBO border & static grain)
+  void evalAnalyticRipples(vec2 suv, vec2 aspectScale, out float h, out vec2 grad) {
+    h = 0.0;
+    grad = vec2(0.0);
+    if (uAnalyticActive < 0.5) return;
+
+    for (int i = 0; i < ${ANALYTIC_WAVE_COUNT}; i++) {
+      vec4 w = uAnalyticWaves[i];
+      float str = w.w;
+      float age = w.z;
+      if (str <= 0.001 || age >= 0.995) continue;
+
+      vec2 delta = (suv - w.xy) * aspectScale;
+      float dist = length(delta);
+      float radius = 0.024 + age * 0.62;
+      float bandW = mix(0.036, 0.095, age);
+      float diff = dist - radius;
+      float invW2 = 1.0 / (bandW * bandW);
+      if (diff * diff * invW2 > 14.0) continue;
+
+      float env = exp(-(diff * diff) * invW2);
+      float life = pow(1.0 - age, 1.65) * smoothstep(0.0, 0.04, age);
+      float amp = str * life * 0.24;
+      float freq = 58.0;
+      float phase = diff * freq;
+      float c = cos(phase);
+      float s = sin(phase);
+
+      h += amp * env * c;
+      if (dist > 0.0005) {
+        float dHdr = amp * env * (-freq * s - (2.0 * diff * invW2) * c);
+        grad += (delta / dist) * (dHdr * 0.0115);
+      }
+    }
+  }
+
   void main() {
     vec2 suv = clamp(vScreenUv, 0.002, 0.998);
     vec2 aspectScale = vec2(uAspect, 1.0);
 
-    // 1. Sample 2D Wave Equation FBO (expanding concentric ripples around the rolling marble)
-    vec4 stC = decodeState(texture2D(uFluidTex, suv));
-    vec4 stL = decodeState(texture2D(uFluidTex, clamp(suv - vec2(uFluidTexel.x * 1.65, 0.0), 0.0, 1.0)));
-    vec4 stR = decodeState(texture2D(uFluidTex, clamp(suv + vec2(uFluidTexel.x * 1.65, 0.0), 0.0, 1.0)));
-    vec4 stD = decodeState(texture2D(uFluidTex, clamp(suv - vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
-    vec4 stU = decodeState(texture2D(uFluidTex, clamp(suv + vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
-    vec2 rippleGrad = vec2(stR.r - stL.r, stU.r - stD.r);
+    // 1. Sample 2D Wave Equation FBO on HalfFloat GPUs, or analytical concentric ring waves otherwise
+    float waveH = 0.0;
+    vec2 rippleGrad = vec2(0.0);
+    if (uUseFluidFbo > 0.5) {
+      vec4 stC = decodeState(texture2D(uFluidTex, suv));
+      vec4 stL = decodeState(texture2D(uFluidTex, clamp(suv - vec2(uFluidTexel.x * 1.65, 0.0), 0.0, 1.0)));
+      vec4 stR = decodeState(texture2D(uFluidTex, clamp(suv + vec2(uFluidTexel.x * 1.65, 0.0), 0.0, 1.0)));
+      vec4 stD = decodeState(texture2D(uFluidTex, clamp(suv - vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
+      vec4 stU = decodeState(texture2D(uFluidTex, clamp(suv + vec2(0.0, uFluidTexel.y * 1.65), 0.0, 1.0)));
+      waveH = stC.r;
+      rippleGrad = vec2(stR.r - stL.r, stU.r - stD.r);
+    } else {
+      evalAnalyticRipples(suv, aspectScale, waveH, rippleGrad);
+    }
 
     // 2. Subtle physical weight dimple right underneath the resting/rolling glass marble
     vec2 mDelta = (suv - uMarbleUv) * aspectScale;
@@ -486,7 +535,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     vec2 trailGrad;
     evalMarbleWake(suv, aspectScale, trailC, haloC, trailGrad);
 
-    float fboHeight = stC.r * 1.25 - mDimple * 0.24 + trailC * 0.36 + haloC * 0.16;
+    float fboHeight = waveH * 1.25 - mDimple * 0.24 + trailC * 0.36 + haloC * 0.16;
     vec2 fboVel = rippleGrad * 0.95 + trailGrad * 0.85;
 
     // Combine true 3D cloth normal with concentric ripples + marble weight dimple + wake
@@ -525,7 +574,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float crest = clamp(vFoldCrest + fboHeight * 0.42, 0.0, 1.0);
     float clothAO = smoothstep(0.06, 0.86, crest);
     float rippleLuminance = clamp(
-      length(rippleGrad) * 3.6 + abs(stC.r) * 1.05 + trailC * 0.42 + haloC * 0.18,
+      length(rippleGrad) * 3.6 + abs(waveH) * 1.05 + trailC * 0.42 + haloC * 0.18,
       0.0,
       0.95
     );
@@ -935,12 +984,25 @@ export function createLoginThreeController(
     { length: TRAIL_NODE_COUNT },
     () => new THREE.Vector4(0.5, 0.36, 1.0, 0.0)
   );
+  const analyticWaves: THREE.Vector4[] = Array.from(
+    { length: ANALYTIC_WAVE_COUNT },
+    () => new THREE.Vector4(0.5, 0.5, 1.0, 0.0)
+  );
+  let analyticWaveCursor = 0;
+  const pushAnalyticWave = (u: number, v: number, strength: number) => {
+    const slot = analyticWaves[analyticWaveCursor];
+    slot.set(clamp(u, 0.01, 0.99), clamp(v, 0.01, 0.99), 0.0, clamp(strength, 0.0, 1.0));
+    analyticWaveCursor = (analyticWaveCursor + 1) % ANALYTIC_WAVE_COUNT;
+  };
 
   const clothMat = new THREE.ShaderMaterial({
     uniforms: {
       uFluidTex: { value: simRead.texture },
       uFluidTexel: { value: new THREE.Vector2(1 / simW, 1 / simH) },
       uEncodedByte: { value: encodedByte },
+      uUseFluidFbo: { value: useHalfFloat ? 1.0 : 0.0 },
+      uAnalyticWaves: { value: analyticWaves },
+      uAnalyticActive: { value: 0.0 },
       uTime: { value: 0 },
       uAspect: { value: initialW / initialH },
       uThemeDark: { value: options.initialDark ? 1 : 0 },
@@ -1365,29 +1427,54 @@ export function createLoginThreeController(
 
     clothMat.uniforms.uTrailActive.value = maxAliveStrength > 0.004 ? 1.0 : 0.0;
 
-    // --- PASS 1: Step 2D Wave Equation FBO (concentric expanding ripples!) ---
-    if (pendingBurstStrength > 0.001 || marbleWaveStrength > 0.001) {
-      fboEnergyTimer = 4.5;
-    }
-    if (fboEnergyTimer > 0) {
-      fboEnergyTimer = Math.max(0, fboEnergyTimer - dt);
-      simMat.uniforms.uPrevState.value = simRead.texture;
-      simMat.uniforms.uDecay.value = 0.976 + currentSurge * 0.008;
+    // --- PASS 1: Step 2D Wave Equation FBO (HalfFloat GPUs) or Analytic Concentric Ripples ---
+    if (useHalfFloat) {
+      if (pendingBurstStrength > 0.001 || marbleWaveStrength > 0.001) {
+        fboEnergyTimer = 4.5;
+      }
+      if (fboEnergyTimer > 0) {
+        fboEnergyTimer = Math.max(0, fboEnergyTimer - dt);
+        simMat.uniforms.uPrevState.value = simRead.texture;
+        simMat.uniforms.uDecay.value = 0.976 + currentSurge * 0.008;
 
-      (simMat.uniforms.uBurstPos.value as THREE.Vector2).set(pendingBurstU, pendingBurstV);
-      simMat.uniforms.uBurstStrength.value = pendingBurstStrength;
-      simMat.uniforms.uBurstRadius.value = pendingBurstRadius;
+        (simMat.uniforms.uBurstPos.value as THREE.Vector2).set(pendingBurstU, pendingBurstV);
+        simMat.uniforms.uBurstStrength.value = pendingBurstStrength;
+        simMat.uniforms.uBurstRadius.value = pendingBurstRadius;
 
-      (simMat.uniforms.uMarbleWavePos.value as THREE.Vector2).set(marbleU, marbleV);
-      simMat.uniforms.uMarbleWaveStrength.value = marbleWaveStrength;
-      simMat.uniforms.uMarbleWaveRadius.value = marbleR * 0.92;
+        (simMat.uniforms.uMarbleWavePos.value as THREE.Vector2).set(marbleU, marbleV);
+        simMat.uniforms.uMarbleWaveStrength.value = marbleWaveStrength;
+        simMat.uniforms.uMarbleWaveRadius.value = marbleR * 0.92;
 
-      renderer.setRenderTarget(simWrite);
-      renderer.render(simScene, orthoCam);
+        renderer.setRenderTarget(simWrite);
+        renderer.render(simScene, orthoCam);
 
-      const temp = simRead;
-      simRead = simWrite;
-      simWrite = temp;
+        const temp = simRead;
+        simRead = simWrite;
+        simWrite = temp;
+      }
+    } else {
+      const waveAgeStep = dt / 2.1;
+      let anyAnalyticAlive = false;
+      for (let i = 0; i < ANALYTIC_WAVE_COUNT; i += 1) {
+        const w = analyticWaves[i];
+        if (w.w > 0.001) {
+          w.z = Math.min(1.0, w.z + waveAgeStep);
+          if (w.z >= 1.0) {
+            w.w = 0.0;
+          } else {
+            anyAnalyticAlive = true;
+          }
+        }
+      }
+      if (pendingBurstStrength > 0.001) {
+        pushAnalyticWave(pendingBurstU, pendingBurstV, pendingBurstStrength);
+        anyAnalyticAlive = true;
+      }
+      if (marbleWaveStrength >= 0.31) {
+        pushAnalyticWave(marbleU, marbleV, marbleWaveStrength * 0.85);
+        anyAnalyticAlive = true;
+      }
+      clothMat.uniforms.uAnalyticActive.value = anyAnalyticAlive ? 1.0 : 0.0;
     }
 
     pendingBurstStrength = 0;

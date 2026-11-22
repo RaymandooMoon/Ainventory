@@ -1757,7 +1757,7 @@
 
 .studio-2d-vton-viewer[data-stage-view='flatlay'] .studio-worn-slots-dock-shell,
 .studio-2d-vton-viewer[data-stage-view='flatlay'] .studio-worn-slots-dock,
-.studio-2d-vton-viewer[data-stage-view='flatlay'] .studio-bottom-left-hud-stack {
+.studio-2d-vton-viewer[data-stage-view='flatlay']:not([data-lookbook-overlay='true']) .studio-bottom-left-hud-stack {
   z-index: 15 !important;
   opacity: 0 !important;
   visibility: hidden !important;
@@ -1795,7 +1795,8 @@
 }
 
 /* Character-tap unfolded Flat-Lay Lookbook overlay spans full stage width cleanly above cards while preserving top Weather Capsule & Wardrobe HUD */
-.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-model-stage {
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-model-stage,
+.studio-2d-vton-viewer[data-lookbook-overlay='true'] .studio-2d-model-stage.is-flatlay-stage {
   z-index: 57;
   pointer-events: none;
 }

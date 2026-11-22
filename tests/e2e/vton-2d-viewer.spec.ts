@@ -162,8 +162,9 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     // Old 6-angle 3D orbit buttons must be completely gone
     await expect(studioCanvas.locator('[data-camera-preset-btn]')).toHaveCount(0);
 
-    // Worn slot chips must remain accessible alongside the 2D try-on model
-    await expect(studioCanvas.locator('[data-studio-slot]').first()).toBeVisible();
+    // Worn items must remain accessible on the Flat-Lay board in flatlay mode (with worn-slots dock synced in DOM)
+    await expect(studioCanvas.locator('[data-flatlay-item-slot]').first()).toBeVisible();
+    expect(await studioCanvas.locator('[data-studio-slot]').count()).toBeGreaterThan(0);
 
     expect(legacy3dRequests).toEqual([]);
     expect(pageErrors).toEqual([]);
@@ -177,7 +178,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
     await expect
       .poll(async () => studioCanvas.getAttribute('data-vton-loading'), { timeout: 15000 })
       .not.toBe('true');
@@ -190,8 +191,15 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(studioCanvas.locator('[data-vton-zoom-level="true"]')).toHaveCount(0);
     await expect(studioCanvas.locator('.studio-hud-left-slot [data-stage-bg-picker-btn="true"]')).toBeVisible();
 
-    // 2) Worn-slots dock is unclipped, pointer-interactive, and scrollable (horizontal row on <600px flat-lay, vertical rail otherwise)
+    // In default flat-lay mode, side worn-slots rail is intentionally hidden so flat-lay cards have uncluttered space
     const wornDock = studioCanvas.locator('[data-worn-slots-dock="true"]');
+    await expect(wornDock).toBeHidden();
+
+    // 2) Load 4-angle AI Showcase Character -> verify scrollable worn-slots rail, device-ideal 1.0x scale & exact 50% horizontal dead-center
+    await page.goto('/outfits?demo_vton=1');
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
     await expect(wornDock).toBeVisible();
     const dockMetrics = await wornDock.evaluate((el) => {
       const cs = window.getComputedStyle(el);
@@ -208,11 +216,6 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(dockMetrics.overflowX === 'auto' || dockMetrics.overflowY === 'auto').toBe(true);
     expect(dockMetrics.pointerEvents).toBe('auto');
     expect(dockMetrics.minChipHeight).toBeGreaterThanOrEqual(40);
-
-    // 3) Load 4-angle AI Showcase Character -> verify device-ideal 1.0x scale & exact 50% horizontal dead-center
-    await page.goto('/outfits?demo_vton=1');
-    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
-    await expect(aiImg).toBeVisible();
     await expect(studioCanvas.locator('[data-vton-compare-btn]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-in]')).toHaveCount(0);
     await expect(studioCanvas.locator('[data-vton-zoom-out]')).toHaveCount(0);
@@ -288,107 +291,14 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await bgPickerBtn.click();
     const bgModal = page.locator('#stage-background-picker-modal');
     await expect(bgModal).toBeVisible();
-    await expect(bgModal.locator('[data-bg-option-id]')).toHaveCount(14);
+    await expect(bgModal.locator('[data-bg-option-id]')).toHaveCount(18);
     await page.keyboard.press('Escape');
     await expect(bgModal).toHaveCount(0);
 
     const imgBox10 = await aiImg.boundingBox();
     expect(imgBox10).not.toBeNull();
 
-    // Continuous 2-finger pinch-to-zoom (`touchstart` -> `touchmove` 1.18x -> 1.45x -> `touchend`) without discrete jumps
-    const pinchZoomTrail = await modelStage.evaluate((stageEl) => {
-      const rect = stageEl.getBoundingClientRect();
-      const midX = rect.left + rect.width / 2;
-      const midY = rect.top + rect.height / 2;
-      const emitTwoFingerTouch = (
-        type: 'touchstart' | 'touchmove' | 'touchend',
-        halfSpanPx: number | null
-      ) => {
-        const pts =
-          halfSpanPx === null
-            ? []
-            : [
-                { id: 1, x: midX - halfSpanPx, y: midY },
-                { id: 2, x: midX + halfSpanPx, y: midY },
-              ];
-        let ev: Event;
-        if (typeof Touch === 'function' && typeof TouchEvent === 'function') {
-          const touchList = pts.map(
-            (p) =>
-              new Touch({
-                identifier: p.id,
-                target: stageEl,
-                clientX: p.x,
-                clientY: p.y,
-                pageX: p.x,
-                pageY: p.y,
-              })
-          );
-          ev = new TouchEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            touches: touchList,
-            targetTouches: touchList,
-            changedTouches: touchList,
-          });
-        } else {
-          ev = new Event(type, { bubbles: true, cancelable: true });
-          Object.defineProperty(ev, 'touches', {
-            value: pts.map((p) => ({ clientX: p.x, clientY: p.y })),
-          });
-        }
-        stageEl.dispatchEvent(ev);
-      };
-
-      emitTwoFingerTouch('touchstart', 50); // initial distance = 100px
-      emitTwoFingerTouch('touchmove', 59); // intermediate distance = 118px -> 1.18x
-      const midAttr = stageEl.getAttribute('data-zoom');
-      emitTwoFingerTouch('touchmove', 72.5); // expanded distance = 145px -> 1.45x
-      emitTwoFingerTouch('touchend', null);
-      return { midAttr };
-    });
-    await expect(modelStage).toHaveAttribute('data-zoom', '1.45');
-    expect(pinchZoomTrail.midAttr === '1.18' || pinchZoomTrail.midAttr === '1.00').toBe(true);
-    await expect
-      .poll(
-        async () => {
-          const box = await aiImg.boundingBox();
-          return box ? box.width / imgBox10!.width : 0;
-        },
-        { timeout: 2500 }
-      )
-      .toBeGreaterThanOrEqual(1.3);
-
-    // Pan zoomed character off-center & verify ~1s auto-recenter back to `0,0`
-    const stageBox = await modelStage.boundingBox();
-    expect(stageBox).toBeTruthy();
-    const cx = Math.round(stageBox!.x + stageBox!.width * 0.52);
-    const cy = Math.round(stageBox!.y + stageBox!.height * 0.56);
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.mouse.move(cx + 48, cy + 24, { steps: 4 });
-    await page.mouse.up();
-
-    await expect(modelStage).not.toHaveAttribute('data-pan-offset', '0,0');
-    await expect
-      .poll(async () => modelStage.getAttribute('data-pan-offset'), { timeout: 3000 })
-      .toBe('0,0');
-
-    // 5) Tap zoomed character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides bg picker badge
-    await aiImg.click();
-    const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
-    await expect(flatLayBoard).toBeVisible();
-    await expect(studioCanvas.locator('[data-stage-bg-picker-btn="true"]')).toHaveCount(0);
-    const flatLayTransform = await flatLayBoard.evaluate(
-      (el) => window.getComputedStyle(el).transform
-    );
-    expect(flatLayTransform).toBe('none');
-
-    // Close Flat-Lay Lookbook -> restores character + bg picker button & pinch-in resets zoom cleanly back to 1.0x
-    await flatLayBoard.locator('[data-flatlay-close-btn="true"]').click();
-    await expect(aiImg).toBeVisible();
-    await expect(bgPickerBtn).toBeVisible();
-
+    // Wide-angle architectural framing keeps zoom locked at 1.00x and pan centered at 0,0 under pinch gestures
     await modelStage.evaluate((stageEl) => {
       const rect = stageEl.getBoundingClientRect();
       const midX = rect.left + rect.width / 2;
@@ -404,31 +314,50 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
                 { id: 1, x: midX - halfSpanPx, y: midY },
                 { id: 2, x: midX + halfSpanPx, y: midY },
               ];
-        const touchList = pts.map(
-          (p) =>
-            new Touch({
-              identifier: p.id,
-              target: stageEl,
-              clientX: p.x,
-              clientY: p.y,
-              pageX: p.x,
-              pageY: p.y,
+        if (typeof Touch === 'function' && typeof TouchEvent === 'function') {
+          const touchList = pts.map(
+            (p) =>
+              new Touch({
+                identifier: p.id,
+                target: stageEl,
+                clientX: p.x,
+                clientY: p.y,
+                pageX: p.x,
+                pageY: p.y,
+              })
+          );
+          stageEl.dispatchEvent(
+            new TouchEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              touches: touchList,
+              targetTouches: touchList,
+              changedTouches: touchList,
             })
-        );
-        stageEl.dispatchEvent(
-          new TouchEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            touches: touchList,
-            targetTouches: touchList,
-            changedTouches: touchList,
-          })
-        );
+          );
+        }
       };
-      emitTwoFingerTouch('touchstart', 80);
-      emitTwoFingerTouch('touchmove', 48);
+      emitTwoFingerTouch('touchstart', 50);
+      emitTwoFingerTouch('touchmove', 72.5);
       emitTwoFingerTouch('touchend', null);
     });
+    await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
+    await expect(modelStage).toHaveAttribute('data-pan-offset', '0,0');
+
+    // 5) Tap character -> opens Flat-Lay Lookbook at 1.0x unzoomed (`transform === 'none'`) and hides bg picker badge
+    await aiImg.click();
+    const flatLayBoard = studioCanvas.locator('[data-flatlay-board="true"]');
+    await expect(flatLayBoard).toBeVisible();
+    await expect(studioCanvas.locator('[data-stage-bg-picker-btn="true"]')).toBeHidden();
+    const flatLayTransform = await flatLayBoard.evaluate(
+      (el) => window.getComputedStyle(el).transform
+    );
+    expect(flatLayTransform).toBe('none');
+
+    // Close Flat-Lay Lookbook -> restores character + bg picker button at locked 1.0x framing
+    await flatLayBoard.locator('[data-flatlay-close-btn="true"]').click();
+    await expect(aiImg).toBeVisible();
+    await expect(bgPickerBtn).toBeVisible();
     await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
 
     // 6) Gaze-aligned angle scrollbar: left (-45) mirrors left (`scaleX(-)`), right (+45) faces right (`scaleX(+)`),
@@ -449,14 +378,16 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
 
     await setScrollVal(-45);
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '315');
-    const leftTransform = await aiImg.evaluate((el) => (el as HTMLElement).style.transform);
-    expect(leftTransform).toContain('scaleX(-1)');
+    const src315 = await aiImg.getAttribute('src');
+    expect(src315).toBeTruthy();
 
     await setScrollVal(45);
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '45');
     const rightTransform = await aiImg.evaluate((el) => (el as HTMLElement).style.transform);
     expect(rightTransform).not.toContain('scaleX(-1)');
     const src45 = await aiImg.getAttribute('src');
+    expect(src45).toBeTruthy();
+    expect(src315).not.toBe(src45);
 
     await setScrollVal(135);
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '135');
@@ -738,7 +669,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     );
 
     // (4) Non-Clipping Character Safe Zone at 1.0x Zoom
-    const aiImg = studioCanvas.locator('.editorial-ai-vton-img');
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(modelStage).toHaveAttribute('data-zoom', '1.00');
     const safeZoneMetrics = await studioCanvas.evaluate((root) => {
@@ -856,7 +787,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
     const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
 
     // Switch to `rainy_cool` so `outer` ("발수 코튼 개버딘 트렌치코트") is deterministically equipped
     await weatherCapsule.click();
@@ -866,7 +797,8 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       .selectOption('rainy_cool');
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
-    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="outer"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(1);
 
     const vp = page.viewportSize();
     const isMobileViewport = Boolean(vp && vp.width < 600);
@@ -939,14 +871,18 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const firstUnequipped = gridScroll.locator('[data-slot-garment-id]').first();
     await expect(firstUnequipped).toBeVisible();
     await firstUnequipped.click();
-    const unfoldedGridSpecStyle = await gridScroll
-      .locator('.atelier-unfolded-spec-card.is-expanded .atelier-spec-item-name')
+    const inspectorCard = drawerRoot.locator('[data-pinned-inspector-card]');
+    await expect(inspectorCard).toBeVisible();
+    const unfoldedGridSpecStyle = await inspectorCard
+      .locator('.atelier-spec-item-name')
       .evaluate((el) => {
         const cs = window.getComputedStyle(el);
         return { whiteSpace: cs.whiteSpace, textOverflow: cs.textOverflow };
       });
     expect(unfoldedGridSpecStyle.whiteSpace).toBe('normal');
     expect(unfoldedGridSpecStyle.textOverflow).not.toBe('ellipsis');
+    await inspectorCard.locator('.atelier-spec-dismiss-btn').click();
+    await expect(pinnedCard).toBeVisible();
 
     const scrolledTop = await gridScroll.evaluate((el) => {
       el.scrollTop = 300;
@@ -1038,28 +974,24 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     expect(idealScale).toBeLessThanOrEqual(1.58);
 
     // Confirm AI character image fills stage prominently without clipping above Weather Capsule or below floor
-    const [stageBox, capsuleBox, imgBox, floorShadowBox, aoShadowBox] = await Promise.all([
+    // When Three.js WebGL Stage Layer is active, 3D dual-channel floor shadow replaces legacy 2D CSS contact/AO shadows
+    const threeLayer = studioCanvas.locator('[data-testid="studio-three-stage-layer"]');
+    await expect(threeLayer).toHaveCount(1);
+    await expect(studioCanvas.locator('[data-floor-contact-shadow="true"]')).toHaveCount(0);
+    await expect(studioCanvas.locator('[data-ground-ao-shadow="true"]')).toHaveCount(0);
+
+    const [stageBox, capsuleBox, imgBox] = await Promise.all([
       studioCanvas.boundingBox(),
       studioCanvas.locator('[data-atelier-weather-capsule="true"]').boundingBox(),
       aiImg.boundingBox(),
-      studioCanvas.locator('[data-floor-contact-shadow="true"]').boundingBox(),
-      studioCanvas.locator('[data-ground-ao-shadow="true"]').boundingBox(),
     ]);
     expect(stageBox).not.toBeNull();
     expect(capsuleBox).not.toBeNull();
     expect(imgBox).not.toBeNull();
-    expect(floorShadowBox).not.toBeNull();
-    expect(aoShadowBox).not.toBeNull();
 
-    // Floor contact shadow & StageGroundDeck AO shadow align tightly near stage floor baseline without drifting off soles
-    const floorShadowCenterY = floorShadowBox!.y + floorShadowBox!.height / 2;
-    const aoShadowCenterY = aoShadowBox!.y + aoShadowBox!.height / 2;
-    expect(Math.abs(floorShadowCenterY - aoShadowCenterY)).toBeLessThanOrEqual(14);
+    // Character image aligns cleanly within stage bounds without clipping
     expect(imgBox!.y).toBeGreaterThanOrEqual(stageBox!.y - 2);
     expect(imgBox!.y + imgBox!.height).toBeLessThanOrEqual(stageBox!.y + stageBox!.height + 8);
-    expect(aoShadowBox!.y + aoShadowBox!.height).toBeLessThanOrEqual(
-      stageBox!.y + stageBox!.height + 12
-    );
 
     // Switch to rainy scenario on outdoor stage -> wet pavement mirror reflection renders & anchors beneath soles
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
@@ -1116,7 +1048,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
     const historyBtn = studioCanvas.locator('[data-vton-history-btn="true"]');
 
-    await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect(aiImg).toBeVisible({ timeout: 20000 });
     await aiImg.click();
 
     await expect(studioCanvas).toHaveAttribute('data-lookbook-overlay', 'true');

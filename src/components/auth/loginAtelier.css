@@ -64,7 +64,16 @@
   font-family: var(--atelier-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
   box-sizing: border-box;
+}
+
+.atelier-auth-root input,
+.atelier-auth-root textarea,
+.atelier-auth-root [contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .atelier-auth-root[data-auth-theme='dark'] {
@@ -1581,6 +1590,8 @@
 }
 
 .atelier-signup-stepper {
+  list-style: none;
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -1590,11 +1601,13 @@
   border: 1px solid var(--atelier-panel-border);
 }
 
-.atelier-step-item {
+.atelier-step-item,
+.atelier-signup-step {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
+  min-width: 0;
   font-size: 11px;
   font-weight: 600;
   color: var(--atelier-ink-muted);
@@ -1604,16 +1617,19 @@
   font-variant-numeric: tabular-nums;
 }
 
-.atelier-step-item.is-current {
+.atelier-step-item.is-current,
+.atelier-signup-step.is-current {
   color: var(--atelier-ink-primary);
   font-weight: 700;
 }
 
-.atelier-step-item.is-done {
+.atelier-step-item.is-done,
+.atelier-signup-step.is-done {
   color: var(--atelier-ink-primary);
 }
 
-.atelier-step-num {
+.atelier-step-num,
+.atelier-signup-step-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1628,7 +1644,9 @@
 }
 
 .atelier-step-item.is-current .atelier-step-num,
-.atelier-step-item.is-done .atelier-step-num {
+.atelier-step-item.is-done .atelier-step-num,
+.atelier-signup-step.is-current .atelier-signup-step-num,
+.atelier-signup-step.is-done .atelier-signup-step-num {
   background: var(--atelier-accent-bg);
   color: var(--atelier-accent-fg);
   border-color: var(--atelier-accent-bg);

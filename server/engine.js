@@ -747,9 +747,59 @@ function resolveLookStylePresetKey(rawKey, fallbackKey) {
   return Object.hasOwn(LOOK_STYLE_PRESETS, normalized) ? normalized : fallbackKey;
 }
 
+export function parseGarmentDetails(item) {
+  if (!item || typeof item !== 'object') return {};
+  if (item.garment_details && typeof item.garment_details === 'object' && !Array.isArray(item.garment_details)) {
+    return item.garment_details;
+  }
+  const raw = item.garment_details_json;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+export function isBottomBeltCompatible(bottomGarment) {
+  if (!bottomGarment || typeof bottomGarment !== 'object') return false;
+  const details = parseGarmentDetails(bottomGarment);
+  if (details.belt_compatible === false) return false;
+  if (details.belt_compatible === true) return true;
+
+  const waistType = String(details.waist_type || '')
+    .trim()
+    .toLowerCase();
+  if (waistType === 'elastic' || waistType === 'drawstring') return false;
+  if (waistType === 'belt_loops' || waistType === 'semi_elastic') return true;
+
+  const sub = String(bottomGarment.subcategory || '')
+    .trim()
+    .toLowerCase();
+  if (sub === 'jogger' || sub === 'sweatpants' || sub === 'leggings' || sub === 'track_pants') {
+    return false;
+  }
+  const text = `${bottomGarment.name || ''} ${bottomGarment.name_en || ''} ${bottomGarment.notes || ''} ${bottomGarment.fit_note || ''}`.toLowerCase();
+  if (/고무줄|전체\s*밴딩|풀\s*밴딩|드로우스트링|벨트\s*불가|elastic\s*waist|drawstring|no\s*belt/i.test(text)) {
+    return false;
+  }
+  return true;
+}
+
 function computeStylePresetAffinityBonus(item, presetKey) {
   const sub = String(item.subcategory || '').toLowerCase();
   const formality = String(item.formality || '').toLowerCase();
+  const styleMood = String(item.style_mood || '')
+    .trim()
+    .toLowerCase();
+  const fit = String(item.fit || '')
+    .trim()
+    .toLowerCase();
   const colorName = String(item.color_name || '');
   const text = `${sub} ${item.fabric || ''} ${item.name || ''} ${item.name_en || ''}`.toLowerCase();
 
@@ -758,6 +808,16 @@ function computeStylePresetAffinityBonus(item, presetKey) {
     if (formality === 'smart') bonus += 18;
     else if (formality === 'formal') bonus += 12;
     else if (formality === 'casual') bonus -= 8;
+
+    if (styleMood === 'smart') bonus += 14;
+    else if (styleMood === 'minimal') bonus += 8;
+    else if (styleMood === 'formal') bonus += 6;
+    else if (styleMood === 'street' || styleMood === 'sporty') bonus -= 14;
+    else if (styleMood === 'casual') bonus -= 4;
+
+    if (fit === 'regular' || fit === 'straight' || fit === 'slim') bonus += 6;
+    else if (fit === 'relaxed') bonus += 3;
+    else if (fit === 'oversized') bonus -= 8;
 
     if (
       /blazer|trench|coat|shirt|oxford|blouse|merino|knit|turtleneck|slacks|trousers|chino|loafer|derby|chelsea|briefcase|블레이저|트렌치|코트|셔츠|블라우스|메리노|니트|슬랙스|로퍼|더비|서류가방/.test(
@@ -774,6 +834,14 @@ function computeStylePresetAffinityBonus(item, presetKey) {
     else if (formality === 'smart') bonus += 4;
     else if (formality === 'formal') bonus -= 16;
 
+    if (styleMood === 'casual') bonus += 14;
+    else if (styleMood === 'minimal' || styleMood === 'sporty') bonus += 6;
+    else if (styleMood === 'formal') bonus -= 14;
+
+    if (fit === 'relaxed' || fit === 'wide' || fit === 'oversized') bonus += 8;
+    else if (fit === 'regular' || fit === 'straight') bonus += 4;
+    else if (fit === 'slim') bonus -= 4;
+
     if (
       /cardigan|windbreaker|denim|trucker|quilted|puffer|padding|fleece|jacket|sweatshirt|hoodie|tee|t-shirt|tshirt|sweater|jeans|cotton|cargo|sneaker|court|runner|crossbody|tote|backpack|가디건|카디건|윈드브레이커|데님|퀼팅|패딩|자켓|스웨트|후드|티셔츠|청바지|스니커즈|크로스|토트|백팩/.test(
         text
@@ -789,6 +857,14 @@ function computeStylePresetAffinityBonus(item, presetKey) {
     else if (formality === 'smart') bonus += 10;
     else if (formality === 'casual') bonus -= 18;
 
+    if (styleMood === 'formal') bonus += 18;
+    else if (styleMood === 'smart') bonus += 10;
+    else if (styleMood === 'minimal') bonus += 6;
+    else if (styleMood === 'casual' || styleMood === 'street' || styleMood === 'sporty') bonus -= 16;
+
+    if (fit === 'regular' || fit === 'straight' || fit === 'slim') bonus += 10;
+    else if (fit === 'oversized' || fit === 'wide') bonus -= 10;
+
     if (
       /suit|blazer|coat|trench|oxford|silk|shirt|blouse|slacks|trousers|loafer|derby|briefcase|tie|정장|블레이저|코트|옥스포드|실크|셔츠|슬랙스|로퍼|더비|서류가방|타이/.test(
         text
@@ -802,6 +878,14 @@ function computeStylePresetAffinityBonus(item, presetKey) {
   } else if (presetKey === 'minimal_daily') {
     if (formality === 'smart') bonus += 16;
     else if (formality === 'casual') bonus += 10;
+
+    if (styleMood === 'minimal') bonus += 16;
+    else if (styleMood === 'smart') bonus += 8;
+    else if (styleMood === 'casual') bonus += 6;
+    else if (styleMood === 'street') bonus -= 6;
+    else if (styleMood === 'sporty') bonus -= 8;
+
+    if (fit === 'straight' || fit === 'regular' || fit === 'relaxed' || fit === 'wide') bonus += 6;
 
     if (/블랙|화이트|아이보리|크림|오트밀|그레이|차콜|베이지|토프|네이비/.test(colorName)) {
       bonus += 14;
@@ -820,6 +904,15 @@ function computeStylePresetAffinityBonus(item, presetKey) {
     else if (formality === 'formal') bonus -= 22;
     if (isStreetAsset) bonus += 24;
 
+    if (styleMood === 'street') bonus += 18;
+    else if (styleMood === 'casual') bonus += 10;
+    else if (styleMood === 'sporty') bonus += 8;
+    else if (styleMood === 'formal') bonus -= 18;
+    else if (styleMood === 'smart') bonus -= 10;
+
+    if (fit === 'oversized' || fit === 'wide' || fit === 'relaxed' || fit === 'cropped') bonus += 12;
+    else if (fit === 'slim') bonus -= 10;
+
     if (
       /bomber|windbreaker|track|ripstop|parka|overshirt|denim|trucker|utility|vest|sweatshirt|hoodie|boxy|cargo|parachute|jogger|chunky|runner|sneaker|combat|cap|sling|duffel|street|보머|윈드브레이커|트랙|립스톱|파카|오버셔츠|유틸리티|베스트|맨투맨|스웨트|후드|박시|카고|파라슈트|조거|청키|러너|스니커즈|컴뱃|캡|슬링|더플|스트릿|stone island|prada|balenciaga|stussy|off-white|fear of god|rick owens|chrome hearts/.test(
         streetText
@@ -836,6 +929,15 @@ function computeStylePresetAffinityBonus(item, presetKey) {
     if (formality === 'casual') bonus += 22;
     else if (formality === 'formal') bonus -= 26;
     if (isStreetAsset) bonus += 26;
+
+    if (styleMood === 'street') bonus += 16;
+    else if (styleMood === 'sporty' || styleMood === 'casual') bonus += 10;
+    else if (styleMood === 'formal') bonus -= 20;
+    else if (styleMood === 'smart') bonus -= 12;
+
+    if (fit === 'oversized' || fit === 'wide' || fit === 'relaxed') bonus += 16;
+    else if (fit === 'slim') bonus -= 14;
+    else if (fit === 'regular') bonus -= 6;
 
     if (
       /varsity|puffer|oversized|heavy|wide|baggy|loose|hoodie|fleece|bauhaus|cargo|jogger|geobasket|hightop|high-top|melting|hiphop|hip-hop|work boots|nubuck|chunky|combat|cross|cap|sling|duffel|chain|바시티|푸퍼|오버사이즈|헤비|와이드|배기|루즈|후드|플리스|바우하우스|카고|조거|지오바스켓|하이탑|멜팅|힙합|워크부츠|누벅|청키|컴뱃|크로스|캡|슬링|더플|체인|rick owens|balenciaga|fear of god|chrome hearts|mihara|timberland|amiri|off-white|dior|gucci/.test(
@@ -979,6 +1081,19 @@ export function buildWeatherRecommendations(
       }
     }
 
+    const thickness = String(item.thickness || '')
+      .trim()
+      .toLowerCase();
+    if (thickness === 'thick') {
+      if (avgTemp <= 12) score += 12;
+      else if (avgTemp >= 21) score -= 18;
+    } else if (thickness === 'thin') {
+      if (avgTemp >= 20) score += 12;
+      else if (avgTemp <= 7) score -= 16;
+    } else if (thickness === 'medium') {
+      if (avgTemp >= 10 && avgTemp <= 22) score += 6;
+    }
+
     if (preferredFormality && item.formality === preferredFormality) {
       score += 10;
     }
@@ -1006,6 +1121,10 @@ export function buildWeatherRecommendations(
   const isUmbrellaItem = (g) =>
     String(g.subcategory || '') === 'umbrella' ||
     /우산|양산|umbrella|parasol/i.test(`${g.name || ''} ${g.name_en || ''}`);
+  const isBeltItem = (g) =>
+    String(g.subcategory || '').toLowerCase() === 'belt' ||
+    String(g.slot_key || '').toLowerCase() === 'acc_belt' ||
+    (g.category === 'accessory' && /벨트|\bbelt\b/i.test(`${g.name || ''} ${g.name_en || ''}`));
   const bagSubs = new Set([
     'bag',
     'tote',
@@ -1066,8 +1185,9 @@ export function buildWeatherRecommendations(
       (g) => !((avgTemp < 23 || isRainy) && OPEN_SUMMER_SHOES.has(String(g.subcategory || '')))
     ),
     umbrella: active.filter(isUmbrellaItem),
+    belt: active.filter(isBeltItem),
     accessory: byCat('accessory')
-      .filter((g) => !isUmbrellaItem(g) && bagSubs.has(String(g.subcategory || 'bag')))
+      .filter((g) => !isUmbrellaItem(g) && !isBeltItem(g) && bagSubs.has(String(g.subcategory || 'bag')))
       .concat(byCat('bag')),
   };
 
@@ -1129,6 +1249,15 @@ export function buildWeatherRecommendations(
     const chosenSocks = pickBest('socks', idx);
     const chosenAccessory = pickBest('accessory', idx);
     const chosenUmbrella = isRainy || isSnowy ? pickBest('umbrella', idx) : null;
+    const bottomSupportsBelt = Boolean(chosenBottom && isBottomBeltCompatible(chosenBottom));
+    const wantsBeltForPreset =
+      preset.key === 'formal_office' ||
+      preset.key === 'business_casual' ||
+      preset.key === 'minimal_daily';
+    const chosenBelt =
+      bottomSupportsBelt && wantsBeltForPreset && pools.belt.length > 0
+        ? pickBest('belt', idx)
+        : null;
     const chosenDress = null;
 
     const slotMap = {
@@ -1145,6 +1274,8 @@ export function buildWeatherRecommendations(
       socks: chosenSocks,
       shoes: chosenShoes,
       accessory: chosenAccessory,
+      belt: chosenBelt,
+      acc_belt: chosenBelt,
       umbrella: chosenUmbrella,
       acc_umbrella: chosenUmbrella,
     };
@@ -1163,6 +1294,7 @@ export function buildWeatherRecommendations(
       chosenSocks,
       chosenShoes,
       chosenAccessory,
+      chosenBelt,
       chosenUmbrella,
     ].filter(Boolean);
 
@@ -1195,6 +1327,12 @@ export function buildWeatherRecommendations(
       } else {
         reasons.push(
           `낮 기온이 ${weather.tempMax}°C까지 올라 아우터 없이 쾌적한 단품 실루엣을 구성했습니다.`
+        );
+      }
+
+      if (wantsBeltForPreset && chosenBottom && !bottomSupportsBelt && pools.belt.length > 0) {
+        reasons.push(
+          `하의 '${chosenBottom.name}'은(는) 밴딩/벨트 불가 구조로 분류되어 벨트를 제외하고 깔끔한 허리 실루엣을 유지했습니다.`
         );
       }
 

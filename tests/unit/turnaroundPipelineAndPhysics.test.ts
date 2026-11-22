@@ -256,4 +256,32 @@ describe('Smooth 8-Angle Turnaround Physics & Crossfade Bridge', () => {
     assert.ok(visitedSlices.size >= 3, `Expected multi-angle coast, visited: ${[...visitedSlices]}`);
     assert.ok(maxBlurSeen >= 3.5, `Expected noticeable kinetic blur during fast flick, got ${maxBlurSeen}`);
   });
+
+  it('converges identically to 180° across 20Hz, 60Hz, and 120Hz frame intervals (FPS-invariant decay)', () => {
+    for (const dtSec of [1 / 120, 1 / 60, 1 / 20]) {
+      let state = {
+        angleDeg: 0,
+        velocityDegPerSec: 1080,
+        targetDetentDeg: null as number | null,
+      };
+      let finalAngle360 = -1;
+      for (let frame = 0; frame < 600; frame += 1) {
+        const next = stepTurnaroundInertia(state, { dtSec });
+        state = {
+          angleDeg: next.angleDeg,
+          velocityDegPerSec: next.velocityDegPerSec,
+          targetDetentDeg: next.targetDetentDeg,
+        };
+        if (next.settled) {
+          finalAngle360 = next.snappedAngle360;
+          break;
+        }
+      }
+      assert.equal(
+        finalAngle360,
+        180,
+        `Expected fast flick at dt=${dtSec.toFixed(4)}s to settle on 180°, got ${finalAngle360}°`
+      );
+    }
+  });
 });

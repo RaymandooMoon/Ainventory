@@ -174,10 +174,13 @@ export function stepTurnaroundInertia(
   let nextVel = curVel;
 
   if (targetDetent === null && Math.abs(curVel) > engageSnapSpeed) {
-    // Free inertial spin with exponential viscous drag
+    // Free inertial spin with exact analytic exponential viscous drag integral (FPS-invariant)
     const decay = Math.exp(-frictionPerSec * dtSec);
     nextVel = curVel * decay;
-    nextAngle = curAngle + nextVel * dtSec;
+    nextAngle =
+      frictionPerSec > 0
+        ? curAngle + (curVel - nextVel) / frictionPerSec
+        : curAngle + curVel * dtSec;
     if (Math.abs(nextVel) <= engageSnapSpeed) {
       // Lock onto the upcoming 45° magnetic detent in the direction of travel
       const projected = nextAngle + nextVel * 0.045;

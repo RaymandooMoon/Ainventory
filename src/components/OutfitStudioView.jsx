@@ -553,9 +553,28 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
   next.bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
   next.shoes = resolveItem(slotMap.shoes);
 
+  const isBottomBeltAllowed = (bottomItem) => {
+    if (!bottomItem || typeof bottomItem !== 'object') return false;
+    const rawDet = bottomItem.garment_details;
+    let det = rawDet && typeof rawDet === 'object' ? rawDet : null;
+    if (!det && typeof bottomItem.garment_details_json === 'string' && bottomItem.garment_details_json.trim()) {
+      try {
+        det = JSON.parse(bottomItem.garment_details_json);
+      } catch {
+        det = null;
+      }
+    }
+    if (det?.belt_compatible === false) return false;
+    if (det?.belt_compatible === true) return true;
+    const waistType = String(det?.waist_type || '').toLowerCase();
+    if (waistType === 'elastic' || waistType === 'drawstring') return false;
+    return true;
+  };
+
   const candidateAcc = resolveItem(slotMap.accessory);
   const candidateNeck = resolveItem(slotMap.neckwear) || resolveItem(slotMap.acc_neck);
   const candidateHead = resolveItem(slotMap.headwear) || resolveItem(slotMap.acc_head);
+  const candidateBelt = resolveItem(slotMap.acc_belt) || resolveItem(slotMap.belt);
   const candidateUmbrella = allowOutdoorUmbrella
     ? resolveItem(slotMap.acc_umbrella) ||
       resolveItem(slotMap.umbrella) ||
@@ -566,7 +585,12 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
 
   if (candidateAcc) {
     const mappedAccSlot = mapGarmentToDefaultSubSlot(candidateAcc);
-    next[mappedAccSlot] = candidateAcc;
+    if (mappedAccSlot !== 'acc_belt' || isBottomBeltAllowed(next.bottom)) {
+      next[mappedAccSlot] = candidateAcc;
+    }
+  }
+  if (candidateBelt && isBottomBeltAllowed(next.bottom) && !next.acc_belt) {
+    next.acc_belt = candidateBelt;
   }
   if (candidateNeck && !next.acc_neck) {
     next.acc_neck = candidateNeck;
@@ -583,6 +607,9 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
       const item = resolveItem(raw);
       if (!item) continue;
       const defaultKey = mapGarmentToDefaultSubSlot(item);
+      if (defaultKey === 'acc_belt' && !isBottomBeltAllowed(next.bottom)) {
+        continue;
+      }
       if (defaultKey === 'onepiece') {
         if (!next.onepiece) {
           next.onepiece = item;
@@ -590,6 +617,7 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
             next.top = null;
             next.top_mid = null;
             next.bottom = null;
+            next.acc_belt = null;
           }
         }
       } else if (defaultKey === 'top' || defaultKey === 'top_mid' || defaultKey === 'bottom') {
@@ -600,6 +628,10 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
         next[defaultKey] = item;
       }
     }
+  }
+
+  if (next.acc_belt && !isBottomBeltAllowed(next.bottom)) {
+    next.acc_belt = null;
   }
 
   return next;

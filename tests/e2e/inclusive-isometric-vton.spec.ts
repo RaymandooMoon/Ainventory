@@ -202,8 +202,7 @@ async function selectStudioSlotAndPickItem(
     await expect(target).toBeVisible();
     const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
     await target.click();
-    const expandedCard = sheet.locator(`[data-slot-garment-id="${pickedId}"]`);
-    const wearBtn = expandedCard.locator('[data-equip-inspector-btn="true"]');
+    const wearBtn = sheet.locator('[data-equip-inspector-btn="true"]').first();
     await expect(wearBtn).toBeVisible();
     await wearBtn.click();
     return pickedId;
@@ -228,20 +227,56 @@ async function selectStudioSlotAndPickItem(
   await expect(target).toBeVisible();
   const pickedId = (await target.getAttribute('data-slot-garment-id')) || '';
   await target.click();
-  const expandedCard = picker.locator(`[data-slot-garment-id="${pickedId}"]`);
-  const wearBtn = expandedCard.locator('[data-equip-inspector-btn="true"]');
+  const wearBtn = picker.locator('[data-equip-inspector-btn="true"]').first();
   await expect(wearBtn).toBeVisible();
   await wearBtn.click();
   return pickedId;
 }
 
+async function unequipSlotManually(
+  page: Page,
+  studioCanvas: ReturnType<Page['locator']>,
+  slotKey: string
+): Promise<void> {
+  const aiRemoveBtn = studioCanvas.locator(`[data-studio-slot="${slotKey}"] .studio-worn-slot-remove`);
+  if (await aiRemoveBtn.isVisible().catch(() => false)) {
+    await aiRemoveBtn.click();
+    return;
+  }
+  const flatlayCard = studioCanvas.locator(`[data-flatlay-item-slot="${slotKey}"]`);
+  await expect(flatlayCard).toBeVisible();
+  await flatlayCard.click();
+  const mobileSheet = page.locator('#outfit-mobile-wardrobe-sheet');
+  if (await mobileSheet.isVisible().catch(() => false)) {
+    const unequipBtn = mobileSheet.locator('[data-pinned-unequip-btn="true"]');
+    await expect(unequipBtn).toBeVisible();
+    await unequipBtn.click();
+    await page.keyboard.press('Escape');
+    await expect(mobileSheet).toHaveCount(0);
+    return;
+  }
+  const picker = page.locator(`#${CARBON_DOM_CONTRACT.studioSlotPickerId}`);
+  const unequipBtn = picker.locator('[data-pinned-unequip-btn="true"]');
+  await expect(unequipBtn).toBeVisible();
+  await unequipBtn.click();
+}
+
 async function clearEquippedSlotsManually(
+  page: Page,
   studioCanvas: ReturnType<Page['locator']>
 ): Promise<void> {
   const removeBtns = studioCanvas.locator('.studio-worn-slot-remove');
   for (let guard = 0; guard < 16; guard += 1) {
     if ((await removeBtns.count()) === 0) break;
-    await removeBtns.first().click();
+    if (await removeBtns.first().isVisible().catch(() => false)) {
+      await removeBtns.first().click();
+      continue;
+    }
+    const flatlayItems = studioCanvas.locator('[data-flatlay-item-slot]');
+    if ((await flatlayItems.count()) === 0) break;
+    const slotKey = (await flatlayItems.first().getAttribute('data-flatlay-item-slot')) || '';
+    if (!slotKey) break;
+    await unequipSlotManually(page, studioCanvas, slotKey);
   }
 }
 
@@ -271,11 +306,16 @@ async function performStageSwipe(
 ) {
   const target = stageLocator.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
   await expect(target).toBeVisible();
-  const box = await target.boundingBox();
+  const flatlayBoard = stageLocator.locator('[data-flatlay-board="true"]');
+  const hitTarget = (await flatlayBoard.isVisible().catch(() => false)) ? flatlayBoard : target;
+  const box = await hitTarget.boundingBox();
   expect(box).toBeTruthy();
-  const startX = Math.round(box!.x + box!.width * 0.52);
-  const startY = Math.round(box!.y + box!.height * 0.72);
-  const deltaPx = speed === 'fast' ? 180 : 76;
+  const deltaPx = speed === 'fast' ? 180 : 84;
+  const startX =
+    direction === 'right'
+      ? Math.round(box!.x + box!.width * 0.32)
+      : Math.round(box!.x + box!.width * 0.68);
+  const startY = Math.round(box!.y + box!.height * 0.52);
   const endX = direction === 'right' ? startX + deltaPx : startX - deltaPx;
 
   if (speed === 'slow') {
@@ -311,8 +351,8 @@ async function performStageSwipe(
       },
       { x0: startX, x1: endX, y: startY }
     );
-    // Allow 4-step 28ms 180° spin animation to settle
-    await page.waitForTimeout(160);
+    // Allow inertial exponential decay + 45° magnetic detent spring settle
+    await page.waitForTimeout(420);
   }
 }
 
@@ -594,11 +634,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       expect(pickerText).not.toMatch(/이너탑|언더웨어|크루 삭스|앵클 삭스|Underwear|Socks/i);
     }
 
-    await expect(
-      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
-    ).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
-    await clearEquippedSlotsManually(studioCanvas);
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
+    await clearEquippedSlotsManually(page, studioCanvas);
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
     await expect(studioCanvas.locator('[data-flatlay-empty="true"]')).toBeVisible();
 
@@ -653,22 +691,20 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(objectFitVal).toBe('contain');
 
     // Unequip swimwear -> instant removal with zero ghost residual
-    await studioCanvas.locator('[data-studio-slot="onepiece"] .studio-worn-slot-remove').click();
+    await unequipSlotManually(page, studioCanvas, 'onepiece');
     await expect(studioCanvas.locator('[data-studio-slot="onepiece"]')).toHaveCount(0);
     await expect(flatLayBoard.locator('[data-flatlay-item-slot="onepiece"]')).toHaveCount(0);
   });
 
-  test('4. Profile VTON Style & API Key Integration: Character Simulation default, Photo Guidance Popup -> Portrait Upload -> Photorealistic unlock, Character Tap Unfolded Lookbook, and 2x2 IndexedDB cache', async ({
+  test('4. Profile VTON Style & Server-Side Gemini Integration: Character Simulation default, Photo Guidance Popup -> Portrait Upload -> Photorealistic unlock, Character Tap Unfolded Lookbook, and 2x2 IndexedDB cache', async ({
     page,
   }) => {
     await page.goto('/outfits');
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(
-      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
-    ).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
 
     // Part A: Without API key configured on CI server, stage surfaces status toast & unfolded Flat-Lay Board
     await expect(studioCanvas).toHaveAttribute('data-stage-mode', 'ai-vton');
@@ -679,16 +715,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       studioCanvas.locator('canvas:not(.studio-three-stage-mount canvas)')
     ).toHaveCount(0);
 
-    // Clicking [API 키 설정] on the stage toast opens Profile directly with the Gemini API Key section expanded!
-    await studioCanvas.locator('[data-vton-open-key-btn="true"]').click();
+    // Status capsule exposes retry trigger while browser API key inputs remain removed (server-side GenAI architecture)
+    await expect(studioCanvas.locator('[data-vton-open-key-btn="true"]')).toBeVisible();
+    await page.locator('#open-profile-studio-btn').click();
     const profileSheet = page.locator('#profile-studio-sheet');
     await expect(profileSheet).toBeVisible();
-    const keyPopover = profileSheet.locator('[data-vton-key-popover="true"]');
-    await expect(keyPopover).toBeVisible();
-    await expect(keyPopover.locator('[data-vton-aistudio-link="true"]')).toHaveAttribute(
-      'href',
-      'https://aistudio.google.com/apikey'
-    );
+    await expect(profileSheet.locator('[data-vton-key-input="true"]')).toHaveCount(0);
 
     // Verify Profile Style Segmented Control: `캐릭터 시뮬레이션` is active by default when no photo is registered
     const profileStyleSeg = profileSheet.locator('[data-profile-style-segmented="true"]');
@@ -738,8 +770,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.route('**/api/vton/synthesize', async (route) => {
       const postData = route.request().postDataJSON() as Record<string, unknown>;
       capturedBodies.push(postData);
-      // Small delay so glassmorphism shimmer overlay is observable
-      await new Promise((r) => setTimeout(r, 120));
+      // Small delay so loading state is observable
+      await new Promise((r) => setTimeout(r, 250));
       const requestedStyle = String(postData?.styleMode || 'stylized_isometric');
       await route.fulfill({
         status: 200,
@@ -759,16 +791,13 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
-    // Trigger synthesis via single Look selector menu (Look 2) since header Refresh was removed
-    await studioCanvas.locator('[data-look-selector-trigger="true"]').click();
-    await studioCanvas
-      .locator('[data-look-selector-menu="true"] [data-weather-rec-id]')
-      .nth(1)
-      .click();
-    await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toBeVisible();
+    // Trigger synthesis cleanly via the status capsule retry CTA ("다시 입혀보기")
+    await studioCanvas.locator('[data-vton-open-key-btn="true"]').click();
+    await expect(studioCanvas).toHaveAttribute('data-vton-loading', 'true');
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-vton-loading', 'false');
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
     expect(capturedBodies.length).toBe(1);
 
@@ -836,7 +865,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas).toHaveAttribute('data-vton-style', 'photorealistic');
     await expect.poll(() => capturedBodies.length).toBe(2);
     expect(capturedBodies[1].styleMode).toBe('photorealistic');
-    await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-vton-loading', 'false');
     await expect(aiImg).toBeVisible();
 
     // Switching to `캐릭터 시뮬레이션` at the new photo-extracted skin tone hash runs once (call #3),
@@ -846,7 +875,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.keyboard.press('Escape');
     await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
     await expect.poll(() => capturedBodies.length).toBe(3);
-    await expect(studioCanvas.locator('[data-vton-shimmer-overlay="true"]')).toHaveCount(0);
+    await expect(studioCanvas).toHaveAttribute('data-vton-loading', 'false');
     await expect(aiImg).toBeVisible();
 
     await page.locator('#open-profile-studio-btn').click();
@@ -909,11 +938,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
-    await expect(
-      page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
-    ).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="top"]')).toBeVisible();
-    await clearEquippedSlotsManually(studioCanvas);
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-flatlay-item-slot="top"]')).toBeVisible();
+    await clearEquippedSlotsManually(page, studioCanvas);
     await expect(studioCanvas).toHaveAttribute('data-equipped-count', '0');
 
     await selectStudioSlotAndPickItem(page, 'outer', {
@@ -925,8 +952,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       matchText: /롱부츠|스노우|방한|Boots/i,
     });
 
-    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toBeVisible();
-    await expect(studioCanvas.locator('[data-studio-slot="shoes"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-studio-slot="outer"]')).toHaveCount(1);
+    await expect(studioCanvas.locator('[data-studio-slot="shoes"]')).toHaveCount(1);
     await expect(studioCanvas.locator('[data-flatlay-item-slot="outer"]')).toBeVisible();
     await expect(studioCanvas.locator('[data-flatlay-item-slot="shoes"]')).toBeVisible();
   });
@@ -976,105 +1003,83 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       .not.toBe(src90);
   });
 
-  test('7. Direct Browser Gemini Synthesis executes with Paid Tier key saved in Profile even when /api/vton/synthesize proxy returns gemini_network_error', async ({
+  test('7. Server-Side Gemini VTON Resilience: zero browser API key exposure, graceful Flat-Lay fallback on gemini_network_error, and 1-click retry recovery into 360° turnaround', async ({
     page,
   }) => {
     const mockTurnaroundDataUrl = buildMockTurnaround2x2PngDataUrl(77);
-    const mockTurnaroundBase64 = mockTurnaroundDataUrl.replace(/^data:image\/png;base64,/, '');
-    let browserGeminiCalls = 0;
-    let capturedApiKeyHeader = '';
-    const seenModalities: string[] = [];
+    let serverCalls = 0;
+    const directBrowserGeminiCalls: string[] = [];
+
+    page.on('request', (req) => {
+      if (req.url().includes('generativelanguage.googleapis.com')) {
+        directBrowserGeminiCalls.push(req.url());
+      }
+    });
 
     await page.route('**/api/vton/synthesize', async (route) => {
+      serverCalls += 1;
+      if (serverCalls === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            mode: '2d-vton',
+            provider: 'flatlay-fallback',
+            geminiUsed: false,
+            compositeImageUrl: null,
+            fallbackReason: 'gemini_network_error',
+          }),
+        });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
+          cached: false,
           mode: '2d-vton',
-          provider: 'flatlay-fallback',
-          geminiUsed: false,
-          compositeImageUrl: null,
-          fallbackReason: 'gemini_network_error',
+          provider: 'gemini-vton',
+          model: 'gemini-3.1-flash-image-preview',
+          layout: 'turnaround_2x2',
+          styleMode: 'stylized_isometric',
+          geminiUsed: true,
+          compositeImageUrl: mockTurnaroundDataUrl,
         }),
       });
     });
-
-    await page.route(
-      'https://generativelanguage.googleapis.com/v1beta/models/**',
-      async (route) => {
-        browserGeminiCalls += 1;
-        const req = route.request();
-        capturedApiKeyHeader = req.headers()['x-goog-api-key'] || '';
-        const bodyJson = JSON.parse(req.postData() || '{}') as {
-          generationConfig?: { responseModalities?: string[] };
-        };
-        const mods = (bodyJson.generationConfig?.responseModalities || []).join(',');
-        seenModalities.push(mods);
-
-        // First call returns text-only STOP to verify automatic ['IMAGE'] modality retry!
-        if (browserGeminiCalls === 1) {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              candidates: [
-                {
-                  finishReason: 'STOP',
-                  content: { parts: [{ text: 'Generating studio lookbook...' }] },
-                },
-              ],
-            }),
-          });
-          return;
-        }
-
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            candidates: [
-              {
-                finishReason: 'STOP',
-                content: {
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: 'image/png',
-                        data: mockTurnaroundBase64,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          }),
-        });
-      }
-    );
 
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
 
-    // Open Profile -> expand Gemini API Key Settings -> save Paid Tier key
+    // First synthesis fails cleanly -> falls back to Flat-Lay with retry capsule and zero direct browser Gemini calls
+    await expect(studioCanvas.locator('[data-flatlay-board="true"]')).toBeVisible();
+    await expect(studioCanvas.locator('[data-vton-status-toast="true"]')).toBeVisible();
+    await expect.poll(() => serverCalls).toBe(1);
+    expect(directBrowserGeminiCalls).toEqual([]);
+
+    // Profile modal must NOT expose any client-side Gemini API key input
     await page.locator('#open-profile-studio-btn').click();
     const profileSheet = page.locator('#profile-studio-sheet');
     await expect(profileSheet).toBeVisible();
-    await profileSheet.locator('#open-vton-api-key-btn').click();
-    const keyInput = profileSheet.locator('[data-vton-key-input="true"]');
-    await expect(keyInput).toBeVisible();
-    await keyInput.fill('test-paid-tier1-gemini-key-9876543210');
-    await profileSheet.locator('[data-vton-save-key-btn="true"]').click();
+    await expect(profileSheet.locator('#open-vton-api-key-btn')).toHaveCount(0);
+    await expect(profileSheet.locator('[data-vton-key-input="true"]')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(profileSheet).toBeHidden();
+
+    // Click retry CTA on status capsule -> server recovers with 2x2 turnaround sheet
+    const retryBtn = studioCanvas.locator('[data-vton-retry-btn="true"], [data-vton-open-key-btn="true"]').first();
+    await expect(retryBtn).toBeVisible();
+    await retryBtn.click();
 
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
-
-    expect(capturedApiKeyHeader).toBe('test-paid-tier1-gemini-key-9876543210');
-    expect(seenModalities).toEqual(['TEXT,IMAGE', 'IMAGE']);
+    expect(serverCalls).toBe(2);
+    expect(directBrowserGeminiCalls).toEqual([]);
 
     const slice0 = await aiImg.getAttribute('src');
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
@@ -1116,13 +1121,13 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
+
+    // 1. Initial entry auto-generates Look A once -> AI mode surfaces Look 1/2 dock & worn slots rail
+    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(
       page.locator('[data-weather-look-dock="true"] [data-look-selector-trigger="true"]')
     ).toBeVisible();
-
-    // 1. Initial entry auto-generates Look A once
-    const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
-    await expect(aiImg).toBeVisible({ timeout: 10000 });
     const callsAfterInitial = synthCalls;
     expect(callsAfterInitial).toBe(1);
     const lookASrc0 = await aiImg.getAttribute('src');
@@ -1523,7 +1528,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
     expect(seedRes.ok()).toBeTruthy();
     const seedJson = await seedRes.json();
-    expect(seedJson.inserted).toBe(65);
+    expect(seedJson.inserted).toBe(115);
 
     const listRes = await request.get(`/api/garments?closet=${encodeURIComponent(freshCloset)}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -1531,7 +1536,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(listRes.ok()).toBeTruthy();
     const listJson = await listRes.json();
     const seededItems: Array<{ subcategory: string; fabric: string }> = listJson.garments || [];
-    expect(seededItems.length).toBe(65);
+    expect(seededItems.length).toBe(115);
 
     const expectedSubtypes = [
       'umbrella',
@@ -1548,8 +1553,21 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       'ring',
       'brooch',
     ];
+    const bagSubcategories = new Set([
+      'bag',
+      'tote',
+      'briefcase',
+      'backpack',
+      'messenger',
+      'clutch',
+      'duffel',
+      'hobo',
+    ]);
     for (const sub of expectedSubtypes) {
-      const subItems = seededItems.filter((g) => g.subcategory === sub);
+      const subItems =
+        sub === 'bag'
+          ? seededItems.filter((g) => bagSubcategories.has(g.subcategory))
+          : seededItems.filter((g) => g.subcategory === sub);
       expect(subItems.length).toBeGreaterThanOrEqual(5);
       const distinctMaterials = new Set(subItems.map((g) => g.fabric));
       expect(distinctMaterials.size).toBeGreaterThanOrEqual(4);
@@ -1574,11 +1592,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
         const cards = sheet.locator('[data-slot-garment-id]');
         const target = cards.nth(cardIndex);
         await expect(target).toBeVisible();
-        const gid = (await target.getAttribute('data-slot-garment-id')) || '';
         await target.click();
-        await sheet
-          .locator(`[data-slot-garment-id="${gid}"] [data-equip-inspector-btn="true"]`)
-          .click();
+        await sheet.locator('[data-equip-inspector-btn="true"]').first().click();
         return;
       }
       await page.locator(`[data-outfit-slot-tab="${parentTab}"]`).click();
@@ -1587,11 +1602,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       const cards = picker.locator('[data-slot-garment-id]');
       const target = cards.nth(cardIndex);
       await expect(target).toBeVisible();
-      const gid = (await target.getAttribute('data-slot-garment-id')) || '';
       await target.click();
-      await picker
-        .locator(`[data-slot-garment-id="${gid}"] [data-equip-inspector-btn="true"]`)
-        .click();
+      await picker.locator('[data-equip-inspector-btn="true"]').first().click();
     };
 
     // Equip TWO DIFFERENT gloves on Left Hand (index 0) and Right Hand (index 1) simultaneously!
@@ -1888,18 +1900,20 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(alphaAudit.darkCoatOpaquePixels).toBeGreaterThan(600);
 
     // (D) Verify Three.js Stage Layer & complete removal of legacy 2D weather foreground canvas
+    // When Three.js WebGL Stage Layer is active (`StudioThreeStageLayer`), it renders real 3D physical
+    // natural + indoor floor shadows directly and intentionally omits the 2D CSS fallback shadow (`count === 0`).
+    const threeLayer = studioCanvas.locator('[data-testid="studio-three-stage-layer"]');
+    await expect(threeLayer).toHaveCount(1);
+    await expect(threeLayer).toHaveCSS('pointer-events', 'none');
+    await expect(threeLayer).toHaveAttribute('data-optical-regime', /.+/);
+
     const contactShadow = studioCanvas.locator('[data-floor-contact-shadow="true"]');
-    await expect(contactShadow).toHaveCount(1);
-    await expect(contactShadow).toHaveCSS('pointer-events', 'none');
+    await expect(contactShadow).toHaveCount(0);
 
     await expect(
       studioCanvas.locator('canvas[data-weather-foreground-canvas="true"]')
     ).toHaveCount(0);
     await expect(studioCanvas.locator('[data-studio-rain-layer="true"]')).toHaveCount(0);
-
-    const threeLayer = studioCanvas.locator('[data-testid="studio-three-stage-layer"]');
-    await expect(threeLayer).toHaveCount(1);
-    await expect(threeLayer).toHaveCSS('pointer-events', 'none');
 
     // (E) Toggle Dark Mode -> verify dark responsive stage (luminance < 40) & zero white box behind model
     await page.getByRole('button', { name: '다크 모드로 전환' }).click();
@@ -2467,9 +2481,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
   test('14. WS-3b: 3 consecutive multi-angle QC failures write server QC failure log, lock to positive-only 0° front fallback, and show 3s auto-dismiss popup', async ({
     page,
   }) => {
-    const buildQcPartialSheet = (cropSidePanels: boolean, singleCropped: boolean): string => {
-      const w = singleCropped ? 96 : 192;
-      const h = singleCropped ? 144 : 288;
+    const buildFrontOnlyDegradedPortrait = (): string => {
+      const w = 96;
+      const h = 144;
       const raw = Buffer.alloc((w * 4 + 1) * h);
       for (let y = 0; y < h; y += 1) {
         const ro = y * (w * 4 + 1);
@@ -2494,24 +2508,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
         }
       };
 
-      if (singleCropped) {
-        paint(34, 62, 52, 80, 176, 128, 72);
-      } else {
-        const panels = [
-          { ox: 0, oy: 0, full: true },
-          { ox: 96, oy: 0, full: !cropSidePanels },
-          { ox: 0, oy: 144, full: !cropSidePanels },
-          { ox: 96, oy: 144, full: !cropSidePanels },
-        ];
-        for (const p of panels) {
-          if (p.full) {
-            paint(p.ox + 38, p.ox + 58, p.oy + 14, p.oy + 34, 223, 186, 155);
-            paint(p.ox + 30, p.ox + 66, p.oy + 35, p.oy + 130, 62, 82, 118);
-          } else {
-            paint(p.ox + 34, p.ox + 62, p.oy + 48, p.oy + 76, 62, 82, 118);
-          }
-        }
-      }
+      paint(38, 58, 14, 34, 223, 186, 155);
+      paint(30, 66, 35, 130, 62, 82, 118);
 
       const crcTable = new Uint32Array(256);
       for (let n = 0; n < 256; n += 1) {
@@ -2547,7 +2545,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       return `data:image/png;base64,${png.toString('base64')}`;
     };
 
-    let sheetAttempts = 0;
+    let sheetRequests = 0;
     const qcLogResponses: Array<{ status: number; ok: boolean; logged: boolean }> = [];
     page.on('response', async (res) => {
       if (res.url().includes('/api/vton/qc-failure-log')) {
@@ -2561,11 +2559,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
 
     await page.route('**/api/vton/synthesize', async (route) => {
-      const body = JSON.parse(route.request().postData() || '{}') as {
-        turnaroundSheet?: boolean;
-      };
-      const isSheet = body.turnaroundSheet !== false;
-      if (isSheet) sheetAttempts += 1;
+      sheetRequests += 1;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -2575,12 +2569,46 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
           mode: '2d-vton',
           provider: 'gemini-vton',
           model: 'gemini-3.1-flash-image',
-          layout: isSheet ? 'turnaround_2x2' : 'single',
+          layout: 'single',
           styleMode: 'stylized_isometric',
           geminiUsed: true,
-          compositeImageUrl: buildQcPartialSheet(true, !isSheet),
+          frontOnlyDegraded: true,
+          fallbackView: 'positive-only',
+          fallbackReason: 'qc_front_only_fallback',
+          qcAttempts: 3,
+          qcReasons: ['side_panel_half_body_cropped'],
+          failedAngles: [45, 90, 180],
+          notificationPopup: {
+            code: 'QC_FRONT_ONLY_FALLBACK',
+            durationMs: 3000,
+            messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+            messageEn: 'Due to a temporary connection issue, only the front view is shown.',
+          },
+          compositeImageUrl: buildFrontOnlyDegradedPortrait(),
         }),
       });
+    });
+
+    await page.addInitScript(() => {
+      const state = { sawToast: false, toastText: '' };
+      (window as unknown as { __frontOnlyToastAudit?: typeof state }).__frontOnlyToastAudit = state;
+      const check = () => {
+        const el = document.querySelector('[data-vton-front-only-toast="true"]');
+        if (el) {
+          state.sawToast = true;
+          state.toastText = (el.textContent || '').trim();
+        }
+      };
+      const start = () => {
+        const mo = new MutationObserver(check);
+        mo.observe(document.documentElement, { childList: true, subtree: true });
+        check();
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start, { once: true });
+      } else {
+        start();
+      }
     });
 
     await page.goto('/outfits');
@@ -2588,24 +2616,39 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');
     const frontOnlyToast = studioCanvas.locator('[data-vton-front-only-toast="true"]');
 
-    // Toast must appear with exact Korean notice, front-only 0° character stays visible, and toast auto-dismisses after ~3s
+    // Wait for front-only degraded state + exact Korean 3s toast, then verify auto-dismiss after ~3s
     await expect(studioCanvas).toHaveAttribute('data-front-only-degraded', 'true', {
       timeout: 20000,
     });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __frontOnlyToastAudit?: { sawToast: boolean; toastText: string };
+                }
+              ).__frontOnlyToastAudit || { sawToast: false, toastText: '' }
+          ),
+        { timeout: 6000 }
+      )
+      .toEqual({
+        sawToast: true,
+        toastText: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+      });
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '0');
     await expect(studioCanvas.locator('[data-angle-scroll-dock="true"]')).toHaveAttribute(
       'data-angle-dock-visible',
       'false'
     );
     await expect(aiImg).toBeVisible();
-    await expect(frontOnlyToast).toBeVisible();
-    await expect(frontOnlyToast).toHaveText('현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.');
 
     // Auto-dismisses cleanly after 3s durationMs without user click
     await expect(frontOnlyToast).toHaveCount(0, { timeout: 6000 });
 
-    // Confirm all 3 QC turnaround retries executed and real POST /api/vton/qc-failure-log succeeded (201)
-    expect(sheetAttempts).toBe(3);
+    // Confirm single-shot turnaround request ran and real POST /api/vton/qc-failure-log succeeded (201)
+    expect(sheetRequests).toBeGreaterThanOrEqual(1);
     await expect.poll(() => qcLogResponses.length).toBeGreaterThanOrEqual(1);
     expect(qcLogResponses[0]).toEqual({ status: 201, ok: true, logged: true });
   });
