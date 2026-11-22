@@ -701,13 +701,6 @@ export default function AinvtrySiteApp() {
                         </div>
                       </dl>
 
-                      <div className="site-status-pills">
-                        <span className="site-status-pill">
-                          <i className="site-live-dot" />
-                          {copy.vision.statusMvp}
-                        </span>
-                      </div>
-
                       <a href={betaMailto} className="site-founder-cta">
                         <span>{copy.vision.directCta}</span>
                         <ArrowUpRight size={16} />

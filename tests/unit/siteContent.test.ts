@@ -48,13 +48,14 @@ describe('ainvtry.com official site content & IR architecture contract', () => {
       assert.equal(copy.architecture.layers.length, 4);
       assert.equal(copy.architecture.mapsNodes.length, 4);
       assert.equal(copy.stack.heroKpis.length, 4);
-      assert.equal(copy.stack.bars.length, 4);
+      assert.equal(copy.stack.specs.length, 4);
       assert.equal(copy.stack.cards.length, 6);
       assert.equal(copy.vision.milestones.length, 3);
       assert.equal(copy.interactive.topologySteps.length, 3);
       assert.ok(copy.legal.privacySections.length >= 4);
       assert.ok(copy.legal.termsSections.length >= 4);
       const serialized = JSON.stringify(copy);
+      assert.ok(!serialized.includes('누끼'), 'Must avoid informal 누끼 slang');
       assert.ok(!serialized.includes('Capacitor 6'), 'Must reference Capacitor 8');
       assert.ok(!serialized.includes('concierge@'), 'Must use verified raymond@ainvtry.com contact');
       assert.ok(!serialized.includes('MILANO'), 'Must not contain fabricated office claims');

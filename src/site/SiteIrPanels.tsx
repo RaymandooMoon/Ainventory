@@ -1,25 +1,9 @@
 import { useState } from 'react';
-import {
-  CloudSun,
-  Cpu,
-  Layers,
-  Lock,
-  MapPin,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react';
 import type { SiteArchLayer, SiteCopy } from './siteContent.ts';
 
-const LAYER_ICONS: Readonly<Record<SiteArchLayer['id'], typeof Layers>> = {
-  spatial: Layers,
-  multimodal: Sparkles,
-  maps: MapPin,
-  privacy: Lock,
-};
-
 /**
- * Interactive 4-Tier Layered Architecture Explorer (OpenAI / Anthropic / Google Cloud IR style).
- * Clicking any tier highlights its trust boundary, real production modules, and SLA guarantees.
+ * Interactive 4-Layer Architecture Explorer (Swiss-editorial hairline layout).
+ * Clicking any tier inspects its modules and security boundary without decorative icon clutter.
  */
 export function ArchitectureLayerExplorer({
   copy,
@@ -28,14 +12,12 @@ export function ArchitectureLayerExplorer({
 }) {
   const [selectedId, setSelectedId] = useState<SiteArchLayer['id']>('maps');
   const activeLayer = copy.layers.find((l) => l.id === selectedId) ?? copy.layers[0];
-  const ActiveIcon = LAYER_ICONS[activeLayer.id];
 
   return (
     <div className="site-ir-arch-grid">
-      {/* Left: Interactive 4-Tier Stack Diagram */}
-      <div className="site-arch-stack" role="tablist" aria-label="Architecture tiers">
+      {/* Left: 4-Layer Interactive Stack */}
+      <div className="site-arch-stack" role="tablist" aria-label="Architecture layers">
         {copy.layers.map((layer) => {
-          const Icon = LAYER_ICONS[layer.id];
           const isSelected = layer.id === activeLayer.id;
           return (
             <button
@@ -50,13 +32,10 @@ export function ArchitectureLayerExplorer({
                 <strong className="site-arch-tier-code">{layer.shortCode}</strong>
                 <span>{layer.shortLabel}</span>
               </span>
-              <span className="site-arch-tier-icon" aria-hidden="true">
-                <Icon size={16} />
-              </span>
               <span className="site-arch-tier-body">
                 <span className="site-arch-tier-top">
                   <span className="site-arch-tier-code">{layer.tier}</span>
-                  <span className="site-arch-boundary-pill">{layer.boundary}</span>
+                  <span className="site-arch-boundary-text">{layer.boundary}</span>
                 </span>
                 <strong className="site-arch-tier-title">{layer.title}</strong>
                 <span className="site-arch-tier-sub">{layer.subtitle}</span>
@@ -66,14 +45,11 @@ export function ArchitectureLayerExplorer({
         })}
       </div>
 
-      {/* Right: Deep Technical Spec Inspector */}
+      {/* Right: Architectural Spec Sheet */}
       <div className="site-arch-inspector" role="tabpanel" aria-live="polite">
         <div className="site-arch-inspector-head">
-          <span className="site-arch-inspector-kicker">
-            <ActiveIcon size={14} />
-            <span>{copy.inspectorLabel}</span>
-          </span>
-          <span className="site-arch-budget-pill">{activeLayer.latencyOrBudget}</span>
+          <span className="site-arch-meta-label">{copy.inspectorLabel}</span>
+          <span className="site-arch-budget-text">{activeLayer.latencyOrBudget}</span>
         </div>
 
         <h3 className="site-arch-inspector-title">{activeLayer.title}</h3>
@@ -84,7 +60,6 @@ export function ArchitectureLayerExplorer({
           <ul className="site-arch-module-list">
             {activeLayer.modules.map((mod) => (
               <li key={mod}>
-                <Cpu size={13} />
                 <code>{mod}</code>
               </li>
             ))}
@@ -92,11 +67,8 @@ export function ArchitectureLayerExplorer({
         </div>
 
         <div className="site-arch-guarantee-bar">
-          <ShieldCheck size={15} />
-          <div>
-            <span className="site-arch-meta-label">{copy.guaranteeLabel}</span>
-            <p>{activeLayer.guarantee}</p>
-          </div>
+          <span className="site-arch-meta-label">{copy.guaranteeLabel}</span>
+          <p>{activeLayer.guarantee}</p>
         </div>
       </div>
     </div>
@@ -104,15 +76,13 @@ export function ArchitectureLayerExplorer({
 }
 
 /**
- * End-to-End Google Cloud & Maps Platform Pipeline Diagram (Commit 169b6b2 Architecture).
+ * Clean 4-Column Google Cloud & Maps Platform Pipeline Overview.
  */
 export function GoogleMapsPipelinePanel({
   copy,
 }: {
   readonly copy: SiteCopy['architecture'];
 }) {
-  const nodeIcons = [CloudSun, MapPin, Layers, Sparkles] as const;
-
   return (
     <div className="site-maps-pipeline-wrap">
       <div className="site-maps-pipeline-head">
@@ -124,27 +94,18 @@ export function GoogleMapsPipelinePanel({
       </div>
 
       <div className="site-maps-nodes-grid">
-        {copy.mapsNodes.map((node, idx) => {
-          const Icon = nodeIcons[idx] ?? Sparkles;
-          return (
-            <article key={node.code} className="site-maps-node-card">
-              <div className="site-maps-node-top">
-                <span className="site-maps-node-code">{node.code}</span>
-                <span className="site-maps-node-icon" aria-hidden="true">
-                  <Icon size={15} />
-                </span>
-              </div>
-              <strong className="site-maps-node-api">{node.apiName}</strong>
-              <span className="site-maps-node-role">{node.role}</span>
-              <p className="site-maps-node-detail">{node.detail}</p>
-              <span className="site-maps-compliance-chip">{node.compliance}</span>
-            </article>
-          );
-        })}
+        {copy.mapsNodes.map((node) => (
+          <article key={node.code} className="site-maps-node-card">
+            <span className="site-maps-node-code">{node.code}</span>
+            <strong className="site-maps-node-api">{node.apiName}</strong>
+            <span className="site-maps-node-role">{node.role}</span>
+            <p className="site-maps-node-detail">{node.detail}</p>
+            <span className="site-maps-compliance-note">{node.compliance}</span>
+          </article>
+        ))}
       </div>
 
       <div className="site-maps-compliance-bar">
-        <ShieldCheck size={15} />
         <span>{copy.mapsComplianceFooter}</span>
       </div>
     </div>
@@ -152,7 +113,7 @@ export function GoogleMapsPipelinePanel({
 }
 
 /**
- * Apple Keynote / Anthropic System Card Hero KPI Strip + Visual Telemetry Bars.
+ * Editorial Tech-Spec KPI Strip + Factual Hairline Specification Ledger (No arbitrary bars).
  */
 export function BenchmarksIrScorecard({
   copy,
@@ -171,33 +132,30 @@ export function BenchmarksIrScorecard({
         ))}
       </div>
 
-      <div className="site-ir-bars-panel">
-        <div className="site-ir-bars-head">
+      <div className="site-ir-ledger-panel">
+        <div className="site-ir-ledger-head">
           <span className="site-arch-meta-label">{copy.benchmarkTitle}</span>
           <span className="site-stack-note">{copy.note}</span>
         </div>
 
-        <div className="site-ir-bars-list">
-          {copy.bars.map((bar) => (
-            <div key={bar.label} className="site-ir-bar-row">
-              <div className="site-ir-bar-meta">
-                <span className="site-ir-bar-label">{bar.label}</span>
-                <strong className="site-ir-bar-val">{bar.valueText}</strong>
-              </div>
-              <div className="site-ir-bar-track" aria-hidden="true">
-                <span className="site-ir-bar-fill" style={{ width: `${bar.pct}%` }} />
-              </div>
-              <span className="site-ir-bar-detail">{bar.detail}</span>
+        <dl className="site-ir-ledger-list">
+          {copy.specs.map((row) => (
+            <div key={row.label} className="site-ir-ledger-row">
+              <dt className="site-ir-ledger-label">
+                <span>{row.label}</span>
+                <small>{row.detail}</small>
+              </dt>
+              <dd className="site-ir-ledger-val">{row.valueText}</dd>
             </div>
           ))}
-        </div>
+        </dl>
       </div>
     </div>
   );
 }
 
 /**
- * 6-Card Production Engineering Stack Matrix with Trust Boundary Badges.
+ * 6-Cell Hairline Production Engineering Stack Matrix.
  */
 export function ProductionStackMatrix({
   copy,
@@ -219,7 +177,7 @@ export function ProductionStackMatrix({
           <article key={card.title} className="site-spec-card">
             <div className="site-spec-card-top">
               <span className="site-spec-eyebrow">{card.eyebrow}</span>
-              <span className="site-arch-boundary-pill">{card.boundary}</span>
+              <span className="site-arch-boundary-text">{card.boundary}</span>
             </div>
             <strong className="site-spec-metric">{card.metric}</strong>
             <h3 className="site-spec-title">{card.title}</h3>

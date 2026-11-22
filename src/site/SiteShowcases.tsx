@@ -2,12 +2,10 @@ import { useState } from 'react';
 import {
   Calendar,
   Camera,
-  CheckCircle2,
   Cpu,
   HardDrive,
   ShieldCheck,
   SlidersHorizontal,
-  Smartphone,
 } from 'lucide-react';
 import {
   resolveAppPreviewSrc,
@@ -30,19 +28,15 @@ export function AppPreviewShowcasePanel({
   const activeScreen =
     copy.screens.find((screen) => screen.id === activeId) ?? copy.screens[0];
   const resolvedSrc = resolveAppPreviewSrc(activeScreen.id, lang, theme);
-  const modeBadge = `${lang.toUpperCase()} · ${theme === 'dark' ? 'DARK' : 'LIGHT'}`;
+  const modeLabel = `${lang === 'ko' ? '한국어' : 'English'} · ${theme === 'dark' ? (lang === 'ko' ? '다크' : 'Dark') : lang === 'ko' ? '라이트' : 'Light'}`;
 
   return (
     <div className="site-app-preview-layout">
       <div className="site-app-preview-copy">
         <div className="site-preview-kicker-row">
           <span className="site-pillar-code">{copy.code}</span>
-          <span className="site-sync-mode-pill">
-            <i className="site-live-dot" />
-            {modeBadge}
-          </span>
+          <span className="site-sync-mode-label">{modeLabel}</span>
         </div>
-        <p className="site-pillar-eyebrow">{copy.eyebrow}</p>
         <h2 className="site-pillar-title">{copy.title}</h2>
         <p className="site-pillar-desc">{copy.description}</p>
 
@@ -60,10 +54,7 @@ export function AppPreviewShowcasePanel({
               >
                 <span className="site-preview-card-index">0{idx + 1}</span>
                 <span className="site-preview-card-text">
-                  <span className="site-preview-card-head">
-                    <strong>{screen.tabLabel}</strong>
-                    <span className="site-preview-metric-tag">{screen.metricTag}</span>
-                  </span>
+                  <strong>{screen.tabLabel}</strong>
                   <small>{screen.title}</small>
                 </span>
               </button>
@@ -79,9 +70,9 @@ export function AppPreviewShowcasePanel({
             <img
               key={`${activeScreen.id}-${lang}-${theme}`}
               src={resolvedSrc}
-              alt={`${activeScreen.imageAlt} (${modeBadge})`}
+              alt={`${activeScreen.imageAlt} (${modeLabel})`}
               width={500}
-              height={1082}
+              height={1044}
               decoding="sync"
               fetchPriority="high"
               className="site-phone-screen-img"
@@ -90,10 +81,7 @@ export function AppPreviewShowcasePanel({
           <div className="site-phone-home-bar" aria-hidden="true" />
         </div>
 
-        <div className="site-preview-caption-pill">
-          <Smartphone size={13} />
-          <span>{activeScreen.caption}</span>
-        </div>
+        <p className="site-preview-caption-text">{activeScreen.caption}</p>
 
         {/* Compact 4-pill switcher for mobile viewports */}
         <div
@@ -274,10 +262,6 @@ export function IngestionShowcasePanel({
           <p className="site-ingestion-badge">{copy.ingestionBadge}</p>
           <p className="site-ingestion-meta">{copy.ingestionMeta}</p>
         </div>
-        <span className="site-status-dot-pill">
-          <CheckCircle2 size={14} />
-          <span>QC PASS</span>
-        </span>
       </div>
     </div>
   );
