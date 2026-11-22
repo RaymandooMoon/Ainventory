@@ -38,6 +38,15 @@ export interface SitePillarCopy {
   readonly bullets: readonly string[];
 }
 
+export interface SiteAppPreviewScreen {
+  readonly id: 'outfits' | 'closet' | 'stats' | 'profile';
+  readonly tabLabel: string;
+  readonly title: string;
+  readonly caption: string;
+  readonly imageSrc: string;
+  readonly imageAlt: string;
+}
+
 export interface SiteCopy {
   readonly nav: {
     readonly homeAria: string;
@@ -54,12 +63,21 @@ export interface SiteCopy {
     readonly opacityHint: string;
   };
   readonly subtabs: {
+    readonly studioPreview: string;
     readonly studioAtelier: string;
     readonly studioIntel: string;
     readonly techIngestion: string;
     readonly techPrivacy: string;
     readonly aboutMission: string;
     readonly aboutFounder: string;
+  };
+  readonly appPreview: {
+    readonly code: string;
+    readonly eyebrow: string;
+    readonly title: string;
+    readonly description: string;
+    readonly badge: string;
+    readonly screens: readonly SiteAppPreviewScreen[];
   };
   readonly hero: {
     readonly kicker: string;
@@ -182,12 +200,55 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       opacityHint: 'Drag up for more transparency, drag down for less',
     },
     subtabs: {
-      studioAtelier: '01 3D Atelier',
-      studioIntel: '02 Wardrobe Intel',
+      studioPreview: '01 App Preview',
+      studioAtelier: '02 3D Atelier',
+      studioIntel: '03 Wardrobe Intel',
       techIngestion: '01 AI Cutout & VTON',
       techPrivacy: '02 Local WASM',
       aboutMission: 'Vision',
       aboutFounder: 'Founder & Beta',
+    },
+    appPreview: {
+      code: 'LIVE BUILD · IN DEVELOPMENT',
+      eyebrow: 'REAL WORKING MVP PREVIEW',
+      title: 'Inside the A inventory Mobile App',
+      description:
+        'Captured directly from our active React + Capacitor + Three.js build. Explore the live weather-synced outfit studio, 253-item monochrome closet, wear telemetry, and on-device facial skin-tone studio.',
+      badge: 'iOS · ANDROID MVP',
+      screens: [
+        {
+          id: 'outfits',
+          tabLabel: 'Outfits',
+          title: 'Multi-Angle Outfit Studio',
+          caption: 'Weather-synced flatlay lookbook & 0°–360° turnaround fitting bar',
+          imageSrc: '/assets/previews/app-outfits.webp',
+          imageAlt: 'A inventory mobile app Outfits fitting studio screen preview',
+        },
+        {
+          id: 'closet',
+          tabLabel: 'Closet',
+          title: '253-Item Digital Closet',
+          caption: 'Apple HIG monochrome squircle grid with brand & wear-count badges',
+          imageSrc: '/assets/previews/app-closet.webp',
+          imageAlt: 'A inventory mobile app Digital Closet wardrobe grid preview',
+        },
+        {
+          id: 'stats',
+          tabLabel: 'Stats',
+          title: 'Wardrobe Bento Analytics',
+          caption: 'Capsule utilization ring, cumulative wears, and Cost-Per-Wear telemetry',
+          imageSrc: '/assets/previews/app-stats.webp',
+          imageAlt: 'A inventory mobile app Wardrobe Stats analytics preview',
+        },
+        {
+          id: 'profile',
+          tabLabel: 'Profile',
+          title: 'Local Skin-Tone & Body Studio',
+          caption: 'On-device MST-04 personal color mesh palette & stature calibration',
+          imageSrc: '/assets/previews/app-profile.webp',
+          imageAlt: 'A inventory mobile app Profile skin-tone and body morph preview',
+        },
+      ],
     },
     hero: {
       kicker: 'AINVTRY.COM · PRIVATE 3D WARDROBE ATELIER',
@@ -196,7 +257,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       titleTail: ' & AI Styling Studio',
       subtitle:
         'Tactile cloth kinematics, multi-angle Gemini Virtual Try-On, and on-device privacy-first wardrobe intelligence.',
-      marbleHint: 'Roll the crystal marble into any menu pill or tap to explore',
+      marbleHint: 'Roll the marble like pinball into any menu pill or tap to explore',
       primaryCta: 'Explore the Atelier',
       secondaryCta: 'Contact Founder',
     },
@@ -417,12 +478,55 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       opacityHint: '위로 드래그하면 투명도 상승, 아래로 내리면 하락',
     },
     subtabs: {
-      studioAtelier: '01 3D 피팅',
-      studioIntel: '02 옷장 인텔리전스',
+      studioPreview: '01 앱 프리뷰',
+      studioAtelier: '02 3D 피팅',
+      studioIntel: '03 옷장 인텔리전스',
       techIngestion: '01 AI 누끼 · VTON',
       techPrivacy: '02 로컬 프라이버시',
       aboutMission: '비전',
       aboutFounder: '창업자 · 베타',
+    },
+    appPreview: {
+      code: 'LIVE BUILD · 개발 중인 실제 앱',
+      eyebrow: '작동 중인 MVP 실시간 캡처',
+      title: '개발 중인 A inventory 모바일 앱 프리뷰',
+      description:
+        '현재 개발 중인 React · Capacitor · Three.js 실구동 빌드 화면입니다. 날씨 연동 코디 스튜디오, 253벌 디지털 옷장, 착용 단가 통계, 온디바이스 피부톤·체형 스튜디오를 미리 살펴보세요.',
+      badge: 'iOS · ANDROID MVP',
+      screens: [
+        {
+          id: 'outfits',
+          tabLabel: '코디',
+          title: '멀티앵글 코디 스튜디오',
+          caption: '실시간 날씨 연동 플랫레이 룩북 & 0° 정면·뒷모습 회전 피팅 바',
+          imageSrc: '/assets/previews/app-outfits.webp',
+          imageAlt: 'A inventory 모바일 앱 코디 스튜디오 프리뷰',
+        },
+        {
+          id: 'closet',
+          tabLabel: '옷장',
+          title: '253벌 디지털 옷장 그리드',
+          caption: 'Apple HIG 무채색 스쿼클 카드 · 브랜드·착용 횟수 실시간 배지',
+          imageSrc: '/assets/previews/app-closet.webp',
+          imageAlt: 'A inventory 모바일 앱 디지털 옷장 그리드 프리뷰',
+        },
+        {
+          id: 'stats',
+          tabLabel: '통계',
+          title: '옷장 벤토 인텔리전스',
+          caption: '캡슐 활용률 링 · 누적 착용 횟수 · 1회 평균 착용 단가(CPW) 분석',
+          imageSrc: '/assets/previews/app-stats.webp',
+          imageAlt: 'A inventory 모바일 앱 옷장 통계 화면 프리뷰',
+        },
+        {
+          id: 'profile',
+          tabLabel: '피부톤',
+          title: '로컬 피부톤 & 체형 스튜디오',
+          caption: '온디바이스 MST-04 퍼스널컬러 메시 팔레트 & 신장·체형 정밀 설정',
+          imageSrc: '/assets/previews/app-profile.webp',
+          imageAlt: 'A inventory 모바일 앱 피부톤 및 체형 스튜디오 프리뷰',
+        },
+      ],
     },
     hero: {
       kicker: 'AINVTRY.COM · 프라이빗 3D 디지털 옷장 아틀리에',
@@ -431,7 +535,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       titleTail: ' & AI 피팅 스튜디오',
       subtitle:
         '실제 원단의 드레이프 물리, 멀티앵글 Gemini AI 가상 피팅, 그리고 얼굴 데이터를 기기 밖으로 보내지 않는 로컬 퍼스널컬러 인텔리전스.',
-      marbleHint: '유리 구슬을 굴려 메뉴를 맞추거나 버튼을 눌러 둘러보세요',
+      marbleHint: '유리 구슬을 핀볼처럼 굴려 메뉴를 맞추거나 탭해 보세요',
       primaryCta: '아틀리에 둘러보기',
       secondaryCta: '창업자 문의',
     },

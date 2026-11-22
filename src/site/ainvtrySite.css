@@ -329,9 +329,14 @@ html[data-site-theme='light'] body {
 }
 
 .site-nav-links--mobile {
-  display: flex;
-  align-self: center;
-  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 22px;
 }
 
 .site-nav-btn {
@@ -355,6 +360,15 @@ html[data-site-theme='light'] body {
     border-color 0.12s var(--site-ease);
 }
 
+.site-nav-btn--bumper {
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: 16px;
+  border-color: var(--hairline);
+  background: var(--bg-surface);
+  font-size: 0.78rem;
+}
+
 .site-nav-btn:hover {
   color: var(--ink-primary);
   background: var(--bg-glass-hover);
@@ -365,6 +379,12 @@ html[data-site-theme='light'] body {
   color: var(--btn-active-fg);
   background: var(--btn-active-bg);
   border-color: var(--hairline-strong);
+}
+
+@media (max-width: 899px) {
+  .site-btn-primary--desktop-only {
+    display: none;
+  }
 }
 
 @media (min-width: 900px) {
@@ -566,24 +586,264 @@ html[lang='ko'] .site-vision-quote {
   background: var(--bg-glass-hover);
 }
 
-/* Marble physical collision feedback */
+/* Marble physical pinball bumper feedback */
 .is-marble-hit {
-  animation: siteMarbleHit 0.36s var(--site-ease);
+  animation: siteMarbleHit 0.38s var(--site-ease);
 }
 
 @keyframes siteMarbleHit {
   0% {
     transform: scale(1);
+    box-shadow: var(--glass-specular);
   }
-  30% {
-    transform: scale(0.93);
+  28% {
+    transform: scale(0.92);
+    box-shadow:
+      0 0 0 2px var(--accent-sand),
+      0 0 22px rgba(226, 207, 168, 0.52);
   }
-  70% {
-    transform: scale(1.04);
+  68% {
+    transform: scale(1.05);
+    box-shadow:
+      0 0 0 1px var(--accent-sand),
+      0 0 12px rgba(226, 207, 168, 0.28);
   }
   100% {
     transform: scale(1);
+    box-shadow: var(--glass-specular);
   }
+}
+
+/* ==========================================================================
+ * Live Developing Mobile App Preview Showcase (Titanium Phone Mockup)
+ * ========================================================================== */
+
+.site-app-preview-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+@media (min-width: 860px) {
+  .site-app-preview-layout {
+    grid-template-columns: 1.08fr 0.92fr;
+    gap: 28px;
+  }
+}
+
+.site-preview-selector-grid {
+  display: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+@media (min-width: 860px) {
+  .site-preview-selector-grid {
+    display: grid;
+  }
+}
+
+.site-preview-card-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.16s var(--site-ease),
+    border-color 0.16s var(--site-ease),
+    transform 0.16s var(--site-ease);
+}
+
+.site-preview-card-btn:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+}
+
+.site-preview-card-btn.is-active {
+  background: var(--btn-active-bg);
+  border-color: var(--accent-sand);
+}
+
+.site-preview-card-index {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-sand);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.site-preview-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.site-preview-card-text strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.site-preview-card-text small {
+  font-size: 0.72rem;
+  color: var(--ink-secondary);
+  line-height: 1.35;
+}
+
+.site-app-preview-device-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-phone-bezel {
+  position: relative;
+  height: clamp(235px, 37dvh, 330px);
+  aspect-ratio: 390 / 844;
+  padding: 7px;
+  border-radius: 30px;
+  border: 1.5px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(145deg, #27272c 0%, #101014 55%, #1d1d22 100%);
+  box-shadow:
+    0 22px 48px -12px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 860px) {
+  .site-phone-bezel {
+    height: clamp(340px, 50dvh, 445px);
+    padding: 8px;
+    border-radius: 34px;
+  }
+}
+
+.site-phone-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24%;
+  height: 8px;
+  border-radius: 9999px;
+  background: #09090b;
+  z-index: 3;
+}
+
+.site-phone-screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 23px;
+  overflow: hidden;
+  background: #ffffff;
+  padding-top: 15px;
+}
+
+@media (min-width: 860px) {
+  .site-phone-screen {
+    border-radius: 26px;
+    padding-top: 18px;
+  }
+}
+
+.site-phone-screen-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  animation: sitePreviewSwap 0.28s var(--site-ease) both;
+}
+
+@keyframes sitePreviewSwap {
+  from {
+    opacity: 0.35;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.site-phone-home-bar {
+  position: absolute;
+  bottom: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34%;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(29, 29, 31, 0.28);
+  z-index: 3;
+}
+
+.site-preview-caption-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  color: var(--ink-secondary);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-align: center;
+  max-width: 100%;
+}
+
+.site-preview-caption-pill svg {
+  flex-shrink: 0;
+  color: var(--accent-sand);
+}
+
+.site-preview-mobile-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 340px;
+}
+
+@media (min-width: 860px) {
+  .site-preview-mobile-pills {
+    display: none;
+  }
+}
+
+.site-preview-mobile-pill {
+  min-height: 36px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s var(--site-ease), border-color 0.14s var(--site-ease);
+}
+
+.site-preview-mobile-pill.is-active {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-fg);
+  border-color: var(--accent-sand);
 }
 
 /* ==========================================================================
@@ -1548,19 +1808,26 @@ html[lang='ko'] .site-vision-quote {
 }
 
 /* ==========================================================================
- * Compact Bottom Bar & Vertical-Drag Opacity Pill Button
+ * Compact Bottom Stack (Mobile Pinball Dock + Legal & Opacity Bar)
  * ========================================================================== */
 
-.site-bottombar {
+.site-bottom-stack {
   flex-shrink: 0;
   width: 100%;
   max-width: 1320px;
   margin: 0 auto;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.site-bottombar {
+  width: 100%;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  z-index: 10;
 }
 
 .site-bottombar-left {
@@ -1658,6 +1925,12 @@ html[lang='ko'] .site-vision-quote {
  * Responsive Refinements for Compact Mobile (<= 859px & <= 520px)
  * ========================================================================== */
 
+@media (max-width: 899px) {
+  .site-hero-cta-row .site-btn-primary--desktop-only {
+    display: none;
+  }
+}
+
 @media (max-width: 859px) {
   .site-glass-panel[data-about-tab='mission'] .site-founder-card {
     display: none;
@@ -1665,6 +1938,16 @@ html[lang='ko'] .site-vision-quote {
 
   .site-glass-panel[data-about-tab='founder'] .site-vision-copy {
     display: none;
+  }
+
+  .site-app-preview-copy .site-pillar-eyebrow,
+  .site-app-preview-copy .site-pillar-desc {
+    display: none;
+  }
+
+  .site-app-preview-copy .site-pillar-title {
+    margin-bottom: 0;
+    font-size: 1.08rem;
   }
 
   .site-bullet-list {
@@ -1711,10 +1994,23 @@ html[lang='ko'] .site-vision-quote {
     min-height: 44px;
   }
 
-  .site-nav-btn {
-    padding: 0 10px;
+  .site-subtab-group {
+    width: 100%;
+    justify-content: space-between;
+    gap: 3px;
+  }
+
+  .site-subtab-pill {
+    flex: 1;
+    padding: 0 6px;
+    font-size: 0.7rem;
+    min-height: 34px;
+  }
+
+  .site-nav-btn--bumper {
+    padding: 0 4px;
     font-size: 0.74rem;
-    min-height: 36px;
+    min-height: 44px;
   }
 
   .site-hero-hint-pill {

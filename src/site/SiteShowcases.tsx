@@ -7,8 +7,102 @@ import {
   HardDrive,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
 } from 'lucide-react';
-import type { SiteCopy } from './siteContent.ts';
+import type { SiteAppPreviewScreen, SiteCopy } from './siteContent.ts';
+
+export function AppPreviewShowcasePanel({
+  copy,
+}: {
+  readonly copy: SiteCopy['appPreview'];
+}) {
+  const [activeId, setActiveId] = useState<SiteAppPreviewScreen['id']>('outfits');
+  const activeScreen =
+    copy.screens.find((screen) => screen.id === activeId) ?? copy.screens[0];
+
+  return (
+    <div className="site-app-preview-layout">
+      <div className="site-app-preview-copy">
+        <span className="site-pillar-code">{copy.code}</span>
+        <p className="site-pillar-eyebrow">{copy.eyebrow}</p>
+        <h2 className="site-pillar-title">{copy.title}</h2>
+        <p className="site-pillar-desc">{copy.description}</p>
+
+        <div className="site-preview-selector-grid" role="tablist" aria-label="App preview screens">
+          {copy.screens.map((screen, idx) => {
+            const isSelected = screen.id === activeScreen.id;
+            return (
+              <button
+                key={screen.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                className={`site-preview-card-btn ${isSelected ? 'is-active' : ''}`}
+                data-marble-target="true"
+                data-marble-action="click"
+                onClick={() => setActiveId(screen.id)}
+              >
+                <span className="site-preview-card-index">0{idx + 1}</span>
+                <span className="site-preview-card-text">
+                  <strong>{screen.tabLabel}</strong>
+                  <small>{screen.title}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="site-app-preview-device-col">
+        <div className="site-phone-bezel">
+          <div className="site-phone-island" aria-hidden="true" />
+          <div className="site-phone-screen">
+            <img
+              key={activeScreen.id}
+              src={activeScreen.imageSrc}
+              alt={activeScreen.imageAlt}
+              width={520}
+              height={1125}
+              decoding="async"
+              className="site-phone-screen-img"
+            />
+          </div>
+          <div className="site-phone-home-bar" aria-hidden="true" />
+        </div>
+
+        <div className="site-preview-caption-pill">
+          <Smartphone size={13} />
+          <span>{activeScreen.caption}</span>
+        </div>
+
+        {/* Compact 4-pill switcher for mobile viewports */}
+        <div
+          className="site-preview-mobile-pills"
+          role="tablist"
+          aria-label="Mobile app preview selector"
+        >
+          {copy.screens.map((screen) => {
+            const isSelected = screen.id === activeScreen.id;
+            return (
+              <button
+                key={screen.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                className={`site-preview-mobile-pill ${isSelected ? 'is-active' : ''}`}
+                data-marble-target="true"
+                data-marble-action="click"
+                onClick={() => setActiveId(screen.id)}
+              >
+                {screen.tabLabel}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type AtelierStance = 'idle' | 'walk' | 'rain';
 

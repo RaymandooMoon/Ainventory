@@ -15,6 +15,7 @@ import { triggerHaptic } from '../utils/nativeBridge.ts';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
 import {
+  AppPreviewShowcasePanel,
   AtelierShowcasePanel,
   IngestionShowcasePanel,
   IntelligenceShowcasePanel,
@@ -79,7 +80,7 @@ export default function AinvtrySiteApp() {
     readonly seq: number;
   } | null>(null);
   const [activeView, setActiveView] = useState<SiteViewId>('home');
-  const [studioTab, setStudioTab] = useState<'atelier' | 'intelligence'>('atelier');
+  const [studioTab, setStudioTab] = useState<'preview' | 'atelier' | 'intelligence'>('preview');
   const [techTab, setTechTab] = useState<'ingestion' | 'privacy'>('ingestion');
   const [aboutMobileTab, setAboutMobileTab] = useState<'mission' | 'founder'>('mission');
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
@@ -398,23 +399,6 @@ export default function AinvtrySiteApp() {
               </button>
             </div>
           </div>
-
-          {/* Mobile / Compact Nav Dock — Tap or Roll Marble into any pill */}
-          <nav className="site-nav-links site-nav-links--mobile" aria-label="Mobile navigation">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`site-nav-btn ${activeView === item.id ? 'is-active' : ''}`}
-                data-marble-target="true"
-                data-marble-action="click"
-                aria-current={activeView === item.id ? 'page' : undefined}
-                onClick={() => handleNavigate(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
         </header>
 
         {/* ================================================================
@@ -443,7 +427,7 @@ export default function AinvtrySiteApp() {
                 <div className="site-hero-cta-row">
                   <button
                     type="button"
-                    className="site-btn-primary"
+                    className="site-btn-primary site-btn-primary--desktop-only"
                     data-marble-target="true"
                     data-marble-action="click"
                     onClick={() => handleNavigate('studio')}
@@ -466,6 +450,20 @@ export default function AinvtrySiteApp() {
               <div className="site-glass-panel">
                 <div className="site-panel-header">
                   <div className="site-subtab-group" role="tablist" aria-label="Studio modules">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={studioTab === 'preview'}
+                      className={`site-subtab-pill ${studioTab === 'preview' ? 'is-active' : ''}`}
+                      data-marble-target="true"
+                      data-marble-action="click"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setStudioTab('preview');
+                      }}
+                    >
+                      {copy.subtabs.studioPreview}
+                    </button>
                     <button
                       type="button"
                       role="tab"
@@ -495,31 +493,37 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.studioIntel}
                     </button>
                   </div>
-                  <span className="site-pill-badge">{copy.capabilities.badge}</span>
+                  <span className="site-pill-badge">
+                    {studioTab === 'preview' ? copy.appPreview.badge : copy.capabilities.badge}
+                  </span>
                 </div>
 
-                <div className="site-panel-split">
-                  <div className="site-pillar-copy">
-                    <span className="site-pillar-code">{activeStudioPillar.code}</span>
-                    <p className="site-pillar-eyebrow">{activeStudioPillar.eyebrow}</p>
-                    <h2 className="site-pillar-title">{activeStudioPillar.title}</h2>
-                    <p className="site-pillar-desc">{activeStudioPillar.description}</p>
-                    <ul className="site-bullet-list">
-                      {activeStudioPillar.bullets.map((b) => (
-                        <li key={b}>
-                          <Check size={15} />
-                          <span>{b}</span>
-                        </li>
-                      ))}
-                    </ul>
+                {studioTab === 'preview' ? (
+                  <AppPreviewShowcasePanel copy={copy.appPreview} />
+                ) : (
+                  <div className="site-panel-split">
+                    <div className="site-pillar-copy">
+                      <span className="site-pillar-code">{activeStudioPillar.code}</span>
+                      <p className="site-pillar-eyebrow">{activeStudioPillar.eyebrow}</p>
+                      <h2 className="site-pillar-title">{activeStudioPillar.title}</h2>
+                      <p className="site-pillar-desc">{activeStudioPillar.description}</p>
+                      <ul className="site-bullet-list">
+                        {activeStudioPillar.bullets.map((b) => (
+                          <li key={b}>
+                            <Check size={15} />
+                            <span>{b}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {studioTab === 'atelier' ? (
+                      <AtelierShowcasePanel copy={copy.interactive} />
+                    ) : (
+                      <IntelligenceShowcasePanel copy={copy.interactive} />
+                    )}
                   </div>
-
-                  {studioTab === 'atelier' ? (
-                    <AtelierShowcasePanel copy={copy.interactive} />
-                  ) : (
-                    <IntelligenceShowcasePanel copy={copy.interactive} />
-                  )}
-                </div>
+                )}
               </div>
             </section>
           )}
@@ -710,9 +714,29 @@ export default function AinvtrySiteApp() {
         </main>
 
         {/* ================================================================
-            COMPACT BOTTOM BAR — LEGAL LINKS + DRAG UP/DOWN OPACITY BUTTON
+            MOBILE BOTTOM PINBALL BUMPER NAV + LEGAL & OPACITY BAR
            ================================================================ */}
-        <footer className="site-bottombar">
+        <div className="site-bottom-stack">
+          <nav
+            className="site-nav-links site-nav-links--mobile"
+            aria-label="Mobile pinball navigation"
+          >
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`site-nav-btn site-nav-btn--bumper ${activeView === item.id ? 'is-active' : ''}`}
+                data-marble-target="true"
+                data-marble-action="click"
+                aria-current={activeView === item.id ? 'page' : undefined}
+                onClick={() => handleNavigate(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          <footer className="site-bottombar">
           <div className="site-bottombar-left">
             <span className="site-bottombar-rights">{copy.footer.rights}</span>
             <a
@@ -765,7 +789,8 @@ export default function AinvtrySiteApp() {
               {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
             </span>
           </button>
-        </footer>
+          </footer>
+        </div>
       </div>
 
       <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={() => setLegalDoc(null)} />

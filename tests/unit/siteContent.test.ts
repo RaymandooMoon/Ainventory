@@ -18,9 +18,15 @@ describe('ainvtry.com official site content contract', () => {
       assert.ok(copy.nav.homeAria.length > 0);
       assert.ok(copy.nav.opacityLabel.length > 0);
       assert.ok(copy.nav.opacityHint.length > 0);
+      assert.ok(copy.subtabs.studioPreview.length > 0);
       assert.ok(copy.subtabs.studioAtelier.length > 0);
       assert.ok(copy.subtabs.techIngestion.length > 0);
       assert.ok(copy.subtabs.aboutFounder.length > 0);
+      assert.equal(copy.appPreview.screens.length, 4);
+      for (const screen of copy.appPreview.screens) {
+        assert.ok(screen.imageSrc.startsWith('/assets/previews/app-'));
+        assert.ok(screen.imageSrc.endsWith('.webp'));
+      }
       assert.equal(copy.stack.cards.length, 4);
       assert.equal(copy.interactive.topologySteps.length, 3);
       assert.ok(copy.legal.privacySections.length >= 4);

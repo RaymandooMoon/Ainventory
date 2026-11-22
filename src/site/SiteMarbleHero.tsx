@@ -163,7 +163,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const mx = stageRect.left + snap.u * stageRect.width;
       const my = stageRect.top + (1 - snap.v) * stageRect.height;
       const radiusPx = snap.radiusNormY * stageRect.height;
-      const hitRadiusPx = radiusPx * 0.92;
+      const hitRadiusPx = radiusPx * 1.06;
       const hitRadiusSq = hitRadiusPx * hitRadiusPx;
       const pxPerWorld = stageRect.height * 0.5;
       const velPxX = snap.vx * pxPerWorld;
@@ -218,14 +218,14 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         if (!isInsideRect && approachDot > 24) continue;
 
         const worldPerPx = 2.0 / Math.max(1, stageRect.height);
-        const pushPx = Math.min(overlapPx + 3, radiusPx * 2.2);
+        const pushPx = Math.min(overlapPx + 4, radiusPx * 2.4);
         ctrl.bounceMarble?.(
           nxPx,
           -nyPx,
           nxPx * pushPx * worldPerPx,
           -nyPx * pushPx * worldPerPx,
-          0.9,
-          0.7
+          0.96,
+          0.84
         );
 
         globalHitCooldownUntil = now + 380;
