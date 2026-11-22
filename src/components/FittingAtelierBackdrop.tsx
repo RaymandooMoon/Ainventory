@@ -17,6 +17,7 @@ import {
   computeHeightAwareStageFraming,
 } from '../utils/stageFramingEngine.ts';
 import type { TimeOfDayPhase } from '../utils/tomorrowPromptPolicy.ts';
+import MapsLiveBackdropLayer from './MapsLiveBackdropLayer.tsx';
 
 function hexToRgbCss(hex: number): string {
   const r = (hex >> 16) & 255;
@@ -32,6 +33,26 @@ function mixWithWarmWhiteRgb(hex: number, whiteWeight = 0.52): string {
   return `${r}, ${g}, ${b}`;
 }
 
+export interface PlaceBackdropVisualProp {
+  active: boolean;
+  imageUrl: string | null;
+  liveMapMode?: 'street_view' | null;
+  lat?: number | null;
+  lng?: number | null;
+  streetViewPanoId?: string | null;
+  streetViewHeading?: number;
+  blurPx: number;
+  sourceMode: 'place_photo' | 'street_view';
+  placeName: string;
+  onImageError?: () => void;
+  onLiveStatusChange?: (status: {
+    available: boolean;
+    copyright: string | null;
+    authFailed?: boolean;
+    billingError?: boolean;
+  }) => void;
+}
+
 export interface FittingAtelierBackdropProps {
   effectiveWeather?: string;
   scenarioKey?: string;
@@ -44,6 +65,7 @@ export interface FittingAtelierBackdropProps {
   lightingPreset?: StageLightingPresetId | string;
   lightingIntensity?: number;
   heightCm?: number;
+  placeBackdrop?: PlaceBackdropVisualProp | null;
 }
 
 /**
@@ -68,12 +90,30 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   lightingPreset = DEFAULT_LIGHTING_PRESET,
   lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
   heightCm = 172,
+  placeBackdrop = null,
 }: FittingAtelierBackdropProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [stageSize, setStageSize] = useState<{ width: number; height: number }>({
     width: 0,
     height: 0,
   });
+  const [placeImageLoadedUrl, setPlaceImageLoadedUrl] = useState<string | null>(null);
+  const hasLiveMapBackdrop = Boolean(
+    placeBackdrop?.active &&
+      !placeBackdrop?.imageUrl &&
+      placeBackdrop?.liveMapMode &&
+      typeof placeBackdrop?.lat === 'number' &&
+      Number.isFinite(placeBackdrop.lat) &&
+      typeof placeBackdrop?.lng === 'number' &&
+      Number.isFinite(placeBackdrop.lng)
+  );
+  const hasActivePlaceBackdrop = Boolean(
+    placeBackdrop?.active && (placeBackdrop?.imageUrl || hasLiveMapBackdrop)
+  );
+  const placeBlurPx = Math.max(0, Math.min(24, Math.round(Number(placeBackdrop?.blurPx ?? 8))));
+  const placeImageReady = Boolean(
+    hasActivePlaceBackdrop && placeBackdrop?.imageUrl && placeImageLoadedUrl === placeBackdrop.imageUrl
+  );
 
   const isDark = theme === 'dark';
   const bgItem = getStageBackgroundById(backgroundId);
@@ -169,6 +209,7 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
   const isNeonScene = Boolean(lightingFrame.isNeonScene || bgItem.lightingRig?.isNeonScene);
 
   const showFixtureLights =
+    !hasActivePlaceBackdrop &&
     fixtureEmitters.length > 0 &&
     lightingFrame.fixtureOnFactor > 0.002 &&
     coverFrame.width > 0 &&
@@ -224,23 +265,23 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
       const fxRgb = hexToRgbCss(activeHex);
       const fxCoreRgb = mixWithWarmWhiteRgb(activeHex, isNeonEmitter ? 0.78 : 0.68);
       const power = Math.max(0, lightingFrame.fixtureOnFactor * emitter.intensity);
-      // Zero-continuous perceptual emitter response calibrated so 100% keeps internal bulb depth
-      // and lampshade rib/edge texture intact (zero full-shade white clipping).
-      const fullPowerRef = isNeonEmitter ? 0.86 : 0.78;
-      const normPower = Math.min(1.04, power / fullPowerRef);
+      // Calibrated ~3x luminous output at 100% while preserving internal bulb depth
+      // and lampshade rib/edge texture.
+      const fullPowerRef = isNeonEmitter ? 0.88 : 0.82;
+      const normPower = Math.min(1.18, power / fullPowerRef);
       const t = Math.min(1, normPower);
       const coreOpacity = isNeonEmitter
-        ? Math.min(0.95, Math.pow(t, 0.9) * 0.95)
-        : Math.min(0.84, Math.pow(t, 0.92) * 0.84);
+        ? Math.min(1.0, Math.pow(t, 0.85) * 1.0)
+        : Math.min(1.0, Math.pow(t, 0.88) * 1.0);
       const glowOpacity = isNeonEmitter
-        ? Math.min(0.84, Math.pow(t, 0.98) * 0.84)
-        : Math.min(0.36, Math.pow(t, 1.08) * 0.36);
+        ? Math.min(1.0, Math.pow(t, 0.92) * 1.0)
+        : Math.min(0.96, Math.pow(t, 0.96) * 0.96);
       const glowScale = isNeonEmitter
-        ? Math.min(1.04, 0.56 + t * 0.44)
-        : Math.min(0.82, 0.52 + t * 0.28);
+        ? Math.min(1.36, 0.64 + t * 0.7)
+        : Math.min(1.34, 0.62 + t * 0.72);
       const glowBrightness = isNeonEmitter
-        ? Math.min(1.1, 0.8 + t * 0.28)
-        : Math.min(0.98, 0.82 + t * 0.16);
+        ? Math.min(1.52, 0.9 + t * 0.62)
+        : Math.min(1.62, 0.92 + t * 0.7);
 
       const isLinear =
         (emitter.kind === 'cove-strip' ||
@@ -408,6 +449,72 @@ const FittingAtelierBackdrop = memo(function FittingAtelierBackdrop({
           />
         </div>
       </div>
+
+      {/* 1A. Live Google Maps Eye-Level Real-Place Out-of-Focus Backdrop Layer (Client UI Overlay Only — Never Sent to AI VTON) */}
+      {hasActivePlaceBackdrop && placeBackdrop?.imageUrl && (
+        <div
+          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none"
+          data-maps-place-backdrop="true"
+          data-maps-backdrop-source={placeBackdrop.sourceMode}
+          data-maps-backdrop-blur={String(placeBlurPx)}
+        >
+          <img
+            key={placeBackdrop.imageUrl}
+            src={placeBackdrop.imageUrl}
+            alt={placeBackdrop.placeName ? `${placeBackdrop.placeName} backdrop` : ''}
+            draggable={false}
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onLoad={() => setPlaceImageLoadedUrl(placeBackdrop.imageUrl)}
+            onError={() => {
+              setPlaceImageLoadedUrl(null);
+              placeBackdrop.onImageError?.();
+            }}
+            className="w-full h-full object-cover transition-opacity duration-200 motion-reduce:transition-none"
+            style={{
+              opacity: placeImageReady ? 1 : 0,
+              objectPosition:
+                placeBackdrop.sourceMode === 'street_view' ? 'center 56%' : 'center 46%',
+              filter: placeBlurPx > 0 ? `blur(${placeBlurPx}px)` : 'none',
+              transform:
+                placeBackdrop.sourceMode === 'street_view' ? 'scale(1.18)' : 'scale(1.12)',
+              transformOrigin: '50% 62%',
+            }}
+          />
+          {/* Subtle top/bottom legibility scrim keeping real street asphalt visible under shoes */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: isDark
+                ? 'linear-gradient(180deg, rgba(10,12,16,0.28) 0%, rgba(10,12,16,0.04) 34%, rgba(18,20,24,0.08) 70%, rgba(22,24,30,0.48) 86%, rgba(16,18,22,0.72) 100%)'
+                : 'linear-gradient(180deg, rgba(15,18,24,0.18) 0%, rgba(255,255,255,0.02) 34%, rgba(224,226,232,0.08) 70%, rgba(222,224,230,0.48) 86%, rgba(208,211,218,0.72) 100%)',
+            }}
+          />
+        </div>
+      )}
+
+      {hasLiveMapBackdrop &&
+        placeBackdrop?.liveMapMode === 'street_view' &&
+        typeof placeBackdrop.lat === 'number' &&
+        typeof placeBackdrop.lng === 'number' && (
+          <div
+            className="absolute inset-0 z-[2] overflow-hidden pointer-events-none"
+            data-maps-place-backdrop="true"
+            data-maps-backdrop-source="street_view"
+            data-maps-backdrop-blur={String(placeBlurPx)}
+          >
+            <MapsLiveBackdropLayer
+              key={`${placeBackdrop.lat}|${placeBackdrop.lng}|${placeBackdrop.streetViewPanoId ?? ''}`}
+              lat={placeBackdrop.lat}
+              lng={placeBackdrop.lng}
+              panoId={placeBackdrop.streetViewPanoId ?? null}
+              heading={placeBackdrop.streetViewHeading ?? 0}
+              blurPx={placeBlurPx}
+              theme={theme}
+              onStatusChange={placeBackdrop.onLiveStatusChange}
+            />
+          </div>
+        )}
 
       {/* 1B. Outdoor Open-Sky Time-of-Day Wash OR Indoor Daytime Window / Post-Sunset Fixture Wash */}
       {resolvedOutdoor ? (

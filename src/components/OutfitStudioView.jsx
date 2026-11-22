@@ -8,7 +8,9 @@ import {
   CloudSun,
   Filter,
   Flame,
+  Loader2,
   LocateFixed,
+  MapPin,
   Moon,
   Plus,
   RotateCcw,
@@ -45,6 +47,11 @@ import {
 import { SEASON_BEST_SWATCHES } from '../services/skinToneAnalyzer.ts';
 import { formatKoreanDistrictLocation } from '../services/vtonQualityControl.ts';
 import { inferBagCarrySpec, isBagGarmentItem } from '../shared/garmentTaxonomy.js';
+import {
+  doesUnderwearMatchGender,
+  evaluateUnderwearOuterInteraction,
+  isSaggingEligibleBottom,
+} from '../shared/underwearStylingEngine.js';
 import { CITY_COORDS, apiFetch } from '../utils/api.ts';
 import { fetchDirectOpenMeteoWeather } from '../utils/liveWeatherClient.ts';
 import {
@@ -56,7 +63,7 @@ import {
   localizeOutfitTitle,
   tx,
 } from '../utils/i18n.ts';
-import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
 import { buildAutoOutfitTitle } from '../utils/outfitTitleGenerator.ts';
 import {
   getLocalDateKey,
@@ -81,6 +88,39 @@ import GarmentObject25D from './GarmentObject25D.jsx';
 import OutfitCategorySilhouetteRail from './OutfitCategorySilhouetteRail.tsx';
 import StoreModal from './StoreModal.jsx';
 import Studio25DCanvas from './Studio25DCanvas.jsx';
+import StudioWeatherAlertBanner from './StudioWeatherAlertBanner.jsx';
+import StudioUvSuggestionCard from './StudioUvSuggestionCard.jsx';
+import {
+  STYLING_PREF_EVENT,
+  applyStylingDensityFilter,
+  getStoredSelectedPlace,
+  getStoredStylingPreference,
+  inferTpoFromPlaceTypes,
+  saveStoredSelectedPlace,
+  saveStoredStylingPreference,
+} from '../services/stylingPreferenceStore.ts';
+import {
+  autocompleteDestinationPlaces,
+  buildPlacePhotoProxyUrl,
+  buildStreetViewProxyUrl,
+  createPlacesSessionToken,
+  fetchDestinationPlaceDetails,
+  fetchPlaceBackdropBundle,
+  notifyGmpQuotaExceeded,
+  searchDestinationPlacesWithLocation,
+} from '../services/mapsClientService.ts';
+import { filterPlacesByEyeLevelStreetView } from '../services/streetViewProbeService.ts';
+import {
+  EMPTY_PLACE_BACKDROP_DATA,
+  getStoredPlaceBackdropPref,
+  resolveActivePlaceBackdropVisual,
+  saveStoredPlaceBackdropPref,
+} from '../services/placeBackdropStore.ts';
+import {
+  classifyUvLevelClient,
+  formatUvLevelLabel,
+  getEffectiveFeelsLikeTemp,
+} from '../utils/uvSmartAccessory.ts';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { ResponsiveSheetModal, TopRightUtilityActions } from './common/AppUI.jsx';
 import '../styles/atelierTokens.css';
@@ -304,6 +344,8 @@ const PARENT_CATEGORY_HEADER_LABELS = {
   top: { ko: '상의', en: 'Tops' },
   bottom: { ko: '하의', en: 'Bottoms' },
   onepiece: { ko: '원피스', en: 'Dresses' },
+  underwear: { ko: '언더웨어', en: 'Underwear' },
+  socks: { ko: '양말', en: 'Socks' },
   shoes: { ko: '신발', en: 'Shoes' },
   bag: { ko: '가방', en: 'Bags' },
   accessory: { ko: '액세서리', en: 'Accessories' },
@@ -378,6 +420,17 @@ const SUBCATEGORY_DISPLAY_MAP = {
   gloves: { ko: '장갑', en: 'Gloves' },
   glove: { ko: '장갑', en: 'Gloves' },
   socks: { ko: '양말', en: 'Socks' },
+  street_crew_socks: { ko: '스트릿 크루 삭스', en: 'Street Crew Socks' },
+  sheer_socks: { ko: '시어 드레스 삭스', en: 'Sheer Dress Socks' },
+  no_show_socks: { ko: '페이크 삭스', en: 'No-Show Socks' },
+  underwear: { ko: '언더웨어', en: 'Underwear' },
+  boxer_briefs: { ko: '드로즈 (박서 브리프)', en: 'Boxer Briefs' },
+  woven_boxers: { ko: '트렁크 복서', en: 'Woven Boxers' },
+  seamless_underwear: { ko: '심리스 이너웨어', en: 'Seamless Innerwear' },
+  lace_underwear: { ko: '레이스 언더웨어', en: 'Lace Underwear' },
+  nubra: { ko: '누브라', en: 'Nubra' },
+  adhesive_bra: { ko: '누브라', en: 'Adhesive Bra' },
+  thong_underwear: { ko: 'T팬티', en: 'Thong' },
   watch: { ko: '시계', en: 'Watch' },
   belt: { ko: '벨트', en: 'Belt' },
   eyewear: { ko: '아이웨어', en: 'Eyewear' },
@@ -551,6 +604,8 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
       : rawTop;
   next.top_mid = hasNonSwimOnepiece ? null : resolveItem(slotMap.top_mid);
   next.bottom = hasNonSwimOnepiece ? null : resolveItem(slotMap.bottom);
+  next.underwear_top = resolveItem(slotMap.underwear_top);
+  next.underwear = resolveItem(slotMap.underwear);
   next.shoes = resolveItem(slotMap.shoes);
 
   const isBottomBeltAllowed = (bottomItem) => {
@@ -1081,6 +1136,9 @@ export default function OutfitStudioView({
   const [weatherPopupOpen, setWeatherPopupOpen] = useState(false);
   const [manualRainUmbrellaCleared, setManualRainUmbrellaCleared] = useState(false);
   const [lookStyleConfig, setLookStyleConfig] = useState(() => readStoredLookStyleConfig());
+  const [saggingFit, setSaggingFit] = useState(false);
+  const [streetSaggingPrompt, setStreetSaggingPrompt] = useState(false);
+  const [underwearSimModalOpen, setUnderwearSimModalOpen] = useState(false);
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
   const forceAutoApplyWeatherRef = useRef(false);
@@ -1096,6 +1154,39 @@ export default function OutfitStudioView({
   const [dayTarget, setDayTarget] = useState('today');
   const [gpsCoords, setGpsCoords] = useState(null);
   const [locatingGps, setLocatingGps] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState(() => getStoredSelectedPlace());
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+  const [placeSearching, setPlaceSearching] = useState(false);
+  const [placePickingId, setPlacePickingId] = useState(null);
+  const [placeSearchError, setPlaceSearchError] = useState('');
+  const [streetViewOnlySearch, setStreetViewOnlySearch] = useState(true);
+  const [placeSearchFilteredOutCount, setPlaceSearchFilteredOutCount] = useState(0);
+  const placeSessionTokenRef = useRef(createPlacesSessionToken());
+  const placeSearchTimerRef = useRef(null);
+  const placeSearchSeqRef = useRef(0);
+
+  const [stylingPref, setStylingPref] = useState(() => getStoredStylingPreference());
+  const stylingPrefRef = useRef(stylingPref);
+  useEffect(() => {
+    stylingPrefRef.current = stylingPref;
+  }, [stylingPref]);
+
+  useEffect(() => {
+    const syncPref = () => {
+      setStylingPref(getStoredStylingPreference());
+    };
+    window.addEventListener(STYLING_PREF_EVENT, syncPref);
+    window.addEventListener('storage', syncPref);
+    return () => {
+      window.removeEventListener(STYLING_PREF_EVENT, syncPref);
+      window.removeEventListener('storage', syncPref);
+      if (placeSearchTimerRef.current) {
+        clearTimeout(placeSearchTimerRef.current);
+      }
+    };
+  }, []);
+
   const [weatherPayload, setWeatherPayload] = useState(null);
   const [activeRecId, setActiveRecId] = useState(null);
   const activeRecIdRef = useRef(null);
@@ -1147,6 +1238,18 @@ export default function OutfitStudioView({
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
+  const [placeBackdropPref, setPlaceBackdropPref] = useState(() => getStoredPlaceBackdropPref());
+  const [placeBackdropData, setPlaceBackdropData] = useState(EMPTY_PLACE_BACKDROP_DATA);
+  const [placeBackdropRefreshNonce, setPlaceBackdropRefreshNonce] = useState(0);
+  const [failedBackdropUrls, setFailedBackdropUrls] = useState(() => new Set());
+  const [liveSvUnavailableKey, setLiveSvUnavailableKey] = useState('');
+  const [liveSvBillingError, setLiveSvBillingError] = useState(false);
+  const [liveSvCopyright, setLiveSvCopyright] = useState(null);
+  const prevBackdropTargetKeyRef = useRef('');
+
+  const handleUpdatePlaceBackdropPref = useCallback((patch) => {
+    setPlaceBackdropPref((prev) => saveStoredPlaceBackdropPref({ ...prev, ...patch }));
+  }, []);
 
   useEffect(() => {
     const syncEconomy = (ev) => {
@@ -1217,6 +1320,10 @@ export default function OutfitStudioView({
       setActiveSlotKey((prev) => (prev === 'outer' || prev === 'outer_mid' ? prev : 'outer'));
     } else if (tabKey === 'top') {
       setActiveSlotKey((prev) => (prev === 'top' || prev === 'top_mid' ? prev : 'top'));
+    } else if (tabKey === 'underwear') {
+      setActiveSlotKey((prev) =>
+        prev === 'underwear' || prev === 'underwear_top' ? prev : 'underwear'
+      );
     } else if (tabKey === 'accessory') {
       setActiveSlotKey((prev) => (isAccessorySlotKey(prev) ? prev : 'accessory'));
     } else if (tabKey === 'jewelry') {
@@ -1346,7 +1453,11 @@ export default function OutfitStudioView({
     if (skinProfile?.skinToneHex) {
       params.set('skin_tone_hex', skinProfile.skinToneHex);
     }
-    if (cityKey === 'gps' && gpsCoords) {
+    if (selectedPlace && Number.isFinite(selectedPlace.lat) && Number.isFinite(selectedPlace.lng)) {
+      params.set('lat', String(selectedPlace.lat));
+      params.set('lon', String(selectedPlace.lng));
+      params.set('location_label', selectedPlace.name);
+    } else if (cityKey === 'gps' && gpsCoords) {
       params.set('lat', String(gpsCoords.lat));
       params.set('lon', String(gpsCoords.lon));
       params.set('location_label', gpsCoords.label || 'GPS');
@@ -1362,14 +1473,19 @@ export default function OutfitStudioView({
             CITY_COORDS.find((c) => c.key === 'seoul') ||
             CITY_COORDS[0];
           const rescueLat =
-            cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lat))
-              ? Number(gpsCoords.lat)
-              : Number(rawData?.weather?.latitude ?? fallbackCity?.lat ?? 37.5665);
+            selectedPlace && Number.isFinite(selectedPlace.lat)
+              ? Number(selectedPlace.lat)
+              : cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lat))
+                ? Number(gpsCoords.lat)
+                : Number(rawData?.weather?.latitude ?? fallbackCity?.lat ?? 37.5665);
           const rescueLon =
-            cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lon))
-              ? Number(gpsCoords.lon)
-              : Number(rawData?.weather?.longitude ?? fallbackCity?.lon ?? 126.978);
+            selectedPlace && Number.isFinite(selectedPlace.lng)
+              ? Number(selectedPlace.lng)
+              : cityKey === 'gps' && gpsCoords && Number.isFinite(Number(gpsCoords.lon))
+                ? Number(gpsCoords.lon)
+                : Number(rawData?.weather?.longitude ?? fallbackCity?.lon ?? 126.978);
           const rescueName =
+            selectedPlace?.name ||
             (cityKey === 'gps' && gpsCoords?.label) ||
             rawData?.weather?.cityName ||
             fallbackCity?.name ||
@@ -1391,6 +1507,9 @@ export default function OutfitStudioView({
               },
             };
           }
+        }
+        if (data?.weather?.quotaFallbackTriggered) {
+          notifyGmpQuotaExceeded();
         }
         setWeatherPayload(data);
 
@@ -1415,9 +1534,14 @@ export default function OutfitStudioView({
           (shouldForceOverwriteSlots || !userModifiedSlotsRef.current)
         ) {
           const chosenRec = recs.find((r) => r.id === activeRecIdRef.current) || recs[0];
-          const mappedSlots = mapWeatherRecToSlots(chosenRec, garments, effectiveW, {
+          const rawMappedSlots = mapWeatherRecToSlots(chosenRec, garments, effectiveW, {
             allowOutdoorUmbrella: isEquippedStageOutdoor,
           });
+          const mappedSlots = applyStylingDensityFilter(
+            rawMappedSlots,
+            stylingPrefRef.current,
+            effectiveW
+          );
           if (!effectiveW.isRainy && !effectiveW.isRaining && !effectiveW.isSnowy) {
             autoEquippedUmbrellaIdRef.current = null;
           }
@@ -1455,6 +1579,7 @@ export default function OutfitStudioView({
     scenarioKey,
     dayTarget,
     gpsCoords,
+    selectedPlace,
     skinProfile,
     effectiveGender,
     garments,
@@ -1601,6 +1726,199 @@ export default function OutfitStudioView({
     scenarioKey === 'rainy_cool' || weather?.isRainy || weather?.isRaining
   );
 
+  // Conditional Google Maps Real-Place Backdrop auto-refresh (strictly fetches ONLY when enabled)
+  const backdropTargetPlaceId = selectedPlace?.placeId || '';
+  const backdropTargetLat =
+    selectedPlace && Number.isFinite(selectedPlace.lat)
+      ? Number(selectedPlace.lat)
+      : Number.isFinite(Number(weather?.latitude))
+        ? Number(weather.latitude)
+        : null;
+  const backdropTargetLng =
+    selectedPlace && Number.isFinite(selectedPlace.lng)
+      ? Number(selectedPlace.lng)
+      : Number.isFinite(Number(weather?.longitude))
+        ? Number(weather.longitude)
+        : null;
+  const backdropTargetQuery = selectedPlace?.name || weather?.cityName || '';
+  const backdropTargetKey = `${backdropTargetPlaceId}|${backdropTargetLat ?? ''}|${backdropTargetLng ?? ''}|${backdropTargetQuery}`;
+
+  useEffect(() => {
+    if (!placeBackdropPref.enabled) {
+      return undefined;
+    }
+    if (!backdropTargetPlaceId && backdropTargetLat === null && !backdropTargetQuery) {
+      return undefined;
+    }
+
+    const targetChanged =
+      prevBackdropTargetKeyRef.current !== '' &&
+      prevBackdropTargetKeyRef.current !== backdropTargetKey;
+    prevBackdropTargetKeyRef.current = backdropTargetKey;
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadBackdrop = async () => {
+      await Promise.resolve();
+      if (cancelled || controller.signal.aborted) return;
+
+      if (targetChanged) {
+        setPlaceBackdropPref((prev) =>
+          prev.selectedPhotoIndex === 0
+            ? prev
+            : saveStoredPlaceBackdropPref({ ...prev, selectedPhotoIndex: 0 })
+        );
+        setFailedBackdropUrls(new Set());
+      }
+
+      setPlaceBackdropData((prev) => ({
+        ...prev,
+        loading: true,
+        error: null,
+        quotaExceeded: false,
+      }));
+
+      try {
+        const bundle = await fetchPlaceBackdropBundle({
+          placeId: backdropTargetPlaceId || null,
+          lat: backdropTargetLat,
+          lng: backdropTargetLng,
+          query: backdropTargetQuery,
+          lang,
+          signal: controller.signal,
+        });
+        if (cancelled || controller.signal.aborted) return;
+        setPlaceBackdropData({
+          ...bundle,
+          loading: false,
+          error: null,
+          quotaExceeded: false,
+        });
+      } catch (err) {
+        if (cancelled || controller.signal.aborted) return;
+        const isQuota = err instanceof Error && err.message === 'QUOTA_EXCEEDED';
+        setPlaceBackdropData((prev) => ({
+          ...prev,
+          photos: [],
+          streetView: EMPTY_PLACE_BACKDROP_DATA.streetView,
+          loading: false,
+          quotaExceeded: isQuota,
+          error: isQuota
+            ? tx(
+                lang,
+                'Google Maps 할당량 한도에 도달해 기본 스튜디오 배경을 유지합니다.',
+                'Google Maps quota reached; keeping your default studio backdrop.'
+              )
+            : tx(
+                lang,
+                '장소 배경을 불러오지 못해 기본 스튜디오 배경을 유지합니다.',
+                'Unable to load place backdrop; keeping your studio backdrop.'
+              ),
+        }));
+      }
+    };
+
+    void loadBackdrop();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    placeBackdropPref.enabled,
+    backdropTargetKey,
+    backdropTargetPlaceId,
+    backdropTargetLat,
+    backdropTargetLng,
+    backdropTargetQuery,
+    placeBackdropRefreshNonce,
+    lang,
+  ]);
+
+  const isLiveSvUnavailableForTarget = Boolean(
+    liveSvUnavailableKey && liveSvUnavailableKey === backdropTargetKey
+  );
+
+  const activePlaceBackdrop = useMemo(() => {
+    const resolvedLat =
+      typeof selectedPlace?.streetViewLat === 'number' && Number.isFinite(selectedPlace.streetViewLat)
+        ? selectedPlace.streetViewLat
+        : backdropTargetLat ?? 37.5636;
+    const resolvedLng =
+      typeof selectedPlace?.streetViewLng === 'number' && Number.isFinite(selectedPlace.streetViewLng)
+        ? selectedPlace.streetViewLng
+        : backdropTargetLng ?? 126.9826;
+    const resolved = resolveActivePlaceBackdropVisual({
+      pref: placeBackdropPref,
+      data: placeBackdropData,
+      fallbackLat: resolvedLat,
+      fallbackLng: resolvedLng,
+      fallbackPlaceName: backdropTargetQuery || selectedPlace?.name || weather?.cityName || '',
+      liveStreetViewUnavailable: isLiveSvUnavailableForTarget || liveSvBillingError,
+      buildPhotoUrl: (photoName) => buildPlacePhotoProxyUrl(photoName, 1280, 1280),
+      buildStreetViewUrl: (panoId, heading) => buildStreetViewProxyUrl(panoId, heading, -2),
+    });
+    const isBrokenImage = Boolean(resolved.imageUrl && failedBackdropUrls.has(resolved.imageUrl));
+    if (!resolved.active || (!resolved.imageUrl && !resolved.liveMapMode) || isBrokenImage) {
+      return { ...resolved, active: false, imageUrl: null, liveMapMode: null };
+    }
+    return {
+      ...resolved,
+      streetViewPanoId: selectedPlace?.streetViewPanoId || null,
+      streetViewCopyright:
+        liveSvCopyright || selectedPlace?.streetViewCopyright || resolved.streetViewCopyright,
+      onLiveStatusChange: (status) => {
+        if (status?.billingError || status?.authFailed) {
+          setLiveSvBillingError(true);
+          setLiveSvUnavailableKey('');
+          setLiveSvCopyright(null);
+        } else if (!status?.available) {
+          setLiveSvBillingError(false);
+          setLiveSvUnavailableKey(backdropTargetKey);
+          setLiveSvCopyright(null);
+        } else {
+          setLiveSvBillingError(false);
+          setLiveSvUnavailableKey('');
+          if (status.copyright) setLiveSvCopyright(status.copyright);
+        }
+      },
+      onImageError: () => {
+        const brokenUrl = resolved.imageUrl;
+        if (!brokenUrl) return;
+        setFailedBackdropUrls((prev) => {
+          const next = new Set(prev);
+          next.add(brokenUrl);
+          return next;
+        });
+        if (
+          resolved.sourceMode === 'place_photo' &&
+          placeBackdropData.photos.length > 1 &&
+          resolved.photoIndex + 1 < placeBackdropData.photos.length
+        ) {
+          handleUpdatePlaceBackdropPref({ selectedPhotoIndex: resolved.photoIndex + 1 });
+        }
+      },
+    };
+  }, [
+    placeBackdropPref,
+    placeBackdropData,
+    backdropTargetKey,
+    backdropTargetLat,
+    backdropTargetLng,
+    backdropTargetQuery,
+    selectedPlace?.name,
+    selectedPlace?.streetViewLat,
+    selectedPlace?.streetViewLng,
+    selectedPlace?.streetViewPanoId,
+    selectedPlace?.streetViewCopyright,
+    weather?.cityName,
+    isLiveSvUnavailableForTarget,
+    liveSvBillingError,
+    liveSvCopyright,
+    failedBackdropUrls,
+    handleUpdatePlaceBackdropPref,
+  ]);
+
   // Auto-seed 5 material items per newly created sub-slot (including rainy-day umbrellas) when empty
   useEffect(() => {
     const needsSubSlotCheck =
@@ -1711,19 +2029,67 @@ export default function OutfitStudioView({
     [garments]
   );
 
+  const activeProfileGender = useMemo(() => {
+    const raw =
+      bridgedAvatar?.spec?.framePreset === 'feminine'
+        ? 'female'
+        : bridgedAvatar?.spec?.framePreset === 'masculine'
+          ? 'male'
+          : bodySpec?.gender || skinProfile?.gender || user?.gender || 'male';
+    return raw === 'female' ? 'female' : 'male';
+  }, [bridgedAvatar, bodySpec, skinProfile, user]);
+
+  const hasGenderMismatchedUnderwear = Boolean(
+    (slots.underwear && !doesUnderwearMatchGender(slots.underwear, activeProfileGender)) ||
+      (slots.underwear_top && !doesUnderwearMatchGender(slots.underwear_top, activeProfileGender))
+  );
+
+  useEffect(() => {
+    if (!hasGenderMismatchedUnderwear) return undefined;
+    const timer = window.setTimeout(() => {
+      setSlots((prev) => {
+        const dropBottom =
+          Boolean(prev.underwear) && !doesUnderwearMatchGender(prev.underwear, activeProfileGender);
+        const dropTop =
+          Boolean(prev.underwear_top) &&
+          !doesUnderwearMatchGender(prev.underwear_top, activeProfileGender);
+        if (!dropBottom && !dropTop) return prev;
+        return {
+          ...prev,
+          ...(dropBottom ? { underwear: null } : {}),
+          ...(dropTop ? { underwear_top: null } : {}),
+        };
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [hasGenderMismatchedUnderwear, activeProfileGender]);
+
   const rawSlotGarmentCount = useMemo(
     () =>
-      garments.filter(
-        (g) => isWearableStudioGarment(g) && doesGarmentMatchSubSlot(g, activeSlotKey)
-      ).length,
-    [garments, activeSlotKey]
+      garments.filter((g) => {
+        if (!isWearableStudioGarment(g) || !doesGarmentMatchSubSlot(g, activeSlotKey)) {
+          return false;
+        }
+        if (
+          (activeSlotKey === 'underwear' || activeSlotKey === 'underwear_top') &&
+          !doesUnderwearMatchGender(g, activeProfileGender)
+        ) {
+          return false;
+        }
+        return true;
+      }).length,
+    [garments, activeSlotKey, activeProfileGender]
   );
 
   const slotGarments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const isUnderwearTab = activeSlotKey === 'underwear' || activeSlotKey === 'underwear_top';
     const filtered = garments.filter((g) => {
       if (!isWearableStudioGarment(g)) return false;
       if (!doesGarmentMatchSubSlot(g, activeSlotKey)) return false;
+      if (isUnderwearTab && !doesUnderwearMatchGender(g, activeProfileGender)) {
+        return false;
+      }
       if (!doesGarmentMatchOccasion(g, occasionFilter)) return false;
       if (seasonFilter !== 'all' && !parseSeasons(g.seasons).includes(seasonFilter)) {
         return false;
@@ -1744,11 +2110,30 @@ export default function OutfitStudioView({
       return haystack.includes(q);
     });
 
+    if (isUnderwearTab) {
+      const equippedUnderwearIds = new Set(
+        [slots.underwear?.id, slots.underwear_top?.id]
+          .filter((id) => id != null)
+          .map((id) => Number(id))
+      );
+      if (equippedUnderwearIds.size === 0) return filtered;
+      return filtered.filter((item) => !equippedUnderwearIds.has(Number(item.id)));
+    }
+
     const equippedId = slots[activeSlotKey]?.id;
     if (equippedId == null) return filtered;
     // Exclude currently equipped slot item so "착용 중" appears ONLY once in .atelier-pinned-equipped-dock
     return filtered.filter((item) => Number(item.id) !== Number(equippedId));
-  }, [garments, activeSlotKey, occasionFilter, seasonFilter, searchQuery, lang, slots]);
+  }, [
+    garments,
+    activeSlotKey,
+    activeProfileGender,
+    occasionFilter,
+    seasonFilter,
+    searchQuery,
+    lang,
+    slots,
+  ]);
 
   const equippedItems = useMemo(() => {
     return ALL_EQUIPPABLE_SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
@@ -1762,11 +2147,74 @@ export default function OutfitStudioView({
       top: (slots.top ? 1 : 0) + (slots.top_mid ? 1 : 0),
       bottom: slots.bottom ? 1 : 0,
       onepiece: slots.onepiece ? 1 : 0,
+      underwear: (slots.underwear ? 1 : 0) + (slots.underwear_top ? 1 : 0),
+      socks: slots.socks ? 1 : 0,
       shoes: slots.shoes ? 1 : 0,
       accessory: accCount,
       jewelry: jwlCount,
     };
   }, [slots]);
+
+  const isBottomSaggingEligible = useMemo(
+    () => isSaggingEligibleBottom(slots.bottom),
+    [slots.bottom]
+  );
+  const effectiveSaggingFit = isBottomSaggingEligible && saggingFit;
+
+  const underwearInteraction = useMemo(() => {
+    const outerTarget = slots.onepiece || slots.bottom || slots.top || null;
+    const activeUnderwear = slots.underwear || slots.underwear_top || null;
+    if (!activeUnderwear || !outerTarget) return null;
+    return evaluateUnderwearOuterInteraction({
+      underwear: activeUnderwear,
+      outerGarment: outerTarget,
+      gender: activeProfileGender,
+    });
+  }, [slots.underwear, slots.underwear_top, slots.onepiece, slots.bottom, slots.top, activeProfileGender]);
+
+  const findPreferredHipHopUnderwear = useCallback(
+    (catalog = garments) => {
+      const list = (Array.isArray(catalog) ? catalog : []).filter((g) =>
+        doesUnderwearMatchGender(g, activeProfileGender)
+      );
+      const boxerBriefs = list.find(
+        (g) => String(g?.subcategory || '').toLowerCase() === 'boxer_briefs'
+      );
+      if (boxerBriefs) return boxerBriefs;
+      const wovenBoxers = list.find(
+        (g) => String(g?.subcategory || '').toLowerCase() === 'woven_boxers'
+      );
+      if (wovenBoxers) return wovenBoxers;
+      return list.find((g) => mapGarmentToFittingSlot(g) === 'underwear') || null;
+    },
+    [garments, activeProfileGender]
+  );
+
+  const applySaggingPolicyForStyle = useCallback(
+    (styleKey, mappedSlots) => {
+      const eligible = isSaggingEligibleBottom(mappedSlots?.bottom);
+      if (styleKey === 'hiphop' && eligible) {
+        setSaggingFit(true);
+        setStreetSaggingPrompt(false);
+        if (!mappedSlots.underwear) {
+          const preferred = findPreferredHipHopUnderwear(garments);
+          if (preferred) {
+            return { ...mappedSlots, underwear: preferred };
+          }
+        }
+        return mappedSlots;
+      }
+      if (styleKey === 'street' && eligible) {
+        setSaggingFit(false);
+        setStreetSaggingPrompt(true);
+        return mappedSlots;
+      }
+      setSaggingFit(false);
+      setStreetSaggingPrompt(false);
+      return mappedSlots;
+    },
+    [findPreferredHipHopUnderwear, garments]
+  );
 
   const uniqueSavedOutfits = useMemo(() => {
     const seen = new Set();
@@ -1811,6 +2259,10 @@ export default function OutfitStudioView({
     recommendations.find((r) => r.id === activeRecId) || recommendations[0] || null;
 
   const resolvedCityDisplayLabel = useMemo(() => {
+    if (selectedPlace?.name) {
+      const tpoShort = lang === 'en' ? selectedPlace.tpoLabelEn : selectedPlace.tpoLabelKo;
+      return `${selectedPlace.name} · ${tpoShort}`;
+    }
     if (cityKey === 'gps') {
       return gpsCoords?.label || tx(lang, '내 위치', 'My Location');
     }
@@ -1826,7 +2278,7 @@ export default function OutfitStudioView({
       return lang === 'en' ? localizeOutfitTitle(koName, 'en') : koName;
     }
     return tx(lang, '서울 중구 명동', 'Seoul · Myeongdong, Jung-gu');
-  }, [cityKey, gpsCoords, cities, weather, lang]);
+  }, [selectedPlace, cityKey, gpsCoords, cities, weather, lang]);
 
   const handleSelectCity = (nextCity) => {
     scenarioSnapshotsRef.current = {};
@@ -1835,8 +2287,188 @@ export default function OutfitStudioView({
     setManualRainUmbrellaCleared(false);
     activeRecIdRef.current = null;
     setActiveRecId(null);
+    setSelectedPlace(null);
+    saveStoredSelectedPlace(null);
     setCityKey(nextCity);
     triggerHaptic('selection');
+  };
+
+  const runDestinationPlaceSearch = (rawInput, onlyStreetView = streetViewOnlySearch) => {
+    setPlaceSearchError('');
+    if (placeSearchTimerRef.current) {
+      clearTimeout(placeSearchTimerRef.current);
+    }
+    const trimmed = String(rawInput || '').trim();
+    if (trimmed.length < 2) {
+      placeSearchSeqRef.current += 1;
+      setPlaceSuggestions([]);
+      setPlaceSearchFilteredOutCount(0);
+      setPlaceSearching(false);
+      return;
+    }
+    const reqSeq = ++placeSearchSeqRef.current;
+    setPlaceSearching(true);
+    placeSearchTimerRef.current = setTimeout(async () => {
+      try {
+        if (onlyStreetView) {
+          const candidates = await searchDestinationPlacesWithLocation({
+            input: trimmed,
+            lang,
+            lat: gpsCoords?.lat,
+            lng: gpsCoords?.lon,
+          });
+          if (placeSearchSeqRef.current !== reqSeq) return;
+          const verified = await filterPlacesByEyeLevelStreetView(candidates, {
+            onlySupported: true,
+          });
+          if (placeSearchSeqRef.current !== reqSeq) return;
+          setPlaceSuggestions(verified.places);
+          setPlaceSearchFilteredOutCount(verified.filteredOutCount);
+        } else {
+          const list = await autocompleteDestinationPlaces({
+            input: trimmed,
+            sessionToken: placeSessionTokenRef.current,
+            lang,
+            lat: gpsCoords?.lat,
+            lng: gpsCoords?.lon,
+          });
+          if (placeSearchSeqRef.current !== reqSeq) return;
+          setPlaceSuggestions(list);
+          setPlaceSearchFilteredOutCount(0);
+        }
+      } catch (err) {
+        if (placeSearchSeqRef.current !== reqSeq) return;
+        setPlaceSuggestions([]);
+        setPlaceSearchFilteredOutCount(0);
+        setPlaceSearchError(
+          err?.message ||
+            tx(lang, '장소 검색에 실패했습니다.', 'Failed to search places.')
+        );
+      } finally {
+        if (placeSearchSeqRef.current === reqSeq) {
+          setPlaceSearching(false);
+        }
+      }
+    }, 280);
+  };
+
+  const handlePlaceQueryChange = (rawInput) => {
+    setPlaceQuery(rawInput);
+    runDestinationPlaceSearch(rawInput, streetViewOnlySearch);
+  };
+
+  const handleToggleStreetViewOnlySearch = (nextOnly) => {
+    triggerHaptic('selection');
+    setStreetViewOnlySearch(nextOnly);
+    if (placeQuery.trim().length >= 2) {
+      runDestinationPlaceSearch(placeQuery, nextOnly);
+    }
+  };
+
+  const applySelectedDestinationPlace = (nextPlace, { enableStreetViewBackdrop = false } = {}) => {
+    scenarioSnapshotsRef.current = {};
+    userModifiedSlotsRef.current = false;
+    forceAutoApplyWeatherRef.current = true;
+    setLiveSvUnavailableKey('');
+    setLiveSvBillingError(false);
+    setLiveSvCopyright(nextPlace.streetViewCopyright || null);
+    setSelectedPlace(nextPlace);
+    saveStoredSelectedPlace(nextPlace);
+    setPlaceQuery('');
+    setPlaceSuggestions([]);
+    setPlaceSearchFilteredOutCount(0);
+    setPlaceBackdropRefreshNonce((n) => n + 1);
+    if (enableStreetViewBackdrop) {
+      handleUpdatePlaceBackdropPref({ enabled: true, sourceMode: 'street_view' });
+    }
+    triggerHaptic('medium');
+    showToast?.(
+      tx(
+        lang,
+        `${nextPlace.name} (${nextPlace.tpoLabelKo}) 기준 날씨와 눈높이 배경을 불러옵니다.`,
+        `Loading weather & eye-level backdrop for ${nextPlace.name} (${nextPlace.tpoLabelEn}).`
+      )
+    );
+  };
+
+  const handleSelectVerifiedStreetViewPlace = (candidate) => {
+    if (!candidate?.placeId || typeof candidate.lat !== 'number' || typeof candidate.lng !== 'number') {
+      return;
+    }
+    const tpo = inferTpoFromPlaceTypes(
+      candidate.primaryType,
+      candidate.types,
+      candidate.mainText || candidate.fullText
+    );
+    applySelectedDestinationPlace(
+      {
+        placeId: candidate.placeId,
+        name: candidate.mainText || candidate.fullText,
+        formattedAddress: candidate.formattedAddress || candidate.secondaryText || '',
+        lat: candidate.lat,
+        lng: candidate.lng,
+        primaryType: candidate.primaryType || '',
+        streetViewPanoId: candidate.streetViewPanoId || null,
+        streetViewLat:
+          typeof candidate.streetViewLat === 'number' ? candidate.streetViewLat : candidate.lat,
+        streetViewLng:
+          typeof candidate.streetViewLng === 'number' ? candidate.streetViewLng : candidate.lng,
+        streetViewCopyright: candidate.streetViewCopyright || '© Google',
+        ...tpo,
+      },
+      { enableStreetViewBackdrop: true }
+    );
+  };
+
+  const handlePickDestinationPlace = async (suggestion) => {
+    if (!suggestion?.placeId || placePickingId) return;
+    // Fast-path: candidates from eye-level Street View filtered search already carry verified coords & panoId
+    if (typeof suggestion.lat === 'number' && typeof suggestion.lng === 'number') {
+      handleSelectVerifiedStreetViewPlace(suggestion);
+      return;
+    }
+    setPlacePickingId(suggestion.placeId);
+    setPlaceSearchError('');
+    try {
+      const details = await fetchDestinationPlaceDetails({
+        placeId: suggestion.placeId,
+        sessionToken: placeSessionTokenRef.current,
+        lang,
+      });
+      placeSessionTokenRef.current = createPlacesSessionToken();
+      const tpo = inferTpoFromPlaceTypes(
+        details.primaryType,
+        details.types,
+        details.name || suggestion.mainText
+      );
+      applySelectedDestinationPlace({
+        placeId: details.placeId,
+        name: details.name || suggestion.mainText,
+        formattedAddress: details.formattedAddress || suggestion.secondaryText,
+        lat: details.lat,
+        lng: details.lng,
+        primaryType: details.primaryType,
+        ...tpo,
+      });
+    } catch (err) {
+      setPlaceSearchError(
+        err?.message ||
+          tx(lang, '장소 좌표를 불러오지 못했습니다.', 'Could not load place details.')
+      );
+    } finally {
+      setPlacePickingId(null);
+    }
+  };
+
+  const handleClearSelectedPlace = () => {
+    triggerHaptic('selection');
+    scenarioSnapshotsRef.current = {};
+    forceAutoApplyWeatherRef.current = true;
+    setSelectedPlace(null);
+    saveStoredSelectedPlace(null);
+    setPlaceQuery('');
+    setPlaceSuggestions([]);
+    setPlaceSearchFilteredOutCount(0);
   };
 
   const handleSelectScenario = (nextScenario) => {
@@ -1986,10 +2618,52 @@ export default function OutfitStudioView({
     activeRecIdRef.current = rec.id;
     setActiveRecId(rec.id);
     setHasExplicitSlotState(true);
-    setSlots(
-      mapWeatherRecToSlots(rec, garments, weather, {
+    const rawMapped = mapWeatherRecToSlots(rec, garments, weather, {
+      allowOutdoorUmbrella: isEquippedStageOutdoor,
+    });
+    const mapped = applyStylingDensityFilter(rawMapped, stylingPrefRef.current, weather);
+    const recIndex = recommendations.findIndex((r) => r.id === rec.id);
+    const resolvedStyleKey =
+      rec.styleKey ||
+      (recIndex === 1 ? lookStyleConfig.look2Style : lookStyleConfig.look1Style);
+    const finalizedSlots = applySaggingPolicyForStyle(resolvedStyleKey, mapped);
+    setSlots(finalizedSlots);
+  };
+
+  const handleUpdateStylingPref = (patch) => {
+    triggerHaptic('selection');
+    const nextPref = { ...stylingPrefRef.current, ...patch };
+    stylingPrefRef.current = nextPref;
+    setStylingPref(nextPref);
+    saveStoredStylingPreference(nextPref);
+
+    if (activeRecommendation) {
+      const rawMapped = mapWeatherRecToSlots(activeRecommendation, garments, weather, {
         allowOutdoorUmbrella: isEquippedStageOutdoor,
-      })
+      });
+      const filtered = applyStylingDensityFilter(rawMapped, nextPref, weather);
+      const recIndex = recommendations.findIndex((r) => r.id === activeRecommendation.id);
+      const resolvedStyleKey =
+        activeRecommendation.styleKey ||
+        (recIndex === 1 ? lookStyleConfig.look2Style : lookStyleConfig.look1Style);
+      setSlots(applySaggingPolicyForStyle(resolvedStyleKey, filtered));
+    } else {
+      setSlots((prev) => applyStylingDensityFilter(prev, nextPref, weather));
+    }
+  };
+
+  const handleToggleUvAccessorySlot = (slotKey, garment, isEquipped) => {
+    if (!slotKey || !garment) return;
+    userModifiedSlotsRef.current = true;
+    setHasExplicitSlotState(true);
+    setSlots((prev) => ({
+      ...prev,
+      [slotKey]: isEquipped ? null : garment,
+    }));
+    showToast?.(
+      isEquipped
+        ? tx(lang, `${garment.name} 착용을 해제했어요.`, `Removed ${garment.name}.`)
+        : tx(lang, `UV 대비 ${garment.name}을(를) 착용했어요.`, `Equipped ${garment.name} for UV protection.`)
     );
   };
 
@@ -2023,11 +2697,12 @@ export default function OutfitStudioView({
       activeRecIdRef.current = targetRec.id;
       setActiveRecId(targetRec.id);
       setHasExplicitSlotState(true);
-      setSlots(
-        mapWeatherRecToSlots(targetRec, garments, weather, {
-          allowOutdoorUmbrella: isEquippedStageOutdoor,
-        })
-      );
+      const rawMapped = mapWeatherRecToSlots(targetRec, garments, weather, {
+        allowOutdoorUmbrella: isEquippedStageOutdoor,
+      });
+      const mapped = applyStylingDensityFilter(rawMapped, stylingPrefRef.current, weather);
+      const finalizedSlots = applySaggingPolicyForStyle(nextStyleKey, mapped);
+      setSlots(finalizedSlots);
     }
   };
 
@@ -2103,9 +2778,13 @@ export default function OutfitStudioView({
   };
 
   const handleToggleEquip = (item) => {
-    const targetSlotKey = doesGarmentMatchSubSlot(item, activeSlotKey)
-      ? activeSlotKey
-      : mapGarmentToDefaultSubSlot(item);
+    const defaultSubSlot = mapGarmentToDefaultSubSlot(item);
+    const isUnderwearItem = defaultSubSlot === 'underwear' || defaultSubSlot === 'underwear_top';
+    const targetSlotKey = isUnderwearItem
+      ? defaultSubSlot
+      : doesGarmentMatchSubSlot(item, activeSlotKey)
+        ? activeSlotKey
+        : defaultSubSlot;
     const isUnequipping = slots[targetSlotKey]?.id === item.id;
 
     setSelectedInspectorId(item?.id ?? null);
@@ -2347,6 +3026,74 @@ export default function OutfitStudioView({
     </div>
   );
 
+  const handleToggleSaggingFit = useCallback(() => {
+    triggerHaptic('selection');
+    const next = !effectiveSaggingFit;
+    setSaggingFit(next);
+    setStreetSaggingPrompt(false);
+    if (next && !slots.underwear) {
+      const preferred = findPreferredHipHopUnderwear(garments);
+      if (preferred) {
+        setSlots((prev) => ({ ...prev, underwear: preferred }));
+        setHasExplicitSlotState(true);
+      }
+    }
+    showToast?.(
+      next
+        ? tx(
+            lang,
+            '새깅 팬츠 핏 ON — AI 피팅 생성 시 로우 드롭 & 밴드 노출이 반영됩니다',
+            'Sagging Fit ON — low-drop waist & exposed band will apply on AI Try-On'
+          )
+        : tx(lang, '새깅 팬츠 핏 OFF — 기본 웨이스트 핏으로 전환됨', 'Sagging Fit OFF — standard waist fit')
+    );
+  }, [effectiveSaggingFit, slots.underwear, findPreferredHipHopUnderwear, garments, lang, showToast]);
+
+  const renderFitToolsMicroBar = () => {
+    if (!isBottomSaggingEligible && !underwearInteraction) return null;
+    const vplStatusLabel =
+      underwearInteraction?.riskLevel === 'high'
+        ? tx(lang, '비침·VPL 주의', 'VPL / Sheer')
+        : underwearInteraction?.riskLevel === 'medium'
+          ? tx(lang, '비침·VPL 미세', 'VPL Subtle')
+          : tx(lang, '비침·VPL 안정', 'VPL Clean');
+    return (
+      <div className="atelier-fit-micro-bar" data-fit-tools-micro-bar="true">
+        {isBottomSaggingEligible && (
+          <button
+            type="button"
+            data-sagging-fit-toggle="true"
+            aria-pressed={effectiveSaggingFit}
+            className={`atelier-fit-micro-btn ${effectiveSaggingFit ? 'is-active' : ''}`}
+            onClick={handleToggleSaggingFit}
+          >
+            <span>
+              {effectiveSaggingFit
+                ? tx(lang, '새깅 핏 · ON', 'Sagging · ON')
+                : tx(lang, '새깅 핏 · OFF', 'Sagging · OFF')}
+            </span>
+          </button>
+        )}
+        {underwearInteraction && (
+          <button
+            type="button"
+            data-underwear-sim-trigger="true"
+            data-underwear-risk={underwearInteraction.riskLevel}
+            className={`atelier-fit-micro-btn ${
+              underwearInteraction.riskLevel === 'high' ? 'is-alert' : ''
+            }`}
+            onClick={() => {
+              triggerHaptic('selection');
+              setUnderwearSimModalOpen(true);
+            }}
+          >
+            <span>{vplStatusLabel}</span>
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const renderSeasonFilterRail = () => (
     <div className="studio-season-dropdown-row">
       <select
@@ -2428,6 +3175,47 @@ export default function OutfitStudioView({
               </option>
               <option value="outer">
                 {tx(lang, '2단계 · 아우터 (코트·트렌치·패딩)', 'Stage 2 · Outer Coat (Coat · Trench · Puffer)')}
+              </option>
+            </select>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeParentTab === 'underwear') {
+      const underwearStageValue = activeSlotKey === 'underwear_top' ? 'underwear_top' : 'underwear';
+      return (
+        <div
+          className="studio-subtree-panel"
+          data-layer-subtree="underwear"
+          role="region"
+          aria-label={tx(lang, '언더웨어 멀티 착용 구성 선택', 'Underwear Multi-Wear View')}
+        >
+          <div className="studio-subtree-select-wrap">
+            <select
+              data-layer-stage-select="underwear"
+              className="studio-dropdown-select"
+              aria-label={tx(lang, '언더웨어 파트 선택', 'Select Underwear Part')}
+              value={underwearStageValue}
+              onChange={(e) => {
+                triggerHaptic('selection');
+                setSelectedInspectorId(null);
+                setActiveSlotKey(e.target.value);
+              }}
+            >
+              <option value="underwear">
+                {tx(
+                  lang,
+                  '전체 · 멀티 착용 (상의+하의 동시 선택)',
+                  'All · Multi-Wear (Top + Bottom)'
+                )}
+              </option>
+              <option value="underwear_top">
+                {tx(
+                  lang,
+                  '이너 상의만 보기 (누브라 · 이너탑)',
+                  'Inner Top Only (Nubra · Inner Top)'
+                )}
               </option>
             </select>
           </div>
@@ -2723,6 +3511,84 @@ export default function OutfitStudioView({
       );
     }
 
+    if (activeParentTab === 'underwear') {
+      const equippedUnderwearCards = [
+        slots.underwear_top
+          ? {
+              slotKey: 'underwear_top',
+              item: slots.underwear_top,
+              statusLabel: tx(lang, '착용 중 · 이너 상의', 'Equipped · Inner Top'),
+            }
+          : null,
+        slots.underwear
+          ? {
+              slotKey: 'underwear',
+              item: slots.underwear,
+              statusLabel: tx(lang, '착용 중 · 이너 하의', 'Equipped · Underwear'),
+            }
+          : null,
+      ].filter(Boolean);
+
+      if (equippedUnderwearCards.length === 0) return null;
+
+      return (
+        <div className="atelier-pinned-equipped-dock flex flex-col gap-2">
+          {equippedUnderwearCards.map((entry) => {
+            const specs = resolveGarmentInspectorSpecs(entry.item, lang);
+            return (
+              <div
+                key={entry.slotKey}
+                className="atelier-inventory-spec-card is-pinned"
+                data-pinned-equipped-card={entry.item.id}
+                role="region"
+                aria-label={tx(lang, '현재 착용 중인 언더웨어', 'Currently equipped underwear')}
+              >
+                <div className="atelier-spec-status-bar">
+                  <span className="atelier-spec-status-pill is-equipped">
+                    <Check size={11} strokeWidth={2.8} aria-hidden="true" />
+                    <span>{entry.statusLabel}</span>
+                  </span>
+                  <button
+                    type="button"
+                    data-pinned-unequip-btn="true"
+                    className="atelier-spec-unequip-btn"
+                    onClick={() => handleUnequipSlot(entry.slotKey)}
+                  >
+                    {tx(lang, '해제', 'Remove')}
+                  </button>
+                </div>
+
+                <div className="atelier-spec-main-row">
+                  <div className="atelier-spec-info-col">
+                    <span className="atelier-spec-item-name">{specs.displayName}</span>
+                    <span className="atelier-spec-brand-line">
+                      {`${specs.brandLabel} · ${specs.subcategoryLabel}`}
+                    </span>
+                    <div className="atelier-spec-meta-pills">
+                      <span className="atelier-spec-meta-pill">
+                        <span
+                          className="atelier-spec-color-dot"
+                          style={{ backgroundColor: specs.colorHex }}
+                          aria-hidden="true"
+                        />
+                        <span>{specs.colorLabel}</span>
+                      </span>
+                      <span className="atelier-spec-meta-pill">{specs.materialLabel}</span>
+                      <span className="atelier-spec-meta-pill">{specs.seasonLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className="atelier-spec-thumb-squircle">
+                    <GarmentObject25D item={entry.item} alt={specs.displayName} padding="8%" />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     if (!pinnedSlotInfo?.item) return null;
     const equippedItem = pinnedSlotInfo.item;
     const specs = resolveGarmentInspectorSpecs(equippedItem, lang);
@@ -2810,7 +3676,10 @@ export default function OutfitStudioView({
       occasionFilter !== 'all' || seasonFilter !== 'all' || searchQuery.trim().length > 0;
     const isFilterEmptyOnly = rawSlotGarmentCount > 0 && hasFilterOrSearch;
 
-    const hasEquippedInSlot = Boolean(slots[activeSlotKey]);
+    const hasEquippedInSlot =
+      activeParentTab === 'underwear'
+        ? Boolean(slots.underwear || slots.underwear_top)
+        : Boolean(slots[activeSlotKey]);
     const hasOnlyEquippedInSlot =
       slotGarments.length === 0 && hasEquippedInSlot && !hasFilterOrSearch;
 
@@ -3024,8 +3893,26 @@ export default function OutfitStudioView({
       </header>
 
       <div className="studio-25d-layout">
+        {/* Ambient full-bleed stage backdrop behind both panes so the translucent right inventory drawer refracts live color & light */}
+        <div className="studio-layout-ambient-bleed" aria-hidden="true">
+          <img
+            src={
+              activePlaceBackdrop?.active && activePlaceBackdrop?.imageUrl
+                ? activePlaceBackdrop.imageUrl
+                : withPublicBaseUrl(equippedStageBg.imageUrl)
+            }
+            alt=""
+            draggable={false}
+            decoding="async"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+
         {/* Center: Isometric Parametric Character Stage */}
         <div className="studio-25d-stage-col">
+          {/* Collapsible Weather Alert Banner (renders only when alerts are active) */}
+          <StudioWeatherAlertBanner weather={weather} lang={lang} />
+
           <Studio25DCanvas
             slots={slots}
             theme={theme}
@@ -3088,9 +3975,23 @@ export default function OutfitStudioView({
             stageBackgroundId={economyState.equippedBackgroundId}
             lightingPreset={economyState.lightingPreset}
             lightingIntensity={economyState.lightingIntensity}
+            placeBackdrop={activePlaceBackdrop}
             onOpenBackgroundPicker={() => setBgPickerOpen(true)}
             onOpenMobileDrawer={() => setMobileSheetOpen(true)}
             mobileDrawerOpen={mobileSheetOpen}
+            saggingFit={effectiveSaggingFit}
+            stylingPref={stylingPref}
+            onUpdateStylingPref={handleUpdateStylingPref}
+            selectedPlace={selectedPlace}
+          />
+
+          {/* Non-intrusive UV Smart Accessory 1-Tap Suggestion Card */}
+          <StudioUvSuggestionCard
+            weather={weather}
+            garments={garments}
+            slots={slots}
+            onToggleAccessorySlot={handleToggleUvAccessorySlot}
+            lang={lang}
           />
         </div>
 
@@ -3104,6 +4005,7 @@ export default function OutfitStudioView({
             {(drawerSearchOpen || searchQuery.trim().length > 0) &&
               renderSlotSearchBar(desktopSearchInputRef)}
             {renderSeasonFilterRail()}
+            {renderFitToolsMicroBar()}
           </div>
 
           {renderSubTreePanel()}
@@ -3363,28 +4265,48 @@ export default function OutfitStudioView({
                       </span>
                     </div>
                     <span className="weather-popup-env-meta tabular-nums">
-                      {scenarioKey === 'live' &&
-                      dayTarget !== 'tomorrow' &&
-                      typeof weather?.currentTemp === 'number' &&
-                      Number.isFinite(weather.currentTemp)
-                        ? tx(
+                      {(() => {
+                        const feelsC = getEffectiveFeelsLikeTemp(weather);
+                        const uvVal = Number(weather?.uvIndex);
+                        const uvText =
+                          Number.isFinite(uvVal) && uvVal > 0
+                            ? ` · UV ${Math.round(uvVal)} (${formatUvLevelLabel(
+                                classifyUvLevelClient(uvVal),
+                                lang
+                              )})`
+                            : '';
+                        const feelsText =
+                          feelsC !== null
+                            ? lang === 'en'
+                              ? ` · Feels ${feelsC}°C`
+                              : ` · 체감 ${feelsC}°C`
+                            : '';
+                        if (
+                          scenarioKey === 'live' &&
+                          dayTarget !== 'tomorrow' &&
+                          typeof weather?.currentTemp === 'number' &&
+                          Number.isFinite(weather.currentTemp)
+                        ) {
+                          return tx(
                             lang,
-                            `현재 ${Math.round(weather.currentTemp)}°C · 강수 ${
+                            `현재 ${Math.round(weather.currentTemp)}°C${feelsText} · 강수 ${
                               weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                            }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
-                            `Now ${Math.round(weather.currentTemp)}°C · Precip ${
+                            }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h${uvText}`,
+                            `Now ${Math.round(weather.currentTemp)}°C${feelsText} · Precip ${
                               weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                            }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
-                          )
-                        : tx(
-                            lang,
-                            `평균 ${Math.round(weather?.avgTemp ?? 13)}°C · 강수 ${
-                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                            }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h`,
-                            `Avg ${Math.round(weather?.avgTemp ?? 13)}°C · Precip ${
-                              weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
-                            }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h`
-                          )}
+                            }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h${uvText}`
+                          );
+                        }
+                        return tx(
+                          lang,
+                          `평균 ${Math.round(weather?.avgTemp ?? 13)}°C${feelsText} · 강수 ${
+                            weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                          }% · 풍속 ${Math.round(weather?.windSpeed ?? 8)}km/h${uvText}`,
+                          `Avg ${Math.round(weather?.avgTemp ?? 13)}°C${feelsText} · Precip ${
+                            weather?.precipProb ?? (isRainyWeatherActive ? 80 : 10)
+                          }% · Wind ${Math.round(weather?.windSpeed ?? 8)}km/h${uvText}`
+                        );
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -3549,6 +4471,175 @@ export default function OutfitStudioView({
                 </span>
               </button>
             </div>
+
+            {/* Google Maps Places TPO Destination Search */}
+            <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/10 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="studio-tpo-place-search"
+                  className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-200 flex items-center gap-1.5"
+                >
+                  <MapPin size={12} aria-hidden="true" />
+                  <span>{tx(lang, '목적지 장소 검색 (TPO 연동)', 'Destination Search (TPO)')}</span>
+                </label>
+                {selectedPlace && (
+                  <button
+                    type="button"
+                    onClick={handleClearSelectedPlace}
+                    className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white underline underline-offset-2"
+                  >
+                    {tx(lang, '장소 해제', 'Clear place')}
+                  </button>
+                )}
+              </div>
+
+              {selectedPlace && (
+                <div className="rounded-xl border border-black/10 dark:border-white/12 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold text-neutral-900 dark:text-white truncate">
+                      {selectedPlace.name}
+                    </div>
+                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                      {lang === 'en' ? selectedPlace.tpoLabelEn : selectedPlace.tpoLabelKo}
+                      {selectedPlace.formattedAddress ? ` · ${selectedPlace.formattedAddress}` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={streetViewOnlySearch}
+                  data-maps-sv-filter-toggle="true"
+                  onClick={() => handleToggleStreetViewOnlySearch(!streetViewOnlySearch)}
+                  className={`inline-flex items-center gap-1.5 min-h-[30px] px-2.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+                    streetViewOnlySearch
+                      ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-900 dark:border-white'
+                      : 'bg-transparent text-neutral-600 border-black/12 dark:text-neutral-300 dark:border-white/15'
+                  }`}
+                >
+                  <span>
+                    {tx(lang, '눈높이 거리뷰 지원 장소만', 'Eye-Level Street View only')}
+                  </span>
+                  <span className="opacity-75">
+                    {streetViewOnlySearch ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+                <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                  {streetViewOnlySearch
+                    ? tx(lang, '야외 지상 도로 확인된 곳만 표시', 'Outdoor ground-level verified')
+                    : tx(lang, '실내·전체 장소 검색', 'All places')}
+                </span>
+              </div>
+
+              <div className="relative">
+                <Search
+                  size={13}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
+                  aria-hidden="true"
+                />
+                <input
+                  id="studio-tpo-place-search"
+                  type="text"
+                  value={placeQuery}
+                  onChange={(e) => handlePlaceQueryChange(e.target.value)}
+                  placeholder={
+                    streetViewOnlySearch
+                      ? tx(
+                          lang,
+                          '예: 성수동 카페거리, 명동, 도쿄 시부야...',
+                          'e.g., Seongsu Cafe Street, Myeongdong, Shibuya...'
+                        )
+                      : tx(
+                          lang,
+                          '예: 여의도 IFC몰, 성수동 카페, 해운대...',
+                          'e.g., IFC Mall Yeouido, Seongsu Cafe...'
+                        )
+                  }
+                  className="w-full min-h-[40px] pl-8 pr-8 rounded-xl border border-black/12 dark:border-white/15 bg-white dark:bg-neutral-900 text-[12px] text-neutral-900 dark:text-white placeholder:text-neutral-400"
+                />
+                {placeSearching && (
+                  <Loader2
+                    size={13}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-neutral-400"
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+
+              {placeSearchError && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">{placeSearchError}</p>
+              )}
+
+              {!placeSearching &&
+                !placeSearchError &&
+                streetViewOnlySearch &&
+                placeQuery.trim().length >= 2 &&
+                placeSuggestions.length === 0 && (
+                  <div className="rounded-xl border border-black/10 dark:border-white/12 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
+                      {placeSearchFilteredOutCount > 0
+                        ? tx(
+                            lang,
+                            `검색된 ${placeSearchFilteredOutCount}곳은 야외 눈높이 거리뷰 미지원 구역입니다.`,
+                            `${placeSearchFilteredOutCount} matched spots lack outdoor eye-level Street View.`
+                          )
+                        : tx(
+                            lang,
+                            '눈높이 거리뷰 지원 장소를 찾지 못했습니다.',
+                            'No eye-level Street View places found.'
+                          )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStreetViewOnlySearch(false)}
+                      className="shrink-0 text-[11px] font-semibold text-neutral-900 dark:text-white underline underline-offset-2"
+                    >
+                      {tx(lang, '전체 보기', 'Show all')}
+                    </button>
+                  </div>
+                )}
+
+              {placeSuggestions.length > 0 && (
+                <ul
+                  className="rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-900 divide-y divide-black/6 dark:divide-white/8 overflow-hidden"
+                  role="listbox"
+                  aria-label={tx(lang, '목적지 검색 결과', 'Destination suggestions')}
+                >
+                  {placeSuggestions.map((s) => (
+                    <li key={s.placeId}>
+                      <button
+                        type="button"
+                        disabled={Boolean(placePickingId)}
+                        onClick={() => handlePickDestinationPlace(s)}
+                        className="w-full min-h-[42px] px-3 py-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.06] flex items-center justify-between gap-2 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-medium text-neutral-900 dark:text-white truncate">
+                            {s.mainText}
+                          </div>
+                          {s.secondaryText && (
+                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                              {s.secondaryText}
+                            </div>
+                          )}
+                        </div>
+                        {s.streetViewAvailable && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded border border-black/12 dark:border-white/18 text-[10px] font-semibold text-neutral-800 dark:text-neutral-200">
+                            {tx(lang, '눈높이 거리뷰', 'Street View')}
+                          </span>
+                        )}
+                        {placePickingId === s.placeId && (
+                          <Loader2 size={13} className="animate-spin text-neutral-400 shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           {/* 3) AI 생성 코디 Look 1 · Look 2 설정 */}
@@ -3631,6 +4722,7 @@ export default function OutfitStudioView({
           {(drawerSearchOpen || searchQuery.trim().length > 0) &&
             renderSlotSearchBar(mobileSearchInputRef)}
           {renderSeasonFilterRail()}
+          {renderFitToolsMicroBar()}
         </div>
         {renderSubTreePanel()}
         <div className="atelier-drawer-body">
@@ -3646,6 +4738,138 @@ export default function OutfitStudioView({
             <div className="atelier-drawer-grid-scroll">{renderSlotInventoryGrid()}</div>
           </div>
         </div>
+      </ResponsiveSheetModal>
+
+      {/* Non-blocking Street Look Sagging Fit Confirmation Modal */}
+      <ResponsiveSheetModal
+        id="street-sagging-prompt-modal"
+        open={Boolean(streetSaggingPrompt && isBottomSaggingEligible)}
+        onClose={() => setStreetSaggingPrompt(false)}
+        lang={lang}
+        eyebrow={tx(lang, '스트릿 핏 옵션', 'Street Fit Option')}
+        title={tx(lang, '새깅 팬츠 핏을 적용할까요?', 'Apply Sagging Pants Fit?')}
+        maxWidth={380}
+      >
+        <div className="atelier-fit-modal-body" data-street-sagging-prompt="true">
+          <p className="atelier-fit-modal-desc">
+            {tx(
+              lang,
+              '스트릿 룩에 바지를 로우 드롭으로 내려 입어 언더웨어 밴드가 드러나는 새깅 핏을 연출할 수 있습니다.',
+              'Drop the waistband low on the hips to showcase the innerwear waistband for an authentic street sagging silhouette.'
+            )}
+          </p>
+          <div className="atelier-fit-modal-actions">
+            <button
+              type="button"
+              className="atelier-sagging-btn is-primary"
+              data-street-sagging-accept="true"
+              onClick={() => {
+                triggerHaptic('selection');
+                setSaggingFit(true);
+                setStreetSaggingPrompt(false);
+                if (!slots.underwear) {
+                  const preferred = findPreferredHipHopUnderwear(garments);
+                  if (preferred) {
+                    setSlots((prev) => ({ ...prev, underwear: preferred }));
+                    setHasExplicitSlotState(true);
+                  }
+                }
+                showToast?.(
+                  tx(
+                    lang,
+                    '새깅 팬츠 핏 적용됨 — AI 피팅 생성 시 로우 드롭이 반영됩니다',
+                    'Sagging Fit applied — will render on AI Try-On'
+                  )
+                );
+              }}
+            >
+              {tx(lang, '새깅 핏 적용', 'Apply Sagging Fit')}
+            </button>
+            <button
+              type="button"
+              className="atelier-sagging-btn"
+              data-street-sagging-decline="true"
+              onClick={() => {
+                triggerHaptic('selection');
+                setSaggingFit(false);
+                setStreetSaggingPrompt(false);
+              }}
+            >
+              {tx(lang, '기본 핏 유지', 'Keep Standard Fit')}
+            </button>
+          </div>
+        </div>
+      </ResponsiveSheetModal>
+
+      {/* Non-blocking Underwear Show-Through & VPL Simulation Detail Sheet */}
+      <ResponsiveSheetModal
+        id="underwear-vpl-sim-modal"
+        open={Boolean(underwearSimModalOpen && underwearInteraction)}
+        onClose={() => setUnderwearSimModalOpen(false)}
+        lang={lang}
+        eyebrow={tx(lang, '이너웨어 시뮬레이션', 'Innerwear Simulation')}
+        title={tx(lang, '속옷 비침 · 라인(VPL) 분석', 'Show-Through & VPL Analysis')}
+        maxWidth={400}
+      >
+        {underwearInteraction && (
+          <div
+            className="atelier-fit-modal-body"
+            data-underwear-sim-card="true"
+            data-underwear-risk={underwearInteraction.riskLevel}
+          >
+            <div className="atelier-fit-modal-metrics">
+              <span>
+                {tx(lang, '비침', 'Show-Through')}:{' '}
+                <strong>
+                  {underwearInteraction.showThroughLevel === 'visible'
+                    ? tx(lang, '보임', 'Visible')
+                    : underwearInteraction.showThroughLevel === 'subtle'
+                      ? tx(lang, '은은함', 'Subtle')
+                      : tx(lang, '없음', 'None')}
+                </strong>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {tx(lang, '속옷선(VPL)', 'VPL Line')}:{' '}
+                <strong>
+                  {underwearInteraction.vplLevel === 'visible'
+                    ? tx(lang, '도드라짐', 'Visible')
+                    : underwearInteraction.vplLevel === 'subtle'
+                      ? tx(lang, '미세함', 'Subtle')
+                      : tx(lang, '노라인', 'No-Show')}
+                </strong>
+              </span>
+            </div>
+            <p className="atelier-fit-modal-desc">
+              {lang === 'en' ? underwearInteraction.summaryEn : underwearInteraction.summaryKo}
+            </p>
+            {(underwearInteraction.tipKo || underwearInteraction.tipEn) && (
+              <p className="atelier-fit-modal-tip">
+                {lang === 'en' ? underwearInteraction.tipEn : underwearInteraction.tipKo}
+              </p>
+            )}
+            <div className="atelier-fit-modal-actions">
+              <button
+                type="button"
+                className="atelier-sagging-btn is-primary"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setUnderwearSimModalOpen(false);
+                  handleSelectTopFittingTab('underwear');
+                }}
+              >
+                {tx(lang, '언더웨어 변경하기', 'Change Underwear')}
+              </button>
+              <button
+                type="button"
+                className="atelier-sagging-btn"
+                onClick={() => setUnderwearSimModalOpen(false)}
+              >
+                {tx(lang, '닫기', 'Close')}
+              </button>
+            </div>
+          </div>
+        )}
       </ResponsiveSheetModal>
 
       {/* After-8-PM Tomorrow Outfit Setup Modal (up to 3 impressions when today's outfit was created) */}
@@ -3702,6 +4926,19 @@ export default function OutfitStudioView({
         onSelectBackground={handleSelectStageBackground}
         onUpdateLighting={handleUpdateStageLighting}
         onOpenStore={() => setStoreOpen(true)}
+        placeBackdropPref={placeBackdropPref}
+        placeBackdropData={placeBackdropData}
+        selectedPlaceName={backdropTargetQuery}
+        gpsCoords={gpsCoords}
+        onSelectVerifiedPlace={handleSelectVerifiedStreetViewPlace}
+        onUpdatePlaceBackdropPref={handleUpdatePlaceBackdropPref}
+        onRefreshPlaceBackdrop={() => {
+          setLiveSvUnavailableKey('');
+          setLiveSvBillingError(false);
+          setPlaceBackdropRefreshNonce((n) => n + 1);
+        }}
+        streetViewUnavailable={isLiveSvUnavailableForTarget}
+        streetViewBillingRequired={liveSvBillingError}
       />
 
       {/* In-App Stage Background Store & Tiered Gacha Modal */}

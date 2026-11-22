@@ -203,6 +203,7 @@ export function OfficialProductProposalCard({
   webMatch,
   onApplyAll,
   onApplyInfoOnly,
+  onOpenSyncModal,
   onDismiss,
   onRunStudioInstead,
 }) {
@@ -213,8 +214,8 @@ export function OfficialProductProposalCard({
         <span>
           {tx(
             lang,
-            '목탭·세탁탭 정보로 인터넷 공식 상품과 깔끔한 사진을 찾고 있어요...',
-            'Searching the web for official product info and clean photos...'
+            '목탭·내부 세탁 케어 라벨 정보로 공식 브랜드 DB를 검색하고 있어요...',
+            'Searching official brand database using neck & care tag...'
           )}
         </span>
       </div>
@@ -233,7 +234,7 @@ export function OfficialProductProposalCard({
   return (
     <section
       className="hig-web-match-card"
-      aria-label={tx(lang, '인터넷 공식 상품 제안', 'Official Web Product Suggestion')}
+      aria-label={tx(lang, '공식 브랜드 DB 매칭 제안', 'Official Brand DB Suggestion')}
     >
       <div className="hig-web-match-header">
         <div className="hig-web-match-eyebrow">
@@ -241,8 +242,8 @@ export function OfficialProductProposalCard({
           <span>
             {tx(
               lang,
-              '인터넷에서 일치하는 공식 상품을 찾았어요',
-              'Matching official product found online'
+              '공식 브랜드 DB에서 일치하는 제품을 찾았어요',
+              'Matching official product found in brand DB'
             )}
           </span>
         </div>
@@ -330,6 +331,18 @@ export function OfficialProductProposalCard({
           >
             <Check size={14} />
             <span>{tx(lang, '공식 정보로 업데이트', 'Update with Official Info')}</span>
+          </button>
+        )}
+
+        {onOpenSyncModal && (
+          <button
+            type="button"
+            className="hig-web-apply-secondary"
+            data-open-official-sync-modal="true"
+            onClick={onOpenSyncModal}
+          >
+            <Sparkles size={13} />
+            <span>{tx(lang, '정보 동기화 모달', 'Review & Sync')}</span>
           </button>
         )}
 

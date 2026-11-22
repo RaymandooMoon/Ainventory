@@ -10,16 +10,20 @@ import {
   CloudSun,
   Coffee,
   Download,
+  FileText,
   Flame,
   History,
   Image as ImageIcon,
   Layers,
+  Map as MapIcon,
   RefreshCw,
+  SlidersHorizontal,
   Snowflake,
   Sparkles,
   Sun,
   Trash2,
   Wind,
+  Wrench,
   X,
   Zap,
   ZoomIn,
@@ -55,6 +59,7 @@ import {
   peekMemoryAiVtonSlice,
   peekShowcaseDemoVtonSlice,
   readCachedAiVtonSlice,
+  repairSingleVtonAngle,
   resolve360AngleRenderSpec,
   resolveEffectiveVtonStyleMode,
   resolveSignedAngleScrollState,
@@ -106,6 +111,9 @@ import {
   stepTurnaroundInertia,
   wrapSignedAngleDeg,
 } from '../utils/turnaroundPhysics.ts';
+import { computeVtonStageProgress } from '../utils/vtonStageProgress.ts';
+import { STYLING_DENSITY_OPTIONS } from '../services/stylingPreferenceStore.ts';
+import { buildOutfitRationaleNote } from '../utils/outfitRationaleEngine.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
@@ -171,6 +179,8 @@ const ORDERED_SLOT_KEYS = [
   'top',
   'onepiece',
   'dress',
+  'underwear_top',
+  'underwear',
   'acc_belt',
   'bottom',
   'acc_wrist_left',
@@ -181,6 +191,7 @@ const ORDERED_SLOT_KEYS = [
   'acc_hand_right',
   'jwl_ring_left',
   'jwl_ring_right',
+  'socks',
   'shoes',
   'accessory',
   'acc_umbrella',
@@ -304,10 +315,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   stageBackgroundId = DEFAULT_STAGE_BACKGROUND_ID,
   lightingPreset = DEFAULT_LIGHTING_PRESET,
   lightingIntensity = DEFAULT_LIGHTING_INTENSITY,
+  placeBackdrop = null,
   onOpenBackgroundPicker,
   onOpenMobileDrawer,
   mobileDrawerOpen = false,
   lang,
+  saggingFit = false,
   forceRefresh = false,
   forceRefreshNonce = 0,
   mode,
@@ -319,6 +332,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   presetNonce: _legacyPresetNonce,
   onUserOrbit: _legacyOnUserOrbit,
   gender: _legacyGender,
+  stylingPref = null,
+  onUpdateStylingPref,
+  selectedPlace = null,
 }) {
   void _legacyQuickSelectPreset;
   void _legacyOpenBodyModal;
@@ -697,11 +713,20 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [aiState, setAiState] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [progressiveBgAnglesLoading, setProgressiveBgAnglesLoading] = useState(false);
+  const [readyTurnaroundCount, setReadyTurnaroundCount] = useState(0);
+  const [vtonProgressElapsedMs, setVtonProgressElapsedMs] = useState(0);
+  const vtonPhaseStartedAtRef = useRef(0);
   const [firstLookCountdownActive, setFirstLookCountdownActive] = useState(false);
   const [firstLookRemainingMs, setFirstLookRemainingMs] = useState(FIRST_LOOK_DELAY_MS);
   const [justLitAngles, setJustLitAngles] = useState([]);
   const [statusToast, setStatusToast] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [fixModalOpen, setFixModalOpen] = useState(false);
+  const [fixPresetKeys, setFixPresetKeys] = useState(['coat_length']);
+  const [fixCustomNote, setFixCustomNote] = useState('');
+  const [isRepairingAngle, setIsRepairingAngle] = useState(false);
+  const [fixFeedbackMsg, setFixFeedbackMsg] = useState('');
+  const pendingCorrectionHintRef = useRef('');
 
   const firstLookDeadlineRef = useRef(0);
   const firstLookTimerRef = useRef(null);
@@ -790,6 +815,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const [historyItems, setHistoryItems] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [lookMenuOpen, setLookMenuOpen] = useState(false);
+  const [densityMenuOpen, setDensityMenuOpen] = useState(false);
+  const [rationaleOpen, setRationaleOpen] = useState(false);
   const [originalModalOpen, setOriginalModalOpen] = useState(false);
   const [originalModalZoomed, setOriginalModalZoomed] = useState(false);
   const [originalImgDims, setOriginalImgDims] = useState(null);
@@ -1019,11 +1046,27 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
   }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
-  // Dismiss open `기록`, `Look 1/2` popover, or `원본 보기` lightbox cleanly on Escape key
+  // Dismiss open `기록`, `Look 1/2`, `밀도`, `코디안` popover, `원본 보기`, or `교정` modal cleanly on Escape key
   useEffect(() => {
-    if (!historyOpen && !lookMenuOpen && !originalModalOpen) return undefined;
+    if (
+      !historyOpen &&
+      !lookMenuOpen &&
+      !densityMenuOpen &&
+      !rationaleOpen &&
+      !originalModalOpen &&
+      !fixModalOpen
+    ) {
+      return undefined;
+    }
     const handleKeyDown = (ev) => {
       if (ev.key !== 'Escape' || ev.defaultPrevented) return;
+      if (fixModalOpen) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation?.();
+        setFixModalOpen(false);
+        return;
+      }
       if (originalModalOpen) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -1045,10 +1088,12 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       ev.stopImmediatePropagation?.();
       setHistoryOpen(false);
       setLookMenuOpen(false);
+      setDensityMenuOpen(false);
+      setRationaleOpen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyOpen, lookMenuOpen, originalModalOpen]);
+  }, [historyOpen, lookMenuOpen, densityMenuOpen, rationaleOpen, originalModalOpen, fixModalOpen]);
 
   const showToast = useCallback((reason) => {
     if (toastTimerRef.current) {
@@ -1180,10 +1225,34 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const normalizedScenarioKey = scenarioKey || 'live';
   const { outfitComboId } = useMemo(
-    () => computeOutfitComboId(vtonSlots, activeHandedness),
-    [vtonSlots, activeHandedness]
+    () => computeOutfitComboId(vtonSlots, activeHandedness, { saggingFit: Boolean(saggingFit) }),
+    [vtonSlots, activeHandedness, saggingFit]
   );
   const scenarioVtonKey = `${normalizedScenarioKey}|${isStageOutdoor ? 'outdoor' : 'indoor'}|${outfitComboId}|${styleMode}|${resolvedAvatarHash}`;
+
+  const activeProgressPhaseKey = isRepairingAngle
+    ? `repair:${canonicalSliceAngle}`
+    : aiLoading
+      ? `front:${scenarioVtonKey}`
+      : progressiveBgAnglesLoading
+        ? `turnaround:${scenarioVtonKey}:${readyTurnaroundCount}`
+        : '';
+
+  useEffect(() => {
+    if (!activeProgressPhaseKey) {
+      vtonPhaseStartedAtRef.current = 0;
+      setVtonProgressElapsedMs(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    vtonPhaseStartedAtRef.current = startedAt;
+    setVtonProgressElapsedMs(0);
+    const id = setInterval(() => {
+      setVtonProgressElapsedMs(Math.max(0, Date.now() - vtonPhaseStartedAtRef.current));
+    }, 250);
+    return () => clearInterval(id);
+  }, [activeProgressPhaseKey]);
+
   const scenarioVtonSnapshotsRef = useRef({});
   const completedProgressiveKeysRef = useRef(new Set());
   const [scenarioSnapEpoch, setScenarioSnapEpoch] = useState(0);
@@ -1221,6 +1290,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const pendingScenarioHydrationUntilRef = useRef(0);
   const prevRefreshNonceRef = useRef(forceRefreshNonce);
   const prevOutfitComboRef = useRef(outfitComboId);
+  const keepFlatLayOpenOnNextComboRef = useRef(false);
 
   const cancelInitialBackgroundPreGenToStaged = useCallback(() => {
     if (!firstLookPreGenActiveRef.current) return false;
@@ -1241,6 +1311,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     if (prevOutfitComboRef.current !== outfitComboId) {
       prevOutfitComboRef.current = outfitComboId;
       clearFrontOnlyFallbackState();
+      const shouldKeepFlatLay = keepFlatLayOpenOnNextComboRef.current;
+      keepFlatLayOpenOnNextComboRef.current = false;
       if (restoringFromHistoryRef.current) {
         restoringFromHistoryRef.current = false;
       } else {
@@ -1255,7 +1327,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         } else if (firstLookPreGenActiveRef.current) {
           cancelInitialBackgroundPreGenToStaged();
         }
-        if (!postLoginRevealActiveRef.current) {
+        if (!postLoginRevealActiveRef.current && !shouldKeepFlatLay) {
           setStageMode('ai-vton');
         }
       }
@@ -1322,7 +1394,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const demoSliceUrl = useMemo(
     () =>
-      demoShowcaseEnabled
+      demoShowcaseEnabled && equippedCount > 0
         ? peekShowcaseDemoVtonSlice(styleMode, canonicalSliceAngle, {
             handedness: activeHandedness,
             hasEquippedBag,
@@ -1331,6 +1403,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         : null,
     [
       demoShowcaseEnabled,
+      equippedCount,
       styleMode,
       canonicalSliceAngle,
       activeHandedness,
@@ -1408,6 +1481,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     scenarioVtonKey,
     resolvedTheme,
     rawLegacyMode,
+    saggingFit: Boolean(saggingFit),
     forceRefresh,
     resolvedLang,
     onAiLookGenerated,
@@ -1433,6 +1507,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       scenarioVtonKey,
       resolvedTheme,
       rawLegacyMode,
+      saggingFit: Boolean(saggingFit),
       forceRefresh,
       resolvedLang,
       onAiLookGenerated,
@@ -1478,6 +1553,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     );
 
     if (!isVtonPipelineActive || equippedCount === 0) {
+      if (equippedCount === 0) {
+        abortControllerRef.current?.abort();
+        clearFirstLookCountdown();
+        setAiState(null);
+        setDemoShowcaseEnabled(false);
+        setPinnedHistoryItem(null);
+        setStageMode('flatlay');
+      }
       setAiLoading(false);
       setProgressiveBgAnglesLoading(false);
       setStagedNeedsApply(false);
@@ -2053,6 +2136,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             turnaroundLayout: 'turnaround_4x2',
             theme: liveSnap.resolvedTheme,
             legacyMode: liveSnap.rawLegacyMode,
+            saggingFit: Boolean(liveSnap.saggingFit),
+            correctionHint: pendingCorrectionHintRef.current || null,
             forceRefresh: isForceBypass,
             signal: controller.signal,
           },
@@ -2072,7 +2157,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 }
               );
               flashJustLitAngle(payload.angleDeg);
-              const stillStreaming = payload.readyAngles.length < TURNAROUND_ANGLES.length;
+              const readyLen = Array.isArray(payload.readyAngles) ? payload.readyAngles.length : 1;
+              setReadyTurnaroundCount(readyLen);
+              const stillStreaming = readyLen < TURNAROUND_ANGLES.length;
               setProgressiveBgAnglesLoading(stillStreaming);
 
               if (payload.isMasterAnchor) {
@@ -2100,11 +2187,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         );
         if (controller.signal.aborted) return;
         forceBypassCacheRef.current = false;
+        pendingCorrectionHintRef.current = '';
         userApprovedGenRef.current = false;
         pendingFacePhotoApproveRef.current = null;
         pendingWeatherApproveRef.current = null;
         pendingScenarioApproveRef.current = null;
         setProgressiveBgAnglesLoading(false);
+        setReadyTurnaroundCount(TURNAROUND_ANGLES.length);
 
         if (outcome.ok && outcome.imageUrl) {
           completedProgressiveKeysRef.current.add(liveSnap.scenarioVtonKey);
@@ -2292,6 +2381,154 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     ]
   );
 
+  const buildCombinedFixDirective = useCallback(() => {
+    const presetDirectives = {
+      coat_length:
+        'Keep the outermost coat silhouette, full hem length, and hood/collar color 100% identical to 0° Direct Front across all 8 angles — NEVER shrink a long coat into a short bomber jacket on side or rear views.',
+      angle_turn:
+        'Strictly match the exact requested camera angle and head/shoulder rotation — keep 135° Back-Right clearly turned 45° diagonally away to the right, completely distinct from 180° symmetrical straight back.',
+      bag_strap:
+        'Preserve exact crossbody/shoulder bag side and strap diagonal path consistently from 0° Front across every angle.',
+      sagging_fit:
+        'Enforce authentic v3 low-hip hip-hop sagging fit: full normal-length boxy top with dead-flat straight hem at wrist/hip-bone level (NEVER cropped at stomach/ribs, NEVER rolled), bright contrast elastic underwear waistband + tall 10-14cm boxer trunk exposed from wrist down to knuckle level (NEVER dye a white waistband grey!), baggy oversized pants waistband pulled low to knuckle/upper-thigh height with extreme deep drop-crotch hanging below the fingertips near mid-thigh and heavy stacked folds over the footwear.',
+      face_body:
+        'Maintain exact user face likeness, hairstyle, and height/body proportions consistently across every view.',
+    };
+    const parts = fixPresetKeys.map((k) => presetDirectives[k]).filter(Boolean);
+    const note = fixCustomNote.trim();
+    if (note) parts.push(`User note: ${note}`);
+    return parts.join(' ').slice(0, 360);
+  }, [fixPresetKeys, fixCustomNote]);
+
+  const handleOpenFixModal = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setOriginalModalOpen(false);
+    setOriginalModalZoomed(false);
+    setFixFeedbackMsg('');
+    setFixModalOpen(true);
+  }, []);
+
+  const handleToggleFixPreset = useCallback((key) => {
+    setFixPresetKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  }, []);
+
+  const handleRegenerateAllWithFix = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      pendingCorrectionHintRef.current = buildCombinedFixDirective();
+      setFixModalOpen(false);
+      handleRetryAiSynthesis(e);
+    },
+    [buildCombinedFixDirective, handleRetryAiSynthesis]
+  );
+
+  const handleRepairCurrentAngle = useCallback(
+    async (e) => {
+      e?.stopPropagation?.();
+      if (isRepairingAngle || equippedCount === 0) return;
+      const targetAngle = canonicalSliceAngle;
+      const frontAnchorUrl =
+        scenarioVtonSnapshotsRef.current[scenarioVtonKey]?.slices?.[0] ||
+        peekMemoryAiVtonSlice(
+          buildAiVtonCacheKey({
+            avatarConfigHash: resolvedAvatarHash,
+            outfitComboId,
+            styleMode,
+            effectiveWeather,
+            angleDeg: 0,
+          })
+        )?.imageUrl ||
+        null;
+
+      setIsRepairingAngle(true);
+      setFixFeedbackMsg(
+        isEn
+          ? `Repairing ${targetAngle}° angle from 0° front anchor...`
+          : `정면(0°) 기준으로 ${targetAngle}° 각도만 빠르게 교정 중...`
+      );
+      try {
+        const res = await repairSingleVtonAngle(
+          {
+            slots: vtonSlots,
+            skinProfile,
+            bodySpec,
+            user,
+            avatarSpec: resolvedAvatarSpec,
+            avatarConfigHash: resolvedAvatarHash,
+            styleMode,
+            weather,
+            theme: resolvedTheme,
+            saggingFit: Boolean(saggingFit),
+          },
+          targetAngle,
+          frontAnchorUrl,
+          buildCombinedFixDirective()
+        );
+        if (res.ok && res.imageUrl) {
+          preloadImageUrls([res.imageUrl]);
+          recordScenarioVtonSnapshot(scenarioVtonKey, targetAngle, res.imageUrl, null, {
+            frontOnlyDegraded: false,
+            notificationPopup: null,
+          });
+          flashJustLitAngle(targetAngle);
+          setAiState((prev) => ({
+            cacheKey: buildAiVtonCacheKey({
+              avatarConfigHash: resolvedAvatarHash,
+              outfitComboId,
+              styleMode,
+              effectiveWeather,
+              angleDeg: targetAngle,
+            }),
+            imageUrl: res.imageUrl,
+            fromCache: false,
+            provider: prev?.provider || 'gemini-vton',
+          }));
+          setFixModalOpen(false);
+          setFixFeedbackMsg('');
+        } else {
+          setFixFeedbackMsg(
+            isEn
+              ? 'Single-angle repair failed. Try regenerating all 8 angles.'
+              : '단일 각도 교정에 실패했습니다. 전체 8각도 재생성을 시도해 주세요.'
+          );
+        }
+      } catch {
+        setFixFeedbackMsg(
+          isEn
+            ? 'Repair request failed. Please try again.'
+            : '교정 요청 중 오류가 발생했습니다. 다시 시도해 주세요.'
+        );
+      } finally {
+        setIsRepairingAngle(false);
+      }
+    },
+    [
+      isRepairingAngle,
+      equippedCount,
+      canonicalSliceAngle,
+      scenarioVtonKey,
+      resolvedAvatarHash,
+      outfitComboId,
+      styleMode,
+      effectiveWeather,
+      isEn,
+      vtonSlots,
+      skinProfile,
+      bodySpec,
+      user,
+      resolvedAvatarSpec,
+      weather,
+      resolvedTheme,
+      saggingFit,
+      buildCombinedFixDirective,
+      recordScenarioVtonSnapshot,
+      flashJustLitAngle,
+    ]
+  );
+
   useEffect(() => {
     if (forceRefreshNonce > 0 && forceRefreshNonce !== prevRefreshNonceRef.current) {
       prevRefreshNonceRef.current = forceRefreshNonce;
@@ -2313,6 +2550,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       e?.preventDefault?.();
       e?.stopPropagation?.();
       setLookMenuOpen(false);
+      setDensityMenuOpen(false);
+      setRationaleOpen(false);
       setHistoryOpen((prev) => {
         const next = !prev;
         if (next) {
@@ -2398,6 +2637,18 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     setStageMode('flatlay');
   }, [equippedCount]);
 
+  const handleFlatLayUnequipSlot = useCallback(
+    (slotKey) => {
+      if (!onUnequipSlot || !slotKey) return;
+      if (stageMode === 'flatlay') {
+        keepFlatLayOpenOnNextComboRef.current = true;
+      }
+      triggerHaptic('selection');
+      onUnequipSlot(slotKey);
+    },
+    [onUnequipSlot, stageMode]
+  );
+
   const handleCloseFlatLay = useCallback(() => {
     setStageMode('ai-vton');
     if (canonicalSliceAngle !== 0) {
@@ -2474,19 +2725,21 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   );
 
   const availableAiImageUrl =
-    pinnedHistorySliceUrl ||
-    scenarioSnapSliceUrl ||
-    memorySlice?.imageUrl ||
-    (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
-    demoSliceUrl ||
-    fallbackSameComboMemorySlice?.imageUrl ||
-    null;
+    equippedCount > 0
+      ? pinnedHistorySliceUrl ||
+        scenarioSnapSliceUrl ||
+        memorySlice?.imageUrl ||
+        (aiState?.cacheKey === currentAiCacheKey ? aiState.imageUrl : null) ||
+        demoSliceUrl ||
+        fallbackSameComboMemorySlice?.imageUrl ||
+        null
+      : null;
 
   const isHoldingForFirstLookCountdown = Boolean(
     firstLookCountdownActive && firstLookRemainingMs > 0
   );
   const resolvedAiImageUrl =
-    stageMode === 'ai-vton' && !isHoldingForFirstLookCountdown
+    equippedCount > 0 && stageMode === 'ai-vton' && !isHoldingForFirstLookCountdown
       ? availableAiImageUrl
       : null;
 
@@ -2539,6 +2792,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const originalModalImageUrl = resolvedOriginalSheetUrl || resolvedAiImageUrl || null;
   const hasRawOriginalSheet = Boolean(resolvedOriginalSheetUrl);
   const canReturnToCharacter =
+    equippedCount > 0 &&
     !resolvedAiImageUrl &&
     Boolean(availableAiImageUrl) &&
     !isHoldingForFirstLookCountdown;
@@ -2553,6 +2807,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     triggerHaptic('selection');
     setHistoryOpen(false);
     setLookMenuOpen(false);
+    setDensityMenuOpen(false);
+    setRationaleOpen(false);
     setOriginalModalZoomed(false);
     setOriginalModalOpen(true);
   }, []);
@@ -2822,6 +3078,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return 12;
   }, [weather, effectiveWeather, scenarioKey]);
 
+  const capsuleFeelsLikeC = useMemo(() => {
+    if (typeof weather?.feelsLikeTemp === 'number' && Number.isFinite(weather.feelsLikeTemp)) {
+      return Math.round(weather.feelsLikeTemp);
+    }
+    if (
+      typeof weather?.feelsLikeMin === 'number' &&
+      typeof weather?.feelsLikeMax === 'number' &&
+      Number.isFinite(weather.feelsLikeMin) &&
+      Number.isFinite(weather.feelsLikeMax)
+    ) {
+      return Math.round(weather.feelsLikeMin * 0.45 + weather.feelsLikeMax * 0.55);
+    }
+    return null;
+  }, [weather]);
+
+  const capsuleUvIndex = useMemo(() => {
+    const uv = Number(weather?.uvIndex);
+    return Number.isFinite(uv) && uv > 0 ? Math.round(uv) : null;
+  }, [weather]);
+
   const capsuleStatusWord = useMemo(() => {
     if (scenarioKey === 'warm_spring') {
       return isEn ? WEATHER_CAPSULE_SHORT_LABELS.mild.en : WEATHER_CAPSULE_SHORT_LABELS.mild.ko;
@@ -2938,7 +3214,35 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       '--stage-char-ambient-brightness',
       stageLightingFrame.characterAmbientBrightness.toFixed(3)
     );
-  }, [stageLightingFrame.characterRimDropShadow, stageLightingFrame.characterAmbientBrightness]);
+    const hexStr = String(stageLightingFrame.fixtureHex || '#FFE5B4')
+      .replace('#', '')
+      .trim();
+    const fullHex =
+      hexStr.length === 3
+        ? hexStr
+            .split('')
+            .map((c) => c + c)
+            .join('')
+        : hexStr;
+    const r = Number.parseInt(fullHex.slice(0, 2), 16);
+    const g = Number.parseInt(fullHex.slice(2, 4), 16);
+    const b = Number.parseInt(fullHex.slice(4, 6), 16);
+    const lampRgb =
+      Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)
+        ? `${r}, ${g}, ${b}`
+        : '255, 229, 180';
+    const lampPower = Math.max(
+      0,
+      Math.min(1, Number(stageLightingFrame.intensityPct ?? 50) / 100)
+    );
+    el.style.setProperty('--stage-slider-lamp-power', lampPower.toFixed(3));
+    el.style.setProperty('--stage-slider-lamp-rgb', lampRgb);
+  }, [
+    stageLightingFrame.characterRimDropShadow,
+    stageLightingFrame.characterAmbientBrightness,
+    stageLightingFrame.intensityPct,
+    stageLightingFrame.fixtureHex,
+  ]);
 
   useEffect(() => {
     const el = wornSlotsDockRef.current;
@@ -3039,6 +3343,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         clockNowMs={clockNowMs}
         lightingPreset={normalizedLightingPreset}
         lightingIntensity={clampedLightingIntensity}
+        placeBackdrop={placeBackdrop}
         heightCm={
           bodySpec?.heightCm ??
           resolvedAvatarSpec?.body?.heightCm ??
@@ -3138,24 +3443,61 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             </span>
           </div>
         </>
-      ) : aiLoading && !postLoginRevealActive ? (
-        <>
-          <div aria-hidden="true" className="studio-vton-progress-track">
-            <div className="studio-vton-progress-fill is-indeterminate" />
-          </div>
-          <div
-            className="studio-vton-step-status tabular-nums"
-            data-vton-loading-steps="true"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="studio-vton-step-badge">0°</span>
-            <span className="studio-vton-step-label">
-              {isEn ? 'Rendering front model...' : '정면 모델을 준비하고 있어요'}
-            </span>
-          </div>
-        </>
-      ) : null}
+      ) : (() => {
+        const vtonProgress = computeVtonStageProgress({
+          aiLoading: Boolean(aiLoading && !postLoginRevealActive),
+          progressiveBgAnglesLoading: Boolean(progressiveBgAnglesLoading && !postLoginRevealActive),
+          isRepairingAngle: Boolean(isRepairingAngle && !postLoginRevealActive),
+          readyAnglesCount: readyTurnaroundCount,
+          totalAnglesCount: TURNAROUND_ANGLES.length,
+          elapsedMs: vtonProgressElapsedMs,
+          activeAngleDeg: canonicalSliceAngle,
+          equippedCount,
+          lang: resolvedLang,
+        });
+        if (!vtonProgress.visible) return null;
+        return (
+          <>
+            <div aria-hidden="true" className="studio-vton-progress-track">
+              <div
+                className="studio-vton-progress-fill is-determinate"
+                style={{ width: `${vtonProgress.progressPct}%` }}
+              />
+            </div>
+            <div
+              className={`studio-vton-step-status is-with-bar tabular-nums ${
+                vtonProgress.phase === 'turnaround_streaming' ? 'is-bg-angles' : ''
+              }`.trim()}
+              data-vton-loading-steps="true"
+              data-vton-progress-phase={vtonProgress.phase}
+              data-vton-progress-pct={vtonProgress.progressPct}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="studio-vton-step-top-row">
+                <span className="studio-vton-step-badge">{vtonProgress.badge}</span>
+                <span className="studio-vton-step-label">{vtonProgress.label}</span>
+                <span className="studio-vton-step-pct tabular-nums">
+                  {vtonProgress.progressPct}%
+                </span>
+              </div>
+              <div
+                className="studio-vton-pill-bar-track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={vtonProgress.progressPct}
+                aria-label={vtonProgress.label}
+              >
+                <div
+                  className="studio-vton-pill-bar-fill"
+                  style={{ width: `${vtonProgress.progressPct}%` }}
+                />
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Layer 4 (z-55+): Symmetrical Slim Top HUD — Left [BG] Slot | Top-Center Weather Capsule | Right [Wardrobe Drawer] */}
       <div className="studio-stage-top-hud">
@@ -3169,14 +3511,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 activeHudTouchId === 'bg-picker' ? 'is-interacting' : ''
               }`.trim()}
               aria-label={
-                isEn
-                  ? `Select stage background (${resolvedBgItem.tier} · ${resolvedBgItem.nameEn})`
-                  : `배경 선택 (${resolvedBgItem.tier}등급 · ${resolvedBgItem.nameKo})`
+                placeBackdrop?.active
+                  ? isEn
+                    ? `Google Maps backdrop (${placeBackdrop.placeName || 'Place'} · Blur ${placeBackdrop.blurPx}px)`
+                    : `실제 장소 배경 (${placeBackdrop.placeName || '장소'} · 블러 ${placeBackdrop.blurPx}px)`
+                  : isEn
+                    ? `Select stage background (${resolvedBgItem.tier} · ${resolvedBgItem.nameEn})`
+                    : `배경 선택 (${resolvedBgItem.tier}등급 · ${resolvedBgItem.nameKo})`
               }
               title={
-                isEn
-                  ? `Stage Backdrop: ${resolvedBgItem.tier} · ${resolvedBgItem.nameEn}`
-                  : `배경 선택 · ${resolvedBgItem.tier}등급 ${resolvedBgItem.nameKo}`
+                placeBackdrop?.active
+                  ? isEn
+                    ? `Google Maps Backdrop · ${placeBackdrop.placeName || 'Place'} (Blur ${placeBackdrop.blurPx}px)`
+                    : `실제 장소 배경 · ${placeBackdrop.placeName || '장소'} (블러 ${placeBackdrop.blurPx}px)`
+                  : isEn
+                    ? `Stage Backdrop: ${resolvedBgItem.tier} · ${resolvedBgItem.nameEn}`
+                    : `배경 선택 · ${resolvedBgItem.tier}등급 ${resolvedBgItem.nameKo}`
               }
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -3189,12 +3539,20 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 e.stopPropagation();
                 setHistoryOpen(false);
                 setLookMenuOpen(false);
+                setDensityMenuOpen(false);
+                setRationaleOpen(false);
                 onOpenBackgroundPicker?.();
               }}
             >
               <span className="studio-vton-history-icon-wrap">
-                <Layers size={14} strokeWidth={2.1} aria-hidden="true" />
-                <sup className="studio-vton-history-sup">{resolvedBgItem.tier}</sup>
+                {placeBackdrop?.active ? (
+                  <MapIcon size={16} strokeWidth={2.05} aria-hidden="true" />
+                ) : (
+                  <Layers size={14} strokeWidth={2.1} aria-hidden="true" />
+                )}
+                <sup className="studio-vton-history-sup">
+                  {placeBackdrop?.active ? 'MAP' : resolvedBgItem.tier}
+                </sup>
               </span>
             </button>
           )}
@@ -3233,17 +3591,26 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               {renderWeatherCapsuleIcon(effectiveWeather, scenarioKey)}
             </span>
             <div className="atelier-weather-capsule-metrics">
-              <div className="atelier-weather-capsule-primary-row">
+              <div className="atelier-weather-capsule-primary-row tabular-nums">
                 <strong className="atelier-weather-capsule-temp">
                   {resolvedLocationLabel} · {capsuleTempC}°C
+                  {capsuleFeelsLikeC !== null
+                    ? isEn
+                      ? ` (Feels ${capsuleFeelsLikeC}°)`
+                      : ` (체감 ${capsuleFeelsLikeC}°)`
+                    : ''}
                 </strong>
                 <span className="studio-weather-curation-dot" aria-hidden="true" />
                 <span className="atelier-weather-capsule-curation">
                   {capsuleStatusWord}
                 </span>
               </div>
-              <span className="atelier-weather-capsule-sub" data-weather-capsule-datetime="true">
+              <span
+                className="atelier-weather-capsule-sub tabular-nums"
+                data-weather-capsule-datetime="true"
+              >
                 {weatherCapsuleDateTimeLabel} · {weatherBadgeMeta.tempText}
+                {capsuleUvIndex !== null && capsuleUvIndex >= 3 ? ` · UV ${capsuleUvIndex}` : ''}
               </span>
             </div>
             <ChevronDown
@@ -3278,14 +3645,100 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 e.stopPropagation();
                 setHistoryOpen(false);
                 setLookMenuOpen(false);
+                setDensityMenuOpen(false);
+                setRationaleOpen(false);
                 onOpenMobileDrawer?.();
               }}
             >
-              <Layers size={15} strokeWidth={2.1} aria-hidden="true" />
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+                <line x1="8.5" y1="10.5" x2="8.5" y2="13.5" />
+                <line x1="15.5" y1="10.5" x2="15.5" y2="13.5" />
+              </svg>
             </button>
           )}
         </div>
       </div>
+
+      {/* Upper-Left Utility Row: Original Image Viewer & AI Correction (kept high and clear of bottom HUD) */}
+      {showOriginalImageLink && (
+        <div
+          className="studio-top-left-vton-utility-row"
+          data-top-left-vton-utility="true"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <a
+            href="#vton-original-image"
+            role="button"
+            data-vton-original-link="true"
+            data-has-raw-sheet={hasRawOriginalSheet ? 'true' : 'false'}
+            aria-haspopup="dialog"
+            aria-expanded={effectiveOriginalModalOpen}
+            aria-label={
+              isEn
+                ? 'View Nano Banana original generated image'
+                : '나노바나나 생성 원본 이미지 보기'
+            }
+            title={
+              hasRawOriginalSheet
+                ? isEn
+                  ? 'View raw Nano Banana 8-angle turnaround sheet'
+                  : '나노바나나 8각도 원본 시트 보기'
+                : isEn
+                  ? 'View loaded character source image'
+                  : '불러온 캐릭터 원본 보기'
+            }
+            className={`studio-vton-original-link ${
+              activeHudTouchId === 'original-link' ? 'is-interacting' : ''
+            }`.trim()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleHudTouchStart('original-link');
+            }}
+            onPointerUp={handleHudTouchEnd}
+            onPointerCancel={handleHudTouchEnd}
+            onPointerLeave={handleHudTouchEnd}
+            onClick={handleOpenOriginalImage}
+          >
+            <ImageIcon size={12} strokeWidth={2.1} aria-hidden="true" />
+            <span>{isEn ? 'Original' : '원본 보기'}</span>
+          </a>
+          <button
+            type="button"
+            data-vton-fix-trigger="true"
+            aria-haspopup="dialog"
+            aria-expanded={fixModalOpen}
+            aria-label={isEn ? 'Fix generated fitting image' : '생성 이미지 교정'}
+            title={
+              isEn
+                ? 'Repair current angle or regenerate with correction'
+                : '잘못 생성된 각도 빠른 교정 또는 전체 재생성'
+            }
+            className={`studio-vton-original-link studio-vton-fix-btn ${
+              isRepairingAngle ? 'is-busy' : ''
+            }`.trim()}
+            disabled={aiLoading || isRepairingAngle}
+            onClick={handleOpenFixModal}
+          >
+            <Wrench size={12} strokeWidth={2.1} aria-hidden="true" />
+            <span>
+              {isRepairingAngle ? (isEn ? 'Fixing...' : '교정 중') : isEn ? 'Fix' : '교정'}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Transient Non-Interactive 360° Swipe Angle Feedback Pill (fades out automatically) */}
       {swipeHudBadgeVisible && (
@@ -3304,6 +3757,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         layers={layers}
         activeSlotKey={activeSlotKey}
         onSelectSlot={handleSelectFlatLaySlot}
+        onUnequipSlot={onUnequipSlot ? handleFlatLayUnequipSlot : undefined}
         stageMode={stageMode}
         styleMode={styleMode}
         aiImageUrl={resolvedAiImageUrl}
@@ -3349,12 +3803,13 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         postLoginRevealActive={postLoginRevealActive}
         postLoginProgress={postLoginProgress}
         onUserInteractFlatLay={handleUserInteractFlatLay}
+        saggingFit={Boolean(saggingFit)}
         legacyMode={viewerMode}
         lang={resolvedLang}
       />
 
-      {/* Click-outside dismiss scrim for open `기록` or `Look 1/2` popover */}
-      {(historyOpen || lookMenuOpen) && (
+      {/* Click-outside dismiss scrim for open stage HUD popovers */}
+      {(historyOpen || lookMenuOpen || densityMenuOpen || rationaleOpen) && (
         <div
           aria-hidden="true"
           data-vton-popover-backdrop="true"
@@ -3363,6 +3818,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             e.stopPropagation();
             setHistoryOpen(false);
             setLookMenuOpen(false);
+            setDensityMenuOpen(false);
+            setRationaleOpen(false);
           }}
         />
       )}
@@ -3779,51 +4236,185 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         </div>
       )}
 
-      {/* Bottom-Left HUD Stack: [Original Image Link] above [Single Look 1/2 Selector Button] above [Saved AI Fitting History Button] */}
+      {/* Bottom-Left HUD Stack: [Density & Style Note Stage Buttons] + [Look 1/2] + [AI Fitting History] */}
       <div
         className="studio-bottom-left-hud-stack"
         data-bottom-left-hud="true"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {showOriginalImageLink && (
-          <a
-            href="#vton-original-image"
-            role="button"
-            data-vton-original-link="true"
-            data-has-raw-sheet={hasRawOriginalSheet ? 'true' : 'false'}
-            aria-haspopup="dialog"
-            aria-expanded={effectiveOriginalModalOpen}
-            aria-label={
-              isEn
-                ? 'View Nano Banana original generated image'
-                : '나노바나나 생성 원본 이미지 보기'
-            }
-            title={
-              hasRawOriginalSheet
-                ? isEn
-                  ? 'View raw Nano Banana 8-angle turnaround sheet'
-                  : '나노바나나 8각도 원본 시트 보기'
-                : isEn
-                  ? 'View loaded character source image'
-                  : '불러온 캐릭터 원본 보기'
-            }
-            className={`studio-vton-original-link ${
-              activeHudTouchId === 'original-link' ? 'is-interacting' : ''
-            }`.trim()}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              handleHudTouchStart('original-link');
-            }}
-            onPointerUp={handleHudTouchEnd}
-            onPointerCancel={handleHudTouchEnd}
-            onPointerLeave={handleHudTouchEnd}
-            onClick={handleOpenOriginalImage}
-          >
-            <ImageIcon size={13} strokeWidth={2.1} aria-hidden="true" />
-            <span>{isEn ? 'Original' : '원본 보기'}</span>
-          </a>
-        )}
+        {stylingPref && onUpdateStylingPref && (() => {
+          const activeDensityMeta =
+            STYLING_DENSITY_OPTIONS.find((opt) => opt.key === stylingPref.density) ||
+            STYLING_DENSITY_OPTIONS[1];
+          const rationaleNote = buildOutfitRationaleNote({
+            slots,
+            weather,
+            selectedPlace,
+            stylingPref,
+            skinProfile,
+            lang: resolvedLang,
+          });
+          return (
+            <div className="studio-stage-inline-pill-stack">
+              {/* In-Stage Styling Density + Bag/Acc Button & Popover */}
+              <div className="studio-stage-popover-anchor">
+                <button
+                  type="button"
+                  data-studio-density-trigger="true"
+                  aria-haspopup="dialog"
+                  aria-expanded={densityMenuOpen}
+                  className={`studio-stage-hud-chip-btn ${densityMenuOpen ? 'is-open' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerHaptic('selection');
+                    setHistoryOpen(false);
+                    setLookMenuOpen(false);
+                    setRationaleOpen(false);
+                    setDensityMenuOpen((prev) => !prev);
+                  }}
+                >
+                  <SlidersHorizontal size={12} strokeWidth={2.1} aria-hidden="true" />
+                  <span>{isEn ? activeDensityMeta.labelEn : activeDensityMeta.labelKo}</span>
+                </button>
+
+                {densityMenuOpen && (
+                  <div
+                    className="studio-stage-glass-popover is-density-popover"
+                    data-studio-density-bar="true"
+                    role="dialog"
+                    aria-label={isEn ? 'Styling Density & Extras' : '착장 밀도 및 소품 설정'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <div className="studio-stage-popover-head">
+                      <strong>{isEn ? 'Styling Density' : '착장 밀도'}</strong>
+                      <button
+                        type="button"
+                        className="studio-stage-popover-close"
+                        aria-label={isEn ? 'Close' : '닫기'}
+                        onClick={() => setDensityMenuOpen(false)}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div
+                      className="studio-stage-density-seg"
+                      role="group"
+                      aria-label={isEn ? 'Styling Density' : '착장 밀도 선택'}
+                    >
+                      {STYLING_DENSITY_OPTIONS.map((opt) => {
+                        const active = stylingPref.density === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            aria-pressed={active}
+                            className={`studio-stage-density-opt ${active ? 'is-active' : ''}`}
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              onUpdateStylingPref({ density: opt.key });
+                            }}
+                          >
+                            {isEn ? opt.labelEn : opt.labelKo}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="studio-stage-density-extras">
+                      <button
+                        type="button"
+                        aria-pressed={Boolean(stylingPref.includeBag)}
+                        className={`studio-stage-extra-toggle ${
+                          stylingPref.includeBag ? 'is-active' : ''
+                        }`}
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          onUpdateStylingPref({ includeBag: !stylingPref.includeBag });
+                        }}
+                      >
+                        {isEn ? 'Bag' : '가방'}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={Boolean(stylingPref.includeAccessory)}
+                        className={`studio-stage-extra-toggle ${
+                          stylingPref.includeAccessory ? 'is-active' : ''
+                        }`}
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          onUpdateStylingPref({
+                            includeAccessory: !stylingPref.includeAccessory,
+                          });
+                        }}
+                      >
+                        {isEn ? 'Accessory' : '액세서리'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* In-Stage Style Note ("코디안") Button & Popover */}
+              {rationaleNote.equippedCount > 0 && (
+                <div className="studio-stage-popover-anchor">
+                  <button
+                    type="button"
+                    data-studio-rationale-trigger="true"
+                    aria-haspopup="dialog"
+                    aria-expanded={rationaleOpen}
+                    className={`studio-stage-hud-chip-btn ${rationaleOpen ? 'is-open' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('selection');
+                      setHistoryOpen(false);
+                      setLookMenuOpen(false);
+                      setDensityMenuOpen(false);
+                      setRationaleOpen((prev) => !prev);
+                    }}
+                  >
+                    <FileText size={12} strokeWidth={2.1} aria-hidden="true" />
+                    <span>{isEn ? 'Style Note' : '코디안'}</span>
+                  </button>
+
+                  {rationaleOpen && (
+                    <div
+                      className="studio-stage-glass-popover is-rationale-popover"
+                      data-outfit-rationale-card="true"
+                      role="dialog"
+                      aria-label={isEn ? 'Outfit Style Note' : '코디안 스타일링 노트'}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="studio-stage-popover-head">
+                        <strong>{isEn ? 'Style Note' : '코디안'}</strong>
+                        <button
+                          type="button"
+                          className="studio-stage-popover-close"
+                          aria-label={isEn ? 'Close' : '닫기'}
+                          onClick={() => setRationaleOpen(false)}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                      <p className="studio-stage-rationale-headline tabular-nums">
+                        {rationaleNote.headline}
+                      </p>
+                      <div className="studio-stage-rationale-list">
+                        {rationaleNote.items.map((item) => (
+                          <div key={item.key} className="studio-stage-rationale-row">
+                            <span className="studio-stage-rationale-label">{item.label}</span>
+                            <span className="studio-stage-rationale-summary tabular-nums">
+                              {item.summary}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {stageLookRecommendations.length > 0 &&
           (() => {
             const foundIdx = stageLookRecommendations.findIndex((r) => r.id === activeRecId);
@@ -3887,6 +4478,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   onClick={(e) => {
                     e.stopPropagation();
                     setHistoryOpen(false);
+                    setDensityMenuOpen(false);
+                    setRationaleOpen(false);
                     setLookMenuOpen((prev) => !prev);
                   }}
                 >
@@ -4017,6 +4610,62 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               : frontOnlyPopupInfo?.messageKo ||
                 '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.'}
           </span>
+        </div>
+      )}
+
+      {/* Subtle Google Maps Required Attribution Micro-Caption (unobtrusive, ToS-compliant, never covers shoes or right rail) */}
+      {placeBackdrop?.active && (
+        <div
+          className="studio-place-attribution-bar"
+          data-maps-stage-attribution="true"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <strong>Google Maps</strong>
+          {placeBackdrop.sourceMode === 'place_photo' &&
+            Array.isArray(placeBackdrop.attributions) &&
+            placeBackdrop.attributions.length > 0 && (
+              <>
+                <span aria-hidden="true" className="studio-place-attribution-sep">
+                  ·
+                </span>
+                <span>
+                  {placeBackdrop.attributions.map((attr, idx) => (
+                    <span key={`${attr.displayName}-${idx}`}>
+                      {idx > 0 ? ', ' : ''}
+                      {attr.uri ? (
+                        <a href={attr.uri} target="_blank" rel="noopener noreferrer">
+                          {attr.displayName}
+                        </a>
+                      ) : (
+                        attr.displayName
+                      )}
+                    </span>
+                  ))}
+                </span>
+              </>
+            )}
+          {placeBackdrop.sourceMode !== 'place_photo' && (
+            <>
+              <span aria-hidden="true" className="studio-place-attribution-sep">
+                ·
+              </span>
+              <span>{placeBackdrop.streetViewCopyright || '© Google'}</span>
+              {placeBackdrop.sourceMode === 'street_view' && placeBackdrop.streetViewReportUrl && (
+                <>
+                  <span aria-hidden="true" className="studio-place-attribution-sep">
+                    ·
+                  </span>
+                  <a
+                    href={placeBackdrop.streetViewReportUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {isEn ? 'Report' : '신고'}
+                  </a>
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -4241,6 +4890,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                   <button
                     type="button"
                     className="studio-original-lightbox-btn"
+                    data-vton-original-fix="true"
+                    aria-label={isEn ? 'Fix generated image' : '이미지 교정'}
+                    title={isEn ? 'Fix generated image' : '잘못 생성된 이미지 교정'}
+                    onClick={handleOpenFixModal}
+                  >
+                    <Wrench size={14} aria-hidden="true" />
+                    <span>{isEn ? 'Fix' : '교정'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="studio-original-lightbox-btn"
                     data-vton-original-download="true"
                     aria-label={isEn ? 'Download original image' : '원본 이미지 저장'}
                     title={isEn ? 'Download original image' : '원본 이미지 저장'}
@@ -4301,6 +4961,128 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     }
                   }}
                 />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+      {fixModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="studio-original-lightbox-backdrop"
+            data-vton-fix-modal="true"
+            data-stage-theme={resolvedTheme}
+            role="dialog"
+            aria-modal="true"
+            aria-label={isEn ? 'Fix AI Fitting Image' : '피팅 이미지 교정'}
+            onClick={() => !isRepairingAngle && setFixModalOpen(false)}
+          >
+            <div
+              className="studio-vton-fix-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="studio-original-lightbox-header">
+                <div className="studio-original-lightbox-title-group">
+                  <strong className="studio-original-lightbox-title">
+                    {isEn ? 'Fix Generated Fitting' : '피팅 이미지 교정'}
+                  </strong>
+                  <span className="studio-original-lightbox-meta tabular-nums">
+                    {isEn
+                      ? `Current angle: ${canonicalSliceAngle}° · Fast single-angle repair or full 8-angle retry`
+                      : `현재 각도 ${canonicalSliceAngle}° · 해당 각도만 빠르게 교정하거나 전체 8각도를 다시 생성할 수 있습니다`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="studio-original-lightbox-close"
+                  aria-label={isEn ? 'Close fix dialog' : '교정 창 닫기'}
+                  disabled={isRepairingAngle}
+                  onClick={() => setFixModalOpen(false)}
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="studio-vton-fix-body">
+                <div className="studio-vton-fix-chips" role="group" aria-label={isEn ? 'Correction presets' : '교정 항목 선택'}>
+                  {[
+                    { key: 'coat_length', ko: '아우터·기장 불일치', en: 'Coat / Hem Length' },
+                    { key: 'angle_turn', ko: '각도·방향 중복/오류', en: 'Angle / Direction' },
+                    { key: 'bag_strap', ko: '가방·스트랩 위치', en: 'Bag / Strap Side' },
+                    { key: 'sagging_fit', ko: '새깅·언더웨어 보정', en: 'Sagging / Underwear' },
+                    { key: 'face_body', ko: '얼굴·체형 닮음', en: 'Face / Proportions' },
+                  ].map((chip) => {
+                    const active = fixPresetKeys.includes(chip.key);
+                    return (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        className={`studio-vton-fix-chip ${active ? 'is-active' : ''}`.trim()}
+                        aria-pressed={active}
+                        disabled={isRepairingAngle}
+                        onClick={() => handleToggleFixPreset(chip.key)}
+                      >
+                        {isEn ? chip.en : chip.ko}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <input
+                  type="text"
+                  className="studio-vton-fix-input"
+                  value={fixCustomNote}
+                  maxLength={180}
+                  disabled={isRepairingAngle}
+                  placeholder={
+                    isEn
+                      ? 'Optional note (e.g., Keep long parka coat on back view)'
+                      : '추가 교정 메모 (예: 뒷모습에서도 롱파카 기장 유지)'
+                  }
+                  onChange={(e) => setFixCustomNote(e.target.value)}
+                />
+
+                {fixFeedbackMsg && (
+                  <p className="studio-vton-fix-status" role="status">
+                    {fixFeedbackMsg}
+                  </p>
+                )}
+
+                <div className="studio-vton-fix-actions">
+                  {canonicalSliceAngle !== 0 && (
+                    <button
+                      type="button"
+                      className="studio-vton-fix-action is-primary"
+                      data-vton-repair-angle="true"
+                      disabled={isRepairingAngle}
+                      onClick={handleRepairCurrentAngle}
+                    >
+                      <Zap size={14} aria-hidden="true" />
+                      <span>
+                        {isRepairingAngle
+                          ? isEn
+                            ? `Repairing ${canonicalSliceAngle}°...`
+                            : `${canonicalSliceAngle}° 교정 중...`
+                          : isEn
+                            ? `Fast Fix ${canonicalSliceAngle}° Only (~6s)`
+                            : `현재 ${canonicalSliceAngle}° 각도만 정면 기준 빠른 교정`}
+                      </span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`studio-vton-fix-action ${canonicalSliceAngle === 0 ? 'is-primary' : ''}`.trim()}
+                    data-vton-regenerate-all="true"
+                    disabled={isRepairingAngle}
+                    onClick={handleRegenerateAllWithFix}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    <span>
+                      {isEn ? 'Regenerate All 8 Angles with Fix' : '전체 8각도 교정 규칙 적용 재생성'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>,

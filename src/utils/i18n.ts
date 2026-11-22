@@ -1073,6 +1073,15 @@ export function localizeMaterialLabel(
   if (/fabric|canvas|gabardine|패브릭/.test(s)) {
     return isEn ? 'Fabric' : '패브릭';
   }
+  if (/silicone|실리콘/.test(s)) {
+    return isEn ? 'Silicone' : '실리콘';
+  }
+  if (/microfiber|modal|마이크로화이버|모달/.test(s)) {
+    return isEn ? 'Microfiber' : '마이크로화이버';
+  }
+  if (/lace|레이스/.test(s)) {
+    return isEn ? 'Lace' : '레이스';
+  }
   if (/acetate|horn/.test(s)) {
     return isEn ? 'Acetate' : '아세테이트';
   }

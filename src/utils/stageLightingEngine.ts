@@ -1262,30 +1262,30 @@ export function resolveStageLightingFrame(params: {
     ? nightWallWashStrength
     : dayWeight * 0.06 + nightWeight * nightWallWashStrength;
 
-  // Physical lamp power factor calibrated to refined architectural luxury headroom:
-  // 0% -> strictly OFF (0); 5% -> whisper-dim ember; 50% -> cozy half-lit; 100% -> refined natural salon glow (no ceiling blowout).
+  // Physical lamp power factor calibrated for ~3x stronger luminous output at 100% while
+  // keeping 0% strictly OFF (0) and maintaining smooth monotonic dimmer progression.
   const hasVisibleFixtures = Boolean(rig.fixtureEmitters && rig.fixtureEmitters.length > 0);
   const daytimeFixtureBase = isNeonScene
-    ? 0.76
+    ? 0.94
     : isWindowless
-      ? 0.5
+      ? 0.92
       : preset !== 'auto' && preset !== 'daylight'
-        ? 0.48
+        ? 0.88
         : isDark
-          ? 0.46
-          : 0.42;
-  const nightFixtureCeiling = isNeonScene ? 0.88 : 0.56;
+          ? 0.86
+          : 0.8;
+  const nightFixtureCeiling = isNeonScene ? 1.0 : 0.98;
   const rawFixtureOn = hasVisibleFixtures
     ? dayWeight * daytimeFixtureBase + nightWeight * nightFixtureCeiling
     : 0;
   // Zero-continuous perceptual 0%..100% dimmer curves (eliminates the abrupt 0% -> 5% floor jump)
   const clampedScale = clamp(intensityScale, 0, 1);
   const fixtureDimmerCurve =
-    clampedScale <= 0.001 ? 0 : Math.pow(clampedScale, 1.08);
+    clampedScale <= 0.001 ? 0 : Math.pow(clampedScale, 1.04);
   const ambientDimmerCurve =
-    clampedScale <= 0.001 ? 0 : Math.pow(clampedScale, 1.12);
+    clampedScale <= 0.001 ? 0 : Math.pow(clampedScale, 1.06);
   const fixtureOnFactor =
-    clampedScale <= 0.001 ? 0 : clamp(rawFixtureOn * fixtureDimmerCurve, 0, 0.96);
+    clampedScale <= 0.001 ? 0 : clamp(rawFixtureOn * fixtureDimmerCurve, 0, 1.0);
 
   // STRICT PHYSICAL SEPARATION OF NATURAL SUNLIGHT VS ARTIFICIAL FIXTURE SHADOWS:
   // 1) Natural Window Sunlight Shadow (`naturalShadow*`): direction, length & opacity depend SOLELY on
@@ -1374,26 +1374,26 @@ export function resolveStageLightingFrame(params: {
           0.44
         );
 
-  // Warm / neon fixture spotlight pool on the floor around the character's feet
+  // Warm / neon fixture spotlight pool on the floor around the character's feet (~3x brighter at 100%)
   const floorPoolStrength =
     clampedScale <= 0.001
       ? 0
       : clamp(
           nightFloorPoolStrength *
-            (useDaylightPrimaryAxis ? 0.52 : 1.0) *
-            (isNeonScene ? 0.85 : 0.72) *
+            (useDaylightPrimaryAxis ? 0.72 : 1.0) *
+            (isNeonScene ? 2.15 : 2.35) *
             ambientDimmerCurve,
           0,
-          0.36
+          0.88
         );
 
   let backdropTintRgba = isNeonScene
     ? clampedScale <= 0.001
       ? 'rgba(8, 10, 20, 0.24)'
-      : `rgba(${hexToRgbTriplet(keyHex)}, ${(0.11 * ambientDimmerCurve).toFixed(3)})`
+      : `rgba(${hexToRgbTriplet(keyHex)}, ${(0.22 * ambientDimmerCurve).toFixed(3)})`
     : clampedScale <= 0.001
       ? `rgba(12, 11, 10, ${(0.08 + nightWeight * 0.1).toFixed(3)})`
-      : `rgba(${hexToRgbTriplet(keyHex)}, ${((0.05 + nightWeight * 0.06) * ambientDimmerCurve).toFixed(3)})`;
+      : `rgba(${hexToRgbTriplet(keyHex)}, ${((0.1 + nightWeight * 0.12) * ambientDimmerCurve).toFixed(3)})`;
 
   if (preset !== 'auto') {
     const pm = getLightingPresetMeta(preset);
@@ -1405,77 +1405,77 @@ export function resolveStageLightingFrame(params: {
     backdropTintRgba =
       clampedScale <= 0.001
         ? 'rgba(12, 11, 10, 0.14)'
-        : `rgba(${pm.tintRgb}, ${clamp(0.11 * ambientDimmerCurve, 0, 0.24).toFixed(3)})`;
+        : `rgba(${pm.tintRgb}, ${clamp(0.22 * ambientDimmerCurve, 0, 0.36).toFixed(3)})`;
   }
 
   const fixtureHex = preset === 'auto' ? rig.nightKelvinHex : keyHex;
   const floorPoolHex = fixtureHex;
 
-  const keyIntensityBase = dayWeight * (isWindowless ? 1.15 : 1.48) + nightWeight * 1.38;
-  const hemiIntensityBase = dayWeight * 0.88 + nightWeight * 0.64;
+  const keyIntensityBase = dayWeight * (isWindowless ? 2.85 : 3.25) + nightWeight * 3.6;
+  const hemiIntensityBase = dayWeight * 1.48 + nightWeight * 1.32;
   const keyIntensity = keyIntensityBase * (clampedScale <= 0.001 ? 0 : ambientDimmerCurve);
-  const hemiIntensity = hemiIntensityBase * (0.35 + 0.65 * clampedScale);
+  const hemiIntensity = hemiIntensityBase * (0.28 + 1.02 * clampedScale);
 
-  // Selective raw photo dimming after sunset (and breaker-off contrast on cyberpunk scenes) so lit
-  // lampshades, pendants, alabaster bars, and neon signs keep natural headroom without blowing out walls.
+  // Selective raw photo dimming after sunset (and breaker-off contrast on cyberpunk scenes),
+  // scaling up brightly at 100% (~3x perceived brightness headroom over prior dim 0.76 cap).
   const backdropNightDim =
     preset === 'daylight' || preset === 'cool_gallery'
-      ? nightWeight * rig.nightPhotoDim * 0.35
+      ? nightWeight * rig.nightPhotoDim * 0.26
       : preset === 'moonlight'
-        ? Math.max(nightWeight * rig.nightPhotoDim, 0.3)
+        ? Math.max(nightWeight * rig.nightPhotoDim * 0.8, 0.24)
         : nightWeight * rig.nightPhotoDim;
 
-  const litContrastAnchor = hasVisibleFixtures && nightWeight > 0.35 ? (isDark ? 0.76 : 0.88) : isDark ? 0.82 : 0.98;
+  const litContrastAnchor = hasVisibleFixtures && nightWeight > 0.35 ? (isDark ? 0.98 : 1.06) : isDark ? 1.02 : 1.1;
   const backdropBrightness = isNeonScene
-    ? clamp(0.36 + 0.62 * ambientDimmerCurve, 0.34, 1.0)
+    ? clamp(0.36 + 0.92 * ambientDimmerCurve, 0.34, 1.28)
     : clamp(
-        litContrastAnchor * (1 - backdropNightDim * 0.64) * (0.64 + 0.28 * ambientDimmerCurve),
+        litContrastAnchor * (1 - backdropNightDim * 0.42 * (1 - ambientDimmerCurve * 0.65)) * (0.48 + 0.78 * ambientDimmerCurve),
         0.42,
-        0.94
+        1.32
       );
   const backdropSaturate = isNeonScene
-    ? clamp(0.42 + 0.72 * fixtureDimmerCurve, 0.4, 1.16)
-    : clamp(0.92 + 0.1 * ambientDimmerCurve, 0.9, 1.04);
+    ? clamp(0.42 + 0.8 * fixtureDimmerCurve, 0.4, 1.24)
+    : clamp(0.92 + 0.14 * ambientDimmerCurve, 0.9, 1.08);
 
   const fixtureRgb = hexToRgbTriplet(fixtureHex);
   const secondaryRgb = hexToRgbTriplet(preset === 'auto' ? secondaryNeonHex : rimHex);
-  const ambientWashScale = isNeonScene ? 0.13 : rig.nightFixture === 'wall-sconce' ? 0.064 : 0.068;
+  const ambientWashScale = isNeonScene ? 0.34 : rig.nightFixture === 'wall-sconce' ? 0.21 : 0.23;
   const fixtureGlowWeight =
     preset === 'auto'
-      ? Math.max(nightWeight, hasVisibleFixtures ? fixtureOnFactor * 0.75 : 0)
-      : Math.max(nightWeight, 0.55);
+      ? Math.max(nightWeight, hasVisibleFixtures ? fixtureOnFactor * 0.88 : 0)
+      : Math.max(nightWeight, 0.72);
   const fixtureGlowAlpha =
     clampedScale <= 0.001
       ? 0
       : clamp(
           fixtureGlowWeight * ambientWashScale * ambientDimmerCurve,
           0,
-          isNeonScene ? 0.15 : 0.09
+          isNeonScene ? 0.38 : 0.28
         );
   const nightFixtureGlowCss =
     fixtureGlowAlpha > 0.003
       ? isNeonScene
-        ? `radial-gradient(ellipse 62% 48% at 24% 46%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.95).toFixed(3)}) 0%, transparent 72%), radial-gradient(ellipse 62% 48% at 76% 46%, rgba(${secondaryRgb}, ${(fixtureGlowAlpha * 0.95).toFixed(3)}) 0%, transparent 72%)`
-        : `radial-gradient(ellipse 56% 36% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.34).toFixed(3)}) 46%, transparent 78%)`
+        ? `radial-gradient(ellipse 68% 54% at 24% 46%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.96).toFixed(3)}) 0%, transparent 74%), radial-gradient(ellipse 68% 54% at 76% 46%, rgba(${secondaryRgb}, ${(fixtureGlowAlpha * 0.96).toFixed(3)}) 0%, transparent 74%)`
+        : `radial-gradient(ellipse 66% 46% at ${fixtureGlowAnchor}, rgba(${fixtureRgb}, ${fixtureGlowAlpha.toFixed(3)}) 0%, rgba(${fixtureRgb}, ${(fixtureGlowAlpha * 0.44).toFixed(3)}) 48%, transparent 82%)`
       : 'none';
 
   const rimEdgePx = Math.round(clamp(-keyPosX * 1.45, -5, 5));
   const rimAlpha =
     clampedScale <= 0.001
       ? 0
-      : clamp((0.18 + (useDaylightPrimaryAxis ? 0.02 : 0.06)) * ambientDimmerCurve, 0, 0.28);
+      : clamp((0.36 + (useDaylightPrimaryAxis ? 0.06 : 0.12)) * ambientDimmerCurve, 0, 0.52);
   const characterRimDropShadow =
     clampedScale <= 0.001
       ? 'drop-shadow(0 0 0 rgba(0, 0, 0, 0))'
       : isNeonScene
-        ? `drop-shadow(-3px -1px 7px rgba(${fixtureRgb}, ${(0.28 * ambientDimmerCurve).toFixed(3)})) drop-shadow(3px -1px 7px rgba(${secondaryRgb}, ${(0.26 * ambientDimmerCurve).toFixed(3)}))`
-        : `drop-shadow(${rimEdgePx}px -1px 6px rgba(${hexToRgbTriplet(rimHex)}, ${rimAlpha.toFixed(3)}))`;
+        ? `drop-shadow(-3px -1px 9px rgba(${fixtureRgb}, ${(0.44 * ambientDimmerCurve).toFixed(3)})) drop-shadow(3px -1px 9px rgba(${secondaryRgb}, ${(0.42 * ambientDimmerCurve).toFixed(3)}))`
+        : `drop-shadow(${rimEdgePx}px -1px 8px rgba(${hexToRgbTriplet(rimHex)}, ${rimAlpha.toFixed(3)}))`;
 
-  // Subtle character environmental luminance sync: sits naturally inside unlit dark room (0.85) -> crisp 1.0 when lit
+  // Character environmental luminance sync: natural moody unlit room (0.84) -> luminous 1.18 at 100%
   const characterAmbientBrightness = clamp(
-    0.85 + 0.15 * Math.max(daylightWindowCastBase, ambientDimmerCurve),
+    0.84 + 0.34 * Math.max(daylightWindowCastBase * 0.45, ambientDimmerCurve),
     0.84,
-    1.0
+    1.18
   );
 
   return {
@@ -1495,15 +1495,15 @@ export function resolveStageLightingFrame(params: {
     groundHex,
     hemiIntensity,
     rimHex,
-    rimScale: clamp(0.65 + 0.55 * clampedScale, 0, 1.35),
+    rimScale: clamp(0.65 + 1.15 * clampedScale, 0, 1.95),
     fogHex,
     fogDensity: 0.022,
     directRatio,
     diffuseRatio: 0.68,
     mieScattering: nightWeight * 0.35,
-    beamVisible: beamOpacityBase * 0.48 * ambientDimmerCurve > 0.008,
+    beamVisible: beamOpacityBase * 1.25 * ambientDimmerCurve > 0.008,
     beamHex: keyHex,
-    beamOpacity: clamp(beamOpacityBase * 0.48 * ambientDimmerCurve, 0, 0.18),
+    beamOpacity: clamp(beamOpacityBase * 1.25 * ambientDimmerCurve, 0, 0.46),
     beamPosX,
     beamPosY: 2.38,
     beamPosZ: -0.2,
@@ -1513,11 +1513,11 @@ export function resolveStageLightingFrame(params: {
     hazeVisible: (hazeOpacityBase > 0.08 || preset !== 'auto') && clampedScale > 0.001,
     hazeHex: keyHex,
     hazeOpacity: clamp(
-      (preset === 'auto' ? hazeOpacityBase : Math.max(hazeOpacityBase, 0.14)) *
-        0.46 *
+      (preset === 'auto' ? hazeOpacityBase : Math.max(hazeOpacityBase, 0.16)) *
+        1.15 *
         ambientDimmerCurve,
       0,
-      0.16
+      0.42
     ),
     hazeFocusY: 0.58,
     goboVisible: goboOpacityBase > 0.015,
@@ -1560,7 +1560,7 @@ export function resolveStageLightingFrame(params: {
     secondaryShadowDirZ: nightSecondaryDirZ,
     floorPoolStrength,
     floorPoolHex,
-    wetSpecularBoost: isNeonScene ? clamp(0.48 * ambientDimmerCurve, 0, 0.56) : 0,
+    wetSpecularBoost: isNeonScene ? clamp(0.64 * ambientDimmerCurve, 0, 0.78) : 0,
     rainSunGlint: 0,
     backdropNightDim,
     backdropBrightness,
@@ -1585,18 +1585,18 @@ export function resolveStageLightingFrame(params: {
       ? lerpRgbHex(fixtureHex, preset === 'auto' ? secondaryNeonHex : rimHex, 0.52)
       : lerpRgbHex(skyHex, fixtureHex, nightWeight * 0.6),
     characterRelightStrength: isNeonScene
-      ? clamp(0.95 * ambientDimmerCurve, 0, 1)
+      ? clamp(1.0 * ambientDimmerCurve, 0, 1)
       : clamp(
-          (0.16 + nightWeight * 0.28 + (preset !== 'auto' ? 0.18 : 0)) *
-            Math.max(daylightWindowCastBase * 0.65, ambientDimmerCurve),
+          (0.32 + nightWeight * 0.42 + (preset !== 'auto' ? 0.2 : 0)) *
+            Math.max(daylightWindowCastBase * 0.45, ambientDimmerCurve),
           0,
-          0.74
+          0.95
         ),
     characterFloorBounceHex: isNeonScene
       ? lerpRgbHex(floorPoolHex, preset === 'auto' ? secondaryNeonHex : rimHex, 0.42)
       : floorPoolHex,
     characterFloorBounceStrength: isNeonScene
-      ? clamp(0.66 * ambientDimmerCurve, 0, 0.8)
-      : clamp(floorPoolStrength * 0.45 * ambientDimmerCurve, 0, 0.34),
+      ? clamp(0.84 * ambientDimmerCurve, 0, 0.94)
+      : clamp(floorPoolStrength * 0.72 * ambientDimmerCurve, 0, 0.68),
   };
 }

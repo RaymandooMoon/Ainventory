@@ -567,8 +567,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     float neonFlag = clamp(uIsNeon, 0.0, 1.0);
 
     float targetExposure = mix(
-      clamp(uAmbientBrightness, 0.72, 1.00),
-      mix(0.76, 0.88, clamp(uAmbientBrightness - 0.12, 0.0, 1.0)),
+      clamp(uAmbientBrightness, 0.72, 1.18),
+      mix(0.76, 1.06, clamp(uAmbientBrightness - 0.12, 0.0, 1.08)),
       neonFlag * strength
     );
     vec3 lit = albedo * targetExposure;

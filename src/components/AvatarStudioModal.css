@@ -2750,3 +2750,399 @@ html[data-theme='dark']
     white-space: normal;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Face Quality Guidance Card, Memorized Face Badge & Face Correction Modal
+   -------------------------------------------------------------------------- */
+#profile-studio-sheet .avatar-face-photo-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#profile-studio-sheet .face-memorized-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background: var(--profile-surface-pill);
+  border: 1px solid var(--profile-hairline-strong);
+  color: var(--profile-ink-primary);
+}
+
+#profile-studio-sheet .skin-analysis-state-card.is-caution {
+  background: var(--profile-surface-card);
+  border: 1px solid var(--profile-hairline-strong);
+}
+
+#profile-studio-sheet .face-quality-guide-card {
+  gap: 10px;
+}
+
+#profile-studio-sheet .face-quality-checklist {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--profile-ink-secondary);
+}
+
+#profile-studio-sheet .face-quality-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#profile-studio-sheet .face-quality-primary-btn,
+#profile-studio-sheet .face-quality-secondary-btn {
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font-size: 0.73rem;
+  font-weight: 680;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+#profile-studio-sheet .face-quality-primary-btn {
+  background: var(--profile-ink-primary);
+  color: var(--profile-bg-sheet, #ffffff);
+  border: 1px solid var(--profile-ink-primary);
+}
+
+#profile-studio-sheet .face-quality-secondary-btn {
+  background: var(--profile-surface-control);
+  color: var(--profile-ink-primary);
+  border: 1px solid var(--profile-hairline-strong);
+}
+
+#profile-studio-sheet .face-quality-secondary-btn:hover {
+  background: var(--profile-surface-control-hover);
+}
+
+/* FaceCorrectionModal (Interactive Multi-Face & Manual Framing Sheet) */
+#face-correction-sheet .face-correction-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#face-correction-sheet .face-correction-candidate-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-secondary, #f5f5f7);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+}
+
+[data-theme='dark'] #face-correction-sheet .face-correction-candidate-bar {
+  background: #1c1c1e;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+#face-correction-sheet .face-correction-candidate-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 680;
+  color: var(--text-primary);
+}
+
+#face-correction-sheet .face-correction-candidate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#face-correction-sheet .face-correction-chip {
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(0, 0, 0, 0.16));
+  background: var(--surface-primary, #ffffff);
+  color: var(--text-primary);
+  font-size: 0.73rem;
+  font-weight: 660;
+  cursor: pointer;
+}
+
+[data-theme='dark'] #face-correction-sheet .face-correction-chip {
+  background: #2c2c2e;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f5f5f7;
+}
+
+#face-correction-sheet .face-correction-chip.is-selected {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+
+[data-theme='dark'] #face-correction-sheet .face-correction-chip.is-selected {
+  background: #ffffff;
+  color: #111111;
+  border-color: #ffffff;
+}
+
+#face-correction-sheet .face-correction-stage-outer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #111113;
+  border: 1px solid var(--border-strong, rgba(128, 128, 128, 0.28));
+}
+
+#face-correction-sheet .face-correction-stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+  cursor: crosshair;
+  line-height: 0;
+}
+
+#face-correction-sheet .face-correction-stage.is-dragging {
+  cursor: grabbing;
+}
+
+#face-correction-sheet .face-correction-source-img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+
+#face-correction-sheet .face-correction-detected-box {
+  position: absolute;
+  padding: 0;
+  border: 1.5px dashed rgba(255, 255, 255, 0.78);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  z-index: 2;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#face-correction-sheet .face-correction-detected-box:hover {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#face-correction-sheet .face-correction-detected-box.is-selected {
+  border-style: solid;
+  border-color: #ffffff;
+}
+
+#face-correction-sheet .face-correction-box-num {
+  position: absolute;
+  top: -10px;
+  left: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(17, 17, 19, 0.9);
+  color: #ffffff;
+  font-size: 0.66rem;
+  font-weight: 760;
+  line-height: 18px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+#face-correction-sheet .face-correction-active-box {
+  position: absolute;
+  border: 2.5px solid #ffffff;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.72),
+    0 0 0 9999px rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+  z-index: 3;
+}
+
+#face-correction-sheet .face-correction-active-tag {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 0.66rem;
+  font-weight: 760;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+#face-correction-sheet .face-correction-preview-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-secondary, #f5f5f7);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+}
+
+[data-theme='dark'] #face-correction-sheet .face-correction-preview-row {
+  background: #1c1c1e;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+#face-correction-sheet .face-correction-crop-box {
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--border-strong, rgba(128, 128, 128, 0.35));
+  background: #1c1c1e;
+}
+
+#face-correction-sheet .face-correction-crop-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#face-correction-sheet .face-correction-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+#face-correction-sheet .face-correction-preview-copy strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 720;
+  color: var(--text-primary);
+}
+
+#face-correction-sheet .face-correction-preview-copy p {
+  margin: 3px 0 0;
+  font-size: 0.71rem;
+  line-height: 1.42;
+  color: var(--text-secondary);
+}
+
+#face-correction-sheet .face-correction-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#face-correction-sheet .face-correction-slider-row label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.71rem;
+  font-weight: 660;
+  color: var(--text-secondary);
+}
+
+#face-correction-sheet .face-correction-slider-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#face-correction-sheet .face-correction-slider-controls input[type='range'] {
+  flex: 1;
+  accent-color: var(--text-primary);
+}
+
+#face-correction-sheet .face-correction-reset-mini {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(128, 128, 128, 0.3));
+  background: transparent;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#face-correction-sheet .face-correction-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+#face-correction-sheet .face-correction-alt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#face-correction-sheet .face-correction-ghost-btn {
+  min-height: 40px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong, rgba(128, 128, 128, 0.3));
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 660;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+#face-correction-sheet .face-correction-primary-btn {
+  flex: 1;
+  min-width: 180px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 11px;
+  border: 1px solid #111111;
+  background: #111111;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 720;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+[data-theme='dark'] #face-correction-sheet .face-correction-primary-btn {
+  background: #ffffff;
+  color: #111111;
+  border-color: #ffffff;
+}
+

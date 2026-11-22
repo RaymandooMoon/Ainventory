@@ -446,6 +446,16 @@ export function createVtonRouter(options = {}) {
             ''
         ).trim() || null,
       handedness: payload.handedness ?? payload.dominant_hand ?? undefined,
+      saggingFit: Boolean(
+        payload.saggingFit ??
+          payload.sagging_fit ??
+          rawClientProfile.saggingFit ??
+          false
+      ),
+      correctionHint:
+        typeof payload.correctionHint === 'string'
+          ? payload.correctionHint.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 360)
+          : '',
       authorizedClosets: req.vtonAuth.authorizedClosets,
       isSampleGuest: req.vtonAuth.isSampleGuest,
       isAuthenticated: req.vtonAuth.isAuthenticated,

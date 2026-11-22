@@ -33,6 +33,9 @@ export type FittingSlotKey =
   | 'top_mid'
   | 'bottom'
   | 'onepiece'
+  | 'underwear_top'
+  | 'underwear'
+  | 'socks'
   | 'shoes'
   | AccessorySubSlotKey
   | JewelrySubSlotKey;
@@ -42,6 +45,8 @@ export type FittingTabKey =
   | 'top'
   | 'bottom'
   | 'onepiece'
+  | 'underwear'
+  | 'socks'
   | 'shoes'
   | 'accessory'
   | 'jewelry';
@@ -53,6 +58,8 @@ export interface FittingSlotDefinition {
     | 'Tops'
     | 'Bottoms'
     | 'One-piece'
+    | 'Underwear'
+    | 'Socks'
     | 'Shoes'
     | 'Accessories'
     | 'Jewelry';
@@ -61,6 +68,8 @@ export interface FittingSlotDefinition {
     | '상의'
     | '하의'
     | '원피스·수영복'
+    | '언더웨어'
+    | '양말'
     | '신발'
     | '액세서리'
     | '주얼리';
@@ -84,6 +93,8 @@ export const FITTING_SLOTS: readonly FittingSlotDefinition[] = [
   { key: 'top', label: 'Tops', labelKo: '상의' },
   { key: 'bottom', label: 'Bottoms', labelKo: '하의' },
   { key: 'onepiece', label: 'One-piece', labelKo: '원피스·수영복' },
+  { key: 'underwear', label: 'Underwear', labelKo: '언더웨어' },
+  { key: 'socks', label: 'Socks', labelKo: '양말' },
   { key: 'shoes', label: 'Shoes', labelKo: '신발' },
   { key: 'accessory', label: 'Accessories', labelKo: '액세서리' },
   { key: 'jewelry', label: 'Jewelry', labelKo: '주얼리' },
@@ -322,6 +333,9 @@ export const ALL_EQUIPPABLE_SLOT_KEYS: readonly FittingSlotKey[] = [
   'top_mid',
   'bottom',
   'onepiece',
+  'underwear_top',
+  'underwear',
+  'socks',
   'shoes',
   ...ACCESSORY_SUBTREE_SLOTS.map((s) => s.key),
   ...JEWELRY_SUBTREE_SLOTS.map((s) => s.key),
@@ -350,7 +364,13 @@ export function resolveParentFittingTab(slotKey?: string | null): FittingTabKey 
   if (key === 'accessory' || ACCESSORY_SLOT_SET.has(key)) return 'accessory';
   if (key === 'outer' || key === 'outer_mid') return 'outer';
   if (key === 'top' || key === 'top_mid') return 'top';
-  if (key === 'bottom' || key === 'onepiece' || key === 'shoes') {
+  if (key === 'underwear' || key === 'underwear_top') return 'underwear';
+  if (
+    key === 'bottom' ||
+    key === 'onepiece' ||
+    key === 'socks' ||
+    key === 'shoes'
+  ) {
     return key;
   }
   return 'top';
@@ -410,12 +430,64 @@ const SWIMWEAR_SUBCATEGORIES = new Set([
 
 const SWIMWEAR_NAME_RE = /수영복|비키니|래시가드|스윔|swimsuit|bikini|rashguard|swimwear|swim[\s_-]*trunks?/i;
 
-const INTIMATE_NON_WEARABLE_SUBCATEGORIES = new Set([
+const UNDERWEAR_SUBCATEGORIES = new Set([
   'underwear',
   'inner_top',
+  'boxer_briefs',
+  'woven_boxers',
+  'seamless_underwear',
+  'lace_underwear',
+  'thong_underwear',
+  'nubra',
+  'adhesive_bra',
+  'camisole',
+]);
+
+const NON_UNDERWEAR_CATEGORIES = new Set([
+  'accessory',
+  'accessories',
+  'bag',
+  'bags',
+  'jewelry',
+  'shoes',
+  'footwear',
+  'outer',
+  'outerwear',
+  'bottom',
+  'bottoms',
+  'dress',
+  'onepiece',
+  'swimwear',
+  'headwear',
+  'neckwear',
+  'gloves',
+  'socks',
+]);
+
+const BAG_SUBCATEGORIES_GUARD = new Set([
+  'bag',
+  'tote',
+  'briefcase',
+  'backpack',
+  'messenger',
+  'clutch',
+  'duffel',
+  'hobo',
+  'crossbody',
+  'shoulder',
+]);
+
+const BAG_NAME_EXCLUDE_RE =
+  /브리프백|브리프케이스|서류가방|토트백|크로스백|숄더백|백팩|클러치|더플백|호보백|메신저백|가방|briefcase|brief\s*bag|tote\s*bag|handbag|backpack/i;
+
+const SOCKS_SUBCATEGORIES = new Set([
   'socks',
   'crew_socks',
+  'street_crew_socks',
+  'sheer_socks',
   'ankle_socks',
+  'no_show_socks',
+  'dress_socks',
 ]);
 
 const ONEPIECE_CATEGORIES = new Set(['dress', 'onepiece', 'swimwear']);
@@ -486,29 +558,56 @@ export function isJewelryGarment(garment?: Partial<GarmentRecord> | null): boole
   return JEWELRY_NAME_RE.test(name);
 }
 
-/**
- * Returns `false` ONLY for non-outer intimate underwear/socks unless the item is swimwear.
- * Permanently prevents underwear/socks from polluting the `Accessories` or other studio slots.
- */
-export function isWearableStudioGarment(garment?: Partial<GarmentRecord> | null): boolean {
+export function isUnderwearGarment(garment?: Partial<GarmentRecord> | null): boolean {
   if (!garment) return false;
-  if (isSwimwearGarment(garment)) return true;
-
   const cat = String(garment.category || '')
     .trim()
     .toLowerCase();
   const sub = String(garment.subcategory || '')
     .trim()
     .toLowerCase();
+  const name = String(garment.name || '');
 
+  if (cat === 'underwear' || UNDERWEAR_SUBCATEGORIES.has(sub)) {
+    return true;
+  }
+
+  // Never classify bags (e.g., 브리프백/브리프케이스), accessories, shoes, or outerwear as underwear
   if (
-    cat === 'underwear' ||
-    cat === 'socks' ||
-    INTIMATE_NON_WEARABLE_SUBCATEGORIES.has(sub)
+    NON_UNDERWEAR_CATEGORIES.has(cat) ||
+    BAG_SUBCATEGORIES_GUARD.has(sub) ||
+    BAG_NAME_EXCLUDE_RE.test(name)
   ) {
     return false;
   }
 
+  return /언더웨어|드로즈|박서|트렁크|심리스\s*팬티|레이스\s*브리프|브리프(?!(?:백|케이스))|브라렛|누브라|실리콘\s*브라|접착\s*브라|티팬티|T팬티|T-?스트링|이너웨어|boxer|briefs?(?!\s*bag|case)|bralette|nubra|adhesive\s*bra|thong|t[\s-]*string|lingerie|underwear/i.test(
+    name
+  );
+}
+
+export function isSocksGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
+  const cat = String(garment.category || '')
+    .trim()
+    .toLowerCase();
+  const sub = String(garment.subcategory || '')
+    .trim()
+    .toLowerCase();
+  const name = String(garment.name || '');
+  return (
+    cat === 'socks' ||
+    SOCKS_SUBCATEGORIES.has(sub) ||
+    /양말|삭스|덧신|socks?|hosiery/i.test(name)
+  );
+}
+
+/**
+ * All active wardrobe garments including dedicated `underwear` and `socks` slots are wearable in studio.
+ * Underwear and socks route strictly to their own slots and NEVER pollute `Accessories`.
+ */
+export function isWearableStudioGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment) return false;
   return true;
 }
 
@@ -631,6 +730,14 @@ export function mapGarmentToFittingSlot(garment?: Partial<GarmentRecord> | null)
     return 'onepiece';
   }
 
+  if (isUnderwearGarment(garment)) {
+    return 'underwear';
+  }
+
+  if (isSocksGarment(garment)) {
+    return 'socks';
+  }
+
   if (isJewelryGarment(garment)) {
     return 'jewelry';
   }
@@ -706,6 +813,30 @@ export function isMidOuterLayerGarment(garment?: Partial<GarmentRecord> | null):
   return false;
 }
 
+const UNDERWEAR_TOP_SUBCATEGORIES = new Set([
+  'nubra',
+  'adhesive_bra',
+  'inner_top',
+  'camisole',
+  'bra',
+  'bralette',
+]);
+
+export function isUnderwearTopGarment(garment?: Partial<GarmentRecord> | null): boolean {
+  if (!garment || !isUnderwearGarment(garment)) return false;
+  const explicitSlot = String((garment as Record<string, unknown>).slot_key || '')
+    .trim()
+    .toLowerCase();
+  if (explicitSlot === 'underwear_top') return true;
+  const sub = String(garment.subcategory || '').trim().toLowerCase();
+  const name = String(garment.name || '');
+  if (UNDERWEAR_TOP_SUBCATEGORIES.has(sub)) return true;
+  if (/세트|&\s*브리프|set/i.test(name)) return false;
+  return /누브라|실리콘\s*브라|접착\s*브라|스트랩리스\s*브라|이너탑|발열\s*이너|캐미솔|브라렛|nubra|adhesive\s*bra|inner\s*top|camisole|bralette/i.test(
+    name
+  );
+}
+
 /**
  * Maps any garment to its natural default equippable leaf slot (`FittingSlotKey`).
  * For symmetric/asymmetric left-right slots, defaults to the left slot (and callers can place a 2nd item in right!).
@@ -719,6 +850,9 @@ export function mapGarmentToDefaultSubSlot(
   }
   if (topTab === 'outer') {
     return isMidOuterLayerGarment(garment) ? 'outer_mid' : 'outer';
+  }
+  if (topTab === 'underwear') {
+    return isUnderwearTopGarment(garment) ? 'underwear_top' : 'underwear';
   }
   if (topTab !== 'accessory' && topTab !== 'jewelry') {
     return topTab;
@@ -816,9 +950,16 @@ export function doesGarmentMatchSubSlot(
       String((garment as Record<string, unknown>).slot_key || '').trim().toLowerCase() === 'outer_mid'
     );
   }
+  if (targetSlotKey === 'underwear_top') {
+    return mapGarmentToFittingSlot(garment) === 'underwear' && isUnderwearTopGarment(garment);
+  }
+  if (targetSlotKey === 'underwear') {
+    return mapGarmentToFittingSlot(garment) === 'underwear';
+  }
   if (
     targetSlotKey === 'bottom' ||
     targetSlotKey === 'onepiece' ||
+    targetSlotKey === 'socks' ||
     targetSlotKey === 'shoes'
   ) {
     return mapGarmentToFittingSlot(garment) === targetSlotKey;
@@ -904,6 +1045,38 @@ export class Studio25DFittingRenderer implements FittingRenderer {
     const hasAnyOuter = hasOuter || hasOuterMid;
 
     const layers: Studio25DLayer[] = [];
+
+    if (slots.underwear_top && !slots.top && !slots.top_mid && !slots.onepiece) {
+      layers.push({
+        slotKey: 'underwear_top',
+        slotLabel: 'Inner Top',
+        garment: slots.underwear_top,
+        xPct: 50,
+        yPct: 30.2,
+        widthPct: 34.0,
+        zIndex: 24,
+        rotationDeg: 0,
+        parallaxDepth: 0.55,
+        shadowBlurPx: 14,
+        shadowOffsetY: 7,
+      });
+    }
+
+    if (slots.underwear && !slots.bottom && !slots.onepiece) {
+      layers.push({
+        slotKey: 'underwear',
+        slotLabel: 'Underwear',
+        garment: slots.underwear,
+        xPct: 50,
+        yPct: 48.0,
+        widthPct: 30.0,
+        zIndex: 25,
+        rotationDeg: 0,
+        parallaxDepth: 0.52,
+        shadowBlurPx: 14,
+        shadowOffsetY: 7,
+      });
+    }
 
     if (slots.onepiece) {
       const swim = isSwimwearGarment(slots.onepiece);

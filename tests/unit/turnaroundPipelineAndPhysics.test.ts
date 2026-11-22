@@ -20,10 +20,13 @@ import {
 } from '../../src/utils/turnaroundPhysics.ts';
 
 describe('4x2 Nano Banana Blueprint Pipeline & Thinking Level', () => {
-  it('defaults turnaround thinking level to HIGH and respects GEMINI_VTON_THINKING_LEVEL overrides', () => {
+  it('defaults turnaround thinking level to LOW for fast 2K latency and respects GEMINI_VTON_THINKING_LEVEL overrides', () => {
     const prev = process.env.GEMINI_VTON_THINKING_LEVEL;
     try {
       delete process.env.GEMINI_VTON_THINKING_LEVEL;
+      assert.equal(resolveTurnaroundThinkingLevel(), 'LOW');
+
+      process.env.GEMINI_VTON_THINKING_LEVEL = 'high';
       assert.equal(resolveTurnaroundThinkingLevel(), 'HIGH');
 
       process.env.GEMINI_VTON_THINKING_LEVEL = 'medium';
@@ -36,7 +39,7 @@ describe('4x2 Nano Banana Blueprint Pipeline & Thinking Level', () => {
       assert.equal(resolveTurnaroundThinkingLevel(), null);
 
       process.env.GEMINI_VTON_THINKING_LEVEL = 'invalid_value';
-      assert.equal(resolveTurnaroundThinkingLevel(), 'HIGH');
+      assert.equal(resolveTurnaroundThinkingLevel(), 'LOW');
     } finally {
       if (prev === undefined) {
         delete process.env.GEMINI_VTON_THINKING_LEVEL;
@@ -111,6 +114,42 @@ describe('4x2 Nano Banana Blueprint Pipeline & Thinking Level', () => {
     assert.doesNotMatch(prompt, /NEVER LEFT/i);
     assert.doesNotMatch(prompt, /NEVER RIGHT/i);
     assert.doesNotMatch(prompt, /STRICTLY FORBIDDEN/i);
+  });
+
+  it('locks outermost coat hem length across all 8 cells when outer + outer_mid are stacked and promotes qcCorrectionHint', () => {
+    const profile = normalizeVtonProfile({
+      gender: 'male',
+      heightCm: 178,
+      weightKg: 73,
+      turnaroundSheet: true,
+      turnaroundLayout: 'turnaround_4x2',
+      styleMode: 'stylized_isometric',
+      qcCorrectionHint: 'Keep long charcoal fishtail parka length on 90/135/180/225/270/315 views.',
+    });
+    const prompt = buildGeminiTryOnPrompt(profile, {
+      outer: {
+        name: '차콜 하이넥 롱 스트릿 피쉬테일 파카 코트',
+        category: 'outer',
+        subcategory: 'coat',
+        color_name: '차콜',
+        color_hex: '#36393D',
+        fabric: 'nylon',
+      },
+      outer_mid: {
+        name: '워시드 블랙 헤비 셀비지 데님 트러커 자켓',
+        category: 'outer',
+        subcategory: 'jacket',
+        color_name: '워시드 블랙',
+        color_hex: '#222426',
+        fabric: 'denim',
+      },
+    });
+
+    assert.match(prompt, /INNER MID-LAYER ONLY RULE/);
+    assert.match(prompt, /CRITICAL OUTERMOST COAT HEM-LENGTH & 8-CELL SILHOUETTE INVARIANCE LOCK/);
+    assert.match(prompt, /CROSS-CELL MASTER CONSISTENCY LOCK/);
+    assert.match(prompt, /\[MANDATORY CORRECTION DIRECTIVE — FIX DEFECT FROM PREVIOUS GENERATION\]/);
+    assert.match(prompt, /Keep long charcoal fishtail parka length/);
   });
 });
 

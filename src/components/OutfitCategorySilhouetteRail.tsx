@@ -51,6 +51,26 @@ function renderCategorySilhouetteSvg(slotKey: FittingTabKey) {
           />
         </svg>
       );
+    case 'underwear':
+      // Structured elastic-waistband boxer briefs / intimate silhouette
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path
+            d="M4.5 6.5H19.5V9.1H4.5V6.5ZM4.5 10.2H19.5L18.8 18H13.8L12.6 14.3H11.4L10.2 18H5.2L4.5 10.2Z"
+            fill="currentColor"
+          />
+        </svg>
+      );
+    case 'socks':
+      // Ribbed crew sock silhouette
+      return (
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path
+            d="M9.5 3.5H15.8V6.1H9.5V3.5ZM9.5 7.2H15.8V13.4C15.8 15.1 14.9 16.6 13.4 17.5L10.3 19.4C8.9 20.3 7 19.9 6.1 18.5C5.2 17.1 5.6 15.2 7 14.3L9.5 12.7V7.2Z"
+            fill="currentColor"
+          />
+        </svg>
+      );
     case 'shoes':
       // Sleek heeled ankle boot silhouette
       return (

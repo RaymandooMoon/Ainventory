@@ -23,6 +23,11 @@ import {
   resolveBagCarryAnatomy,
 } from '../src/services/vtonQualityControl.ts';
 import { inferBagCarrySpec } from '../src/shared/garmentTaxonomy.js';
+import {
+  buildSaggingVtonDirective,
+  classifyUnderwearProfile,
+  evaluateUnderwearOuterInteraction,
+} from '../src/shared/underwearStylingEngine.js';
 
 export const VTON_MODE = '2d-vton';
 export const VTON_STYLE_PRESET = 'photorealistic';
@@ -63,6 +68,8 @@ export const VTON_SLOTS = Object.freeze([
   'neckwear',
   'gloves',
   'socks',
+  'underwear_top',
+  'underwear',
 ]);
 
 const VTON_SLOT_SET = new Set(VTON_SLOTS);
@@ -78,6 +85,8 @@ const PROMPT_SLOT_ORDER = Object.freeze([
   'jwl_ear_left',
   'jwl_ear_right',
   'onepiece',
+  'underwear_top',
+  'underwear',
   'top',
   'top_mid',
   'dress',
@@ -136,6 +145,11 @@ const ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES = Object.freeze({
   jwl_ring_left: 'worn specifically on a finger of the model’s LEFT hand',
   jwl_ring_right: 'worn specifically on a finger of the model’s RIGHT hand',
   jwl_brooch: 'pinned cleanly onto the left chest lapel or upper bodice',
+  socks: 'worn cleanly on BOTH ankles/calves peeking naturally above the shoe collar and beneath the trouser hem',
+  underwear_top:
+    'worn neatly as the upper intimates / inner-top layer over the bust/chest (displayed directly as a tasteful fashion editorial lookbook piece when no outer top/dress covers it)',
+  underwear:
+    'worn neatly as the lower intimates / foundation layer at the hips (displayed directly as a tasteful luxury intimates editorial lookbook piece when no outer bottom/dress covers it, or showing contrast waistband when sagging fit is active)',
 });
 
 const SLOT_ALIAS_MAP = Object.freeze({
@@ -168,6 +182,23 @@ const SLOT_ALIAS_MAP = Object.freeze({
   acc: 'accessory',
   umbrella: 'acc_umbrella',
   parasol: 'acc_umbrella',
+  innerwear: 'underwear',
+  lingerie: 'underwear',
+  boxers: 'underwear',
+  boxer_briefs: 'underwear',
+  woven_boxers: 'underwear',
+  briefs: 'underwear',
+  seamless_underwear: 'underwear',
+  lace_underwear: 'underwear',
+  thong_underwear: 'underwear',
+  underwear_top: 'underwear_top',
+  inner_top: 'underwear_top',
+  camisole: 'underwear_top',
+  nubra: 'underwear_top',
+  adhesive_bra: 'underwear_top',
+  street_crew_socks: 'socks',
+  sheer_socks: 'socks',
+  no_show_socks: 'socks',
   belt: 'acc_belt',
   eyewear: 'acc_eyes',
   sunglasses: 'acc_eyes',
@@ -301,11 +332,11 @@ export function resolveTurnaroundSheetImageSize() {
 }
 
 export function resolveTurnaroundThinkingLevel() {
-  const raw = String(readServerEnvVar('GEMINI_VTON_THINKING_LEVEL') || 'HIGH')
+  const raw = String(readServerEnvVar('GEMINI_VTON_THINKING_LEVEL') || 'LOW')
     .trim()
     .toUpperCase();
   if (raw === 'OFF' || raw === 'NONE' || raw === 'DISABLED') return null;
-  return VALID_THINKING_LEVELS.has(raw) ? raw : 'HIGH';
+  return VALID_THINKING_LEVELS.has(raw) ? raw : 'LOW';
 }
 
 /**
@@ -347,6 +378,10 @@ const SAFE_CACHE_KEY_RE = /^(combo|base)-[0-9a-f]{64}$/;
 
 /** @type {Map<string, { cacheKey: string, kind: 'combo' | 'base', model: string, dataUrl: string, createdAt: number, lastAccessedAt: number }>} */
 const memCache = new Map();
+
+/** @type {Map<string, { mimeType: string, base64Data: string, imageDigest: string }>} */
+const seedPackshotMemCache = new Map();
+const MAX_SEED_PACKSHOT_CACHE = 96;
 
 /** @type {Map<string, Promise<object>>} */
 const inFlightSyntheses = new Map();
@@ -876,6 +911,11 @@ export function loadGarmentPackshot(
       return null;
     }
 
+    const cachedSeed = seedPackshotMemCache.get(relPath);
+    if (cachedSeed) {
+      return cachedSeed;
+    }
+
     try {
       const stat = fs.statSync(fullPath);
       if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_PACKSHOT_FILE_BYTES) {
@@ -887,11 +927,17 @@ export function loadGarmentPackshot(
       }
       const mimeType = detectImageMimeType(buffer);
       if (!mimeType) return null;
-      return {
+      const entry = {
         mimeType,
         base64Data: buffer.toString('base64'),
         imageDigest: `seed:${relPath}:${sha256Hex(buffer).slice(0, 20)}`,
       };
+      if (seedPackshotMemCache.size >= MAX_SEED_PACKSHOT_CACHE) {
+        const oldestKey = seedPackshotMemCache.keys().next().value;
+        if (oldestKey) seedPackshotMemCache.delete(oldestKey);
+      }
+      seedPackshotMemCache.set(relPath, entry);
+      return entry;
     } catch {
       return null;
     }
@@ -1194,12 +1240,15 @@ export function normalizeVtonProfile(
       : 'turnaround_4x2'
     : 'single';
 
+  const saggingFit = Boolean(extraOptions?.saggingFit ?? src.saggingFit ?? false);
+
   return {
     viewAngleDeg,
     styleMode,
     weatherMood,
     turnaroundSheet,
     turnaroundLayout,
+    saggingFit,
     avatarConfigHash: rawAvatarHash || null,
     gender,
     framePreset,
@@ -1266,10 +1315,15 @@ export function normalizeVtonProfile(
         }
       : null,
     secondaryAnchorAngleDeg,
-    qcCorrectionHint:
-      typeof extraOptions?.qcCorrectionHint === 'string' && extraOptions.qcCorrectionHint.trim()
-        ? extraOptions.qcCorrectionHint.trim().slice(0, 600)
-        : '',
+    qcCorrectionHint: (() => {
+      const rawHint =
+        typeof extraOptions?.qcCorrectionHint === 'string' && extraOptions.qcCorrectionHint.trim()
+          ? extraOptions.qcCorrectionHint
+          : typeof src?.qcCorrectionHint === 'string' && src.qcCorrectionHint.trim()
+            ? src.qcCorrectionHint
+            : '';
+      return rawHint ? rawHint.trim().slice(0, 600) : '';
+    })(),
   };
 }
 
@@ -1515,11 +1569,25 @@ export function computeVtonHashes(normalizedProfile, resolvedSlots = {}) {
     normalizedProfile.weatherMood?.key ||
     'clear';
 
+  const hasUnderwearSlots = Boolean(resolvedSlots.underwear || resolvedSlots.underwear_top);
+  const hasOuterClothingSlots = Boolean(
+    resolvedSlots.outer ||
+      resolvedSlots.outer_mid ||
+      resolvedSlots.top ||
+      resolvedSlots.top_mid ||
+      resolvedSlots.bottom ||
+      resolvedSlots.onepiece ||
+      resolvedSlots.dress
+  );
+  const isUnderwearLookbook = hasUnderwearSlots && !hasOuterClothingSlots;
+
   const basePayload = {
     v: CACHE_SCHEMA_VERSION,
     styleMode,
     weatherKey,
     layoutKey,
+    saggingFit: normalizedProfile.saggingFit ? 'v3-low-hip-baggy-sag' : false,
+    underwearLookbook: isUnderwearLookbook ? 'v2-intimates-lookbook' : false,
     avatarConfigHash: normalizedProfile.avatarConfigHash || null,
     gender: normalizedProfile.gender || 'unisex',
     framePreset: normalizedProfile.framePreset,
@@ -2003,12 +2071,12 @@ function buildEditorialStyleAndBodyPrompt(
           `  * [Row 1, Col 1 — 0° Direct Front]: Symmetrical frontal stance looking straight at the camera with full outfit front, legs, and both shoes grounded at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[0]}]` : ''}`,
           `  * [Row 1, Col 2 — 45° Front-Right Three-Quarter]: Whole body turned 45° clockwise so nose, gaze, coat lapels, torso, and both shoe toes point diagonally toward the RIGHT border (3 o'clock); the wearer's right shoulder stands closer in the foreground on the cell's left side, both shoes grounded at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[45]}]` : ''}`,
           `  * [Row 1, Col 3 — 90° Right Side Profile]: Pure perpendicular side profile facing straight toward the RIGHT border (3 o'clock) with one eye, nose tip, chest profile, and both shoes pointing straight right; the wearer's right shoulder and right arm face the camera directly at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[90]}]` : ''}`,
-          `  * [Row 1, Col 4 — 135° Back-Right Three-Quarter Rear]: Turned 135° away toward the RIGHT border (2 o'clock), showing the rear back of the head/hair with the back of the RIGHT EAR visible on the right edge of the head, the right shoulder blade and rear coat panel facing camera, and both shoes angled away toward the RIGHT border at y=46%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[135]}]` : ''}`,
+          `  * [Row 1, Col 4 — 135° Back-Right Three-Quarter Rear (DISTINCT FROM 180° BACK)]: Turned diagonally 135° away toward the RIGHT border (2 o'clock) — visibly rotated 45° off straight-back so the body silhouette is narrower in 3/4 rear perspective, showing the back-left 2/3 of the head/hair with the RIGHT EAR / CHEEK EDGE peeking on the right side of the head, the right shoulder closer to camera than the left shoulder, and both shoes staggered diagonally away toward the RIGHT border at y=46% (NEVER draw a symmetrical flat 180° straight back identical to Row 2 Col 1!).${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[135]}]` : ''}`,
           '- BOTTOM ROW (y=54%..96%, full-body head-to-shoes, continuing clockwise toward the LEFT edge):',
-          `  * [Row 2, Col 1 — 180° Straight Rear Back]: Symmetrical pure back view facing directly away from camera showing the back of head/hair, centered vertical back seam, rear trousers, and both shoe heels grounded at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[180]}]` : ''}`,
-          `  * [Row 2, Col 2 — 225° Back-Left Three-Quarter Rear]: Turned away toward the LEFT border (10 o'clock), showing the rear back of the head/hair with the back of the LEFT EAR visible on the left edge of the head, the left shoulder blade and rear coat panel facing camera, and both shoes angled away toward the LEFT border at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[225]}]` : ''}`,
-          `  * [Row 2, Col 3 — 270° Left Side Profile]: Pure perpendicular side profile facing straight toward the LEFT border (9 o'clock) with one eye, nose tip, chest profile, and both shoes pointing straight left; the wearer's left shoulder and left arm face the camera directly at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[270]}]` : ''}`,
-          `  * [Row 2, Col 4 — 315° Front-Left Three-Quarter]: Whole body turned 45° counter-clockwise from front so nose, gaze, coat lapels, torso, and both shoe toes point diagonally toward the LEFT border (9 o'clock); the wearer's left shoulder stands closer in the foreground on the cell's right side, both shoes grounded at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[315]}]` : ''}`,
+          `  * [Row 2, Col 1 — 180° Straight Rear Back (STRICTLY SYMMETRICAL, DISTINCT FROM 135°)]: Symmetrical pure back view facing directly away from camera with perfectly perpendicular level shoulders, centered vertical spine seam, both ears equally tucked behind the head, rear coat/trousers at the EXACT SAME HEM LENGTH as Row 1 Col 1 (0° Front), and both shoe heels aligned straight at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[180]}]` : ''}`,
+          `  * [Row 2, Col 2 — 225° Back-Left Three-Quarter Rear]: Turned diagonally 45° off straight-back away toward the LEFT border (10 o'clock), showing the rear back-right 2/3 of the head/hair with the LEFT EAR / CHEEK EDGE peeking on the left edge of the head, the left shoulder closer to camera, and both shoes staggered away toward the LEFT border at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[225]}]` : ''}`,
+          `  * [Row 2, Col 3 — 270° Left Side Profile]: Pure perpendicular side profile facing straight toward the LEFT border (9 o'clock) with one eye, nose tip, chest profile, exact same coat hem length as 0° Front, and both shoes pointing straight left; the wearer's left shoulder and left arm face the camera directly at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[270]}]` : ''}`,
+          `  * [Row 2, Col 4 — 315° Front-Left Three-Quarter]: Whole body turned 45° counter-clockwise from front so nose, gaze, coat lapels, torso, exact same coat hem length as 0° Front, and both shoe toes point diagonally toward the LEFT border (9 o'clock); the wearer's left shoulder stands closer in the foreground on the cell's right side, both shoes grounded at y=96%.${sheetBagAnatomy ? ` [Bag: ${sheetBagAnatomy.perAngleScreenPrompt[315]}]` : ''}`,
           '- Keep the entire 4:3 canvas cleanly borderless and free of grid lines, divider bars, text, or numbers.',
         ]
       : [
@@ -2149,7 +2217,7 @@ function buildBaseModelParts(profile) {
       `- ${FOOTWEAR_PAIR_SYMMETRY_LOCK}`,
       '- Keep the silhouette clean and unobstructed so authentic body proportions and MST complexion are unmistakably legible.',
       ...(profile.qcCorrectionHint
-        ? [`[SERVER QC RETRY CORRECTION — FIX PREVIOUS DEFECT]: ${profile.qcCorrectionHint}`]
+        ? [`[MANDATORY CORRECTION DIRECTIVE — FIX DEFECT FROM PREVIOUS GENERATION]: ${profile.qcCorrectionHint}`]
         : []),
       '[OUTPUT DIRECTIVE]: Generate and output the final high-resolution studio lookbook image directly without asking follow-up questions.',
     ].join('\n'),
@@ -2218,9 +2286,21 @@ function buildCompositeLookParts(profile, resolvedSlots) {
       canonicalBagAngle === 180 ||
       canonicalBagAngle === 225);
 
+  const precheckSaggingDirective = buildSaggingVtonDirective({
+    saggingFit: Boolean(profile.saggingFit),
+    bottom: resolvedSlots.bottom || null,
+    underwear: resolvedSlots.underwear || null,
+  });
+  const isSaggingActive = Boolean(precheckSaggingDirective);
+
   if (!profile.turnaroundSheet && profile.masterAnchorPart && profile.viewAngleDeg !== 0) {
     const bagLockForAngle = hasEquippedBag
       ? ` BAG SCREEN-SIDE & HAND-ROLE LOCK FOR ${canonicalBagAngle}°: ${bagAnatomy.perAngleScreenPrompt[canonicalBagAngle]} ${bagAnatomy.dualHandRolePrompt}`
+      : '';
+    const saggingAngleLock = isSaggingActive
+      ? isSingleRearAngle
+        ? ` DEEP SAGGING REAR-VIEW CONTINUITY LOCK FOR ${canonicalBagAngle}°: Preserve the EXACT v3 hip-hop sagging silhouette from the front anchor — keep the normal-length top's rear bottom hem 100% FLAT, STRAIGHT, AND UNGATHERED at hip-bone/wrist level (never cropped up at ribs, never bunched/rolled), clearly expose the bright contrast elastic underwear waistband + tall 10–14cm upper boxer seat across the upper buttocks, drop the pants waistband LOW down at knuckle height across the LOWER BUTTOCKS, place the rear pockets conspicuously LOW near the upper hamstrings with a wide baggy drop-crotch hanging below the fingertips, and keep heavy stacked fabric folds pooling over the footwear heels.`
+        : ` DEEP SAGGING ANGLE CONTINUITY LOCK FOR ${canonicalBagAngle}°: Keep the normal-length top's bottom hem 100% FLAT, STRAIGHT, AND UNGATHERED at hip-bone/wrist level (never cropped at stomach, never rolled/cinched), preserve the low-hip contrast elastic underwear waistband + tall 10–14cm exposed boxer body from wrist to knuckle level, deeply low-slung baggy pants waistband dropped down to knuckle/upper-thigh level, extreme deep drop-crotch hanging below fingertips near mid-thigh, wide slouchy baggy legs, and heavy ankle stacking over the footwear.`
       : '';
     const rearLockWarning = isSingleRearAngle
       ? ' ABSOLUTE REAR-VIEW ORIENTATION LOCK: The model MUST be turned STRICTLY AWAY from the camera showing ONLY the BACK of their head/hair, BACK of their coat/shoulders, and BACK of their trousers/heels. STRICTLY ZERO front face, ZERO eyes, ZERO nose/mouth facing camera, ZERO front shirt/chest buttons!'
@@ -2229,7 +2309,7 @@ function buildCompositeLookParts(profile, resolvedSlots) {
         : '';
     parts.push({
       text: `[MASTER CHARACTER & OUTFIT ANCHOR — 0° FRONT VIEW ATTACHED IMMEDIATELY BELOW]:
-THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THIS EXACT SAME person to the requested ${canonicalBagAngle}° camera angle while preserving 100% identical hairstyle/hair color, skin tone, body proportions, exact coat/top/bottom/shoes colors and fabric textures, and exact anatomical side/carry-style of every bag, watch, and accessory.${bagLockForAngle}${rearLockWarning}`,
+THIS ATTACHED IMAGE IS THE EXACT MASTER 0° FRONT CHARACTER & OUTFIT. Rotate THIS EXACT SAME person to the requested ${canonicalBagAngle}° camera angle while preserving 100% identical hairstyle/hair color, skin tone, body proportions, exact coat/top/bottom/shoes colors and fabric textures, and exact anatomical side/carry-style of every bag, watch, and accessory.${bagLockForAngle}${saggingAngleLock}${rearLockWarning}`,
     });
     parts.push({
       inlineData: {
@@ -2310,7 +2390,16 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
   const hasBottom = Boolean(resolvedSlots.bottom);
   const hasOuterMid = Boolean(resolvedSlots.outer_mid);
   const hasOuter = Boolean(resolvedSlots.outer);
+  const hasAnyOuter = hasOuter || hasOuterMid;
   const hasAnyTop = hasTop || hasTopMid;
+  const hasUnderwearTop = Boolean(resolvedSlots.underwear_top);
+  const hasUnderwearBottom = Boolean(resolvedSlots.underwear);
+  const hasAnyUnderwear = hasUnderwearTop || hasUnderwearBottom;
+  const isFullUnderwearSet =
+    hasUnderwearBottom &&
+    /세트|브라렛.*브리프|set|bralette.*brief/i.test(String(resolvedSlots.underwear?.name || ''));
+  const isUnderwearLookbookMode =
+    hasAnyUnderwear && !hasAnyOuter && !hasAnyTop && !hasBottom && !hasOnepiece;
   const hasShoes = Boolean(resolvedSlots.shoes);
   const hasLeftRightAsymmetry =
     Boolean(resolvedSlots.acc_hand_left && resolvedSlots.acc_hand_right) ||
@@ -2344,12 +2433,12 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
       '- Layer the mid-layer cardigan/vest/knit cleanly OVER the inner base top so the inner collar, cuffs, and hem remain naturally visible underneath.'
     );
   }
-  if (hasOuterMid && (hasAnyTop || hasOnepiece)) {
+  if (hasOuterMid && (hasAnyTop || hasOnepiece || hasOuter)) {
     const outerMidItem = resolvedSlots.outer_mid;
     layeringRules.push(
       `- Layer the ${outerMidItem.colorName} mid-layer ${outerMidItem.subcategory || 'jacket'} cleanly OVER the inner top/knit with relaxed open front draping so inner collar and cardigan depth remain legible.${
         hasOuter
-          ? ` Because the ${resolvedSlots.outer.colorName} outer coat is worn outside it, keep BOTH shoulders and sleeves uniformly in the outer coat's ${resolvedSlots.outer.colorName} color while the ${outerMidItem.colorName} mid-layer peeks gently at the inner chest lapels underneath.`
+          ? ` INNER MID-LAYER ONLY RULE: Because the outermost ${resolvedSlots.outer.colorName} ${resolvedSlots.outer.subcategory || 'coat'} is worn OUTSIDE this mid-layer, this ${outerMidItem.colorName} mid-layer jacket MUST ONLY peek slightly along the open front chest lapels in front/quarter views (0°, 45°, 315°) — NEVER let this shorter mid-layer jacket replace or morph the outer coat on 90°/135°/180°/225°/270°/315° views, and NEVER change the outer coat's hem length or hood color!`
           : ''
       }`
     );
@@ -2357,7 +2446,12 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
   if (hasOuter) {
     const outerItem = resolvedSlots.outer;
     layeringRules.push(
-      `- Render the outermost ${outerItem.colorName} ${outerItem.fabric} ${outerItem.subcategory || 'coat'} uniformly on BOTH the entire wearer-left side AND entire wearer-right side (both sleeves, both shoulders, both front panels, and full back) across EVERY view (${viewScopeText}). NEVER split the coat into two different colors left-vs-right, and NEVER drop the outer coat on side or rear views.`
+      `- CRITICAL OUTERMOST COAT HEM-LENGTH & 8-CELL SILHOUETTE INVARIANCE LOCK: Render the outermost ${outerItem.colorName} ${outerItem.fabric} ${outerItem.subcategory || 'coat'} (${outerItem.name}) with 100% IDENTICAL silhouette, EXACT SAME HEM LENGTH (e.g., if it is a long coat/parka reaching mid-thigh or knee in 0° Front, it MUST remain that exact long mid-thigh/knee hem length across ALL views — NEVER shrink or swap it into a short waist-length ribbed bomber jacket in 90°/135°/180°/225°/270°/315°!), EXACT SAME hood/collar color, and uniform ${outerItem.colorName} outer fabric on BOTH sleeves, BOTH shoulders, front panels, and full back across EVERY view (${viewScopeText}).`
+    );
+  }
+  if (is4x2TurnaroundSheet) {
+    layeringRules.push(
+      '- CROSS-CELL MASTER CONSISTENCY LOCK: Treat [Row 1, Col 1 — 0° Direct Front] as the strict ground-truth outfit blueprint for ALL 8 cells. Every single cell (45°, 90°, 135°, 180°, 225°, 270°, 315°) MUST preserve 100% identical coat/top hem length, identical hood color, identical scarf/collar drape, identical trouser cut/pockets, and identical bag strap direction without morphing any garment between Top Row and Bottom Row!'
     );
   }
   if (hasEquippedUmbrella || effectiveWeather === 'rain') {
@@ -2381,23 +2475,89 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
     );
   }
 
-  if (!hasAnyTop && !hasOnepiece) {
+  if (isUnderwearLookbookMode) {
+    const isFemaleModel = profile.gender === 'female';
+    const hasUpperCoverage = hasUnderwearTop || isFullUnderwearSet;
+    const hasLowerCoverage = hasUnderwearBottom;
+    const safeCatalogTone = profile.safeCatalogRetry
+      ? 'STRICT MODEST LUXURY SWIMWEAR / ATHLEISURE-INTIMATES E-COMMERCE MANNEQUIN-GRADE STUDIO CATALOG FIT-CHECK (SKIMS / Calvin Klein / Zara Home editorial standard — 100% tasteful, clinical studio fit lighting, zero provocative posing, completely non-explicit).'
+      : 'HIGH-FASHION INTIMATES / LINGERIE EDITORIAL STUDIO LOOKBOOK (SKIMS / Calvin Klein / luxury department-store e-commerce fit catalog — strictly tasteful, non-explicit, neutral standing catalog pose, clean soft studio lighting).';
+
     layeringRules.push(
-      '- Since no top or onepiece is equipped, include a minimal neutral ecru (#EFECE6) crew-neck studio inner tee.'
+      `- ${safeCatalogTone} Showcase the equipped intimates/underwear piece(s) directly as the complete standalone studio lookbook outfit — DO NOT cover them with an outer T-shirt, blouse, dress, or trousers.`
     );
+
+    if (isFemaleModel) {
+      if (!hasUpperCoverage) {
+        const uwHex = String(resolvedSlots.underwear?.colorHex || '#1B1B1E');
+        layeringRules.push(
+          `- Because only lower intimates are equipped without an upper piece, pair with a clean minimal matte seamless studio bandeau bralette (${uwHex}) for tasteful, modest upper-torso coverage while showcasing the equipped lower piece cleanly as the hero item.`
+        );
+      }
+      if (!hasLowerCoverage) {
+        const uwTopHex = String(resolvedSlots.underwear_top?.colorHex || '#D8BDA8');
+        layeringRules.push(
+          `- Because only an upper innerwear/nubra piece is equipped without a lower piece, pair with clean minimal matte seamless studio high-cut briefs (${uwTopHex}) for tasteful, modest lower-body coverage while showcasing the equipped upper piece cleanly as the hero item.`
+        );
+      }
+    } else {
+      if (!hasLowerCoverage) {
+        layeringRules.push(
+          '- Because only an upper inner top is equipped without a lower piece, pair with clean minimal charcoal (#2B2B2E) fitted cotton boxer briefs.'
+        );
+      } else if (!hasUpperCoverage) {
+        layeringRules.push(
+          profile.safeCatalogRetry
+            ? '- Pair the equipped menswear boxer/trunk with a clean minimal fitted off-white (#F2F1EC) sleeveless ribbed studio tank top for a tasteful menswear underwear catalog lookbook.'
+            : '- Style the equipped menswear underwear as a clean Calvin Klein / luxury department-store menswear intimates studio catalog lookbook (paired cleanly with a minimal fitted neutral sleeveless ribbed inner tank or classic tasteful editorial studio presentation, strictly non-explicit).'
+        );
+      }
+    }
+
+    if (!hasShoes) {
+      layeringRules.push(
+        '- Since no shoes are equipped for this intimates lookbook, complete the full-body stance cleanly barefoot or in minimal neutral off-white (#EAE7E1) studio slides (do NOT add heavy outdoor sneakers).'
+      );
+    }
+  } else {
+    if (!hasAnyTop && !hasOnepiece) {
+      layeringRules.push(
+        isSaggingActive
+          ? '- Since no top or onepiece is equipped while sagging fit is active, include a minimal neutral ecru (#EFECE6) boxy waist-length studio tee with a completely FLAT STRAIGHT ungathered bottom hem ending cleanly at the natural waist right ABOVE the exposed underwear waistband.'
+          : '- Since no top or onepiece is equipped, include a minimal neutral ecru (#EFECE6) crew-neck studio inner tee.'
+      );
+    }
+    if (!hasBottom && !hasOnepiece) {
+      layeringRules.push(
+        '- Since no bottom or onepiece is equipped, pair with clean neutral stone-taupe (#D8D3C8) straight tailored studio trousers.'
+      );
+    }
+    if (!hasShoes) {
+      layeringRules.push(
+        isSwimwearOnepiece && !hasBottom && !hasOuter
+          ? '- Since standalone resort swimwear is equipped without shoes, complete the stance with minimal neutral resort slides (#EAE7E1).'
+          : '- Since no shoes are equipped, complete the full-body stance with minimal off-white (#EAE7E1) low-profile studio court sneakers.'
+      );
+    }
   }
-  if (!hasBottom && !hasOnepiece) {
-    layeringRules.push(
-      '- Since no bottom or onepiece is equipped, pair with clean neutral stone-taupe (#D8D3C8) straight tailored studio trousers.'
-    );
+  if (precheckSaggingDirective) {
+    layeringRules.push(`- ${precheckSaggingDirective}`);
   }
-  if (!hasShoes) {
-    layeringRules.push(
-      isSwimwearOnepiece && !hasBottom && !hasOuter
-        ? '- Since standalone resort swimwear is equipped without shoes, complete the stance with minimal neutral resort slides (#EAE7E1).'
-        : '- Since no shoes are equipped, complete the full-body stance with minimal off-white (#EAE7E1) low-profile studio court sneakers.'
-    );
+
+  const outerForUnderwearCheck =
+    resolvedSlots.onepiece || resolvedSlots.dress || resolvedSlots.bottom || resolvedSlots.top || null;
+  const underwearForOuterCheck = resolvedSlots.underwear || resolvedSlots.underwear_top || null;
+  if (underwearForOuterCheck && outerForUnderwearCheck && !isUnderwearLookbookMode) {
+    const underwearInteraction = evaluateUnderwearOuterInteraction({
+      underwear: underwearForOuterCheck,
+      outerGarment: outerForUnderwearCheck,
+      gender: profile.gender,
+    });
+    if (underwearInteraction?.vtonDirective) {
+      layeringRules.push(`- ${underwearInteraction.vtonDirective}`);
+    }
   }
+
   parts.push({ text: layeringRules.join('\n') });
 
   if (hasEquippedBag) {
@@ -2417,10 +2577,23 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
   }
   for (const slot of equippedKeys) {
     const item = resolvedSlots[slot];
-    const placementCue =
+    let placementCue =
       item.isBag || slot === 'accessory'
         ? bagAnatomy.slotPrompt
         : ANATOMICAL_SLOT_PLACEMENT_DIRECTIVES[slot] || '';
+    if (isSaggingActive) {
+      if (slot === 'underwear') {
+        placementCue = `HERO EXPOSED SAGGING LAYER (DO NOT HIDE — LOW-HIP PLACEMENT): Worn LOW ON THE HIP BONES at WRIST-BONE height (5–7cm below the navel — NEVER hiked high onto the stomach!) so BOTH the full contrast elastic waistband (keeping any BRIGHT CRISP WHITE waistband & dark graphic chevron/stripe lines from the photo 100% pure white — NEVER greyed or darkened!) AND a tall 10cm–14cm vertical section of the main underwear knit/plaid body extend cleanly from WRIST height down to KNUCKLE height all the way around (0° front, 45°/315° quarter, 90°/270° side, AND 180° back) directly ABOVE the deeply low-slung sagging pants waistband.`;
+      } else if (slot === 'bottom') {
+        placementCue = `DEEP HIP-HOP SAGGING PANTS FIT OVERRIDE (TRANSFORM INTO EXTREME LOW-SLUNG BAGGY DROP-CROTCH): Pull these exact pants DRASTICALLY LOW down off the hips to KNUCKLE / UPPER-THIGH HEIGHT — pant waistband, drawstring, and top pockets sit across the LOWER PELVIS / TOP OF THIGHS in front and across the LOWER BUTTOCKS in back (leaving 10cm–14cm of exposed underwear cleanly above the pant waist!). Force an unmistakable EXTREME DROP-CROTCH hanging visibly BELOW THE FINGERTIPS near MID-THIGH, conspicuously low-sitting rear pockets near the upper hamstrings in rear views, WIDE OVERSIZED SLOUCHY BAGGY LEGS (do NOT render slim/tight legs even if the flat-lay photo looks straight!), and HEAVY STACKED / POOLED FABRIC FOLDS resting over the boots/sneakers.`;
+      } else if (slot === 'top') {
+        placementCue = `FLAT STRAIGHT-HEM STREETWEAR DRAPE (NORMAL RELAXED LENGTH — ZERO CROP-TOP, ZERO ROLL-UP, ZERO BUNCHING): Keep this top at FULL NORMAL RELAXED STREETWEAR LENGTH covering the entire stomach/navel, ending cleanly at HIP-BONE / WRIST-BONE height right at the top edge of the low-slung underwear waistband with a 100% FLAT, STRAIGHT, LOOSE, CRISP, UNGATHERED horizontal bottom hem — NEVER crop it short up at the ribs/elbows, NEVER roll, tuck, scrunch, or curve the bottom edge inward! Keep the tall low-hip exposed underwear and deeply dropped baggy pants below 100% unobstructed across all views.`;
+      } else if (slot === 'top_mid' || slot === 'outer_mid' || slot === 'outer') {
+        placementCue = `${placementCue} Keep front cleanly unbuttoned/open with flat straight ungathered vertical hems (NEVER bunched/cinched) so the low-hip exposed sagging underwear and deeply low-slung baggy pants remain clearly legible.`;
+      } else if (slot === 'acc_belt') {
+        placementCue = `threaded through the DEEPLY LOW-SLUNG sagged pants waistband down at knuckle / upper-thigh height (well below the exposed underwear — NEVER at the natural waist)`;
+      }
+    }
     const mirrorNote = item.bagAssetMirrored
       ? ' Horizontally mirror this bag onto the wearer\'s anatomical RIGHT shoulder/hand.'
       : '';
@@ -2429,15 +2602,17 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
         ? ` NOTE FOR ${canonicalBagAngle}° SIDE PROFILE: This bag hangs on the wearer's FAR ${bagAnatomy.carrySide.toUpperCase()} side behind the body — keep the foreground ${bagAnatomy.freeSide.toUpperCase()} shoulder/arm completely empty and unobstructed.`
         : '';
     const detailCues = [];
-    if (item.fit) detailCues.push(`${item.fit} fit`);
+    if (item.fit && !(isSaggingActive && slot === 'bottom')) detailCues.push(`${item.fit} fit`);
     if (item.textureFeel) detailCues.push(`${item.textureFeel} drape/handfeel`);
     const det = item.garmentDetails || {};
     if (det.waist_type === 'elastic') detailCues.push('full elastic waistband');
     else if (det.waist_type === 'semi_elastic') detailCues.push('clean front with back-elastic waistband');
     else if (det.waist_type === 'drawstring') detailCues.push('drawstring waist');
     if (det.belt_compatible === false) detailCues.push('NO belt loops, do NOT render a belt');
-    if (det.rise) detailCues.push(`${det.rise} rise`);
-    if (det.length_profile) detailCues.push(`${det.length_profile} hem length`);
+    if (det.rise && !(isSaggingActive && slot === 'bottom')) detailCues.push(`${det.rise} rise`);
+    if (det.length_profile && !(isSaggingActive && (slot === 'bottom' || slot === 'top'))) {
+      detailCues.push(`${det.length_profile} hem length`);
+    }
     if (det.back_detail) detailCues.push(`back detail: ${det.back_detail}`);
     if (item.fitNote) detailCues.push(`personal wearing fit note: ${item.fitNote}`);
     const extraFitDirective = detailCues.length > 0 ? ` Construction & Fit: ${detailCues.join(', ')}.` : '';
@@ -2445,8 +2620,34 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
     const garmentDesc = `${item.colorName} ${item.fabric} ${item.subcategory || item.category}`.trim();
     const specLine = `Garment reference (${item.category || slot}): ${garmentDesc}.${extraFitDirective}${placementCue ? ` Placement: ${placementCue}${mirrorNote}${farOccludedNote}` : ''}`;
     if (item.packshot) {
+      let packshotDirective;
+      if (isSaggingActive && slot === 'bottom') {
+        packshotDirective = `${specLine} Reproduce the exact ${item.fabric} texture, ${item.colorName} color, cargo pockets, zippers, and hanging drawstrings from the reference photo immediately below, while DRAMATICALLY TRANSFORMING its wearing cut into the EXTREME LOW-SLUNG OVERSIZED BAGGY DROP-CROTCH SAGGING SILHOUETTE specified above (${viewScopeText}). Do NOT render any text or labels in the output image:`;
+      } else if (slot === 'underwear_top') {
+        const uwTopProfile = classifyUnderwearProfile(item);
+        packshotDirective = uwTopProfile?.isNubra
+          ? `${specLine} Reproduce the exact strapless backless adhesive silicone nubra design, matte ${item.colorName} (${item.colorHex || ''}) smooth contoured cups, and translucent center clasp from the reference photo immediately below (${viewScopeText}) — ZERO shoulder straps and ZERO back band, styled cleanly as a tasteful luxury intimates editorial catalog fit. Do NOT render any text or labels in the output image:`
+          : `${specLine} Reproduce the exact ${item.fabric} texture, neckline, straps, and ${item.colorName} (${item.colorHex || ''}) color of this innerwear top from the reference photo immediately below (${viewScopeText}) in a clean tasteful editorial catalog fit. Do NOT render any text or labels in the output image:`;
+      } else if (slot === 'underwear') {
+        const uwProfile = classifyUnderwearProfile(item);
+        if (isSaggingActive) {
+          packshotDirective = `${specLine} Faithfully copy the EXACT TWO-TONE visual design from the reference photo immediately below (${viewScopeText}): preserve any BRIGHT CRISP WHITE contrast elastic waistband and its dark graphic stripes/chevrons at full bright contrast (NEVER dye a white waistband grey or black!), AND render the main boxer fabric body in its exact ${item.colorName} (${item.colorHex || ''}) color/plaid pattern. Do NOT render extraneous UI captions or watermarks:`;
+        } else if (uwProfile?.isThong) {
+          packshotDirective = `${specLine} Faithfully reproduce the exact sleek laser-cut seamless T-string / thong silhouette, smooth matte ${item.fabric} texture, and ${item.colorName} (${item.colorHex || ''}) color from the reference photo immediately below (${viewScopeText}) in a tasteful, non-explicit luxury e-commerce intimates studio catalog fit. Do NOT render any text or labels in the output image:`;
+        } else if (isFullUnderwearSet) {
+          packshotDirective = `${specLine} Faithfully reproduce BOTH pieces of this coordinated intimates set (matching bralette/top + matching brief) with its exact ${item.fabric} texture, trim details, and ${item.colorName} (${item.colorHex || ''}) color from the reference photo immediately below (${viewScopeText}) in a tasteful luxury department-store lookbook fit. Do NOT render any text or labels in the output image:`;
+        } else if (uwProfile?.isDesignerWaistband) {
+          packshotDirective = `${specLine} Faithfully copy the exact waistband detail, cut, and ${item.colorName} (${item.colorHex || ''}) ${item.fabric} body/pattern from the reference photo immediately below (${viewScopeText}) in a clean menswear studio catalog fit. Do NOT render any text or labels in the output image:`;
+        } else {
+          packshotDirective = `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} (${item.colorHex || ''}) color from the reference image immediately below (${viewScopeText}) in a clean tasteful editorial intimates studio fit. Do NOT render any text or labels in the output image:`;
+        }
+      } else if (isSaggingActive && slot === 'top') {
+        packshotDirective = `${specLine} Reproduce the exact ${item.fabric} texture, ${item.colorName} color, crewneck collar, and relaxed streetwear sleeves from the reference photo immediately below (${viewScopeText}), draping it as a FULL-LENGTH loose boxy streetwear top ending cleanly with a dead-flat straight horizontal hem at hip-bone/wrist height (NEVER cropped at ribs, NEVER bunched/tucked). Do NOT render any text or labels in the output image:`;
+      } else {
+        packshotDirective = `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} color from the reference image immediately below (${viewScopeText}). Do NOT render any text or labels in the output image:`;
+      }
       parts.push({
-        text: `${specLine} Reproduce the exact silhouette, ${item.fabric} texture, and ${item.colorName} color from the reference image immediately below (${viewScopeText}). Do NOT render any text or labels in the output image:`,
+        text: packshotDirective,
       });
       parts.push({
         inlineData: {
@@ -2456,14 +2657,14 @@ THIS ATTACHED IMAGE IS THE ALREADY-VERIFIED ${secLabel} VIEW OF THIS EXACT SAME 
       });
     } else {
       parts.push({
-        text: `${specLine} Render with authentic ${item.fabric} texture and ${item.colorName} color (${viewScopeText}).`,
+        text: `${specLine} Render with authentic ${item.fabric} texture and ${item.colorName} (${item.colorHex || ''}) color (${viewScopeText}).`,
       });
     }
   }
 
   if (profile.qcCorrectionHint) {
     parts.push({
-      text: `Correction directive for this retry: ${profile.qcCorrectionHint}`,
+      text: `[MANDATORY CORRECTION DIRECTIVE — FIX DEFECT FROM PREVIOUS GENERATION]: ${profile.qcCorrectionHint}`,
     });
   }
 
@@ -3220,6 +3421,7 @@ export async function synthesizeVtonLook(params = {}) {
         params.secondaryAnchorDataUrl ?? rawProfile?.secondaryAnchorDataUrl ?? null,
       secondaryAnchorAngleDeg:
         params.secondaryAnchorAngleDeg ?? rawProfile?.secondaryAnchorAngleDeg ?? null,
+      saggingFit: Boolean(params.saggingFit ?? rawProfile?.saggingFit ?? false),
       qcCorrectionHint: params.qcCorrectionHint ?? null,
     }
   );
@@ -3293,6 +3495,10 @@ export async function synthesizeVtonLook(params = {}) {
     fallbackReason,
     equippedSlots,
   });
+
+  if (isBaseOnlyLook && !includeBaseModel) {
+    return buildFallbackResult('empty_outfit');
+  }
 
   // 1. Server Cache Lookup
   if (!forceRefresh) {
@@ -3489,7 +3695,12 @@ export async function synthesizeVtonLook(params = {}) {
         normalizedProfile.turnaroundSheet &&
         !isFatalCredentialReason(comboRes?.reason)
       ) {
-        const singleProfile = { ...normalizedProfile, turnaroundSheet: false };
+        const isSafetyBlock = /safety|prohibited|empty_image/i.test(String(comboRes?.reason || ''));
+        const singleProfile = {
+          ...normalizedProfile,
+          turnaroundSheet: false,
+          safeCatalogRetry: isSafetyBlock,
+        };
         const singleHashes = computeVtonHashes(singleProfile, resolvedSlots);
         const singleKey = `combo-${singleHashes.comboHash}`;
         const cachedSingle = !forceRefresh ? getCacheEntry(singleKey) : null;
@@ -3515,6 +3726,36 @@ export async function synthesizeVtonLook(params = {}) {
             finalLayout = 'single';
             finalComboCacheKey = singleKey;
           }
+        }
+      }
+
+      // Auto-recover single-angle intimates/lingerie lookbook if Gemini image safety tripped on first pass
+      const isUnderwearOnlyResolved =
+        Boolean(resolvedSlots.underwear || resolvedSlots.underwear_top) &&
+        !resolvedSlots.outer &&
+        !resolvedSlots.outer_mid &&
+        !resolvedSlots.top &&
+        !resolvedSlots.top_mid &&
+        !resolvedSlots.bottom &&
+        !resolvedSlots.onepiece &&
+        !resolvedSlots.dress;
+      if (
+        (!comboRes || !comboRes.ok || !comboRes.dataUrl) &&
+        isUnderwearOnlyResolved &&
+        !normalizedProfile.turnaroundSheet &&
+        !isFatalCredentialReason(comboRes?.reason) &&
+        /safety|prohibited|empty_image/i.test(String(comboRes?.reason || ''))
+      ) {
+        const safeRetryProfile = { ...normalizedProfile, safeCatalogRetry: true };
+        const safeRetryRes = await generateWithGeminiModelChain(
+          buildCompositeLookParts(safeRetryProfile, resolvedSlots),
+          apiKey,
+          modelChain,
+          vertexCfg,
+          { turnaroundSheet: false }
+        );
+        if (safeRetryRes?.ok && safeRetryRes.dataUrl) {
+          comboRes = safeRetryRes;
         }
       }
 

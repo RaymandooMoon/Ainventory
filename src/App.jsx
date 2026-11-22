@@ -19,6 +19,7 @@ import {
   getStoredSkinProfile,
   saveStoredSkinProfile,
 } from './services/skinToneAnalyzer.ts';
+import { loadMemorizedFaceIdentity } from './services/faceMemoryStore.ts';
 import {
   apiFetch,
   getStoredToken,
@@ -141,6 +142,13 @@ export default function App() {
   const [resolvedTheme, setResolvedTheme] = useState(() =>
     applyThemePreference(getStoredThemePreference())
   );
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const onQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
+  }, []);
 
   useEffect(() => {
     syncDocumentLang(lang);
@@ -199,7 +207,50 @@ export default function App() {
         setRefreshKey((k) => k + 1);
       }
     });
+
+    // Hydrate memorized face identity from IndexedDB so refreshing the page restores my face seamlessly
+    let memoryCancelled = false;
+    loadMemorizedFaceIdentity()
+      .then((memory) => {
+        if (memoryCancelled || !memory?.singleFacePortraitDataUrl) return;
+        const currentSkin = getStoredSkinProfile();
+        if (currentSkin.portraitDataUrl === memory.singleFacePortraitDataUrl) return;
+        const snap = memory.analysisSnapshot;
+        const hydratedSkin = saveStoredSkinProfile({
+          ...currentSkin,
+          ...(snap
+            ? {
+                skinToneHex: snap.skinToneHex || currentSkin.skinToneHex,
+                personalColor: snap.personalColor || currentSkin.personalColor,
+                personalColorLabelKo:
+                  snap.personalColorLabelKo || currentSkin.personalColorLabelKo,
+                subTypeLabelKo: snap.subTypeLabelKo || currentSkin.subTypeLabelKo,
+                mstLevel: snap.mstLevel ?? currentSkin.mstLevel,
+                mstUndertone: snap.mstUndertone ?? currentSkin.mstUndertone,
+                mstCode: snap.mstCode ?? currentSkin.mstCode,
+              }
+            : {}),
+          portraitDataUrl: memory.singleFacePortraitDataUrl,
+        });
+        setSkinProfile(hydratedSkin);
+        patchAvatarSpec({
+          appearance: {
+            ...(snap
+              ? {
+                  skinToneHex: hydratedSkin.skinToneHex,
+                  personalColor: hydratedSkin.personalColor,
+                  mstLevel: hydratedSkin.mstLevel,
+                  mstUndertone: hydratedSkin.mstUndertone,
+                }
+              : {}),
+            facePhotoUrl: memory.singleFacePortraitDataUrl,
+          },
+        });
+      })
+      .catch(() => {});
+
     return () => {
+      memoryCancelled = true;
       unsubTheme();
       unsubSync();
     };
@@ -334,29 +385,34 @@ export default function App() {
 
   const handleApplySkinProfile = useCallback(
     async (nextProfile, options = {}) => {
-      const lockedGender =
-        user && !user.isSampleDemo
+      const explicitGender =
+        nextProfile?.gender === 'female' || nextProfile?.gender === 'male'
+          ? nextProfile.gender
+          : null;
+      const resolvedGender =
+        explicitGender ??
+        (user && !user.isSampleDemo
           ? user.gender === 'female'
             ? 'female'
             : 'male'
           : (bodySpec?.gender || skinProfile?.gender) === 'female'
             ? 'female'
-            : 'male';
+            : 'male');
 
       const saved = saveStoredSkinProfile({
         ...nextProfile,
-        gender: lockedGender,
+        gender: resolvedGender,
       });
       setSkinProfile(saved);
 
       setBodySpec((prev) => {
-        if (prev.gender === lockedGender) return prev;
-        const def = getDefaultBodySpec(lockedGender);
+        if (prev.gender === resolvedGender) return prev;
+        const def = getDefaultBodySpec(resolvedGender);
         return saveStoredBodySpec({
           ...prev,
-          gender: lockedGender,
-          heightCm: def.heightCm,
-          weightKg: def.weightKg,
+          gender: resolvedGender,
+          heightCm: prev.heightCm || def.heightCm,
+          weightKg: prev.weightKg || def.weightKg,
         });
       });
 
@@ -367,7 +423,7 @@ export default function App() {
               skinToneHex: saved.skinToneHex,
               personalColor: saved.personalColor,
               personalColorLabelKo: saved.personalColorLabelKo,
-              gender: lockedGender,
+              gender: resolvedGender,
             }
           : prev
       );
@@ -379,7 +435,7 @@ export default function App() {
             body: JSON.stringify({
               personal_color: saved.personalColor,
               skin_tone_hex: saved.skinToneHex,
-              gender: lockedGender,
+              gender: resolvedGender,
               handedness: getAvatarSpecSnapshot().spec.dominantHand,
             }),
           });
@@ -395,34 +451,39 @@ export default function App() {
 
   const handleUpdateBodySpec = useCallback(
     async (nextSpec, options = {}) => {
-      const lockedGender =
-        user && !user.isSampleDemo
+      const explicitGender =
+        nextSpec?.gender === 'female' || nextSpec?.gender === 'male'
+          ? nextSpec.gender
+          : null;
+      const resolvedGender =
+        explicitGender ??
+        (user && !user.isSampleDemo
           ? user.gender === 'female'
             ? 'female'
             : 'male'
           : (bodySpec?.gender || skinProfile?.gender) === 'female'
             ? 'female'
-            : 'male';
+            : 'male');
 
       const savedBody = saveStoredBodySpec(
         {
           ...nextSpec,
-          gender: lockedGender,
+          gender: resolvedGender,
         },
         { throwOnError: Boolean(options?.throwOnError) }
       );
       setBodySpec(savedBody);
 
       setSkinProfile((prev) => {
-        if (prev?.gender === lockedGender) return prev;
-        return saveStoredSkinProfile({ ...prev, gender: lockedGender });
+        if (prev?.gender === resolvedGender) return prev;
+        return saveStoredSkinProfile({ ...prev, gender: resolvedGender });
       });
 
       setUser((prev) =>
         prev
           ? {
               ...prev,
-              gender: lockedGender,
+              gender: resolvedGender,
               heightCm: savedBody.heightCm,
               weightKg: savedBody.weightKg,
               bodyShape: savedBody.bodyShape,
@@ -435,7 +496,7 @@ export default function App() {
           await apiFetch('/auth/profile', {
             method: 'POST',
             body: JSON.stringify({
-              gender: lockedGender,
+              gender: resolvedGender,
               height_cm: savedBody.heightCm,
               weight_kg: savedBody.weightKg,
               body_shape: savedBody.bodyShape,
@@ -897,6 +958,22 @@ export default function App() {
 
       {shouldRenderAppShell && (
         <div ref={appShellRef} className={`hig-native-shell ${portalShellClass}`.trim()}>
+          {gmpQuotaExceeded && (
+            <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+              <span>
+                Google Maps Platform quota reached. If you are the app owner, visit{' '}
+                <a
+                  href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-semibold text-amber-950 hover:text-amber-800"
+                >
+                  maps developer site
+                </a>{' '}
+                for instructions to update your account.
+              </span>
+            </div>
+          )}
           <StatusCapsule />
 
       <main className="hig-native-viewport">

@@ -182,6 +182,8 @@ export interface AiVtonSynthesisRequest extends GenderNeutralProfileInput {
   mode?: unknown;
   forceRefresh?: boolean;
   masterAnchorDataUrl?: string | null;
+  saggingFit?: boolean;
+  correctionHint?: string | null;
   skipVisionQc?: boolean;
   signal?: AbortSignal;
 }
@@ -310,6 +312,8 @@ const ORDERED_OUTFIT_SLOTS = [
   'top',
   'onepiece',
   'dress',
+  'underwear_top',
+  'underwear',
   'acc_belt',
   'bottom',
   'acc_wrist_left',
@@ -1094,7 +1098,8 @@ export function normalizeGenderNeutralProfile(
 export function computeOutfitComboId(
   // oxlint-disable-next-line typescript/no-explicit-any
   slots?: Record<string, any> | null,
-  handedness?: unknown
+  handedness?: unknown,
+  options?: { saggingFit?: boolean } | null
 ): {
   outfitComboId: string;
   equippedSlotKeys: string[];
@@ -1135,13 +1140,23 @@ export function computeOutfitComboId(
     })
   );
 
+  const hasOuterGarmentLayer = equippedGarments.some(({ slotKey }) =>
+    ['outer', 'outer_mid', 'top', 'top_mid', 'bottom', 'onepiece', 'dress'].includes(slotKey)
+  );
+  const hasUnderwearLayer = equippedGarments.some(
+    ({ slotKey }) => slotKey === 'underwear' || slotKey === 'underwear_top'
+  );
+  const isUnderwearLookbook = hasUnderwearLayer && !hasOuterGarmentLayer;
+
   const baseSig = equippedGarments
     .map(({ slotKey, garment }) => {
       const resolvedUrl = resolveGarmentCanonicalImageUrl(garment);
       return `${slotKey}:${garment.id ?? ''}:${garment.subcategory ?? ''}:${garment.color_hex ?? ''}:${resolvedUrl}`;
     })
     .join('|');
-  const rawSig = hasBag && normalizedHand === 'left' ? `${baseSig}|hand:left` : baseSig;
+  const handSig = hasBag && normalizedHand === 'left' ? `${baseSig}|hand:left` : baseSig;
+  const sagSig = options?.saggingFit ? `${handSig}|sag:3` : handSig;
+  const rawSig = isUnderwearLookbook ? `${sagSig}|uwlb:2` : sagSig;
 
   return {
     outfitComboId: `outfit_${fnvHashHex(rawSig)}`,
@@ -4920,9 +4935,28 @@ export async function sliceTurnaround2x2Sheet(
 
         normalizeTurnaroundCanvasesToFloorBaseline(cutCanvases);
 
+        // Prefer fast lossy-high-quality WebP with alpha (5-8x faster than synchronous PNG encode, ~70% smaller IndexedDB payload)
+        let alphaDataUrlMime: 'image/webp' | 'image/png' = 'image/png';
+        try {
+          const probe = document.createElement('canvas');
+          probe.width = 2;
+          probe.height = 2;
+          if (probe.toDataURL('image/webp', 0.92).startsWith('data:image/webp')) {
+            alphaDataUrlMime = 'image/webp';
+          }
+          probe.width = 0;
+          probe.height = 0;
+        } catch {
+          alphaDataUrlMime = 'image/png';
+        }
+        const encodeAlphaCanvas = (canvas: HTMLCanvasElement): string =>
+          alphaDataUrlMime === 'image/webp'
+            ? canvas.toDataURL('image/webp', 0.92)
+            : canvas.toDataURL('image/png');
+
         // If slicing a 4-panel 2x2 sheet (e.g. square fallback), synthesize distinct left-facing 225° from 90°!
         if (!cutCanvases[135] && cutCanvases[90]) {
-          out[135] = cutCanvases[90].toDataURL('image/png');
+          out[135] = encodeAlphaCanvas(cutCanvases[90]);
         }
         if (!cutCanvases[225] && cutCanvases[90]) {
           mirror225 = document.createElement('canvas');
@@ -4933,7 +4967,7 @@ export async function sliceTurnaround2x2Sheet(
             mCtx.translate(mirror225.width, 0);
             mCtx.scale(-1, 1);
             mCtx.drawImage(cutCanvases[90], 0, 0);
-            out[225] = mirror225.toDataURL('image/png');
+            out[225] = encodeAlphaCanvas(mirror225);
           }
           mirror225.width = 0;
           mirror225.height = 0;
@@ -4943,7 +4977,7 @@ export async function sliceTurnaround2x2Sheet(
         for (const angle of TURNAROUND_ANGLES) {
           const c = cutCanvases[angle];
           if (c) {
-            out[angle] = c.toDataURL('image/png');
+            out[angle] = encodeAlphaCanvas(c);
           }
         }
         if (!out[135]) {
@@ -5514,7 +5548,6 @@ async function buildMultimodalSlotsPayload(
   await Promise.all(
     equippedGarments.map(async ({ slotKey, garment }) => {
       const canonicalUrl = resolveGarmentCanonicalImageUrl(garment);
-      const rawInlineDataUrl = await encodeImageUrlToInlineDataUrl(canonicalUrl);
       const isBag = isBagGarmentItem({
         slot: slotKey,
         category: garment.category,
@@ -5525,6 +5558,13 @@ async function buildMultimodalSlotsPayload(
       const shouldMirrorBagAsset = Boolean(
         isBag && handedness === 'left' && bagCarrySpec?.bag_carry_style !== 'backpack'
       );
+      // Fast-path: `/seed/*` packshots already live on the Express server's local disk & RAM LRU cache.
+      // Skip redundant client HTTP fetch + canvas re-encoding + multi-MB JSON upload unless mirroring a left-handed bag.
+      const canUseServerLocalSeed =
+        !shouldMirrorBagAsset && canonicalUrl.startsWith('/seed/');
+      const rawInlineDataUrl = canUseServerLocalSeed
+        ? null
+        : await encodeImageUrlToInlineDataUrl(canonicalUrl);
       const inlineDataUrl =
         shouldMirrorBagAsset && rawInlineDataUrl
           ? await mirrorImageDataUrlHorizontally(rawInlineDataUrl, 'image/jpeg')
@@ -6202,7 +6242,8 @@ export async function synthesizeGeminiMultiAngleVton(
 
   const { outfitComboId, equippedSlotKeys, equippedGarments } = computeOutfitComboId(
     request.slots,
-    profile.dominantHand
+    profile.dominantHand,
+    { saggingFit: Boolean(request.saggingFit) }
   );
   const hasEquippedBag = equippedGarments.some(({ slotKey, garment }) =>
     isBagGarmentItem({
@@ -6508,6 +6549,7 @@ export async function synthesizeGeminiMultiAngleVton(
                   ? { turnaroundLayout: request.turnaroundLayout || 'turnaround_4x2' }
                   : {}),
                 weather: serializedWeatherPayload,
+                saggingFit: Boolean(request.saggingFit),
                 profileKey: serverProfileConfig.profileKey,
                 handedness: effectiveProfile.dominantHand,
                 avatarSpec: effectiveProfile.avatarSpec,
@@ -6738,6 +6780,7 @@ export async function synthesizeGeminiMultiAngleVton(
                       viewAngleDeg: repairAngle,
                       turnaroundSheet: false,
                       weather: serializedWeatherPayload,
+                      saggingFit: Boolean(request.saggingFit),
                       profileKey: serverProfileConfig.profileKey,
                       handedness: effectiveProfile.dominantHand,
                       avatarSpec: effectiveProfile.avatarSpec,
@@ -7026,6 +7069,7 @@ export async function synthesizeGeminiMultiAngleVton(
                   viewAngleDeg: 0,
                   turnaroundSheet: false,
                   weather: serializedWeatherPayload,
+                  saggingFit: Boolean(request.saggingFit),
                   profileKey: serverProfileConfig.profileKey,
                   handedness: effectiveProfile.dominantHand,
                   avatarSpec: effectiveProfile.avatarSpec,
@@ -7347,7 +7391,8 @@ export async function synthesizeProgressiveMultiAngleVton(
   const effectiveWeather = resolveEffectiveWeatherFromRaw(request.weather);
   const { outfitComboId, equippedSlotKeys, equippedGarments } = computeOutfitComboId(
     request.slots,
-    profile.dominantHand
+    profile.dominantHand,
+    { saggingFit: Boolean(request.saggingFit) }
   );
   const hasEquippedBag = equippedGarments.some(({ slotKey, garment }) =>
     isBagGarmentItem({
@@ -7563,6 +7608,7 @@ export async function synthesizeProgressiveMultiAngleVton(
           turnaroundSheet: false,
           ...(singleOpts?.skipVisionQc ? { skipVisionQc: true } : {}),
           weather: serializedWeatherPayload,
+          saggingFit: Boolean(request.saggingFit),
           profileKey: serverProfileConfig.profileKey,
           handedness: activeAngleHandedness,
           avatarSpec: effectiveProfile.avatarSpec,
@@ -7697,6 +7743,8 @@ export async function synthesizeProgressiveMultiAngleVton(
           turnaroundLayout: targetSheetLayout,
           skipVisionQc: true,
           weather: serializedWeatherPayload,
+          saggingFit: Boolean(request.saggingFit),
+          ...(request.correctionHint ? { correctionHint: String(request.correctionHint).trim().slice(0, 360) } : {}),
           profileKey: serverProfileConfig.profileKey,
           handedness: effectiveProfile.dominantHand,
           avatarSpec: effectiveProfile.avatarSpec,
@@ -8164,4 +8212,222 @@ export async function synthesizeProgressiveMultiAngleVton(
     createdAt: Date.now(),
   };
 }
+
+/**
+ * Fast (~5-8s) single-angle repair anchored to the verified 0° Front Master Anchor.
+ * Replaces ONLY `targetAngle` in memory + IndexedDB cache without regenerating the other 7 angles.
+ */
+export async function repairSingleVtonAngle(
+  request: AiVtonSynthesisRequest,
+  targetAngle: TurnaroundAngleDeg,
+  frontMasterDataUrl: string | null,
+  correctionHint = ''
+): Promise<{
+  ok: boolean;
+  angleDeg: TurnaroundAngleDeg;
+  imageUrl: string | null;
+  model: string | null;
+  reason: string | null;
+}> {
+  const mode = normalizeViewerMode(request.legacyMode ?? request.mode);
+  const serverProfileConfig = await fetchServerProfileConfig(
+    normalizeHandedness(
+      request.handedness ??
+        request.dominantHand ??
+        request.avatarSpec?.dominantHand ??
+        request.profile?.dominantHand ??
+        getCachedServerHandedness()
+    )
+  );
+  const profile = normalizeGenderNeutralProfile({
+    ...request,
+    ...(serverProfileConfig.hasStoredRecord
+      ? { handedness: serverProfileConfig.handedness }
+      : {}),
+  });
+  const styleMode = normalizeVtonStyleMode(request.styleMode);
+  const weatherMood = normalizeWeatherMoodKey(request.weather);
+  const effectiveWeather = resolveEffectiveWeatherFromRaw(request.weather);
+  const serializedWeatherPayload =
+    request.weather && typeof request.weather === 'object'
+      ? {
+          ...request.weather,
+          effectiveWeather: request.weather.effectiveWeather ?? effectiveWeather,
+          mood: request.weather.mood ?? weatherMood,
+        }
+      : { effectiveWeather, mood: weatherMood };
+
+  const { outfitComboId, equippedGarments } = computeOutfitComboId(
+    request.slots,
+    profile.dominantHand,
+    { saggingFit: Boolean(request.saggingFit) }
+  );
+  if (equippedGarments.length === 0) {
+    return { ok: false, angleDeg: targetAngle, imageUrl: null, model: null, reason: 'empty_outfit' };
+  }
+
+  const garmentLabels = equippedGarments
+    .map(({ garment }) => String(garment.name || '').trim())
+    .filter(Boolean);
+  const slotGarmentIds: Record<string, number | string> = {};
+  for (const { slotKey, garment } of equippedGarments) {
+    if (garment?.id !== undefined && garment?.id !== null) {
+      slotGarmentIds[slotKey] = garment.id;
+    }
+  }
+  const outfitLabel =
+    garmentLabels.length > 2
+      ? `${garmentLabels.slice(0, 2).join(' · ')} 외 ${garmentLabels.length - 2}`
+      : garmentLabels.join(' · ') || '저장된 AI 피팅';
+
+  const reqHeaders = buildVtonRequestAuthHeaders({
+    'X-Profile-Key': serverProfileConfig.profileKey,
+  });
+
+  const [serializedSlots, encodedPortrait, encodedAnchor] = await Promise.all([
+    buildMultimodalSlotsPayload(equippedGarments, profile.dominantHand),
+    profile.portraitDataUrl
+      ? encodeImageUrlToInlineDataUrl(profile.portraitDataUrl)
+      : Promise.resolve(null),
+    targetAngle !== 0 && frontMasterDataUrl
+      ? encodeImageUrlToInlineDataUrl(frontMasterDataUrl)
+      : Promise.resolve(null),
+  ]);
+  const effectivePortraitUrl = encodedPortrait || profile.portraitDataUrl || null;
+  const effectiveProfile: NormalizedVtonProfile =
+    effectivePortraitUrl !== profile.portraitDataUrl
+      ? { ...profile, portraitDataUrl: effectivePortraitUrl }
+      : profile;
+  const masterAnchorPayload =
+    targetAngle !== 0 ? encodedAnchor || frontMasterDataUrl || null : null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55_000);
+  const onParentAbort = () => controller.abort();
+  request.signal?.addEventListener('abort', onParentAbort, { once: true });
+
+  try {
+    const json = await apiFetch<VtonServerResponse>('/vton/synthesize', {
+      method: 'POST',
+      headers: reqHeaders,
+      signal: controller.signal,
+      body: JSON.stringify({
+        mode,
+        styleMode,
+        viewAngleDeg: targetAngle,
+        turnaroundSheet: false,
+        skipVisionQc: true,
+        weather: serializedWeatherPayload,
+        saggingFit: Boolean(request.saggingFit),
+        ...(correctionHint.trim()
+          ? { correctionHint: correctionHint.trim().slice(0, 360) }
+          : {}),
+        ...(masterAnchorPayload ? { masterAnchorDataUrl: masterAnchorPayload } : {}),
+        profileKey: serverProfileConfig.profileKey,
+        handedness: effectiveProfile.dominantHand,
+        avatarSpec: effectiveProfile.avatarSpec,
+        avatarConfigHash: effectiveProfile.avatarConfigHash,
+        portraitDataUrl: effectivePortraitUrl,
+        profile: {
+          gender: effectiveProfile.gender,
+          dominantHand: effectiveProfile.dominantHand,
+          handedness: effectiveProfile.dominantHand,
+          skinToneHex: effectiveProfile.skinToneHex,
+          personalColor: effectiveProfile.personalColor,
+          heightCm: effectiveProfile.heightCm,
+          weightKg: effectiveProfile.weightKg,
+          bodyShape: effectiveProfile.bodyShape,
+          shoulderScale: effectiveProfile.shoulderScale,
+          waistScale: effectiveProfile.waistScale,
+          hipScale: effectiveProfile.hipScale,
+          portraitDataUrl: effectivePortraitUrl,
+          avatarSpec: effectiveProfile.avatarSpec,
+          avatarConfigHash: effectiveProfile.avatarConfigHash,
+          styleMode,
+          viewAngleDeg: targetAngle,
+          turnaroundSheet: false,
+        },
+        slots: serializedSlots,
+        forceRefresh: true,
+      }),
+    });
+
+    if (request.signal?.aborted) {
+      return { ok: false, angleDeg: targetAngle, imageUrl: null, model: null, reason: 'aborted' };
+    }
+
+    const rawComposite = sanitizeImageCandidate(
+      json?.compositeImageUrl ?? json?.afterImageUrl ?? null
+    );
+    if (!rawComposite || json?.geminiUsed === false || json?.provider === 'flatlay-fallback') {
+      return {
+        ok: false,
+        angleDeg: targetAngle,
+        imageUrl: null,
+        model: null,
+        reason: json?.fallbackReason || 'gemini_synthesis_failed',
+      };
+    }
+
+    const rawCut = await ensureTransparentCutout(await removeModelBackgroundToPng(rawComposite));
+    if (request.signal?.aborted) {
+      return { ok: false, angleDeg: targetAngle, imageUrl: null, model: null, reason: 'aborted' };
+    }
+
+    const alignMap: Partial<Record<TurnaroundAngleDeg, string>> = { [targetAngle]: rawCut };
+    if (targetAngle !== 0 && frontMasterDataUrl) {
+      alignMap[0] = frontMasterDataUrl;
+    }
+    await normalizeTurnaroundDataUrlsToFloorBaseline(alignMap);
+    const finalUrl = alignMap[targetAngle] || rawCut;
+    const modelName = String(json?.model || 'gemini-nano-banana-2.1');
+    const entryCacheKey = buildAiVtonCacheKey({
+      avatarConfigHash: profile.avatarConfigHash,
+      outfitComboId,
+      styleMode,
+      effectiveWeather,
+      angleDeg: targetAngle,
+    });
+    markCacheKeyTransparentVerified(entryCacheKey);
+    await persistAiVtonSlices([
+      {
+        cacheKey: entryCacheKey,
+        avatarConfigHash: profile.avatarConfigHash,
+        outfitComboId,
+        styleMode,
+        angleDeg: targetAngle,
+        weatherMood,
+        effectiveWeather,
+        imageUrl: finalUrl,
+        sheetImageUrl: null,
+        outfitLabel,
+        garmentLabels,
+        slotGarmentIds,
+        equippedCount: equippedGarments.length,
+        model: modelName,
+        updatedAt: Date.now(),
+      },
+    ]);
+
+    return {
+      ok: true,
+      angleDeg: targetAngle,
+      imageUrl: finalUrl,
+      model: modelName,
+      reason: null,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      angleDeg: targetAngle,
+      imageUrl: null,
+      model: null,
+      reason: err instanceof Error ? err.message : 'repair_failed',
+    };
+  } finally {
+    clearTimeout(timeoutId);
+    request.signal?.removeEventListener('abort', onParentAbort);
+  }
+}
+
 

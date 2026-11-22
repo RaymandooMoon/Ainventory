@@ -15,6 +15,11 @@ import {
   resolveManifestSlotAndGlb,
 } from '../src/shared/garmentTaxonomy.js';
 import { computeBodyMetrics } from './wardrobeStatsAndGenerator.js';
+import {
+  classifyUvLevel,
+  estimateFeelsLikeTemp,
+  fetchGoogleWeatherSnapshot,
+} from './googleWeatherService.js';
 
 export {
   COLOR_PALETTE,
@@ -61,9 +66,17 @@ const WEATHER_SCENARIOS = {
     weatherCode: 1,
     tempMin: 7,
     tempMax: 16,
+    feelsLikeMin: 6,
+    feelsLikeMax: 15,
+    feelsLikeTemp: 11,
+    uvIndex: 4,
+    uvLevel: 'moderate',
+    precipitationType: 'NONE',
     precipProb: 10,
     windSpeed: 11,
     humidity: 48,
+    alerts: [],
+    alertStylingDirectives: [],
     isSimulated: true,
   },
   cloudy_overcast: {
@@ -72,9 +85,17 @@ const WEATHER_SCENARIOS = {
     weatherCode: 3,
     tempMin: 10,
     tempMax: 16,
+    feelsLikeMin: 9,
+    feelsLikeMax: 15,
+    feelsLikeTemp: 12,
+    uvIndex: 2,
+    uvLevel: 'low',
+    precipitationType: 'NONE',
     precipProb: 25,
     windSpeed: 10,
     humidity: 66,
+    alerts: [],
+    alertStylingDirectives: [],
     isSimulated: true,
   },
   rainy_cool: {
@@ -83,9 +104,32 @@ const WEATHER_SCENARIOS = {
     weatherCode: 61,
     tempMin: 9,
     tempMax: 13,
+    feelsLikeMin: 6,
+    feelsLikeMax: 10,
+    feelsLikeTemp: 8,
+    uvIndex: 1,
+    uvLevel: 'low',
+    precipitationType: 'RAIN',
     precipProb: 80,
     windSpeed: 19,
     humidity: 82,
+    alerts: [
+      {
+        alertId: 'sim-rain-advisory',
+        title: '호우주의보 (시뮬레이션)',
+        eventType: 'RAIN',
+        severity: 'MODERATE',
+        areaName: '서울권',
+        description: '시간당 강한 비가 예상되어 방수 아우터와 젖지 않는 신발 착용을 권장합니다.',
+        instructions: ['외출 시 우산과 방수 아우터를 챙기세요.'],
+        dataSource: {
+          name: '기상청 (KMA)',
+          authorityUri: 'https://www.weather.go.kr/',
+        },
+        stylingDirective: 'rain_storm',
+      },
+    ],
+    alertStylingDirectives: ['rain_storm'],
     isSimulated: true,
   },
   snowy_winter: {
@@ -94,10 +138,33 @@ const WEATHER_SCENARIOS = {
     weatherCode: 73,
     tempMin: -4,
     tempMax: 1,
+    feelsLikeMin: -8,
+    feelsLikeMax: -3,
+    feelsLikeTemp: -5,
+    uvIndex: 2,
+    uvLevel: 'low',
+    precipitationType: 'SNOW',
     precipProb: 85,
     windSpeed: 12,
     humidity: 76,
     isSnowy: true,
+    alerts: [
+      {
+        alertId: 'sim-snow-advisory',
+        title: '대설주의보 (시뮬레이션)',
+        eventType: 'SNOW',
+        severity: 'MODERATE',
+        areaName: '수도권',
+        description: '적설 및 결빙이 예상되어 방한 아우터와 미끄럼 방지 부츠를 추천합니다.',
+        instructions: ['보온성이 높은 아우터와 방수 부츠를 착용하세요.'],
+        dataSource: {
+          name: '기상청 (KMA)',
+          authorityUri: 'https://www.weather.go.kr/',
+        },
+        stylingDirective: 'snow_ice',
+      },
+    ],
+    alertStylingDirectives: ['snow_ice'],
     isSimulated: true,
   },
   windy_gale: {
@@ -106,9 +173,33 @@ const WEATHER_SCENARIOS = {
     weatherCode: 2,
     tempMin: 8,
     tempMax: 15,
+    feelsLikeMin: 3,
+    feelsLikeMax: 10,
+    feelsLikeTemp: 6,
+    uvIndex: 5,
+    uvLevel: 'moderate',
+    precipitationType: 'NONE',
     precipProb: 15,
     windSpeed: 32,
+    windGust: 48,
     humidity: 52,
+    alerts: [
+      {
+        alertId: 'sim-wind-advisory',
+        title: '강풍주의보 (시뮬레이션)',
+        eventType: 'GALE',
+        severity: 'MODERATE',
+        areaName: '도심 전역',
+        description: '강한 바람으로 체감온도가 실제보다 4~5°C 낮아집니다.',
+        instructions: ['방풍 아우터나 목을 감싸는 아이템을 함께 착용하세요.'],
+        dataSource: {
+          name: '기상청 (KMA)',
+          authorityUri: 'https://www.weather.go.kr/',
+        },
+        stylingDirective: 'cold_wind',
+      },
+    ],
+    alertStylingDirectives: ['cold_wind'],
     isSimulated: true,
   },
   warm_spring: {
@@ -117,9 +208,17 @@ const WEATHER_SCENARIOS = {
     weatherCode: 2,
     tempMin: 14,
     tempMax: 24,
+    feelsLikeMin: 14,
+    feelsLikeMax: 25,
+    feelsLikeTemp: 20,
+    uvIndex: 7,
+    uvLevel: 'high',
+    precipitationType: 'NONE',
     precipProb: 15,
     windSpeed: 9,
     humidity: 54,
+    alerts: [],
+    alertStylingDirectives: [],
     isSimulated: true,
   },
   summer_heatwave: {
@@ -128,9 +227,32 @@ const WEATHER_SCENARIOS = {
     weatherCode: 0,
     tempMin: 26,
     tempMax: 34,
+    feelsLikeMin: 28,
+    feelsLikeMax: 37,
+    feelsLikeTemp: 35,
+    uvIndex: 9,
+    uvLevel: 'very_high',
+    precipitationType: 'NONE',
     precipProb: 10,
     windSpeed: 8,
     humidity: 68,
+    alerts: [
+      {
+        alertId: 'sim-heat-advisory',
+        title: '폭염주의보 (시뮬레이션)',
+        eventType: 'HEAT',
+        severity: 'SEVERE',
+        areaName: '도심 전역',
+        description: '최고 체감온도 35°C 이상으로 통기성이 좋은 경량 소재와 자외선 차단이 필요합니다.',
+        instructions: ['린넨·코튼 등 얇고 통기성 좋은 옷과 선글라스·모자를 착용하세요.'],
+        dataSource: {
+          name: '기상청 (KMA)',
+          authorityUri: 'https://www.weather.go.kr/',
+        },
+        stylingDirective: 'extreme_heat',
+      },
+    ],
+    alertStylingDirectives: ['extreme_heat'],
     isSimulated: true,
   },
   winter_cold: {
@@ -139,9 +261,33 @@ const WEATHER_SCENARIOS = {
     weatherCode: 0,
     tempMin: -10,
     tempMax: -4,
+    feelsLikeMin: -16,
+    feelsLikeMax: -9,
+    feelsLikeTemp: -13,
+    uvIndex: 2,
+    uvLevel: 'low',
+    precipitationType: 'NONE',
     precipProb: 10,
     windSpeed: 28,
+    windGust: 40,
     humidity: 34,
+    alerts: [
+      {
+        alertId: 'sim-cold-advisory',
+        title: '한파주의보 (시뮬레이션)',
+        eventType: 'COLD',
+        severity: 'SEVERE',
+        areaName: '수도권 전역',
+        description: '강한 찬바람으로 체감온도가 영하 13°C 이하로 떨어집니다.',
+        instructions: ['헤비 패딩·울 코트와 방한 액세서리로 체온을 유지하세요.'],
+        dataSource: {
+          name: '기상청 (KMA)',
+          authorityUri: 'https://www.weather.go.kr/',
+        },
+        stylingDirective: 'cold_wind',
+      },
+    ],
+    alertStylingDirectives: ['cold_wind'],
     isSimulated: true,
   },
 };
@@ -536,6 +682,39 @@ export async function fetchTomorrowWeather(
       weatherCache.set(cacheKey, { fetchedAt: now, ttlMs, data });
     };
 
+    // Priority 1: Google Maps Platform Weather API v1 (current + 2-day forecast + official KMA alerts)
+    let googleQuotaTriggered = false;
+    try {
+      const googleRes = await fetchGoogleWeatherSnapshot({
+        lat: city.lat,
+        lon: city.lon,
+        cityKey: hasCustom ? 'gps' : safeCityKey,
+        cityName: city.name,
+        dayTarget: resolvedDayTarget,
+        targetDateStr,
+        languageCode: 'ko',
+      });
+      if (googleRes?.quotaExceeded) {
+        googleQuotaTriggered = true;
+      }
+      if (googleRes?.weather) {
+        const gData = {
+          ...googleRes.weather,
+          recommendedMotion: inferWeatherMotion(
+            googleRes.weather.weatherCode,
+            googleRes.weather.precipProb,
+            googleRes.weather.windSpeed,
+            googleRes.weather.condition
+          ),
+        };
+        storeCache(gData, WEATHER_SUCCESS_TTL_MS);
+        return gData;
+      }
+    } catch {
+      // Fall through cleanly to Open-Meteo fallback
+    }
+
+    // Priority 2: Open-Meteo automatic seamless fallback
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,shortwave_radiation_sum&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,cloud_cover,visibility,is_day,precipitation,direct_radiation,diffuse_radiation&timezone=auto&forecast_days=3`;
       let res = null;
@@ -608,6 +787,30 @@ export async function fetchTomorrowWeather(
       const currentPrecipitation =
         cur && Number.isFinite(Number(cur.precipitation)) ? Number(cur.precipitation) : undefined;
       const isDay = cur && (cur.is_day === 0 || cur.is_day === 1) ? Boolean(cur.is_day) : undefined;
+      const resolvedHumidity = currentHumidity ?? (precipProb >= 50 ? 78 : 50);
+      const roundedMin = Math.round(minRaw) || 0;
+      const roundedMax = Math.round(maxRaw) || 0;
+      const feelsLikeMin = estimateFeelsLikeTemp({
+        tempC: roundedMin,
+        windSpeedKmh: windSpeed,
+        humidity: resolvedHumidity,
+      });
+      const feelsLikeMax = estimateFeelsLikeTemp({
+        tempC: roundedMax,
+        windSpeedKmh: windSpeed,
+        humidity: resolvedHumidity,
+      });
+      const feelsLikeTemp = estimateFeelsLikeTemp({
+        tempC: currentTemp !== undefined ? currentTemp : roundedMin * 0.45 + roundedMax * 0.55,
+        windSpeedKmh: currentWindSpeed ?? windSpeed,
+        humidity: resolvedHumidity,
+      });
+      const estimatedUv =
+        typeof directRadiation === 'number' && directRadiation > 0
+          ? Math.min(11, Math.max(1, Math.round(directRadiation / 85)))
+          : isDay === false
+            ? 0
+            : Math.min(8, Math.max(1, Math.round((shortwaveRadiationSum || 10) / 3.2)));
 
       const data = {
         cityKey: hasCustom ? 'gps' : safeCityKey,
@@ -617,16 +820,24 @@ export async function fetchTomorrowWeather(
         date: json.daily.time[idx] || targetDateStr,
         dayTarget: resolvedDayTarget,
         scenarioKey: 'live',
+        weatherProvider: 'open_meteo',
         condition,
         weatherCode: code,
-        tempMin: Math.round(minRaw) || 0,
-        tempMax: Math.round(maxRaw) || 0,
+        tempMin: roundedMin,
+        tempMax: roundedMax,
         ...(currentTemp !== undefined ? { currentTemp } : {}),
+        ...(feelsLikeTemp !== null ? { feelsLikeTemp } : {}),
+        ...(feelsLikeMin !== null ? { feelsLikeMin } : {}),
+        ...(feelsLikeMax !== null ? { feelsLikeMax } : {}),
+        uvIndex: estimatedUv,
+        uvLevel: classifyUvLevel(estimatedUv),
+        precipitationType:
+          code >= 71 && code <= 86 ? 'SNOW' : precipProb >= 45 || (code >= 51 && code <= 69) ? 'RAIN' : 'NONE',
         ...(currentWeatherCode !== undefined ? { currentWeatherCode } : {}),
         ...(currentWindSpeed !== undefined ? { currentWindSpeed } : {}),
         precipProb,
         windSpeed,
-        humidity: currentHumidity ?? (precipProb >= 50 ? 78 : 50),
+        humidity: resolvedHumidity,
         sunrise,
         sunset,
         shortwaveRadiationSum,
@@ -636,6 +847,9 @@ export async function fetchTomorrowWeather(
         diffuseRadiation,
         currentPrecipitation,
         isDay,
+        alerts: [],
+        alertStylingDirectives: [],
+        quotaFallbackTriggered: googleQuotaTriggered,
         isSimulated: false,
         fallbackUsed: false,
         weatherUnavailable: false,
@@ -962,17 +1176,50 @@ export function buildWeatherRecommendations(
   options = {}
 ) {
   const active = closetGarments.filter((g) => g.status === 'active');
-  const avgTemp = Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55) || 0;
+  const alertDirectives = new Set([
+    ...(Array.isArray(weather.alertStylingDirectives) ? weather.alertStylingDirectives : []),
+    ...(Array.isArray(weather.alerts)
+      ? weather.alerts.map((a) => String(a?.stylingDirective || '')).filter(Boolean)
+      : []),
+  ]);
+  const hasColdWindAlert = alertDirectives.has('cold_wind');
+  const hasRainStormAlert = alertDirectives.has('rain_storm');
+  const hasSnowIceAlert = alertDirectives.has('snow_ice');
+  const hasExtremeHeatAlert = alertDirectives.has('extreme_heat');
+
+  // Prioritize feels-like temperature for outfit thickness & outerwear decisions
+  const rawFeelsTemp =
+    typeof weather.feelsLikeTemp === 'number' && Number.isFinite(weather.feelsLikeTemp)
+      ? Math.round(weather.feelsLikeTemp)
+      : typeof weather.feelsLikeMin === 'number' &&
+          typeof weather.feelsLikeMax === 'number' &&
+          Number.isFinite(weather.feelsLikeMin) &&
+          Number.isFinite(weather.feelsLikeMax)
+        ? Math.round(weather.feelsLikeMin * 0.45 + weather.feelsLikeMax * 0.55)
+        : Math.round(weather.tempMin * 0.45 + weather.tempMax * 0.55) || 0;
+  const avgTemp = hasColdWindAlert ? rawFeelsTemp - 2 : rawFeelsTemp;
   const diurnalSwing = weather.tempMax - weather.tempMin;
   const isRainy =
-    weather.precipProb >= 45 || (weather.weatherCode >= 51 && weather.weatherCode <= 82);
-  const isSnowy = Boolean(weather.isSnowy || (weather.weatherCode >= 71 && weather.weatherCode <= 86));
+    hasRainStormAlert ||
+    Boolean(weather.isRainy) ||
+    weather.precipProb >= 45 ||
+    (weather.weatherCode >= 51 && weather.weatherCode <= 82);
+  const isSnowy = Boolean(
+    hasSnowIceAlert || weather.isSnowy || (weather.weatherCode >= 71 && weather.weatherCode <= 86)
+  );
   const isWindy =
+    hasColdWindAlert ||
     Number(weather.windSpeed) >= 22 ||
+    Number(weather.windGust) >= 32 ||
     /강풍|돌풍|칼바람|gale|windy/i.test(String(weather.condition || ''));
   const needOuter =
-    (weather.tempMax < 23 && (avgTemp <= 19 || diurnalSwing >= 8)) || isRainy || isWindy;
-  const needWarmAcc = avgTemp <= 9 || (isWindy && avgTemp <= 15);
+    !hasExtremeHeatAlert &&
+    ((weather.tempMax < 23 && (avgTemp <= 19 || diurnalSwing >= 8)) ||
+      isRainy ||
+      isWindy ||
+      isSnowy);
+  const needWarmAcc =
+    avgTemp <= 9 || (isWindy && avgTemp <= 15) || hasColdWindAlert || hasSnowIceAlert;
 
   const look1StyleKey = resolveLookStylePresetKey(
     options?.look1Style ?? options?.look1_style,
@@ -1057,7 +1304,7 @@ export function buildWeatherRecommendations(
     }
 
     if (isRainy) {
-      if (item.water_resistant) score += 22;
+      if (item.water_resistant) score += hasRainStormAlert ? 30 : 22;
       if (item.color_name === '화이트' && (item.category === 'bottom' || item.category === 'shoes')) {
         score -= 18;
       }
@@ -1066,19 +1313,29 @@ export function buildWeatherRecommendations(
       }
     }
 
+    if (isSnowy && hasSnowIceAlert) {
+      if (item.category === 'shoes' && WINTER_BOOTS.has(sub)) score += 18;
+      if (item.category === 'outer' && HEAVY_WINTER_OUTER.has(sub)) score += 14;
+    }
+
     if (isWindy) {
       if (
         item.category === 'outer' &&
         /coat|trench|jacket|windbreaker|field_jacket|leather_jacket|padding|mustang/.test(sub)
       ) {
-        score += 14;
+        score += hasColdWindAlert ? 20 : 14;
       }
       if (item.category === 'neckwear') {
-        score += 12;
+        score += hasColdWindAlert ? 16 : 12;
       }
       if (item.water_resistant) {
         score += 8;
       }
+    }
+
+    if (hasExtremeHeatAlert) {
+      if (item.category === 'outer') score -= 22;
+      if (/linen|린넨|시어서커|mesh|코튼/i.test(String(item.fabric || ''))) score += 10;
     }
 
     const thickness = String(item.thickness || '')

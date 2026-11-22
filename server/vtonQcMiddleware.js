@@ -1448,7 +1448,8 @@ export function createVtonQcMiddleware({
       let lastReport = null;
       let lastVisionVerdict = null;
       let bestFrontCutoutUrl = null;
-      let correctionHint = '';
+      let correctionHint =
+        typeof baseParams.correctionHint === 'string' ? baseParams.correctionHint.trim() : '';
 
       for (let attempt = 1; attempt <= effectiveAttemptLimit; attempt += 1) {
         if (requestAbortController.signal.aborted) {

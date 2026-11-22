@@ -347,28 +347,30 @@ export async function analyzeGarmentPhotos({
     throw err;
   }
 
-  const frontPart = decodeValidatedDataUrl(frontImage, MAX_ANALYZE_IMAGE_BYTES);
-  if (!frontPart) {
-    const err = new Error('유효한 앞면 의류 이미지(JPEG/PNG/WebP, 5MB 이하)가 필요합니다.');
+  const frontPart = frontImage ? decodeValidatedDataUrl(frontImage, MAX_ANALYZE_IMAGE_BYTES) : null;
+  const backPart = backImage ? decodeValidatedDataUrl(backImage, MAX_ANALYZE_IMAGE_BYTES) : null;
+  const validTags = (Array.isArray(tagImages) ? tagImages : [])
+    .slice(0, 3)
+    .map((img) => decodeValidatedDataUrl(img, MAX_ANALYZE_IMAGE_BYTES))
+    .filter(Boolean);
+
+  if (!frontPart && validTags.length === 0) {
+    const err = new Error('유효한 앞면 의류 이미지 또는 라벨 이미지(JPEG/PNG/WebP, 5MB 이하)가 필요합니다.');
     err.status = 400;
     throw err;
   }
-
-  const backPart = backImage ? decodeValidatedDataUrl(backImage, MAX_ANALYZE_IMAGE_BYTES) : null;
-  const validTags = (Array.isArray(tagImages) ? tagImages : [])
-    .slice(0, 2)
-    .map((img) => decodeValidatedDataUrl(img, MAX_ANALYZE_IMAGE_BYTES))
-    .filter(Boolean);
 
   const parts = [
     {
       text: [
         'You are a precision luxury fashion archivist and digital wardrobe specialist.',
         'Analyze the attached garment photographs carefully:',
-        '- Image 1 is the FRONT view of the garment.',
-        backPart ? '- Image 2 is the BACK view of the garment.' : '- Only front view is provided.',
+        frontPart
+          ? '- Image 1 is the FRONT view of the garment.'
+          : '- Front view is not attached yet; rely on the attached NECK TAG / INTERNAL WASH CARE LABEL close-up(s) to identify brand, product/style code, fiber composition, size, and care instructions.',
+        backPart ? '- The next image is the BACK view of the garment.' : '- Back view is not attached.',
         validTags.length > 0
-          ? `- The remaining ${validTags.length} image(s) are NECK TAG / CARE LABEL close-ups. Perform careful OCR for brand name, line, product/style/model code (품번/RN/CA/article number), fiber composition (소재 혼용률), size tag, and washing/care symbols.`
+          ? `- The remaining ${validTags.length} image(s) are NECK TAG / INTERNAL WASH CARE LABEL close-ups. Perform precision OCR for official brand name, sub-line, product/style/article/SKU code (품번/모델번호/RN/CA), exact fiber composition (소재 혼용률, e.g. 울 80%, 캐시미어 20%), size tag, and washing/care symbols.`
           : '- No tag close-up provided, but still inspect any visible brand/label text on the garment.',
         '',
         'CRITICAL RULES:',
@@ -376,17 +378,21 @@ export async function analyzeGarmentPhotos({
         '2. Detect construction details across BOTH front and back views: for pants/bottoms, carefully check whether the waistband is full elastic (고무줄 밴딩 -> belt_compatible=false), back-only semi-elastic (뒤밴딩), drawstring, or standard belt loops. Check rise and leg drape/length.',
         '3. Choose the MOST SPECIFIC material (e.g., if ribbed corduroy cotton, select "Corduroy", not generic "Fabric").',
         '4. Set background_has_clutter_or_body=true if the photo has wood grain/patterned floor, cluttered bed/room, or human feet/hands near the garment so our hybrid cutout pipeline knows to offer AI Studio refinement.',
-        '5. If brand and/or product code is visible (luxury or SPA brand like Uniqlo, Zara, COS, Lemaire, Ralph Lauren, Musinsa Standard, Nike, etc.), set has_identifiable_product=true and craft a crisp web_search_query.',
-        `6. Provide natural, concise Korean and English garment names (never filenames). Primary user language: ${lang === 'en' ? 'English' : 'Korean'}.`,
+        '5. If brand and/or product code is visible (luxury or SPA brand like Uniqlo, Zara, COS, Lemaire, Ralph Lauren, Musinsa Standard, Nike, etc.), set has_identifiable_product=true and craft a crisp web_search_query combining brand + style/product code.',
+        '6. Carefully read all laundry care symbols and care text on any attached CARE LABEL (or infer safely from fabric like wool/cashmere/silk/denim/leather) to populate `care_profile`: wash_method (dry_clean_only | hand_wash | wool_delicate | machine_normal | spot_clean), water_temp_c (0 | 30 | 40 | 60), tumble_dry (allowed | low_heat | no_tumble_flat | no_tumble_hang), bleach (allowed | oxygen_only | no_bleach), iron (allowed | low_cloth | no_iron), color_bleed_risk (high | medium | low), color_group (white_light | dark_vivid | denim_indigo), and needs_laundry_net (boolean).',
+        `7. Provide natural, concise Korean and English garment names (never filenames). Primary user language: ${lang === 'en' ? 'English' : 'Korean'}.`,
       ].join('\n'),
     },
-    {
+  ];
+
+  if (frontPart) {
+    parts.push({
       inlineData: {
         mimeType: frontPart.mimeType,
         data: frontPart.base64Data,
       },
-    },
-  ];
+    });
+  }
 
   if (backPart) {
     parts.push({
@@ -460,6 +466,43 @@ export async function analyzeGarmentPhotos({
               back_detail: { type: Type.STRING, description: 'Notable back detail observed from back photo (e.g. 투포켓, 백프린트, 뒷밴딩)' },
             },
           },
+          care_profile: {
+            type: Type.OBJECT,
+            properties: {
+              wash_method: {
+                type: Type.STRING,
+                description: 'One of: dry_clean_only, hand_wash, wool_delicate, machine_normal, spot_clean',
+              },
+              water_temp_c: {
+                type: Type.INTEGER,
+                description: 'Recommended max wash water temp in Celsius: 0 (no water), 30, 40, or 60',
+              },
+              tumble_dry: {
+                type: Type.STRING,
+                description: 'One of: allowed, low_heat, no_tumble_flat, no_tumble_hang',
+              },
+              bleach: {
+                type: Type.STRING,
+                description: 'One of: allowed, oxygen_only, no_bleach',
+              },
+              iron: {
+                type: Type.STRING,
+                description: 'One of: allowed, low_cloth, no_iron',
+              },
+              color_bleed_risk: {
+                type: Type.STRING,
+                description: 'One of: high, medium, low',
+              },
+              color_group: {
+                type: Type.STRING,
+                description: 'One of: white_light, dark_vivid, denim_indigo',
+              },
+              needs_laundry_net: {
+                type: Type.BOOLEAN,
+                description: 'True for knitwear, wool, lingerie, lace, or delicate weaves',
+              },
+            },
+          },
           background_has_clutter_or_body: {
             type: Type.BOOLEAN,
             description: 'True if textured floor (wood/tile/bed), shadows, or human feet/hands appear in the photo',
@@ -521,6 +564,43 @@ export async function analyzeGarmentPhotos({
         ? false
         : true;
 
+  const rawCare = parsed.care_profile && typeof parsed.care_profile === 'object'
+    ? parsed.care_profile
+    : null;
+  const ALLOWED_WASH = new Set(['dry_clean_only', 'hand_wash', 'wool_delicate', 'machine_normal', 'spot_clean']);
+  const ALLOWED_TUMBLE = new Set(['allowed', 'low_heat', 'no_tumble_flat', 'no_tumble_hang']);
+  const ALLOWED_BLEACH = new Set(['allowed', 'oxygen_only', 'no_bleach']);
+  const ALLOWED_IRON = new Set(['allowed', 'low_cloth', 'no_iron']);
+  const ALLOWED_BLEED = new Set(['high', 'medium', 'low']);
+  const ALLOWED_CGROUP = new Set(['white_light', 'dark_vivid', 'denim_indigo']);
+  const sanitizedCareProfile = rawCare
+    ? {
+        washMethod: ALLOWED_WASH.has(String(rawCare.wash_method || ''))
+          ? String(rawCare.wash_method)
+          : 'machine_normal',
+        waterTempC: [0, 30, 40, 60].includes(Number(rawCare.water_temp_c))
+          ? Number(rawCare.water_temp_c)
+          : 30,
+        tumbleDry: ALLOWED_TUMBLE.has(String(rawCare.tumble_dry || ''))
+          ? String(rawCare.tumble_dry)
+          : 'no_tumble_hang',
+        bleach: ALLOWED_BLEACH.has(String(rawCare.bleach || ''))
+          ? String(rawCare.bleach)
+          : 'no_bleach',
+        iron: ALLOWED_IRON.has(String(rawCare.iron || ''))
+          ? String(rawCare.iron)
+          : 'low_cloth',
+        colorBleedRisk: ALLOWED_BLEED.has(String(rawCare.color_bleed_risk || ''))
+          ? String(rawCare.color_bleed_risk)
+          : 'medium',
+        colorGroup: ALLOWED_CGROUP.has(String(rawCare.color_group || ''))
+          ? String(rawCare.color_group)
+          : 'dark_vivid',
+        needsLaundryNet: Boolean(rawCare.needs_laundry_net),
+        source: validTags.length > 0 ? 'care_label_scan' : 'inferred',
+      }
+    : null;
+
   return {
     name_ko: String(parsed.name_ko || '').trim().slice(0, 120) || '새 아이템',
     name_en: String(parsed.name_en || '').trim().slice(0, 120) || 'New Garment',
@@ -543,6 +623,7 @@ export async function analyzeGarmentPhotos({
     product_code: String(parsed.product_code || '').trim().slice(0, 64),
     size: String(parsed.size || '').trim().slice(0, 32),
     care_tip: String(lang === 'en' ? parsed.care_tip_en || parsed.care_tip_ko : parsed.care_tip_ko || parsed.care_tip_en || '').trim().slice(0, 220),
+    care_profile: sanitizedCareProfile,
     suggested_fit_note: String(
       lang === 'en'
         ? parsed.suggested_fit_note_en || parsed.suggested_fit_note_ko
@@ -559,6 +640,7 @@ export async function analyzeGarmentPhotos({
       ...(rawDetails.closure_type ? { closure_type: String(rawDetails.closure_type).trim() } : {}),
       ...(rawDetails.heel_height ? { heel_height: String(rawDetails.heel_height).trim() } : {}),
       ...(rawDetails.back_detail ? { back_detail: String(rawDetails.back_detail).trim().slice(0, 120) } : {}),
+      ...(sanitizedCareProfile ? { care_profile: sanitizedCareProfile } : {}),
     },
     background_quality: {
       hasClutterOrBodyPart: Boolean(parsed.background_has_clutter_or_body),

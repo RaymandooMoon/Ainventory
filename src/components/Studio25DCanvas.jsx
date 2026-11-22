@@ -40,6 +40,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   stageBackgroundId,
   lightingPreset,
   lightingIntensity,
+  placeBackdrop = null,
   onOpenBackgroundPicker,
   onOpenMobileDrawer,
   mobileDrawerOpen = false,
@@ -54,6 +55,10 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   presetNonce,
   onUserOrbit,
   gender,
+  saggingFit = false,
+  stylingPref = null,
+  onUpdateStylingPref,
+  selectedPlace = null,
 }) {
   const normalizedMode = normalizeViewerMode(legacyMode ?? mode ?? viewMode ?? renderMode);
 
@@ -90,6 +95,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       stageBackgroundId={stageBackgroundId}
       lightingPreset={lightingPreset}
       lightingIntensity={lightingIntensity}
+      placeBackdrop={placeBackdrop}
       onOpenBackgroundPicker={onOpenBackgroundPicker}
       onOpenMobileDrawer={onOpenMobileDrawer}
       mobileDrawerOpen={mobileDrawerOpen}
@@ -101,6 +107,10 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       presetNonce={presetNonce}
       onUserOrbit={onUserOrbit}
       gender={gender}
+      saggingFit={saggingFit}
+      stylingPref={stylingPref}
+      onUpdateStylingPref={onUpdateStylingPref}
+      selectedPlace={selectedPlace}
     />
   );
 });

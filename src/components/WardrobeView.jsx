@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, RotateCcw, Search, X } from 'lucide-react';
+import { Plus, RotateCcw, Search, WashingMachine, X } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
   WARDROBE_PILL_FILTERS,
@@ -9,6 +9,10 @@ import {
   classifyAccessoryOrJewelryPart,
   isJewelryGarment,
 } from '../services/fittingRenderer.ts';
+import {
+  LAUNDRY_BASKET_EVENT,
+  loadLaundryBasket,
+} from '../services/laundryBasketStore.ts';
 import { apiFetch } from '../utils/api.ts';
 import {
   localizeBrandName,
@@ -19,6 +23,8 @@ import {
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AddGarmentModal from './AddGarmentModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
+import NearbyCareMapModal from './NearbyCareMapModal.jsx';
+import SmartLaundryBasketModal from './SmartLaundryBasketModal.jsx';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
 
@@ -71,7 +77,23 @@ export default function WardrobeView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [laundryModalOpen, setLaundryModalOpen] = useState(false);
+  const [laundryCount, setLaundryCount] = useState(() => loadLaundryBasket().garmentIds.length);
+  const [careMapState, setCareMapState] = useState({ open: false, garment: null, serviceType: null });
   const ensuredSeedRef = useRef(new Set());
+
+  useEffect(() => {
+    const syncBasketCount = (ev) => {
+      const next = ev?.detail || loadLaundryBasket();
+      setLaundryCount(Array.isArray(next.garmentIds) ? next.garmentIds.length : 0);
+    };
+    window.addEventListener(LAUNDRY_BASKET_EVENT, syncBasketCount);
+    window.addEventListener('storage', syncBasketCount);
+    return () => {
+      window.removeEventListener(LAUNDRY_BASKET_EVENT, syncBasketCount);
+      window.removeEventListener('storage', syncBasketCount);
+    };
+  }, []);
 
   const categoryFilteredGarments = useMemo(() => {
     if (activeCategory === 'all') return garments;
@@ -206,6 +228,23 @@ export default function WardrobeView({
             }}
           >
             <Search size={19} strokeWidth={2.1} />
+          </button>
+          <button
+            type="button"
+            className={`hig-circle-icon-btn relative ${laundryCount > 0 ? 'active' : ''}`}
+            data-laundry-basket-toggle="true"
+            aria-label={tx(lang, '스마트 세탁 바구니 열기', 'Open Smart Laundry Basket')}
+            onClick={() => {
+              triggerHaptic('selection');
+              setLaundryModalOpen(true);
+            }}
+          >
+            <WashingMachine size={18} strokeWidth={2.1} />
+            {laundryCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 text-[10px] font-bold flex items-center justify-center tabular-nums shadow-sm">
+                {laundryCount > 99 ? '99+' : laundryCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -459,6 +498,27 @@ export default function WardrobeView({
           onGarmentRegistered?.(created);
         }}
         showToast={showToast}
+      />
+
+      <SmartLaundryBasketModal
+        open={laundryModalOpen}
+        onClose={() => setLaundryModalOpen(false)}
+        activeCloset={activeCloset}
+        garments={garments}
+        lang={lang}
+        onOpenCareMap={(garment, serviceType) => {
+          setLaundryModalOpen(false);
+          setCareMapState({ open: true, garment, serviceType });
+        }}
+        showToast={showToast}
+      />
+
+      <NearbyCareMapModal
+        open={careMapState.open}
+        onClose={() => setCareMapState({ open: false, garment: null, serviceType: null })}
+        garment={careMapState.garment}
+        initialServiceType={careMapState.serviceType}
+        lang={lang}
       />
     </section>
   );

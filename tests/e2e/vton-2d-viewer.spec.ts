@@ -1103,9 +1103,10 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
       expect(zHierarchy.lookDock.pointerEvents).toBe('none');
     }
 
-    // Top Weather Capsule stays above & cleanly separated from elevated Flat-Lay board
+    // Top Weather Capsule stays above & cleanly separated from elevated Flat-Lay board;
+    // bottom-left History pill stays hidden while lookbook is open so it never overlaps garment cards
     await expect(weatherCapsule).toBeVisible();
-    await expect(historyBtn).toBeVisible();
+    await expect(historyBtn).toBeHidden();
     const [capsuleBox, boardBox] = await Promise.all([
       weatherCapsule.boundingBox(),
       flatLayBoard.boundingBox(),
@@ -1133,7 +1134,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
 
-    // Close Flat-Lay Lookbook -> returns to AI character stage cleanly
+    // Close Flat-Lay Lookbook -> returns to AI character stage cleanly and restores History button
     const closeBtn = studioCanvas.locator('[data-flatlay-close-btn="true"]');
     await expect(closeBtn).toBeVisible();
     await closeBtn.click();
@@ -1141,6 +1142,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await expect(studioCanvas).not.toHaveAttribute('data-lookbook-overlay', 'true');
     await expect(modelStage).toHaveAttribute('data-stage-view', 'ai-vton');
     await expect(aiImg).toBeVisible();
+    await expect(historyBtn).toBeVisible();
   });
 });
 

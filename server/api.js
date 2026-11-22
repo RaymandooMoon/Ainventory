@@ -22,6 +22,7 @@ import db, {
   computeVerificationHash,
   ensureLuxuryStreetSeeds,
   ensureNewSubcategoryMaterialSeeds,
+  ensureUnderwearAndSocksSeeds,
   getServerProfileConfig,
   hashPassword,
   initDb,
@@ -42,6 +43,18 @@ import {
   generateStudioCutoutImage,
   lookupOfficialGarmentOnWeb,
 } from './garmentVisionService.js';
+import {
+  autocompletePlaces,
+  getPlaceDetails,
+  getServerGoogleMapsApiKey,
+  searchNearbyCareShops,
+  searchPlacesWithLocation,
+} from './mapsProxyService.js';
+import {
+  fetchPlaceBackdropBundle,
+  proxyPlacePhotoMedia,
+  proxyStreetViewImage,
+} from './mapsBackdropService.js';
 import {
   AGE_GROUPS,
   BODY_SHAPE_OPTIONS,
@@ -2003,6 +2016,208 @@ export function createApiRouter(options = {}) {
     res.json({ ok: true });
   });
 
+  // Read-only Google Maps Platform Server Proxies (accessible in both authenticated & guest demo modes + browser <img> tags)
+  router.get('/maps/config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const apiKey = getServerGoogleMapsApiKey();
+    res.json({
+      configured: Boolean(apiKey),
+      apiKey: apiKey || null,
+    });
+  });
+
+  router.post('/maps/autocomplete', async (req, res) => {
+    const rate = checkRateLimit(`maps:ac:${req.ip || 'local'}`, 90);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { input, sessionToken, languageCode, regionCode, lat, lng } = req.body || {};
+      const result = await autocompletePlaces({
+        input,
+        sessionToken,
+        languageCode,
+        regionCode,
+        lat,
+        lng,
+      });
+      res.json(result);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '장소 자동완성 요청에 실패했습니다.'),
+        code: String(err?.code || 'MAPS_AUTOCOMPLETE_ERROR'),
+      });
+    }
+  });
+
+  router.post('/maps/search-places', async (req, res) => {
+    const rate = checkRateLimit(`maps:search:${req.ip || 'local'}`, 90);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { input, languageCode, regionCode, lat, lng } = req.body || {};
+      const result = await searchPlacesWithLocation({
+        input,
+        languageCode,
+        regionCode,
+        lat,
+        lng,
+      });
+      res.json(result);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '거리뷰 지원 장소 검색에 실패했습니다.'),
+        code: String(err?.code || 'MAPS_SEARCH_PLACES_ERROR'),
+      });
+    }
+  });
+
+  router.get('/maps/place/:placeId', async (req, res) => {
+    const rate = checkRateLimit(`maps:place:${req.ip || 'local'}`, 90);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '장소 조회 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const result = await getPlaceDetails({
+        placeId: req.params.placeId,
+        sessionToken: typeof req.query.sessionToken === 'string' ? req.query.sessionToken : '',
+        languageCode: typeof req.query.languageCode === 'string' ? req.query.languageCode : 'ko',
+      });
+      res.json(result);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '장소 상세 정보를 불러오지 못했습니다.'),
+        code: String(err?.code || 'MAPS_PLACE_DETAILS_ERROR'),
+      });
+    }
+  });
+
+  router.post('/maps/nearby-care', async (req, res) => {
+    const rate = checkRateLimit(`maps:care:${req.ip || 'local'}`, 60);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '주변 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { lat, lng, serviceType, languageCode, regionCode, radiusMeters } = req.body || {};
+      const result = await searchNearbyCareShops({
+        lat,
+        lng,
+        serviceType,
+        languageCode,
+        regionCode,
+        radiusMeters,
+      });
+      res.json(result);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '주변 세탁·수선소 검색에 실패했습니다.'),
+        code: String(err?.code || 'MAPS_NEARBY_CARE_ERROR'),
+      });
+    }
+  });
+
+  // Google Maps Platform Place Photos (New) + Street View Static API Backdrop Proxy
+  router.get('/maps/place-backdrop', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const rate = checkRateLimit(`maps:backdrop:${req.ip || 'local'}`, 90);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '장소 배경 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const result = await fetchPlaceBackdropBundle({
+        placeId: typeof req.query.placeId === 'string' ? req.query.placeId : '',
+        lat: req.query.lat !== undefined ? Number(req.query.lat) : null,
+        lng: req.query.lng !== undefined ? Number(req.query.lng) : null,
+        query: typeof req.query.query === 'string' ? req.query.query : '',
+        languageCode: typeof req.query.languageCode === 'string' ? req.query.languageCode : 'ko',
+      });
+      res.json(result);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '장소 배경 정보를 불러오지 못했습니다.'),
+        code: String(err?.code || 'MAPS_BACKDROP_ERROR'),
+      });
+    }
+  });
+
+  router.get('/maps/place-photo', async (req, res) => {
+    const rate = checkRateLimit(`maps:photo:${req.ip || 'local'}`, 120);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '장소 사진 요청이 너무 많습니다.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { buffer, contentType } = await proxyPlacePhotoMedia({
+        photoName: typeof req.query.name === 'string' ? req.query.name : '',
+        maxWidthPx: req.query.maxWidthPx !== undefined ? Number(req.query.maxWidthPx) : 1280,
+        maxHeightPx: req.query.maxHeightPx !== undefined ? Number(req.query.maxHeightPx) : 1280,
+      });
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(buffer);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '장소 사진을 불러오지 못했습니다.'),
+        code: String(err?.code || 'MAPS_PLACE_PHOTO_ERROR'),
+      });
+    }
+  });
+
+  router.get('/maps/streetview', async (req, res) => {
+    const rate = checkRateLimit(`maps:sv:${req.ip || 'local'}`, 120);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: '거리뷰 요청이 너무 많습니다.',
+        code: 'RATE_LIMITED',
+      });
+    }
+    try {
+      const { buffer, contentType } = await proxyStreetViewImage({
+        panoId: typeof req.query.panoId === 'string' ? req.query.panoId : '',
+        heading: req.query.heading !== undefined ? Number(req.query.heading) : 0,
+        pitch: req.query.pitch !== undefined ? Number(req.query.pitch) : 4,
+        fov: req.query.fov !== undefined ? Number(req.query.fov) : 90,
+        width: req.query.width !== undefined ? Number(req.query.width) : 640,
+        height: req.query.height !== undefined ? Number(req.query.height) : 640,
+      });
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(buffer);
+    } catch (err) {
+      const status = Number(err?.status) || 502;
+      res.status(status).json({
+        error: String(err?.message || '거리뷰 이미지를 불러오지 못했습니다.'),
+        code: String(err?.code || 'MAPS_STREETVIEW_ERROR'),
+      });
+    }
+  });
+
   // Protected or Guest Sample Demo routes below
   router.use(requireAuth);
 
@@ -2660,10 +2875,12 @@ export function createApiRouter(options = {}) {
       if (c === 'sample' || c === 'husband' || c === 'wife') {
         ensureNewSubcategoryMaterialSeeds(c);
         ensureLuxuryStreetSeeds(c);
+        ensureUnderwearAndSocksSeeds(c);
       } else {
         const hasAny = db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
         if (hasAny) {
           ensureNewSubcategoryMaterialSeeds(c);
+          ensureUnderwearAndSocksSeeds(c);
         }
       }
     }
@@ -2702,7 +2919,9 @@ export function createApiRouter(options = {}) {
       }
     }
     const insertedCount =
-      ensureNewSubcategoryMaterialSeeds(targetCloset) + ensureLuxuryStreetSeeds(targetCloset);
+      ensureNewSubcategoryMaterialSeeds(targetCloset) +
+      ensureLuxuryStreetSeeds(targetCloset) +
+      ensureUnderwearAndSocksSeeds(targetCloset);
     const rows = db
       .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
       .all(targetCloset)
@@ -3335,10 +3554,12 @@ export function createApiRouter(options = {}) {
     if (closetOwner === 'sample' || closetOwner === 'husband' || closetOwner === 'wife') {
       ensureNewSubcategoryMaterialSeeds(closetOwner);
       ensureLuxuryStreetSeeds(closetOwner);
+      ensureUnderwearAndSocksSeeds(closetOwner);
     } else if (
       db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(closetOwner)
     ) {
       ensureNewSubcategoryMaterialSeeds(closetOwner);
+      ensureUnderwearAndSocksSeeds(closetOwner);
     }
 
     const garments = db

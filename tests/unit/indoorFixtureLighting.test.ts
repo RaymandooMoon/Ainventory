@@ -111,7 +111,7 @@ test('all 4 cyberpunk stages (S+, S, A+, A) illuminate diverse multi-color neon 
     });
 
     assert.equal(f100.isNeonScene, true);
-    assert.ok(f100.fixtureOnFactor >= 0.8 && f100.fixtureOnFactor <= 0.96, `${spec.id} 100% neon should stay punchy without blowout, got ${f100.fixtureOnFactor}`);
+    assert.ok(f100.fixtureOnFactor >= 0.8 && f100.fixtureOnFactor <= 1.0, `${spec.id} 100% neon should stay punchy, got ${f100.fixtureOnFactor}`);
     assert.ok(f100.floorPoolStrength >= 0.25, `${spec.id} 100% neon should illuminate floor pool`);
     assert.ok(f50.fixtureOnFactor > 0.25 && f50.fixtureOnFactor < f100.fixtureOnFactor * 0.65, `${spec.id} 50% neon should visibly dim near midpoint`);
     assert.equal(f0.fixtureOnFactor, 0);
@@ -135,14 +135,14 @@ test('post-sunset wall-sconce loft turns lamps ON with refined headroom and cast
   });
 
   assert.equal(frame.opticalRegime, 'indoor_night_fixture');
-  assert.ok(frame.fixtureOnFactor >= 0.5 && frame.fixtureOnFactor <= 0.64, `expected refined 100% sconce level, got ${frame.fixtureOnFactor}`);
+  assert.ok(frame.fixtureOnFactor >= 0.85 && frame.fixtureOnFactor <= 1.0, `expected boosted 100% sconce level, got ${frame.fixtureOnFactor}`);
   assert.ok(frame.directRatio >= 0.78, `night indoor directRatio must stay crisp at 100%, got ${frame.directRatio}`);
   // Left wall sconce sits on negative X, casting primary shadow to positive X (right)
   assert.ok(frame.keyPosX < -1.8, `expected left wall sconce keyPosX < -1.8, got ${frame.keyPosX}`);
   // Opposing right wall sconce casts softer secondary fill shadow to the left
   assert.ok(frame.secondaryShadowWeight >= 0.25, `expected secondary fill shadow, got ${frame.secondaryShadowWeight}`);
   assert.ok(frame.secondaryShadowDirX < -0.5);
-  assert.ok(frame.floorPoolStrength > 0.14);
+  assert.ok(frame.floorPoolStrength > 0.4);
   assert.ok(frame.castShadowScale >= 0.9, `expected full directional cast shadow at 100%, got ${frame.castShadowScale}`);
 });
 
@@ -157,9 +157,9 @@ test('post-sunset dark basalt flagship casts crisp pin-spot shadow over warm flo
     weather: { latitude: 37.5665, longitude: 126.978 },
   });
 
-  assert.ok(frame.fixtureOnFactor >= 0.5 && frame.fixtureOnFactor <= 0.64);
+  assert.ok(frame.fixtureOnFactor >= 0.85 && frame.fixtureOnFactor <= 1.0);
   assert.ok(frame.directRatio >= 0.84, `pin-spot directRatio should be crisp, got ${frame.directRatio}`);
-  assert.ok(frame.floorPoolStrength >= 0.2, `dark basalt floor needs warm pool, got ${frame.floorPoolStrength}`);
+  assert.ok(frame.floorPoolStrength >= 0.45, `dark basalt floor needs warm pool, got ${frame.floorPoolStrength}`);
   assert.ok(frame.castShadowScale >= 0.9);
 });
 
@@ -284,15 +284,18 @@ test('zero-continuous dimming across 0%..5%..50%..100% eliminates low-end floor 
     );
   }
 
-  // 100% stays refined (calibrated to former ~5% natural luminance headroom, zero ceiling blowout)
+  // 100% delivers 3x brighter headroom while staying cleanly bounded without clipping
   assert.ok(f25.fixtureOnFactor > f5.fixtureOnFactor);
   assert.ok(f75.fixtureOnFactor > f50.fixtureOnFactor);
-  assert.ok(f100.fixtureOnFactor >= 0.5 && f100.fixtureOnFactor <= 0.64, `100% indoor fixtureOnFactor (${f100.fixtureOnFactor}) must stay refined`);
+  assert.ok(f100.fixtureOnFactor >= 0.85 && f100.fixtureOnFactor <= 1.0, `100% indoor fixtureOnFactor (${f100.fixtureOnFactor}) must reflect boosted 100% output`);
   assert.ok(
-    f100.backdropBrightness <= 0.85,
-    `100% night dark-mode cafe brightness (${f100.backdropBrightness}) must avoid wall/ceiling overexposure`
+    f100.backdropBrightness >= 0.95 && f100.backdropBrightness <= 1.35,
+    `100% night dark-mode cafe brightness (${f100.backdropBrightness}) must be well-lit and bounded`
   );
-  assert.equal(f100.characterAmbientBrightness, 1);
+  assert.ok(
+    f100.characterAmbientBrightness >= 1.0 && f100.characterAmbientBrightness <= 1.2,
+    `100% characterAmbientBrightness (${f100.characterAmbientBrightness}) must stay cleanly bounded`
+  );
 
   // Physical geometric invariance: at night, dimming a fixed lamp must NEVER drift light direction or shadow shape
   for (const f of frames) {

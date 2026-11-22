@@ -2,9 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   AlertCircle,
   AlertTriangle,
+  BookmarkCheck,
   Camera,
   Check,
   ChevronLeft,
+  Crosshair,
   Loader2,
   Palette,
   RotateCcw,
@@ -53,6 +55,18 @@ import {
   resolveEffectiveVtonStyleMode,
   setStoredVtonStylePreference,
 } from '../services/vton2DService.ts';
+import {
+  clearMemorizedFaceIdentity,
+  loadMemorizedFaceIdentity,
+  saveMemorizedFaceIdentity,
+} from '../services/faceMemoryStore.ts';
+import { evaluateFacePhotoQuality } from '../utils/faceAnalysisDiagnostics.ts';
+import {
+  STYLING_DENSITY_OPTIONS,
+  STYLING_PREF_EVENT,
+  getStoredStylingPreference,
+  saveStoredStylingPreference,
+} from '../services/stylingPreferenceStore.ts';
 import { localizeApiMessage, tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
@@ -62,6 +76,7 @@ import {
   PrimaryBodyAtelierSliders,
 } from './AvatarStudioControls.jsx';
 import Character25DMannequin from './Character25DMannequin.jsx';
+import FaceCorrectionModal from './FaceCorrectionModal.jsx';
 import FaceLandmarkMeshOverlay from './FaceLandmarkMeshOverlay.tsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 import '../styles/atelierTokens.css';
@@ -233,6 +248,7 @@ function ProfileModalContent({
 
   // VTON Model Style preference ('stylized_isometric' default when no photo; 'photorealistic' gated on user photo)
   const [draftStylePref, setDraftStylePref] = useState(() => getStoredVtonStylePreference());
+  const [draftStylingPref, setDraftStylingPref] = useState(() => getStoredStylingPreference());
   const [photoGuideModalOpen, setPhotoGuideModalOpen] = useState(false);
   const [pendingPhotoForRealism, setPendingPhotoForRealism] = useState(false);
 
@@ -240,14 +256,28 @@ function ProfileModalContent({
     const onStyleSync = () => {
       setDraftStylePref(getStoredVtonStylePreference());
     };
+    const onDensitySync = () => {
+      setDraftStylingPref(getStoredStylingPreference());
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
+      window.addEventListener(STYLING_PREF_EVENT, onDensitySync);
     }
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener(VTON_STYLE_PREF_EVENT, onStyleSync);
+        window.removeEventListener(STYLING_PREF_EVENT, onDensitySync);
       }
     };
+  }, []);
+
+  const updateDraftStylingPref = useCallback((patch) => {
+    triggerHaptic('selection');
+    setDraftStylingPref((prev) => {
+      const next = { ...prev, ...patch };
+      saveStoredStylingPreference(next);
+      return next;
+    });
   }, []);
 
   const [heightInputText, setHeightInputText] = useState(() =>
@@ -370,6 +400,58 @@ function ProfileModalContent({
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSampleSource, setIsSampleSource] = useState(false);
+  const [faceCorrectionOpen, setFaceCorrectionOpen] = useState(false);
+  const [manualFaceBox, setManualFaceBox] = useState(null);
+  const [selectedFaceIndex, setSelectedFaceIndex] = useState(null);
+  const [memorizedAt, setMemorizedAt] = useState(null);
+
+  // Hydrate memorized face identity from IndexedDB so refreshing the page restores my face & analysis
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    loadMemorizedFaceIdentity()
+      .then((memory) => {
+        if (cancelled || !memory) return;
+        setSourceImageUrl((prev) => prev || memory.sourceImageDataUrl);
+        setCandidateFaceUrl((prev) => prev || memory.singleFacePortraitDataUrl);
+        setLightingMode(memory.lightingMode || 'auto_d65');
+        setManualFaceBox(memory.manualFaceBox ?? null);
+        setSelectedFaceIndex(
+          typeof memory.selectedFaceIndex === 'number' ? memory.selectedFaceIndex : null
+        );
+        setMemorizedAt(memory.memorizedAt);
+        if (memory.analysisSnapshot) {
+          setAnalysisResult((prev) => prev || memory.analysisSnapshot);
+          setDraftSubType(memory.analysisSnapshot.subTypeLabelKo);
+          setDraftPresetKey(memory.analysisSnapshot.matchedPresetKey);
+        }
+        setDraftSpec((prev) => {
+          if (prev.appearance.facePhotoUrl) return prev;
+          const snap = memory.analysisSnapshot;
+          const autoMst = snap ? findClosestMstFromHex(snap.skinToneHex) : null;
+          return sanitizeAvatarSpec({
+            ...prev,
+            appearance: {
+              ...prev.appearance,
+              ...(snap
+                ? {
+                    mstLevel: snap.mstLevel ?? autoMst?.level ?? prev.appearance.mstLevel,
+                    mstUndertone:
+                      snap.mstUndertone ?? autoMst?.undertone ?? prev.appearance.mstUndertone,
+                    skinToneHex: snap.skinToneHex || prev.appearance.skinToneHex,
+                    personalColor: snap.personalColor || prev.appearance.personalColor,
+                  }
+                : {}),
+              facePhotoUrl: memory.singleFacePortraitDataUrl,
+            },
+          });
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Progressive disclosure states for detailed L*a*b* metrics & sample preset rail
   const [metricsOpen, setMetricsOpen] = useState(false);
@@ -418,6 +500,26 @@ function ProfileModalContent({
     !isSampleSource &&
     Boolean(analysisResult) &&
     !analysisResult.faceDetected;
+
+  const faceQualityReport = useMemo(() => {
+    if (analyzing || errorMsg || isSampleSource || !analysisResult) return null;
+    return evaluateFacePhotoQuality({
+      faceDetected: Boolean(analysisResult.faceDetected),
+      detectedFaceCount: analysisResult.detectedFaceCount ?? 0,
+      faceAreaRatio: analysisResult.faceAreaRatio ?? 0.15,
+      confidence: analysisResult.confidence ?? 80,
+      labL: analysisResult.lab?.L ?? 65,
+      labChroma: analysisResult.lab?.chroma ?? 15,
+      gainSkew: analysisResult.lightingSkew ?? 0,
+      manualOverride: Boolean(manualFaceBox || analysisResult.manualFaceBoxUsed),
+      lang,
+    });
+  }, [analyzing, errorMsg, isSampleSource, analysisResult, manualFaceBox, lang]);
+
+  const showFaceQualityGuide = Boolean(faceQualityReport && faceQualityReport.level !== 'good');
+  const canOpenFaceCorrection = Boolean(
+    !isSampleSource && (sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl)
+  );
 
   const effectiveDraftVtonStyle = useMemo(
     () =>
@@ -505,7 +607,7 @@ function ProfileModalContent({
     });
   };
 
-  const downscaleUserPortrait = (rawDataUrl) =>
+  const downscaleUserPortrait = (rawDataUrl, maxDim = 512, quality = 0.88) =>
     new Promise((resolve) => {
       if (typeof document === 'undefined' || typeof Image === 'undefined') {
         resolve(rawDataUrl);
@@ -514,7 +616,6 @@ function ProfileModalContent({
       const img = new Image();
       img.onload = () => {
         try {
-          const maxDim = 512;
           const srcW = Math.max(1, img.naturalWidth || img.width || 1);
           const srcH = Math.max(1, img.naturalHeight || img.height || 1);
           const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
@@ -531,7 +632,7 @@ function ProfileModalContent({
           ctx.fillStyle = '#F5F5F7';
           ctx.fillRect(0, 0, dstW, dstH);
           ctx.drawImage(img, 0, 0, dstW, dstH);
-          resolve(canvas.toDataURL('image/jpeg', 0.88));
+          resolve(canvas.toDataURL('image/jpeg', quality));
         } catch {
           resolve(rawDataUrl);
         }
@@ -550,18 +651,24 @@ function ProfileModalContent({
     const isUserUpload = Boolean(options.isUserUpload);
     const updateFacePhoto = options.updateFacePhoto ?? isUserUpload;
     const skipNeuralDetector = Boolean(options.skipNeuralDetector);
+    const nextManualBox =
+      options.manualFaceBox !== undefined ? options.manualFaceBox : undefined;
+    const nextSelectedIdx =
+      typeof options.selectedFaceIndex === 'number' ? options.selectedFaceIndex : undefined;
     const requestSeq = ++analysisSeqRef.current;
     setAnalyzing(true);
     setErrorMsg('');
     try {
-      const [res, compactPortraitUrl] = await Promise.all([
+      const [res, compactSourceUrl] = await Promise.all([
         analyzePortraitSkinTone(imgSrc, {
           lightingMode: nextLighting,
           focusPoint,
+          manualFaceBox: nextManualBox,
+          selectedFaceIndex: nextSelectedIdx,
           previousCropRect: options.previousCropRect,
           skipNeuralDetector,
         }),
-        updateFacePhoto ? downscaleUserPortrait(imgSrc) : Promise.resolve(null),
+        updateFacePhoto ? downscaleUserPortrait(imgSrc, 720, 0.85) : Promise.resolve(null),
       ]);
       if (analysisSeqRef.current !== requestSeq) return;
       setAnalysisResult(res);
@@ -571,8 +678,9 @@ function ProfileModalContent({
       const autoMst = findClosestMstFromHex(res.skinToneHex);
       const syncedMstLevel = res.mstLevel ?? autoMst.level;
       const syncedMstUndertone = res.mstUndertone ?? autoMst.undertone;
+      // CRITICAL: Prefer the isolated cropped single-face portrait so group photos NEVER feed bystanders to AI VTON
       const resolvedFaceUrl = updateFacePhoto
-        ? compactPortraitUrl || res.previewDataUrl || imgSrc
+        ? res.singleFacePortraitDataUrl || res.previewDataUrl || compactSourceUrl || imgSrc
         : undefined;
 
       if (resolvedFaceUrl) {
@@ -580,6 +688,23 @@ function ProfileModalContent({
         if (pendingPhotoForRealism || draftStylePref !== 'stylized_isometric') {
           setPendingPhotoForRealism(false);
           setDraftStylePref('photorealistic');
+        }
+        // Memorize selected face identity in IndexedDB so refreshing the page restores it immediately
+        const memorizedRecord = await saveMemorizedFaceIdentity({
+          sourceImageDataUrl: compactSourceUrl || sourceImageUrl || imgSrc,
+          singleFacePortraitDataUrl: resolvedFaceUrl,
+          lightingMode: nextLighting,
+          manualFaceBox: nextManualBox ?? null,
+          selectedFaceIndex:
+            typeof nextSelectedIdx === 'number'
+              ? nextSelectedIdx
+              : typeof res.selectedFaceIndex === 'number'
+                ? res.selectedFaceIndex
+                : null,
+          analysisSnapshot: res,
+        });
+        if (memorizedRecord && analysisSeqRef.current === requestSeq) {
+          setMemorizedAt(memorizedRecord.memorizedAt);
         }
       }
 
@@ -675,6 +800,8 @@ function ProfileModalContent({
         return;
       }
       setIsSampleSource(false);
+      setManualFaceBox(null);
+      setSelectedFaceIndex(null);
       setSourceImageUrl(dataUrl);
       void runAnalysis(dataUrl, lightingMode, undefined, {
         isUserUpload: true,
@@ -753,9 +880,14 @@ function ProfileModalContent({
     setSourceImageUrl('');
     setCandidateFaceUrl('');
     setAnalysisResult(null);
+    setManualFaceBox(null);
+    setSelectedFaceIndex(null);
+    setMemorizedAt(null);
+    setFaceCorrectionOpen(false);
     setMetricsOpen(false);
     setPendingPhotoForRealism(false);
     setDraftStylePref('stylized_isometric');
+    void clearMemorizedFaceIdentity();
     setDraftSpec((prev) =>
       sanitizeAvatarSpec({
         ...prev,
@@ -765,6 +897,30 @@ function ProfileModalContent({
         },
       })
     );
+  };
+
+  const handleOpenFaceCorrection = () => {
+    if (!canOpenFaceCorrection) return;
+    triggerHaptic('selection');
+    setFaceCorrectionOpen(true);
+  };
+
+  const handleConfirmFaceCorrection = ({
+    manualFaceBox: nextBox,
+    selectedFaceIndex: nextIdx,
+  }) => {
+    setFaceCorrectionOpen(false);
+    const targetSrc = sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl;
+    if (!targetSrc) return;
+    setManualFaceBox(nextBox || null);
+    setSelectedFaceIndex(typeof nextIdx === 'number' ? nextIdx : null);
+    void runAnalysis(targetSrc, lightingMode, undefined, {
+      isUserUpload: true,
+      updateFacePhoto: true,
+      skipNeuralDetector: false,
+      manualFaceBox: nextBox || undefined,
+      selectedFaceIndex: typeof nextIdx === 'number' ? nextIdx : undefined,
+    });
   };
 
   const handleJumpToManualSkinTone = () => {
@@ -791,6 +947,9 @@ function ProfileModalContent({
         isUserUpload: !isSampleSource && Boolean(draftFacePhotoUrl),
         updateFacePhoto: false,
         skipNeuralDetector: isSampleSource,
+        manualFaceBox: manualFaceBox || undefined,
+        selectedFaceIndex:
+          typeof selectedFaceIndex === 'number' ? selectedFaceIndex : undefined,
       });
     }
   };
@@ -811,7 +970,7 @@ function ProfileModalContent({
       { x: fullX, y: fullY },
       {
         isUserUpload: !isSampleSource && Boolean(draftFacePhotoUrl),
-        updateFacePhoto: false,
+        updateFacePhoto: !isSampleSource && Boolean(draftFacePhotoUrl),
         skipNeuralDetector: isSampleSource,
         previousCropRect: cropRect,
       }
@@ -900,6 +1059,7 @@ function ProfileModalContent({
     };
 
     const skinChanged =
+      skinProfile?.gender !== skinPayload.gender ||
       skinProfile?.skinToneHex !== skinPayload.skinToneHex ||
       skinProfile?.personalColor !== skinPayload.personalColor ||
       skinProfile?.mstLevel !== skinPayload.mstLevel ||
@@ -907,6 +1067,7 @@ function ProfileModalContent({
       (skinProfile?.portraitDataUrl || null) !== (skinPayload.portraitDataUrl || null);
 
     const bodyChanged =
+      bodySpec?.gender !== legacyBody.gender ||
       bodySpec?.heightCm !== legacyBody.heightCm ||
       bodySpec?.weightKg !== legacyBody.weightKg ||
       bodySpec?.bodyShape !== legacyBody.bodyShape ||
@@ -1261,6 +1422,165 @@ function ProfileModalContent({
                     'Fits outfits on a character simulation tailored to your body & skin tone.'
                   )}
             </p>
+          </div>
+
+          <div
+            className="profile-ai-style-block"
+            data-profile-gender-section="true"
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: '1px solid var(--border-subtle, rgba(140, 140, 148, 0.22))',
+            }}
+          >
+            <div className="profile-ai-row-head">
+              <span className="profile-ai-row-title">
+                {tx(lang, '모델 성별 (피팅 테스트)', 'Model Gender (Fitting Test)')}
+              </span>
+              <span className="profile-ai-status-chip">
+                {fallbackGender === 'female'
+                  ? tx(lang, '여성 체형 · 원피스/언더웨어 시뮬레이션', 'Female · Dress & Innerwear Sim')
+                  : tx(lang, '남성 체형 · 새깅 핏/언더웨어 시뮬레이션', 'Male · Sagging Fit & Innerwear Sim')}
+              </span>
+            </div>
+
+            <div
+              className="profile-vton-style-segmented"
+              data-profile-gender-segmented="true"
+              role="group"
+              aria-label={tx(lang, '모델 성별 선택', 'Select Model Gender')}
+            >
+              <button
+                type="button"
+                data-profile-gender-toggle="male"
+                aria-pressed={fallbackGender === 'male'}
+                className={`profile-vton-style-btn ${
+                  fallbackGender === 'male' ? 'is-active' : ''
+                }`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setDraftSpec((prev) =>
+                    sanitizeAvatarSpec({
+                      ...prev,
+                      framePreset: 'masculine',
+                      anthropometrics: {
+                        ...prev.anthropometrics,
+                        chestForm: 'pectoral',
+                      },
+                    })
+                  );
+                }}
+              >
+                {fallbackGender === 'male' && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
+                <span>{tx(lang, '남성 (Male)', 'Male')}</span>
+              </button>
+              <button
+                type="button"
+                data-profile-gender-toggle="female"
+                aria-pressed={fallbackGender === 'female'}
+                className={`profile-vton-style-btn ${
+                  fallbackGender === 'female' ? 'is-active' : ''
+                }`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setDraftSpec((prev) =>
+                    sanitizeAvatarSpec({
+                      ...prev,
+                      framePreset: 'feminine',
+                      anthropometrics: {
+                        ...prev.anthropometrics,
+                        chestForm: 'contoured',
+                      },
+                    })
+                  );
+                }}
+              >
+                {fallbackGender === 'female' && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
+                <span>{tx(lang, '여성 (Female)', 'Female')}</span>
+              </button>
+            </div>
+
+            <p className="profile-ai-style-hint">
+              {tx(
+                lang,
+                '남성·여성 모델을 전환해 새깅 팬츠 핏과 얇은 원피스 속옷 비침·라인(VPL) 시뮬레이션을 모두 테스트할 수 있습니다.',
+                'Switch between Male & Female models to test sagging pants fit and sheer dress underwear show-through / VPL simulation.'
+              )}
+            </p>
+          </div>
+
+          <div
+            className="mt-4 pt-4 border-t border-black/8 dark:border-white/10 space-y-2.5"
+            data-profile-styling-density="true"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold text-neutral-900 dark:text-white">
+                {tx(lang, '기본 착장 밀도 성향', 'Default Styling Density')}
+              </span>
+              <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                {tx(lang, '스튜디오 코디 자동 반영', 'Synced with Studio')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={tx(lang, '착장 밀도 선택', 'Select styling density')}>
+              {STYLING_DENSITY_OPTIONS.map((opt) => {
+                const active = draftStylingPref.density === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => updateDraftStylingPref({ density: opt.key })}
+                    className={`min-h-[40px] px-2 rounded-xl text-[12px] font-semibold border transition-colors ${
+                      active
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                        : 'bg-black/[0.03] dark:bg-white/[0.04] text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/10'
+                    }`}
+                  >
+                    {tx(lang, opt.labelKo, opt.labelEn)}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                aria-pressed={draftStylingPref.includeBag}
+                onClick={() =>
+                  updateDraftStylingPref({ includeBag: !draftStylingPref.includeBag })
+                }
+                className={`min-h-[38px] px-3 rounded-xl text-[11px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${
+                  draftStylingPref.includeBag
+                    ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                    : 'bg-transparent text-neutral-600 dark:text-neutral-400 border-black/10 dark:border-white/12'
+                }`}
+              >
+                {draftStylingPref.includeBag && <Check size={12} strokeWidth={2.8} />}
+                <span>{tx(lang, '가방 포함', 'Include Bag')}</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={draftStylingPref.includeAccessory}
+                onClick={() =>
+                  updateDraftStylingPref({
+                    includeAccessory: !draftStylingPref.includeAccessory,
+                  })
+                }
+                className={`min-h-[38px] px-3 rounded-xl text-[11px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${
+                  draftStylingPref.includeAccessory
+                    ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                    : 'bg-transparent text-neutral-600 dark:text-neutral-400 border-black/10 dark:border-white/12'
+                }`}
+              >
+                {draftStylingPref.includeAccessory && <Check size={12} strokeWidth={2.8} />}
+                <span>{tx(lang, '액세서리 포함', 'Include Accessories')}</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1626,36 +1946,62 @@ function ProfileModalContent({
                 </div>
               )}
 
-              {/* Soft Face-Not-Detected Warning */}
-              {showFaceNotDetectedWarning && (
+              {/* Soft Face-Not-Detected / Multi-Face / Poor Quality Guidance Card */}
+              {(showFaceNotDetectedWarning || showFaceQualityGuide) && faceQualityReport && (
                 <div
-                  className="skin-analysis-state-card is-warning"
-                  data-face-analysis-state="error"
+                  className={`skin-analysis-state-card ${
+                    faceQualityReport.level === 'poor' ? 'is-warning' : 'is-caution'
+                  } face-quality-guide-card`}
+                  data-face-quality-guide="true"
+                  data-face-quality-issue={faceQualityReport.primaryIssue}
+                  data-face-analysis-state={showFaceNotDetectedWarning ? 'error' : 'warning'}
                   role="status"
                 >
                   <div className="skin-state-header">
                     <AlertCircle size={18} className="skin-state-icon-warning" aria-hidden="true" />
                     <div className="skin-state-copy">
-                      <strong>
-                        {tx(
-                          lang,
-                          '사진에서 얼굴 윤곽을 뚜렷하게 찾지 못했어요',
-                          'Face contours were not clearly detected'
-                        )}
-                      </strong>
-                      <p className="skin-error-desc">
-                        {tx(
-                          lang,
-                          '프리뷰의 얼굴 위치를 직접 탭하거나 아래 버튼으로 다시 선택해 주세요.',
-                          'Tap directly on the preview face or choose a recovery option below.'
-                        )}
-                      </p>
+                      <strong>{faceQualityReport.headline}</strong>
+                      <p className="skin-error-desc">{faceQualityReport.description}</p>
                     </div>
+                  </div>
+                  <ul className="face-quality-checklist">
+                    {faceQualityReport.checklist.map((tip) => (
+                      <li key={tip}>{tip}</li>
+                    ))}
+                  </ul>
+                  <div className="face-quality-actions">
+                    {canOpenFaceCorrection && (
+                      <button
+                        type="button"
+                        data-open-face-correction-guide-btn="true"
+                        className="face-quality-primary-btn"
+                        onClick={handleOpenFaceCorrection}
+                      >
+                        <Crosshair size={14} aria-hidden="true" />
+                        <span>{tx(lang, '내 얼굴 선택·교정', 'Select My Face')}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="face-quality-secondary-btn"
+                      onClick={handleOpenGallery}
+                    >
+                      <Upload size={14} aria-hidden="true" />
+                      <span>{tx(lang, '다른 사진 업로드', 'Upload Another')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="face-quality-secondary-btn"
+                      onClick={handleOpenCamera}
+                    >
+                      <Camera size={14} aria-hidden="true" />
+                      <span>{tx(lang, '정면 다시 촬영', 'Retake Photo')}</span>
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Loaded Portrait Banner (Active Toggle & Reset) */}
+              {/* Loaded Portrait Banner (Active Toggle, Face Correction Tool & Memorized Badge) */}
               {!errorMsg && hasPhotoForEmptyCheck && (
                 <div
                   className="avatar-face-photo-row"
@@ -1674,22 +2020,39 @@ function ProfileModalContent({
                       </span>
                     )}
                     <div className="avatar-face-photo-text">
-                      <strong>
-                        {isFacePhotoActive
-                          ? tx(lang, '내 얼굴 사진 반영 ON', 'My Face Photo Active')
-                          : tx(
-                              lang,
-                              '얼굴 사진 분석 완료 (일러스트 모드)',
-                              'Portrait Analyzed (Stylized Mode)'
-                            )}
-                      </strong>
+                      <div className="avatar-face-photo-title-line">
+                        <strong>
+                          {isFacePhotoActive
+                            ? tx(lang, '내 얼굴 사진 반영 ON', 'My Face Photo Active')
+                            : tx(
+                                lang,
+                                '얼굴 사진 분석 완료 (일러스트 모드)',
+                                'Portrait Analyzed (Stylized Mode)'
+                              )}
+                        </strong>
+                        {memorizedAt && isFacePhotoActive && (
+                          <span
+                            className="face-memorized-pill"
+                            data-face-memorized-badge="true"
+                          >
+                            <BookmarkCheck size={11} aria-hidden="true" />
+                            <span>{tx(lang, '얼굴 기억됨', 'Memorized')}</span>
+                          </span>
+                        )}
+                      </div>
                       <small>
                         {isFacePhotoActive
-                          ? tx(
-                              lang,
-                              'AI 피팅 시 업로드한 본인 얼굴·헤어로 생성됩니다',
-                              'AI Try-On uses your uploaded face & hair likeness'
-                            )
+                          ? manualFaceBox || analysisResult?.manualFaceBoxUsed
+                            ? tx(
+                                lang,
+                                '교정한 내 얼굴만 단독 추출되어 새로고침 후에도 유지됩니다',
+                                'Your isolated face stays memorized even after refresh'
+                              )
+                            : tx(
+                                lang,
+                                'AI 피팅 시 본인 얼굴만 분리 반영되며 새로고침 후에도 기억됩니다',
+                                'Isolated face applies to AI Try-On and persists across refresh'
+                              )
                           : tx(
                               lang,
                               '피부톤만 추출되었으며 아바타는 일러스트로 표시됩니다',
@@ -1699,6 +2062,16 @@ function ProfileModalContent({
                     </div>
                   </div>
                   <div className="avatar-face-photo-actions">
+                    {canOpenFaceCorrection && (
+                      <button
+                        type="button"
+                        data-open-face-correction-btn="true"
+                        className="avatar-switch-btn is-subtle"
+                        onClick={handleOpenFaceCorrection}
+                      >
+                        {tx(lang, '얼굴 교정', 'Fix Face')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       data-reset-face-photo-btn="true"
@@ -2164,6 +2537,22 @@ function ProfileModalContent({
           </div>
         </div>
       )}
+      <FaceCorrectionModal
+        open={faceCorrectionOpen}
+        lang={lang}
+        sourceImageUrl={sourceImageUrl || draftFacePhotoUrl || candidateFaceUrl}
+        detectedFaces={analysisResult?.detectedFaces || []}
+        initialFaceBox={manualFaceBox || analysisResult?.selectedFaceNormBox || null}
+        selectedFaceIndex={
+          typeof selectedFaceIndex === 'number'
+            ? selectedFaceIndex
+            : analysisResult?.selectedFaceIndex
+        }
+        onClose={() => setFaceCorrectionOpen(false)}
+        onConfirmFace={handleConfirmFaceCorrection}
+        onRequestUpload={handleOpenGallery}
+        onRequestCamera={handleOpenCamera}
+      />
     </ResponsiveSheetModal>
   );
 }

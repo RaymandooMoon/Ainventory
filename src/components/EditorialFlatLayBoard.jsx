@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MoveHorizontal } from 'lucide-react';
+import { ArrowLeft, MoveHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
 import {
@@ -32,7 +32,9 @@ const SLOT_EDITORIAL_PRIORITY = {
   dress: 2,
   top_mid: 2.5,
   top: 3,
+  underwear_top: 3.2,
   bottom: 4,
+  underwear: 4.2,
   shoes: 5,
   acc_umbrella: 6,
   accessory: 7,
@@ -63,7 +65,10 @@ const SLOT_BADGE_LABELS = {
   top: { ko: 'TOP', en: 'TOP' },
   onepiece: { ko: 'ONE-PIECE', en: 'ONE-PIECE' },
   dress: { ko: 'DRESS', en: 'DRESS' },
+  underwear_top: { ko: 'INNER TOP', en: 'INNER TOP' },
+  underwear: { ko: 'UNDERWEAR', en: 'UNDERWEAR' },
   bottom: { ko: 'BOTTOM', en: 'BOTTOM' },
+  socks: { ko: 'SOCKS', en: 'SOCKS' },
   shoes: { ko: 'SHOES', en: 'SHOES' },
   accessory: { ko: 'BAG', en: 'BAG' },
   acc_umbrella: { ko: 'UMBRELLA', en: 'UMBRELLA' },
@@ -144,6 +149,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   placements,
   activeSlotKey,
   onSelectSlot,
+  onUnequipSlot,
   canReturnToCharacter = false,
   onCloseFlatLay,
   resolvedLang,
@@ -155,6 +161,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
   postLoginRevealActive = false,
   postLoginProgress = 0,
   onUserInteractFlatLay,
+  saggingFit = false,
   asPrimaryStageTarget,
   transformStyle,
 }) {
@@ -176,9 +183,24 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
       data-vton-after-img={asPrimaryStageTarget ? 'true' : undefined}
       style={transformStyle}
     >
-      {/* Editorial Masthead + Optional Return-to-Character Action */}
+      {/* Editorial Masthead + Leading Left Return-to-Character Action */}
       <div className="editorial-flatlay-header">
         <div className="editorial-flatlay-header-left">
+          {canReturnToCharacter && onCloseFlatLay && (
+            <button
+              type="button"
+              data-flatlay-close-btn="true"
+              className="editorial-flatlay-close-btn"
+              aria-label={isEn ? 'Return to character fitting view' : '캐릭터 피팅 화면으로 돌아가기'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCloseFlatLay();
+              }}
+            >
+              <ArrowLeft size={13} aria-hidden="true" />
+              <span>{isEn ? 'Back to Character' : '캐릭터로 돌아가기'}</span>
+            </button>
+          )}
           <span className="editorial-flatlay-kicker">
             {isEn ? 'FLAT-LAY LOOKBOOK' : '플랫레이 룩북'}
           </span>
@@ -199,21 +221,6 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
               {heightCm}·{weightKg} · {angleDeg}°
             </span>
           </span>
-          {canReturnToCharacter && onCloseFlatLay && (
-            <button
-              type="button"
-              data-flatlay-close-btn="true"
-              className="editorial-flatlay-close-btn"
-              aria-label={isEn ? 'Return to character fitting view' : '캐릭터 피팅 화면으로 돌아가기'}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseFlatLay();
-              }}
-            >
-              <ArrowLeft size={13} aria-hidden="true" />
-              <span>{isEn ? 'Back to Character' : '캐릭터로 돌아가기'}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -278,8 +285,18 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
               isEn && garment.name_en
                 ? garment.name_en
                 : localizeGarmentName(garment.name, resolvedLang);
-            const slotBadge =
+            const baseSlotBadge =
               SLOT_BADGE_LABELS[slotKey]?.[isEn ? 'en' : 'ko'] || slotKey.toUpperCase();
+            const slotBadge =
+              saggingFit && slotKey === 'bottom'
+                ? isEn
+                  ? 'BOTTOM · SAGGING'
+                  : 'BOTTOM · 새깅 핏'
+                : saggingFit && slotKey === 'underwear'
+                  ? isEn
+                    ? 'UNDERWEAR · BAND'
+                    : 'UNDERWEAR · 밴드 노출'
+                  : baseSlotBadge;
             const allowStorePhoto = Boolean(
               garment.image_url &&
                 (garment.image_url.startsWith('data:') ||
@@ -314,6 +331,25 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                 }}
               >
                 <span className="editorial-flatlay-slot-tag">{slotBadge}</span>
+                {onUnequipSlot && (
+                  <button
+                    type="button"
+                    className="editorial-flatlay-remove-btn"
+                    data-flatlay-remove-slot={slotKey}
+                    aria-label={
+                      isEn ? `Remove ${displayName}` : `${displayName} 착용 해제`
+                    }
+                    title={isEn ? 'Remove item' : '착용 해제'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUserInteractFlatLay?.();
+                      onUnequipSlot(slotKey);
+                    }}
+                  >
+                    <X size={11} strokeWidth={2.5} aria-hidden="true" />
+                  </button>
+                )}
                 <div className="editorial-flatlay-cutout-wrap">
                   <StudioGarmentImage
                     item={garment}
@@ -402,6 +438,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   layers: explicitLayers = null,
   activeSlotKey = null,
   onSelectSlot,
+  onUnequipSlot,
   stageMode = 'flatlay',
   styleMode = 'stylized_isometric',
   aiImageUrl = null,
@@ -441,6 +478,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   postLoginRevealActive = false,
   postLoginProgress = 0,
   onUserInteractFlatLay,
+  saggingFit = false,
   legacyMode,
   lang,
 }) {
@@ -1717,6 +1755,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               placements={placements}
               activeSlotKey={activeSlotKey}
               onSelectSlot={onSelectSlot}
+              onUnequipSlot={onUnequipSlot}
               canReturnToCharacter={canReturnToCharacter}
               onCloseFlatLay={onCloseFlatLay}
               resolvedLang={resolvedLang}
@@ -1728,6 +1767,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
               postLoginRevealActive={postLoginRevealActive}
               postLoginProgress={postLoginProgress}
               onUserInteractFlatLay={onUserInteractFlatLay}
+              saggingFit={Boolean(saggingFit)}
               asPrimaryStageTarget
               transformStyle={undefined}
             />
@@ -1751,6 +1791,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 weightKg={resolvedWeightKg}
                 angleDeg={safeAngleDeg}
                 isSynthesizing={aiLoading}
+                saggingFit={Boolean(saggingFit)}
                 asPrimaryStageTarget={false}
                 transformStyle={undefined}
               />

@@ -11,8 +11,15 @@ import {
   normalizeMstUndertone,
 } from './monkSkinTone.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
+import {
+  type DetectedFaceCandidate,
+  type NormalizedFaceBox,
+  clampNormalizedFaceBox,
+  computeSingleFacePortraitRect,
+  dedupeDetectedFaceCandidates,
+} from '../utils/faceAnalysisDiagnostics.ts';
 
-export type { MstLevel, MstSwatch, MstUndertone };
+export type { DetectedFaceCandidate, MstLevel, MstSwatch, MstUndertone, NormalizedFaceBox };
 
 export type PersonalColorSeasonKey =
   | 'spring_warm'
@@ -100,6 +107,14 @@ export interface SkinToneAnalysisResult {
   adviceKo: string;
   adviceEn: string;
   previewDataUrl: string;
+  singleFacePortraitDataUrl?: string;
+  detectedFaces?: DetectedFaceCandidate[];
+  detectedFaceCount?: number;
+  selectedFaceIndex?: number;
+  faceAreaRatio?: number;
+  lightingSkew?: number;
+  manualFaceBoxUsed?: boolean;
+  selectedFaceNormBox?: NormalizedFaceBox;
 }
 
 export interface StoredSkinProfile {
@@ -793,6 +808,7 @@ type FaceDetectorEngineKind =
   | 'native_face_detector'
   | 'pure_ts_integral'
   | 'manual_focus'
+  | 'manual_box'
   | 'fallback';
 
 interface DetectedFaceBox {
@@ -816,7 +832,14 @@ interface CropSourceRect {
 interface DetectFaceOptions {
   skipNeuralDetector?: boolean;
   focusPoint?: { x: number; y: number };
+  manualFaceBox?: NormalizedFaceBox;
+  selectedFaceIndex?: number;
   previousCropRect?: CropSourceRect;
+}
+
+interface FullPortraitDetectionResult {
+  primary: DetectedFaceBox;
+  allCandidates: DetectedFaceBox[];
 }
 
 interface MediaPipeLandmarkerLike {
@@ -856,9 +879,9 @@ async function getMediaPipeLandmarker(): Promise<MediaPipeLandmarkerLike | null>
               delegate: 'CPU',
             },
             runningMode: 'IMAGE',
-            numFaces: 5,
-            minFaceDetectionConfidence: 0.24,
-            minFacePresenceConfidence: 0.24,
+            numFaces: 6,
+            minFaceDetectionConfidence: 0.22,
+            minFacePresenceConfidence: 0.22,
           });
         })();
         const timeoutTask = new Promise<null>((resolve) => {
@@ -1395,24 +1418,129 @@ function detectFacePureTSFromImage(
  * - Falls back seamlessly to native FaceDetector or the pure-TS multi-scale integral-image
  *   detector when skipped (synthetic presets), offline, or on extreme 90° profiles.
  */
+function findClosestRawCandidate(
+  rawCandidates: ReadonlyArray<DetectedFaceBox>,
+  target: DetectedFaceCandidate,
+  srcW: number,
+  srcH: number
+): DetectedFaceBox | null {
+  if (!rawCandidates.length) return null;
+  const tx = target.cx * srcW;
+  const ty = target.cy * srcH;
+  let best: DetectedFaceBox | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const item of rawCandidates) {
+    const d = Math.hypot(item.cx - tx, item.cy - ty);
+    if (d < bestDist) {
+      bestDist = d;
+      best = item;
+    }
+  }
+  return best;
+}
+
 async function detectFaceOnFullPortrait(
   img: HTMLImageElement,
   gains: { r: number; g: number; b: number },
   options: DetectFaceOptions = {}
-): Promise<DetectedFaceBox> {
+): Promise<FullPortraitDetectionResult> {
   const srcW = img.naturalWidth || img.width || 320;
   const srcH = img.naturalHeight || img.height || 320;
   const minSrcSide = Math.min(srcW, srcH);
 
   let mpLandmarker: MediaPipeLandmarkerLike | null = null;
+  const collectedRawFaces: DetectedFaceBox[] = [];
+
   if (!options.skipNeuralDetector) {
     mpLandmarker = await getMediaPipeLandmarker();
     if (mpLandmarker) {
-      // Stage 1: Full-frame landmark detection
+      // Stage 1: Full-frame landmark detection (captures up to 6 faces)
       const stage1Faces = runMediaPipeOnRoi(mpLandmarker, img, srcW, srcH, 0, 0, srcW, srcH, 640);
+      collectedRawFaces.push(...stage1Faces);
+
+      // For wide / group shots, also scan left & right upper halves so distant side faces are found
+      if (srcW >= srcH * 0.92 && stage1Faces.length <= 4) {
+        const leftFaces = runMediaPipeOnRoi(
+          mpLandmarker,
+          img,
+          srcW,
+          srcH,
+          0,
+          0,
+          srcW * 0.56,
+          srcH * 0.72,
+          520
+        );
+        const rightFaces = runMediaPipeOnRoi(
+          mpLandmarker,
+          img,
+          srcW,
+          srcH,
+          srcW * 0.44,
+          0,
+          srcW * 0.56,
+          srcH * 0.72,
+          520
+        );
+        collectedRawFaces.push(...leftFaces, ...rightFaces);
+      }
+
+      // Priority A: Explicit user-adjusted manual face box from FaceCorrectionModal
+      if (options.manualFaceBox) {
+        const safeBox = clampNormalizedFaceBox(options.manualFaceBox);
+        const boxCx = (safeBox.x + safeBox.w * 0.5) * srcW;
+        const boxCy = (safeBox.y + safeBox.h * 0.5) * srcH;
+        const boxW = safeBox.w * srcW;
+        const boxH = safeBox.h * srcH;
+
+        const padX = Math.max(boxW * 0.45, minSrcSide * 0.08);
+        const padY = Math.max(boxH * 0.45, minSrcSide * 0.08);
+        const rx = clamp(boxCx - boxW * 0.5 - padX, 0, Math.max(0, srcW - 24));
+        const ry = clamp(boxCy - boxH * 0.5 - padY, 0, Math.max(0, srcH - 24));
+        const rw = clamp(boxW + padX * 2, 24, srcW - rx);
+        const rh = clamp(boxH + padY * 2, 24, srcH - ry);
+
+        const roiFaces = runMediaPipeOnRoi(mpLandmarker, img, srcW, srcH, rx, ry, rw, rh, 512);
+        collectedRawFaces.push(...roiFaces);
+
+        const matchedInBox = selectBestMediaPipeFace(roiFaces, srcW, srcH, {
+          x: safeBox.x + safeBox.w * 0.5,
+          y: safeBox.y + safeBox.h * 0.5,
+        });
+        if (matchedInBox) {
+          const dist = Math.hypot(matchedInBox.cx - boxCx, matchedInBox.cy - boxCy);
+          if (dist <= Math.max(boxW, boxH) * 0.65) {
+            return { primary: matchedInBox, allCandidates: collectedRawFaces };
+          }
+        }
+        return {
+          primary: {
+            cx: boxCx,
+            cy: boxCy,
+            w: boxW,
+            h: boxH,
+            detected: true,
+            engine: 'manual_box',
+          },
+          allCandidates: collectedRawFaces,
+        };
+      }
+
+      // Priority B: Explicit candidate index selection from FaceCorrectionModal
+      if (typeof options.selectedFaceIndex === 'number' && collectedRawFaces.length > 0) {
+        const deduped = dedupeDetectedFaceCandidates(collectedRawFaces, srcW, srcH);
+        const target = deduped[options.selectedFaceIndex];
+        if (target) {
+          const rawMatch = findClosestRawCandidate(collectedRawFaces, target, srcW, srcH);
+          if (rawMatch) {
+            return { primary: rawMatch, allCandidates: collectedRawFaces };
+          }
+        }
+      }
+
       if (options.focusPoint) {
         const focusedStage1 = selectBestMediaPipeFace(
-          stage1Faces,
+          collectedRawFaces,
           srcW,
           srcH,
           options.focusPoint
@@ -1423,7 +1551,7 @@ async function detectFaceOnFullPortrait(
             focusedStage1.cy - options.focusPoint.y * srcH
           );
           if (dist <= Math.max(focusedStage1.w, focusedStage1.h) * 0.72) {
-            return focusedStage1;
+            return { primary: focusedStage1, allCandidates: collectedRawFaces };
           }
         }
         // Stage 2 (Focus Zoom): crop generously around the user's tap point
@@ -1454,11 +1582,16 @@ async function detectFaceOnFullPortrait(
           roiSide,
           512
         );
+        collectedRawFaces.push(...focusFaces);
         const focused = selectBestMediaPipeFace(focusFaces, srcW, srcH, options.focusPoint);
-        if (focused) return focused;
+        if (focused) {
+          return { primary: focused, allCandidates: collectedRawFaces };
+        }
       } else {
-        const bestStage1 = selectBestMediaPipeFace(stage1Faces, srcW, srcH);
-        if (bestStage1) return bestStage1;
+        const bestStage1 = selectBestMediaPipeFace(collectedRawFaces, srcW, srcH);
+        if (bestStage1) {
+          return { primary: bestStage1, allCandidates: collectedRawFaces };
+        }
 
         // Stage 2 (Progressive Zoom for full-body / distant subjects)
         const stage2Rois: Array<{
@@ -1472,12 +1605,6 @@ async function detectFaceOnFullPortrait(
           { sx: 0, sy: 0, sw: srcW, sh: srcH * 0.56, maxDim: 560 },
           { sx: srcW * 0.22, sy: 0, sw: srcW * 0.56, sh: srcH * 0.38, maxDim: 480 },
           { sx: srcW * 0.1, sy: srcH * 0.22, sw: srcW * 0.8, sh: srcH * 0.56, maxDim: 512 },
-          ...(srcW >= srcH * 0.85
-            ? [
-                { sx: 0, sy: 0, sw: srcW * 0.52, sh: srcH * 0.56, maxDim: 512 },
-                { sx: srcW * 0.48, sy: 0, sw: srcW * 0.52, sh: srcH * 0.56, maxDim: 512 },
-              ]
-            : []),
         ];
         for (const roi of stage2Rois) {
           const faces = runMediaPipeOnRoi(
@@ -1491,11 +1618,30 @@ async function detectFaceOnFullPortrait(
             roi.sh,
             roi.maxDim
           );
+          collectedRawFaces.push(...faces);
           const picked = selectBestMediaPipeFace(faces, srcW, srcH);
-          if (picked) return picked;
+          if (picked) {
+            return { primary: picked, allCandidates: collectedRawFaces };
+          }
         }
       }
     }
+  }
+
+  // Respect explicit manualFaceBox even when MediaPipe is unavailable or skipped
+  if (options.manualFaceBox) {
+    const safeBox = clampNormalizedFaceBox(options.manualFaceBox);
+    return {
+      primary: {
+        cx: (safeBox.x + safeBox.w * 0.5) * srcW,
+        cy: (safeBox.y + safeBox.h * 0.5) * srcH,
+        w: safeBox.w * srcW,
+        h: safeBox.h * srcH,
+        detected: true,
+        engine: 'manual_box',
+      },
+      allCandidates: collectedRawFaces,
+    };
   }
 
   // Stage 3: Pure-TS multi-scale integral-image face detector
@@ -1521,8 +1667,11 @@ async function detectFaceOnFullPortrait(
       zoomSide,
       480
     );
+    collectedRawFaces.push(...zoomFaces);
     const picked = selectBestMediaPipeFace(zoomFaces, srcW, srcH, options.focusPoint);
-    if (picked) return picked;
+    if (picked) {
+      return { primary: picked, allCandidates: collectedRawFaces };
+    }
   }
 
   // Stage 4: Native platform FaceDetector API when available & earlier stages missed
@@ -1548,31 +1697,30 @@ async function detectFaceOnFullPortrait(
             };
           }
         ).FaceDetector;
-        const detector = new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 5 });
+        const detector = new FaceDetectorCtor({ fastMode: true, maxDetectedFaces: 6 });
         const faces = await detector.detect(detCanvas);
         detCanvas.width = 0;
         detCanvas.height = 0;
         if (Array.isArray(faces) && faces.length > 0) {
-          let bestFace = faces[0].boundingBox;
-          let bestRank = -1;
-          for (const item of faces) {
-            const b = item.boundingBox;
-            const yNorm = (b.y + b.height * 0.5) / detH;
-            const rank = b.width * b.height * (1.25 - 0.35 * yNorm);
-            if (rank > bestRank) {
-              bestRank = rank;
-              bestFace = b;
-            }
-          }
-          if (bestFace.width >= 12 && bestFace.height >= 12) {
-            return {
-              cx: (bestFace.x + bestFace.width * 0.5) / scale,
-              cy: (bestFace.y + bestFace.height * 0.5) / scale,
-              w: bestFace.width / scale,
-              h: bestFace.height / scale,
-              detected: true,
-              engine: 'native_face_detector',
-            };
+          const nativeBoxes: DetectedFaceBox[] = faces
+            .filter((item) => item.boundingBox.width >= 12 && item.boundingBox.height >= 12)
+            .map((item) => {
+              const b = item.boundingBox;
+              return {
+                cx: (b.x + b.width * 0.5) / scale,
+                cy: (b.y + b.height * 0.5) / scale,
+                w: b.width / scale,
+                h: b.height / scale,
+                detected: true,
+                engine: 'native_face_detector' as const,
+              };
+            });
+          if (nativeBoxes.length > 0) {
+            collectedRawFaces.push(...nativeBoxes);
+            const bestNative =
+              selectBestMediaPipeFace(nativeBoxes, srcW, srcH, options.focusPoint) ||
+              nativeBoxes[0];
+            return { primary: bestNative, allCandidates: collectedRawFaces };
           }
         }
       }
@@ -1583,7 +1731,12 @@ async function detectFaceOnFullPortrait(
     }
   }
 
-  return pureTsCandidate;
+  return {
+    primary: pureTsCandidate,
+    allCandidates: pureTsCandidate.detected
+      ? [...collectedRawFaces, pureTsCandidate]
+      : collectedRawFaces,
+  };
 }
 
 /**
@@ -1881,6 +2034,8 @@ export async function analyzePortraitSkinTone(
   options: {
     lightingMode?: LightingCalibrationKey;
     focusPoint?: { x: number; y: number };
+    manualFaceBox?: NormalizedFaceBox;
+    selectedFaceIndex?: number;
     previousCropRect?: CropSourceRect;
     skipNeuralDetector?: boolean;
   } = {}
@@ -1899,15 +2054,26 @@ export async function analyzePortraitSkinTone(
   const gains = modeSpec.gains.autoGreyWorld
     ? estimateNeutralWhiteBalanceGains(img)
     : { r: modeSpec.gains.r, g: modeSpec.gains.g, b: modeSpec.gains.b };
+  const lightingSkew = Number(
+    Math.max(Math.abs(gains.r - 1), Math.abs(gains.g - 1), Math.abs(gains.b - 1)).toFixed(3)
+  );
 
-  // 2. Detect face on full uncropped portrait (passing optional user focusPoint)
-  let detectedFace = await detectFaceOnFullPortrait(img, gains, {
+  // 2. Detect ALL faces on full uncropped portrait + select active target
+  const detectionOutcome = await detectFaceOnFullPortrait(img, gains, {
     skipNeuralDetector: options.skipNeuralDetector,
     focusPoint: options.focusPoint,
+    manualFaceBox: options.manualFaceBox,
+    selectedFaceIndex: options.selectedFaceIndex,
     previousCropRect: options.previousCropRect,
   });
+  let detectedFace = detectionOutcome.primary;
+  const detectedFaces = dedupeDetectedFaceCandidates(
+    detectionOutcome.allCandidates,
+    srcW,
+    srcH
+  );
 
-  if (options.focusPoint) {
+  if (options.focusPoint && !options.manualFaceBox) {
     const focusPx = clamp(options.focusPoint.x, 0.04, 0.96) * srcW;
     const focusPy = clamp(options.focusPoint.y, 0.04, 0.96) * srcH;
 
@@ -1972,6 +2138,61 @@ export async function analyzePortraitSkinTone(
   const previewDataUrl = canvas.toDataURL('image/jpeg', 0.92);
   canvas.width = 0;
   canvas.height = 0;
+
+  // 3b. Render isolated single-face portrait (512x512) with generous hair/chin framing for AI VTON
+  let singleFacePortraitDataUrl = previewDataUrl;
+  try {
+    const portraitRect = computeSingleFacePortraitRect(detectedFace, srcW, srcH);
+    const portraitCanvas = document.createElement('canvas');
+    portraitCanvas.width = 512;
+    portraitCanvas.height = 512;
+    const pCtx = portraitCanvas.getContext('2d');
+    if (pCtx) {
+      pCtx.fillStyle = '#F5F5F7';
+      pCtx.fillRect(0, 0, 512, 512);
+      pCtx.drawImage(
+        img,
+        portraitRect.sx,
+        portraitRect.sy,
+        portraitRect.side,
+        portraitRect.side,
+        0,
+        0,
+        512,
+        512
+      );
+      singleFacePortraitDataUrl = portraitCanvas.toDataURL('image/jpeg', 0.9);
+    }
+    portraitCanvas.width = 0;
+    portraitCanvas.height = 0;
+  } catch {
+    singleFacePortraitDataUrl = previewDataUrl;
+  }
+
+  const faceAreaRatio = Number(
+    clamp((detectedFace.w * detectedFace.h) / Math.max(1, srcW * srcH), 0, 1).toFixed(4)
+  );
+  const selectedFaceNormBox = clampNormalizedFaceBox({
+    x: (detectedFace.cx - detectedFace.w * 0.5) / Math.max(1, srcW),
+    y: (detectedFace.cy - detectedFace.h * 0.5) / Math.max(1, srcH),
+    w: detectedFace.w / Math.max(1, srcW),
+    h: detectedFace.h / Math.max(1, srcH),
+  });
+  let selectedFaceIndex = -1;
+  if (detectedFaces.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    const targetCx = detectedFace.cx / Math.max(1, srcW);
+    const targetCy = detectedFace.cy / Math.max(1, srcH);
+    detectedFaces.forEach((cand, idx) => {
+      const dist = Math.hypot(cand.cx - targetCx, cand.cy - targetCy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = idx;
+      }
+    });
+    selectedFaceIndex = bestIdx;
+  }
 
   // Map detected face box into normalized [0..1] preview coordinates
   const faceCxNorm = clamp((detectedFace.cx - sx) / cropSide, 0.22, 0.78);
@@ -2485,5 +2706,13 @@ export async function analyzePortraitSkinTone(
     adviceKo: seasonMeta.adviceKo,
     adviceEn: seasonMeta.adviceEn,
     previewDataUrl,
+    singleFacePortraitDataUrl,
+    detectedFaces,
+    detectedFaceCount: detectedFaces.length,
+    selectedFaceIndex: selectedFaceIndex >= 0 ? selectedFaceIndex : undefined,
+    faceAreaRatio,
+    lightingSkew,
+    manualFaceBoxUsed: Boolean(options.manualFaceBox),
+    selectedFaceNormBox,
   };
 }

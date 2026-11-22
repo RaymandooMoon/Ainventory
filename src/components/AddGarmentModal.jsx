@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,7 +7,10 @@ import {
   Globe,
   ImagePlus,
   Loader2,
+  Lock,
   Plus,
+  Search,
+  ShieldCheck,
   Sparkles,
   Tag,
   X,
@@ -53,7 +56,14 @@ import {
   CompactPreviewBar,
   OfficialProductProposalCard,
 } from './GarmentRegistrationBanner.jsx';
+import OfficialInfoSyncModal from './OfficialInfoSyncModal.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
+import { buildGarmentRegistrationStepperState } from '../utils/garmentRegistrationStepper.ts';
+import {
+  formatCareSummaryTokens,
+  inferGarmentCareProfile,
+  sanitizeGarmentCareProfile,
+} from '../utils/garmentCareEngine.ts';
 
 const ACCESSORY_SUBTYPE_OPTIONS = [
   { key: 'bag', ko: '크로스·숄더백', en: 'Crossbody / Shoulder' },
@@ -90,6 +100,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const backCameraRef = useRef(null);
   const tagGalleryRef = useRef(null);
   const tagCameraRef = useRef(null);
+  const careLabelGalleryRef = useRef(null);
+  const careLabelCameraRef = useRef(null);
 
   const mountedRef = useRef(true);
   const dirtyFieldsRef = useRef(new Set());
@@ -109,7 +121,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   // Captured raw compressed previews
   const [frontPreview, setFrontPreview] = useState(null);
   const [backPreview, setBackPreview] = useState(null);
-  const [tagPreviews, setTagPreviews] = useState([]);
+  const [neckTagPreview, setNeckTagPreview] = useState(null);
+  const [careLabelPreview, setCareLabelPreview] = useState(null);
   const [loadingSlot, setLoadingSlot] = useState('');
 
   // Background cutout pipeline state
@@ -124,13 +137,20 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const [studioBusySide, setStudioBusySide] = useState('');
   const [cutoutSource, setCutoutSource] = useState('local_ml');
 
-  // AI analysis + Official Web Lookup state
+  // AI analysis + Official Brand DB Lookup & Sync Modal state
   const [analysisStatus, setAnalysisStatus] = useState('idle'); // idle | analyzing | ready | fallback
   const [analysisNote, setAnalysisNote] = useState('');
   const [webLookupStatus, setWebLookupStatus] = useState('idle'); // idle | searching | found | not_found | applied_all | applied_info_only | dismissed
   const [webMatch, setWebMatch] = useState(null);
   const [officialImageCutout, setOfficialImageCutout] = useState(null);
   const [usingOfficialPhoto, setUsingOfficialPhoto] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [labelSearchBusy, setLabelSearchBusy] = useState(false);
+
+  const tagPreviews = useMemo(
+    () => [neckTagPreview, careLabelPreview].filter(Boolean),
+    [neckTagPreview, careLabelPreview]
+  );
 
   // Step 1: Core attributes
   const [category, setCategory] = useState('bottom');
@@ -162,8 +182,45 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
   const [size, setSize] = useState('');
   const [materialComposition, setMaterialComposition] = useState('');
   const [careTip, setCareTip] = useState('');
+  const [careProfileOverride, setCareProfileOverride] = useState(null);
   const [officialSourceUrl, setOfficialSourceUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const effectiveCareProfile = useMemo(() => {
+    const inferred = inferGarmentCareProfile({
+      name,
+      category,
+      subcategory,
+      fabric: material,
+      material_composition: materialComposition,
+      color_name: colorName,
+      color_hex: colorHex,
+      care_tip: careTip,
+    });
+    if (careProfileOverride) {
+      return sanitizeGarmentCareProfile(
+        {
+          ...careProfileOverride,
+          ...(careLabelPreview ? { careLabelImageUrl: careLabelPreview } : {}),
+        },
+        inferred
+      );
+    }
+    return careLabelPreview
+      ? { ...inferred, careLabelImageUrl: careLabelPreview }
+      : inferred;
+  }, [
+    name,
+    category,
+    subcategory,
+    material,
+    materialComposition,
+    colorName,
+    colorHex,
+    careTip,
+    careProfileOverride,
+    careLabelPreview,
+  ]);
 
   const markDirty = (field) => {
     dirtyFieldsRef.current.add(field);
@@ -223,7 +280,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
 
     setLoadingSlot(slot);
     try {
-      const maxSide = slot === 'tag' ? 1280 : 1200;
+      const maxSide = slot === 'tag' || slot === 'care_label' ? 1280 : 1200;
       const compressed = await prepareUploadPreview(file, maxSide, 0.86);
       if (!mountedRef.current) return;
 
@@ -239,7 +296,9 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         setCutoutStatusBack('idle');
         setNeedsStudioBack(false);
       } else if (slot === 'tag') {
-        setTagPreviews((prev) => [...prev.slice(0, 1), compressed]);
+        setNeckTagPreview(compressed);
+      } else if (slot === 'care_label') {
+        setCareLabelPreview(compressed);
       }
       triggerHaptic('selection');
     } catch (err) {
@@ -252,14 +311,14 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
     }
   };
 
-  const triggerWebLookup = async (params) => {
+  const triggerWebLookup = async (params, { openModalOnMatch = false } = {}) => {
     setWebLookupStatus('searching');
     try {
       const res = await apiFetch('/garments/web-lookup', {
         method: 'POST',
         body: JSON.stringify({ ...params, lang }),
       });
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return null;
       const match = res?.match;
       if (match?.found) {
         setWebMatch(match);
@@ -273,14 +332,112 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
               if (mountedRef.current) setOfficialImageCutout(match.official_image_data);
             });
         }
+        if (openModalOnMatch) {
+          setSyncModalOpen(true);
+        }
+        return match;
       } else {
         setWebMatch(null);
         setWebLookupStatus('not_found');
+        if (openModalOnMatch) {
+          showToast?.(
+            tx(
+              lang,
+              '공식 브랜드 DB에서 일치하는 품번/제품을 찾지 못했습니다. 라벨을 더 선명하게 찍어보세요.',
+              'No exact official product found in brand DB. Try a clearer close-up of the label.'
+            )
+          );
+        }
+        return null;
       }
     } catch {
       if (mountedRef.current) {
         setWebLookupStatus('not_found');
+        if (openModalOnMatch) {
+          showToast?.(
+            tx(
+              lang,
+              '공식 브랜드 DB 검색 중 오류가 발생했습니다.',
+              'Official brand DB search failed.'
+            )
+          );
+        }
       }
+      return null;
+    }
+  };
+
+  const handleLabelBrandDbSearch = async () => {
+    if (labelSearchBusy || webLookupStatus === 'searching') return;
+    if (tagPreviews.length === 0 && !brand.trim() && !productCode.trim()) {
+      showToast?.(
+        tx(
+          lang,
+          '목탭이나 내부 세탁 케어 라벨 사진을 먼저 촬영·선택해 주세요.',
+          'Please capture or select a neck tag or care label photo first.'
+        )
+      );
+      return;
+    }
+
+    setLabelSearchBusy(true);
+    triggerHaptic('selection');
+    try {
+      let lookupPayload = {
+        brand: brand.trim(),
+        product_code: productCode.trim(),
+        query: '',
+        name: name.trim(),
+        category,
+        color_name: colorName,
+        material,
+      };
+
+      if (tagPreviews.length > 0) {
+        const visionRes = await apiFetch('/garments/vision-analyze', {
+          method: 'POST',
+          body: JSON.stringify({
+            front_image: frontPreview || null,
+            back_image: backPreview || null,
+            tag_images: tagPreviews,
+            lang,
+          }),
+        });
+        if (!mountedRef.current) return;
+        const a = visionRes?.analysis;
+        if (a) {
+          if (a.brand && !dirtyFieldsRef.current.has('brand')) setBrand(a.brand);
+          if (a.product_code && !dirtyFieldsRef.current.has('productCode')) {
+            setProductCode(a.product_code);
+          }
+          if (a.material_composition && !dirtyFieldsRef.current.has('materialComposition')) {
+            setMaterialComposition(a.material_composition);
+          }
+          if (a.size && !dirtyFieldsRef.current.has('size')) setSize(a.size);
+          if (a.care_tip && !dirtyFieldsRef.current.has('careTip')) setCareTip(a.care_tip);
+
+          lookupPayload = {
+            brand: a.brand || brand.trim(),
+            product_code: a.product_code || productCode.trim(),
+            query: a.web_search_query || '',
+            name: (lang === 'en' ? a.name_en : a.name_ko) || name.trim(),
+            category: a.category || category,
+            color_name: a.color_name || colorName,
+            material: a.material || material,
+          };
+        }
+      }
+
+      await triggerWebLookup(lookupPayload, { openModalOnMatch: true });
+    } catch (err) {
+      if (mountedRef.current) {
+        showToast?.(
+          localizeApiMessage(err?.message, lang) ||
+            tx(lang, '라벨 분석 및 공식 DB 검색에 실패했습니다.', 'Label scan & brand DB search failed.')
+        );
+      }
+    } finally {
+      if (mountedRef.current) setLabelSearchBusy(false);
     }
   };
 
@@ -403,6 +560,15 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           setMaterialComposition(a.material_composition);
         }
         if (!dirty.has('careTip') && a.care_tip) setCareTip(a.care_tip);
+        if (!dirty.has('careProfile') && a.care_profile && typeof a.care_profile === 'object') {
+          setCareProfileOverride(
+            sanitizeGarmentCareProfile({
+              ...a.care_profile,
+              source: careLabelPreview ? 'care_label_scan' : a.care_profile.source || 'inferred',
+              ...(careLabelPreview ? { careLabelImageUrl: careLabelPreview } : {}),
+            })
+          );
+        }
 
         if (a.background_quality?.hasClutterOrBodyPart) {
           setNeedsStudioFront(true);
@@ -547,6 +713,73 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
     triggerHaptic('medium');
   };
 
+  const handleConfirmSyncModal = ({ patch, applyOfficialPhoto, appliedCount }) => {
+    if (patch.name) {
+      markDirty('name');
+      setName(patch.name);
+    }
+    if (patch.brand) {
+      markDirty('brand');
+      setBrand(patch.brand);
+    }
+    if (patch.productCode) {
+      markDirty('productCode');
+      setProductCode(patch.productCode);
+    }
+    if (patch.colorName) {
+      markDirty('color');
+      setColorName(patch.colorName);
+    }
+    if (patch.material) {
+      markDirty('material');
+      setMaterial(patch.material);
+    }
+    if (patch.materialComposition) {
+      markDirty('materialComposition');
+      setMaterialComposition(patch.materialComposition);
+    }
+    if (patch.fit) {
+      markDirty('fit');
+      setFit(patch.fit);
+    }
+    if (patch.price) {
+      setPrice(patch.price);
+    }
+    if (patch.purchaseStore) {
+      setPurchaseStore(patch.purchaseStore);
+    }
+    if (patch.careTip) {
+      markDirty('careTip');
+      setCareTip(patch.careTip);
+    }
+    if (patch.fitNote) {
+      markDirty('fitNote');
+      setFitNote(patch.fitNote);
+    }
+    if (patch.officialSourceUrl) {
+      setOfficialSourceUrl(patch.officialSourceUrl);
+    }
+
+    if (applyOfficialPhoto && (officialImageCutout || webMatch?.official_image_data)) {
+      setUsingOfficialPhoto(true);
+      setActivePreviewSide('front');
+      setShowOriginal(false);
+      setCutoutSource('official_web');
+      setWebLookupStatus('applied_all');
+    } else if (appliedCount > 0) {
+      setWebLookupStatus('applied_info_only');
+    }
+
+    triggerHaptic('medium');
+    showToast?.(
+      tx(
+        lang,
+        `공식 브랜드 DB 정보 ${appliedCount}개 항목을 자동 업데이트했어요.`,
+        `Synced ${appliedCount} official brand specifications.`
+      )
+    );
+  };
+
   const handleToggleSeason = (seasonKey) => {
     markDirty('seasons');
     setSeasons((prev) => {
@@ -629,7 +862,13 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           care_tip: careTip.trim(),
           fit_note: fitNote.trim(),
           notes: fitNote.trim(),
-          garment_details: garmentDetails,
+          garment_details: {
+            ...(garmentDetails && typeof garmentDetails === 'object' ? garmentDetails : {}),
+            care_profile: {
+              ...effectiveCareProfile,
+              ...(careLabelPreview ? { careLabelImageUrl: careLabelPreview } : {}),
+            },
+          },
           official_source_url: officialSourceUrl.trim(),
           cutout_source: usingOfficialPhoto ? 'official_web' : cutoutSource,
           image_data: primaryFrontImage,
@@ -660,9 +899,55 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
 
   const quickFitNotes = QUICK_FIT_NOTES_BY_CATEGORY[category] || QUICK_FIT_NOTES_BY_CATEGORY.top;
 
+  const hasOfficialSync =
+    webLookupStatus === 'applied_all' || webLookupStatus === 'applied_info_only';
+
+  const stepperState = useMemo(
+    () =>
+      buildGarmentRegistrationStepperState({
+        hasFront: Boolean(frontPreview),
+        hasBack: Boolean(backPreview),
+        hasNeckTag: Boolean(neckTagPreview),
+        hasCareLabel: Boolean(careLabelPreview),
+        hasOfficialSync,
+        currentFormStep: step,
+        lang,
+      }),
+    [frontPreview, backPreview, neckTagPreview, careLabelPreview, hasOfficialSync, step, lang]
+  );
+
+  const currentSyncValues = useMemo(
+    () => ({
+      name,
+      brand,
+      productCode,
+      colorName,
+      material,
+      materialComposition,
+      fit,
+      price,
+      purchaseStore,
+      careTip,
+      fitNote,
+    }),
+    [
+      name,
+      brand,
+      productCode,
+      colorName,
+      material,
+      materialComposition,
+      fit,
+      price,
+      purchaseStore,
+      careTip,
+      fitNote,
+    ]
+  );
+
   return (
     <form onSubmit={handleSubmit} className="hig-add-garment-form hig-guided-reg-form">
-      {/* Hidden File Inputs (Front preserves CARBON_DOM_CONTRACT IDs) */}
+      {/* Hidden File Inputs — indices 0..5 preserved for E2E & CARBON_DOM_CONTRACT compatibility */}
       <input
         id={CARBON_DOM_CONTRACT.wardrobeGalleryInputId}
         ref={frontGalleryRef}
@@ -710,17 +995,135 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
         onChange={(e) => handlePickPhoto('tag', e)}
         className="sr-only-input"
       />
+      <input
+        ref={careLabelGalleryRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => handlePickPhoto('care_label', e)}
+        className="sr-only-input"
+      />
+      <input
+        ref={careLabelCameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => handlePickPhoto('care_label', e)}
+        className="sr-only-input"
+      />
+
+      {/* ==================== TOP VISUAL CAPTURE & REGISTRATION STEPPER ==================== */}
+      <nav
+        className="hig-reg-top-stepper"
+        data-garment-capture-stepper="true"
+        aria-label={tx(lang, '의류 촬영 및 등록 진행 단계', 'Garment capture and registration progress')}
+      >
+        <div className="hig-reg-stepper-head">
+          <span className="hig-reg-stepper-title">
+            {tx(lang, '촬영 · 등록 진행 현황', 'Capture Progress')}
+          </span>
+          <span className="hig-reg-stepper-counter tabular-nums">
+            {tx(
+              lang,
+              `필수 사진 ${stepperState.requiredCapturedCount}/${stepperState.requiredTotalCount}`,
+              `Required ${stepperState.requiredCapturedCount}/${stepperState.requiredTotalCount}`
+            )}
+          </span>
+        </div>
+
+        <div className="hig-reg-stepper-track" aria-hidden="true">
+          <div
+            className="hig-reg-stepper-track-fill"
+            style={{ width: `${stepperState.progressPct}%` }}
+          />
+        </div>
+
+        <ol className="hig-reg-stepper-list">
+          {stepperState.stages.map((stage) => {
+            const isDone = stage.status === 'done';
+            const isActive = stage.status === 'active';
+            const clickable =
+              (stage.id === 'front' || stage.id === 'back' || stage.id === 'label') && step > 0;
+            return (
+              <li
+                key={stage.id}
+                className={`hig-reg-stepper-node is-${stage.status}`}
+                data-stepper-stage={stage.id}
+                data-stepper-status={stage.status}
+              >
+                <button
+                  type="button"
+                  className="hig-reg-stepper-node-btn"
+                  disabled={!clickable && !(stage.id === 'save' && stepperState.canSave && step === 0)}
+                  onClick={() => {
+                    if (clickable) setStep(0);
+                    else if (stage.id === 'save' && stepperState.canSave && step === 0) {
+                      startAnalysisAndGuidedFlow();
+                    }
+                  }}
+                >
+                  <span className="hig-reg-stepper-dot tabular-nums">
+                    {isDone ? <Check size={11} strokeWidth={2.8} /> : stage.index}
+                  </span>
+                  <span className="hig-reg-stepper-label">
+                    {stage.shortLabel}
+                    {stage.required && !isDone && (
+                      <span className="hig-reg-stepper-req" aria-hidden="true">*</span>
+                    )}
+                  </span>
+                  {isActive && <span className="sr-only">{tx(lang, '현재 단계', 'Current step')}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {/* ==================== STEP 0: MANDATORY FRONT + BACK + OPTIONAL TAG CAPTURE ==================== */}
       {step === 0 && (
         <div className="hig-capture-step" id={CARBON_DOM_CONTRACT.addGarmentPreviewId}>
-          <p className="hig-capture-lead">
-            {tx(
-              lang,
-              '앞면과 뒷면 2장을 촬영하면 AI가 색상·재질·핏·착용 디테일을 자동 분석하고 백그라운드에서 누끼를 작업해요.',
-              'Capture both front and back views so AI analyzes color, fabric, fit, and details while cutting out backgrounds.'
-            )}
-          </p>
+          {/* Mandatory Front 1 + Back 1 Capture Guide Banner */}
+          <div
+            className={`hig-mandatory-guide-banner ${stepperState.canSave ? 'is-complete' : ''}`}
+            data-front-back-guide="true"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="hig-mandatory-guide-top">
+              <div className="hig-mandatory-guide-title">
+                {stepperState.canSave ? <ShieldCheck size={15} /> : <Lock size={14} />}
+                <span>
+                  {tx(
+                    lang,
+                    '필수 촬영 가이드 · 앞면 1장 + 뒷면 1장',
+                    'Required Capture Guide · 1 Front + 1 Back'
+                  )}
+                </span>
+              </div>
+              <div className="hig-mandatory-guide-chips tabular-nums">
+                <span className={`hig-guide-chip ${frontPreview ? 'is-done' : ''}`}>
+                  {frontPreview ? <Check size={11} /> : null}
+                  {tx(lang, '앞면 1장', 'Front 1')}
+                </span>
+                <span className={`hig-guide-chip ${backPreview ? 'is-done' : ''}`}>
+                  {backPreview ? <Check size={11} /> : null}
+                  {tx(lang, '뒷면 1장', 'Back 1')}
+                </span>
+              </div>
+            </div>
+            <p className="hig-capture-lead">
+              {stepperState.canSave
+                ? tx(
+                    lang,
+                    '앞·뒷면 필수 사진 2장이 모두 준비되었어요. 바로 저장하거나 AI 자동 분석으로 상세 정보를 채워보세요.',
+                    'Both required photos are ready. Save now or launch AI Guided Registration to auto-fill specs.'
+                  )
+                : tx(
+                    lang,
+                    '정확한 360° 가상 피팅과 핏 분석을 위해 앞면 1장과 뒷면 1장을 평평하게 펼쳐 모두 촬영해 주세요. 두 장이 모두 등록되어야 저장 버튼이 활성화됩니다.',
+                    'Lay the garment flat and capture both 1 front and 1 back photo for accurate 360° virtual try-on. Save unlocks once both photos are added.'
+                  )}
+            </p>
+          </div>
 
           <div className="hig-capture-dual-grid">
             {/* Slot 1: Front (Required) */}
@@ -729,7 +1132,9 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 <span className="hig-capture-slot-title">
                   {tx(lang, '1. 앞면 사진', '1. Front View')}
                 </span>
-                <span className="hig-capture-required-dot">{tx(lang, '필수', 'Required')}</span>
+                <span className={`hig-capture-required-dot ${frontPreview ? 'is-done' : ''}`}>
+                  {frontPreview ? tx(lang, '필수 · 완료', 'Required · Done') : tx(lang, '필수 1장', 'Required')}
+                </span>
               </div>
 
               <div className="hig-capture-slot-stage">
@@ -777,7 +1182,9 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 <span className="hig-capture-slot-title">
                   {tx(lang, '2. 뒷면 사진', '2. Back View')}
                 </span>
-                <span className="hig-capture-required-dot">{tx(lang, '필수', 'Required')}</span>
+                <span className={`hig-capture-required-dot ${backPreview ? 'is-done' : ''}`}>
+                  {backPreview ? tx(lang, '필수 · 완료', 'Required · Done') : tx(lang, '필수 1장', 'Required')}
+                </span>
               </div>
 
               <div className="hig-capture-slot-stage">
@@ -818,8 +1225,8 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
             </div>
           </div>
 
-          {/* Slot 3: Optional Neck Tag / Care Label for Web Official Product Search */}
-          <div className="hig-tag-capture-card">
+          {/* Slot 3: Optional Neck Tag & Internal Wash Care Label -> Official Brand DB Lookup */}
+          <div className="hig-tag-capture-card" data-label-capture-section="true">
             <div className="hig-tag-capture-head">
               <div className="hig-tag-capture-title-group">
                 <Tag size={15} />
@@ -827,81 +1234,187 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   <span className="hig-tag-capture-title">
                     {tx(
                       lang,
-                      '목탭 · 내부 세탁탭 촬영 (선택 · 공식 정보 자동 검색)',
-                      'Neck / Care Tag Photo (Optional · Auto Web Search)'
+                      '목탭 · 내부 세탁 케어 라벨 촬영 (선택 · 공식 브랜드 DB 매칭)',
+                      'Neck Tag & Internal Care Label (Optional · Official Brand DB)'
                     )}
                   </span>
                   <p className="hig-tag-capture-desc">
                     {tx(
                       lang,
-                      '명품·SPA 브랜드 옷은 라벨을 함께 찍으면 인터넷에서 깔끔한 공식 사진·혼용률·정가를 찾아 제안해 드려요.',
-                      'For luxury or SPA brands, add tag photos to find clean official photos, fabric specs & retail price.'
+                      '목탭이나 내부 세탁 케어 라벨을 찍으면 공식 브랜드 DB에서 브랜드·품번·혼용률과 깔끔한 제품 사진을 찾아 동기화 모달로 제안해 드려요.',
+                      'Capture the neck tag or internal wash care label to match brand, SKU, fiber composition & clean official photos.'
                     )}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="hig-tag-thumb-row">
-              {tagPreviews.map((src, idx) => (
-                <div key={`tag-${idx}`} className="hig-tag-thumb-item">
-                  <img src={src} alt={tx(lang, `라벨 ${idx + 1}`, `Tag ${idx + 1}`)} />
-                  <button
-                    type="button"
-                    className="hig-tag-remove-btn"
-                    aria-label={tx(lang, '라벨 사진 삭제', 'Remove tag photo')}
-                    onClick={() => setTagPreviews((prev) => prev.filter((_, i) => i !== idx))}
-                  >
-                    <X size={12} />
-                  </button>
+            <div className="hig-label-dual-slots">
+              {/* Sub-slot A: Neck Tag */}
+              <div className={`hig-label-slot-box ${neckTagPreview ? 'is-filled' : ''}`}>
+                <div className="hig-label-slot-head">
+                  <span>{tx(lang, '목탭 (브랜드·라인)', 'Neck Tag')}</span>
+                  {neckTagPreview && <Check size={12} />}
                 </div>
-              ))}
+                {neckTagPreview ? (
+                  <div className="hig-tag-thumb-item">
+                    <img src={neckTagPreview} alt={tx(lang, '목탭 사진', 'Neck tag photo')} />
+                    <button
+                      type="button"
+                      className="hig-tag-remove-btn"
+                      aria-label={tx(lang, '목탭 사진 삭제', 'Remove neck tag photo')}
+                      onClick={() => setNeckTagPreview(null)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="hig-tag-add-buttons">
+                    <button
+                      type="button"
+                      className="hig-reg-mini-btn"
+                      disabled={loadingSlot === 'tag'}
+                      onClick={() => tagCameraRef.current?.click()}
+                    >
+                      {loadingSlot === 'tag' ? (
+                        <Loader2 size={13} className="hig-spin" />
+                      ) : (
+                        <Camera size={13} />
+                      )}
+                      <span>{tx(lang, '촬영', 'Snap')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="hig-reg-mini-btn"
+                      disabled={loadingSlot === 'tag'}
+                      onClick={() => tagGalleryRef.current?.click()}
+                    >
+                      <Plus size={13} />
+                      <span>{tx(lang, '앨범', 'Album')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-              {tagPreviews.length < 2 && (
-                <div className="hig-tag-add-buttons">
-                  <button
-                    type="button"
-                    className="hig-reg-mini-btn"
-                    disabled={loadingSlot === 'tag'}
-                    onClick={() => tagCameraRef.current?.click()}
-                  >
-                    {loadingSlot === 'tag' ? (
-                      <Loader2 size={13} className="hig-spin" />
-                    ) : (
-                      <Camera size={13} />
-                    )}
-                    <span>{tx(lang, '라벨 촬영', 'Snap Tag')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hig-reg-mini-btn"
-                    disabled={loadingSlot === 'tag'}
-                    onClick={() => tagGalleryRef.current?.click()}
-                  >
-                    <Plus size={13} />
-                    <span>{tx(lang, '앨범에서 추가', 'From Library')}</span>
-                  </button>
+              {/* Sub-slot B: Internal Wash Care Label */}
+              <div className={`hig-label-slot-box ${careLabelPreview ? 'is-filled' : ''}`}>
+                <div className="hig-label-slot-head">
+                  <span>{tx(lang, '내부 세탁 케어 라벨 (품번·혼용률)', 'Care Label (SKU & Fiber)')}</span>
+                  {careLabelPreview && <Check size={12} />}
                 </div>
+                {careLabelPreview ? (
+                  <div className="hig-tag-thumb-item">
+                    <img
+                      src={careLabelPreview}
+                      alt={tx(lang, '내부 세탁 케어 라벨 사진', 'Care label photo')}
+                    />
+                    <button
+                      type="button"
+                      className="hig-tag-remove-btn"
+                      aria-label={tx(lang, '세탁 라벨 사진 삭제', 'Remove care label photo')}
+                      onClick={() => setCareLabelPreview(null)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="hig-tag-add-buttons">
+                    <button
+                      type="button"
+                      className="hig-reg-mini-btn"
+                      disabled={loadingSlot === 'care_label'}
+                      onClick={() => careLabelCameraRef.current?.click()}
+                    >
+                      {loadingSlot === 'care_label' ? (
+                        <Loader2 size={13} className="hig-spin" />
+                      ) : (
+                        <Camera size={13} />
+                      )}
+                      <span>{tx(lang, '촬영', 'Snap')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="hig-reg-mini-btn"
+                      disabled={loadingSlot === 'care_label'}
+                      onClick={() => careLabelGalleryRef.current?.click()}
+                    >
+                      <Plus size={13} />
+                      <span>{tx(lang, '앨범', 'Album')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Direct Official Brand DB Lookup Trigger on Step 0 */}
+            <div className="hig-label-db-action-row">
+              <button
+                type="button"
+                className="hig-web-manual-search-btn"
+                data-label-brand-db-search-btn="true"
+                disabled={tagPreviews.length === 0 || labelSearchBusy || webLookupStatus === 'searching'}
+                onClick={handleLabelBrandDbSearch}
+              >
+                {labelSearchBusy || webLookupStatus === 'searching' ? (
+                  <Loader2 size={14} className="hig-spin" />
+                ) : (
+                  <Search size={14} />
+                )}
+                <span>
+                  {labelSearchBusy || webLookupStatus === 'searching'
+                    ? tx(lang, '라벨 판독 및 공식 브랜드 DB 검색 중...', 'Scanning label & searching brand DB...')
+                    : tx(lang, '촬영한 라벨로 공식 브랜드 DB 검색', 'Search Official Brand DB from Label')}
+                </span>
+              </button>
+
+              {webMatch?.found && (
+                <button
+                  type="button"
+                  className="hig-reg-mini-btn active"
+                  onClick={() => setSyncModalOpen(true)}
+                >
+                  <Sparkles size={13} />
+                  <span>{tx(lang, '정보 동기화 모달 열기', 'Open Sync Modal')}</span>
+                </button>
               )}
             </div>
           </div>
 
-          <button
-            type="button"
-            className="hig-primary-cta-btn"
-            disabled={!frontPreview || !backPreview || Boolean(loadingSlot)}
-            onClick={startAnalysisAndGuidedFlow}
-          >
-            <Sparkles size={17} />
-            <span>
-              {!frontPreview
-                ? tx(lang, '1. 앞면 사진을 먼저 선택해주세요', '1. Select front photo first')
-                : !backPreview
-                  ? tx(lang, '2. 뒷면 사진도 한 장 선택해주세요', '2. Select back photo too')
-                  : tx(lang, 'AI 자동 분석 & 등록 가이드 시작', 'Start AI Guided Registration')}
-            </span>
-            {frontPreview && backPreview && <ArrowRight size={16} />}
-          </button>
+          {/* Step 0 Action Row: AI Guided Next CTA + Explicitly Locked Save Button */}
+          <div className="hig-capture-submit-stack">
+            <button
+              type="button"
+              className="hig-primary-cta-btn"
+              disabled={!stepperState.canSave || Boolean(loadingSlot)}
+              onClick={startAnalysisAndGuidedFlow}
+            >
+              <Sparkles size={17} />
+              <span>
+                {!frontPreview
+                  ? tx(lang, '1. 앞면 사진을 먼저 선택해주세요', '1. Select front photo first')
+                  : !backPreview
+                    ? tx(lang, '2. 뒷면 사진도 한 장 선택해주세요', '2. Select back photo too')
+                    : tx(lang, 'AI 자동 분석 & 등록 가이드 시작', 'Start AI Guided Registration')}
+              </span>
+              {stepperState.canSave && <ArrowRight size={16} />}
+            </button>
+
+            <button
+              type="submit"
+              className="hig-capture-save-btn"
+              data-step0-save-btn="true"
+              disabled={!stepperState.canSave || submitting || Boolean(loadingSlot)}
+            >
+              {stepperState.canSave ? <Check size={15} /> : <Lock size={14} />}
+              <span>
+                {submitting
+                  ? tx(lang, '옷장에 저장 중...', 'Saving...')
+                  : stepperState.canSave
+                    ? tx(lang, '앞·뒷면 사진으로 바로 저장', 'Save Now with Front & Back')
+                    : tx(lang, '저장 (앞면 1장 + 뒷면 1장 필수)', 'Save Locked (Front + Back Required)')}
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -940,6 +1453,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
             webMatch={webMatch}
             onApplyAll={() => applyOfficialMatchFields(true)}
             onApplyInfoOnly={() => applyOfficialMatchFields(false)}
+            onOpenSyncModal={() => setSyncModalOpen(true)}
             onDismiss={() => setWebLookupStatus('dismissed')}
             onRunStudioInstead={() => handleRunStudioRefinement('front')}
           />
@@ -1548,31 +2062,35 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 </div>
               </div>
 
-              {(brand.trim() || productCode.trim()) && webLookupStatus !== 'searching' && (
-                <button
-                  type="button"
-                  className="hig-web-manual-search-btn"
-                  onClick={() =>
-                    triggerWebLookup({
-                      brand: brand.trim(),
-                      product_code: productCode.trim(),
-                      name: name.trim(),
-                      category,
-                      color_name: colorName,
-                      material,
-                    })
-                  }
-                >
-                  <Globe size={14} />
-                  <span>
-                    {tx(
-                      lang,
-                      '입력한 브랜드·품번으로 인터넷 공식 정보 찾기',
-                      'Search Official Product Info Online'
-                    )}
-                  </span>
-                </button>
-              )}
+              {(brand.trim() || productCode.trim() || tagPreviews.length > 0) &&
+                webLookupStatus !== 'searching' && (
+                  <button
+                    type="button"
+                    className="hig-web-manual-search-btn"
+                    onClick={() =>
+                      triggerWebLookup(
+                        {
+                          brand: brand.trim(),
+                          product_code: productCode.trim(),
+                          name: name.trim(),
+                          category,
+                          color_name: colorName,
+                          material,
+                        },
+                        { openModalOnMatch: true }
+                      )
+                    }
+                  >
+                    <Globe size={14} />
+                    <span>
+                      {tx(
+                        lang,
+                        '공식 브랜드 DB에서 제품 정보 찾아 동기화하기',
+                        'Search Official Brand DB & Open Sync Modal'
+                      )}
+                    </span>
+                  </button>
+                )}
 
               <div className="hig-field-grid-2">
                 <div className="hig-field-group">
@@ -1696,6 +2214,155 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   maxLength={240}
                 />
               </div>
+
+              {/* Structured Smart Laundry Care Profile */}
+              <div
+                className="rounded-xl border border-black/10 dark:border-white/12 bg-black/[0.02] dark:bg-white/[0.03] p-3.5 space-y-3"
+                data-add-garment-care-profile="true"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold text-neutral-900 dark:text-white">
+                      {tx(lang, '세탁 기준 자동 구조화', 'Structured Laundry Care')}
+                    </div>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 leading-snug">
+                      {formatCareSummaryTokens(effectiveCareProfile, lang).join(' · ')}
+                    </p>
+                  </div>
+                  {careLabelPreview && (
+                    <img
+                      src={careLabelPreview}
+                      alt={tx(lang, '세탁탭 보관 이미지', 'Archived care label')}
+                      className="w-10 h-10 rounded-lg object-cover border border-black/10 dark:border-white/15 shrink-0"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <span className="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">
+                    {tx(lang, '세탁 방식', 'Wash Method')}
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {[
+                      { key: 'dry_clean_only', ko: '드라이 전용', en: 'Dry Clean' },
+                      { key: 'wool_delicate', ko: '울·니트 코스', en: 'Wool / Delicate' },
+                      { key: 'hand_wash', ko: '손세탁', en: 'Hand Wash' },
+                      { key: 'machine_normal', ko: '일반 세탁', en: 'Normal Wash' },
+                      { key: 'spot_clean', ko: '부분 케어', en: 'Spot Clean' },
+                    ].map((opt) => {
+                      const active = effectiveCareProfile.washMethod === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            markDirty('careProfile');
+                            triggerHaptic('selection');
+                            setCareProfileOverride({
+                              ...effectiveCareProfile,
+                              washMethod: opt.key,
+                              waterTempC:
+                                opt.key === 'dry_clean_only' || opt.key === 'spot_clean'
+                                  ? 0
+                                  : opt.key === 'wool_delicate' || opt.key === 'hand_wash'
+                                    ? 30
+                                    : effectiveCareProfile.waterTempC || 40,
+                              tumbleDry:
+                                opt.key === 'dry_clean_only' ||
+                                opt.key === 'wool_delicate' ||
+                                opt.key === 'hand_wash'
+                                  ? 'no_tumble_flat'
+                                  : effectiveCareProfile.tumbleDry,
+                              source: 'user_edited',
+                            });
+                          }}
+                          className={`min-h-[38px] px-2.5 rounded-lg text-[11px] font-medium border transition-colors ${
+                            active
+                              ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                              : 'bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/12'
+                          }`}
+                        >
+                          {tx(lang, opt.ko, opt.en)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markDirty('careProfile');
+                      triggerHaptic('selection');
+                      const isNoTumble =
+                        effectiveCareProfile.tumbleDry === 'no_tumble_flat' ||
+                        effectiveCareProfile.tumbleDry === 'no_tumble_hang';
+                      setCareProfileOverride({
+                        ...effectiveCareProfile,
+                        tumbleDry: isNoTumble ? 'low_heat' : 'no_tumble_flat',
+                        source: 'user_edited',
+                      });
+                    }}
+                    className={`min-h-[36px] px-3 rounded-lg text-[11px] font-medium border transition-colors ${
+                      effectiveCareProfile.tumbleDry === 'no_tumble_flat' ||
+                      effectiveCareProfile.tumbleDry === 'no_tumble_hang'
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                        : 'bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/12'
+                    }`}
+                  >
+                    {effectiveCareProfile.tumbleDry === 'no_tumble_flat' ||
+                    effectiveCareProfile.tumbleDry === 'no_tumble_hang'
+                      ? tx(lang, '건조기 금지 ON', 'No Tumble Dry ON')
+                      : tx(lang, '건조기 가능', 'Tumble Dry OK')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markDirty('careProfile');
+                      triggerHaptic('selection');
+                      setCareProfileOverride({
+                        ...effectiveCareProfile,
+                        needsLaundryNet: !effectiveCareProfile.needsLaundryNet,
+                        source: 'user_edited',
+                      });
+                    }}
+                    className={`min-h-[36px] px-3 rounded-lg text-[11px] font-medium border transition-colors ${
+                      effectiveCareProfile.needsLaundryNet
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                        : 'bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/12'
+                    }`}
+                  >
+                    {effectiveCareProfile.needsLaundryNet
+                      ? tx(lang, '세탁망 권장 ON', 'Mesh Bag ON')
+                      : tx(lang, '세탁망 불필요', 'No Mesh Bag')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markDirty('careProfile');
+                      triggerHaptic('selection');
+                      setCareProfileOverride({
+                        ...effectiveCareProfile,
+                        colorBleedRisk:
+                          effectiveCareProfile.colorBleedRisk === 'high' ? 'low' : 'high',
+                        source: 'user_edited',
+                      });
+                    }}
+                    className={`min-h-[36px] px-3 rounded-lg text-[11px] font-medium border transition-colors ${
+                      effectiveCareProfile.colorBleedRisk === 'high'
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                        : 'bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/12'
+                    }`}
+                  >
+                    {effectiveCareProfile.colorBleedRisk === 'high'
+                      ? tx(lang, '이염 주의 ON', 'Color Bleed Risk ON')
+                      : tx(lang, '이염 위험 낮음', 'Low Bleed Risk')}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1716,7 +2383,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 <button
                   type="submit"
                   className="hig-guided-quicksave-btn"
-                  disabled={submitting}
+                  disabled={submitting || !stepperState.canSave}
                 >
                   {tx(lang, '바로 저장', 'Quick Save')}
                 </button>
@@ -1737,7 +2404,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                 id={CARBON_DOM_CONTRACT.wardrobeSubmitAddBtnId}
                 type="submit"
                 className="hig-primary-cta-btn hig-guided-next-btn"
-                disabled={submitting}
+                disabled={submitting || !stepperState.canSave}
               >
                 <Check size={17} />
                 <span>
@@ -1750,6 +2417,19 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           </div>
         </>
       )}
+
+      {/* Official Brand DB Info Sync Modal */}
+      <OfficialInfoSyncModal
+        open={syncModalOpen}
+        lang={lang}
+        webMatch={webMatch}
+        currentValues={currentSyncValues}
+        currentFrontImage={frontCutout?.cutoutDataUrl || frontPreview}
+        officialImageCutout={officialImageCutout}
+        onClose={() => setSyncModalOpen(false)}
+        onConfirmSync={handleConfirmSyncModal}
+        onRunStudioInstead={frontPreview ? () => handleRunStudioRefinement('front') : null}
+      />
     </form>
   );
 }

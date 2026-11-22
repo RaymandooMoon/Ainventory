@@ -912,9 +912,9 @@ export default function StudioThreeStageLayer({
           _targetFloorPoolColor.setHex(lf.floorPoolHex);
           fixturePoolMat.color.lerp(_targetFloorPoolColor, blend);
           fixturePoolMat.opacity = THREE.MathUtils.clamp(
-            poolOpacity * (isDark ? 1.12 : 0.92),
+            poolOpacity * (isDark ? 1.24 : 1.04),
             0,
-            0.48
+            0.86
           );
           fixturePoolMesh.position.set(
             THREE.MathUtils.clamp(lf.keyPosX * 0.12, -0.35, 0.35),

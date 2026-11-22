@@ -1,11 +1,20 @@
-import { useState } from 'react';
-import { Check, ExternalLink, Layers, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, ExternalLink, Layers, MapPin, Trash2, WashingMachine } from 'lucide-react';
 import {
   CARBON_DOM_CONTRACT,
   WARDROBE_CATEGORY_OPTIONS,
   normalizeWardrobeCategoryKey,
 } from '../contracts/carbonDesignContract.ts';
+import {
+  LAUNDRY_BASKET_EVENT,
+  loadLaundryBasket,
+  toggleLaundryBasketItem,
+} from '../services/laundryBasketStore.ts';
 import { apiFetch } from '../utils/api.ts';
+import {
+  formatCareSummaryTokens,
+  resolveGarmentCareProfile,
+} from '../utils/garmentCareEngine.ts';
 import {
   localizeApiMessage,
   localizeBrandName,
@@ -24,9 +33,25 @@ import {
   formatGarmentDetailsSummary,
 } from '../shared/garmentMetadata.js';
 import GarmentObject25D from './GarmentObject25D.jsx';
+import NearbyCareMapModal from './NearbyCareMapModal.jsx';
 import { ResponsiveSheetModal } from './common/AppUI.jsx';
 
 const QUICK_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'FREE'];
+
+const CARE_WASH_METHOD_OPTIONS = [
+  { key: 'dry_clean_only', ko: '드라이클리닝', en: 'Dry Clean' },
+  { key: 'wool_delicate', ko: '울·니트 코스', en: 'Wool Cycle' },
+  { key: 'hand_wash', ko: '단독 손세탁', en: 'Hand Wash' },
+  { key: 'machine_normal', ko: '일반 물세탁', en: 'Machine Wash' },
+  { key: 'spot_clean', ko: '부분 케어', en: 'Spot Care' },
+];
+
+const CARE_TUMBLE_OPTIONS = [
+  { key: 'no_tumble_flat', ko: '건조기 불가(뉘어 건조)', en: 'Flat Dry' },
+  { key: 'no_tumble_hang', ko: '건조기 불가(그늘 건조)', en: 'Line Dry' },
+  { key: 'low_heat', ko: '저온 건조', en: 'Low Heat' },
+  { key: 'allowed', ko: '건조기 가능', en: 'Tumble OK' },
+];
 
 function ItemDetailContent({
   garment,
@@ -61,6 +86,11 @@ function ItemDetailContent({
   );
   const [careTip, setCareTip] = useState(() => garment.care_tip || '');
   const [garmentDetails, setGarmentDetails] = useState(() => garment.garment_details || {});
+  const [careProfile, setCareProfile] = useState(() => resolveGarmentCareProfile(garment));
+  const [careMapOpen, setCareMapOpen] = useState(false);
+  const [inLaundryBasket, setInLaundryBasket] = useState(() =>
+    loadLaundryBasket().garmentIds.includes(Number(garment.id))
+  );
   const [memo, setMemo] = useState(() => initialDisplayMemo);
   const [hasStrap, setHasStrap] = useState(() => Boolean(initialBagSpec.has_strap));
   const [bagCarryStyle, setBagCarryStyle] = useState(
@@ -68,6 +98,15 @@ function ItemDetailContent({
   );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const syncBasket = (ev) => {
+      const next = ev?.detail || loadLaundryBasket();
+      setInLaundryBasket(next.garmentIds.includes(Number(garment.id)));
+    };
+    window.addEventListener(LAUNDRY_BASKET_EVENT, syncBasket);
+    return () => window.removeEventListener(LAUNDRY_BASKET_EVENT, syncBasket);
+  }, [garment.id]);
 
   const isBagItem = initialBagSpec.isBag;
   const hasBackImage = Boolean(garment.back_image_url);
@@ -116,7 +155,10 @@ function ItemDetailContent({
         product_code: productCode.trim(),
         material_composition: materialComposition.trim(),
         care_tip: careTip.trim(),
-        garment_details: garmentDetails,
+        garment_details: {
+          ...(garmentDetails && typeof garmentDetails === 'object' ? garmentDetails : {}),
+          care_profile: careProfile,
+        },
         fit_note: resolvedMemo,
         memo: resolvedMemo,
         notes: resolvedMemo,
@@ -594,9 +636,180 @@ function ItemDetailContent({
         </div>
 
         <div className="hig-field-group">
-          <label htmlFor="detail-care-input" className="hig-field-label">
-            {tx(lang, '세탁 · 관리 팁', 'Care Tip')}
-          </label>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label htmlFor="detail-care-input" className="hig-field-label m-0">
+              {tx(lang, '세탁 · 케어 가이드', 'Washing & Care Guide')}
+            </label>
+            <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+              {careProfile.source === 'care_label_scan'
+                ? tx(lang, '세탁탭 분석 반영', 'From care label')
+                : careProfile.source === 'user_edited'
+                  ? tx(lang, '직접 설정됨', 'Custom')
+                  : tx(lang, '소재 자동 추정', 'Auto-inferred')}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-black/10 dark:border-white/12 p-3 space-y-2.5 bg-black/[0.02] dark:bg-white/[0.03] mb-2">
+            <div className="text-xs font-medium text-neutral-800 dark:text-neutral-200 tabular-nums">
+              {formatCareSummaryTokens(careProfile, lang).join(' · ')}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={tx(lang, '세탁 방식', 'Wash Method')}>
+              {CARE_WASH_METHOD_OPTIONS.map((opt) => {
+                const active = careProfile.washMethod === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setCareProfile((prev) => ({
+                        ...prev,
+                        washMethod: opt.key,
+                        waterTempC:
+                          opt.key === 'dry_clean_only' || opt.key === 'spot_clean'
+                            ? 0
+                            : prev.waterTempC || 30,
+                        source: 'user_edited',
+                      }));
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+                      active
+                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                        : 'border-black/10 dark:border-white/15 text-neutral-600 dark:text-neutral-300'
+                    }`}
+                  >
+                    {lang === 'en' ? opt.en : opt.ko}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {CARE_TUMBLE_OPTIONS.map((opt) => {
+                const active = careProfile.tumbleDry === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setCareProfile((prev) => ({
+                        ...prev,
+                        tumbleDry: opt.key,
+                        source: 'user_edited',
+                      }));
+                    }}
+                    className={`min-h-[32px] px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                      active
+                        ? 'bg-neutral-900/10 dark:bg-white/15 border-neutral-900/40 dark:border-white/40 text-neutral-900 dark:text-white font-semibold'
+                        : 'border-black/8 dark:border-white/10 text-neutral-500 dark:text-neutral-400'
+                    }`}
+                  >
+                    {lang === 'en' ? opt.en : opt.ko}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                aria-pressed={careProfile.needsLaundryNet}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setCareProfile((prev) => ({
+                    ...prev,
+                    needsLaundryNet: !prev.needsLaundryNet,
+                    source: 'user_edited',
+                  }));
+                }}
+                className={`min-h-[32px] px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                  careProfile.needsLaundryNet
+                    ? 'bg-neutral-900/10 dark:bg-white/15 border-neutral-900/40 dark:border-white/40 text-neutral-900 dark:text-white font-semibold'
+                    : 'border-black/8 dark:border-white/10 text-neutral-500 dark:text-neutral-400'
+                }`}
+              >
+                {tx(lang, '세탁망 권장', 'Mesh Bag')}
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={careProfile.colorBleedRisk === 'high'}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setCareProfile((prev) => ({
+                    ...prev,
+                    colorBleedRisk: prev.colorBleedRisk === 'high' ? 'low' : 'high',
+                    source: 'user_edited',
+                  }));
+                }}
+                className={`min-h-[32px] px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                  careProfile.colorBleedRisk === 'high'
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300 font-semibold'
+                    : 'border-black/8 dark:border-white/10 text-neutral-500 dark:text-neutral-400'
+                }`}
+              >
+                {tx(lang, '이염 주의', 'Color Bleed')}
+              </button>
+            </div>
+
+            {careProfile.careLabelImageUrl && (
+              <div className="pt-1 flex items-center gap-2.5">
+                <img
+                  src={careProfile.careLabelImageUrl}
+                  alt={tx(lang, '저장된 세탁 케어 라벨', 'Saved Care Label')}
+                  className="w-14 h-14 rounded-lg object-cover border border-black/10 dark:border-white/15 shrink-0"
+                />
+                <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  {tx(lang, '등록 시 촬영한 내부 세탁탭 사진이 보관되어 있습니다.', 'Captured care label photo archived.')}
+                </span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  const { added } = toggleLaundryBasketItem(Number(garment.id));
+                  setInLaundryBasket(added);
+                  showToast?.(
+                    added
+                      ? tx(lang, '스마트 세탁 바구니에 담았습니다.', 'Added to Smart Laundry Basket.')
+                      : tx(lang, '세탁 바구니에서 제외했습니다.', 'Removed from Smart Laundry Basket.')
+                  );
+                }}
+                className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                  inLaundryBasket
+                    ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
+                    : 'border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10'
+                }`}
+              >
+                <WashingMachine size={14} />
+                <span>
+                  {inLaundryBasket
+                    ? tx(lang, '세탁 바구니 담김', 'In Laundry Basket')
+                    : tx(lang, '세탁 바구니 담기', 'Add to Laundry')}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                data-open-nearby-care-map="true"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setCareMapOpen(true);
+                }}
+                className="min-h-[42px] px-3 py-2 rounded-xl border border-black/15 dark:border-white/15 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              >
+                <MapPin size={14} />
+                <span>{tx(lang, '주변 세탁·수선소 찾기', 'Nearby Cleaners')}</span>
+              </button>
+            </div>
+          </div>
+
           <input
             id="detail-care-input"
             type="text"
@@ -656,6 +869,22 @@ function ItemDetailContent({
           </button>
         </div>
       </form>
+
+      <NearbyCareMapModal
+        open={careMapOpen}
+        onClose={() => setCareMapOpen(false)}
+        garment={{
+          ...garment,
+          fabric,
+          material_composition: materialComposition,
+          care_tip: careTip,
+          garment_details: {
+            ...(garmentDetails && typeof garmentDetails === 'object' ? garmentDetails : {}),
+            care_profile: careProfile,
+          },
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import {
   defineConfig,
   loadEnv,
@@ -48,7 +49,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), ainventoryBackendPlugin()],
+    plugins: [tailwindcss(), react(), ainventoryBackendPlugin()],
     optimizeDeps: {
       exclude: ['@imgly/background-removal', 'onnxruntime-web'],
     },

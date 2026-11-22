@@ -503,19 +503,345 @@ export function ensureLuxuryStreetSeeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
+const UNDERWEAR_SOCKS_SEED_CATALOG = Object.freeze([
+  {
+    idOffset: 901,
+    name: '힙합 로고 밴드 블랙 드로즈 언더웨어',
+    category: 'underwear',
+    subcategory: 'boxer_briefs',
+    color_name: '블랙',
+    color_hex: '#161618',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 1,
+    brand: 'CALVIN KLEIN',
+    price: 42000,
+    image_url: '/seed/studio-hiphop-boxer-briefs.webp',
+    fabric: 'cotton',
+    slot_key: 'underwear',
+    notes: '힙합 새깅 팬츠 스타일링에 최적화된 와이드 화이트 로고 밴드 남성 드로즈',
+    garment_details_json: JSON.stringify({
+      target_gender: 'male',
+      underwear_style: 'boxer_briefs',
+      seam_profile: 'band_waist',
+      waistband_visible: true,
+      thickness: 'medium',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 902,
+    name: '네이비 체크 우븐 코튼 트렁크 복서',
+    category: 'underwear',
+    subcategory: 'woven_boxers',
+    color_name: '네이비/레드 체크',
+    color_hex: '#1F304D',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 1,
+    brand: 'POLO RALPH LAUREN',
+    price: 38000,
+    image_url: '/seed/studio-check-boxers.webp',
+    fabric: 'cotton',
+    slot_key: 'underwear',
+    notes: '스트릿·힙합 배기 데님 새깅 연출에 포인트가 되는 클래식 체크 우븐 트렁크',
+    garment_details_json: JSON.stringify({
+      target_gender: 'male',
+      underwear_style: 'woven_boxers',
+      seam_profile: 'textured',
+      waistband_visible: true,
+      thickness: 'medium',
+      fit: 'relaxed',
+    }),
+  },
+  {
+    idOffset: 903,
+    name: '누드 베이지 심리스 노라인 이너웨어 세트',
+    category: 'underwear',
+    subcategory: 'seamless_underwear',
+    color_name: '누드 베이지',
+    color_hex: '#D6B8A3',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 2,
+    brand: 'SKIMS',
+    price: 64000,
+    image_url: '/seed/studio-seamless-nude-set.webp',
+    fabric: 'microfiber',
+    slot_key: 'underwear',
+    notes: '얇은 화이트 원피스·린넨 슬립 착용 시 속옷선(VPL)과 비침을 최소화하는 레이저컷 심리스',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      underwear_style: 'seamless',
+      seam_profile: 'seamless',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 904,
+    name: '제트 블랙 레이스 브라렛 & 브리프 세트',
+    category: 'underwear',
+    subcategory: 'lace_underwear',
+    color_name: '블랙',
+    color_hex: '#141417',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 2,
+    brand: 'AGENT PROVOCATEUR',
+    price: 89000,
+    image_url: '/seed/studio-black-lace-set.webp',
+    fabric: 'lace',
+    slot_key: 'underwear',
+    notes: '밝고 얇은 원피스/실크 스커트 착용 시 비침 및 레이스 라인(VPL) 시뮬레이션 확인용 블랙 레이스 세트',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      underwear_style: 'lace',
+      seam_profile: 'lace',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 905,
+    name: '화이트 더블 스트라이프 스트릿 크루 삭스',
+    category: 'socks',
+    subcategory: 'street_crew_socks',
+    color_name: '화이트/블랙',
+    color_hex: '#F3F3F5',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -5,
+    max_temp: 34,
+    water_resistant: false,
+    formality: 1,
+    brand: 'STUSSY',
+    price: 22000,
+    image_url: '/seed/studio-street-crew-socks.webp',
+    fabric: 'cotton',
+    slot_key: 'socks',
+    notes: '스니커즈·쇼츠·새깅 스트릿 코디와 매치하는 골지 화이트 스트라이프 크루 삭스',
+    garment_details_json: JSON.stringify({
+      target_gender: 'unisex',
+      sock_height: 'crew',
+      thickness: 'medium',
+      fit: 'regular',
+    }),
+  },
+  {
+    idOffset: 906,
+    name: '차콜 블랙 시어 나일론 드레스 크루 삭스',
+    category: 'socks',
+    subcategory: 'sheer_socks',
+    color_name: '차콜 블랙',
+    color_hex: '#222226',
+    seasons: ['spring', 'summer', 'fall'],
+    min_temp: 4,
+    max_temp: 30,
+    water_resistant: false,
+    formality: 3,
+    brand: 'FALKE',
+    price: 28000,
+    image_url: '/seed/studio-sheer-dress-socks.webp',
+    fabric: 'nylon',
+    slot_key: 'socks',
+    notes: '로퍼·메리제인·드레스 슈즈에 은은한 시어 텍스처를 더하는 드레스 삭스',
+    garment_details_json: JSON.stringify({
+      target_gender: 'unisex',
+      sock_height: 'crew',
+      opacity_level: 'sheer',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 907,
+    name: '화이트 시어 린넨 썸머 슬립 원피스',
+    category: 'dress',
+    subcategory: 'dress',
+    color_name: '아이보리 화이트',
+    color_hex: '#F6F5F0',
+    seasons: ['spring', 'summer'],
+    min_temp: 18,
+    max_temp: 36,
+    water_resistant: false,
+    formality: 3,
+    brand: 'JACQUEMUS',
+    price: 265000,
+    image_url: '/seed/s4-summer-dress-linen.webp',
+    fabric: 'linen',
+    slot_key: 'onepiece',
+    notes: '얇은 화이트 린넨 원단으로 언더웨어 컬러·라인(VPL) 비침 시뮬레이션 테스트에 적합한 썸머 원피스',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      thickness: 'thin',
+      opacity_level: 'semi_sheer',
+      fit: 'slim',
+      length_profile: 'midi',
+    }),
+  },
+  {
+    idOffset: 908,
+    name: '누드 실리콘 심리스 누브라',
+    category: 'underwear',
+    subcategory: 'nubra',
+    color_name: '누드 베이지',
+    color_hex: '#D8BDA8',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 2,
+    brand: 'WACOAL',
+    price: 49000,
+    image_url: '/seed/studio-nubra.webp',
+    fabric: 'silicone',
+    slot_key: 'underwear',
+    notes: '오프숄더·슬립·백리스 원피스 착용 시 어깨끈과 등 밴드 노출을 없애주는 스킨톤 스트랩리스 접착 누브라',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      underwear_style: 'nubra',
+      seam_profile: 'seamless',
+      strapless: true,
+      backless: true,
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 909,
+    name: '제트 블랙 레이저컷 심리스 T팬티',
+    category: 'underwear',
+    subcategory: 'thong_underwear',
+    color_name: '블랙',
+    color_hex: '#1B1B1E',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 38,
+    water_resistant: false,
+    formality: 2,
+    brand: 'CALVIN KLEIN',
+    price: 34000,
+    image_url: '/seed/studio-thong.webp',
+    fabric: 'microfiber',
+    slot_key: 'underwear',
+    notes: '타이트한 스커트·슬립 원피스·레깅스 착용 시 힙 속옷선(VPL)을 완벽히 없애는 레이저컷 T팬티',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      underwear_style: 'thong',
+      seam_profile: 'seamless',
+      vpl_free: true,
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+]);
+
+export function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
+  if (!closetOwner || closetOwner === 'all') return 0;
+
+  // Auto-upgrade any previously seeded .jpg studio underwear/socks URLs to transparent .webp
+  db.prepare(
+    `UPDATE garments
+     SET image_url = REPLACE(image_url, '.jpg', '.webp')
+     WHERE closet_owner = ?
+       AND image_url IN (
+         '/seed/studio-hiphop-boxer-briefs.jpg',
+         '/seed/studio-check-boxers.jpg',
+         '/seed/studio-seamless-nude-set.jpg',
+         '/seed/studio-black-lace-set.jpg',
+         '/seed/studio-street-crew-socks.jpg',
+         '/seed/studio-sheer-dress-socks.jpg'
+       )`
+  ).run(closetOwner);
+
+  const existingRows = db
+    .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
+    .all(closetOwner);
+  const existingNames = new Set(existingRows.map((r) => String(r.name || '').trim()));
+  const existingUrls = new Set(existingRows.map((r) => String(r.image_url || '').trim()));
+
+  const today = new Date();
+  const fmtDate = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const insertSeed = db.prepare(`
+    INSERT INTO garments (
+      closet_owner, name, category, subcategory, color_name, color_hex,
+      seasons, min_temp, max_temp, water_resistant, formality,
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture, garment_details_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, 0, ?)
+  `);
+
+  let insertedCount = 0;
+  for (const item of UNDERWEAR_SOCKS_SEED_CATALOG) {
+    // For the sheer white dress which reuses an existing webp image, dedupe by name;
+    // for the 6 studio underwear/socks items, dedupe by image_url OR name.
+    const isDressShare = item.category === 'dress';
+    if (existingNames.has(item.name)) continue;
+    if (!isDressShare && existingUrls.has(item.image_url)) continue;
+
+    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+    const wearCount = ((item.idOffset * 3) % 12) + 2;
+    const lastWornDate = fmtDate(((item.idOffset * 2) % 20) + 1);
+    const isFav = item.idOffset === 901 || item.idOffset === 903 ? 1 : 0;
+    insertSeed.run(
+      closetOwner,
+      item.name,
+      item.category,
+      item.subcategory,
+      item.color_name,
+      item.color_hex,
+      JSON.stringify(item.seasons),
+      item.min_temp,
+      item.max_temp,
+      item.water_resistant ? 1 : 0,
+      item.formality,
+      item.brand,
+      item.price,
+      wearCount,
+      lastWornDate,
+      isFav,
+      item.image_url,
+      item.notes,
+      item.fabric,
+      item.slot_key || spec.slotKey,
+      spec.baseGlb,
+      spec.physicsPreset,
+      item.garment_details_json
+    );
+    existingNames.add(item.name);
+    existingUrls.add(item.image_url);
+    insertedCount += 1;
+  }
+  return insertedCount;
+}
+
 function ensureSampleClosetSeeded() {
   const sampleCount = db
     .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
     .get().cnt;
   const legacyNonWebp = db
     .prepare(
-      "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp'"
+      "SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample' AND image_url NOT LIKE '/seed/%.webp' AND image_url NOT LIKE '/seed/studio-%'"
     )
     .get().cnt;
   if (sampleCount >= 120 && legacyNonWebp === 0) {
     ensureNewSubcategoryMaterialSeeds('sample');
     ensureLayered10Seeds('sample');
     ensureLuxuryStreetSeeds('sample');
+    ensureUnderwearAndSocksSeeds('sample');
     return;
   }
 
@@ -569,6 +895,7 @@ function ensureSampleClosetSeeded() {
   ensureNewSubcategoryMaterialSeeds('sample');
   ensureLayered10Seeds('sample');
   ensureLuxuryStreetSeeds('sample');
+  ensureUnderwearAndSocksSeeds('sample');
 }
 
 function ensureSeasonalHighlightsForDemoClosets() {
@@ -660,6 +987,8 @@ function ensureSeasonalHighlightsForDemoClosets() {
   ensureLayered10Seeds('wife');
   ensureLuxuryStreetSeeds('husband');
   ensureLuxuryStreetSeeds('wife');
+  ensureUnderwearAndSocksSeeds('husband');
+  ensureUnderwearAndSocksSeeds('wife');
 }
 
 export function initDb() {
