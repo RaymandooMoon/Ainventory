@@ -11,6 +11,12 @@ import {
 } from 'lucide-react';
 import type { LoginThreeVariantId } from '../components/auth/loginThreeScenes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import {
+  ArchitectureLayerExplorer,
+  BenchmarksIrScorecard,
+  GoogleMapsPipelinePanel,
+  ProductionStackMatrix,
+} from './SiteIrPanels.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
 import {
@@ -80,7 +86,8 @@ export default function AinvtrySiteApp() {
   } | null>(null);
   const [activeView, setActiveView] = useState<SiteViewId>('home');
   const [studioTab, setStudioTab] = useState<'preview' | 'atelier' | 'intelligence'>('preview');
-  const [techTab, setTechTab] = useState<'ingestion' | 'privacy'>('ingestion');
+  const [archTab, setArchTab] = useState<'stack' | 'maps' | 'vision'>('stack');
+  const [benchTab, setBenchTab] = useState<'kpi' | 'matrix'>('kpi');
   const [aboutMobileTab, setAboutMobileTab] = useState<'mission' | 'founder'>('mission');
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
   const [isDraggingOpacity, setIsDraggingOpacity] = useState(false);
@@ -96,7 +103,6 @@ export default function AinvtrySiteApp() {
   } | null>(null);
 
   const copy = SITE_COPY[lang];
-  // Transparency % rises when dragging UP (alpha decreases toward 0.10 -> 90% transparent)
   const transparencyPct = Math.round((1 - uiAlpha) * 100);
 
   const applyUiAlpha = useCallback((next: number) => {
@@ -117,8 +123,7 @@ export default function AinvtrySiteApp() {
     }
   }, [theme, lang]);
 
-  // Global wheel & vertical touch-swipe opacity gesture (exact LoginView.jsx parity):
-  // Wheel/swipe UP -> higher transparency (alpha down to 0.10); DOWN -> lower transparency (alpha up to 0.96).
+  // Global wheel & vertical touch-swipe opacity gesture (LoginView.jsx parity)
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     if (rootRef.current) {
@@ -129,7 +134,9 @@ export default function AinvtrySiteApp() {
       const el = target as HTMLElement | null;
       if (!el || typeof el.closest !== 'function') return false;
       return Boolean(
-        el.closest('input, textarea, select, [data-no-marble="true"], [role="dialog"], [aria-modal="true"]')
+        el.closest(
+          'input, textarea, select, [data-no-marble="true"], [role="dialog"], [aria-modal="true"]'
+        )
       );
     };
 
@@ -214,7 +221,6 @@ export default function AinvtrySiteApp() {
     setLang((prev) => (prev === 'en' ? 'ko' : 'en'));
   }, []);
 
-  // Dedicated tactile drag-up / drag-down Opacity Button handlers
   const handleOpacityPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -236,7 +242,6 @@ export default function AinvtrySiteApp() {
       drag.lastY = e.clientY;
       drag.moved += Math.abs(dy);
       if (Math.abs(dy) < 0.25) return;
-      // Drag UP (dy < 0) -> alpha decreases (more transparent); Drag DOWN (dy > 0) -> alpha increases (more opaque)
       applyUiAlpha(uiAlphaRef.current + (dy / 180) * 0.86);
     },
     [applyUiAlpha]
@@ -255,7 +260,6 @@ export default function AinvtrySiteApp() {
       setIsDraggingOpacity(false);
       if (wasTap) {
         triggerHaptic('selection');
-        // Quick tap cycles through clean glass presets: 50% -> 82% transparent -> 15% transparent -> 50%
         const curr = uiAlphaRef.current;
         if (curr > 0.35 && curr < 0.65) {
           applyUiAlpha(0.18);
@@ -301,16 +305,10 @@ export default function AinvtrySiteApp() {
       ? copy.capabilities.pillars.atelier
       : copy.capabilities.pillars.intelligence;
 
-  const activeTechPillar =
-    techTab === 'ingestion'
-      ? copy.capabilities.pillars.ingestion
-      : copy.capabilities.pillars.privacy;
-
   return (
     <div ref={rootRef} className="site-root" data-site-theme={theme} data-active-view={activeView}>
       {/* ================================================================
           SHARED FULL-VIEWPORT 3D SILK + ROLLING GLASS MARBLE BACKDROP
-          Always live behind every view (Home, Studio, Architecture, Specs, About)
          ================================================================ */}
       <SiteMarbleHero
         theme={theme}
@@ -322,7 +320,7 @@ export default function AinvtrySiteApp() {
 
       <div className="site-shell">
         {/* ================================================================
-            PERSISTENT FLOATING NAVIGATION & UTILITY TOPBAR
+            PERSISTENT FLOATING UTILITY TOPBAR (MARBLE-HITTABLE)
            ================================================================ */}
         <header className="site-header-stack">
           <div className="site-topbar">
@@ -385,7 +383,7 @@ export default function AinvtrySiteApp() {
         </header>
 
         {/* ================================================================
-            SINGLE-VIEWPORT SPATIAL STAGE (ZERO PAGE SCROLL)
+            SINGLE-VIEWPORT SPATIAL STAGE — UNIFORM IR GLASS WINDOW FRAME
            ================================================================ */}
         <main className="site-stage" aria-live="polite">
           {activeView === 'home' && (
@@ -408,7 +406,6 @@ export default function AinvtrySiteApp() {
 
               <div className="site-hero-dock">
                 <div className="site-hero-cta-row">
-                  {/* Contact Founder intentionally excluded from marble-hit triggers */}
                   <a href={betaMailto} className="site-btn-secondary">
                     <Mail size={15} />
                     <span>{copy.hero.secondaryCta}</span>
@@ -465,32 +462,34 @@ export default function AinvtrySiteApp() {
                   </span>
                 </div>
 
-                {studioTab === 'preview' ? (
-                  <AppPreviewShowcasePanel copy={copy.appPreview} />
-                ) : (
-                  <div className="site-panel-split">
-                    <div className="site-pillar-copy">
-                      <span className="site-pillar-code">{activeStudioPillar.code}</span>
-                      <p className="site-pillar-eyebrow">{activeStudioPillar.eyebrow}</p>
-                      <h2 className="site-pillar-title">{activeStudioPillar.title}</h2>
-                      <p className="site-pillar-desc">{activeStudioPillar.description}</p>
-                      <ul className="site-bullet-list">
-                        {activeStudioPillar.bullets.map((b) => (
-                          <li key={b}>
-                            <Check size={15} />
-                            <span>{b}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                <div className="site-panel-body">
+                  {studioTab === 'preview' ? (
+                    <AppPreviewShowcasePanel copy={copy.appPreview} lang={lang} theme={theme} />
+                  ) : (
+                    <div className="site-panel-split">
+                      <div className="site-pillar-copy">
+                        <span className="site-pillar-code">{activeStudioPillar.code}</span>
+                        <p className="site-pillar-eyebrow">{activeStudioPillar.eyebrow}</p>
+                        <h2 className="site-pillar-title">{activeStudioPillar.title}</h2>
+                        <p className="site-pillar-desc">{activeStudioPillar.description}</p>
+                        <ul className="site-bullet-list">
+                          {activeStudioPillar.bullets.map((b) => (
+                            <li key={b}>
+                              <Check size={15} />
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
 
-                    {studioTab === 'atelier' ? (
-                      <AtelierShowcasePanel copy={copy.interactive} />
-                    ) : (
-                      <IntelligenceShowcasePanel copy={copy.interactive} />
-                    )}
-                  </div>
-                )}
+                      {studioTab === 'atelier' ? (
+                        <AtelierShowcasePanel copy={copy.interactive} />
+                      ) : (
+                        <IntelligenceShowcasePanel copy={copy.interactive} />
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           )}
@@ -507,52 +506,60 @@ export default function AinvtrySiteApp() {
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={techTab === 'ingestion'}
-                      className={`site-subtab-pill ${techTab === 'ingestion' ? 'is-active' : ''}`}
+                      aria-selected={archTab === 'stack'}
+                      className={`site-subtab-pill ${archTab === 'stack' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
-                        setTechTab('ingestion');
+                        setArchTab('stack');
                       }}
                     >
-                      {copy.subtabs.techIngestion}
+                      {copy.subtabs.archStack}
                     </button>
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={techTab === 'privacy'}
-                      className={`site-subtab-pill ${techTab === 'privacy' ? 'is-active' : ''}`}
+                      aria-selected={archTab === 'maps'}
+                      className={`site-subtab-pill ${archTab === 'maps' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
-                        setTechTab('privacy');
+                        setArchTab('maps');
                       }}
                     >
-                      {copy.subtabs.techPrivacy}
+                      {copy.subtabs.archMaps}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={archTab === 'vision'}
+                      className={`site-subtab-pill ${archTab === 'vision' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setArchTab('vision');
+                      }}
+                    >
+                      {copy.subtabs.archCutoutPrivacy}
                     </button>
                   </div>
-                  <span className="site-pill-badge">{copy.capabilities.badge}</span>
+                  <span className="site-pill-badge">{copy.architecture.badge}</span>
                 </div>
 
-                <div className="site-panel-split site-panel-split--reverse">
-                  {techTab === 'ingestion' ? (
-                    <IngestionShowcasePanel copy={copy.interactive} />
-                  ) : (
-                    <PrivacyShowcasePanel copy={copy.interactive} />
+                <div className="site-panel-body">
+                  {archTab === 'stack' && <ArchitectureLayerExplorer copy={copy.architecture} />}
+                  {archTab === 'maps' && <GoogleMapsPipelinePanel copy={copy.architecture} />}
+                  {archTab === 'vision' && (
+                    <div className="site-panel-split site-panel-split--vision">
+                      <IngestionShowcasePanel copy={copy.interactive} />
+                      <div className="site-vision-privacy-col">
+                        <span className="site-pillar-code">
+                          {copy.capabilities.pillars.ingestion.code}
+                        </span>
+                        <h3 className="site-pillar-title">
+                          {copy.capabilities.pillars.ingestion.title}
+                        </h3>
+                        <PrivacyShowcasePanel copy={copy.interactive} />
+                      </div>
+                    </div>
                   )}
-
-                  <div className="site-pillar-copy">
-                    <span className="site-pillar-code">{activeTechPillar.code}</span>
-                    <p className="site-pillar-eyebrow">{activeTechPillar.eyebrow}</p>
-                    <h2 className="site-pillar-title">{activeTechPillar.title}</h2>
-                    <p className="site-pillar-desc">{activeTechPillar.description}</p>
-                    <ul className="site-bullet-list">
-                      {activeTechPillar.bullets.map((b) => (
-                        <li key={b}>
-                          <Check size={15} />
-                          <span>{b}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
                 </div>
               </div>
             </section>
@@ -561,23 +568,42 @@ export default function AinvtrySiteApp() {
           {activeView === 'benchmarks' && (
             <section key="benchmarks" className="site-view site-view--panel">
               <div className="site-glass-panel">
-                <div className="site-panel-head-row">
-                  <div>
-                    <p className="site-eyebrow">{copy.stack.eyebrow}</p>
-                    <h2 className="site-section-title">{copy.stack.heading}</h2>
+                <div className="site-panel-header">
+                  <div className="site-subtab-group" role="tablist" aria-label="Benchmark views">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={benchTab === 'kpi'}
+                      className={`site-subtab-pill ${benchTab === 'kpi' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setBenchTab('kpi');
+                      }}
+                    >
+                      {copy.subtabs.benchKpi}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={benchTab === 'matrix'}
+                      className={`site-subtab-pill ${benchTab === 'matrix' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setBenchTab('matrix');
+                      }}
+                    >
+                      {copy.subtabs.benchMatrix}
+                    </button>
                   </div>
-                  <p className="site-stack-note">{copy.stack.note}</p>
+                  <span className="site-pill-badge">{copy.architecture.badge}</span>
                 </div>
 
-                <div className="site-spec-grid">
-                  {copy.stack.cards.map((card) => (
-                    <article key={card.title} className="site-spec-card">
-                      <span className="site-spec-eyebrow">{card.eyebrow}</span>
-                      <strong className="site-spec-metric">{card.metric}</strong>
-                      <h3 className="site-spec-title">{card.title}</h3>
-                      <p className="site-spec-detail">{card.detail}</p>
-                    </article>
-                  ))}
+                <div className="site-panel-body">
+                  {benchTab === 'kpi' ? (
+                    <BenchmarksIrScorecard copy={copy.stack} />
+                  ) : (
+                    <ProductionStackMatrix copy={copy.stack} />
+                  )}
                 </div>
               </div>
             </section>
@@ -586,8 +612,8 @@ export default function AinvtrySiteApp() {
           {activeView === 'about' && (
             <section key="about" className="site-view site-view--panel">
               <div className="site-glass-panel" data-about-tab={aboutMobileTab}>
-                <div className="site-panel-header site-about-mobile-tabs">
-                  <div className="site-subtab-group" role="tablist" aria-label="About sections">
+                <div className="site-panel-header">
+                  <div className="site-subtab-group site-about-tab-switcher" role="tablist" aria-label="About sections">
                     <button
                       type="button"
                       role="tab"
@@ -613,59 +639,81 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.aboutFounder}
                     </button>
                   </div>
-                  <span className="site-pill-badge">{SITE_META.domain}</span>
+                  <span className="site-about-desktop-kicker">{copy.vision.eyebrow}</span>
+                  <span className="site-pill-badge">{copy.vision.irBadge}</span>
                 </div>
 
-                <div className="site-vision-grid">
-                  <div className="site-vision-copy">
-                    <p className="site-eyebrow">{copy.vision.eyebrow}</p>
-                    <h2 className="site-section-title">{copy.vision.heading}</h2>
-                    <blockquote className="site-vision-quote">{copy.vision.quote}</blockquote>
-                    <p className="site-vision-body">{copy.vision.body}</p>
-                    <div className="site-status-pills">
-                      <span className="site-status-pill">
-                        <i className="site-live-dot" />
-                        {copy.vision.statusMvp}
-                      </span>
-                      <span className="site-status-pill">{copy.vision.statusRelease}</span>
+                <div className="site-panel-body">
+                  <div className="site-vision-grid">
+                    <div className="site-vision-copy">
+                      <h2 className="site-section-title">{copy.vision.heading}</h2>
+                      <blockquote className="site-vision-quote">{copy.vision.quote}</blockquote>
+
+                      <div className="site-roadmap-block">
+                        <span className="site-arch-meta-label">{copy.vision.roadmapTitle}</span>
+                        <ol className="site-roadmap-list">
+                          {copy.vision.milestones.map((m) => (
+                            <li
+                              key={m.phase}
+                              className={`site-roadmap-item is-${m.status}`}
+                            >
+                              <span className="site-roadmap-phase">{m.phase}</span>
+                              <div className="site-roadmap-text">
+                                <strong>{m.title}</strong>
+                                <span>{m.detail}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
                     </div>
+
+                    <aside className="site-founder-card" aria-label="Company and founder details">
+                      <div className="site-founder-head">
+                        <div className="site-founder-avatar" aria-hidden="true">
+                          RM
+                        </div>
+                        <div>
+                          <h3 className="site-founder-name">{SITE_META.founderName}</h3>
+                          <p className="site-founder-role">{copy.vision.founderRole}</p>
+                          <a href={`mailto:${SITE_META.contactEmail}`} className="site-founder-email">
+                            {SITE_META.contactEmail}
+                          </a>
+                        </div>
+                      </div>
+
+                      <p className="site-founder-bio">{copy.vision.founderBio}</p>
+
+                      <dl className="site-dossier-list">
+                        <div>
+                          <dt>{copy.vision.hqLabel}</dt>
+                          <dd>{copy.vision.hqValue}</dd>
+                        </div>
+                        <div>
+                          <dt>{copy.vision.domainLabel}</dt>
+                          <dd>
+                            <strong>{SITE_META.domain}</strong>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{copy.vision.stackSummaryLabel}</dt>
+                          <dd>{copy.vision.stackSummaryValue}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="site-status-pills">
+                        <span className="site-status-pill">
+                          <i className="site-live-dot" />
+                          {copy.vision.statusMvp}
+                        </span>
+                      </div>
+
+                      <a href={betaMailto} className="site-founder-cta">
+                        <span>{copy.vision.directCta}</span>
+                        <ArrowUpRight size={16} />
+                      </a>
+                    </aside>
                   </div>
-
-                  <aside className="site-founder-card" aria-label="Company and founder details">
-                    <div className="site-founder-head">
-                      <div className="site-founder-avatar" aria-hidden="true">
-                        RM
-                      </div>
-                      <div>
-                        <h3 className="site-founder-name">{SITE_META.founderName}</h3>
-                        <p className="site-founder-role">{copy.vision.founderRole}</p>
-                        <a href={`mailto:${SITE_META.contactEmail}`} className="site-founder-email">
-                          {SITE_META.contactEmail}
-                        </a>
-                      </div>
-                    </div>
-
-                    <p className="site-founder-bio">{copy.vision.founderBio}</p>
-
-                    <dl className="site-dossier-list">
-                      <div>
-                        <dt>{copy.vision.hqLabel}</dt>
-                        <dd>{copy.vision.hqValue}</dd>
-                      </div>
-                      <div>
-                        <dt>{copy.vision.domainLabel}</dt>
-                        <dd>
-                          <strong>{SITE_META.domain}</strong>
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {/* Direct founder email intentionally excluded from marble triggers */}
-                    <a href={betaMailto} className="site-founder-cta">
-                      <span>{copy.vision.directCta}</span>
-                      <ArrowUpRight size={16} />
-                    </a>
-                  </aside>
                 </div>
               </div>
             </section>
@@ -693,58 +741,58 @@ export default function AinvtrySiteApp() {
           </nav>
 
           <footer className="site-bottombar">
-          <div className="site-bottombar-left">
-            <span className="site-bottombar-rights">{copy.footer.rights}</span>
-            <a
-              href={`mailto:${SITE_META.contactEmail}`}
-              className="site-bottombar-link site-bottombar-email"
-            >
-              {SITE_META.contactEmail}
-            </a>
-            <button
-              type="button"
-              className="site-bottombar-link"
-              onClick={() => setLegalDoc('privacy')}
-            >
-              {copy.footer.privacy}
-            </button>
-            <button
-              type="button"
-              className="site-bottombar-link"
-              onClick={() => setLegalDoc('terms')}
-            >
-              {copy.footer.terms}
-            </button>
-          </div>
+            <div className="site-bottombar-left">
+              <span className="site-bottombar-rights">{copy.footer.rights}</span>
+              <a
+                href={`mailto:${SITE_META.contactEmail}`}
+                className="site-bottombar-link site-bottombar-email"
+              >
+                {SITE_META.contactEmail}
+              </a>
+              <button
+                type="button"
+                className="site-bottombar-link"
+                onClick={() => setLegalDoc('privacy')}
+              >
+                {copy.footer.privacy}
+              </button>
+              <button
+                type="button"
+                className="site-bottombar-link"
+                onClick={() => setLegalDoc('terms')}
+              >
+                {copy.footer.terms}
+              </button>
+            </div>
 
-          <button
-            type="button"
-            role="slider"
-            aria-label={copy.nav.opacityHint}
-            aria-valuemin={4}
-            aria-valuemax={90}
-            aria-valuenow={transparencyPct}
-            aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
-            title={copy.nav.opacityHint}
-            data-no-marble="true"
-            className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
-            onPointerDown={handleOpacityPointerDown}
-            onPointerMove={handleOpacityPointerMove}
-            onPointerUp={handleOpacityPointerUp}
-            onPointerCancel={handleOpacityPointerUp}
-            onKeyDown={handleOpacityKeyDown}
-          >
-            <span className="site-opacity-meter" aria-hidden="true">
-              <span
-                className="site-opacity-meter-fill"
-                style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
-              />
-            </span>
-            <ChevronsUpDown size={14} />
-            <span className="site-opacity-label">
-              {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
-            </span>
-          </button>
+            <button
+              type="button"
+              role="slider"
+              aria-label={copy.nav.opacityHint}
+              aria-valuemin={4}
+              aria-valuemax={90}
+              aria-valuenow={transparencyPct}
+              aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
+              title={copy.nav.opacityHint}
+              data-no-marble="true"
+              className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
+              onPointerDown={handleOpacityPointerDown}
+              onPointerMove={handleOpacityPointerMove}
+              onPointerUp={handleOpacityPointerUp}
+              onPointerCancel={handleOpacityPointerUp}
+              onKeyDown={handleOpacityKeyDown}
+            >
+              <span className="site-opacity-meter" aria-hidden="true">
+                <span
+                  className="site-opacity-meter-fill"
+                  style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
+                />
+              </span>
+              <ChevronsUpDown size={14} />
+              <span className="site-opacity-label">
+                {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
+              </span>
+            </button>
           </footer>
         </div>
       </div>

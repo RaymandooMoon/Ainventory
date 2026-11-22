@@ -9,21 +9,39 @@ import {
   SlidersHorizontal,
   Smartphone,
 } from 'lucide-react';
-import type { SiteAppPreviewScreen, SiteCopy } from './siteContent.ts';
+import {
+  resolveAppPreviewSrc,
+  type SiteAppPreviewScreen,
+  type SiteCopy,
+  type SiteLang,
+  type SiteTheme,
+} from './siteContent.ts';
 
 export function AppPreviewShowcasePanel({
   copy,
+  lang,
+  theme,
 }: {
   readonly copy: SiteCopy['appPreview'];
+  readonly lang: SiteLang;
+  readonly theme: SiteTheme;
 }) {
   const [activeId, setActiveId] = useState<SiteAppPreviewScreen['id']>('outfits');
   const activeScreen =
     copy.screens.find((screen) => screen.id === activeId) ?? copy.screens[0];
+  const resolvedSrc = resolveAppPreviewSrc(activeScreen.id, lang, theme);
+  const modeBadge = `${lang.toUpperCase()} · ${theme === 'dark' ? 'DARK' : 'LIGHT'}`;
 
   return (
     <div className="site-app-preview-layout">
       <div className="site-app-preview-copy">
-        <span className="site-pillar-code">{copy.code}</span>
+        <div className="site-preview-kicker-row">
+          <span className="site-pillar-code">{copy.code}</span>
+          <span className="site-sync-mode-pill">
+            <i className="site-live-dot" />
+            {modeBadge}
+          </span>
+        </div>
         <p className="site-pillar-eyebrow">{copy.eyebrow}</p>
         <h2 className="site-pillar-title">{copy.title}</h2>
         <p className="site-pillar-desc">{copy.description}</p>
@@ -42,7 +60,10 @@ export function AppPreviewShowcasePanel({
               >
                 <span className="site-preview-card-index">0{idx + 1}</span>
                 <span className="site-preview-card-text">
-                  <strong>{screen.tabLabel}</strong>
+                  <span className="site-preview-card-head">
+                    <strong>{screen.tabLabel}</strong>
+                    <span className="site-preview-metric-tag">{screen.metricTag}</span>
+                  </span>
                   <small>{screen.title}</small>
                 </span>
               </button>
@@ -52,15 +73,15 @@ export function AppPreviewShowcasePanel({
       </div>
 
       <div className="site-app-preview-device-col">
-        <div className="site-phone-bezel">
+        <div className="site-phone-bezel" data-phone-theme={theme}>
           <div className="site-phone-island" aria-hidden="true" />
           <div className="site-phone-screen">
             <img
-              key={activeScreen.id}
-              src={activeScreen.imageSrc}
-              alt={activeScreen.imageAlt}
-              width={520}
-              height={1125}
+              key={`${activeScreen.id}-${lang}-${theme}`}
+              src={resolvedSrc}
+              alt={`${activeScreen.imageAlt} (${modeBadge})`}
+              width={500}
+              height={1082}
               decoding="sync"
               fetchPriority="high"
               className="site-phone-screen-img"
