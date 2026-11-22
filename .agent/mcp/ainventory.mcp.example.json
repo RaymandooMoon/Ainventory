@@ -37,7 +37,7 @@
     "stitch": {
       "serverUrl": "https://stitch.googleapis.com/mcp",
       "headers": {
-        "X-Goog-Api-Key": "AQ.Ab8RN6JBoUyU38wrJZO9Z7wjzQmq7Nb8MN7FMFRAkw9lXI7-Pw"
+        "X-Goog-Api-Key": "YOUR_STITCH_API_KEY_HERE"
       },
       "timeoutSeconds": 300,
       "description": "Google Stitch UI design & screen generation MCP (put real key only in ~/.gemini/config/mcp_config.json or gitignored .agents/mcp_config.json)"
