@@ -4,21 +4,25 @@
  * Studio 3D Stage Module for ainvtry.com (Three.js 0.187 WebGL2)
  *
  * Implements the luxury editorial 3D fitting showcase:
- * 1. Layered smoked-glass circular turntable pedestal (y = -1.25) with
- *    chamfered champagne-gold upper/lower rims, inner frosted mirror disc,
+ * 1. Layered frosted-crystal circular turntable pedestal (y = -1.25) with
+ *    chamfered champagne-gold upper/lower rims, luminous inner studio disc,
  *    and soft ground contact shadow.
  * 2. Dual 360° counter-rotating tilted champagne-gold orbital rings with
  *    specular glint nodes and 48 lightweight floating starlight dust points.
- * 3. Procedurally sculpted stylized tailored-overcoat fitting figure with
- *    live Stand / Walk / Rain skeletal pose choreography, translucent
- *    smoked-glass champagne umbrella, and 3D diagonal raindrop streaks.
+ * 3. High-resolution 20-bone skinned anatomical mannequin & tailored double-
+ *    breasted charcoal wool overcoat GLB (`/assets/models/studio-mannequin-v1.glb`,
+ *    CC0 MakeHuman base, baked ray-traced studio vertex AO, procedural wool-twill
+ *    micro-weave bump PBR, real Stand / Walk / Rain skeletal choreography,
+ *    translucent smoked-glass champagne umbrella, and 3D raindrop streaks).
  * 4. Curved front champagne-gold 360° dial track (radius 2.08, y = -1.32)
  *    with reusable glowing marble controller synced to turntable rotation.
  *
- * Mobile 60fps & SwiftShader compatible — ZERO external network asset fetches.
+ * Preloads on stage construction so the sculpted 3D model is ready the instant
+ * the marble enters Studio, with SSR / headless Node test safety.
  */
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   STAGE_CAMERA_PRESETS,
   type MoodMode,
@@ -40,6 +44,9 @@ import {
  * 1. Stage Spatial & Animation Constants
  * ========================================================================== */
 
+const STUDIO_MANNEQUIN_GLB_URL = '/assets/models/studio-mannequin-v1.glb';
+const MANNEQUIN_WORLD_SCALE = 1.44; // 1.615m anatomical mesh -> ~2.33 world units on turntable
+
 const PEDESTAL_Y = -1.25;
 const PEDESTAL_RADIUS = 1.58;
 const PEDESTAL_HEIGHT = 0.18;
@@ -59,8 +66,12 @@ const RAIN_BOTTOM_Y = PEDESTAL_TOP_Y + 0.04;
 const UMBRELLA_DEFLECT_RADIUS = 0.92;
 const UMBRELLA_DEFLECT_Y = 1.72;
 
+export interface StudioStageOptions {
+  readonly onModelLoaded?: () => void;
+}
+
 /* ==========================================================================
- * 2. SSR-Safe Procedural Canvas Textures (Zero Network Fetches)
+ * 2. SSR-Safe Procedural Canvas Textures (Zero External Network Fetches)
  * ========================================================================== */
 
 function createFallbackTexture(rgba: [number, number, number, number]): THREE.DataTexture {
@@ -69,7 +80,7 @@ function createFallbackTexture(rgba: [number, number, number, number]): THREE.Da
   return tex;
 }
 
-/** Soft radial floor contact shadow beneath pedestal and figure shoes. */
+/** Soft radial floor contact shadow beneath pedestal and Chelsea boots. */
 function createRadialShadowTexture(size = 128): THREE.Texture {
   if (typeof document === 'undefined') {
     return createFallbackTexture([0, 0, 0, 140]);
@@ -81,9 +92,9 @@ function createRadialShadowTexture(size = 128): THREE.Texture {
   if (ctx) {
     const half = size * 0.5;
     const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
-    grad.addColorStop(0.0, 'rgba(6, 6, 10, 0.84)');
-    grad.addColorStop(0.45, 'rgba(6, 6, 10, 0.52)');
-    grad.addColorStop(0.76, 'rgba(8, 8, 12, 0.18)');
+    grad.addColorStop(0.0, 'rgba(6, 6, 10, 0.88)');
+    grad.addColorStop(0.42, 'rgba(6, 6, 10, 0.56)');
+    grad.addColorStop(0.75, 'rgba(8, 8, 12, 0.20)');
     grad.addColorStop(1.0, 'rgba(8, 8, 12, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
@@ -94,10 +105,10 @@ function createRadialShadowTexture(size = 128): THREE.Texture {
   return tex;
 }
 
-/** Subtle frosted mirror radial sheen texture inside the smoked-glass disc. */
-function createFrostedMirrorTexture(size = 128): THREE.Texture {
+/** Luminous frosted crystal radial sheen texture inside the glass turntable disc. */
+function createFrostedMirrorTexture(size = 256): THREE.Texture {
   if (typeof document === 'undefined') {
-    return createFallbackTexture([180, 176, 172, 160]);
+    return createFallbackTexture([215, 210, 204, 190]);
   }
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -105,17 +116,54 @@ function createFrostedMirrorTexture(size = 128): THREE.Texture {
   const ctx = canvas.getContext('2d');
   if (ctx) {
     const half = size * 0.5;
-    const grad = ctx.createRadialGradient(half * 0.92, half * 0.88, 0, half, half, half);
-    grad.addColorStop(0.0, 'rgba(255, 250, 240, 0.82)');
-    grad.addColorStop(0.35, 'rgba(218, 212, 204, 0.44)');
-    grad.addColorStop(0.75, 'rgba(130, 126, 122, 0.22)');
-    grad.addColorStop(0.95, 'rgba(235, 224, 204, 0.36)');
-    grad.addColorStop(1.0, 'rgba(235, 224, 204, 0.0)');
+    const grad = ctx.createRadialGradient(half * 0.78, half * 0.72, 0, half, half, half);
+    grad.addColorStop(0.0, 'rgba(255, 252, 246, 0.94)');
+    grad.addColorStop(0.32, 'rgba(224, 219, 214, 0.62)');
+    grad.addColorStop(0.72, 'rgba(154, 150, 152, 0.32)');
+    grad.addColorStop(0.94, 'rgba(244, 232, 212, 0.54)');
+    grad.addColorStop(1.0, 'rgba(244, 232, 212, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Procedural diagonal worsted wool-twill micro-weave bump map for luxury tailoring. */
+function createWoolWeaveBumpTexture(size = 256): THREE.Texture {
+  if (typeof document === 'undefined') {
+    return createFallbackTexture([128, 128, 128, 255]);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const img = ctx.createImageData(size, size);
+    const data = img.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        // Fine 2/2 diagonal twill rib + subtle organic wool nap grain
+        const twill = (x + y) % 8 < 4 ? 14 : -14;
+        const weft = (x % 4 === 0 ? 5 : -3) + (y % 4 === 0 ? 4 : -2);
+        const hash = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+        const grain = (hash - Math.floor(hash) - 0.5) * 20;
+        const v = Math.max(0, Math.min(255, Math.round(128 + twill + weft + grain)));
+        const off = (y * size + x) * 4;
+        data[off] = v;
+        data[off + 1] = v;
+        data[off + 2] = v;
+        data[off + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(18, 18);
   tex.needsUpdate = true;
   return tex;
 }
@@ -139,7 +187,6 @@ function createStarlightTexture(size = 64): THREE.Texture {
     ctx.fillStyle = radial;
     ctx.fillRect(0, 0, size, size);
 
-    // Subtle crisp 4-point editorial gleam
     ctx.fillStyle = 'rgba(255, 250, 240, 0.85)';
     ctx.beginPath();
     ctx.ellipse(half, half, half * 0.84, size * 0.032, 0, 0, Math.PI * 2);
@@ -155,7 +202,7 @@ function createStarlightTexture(size = 64): THREE.Texture {
 }
 
 /* ==========================================================================
- * 3. Circular Smoked-Glass Turntable Pedestal Builder
+ * 3. Circular Frosted-Crystal Turntable Pedestal Builder
  * ========================================================================== */
 
 interface PedestalRig {
@@ -176,10 +223,10 @@ function buildTurntablePedestal(
   group.name = 'studio-turntable-pedestal';
   group.position.set(0, PEDESTAL_Y, 0);
 
-  // Main layered smoked-glass cylinder
+  // Main layered frosted-crystal cylinder
   const glassGeo = new THREE.CylinderGeometry(
     PEDESTAL_RADIUS,
-    PEDESTAL_RADIUS + 0.02,
+    PEDESTAL_RADIUS + 0.025,
     PEDESTAL_HEIGHT,
     64,
     1,
@@ -190,63 +237,65 @@ function buildTurntablePedestal(
   glassMesh.renderOrder = 2;
   group.add(glassMesh);
 
-  // Subtle translucent inner architectural core plate so glass stays grounded at 100%
+  // Architectural inner core plate so turntable retains crisp visual presence at 100% Glass
   const baseCoreGeo = new THREE.CylinderGeometry(
-    PEDESTAL_RADIUS - 0.08,
-    PEDESTAL_RADIUS - 0.06,
-    0.04,
+    PEDESTAL_RADIUS - 0.07,
+    PEDESTAL_RADIUS - 0.05,
+    0.045,
     48
   );
   const baseCoreMat = new THREE.MeshStandardMaterial({
-    color: 0x16161c,
-    roughness: 0.42,
-    metalness: 0.28,
+    color: 0x26252c,
+    roughness: 0.34,
+    metalness: 0.42,
     transparent: true,
-    opacity: 0.46,
+    opacity: 0.56,
   });
   const baseCoreMesh = new THREE.Mesh(baseCoreGeo, baseCoreMat);
-  baseCoreMesh.position.y = -PEDESTAL_HEIGHT * 0.3;
+  baseCoreMesh.position.y = -PEDESTAL_HEIGHT * 0.28;
   group.add(baseCoreMesh);
 
-  // Subtle inner frosted mirror disc right beneath the top surface
-  const mirrorTex = createFrostedMirrorTexture(128);
-  const mirrorGeo = new THREE.CircleGeometry(PEDESTAL_RADIUS - 0.045, 64);
+  // Luminous frosted studio reflector disc right beneath top bevel (matches luxury crystal turntable)
+  const mirrorTex = createFrostedMirrorTexture(256);
+  const mirrorGeo = new THREE.CircleGeometry(PEDESTAL_RADIUS - 0.032, 64);
   mirrorGeo.rotateX(-Math.PI * 0.5);
   const mirrorMat = new THREE.MeshPhysicalMaterial({
-    color: 0x2a2930,
+    color: 0xbcb6ae,
+    emissive: 0x3b3730,
+    emissiveIntensity: 0.3,
     map: mirrorTex,
-    roughness: 0.16,
-    metalness: 0.62,
-    clearcoat: 0.9,
+    roughness: 0.2,
+    metalness: 0.24,
+    clearcoat: 0.95,
     clearcoatRoughness: 0.12,
     transparent: true,
-    opacity: 0.52,
+    opacity: 0.78,
     depthWrite: false,
   });
   const mirrorMesh = new THREE.Mesh(mirrorGeo, mirrorMat);
-  mirrorMesh.position.y = PEDESTAL_HEIGHT * 0.5 - 0.012;
+  mirrorMesh.position.y = PEDESTAL_HEIGHT * 0.5 - 0.01;
   mirrorMesh.renderOrder = 1;
   group.add(mirrorMesh);
 
-  // Chamfered champagne-gold upper, lower & inner bezel rim rings
-  const rimMat = createChampagneGoldMaterial(mood, theme, 0.3);
+  // Chamfered metallic champagne-gold upper, lower & inner bezel rims
+  const rimMat = createChampagneGoldMaterial(mood, theme, 0.34);
 
-  const upperRimGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS, 0.02, 14, 72);
+  const upperRimGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS, 0.021, 14, 72);
   upperRimGeo.rotateX(Math.PI * 0.5);
   const upperRimMesh = new THREE.Mesh(upperRimGeo, rimMat);
   upperRimMesh.position.y = PEDESTAL_HEIGHT * 0.5 - 0.004;
   group.add(upperRimMesh);
 
-  const lowerRimGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS + 0.02, 0.022, 14, 72);
+  const lowerRimGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS + 0.025, 0.023, 14, 72);
   lowerRimGeo.rotateX(Math.PI * 0.5);
   const lowerRimMesh = new THREE.Mesh(lowerRimGeo, rimMat);
   lowerRimMesh.position.y = -PEDESTAL_HEIGHT * 0.5 + 0.004;
   group.add(lowerRimMesh);
 
-  const innerBezelGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS - 0.22, 0.006, 10, 64);
+  const innerBezelGeo = new THREE.TorusGeometry(PEDESTAL_RADIUS - 0.2, 0.006, 10, 64);
   innerBezelGeo.rotateX(Math.PI * 0.5);
   const innerBezelMesh = new THREE.Mesh(innerBezelGeo, rimMat);
-  innerBezelMesh.position.y = PEDESTAL_HEIGHT * 0.5 - 0.006;
+  innerBezelMesh.position.y = PEDESTAL_HEIGHT * 0.5 - 0.005;
   group.add(innerBezelMesh);
 
   // Soft dark contact shadow plane beneath the pedestal
@@ -257,7 +306,7 @@ function buildTurntablePedestal(
     map: shadowTex,
     color: 0x050508,
     transparent: true,
-    opacity: 0.68,
+    opacity: 0.72,
     depthWrite: false,
   });
   const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
@@ -348,7 +397,6 @@ function buildStarlightDust(): StarlightRig {
   const positions = new Float32Array(STARLIGHT_COUNT * 3);
   const seeds: StarlightSeed[] = [];
 
-  // Deterministic golden-angle spiral distribution for balanced editorial sparkle
   const goldenAngle = 2.3999632297;
   for (let i = 0; i < STARLIGHT_COUNT; i++) {
     const t = (i + 0.5) / STARLIGHT_COUNT;
@@ -388,7 +436,7 @@ function buildStarlightDust(): StarlightRig {
 }
 
 /* ==========================================================================
- * 5. Sculpted Tailored Coat Fitting Figure + Translucent Umbrella Builder
+ * 5. Sculpted 20-Bone Skinned GLB Mannequin & Smoked-Glass Umbrella Builder
  * ========================================================================== */
 
 interface UmbrellaRig {
@@ -414,22 +462,22 @@ function buildUmbrella(
     metalness: 0.25,
   });
 
-  // Sculpted handle grip resting inside the right hand palm
-  const gripGeo = new THREE.CylinderGeometry(0.021, 0.023, 0.16, 14);
+  // Sculpted handle grip resting cleanly inside the right hand palm
+  const gripGeo = new THREE.CylinderGeometry(0.02, 0.022, 0.17, 14);
   const gripMesh = new THREE.Mesh(gripGeo, gripMat);
   gripMesh.position.y = -0.02;
   group.add(gripMesh);
 
-  const pommelGeo = new THREE.SphereGeometry(0.023, 12, 10);
+  const pommelGeo = new THREE.SphereGeometry(0.022, 12, 10);
   const pommelMesh = new THREE.Mesh(pommelGeo, goldMat);
-  pommelMesh.position.y = -0.1;
+  pommelMesh.position.y = -0.105;
   group.add(pommelMesh);
 
-  // Slim metallic champagne shaft extending cleanly to the canopy apex
-  const canopyRadius = 0.92;
-  const canopyPhi = Math.PI * 0.41;
-  const canopyScaleY = 0.66;
-  const canopyHolderY = 0.64;
+  // Slim metallic champagne shaft extending cleanly above the 2.33u sculpted head to the canopy apex
+  const canopyRadius = 0.98;
+  const canopyPhi = Math.PI * 0.4;
+  const canopyScaleY = 0.62;
+  const canopyHolderY = 0.98;
   const apexLocalY = canopyRadius * canopyScaleY;
   const shaftTopY = canopyHolderY + apexLocalY;
   const shaftBottomY = 0.04;
@@ -440,7 +488,6 @@ function buildUmbrella(
   shaftMesh.position.y = shaftBottomY + shaftLength * 0.5;
   group.add(shaftMesh);
 
-  // Inner runner collar along shaft visible softly through the smoked glass
   const runnerGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.045, 14);
   const runnerMesh = new THREE.Mesh(runnerGeo, goldMat);
   runnerMesh.position.y = shaftTopY - 0.16;
@@ -469,7 +516,6 @@ function buildUmbrella(
 
   // 8 sculptural champagne-gold exterior ribs following the dome profile
   const ribGeo = new THREE.TorusGeometry(canopyRadius + 0.004, 0.006, 6, 20, canopyPhi);
-  // Align partial arc from top pole (+Y) down toward equator (+X)
   ribGeo.rotateZ(Math.PI * 0.5 - canopyPhi);
   ribGeo.scale(1, canopyScaleY, 1);
 
@@ -497,357 +543,177 @@ function buildUmbrella(
   return { group, canopyMat, goldMat, gripMat };
 }
 
-interface FigureRig {
-  readonly root: THREE.Group;
-  readonly torsoGroup: THREE.Group;
-  readonly headPivot: THREE.Group;
-  readonly coatSkirtPivot: THREE.Group;
-  readonly leftShoulderPivot: THREE.Group;
-  readonly leftElbowPivot: THREE.Group;
-  readonly rightShoulderPivot: THREE.Group;
-  readonly rightElbowPivot: THREE.Group;
-  readonly rightHandGrip: THREE.Group;
-  readonly leftHipPivot: THREE.Group;
-  readonly leftKneePivot: THREE.Group;
-  readonly rightHipPivot: THREE.Group;
-  readonly rightKneePivot: THREE.Group;
-  readonly umbrella: UmbrellaRig;
-  readonly materials: {
-    readonly porcelainMat: THREE.MeshStandardMaterial;
-    readonly hairMat: THREE.MeshStandardMaterial;
-    readonly coatMat: THREE.MeshPhysicalMaterial;
-    readonly knitMat: THREE.MeshStandardMaterial;
-    readonly trouserMat: THREE.MeshPhysicalMaterial;
-    readonly shoeMat: THREE.MeshStandardMaterial;
-    readonly footShadowMat: THREE.MeshBasicMaterial;
-  };
+type RigBoneName =
+  | 'pelvis'
+  | 'spine3'
+  | 'spine2'
+  | 'spine1'
+  | 'neck'
+  | 'head'
+  | 'clavicleL'
+  | 'shoulderL'
+  | 'elbowL'
+  | 'handL'
+  | 'clavicleR'
+  | 'shoulderR'
+  | 'elbowR'
+  | 'handR'
+  | 'hipL'
+  | 'kneeL'
+  | 'ankleL'
+  | 'hipR'
+  | 'kneeR'
+  | 'ankleR';
+
+type RigBoneMap = Partial<Record<RigBoneName, THREE.Bone>>;
+
+interface FigureMaterials {
+  readonly porcelainMat: THREE.MeshPhysicalMaterial;
+  readonly hairMat: THREE.MeshPhysicalMaterial;
+  readonly coatMat: THREE.MeshPhysicalMaterial;
+  readonly knitMat: THREE.MeshPhysicalMaterial;
+  readonly trouserMat: THREE.MeshPhysicalMaterial;
+  readonly shoeMat: THREE.MeshPhysicalMaterial;
+  readonly footShadowMat: THREE.MeshBasicMaterial;
+  readonly loadingHaloMat: THREE.MeshBasicMaterial;
+  readonly woolBumpTex: THREE.Texture;
 }
 
-function buildTailoredFigure(
+interface SkinnedFigureRig {
+  readonly root: THREE.Group;
+  readonly modelSlot: THREE.Group;
+  readonly loadingHalo: THREE.Mesh;
+  readonly umbrella: UmbrellaRig;
+  readonly materials: FigureMaterials;
+  bones: RigBoneMap;
+  loadedModel: THREE.Object3D | null;
+  loadFade: number;
+  isLoaded: boolean;
+}
+
+function buildSkinnedFigureRig(
   glassRatio: number,
   mood: MoodMode,
   theme: ThemeMode
-): FigureRig {
+): SkinnedFigureRig {
   const root = new THREE.Group();
   root.name = 'studio-fitting-figure';
 
-  // Editorial materials — calibrated for clean silhouette in Dark and Light modes
-  const porcelainMat = new THREE.MeshStandardMaterial({
-    color: 0xcab39e,
-    roughness: 0.56,
+  const woolBumpTex = createWoolWeaveBumpTexture(256);
+
+  // Luxury editorial PBR materials calibrated with baked studio vertex AO (`vertexColors: true`)
+  const porcelainMat = new THREE.MeshPhysicalMaterial({
+    color: 0xdcc4ae,
+    vertexColors: true,
+    roughness: 0.5,
+    metalness: 0.02,
+    sheen: 0.28,
+    sheenRoughness: 0.7,
+    sheenColor: new THREE.Color(0xffe9d4),
+  });
+
+  const hairMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1b1a20,
+    vertexColors: true,
+    roughness: 0.62,
     metalness: 0.04,
-  });
-
-  const hairMat = new THREE.MeshStandardMaterial({
-    color: 0x1d1c21,
-    roughness: 0.44,
-    metalness: 0.14,
-  });
-
-  const coatMat = new THREE.MeshPhysicalMaterial({
-    color: 0x1e1e23,
-    roughness: 0.82,
-    metalness: 0.06,
-    sheen: 0.58,
-    sheenRoughness: 0.72,
-    sheenColor: new THREE.Color(0x9a8c7a),
+    sheen: 0.32,
+    sheenRoughness: 0.64,
+    sheenColor: new THREE.Color(0x63606e),
     side: THREE.DoubleSide,
   });
 
-  const knitMat = new THREE.MeshStandardMaterial({
-    color: 0x141418,
-    roughness: 0.9,
+  const coatMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1d1e24,
+    vertexColors: true,
+    roughness: 0.85,
     metalness: 0.03,
+    sheen: 0.74,
+    sheenRoughness: 0.56,
+    sheenColor: new THREE.Color(0xa69b8d),
+    bumpMap: woolBumpTex,
+    bumpScale: 0.0045,
+    side: THREE.DoubleSide,
+  });
+
+  const knitMat = new THREE.MeshPhysicalMaterial({
+    color: 0x111116,
+    vertexColors: true,
+    roughness: 0.94,
+    metalness: 0.02,
+    sheen: 0.42,
+    sheenRoughness: 0.78,
+    sheenColor: new THREE.Color(0x6c6864),
+    bumpMap: woolBumpTex,
+    bumpScale: 0.006,
   });
 
   const trouserMat = new THREE.MeshPhysicalMaterial({
-    color: 0x17171c,
-    roughness: 0.78,
-    metalness: 0.05,
-    sheen: 0.35,
-    sheenRoughness: 0.8,
-    sheenColor: new THREE.Color(0x7c7874),
+    color: 0x17181e,
+    vertexColors: true,
+    roughness: 0.86,
+    metalness: 0.03,
+    sheen: 0.54,
+    sheenRoughness: 0.66,
+    sheenColor: new THREE.Color(0x88817a),
+    bumpMap: woolBumpTex,
+    bumpScale: 0.003,
+    side: THREE.DoubleSide,
   });
 
-  const shoeMat = new THREE.MeshStandardMaterial({
+  const shoeMat = new THREE.MeshPhysicalMaterial({
     color: 0x121216,
-    roughness: 0.34,
-    metalness: 0.22,
+    vertexColors: true,
+    roughness: 0.28,
+    metalness: 0.14,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.22,
   });
 
-  // Subtle boot contact shadow grounding shoes onto the mirrored turntable top
+  // Soft boot contact shadow grounding shoes firmly onto the frosted crystal turntable
   const footShadowTex = createRadialShadowTexture(64);
-  const footShadowGeo = new THREE.PlaneGeometry(0.84, 0.64);
+  const footShadowGeo = new THREE.PlaneGeometry(0.92, 0.72);
   footShadowGeo.rotateX(-Math.PI * 0.5);
   const footShadowMat = new THREE.MeshBasicMaterial({
     map: footShadowTex,
     color: 0x050508,
     transparent: true,
-    opacity: 0.56,
+    opacity: 0.62,
     depthWrite: false,
   });
   const footShadowMesh = new THREE.Mesh(footShadowGeo, footShadowMat);
-  footShadowMesh.position.set(0, 0.004, 0.02);
+  footShadowMesh.position.set(0, 0.004, 0.04);
   root.add(footShadowMesh);
 
-  /* --- Upper Torso & Tailored Overcoat Bodice (pivot at waist y = 1.46) --- */
-  const torsoGroup = new THREE.Group();
-  torsoGroup.position.set(0, 1.46, 0);
-  root.add(torsoGroup);
+  // Subtle luminous champagne atelier halo shown only during the ~150ms GLB stream-in
+  const loadingHaloGeo = new THREE.RingGeometry(0.42, 0.455, 48);
+  loadingHaloGeo.rotateX(-Math.PI * 0.5);
+  const loadingHaloMat = new THREE.MeshBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const loadingHalo = new THREE.Mesh(loadingHaloGeo, loadingHaloMat);
+  loadingHalo.position.set(0, 0.025, 0);
+  root.add(loadingHalo);
 
-  // Sculpted LatheGeometry torso profile (slim waist -> structured tailored chest -> shoulder slope)
-  const torsoPoints: THREE.Vector2[] = [
-    new THREE.Vector2(0.185, -0.02),
-    new THREE.Vector2(0.195, 0.14),
-    new THREE.Vector2(0.228, 0.34),
-    new THREE.Vector2(0.258, 0.49),
-    new THREE.Vector2(0.236, 0.56),
-    new THREE.Vector2(0.105, 0.59),
-  ];
-  const torsoGeo = new THREE.LatheGeometry(torsoPoints, 28);
-  torsoGeo.scale(1.06, 1.0, 0.62);
-  const torsoMesh = new THREE.Mesh(torsoGeo, coatMat);
-  torsoGroup.add(torsoMesh);
+  // Dedicated mount slot for the loaded 20-bone skinned GLB hierarchy
+  const modelSlot = new THREE.Group();
+  modelSlot.name = 'studio-glb-mannequin-slot';
+  modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE);
+  root.add(modelSlot);
 
-  // Inner dark knit turtleneck chest V-insert & mock-neck collar
-  const knitChestGeo = new THREE.CylinderGeometry(0.108, 0.092, 0.38, 20);
-  knitChestGeo.scale(1.0, 1.0, 0.72);
-  const knitChestMesh = new THREE.Mesh(knitChestGeo, knitMat);
-  knitChestMesh.position.set(0, 0.39, 0.088);
-  torsoGroup.add(knitChestMesh);
-
-  const mockNeckGeo = new THREE.CylinderGeometry(0.084, 0.094, 0.11, 22);
-  const mockNeckMesh = new THREE.Mesh(mockNeckGeo, knitMat);
-  mockNeckMesh.position.set(0, 0.61, 0.01);
-  torsoGroup.add(mockNeckMesh);
-
-  // Raised tailored overcoat collar hugging back & sides of mock neck
-  const collarGeo = new THREE.CylinderGeometry(
-    0.114,
-    0.128,
-    0.115,
-    24,
-    1,
-    true,
-    Math.PI * 0.24,
-    Math.PI * 1.52
-  );
-  const collarMesh = new THREE.Mesh(collarGeo, coatMat);
-  collarMesh.position.set(0, 0.595, -0.005);
-  torsoGroup.add(collarMesh);
-
-  // Left & Right sculpted peaked overcoat lapels framing the chest V
-  const lapelGeo = new THREE.BoxGeometry(0.064, 0.33, 0.022);
-  const leftLapel = new THREE.Mesh(lapelGeo, coatMat);
-  leftLapel.position.set(0.072, 0.38, 0.148);
-  leftLapel.rotation.set(-0.08, 0.24, -0.22);
-  torsoGroup.add(leftLapel);
-
-  const rightLapel = new THREE.Mesh(lapelGeo, coatMat);
-  rightLapel.position.set(-0.072, 0.38, 0.148);
-  rightLapel.rotation.set(-0.08, -0.24, 0.22);
-  torsoGroup.add(rightLapel);
-
-  // Subtle matte obsidian overcoat buttons
-  const buttonGeo = new THREE.CylinderGeometry(0.013, 0.013, 0.008, 12);
-  buttonGeo.rotateX(Math.PI * 0.5);
-  const btnUpper = new THREE.Mesh(buttonGeo, shoeMat);
-  btnUpper.position.set(0.022, 0.14, 0.146);
-  torsoGroup.add(btnUpper);
-
-  const btnLower = new THREE.Mesh(buttonGeo, shoeMat);
-  btnLower.position.set(0.022, -0.02, 0.136);
-  torsoGroup.add(btnLower);
-
-  /* --- Flared Long Overcoat Skirt with Architectural Front Walking Slit --- */
-  const coatSkirtPivot = new THREE.Group();
-  coatSkirtPivot.position.set(0, 1.46, 0);
-  root.add(coatSkirtPivot);
-
-  const slitHalfAngle = 0.15;
-  const skirtGeo = new THREE.CylinderGeometry(
-    0.198,
-    0.292,
-    0.82,
-    32,
-    4,
-    true,
-    slitHalfAngle,
-    Math.PI * 2 - slitHalfAngle * 2
-  );
-  skirtGeo.scale(1.04, 1.0, 0.68);
-  const skirtMesh = new THREE.Mesh(skirtGeo, coatMat);
-  skirtMesh.position.y = -0.41;
-  coatSkirtPivot.add(skirtMesh);
-
-  // Subtle inner hip/pelvis core bridging torso and trousers cleanly behind the coat slit
-  const pelvisGeo = new THREE.CylinderGeometry(0.17, 0.16, 0.28, 20);
-  pelvisGeo.scale(1.04, 1.0, 0.66);
-  const pelvisMesh = new THREE.Mesh(pelvisGeo, trouserMat);
-  pelvisMesh.position.set(0, 1.24, 0);
-  root.add(pelvisMesh);
-
-  /* --- Head, Neck & Sculpted Dark Swept Hair Crown --- */
-  const headPivot = new THREE.Group();
-  headPivot.position.set(0, 0.65, 0.01); // local to torsoGroup -> figure y = 2.11
-  torsoGroup.add(headPivot);
-
-  const neckGeo = new THREE.CylinderGeometry(0.062, 0.072, 0.11, 18);
-  const neckMesh = new THREE.Mesh(neckGeo, porcelainMat);
-  neckMesh.position.y = 0.05;
-  headPivot.add(neckMesh);
-
-  // Elongated minimal fashion mannequin head via LatheGeometry for clean jawline & chin
-  const headProfile: THREE.Vector2[] = [
-    new THREE.Vector2(0.001, 0.08),
-    new THREE.Vector2(0.052, 0.095),
-    new THREE.Vector2(0.096, 0.145),
-    new THREE.Vector2(0.118, 0.225),
-    new THREE.Vector2(0.122, 0.305),
-    new THREE.Vector2(0.104, 0.37),
-    new THREE.Vector2(0.056, 0.405),
-    new THREE.Vector2(0.001, 0.415),
-  ];
-  const headGeo = new THREE.LatheGeometry(headProfile, 28);
-  headGeo.scale(0.92, 1.0, 1.04);
-  const headMesh = new THREE.Mesh(headGeo, porcelainMat);
-  headPivot.add(headMesh);
-
-  // Sculpted swept-back dark hair crown (editorial matte pompadour contour)
-  const hairCrownGeo = new THREE.SphereGeometry(0.126, 24, 18, 0, Math.PI * 2, 0, Math.PI * 0.62);
-  hairCrownGeo.scale(0.96, 1.04, 1.12);
-  const hairCrownMesh = new THREE.Mesh(hairCrownGeo, hairMat);
-  hairCrownMesh.position.set(0, 0.285, -0.018);
-  hairCrownMesh.rotation.x = -0.34;
-  headPivot.add(hairCrownMesh);
-
-  const hairBackGeo = new THREE.SphereGeometry(0.12, 20, 14);
-  hairBackGeo.scale(0.93, 0.96, 0.85);
-  const hairBackMesh = new THREE.Mesh(hairBackGeo, hairMat);
-  hairBackMesh.position.set(0, 0.245, -0.044);
-  headPivot.add(hairBackMesh);
-
-  const hairWaveGeo = new THREE.CapsuleGeometry(0.048, 0.11, 8, 14);
-  hairWaveGeo.rotateZ(Math.PI * 0.44);
-  hairWaveGeo.rotateY(0.18);
-  const hairWaveMesh = new THREE.Mesh(hairWaveGeo, hairMat);
-  hairWaveMesh.position.set(-0.012, 0.386, 0.016);
-  headPivot.add(hairWaveMesh);
-
-  /* --- Articulated Arms Builder (Left at +X, Right at -X) --- */
-  const upperSleeveGeo = new THREE.CylinderGeometry(0.072, 0.06, 0.39, 18);
-  const deltoidCapGeo = new THREE.SphereGeometry(0.075, 16, 14);
-  const lowerSleeveGeo = new THREE.CylinderGeometry(0.059, 0.048, 0.37, 18);
-  const elbowJointGeo = new THREE.SphereGeometry(0.059, 14, 12);
-  const handGeo = new THREE.CapsuleGeometry(0.033, 0.072, 8, 12);
-  handGeo.scale(0.8, 1.0, 0.58);
-
-  const createArm = (sideSign: 1 | -1) => {
-    const shoulderPivot = new THREE.Group();
-    shoulderPivot.position.set(sideSign * 0.282, 0.49, 0);
-    torsoGroup.add(shoulderPivot);
-
-    const deltoid = new THREE.Mesh(deltoidCapGeo, coatMat);
-    deltoid.scale.set(1.06, 0.94, 0.96);
-    shoulderPivot.add(deltoid);
-
-    const upperSleeve = new THREE.Mesh(upperSleeveGeo, coatMat);
-    upperSleeve.position.y = -0.195;
-    shoulderPivot.add(upperSleeve);
-
-    const elbowPivot = new THREE.Group();
-    elbowPivot.position.set(0, -0.385, 0);
-    shoulderPivot.add(elbowPivot);
-
-    const elbowCap = new THREE.Mesh(elbowJointGeo, coatMat);
-    elbowPivot.add(elbowCap);
-
-    const lowerSleeve = new THREE.Mesh(lowerSleeveGeo, coatMat);
-    lowerSleeve.position.y = -0.185;
-    elbowPivot.add(lowerSleeve);
-
-    const handMesh = new THREE.Mesh(handGeo, porcelainMat);
-    handMesh.position.set(0, -0.415, 0.008);
-    elbowPivot.add(handMesh);
-
-    const gripPivot = new THREE.Group();
-    gripPivot.position.set(0, -0.415, 0.015);
-    elbowPivot.add(gripPivot);
-
-    return { shoulderPivot, elbowPivot, gripPivot };
-  };
-
-  const leftArm = createArm(1);
-  const rightArm = createArm(-1);
-
-  // Mount translucent champagne umbrella at the right hand grip
+  // Translucent smoked-glass umbrella mounted directly in figure.root space
+  // and synced each frame to the exact world-transformed palm of `bones.handR`
   const umbrella = buildUmbrella(glassRatio, mood, theme);
-  rightArm.gripPivot.add(umbrella.group);
-
-  /* --- Articulated Tailored Trousers & Matte Minimalist Shoes --- */
-  const thighGeo = new THREE.CylinderGeometry(0.086, 0.072, 0.51, 18);
-  const kneeCapGeo = new THREE.SphereGeometry(0.071, 14, 12);
-  const calfGeo = new THREE.CylinderGeometry(0.07, 0.055, 0.54, 18);
-  const shoeUpperGeo = new THREE.CapsuleGeometry(0.048, 0.145, 8, 14);
-  shoeUpperGeo.rotateX(Math.PI * 0.5);
-  shoeUpperGeo.scale(0.95, 0.72, 1.0);
-  const shoeSoleGeo = new THREE.BoxGeometry(0.094, 0.022, 0.245);
-
-  const createLeg = (sideSign: 1 | -1) => {
-    const hipPivot = new THREE.Group();
-    hipPivot.position.set(sideSign * 0.108, 1.12, 0);
-    root.add(hipPivot);
-
-    const thigh = new THREE.Mesh(thighGeo, trouserMat);
-    thigh.position.y = -0.255;
-    hipPivot.add(thigh);
-
-    const kneePivot = new THREE.Group();
-    kneePivot.position.set(0, -0.5, 0);
-    hipPivot.add(kneePivot);
-
-    const kneeCap = new THREE.Mesh(kneeCapGeo, trouserMat);
-    kneePivot.add(kneeCap);
-
-    const calf = new THREE.Mesh(calfGeo, trouserMat);
-    calf.position.y = -0.27;
-    kneePivot.add(calf);
-
-    // Matte sculpted shoe with sole cleanly touching local y = 0.0 (at -0.62 from knee)
-    const shoeGroup = new THREE.Group();
-    shoeGroup.position.set(0, -0.582, 0.048);
-    shoeGroup.rotation.y = sideSign * 0.09; // Natural poised editorial stance turnout
-
-    const shoeUpper = new THREE.Mesh(shoeUpperGeo, shoeMat);
-    shoeUpper.position.y = 0.008;
-    shoeGroup.add(shoeUpper);
-
-    const shoeSole = new THREE.Mesh(shoeSoleGeo, shoeMat);
-    shoeSole.position.set(0, -0.027, 0);
-    shoeGroup.add(shoeSole);
-
-    kneePivot.add(shoeGroup);
-
-    return { hipPivot, kneePivot };
-  };
-
-  const leftLeg = createLeg(1);
-  const rightLeg = createLeg(-1);
+  root.add(umbrella.group);
 
   return {
     root,
-    torsoGroup,
-    headPivot,
-    coatSkirtPivot,
-    leftShoulderPivot: leftArm.shoulderPivot,
-    leftElbowPivot: leftArm.elbowPivot,
-    rightShoulderPivot: rightArm.shoulderPivot,
-    rightElbowPivot: rightArm.elbowPivot,
-    rightHandGrip: rightArm.gripPivot,
-    leftHipPivot: leftLeg.hipPivot,
-    leftKneePivot: leftLeg.kneePivot,
-    rightHipPivot: rightLeg.hipPivot,
-    rightKneePivot: rightLeg.kneePivot,
+    modelSlot,
+    loadingHalo,
     umbrella,
     materials: {
       porcelainMat,
@@ -857,8 +723,64 @@ function buildTailoredFigure(
       trouserMat,
       shoeMat,
       footShadowMat,
+      loadingHaloMat,
+      woolBumpTex,
     },
+    bones: {},
+    loadedModel: null,
+    loadFade: 0,
+    isLoaded: false,
   };
+}
+
+function assignMannequinMaterials(
+  sceneRoot: THREE.Object3D,
+  materials: FigureMaterials,
+  bonesOut: RigBoneMap
+): void {
+  sceneRoot.traverse((obj) => {
+    if ((obj as THREE.Bone).isBone) {
+      const bone = obj as THREE.Bone;
+      bonesOut[bone.name as RigBoneName] = bone;
+      return;
+    }
+
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh || (obj as THREE.Mesh).isMesh) {
+      const mesh = obj as THREE.Mesh;
+      mesh.frustumCulled = false;
+
+      // Dispose default GLB material before binding our luxury editorial PBR materials
+      if (Array.isArray(mesh.material)) {
+        for (const m of mesh.material) m.dispose();
+      } else if (mesh.material) {
+        mesh.material.dispose();
+      }
+
+      switch (mesh.name) {
+        case 'mannequin_body':
+          mesh.material = materials.porcelainMat;
+          break;
+        case 'mannequin_hair':
+          mesh.material = materials.hairMat;
+          break;
+        case 'garment_coat':
+          mesh.material = materials.coatMat;
+          break;
+        case 'garment_knit':
+          mesh.material = materials.knitMat;
+          break;
+        case 'garment_slacks':
+          mesh.material = materials.trouserMat;
+          break;
+        case 'garment_shoes':
+          mesh.material = materials.shoeMat;
+          break;
+        default:
+          mesh.material = materials.coatMat;
+          break;
+      }
+    }
+  });
 }
 
 /* ==========================================================================
@@ -885,7 +807,6 @@ function buildRainStreaks(): RainRig {
   const positions = new Float32Array(RAIN_COUNT * 2 * 3);
   const drops: RainDropSeed[] = [];
 
-  // Deterministic pseudo-random distribution around the fitting column
   const goldenAngle = 2.3999632297;
   for (let i = 0; i < RAIN_COUNT; i++) {
     const radialNorm = Math.sqrt(((i * 29 + 7) % RAIN_COUNT) / RAIN_COUNT);
@@ -893,7 +814,7 @@ function buildRainStreaks(): RainRig {
     const angle = i * goldenAngle;
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    const y = RAIN_BOTTOM_Y + ((i * 53) % RAIN_COUNT) / RAIN_COUNT * (RAIN_TOP_Y - RAIN_BOTTOM_Y);
+    const y = RAIN_BOTTOM_Y + (((i * 53) % RAIN_COUNT) / RAIN_COUNT) * (RAIN_TOP_Y - RAIN_BOTTOM_Y);
     const speed = 3.8 + (i % 7) * 0.32;
     const streakLength = 0.16 + (i % 5) * 0.032;
 
@@ -928,7 +849,6 @@ function writeRainSegment(
   length: number
 ): void {
   const base = index * 6;
-  // Subtle diagonal rain wind slant (-X, -Y, +Z)
   const dx = -0.18 * length;
   const dy = -1.0 * length;
   const dz = 0.04 * length;
@@ -958,27 +878,23 @@ function buildDialTrack(mood: MoodMode, theme: ThemeMode): DialTrackRig {
   const bandMat = createChampagneGoldMaterial(mood, theme, 0.28);
   const railGlowMat = createChampagneGoldMaterial(mood, theme, 0.62);
 
-  // Rotate horizontal in XZ plane and center symmetric around front +Z axis
   const alignHorizontalFront = (geo: THREE.BufferGeometry) => {
     geo.rotateX(Math.PI * 0.5);
     geo.rotateY(DIAL_ARC * 0.5 - Math.PI * 0.5);
   };
 
-  // Sculpted flattened metallic champagne crescent band
   const bandGeo = new THREE.TorusGeometry(DIAL_RADIUS, 0.04, 14, 72, DIAL_ARC);
   alignHorizontalFront(bandGeo);
   bandGeo.scale(1, 0.34, 1);
   const bandMesh = new THREE.Mesh(bandGeo, bandMat);
   group.add(bandMesh);
 
-  // Luminous specular centerline rail crown
   const railGeo = new THREE.TorusGeometry(DIAL_RADIUS, 0.0095, 8, 72, DIAL_ARC);
   alignHorizontalFront(railGeo);
   const railMesh = new THREE.Mesh(railGeo, railGlowMat);
   railMesh.position.y = 0.013;
   group.add(railMesh);
 
-  // Tapered end finials at both arc tips (±DIAL_ARC / 2)
   const finialGeo = new THREE.SphereGeometry(0.032, 12, 10);
   finialGeo.scale(1, 0.45, 1);
   const halfArc = DIAL_ARC * 0.5;
@@ -989,7 +905,6 @@ function buildDialTrack(mood: MoodMode, theme: ThemeMode): DialTrackRig {
     group.add(finial);
   }
 
-  // Precision Swiss-horology radial ticks along the front dial arc
   const tickGeo = new THREE.BoxGeometry(0.01, 0.008, 0.068);
   const tickFractions = [-0.44, -0.22, 0, 0.22, 0.44] as const;
   for (const frac of tickFractions) {
@@ -1008,13 +923,14 @@ function buildDialTrack(mood: MoodMode, theme: ThemeMode): DialTrackRig {
 }
 
 /* ==========================================================================
- * 8. Dedicated Studio Stage Lighting Rig (Dark & Light Mode Calibrated)
+ * 8. Dedicated Editorial 4-Point Studio Lighting Rig
  * ========================================================================== */
 
 interface StudioLightRig {
   readonly group: THREE.Group;
   readonly keyLight: THREE.DirectionalLight;
   readonly rimLight: THREE.DirectionalLight;
+  readonly coolFillLight: THREE.DirectionalLight;
   readonly fillLight: THREE.HemisphereLight;
   readonly pedestalGlow: THREE.PointLight;
 }
@@ -1023,36 +939,42 @@ function buildStudioLights(): StudioLightRig {
   const group = new THREE.Group();
   group.name = 'studio-lights';
 
-  // Warm editorial key light (upper left-front)
-  const keyLight = new THREE.DirectionalLight(0xfff1dc, 2.2);
-  keyLight.position.set(-3.2, 4.4, 3.8);
+  // Warm editorial key light (upper left-front) sculpting lapels and face contour
+  const keyLight = new THREE.DirectionalLight(0xfff1dc, 2.4);
+  keyLight.position.set(-2.9, 4.1, 3.8);
   group.add(keyLight);
 
-  // Diagonal sculptural rim light (upper right-rear, echoing editorial studio beam)
-  const rimLight = new THREE.DirectionalLight(0xe5cfa7, 2.1);
-  rimLight.position.set(3.4, 3.2, -3.2);
+  // High-contrast champagne rim light (upper right-rear) separating charcoal wool from dark backdrop
+  const rimLight = new THREE.DirectionalLight(0xf1d6a7, 3.0);
+  rimLight.position.set(3.4, 2.9, -2.9);
   group.add(rimLight);
 
-  // Balanced hemisphere fill so charcoal tailored wool reveals rich folds in both themes
-  const fillLight = new THREE.HemisphereLight(0xf6efe6, 0x2a241e, 1.15);
+  // Crisp cool-platinum secondary fill light (right-front) revealing tailored fabric folds
+  const coolFillLight = new THREE.DirectionalLight(0xc9d9f0, 0.92);
+  coolFillLight.position.set(2.6, 1.5, 2.9);
+  group.add(coolFillLight);
+
+  // Balanced studio hemisphere bounce
+  const fillLight = new THREE.HemisphereLight(0xf6efe6, 0x26201a, 1.05);
   group.add(fillLight);
 
-  // Subtle under-glow kissing the smoked-glass pedestal and lower coat hem
-  const pedestalGlow = new THREE.PointLight(0xe2cfa8, 1.4, 5.8, 2);
-  pedestalGlow.position.set(0.25, -0.78, 1.15);
+  // Luminous under-glow grazing the frosted crystal turntable and lower coat hem
+  const pedestalGlow = new THREE.PointLight(0xe5d1ab, 1.65, 6.2, 2);
+  pedestalGlow.position.set(-0.2, -0.72, 1.25);
   group.add(pedestalGlow);
 
-  return { group, keyLight, rimLight, fillLight, pedestalGlow };
+  return { group, keyLight, rimLight, coolFillLight, fillLight, pedestalGlow };
 }
 
 /* ==========================================================================
  * 9. StageModule Factory: createStudioStage()
  * ========================================================================== */
 
-export function createStudioStage(): StageModule {
+export function createStudioStage(options?: StudioStageOptions): StageModule {
   const group = new THREE.Group();
   group.name = 'stage-studio';
 
+  let disposed = false;
   let currentGlassRatio = 0.5;
   let currentMood: MoodMode = 'luxury';
   let currentTheme: ThemeMode = 'dark';
@@ -1067,14 +989,10 @@ export function createStudioStage(): StageModule {
   let hoverSmoothX = 0;
   let hoverSmoothY = 0;
 
-  // Scratch vectors & quaternions for allocation-free 60/120fps update loop
+  // Scratch vectors & matrices for allocation-free 60/120fps update loop
   const marbleAnchor = new THREE.Vector3();
-  const tmpQuatA = new THREE.Quaternion();
-  const tmpQuatB = new THREE.Quaternion();
-  // Upright editorial umbrella tilt relative to torsoGroup (leaning gracefully over head)
-  const umbrellaTargetQuat = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(-0.24, 0, -0.16, 'XYZ')
-  );
+  const handWorldPos = new THREE.Vector3();
+  const invRootMatrix = new THREE.Matrix4();
 
   // Build scene components
   const lights = buildStudioLights();
@@ -1089,13 +1007,13 @@ export function createStudioStage(): StageModule {
   const starlight = buildStarlightDust();
   group.add(starlight.points);
 
-  // Rotatable turntable group centered on top of the smoked-glass disc
+  // Rotatable turntable group centered on top of the frosted-crystal disc
   const turntableGroup = new THREE.Group();
   turntableGroup.name = 'studio-turntable-rotor';
   turntableGroup.position.set(0, PEDESTAL_TOP_Y, 0);
   group.add(turntableGroup);
 
-  const figure = buildTailoredFigure(currentGlassRatio, currentMood, currentTheme);
+  const figure = buildSkinnedFigureRig(currentGlassRatio, currentMood, currentTheme);
   turntableGroup.add(figure.root);
 
   const rain = buildRainStreaks();
@@ -1103,6 +1021,65 @@ export function createStudioStage(): StageModule {
 
   const dialTrack = buildDialTrack(currentMood, currentTheme);
   group.add(dialTrack.group);
+
+  /* ------------------------------------------------------------------------
+   * Preload High-Resolution 20-Bone Skinned GLB Mannequin (Abort-Safe)
+   * ------------------------------------------------------------------------ */
+
+  const disposeSkeletons = (rootObj: THREE.Object3D | null): void => {
+    if (!rootObj) return;
+    const seen = new Set<THREE.Skeleton>();
+    rootObj.traverse((obj) => {
+      const skinned = obj as THREE.SkinnedMesh;
+      if (skinned.isSkinnedMesh && skinned.skeleton && !seen.has(skinned.skeleton)) {
+        seen.add(skinned.skeleton);
+        skinned.skeleton.dispose();
+      }
+    });
+  };
+
+  const loadAbortController =
+    typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    const loader = new GLTFLoader();
+    void fetch(STUDIO_MANNEQUIN_GLB_URL, {
+      signal: loadAbortController?.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        if (disposed) return;
+        loader.parse(
+          buffer,
+          '',
+          (gltf) => {
+            if (disposed) {
+              disposeSkeletons(gltf.scene);
+              disposeObject3D(gltf.scene);
+              return;
+            }
+            figure.loadedModel = gltf.scene;
+            figure.bones = {};
+            assignMannequinMaterials(gltf.scene, figure.materials, figure.bones);
+            figure.modelSlot.add(gltf.scene);
+            figure.isLoaded = true;
+            figure.loadFade = 0;
+            figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * 0.96);
+            applySkeletalPose(0, false);
+            options?.onModelLoaded?.();
+          },
+          () => {
+            // Keep stage resilient if parse fails
+          }
+        );
+      })
+      .catch(() => {
+        // Ignore aborted or offline fetches cleanly
+      });
+  }
 
   /* ------------------------------------------------------------------------
    * Visual Mode & Glass Synchronization
@@ -1114,21 +1091,19 @@ export function createStudioStage(): StageModule {
     applySmokedGlassState(pedestal.glassMat, currentGlassRatio, currentMood, currentTheme);
     applySmokedGlassState(figure.umbrella.canopyMat, currentGlassRatio, currentMood, currentTheme);
 
-    // Keep umbrella opacity modulated by active rainBlend fade
     const baseCanopyOpacity = figure.umbrella.canopyMat.opacity;
     figure.umbrella.canopyMat.userData.targetOpacity = baseCanopyOpacity;
     figure.umbrella.canopyMat.opacity = baseCanopyOpacity * rainBlend;
 
-    // Harmonize frosted inner mirror disc and architectural base with Glass %
     const isDark = currentTheme === 'dark';
     pedestal.mirrorMat.opacity = THREE.MathUtils.lerp(
-      isDark ? 0.62 : 0.48,
-      isDark ? 0.34 : 0.26,
+      isDark ? 0.78 : 0.62,
+      isDark ? 0.48 : 0.36,
       currentGlassRatio
     );
     pedestal.baseCoreMat.opacity = THREE.MathUtils.lerp(
-      isDark ? 0.56 : 0.38,
-      isDark ? 0.18 : 0.12,
+      isDark ? 0.64 : 0.44,
+      isDark ? 0.24 : 0.16,
       currentGlassRatio
     );
   };
@@ -1139,37 +1114,43 @@ export function createStudioStage(): StageModule {
     const isDark = theme === 'dark';
     const isAurora = mood === 'aurora';
 
-    // Update shared smoked-glass and metallic gold materials
     syncGlass(currentGlassRatio);
-    applyGoldModeState(pedestal.rimMat, mood, theme, 0.32);
+    applyGoldModeState(pedestal.rimMat, mood, theme, 0.34);
     applyGoldModeState(orbitals.ringMat, mood, theme, 0.34);
     applyGoldModeState(orbitals.sparkMat, mood, theme, 0.94);
     applyGoldModeState(dialTrack.bandMat, mood, theme, 0.28);
     applyGoldModeState(dialTrack.railGlowMat, mood, theme, 0.64);
     applyGoldModeState(figure.umbrella.goldMat, mood, theme, 0.34);
 
-    // Pedestal frosted mirror & contact shadows calibrated for Dark vs Light mode
+    // Pedestal frosted crystal reflector & shadows calibrated for Dark vs Light mode
     pedestal.mirrorMat.color.setHex(
-      isDark ? (isAurora ? 0x263144 : 0x2d2a26) : isAurora ? 0xdbe5f4 : 0xeae3d8
+      isDark ? (isAurora ? 0x9cb0cc : 0xbcb6ae) : isAurora ? 0xdbe5f4 : 0xf2ece4
     );
+    pedestal.mirrorMat.emissive.setHex(
+      isDark ? (isAurora ? 0x243248 : 0x3b3730) : isAurora ? 0x9cb4d4 : 0xd0c6b6
+    );
+    pedestal.mirrorMat.emissiveIntensity = isDark ? 0.3 : 0.16;
     pedestal.baseCoreMat.color.setHex(
-      isDark ? (isAurora ? 0x131a29 : 0x17151a) : isAurora ? 0xd0dbed : 0xe4ddd2
+      isDark ? (isAurora ? 0x1a2336 : 0x242228) : isAurora ? 0xd0dbed : 0xe4ddd2
     );
     pedestal.shadowMat.color.setHex(isDark ? 0x040407 : 0x3b3630);
-    pedestal.shadowMat.opacity = isDark ? 0.72 : 0.28;
-    figure.materials.footShadowMat.color.setHex(isDark ? 0x050508 : 0x2d2924);
-    figure.materials.footShadowMat.opacity = isDark ? 0.56 : 0.34;
-
-    // Tailored figure contrast tuning for crisp legibility on Light & Dark canvases
-    figure.materials.coatMat.color.setHex(isDark ? 0x202026 : 0x24242b);
-    figure.materials.coatMat.sheenColor.setHex(
-      isAurora ? (isDark ? 0x8db2e2 : 0x6f8ab0) : isDark ? 0xb49f84 : 0x857562
+    pedestal.shadowMat.opacity = isDark ? 0.76 : 0.3;
+    figure.materials.footShadowMat.color.setHex(isDark ? 0x040407 : 0x2d2924);
+    figure.materials.footShadowMat.opacity = isDark ? 0.72 : 0.4;
+    figure.materials.loadingHaloMat.color.setHex(
+      isAurora ? STAGE_PALETTE.auroraSilverGold : STAGE_PALETTE.champagneGoldBright
     );
-    figure.materials.trouserMat.color.setHex(isDark ? 0x18181d : 0x1d1d23);
-    figure.materials.porcelainMat.color.setHex(isDark ? 0xcab39e : 0xc4aa92);
-    figure.materials.hairMat.color.setHex(isDark ? 0x1a191f : 0x1f1e24);
 
-    // Starlight dust blending & tint (Additive glow in Dark, brushed champagne in Light)
+    // Sculpted mannequin editorial PBR materials tuned for Light & Dark legibility
+    figure.materials.coatMat.color.setHex(isDark ? 0x1d1e24 : 0x25262e);
+    figure.materials.coatMat.sheenColor.setHex(
+      isAurora ? (isDark ? 0x8fb5e6 : 0x6f8ab0) : isDark ? 0xa69b8d : 0x7d7264
+    );
+    figure.materials.trouserMat.color.setHex(isDark ? 0x17181e : 0x1e2027);
+    figure.materials.porcelainMat.color.setHex(isDark ? 0xdcc4ae : 0xcfb298);
+    figure.materials.hairMat.color.setHex(isDark ? 0x1b1a20 : 0x201f26);
+
+    // Starlight dust blending & tint
     const nextStarBlend = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
     if (starlight.material.blending !== nextStarBlend) {
       starlight.material.blending = nextStarBlend;
@@ -1186,7 +1167,7 @@ export function createStudioStage(): StageModule {
     );
     starlight.material.opacity = isDark ? 0.82 : 0.62;
 
-    // Raindrop streak tint for crisp visibility in Dark & Light modes
+    // Raindrop streak tint
     rain.material.color.setHex(
       isAurora
         ? isDark
@@ -1197,143 +1178,234 @@ export function createStudioStage(): StageModule {
           : 0x7b6a52
     );
 
-    // Dedicated studio lights calibrated per Mood × Theme
+    // Editorial 4-point studio lighting rig calibrated per Mood × Theme
     if (isDark) {
-      lights.keyLight.color.setHex(isAurora ? 0xe8f1ff : 0xfff0d8);
-      lights.keyLight.intensity = 2.25;
-      lights.rimLight.color.setHex(isAurora ? 0x9ec4f6 : 0xe8cfa4);
-      lights.rimLight.intensity = 2.35;
+      lights.keyLight.color.setHex(isAurora ? 0xe8f1ff : 0xfff1dc);
+      lights.keyLight.intensity = 2.4;
+      lights.rimLight.color.setHex(isAurora ? 0x9ec4f6 : 0xf1d6a7);
+      lights.rimLight.intensity = 3.05;
+      lights.coolFillLight.color.setHex(isAurora ? 0xb4cef4 : 0xc9d9f0);
+      lights.coolFillLight.intensity = 0.92;
       lights.fillLight.color.setHex(isAurora ? 0xcadbf5 : 0xf2e7d8);
-      lights.fillLight.groundColor.setHex(isAurora ? 0x192235 : 0x2c241b);
-      lights.fillLight.intensity = 1.25;
+      lights.fillLight.groundColor.setHex(isAurora ? 0x192235 : 0x28211a);
+      lights.fillLight.intensity = 1.08;
       lights.pedestalGlow.color.setHex(isAurora ? 0x8fb6ec : STAGE_PALETTE.champagneGoldBright);
-      lights.pedestalGlow.intensity = 1.45;
+      lights.pedestalGlow.intensity = 1.65;
     } else {
       lights.keyLight.color.setHex(isAurora ? 0xf4f8ff : 0xfff8ee);
-      lights.keyLight.intensity = 2.45;
-      lights.rimLight.color.setHex(isAurora ? 0x9abbe8 : 0xd6b582);
-      lights.rimLight.intensity = 1.65;
+      lights.keyLight.intensity = 2.55;
+      lights.rimLight.color.setHex(isAurora ? 0x9abbe8 : 0xdcb985);
+      lights.rimLight.intensity = 2.0;
+      lights.coolFillLight.color.setHex(0xe8f0fc);
+      lights.coolFillLight.intensity = 0.78;
       lights.fillLight.color.setHex(0xffffff);
       lights.fillLight.groundColor.setHex(isAurora ? 0xbccae0 : 0xd8cfc2);
       lights.fillLight.intensity = 1.85;
       lights.pedestalGlow.color.setHex(isAurora ? 0x8eaad6 : 0xc8a46e);
-      lights.pedestalGlow.intensity = 0.85;
+      lights.pedestalGlow.intensity = 0.9;
     }
   };
 
   /* ------------------------------------------------------------------------
-   * Choreographed Pose & Particle Updaters
+   * Real 20-Bone Skeletal Choreography (`Stand` / `Walk` / `Rain`)
    * ------------------------------------------------------------------------ */
 
-  const updateFigurePose = (elapsed: number, reducedMotion: boolean): void => {
+  const applySkeletalPose = (elapsed: number, reducedMotion: boolean): void => {
+    const bones = figure.bones;
     const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
-    const breathPhase = reducedMotion ? 0 : elapsed * 2.1;
-    const walkPhase = reducedMotion ? 0.65 : elapsed * 4.2;
+    const breathPhase = reducedMotion ? 0 : elapsed * 2.05;
+    const walkPhase = reducedMotion ? 0.65 : elapsed * 4.0;
 
-    const breathRise = Math.sin(breathPhase) * 0.008 * (standWeight + rainBlend * 0.7);
+    const breathWave = Math.sin(breathPhase);
     const gaitWave = Math.sin(walkPhase);
     const gaitCos = Math.cos(walkPhase);
-    const walkBounce = Math.abs(gaitWave) * 0.036 * walkBlend;
+    const walkBounce = Math.abs(gaitWave) * 0.026 * walkBlend;
 
-    // Ground root with subtle stride lift during walk
-    figure.root.position.y = walkBounce;
+    // Ground root with +0.006 sole compensation so boots rest flush on turntable top
+    figure.root.position.y = 0.006 + walkBounce;
 
-    // Torso breathing, runway clavicle counter-twist (BONE_L_CLAVICLE_12), and subtle rain lean
-    figure.torsoGroup.position.y = 1.46 + breathRise;
-    figure.torsoGroup.rotation.set(
-      0.035 * walkBlend - 0.02 * rainBlend,
-      -gaitWave * 0.11 * walkBlend + 0.04 * rainBlend,
-      gaitWave * 0.032 * walkBlend - 0.025 * rainBlend
-    );
+    if (figure.isLoaded) {
+      // Pelvis & spine counter-rotation (BONE_SPINE_02) + subtle editorial breathing
+      if (bones.pelvis) {
+        bones.pelvis.rotation.set(
+          0.02 * walkBlend - 0.015 * rainBlend,
+          gaitWave * 0.06 * walkBlend,
+          -gaitWave * 0.024 * walkBlend
+        );
+      }
+      if (bones.spine3) {
+        bones.spine3.rotation.set(
+          breathWave * 0.008 * (standWeight + rainBlend * 0.7),
+          -gaitWave * 0.05 * walkBlend + 0.02 * rainBlend,
+          0
+        );
+      }
+      if (bones.spine2) {
+        bones.spine2.rotation.set(
+          breathWave * 0.01 * (standWeight + rainBlend * 0.7) + 0.025 * walkBlend,
+          -gaitWave * 0.08 * walkBlend + 0.03 * rainBlend,
+          gaitWave * 0.02 * walkBlend - 0.018 * rainBlend
+        );
+      }
+      if (bones.spine1) {
+        bones.spine1.rotation.set(
+          breathWave * 0.012 * (standWeight + rainBlend * 0.7),
+          -gaitWave * 0.04 * walkBlend,
+          0
+        );
+      }
 
-    // Subtle poised head micro-turn & gentle hover tracking
-    const idleHeadYaw = reducedMotion ? 0 : Math.sin(elapsed * 0.65) * 0.045 * standWeight;
-    figure.headPivot.rotation.set(
-      hoverSmoothY * 0.08 + 0.03 * rainBlend,
-      idleHeadYaw + hoverSmoothX * 0.12 - 0.06 * rainBlend,
-      -gaitWave * 0.02 * walkBlend
-    );
+      // Poised head & neck subtle gaze tracking + gentle idle motion
+      const idleHeadYaw = reducedMotion ? 0 : Math.sin(elapsed * 0.62) * 0.045 * standWeight;
+      if (bones.neck) {
+        bones.neck.rotation.set(
+          hoverSmoothY * 0.035 + 0.02 * rainBlend,
+          (idleHeadYaw + hoverSmoothX * 0.05) * 0.45,
+          0
+        );
+      }
+      if (bones.head) {
+        bones.head.rotation.set(
+          hoverSmoothY * 0.06 + 0.03 * rainBlend,
+          idleHeadYaw + hoverSmoothX * 0.1 - 0.05 * rainBlend,
+          -gaitWave * 0.018 * walkBlend
+        );
+      }
 
-    // Tailored coat skirt subtle cloth-drape sway (trails torso rotation + breeze in rain)
-    const rainBreeze = reducedMotion ? 0 : Math.sin(elapsed * 3.4) * 0.032;
-    figure.coatSkirtPivot.position.y = 1.46 + breathRise * 0.5;
-    figure.coatSkirtPivot.rotation.set(
-      (0.05 + Math.abs(gaitWave) * 0.045) * walkBlend + rainBreeze * rainBlend,
-      -Math.sin(walkPhase - 0.45) * 0.09 * walkBlend,
-      gaitCos * 0.025 * walkBlend + rainBreeze * 0.6 * rainBlend
-    );
-    const skirtFlare = 1 + 0.055 * walkBlend * Math.abs(gaitWave) + 0.02 * rainBlend;
-    figure.coatSkirtPivot.scale.set(1, 1, skirtFlare);
+      // Clavicles (BONE_L_CLAVICLE_12) breathing + subtle lift when holding umbrella
+      if (bones.clavicleL) {
+        bones.clavicleL.rotation.set(
+          0,
+          0,
+          -0.05 + breathWave * 0.012 * (standWeight + rainBlend * 0.6)
+        );
+      }
+      if (bones.clavicleR) {
+        bones.clavicleR.rotation.set(
+          0,
+          0,
+          0.05 * (standWeight + walkBlend) + 0.11 * rainBlend - breathWave * 0.012 * standWeight
+        );
+      }
 
-    /* --- Left Arm (side +X): relaxed stand / counter-walk / rain-pocket poise --- */
-    const leftSwing = gaitWave * 0.36;
-    const leftShoulderX =
-      0.02 * standWeight + leftSwing * walkBlend + 0.08 * rainBlend;
-    const leftShoulderZ =
-      0.09 * standWeight + 0.11 * walkBlend + 0.13 * rainBlend;
-    const leftElbowX =
-      -0.14 * standWeight +
-      (-0.2 - Math.max(0, -leftSwing) * 0.42) * walkBlend +
-      -0.46 * rainBlend;
+      // Left Arm (+X): drops cleanly out of rest A-pose into palms-inward runway Stand / Walk / Rain
+      const leftArmSwing = gaitWave * 0.24;
+      if (bones.shoulderL) {
+        bones.shoulderL.rotation.set(
+          0.08 * standWeight + leftArmSwing * walkBlend + 0.09 * rainBlend,
+          -0.08 * standWeight - 0.06 * walkBlend - 0.08 * rainBlend,
+          -0.58 * standWeight - 0.56 * walkBlend - 0.57 * rainBlend
+        );
+      }
+      if (bones.elbowL) {
+        bones.elbowL.rotation.set(
+          0.16 * standWeight + (0.08 - Math.max(0, -leftArmSwing) * 0.35) * walkBlend + 0.12 * rainBlend,
+          0.28 * standWeight + 0.24 * walkBlend + 0.26 * rainBlend,
+          0.08 * standWeight + 0.06 * walkBlend + 0.08 * rainBlend
+        );
+      }
+      if (bones.handL) {
+        bones.handL.rotation.set(0, 0.24, -0.06);
+      }
 
-    figure.leftShoulderPivot.rotation.set(leftShoulderX, 0, leftShoulderZ);
-    figure.leftElbowPivot.rotation.set(leftElbowX, 0, 0);
+      // Right Arm (-X): Stand / opposing Walk swing / elevated chest-high Rain umbrella grip
+      const rightArmSwing = -gaitWave * 0.24;
+      if (bones.shoulderR) {
+        bones.shoulderR.rotation.set(
+          0.08 * standWeight + rightArmSwing * walkBlend - 0.72 * rainBlend,
+          0.08 * standWeight + 0.06 * walkBlend - 0.18 * rainBlend,
+          0.58 * standWeight + 0.56 * walkBlend + 0.38 * rainBlend
+        );
+      }
+      if (bones.elbowR) {
+        bones.elbowR.rotation.set(
+          0.16 * standWeight + (0.08 - Math.max(0, -rightArmSwing) * 0.35) * walkBlend - 1.38 * rainBlend,
+          -0.28 * standWeight - 0.24 * walkBlend + 0.26 * rainBlend,
+          -0.08 * standWeight - 0.06 * walkBlend - 0.14 * rainBlend
+        );
+      }
+      if (bones.handR) {
+        bones.handR.rotation.set(
+          0.24 * rainBlend,
+          -0.24 * (standWeight + walkBlend) + 0.12 * rainBlend,
+          0.06 * (standWeight + walkBlend)
+        );
+      }
 
-    /* --- Right Arm (side -X): relaxed stand / counter-walk / raised umbrella hold --- */
-    const rightSwing = -gaitWave * 0.36;
-    const rightShoulderX =
-      0.02 * standWeight + rightSwing * walkBlend + -0.26 * rainBlend;
-    const rightShoulderZ =
-      -0.09 * standWeight + -0.11 * walkBlend + 0.08 * rainBlend;
-    const rightElbowX =
-      -0.14 * standWeight +
-      (-0.2 - Math.max(0, -rightSwing) * 0.42) * walkBlend +
-      -1.92 * rainBlend;
+      // Legs (hip/knee/ankle): poised runway stance in Stand/Rain, smooth stride in Walk
+      const leftLegSwing = -gaitWave * 0.24;
+      const rightLegSwing = gaitWave * 0.24;
+      const leftKneeBend = Math.max(0, gaitCos) * 0.34 + 0.04;
+      const rightKneeBend = Math.max(0, -gaitCos) * 0.34 + 0.04;
 
-    figure.rightShoulderPivot.rotation.set(rightShoulderX, 0, rightShoulderZ);
-    figure.rightElbowPivot.rotation.set(rightElbowX, 0, 0);
+      if (bones.hipL) {
+        bones.hipL.rotation.set(
+          leftLegSwing * walkBlend - 0.02 * rainBlend,
+          0,
+          -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
+        );
+      }
+      if (bones.kneeL) {
+        bones.kneeL.rotation.set(leftKneeBend * walkBlend + 0.02 * rainBlend, 0, 0);
+      }
+      if (bones.ankleL) {
+        bones.ankleL.rotation.set(
+          -leftKneeBend * 0.35 * walkBlend,
+          0,
+          0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
+        );
+      }
 
-    /* --- Translucent Champagne Umbrella Smooth Scale, Fade & Upright Compensation --- */
+      if (bones.hipR) {
+        bones.hipR.rotation.set(
+          rightLegSwing * walkBlend + 0.015 * rainBlend,
+          0,
+          0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
+        );
+      }
+      if (bones.kneeR) {
+        bones.kneeR.rotation.set(rightKneeBend * walkBlend + 0.015 * rainBlend, 0, 0);
+      }
+      if (bones.ankleR) {
+        bones.ankleR.rotation.set(
+          -rightKneeBend * 0.35 * walkBlend,
+          0,
+          -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
+        );
+      }
+    }
+
+    /* --- Translucent Champagne Umbrella Synced to Sculpted Right Hand Palm --- */
     const showUmbrella = rainBlend > 0.015;
     figure.umbrella.group.visible = showUmbrella;
     if (showUmbrella) {
-      const easedScale = rainBlend * rainBlend * (3 - 2 * rainBlend);
-      figure.umbrella.group.scale.setScalar(Math.max(0.001, easedScale));
+      // Smoothly unfold from 0 -> 1 over the first 45% of rainBlend (no pop-in, full size fast)
+      const unfoldT = THREE.MathUtils.clamp((rainBlend - 0.015) / 0.435, 0, 1);
+      const unfoldScale = unfoldT * unfoldT * (3 - 2 * unfoldT);
+      const easedFade = rainBlend * rainBlend * (3 - 2 * rainBlend);
+      figure.umbrella.group.scale.setScalar(Math.max(0.001, unfoldScale));
 
-      // Cancel parent shoulder + elbow rotations so the canopy holds its exact upright tilt
-      tmpQuatA
-        .copy(figure.rightShoulderPivot.quaternion)
-        .multiply(figure.rightElbowPivot.quaternion)
-        .invert();
-      tmpQuatB.copy(tmpQuatA).multiply(umbrellaTargetQuat);
-      figure.umbrella.group.quaternion.copy(tmpQuatB);
+      if (figure.isLoaded && bones.handR) {
+        figure.root.updateMatrixWorld(true);
+        handWorldPos.set(0.015, 0.03, 0.04);
+        bones.handR.localToWorld(handWorldPos);
+        invRootMatrix.copy(figure.root.matrixWorld).invert();
+        handWorldPos.applyMatrix4(invRootMatrix);
+        handWorldPos.y = Math.max(handWorldPos.y, 1.48);
+        figure.umbrella.group.position.copy(handWorldPos);
+      } else {
+        figure.umbrella.group.position.set(-0.34, 1.5, 0.28);
+      }
+
+      const rainBreeze = reducedMotion ? 0 : Math.sin(elapsed * 2.8) * 0.025;
+      figure.umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
 
       const targetOpacity =
         typeof figure.umbrella.canopyMat.userData.targetOpacity === 'number'
           ? (figure.umbrella.canopyMat.userData.targetOpacity as number)
           : 0.56;
-      figure.umbrella.canopyMat.opacity = targetOpacity * easedScale;
+      figure.umbrella.canopyMat.opacity = targetOpacity * easedFade;
     }
-
-    /* --- Legs (Hip forward < 0, Knee anatomical backward bend >= 0) --- */
-    const leftLegSwing = -gaitWave * 0.4;
-    const rightLegSwing = gaitWave * 0.4;
-    const leftKneeBend = Math.max(0, gaitCos) * 0.52 + 0.06;
-    const rightKneeBend = Math.max(0, -gaitCos) * 0.52 + 0.06;
-
-    figure.leftHipPivot.rotation.set(
-      leftLegSwing * walkBlend - 0.03 * rainBlend,
-      0,
-      0.025 * (standWeight + rainBlend)
-    );
-    figure.leftKneePivot.rotation.set(leftKneeBend * walkBlend + 0.03 * rainBlend, 0, 0);
-
-    figure.rightHipPivot.rotation.set(
-      rightLegSwing * walkBlend + 0.02 * rainBlend,
-      0,
-      -0.025 * (standWeight + rainBlend)
-    );
-    figure.rightKneePivot.rotation.set(rightKneeBend * walkBlend + 0.02 * rainBlend, 0, 0);
   };
 
   const updateRainParticles = (dt: number, reducedMotion: boolean): void => {
@@ -1353,7 +1425,6 @@ export function createStudioStage(): StageModule {
       drop.x -= drop.speed * 0.18 * dt;
       drop.z += drop.speed * 0.04 * dt;
 
-      // Deflect raindrops smoothly at the translucent umbrella canopy dome
       const horizontalSq = drop.x * drop.x + drop.z * drop.z;
       const hitUmbrella =
         horizontalSq < UMBRELLA_DEFLECT_RADIUS * UMBRELLA_DEFLECT_RADIUS &&
@@ -1362,7 +1433,8 @@ export function createStudioStage(): StageModule {
 
       if (hitUmbrella || drop.y < RAIN_BOTTOM_Y) {
         drop.y = RAIN_TOP_Y - ((i * 19) % 10) * 0.06;
-        const resetRadius = 0.16 + Math.sqrt(((i * 31 + 11) % RAIN_COUNT) / RAIN_COUNT) * RAIN_COLUMN_RADIUS;
+        const resetRadius =
+          0.16 + Math.sqrt(((i * 31 + 11) % RAIN_COUNT) / RAIN_COUNT) * RAIN_COLUMN_RADIUS;
         const resetAngle = i * 2.3999632297 + drop.speed * 0.3;
         drop.x = Math.cos(resetAngle) * resetRadius + 0.42;
         drop.z = Math.sin(resetAngle) * resetRadius;
@@ -1374,7 +1446,6 @@ export function createStudioStage(): StageModule {
   };
 
   const updateOrbitalsAndDust = (elapsed: number, reducedMotion: boolean): void => {
-    // Subtab subtle aesthetic focus modulation
     const subtabRingLift =
       currentSubtab === 'intelligence' ? 0.12 : currentSubtab === 'atelier' ? 0.04 : 0;
     const subtabSpeed =
@@ -1397,7 +1468,6 @@ export function createStudioStage(): StageModule {
     );
     orbitals.group.position.y = 0.06 + subtabRingLift;
 
-    // Lightweight starlight micro-sparkle orbital drift
     if (!reducedMotion) {
       const { seeds, positions } = starlight;
       for (let i = 0; i < seeds.length; i++) {
@@ -1421,7 +1491,6 @@ export function createStudioStage(): StageModule {
     cameraPreset: STAGE_CAMERA_PRESETS.studio,
 
     getMarbleAnchor(elapsed: number, state: StageInteractionState): THREE.Vector3 {
-      // Smoothly wrap continuous 360° angle onto the visible front dial rail
       const wrappedAngle = Math.atan2(
         Math.sin(state.studioAngleRad),
         Math.cos(state.studioAngleRad)
@@ -1443,9 +1512,15 @@ export function createStudioStage(): StageModule {
       rainBlend = ctx.interaction.studioPose === 'rain' ? 1 : 0;
       turntableGroup.rotation.y = currentAngleRad;
 
+      if (figure.isLoaded && ctx.reducedMotion) {
+        figure.loadFade = 1;
+        figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE);
+        figure.loadingHalo.visible = false;
+      }
+
       syncVisualMode(ctx.mood, ctx.theme);
       syncGlass(ctx.glassRatio);
-      updateFigurePose(0, ctx.reducedMotion);
+      applySkeletalPose(0, ctx.reducedMotion);
     },
 
     onExit(_ctx: StageContext): void {
@@ -1485,7 +1560,6 @@ export function createStudioStage(): StageModule {
     },
 
     onPointerTap(ndcX: number, _ndcY: number, ctx: StageContext): void {
-      // Gentle 45° editorial runway quarter-turn toward the tapped side
       const direction = ndcX >= -0.15 ? 1 : -1;
       const nextAngle = ctx.interaction.studioAngleRad + direction * (Math.PI * 0.25);
       ctx.emitUiSync({ studioAngleRad: nextAngle });
@@ -1493,10 +1567,9 @@ export function createStudioStage(): StageModule {
 
     update(dt: number, elapsed: number, ctx: StageContext): void {
       const dampFast = ctx.reducedMotion ? 1 : 1 - Math.exp(-10 * dt);
-      const dampPose = ctx.reducedMotion ? 1 : 1 - Math.exp(-7 * dt);
+      const dampPose = ctx.reducedMotion ? 1 : 1 - Math.exp(-9.5 * dt);
       const dampHover = ctx.reducedMotion ? 1 : 1 - Math.exp(-6 * dt);
 
-      // Smoothly rotate 360° turntable toward interactive angle
       currentAngleRad = THREE.MathUtils.lerp(
         currentAngleRad,
         ctx.interaction.studioAngleRad,
@@ -1504,11 +1577,9 @@ export function createStudioStage(): StageModule {
       );
       turntableGroup.rotation.y = currentAngleRad;
 
-      // Smoothly damp subtle hover parallax
       hoverSmoothX = THREE.MathUtils.lerp(hoverSmoothX, hoverTargetX, dampHover);
       hoverSmoothY = THREE.MathUtils.lerp(hoverSmoothY, hoverTargetY, dampHover);
 
-      // Smooth pose state blending: Stand / Walk / Rain
       const targetWalk = ctx.interaction.studioPose === 'walk' ? 1 : 0;
       const targetRain = ctx.interaction.studioPose === 'rain' ? 1 : 0;
       walkBlend = THREE.MathUtils.lerp(walkBlend, targetWalk, dampPose);
@@ -1516,13 +1587,50 @@ export function createStudioStage(): StageModule {
 
       currentSubtab = ctx.interaction.studioSubtab;
 
-      updateFigurePose(elapsed, ctx.reducedMotion);
+      // Smooth arrival scale & halo dismissal once the sculpted GLB streams in
+      if (figure.isLoaded) {
+        if (figure.loadFade < 1) {
+          figure.loadFade = ctx.reducedMotion
+            ? 1
+            : Math.min(1, figure.loadFade + dt * 3.8);
+          const eased = figure.loadFade * figure.loadFade * (3 - 2 * figure.loadFade);
+          figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * (0.96 + 0.04 * eased));
+          figure.materials.loadingHaloMat.opacity = 0.55 * (1 - eased);
+          figure.loadingHalo.visible = figure.loadFade < 0.99;
+        }
+      } else {
+        figure.loadingHalo.visible = true;
+        const pulse = ctx.reducedMotion ? 1 : 0.94 + Math.sin(elapsed * 3.2) * 0.08;
+        figure.loadingHalo.scale.setScalar(pulse);
+        figure.materials.loadingHaloMat.opacity = 0.35 + (pulse - 0.86) * 1.4;
+      }
+
+      applySkeletalPose(elapsed, ctx.reducedMotion);
       updateRainParticles(dt, ctx.reducedMotion);
       updateOrbitalsAndDust(elapsed, ctx.reducedMotion);
     },
 
     dispose(): void {
+      disposed = true;
+      loadAbortController?.abort();
+      disposeSkeletons(figure.loadedModel);
+
+      // Only manually dispose materials/textures when GLB never attached to scene graph;
+      // once attached, disposeObject3D(group) deduplicates and disposes them cleanly once.
+      if (!figure.isLoaded) {
+        figure.materials.woolBumpTex.dispose();
+        figure.materials.porcelainMat.dispose();
+        figure.materials.hairMat.dispose();
+        figure.materials.coatMat.dispose();
+        figure.materials.knitMat.dispose();
+        figure.materials.trouserMat.dispose();
+        figure.materials.shoeMat.dispose();
+      }
+
       disposeObject3D(group);
+      figure.loadedModel = null;
+      figure.bones = {};
+      figure.isLoaded = false;
     },
   };
 }

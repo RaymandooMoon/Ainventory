@@ -78,6 +78,34 @@ describe('ainvtry.com official site content & icon-first architecture contract',
     }
   });
 
+  it('ships lightweight 20-bone skinned studio-mannequin-v1.glb with all 6 sculpted meshes', () => {
+    const glbPath = path.resolve(
+      import.meta.dirname,
+      '../../site/public/assets/models/studio-mannequin-v1.glb'
+    );
+    assert.ok(fs.existsSync(glbPath), `Missing Studio 3D mannequin GLB on disk: ${glbPath}`);
+    const buf = fs.readFileSync(glbPath);
+    assert.equal(buf.toString('utf8', 0, 4), 'glTF', 'Must be a valid binary glTF 2.0 container');
+    assert.ok(buf.byteLength < 1024 * 1024, `Studio GLB must stay under 1 MB (got ${buf.byteLength})`);
+
+    const jsonLen = buf.readUInt32LE(12);
+    const gltf = JSON.parse(buf.toString('utf8', 20, 20 + jsonLen)) as {
+      meshes: Array<{ name: string }>;
+      skins: Array<{ name: string; joints: number[] }>;
+    };
+    const meshNames = gltf.meshes.map((m) => m.name);
+    assert.deepEqual(meshNames, [
+      'mannequin_body',
+      'mannequin_hair',
+      'garment_coat',
+      'garment_knit',
+      'garment_slacks',
+      'garment_shoes',
+    ]);
+    assert.equal(gltf.skins.length, 1);
+    assert.equal(gltf.skins[0].joints.length, 20);
+  });
+
   it('provides complete bilingual EN/KO icon-first content, 6-cut clay journey, Google API x 3D theater, 6-tier Dev/Prod blueprint, and 4-line privacy defense', () => {
     for (const lang of ['en', 'ko'] as const) {
       const copy = SITE_COPY[lang];

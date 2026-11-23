@@ -290,7 +290,13 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         }
       );
 
-      director.registerStage(createStudioStage());
+      director.registerStage(
+        createStudioStage({
+          onModelLoaded: () => {
+            controllerRef.current?.requestRender?.();
+          },
+        })
+      );
       director.registerStage(createArchitectureStage());
       director.registerStage(createSpecsStage());
       director.registerStage(createAboutStage());
