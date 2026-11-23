@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { MoodMode, ThemeMode } from '../ainvtryStageDirector.ts';
 
 /* ==========================================================================
@@ -38,73 +39,23 @@ export const STAGE_PALETTE = {
 const ENV_RENDER_TARGETS = new WeakMap<THREE.Texture, THREE.WebGLRenderTarget>();
 
 /* ==========================================================================
- * 2. Procedural PMREM Studio Light-Box Environment (Zero Network Fetches)
+ * 2. Studio PMREM RoomEnvironment (Zero External Network Fetches)
  * ========================================================================== */
 
 /**
- * Generates a lightweight procedural PMREM studio environment texture featuring
- * a warm champagne key softbox, crisp overhead pearl fill, obsidian-cool rim
- * strip, and subtle under-bounce so smoked glass and metallic gold surfaces
- * exhibit high-craft studio reflections without loading external HDRI files.
+ * Generates a high-dynamic-range studio PMREM environment texture from
+ * Three.js `RoomEnvironment` so metallic champagne gold, brushed brass,
+ * dark worsted wool, and smoked crystal glass exhibit authentic showroom
+ * reflections without external HDRI fetches.
  */
 export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer);
-  pmrem.compileEquirectangularShader();
-
-  const envScene = new THREE.Scene();
-  envScene.background = new THREE.Color(STAGE_PALETTE.obsidianDeep);
-
-  const boxGeo = new THREE.BoxGeometry(18, 12, 18);
-  const boxMat = new THREE.MeshBasicMaterial({
-    color: 0x0b0b10,
-    side: THREE.BackSide,
-  });
-  envScene.add(new THREE.Mesh(boxGeo, boxMat));
-
-  const panelGeos: THREE.BufferGeometry[] = [boxGeo];
-  const panelMats: THREE.Material[] = [boxMat];
-
-  const addSoftbox = (
-    width: number,
-    height: number,
-    colorHex: number,
-    position: [number, number, number],
-    lookAt: [number, number, number]
-  ) => {
-    const geo = new THREE.PlaneGeometry(width, height);
-    const mat = new THREE.MeshBasicMaterial({
-      color: colorHex,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(position[0], position[1], position[2]);
-    mesh.lookAt(lookAt[0], lookAt[1], lookAt[2]);
-    envScene.add(mesh);
-    panelGeos.push(geo);
-    panelMats.push(mat);
-  };
-
-  // Warm champagne key softbox (upper left-front)
-  addSoftbox(6.2, 4.0, 0xf7e2be, [-5.2, 4.4, 4.4], [0, 0, 0]);
-  // Crisp ivory studio overhead strip
-  addSoftbox(8.5, 2.2, 0xf4f1ea, [0, 5.8, -0.4], [0, 0, 0]);
-  // Cool platinum-obsidian rim panel (right back)
-  addSoftbox(4.8, 5.2, 0xbfd0e8, [6.0, 2.2, -4.6], [0, 0, 0]);
-  // Subtle Aurora prismatic accent edge (left back)
-  addSoftbox(3.4, 3.6, 0x9bc4ec, [-6.2, 1.1, -3.8], [0, 0, 0]);
-  // Warm low champagne bounce card
-  addSoftbox(7.0, 2.6, 0x8f7144, [0, -5.2, 2.4], [0, 0, 0]);
-
-  const renderTarget = pmrem.fromScene(envScene, 0.04);
+  const roomEnv = new RoomEnvironment();
+  const renderTarget = pmrem.fromScene(roomEnv, 0.04);
   const envTexture = renderTarget.texture;
   ENV_RENDER_TARGETS.set(envTexture, renderTarget);
 
-  for (const geo of panelGeos) {
-    geo.dispose();
-  }
-  for (const mat of panelMats) {
-    mat.dispose();
-  }
+  roomEnv.dispose();
   pmrem.dispose();
 
   return envTexture;
@@ -664,6 +615,7 @@ export function createFloatingLabelSprite(
     transparent: true,
     depthTest: true,
     depthWrite: false,
+    toneMapped: false,
   });
   const sprite = new THREE.Sprite(spriteMat);
   sprite.scale.set(worldWidth, worldHeight, 1);

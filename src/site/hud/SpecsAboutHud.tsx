@@ -112,7 +112,19 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
           <span className="hud-gold-badge">{focusedPillar.label}</span>
         </div>
 
-        {/* 4 Hero KPI Cards synced bidirectionally with 3D Pillars 0..3 */}
+        {/* Active KPI / Spec Description (ON TOP) */}
+        <div className="hud-inspector hud-inspector--top" aria-live="polite">
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={inspector.icon} size={14} />
+            </span>
+            <strong>{inspector.title}</strong>
+            <span className="hud-gold-badge">{inspector.badge}</span>
+          </div>
+          <p className="hud-body-copy">{inspector.detail}</p>
+        </div>
+
+        {/* 4 Hero KPI Cards synced bidirectionally with 3D Pillars 0..3 (BELOW) */}
         <div className="hud-grid-2" role="group" aria-label={stack.heading}>
           {stack.heroKpis.map((kpi, idx) => {
             const itemKey = `kpi:${kpi.id}`;
@@ -139,7 +151,7 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
           })}
         </div>
 
-        {/* 4 Verification Spec Cards synced with 3D Pillars */}
+        {/* 4 Verification Spec Cards synced with 3D Pillars (BELOW) */}
         <div className="hud-subblock">
           <span className="hud-eyebrow">{stack.benchmarkTitle}</span>
           <div className="hud-grid-2" role="group" aria-label={stack.benchmarkTitle}>
@@ -171,18 +183,6 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
             })}
           </div>
         </div>
-
-        {/* Active Inspector */}
-        <div className="hud-inspector" aria-live="polite">
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={inspector.icon} size={14} />
-            </span>
-            <strong>{inspector.title}</strong>
-            <span className="hud-gold-badge">{inspector.badge}</span>
-          </div>
-          <p className="hud-body-copy">{inspector.detail}</p>
-        </div>
       </div>
     );
   }
@@ -209,6 +209,27 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
         </div>
       </div>
 
+      {/* Active Stack Card Description (ON TOP) */}
+      <div
+        id={stackPanelId}
+        className="hud-inspector hud-inspector--top"
+        role="tabpanel"
+        aria-labelledby={`${stackPrefix}-${activeCard.id}`}
+        aria-live="polite"
+      >
+        <div className="hud-inline-head">
+          <span className="hud-icon-badge">
+            <SiteIcon name={activeCard.icon} size={14} />
+          </span>
+          <strong>
+            {activeCard.metric} · {activeCard.title}
+          </strong>
+          <span className="hud-gold-badge">{activeCard.boundary}</span>
+        </div>
+        <p className="hud-body-copy">{activeCard.detail}</p>
+      </div>
+
+      {/* 6 Production Stack Cards (BELOW) */}
       <div
         className="hud-grid-2"
         role="tablist"
@@ -245,25 +266,6 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
             </button>
           );
         })}
-      </div>
-
-      <div
-        id={stackPanelId}
-        className="hud-inspector"
-        role="tabpanel"
-        aria-labelledby={`${stackPrefix}-${activeCard.id}`}
-        aria-live="polite"
-      >
-        <div className="hud-inline-head">
-          <span className="hud-icon-badge">
-            <SiteIcon name={activeCard.icon} size={14} />
-          </span>
-          <strong>
-            {activeCard.metric} · {activeCard.title}
-          </strong>
-          <span className="hud-gold-badge">{activeCard.boundary}</span>
-        </div>
-        <p className="hud-body-copy">{activeCard.detail}</p>
       </div>
     </div>
   );
@@ -400,7 +402,31 @@ export function AboutStageHud({
           </div>
         </div>
 
-        {/* 6 Clickable Cut Pills synced live to aboutStage marble */}
+        {/* Active Cut API Chips + Full Detail Inspector (ON TOP) */}
+        <div
+          id={journeyPanelId}
+          className="hud-inspector hud-inspector--top"
+          role="tabpanel"
+          aria-labelledby={`${journeyPrefix}-${activeCut.id}`}
+          aria-live="polite"
+        >
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeCut.icon} size={14} />
+            </span>
+            <strong>{activeCut.title}</strong>
+          </div>
+          <div className="hud-chip-wrap">
+            {activeCut.apiChips.map((chip) => (
+              <span key={chip} className="hud-chip-tag">
+                {chip}
+              </span>
+            ))}
+          </div>
+          <p className="hud-body-copy">{activeCut.detail}</p>
+        </div>
+
+        {/* 6 Clickable Cut Cards synced live to aboutStage marble (BELOW) */}
         <div
           className="hud-grid-2"
           role="tablist"
@@ -435,30 +461,6 @@ export function AboutStageHud({
               </button>
             );
           })}
-        </div>
-
-        {/* Active Cut API Chips + Full Detail Inspector */}
-        <div
-          id={journeyPanelId}
-          className="hud-inspector"
-          role="tabpanel"
-          aria-labelledby={`${journeyPrefix}-${activeCut.id}`}
-          aria-live="polite"
-        >
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeCut.icon} size={14} />
-            </span>
-            <strong>{activeCut.title}</strong>
-          </div>
-          <div className="hud-chip-wrap">
-            {activeCut.apiChips.map((chip) => (
-              <span key={chip} className="hud-chip-tag">
-                {chip}
-              </span>
-            ))}
-          </div>
-          <p className="hud-body-copy">{activeCut.detail}</p>
         </div>
 
         <button
@@ -519,7 +521,19 @@ export function AboutStageHud({
           </h2>
         </div>
 
-        {/* 3 Value Pillars */}
+        {/* Active Inspector Description (ON TOP) */}
+        <div className="hud-inspector hud-inspector--top" aria-live="polite">
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={inspector.icon} size={14} />
+            </span>
+            <strong>{inspector.title}</strong>
+            <span className="hud-gold-badge">{inspector.badge}</span>
+          </div>
+          <p className="hud-body-copy">{inspector.detail}</p>
+        </div>
+
+        {/* 3 Value Pillars (BELOW) */}
         <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={mission.badge}>
           {mission.commitments.map((item) => {
             const isSelected = missionChoice.kind === 'pillar' && missionChoice.id === item.id;
@@ -668,18 +682,6 @@ export function AboutStageHud({
           </div>
         </div>
 
-        {/* Inspector */}
-        <div className="hud-inspector" aria-live="polite">
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={inspector.icon} size={14} />
-            </span>
-            <strong>{inspector.title}</strong>
-            <span className="hud-gold-badge">{inspector.badge}</span>
-          </div>
-          <p className="hud-body-copy">{inspector.detail}</p>
-        </div>
-
         <button
           type="button"
           className="hud-bridge-btn"
@@ -728,7 +730,19 @@ export function AboutStageHud({
         </button>
       </div>
 
-      {/* 3-Pillar Circular Business Model */}
+      {/* Active BM / Moat Description (ON TOP) */}
+      <div className="hud-inspector hud-inspector--top" aria-live="polite">
+        <div className="hud-inline-head">
+          <span className="hud-icon-badge">
+            <SiteIcon name={activeFounderInfo.icon} size={14} />
+          </span>
+          <strong>{activeFounderInfo.title}</strong>
+          <span className="hud-gold-badge">{activeFounderInfo.badge}</span>
+        </div>
+        <p className="hud-body-copy">{activeFounderInfo.detail}</p>
+      </div>
+
+      {/* 3-Pillar Circular Business Model Cards (BELOW) */}
       <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={vision.revenueTitle}>
         {vision.revenuePillars.map((pillar) => {
           const key = `bm:${pillar.id}`;
@@ -754,7 +768,7 @@ export function AboutStageHud({
         })}
       </div>
 
-      {/* 4 Core Moats */}
+      {/* 4 Core Moat Cards (BELOW) */}
       <div className="hud-grid-2" role="group" aria-label={vision.moatsTitle}>
         {vision.moats.map((moat) => {
           const key = `moat:${moat.id}`;
@@ -776,18 +790,6 @@ export function AboutStageHud({
             </button>
           );
         })}
-      </div>
-
-      {/* Active BM / Moat Inspector */}
-      <div className="hud-inspector" aria-live="polite">
-        <div className="hud-inline-head">
-          <span className="hud-icon-badge">
-            <SiteIcon name={activeFounderInfo.icon} size={14} />
-          </span>
-          <strong>{activeFounderInfo.title}</strong>
-          <span className="hud-gold-badge">{activeFounderInfo.badge}</span>
-        </div>
-        <p className="hud-body-copy">{activeFounderInfo.detail}</p>
       </div>
 
       <blockquote className="hud-quote">{vision.quote}</blockquote>

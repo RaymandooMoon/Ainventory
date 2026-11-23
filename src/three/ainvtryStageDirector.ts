@@ -35,6 +35,7 @@ export interface StageInteractionState {
   studioSubtab: 'preview' | 'atelier' | 'intelligence';
   studioPreviewScreen: 'outfits' | 'closet' | 'stats' | 'profile';
   studioPose: 'stand' | 'walk' | 'rain';
+  studioModelMode: 'dressform' | 'mannequin';
   studioAngleRad: number;
   architectureSubtab: 'blueprint' | 'privacy' | 'maps';
   architectureTier: number; // 0..5
@@ -53,6 +54,7 @@ export const DEFAULT_STAGE_INTERACTION_STATE: Readonly<StageInteractionState> = 
   studioSubtab: 'preview',
   studioPreviewScreen: 'outfits',
   studioPose: 'stand',
+  studioModelMode: 'dressform',
   studioAngleRad: 0,
   architectureSubtab: 'blueprint',
   architectureTier: 3, // 04 iNVTRY Core active by default
@@ -129,6 +131,7 @@ export interface DirectorOptions {
   readonly reducedMotion?: boolean;
   readonly transitionDurationSec?: number;
   readonly initialAspect?: number;
+  readonly initialWidth?: number;
 }
 
 /* ==========================================================================
@@ -164,13 +167,16 @@ export const STAGE_CAMERA_PRESETS: Record<ActiveStageId, CameraPreset> = {
 
 const PORTRAIT_ASPECT_THRESHOLD = 0.85;
 const DESKTOP_ASPECT_THRESHOLD = 1.0;
+const MOBILE_VIEWPORT_WIDTH_PX = 860;
 const DEFAULT_PORTRAIT_LOOK_Y_OFFSET = 0.42;
-const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 1.05;
+const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 1.48;
 
 /**
  * Computes responsive camera position and lookAt vectors from a desktop base
  * preset so the 3D stage frames cleanly on both wide desktops (left 58% band)
- * and narrow portrait viewports (centered X = 0 with calibrated Z pullback).
+ * and mobile/compact tablet (<860px, matching the CSS bottom-sheet breakpoint)
+ * or narrow portrait viewports (centered X = 0 above the collapsed mobile
+ * bottom sheet with calibrated Z pullback).
  */
 export function computeResponsiveCameraPreset(
   base: CameraPreset,
@@ -178,45 +184,55 @@ export function computeResponsiveCameraPreset(
   outPos: THREE.Vector3,
   outLook: THREE.Vector3,
   isHero = false,
-  portraitLookYOffset = DEFAULT_PORTRAIT_LOOK_Y_OFFSET
+  portraitLookYOffset = DEFAULT_PORTRAIT_LOOK_Y_OFFSET,
+  viewportWidth?: number
 ): void {
   const safeAspect = Number.isFinite(aspect) && aspect > 0.2 ? aspect : 16 / 9;
+  const isMobileViewport =
+    typeof viewportWidth === 'number' &&
+    Number.isFinite(viewportWidth) &&
+    viewportWidth > 0 &&
+    viewportWidth < MOBILE_VIEWPORT_WIDTH_PX;
 
   if (isHero) {
     outPos.copy(base.position);
     outLook.copy(base.lookAt);
-    if (safeAspect < PORTRAIT_ASPECT_THRESHOLD) {
+    if (safeAspect < PORTRAIT_ASPECT_THRESHOLD || isMobileViewport) {
       const pull = THREE.MathUtils.clamp(PORTRAIT_ASPECT_THRESHOLD / safeAspect, 1.0, 1.38);
       outPos.z = base.position.z * pull;
     }
     return;
   }
 
-  if (safeAspect >= DESKTOP_ASPECT_THRESHOLD) {
+  if (!isMobileViewport && safeAspect >= DESKTOP_ASPECT_THRESHOLD) {
     outPos.copy(base.position);
     outLook.copy(base.lookAt);
     return;
   }
 
-  // Smooth blend weight: 0 at portrait (< 0.85) -> 1 at desktop (>= 1.0)
-  const desktopWeight = THREE.MathUtils.clamp(
-    (safeAspect - PORTRAIT_ASPECT_THRESHOLD) /
-      (DESKTOP_ASPECT_THRESHOLD - PORTRAIT_ASPECT_THRESHOLD),
-    0,
-    1
-  );
+  // Smooth blend weight: 0 at mobile (< 768px) or portrait (< 0.85) -> 1 at desktop (>= 1.0)
+  const desktopWeight = isMobileViewport
+    ? 0
+    : THREE.MathUtils.clamp(
+        (safeAspect - PORTRAIT_ASPECT_THRESHOLD) /
+          (DESKTOP_ASPECT_THRESHOLD - PORTRAIT_ASPECT_THRESHOLD),
+        0,
+        1
+      );
 
-  // Pull camera back proportionally on portrait widths to prevent lateral clipping
-  const portraitZScale = Math.min(1.52, Math.max(1.18, 0.92 / Math.max(safeAspect, 0.42)));
+  // Pull camera back proportionally on portrait/mobile widths to prevent lateral clipping
+  const portraitZScale = Math.min(1.54, Math.max(1.22, 0.94 / Math.max(safeAspect, 0.42)));
   const zScale = THREE.MathUtils.lerp(portraitZScale, 1.0, desktopWeight);
 
-  // Portrait centers X = 0 and lowers lookAt Y so the 3D showcase sits
-  // clearly above the bottom HUD drawer without colliding with mobile chrome.
+  // Portrait/mobile centers X = 0, lowers lookAt Y, and drops camera Y slightly so
+  // the entire dress form, turntable, and front gold marble dial arc stay unobstructed
+  // above the collapsed mobile bottom sheet (~50dvh) without pitching the front arc down.
   const portraitLookY = base.lookAt.y - portraitLookYOffset;
+  const portraitPosY = base.position.y - 0.18;
 
   outPos.set(
     THREE.MathUtils.lerp(0, base.position.x, desktopWeight),
-    THREE.MathUtils.lerp(base.position.y + 0.15, base.position.y, desktopWeight),
+    THREE.MathUtils.lerp(portraitPosY, base.position.y, desktopWeight),
     base.position.z * zScale
   );
 
@@ -362,6 +378,7 @@ export class AinvtryStageDirector {
   private transitionElapsed = 0;
   private transitionStartElapsed = 0;
   private readonly transitionDurationSec: number;
+  private viewportWidth: number | undefined;
 
   private readonly heroPhysics: HeroMarblePhysicsPort;
   private readonly dockColliders: DomDockColliderSync;
@@ -385,6 +402,13 @@ export class AinvtryStageDirector {
       typeof options.initialAspect === 'number' && options.initialAspect > 0
         ? options.initialAspect
         : camera.aspect || 16 / 9;
+
+    this.viewportWidth =
+      typeof options.initialWidth === 'number' &&
+      Number.isFinite(options.initialWidth) &&
+      options.initialWidth > 0
+        ? options.initialWidth
+        : undefined;
 
     this.transitionDurationSec =
       typeof options.transitionDurationSec === 'number' && options.transitionDurationSec > 0
@@ -412,7 +436,9 @@ export class AinvtryStageDirector {
       initialAspect,
       this.camToPos,
       this.camToLook,
-      true
+      true,
+      DEFAULT_PORTRAIT_LOOK_Y_OFFSET,
+      this.viewportWidth
     );
     this.camFromPos.copy(this.camToPos);
     this.camFromLook.copy(this.camToLook);
@@ -450,11 +476,29 @@ export class AinvtryStageDirector {
   }
 
   /**
+   * Re-computes responsive framing using exact viewport pixel dimensions so
+   * narrow mobile widths (< 768px) switch cleanly to unobstructed bottom-sheet
+   * framing regardless of orientation.
+   */
+  public setViewportSize(width: number, height: number): void {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return;
+    }
+    this.viewportWidth = width;
+    this.applyViewportFraming(width / height);
+  }
+
+  /**
    * Re-computes responsive framing when the viewport aspect ratio changes
    * (desktop left-58% framing vs. narrow portrait centered framing).
    */
   public setViewportAspect(aspect: number): void {
     if (!Number.isFinite(aspect) || aspect <= 0) return;
+    this.viewportWidth = undefined;
+    this.applyViewportFraming(aspect);
+  }
+
+  private applyViewportFraming(aspect: number): void {
     this.ctx.viewportAspect = aspect;
 
     const targetPreset =
@@ -469,7 +513,8 @@ export class AinvtryStageDirector {
       this.camToPos,
       this.camToLook,
       this.activeStage === 'hero',
-      MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET
+      MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
+      this.viewportWidth
     );
 
     if (this.ctx.reducedMotion && !this.isTransitioning) {
@@ -527,7 +572,9 @@ export class AinvtryStageDirector {
         this.ctx.viewportAspect,
         this.camToPos,
         this.camToLook,
-        true
+        true,
+        DEFAULT_PORTRAIT_LOOK_Y_OFFSET,
+        this.viewportWidth
       );
       this.setupMarbleArc(this.tmpStartPos, HERO_MARBLE_WELL);
     } else if (nextModule) {
@@ -543,7 +590,8 @@ export class AinvtryStageDirector {
         this.camToPos,
         this.camToLook,
         false,
-        MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET
+        MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
+        this.viewportWidth
       );
 
       const anchor = nextModule.getMarbleAnchor(elapsed, this.ctx.interaction);

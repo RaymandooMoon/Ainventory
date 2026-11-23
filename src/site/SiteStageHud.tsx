@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActiveStageId, StageInteractionState } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
@@ -20,6 +20,41 @@ export interface SiteStageHudProps {
 interface SubtabOption<T extends string> {
   readonly id: T;
   readonly label: string;
+}
+
+interface SheetGestureState {
+  active: boolean;
+  source: 'touch' | 'pointer';
+  zone: 'handle' | 'header' | 'scroll';
+  lockedOut: boolean;
+  handled: boolean;
+  startX: number;
+  startY: number;
+  startScrollTop: number;
+}
+
+const MOBILE_SHEET_MAX_WIDTH = 859;
+const EXPAND_SWIPE_PX = 28;
+const HANDLE_COLLAPSE_SWIPE_PX = 28;
+const HEADER_COLLAPSE_SWIPE_PX = 36;
+const SCROLL_COLLAPSE_SWIPE_PX = 44;
+const SCROLL_EXPAND_TOP_PX = 10;
+
+function isMobileSheetViewport(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth <= MOBILE_SHEET_MAX_WIDTH;
+}
+
+function readGesturePoint(e: PointerEvent | TouchEvent): { x: number; y: number } | null {
+  if ('touches' in e) {
+    if (e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.changedTouches.length > 0) {
+      return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    }
+    return null;
+  }
+  return { x: e.clientX, y: e.clientY };
 }
 
 function handleSubtabKeys<T extends string>(
@@ -46,11 +81,11 @@ function handleSubtabKeys<T extends string>(
 }
 
 /**
- * Right-38% Desktop / Bottom-42% Mobile Stitch v4 Frosted Glass HUD Overlay.
- * Floats cleanly beside (or below on portrait mobile) the live interactive Three.js 3D stage
- * without blocking left-58% / top-44% 3D pointer gestures, binding 100% lossless KO/EN content.
+ * Right-38% Desktop / 2-Detent Expandable Mobile Bottom Sheet Stitch v4 Frosted Glass HUD Overlay.
+ * Floats cleanly beside (or anchored at 35dvh resting detent on mobile, expanding smoothly on scroll/swipe/handle tap)
+ * the live interactive Three.js 3D stage without blocking 3D pointer gestures, binding 100% lossless KO/EN content.
  */
-export default function SiteStageHud({
+function SiteStageHudPanel({
   activeStage,
   copy,
   lang,
@@ -62,6 +97,20 @@ export default function SiteStageHud({
   onUpdateInteraction,
 }: SiteStageHudProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const isSheetExpandedRef = useRef(false);
+  const suppressGrabClickRef = useRef(false);
+  const suppressTimerRef = useRef<number | null>(null);
+  const gestureRef = useRef<SheetGestureState>({
+    active: false,
+    source: 'pointer',
+    zone: 'scroll',
+    lockedOut: false,
+    handled: false,
+    startX: 0,
+    startY: 0,
+    startScrollTop: 0,
+  });
 
   const activeSubtabKey =
     activeStage === 'studio'
@@ -72,11 +121,202 @@ export default function SiteStageHud({
           ? interaction.specsSubtab
           : interaction.aboutSubtab;
 
+  const markSuppressGrabClick = useCallback(() => {
+    suppressGrabClickRef.current = true;
+    if (suppressTimerRef.current !== null) {
+      window.clearTimeout(suppressTimerRef.current);
+    }
+    suppressTimerRef.current = window.setTimeout(() => {
+      suppressGrabClickRef.current = false;
+      suppressTimerRef.current = null;
+    }, 140);
+  }, []);
+
+  const applySheetExpanded = useCallback((next: boolean) => {
+    if (isSheetExpandedRef.current === next) return;
+    isSheetExpandedRef.current = next;
+    setIsSheetExpanded(next);
+    triggerHaptic('selection');
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
   }, [activeStage, activeSubtabKey]);
+
+  // Reset mobile expanded state cleanly if viewport grows into desktop HUD layout
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mql = window.matchMedia(`(max-width: ${MOBILE_SHEET_MAX_WIDTH}px)`);
+    const onViewportChange = (e: MediaQueryListEvent) => {
+      if (!e.matches) {
+        gestureRef.current.active = false;
+        isSheetExpandedRef.current = false;
+        setIsSheetExpanded(false);
+      }
+    };
+    mql.addEventListener('change', onViewportChange);
+    return () => {
+      mql.removeEventListener('change', onViewportChange);
+    };
+  }, []);
+
+  // Global touch/pointer move & release tracking for native mobile bottom-sheet swipe-up/down detents
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const evaluateSwipe = (e: PointerEvent | TouchEvent, source: 'touch' | 'pointer') => {
+      const g = gestureRef.current;
+      if (!g.active || g.source !== source || g.lockedOut || g.handled) return;
+      if (!isMobileSheetViewport()) {
+        g.active = false;
+        return;
+      }
+
+      const pt = readGesturePoint(e);
+      if (!pt) return;
+
+      const dx = pt.x - g.startX;
+      const dy = pt.y - g.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (g.zone !== 'handle' && absDx > 10 && absDx > absDy * 1.15) {
+        g.lockedOut = true;
+        return;
+      }
+
+      const expanded = isSheetExpandedRef.current;
+
+      // Collapsed -> swipe upward expands sheet cleanly up below the top navbar
+      if (!expanded && dy < -EXPAND_SWIPE_PX && (g.zone === 'handle' || absDy > absDx * 1.15)) {
+        g.handled = true;
+        g.active = false;
+        if (g.zone === 'handle') {
+          markSuppressGrabClick();
+        }
+        applySheetExpanded(true);
+        return;
+      }
+
+      // Expanded -> swipe downward on handle/header, or downward on scroll area while at top (scrollTop <= 2)
+      if (expanded && dy > 0 && (g.zone === 'handle' || absDy > absDx * 1.15)) {
+        if (g.zone === 'handle' && dy > HANDLE_COLLAPSE_SWIPE_PX) {
+          g.handled = true;
+          g.active = false;
+          markSuppressGrabClick();
+          applySheetExpanded(false);
+          return;
+        }
+        if (g.zone === 'header' && dy > HEADER_COLLAPSE_SWIPE_PX) {
+          g.handled = true;
+          g.active = false;
+          applySheetExpanded(false);
+          return;
+        }
+        if (g.zone === 'scroll') {
+          const currentScrollTop = scrollRef.current?.scrollTop ?? 0;
+          if (g.startScrollTop > 2 || currentScrollTop > 2) {
+            g.lockedOut = true;
+            return;
+          }
+          if (dy > SCROLL_COLLAPSE_SWIPE_PX) {
+            g.handled = true;
+            g.active = false;
+            applySheetExpanded(false);
+          }
+        }
+      }
+    };
+
+    const finishGesture = (e: PointerEvent | TouchEvent, source: 'touch' | 'pointer') => {
+      const g = gestureRef.current;
+      if (!g.active || g.source !== source) return;
+      evaluateSwipe(e, source);
+      g.active = false;
+      g.lockedOut = false;
+      g.handled = false;
+    };
+
+    const onPointerMove = (e: PointerEvent) => evaluateSwipe(e, 'pointer');
+    const onPointerEnd = (e: PointerEvent) => finishGesture(e, 'pointer');
+    const onTouchMove = (e: TouchEvent) => evaluateSwipe(e, 'touch');
+    const onTouchEnd = (e: TouchEvent) => finishGesture(e, 'touch');
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerEnd, { passive: true });
+    window.addEventListener('pointercancel', onPointerEnd, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+      if (suppressTimerRef.current !== null) {
+        window.clearTimeout(suppressTimerRef.current);
+        suppressTimerRef.current = null;
+      }
+    };
+  }, [applySheetExpanded, markSuppressGrabClick]);
+
+  const beginSheetGesture = (
+    e: React.PointerEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
+    zone: 'handle' | 'header' | 'scroll'
+  ) => {
+    if (!isMobileSheetViewport()) return;
+
+    const isTouch = 'touches' in e;
+    if (!isTouch) {
+      // Touch devices are handled exclusively via touchstart/touchmove/touchend
+      if (e.pointerType === 'touch') return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (gestureRef.current.active && gestureRef.current.source === 'touch') return;
+    }
+
+    const targetEl = e.target instanceof Element ? e.target : null;
+    if (
+      zone !== 'handle' &&
+      targetEl?.closest('input, textarea, select, [contenteditable="true"], .site-hud-subtabs')
+    ) {
+      return;
+    }
+
+    const clientX = isTouch ? (e.touches[0]?.clientX ?? 0) : e.clientX;
+    const clientY = isTouch ? (e.touches[0]?.clientY ?? 0) : e.clientY;
+
+    if (zone === 'handle') {
+      e.stopPropagation();
+    }
+
+    gestureRef.current = {
+      active: true,
+      source: isTouch ? 'touch' : 'pointer',
+      zone,
+      lockedOut: false,
+      handled: false,
+      startX: clientX,
+      startY: clientY,
+      startScrollTop: zone === 'scroll' ? (scrollRef.current?.scrollTop ?? 0) : 0,
+    };
+  };
+
+  const handleGrabClick = () => {
+    if (suppressGrabClickRef.current || !isMobileSheetViewport()) return;
+    applySheetExpanded(!isSheetExpandedRef.current);
+  };
+
+  const handleScrollContainer = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!isMobileSheetViewport()) return;
+    if (!isSheetExpandedRef.current && e.currentTarget.scrollTop > SCROLL_EXPAND_TOP_PX) {
+      applySheetExpanded(true);
+    }
+  };
 
   const stageHeader = (() => {
     if (activeStage === 'studio') {
@@ -146,17 +386,42 @@ export default function SiteStageHud({
   })();
 
   const showHeaderBadge = Boolean(stageHeader.badge) && stageHeader.tabs.length < 3;
+  const grabAriaLabel = isSheetExpanded
+    ? lang === 'ko'
+      ? '패널 접기 (3D 무대 크게 보기)'
+      : 'Collapse panel to reveal 3D stage'
+    : lang === 'ko'
+      ? '패널 위로 펼치기'
+      : 'Expand panel upward';
 
   return (
     <aside
-      key={activeStage}
       className="site-hud-panel"
       data-hud-surface="true"
       data-no-marble="true"
       data-stage={activeStage}
+      data-sheet-expanded={isSheetExpanded ? 'true' : 'false'}
       aria-label={`${activeStage} inspector`}
     >
-      <div className="site-hud-header" data-tab-count={stageHeader.tabs.length}>
+      <button
+        type="button"
+        className="site-hud-grab-btn"
+        aria-expanded={isSheetExpanded}
+        aria-controls="site-hud-tabpanel"
+        aria-label={grabAriaLabel}
+        onClick={handleGrabClick}
+        onPointerDown={(e) => beginSheetGesture(e, 'handle')}
+        onTouchStart={(e) => beginSheetGesture(e, 'handle')}
+      >
+        <span className="site-hud-grab-bar" aria-hidden="true" />
+      </button>
+
+      <div
+        className="site-hud-header"
+        data-tab-count={stageHeader.tabs.length}
+        onPointerDown={(e) => beginSheetGesture(e, 'header')}
+        onTouchStart={(e) => beginSheetGesture(e, 'header')}
+      >
         <div
           className="site-hud-subtabs"
           role="tablist"
@@ -202,6 +467,9 @@ export default function SiteStageHud({
         className="site-hud-scroll"
         role="tabpanel"
         aria-labelledby={`${stageHeader.prefix}-${stageHeader.current}`}
+        onScroll={handleScrollContainer}
+        onPointerDown={(e) => beginSheetGesture(e, 'scroll')}
+        onTouchStart={(e) => beginSheetGesture(e, 'scroll')}
       >
         {activeStage === 'studio' && (
           <StudioStageHud
@@ -243,3 +511,8 @@ export default function SiteStageHud({
     </aside>
   );
 }
+
+export default function SiteStageHud(props: SiteStageHudProps) {
+  return <SiteStageHudPanel key={props.activeStage} {...props} />;
+}
+

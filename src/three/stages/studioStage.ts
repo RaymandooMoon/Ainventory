@@ -3,26 +3,32 @@
  * ---------------------------------------------------------------------------
  * Studio 3D Stage Module for ainvtry.com (Three.js 0.187 WebGL2)
  *
- * Implements the luxury editorial 3D fitting showcase:
+ * Implements the Dual-Mode Luxury Editorial 3D Showroom:
  * 1. Layered frosted-crystal circular turntable pedestal (y = -1.25) with
  *    chamfered champagne-gold upper/lower rims, luminous inner studio disc,
  *    and soft ground contact shadow.
  * 2. Dual 360° counter-rotating tilted champagne-gold orbital rings with
  *    specular glint nodes and 48 lightweight floating starlight dust points.
- * 3. High-resolution 20-bone skinned anatomical mannequin & tailored double-
- *    breasted charcoal wool overcoat GLB (`/assets/models/studio-mannequin-v1.glb`,
- *    CC0 MakeHuman base, baked ray-traced studio vertex AO, procedural wool-twill
- *    micro-weave bump PBR, real Stand / Walk / Rain skeletal choreography,
- *    translucent smoked-glass champagne umbrella, and 3D raindrop streaks).
- * 4. Curved front champagne-gold 360° dial track (radius 2.08, y = -1.32)
- *    with reusable glowing marble controller synced to turntable rotation.
- *
- * Preloads on stage construction so the sculpted 3D model is ready the instant
- * the marble enters Studio, with SSR / headless Node test safety.
+ * 3. Mode A (Immediate Default: `'dressform'`): High-Fashion Headless Couture
+ *    Atelier Dress Form sculpted from a 64-segment anatomical `SplineCurve`
+ *    `LatheGeometry`, obsidian wool-weave physical fabric + internal brushed-
+ *    gold core spine revealed via Glass %, chamfered neck finial & minimalist
+ *    coat-hanger hook (`iNVTRY` hanger signature), 3 elliptical tailoring
+ *    measurement rings with seam glint nodes, brushed-gold stand pole & plinth,
+ *    and reactive `Stand / Walk / Rain` couture choreography.
+ * 4. Mode B: Auto drop-in `/models/mannequin.glb` (with Draco support, magic-
+ *    byte `glTF` pre-verification for zero console errors, `Box3` 1.8u auto-
+ *    scaling & grounding, PBR sheen/IBL tuning, and `AnimationMixer` crossfade)
+ *    plus lazily-loaded toggleable 20-bone skinned CC0 GLB mannequin
+ *    (`/assets/models/studio-mannequin-v1.glb`) when `studioModelMode === 'mannequin'`.
+ * 5. Curved front champagne-gold 360° dial track (radius 2.08, y = -1.32)
+ *    with reusable glowing marble controller synced to turntable rotation,
+ *    plus translucent smoked-glass umbrella and diagonal 3D rain streaks.
  */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   STAGE_CAMERA_PRESETS,
   type MoodMode,
@@ -41,11 +47,18 @@ import {
 } from './stageMaterials.ts';
 
 /* ==========================================================================
- * 1. Stage Spatial & Animation Constants
+ * 1. Stage Spatial, Model & Animation Constants
  * ========================================================================== */
 
+const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
+const CUSTOM_MANNEQUIN_TARGET_HEIGHT = 1.8;
 const STUDIO_MANNEQUIN_GLB_URL = '/assets/models/studio-mannequin-v1.glb';
+const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
 const MANNEQUIN_WORLD_SCALE = 1.44; // 1.615m anatomical mesh -> ~2.33 world units on turntable
+
+const TORSO_SCALE_X = 1.18;
+const TORSO_SCALE_Z = 0.72;
+const TORSO_PIVOT_Y = 0.8;
 
 const PEDESTAL_Y = -1.25;
 const PEDESTAL_RADIUS = 1.58;
@@ -64,14 +77,18 @@ const RAIN_COLUMN_RADIUS = 1.78;
 const RAIN_TOP_Y = 2.65;
 const RAIN_BOTTOM_Y = PEDESTAL_TOP_Y + 0.04;
 const UMBRELLA_DEFLECT_RADIUS = 0.92;
-const UMBRELLA_DEFLECT_Y = 1.72;
+const UMBRELLA_DEFLECT_Y_MANNEQUIN = 1.72;
+const UMBRELLA_DEFLECT_Y_DRESSFORM = 1.56;
+const UMBRELLA_DEFLECT_Y_CUSTOM = 1.38;
+
+type ActiveModelKind = 'dressform' | 'mannequin' | 'custom';
 
 export interface StudioStageOptions {
   readonly onModelLoaded?: () => void;
 }
 
 /* ==========================================================================
- * 2. SSR-Safe Procedural Canvas Textures (Zero External Network Fetches)
+ * 2. SSR-Safe Procedural Canvas Textures & Binary GLB Magic Verification
  * ========================================================================== */
 
 function createFallbackTexture(rgba: [number, number, number, number]): THREE.DataTexture {
@@ -80,7 +97,19 @@ function createFallbackTexture(rgba: [number, number, number, number]): THREE.Da
   return tex;
 }
 
-/** Soft radial floor contact shadow beneath pedestal and Chelsea boots. */
+/** Verifies binary GLB magic header (`glTF` = 0x67 0x6C 0x54 0x46) before parsing. */
+function isValidGlbBuffer(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 12) return false;
+  const header = new Uint8Array(buffer, 0, 4);
+  return (
+    header[0] === 0x67 &&
+    header[1] === 0x6c &&
+    header[2] === 0x54 &&
+    header[3] === 0x46
+  );
+}
+
+/** Soft radial floor contact shadow beneath pedestal and showroom base. */
 function createRadialShadowTexture(size = 128): THREE.Texture {
   if (typeof document === 'undefined') {
     return createFallbackTexture([0, 0, 0, 140]);
@@ -255,7 +284,7 @@ function buildTurntablePedestal(
   baseCoreMesh.position.y = -PEDESTAL_HEIGHT * 0.28;
   group.add(baseCoreMesh);
 
-  // Luminous frosted studio reflector disc right beneath top bevel (matches luxury crystal turntable)
+  // Luminous frosted studio reflector disc right beneath top bevel
   const mirrorTex = createFrostedMirrorTexture(256);
   const mirrorGeo = new THREE.CircleGeometry(PEDESTAL_RADIUS - 0.032, 64);
   mirrorGeo.rotateX(-Math.PI * 0.5);
@@ -436,7 +465,414 @@ function buildStarlightDust(): StarlightRig {
 }
 
 /* ==========================================================================
- * 5. Sculpted 20-Bone Skinned GLB Mannequin & Smoked-Glass Umbrella Builder
+ * 5. Mode A: High-Fashion Headless Couture Atelier Dress Form Builder
+ * ========================================================================== */
+
+interface AtelierDressFormRig {
+  readonly group: THREE.Group;
+  readonly torsoPivot: THREE.Group;
+  readonly torsoMat: THREE.MeshPhysicalMaterial;
+  readonly goldHardwareMat: THREE.MeshStandardMaterial;
+  readonly plinthInlayMat: THREE.MeshStandardMaterial;
+  readonly coreSpineMat: THREE.MeshStandardMaterial;
+  readonly measureRingMat: THREE.MeshStandardMaterial;
+  readonly seamGlintMat: THREE.MeshStandardMaterial;
+}
+
+/** Linearly interpolates the torso profile radius at any exact vertical Y coordinate. */
+function sampleProfileRadiusAtY(points: readonly THREE.Vector2[], targetY: number): number {
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if ((a.y <= targetY && b.y >= targetY) || (a.y >= targetY && b.y <= targetY)) {
+      const span = b.y - a.y;
+      if (Math.abs(span) < 1e-6) return b.x;
+      const t = (targetY - a.y) / span;
+      return THREE.MathUtils.lerp(a.x, b.x, t);
+    }
+  }
+  return points[points.length - 1]?.x ?? 0.2;
+}
+
+/** Applies Luxury/Aurora × Dark/Light palette to brushed couture gold hardware. */
+function applyBrushedGoldHardwareMode(
+  mat: THREE.MeshStandardMaterial,
+  mood: MoodMode,
+  theme: ThemeMode,
+  emissiveIntensity: number
+): void {
+  const isDark = theme === 'dark';
+  const isAurora = mood === 'aurora';
+
+  if (isAurora) {
+    mat.color.setHex(
+      isDark ? STAGE_PALETTE.auroraSilverGold : STAGE_PALETTE.auroraSilverLightTheme
+    );
+    mat.emissive.setHex(
+      isDark ? STAGE_PALETTE.auroraEmissiveDark : STAGE_PALETTE.auroraEmissiveLight
+    );
+    mat.metalness = isDark ? 0.93 : 0.86;
+    mat.roughness = isDark ? 0.16 : 0.22;
+    mat.envMapIntensity = isDark ? 1.65 : 1.3;
+  } else {
+    mat.color.setHex(isDark ? 0xd6b889 : STAGE_PALETTE.champagneGoldLightTheme);
+    mat.emissive.setHex(
+      isDark ? STAGE_PALETTE.champagneEmissiveDark : STAGE_PALETTE.champagneEmissiveLight
+    );
+    mat.metalness = isDark ? 0.92 : 0.86;
+    mat.roughness = isDark ? 0.18 : 0.23;
+    mat.envMapIntensity = isDark ? 1.55 : 1.25;
+  }
+
+  mat.emissiveIntensity = isDark ? emissiveIntensity : emissiveIntensity * 0.62;
+}
+
+function buildAtelierDressForm(
+  woolBumpTex: THREE.Texture,
+  glassRatio: number,
+  mood: MoodMode,
+  theme: ThemeMode
+): AtelierDressFormRig {
+  const group = new THREE.Group();
+  group.name = 'studio-atelier-dressform';
+
+  // Brushed champagne gold hardware (`#D6B889`, metalness 0.92, roughness 0.18)
+  const goldHardwareMat = new THREE.MeshStandardMaterial({
+    color: 0xd6b889,
+    metalness: 0.92,
+    roughness: 0.18,
+    envMapIntensity: 1.55,
+  });
+  applyBrushedGoldHardwareMode(goldHardwareMat, mood, theme, 0.14);
+
+  const plinthInlayMat = new THREE.MeshStandardMaterial({
+    color: 0x16171c,
+    metalness: 0.24,
+    roughness: 0.36,
+    envMapIntensity: 1.1,
+  });
+
+  // Internal brushed-gold core spine revealed softly through smoked glass %
+  const coreSpineMat = new THREE.MeshStandardMaterial({
+    color: 0xd6b889,
+    emissive: STAGE_PALETTE.champagneEmissiveDark,
+    emissiveIntensity: 0.35,
+    metalness: 0.92,
+    roughness: 0.18,
+    envMapIntensity: 1.6,
+  });
+  applyBrushedGoldHardwareMode(coreSpineMat, mood, theme, 0.36);
+
+  // Ultra-fine tailoring measurement rings + seam glint nodes
+  const measureRingMat = new THREE.MeshStandardMaterial({
+    color: 0xd6b889,
+    metalness: 0.92,
+    roughness: 0.18,
+    envMapIntensity: 1.6,
+  });
+  applyBrushedGoldHardwareMode(measureRingMat, mood, theme, 0.38);
+
+  const seamGlintMat = new THREE.MeshStandardMaterial({
+    color: 0xe6cfa4,
+    metalness: 0.94,
+    roughness: 0.14,
+    envMapIntensity: 1.75,
+  });
+  applyBrushedGoldHardwareMode(seamGlintMat, mood, theme, 0.85);
+
+  /* --- 5A. Chamfered Base Plinth Ring & Slim Brushed-Gold Stand Pole (y = 0 .. 0.85) --- */
+  const plinthPoints: THREE.Vector2[] = [
+    new THREE.Vector2(0.001, 0.002),
+    new THREE.Vector2(0.268, 0.002),
+    new THREE.Vector2(0.268, 0.014),
+    new THREE.Vector2(0.252, 0.025),
+    new THREE.Vector2(0.155, 0.027),
+    new THREE.Vector2(0.122, 0.044),
+    new THREE.Vector2(0.056, 0.052),
+    new THREE.Vector2(0.036, 0.072),
+    new THREE.Vector2(0.026, 0.074),
+    new THREE.Vector2(0.001, 0.074),
+  ];
+  const plinthGeo = new THREE.LatheGeometry(plinthPoints, 48);
+  const plinthMesh = new THREE.Mesh(plinthGeo, goldHardwareMat);
+  group.add(plinthMesh);
+
+  // Subtle dark obsidian accent inlay ring set into the plinth terrace
+  const plinthInlayGeo = new THREE.TorusGeometry(0.205, 0.007, 10, 48);
+  plinthInlayGeo.rotateX(Math.PI * 0.5);
+  const plinthInlayMesh = new THREE.Mesh(plinthInlayGeo, plinthInlayMat);
+  plinthInlayMesh.position.y = 0.026;
+  group.add(plinthInlayMesh);
+
+  // Slim brushed-gold central stand pole extending cleanly into the under-torso collar
+  const standPoleGeo = new THREE.CylinderGeometry(0.021, 0.025, 0.8, 24);
+  const standPoleMesh = new THREE.Mesh(standPoleGeo, goldHardwareMat);
+  standPoleMesh.position.y = 0.45;
+  group.add(standPoleMesh);
+
+  // Mid-pole couture height-adjustment collar ring
+  const lockCollarGeo = new THREE.CylinderGeometry(0.034, 0.036, 0.032, 24);
+  const lockCollarMesh = new THREE.Mesh(lockCollarGeo, goldHardwareMat);
+  lockCollarMesh.position.y = 0.43;
+  group.add(lockCollarMesh);
+
+  const lockRimGeo = new THREE.TorusGeometry(0.036, 0.0045, 10, 24);
+  lockRimGeo.rotateX(Math.PI * 0.5);
+  const lockRimMesh = new THREE.Mesh(lockRimGeo, measureRingMat);
+  lockRimMesh.position.y = 0.446;
+  group.add(lockRimMesh);
+
+  /* --- 5B. Pivoted Couture Torso Assembly (Anchored at TORSO_PIVOT_Y = 0.80) --- */
+  const torsoPivot = new THREE.Group();
+  torsoPivot.name = 'studio-dressform-torso-pivot';
+  torsoPivot.position.set(0, TORSO_PIVOT_Y, 0);
+  group.add(torsoPivot);
+
+  // Under-torso sculpted brass mounting collar receiving the bottom hem
+  const underCollarPoints: THREE.Vector2[] = [
+    new THREE.Vector2(0.001, -0.056),
+    new THREE.Vector2(0.036, -0.056),
+    new THREE.Vector2(0.046, -0.044),
+    new THREE.Vector2(0.088, -0.036),
+    new THREE.Vector2(0.128, -0.026),
+    new THREE.Vector2(0.132, -0.018),
+    new THREE.Vector2(0.001, -0.018),
+  ];
+  const underCollarGeo = new THREE.LatheGeometry(underCollarPoints, 48);
+  underCollarGeo.scale(TORSO_SCALE_X, 1, TORSO_SCALE_Z);
+  underCollarGeo.computeVertexNormals();
+  const underCollarMesh = new THREE.Mesh(underCollarGeo, goldHardwareMat);
+  torsoPivot.add(underCollarMesh);
+
+  // Anatomical Couture Torso via SplineCurve + 64-segment LatheGeometry
+  const coutureControlPoints: THREE.Vector2[] = [
+    new THREE.Vector2(0.228, 0.785), // beveled lower hem
+    new THREE.Vector2(0.256, 0.835), // low hip flare
+    new THREE.Vector2(0.264, 0.892), // sculpted pelvis curve
+    new THREE.Vector2(0.236, 0.962), // upper pelvis taper
+    new THREE.Vector2(0.194, 1.032), // lower waist convergence
+    new THREE.Vector2(0.172, 1.095), // cinched couture waist
+    new THREE.Vector2(0.188, 1.168), // lower ribcage lift
+    new THREE.Vector2(0.234, 1.265), // sculpted mid ribcage
+    new THREE.Vector2(0.268, 1.365), // tailored chest / bust apex
+    new THREE.Vector2(0.282, 1.455), // upper chest broadening
+    new THREE.Vector2(0.304, 1.535), // broad architectural couture shoulders
+    new THREE.Vector2(0.282, 1.592), // rounded shoulder cap
+    new THREE.Vector2(0.202, 1.640), // trapezius slope
+    new THREE.Vector2(0.122, 1.688), // collarbone root
+    new THREE.Vector2(0.092, 1.734), // slim couture neck base
+    new THREE.Vector2(0.088, 1.808), // upper neck column
+  ];
+
+  const profileSpline = new THREE.SplineCurve(coutureControlPoints);
+  const sampledBody = profileSpline.getPoints(72);
+
+  // Prepend/append closed beveled bottom & top caps without spline Gibbs overshoot
+  const absoluteProfile: THREE.Vector2[] = [
+    new THREE.Vector2(0.001, 0.770),
+    new THREE.Vector2(0.118, 0.771),
+    new THREE.Vector2(0.204, 0.776),
+    ...sampledBody.map((pt) => new THREE.Vector2(Math.max(0.002, pt.x), pt.y)),
+    new THREE.Vector2(0.080, 1.823),
+    new THREE.Vector2(0.052, 1.829),
+    new THREE.Vector2(0.001, 1.831),
+  ];
+
+  const torsoLathePoints = absoluteProfile.map(
+    (pt) => new THREE.Vector2(pt.x, pt.y - TORSO_PIVOT_Y)
+  );
+  const torsoGeo = new THREE.LatheGeometry(torsoLathePoints, 64);
+  torsoGeo.scale(TORSO_SCALE_X, 1, TORSO_SCALE_Z);
+  torsoGeo.computeVertexNormals();
+
+  // Deep obsidian charcoal couture wool + champagne sheen + Glass % smoked translucency
+  const torsoMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1a1b20,
+    roughness: 0.42,
+    metalness: 0.15,
+    sheen: 0.85,
+    sheenRoughness: 0.5,
+    sheenColor: new THREE.Color(0xd6b889),
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.32,
+    envMapIntensity: 1.25,
+    bumpMap: woolBumpTex,
+    bumpScale: 0.002,
+    transparent: true,
+    opacity: THREE.MathUtils.lerp(1.0, 0.76, THREE.MathUtils.clamp(glassRatio, 0, 1)),
+    depthWrite: true,
+  });
+
+  const torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
+  torsoMesh.name = 'studio-dressform-torso';
+  torsoMesh.renderOrder = 2;
+  torsoPivot.add(torsoMesh);
+
+  /* --- 5C. Internal Brushed-Gold Architectural Core Spine (Revealed via Glass %) --- */
+  const coreSpineGroup = new THREE.Group();
+  coreSpineGroup.name = 'studio-dressform-gold-spine';
+  torsoPivot.add(coreSpineGroup);
+
+  const spineRodGeo = new THREE.CylinderGeometry(0.014, 0.022, 0.96, 16);
+  const spineRodMesh = new THREE.Mesh(spineRodGeo, coreSpineMat);
+  spineRodMesh.position.y = 1.28 - TORSO_PIVOT_Y;
+  spineRodMesh.renderOrder = 1;
+  coreSpineGroup.add(spineRodMesh);
+
+  const coreRibSpecs: ReadonlyArray<{ readonly y: number; readonly r: number }> = [
+    { y: 0.90, r: 0.145 },
+    { y: 1.10, r: 0.102 },
+    { y: 1.35, r: 0.158 },
+    { y: 1.52, r: 0.172 },
+  ];
+  const vertebraGeo = new THREE.SphereGeometry(0.026, 12, 10);
+  for (const spec of coreRibSpecs) {
+    const ribGeo = new THREE.TorusGeometry(spec.r, 0.0055, 10, 48);
+    ribGeo.rotateX(Math.PI * 0.5);
+    ribGeo.scale(TORSO_SCALE_X, 1, TORSO_SCALE_Z);
+    ribGeo.computeVertexNormals();
+    const ribMesh = new THREE.Mesh(ribGeo, coreSpineMat);
+    ribMesh.position.y = spec.y - TORSO_PIVOT_Y;
+    ribMesh.renderOrder = 1;
+    coreSpineGroup.add(ribMesh);
+
+    const vertebra = new THREE.Mesh(vertebraGeo, coreSpineMat);
+    vertebra.position.y = spec.y - TORSO_PIVOT_Y;
+    vertebra.renderOrder = 1;
+    coreSpineGroup.add(vertebra);
+  }
+
+  /* --- 5D. Chamfered Neck Finial Cap & Minimalist Coat-Hanger Hook (Total H ~2.12u) --- */
+  const neckFinialPoints: THREE.Vector2[] = [
+    new THREE.Vector2(0.001, 1.822 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.098, 1.822 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.101, 1.836 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.090, 1.858 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.056, 1.872 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.032, 1.884 - TORSO_PIVOT_Y),
+    new THREE.Vector2(0.001, 1.886 - TORSO_PIVOT_Y),
+  ];
+  const neckFinialGeo = new THREE.LatheGeometry(neckFinialPoints, 48);
+  neckFinialGeo.scale(TORSO_SCALE_X, 1, TORSO_SCALE_Z);
+  neckFinialGeo.computeVertexNormals();
+  const neckFinialMesh = new THREE.Mesh(neckFinialGeo, goldHardwareMat);
+  neckFinialMesh.renderOrder = 3;
+  torsoPivot.add(neckFinialMesh);
+
+  // Collar bezel ring anchoring the hanger stem
+  const hookCollarGeo = new THREE.TorusGeometry(0.028, 0.006, 10, 28);
+  hookCollarGeo.rotateX(Math.PI * 0.5);
+  const hookCollarMesh = new THREE.Mesh(hookCollarGeo, goldHardwareMat);
+  hookCollarMesh.position.y = 1.886 - TORSO_PIVOT_Y;
+  torsoPivot.add(hookCollarMesh);
+
+  // Minimalist metallic Coat-Hanger Hook (`iNVTRY` hanger signature)
+  const hookCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.0, 1.876 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(0.0, 1.928 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(0.028, 1.970 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(0.070, 2.024 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(0.056, 2.088 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(0.002, 2.116 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(-0.055, 2.094 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(-0.072, 2.038 - TORSO_PIVOT_Y, 0),
+    new THREE.Vector3(-0.050, 2.006 - TORSO_PIVOT_Y, 0),
+  ]);
+  const hookGeo = new THREE.TubeGeometry(hookCurve, 48, 0.0125, 14, false);
+  const hookMesh = new THREE.Mesh(hookGeo, goldHardwareMat);
+  hookMesh.name = 'studio-dressform-hanger-hook';
+  torsoPivot.add(hookMesh);
+
+  // Chamfered tip finial sphere capping the open end of the hanger hook
+  const hookTipGeo = new THREE.SphereGeometry(0.0155, 14, 12);
+  const hookTipMesh = new THREE.Mesh(hookTipGeo, seamGlintMat);
+  hookTipMesh.position.set(-0.050, 2.006 - TORSO_PIVOT_Y, 0);
+  torsoPivot.add(hookTipMesh);
+
+  /* --- 5E. 3 Ultra-Fine Tailoring Measurement Rings + Seam Glint Nodes --- */
+  const measurementSpecs: ReadonlyArray<{
+    readonly name: string;
+    readonly y: number;
+    readonly tube: number;
+    readonly clearance: number;
+    readonly glints: ReadonlyArray<'left' | 'right' | 'front' | 'back'>;
+  }> = [
+    {
+      name: 'shoulder',
+      y: 1.535,
+      tube: 0.0044,
+      clearance: 0.005,
+      glints: ['left', 'right'],
+    },
+    {
+      name: 'chest',
+      y: 1.365,
+      tube: 0.0038,
+      clearance: 0.0048,
+      glints: ['front', 'back'],
+    },
+    {
+      name: 'waist',
+      y: 1.095,
+      tube: 0.0048,
+      clearance: 0.0052,
+      glints: ['front', 'back', 'left', 'right'],
+    },
+  ];
+
+  const glintNodeGeo = new THREE.SphereGeometry(0.0105, 12, 10);
+  for (const spec of measurementSpecs) {
+    const r = sampleProfileRadiusAtY(absoluteProfile, spec.y) + spec.clearance;
+    const ringGeo = new THREE.TorusGeometry(r, spec.tube, 12, 72);
+    ringGeo.rotateX(Math.PI * 0.5);
+    ringGeo.scale(TORSO_SCALE_X, 1, TORSO_SCALE_Z);
+    ringGeo.computeVertexNormals();
+    const ringMesh = new THREE.Mesh(ringGeo, measureRingMat);
+    ringMesh.name = `studio-dressform-ring-${spec.name}`;
+    ringMesh.position.y = spec.y - TORSO_PIVOT_Y;
+    ringMesh.renderOrder = 3;
+    torsoPivot.add(ringMesh);
+
+    const localY = spec.y - TORSO_PIVOT_Y;
+    for (const side of spec.glints) {
+      const node = new THREE.Mesh(glintNodeGeo, seamGlintMat);
+      if (side === 'left') node.position.set(r * TORSO_SCALE_X, localY, 0);
+      else if (side === 'right') node.position.set(-r * TORSO_SCALE_X, localY, 0);
+      else if (side === 'front') node.position.set(0, localY, r * TORSO_SCALE_Z);
+      else node.position.set(0, localY, -r * TORSO_SCALE_Z);
+      node.renderOrder = 3;
+      torsoPivot.add(node);
+    }
+  }
+
+  // Ultra-fine front & back center couture seam hairlines hugging the silhouette
+  const seamSampleYs = [0.80, 0.89, 0.99, 1.095, 1.22, 1.365, 1.50, 1.61, 1.69];
+  for (const zSign of [1, -1] as const) {
+    const seamPts = seamSampleYs.map((y) => {
+      const r = sampleProfileRadiusAtY(absoluteProfile, y);
+      return new THREE.Vector3(0, y - TORSO_PIVOT_Y, zSign * (r * TORSO_SCALE_Z + 0.0038));
+    });
+    const seamCurve = new THREE.CatmullRomCurve3(seamPts);
+    const seamGeo = new THREE.TubeGeometry(seamCurve, 32, 0.0022, 8, false);
+    const seamMesh = new THREE.Mesh(seamGeo, measureRingMat);
+    seamMesh.renderOrder = 3;
+    torsoPivot.add(seamMesh);
+  }
+
+  return {
+    group,
+    torsoPivot,
+    torsoMat,
+    goldHardwareMat,
+    plinthInlayMat,
+    coreSpineMat,
+    measureRingMat,
+    seamGlintMat,
+  };
+}
+
+/* ==========================================================================
+ * 6. Translucent Smoked-Glass Champagne Umbrella Builder
  * ========================================================================== */
 
 interface UmbrellaRig {
@@ -462,7 +898,7 @@ function buildUmbrella(
     metalness: 0.25,
   });
 
-  // Sculpted handle grip resting cleanly inside the right hand palm
+  // Sculpted handle grip resting cleanly inside the right hand palm (or suspended behind form)
   const gripGeo = new THREE.CylinderGeometry(0.02, 0.022, 0.17, 14);
   const gripMesh = new THREE.Mesh(gripGeo, gripMat);
   gripMesh.position.y = -0.02;
@@ -473,7 +909,7 @@ function buildUmbrella(
   pommelMesh.position.y = -0.105;
   group.add(pommelMesh);
 
-  // Slim metallic champagne shaft extending cleanly above the 2.33u sculpted head to the canopy apex
+  // Slim metallic champagne shaft extending cleanly to the canopy apex
   const canopyRadius = 0.98;
   const canopyPhi = Math.PI * 0.4;
   const canopyScaleY = 0.62;
@@ -543,6 +979,10 @@ function buildUmbrella(
   return { group, canopyMat, goldMat, gripMat };
 }
 
+/* ==========================================================================
+ * 7. Mode B: 20-Bone Skinned GLB Mannequin & Auto Drop-In Rig Builders
+ * ========================================================================== */
+
 type RigBoneName =
   | 'pelvis'
   | 'spine3'
@@ -574,16 +1014,13 @@ interface FigureMaterials {
   readonly knitMat: THREE.MeshPhysicalMaterial;
   readonly trouserMat: THREE.MeshPhysicalMaterial;
   readonly shoeMat: THREE.MeshPhysicalMaterial;
-  readonly footShadowMat: THREE.MeshBasicMaterial;
   readonly loadingHaloMat: THREE.MeshBasicMaterial;
-  readonly woolBumpTex: THREE.Texture;
 }
 
 interface SkinnedFigureRig {
   readonly root: THREE.Group;
   readonly modelSlot: THREE.Group;
   readonly loadingHalo: THREE.Mesh;
-  readonly umbrella: UmbrellaRig;
   readonly materials: FigureMaterials;
   bones: RigBoneMap;
   loadedModel: THREE.Object3D | null;
@@ -591,22 +1028,30 @@ interface SkinnedFigureRig {
   isLoaded: boolean;
 }
 
-function buildSkinnedFigureRig(
-  glassRatio: number,
-  mood: MoodMode,
-  theme: ThemeMode
-): SkinnedFigureRig {
+interface CustomDropInRig {
+  readonly root: THREE.Group;
+  readonly modelSlot: THREE.Group;
+  loadedModel: THREE.Object3D | null;
+  mixer: THREE.AnimationMixer | null;
+  standAction: THREE.AnimationAction | null;
+  walkAction: THREE.AnimationAction | null;
+  activeClip: 'stand' | 'walk';
+  isLoaded: boolean;
+}
+
+function buildSkinnedFigureRig(woolBumpTex: THREE.Texture): SkinnedFigureRig {
   const root = new THREE.Group();
   root.name = 'studio-fitting-figure';
-
-  const woolBumpTex = createWoolWeaveBumpTexture(256);
+  root.visible = false;
 
   // Luxury editorial PBR materials calibrated with baked studio vertex AO (`vertexColors: true`)
+  // and restrained envMapIntensity under RoomEnvironment + ACESFilmic so dark wool tailoring stays rich obsidian
   const porcelainMat = new THREE.MeshPhysicalMaterial({
     color: 0xdcc4ae,
     vertexColors: true,
     roughness: 0.5,
     metalness: 0.02,
+    envMapIntensity: 0.48,
     sheen: 0.28,
     sheenRoughness: 0.7,
     sheenColor: new THREE.Color(0xffe9d4),
@@ -617,6 +1062,7 @@ function buildSkinnedFigureRig(
     vertexColors: true,
     roughness: 0.62,
     metalness: 0.04,
+    envMapIntensity: 0.45,
     sheen: 0.32,
     sheenRoughness: 0.64,
     sheenColor: new THREE.Color(0x63606e),
@@ -628,6 +1074,7 @@ function buildSkinnedFigureRig(
     vertexColors: true,
     roughness: 0.85,
     metalness: 0.03,
+    envMapIntensity: 0.42,
     sheen: 0.74,
     sheenRoughness: 0.56,
     sheenColor: new THREE.Color(0xa69b8d),
@@ -641,6 +1088,7 @@ function buildSkinnedFigureRig(
     vertexColors: true,
     roughness: 0.94,
     metalness: 0.02,
+    envMapIntensity: 0.35,
     sheen: 0.42,
     sheenRoughness: 0.78,
     sheenColor: new THREE.Color(0x6c6864),
@@ -653,6 +1101,7 @@ function buildSkinnedFigureRig(
     vertexColors: true,
     roughness: 0.86,
     metalness: 0.03,
+    envMapIntensity: 0.4,
     sheen: 0.54,
     sheenRoughness: 0.66,
     sheenColor: new THREE.Color(0x88817a),
@@ -666,26 +1115,12 @@ function buildSkinnedFigureRig(
     vertexColors: true,
     roughness: 0.28,
     metalness: 0.14,
+    envMapIntensity: 0.85,
     clearcoat: 0.5,
     clearcoatRoughness: 0.22,
   });
 
-  // Soft boot contact shadow grounding shoes firmly onto the frosted crystal turntable
-  const footShadowTex = createRadialShadowTexture(64);
-  const footShadowGeo = new THREE.PlaneGeometry(0.92, 0.72);
-  footShadowGeo.rotateX(-Math.PI * 0.5);
-  const footShadowMat = new THREE.MeshBasicMaterial({
-    map: footShadowTex,
-    color: 0x050508,
-    transparent: true,
-    opacity: 0.62,
-    depthWrite: false,
-  });
-  const footShadowMesh = new THREE.Mesh(footShadowGeo, footShadowMat);
-  footShadowMesh.position.set(0, 0.004, 0.04);
-  root.add(footShadowMesh);
-
-  // Subtle luminous champagne atelier halo shown only during the ~150ms GLB stream-in
+  // Subtle luminous champagne atelier halo shown only while lazily streaming 20-bone GLB
   const loadingHaloGeo = new THREE.RingGeometry(0.42, 0.455, 48);
   loadingHaloGeo.rotateX(-Math.PI * 0.5);
   const loadingHaloMat = new THREE.MeshBasicMaterial({
@@ -705,16 +1140,10 @@ function buildSkinnedFigureRig(
   modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE);
   root.add(modelSlot);
 
-  // Translucent smoked-glass umbrella mounted directly in figure.root space
-  // and synced each frame to the exact world-transformed palm of `bones.handR`
-  const umbrella = buildUmbrella(glassRatio, mood, theme);
-  root.add(umbrella.group);
-
   return {
     root,
     modelSlot,
     loadingHalo,
-    umbrella,
     materials: {
       porcelainMat,
       hairMat,
@@ -722,15 +1151,44 @@ function buildSkinnedFigureRig(
       knitMat,
       trouserMat,
       shoeMat,
-      footShadowMat,
       loadingHaloMat,
-      woolBumpTex,
     },
     bones: {},
     loadedModel: null,
     loadFade: 0,
     isLoaded: false,
   };
+}
+
+function buildCustomDropInRig(): CustomDropInRig {
+  const root = new THREE.Group();
+  root.name = 'studio-custom-mannequin';
+  root.visible = false;
+
+  const modelSlot = new THREE.Group();
+  modelSlot.name = 'studio-custom-mannequin-slot';
+  root.add(modelSlot);
+
+  return {
+    root,
+    modelSlot,
+    loadedModel: null,
+    mixer: null,
+    standAction: null,
+    walkAction: null,
+    activeClip: 'stand',
+    isLoaded: false,
+  };
+}
+
+function disposeMaterialWithTextures(mat: THREE.Material): void {
+  const record = mat as unknown as Record<string, unknown>;
+  for (const val of Object.values(record)) {
+    if (val && typeof val === 'object' && (val as { isTexture?: boolean }).isTexture === true) {
+      (val as THREE.Texture).dispose();
+    }
+  }
+  mat.dispose();
 }
 
 function assignMannequinMaterials(
@@ -749,11 +1207,11 @@ function assignMannequinMaterials(
       const mesh = obj as THREE.Mesh;
       mesh.frustumCulled = false;
 
-      // Dispose default GLB material before binding our luxury editorial PBR materials
+      // Dispose default GLB material and any embedded textures before binding our luxury PBR materials
       if (Array.isArray(mesh.material)) {
-        for (const m of mesh.material) m.dispose();
+        for (const m of mesh.material) disposeMaterialWithTextures(m);
       } else if (mesh.material) {
-        mesh.material.dispose();
+        disposeMaterialWithTextures(mesh.material);
       }
 
       switch (mesh.name) {
@@ -783,8 +1241,75 @@ function assignMannequinMaterials(
   });
 }
 
+function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void {
+  const model = gltf.scene;
+
+  // Normalize scale via Box3 to exactly 1.8 world units tall, centered X/Z = 0, grounded at y = 0
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+
+  if (size.y > 1e-4) {
+    const scaleFactor = CUSTOM_MANNEQUIN_TARGET_HEIGHT / size.y;
+    model.scale.multiplyScalar(scaleFactor);
+  }
+
+  model.updateMatrixWorld(true);
+  box.setFromObject(model);
+  box.getCenter(center);
+  model.position.x -= center.x;
+  model.position.z -= center.z;
+  model.position.y -= box.min.y;
+
+  // Tune Showroom IBL & sheen across all imported PBR meshes
+  model.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.frustumCulled = false;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!mat) continue;
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.envMapIntensity = 1.2;
+        mat.sheen = Math.max(mat.sheen, 0.55);
+        mat.needsUpdate = true;
+      } else if (mat instanceof THREE.MeshStandardMaterial) {
+        mat.envMapIntensity = 1.2;
+        mat.needsUpdate = true;
+      }
+    }
+  });
+
+  // Bind Stand / Walk animation clips when embedded animations exist
+  if (gltf.animations.length > 0) {
+    const mixer = new THREE.AnimationMixer(model);
+    const standClip =
+      gltf.animations.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
+      gltf.animations[0];
+    const walkClip =
+      gltf.animations.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
+      gltf.animations[1] ??
+      standClip;
+
+    const standAction = mixer.clipAction(standClip);
+    const walkAction = walkClip === standClip ? standAction : mixer.clipAction(walkClip);
+    standAction.play();
+
+    targetRig.mixer = mixer;
+    targetRig.standAction = standAction;
+    targetRig.walkAction = walkAction;
+    targetRig.activeClip = 'stand';
+  }
+
+  targetRig.loadedModel = model;
+  targetRig.modelSlot.add(model);
+  targetRig.isLoaded = true;
+}
+
 /* ==========================================================================
- * 6. 3D Diagonal Raindrop Streaks Builder (`THREE.LineSegments`)
+ * 8. 3D Diagonal Raindrop Streaks Builder (`THREE.LineSegments`)
  * ========================================================================== */
 
 interface RainDropSeed {
@@ -861,7 +1386,7 @@ function writeRainSegment(
 }
 
 /* ==========================================================================
- * 7. Curved Front Champagne-Gold 360° Dial Track Builder
+ * 9. Curved Front Champagne-Gold 360° Dial Track Builder
  * ========================================================================== */
 
 interface DialTrackRig {
@@ -923,7 +1448,7 @@ function buildDialTrack(mood: MoodMode, theme: ThemeMode): DialTrackRig {
 }
 
 /* ==========================================================================
- * 8. Dedicated Editorial 4-Point Studio Lighting Rig
+ * 10. Dedicated Couture Showroom Lighting Rig (Calibrated for ACESFilmic + RoomEnv)
  * ========================================================================== */
 
 interface StudioLightRig {
@@ -939,27 +1464,27 @@ function buildStudioLights(): StudioLightRig {
   const group = new THREE.Group();
   group.name = 'studio-lights';
 
-  // Warm editorial key light (upper left-front) sculpting lapels and face contour
-  const keyLight = new THREE.DirectionalLight(0xfff1dc, 2.4);
-  keyLight.position.set(-2.9, 4.1, 3.8);
+  // Key Light: upper left-front soft warm white (#FFF7EB, intensity 1.5)
+  const keyLight = new THREE.DirectionalLight(0xfff7eb, 1.5);
+  keyLight.position.set(-3.0, 4.2, 3.8);
   group.add(keyLight);
 
-  // High-contrast champagne rim light (upper right-rear) separating charcoal wool from dark backdrop
-  const rimLight = new THREE.DirectionalLight(0xf1d6a7, 3.0);
-  rimLight.position.set(3.4, 2.9, -2.9);
+  // Rim Light: rear-right champagne gold rim (#E6C792, intensity 3.2) carving silhouette
+  const rimLight = new THREE.DirectionalLight(0xe6c792, 3.2);
+  rimLight.position.set(3.2, 2.8, -3.1);
   group.add(rimLight);
 
-  // Crisp cool-platinum secondary fill light (right-front) revealing tailored fabric folds
-  const coolFillLight = new THREE.DirectionalLight(0xc9d9f0, 0.92);
-  coolFillLight.position.set(2.6, 1.5, 2.9);
+  // Fill Light: lower left-front cool silver (#8FA8C8, intensity 0.5)
+  const coolFillLight = new THREE.DirectionalLight(0x8fa8c8, 0.5);
+  coolFillLight.position.set(-2.6, -0.35, 3.1);
   group.add(coolFillLight);
 
-  // Balanced studio hemisphere bounce
-  const fillLight = new THREE.HemisphereLight(0xf6efe6, 0x26201a, 1.05);
+  // Gentle low-intensity hemisphere bounce preserving dark fabric contrast
+  const fillLight = new THREE.HemisphereLight(0xf6efe6, 0x1e1a16, 0.48);
   group.add(fillLight);
 
-  // Luminous under-glow grazing the frosted crystal turntable and lower coat hem
-  const pedestalGlow = new THREE.PointLight(0xe5d1ab, 1.65, 6.2, 2);
+  // Subtle luminous pedestal under-glow grazing turntable and lower contour
+  const pedestalGlow = new THREE.PointLight(0xe5d1ab, 1.15, 6.2, 2);
   pedestalGlow.position.set(-0.2, -0.72, 1.25);
   group.add(pedestalGlow);
 
@@ -967,7 +1492,7 @@ function buildStudioLights(): StudioLightRig {
 }
 
 /* ==========================================================================
- * 9. StageModule Factory: createStudioStage()
+ * 11. StageModule Factory: createStudioStage()
  * ========================================================================== */
 
 export function createStudioStage(options?: StudioStageOptions): StageModule {
@@ -979,6 +1504,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   let currentMood: MoodMode = 'luxury';
   let currentTheme: ThemeMode = 'dark';
   let currentSubtab: StageInteractionState['studioSubtab'] = 'preview';
+  let requestedModelMode: StageInteractionState['studioModelMode'] = 'dressform';
+  let userExplicitlySelectedDressform = false;
+  let builtInMannequinLoadStarted = false;
 
   // Smooth runtime animation states (zero per-frame allocations)
   let currentAngleRad = 0;
@@ -992,9 +1520,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   // Scratch vectors & matrices for allocation-free 60/120fps update loop
   const marbleAnchor = new THREE.Vector3();
   const handWorldPos = new THREE.Vector3();
-  const invRootMatrix = new THREE.Matrix4();
+  const invTurntableMatrix = new THREE.Matrix4();
 
-  // Build scene components
+  // Build shared procedural textures & scene components
+  const woolBumpTex = createWoolWeaveBumpTexture(256);
+
   const lights = buildStudioLights();
   group.add(lights.group);
 
@@ -1013,8 +1543,41 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   turntableGroup.position.set(0, PEDESTAL_TOP_Y, 0);
   group.add(turntableGroup);
 
-  const figure = buildSkinnedFigureRig(currentGlassRatio, currentMood, currentTheme);
+  // Shared soft contact shadow grounding dress form plinth or mannequin boots on turntable
+  const contactShadowTex = createRadialShadowTexture(64);
+  const contactShadowGeo = new THREE.PlaneGeometry(0.92, 0.72);
+  contactShadowGeo.rotateX(-Math.PI * 0.5);
+  const contactShadowMat = new THREE.MeshBasicMaterial({
+    map: contactShadowTex,
+    color: 0x050508,
+    transparent: true,
+    opacity: 0.62,
+    depthWrite: false,
+  });
+  const contactShadowMesh = new THREE.Mesh(contactShadowGeo, contactShadowMat);
+  contactShadowMesh.position.set(0, 0.004, 0.04);
+  turntableGroup.add(contactShadowMesh);
+
+  // Mode A: High-Fashion Headless Couture Atelier Dress Form (default immediate display)
+  const dressForm = buildAtelierDressForm(
+    woolBumpTex,
+    currentGlassRatio,
+    currentMood,
+    currentTheme
+  );
+  turntableGroup.add(dressForm.group);
+
+  // Mode B1: Lazy-loaded 20-Bone Skinned CC0 GLB Mannequin
+  const figure = buildSkinnedFigureRig(woolBumpTex);
   turntableGroup.add(figure.root);
+
+  // Mode B2: Auto Drop-In `/models/mannequin.glb`
+  const customDropIn = buildCustomDropInRig();
+  turntableGroup.add(customDropIn.root);
+
+  // Shared translucent smoked-glass champagne umbrella (mounted in turntable space)
+  const umbrella = buildUmbrella(currentGlassRatio, currentMood, currentTheme);
+  turntableGroup.add(umbrella.group);
 
   const rain = buildRainStreaks();
   group.add(rain.lines);
@@ -1023,7 +1586,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   group.add(dialTrack.group);
 
   /* ------------------------------------------------------------------------
-   * Preload High-Resolution 20-Bone Skinned GLB Mannequin (Abort-Safe)
+   * Dual-Mode Model Resolution & Abort-Safe GLTF/Draco Loader Pipeline
    * ------------------------------------------------------------------------ */
 
   const disposeSkeletons = (rootObj: THREE.Object3D | null): void => {
@@ -1038,27 +1601,70 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     });
   };
 
+  const canFetchInBrowser = typeof window !== 'undefined' && typeof fetch === 'function';
   const loadAbortController =
-    typeof AbortController !== 'undefined' ? new AbortController() : null;
+    canFetchInBrowser && typeof AbortController !== 'undefined' ? new AbortController() : null;
 
-  if (typeof window !== 'undefined' && typeof fetch === 'function') {
-    const loader = new GLTFLoader();
+  let gltfLoader: GLTFLoader | null = null;
+  let dracoLoader: DRACOLoader | null = null;
+  let activeParseCount = 0;
+  let latestEmitUiSync: StageContext['emitUiSync'] | null = null;
+
+  const disposeDracoIfIdle = (): void => {
+    if (!disposed || activeParseCount > 0) return;
+    dracoLoader?.dispose();
+    dracoLoader = null;
+    gltfLoader = null;
+  };
+
+  const getGltfLoader = (): GLTFLoader | null => {
+    if (!canFetchInBrowser || disposed) return null;
+    if (!gltfLoader) {
+      gltfLoader = new GLTFLoader();
+      dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+      gltfLoader.setDRACOLoader(dracoLoader);
+    }
+    return gltfLoader;
+  };
+
+  const resolveActiveModelKind = (): ActiveModelKind => {
+    if (customDropIn.isLoaded && !userExplicitlySelectedDressform) {
+      return 'custom';
+    }
+    if (requestedModelMode === 'mannequin') {
+      return customDropIn.isLoaded ? 'custom' : 'mannequin';
+    }
+    return 'dressform';
+  };
+
+  const loadBuiltInMannequin = (): void => {
+    if (builtInMannequinLoadStarted || disposed || !canFetchInBrowser) return;
+    builtInMannequinLoadStarted = true;
+
     void fetch(STUDIO_MANNEQUIN_GLB_URL, {
       signal: loadAbortController?.signal,
     })
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) return null;
+        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+        if (contentType.includes('text/html')) return null;
         return res.arrayBuffer();
       })
       .then((buffer) => {
-        if (disposed) return;
+        if (disposed || !buffer || !isValidGlbBuffer(buffer)) return;
+        const loader = getGltfLoader();
+        if (!loader) return;
+        activeParseCount += 1;
         loader.parse(
           buffer,
           '',
           (gltf) => {
+            activeParseCount = Math.max(0, activeParseCount - 1);
             if (disposed) {
               disposeSkeletons(gltf.scene);
               disposeObject3D(gltf.scene);
+              disposeDracoIfIdle();
               return;
             }
             figure.loadedModel = gltf.scene;
@@ -1069,15 +1675,77 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
             figure.loadFade = 0;
             figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * 0.96);
             applySkeletalPose(0, false);
+            syncActiveModelVisibility();
             options?.onModelLoaded?.();
           },
           () => {
-            // Keep stage resilient if parse fails
+            activeParseCount = Math.max(0, activeParseCount - 1);
+            disposeDracoIfIdle();
+            // Silently preserve stage resilience if parse fails
           }
         );
       })
       .catch(() => {
-        // Ignore aborted or offline fetches cleanly
+        // Silently ignore aborted or offline fetches
+      });
+  };
+
+  const syncActiveModelVisibility = (): ActiveModelKind => {
+    const activeKind = resolveActiveModelKind();
+    dressForm.group.visible = activeKind === 'dressform';
+    figure.root.visible = activeKind === 'mannequin';
+    customDropIn.root.visible = activeKind === 'custom';
+
+    if (activeKind === 'mannequin' && !figure.isLoaded && !builtInMannequinLoadStarted) {
+      loadBuiltInMannequin();
+    }
+    return activeKind;
+  };
+
+  // Silent Auto Drop-In Check for `/models/mannequin.glb` (zero console errors & zero loader allocation if absent)
+  if (canFetchInBrowser) {
+    void fetch(CUSTOM_MANNEQUIN_GLB_URL, {
+      signal: loadAbortController?.signal,
+    })
+      .then((res) => {
+        if (!res.ok) return null;
+        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+        if (contentType.includes('text/html')) return null;
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        if (disposed || !buffer || !isValidGlbBuffer(buffer)) return;
+        const loader = getGltfLoader();
+        if (!loader) return;
+        activeParseCount += 1;
+        loader.parse(
+          buffer,
+          '',
+          (gltf) => {
+            activeParseCount = Math.max(0, activeParseCount - 1);
+            if (disposed) {
+              disposeSkeletons(gltf.scene);
+              disposeObject3D(gltf.scene);
+              disposeDracoIfIdle();
+              return;
+            }
+            prepareCustomDropInModel(gltf, customDropIn);
+            if (!userExplicitlySelectedDressform) {
+              requestedModelMode = 'mannequin';
+              latestEmitUiSync?.({ studioModelMode: 'mannequin' });
+            }
+            syncActiveModelVisibility();
+            options?.onModelLoaded?.();
+          },
+          () => {
+            activeParseCount = Math.max(0, activeParseCount - 1);
+            disposeDracoIfIdle();
+            // Silently fall back to Dress Form on corrupt custom drop-in
+          }
+        );
+      })
+      .catch(() => {
+        // Silently ignore 404, aborted, or offline drop-in probes
       });
   }
 
@@ -1089,11 +1757,22 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     currentGlassRatio = THREE.MathUtils.clamp(ratio, 0, 1);
 
     applySmokedGlassState(pedestal.glassMat, currentGlassRatio, currentMood, currentTheme);
-    applySmokedGlassState(figure.umbrella.canopyMat, currentGlassRatio, currentMood, currentTheme);
+    applySmokedGlassState(umbrella.canopyMat, currentGlassRatio, currentMood, currentTheme);
 
-    const baseCanopyOpacity = figure.umbrella.canopyMat.opacity;
-    figure.umbrella.canopyMat.userData.targetOpacity = baseCanopyOpacity;
-    figure.umbrella.canopyMat.opacity = baseCanopyOpacity * rainBlend;
+    const baseCanopyOpacity = umbrella.canopyMat.opacity;
+    umbrella.canopyMat.userData.targetOpacity = baseCanopyOpacity;
+    umbrella.canopyMat.opacity = baseCanopyOpacity * rainBlend;
+
+    // Subtle smoked-glass translucency & clearcoat on Dress Form revealing internal gold spine
+    dressForm.torsoMat.opacity = THREE.MathUtils.lerp(1.0, 0.76, currentGlassRatio);
+    dressForm.torsoMat.clearcoat = THREE.MathUtils.lerp(0.25, 0.85, currentGlassRatio);
+    dressForm.torsoMat.roughness = THREE.MathUtils.lerp(0.42, 0.26, currentGlassRatio);
+    applyBrushedGoldHardwareMode(
+      dressForm.coreSpineMat,
+      currentMood,
+      currentTheme,
+      THREE.MathUtils.lerp(0.18, 0.74, currentGlassRatio)
+    );
 
     const isDark = currentTheme === 'dark';
     pedestal.mirrorMat.opacity = THREE.MathUtils.lerp(
@@ -1120,7 +1799,21 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     applyGoldModeState(orbitals.sparkMat, mood, theme, 0.94);
     applyGoldModeState(dialTrack.bandMat, mood, theme, 0.28);
     applyGoldModeState(dialTrack.railGlowMat, mood, theme, 0.64);
-    applyGoldModeState(figure.umbrella.goldMat, mood, theme, 0.34);
+    applyGoldModeState(umbrella.goldMat, mood, theme, 0.34);
+
+    // Couture Dress Form PBR & brushed gold hardware calibrated for Mood × Theme
+    applyBrushedGoldHardwareMode(dressForm.goldHardwareMat, mood, theme, 0.14);
+    applyBrushedGoldHardwareMode(dressForm.measureRingMat, mood, theme, 0.38);
+    applyBrushedGoldHardwareMode(dressForm.seamGlintMat, mood, theme, 0.85);
+    dressForm.plinthInlayMat.color.setHex(
+      isDark ? (isAurora ? 0x151a24 : 0x16171c) : isAurora ? 0x263144 : 0x242328
+    );
+    dressForm.torsoMat.color.setHex(
+      isDark ? (isAurora ? 0x171b24 : 0x1a1b20) : isAurora ? 0x212836 : 0x23242b
+    );
+    dressForm.torsoMat.sheenColor.setHex(
+      isAurora ? (isDark ? 0x9ec4f6 : 0x7398c8) : 0xd6b889
+    );
 
     // Pedestal frosted crystal reflector & shadows calibrated for Dark vs Light mode
     pedestal.mirrorMat.color.setHex(
@@ -1135,13 +1828,13 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     );
     pedestal.shadowMat.color.setHex(isDark ? 0x040407 : 0x3b3630);
     pedestal.shadowMat.opacity = isDark ? 0.76 : 0.3;
-    figure.materials.footShadowMat.color.setHex(isDark ? 0x040407 : 0x2d2924);
-    figure.materials.footShadowMat.opacity = isDark ? 0.72 : 0.4;
+    contactShadowMat.color.setHex(isDark ? 0x040407 : 0x2d2924);
+    contactShadowMat.opacity = isDark ? 0.72 : 0.4;
     figure.materials.loadingHaloMat.color.setHex(
       isAurora ? STAGE_PALETTE.auroraSilverGold : STAGE_PALETTE.champagneGoldBright
     );
 
-    // Sculpted mannequin editorial PBR materials tuned for Light & Dark legibility
+    // Sculpted 20-bone mannequin editorial PBR materials tuned for Light & Dark legibility
     figure.materials.coatMat.color.setHex(isDark ? 0x1d1e24 : 0x25262e);
     figure.materials.coatMat.sheenColor.setHex(
       isAurora ? (isDark ? 0x8fb5e6 : 0x6f8ab0) : isDark ? 0xa69b8d : 0x7d7264
@@ -1178,36 +1871,80 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
           : 0x7b6a52
     );
 
-    // Editorial 4-point studio lighting rig calibrated per Mood × Theme
+    // Luxury Showroom Lighting Rig calibrated for ACESFilmic + RoomEnvironment
     if (isDark) {
-      lights.keyLight.color.setHex(isAurora ? 0xe8f1ff : 0xfff1dc);
-      lights.keyLight.intensity = 2.4;
-      lights.rimLight.color.setHex(isAurora ? 0x9ec4f6 : 0xf1d6a7);
-      lights.rimLight.intensity = 3.05;
-      lights.coolFillLight.color.setHex(isAurora ? 0xb4cef4 : 0xc9d9f0);
-      lights.coolFillLight.intensity = 0.92;
-      lights.fillLight.color.setHex(isAurora ? 0xcadbf5 : 0xf2e7d8);
-      lights.fillLight.groundColor.setHex(isAurora ? 0x192235 : 0x28211a);
-      lights.fillLight.intensity = 1.08;
+      lights.keyLight.color.setHex(isAurora ? 0xeaf2ff : 0xfff7eb);
+      lights.keyLight.intensity = 1.5;
+      lights.rimLight.color.setHex(isAurora ? 0x9ec4f6 : 0xe6c792);
+      lights.rimLight.intensity = 3.2;
+      lights.coolFillLight.color.setHex(isAurora ? 0x98b8e6 : 0x8fa8c8);
+      lights.coolFillLight.intensity = 0.5;
+      lights.fillLight.color.setHex(isAurora ? 0xcadbf5 : 0xf6efe6);
+      lights.fillLight.groundColor.setHex(isAurora ? 0x151d2e : 0x1e1a16);
+      lights.fillLight.intensity = 0.48;
       lights.pedestalGlow.color.setHex(isAurora ? 0x8fb6ec : STAGE_PALETTE.champagneGoldBright);
-      lights.pedestalGlow.intensity = 1.65;
+      lights.pedestalGlow.intensity = 1.15;
     } else {
-      lights.keyLight.color.setHex(isAurora ? 0xf4f8ff : 0xfff8ee);
-      lights.keyLight.intensity = 2.55;
-      lights.rimLight.color.setHex(isAurora ? 0x9abbe8 : 0xdcb985);
-      lights.rimLight.intensity = 2.0;
-      lights.coolFillLight.color.setHex(0xe8f0fc);
-      lights.coolFillLight.intensity = 0.78;
+      lights.keyLight.color.setHex(isAurora ? 0xf3f7ff : 0xfff9f0);
+      lights.keyLight.intensity = 1.65;
+      lights.rimLight.color.setHex(isAurora ? 0x8fb5e6 : 0xdcb982);
+      lights.rimLight.intensity = 2.25;
+      lights.coolFillLight.color.setHex(isAurora ? 0xb4ccf0 : 0x9eb4d0);
+      lights.coolFillLight.intensity = 0.68;
       lights.fillLight.color.setHex(0xffffff);
-      lights.fillLight.groundColor.setHex(isAurora ? 0xbccae0 : 0xd8cfc2);
-      lights.fillLight.intensity = 1.85;
+      lights.fillLight.groundColor.setHex(isAurora ? 0xc2d0e4 : 0xdad2c6);
+      lights.fillLight.intensity = 1.12;
       lights.pedestalGlow.color.setHex(isAurora ? 0x8eaad6 : 0xc8a46e);
-      lights.pedestalGlow.intensity = 0.9;
+      lights.pedestalGlow.intensity = 0.72;
     }
   };
 
   /* ------------------------------------------------------------------------
-   * Real 20-Bone Skeletal Choreography (`Stand` / `Walk` / `Rain`)
+   * Mode A Choreography: Couture Atelier Dress Form (`Stand` / `Walk` / `Rain`)
+   * ------------------------------------------------------------------------ */
+
+  const applyDressFormPose = (elapsed: number, reducedMotion: boolean): void => {
+    const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
+    const breathWave = reducedMotion ? 0 : Math.sin(elapsed * 1.85);
+    const walkPhase = reducedMotion ? 0.65 : elapsed * 3.8;
+    const gaitWave = Math.sin(walkPhase);
+    const gaitLift = Math.abs(gaitWave);
+
+    // Subtle couture breathing float in Stand + rhythmic runway stride lift in Walk
+    const floatY =
+      breathWave * 0.013 * (standWeight + rainBlend * 0.45) +
+      gaitLift * 0.024 * walkBlend;
+    dressForm.torsoPivot.position.y = TORSO_PIVOT_Y + floatY;
+
+    // Hover parallax tilt + runway contrapposto yaw/sway + sheltered rain lean
+    const pitchX =
+      hoverSmoothY * 0.042 * (standWeight + rainBlend * 0.5) +
+      (0.026 + gaitLift * 0.016) * walkBlend +
+      0.045 * rainBlend;
+    const yawY =
+      hoverSmoothX * 0.085 * standWeight +
+      gaitWave * 0.145 * walkBlend +
+      (reducedMotion ? 0 : Math.sin(elapsed * 0.7) * 0.03 * standWeight) -
+      0.04 * rainBlend;
+    const rollZ =
+      -hoverSmoothX * 0.028 * standWeight -
+      gaitWave * 0.048 * walkBlend -
+      0.055 * rainBlend;
+
+    dressForm.torsoPivot.rotation.set(pitchX, yawY, rollZ);
+
+    // Calm golden tailoring ring pulse in Stand, accelerated runway shimmer in Walk
+    const ringPulseFreq = 2.0 + walkBlend * 3.4;
+    const ringPulse = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(elapsed * ringPulseFreq);
+    const themeScale = currentTheme === 'dark' ? 1.0 : 0.62;
+    dressForm.measureRingMat.emissiveIntensity =
+      (0.28 + ringPulse * (0.24 + 0.28 * walkBlend)) * themeScale;
+    dressForm.seamGlintMat.emissiveIntensity =
+      (0.68 + ringPulse * (0.34 + 0.36 * walkBlend)) * themeScale;
+  };
+
+  /* ------------------------------------------------------------------------
+   * Mode B1 Choreography: Real 20-Bone Skeletal Animation (`Stand` / `Walk` / `Rain`)
    * ------------------------------------------------------------------------ */
 
   const applySkeletalPose = (elapsed: number, reducedMotion: boolean): void => {
@@ -1224,191 +1961,262 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     // Ground root with +0.006 sole compensation so boots rest flush on turntable top
     figure.root.position.y = 0.006 + walkBounce;
 
-    if (figure.isLoaded) {
-      // Pelvis & spine counter-rotation (BONE_SPINE_02) + subtle editorial breathing
-      if (bones.pelvis) {
-        bones.pelvis.rotation.set(
-          0.02 * walkBlend - 0.015 * rainBlend,
-          gaitWave * 0.06 * walkBlend,
-          -gaitWave * 0.024 * walkBlend
-        );
-      }
-      if (bones.spine3) {
-        bones.spine3.rotation.set(
-          breathWave * 0.008 * (standWeight + rainBlend * 0.7),
-          -gaitWave * 0.05 * walkBlend + 0.02 * rainBlend,
-          0
-        );
-      }
-      if (bones.spine2) {
-        bones.spine2.rotation.set(
-          breathWave * 0.01 * (standWeight + rainBlend * 0.7) + 0.025 * walkBlend,
-          -gaitWave * 0.08 * walkBlend + 0.03 * rainBlend,
-          gaitWave * 0.02 * walkBlend - 0.018 * rainBlend
-        );
-      }
-      if (bones.spine1) {
-        bones.spine1.rotation.set(
-          breathWave * 0.012 * (standWeight + rainBlend * 0.7),
-          -gaitWave * 0.04 * walkBlend,
-          0
-        );
-      }
+    if (!figure.isLoaded) return;
 
-      // Poised head & neck subtle gaze tracking + gentle idle motion
-      const idleHeadYaw = reducedMotion ? 0 : Math.sin(elapsed * 0.62) * 0.045 * standWeight;
-      if (bones.neck) {
-        bones.neck.rotation.set(
-          hoverSmoothY * 0.035 + 0.02 * rainBlend,
-          (idleHeadYaw + hoverSmoothX * 0.05) * 0.45,
-          0
-        );
-      }
-      if (bones.head) {
-        bones.head.rotation.set(
-          hoverSmoothY * 0.06 + 0.03 * rainBlend,
-          idleHeadYaw + hoverSmoothX * 0.1 - 0.05 * rainBlend,
-          -gaitWave * 0.018 * walkBlend
-        );
-      }
-
-      // Clavicles (BONE_L_CLAVICLE_12) breathing + subtle lift when holding umbrella
-      if (bones.clavicleL) {
-        bones.clavicleL.rotation.set(
-          0,
-          0,
-          -0.05 + breathWave * 0.012 * (standWeight + rainBlend * 0.6)
-        );
-      }
-      if (bones.clavicleR) {
-        bones.clavicleR.rotation.set(
-          0,
-          0,
-          0.05 * (standWeight + walkBlend) + 0.11 * rainBlend - breathWave * 0.012 * standWeight
-        );
-      }
-
-      // Left Arm (+X): drops cleanly out of rest A-pose into palms-inward runway Stand / Walk / Rain
-      const leftArmSwing = gaitWave * 0.24;
-      if (bones.shoulderL) {
-        bones.shoulderL.rotation.set(
-          0.08 * standWeight + leftArmSwing * walkBlend + 0.09 * rainBlend,
-          -0.08 * standWeight - 0.06 * walkBlend - 0.08 * rainBlend,
-          -0.58 * standWeight - 0.56 * walkBlend - 0.57 * rainBlend
-        );
-      }
-      if (bones.elbowL) {
-        bones.elbowL.rotation.set(
-          0.16 * standWeight + (0.08 - Math.max(0, -leftArmSwing) * 0.35) * walkBlend + 0.12 * rainBlend,
-          0.28 * standWeight + 0.24 * walkBlend + 0.26 * rainBlend,
-          0.08 * standWeight + 0.06 * walkBlend + 0.08 * rainBlend
-        );
-      }
-      if (bones.handL) {
-        bones.handL.rotation.set(0, 0.24, -0.06);
-      }
-
-      // Right Arm (-X): Stand / opposing Walk swing / elevated chest-high Rain umbrella grip
-      const rightArmSwing = -gaitWave * 0.24;
-      if (bones.shoulderR) {
-        bones.shoulderR.rotation.set(
-          0.08 * standWeight + rightArmSwing * walkBlend - 0.72 * rainBlend,
-          0.08 * standWeight + 0.06 * walkBlend - 0.18 * rainBlend,
-          0.58 * standWeight + 0.56 * walkBlend + 0.38 * rainBlend
-        );
-      }
-      if (bones.elbowR) {
-        bones.elbowR.rotation.set(
-          0.16 * standWeight + (0.08 - Math.max(0, -rightArmSwing) * 0.35) * walkBlend - 1.38 * rainBlend,
-          -0.28 * standWeight - 0.24 * walkBlend + 0.26 * rainBlend,
-          -0.08 * standWeight - 0.06 * walkBlend - 0.14 * rainBlend
-        );
-      }
-      if (bones.handR) {
-        bones.handR.rotation.set(
-          0.24 * rainBlend,
-          -0.24 * (standWeight + walkBlend) + 0.12 * rainBlend,
-          0.06 * (standWeight + walkBlend)
-        );
-      }
-
-      // Legs (hip/knee/ankle): poised runway stance in Stand/Rain, smooth stride in Walk
-      const leftLegSwing = -gaitWave * 0.24;
-      const rightLegSwing = gaitWave * 0.24;
-      const leftKneeBend = Math.max(0, gaitCos) * 0.34 + 0.04;
-      const rightKneeBend = Math.max(0, -gaitCos) * 0.34 + 0.04;
-
-      if (bones.hipL) {
-        bones.hipL.rotation.set(
-          leftLegSwing * walkBlend - 0.02 * rainBlend,
-          0,
-          -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
-        );
-      }
-      if (bones.kneeL) {
-        bones.kneeL.rotation.set(leftKneeBend * walkBlend + 0.02 * rainBlend, 0, 0);
-      }
-      if (bones.ankleL) {
-        bones.ankleL.rotation.set(
-          -leftKneeBend * 0.35 * walkBlend,
-          0,
-          0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
-        );
-      }
-
-      if (bones.hipR) {
-        bones.hipR.rotation.set(
-          rightLegSwing * walkBlend + 0.015 * rainBlend,
-          0,
-          0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
-        );
-      }
-      if (bones.kneeR) {
-        bones.kneeR.rotation.set(rightKneeBend * walkBlend + 0.015 * rainBlend, 0, 0);
-      }
-      if (bones.ankleR) {
-        bones.ankleR.rotation.set(
-          -rightKneeBend * 0.35 * walkBlend,
-          0,
-          -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
-        );
-      }
+    // Pelvis & spine counter-rotation + subtle editorial breathing
+    if (bones.pelvis) {
+      bones.pelvis.rotation.set(
+        0.02 * walkBlend - 0.015 * rainBlend,
+        gaitWave * 0.06 * walkBlend,
+        -gaitWave * 0.024 * walkBlend
+      );
+    }
+    if (bones.spine3) {
+      bones.spine3.rotation.set(
+        breathWave * 0.008 * (standWeight + rainBlend * 0.7),
+        -gaitWave * 0.05 * walkBlend + 0.02 * rainBlend,
+        0
+      );
+    }
+    if (bones.spine2) {
+      bones.spine2.rotation.set(
+        breathWave * 0.01 * (standWeight + rainBlend * 0.7) + 0.025 * walkBlend,
+        -gaitWave * 0.08 * walkBlend + 0.03 * rainBlend,
+        gaitWave * 0.02 * walkBlend - 0.018 * rainBlend
+      );
+    }
+    if (bones.spine1) {
+      bones.spine1.rotation.set(
+        breathWave * 0.012 * (standWeight + rainBlend * 0.7),
+        -gaitWave * 0.04 * walkBlend,
+        0
+      );
     }
 
-    /* --- Translucent Champagne Umbrella Synced to Sculpted Right Hand Palm --- */
-    const showUmbrella = rainBlend > 0.015;
-    figure.umbrella.group.visible = showUmbrella;
-    if (showUmbrella) {
-      // Smoothly unfold from 0 -> 1 over the first 45% of rainBlend (no pop-in, full size fast)
-      const unfoldT = THREE.MathUtils.clamp((rainBlend - 0.015) / 0.435, 0, 1);
-      const unfoldScale = unfoldT * unfoldT * (3 - 2 * unfoldT);
-      const easedFade = rainBlend * rainBlend * (3 - 2 * rainBlend);
-      figure.umbrella.group.scale.setScalar(Math.max(0.001, unfoldScale));
+    // Poised head & neck subtle gaze tracking + gentle idle motion
+    const idleHeadYaw = reducedMotion ? 0 : Math.sin(elapsed * 0.62) * 0.045 * standWeight;
+    if (bones.neck) {
+      bones.neck.rotation.set(
+        hoverSmoothY * 0.035 + 0.02 * rainBlend,
+        (idleHeadYaw + hoverSmoothX * 0.05) * 0.45,
+        0
+      );
+    }
+    if (bones.head) {
+      bones.head.rotation.set(
+        hoverSmoothY * 0.06 + 0.03 * rainBlend,
+        idleHeadYaw + hoverSmoothX * 0.1 - 0.05 * rainBlend,
+        -gaitWave * 0.018 * walkBlend
+      );
+    }
 
-      if (figure.isLoaded && bones.handR) {
-        figure.root.updateMatrixWorld(true);
-        handWorldPos.set(0.015, 0.03, 0.04);
-        bones.handR.localToWorld(handWorldPos);
-        invRootMatrix.copy(figure.root.matrixWorld).invert();
-        handWorldPos.applyMatrix4(invRootMatrix);
-        handWorldPos.y = Math.max(handWorldPos.y, 1.48);
-        figure.umbrella.group.position.copy(handWorldPos);
-      } else {
-        figure.umbrella.group.position.set(-0.34, 1.5, 0.28);
-      }
+    // Clavicles breathing + subtle lift when holding umbrella
+    if (bones.clavicleL) {
+      bones.clavicleL.rotation.set(
+        0,
+        0,
+        -0.05 + breathWave * 0.012 * (standWeight + rainBlend * 0.6)
+      );
+    }
+    if (bones.clavicleR) {
+      bones.clavicleR.rotation.set(
+        0,
+        0,
+        0.05 * (standWeight + walkBlend) + 0.11 * rainBlend - breathWave * 0.012 * standWeight
+      );
+    }
 
-      const rainBreeze = reducedMotion ? 0 : Math.sin(elapsed * 2.8) * 0.025;
-      figure.umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
+    // Left Arm (+X): palms-inward runway Stand / Walk / Rain
+    const leftArmSwing = gaitWave * 0.24;
+    if (bones.shoulderL) {
+      bones.shoulderL.rotation.set(
+        0.08 * standWeight + leftArmSwing * walkBlend + 0.09 * rainBlend,
+        -0.08 * standWeight - 0.06 * walkBlend - 0.08 * rainBlend,
+        -0.58 * standWeight - 0.56 * walkBlend - 0.57 * rainBlend
+      );
+    }
+    if (bones.elbowL) {
+      bones.elbowL.rotation.set(
+        0.16 * standWeight + (0.08 - Math.max(0, -leftArmSwing) * 0.35) * walkBlend + 0.12 * rainBlend,
+        0.28 * standWeight + 0.24 * walkBlend + 0.26 * rainBlend,
+        0.08 * standWeight + 0.06 * walkBlend + 0.08 * rainBlend
+      );
+    }
+    if (bones.handL) {
+      bones.handL.rotation.set(0, 0.24, -0.06);
+    }
 
-      const targetOpacity =
-        typeof figure.umbrella.canopyMat.userData.targetOpacity === 'number'
-          ? (figure.umbrella.canopyMat.userData.targetOpacity as number)
-          : 0.56;
-      figure.umbrella.canopyMat.opacity = targetOpacity * easedFade;
+    // Right Arm (-X): Stand / opposing Walk swing / elevated chest-high Rain umbrella grip
+    const rightArmSwing = -gaitWave * 0.24;
+    if (bones.shoulderR) {
+      bones.shoulderR.rotation.set(
+        0.08 * standWeight + rightArmSwing * walkBlend - 0.72 * rainBlend,
+        0.08 * standWeight + 0.06 * walkBlend - 0.18 * rainBlend,
+        0.58 * standWeight + 0.56 * walkBlend + 0.38 * rainBlend
+      );
+    }
+    if (bones.elbowR) {
+      bones.elbowR.rotation.set(
+        0.16 * standWeight + (0.08 - Math.max(0, -rightArmSwing) * 0.35) * walkBlend - 1.38 * rainBlend,
+        -0.28 * standWeight - 0.24 * walkBlend + 0.26 * rainBlend,
+        -0.08 * standWeight - 0.06 * walkBlend - 0.14 * rainBlend
+      );
+    }
+    if (bones.handR) {
+      bones.handR.rotation.set(
+        0.24 * rainBlend,
+        -0.24 * (standWeight + walkBlend) + 0.12 * rainBlend,
+        0.06 * (standWeight + walkBlend)
+      );
+    }
+
+    // Legs (hip/knee/ankle): poised runway stance in Stand/Rain, smooth stride in Walk
+    const leftLegSwing = -gaitWave * 0.24;
+    const rightLegSwing = gaitWave * 0.24;
+    const leftKneeBend = Math.max(0, gaitCos) * 0.34 + 0.04;
+    const rightKneeBend = Math.max(0, -gaitCos) * 0.34 + 0.04;
+
+    if (bones.hipL) {
+      bones.hipL.rotation.set(
+        leftLegSwing * walkBlend - 0.02 * rainBlend,
+        0,
+        -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
+      );
+    }
+    if (bones.kneeL) {
+      bones.kneeL.rotation.set(leftKneeBend * walkBlend + 0.02 * rainBlend, 0, 0);
+    }
+    if (bones.ankleL) {
+      bones.ankleL.rotation.set(
+        -leftKneeBend * 0.35 * walkBlend,
+        0,
+        0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
+      );
+    }
+
+    if (bones.hipR) {
+      bones.hipR.rotation.set(
+        rightLegSwing * walkBlend + 0.015 * rainBlend,
+        0,
+        0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
+      );
+    }
+    if (bones.kneeR) {
+      bones.kneeR.rotation.set(rightKneeBend * walkBlend + 0.015 * rainBlend, 0, 0);
+    }
+    if (bones.ankleR) {
+      bones.ankleR.rotation.set(
+        -rightKneeBend * 0.35 * walkBlend,
+        0,
+        -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
+      );
     }
   };
 
-  const updateRainParticles = (dt: number, reducedMotion: boolean): void => {
+  /* ------------------------------------------------------------------------
+   * Mode B2 Choreography: Auto Drop-In `/models/mannequin.glb`
+   * ------------------------------------------------------------------------ */
+
+  const applyCustomDropInPose = (
+    dt: number,
+    elapsed: number,
+    pose: StageInteractionState['studioPose'],
+    reducedMotion: boolean
+  ): void => {
+    if (!customDropIn.isLoaded) return;
+
+    if (customDropIn.mixer && customDropIn.standAction && customDropIn.walkAction) {
+      const desiredClip: 'stand' | 'walk' = pose === 'walk' ? 'walk' : 'stand';
+      if (desiredClip !== customDropIn.activeClip && customDropIn.standAction !== customDropIn.walkAction) {
+        const fromAction =
+          customDropIn.activeClip === 'walk'
+            ? customDropIn.walkAction
+            : customDropIn.standAction;
+        const toAction =
+          desiredClip === 'walk' ? customDropIn.walkAction : customDropIn.standAction;
+        toAction.reset().play();
+        fromAction.crossFadeTo(toAction, 0.35, false);
+        customDropIn.activeClip = desiredClip;
+      }
+      customDropIn.mixer.update(reducedMotion ? 0 : dt);
+      customDropIn.modelSlot.position.y = 0;
+      customDropIn.modelSlot.rotation.set(0.02 * rainBlend, hoverSmoothX * 0.06, -0.025 * rainBlend);
+      return;
+    }
+
+    // Static custom GLB fallback: smooth breathing float & subtle pose response
+    const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
+    const breathWave = reducedMotion ? 0 : Math.sin(elapsed * 1.9);
+    const walkWave = reducedMotion ? 0 : Math.sin(elapsed * 3.8);
+    customDropIn.modelSlot.position.y =
+      breathWave * 0.012 * (standWeight + rainBlend * 0.5) +
+      Math.abs(walkWave) * 0.02 * walkBlend;
+    customDropIn.modelSlot.rotation.set(
+      hoverSmoothY * 0.03 + 0.03 * rainBlend,
+      hoverSmoothX * 0.07 * standWeight + walkWave * 0.1 * walkBlend,
+      -walkWave * 0.03 * walkBlend - 0.035 * rainBlend
+    );
+  };
+
+  /* ------------------------------------------------------------------------
+   * Shared Smoked-Glass Champagne Umbrella Tracking
+   * ------------------------------------------------------------------------ */
+
+  const updateUmbrella = (
+    activeKind: ActiveModelKind,
+    elapsed: number,
+    reducedMotion: boolean
+  ): void => {
+    const showUmbrella = rainBlend > 0.015;
+    umbrella.group.visible = showUmbrella;
+    if (!showUmbrella) return;
+
+    // Smoothly unfold from 0 -> 1 over the first 45% of rainBlend (no pop-in)
+    const unfoldT = THREE.MathUtils.clamp((rainBlend - 0.015) / 0.435, 0, 1);
+    const unfoldScale = unfoldT * unfoldT * (3 - 2 * unfoldT);
+    const easedFade = rainBlend * rainBlend * (3 - 2 * rainBlend);
+    umbrella.group.scale.setScalar(Math.max(0.001, unfoldScale));
+
+    const rainBreeze = reducedMotion ? 0 : Math.sin(elapsed * 2.8) * 0.025;
+
+    if (activeKind === 'mannequin' && figure.isLoaded && figure.bones.handR) {
+      turntableGroup.updateMatrixWorld(true);
+      handWorldPos.set(0.015, 0.03, 0.04);
+      figure.bones.handR.localToWorld(handWorldPos);
+      invTurntableMatrix.copy(turntableGroup.matrixWorld).invert();
+      handWorldPos.applyMatrix4(invTurntableMatrix);
+      handWorldPos.y = Math.max(handWorldPos.y, 1.48);
+      umbrella.group.position.copy(handWorldPos);
+      umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
+    } else if (activeKind === 'dressform') {
+      // Suspended gracefully overhead above the 2.12u coat-hanger hook with zero torso clipping
+      umbrella.group.position.set(-0.46, 1.22, -0.08);
+      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.25 + rainBreeze);
+    } else if (activeKind === 'custom') {
+      // Suspended cleanly overhead above the 1.8u auto-scaled custom mannequin
+      umbrella.group.position.set(-0.42, 0.96, -0.06);
+      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.22 + rainBreeze);
+    } else {
+      umbrella.group.position.set(-0.34, 1.5, 0.28);
+      umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
+    }
+
+    const targetOpacity =
+      typeof umbrella.canopyMat.userData.targetOpacity === 'number'
+        ? (umbrella.canopyMat.userData.targetOpacity as number)
+        : 0.56;
+    umbrella.canopyMat.opacity = targetOpacity * easedFade;
+  };
+
+  /* ------------------------------------------------------------------------
+   * 3D Diagonal Rain Streaks & Orbital Systems
+   * ------------------------------------------------------------------------ */
+
+  const updateRainParticles = (
+    activeKind: ActiveModelKind,
+    dt: number,
+    reducedMotion: boolean
+  ): void => {
     const showRain = rainBlend > 0.02;
     rain.lines.visible = showRain;
     if (!showRain) return;
@@ -1417,6 +2225,13 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     rain.material.opacity = maxOpacity * rainBlend;
 
     if (reducedMotion) return;
+
+    const deflectY =
+      activeKind === 'dressform'
+        ? UMBRELLA_DEFLECT_Y_DRESSFORM
+        : activeKind === 'custom'
+          ? UMBRELLA_DEFLECT_Y_CUSTOM
+          : UMBRELLA_DEFLECT_Y_MANNEQUIN;
 
     const { drops, positions } = rain;
     for (let i = 0; i < drops.length; i++) {
@@ -1428,8 +2243,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       const horizontalSq = drop.x * drop.x + drop.z * drop.z;
       const hitUmbrella =
         horizontalSq < UMBRELLA_DEFLECT_RADIUS * UMBRELLA_DEFLECT_RADIUS &&
-        drop.y <= UMBRELLA_DEFLECT_Y &&
-        drop.y > UMBRELLA_DEFLECT_Y - 0.55;
+        drop.y <= deflectY &&
+        drop.y > deflectY - 0.55;
 
       if (hitUmbrella || drop.y < RAIN_BOTTOM_Y) {
         drop.y = RAIN_TOP_Y - ((i * 19) % 10) * 0.06;
@@ -1450,10 +2265,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       currentSubtab === 'intelligence' ? 0.12 : currentSubtab === 'atelier' ? 0.04 : 0;
     const subtabSpeed =
       currentSubtab === 'atelier' ? 1.25 : currentSubtab === 'intelligence' ? 0.85 : 1.0;
+    const walkBoost = 1.0 + walkBlend * 0.72;
 
     if (!reducedMotion) {
-      orbitals.outerSpin.rotation.z = elapsed * 0.24 * subtabSpeed;
-      orbitals.innerSpin.rotation.z = -elapsed * 0.31 * subtabSpeed;
+      orbitals.outerSpin.rotation.z = elapsed * 0.24 * subtabSpeed * walkBoost;
+      orbitals.innerSpin.rotation.z = -elapsed * 0.31 * subtabSpeed * walkBoost;
     }
 
     orbitals.outerPivot.rotation.set(
@@ -1506,11 +2322,24 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     onEnter(ctx: StageContext): void {
+      latestEmitUiSync = ctx.emitUiSync;
       currentAngleRad = ctx.interaction.studioAngleRad;
       currentSubtab = ctx.interaction.studioSubtab;
+      if (
+        customDropIn.isLoaded &&
+        !userExplicitlySelectedDressform &&
+        ctx.interaction.studioModelMode !== 'mannequin'
+      ) {
+        requestedModelMode = 'mannequin';
+        ctx.emitUiSync({ studioModelMode: 'mannequin' });
+      } else {
+        requestedModelMode = ctx.interaction.studioModelMode;
+      }
       walkBlend = ctx.interaction.studioPose === 'walk' ? 1 : 0;
       rainBlend = ctx.interaction.studioPose === 'rain' ? 1 : 0;
       turntableGroup.rotation.y = currentAngleRad;
+
+      const activeKind = syncActiveModelVisibility();
 
       if (figure.isLoaded && ctx.reducedMotion) {
         figure.loadFade = 1;
@@ -1520,7 +2349,14 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
 
       syncVisualMode(ctx.mood, ctx.theme);
       syncGlass(ctx.glassRatio);
-      applySkeletalPose(0, ctx.reducedMotion);
+      if (activeKind === 'dressform') {
+        applyDressFormPose(0, ctx.reducedMotion);
+      } else if (activeKind === 'mannequin') {
+        applySkeletalPose(0, ctx.reducedMotion);
+      } else {
+        applyCustomDropInPose(0, 0, ctx.interaction.studioPose, ctx.reducedMotion);
+      }
+      updateUmbrella(activeKind, 0, ctx.reducedMotion);
     },
 
     onExit(_ctx: StageContext): void {
@@ -1541,6 +2377,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     onInteractionChange(patch: Partial<StageInteractionState>, _ctx: StageContext): void {
       if (patch.studioSubtab) {
         currentSubtab = patch.studioSubtab;
+      }
+      if (patch.studioModelMode) {
+        requestedModelMode = patch.studioModelMode;
+        userExplicitlySelectedDressform = patch.studioModelMode === 'dressform';
+        syncActiveModelVisibility();
       }
     },
 
@@ -1586,39 +2427,66 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       rainBlend = THREE.MathUtils.lerp(rainBlend, targetRain, dampPose);
 
       currentSubtab = ctx.interaction.studioSubtab;
-
-      // Smooth arrival scale & halo dismissal once the sculpted GLB streams in
-      if (figure.isLoaded) {
-        if (figure.loadFade < 1) {
-          figure.loadFade = ctx.reducedMotion
-            ? 1
-            : Math.min(1, figure.loadFade + dt * 3.8);
-          const eased = figure.loadFade * figure.loadFade * (3 - 2 * figure.loadFade);
-          figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * (0.96 + 0.04 * eased));
-          figure.materials.loadingHaloMat.opacity = 0.55 * (1 - eased);
-          figure.loadingHalo.visible = figure.loadFade < 0.99;
-        }
-      } else {
-        figure.loadingHalo.visible = true;
-        const pulse = ctx.reducedMotion ? 1 : 0.94 + Math.sin(elapsed * 3.2) * 0.08;
-        figure.loadingHalo.scale.setScalar(pulse);
-        figure.materials.loadingHaloMat.opacity = 0.35 + (pulse - 0.86) * 1.4;
+      if (requestedModelMode !== ctx.interaction.studioModelMode) {
+        requestedModelMode = ctx.interaction.studioModelMode;
+        userExplicitlySelectedDressform = requestedModelMode === 'dressform';
       }
 
-      applySkeletalPose(elapsed, ctx.reducedMotion);
-      updateRainParticles(dt, ctx.reducedMotion);
+      const activeKind = syncActiveModelVisibility();
+
+      if (activeKind === 'dressform') {
+        applyDressFormPose(elapsed, ctx.reducedMotion);
+      } else if (activeKind === 'mannequin') {
+        // Smooth arrival scale & halo dismissal once the lazily-loaded 20-bone GLB streams in
+        if (figure.isLoaded) {
+          if (figure.loadFade < 1) {
+            figure.loadFade = ctx.reducedMotion
+              ? 1
+              : Math.min(1, figure.loadFade + dt * 3.8);
+            const eased = figure.loadFade * figure.loadFade * (3 - 2 * figure.loadFade);
+            figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * (0.96 + 0.04 * eased));
+            figure.materials.loadingHaloMat.opacity = 0.55 * (1 - eased);
+            figure.loadingHalo.visible = figure.loadFade < 0.99;
+          }
+        } else {
+          figure.loadingHalo.visible = true;
+          const pulse = ctx.reducedMotion ? 1 : 0.94 + Math.sin(elapsed * 3.2) * 0.08;
+          figure.loadingHalo.scale.setScalar(pulse);
+          figure.materials.loadingHaloMat.opacity = 0.35 + (pulse - 0.86) * 1.4;
+        }
+        applySkeletalPose(elapsed, ctx.reducedMotion);
+      } else {
+        applyCustomDropInPose(dt, elapsed, ctx.interaction.studioPose, ctx.reducedMotion);
+      }
+
+      updateUmbrella(activeKind, elapsed, ctx.reducedMotion);
+      updateRainParticles(activeKind, dt, ctx.reducedMotion);
       updateOrbitalsAndDust(elapsed, ctx.reducedMotion);
     },
 
     dispose(): void {
       disposed = true;
+      latestEmitUiSync = null;
       loadAbortController?.abort();
-      disposeSkeletons(figure.loadedModel);
 
-      // Only manually dispose materials/textures when GLB never attached to scene graph;
-      // once attached, disposeObject3D(group) deduplicates and disposes them cleanly once.
+      if (customDropIn.mixer) {
+        customDropIn.mixer.stopAllAction();
+        if (customDropIn.loadedModel) {
+          customDropIn.mixer.uncacheRoot(customDropIn.loadedModel);
+        }
+        customDropIn.mixer = null;
+        customDropIn.standAction = null;
+        customDropIn.walkAction = null;
+      }
+
+      disposeDracoIfIdle();
+
+      disposeSkeletons(figure.loadedModel);
+      disposeSkeletons(customDropIn.loadedModel);
+
+      // Only manually dispose mannequin PBR materials when 20-bone GLB never attached to scene graph;
+      // woolBumpTex is owned by dressForm.torsoMat inside `group` and disposed once by disposeObject3D.
       if (!figure.isLoaded) {
-        figure.materials.woolBumpTex.dispose();
         figure.materials.porcelainMat.dispose();
         figure.materials.hairMat.dispose();
         figure.materials.coatMat.dispose();
@@ -1631,6 +2499,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       figure.loadedModel = null;
       figure.bones = {};
       figure.isLoaded = false;
+      customDropIn.loadedModel = null;
+      customDropIn.isLoaded = false;
     },
   };
 }

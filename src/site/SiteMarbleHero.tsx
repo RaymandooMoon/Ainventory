@@ -285,6 +285,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         },
         {
           initialAspect: safeAspect,
+          initialWidth: width,
           transitionDurationSec: 0.85,
           reducedMotion,
         }
@@ -301,6 +302,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       director.registerStage(createSpecsStage());
       director.registerStage(createAboutStage());
 
+      director.setViewportSize(width, height);
       director.setVisualMode(moodRef.current, themeRef.current);
       director.setGlassPercent(glassPercentRef.current);
       director.updateInteraction(interactionRef.current);
@@ -345,7 +347,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       const aspect = width / Math.max(1, height);
       rig.camera.aspect = aspect;
       rig.camera.updateProjectionMatrix();
-      rig.director.setViewportAspect(aspect);
+      rig.director.setViewportSize(width, height);
     },
     [ensureRig]
   );
@@ -392,7 +394,19 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         glassPercentRef.current / 100,
         ctx.elapsed
       );
-      ctx.renderer.render(rig.scene, rig.camera);
+
+      // Isolate ACESFilmic tone mapping strictly to the 3D stage overlay pass so
+      // the HERO silk fluid and App Login screen shaders remain 100% untouched.
+      const prevToneMapping = ctx.renderer.toneMapping;
+      const prevExposure = ctx.renderer.toneMappingExposure;
+      ctx.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      ctx.renderer.toneMappingExposure = 1.1;
+      try {
+        ctx.renderer.render(rig.scene, rig.camera);
+      } finally {
+        ctx.renderer.toneMapping = prevToneMapping;
+        ctx.renderer.toneMappingExposure = prevExposure;
+      }
       return true;
     },
     [ensureRig, syncStageTransition]

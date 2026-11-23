@@ -267,6 +267,20 @@ describe('computeResponsiveCameraPreset', () => {
     assert.ok(safePos.equals(base.position), 'Invalid aspect should fall back cleanly to 16:9 desktop');
     assert.ok(safeLook.equals(base.lookAt));
   });
+
+  it('activates centered mobile sheet framing below 860px width to match CSS bottom-sheet breakpoint', () => {
+    const base = STAGE_CAMERA_PRESETS.studio;
+    const compactPos = new THREE.Vector3();
+    const compactLook = new THREE.Vector3();
+    computeResponsiveCameraPreset(base, 800 / 700, compactPos, compactLook, false, 1.48, 800);
+    assert.equal(compactPos.x, 0, '800px compact tablet (<860px) must center X = 0 for bottom sheet');
+    assert.equal(compactLook.x, 0);
+
+    const desktopPos = new THREE.Vector3();
+    const desktopLook = new THREE.Vector3();
+    computeResponsiveCameraPreset(base, 1280 / 800, desktopPos, desktopLook, false, 1.48, 1280);
+    assert.ok(desktopPos.equals(base.position), '1280px desktop (>=860px) keeps left-58% +X offset');
+  });
 });
 
 describe('DomDockColliderSync', () => {

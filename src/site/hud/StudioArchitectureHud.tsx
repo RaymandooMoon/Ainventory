@@ -77,47 +77,13 @@ export function StudioStageHud({
           <span className="hud-chip-tag">{modeLabel}</span>
         </div>
 
-        {/* 4-Mode Screen Switcher */}
-        <div
-          className="hud-pill-grid hud-pill-grid--4"
-          role="tablist"
-          aria-label={copy.appPreview.title}
-          onKeyDown={(e) =>
-            handleTablistArrows(e, screenIds, activeScreen.id, previewPrefix, (id) =>
-              onUpdateInteraction({ studioPreviewScreen: id })
-            )
-          }
-        >
-          {copy.appPreview.screens.map((screen) => {
-            const isSelected = screen.id === activeScreen.id;
-            return (
-              <button
-                key={screen.id}
-                id={`${previewPrefix}-${screen.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                aria-controls={previewPanelId}
-                tabIndex={isSelected ? 0 : -1}
-                className={`hud-mode-btn ${isSelected ? 'is-active' : ''}`}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onUpdateInteraction({ studioPreviewScreen: screen.id });
-                }}
-              >
-                <SiteIcon name={screen.icon} size={15} />
-                <span>{screen.tabLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Synced Smartphone Mockup + Screen Summary */}
+        {/* Synced Smartphone Mockup + Screen Summary (ON TOP) */}
         <div
           id={previewPanelId}
           className="hud-preview-hero-row"
           role="tabpanel"
           aria-labelledby={`${previewPrefix}-${activeScreen.id}`}
+          aria-live="polite"
         >
           <div className="hud-phone-frame" data-phone-theme={theme}>
             <div className="hud-phone-island" aria-hidden="true" />
@@ -156,6 +122,41 @@ export function StudioStageHud({
             </div>
           </div>
         </div>
+
+        {/* 4-Mode Screen Switcher Cards (BELOW) */}
+        <div
+          className="hud-pill-grid hud-pill-grid--4"
+          role="tablist"
+          aria-label={copy.appPreview.title}
+          onKeyDown={(e) =>
+            handleTablistArrows(e, screenIds, activeScreen.id, previewPrefix, (id) =>
+              onUpdateInteraction({ studioPreviewScreen: id })
+            )
+          }
+        >
+          {copy.appPreview.screens.map((screen) => {
+            const isSelected = screen.id === activeScreen.id;
+            return (
+              <button
+                key={screen.id}
+                id={`${previewPrefix}-${screen.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls={previewPanelId}
+                tabIndex={isSelected ? 0 : -1}
+                className={`hud-mode-btn ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onUpdateInteraction({ studioPreviewScreen: screen.id });
+                }}
+              >
+                <SiteIcon name={screen.icon} size={15} />
+                <span>{screen.tabLabel}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -165,6 +166,15 @@ export function StudioStageHud({
     const activeFeature = pillar.features.find((f) => f.id === atelierFeatId) ?? pillar.features[0];
     const poseInfo = copy.interactive.poseTelemetry[interaction.studioPose];
     const angleDeg = normalizeDegrees(interaction.studioAngleRad);
+    const activeModelMode = interaction.studioModelMode ?? 'dressform';
+
+    const modelModes: readonly {
+      readonly id: StageInteractionState['studioModelMode'];
+      readonly label: string;
+    }[] = [
+      { id: 'dressform', label: lang === 'ko' ? '드레스폼' : 'Dress Form' },
+      { id: 'mannequin', label: lang === 'ko' ? '20본 3D' : '20-Bone 3D' },
+    ];
 
     const poses: readonly { readonly id: StudioPoseId; readonly label: string }[] = [
       { id: 'stand', label: copy.interactive.stanceIdle },
@@ -182,8 +192,37 @@ export function StudioStageHud({
           <span className="hud-chip-tag">{copy.interactive.pccsNote}</span>
         </div>
 
-        {/* Live 3D Pose Controls synced directly to studioStage */}
+        {/* Live 3D Pose, 360° Turntable & Dual-Mode Model Switcher synced directly to studioStage */}
         <div className="hud-card">
+          <div className="hud-model-mode-row">
+            <span className="hud-eyebrow hud-model-mode-label">
+              {lang === 'ko' ? '3D 모델' : '3D Model'}
+            </span>
+            <div
+              className="hud-segmented hud-segmented--model"
+              role="group"
+              aria-label={lang === 'ko' ? '3D 모델 전환' : '3D model mode'}
+            >
+              {modelModes.map((mode) => {
+                const isSelected = activeModelMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={`hud-seg-btn ${isSelected ? 'is-active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onUpdateInteraction({ studioModelMode: mode.id });
+                    }}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="hud-control-row">
             <div className="hud-segmented" role="group" aria-label="3D pose posture">
               {poses.map((pose) => {
@@ -255,7 +294,25 @@ export function StudioStageHud({
           <p className="hud-body-copy">{poseInfo.summary}</p>
         </div>
 
-        {/* 4 Sculptural 3D Engine Feature Cards + Clickable Inspector */}
+        {/* Active Sculptural 3D Feature Description (ON TOP) */}
+        <div
+          id={`${uid}-atelier-panel`}
+          className="hud-inspector hud-inspector--top"
+          role="tabpanel"
+          aria-labelledby={`${uid}-atelier-${activeFeature.id}`}
+          aria-live="polite"
+        >
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeFeature.icon} size={14} />
+            </span>
+            <strong>{activeFeature.label}</strong>
+            <span className="hud-gold-badge">{activeFeature.tag}</span>
+          </div>
+          <p className="hud-body-copy">{activeFeature.detail}</p>
+        </div>
+
+        {/* 4 Sculptural 3D Engine Feature Cards (BELOW) */}
         <div
           className="hud-grid-2"
           role="tablist"
@@ -298,23 +355,6 @@ export function StudioStageHud({
             );
           })}
         </div>
-
-        <div
-          id={`${uid}-atelier-panel`}
-          className="hud-inspector"
-          role="tabpanel"
-          aria-labelledby={`${uid}-atelier-${activeFeature.id}`}
-          aria-live="polite"
-        >
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeFeature.icon} size={14} />
-            </span>
-            <strong>{activeFeature.label}</strong>
-            <span className="hud-gold-badge">{activeFeature.tag}</span>
-          </div>
-          <p className="hud-body-copy">{activeFeature.detail}</p>
-        </div>
       </div>
     );
   }
@@ -337,7 +377,63 @@ export function StudioStageHud({
         <span className="hud-chip-tag">{carePillar.code}</span>
       </div>
 
-      {/* Wear Economics Dashboard Cards */}
+      {/* Active Care & Asset OS Description (ON TOP) */}
+      <div
+        id={carePanelId}
+        className="hud-inspector hud-inspector--top"
+        role="tabpanel"
+        aria-labelledby={`${carePrefix}-${activeCareFeat.id}`}
+        aria-live="polite"
+      >
+        <div className="hud-inline-head">
+          <span className="hud-icon-badge">
+            <SiteIcon name={activeCareFeat.icon} size={14} />
+          </span>
+          <strong>{activeCareFeat.label}</strong>
+          <span className="hud-gold-badge">{activeCareFeat.tag}</span>
+        </div>
+        <p className="hud-body-copy">{activeCareFeat.detail}</p>
+      </div>
+
+      {/* 4 Care & Asset OS Feature Cards */}
+      <div
+        className="hud-grid-2"
+        role="tablist"
+        aria-label={carePillar.title}
+        onKeyDown={(e) =>
+          handleTablistArrows(e, careFeatIds, activeCareFeat.id, carePrefix, setCareFeatId)
+        }
+      >
+        {carePillar.features.map((feat) => {
+          const isSelected = feat.id === activeCareFeat.id;
+          return (
+            <button
+              key={feat.id}
+              id={`${carePrefix}-${feat.id}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={carePanelId}
+              tabIndex={isSelected ? 0 : -1}
+              className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+              onClick={() => {
+                triggerHaptic('selection');
+                setCareFeatId(feat.id);
+              }}
+            >
+              <div className="hud-tile-top">
+                <span className="hud-icon-badge">
+                  <SiteIcon name={feat.icon} size={15} />
+                </span>
+                <span className="hud-gold-badge">{feat.tag}</span>
+              </div>
+              <strong className="hud-tile-title">{feat.label}</strong>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Wear Economics KPI Dashboard Cards (BELOW) */}
       <div className="hud-grid-2">
         <div className="hud-card hud-kpi-card">
           <span className="hud-metric-chip-label">{copy.interactive.cpwLabel}</span>
@@ -383,61 +479,6 @@ export function StudioStageHud({
           <strong className="hud-mini-title">{copy.interactive.ootdTitle}</strong>
           <span className="hud-chip-tag">{copy.interactive.ootdDate}</span>
         </div>
-      </div>
-
-      {/* 4 Care & Asset OS Feature Cards + Inspector */}
-      <div
-        className="hud-grid-2"
-        role="tablist"
-        aria-label={carePillar.title}
-        onKeyDown={(e) =>
-          handleTablistArrows(e, careFeatIds, activeCareFeat.id, carePrefix, setCareFeatId)
-        }
-      >
-        {carePillar.features.map((feat) => {
-          const isSelected = feat.id === activeCareFeat.id;
-          return (
-            <button
-              key={feat.id}
-              id={`${carePrefix}-${feat.id}`}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              aria-controls={carePanelId}
-              tabIndex={isSelected ? 0 : -1}
-              className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                setCareFeatId(feat.id);
-              }}
-            >
-              <div className="hud-tile-top">
-                <span className="hud-icon-badge">
-                  <SiteIcon name={feat.icon} size={15} />
-                </span>
-                <span className="hud-gold-badge">{feat.tag}</span>
-              </div>
-              <strong className="hud-tile-title">{feat.label}</strong>
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        id={carePanelId}
-        className="hud-inspector"
-        role="tabpanel"
-        aria-labelledby={`${carePrefix}-${activeCareFeat.id}`}
-        aria-live="polite"
-      >
-        <div className="hud-inline-head">
-          <span className="hud-icon-badge">
-            <SiteIcon name={activeCareFeat.icon} size={14} />
-          </span>
-          <strong>{activeCareFeat.label}</strong>
-          <span className="hud-gold-badge">{activeCareFeat.tag}</span>
-        </div>
-        <p className="hud-body-copy">{activeCareFeat.detail}</p>
       </div>
     </div>
   );
@@ -519,6 +560,23 @@ export function ArchitectureStageHud({
           >
             {arch.modeProdLabel}
           </button>
+        </div>
+
+        {/* Active Node Dual Spec Inspector (ON TOP) */}
+        <div className="hud-inspector hud-inspector--top" aria-live="polite">
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeNode.icon} size={14} />
+            </span>
+            <strong>{activeNode.label}</strong>
+            <span className="hud-gold-badge">{isMvp ? arch.devTag : arch.prodTag}</span>
+          </div>
+          <p className="hud-body-copy">{primarySpec}</p>
+          <div className="hud-inspector-delta">
+            <ArrowRight size={12} aria-hidden="true" className="hud-accent-icon" />
+            <span className="hud-chip-tag">{isMvp ? arch.prodTag : arch.devTag}</span>
+            <span>{secondarySpec}</span>
+          </div>
         </div>
 
         {/* Privacy 4-Shield Quick Strip */}
@@ -622,23 +680,6 @@ export function ArchitectureStageHud({
             })}
           </div>
         </div>
-
-        {/* MVP & PROD Dual Spec Inspector */}
-        <div className="hud-inspector" aria-live="polite">
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeNode.icon} size={14} />
-            </span>
-            <strong>{activeNode.label}</strong>
-            <span className="hud-gold-badge">{isMvp ? arch.devTag : arch.prodTag}</span>
-          </div>
-          <p className="hud-body-copy">{primarySpec}</p>
-          <div className="hud-inspector-delta">
-            <ArrowRight size={12} aria-hidden="true" className="hud-accent-icon" />
-            <span className="hud-chip-tag">{isMvp ? arch.prodTag : arch.devTag}</span>
-            <span>{secondarySpec}</span>
-          </div>
-        </div>
       </div>
     );
   }
@@ -656,7 +697,83 @@ export function ArchitectureStageHud({
           </div>
         </div>
 
-        {/* Interactive Original vs Separated WebP Drag Slider */}
+        {/* Active 3-Row Privacy Spec Sheet (ON TOP) */}
+        <div
+          id={`${uid}-privacy-panel`}
+          className="hud-inspector hud-inspector--top hud-privacy-spec"
+          role="tabpanel"
+          aria-labelledby={`${uid}-privacy-${activeShield.id}`}
+          aria-live="polite"
+        >
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeShield.icon} size={14} />
+            </span>
+            <strong>{activeShield.title}</strong>
+            <span className="hud-gold-badge">{activeShield.statusTag}</span>
+          </div>
+
+          <div className="hud-spec-rows">
+            <div className="hud-spec-row">
+              <span className="hud-eyebrow">{arch.privacyCurrentLabel}</span>
+              <p className="hud-body-copy">{activeShield.devStatus}</p>
+            </div>
+            <div className="hud-spec-row">
+              <span className="hud-eyebrow">{arch.privacyProdLabel}</span>
+              <p className="hud-body-copy">{activeShield.prodTarget}</p>
+            </div>
+            <div className="hud-spec-row is-retention">
+              <span className="hud-eyebrow">{arch.privacyRetentionLabel}</span>
+              <p className="hud-body-copy">{activeShield.retention}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Privacy Shield Cards */}
+        <div
+          className="hud-grid-2"
+          role="tablist"
+          aria-label={arch.privacyHeading}
+          onKeyDown={(e) =>
+            handleTablistArrows(
+              e,
+              arch.privacyShields.map((s) => s.id),
+              activeShield.id,
+              `${uid}-privacy`,
+              onSelectPrivacyShield
+            )
+          }
+        >
+          {arch.privacyShields.map((shield) => {
+            const isSelected = shield.id === activeShield.id;
+            return (
+              <button
+                key={shield.id}
+                id={`${uid}-privacy-${shield.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls={`${uid}-privacy-panel`}
+                tabIndex={isSelected ? 0 : -1}
+                className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onSelectPrivacyShield(shield.id);
+                }}
+              >
+                <div className="hud-tile-top">
+                  <span className="hud-icon-badge">
+                    <SiteIcon name={shield.icon} size={15} />
+                  </span>
+                  <span className="hud-mono-num">{shield.code}</span>
+                </div>
+                <strong className="hud-tile-title">{shield.shortLabel}</strong>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Interactive Original vs Separated WebP Drag Slider (BELOW) */}
         <div className="hud-card hud-compare-card">
           <div className="site-compare-viewport hud-compare-viewport" data-no-marble="true">
             <div className="site-compare-layer site-compare-after">
@@ -709,82 +826,6 @@ export function ArchitectureStageHud({
             <span className="hud-mono-val">{copy.interactive.ingestionMeta}</span>
           </div>
         </div>
-
-        {/* 4 Privacy Shield Tabs */}
-        <div
-          className="hud-grid-2"
-          role="tablist"
-          aria-label={arch.privacyHeading}
-          onKeyDown={(e) =>
-            handleTablistArrows(
-              e,
-              arch.privacyShields.map((s) => s.id),
-              activeShield.id,
-              `${uid}-privacy`,
-              onSelectPrivacyShield
-            )
-          }
-        >
-          {arch.privacyShields.map((shield) => {
-            const isSelected = shield.id === activeShield.id;
-            return (
-              <button
-                key={shield.id}
-                id={`${uid}-privacy-${shield.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                aria-controls={`${uid}-privacy-panel`}
-                tabIndex={isSelected ? 0 : -1}
-                className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onSelectPrivacyShield(shield.id);
-                }}
-              >
-                <div className="hud-tile-top">
-                  <span className="hud-icon-badge">
-                    <SiteIcon name={shield.icon} size={15} />
-                  </span>
-                  <span className="hud-mono-num">{shield.code}</span>
-                </div>
-                <strong className="hud-tile-title">{shield.shortLabel}</strong>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Full 3-Row Privacy Spec Sheet */}
-        <div
-          id={`${uid}-privacy-panel`}
-          className="hud-inspector hud-privacy-spec"
-          role="tabpanel"
-          aria-labelledby={`${uid}-privacy-${activeShield.id}`}
-          aria-live="polite"
-        >
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeShield.icon} size={14} />
-            </span>
-            <strong>{activeShield.title}</strong>
-            <span className="hud-gold-badge">{activeShield.statusTag}</span>
-          </div>
-
-          <div className="hud-spec-rows">
-            <div className="hud-spec-row">
-              <span className="hud-eyebrow">{arch.privacyCurrentLabel}</span>
-              <p className="hud-body-copy">{activeShield.devStatus}</p>
-            </div>
-            <div className="hud-spec-row">
-              <span className="hud-eyebrow">{arch.privacyProdLabel}</span>
-              <p className="hud-body-copy">{activeShield.prodTarget}</p>
-            </div>
-            <div className="hud-spec-row is-retention">
-              <span className="hud-eyebrow">{arch.privacyRetentionLabel}</span>
-              <p className="hud-body-copy">{activeShield.retention}</p>
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -810,54 +851,10 @@ export function ArchitectureStageHud({
         <span className="hud-gold-badge">{arch.mapsBadge}</span>
       </div>
 
-      {/* 6 Interactive Google API Cards (Synced with 3D Tower & Weather) */}
-      <div
-        className="hud-grid-2"
-        role="tablist"
-        aria-label={arch.mapsHeading}
-        onKeyDown={(e) =>
-          handleTablistArrows(e, mapsNodeIds, activeApi.id, mapsPrefix, (id) => {
-            const nextIdx = arch.mapsNodes.findIndex((n) => n.id === id);
-            if (nextIdx >= 0) {
-              onUpdateInteraction({ googleApiIndex: nextIdx });
-            }
-          })
-        }
-      >
-        {arch.mapsNodes.map((node, idx) => {
-          const isSelected = idx === interaction.googleApiIndex;
-          return (
-            <button
-              key={node.id}
-              id={`${mapsPrefix}-${node.id}`}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              aria-controls={mapsPanelId}
-              tabIndex={isSelected ? 0 : -1}
-              className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                onUpdateInteraction({ googleApiIndex: idx });
-              }}
-            >
-              <div className="hud-tile-top">
-                <span className="hud-icon-badge">
-                  <SiteIcon name={node.icon} size={15} />
-                </span>
-                <span className={`hud-status-pill is-${node.status}`}>{node.statusLabel}</span>
-              </div>
-              <strong className="hud-tile-title">{node.apiName}</strong>
-              <span className="hud-sub-meta">{node.role}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Active Google API Live Telemetry & Interactive Controls */}
+      {/* Active Google API Live Telemetry & Interactive Controls (ON TOP) */}
       <div
         id={mapsPanelId}
-        className="hud-inspector hud-api-panel"
+        className="hud-inspector hud-inspector--top hud-api-panel"
         role="tabpanel"
         aria-labelledby={`${mapsPrefix}-${activeApi.id}`}
         aria-live="polite"
@@ -941,6 +938,50 @@ export function ArchitectureStageHud({
         </div>
 
         <p className="hud-body-copy">{activeApi.detail}</p>
+      </div>
+
+      {/* 6 Interactive Google API Cards (Synced with 3D Tower & Weather, BELOW) */}
+      <div
+        className="hud-grid-2"
+        role="tablist"
+        aria-label={arch.mapsHeading}
+        onKeyDown={(e) =>
+          handleTablistArrows(e, mapsNodeIds, activeApi.id, mapsPrefix, (id) => {
+            const nextIdx = arch.mapsNodes.findIndex((n) => n.id === id);
+            if (nextIdx >= 0) {
+              onUpdateInteraction({ googleApiIndex: nextIdx });
+            }
+          })
+        }
+      >
+        {arch.mapsNodes.map((node, idx) => {
+          const isSelected = idx === interaction.googleApiIndex;
+          return (
+            <button
+              key={node.id}
+              id={`${mapsPrefix}-${node.id}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={mapsPanelId}
+              tabIndex={isSelected ? 0 : -1}
+              className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+              onClick={() => {
+                triggerHaptic('selection');
+                onUpdateInteraction({ googleApiIndex: idx });
+              }}
+            >
+              <div className="hud-tile-top">
+                <span className="hud-icon-badge">
+                  <SiteIcon name={node.icon} size={15} />
+                </span>
+                <span className={`hud-status-pill is-${node.status}`}>{node.statusLabel}</span>
+              </div>
+              <strong className="hud-tile-title">{node.apiName}</strong>
+              <span className="hud-sub-meta">{node.role}</span>
+            </button>
+          );
+        })}
       </div>
 
       <p className="hud-compliance-note">{arch.mapsComplianceFooter}</p>

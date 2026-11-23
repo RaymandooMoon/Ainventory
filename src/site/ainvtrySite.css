@@ -1378,6 +1378,7 @@ html[lang='ko'] .site-vision-quote {
   margin: 0;
   opacity: 0;
   cursor: ew-resize;
+  touch-action: pan-x;
 }
 
 .site-ingestion-footer {
@@ -5229,6 +5230,11 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
   }
 }
 
+/* Interactive Mobile Bottom-Sheet Grab Handle (Hidden on Desktop >= 860px) */
+.site-hud-grab-btn {
+  display: none;
+}
+
 /* Fixed HUD Subtab Bar */
 .site-hud-header {
   flex-shrink: 0;
@@ -5346,6 +5352,10 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.hud-stack > * {
+  min-width: 0;
 }
 
 .hud-subblock {
@@ -5540,6 +5550,36 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
   border-color: var(--hud-gold-hairline-soft);
 }
 
+.hud-inspector--top {
+  border-top-color: var(--hud-gold-border);
+  box-shadow:
+    inset 0 1px 0 rgba(var(--hud-gold-rgb), 0.28),
+    0 8px 22px -12px rgba(0, 0, 0, 0.36);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--hud-gold-rgb), 0.085) 0%,
+      rgba(var(--hud-gold-rgb), 0.015) 48%,
+      transparent 100%
+    ),
+    var(--hud-glass-card-bg);
+}
+
+.site-root[data-site-theme='light'] .hud-inspector--top {
+  border-top-color: var(--hud-gold-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 8px 20px -12px rgba(29, 29, 31, 0.12);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--hud-gold-rgb), 0.11) 0%,
+      rgba(var(--hud-gold-rgb), 0.025) 52%,
+      transparent 100%
+    ),
+    var(--hud-glass-card-bg);
+}
+
 .hud-inline-head {
   display: flex;
   align-items: center;
@@ -5562,6 +5602,11 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
   font-size: 0.72rem;
   line-height: 1.44;
   color: var(--ink-tertiary);
+}
+
+.hud-inspector-delta > span:last-child {
+  min-width: 0;
+  word-break: keep-all;
 }
 
 /* Grids & Mode Switchers */
@@ -5702,6 +5747,20 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
 }
 
 /* Segmented Controls & Angle Readout */
+.hud-model-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.hud-model-mode-label {
+  margin-bottom: 0;
+}
+
 .hud-control-row {
   display: flex;
   align-items: center;
@@ -5729,6 +5788,16 @@ html[data-vibrancy-fallback='solid'] .site-root[data-site-theme='light'] .site-h
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   width: 100%;
+}
+
+.hud-segmented--model {
+  margin-left: auto;
+}
+
+.hud-segmented--model .hud-seg-btn {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 0.71rem;
 }
 
 .hud-seg-btn {
@@ -6516,8 +6585,8 @@ html[lang='ko'] .hud-quote {
 }
 
 /* ==========================================================================
- * Responsive Mobile Bottom-Sheet Layout (<= 859px & <= 359px Narrow Guard)
- * Top ~44dvh Completely Transparent for Live Centered 3D Stage
+ * Responsive Mobile 2-Detent Expandable Bottom-Sheet Layout (<= 859px & <= 359px)
+ * Resting 35dvh Detent leaves Top ~50dvh Open for Live 3D Stage; expands smoothly on scroll/swipe/tap
  * ========================================================================== */
 
 @media (max-width: 960px) {
@@ -6529,18 +6598,25 @@ html[lang='ko'] .hud-quote {
 
 @media (max-width: 859px) {
   .site-hud-panel {
+    --hud-sheet-expanded-height: calc(
+      100dvh - max(76px, calc(64px + env(safe-area-inset-top))) - 114px - env(safe-area-inset-bottom)
+    );
     top: auto;
     left: 12px;
     right: 12px;
     bottom: calc(114px + env(safe-area-inset-bottom));
     transform: none;
     width: auto;
-    height: min(44dvh, 372px);
-    max-height: calc(100dvh - 44dvh - 118px - env(safe-area-inset-bottom));
+    height: min(35dvh, 294px);
+    max-height: var(--hud-sheet-expanded-height);
     border-radius: 20px 20px 16px 16px;
     border: 1px solid rgba(var(--hud-gold-rgb), 0.42);
     border-top: 1px solid var(--hud-gold-border);
     background: rgba(14, 14, 18, max(0.62, var(--glass-opacity)));
+    transition:
+      height 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.24s ease,
+      box-shadow 0.28s ease;
     animation: siteHudSheetEnter 0.34s var(--site-ease) both;
   }
 
@@ -6548,15 +6624,55 @@ html[lang='ko'] .hud-quote {
     background: rgba(250, 248, 244, max(0.76, var(--glass-opacity)));
   }
 
-  .site-hud-panel::before {
-    content: '';
-    display: block;
-    width: 36px;
-    height: 3px;
-    margin: 8px auto 2px;
-    border-radius: 9999px;
-    background: rgba(var(--hud-gold-rgb), 0.55);
+  .site-hud-panel[data-sheet-expanded='true'] {
+    height: var(--hud-sheet-expanded-height);
+    border-color: var(--hud-gold-border);
+    box-shadow:
+      0 28px 68px -14px rgba(0, 0, 0, 0.56),
+      var(--hud-gold-specular);
+  }
+
+  .site-root[data-site-theme='light'] .site-hud-panel[data-sheet-expanded='true'] {
+    box-shadow:
+      0 24px 58px -14px rgba(29, 29, 31, 0.2),
+      var(--hud-gold-specular);
+  }
+
+  .site-hud-grab-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 26px;
+    padding: 8px 0 4px;
+    border: 0;
+    background: transparent;
+    cursor: grab;
     flex-shrink: 0;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .site-hud-grab-btn:active {
+    cursor: grabbing;
+  }
+
+  .site-hud-grab-bar {
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 9999px;
+    background: rgba(var(--hud-gold-rgb), 0.62);
+    transition:
+      width 0.22s var(--site-ease),
+      background-color 0.22s ease;
+  }
+
+  .site-hud-grab-btn:hover .site-hud-grab-bar,
+  .site-hud-grab-btn:active .site-hud-grab-bar,
+  .site-hud-panel[data-sheet-expanded='true'] .site-hud-grab-bar {
+    width: 52px;
+    background: var(--hud-gold);
   }
 
   @keyframes siteHudSheetEnter {
@@ -6571,7 +6687,7 @@ html[lang='ko'] .hud-quote {
   }
 
   .site-hud-header {
-    padding: 8px 12px 10px;
+    padding: 4px 12px 8px;
   }
 
   .site-hud-badge {
@@ -6579,7 +6695,8 @@ html[lang='ko'] .hud-quote {
   }
 
   .site-hud-scroll {
-    padding: 12px 14px 16px;
+    padding: 10px 14px 16px;
+    scrollbar-gutter: auto;
   }
 
   .hud-preview-hero-row {
