@@ -9,7 +9,12 @@ import {
   Sparkles,
   Sun,
 } from 'lucide-react';
-import type { LoginThreeVariantId } from '../components/auth/loginThreeScenes.ts';
+import {
+  cycleLoginThreeVariant,
+  DEFAULT_LOGIN_THREE_VARIANT,
+  getLoginThreeVariantMeta,
+  type LoginThreeVariantId,
+} from '../components/auth/loginThreeScenes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
   ArchitectureLayerExplorer,
@@ -78,7 +83,9 @@ function SiteBrandMark({
 export default function AinvtrySiteApp() {
   const [theme, setTheme] = useState<SiteTheme>('dark');
   const [lang, setLang] = useState<SiteLang>('en');
-  const [motionVariant, setMotionVariant] = useState<LoginThreeVariantId>('luxury');
+  const [motionVariant, setMotionVariant] = useState<LoginThreeVariantId>(
+    DEFAULT_LOGIN_THREE_VARIANT
+  );
   const [variantOrigin, setVariantOrigin] = useState<{
     readonly x: number;
     readonly y: number;
@@ -103,6 +110,7 @@ export default function AinvtrySiteApp() {
   } | null>(null);
 
   const copy = SITE_COPY[lang];
+  const activeVariantMeta = getLoginThreeVariantMeta(motionVariant);
   const transparencyPct = Math.round((1 - uiAlpha) * 100);
 
   const applyUiAlpha = useCallback((next: number) => {
@@ -208,7 +216,7 @@ export default function AinvtrySiteApp() {
         seq: Date.now(),
       });
     }
-    setMotionVariant((prev) => (prev === 'luxury' ? 'aurora' : 'luxury'));
+    setMotionVariant((prev) => cycleLoginThreeVariant(prev));
   }, []);
 
   const handleToggleTheme = useCallback(() => {
@@ -344,13 +352,13 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleSilk}
                 aria-label={
                   lang === 'en'
-                    ? `Switch 3D silk backdrop (${motionVariant === 'luxury' ? 'Luxury' : 'Aurora'})`
-                    : `3D 실크 배경 전환 (${motionVariant === 'luxury' ? '럭셔리' : '오로라'})`
+                    ? `Switch 3D silk backdrop (${activeVariantMeta.labelEn})`
+                    : `3D 실크 배경 전환 (${activeVariantMeta.labelKo})`
                 }
               >
                 <Sparkles size={14} />
                 <span>
-                  {motionVariant === 'luxury' ? copy.nav.silkLuxury : copy.nav.silkAurora}
+                  {lang === 'en' ? activeVariantMeta.shortEn : activeVariantMeta.shortKo}
                 </span>
               </button>
             </div>

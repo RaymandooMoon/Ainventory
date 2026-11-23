@@ -49,6 +49,16 @@ export function normalizeLoginThreeVariant(raw?: string | null): LoginThreeVaria
   return 'luxury';
 }
 
+export function getLoginThreeVariantMeta(id: LoginThreeVariantId): LoginThreeVariantMeta {
+  return LOGIN_THREE_VARIANTS.find((v) => v.id === id) ?? LOGIN_THREE_VARIANTS[0];
+}
+
+export function cycleLoginThreeVariant(current: LoginThreeVariantId): LoginThreeVariantId {
+  const idx = LOGIN_THREE_VARIANTS.findIndex((v) => v.id === current);
+  if (idx < 0 || LOGIN_THREE_VARIANTS.length === 0) return DEFAULT_LOGIN_THREE_VARIANT;
+  return LOGIN_THREE_VARIANTS[(idx + 1) % LOGIN_THREE_VARIANTS.length].id;
+}
+
 export interface MarbleStepSnapshot {
   u: number;
   v: number;
@@ -80,6 +90,7 @@ export interface LoginThreeController {
     impactStrength?: number,
     minBounceSpeed?: number
   ) => void;
+  setPlayBounds?: (bounds: { bottomInsetWorld?: number; topInsetWorld?: number }) => void;
   triggerPulse: (nx: number, ny: number, strength?: number) => void;
   triggerLoginSurge: (nx: number, ny: number) => void;
   resize: (width: number, height: number) => void;
@@ -976,9 +987,10 @@ export function createLoginThreeController(
     initialVariant: LoginThreeVariantId;
     reducedMotion: boolean;
     onMarbleStep?: (snapshot: MarbleStepSnapshot) => void;
+    onFloorBounce?: (impactSpeed: number) => void;
   }
 ): LoginThreeController | null {
-  const { reducedMotion, onMarbleStep } = options;
+  const { reducedMotion, onMarbleStep, onFloorBounce } = options;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
@@ -1240,6 +1252,8 @@ export function createLoginThreeController(
   let marbleVx = 0.0;
   let marbleVy = 0.0;
   let marbleOpacity = 1.0;
+  let bottomInsetWorld = 0;
+  let topInsetWorld = 0;
   // Second-order gravity sink spring: gently drops into the silk pocket on mount, deepens when resting/pressed
   let marbleSink = reducedMotion ? 1.02 : 0.32;
   let marbleSinkVel = reducedMotion ? 0.0 : 2.9;
@@ -1409,7 +1423,7 @@ export function createLoginThreeController(
     const padX = marbleR * 2.35;
     const padY = marbleR * 2.35;
     marbleX = clamp(marbleX, -aspect + padX, aspect - padX);
-    marbleY = clamp(marbleY, -1 + padY, 1 - padY);
+    marbleY = clamp(marbleY, -1 + bottomInsetWorld + padY, 1 - topInsetWorld - padY);
 
     const nextDims = getSimDims(width, height);
     if (Math.abs(nextDims.sw - simW) > 32 || Math.abs(nextDims.sh - simH) > 32) {
@@ -1506,11 +1520,11 @@ export function createLoginThreeController(
       marbleX += marbleVx * dt;
       marbleY += marbleVy * dt;
 
-      // Soft elastic bounce off viewport edges (emits a concentric impact ripple + fabric press bob!)
+      // Soft elastic bounce off viewport edges (and optional bottom floor rail when setPlayBounds is used)
       const minX = -currentAspect + marbleR * 2.2;
       const maxX = currentAspect - marbleR * 2.2;
-      const minY = -1.0 + marbleR * 2.2;
-      const maxY = 1.0 - marbleR * 2.2;
+      const minY = -1.0 + bottomInsetWorld + marbleR * 2.2;
+      const maxY = 1.0 - topInsetWorld - marbleR * 2.2;
       let bouncedImpact = 0;
 
       if (marbleX < minX) {
@@ -1524,9 +1538,17 @@ export function createLoginThreeController(
       }
 
       if (marbleY < minY) {
+        const floorImpact = Math.abs(marbleVy);
         marbleY = minY;
-        bouncedImpact = Math.max(bouncedImpact, Math.abs(marbleVy));
-        marbleVy = Math.abs(marbleVy) * 0.56;
+        bouncedImpact = Math.max(bouncedImpact, floorImpact);
+        if (bottomInsetWorld > 0.001) {
+          marbleVy = floorImpact > 0.14 ? Math.max(floorImpact * 0.82, 0.48) : floorImpact * 0.56;
+          if (floorImpact > 0.14) {
+            onFloorBounce?.(floorImpact);
+          }
+        } else {
+          marbleVy = floorImpact * 0.56;
+        }
       } else if (marbleY > maxY) {
         marbleY = maxY;
         bouncedImpact = Math.max(bouncedImpact, Math.abs(marbleVy));
@@ -2185,7 +2207,11 @@ export function createLoginThreeController(
 
       const pad = marbleR * 2.2;
       marbleX = clamp(marbleX + sepWorldX, -currentAspect + pad, currentAspect - pad);
-      marbleY = clamp(marbleY + sepWorldY, -1.0 + pad, 1.0 - pad);
+      marbleY = clamp(
+        marbleY + sepWorldY,
+        -1.0 + bottomInsetWorld + pad,
+        1.0 - topInsetWorld - pad
+      );
 
       // Reflect incoming velocity across the button surface normal with glassy elastic restitution
       const vn = marbleVx * nx + marbleVy * ny;
@@ -2213,6 +2239,17 @@ export function createLoginThreeController(
       pendingBurstRadius = marbleR * 1.32;
       marbleSinkVel += clamp(impactStrength * 1.6, 0.6, 2.0);
       fboEnergyTimer = 4.5;
+    },
+    setPlayBounds(bounds: { bottomInsetWorld?: number; topInsetWorld?: number }) {
+      if (typeof bounds.bottomInsetWorld === 'number' && Number.isFinite(bounds.bottomInsetWorld)) {
+        bottomInsetWorld = clamp(bounds.bottomInsetWorld, 0, 0.85);
+      }
+      if (typeof bounds.topInsetWorld === 'number' && Number.isFinite(bounds.topInsetWorld)) {
+        topInsetWorld = clamp(bounds.topInsetWorld, 0, 0.85);
+      }
+      const pad = marbleR * 2.2;
+      marbleY = clamp(marbleY, -1.0 + bottomInsetWorld + pad, 1.0 - topInsetWorld - pad);
+      markPacerActivity(pacer, performance.now(), false);
     },
     triggerPulse(nx: number, ny: number, strength = 0.72) {
       markPacerActivity(pacer, performance.now(), true);
