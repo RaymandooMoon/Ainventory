@@ -1,8 +1,11 @@
+import type { SiteIconKey } from './SiteIcon.tsx';
+
 export type SiteLang = 'en' | 'ko';
 export type SiteTheme = 'dark' | 'light';
 export type LegalDocKind = 'privacy' | 'terms';
 export type SiteViewId = 'home' | 'studio' | 'technology' | 'benchmarks' | 'about';
 export type AppPreviewScreenId = 'outfits' | 'closet' | 'stats' | 'profile';
+export type BlueprintScaleMode = 'dev' | 'prod';
 
 const PREVIEW_FILE_PREFIX: Readonly<Record<AppPreviewScreenId, string>> = {
   outfits: 'app-fitting-live',
@@ -39,24 +42,24 @@ export const SITE_META: SiteMeta = {
   copyrightYear: '2026',
 };
 
-export interface SiteSpecCard {
-  readonly eyebrow: string;
-  readonly metric: string;
-  readonly title: string;
+export interface SiteIconFeature {
+  readonly id: string;
+  readonly icon: SiteIconKey;
+  readonly label: string;
+  readonly tag: string;
   readonly detail: string;
-  readonly boundary: string;
 }
 
 export interface SitePillarCopy {
   readonly code: string;
   readonly eyebrow: string;
   readonly title: string;
-  readonly description: string;
-  readonly bullets: readonly string[];
+  readonly features: readonly SiteIconFeature[];
 }
 
 export interface SiteAppPreviewScreen {
   readonly id: AppPreviewScreenId;
+  readonly icon: SiteIconKey;
   readonly tabLabel: string;
   readonly title: string;
   readonly caption: string;
@@ -64,21 +67,40 @@ export interface SiteAppPreviewScreen {
   readonly imageAlt: string;
 }
 
-export interface SiteArchLayer {
-  readonly id: 'spatial' | 'multimodal' | 'maps' | 'privacy';
-  readonly shortCode: string;
+export interface SiteBlueprintNode {
+  readonly id: string;
+  readonly icon: SiteIconKey;
+  readonly label: string;
+  readonly shortSub: string;
+  readonly highlight?: boolean;
+  readonly devSpec: string;
+  readonly prodSpec: string;
+}
+
+export interface SiteBlueprintTier {
+  readonly id: 'client' | 'edge' | 'gateway' | 'core' | 'shared' | 'data';
+  readonly num: string;
+  readonly label: string;
   readonly shortLabel: string;
-  readonly tier: string;
-  readonly boundary: string;
+  readonly highlight?: boolean;
+  readonly nodes: readonly SiteBlueprintNode[];
+}
+
+export interface SitePrivacyShield {
+  readonly id: 'biometric' | 'oidc' | 'vault' | 'exif';
+  readonly icon: SiteIconKey;
+  readonly code: string;
+  readonly shortLabel: string;
   readonly title: string;
-  readonly subtitle: string;
-  readonly summary: string;
-  readonly modules: readonly string[];
-  readonly guarantee: string;
-  readonly latencyOrBudget: string;
+  readonly statusTag: string;
+  readonly devStatus: string;
+  readonly prodTarget: string;
+  readonly retention: string;
 }
 
 export interface SitePipelineNode {
+  readonly id: string;
+  readonly icon: SiteIconKey;
   readonly code: string;
   readonly apiName: string;
   readonly role: string;
@@ -87,25 +109,35 @@ export interface SitePipelineNode {
 }
 
 export interface SiteIrKpi {
+  readonly id: string;
+  readonly icon: SiteIconKey;
   readonly value: string;
   readonly label: string;
-  readonly sub: string;
+  readonly detail: string;
 }
 
 export interface SiteBenchmarkRow {
+  readonly id: string;
+  readonly icon: SiteIconKey;
+  readonly shortLabel: string;
   readonly label: string;
   readonly valueText: string;
   readonly detail: string;
 }
 
-export interface SiteMilestone {
-  readonly phase: string;
-  readonly status: 'done' | 'active';
+export interface SiteSpecCard {
+  readonly id: string;
+  readonly icon: SiteIconKey;
+  readonly eyebrow: string;
+  readonly metric: string;
   readonly title: string;
   readonly detail: string;
+  readonly boundary: string;
 }
 
 export interface SiteMissionCommitment {
+  readonly id: 'wear' | 'cpw' | 'resale';
+  readonly icon: SiteIconKey;
   readonly num: string;
   readonly title: string;
   readonly tag: string;
@@ -114,6 +146,7 @@ export interface SiteMissionCommitment {
 
 export interface SiteLifecycleNode {
   readonly id: 'closet' | 'weather' | 'avatar' | 'calendar' | 'cpw';
+  readonly icon: SiteIconKey;
   readonly num: string;
   readonly title: string;
   readonly subtitle: string;
@@ -122,20 +155,25 @@ export interface SiteLifecycleNode {
 
 export interface SiteLifecycleExit {
   readonly id: 'resale' | 'purchase';
+  readonly icon: SiteIconKey;
   readonly title: string;
   readonly subtitle: string;
+  readonly detail: string;
 }
 
-export interface SiteLegacySilo {
-  readonly side: 'left' | 'right';
-  readonly tag: string;
+export interface SiteMilestone {
+  readonly id: string;
+  readonly icon: SiteIconKey;
+  readonly phase: string;
+  readonly status: 'done' | 'active';
   readonly title: string;
-  readonly step1: string;
-  readonly step2: string;
-  readonly gapNote: string;
+  readonly tag: string;
+  readonly detail: string;
 }
 
 export interface SiteRevenuePillar {
+  readonly id: string;
+  readonly icon: SiteIconKey;
   readonly num: string;
   readonly title: string;
   readonly mechanism: string;
@@ -143,7 +181,10 @@ export interface SiteRevenuePillar {
 }
 
 export interface SiteMoatItem {
+  readonly id: string;
+  readonly icon: SiteIconKey;
   readonly title: string;
+  readonly tag: string;
   readonly detail: string;
 }
 
@@ -166,22 +207,20 @@ export interface SiteCopy {
     readonly studioPreview: string;
     readonly studioAtelier: string;
     readonly studioIntel: string;
-    readonly archStack: string;
+    readonly archBlueprint: string;
+    readonly archPrivacy: string;
     readonly archMaps: string;
-    readonly archCutoutPrivacy: string;
     readonly benchKpi: string;
     readonly benchMatrix: string;
     readonly aboutMission: string;
     readonly aboutRoadmap: string;
     readonly aboutFounder: string;
   };
+  readonly tapHint: string;
   readonly appPreview: {
     readonly code: string;
-    readonly eyebrow: string;
     readonly title: string;
-    readonly description: string;
     readonly badge: string;
-    readonly syncHint: string;
     readonly screens: readonly SiteAppPreviewScreen[];
   };
   readonly hero: {
@@ -195,29 +234,33 @@ export interface SiteCopy {
     readonly secondaryCta: string;
   };
   readonly capabilities: {
-    readonly sectionCode: string;
-    readonly eyebrow: string;
-    readonly heading: string;
-    readonly subheading: string;
     readonly badge: string;
     readonly pillars: {
       readonly atelier: SitePillarCopy;
-      readonly ingestion: SitePillarCopy;
       readonly intelligence: SitePillarCopy;
-      readonly privacy: SitePillarCopy;
     };
   };
   readonly architecture: {
-    readonly eyebrow: string;
-    readonly heading: string;
     readonly badge: string;
-    readonly inspectorLabel: string;
-    readonly modulesLabel: string;
-    readonly guaranteeLabel: string;
-    readonly layers: readonly SiteArchLayer[];
+    readonly blueprintTitle: string;
+    readonly modeDevLabel: string;
+    readonly modeProdLabel: string;
+    readonly devTag: string;
+    readonly prodTag: string;
+    readonly govLabel: string;
+    readonly privacyStripLabel: string;
+    readonly openPrivacyCta: string;
+    readonly tiers: readonly SiteBlueprintTier[];
+    readonly governance: readonly SiteBlueprintNode[];
+    readonly privacyEyebrow: string;
+    readonly privacyHeading: string;
+    readonly privacyBadge: string;
+    readonly privacyCurrentLabel: string;
+    readonly privacyProdLabel: string;
+    readonly privacyRetentionLabel: string;
+    readonly privacyShields: readonly SitePrivacyShield[];
     readonly mapsEyebrow: string;
     readonly mapsHeading: string;
-    readonly mapsSub: string;
     readonly mapsComplianceFooter: string;
     readonly mapsNodes: readonly SitePipelineNode[];
   };
@@ -225,12 +268,6 @@ export interface SiteCopy {
     readonly stanceIdle: string;
     readonly stanceWalk: string;
     readonly stanceRain: string;
-    readonly rigLabel: string;
-    readonly rigValue: string;
-    readonly rigMeta: string;
-    readonly morphLabel: string;
-    readonly morphValue: string;
-    readonly morphMeta: string;
     readonly pccsNote: string;
     readonly beforeLabel: string;
     readonly afterLabel: string;
@@ -245,17 +282,8 @@ export interface SiteCopy {
     readonly balanceMeta: string;
     readonly dupTitle: string;
     readonly dupStatus: string;
-    readonly dupDesc: string;
     readonly ootdDate: string;
     readonly ootdTitle: string;
-    readonly ootdMeta: string;
-    readonly topologyTitle: string;
-    readonly topologySteps: readonly {
-      readonly title: string;
-      readonly sub: string;
-    }[];
-    readonly topologyFooterLeft: string;
-    readonly topologyFooterRight: string;
   };
   readonly stack: {
     readonly eyebrow: string;
@@ -271,37 +299,31 @@ export interface SiteCopy {
     readonly badge: string;
     readonly headingLead: string;
     readonly headingAccent: string;
-    readonly statement: string;
     readonly commitments: readonly SiteMissionCommitment[];
-    readonly diagramEyebrow: string;
-    readonly diagramTitle: string;
-    readonly diagramLegendSilo: string;
-    readonly diagramLegendCore: string;
     readonly centerKicker: string;
     readonly centerTitle: string;
     readonly centerSub: string;
-    readonly silos: readonly SiteLegacySilo[];
+    readonly autoPlayLabel: string;
+    readonly pausePlayLabel: string;
     readonly loopNodes: readonly SiteLifecycleNode[];
     readonly exits: readonly SiteLifecycleExit[];
-    readonly diagramFooter: string;
+    readonly nextLabel: string;
   };
   readonly vision: {
     readonly eyebrow: string;
     readonly heading: string;
     readonly irBadge: string;
     readonly quote: string;
-    readonly body: string;
     readonly roadmapTitle: string;
     readonly milestones: readonly SiteMilestone[];
+    readonly moatsTitle: string;
+    readonly moats: readonly SiteMoatItem[];
+    readonly nextToBmLabel: string;
     readonly revenueTitle: string;
     readonly revenueNote: string;
     readonly revenuePillars: readonly SiteRevenuePillar[];
-    readonly moatsTitle: string;
-    readonly moats: readonly SiteMoatItem[];
-    readonly statusMvp: string;
-    readonly statusRelease: string;
+    readonly backToMissionLabel: string;
     readonly founderRole: string;
-    readonly founderBio: string;
     readonly hqLabel: string;
     readonly hqValue: string;
     readonly domainLabel: string;
@@ -310,12 +332,9 @@ export interface SiteCopy {
     readonly directCta: string;
   };
   readonly footer: {
-    readonly summary: string;
     readonly rights: string;
     readonly privacy: string;
     readonly terms: string;
-    readonly contact: string;
-    readonly backToTop: string;
   };
   readonly legal: {
     readonly closeLabel: string;
@@ -346,55 +365,56 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     subtabs: {
       studioPreview: 'Live App',
       studioAtelier: '3D Fitting',
-      studioIntel: 'Care & Schedule',
-      archStack: 'System Stack',
+      studioIntel: 'Care & CPW',
+      archBlueprint: 'System Blueprint',
+      archPrivacy: 'Privacy & Security',
       archMaps: 'Maps & Weather',
-      archCutoutPrivacy: 'Image & Privacy',
       benchKpi: 'Key Metrics',
       benchMatrix: 'Tech Stack',
-      aboutMission: 'Our Mission',
-      aboutRoadmap: 'Roadmap',
-      aboutFounder: 'Founder',
+      aboutMission: '01 Mission',
+      aboutRoadmap: '02 Roadmap',
+      aboutFounder: '03 BM & Founder',
     },
+    tapHint: 'Tap an icon to inspect',
     appPreview: {
-      code: 'iNVTRY · Mobile App',
-      eyebrow: 'Live build capture',
-      title: 'iNVTRY in active development',
-      description:
-        'Real screens from our React 19 + Capacitor 8 mobile build. Switching language or theme at the top updates the preview alongside the site.',
+      code: 'iNVTRY · Mobile Build',
+      title: 'Live Cross-Platform App',
       badge: '4-Mode Sync',
-      syncHint: 'Matches site language and theme',
       screens: [
         {
           id: 'outfits',
+          icon: 'shirt',
           tabLabel: 'Fitting',
-          title: 'Multi-Angle Fitting Room',
-          caption: '0°–360° multi-layer fitting with live weather and Street View backdrops',
+          title: '360° Fitting',
+          caption: 'Multi-layer 0°–360° try-on with live weather and Street View backdrops.',
           metricTag: '360°',
           imageAlt: 'iNVTRY mobile app multi-angle fitting studio',
         },
         {
           id: 'closet',
+          icon: 'layoutGrid',
           tabLabel: 'Closet',
-          title: 'Digital Closet',
-          caption: 'Auto-tagged 11-slot archive, wear counters, and care-aware laundry basket',
+          title: '11-Slot Closet',
+          caption: 'Auto-tagged owned wardrobe with wear counters and care-aware laundry basket.',
           metricTag: '11 Slots',
           imageAlt: 'iNVTRY mobile app digital closet view',
         },
         {
           id: 'stats',
+          icon: 'barChart',
           tabLabel: 'Stats',
-          title: 'CPW & Dormant Insights',
-          caption: 'Cost-per-wear analytics, dormant garment flags, and one-tap resale prep',
+          title: 'CPW & Resale',
+          caption: 'Cost-per-wear analytics, dormant flags, and verified one-tap resale prep.',
           metricTag: 'CPW',
           imageAlt: 'iNVTRY mobile app wear and cost analytics',
         },
         {
           id: 'profile',
+          icon: 'scanFace',
           tabLabel: 'Profile',
-          title: 'Tone & Fit Calibration',
-          caption: '0-byte local skin-tone sampling, body measurements, and fit tuning',
-          metricTag: '0B Local',
+          title: '0B Local Tone',
+          caption: 'On-device MediaPipe WASM skin-tone calibration with zero facial upload.',
+          metricTag: '0B Face',
           imageAlt: 'iNVTRY mobile app skin-tone and body calibration',
         },
       ],
@@ -405,191 +425,409 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       titleAccent: 'fitted in 3D',
       titleTail: ' before you wear it.',
       subtitle:
-        'A weather-reactive personal Wardrobe Asset OS uniting owned clothes, 360° multi-layer fitting, Cost-Per-Wear telemetry, and one-tap circular resale—with on-device biometric privacy.',
+        'A weather-reactive Wardrobe Asset OS uniting owned clothes, 360° fitting, CPW analytics, and verified one-tap resale.',
       marbleHint: 'Roll the marble into any menu below, or tap to open',
       primaryCta: 'Open Studio',
       secondaryCta: 'Contact Founder',
     },
     capabilities: {
-      sectionCode: 'Product',
-      eyebrow: 'iNVTRY',
-      heading: 'Built around the full lifecycle of clothes you own',
-      subheading: 'Daily weather outfits, 360° multi-layer fit, garment care, and circular resale in one loop.',
       badge: 'Working MVP',
       pillars: {
         atelier: {
-          code: '3D Fitting',
-          eyebrow: 'Three.js 0.187 · Four-Season Multi-Layering',
-          title: '21-Bone Rig & 11-Slot 360° Multi-Layering',
-          description:
-            'Beyond single-item size checks, stack inner, mid, outer, footwear, and umbrella slots across 28 body morphs with 21-bone skeletal motion, SpringBone drape physics, and 8-angle turnaround tailored to daily temperature swings.',
-          bullets: [
-            'Idle, walking, rain umbrella, and hand-pose motion states',
-            'Show-through, relaxed fit, and 11-slot multi-layer balance checks',
-            'Adaptive 120Hz/30Hz pacing with instant 2D fallback on WebGL loss',
-          ],
-        },
-        ingestion: {
-          code: 'Image & Privacy',
-          eyebrow: 'EXIF/GPS Stripped · 0-Byte Local Face Vault',
-          title: 'De-Identified Garment Separation & Local Biometrics',
-          description:
-            'Client-side cropping, background separation, and WebP re-encoding (582 KB → 23 KB) strip GPS, device EXIF, and indoor backgrounds before AI processing. Facial skin-tone calibration runs strictly on-device in MediaPipe WASM.',
-          bullets: [
-            'Automated fabric, color, and season tagging cuts onboarding friction',
-            'PII-free prompts & Paid Tier No-Training 2K multi-angle try-on',
-            'Zero stored OAuth tokens, tenant isolation & atomic account deletion',
+          code: '3D Fitting Engine',
+          eyebrow: 'Three.js 0.187 · Multi-Layer',
+          title: 'Four-Season 360° Fitting',
+          features: [
+            {
+              id: 'rig',
+              icon: 'move3d',
+              label: '21-Bone Rig',
+              tag: 'SpringBone',
+              detail: 'Simulates idle, walking, rain-umbrella, and hand postures with cloth drape.',
+            },
+            {
+              id: 'slots',
+              icon: 'layers',
+              label: '11-Slot Layers',
+              tag: '28 Morphs',
+              detail: 'Stacks inner, mid, outer, shoes, and accessories with show-through fit checks.',
+            },
+            {
+              id: 'angles',
+              icon: 'rotate3d',
+              label: '8-Angle 360°',
+              tag: 'Optical Flow',
+              detail: 'Generates smooth full-turnaround views across front, side, and back silhouettes.',
+            },
+            {
+              id: 'pacer',
+              icon: 'gauge',
+              label: '120Hz / 30Hz',
+              tag: '2D Fallback',
+              detail: 'Adapts GPU refresh dynamically and falls back to 2D collage on WebGL loss.',
+            },
           ],
         },
         intelligence: {
-          code: 'Care & Schedule',
-          eyebrow: 'Calendar · CPW Telemetry · Nearby Care Map',
-          title: 'Cost-Per-Wear Economics, Resale & Live Weather',
-          description:
-            'Calendar wear logs compute real Cost-Per-Wear (Price ÷ Wears) and surface dormant pieces for one-tap resale using already-stored photos and metadata—paired with live weather alerts, laundry rules, and nearby care shops.',
-          bullets: [
-            'Grounded outfit suggestions strictly from owned clothes & live weather',
-            'Automatic dormant garment detection feeding one-tap circular resale',
-            'Wash/bleed care alerts, nearby care map, and offline duplicate guard',
-          ],
-        },
-        privacy: {
-          code: 'Privacy',
-          eyebrow: 'Privacy-by-Design 4-Line Defense',
-          title: '0-Byte Biometric Upload & Offline-First Storage',
-          description:
-            'Facial landmarks and lighting calibration run 100% locally (0 bytes transmitted). Your catalog opens offline via IndexedDB on web, iOS, and Android, and one-stop deletion wipes server records, caches, and local vaults atomically.',
-          bullets: [
-            'Server-verified Apple/Google OIDC with zero stored IdP tokens',
-            'Per-user tenant guard (IDOR prevention), magic-byte & sandbox CSP',
-            'Single React 19 + Capacitor 8 codebase across web, iOS, and Android',
+          code: 'Care & Asset OS',
+          eyebrow: 'CPW · Care · Verified Resale',
+          title: 'Wear Economics & Care',
+          features: [
+            {
+              id: 'cpw',
+              icon: 'trendingDown',
+              label: 'CPW Telemetry',
+              tag: 'Price ÷ Wears',
+              detail: 'Calendar wear logs calculate real cost-per-wear and flag idle pieces.',
+            },
+            {
+              id: 'resale',
+              icon: 'badgeCheck',
+              label: 'Authentic Resale',
+              tag: '1-Tap Trust',
+              detail: 'Pairs stored photos with luxury and purchase records for verified one-tap resale.',
+            },
+            {
+              id: 'care',
+              icon: 'droplets',
+              label: 'Care Rules',
+              tag: 'Bleed Guard',
+              detail: 'Matches fabric care tags to wash rules and warns on color-bleed risk.',
+            },
+            {
+              id: 'map',
+              icon: 'mapPin',
+              label: 'Nearby Care Map',
+              tag: 'Places API',
+              detail: 'Locates nearby dry-cleaners, tailors, and leather-care shops via server proxy.',
+            },
           ],
         },
       },
     },
     architecture: {
-      eyebrow: 'System Architecture',
-      heading: '3D Engine, No-Training AI, Geo-Proxy & Privacy-by-Design',
-      badge: '4 Layers · 4 Security Lines',
-      inspectorLabel: 'Layer Specification',
-      modulesLabel: 'Production Modules',
-      guaranteeLabel: 'Boundary & Guarantee',
-      layers: [
+      badge: '6-Tier · Privacy-by-Design',
+      blueprintTitle: 'iNVTRY 6-Tier System & Hardware',
+      modeDevLabel: 'Current Dev (MVP)',
+      modeProdLabel: 'Prod Scale + GPU',
+      devTag: 'MVP',
+      prodTag: 'PROD',
+      govLabel: 'Governance',
+      privacyStripLabel: 'Privacy 4-Shield',
+      openPrivacyCta: 'Details',
+      tiers: [
         {
-          id: 'spatial',
-          shortCode: 'L1',
-          shortLabel: '3D GPU',
-          tier: 'L1 · Client GPU',
-          boundary: 'WebGL2 · 120Hz',
-          title: 'Four-Season Multi-Layer 3D & Adaptive Renderer',
-          subtitle: 'Three.js 0.187 · 21-Bone Rig · 8-Angle Flow · 120Hz/30Hz Pacing',
-          summary:
-            'Handles 21-bone skeletal motion, SpringBone drape physics, 11-slot inner/mid/outer layering, weighted GLSL silk and marble shaders, adaptive 120Hz→30Hz frame pacing, and automatic 2D WebGL recovery.',
-          modules: [
-            'loginThreeScenes.ts + adaptiveFramePacer.ts',
-            'vton2DService.ts (8-Angle Optical Flow)',
-            'underwearStylingEngine.js (Show-through & Fit)',
-            'StageStreetViewMapSheet.tsx (Street View Sheet)',
+          id: 'client',
+          num: '01',
+          label: 'Client Apps',
+          shortLabel: '01 Client',
+          nodes: [
+            {
+              id: 'invtry-web',
+              icon: 'globe',
+              label: 'iNVTRY Web',
+              shortSub: 'React 19 PWA',
+              highlight: true,
+              devSpec: 'React 19 + TypeScript 7 + Vite 8 + MediaPipe WASM local analysis.',
+              prodSpec: 'Global PWA with IndexedDB offline sync and zero biometric uploads.',
+            },
+            {
+              id: 'invtry-native',
+              icon: 'smartphone',
+              label: 'iNVTRY Mobile',
+              shortSub: 'iOS · Android',
+              highlight: true,
+              devSpec: 'Capacitor 8 single-codebase hybrid wrapper with native haptics.',
+              prodSpec: 'App Store & Google Play release with Keychain / Keystore binding.',
+            },
+            {
+              id: 'ops-console',
+              icon: 'layoutGrid',
+              label: 'Ops Console',
+              shortSub: 'Catalog · QC',
+              devSpec: 'Local seed curation, visual VTON QC audit, and Playwright E2E gate.',
+              prodSpec: 'Role-scoped curation admin, resale partner verification, and alerts.',
+            },
           ],
-          guarantee: '120Hz active / 30Hz idle / 0Hz modal pause · instant 2D fallback on WebGL loss',
-          latencyOrBudget: '120Hz / 30Hz',
         },
         {
-          id: 'multimodal',
-          shortCode: 'L2',
-          shortLabel: 'AI Model',
-          tier: 'L2 · De-Identified AI',
-          boundary: 'Vertex · Paid',
-          title: 'De-Identified Tagging, 2K Try-On & Outfit Rationale',
-          subtitle: 'Gemini / Vertex Paid No-Training · PII-Free · Automated QC',
-          summary:
-            'Accepts only EXIF/GPS-stripped, background-separated WebP garments without PII to tag fabrics, generate grounded outfits strictly from owned inventory and live weather, verify angles, and discard payloads immediately.',
-          modules: [
-            'server/garmentVisionService.js (De-Identified)',
-            'server/vtonService.js + vtonQcMiddleware.js',
-            'outfitRationaleEngine.ts (Owned Closet & TPO)',
-            'vtonStageProgress.ts (Progressive Stream)',
+          id: 'edge',
+          num: '02',
+          label: 'Edge Access',
+          shortLabel: '02 Edge',
+          nodes: [
+            {
+              id: 'cdn',
+              icon: 'cloud',
+              label: 'CDN Edge',
+              shortSub: 'Cloudflare',
+              devSpec: 'Cloudflare Workers Static Assets serving immutable hashed bundles.',
+              prodSpec: 'Multi-region Edge CDN caching static 3D base assets and web shells.',
+            },
+            {
+              id: 'lb-waf',
+              icon: 'network',
+              label: 'Load Balancer · WAF',
+              shortSub: 'TLS 1.3',
+              devSpec: 'Managed HTTPS ingress with HSTS, CSP headers, and IP rate limits.',
+              prodSpec: 'Global Cloud Load Balancer + Cloud Armor WAF DDoS and bot defense.',
+            },
           ],
-          guarantee: 'Zero PII in prompts · No-Training Paid Tier · 0-day payload retention',
-          latencyOrBudget: '0-Day · 2K',
         },
         {
-          id: 'maps',
-          shortCode: 'L3',
-          shortLabel: 'Maps',
-          tier: 'L3 · Weather & Places',
-          boundary: 'Server Proxy',
-          title: 'Google Maps Platform Weather, Street View & Care',
-          subtitle: 'Weather v1 · Places (New) · Free Street View Pre-Check · Care Map',
-          summary:
-            'Routes all Maps and Weather requests through an Express 5 server proxy: Weather API v1 temperature swings, alerts and UV, Places API (New) with minimal FieldMask for TPO venues and nearby care shops, and free Street View metadata checks.',
-          modules: [
-            'server/googleWeatherService.js (v1 & Alerts)',
-            'server/mapsProxyService.js (Places New)',
-            'server/mapsBackdropService.js (Zero-Cache)',
-            'garmentCareEngine.ts + NearbyCareMapModal',
+          id: 'gateway',
+          num: '03',
+          label: 'API Gateway',
+          shortLabel: '03 Gateway',
+          highlight: true,
+          nodes: [
+            {
+              id: 'invtry-gw',
+              icon: 'keyRound',
+              label: 'iNVTRY Unified API Gateway',
+              shortSub: 'Stateless OIDC · Rate Limit',
+              highlight: true,
+              devSpec: 'Express 5 hardened proxy: Apple/Google OIDC JWKS, HttpOnly cookie, zero IdP tokens.',
+              prodSpec: 'Cloud Run API Gateway: short-lived JWT + rotating refresh tokens + anomaly alerts.',
+            },
           ],
-          guarantee: 'Zero permanent media caching · server-only keys · free metadata pre-check',
-          latencyOrBudget: '20m TTL cache',
         },
         {
-          id: 'privacy',
-          shortCode: 'L4',
-          shortLabel: 'Security',
-          tier: 'L4 · Privacy-by-Design',
-          boundary: '0B Face · Guard',
-          title: 'Local Biometric Vault, Stateless OIDC & Tenant Isolation',
-          subtitle: 'MediaPipe WASM · Zero Stored OAuth Tokens · Tenant Guard · Atomic Erase',
-          summary:
-            'Completes facial tone calibration on-device (0 bytes uploaded), verifies Apple/Google OIDC signatures without storing IdP tokens or auto-merging unverified emails, enforces per-closet tenant isolation, and erases all data atomically on account deletion.',
-          modules: [
-            'skinToneAnalyzer.ts + faceMemoryStore.ts (0B)',
-            'server/api.js (Stateless OIDC · Tenant Guard)',
-            'server/start.js (Magic-Byte · Sandbox CSP)',
-            'Capacitor 8 (Offline-First iOS & Android)',
+          id: 'core',
+          num: '04',
+          label: 'iNVTRY Core',
+          shortLabel: '04 iNVTRY',
+          highlight: true,
+          nodes: [
+            {
+              id: 'core-vton',
+              icon: 'cpu',
+              label: 'iNVTRY 3D · VTON',
+              shortSub: 'L4 / A100 GPU',
+              highlight: true,
+              devSpec: 'Three.js 21-bone rig + Gemini / Vertex Paid No-Training VTON proxy.',
+              prodSpec: 'Auto-scaling Cloud Run + NVIDIA L4 / A100 GPU workers in VPC boundary.',
+            },
+            {
+              id: 'core-closet',
+              icon: 'shirt',
+              label: 'iNVTRY Closet · CPW',
+              shortSub: '11-Slot OS',
+              highlight: true,
+              devSpec: '11-slot taxonomy, calendar wear logs, CPW calculator, and duplicate guard.',
+              prodSpec: 'Multi-tenant wardrobe service with real-time wear analytics pipelines.',
+            },
+            {
+              id: 'core-weather',
+              icon: 'cloudSun',
+              label: 'iNVTRY Weather · TPO',
+              shortSub: 'Maps Proxy',
+              highlight: true,
+              devSpec: 'Server proxy for Weather API v1, Places API (New), and Street View.',
+              prodSpec: 'Regional geo-proxy with shared Redis TTL cache and zero media persistence.',
+            },
+            {
+              id: 'core-resale',
+              icon: 'badgeCheck',
+              label: 'iNVTRY Auth Resale',
+              shortSub: 'Provenance Sync',
+              highlight: true,
+              devSpec: 'Dormant CPW item detector reusing stored photos and garment metadata.',
+              prodSpec: 'Luxury & purchase-record authentication API feeding transparent 1-tap resale.',
+            },
           ],
-          guarantee: '0 bytes raw facial upload · zero stored OAuth tokens · atomic one-stop deletion',
-          latencyOrBudget: '4-Line Defense',
+        },
+        {
+          id: 'shared',
+          num: '05',
+          label: 'Shared Base',
+          shortLabel: '05 Shared',
+          nodes: [
+            {
+              id: 'shared-log',
+              icon: 'fileSearch',
+              label: 'Logging · Tracing',
+              shortSub: 'Masked Audit',
+              devSpec: 'Structured server logs with PII redaction and stack-trace masking.',
+              prodSpec: 'Cloud Logging + OpenTelemetry tracing with retention rollover.',
+            },
+            {
+              id: 'shared-oss',
+              icon: 'hardDrive',
+              label: 'Object Storage',
+              shortSub: '3-Zone Private',
+              devSpec: 'Owner-prefix /uploads with magic-byte check, 4MB cap, and sandbox CSP.',
+              prodSpec: 'GCS 3-Zone (Public Seed / Private 15m Signed URL / 24h Ephemeral VTON).',
+            },
+            {
+              id: 'shared-mq',
+              icon: 'workflow',
+              label: 'Async Queue (MQ)',
+              shortSub: 'Pub/Sub Jobs',
+              devSpec: 'Progressive stage streaming for 8-angle try-on and vision tagging.',
+              prodSpec: 'Google Cloud Pub/Sub decoupling GPU VTON jobs and resale sync webhooks.',
+            },
+          ],
+        },
+        {
+          id: 'data',
+          num: '06',
+          label: 'Data · Hardware',
+          shortLabel: '06 Data/HW',
+          nodes: [
+            {
+              id: 'data-sql',
+              icon: 'database',
+              label: 'Primary DB',
+              shortSub: 'SQLite → Cloud SQL',
+              devSpec: 'sql.js WASM SQLite + client IndexedDB offline vault for rapid MVP.',
+              prodSpec: 'Cloud SQL PostgreSQL HA (Multi-AZ) with strict row-level tenant isolation.',
+            },
+            {
+              id: 'data-redis',
+              icon: 'zap',
+              label: 'Memory Cache',
+              shortSub: 'TTL → Redis HA',
+              devSpec: 'In-process 20–30m weather TTL cache and IP rate-limit buckets.',
+              prodSpec: 'Memorystore Redis Cluster for sessions, revocation lists, and geo cache.',
+            },
+            {
+              id: 'data-gpu',
+              icon: 'server',
+              label: 'Compute · GPU',
+              shortSub: 'Cloud Run · L4/A100',
+              devSpec: 'Single Node Express 5 server + serverless Vertex AI Paid inference.',
+              prodSpec: 'Auto-scaled Cloud Run HA + dedicated NVIDIA L4 / A100 GPU worker pool.',
+            },
+            {
+              id: 'data-vault',
+              icon: 'lock',
+              label: 'Encrypted Vault',
+              shortSub: 'CMEK AES-256',
+              devSpec: 'Isolated local faceMemoryStore + server-only process.env secrets.',
+              prodSpec: 'Cloud KMS CMEK (AES-256-GCM) + Secret Manager + VPC Service Controls.',
+            },
+          ],
+        },
+      ],
+      governance: [
+        {
+          id: 'gov-audit',
+          icon: 'activity',
+          label: 'Audit Log',
+          shortSub: 'Trace',
+          devSpec: 'Masked API request logs and automated verify:secrets pre-commit scan.',
+          prodSpec: 'Tamper-evident security audit logs with 24h incident response SOP.',
+        },
+        {
+          id: 'gov-rbac',
+          icon: 'userCheck',
+          label: 'Access Control',
+          shortSub: 'Tenant Guard',
+          devSpec: 'resolveAuthorizedClosets enforces strict per-user isolation (anti-IDOR).',
+          prodSpec: 'Least-privilege IAM service accounts + periodic penetration testing.',
+        },
+        {
+          id: 'gov-cicd',
+          icon: 'gitBranch',
+          label: 'Git CI / CD',
+          shortSub: 'Verify Gate',
+          devSpec: 'oxlint + TypeScript 7 strict + 210+ unit/E2E tests before auto deploy.',
+          prodSpec: 'Automated PII/EXIF regression gates + canary Cloud Run rollout.',
+        },
+      ],
+      privacyEyebrow: 'Risk Mitigation · Privacy-by-Design',
+      privacyHeading: '4-Line Personal Data Defense',
+      privacyBadge: '0B Biometrics · Zero OAuth Tokens',
+      privacyCurrentLabel: 'Implemented Now (MVP)',
+      privacyProdLabel: 'Production Hardening',
+      privacyRetentionLabel: 'Retention & Disposal',
+      privacyShields: [
+        {
+          id: 'biometric',
+          icon: 'scanFace',
+          code: '01',
+          shortLabel: '0B Face WASM',
+          title: 'On-Device Biometric Isolation',
+          statusTag: 'Implemented',
+          devStatus: 'MediaPipe FaceLandmarker WASM runs 100% on-device; calibrated tone stays in local IndexedDB (0 bytes uploaded).',
+          prodTarget: 'Maintains strict 0-byte raw face upload invariant across iOS, Android, and Web.',
+          retention: 'Camera frames: 0s RAM volatile · Local vault purged on logout/delete.',
+        },
+        {
+          id: 'oidc',
+          icon: 'keyRound',
+          code: '02',
+          shortLabel: 'Zero OAuth Keys',
+          title: 'Stateless OIDC & Anti-ATO Guard',
+          statusTag: 'Implemented',
+          devStatus: 'Server verifies Apple/Google OIDC signatures, stores zero external IdP tokens, blocks unverified email auto-merge, and issues HttpOnly cookies.',
+          prodTarget: 'Adds short-lived access + rotating refresh tokens bound to iOS Keychain & Android Keystore.',
+          retention: 'IdP tokens: Never stored · Expired sessions auto-purged every 12h.',
+        },
+        {
+          id: 'vault',
+          icon: 'shieldCheck',
+          code: '03',
+          shortLabel: '3-Zone CMEK',
+          title: 'Tenant & 3-Zone Storage Isolation',
+          statusTag: 'MVP + Prod 3-Zone',
+          devStatus: 'Every API passes resolveAuthorizedClosets (anti-IDOR) with magic-byte upload checks, path-traversal guard, and sandbox CSP.',
+          prodTarget: 'Physical GCS 3-Zone split (Public Seed / Private Bucket with 15m Signed URL + CMEK / 24h Ephemeral VTON).',
+          retention: 'VTON scratch: 24h auto-expire · Zero public URL access to user garments.',
+        },
+        {
+          id: 'exif',
+          icon: 'trash',
+          code: '04',
+          shortLabel: 'EXIF · Atomic Erase',
+          title: 'EXIF Strip, No-Training AI & One-Stop Erase',
+          statusTag: 'Implemented',
+          devStatus: 'Client separation & WebP re-encoding strip GPS/EXIF and indoor rooms; Vertex Paid No-Training excludes PII; DELETE /api/auth/account wipes all stores atomically.',
+          prodTarget: 'Enforces Vertex AI VPC Service Controls and automated CI PII/EXIF regression gates.',
+          retention: 'AI payload: 0-day volatile · Account delete wipes DB, files, cache & IndexedDB.',
         },
       ],
       mapsEyebrow: 'Google Cloud & Maps Platform',
-      mapsHeading: 'ToS-compliant weather, place, and care proxy',
-      mapsSub:
-        'All Maps and Weather requests stay on the Express 5 server with minimal X-Goog-FieldMask, solution attribution, and zero permanent media caching.',
+      mapsHeading: 'Server-Proxied Weather, Places & AI',
       mapsComplianceFooter:
-        'Server-only API keys · Minimal FieldMask · Free Street View metadata pre-check · Zero permanent media storage',
+        'Server-only keys · Minimal FieldMask · Free Street View metadata pre-check · 0 permanent media cached',
       mapsNodes: [
         {
+          id: 'weather',
+          icon: 'cloudSun',
           code: '01',
-          apiName: 'Google Weather API v1',
-          role: 'Conditions, Forecast & Alerts',
-          detail:
-            'Reads severe weather alerts and UV index to update fitting studio banners, umbrella stance, and sun-protection prompts.',
-          compliance: '20–30m memory TTL',
+          apiName: 'Weather API v1',
+          role: 'Alerts · Swings · UV',
+          detail: 'Injects real temperature swings, rain alerts, and UV directly into daily 3D outfits and umbrella stance.',
+          compliance: '20–30m Memory TTL',
         },
         {
+          id: 'places',
+          icon: 'mapPin',
           code: '02',
           apiName: 'Places API (New)',
-          role: 'TPO Venues & Nearby Care',
-          detail:
-            'Finds real venues for outfit context and maps nearby dry-cleaners, laundries, tailors, and leather-care shops.',
+          role: 'Venues · Care Map',
+          detail: 'Matches TPO venue context and locates nearby dry-cleaners, tailors, and leather-care shops.',
           compliance: 'Minimal FieldMask',
         },
         {
+          id: 'streetview',
+          icon: 'compass',
           code: '03',
-          apiName: 'Place Photos & Street View',
-          role: 'Live Location Backdrops',
-          detail:
-            'Checks free streetview/metadata before fetching imagery, placing real street or venue lighting behind the model.',
-          compliance: 'No media DB cache',
+          apiName: 'Street View · Photos',
+          role: 'Live Backdrops',
+          detail: 'Runs free streetview/metadata pre-check before streaming venue backdrops behind the 3D model.',
+          compliance: '0 Media Stored in DB',
         },
         {
+          id: 'vertex',
+          icon: 'sparkles',
           code: '04',
-          apiName: 'Gemini & Vertex AI',
-          role: 'Tagging, Try-On & Notes',
-          detail:
-            'Combines weather, place context, personal tone, and 11-slot wardrobe data into multi-angle try-on renders and outfit notes.',
-          compliance: 'Visual QC check',
+          apiName: 'Gemini · Vertex AI',
+          role: 'No-Training VTON',
+          detail: 'Tags EXIF-stripped garments and generates 2K multi-angle try-on renders with zero model training.',
+          compliance: '0-Day Stateless',
         },
       ],
     },
@@ -597,311 +835,343 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       stanceIdle: 'Stand',
       stanceWalk: 'Walk',
       stanceRain: 'Rain',
-      rigLabel: 'Rig & Slots',
-      rigValue: '21 Bones · 11 Slots',
-      rigMeta: 'SpringBone cloth & fit engine',
-      morphLabel: 'Morphs & Views',
-      morphValue: '28 Morphs · 8 Angles',
-      morphMeta: '0°–360° optical-flow turnaround',
       pccsNote: 'PCCS 12-Tone · MST-04',
       beforeLabel: 'Original',
       afterLabel: 'Separated WebP',
       sliderHint: 'Drag to compare original photo and background-separated WebP',
-      ingestionBadge: 'Background separation · Gemini Vision',
-      ingestionMeta: '582 KB → 23 KB WebP (-96%) · 11-slot classification',
-      cpwLabel: 'Average Cost / Wear',
+      ingestionBadge: 'EXIF / GPS & Background Stripped',
+      ingestionMeta: '582 KB → 23 KB WebP (-96%)',
+      cpwLabel: 'Avg Cost / Wear',
       cpwValue: '₩14,200',
-      cpwDelta: '-18% from last month',
+      cpwDelta: '-18% MoM',
       balanceLabel: 'Closet Utilization',
       balanceValue: '98.4%',
-      balanceMeta: '0 color-bleed conflicts',
-      dupTitle: 'Care Rules & Nearby Care Map',
+      balanceMeta: '0 bleed conflicts',
+      dupTitle: 'Care & Nearby Map',
       dupStatus: 'Places API',
-      dupDesc:
-        'Matches garment care tags with wash/bleed rules and locates nearby dry-cleaners, tailors, and leather-care shops.',
-      ootdDate: 'Weather',
-      ootdTitle: 'Alerts & Plain-Language Notes',
-      ootdMeta: 'Weather v1 · UV accessory & umbrella guidance',
-      topologyTitle: 'On-Device Facial Processing Path',
-      topologySteps: [
-        { title: 'Camera', sub: 'Local frame capture' },
-        { title: 'MediaPipe WASM', sub: 'On-device MST-04' },
-        { title: 'IndexedDB', sub: 'Local face memory' },
-      ],
-      topologyFooterLeft: 'External biometric upload',
-      topologyFooterRight: '0 Bytes',
+      ootdDate: 'Weather v1',
+      ootdTitle: 'Alerts & UV Guidance',
     },
     stack: {
-      eyebrow: 'Specifications',
-      heading: 'Measured codebase, security & lifecycle metrics',
-      note: 'Verified directly from the active repository & security spec',
+      eyebrow: 'Verified Specs',
+      heading: 'Measured Engineering & Security Metrics',
+      note: 'Verified directly from active codebase',
       heroKpis: [
         {
+          id: 'loop',
+          icon: 'refreshCw',
           value: '5-Stage',
-          label: 'Closed Lifecycle Loop',
-          sub: 'Closet → Weather → 360° Fit → Calendar → CPW & Resale',
+          label: 'Closed Loop',
+          detail: 'Connects Closet → Weather → 360° Fit → Calendar → CPW & Verified One-Tap Resale.',
         },
         {
+          id: 'face',
+          icon: 'shieldCheck',
           value: '0 Bytes',
-          label: 'Face Data Uploaded',
-          sub: 'Local MediaPipe WASM · IndexedDB Isolated Vault',
+          label: 'Face Uploaded',
+          detail: 'MediaPipe WASM runs locally on-device with zero external transmission of facial frames.',
         },
         {
+          id: 'tests',
+          icon: 'checkCircle',
           value: '210+',
           label: 'Automated Tests',
-          sub: '30+ suites across VTON, Weather, Maps, Care & Pacing',
+          detail: '30+ unit & E2E suites covering VTON, Weather, Maps, Care, Security, and GPU Pacing.',
         },
         {
+          id: 'apis',
+          icon: 'cloud',
           value: '4 APIs',
-          label: 'Google Cloud & Maps',
-          sub: 'Vertex/Gemini No-Training, Weather v1, Places (New), Street View',
+          label: 'Google Cloud',
+          detail: 'Integrates Vertex/Gemini No-Training, Weather API v1, Places API (New), and Street View.',
         },
       ],
-      benchmarkTitle: 'Verified Engineering & Security Specifications',
+      benchmarkTitle: 'Core Verification Specs',
       specs: [
         {
-          label: 'Background separation & EXIF/GPS strip',
+          id: 'webp',
+          icon: 'imageMinus',
+          shortLabel: 'EXIF Strip',
+          label: 'Background Separation & EXIF Strip',
           valueText: '582 KB → 23 KB (-96%)',
-          detail: 'Client WebP re-encoding strips GPS, device EXIF, and private indoor backgrounds',
+          detail: 'Client WebP re-encoding strips GPS, device EXIF, and indoor room backgrounds before upload.',
         },
         {
-          label: 'Privacy-by-Design 4-line defense',
-          valueText: '0 Bytes face · Zero IdP tokens',
-          detail: 'Stateless OIDC auth, tenant isolation, No-Training AI, atomic account deletion',
+          id: 'defense',
+          icon: 'lock',
+          shortLabel: '4-Line Privacy',
+          label: 'Privacy-by-Design 4-Line Defense',
+          valueText: '0B Face · Zero IdP',
+          detail: 'Local WASM biometrics, stateless OIDC, tenant isolation, No-Training AI, and atomic erasure.',
         },
         {
-          label: 'Four-season 3D layering & turnaround',
-          valueText: '21 Bones · 28 Morphs · 8 Angles',
-          detail: '11-slot layering, 0°–360° optical flow, and 120Hz/60Hz/30Hz adaptive pacing',
+          id: 'rig3d',
+          icon: 'box',
+          shortLabel: '3D Rig',
+          label: 'Four-Season 3D Multi-Layering',
+          valueText: '21B · 28M · 8A',
+          detail: '21-bone skeletal rig, 28 body morphs, 11-slot layering, 8-angle turnaround, 120Hz/30Hz pacing.',
         },
         {
-          label: 'CPW economics & circular care engine',
-          valueText: '11 Slots · 253+ catalog items',
-          detail: 'Cost-per-wear dormant alerts, wash/bleed care rules, and one-tap resale prep',
+          id: 'cpw',
+          icon: 'coins',
+          shortLabel: 'CPW & Resale',
+          label: 'CPW Telemetry & Verified Resale',
+          valueText: '11 Slots · 253+ Items',
+          detail: 'Calculates real cost-per-wear, flags dormant pieces, and links purchase provenance to 1-tap resale.',
         },
       ],
       cards: [
         {
+          id: 'three',
+          icon: 'box',
           eyebrow: '3D Graphics',
           metric: 'Three.js 0.187',
-          title: 'Multi-Layer Rig & Adaptive Pacing',
-          detail: '21-bone rig, SpringBone drape, 28 morphs, 8-angle turnaround, 120Hz/30Hz pacer.',
+          title: 'Multi-Layer Rig',
+          detail: '21-bone rig, SpringBone cloth, 28 morphs, 8-angle turnaround, and 120Hz/30Hz pacer.',
           boundary: 'WebGL2',
         },
         {
+          id: 'ai',
+          icon: 'sparkles',
           eyebrow: 'Multimodal AI',
           metric: 'Gemini · Vertex',
-          title: 'Tagging, 2K Try-On & No-Training',
-          detail: 'PII-free prompts, Paid Tier No-Training path, automated angle QC & outfit notes.',
-          boundary: 'No-Training',
+          title: 'No-Training VTON',
+          detail: 'PII-free prompts, Paid No-Training path, automated angle QC, and plain-language rationale.',
+          boundary: '0-Day Stateless',
         },
         {
-          eyebrow: 'Location & Weather',
+          id: 'maps',
+          icon: 'mapPin',
+          eyebrow: 'Maps & Weather',
           metric: 'Google Maps',
-          title: 'Weather v1, Places & Street View',
-          detail: 'Live alerts & diurnal swings, interactive Street View sheet, and nearby care map.',
+          title: 'Weather · Places',
+          detail: 'Weather API v1 alerts, Places API (New) care map, and zero-cache Street View proxy.',
           boundary: 'Server Proxy',
         },
         {
-          eyebrow: 'On-Device Security',
-          metric: '0-Byte Biometric',
-          title: 'Local Tone Vault, OIDC & Isolation',
-          detail: 'MediaPipe WASM locally, zero stored OAuth tokens, tenant isolation & atomic erase.',
-          boundary: 'Privacy-by-Design',
+          id: 'security',
+          icon: 'shield',
+          eyebrow: 'On-Device Privacy',
+          metric: '0-Byte Face',
+          title: 'OIDC · 3-Zone',
+          detail: 'MediaPipe WASM local tone, zero stored OAuth tokens, tenant isolation, and atomic erase.',
+          boundary: '4-Line Defense',
         },
         {
-          eyebrow: 'Wardrobe Asset OS',
-          metric: 'CPW · Care',
-          title: 'Wear Economics & One-Tap Resale',
-          detail: 'Calendar OOTD logging, cost-per-wear tracking, dormant resale & duplicate guard.',
+          id: 'asset',
+          icon: 'badgeCheck',
+          eyebrow: 'Wardrobe OS',
+          metric: 'CPW · Auth Resale',
+          title: 'Circular Economy',
+          detail: 'Calendar OOTD logging, dormant item detection, and purchase-verified one-tap resale.',
           boundary: 'Closed Loop',
         },
         {
-          eyebrow: 'App Runtime',
+          id: 'runtime',
+          icon: 'smartphone',
+          eyebrow: 'Cross-Platform',
           metric: 'Capacitor 8',
-          title: 'React 19, Express 5 & sql.js',
-          detail: 'Strict TypeScript 7, offline-first IndexedDB, single codebase for web, iOS & Android.',
-          boundary: 'Cross-Platform',
+          title: 'React 19 · Express 5',
+          detail: 'Strict TypeScript 7, offline-first IndexedDB, single codebase for web, iOS, and Android.',
+          boundary: 'Web · iOS · AOS',
         },
       ],
     },
     mission: {
-      eyebrow: 'Our Mission',
-      badge: 'Circular Wardrobe Loop',
-      headingLead: 'Sustainable wardrobe intelligence, ',
-      headingAccent: 'built around what you already own',
-      statement:
-        'Instead of isolated pre-purchase try-on widgets or manual secondhand apps, Ainventory connects your digital closet, live hyperlocal weather, 360° multi-layer fitting, and Cost-Per-Wear telemetry into one closed lifecycle loop—eliminating duplicate purchases and extending garment lifespan.',
+      eyebrow: '01 · Sustainability Mission',
+      badge: 'Verified Circular Wardrobe',
+      headingLead: 'Wear what you own. ',
+      headingAccent: 'Circulate with trust.',
       commitments: [
         {
+          id: 'wear',
+          icon: 'shirt',
           num: '01',
           title: 'Wear First',
-          tag: 'WEAR FIRST',
-          detail: 'Start every morning with clothes you already own, layered in 360° around real local temperature and rain before buying anything new.',
-        },
-        {
-          num: '02',
-          title: 'Measure Cost-Per-Wear',
-          tag: 'CPW TELEMETRY',
-          detail: 'Log daily outfits in Calendar to compute real Cost-Per-Wear (Price ÷ Wears) and surface dormant pieces objectively.',
-        },
-        {
-          num: '03',
-          title: 'Circular Exit & Gap-Only Sync',
-          tag: 'CIRCULAR EXIT',
-          detail: 'Turn unworn pieces into one-tap resale listings using stored photos and specs, while limiting new buys strictly to verified wardrobe gaps.',
-        },
-      ],
-      diagramEyebrow: 'System Paradigm Comparison',
-      diagramTitle: 'Disconnected Legacy Silos vs. iNVTRY Closed Lifecycle',
-      diagramLegendSilo: 'Disconnected Silos',
-      diagramLegendCore: 'iNVTRY Apparel Lifecycle Loop',
-      centerKicker: 'iNVTRY LOOP',
-      centerTitle: 'Apparel Lifecycle',
-      centerSub: 'Closed-Loop OS',
-      silos: [
-        {
-          side: 'left',
-          tag: 'LEGACY SILO 01',
-          title: '1st/2nd Try-On',
-          step1: 'E-commerce catalog',
-          step2: 'Pre-purchase size check only',
-          gapNote: 'No owned-closet memory',
-        },
-        {
-          side: 'right',
-          tag: 'LEGACY SILO 02',
-          title: 'Standalone Resale',
-          step1: 'Manual photo & listing',
-          step2: 'Separate C2C resale apps',
-          gapNote: 'Zero wear-frequency data',
-        },
-      ],
-      loopNodes: [
-        {
-          id: 'closet',
-          num: '01',
-          title: 'Digital Closet',
-          subtitle: 'AI 11-Slot Archive',
-          detail: 'Background-separated, EXIF-stripped WebP items with automated fabric, color, and season tagging.',
-        },
-        {
-          id: 'weather',
-          num: '02',
-          title: 'Local Weather',
-          subtitle: 'Temp · Swings · Rain',
-          detail: 'Injects Google Weather v1 conditions, diurnal swings, severe alerts, and UV directly into daily outfit rules.',
-        },
-        {
-          id: 'avatar',
-          num: '03',
-          title: '360° Layered Avatar',
-          subtitle: 'Inner · Mid · Outer Fit',
-          detail: 'Simulates four-season multi-layer stacking and 8-angle turnaround fit before you get dressed.',
-        },
-        {
-          id: 'calendar',
-          num: '04',
-          title: 'Calendar Log',
-          subtitle: 'Daily OOTD History',
-          detail: 'Tracks worn outfits by date to prevent repetitive styling and build objective wardrobe telemetry.',
+          tag: 'OWNED CLOSET',
+          detail: 'Start every morning with clothes you already own, fitted in 360° for today’s real weather.',
         },
         {
           id: 'cpw',
+          icon: 'barChart',
+          num: '02',
+          title: 'CPW Telemetry',
+          tag: 'PRICE ÷ WEARS',
+          detail: 'Track real cost-per-wear from daily calendar logs to surface dormant garments objectively.',
+        },
+        {
+          id: 'resale',
+          icon: 'badgeCheck',
+          num: '03',
+          title: 'Verified Resale',
+          tag: 'AUTH PROVENANCE',
+          detail: 'Link luxury receipts and purchase history with authenticity checks for transparent one-tap resale.',
+        },
+      ],
+      centerKicker: 'iNVTRY LOOP',
+      centerTitle: 'Closed Loop',
+      centerSub: 'Sustainable AI Closet',
+      autoPlayLabel: 'Auto',
+      pausePlayLabel: 'Pause',
+      loopNodes: [
+        {
+          id: 'closet',
+          icon: 'shirt',
+          num: '01',
+          title: 'Closet',
+          subtitle: '11-Slot Archive',
+          detail: 'EXIF-stripped WebP items auto-tagged by fabric, color, season, and purchase provenance.',
+        },
+        {
+          id: 'weather',
+          icon: 'cloudSun',
+          num: '02',
+          title: 'Weather',
+          subtitle: 'Temp · Rain · UV',
+          detail: 'Injects Google Weather API v1 temperature swings, alerts, and UV directly into daily outfits.',
+        },
+        {
+          id: 'avatar',
+          icon: 'personStanding',
+          num: '03',
+          title: '360° Fit',
+          subtitle: 'Multi-Layer 3D',
+          detail: 'Simulates four-season inner, mid, and outer layering across 8 turnaround angles before dressing.',
+        },
+        {
+          id: 'calendar',
+          icon: 'calendar',
+          num: '04',
+          title: 'Calendar',
+          subtitle: 'OOTD Log',
+          detail: 'Logs real worn outfits by date to prevent repetition and build objective utilization history.',
+        },
+        {
+          id: 'cpw',
+          icon: 'coins',
           num: '05',
-          title: 'CPW & Dormant',
-          subtitle: 'Price ÷ Wears',
-          detail: 'Flags low-utilization deadstock automatically to trigger circular resale and block duplicate purchases.',
+          title: 'CPW & Idle',
+          subtitle: 'Wear Value',
+          detail: 'Flags low-CPW dormant items automatically to unlock verified one-tap resale and block duplicates.',
         },
       ],
       exits: [
         {
           id: 'resale',
-          title: 'One-Tap Resale',
-          subtitle: 'Reuse stored photos & specs for idle items',
+          icon: 'badgeCheck',
+          title: 'Verified 1-Tap Resale',
+          subtitle: 'Luxury & purchase-record authenticity',
+          detail: 'Reuses stored photos, purchase receipts, and authenticity partner checks for counterfeit-free one-tap resale.',
         },
         {
           id: 'purchase',
-          title: 'Tailored Purchase Sync',
-          subtitle: 'Fill verified gaps · block duplicates',
+          icon: 'shoppingBag',
+          title: 'Gap-Only Purchase',
+          subtitle: 'Zero duplicates · verified gaps',
+          detail: 'Checks new items against your owned 11-slot closet so you only buy verified missing layers.',
         },
       ],
-      diagramFooter: 'Select any node to inspect its role · Grounded closed-loop wardrobe workflow',
+      nextLabel: 'Next: 02 Roadmap',
     },
     vision: {
-      eyebrow: 'About Ainvtry',
-      heading: 'A weather-reactive personal Wardrobe Asset OS',
+      eyebrow: '03 · BM & Founder',
+      heading: 'From Working MVP to Verified Circular Platform',
       irBadge: 'Seoul · 2026',
       quote:
-        '“When you can see how your own clothes layer for today’s weather—and how often each piece is actually worn—you get far more out of your closet and buy far fewer duplicates.”',
-      body: 'Ainvtry (iNVTRY) is an independent fashion-tech startup in Seoul building a closed-loop personal Wardrobe Asset OS across web, iOS, and Android—uniting owned inventory, live weather, 360° multi-layer fitting, CPW analytics, and circular resale.',
-      roadmapTitle: 'Milestones & Validation',
+        '“When your closet connects daily weather, 3D fit, real wear counts, and verified authenticity, every garment lives longer and trades with trust.”',
+      roadmapTitle: '02 · Execution Roadmap',
       milestones: [
         {
+          id: 'stage-1',
+          icon: 'checkCircle',
           phase: 'Stage 1',
           status: 'done',
-          title: '3D Multi-Layer Rig, 8-Angle Try-On & Local Biometrics',
-          detail: '21-bone rig, 28 morphs, 11-slot layering, EXIF-stripped WebP separation, and MediaPipe WASM local analysis.',
+          title: '3D Rig & 0B Local Vision',
+          tag: 'Completed',
+          detail: '21-bone rig, 28 morphs, 11-slot layering, EXIF-stripped WebP separation, and MediaPipe WASM.',
         },
         {
+          id: 'stage-2',
+          icon: 'shieldCheck',
           phase: 'Stage 2',
           status: 'done',
-          title: 'Google Maps Weather/Places & Privacy-by-Design 4-Line Defense',
-          detail: 'Weather v1 alerts, Street View map sheet, care map, stateless OIDC auth, tenant isolation, and one-stop deletion.',
+          title: 'Maps Proxy & 4-Line Privacy',
+          tag: 'Completed',
+          detail: 'Weather API v1, Street View, nearby care map, stateless OIDC, tenant guard, and atomic erasure.',
         },
         {
+          id: 'stage-3',
+          icon: 'rocket',
           phase: 'Stage 3',
           status: 'active',
-          title: 'Closed Beta (CBT), Patent Priority, 3-Zone Cloud & Store Release',
-          detail: '30–50 user CBT measuring decision time & CPW resale intent, core algorithm patent filing, GCS 3-Zone, iOS/Android launch.',
+          title: 'CBT · Auth Resale · Cloud HA',
+          tag: 'In Progress',
+          detail: 'Closed beta metrics, core patent, luxury authenticity resale API, GCS 3-Zone CMEK, iOS & Android launch.',
         },
       ],
-      revenueTitle: 'Sustainable 3-Pillar Business Model',
-      revenueNote: 'Daily weather-outfit retention offsets generative AI inference costs',
+      moatsTitle: 'Four Core Moats',
+      moats: [
+        {
+          id: 'mvp',
+          icon: 'smartphone',
+          title: 'Working MVP',
+          tag: '210+ Tests',
+          detail: 'React 19 + Capacitor 8 (iOS/Android) live build ready for hands-on evaluation.',
+        },
+        {
+          id: 'layer360',
+          icon: 'layers',
+          title: '360° Multi-Layer',
+          tag: '11 Slots',
+          detail: 'Full inner, mid, outer, and umbrella simulation tuned for four-season temperature swings.',
+        },
+        {
+          id: 'provenance',
+          icon: 'badgeCheck',
+          title: 'Verified Resale Loop',
+          tag: 'Trust Loop',
+          detail: 'Daily wear logs + purchase provenance create counterfeit-free supply without cold-start friction.',
+        },
+        {
+          id: 'privacy',
+          icon: 'lock',
+          title: '4-Line Privacy',
+          tag: '0B Biometrics',
+          detail: 'On-device WASM biometrics, zero OAuth tokens, 3-Zone CMEK isolation, and atomic deletion.',
+        },
+      ],
+      nextToBmLabel: 'Next: 03 BM & Founder',
+      revenueTitle: '3-Pillar Circular Business Model',
+      revenueNote: 'Daily weather styling retention powers sustainable monetization',
       revenuePillars: [
         {
+          id: 'pro',
+          icon: 'crown',
           num: '01',
           title: 'Pro Subscription',
           mechanism: 'Recurring SaaS',
-          detail: 'Unlimited multi-angle virtual try-on, advanced TPO/travel capsule planning, and deep CPW asset insights.',
+          detail: 'Unlimited multi-angle 2K try-on, TPO & travel capsule plans, and deep CPW asset analytics.',
         },
         {
+          id: 'affiliate',
+          icon: 'shoppingBag',
           num: '02',
-          title: 'Gap-Only Affiliate Commerce',
-          mechanism: 'Tailored Gaps',
-          detail: 'Recommends only verified missing layers or color gaps that complement owned garments—high intent, zero duplicates.',
+          title: 'Gap-Only Affiliate',
+          mechanism: 'Zero Duplicates',
+          detail: 'Recommends only verified missing layers or color gaps tailored to owned clothes for high conversion.',
         },
         {
+          id: 'resale-bm',
+          icon: 'badgeCheck',
           num: '03',
-          title: 'One-Tap Circular Resale',
-          mechanism: 'Resale Supply',
-          detail: 'Converts low-CPW dormant items into instant resale listings from stored metadata without C2C cold-start friction.',
+          title: 'Verified Auth Resale',
+          mechanism: 'Trust Commission',
+          detail: 'Monetizes one-tap resale backed by luxury purchase records and partner authenticity verification.',
         },
       ],
-      moatsTitle: 'Four Product & Engineering Moats',
-      moats: [
-        {
-          title: 'Working Cross-Platform MVP',
-          detail: 'React 19, Capacitor 8 (iOS/Android), and 210+ automated tests ready for live demonstration.',
-        },
-        {
-          title: 'Four-Season 360° Multi-Layering',
-          detail: 'Full inner, mid, outer, footwear, and umbrella simulation tuned for diurnal temperature swings.',
-        },
-        {
-          title: 'Closed-Loop Retention & 3-Pillar BM',
-          detail: 'Daily morning weather styling feeds Calendar logs, CPW telemetry, one-tap resale, and gap-only buys.',
-        },
-        {
-          title: 'Privacy-by-Design 4-Line Defense',
-          detail: '0-byte biometric upload, zero stored OAuth tokens, tenant storage isolation, No-Training AI, atomic erasure.',
-        },
-      ],
-      statusMvp: '210+ tests · Working MVP',
-      statusRelease: 'Preparing iOS & Android release',
+      backToMissionLabel: '01 Mission',
       founderRole: 'Founder & Engineer · Ainvtry',
-      founderBio:
-        'Building Ainvtry end-to-end across Three.js graphics, Gemini/Vertex AI virtual try-on, Google Maps Platform weather and place proxies, local WebAssembly biometrics, security architecture, and Capacitor mobile apps.',
       hqLabel: 'Location',
       hqValue: 'Seoul, South Korea',
       domainLabel: 'Website',
@@ -910,16 +1180,13 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       directCta: 'Email Raymond',
     },
     footer: {
-      summary: 'Ainvtry (A inventory) — 3D Digital Wardrobe & Fitting App. Built in Seoul.',
       rights: '© 2026 Ainvtry. All rights reserved.',
       privacy: 'Privacy Policy',
       terms: 'Terms of Service',
-      contact: 'Contact',
-      backToTop: 'Back to Top',
     },
     legal: {
       closeLabel: 'Close legal notice',
-      updatedAt: 'Effective November 22, 2026 · ainvtry.com',
+      updatedAt: 'Effective November 23, 2026 · ainvtry.com',
       privacyTitle: 'Privacy Policy',
       privacySections: [
         {
@@ -943,11 +1210,11 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       termsSections: [
         {
           heading: '1. Service Scope',
-          body: 'Ainvtry (ainvtry.com, product: A inventory) provides 3D digital wardrobe management, garment classification, multi-angle virtual try-on previews, garment care guidance, and weather/TPO outfit planning tools.',
+          body: 'Ainvtry (ainvtry.com, product: A inventory) provides 3D digital wardrobe management, garment classification, multi-angle virtual try-on previews, garment care guidance, weather/TPO outfit planning, and purchase-verified resale preparation tools.',
         },
         {
           heading: '2. User Content Ownership',
-          body: 'You retain full ownership of all wardrobe photographs, outfit logs, and notes you upload to Ainvtry. You grant Ainvtry only the limited technical license needed to render and process your requested features.',
+          body: 'You retain full ownership of all wardrobe photographs, outfit logs, and purchase records you store in Ainvtry. You grant Ainvtry only the limited technical license needed to render and process your requested features.',
         },
         {
           heading: '3. Preview & Care Guidance',
@@ -978,54 +1245,55 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     subtabs: {
       studioPreview: '라이브 앱',
       studioAtelier: '3D 피팅',
-      studioIntel: '케어 · 일정',
-      archStack: '시스템 구조',
+      studioIntel: '케어 · CPW',
+      archBlueprint: '시스템 구성도',
+      archPrivacy: '개인정보 · 보안',
       archMaps: '지도 · 날씨',
-      archCutoutPrivacy: '배경 분리 · 보안',
       benchKpi: '핵심 지표',
       benchMatrix: '기술 스택',
-      aboutMission: '우리의 미션',
-      aboutRoadmap: '로드맵 · BM',
-      aboutFounder: '창업자',
+      aboutMission: '01 미션',
+      aboutRoadmap: '02 로드맵',
+      aboutFounder: '03 BM · 창업자',
     },
+    tapHint: '아이콘을 눌러 간결한 설명 보기',
     appPreview: {
       code: 'iNVTRY · 모바일 앱',
-      eyebrow: '개발 중인 실구동 화면',
-      title: '실제로 만들고 있는 앱 화면입니다',
-      description:
-        'React 19와 Capacitor 8로 개발 중인 최신 모바일 앱 화면입니다. 상단에서 한/영 또는 다크/라이트를 바꾸면 프리뷰도 함께 바뀝니다.',
+      title: '실구동 하이브리드 앱',
       badge: '4모드 연동',
-      syncHint: '사이트 언어 · 테마와 함께 전환',
       screens: [
         {
           id: 'outfits',
+          icon: 'shirt',
           tabLabel: '피팅',
-          title: '멀티앵글 가상 피팅',
-          caption: '0°–360° 다중 레이어드 피팅과 실시간 기상 · 거리뷰 배경 연동',
+          title: '360° 가상 피팅',
+          caption: '실시간 날씨와 거리뷰 배경 위에서 0°–360° 다중 레이어드를 미리 확인합니다.',
           metricTag: '360°',
           imageAlt: 'iNVTRY 모바일 앱 가상 피팅 스튜디오 화면',
         },
         {
           id: 'closet',
+          icon: 'layoutGrid',
           tabLabel: '옷장',
-          title: '디지털 옷장',
-          caption: '자동 태깅 11슬롯 아카이브, 착용 횟수 카운터 및 세탁 바구니',
+          title: '11슬롯 옷장',
+          caption: '자동 태깅 보유 의류, 착용 횟수 카운터, 세탁 바구니를 한 번에 관리합니다.',
           metricTag: '11슬롯',
           imageAlt: 'iNVTRY 모바일 앱 디지털 옷장 화면',
         },
         {
           id: 'stats',
+          icon: 'barChart',
           tabLabel: '통계',
-          title: 'CPW · 유휴 의류 분석',
-          caption: '1회 착용 단가(CPW), 유휴 의류 식별 및 원탭 중고 리셀 연동',
+          title: 'CPW · 리셀',
+          caption: '1회 착용 단가(CPW)와 유휴 의류를 식별해 정품 인증 원탭 리셀로 연결합니다.',
           metricTag: 'CPW',
           imageAlt: 'iNVTRY 모바일 앱 옷장 통계 화면',
         },
         {
           id: 'profile',
+          icon: 'scanFace',
           tabLabel: '프로필',
-          title: '피부톤 · 체형 설정',
-          caption: '외부 전송 0 Bytes 기기 내 피부톤 분석, 체형 비율 및 핏 보정',
+          title: '0B 로컬 피부톤',
+          caption: '외부 전송 0 Bytes 기기 내 MediaPipe WASM 피부톤 진단과 체형 보정.',
           metricTag: '0B 로컬',
           imageAlt: 'iNVTRY 모바일 앱 피부톤 및 체형 설정 화면',
         },
@@ -1037,191 +1305,409 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       titleAccent: '먼저 맞춰보는',
       titleTail: ' 나만의 3D 옷장',
       subtitle:
-        '실시간 국지 기상과 보유 옷장을 연결해 360° 다중 레이어드로 시뮬레이션하고, 캘린더·CPW 분석·원탭 리셀까지 잇는 개인 의류 자산 운영체제.',
+        '보유 옷장과 실시간 날씨를 360° 피팅, CPW 분석, 정품 인증 원탭 리셀로 잇는 개인 의류 자산 OS.',
       marbleHint: '유리 구슬을 굴려 아래 메뉴를 맞추거나 눌러서 이동해 보세요',
       primaryCta: '스튜디오 보기',
       secondaryCta: '창업자 문의',
     },
     capabilities: {
-      sectionCode: '제품 소개',
-      eyebrow: 'iNVTRY',
-      heading: '이미 가진 옷의 생애주기를 완성하는 도구',
-      subheading: '아침 기상 코디부터 360° 다중 레이어링, 세탁 케어, CPW 순환 리셀까지 한곳에서 정리합니다.',
       badge: '실구동 MVP',
       pillars: {
         atelier: {
-          code: '3D 피팅',
-          eyebrow: 'Three.js 0.187 · 사계절 다중 레이어링',
-          title: '21개 관절 리그와 11슬롯 360° 다중 레이어드',
-          description:
-            '단품 핏 확인을 넘어 이너·미드·아우터·신발·액세서리까지 11개 슬롯을 겹쳐 입히고, 21개 관절 모션·SpringBone 원단 물리·8앵글 회전으로 사계절 일교차와 강수에 맞춘 착장을 미리 검증합니다.',
-          bullets: [
-            '기본 자세, 워킹, 우산 들기(강수 연동), 손 디테일 동작 지원',
-            '이너웨어 비침·새깅 핏과 28종 체형 비율 실시간 동기화',
-            '120Hz/30Hz 가변 프레임 제어 및 WebGL 손실 시 2D 즉시 폴백',
-          ],
-        },
-        ingestion: {
-          code: '배경 분리 · 보안',
-          eyebrow: 'EXIF/GPS 제거 · 기기 내 피부톤 볼트',
-          title: '비식별 의류 배경 분리와 0-Byte 로컬 페이스 볼트',
-          description:
-            '클라이언트 크롭·배경 분리와 WebP 재인코딩(582 KB → 23 KB) 과정에서 GPS·기기 EXIF와 실내 사생활 배경을 100% 제거합니다. 안면 피부톤 분석은 기기 내 MediaPipe WASM에서만 완결됩니다.',
-          bullets: [
-            '자동 배경 분리·소재·계절 태깅으로 초기 옷장 등록 장벽 최소화',
-            'PII 배제 · 유료 무학습(No-Training) 2K 멀티앵글 VTON 추론',
-            'OAuth 토큰 비보관 · 계정별 테넌트 격리 · 탈퇴 시 원스톱 파기',
+          code: '3D 피팅 엔진',
+          eyebrow: 'Three.js 0.187 · 다중 레이어링',
+          title: '사계절 360° 가상 피팅',
+          features: [
+            {
+              id: 'rig',
+              icon: 'move3d',
+              label: '21관절 리그',
+              tag: 'SpringBone',
+              detail: '기본 · 워킹 · 우산 · 손 포즈와 원단 드레이프 물리를 실시간 구동합니다.',
+            },
+            {
+              id: 'slots',
+              icon: 'layers',
+              label: '11슬롯 레이어',
+              tag: '28종 모프',
+              detail: '이너 · 미드 · 아우터 · 신발을 겹쳐 입히고 비침과 핏 균형을 확인합니다.',
+            },
+            {
+              id: 'angles',
+              icon: 'rotate3d',
+              label: '8앵글 360°',
+              tag: '회전 뷰',
+              detail: '정면 · 측면 · 후면 전 각도 실루엣을 부드러운 회전 피팅으로 검증합니다.',
+            },
+            {
+              id: 'pacer',
+              icon: 'gauge',
+              label: '120Hz / 30Hz',
+              tag: '2D 폴백',
+              detail: '상황에 맞춰 GPU 주사율을 조절하고 WebGL 손실 시 2D 콜라주로 즉시 복구합니다.',
+            },
           ],
         },
         intelligence: {
-          code: '케어 · 일정',
-          eyebrow: '캘린더 · CPW 자산 분석 · 주변 케어 지도',
-          title: '1회 착용 비용(CPW), 유휴 의류 순환, 실시간 날씨 코디',
-          description:
-            '캘린더 착용 기록으로 구매가 ÷ 착용 횟수(CPW)와 미착용 유휴 의류를 자동 식별해 원탭 중고 리셀로 연결합니다. 실시간 기상 특보와 세탁 라벨 규칙, 주변 세탁·수선 지도까지 함께 관리합니다.',
-          bullets: [
-            '보유 옷장·실시간 기상·최근 착용 이력 안에서만 실행 가능한 코디 제안',
-            'CPW 하위 유휴 의류 자동 포착 → 기존 사진·스펙 기반 원탭 리셀 전환',
-            '세탁 이염 경고, 주변 케어 매장 지도 및 오프라인 중복 구매 차단',
-          ],
-        },
-        privacy: {
-          code: '프라이버시',
-          eyebrow: 'Privacy-by-Design 4대 방어선',
-          title: '안면 외부 전송 0 Bytes & 오프라인 우선 구조',
-          description:
-            '생체 안면 분석은 100% 기기 내부에서 수행해 외부 전송량이 0 Bytes입니다. 등록한 옷장은 로컬 IndexedDB로 오프라인에서도 빠르게 열리며, 탈퇴 시 서버·캐시·로컬 볼트를 원스톱으로 영구 파기합니다.',
-          bullets: [
-            'Apple/Google OIDC 서버 서명 검증 · 외부 IdP 토큰 전면 미저장',
-            '모든 API 테넌트 격리(IDOR 차단) 및 파일 매직바이트·샌드박스 CSP',
-            'React 19 · Capacitor 8 단일 코드베이스로 웹·iOS·Android 동시 지원',
+          code: '케어 · 자산 OS',
+          eyebrow: 'CPW · 케어 · 정품 인증 리셀',
+          title: '착용 효율과 의류 케어',
+          features: [
+            {
+              id: 'cpw',
+              icon: 'trendingDown',
+              label: 'CPW 분석',
+              tag: '구매가 ÷ 착용',
+              detail: '캘린더 착용 기록으로 1회 착용 단가와 미착용 유휴 의류를 자동 계산합니다.',
+            },
+            {
+              id: 'resale',
+              icon: 'badgeCheck',
+              label: '정품 인증 리셀',
+              tag: '투명 거래',
+              detail: '명품 구매 이력과 정품 인증 연동을 묶어 신뢰할 수 있는 원탭 리셀을 지원합니다.',
+            },
+            {
+              id: 'care',
+              icon: 'droplets',
+              label: '세탁 규칙',
+              tag: '이염 경고',
+              detail: '소재별 세탁 라벨 주의사항과 이염 위험 조합을 사전에 알려줍니다.',
+            },
+            {
+              id: 'map',
+              icon: 'mapPin',
+              label: '주변 케어 지도',
+              tag: 'Places 연동',
+              detail: '서버 프록시로 가까운 드라이클리닝 · 수선실 · 가죽 케어 매장을 찾아줍니다.',
+            },
           ],
         },
       },
     },
     architecture: {
-      eyebrow: '시스템 구조',
-      heading: '3D 엔진 · 무학습 AI · 기상 프록시 · Privacy-by-Design 4계층',
-      badge: '4계층 · 4대 보안 방어선',
-      inspectorLabel: '선택 계층 상세',
-      modulesLabel: '주요 구현 모듈',
-      guaranteeLabel: '보안 경계 및 보장',
-      layers: [
+      badge: '6계층 · Privacy-by-Design',
+      blueprintTitle: 'iNVTRY 6계층 시스템 · 하드웨어 구성',
+      modeDevLabel: '현재 개발 (MVP)',
+      modeProdLabel: '상용 스케일 · GPU',
+      devTag: '현재 개발',
+      prodTag: '상용 확장',
+      govLabel: '운영 · 거버넌스',
+      privacyStripLabel: '4중 보안 방어',
+      openPrivacyCta: '상세',
+      tiers: [
         {
-          id: 'spatial',
-          shortCode: 'L1',
-          shortLabel: '3D 엔진',
-          tier: 'L1 · 클라이언트 GPU',
-          boundary: 'WebGL2 · 120Hz',
-          title: '사계절 다중 레이어드 3D & 가변 프레임 렌더러',
-          subtitle: 'Three.js 0.187 · 21관절 · 8앵글 회전 · 120Hz/30Hz 페이싱',
-          summary:
-            '21개 관절 모션, SpringBone 옷감 물리, 이너·미드·아우터 11슬롯 다겹 레이어링, 중력 침강 GLSL 실크·구슬 셰이더, 120Hz→30Hz 가변 프레임 제어와 WebGL 복구 폴백을 브라우저 GPU에서 처리합니다.',
-          modules: [
-            'loginThreeScenes.ts + adaptiveFramePacer.ts',
-            'vton2DService.ts (8앵글 옵티컬 플로우)',
-            'underwearStylingEngine.js (비침 · 새깅 핏)',
-            'StageStreetViewMapSheet.tsx (거리뷰 시트)',
+          id: 'client',
+          num: '01',
+          label: '프론트엔드',
+          shortLabel: '01 클라이언트',
+          nodes: [
+            {
+              id: 'invtry-web',
+              icon: 'globe',
+              label: 'iNVTRY 웹',
+              shortSub: 'React 19 PWA',
+              highlight: true,
+              devSpec: 'React 19 · TypeScript 7 · Vite 8 및 기기 내 MediaPipe WASM 분석.',
+              prodSpec: 'IndexedDB 오프라인 동기화와 안면 0-Byte 격리를 유지하는 글로벌 PWA.',
+            },
+            {
+              id: 'invtry-native',
+              icon: 'smartphone',
+              label: 'iNVTRY 모바일 앱',
+              shortSub: 'iOS · Android',
+              highlight: true,
+              devSpec: 'Capacitor 8 단일 코드베이스 하이브리드 앱 및 네이티브 햅틱 연동.',
+              prodSpec: 'App Store · Google Play 출시 및 Keychain · Keystore 하드웨어 키 바인딩.',
+            },
+            {
+              id: 'ops-console',
+              icon: 'layoutGrid',
+              label: '운영 콘솔',
+              shortSub: '카탈로그 · 검수',
+              devSpec: '샘플 시드 관리, VTON 품질 검수, Playwright 모바일 자동 검증.',
+              prodSpec: '권한 분리 운영 백오피스, 정품 인증 파트너 검수 및 이상 징후 관제.',
+            },
           ],
-          guarantee: '활성 120Hz / 유휴 30Hz / 모달 0Hz 자동 제어 · WebGL 손실 시 2D 즉시 전환',
-          latencyOrBudget: '120Hz / 30Hz',
         },
         {
-          id: 'multimodal',
-          shortCode: 'L2',
-          shortLabel: 'AI 모델',
-          tier: 'L2 · 비식별 클라우드 AI',
-          boundary: 'Vertex · 무학습',
-          title: '비식별 의류 태깅 · 2K 가상 피팅 · 코디 해설',
-          subtitle: 'Gemini / Vertex AI 유료 무학습 · PII 배제 · 자동 품질 검수',
-          summary:
-            '배경·EXIF/GPS가 제거된 WebP 의류만 PII 없이 전달해 소재·계절을 자동 태깅하고, 보유 옷장과 기상·착용 이력 안에서만 실행 가능한 2K 멀티앵글 코디와 해설을 생성한 뒤 페이로드를 즉시 파기합니다.',
-          modules: [
-            'server/garmentVisionService.js (비식별 태깅)',
-            'server/vtonService.js + vtonQcMiddleware.js',
-            'outfitRationaleEngine.ts (보유 의류·TPO 해설)',
-            'vtonStageProgress.ts (단계별 스트리밍)',
+          id: 'edge',
+          num: '02',
+          label: '서비스 접근',
+          shortLabel: '02 엣지',
+          nodes: [
+            {
+              id: 'cdn',
+              icon: 'cloud',
+              label: 'CDN 가속',
+              shortSub: 'Cloudflare',
+              devSpec: 'Cloudflare Workers Static Assets 기반 불변 해시 에셋 배포.',
+              prodSpec: '글로벌 멀티 리전 CDN으로 공용 3D 베이스 에셋과 앱 셸 초저지연 전송.',
+            },
+            {
+              id: 'lb-waf',
+              icon: 'network',
+              label: '부하 분산 · WAF',
+              shortSub: 'TLS 1.3',
+              devSpec: 'HTTPS 강제, HSTS · CSP 보안 헤더 및 IP 단위 Rate Limit 적용.',
+              prodSpec: '글로벌 Cloud Load Balancer + Cloud Armor WAF 디도스 · 봇 방어.',
+            },
           ],
-          guarantee: 'PII 완전 배제 · AI 모델 재학습 미사용(No-Training) · 응답 직후 0일 파기',
-          latencyOrBudget: '0일 파기 · 2K',
         },
         {
-          id: 'maps',
-          shortCode: 'L3',
-          shortLabel: '지도·기상',
-          tier: 'L3 · 실시간 기상 · 장소',
-          boundary: '서버 프록시',
-          title: 'Google Maps Platform 기상 · 거리뷰 · 주변 케어',
-          subtitle: 'Weather v1 · Places (New) · Street View 사전 확인 · 케어 지도',
-          summary:
-            'Express 5 서버 프록시로 Google Weather API v1(기온·일교차·특보·UV), 최소 FieldMask 기반 Places API (New)(방문 장소 배경·주변 세탁/수선 매장), 무료 Street View 메타데이터 사전 확인을 연동합니다.',
-          modules: [
-            'server/googleWeatherService.js (v1 · 특보)',
-            'server/mapsProxyService.js (Places New)',
-            'server/mapsBackdropService.js (무저장 프록시)',
-            'garmentCareEngine.ts + NearbyCareMapModal',
+          id: 'gateway',
+          num: '03',
+          label: 'API 게이트웨이',
+          shortLabel: '03 게이트웨이',
+          highlight: true,
+          nodes: [
+            {
+              id: 'invtry-gw',
+              icon: 'keyRound',
+              label: 'iNVTRY 통합 API 게이트웨이',
+              shortSub: 'Stateless OIDC · 토큰 인증',
+              highlight: true,
+              devSpec: 'Express 5 보안 프록시: Apple/Google OIDC 서명 검증, HttpOnly 쿠키, 외부 토큰 무저장.',
+              prodSpec: 'Cloud Run 게이트웨이: 단기 JWT + Refresh 토큰 순환 및 이상 로그인 차단.',
+            },
           ],
-          guarantee: '지도 미디어 영구 DB 저장 0건 · API 키 서버 전용 격리 · 무료 메타데이터 선조회',
-          latencyOrBudget: '20분 TTL 캐시',
         },
         {
-          id: 'privacy',
-          shortCode: 'L4',
-          shortLabel: '보안·기기',
-          tier: 'L4 · Privacy-by-Design',
-          boundary: '0B 생체 · 격리',
-          title: '로컬 생체 볼트 · Stateless OIDC · 테넌트 스토리지 격리',
-          subtitle: 'MediaPipe WASM · OAuth 토큰 비보관 · resolveAuthorizedClosets · 원스톱 파기',
-          summary:
-            '안면 피부톤 분석을 기기 내 WASM으로 완결(외부 전송 0 Bytes)하고, Apple/Google OIDC 서명 검증(외부 토큰 미저장·이메일 자동 병합 금지), 계정별 테넌트 격리, 탈퇴 시 DB·파일·로컬 볼트 원스톱 파기를 강제합니다.',
-          modules: [
-            'skinToneAnalyzer.ts + faceMemoryStore.ts (0B)',
-            'server/api.js (Stateless OIDC · Tenant Guard)',
-            'server/start.js (매직바이트 · 샌드박스 CSP)',
-            'Capacitor 8 (오프라인 우선 iOS · Android)',
+          id: 'core',
+          num: '04',
+          label: 'iNVTRY 코어',
+          shortLabel: '04 iNVTRY',
+          highlight: true,
+          nodes: [
+            {
+              id: 'core-vton',
+              icon: 'cpu',
+              label: 'iNVTRY 3D · VTON',
+              shortSub: 'L4 / A100 GPU',
+              highlight: true,
+              devSpec: 'Three.js 21관절 엔진 + Gemini · Vertex 유료 무학습 VTON 프록시.',
+              prodSpec: '자동 확장 Cloud Run + VPC 경계 내 NVIDIA L4 / A100 전용 GPU 워커.',
+            },
+            {
+              id: 'core-closet',
+              icon: 'shirt',
+              label: 'iNVTRY 옷장 · CPW',
+              shortSub: '11슬롯 OS',
+              highlight: true,
+              devSpec: '11슬롯 분류, 캘린더 착용 기록, CPW 단가 산출 및 중복 구매 차단.',
+              prodSpec: '테넌트 격리 기반 대규모 의류 자산 관리 및 실시간 활용도 분석 엔진.',
+            },
+            {
+              id: 'core-weather',
+              icon: 'cloudSun',
+              label: 'iNVTRY 기상 · 장소',
+              shortSub: 'Maps 프록시',
+              highlight: true,
+              devSpec: 'Weather API v1 · Places API (New) · Street View 서버 전용 프록시.',
+              prodSpec: '리전별 기상 · 장소 프록시와 공유 Redis TTL 캐시 (지도 미디어 무저장).',
+            },
+            {
+              id: 'core-resale',
+              icon: 'badgeCheck',
+              label: 'iNVTRY 정품 리셀',
+              shortSub: '구매 기록 연동',
+              highlight: true,
+              devSpec: '유휴 의류 자동 감지 및 기존 등록 사진 · 스펙 기반 원탭 판매글 생성.',
+              prodSpec: '명품 구매 이력 · 영수증 기반 정품 인증 파트너 API 연동 투명 리셀.',
+            },
           ],
-          guarantee: '안면 원본 외부 전송 0 Bytes · OAuth 토큰 비보관 · 탈퇴 시 원스톱 영구 파기',
-          latencyOrBudget: '4대 방어선',
+        },
+        {
+          id: 'shared',
+          num: '05',
+          label: '공공 기초',
+          shortLabel: '05 기초 서비스',
+          nodes: [
+            {
+              id: 'shared-log',
+              icon: 'fileSearch',
+              label: '로그 · 추적',
+              shortSub: '비식별 감사',
+              devSpec: 'PII 마스킹 구조화 로그 및 스택 트레이스 노출 차단 에러 핸들러.',
+              prodSpec: 'Cloud Logging + OpenTelemetry 분산 추적 및 법정 기한 자동 롤오버.',
+            },
+            {
+              id: 'shared-oss',
+              icon: 'hardDrive',
+              label: '파일 스토리지',
+              shortSub: '3-Zone 비공개',
+              devSpec: '소유자 접두사 /uploads, 매직바이트 검증, 4MB 상한, 샌드박스 CSP.',
+              prodSpec: 'GCS 3-Zone 분리 (공용 시드 / 비공개 15분 서명 URL / 24시간 임시 VTON).',
+            },
+            {
+              id: 'shared-mq',
+              icon: 'workflow',
+              label: '메시지 큐 (MQ)',
+              shortSub: '비동기 작업',
+              devSpec: '8앵글 가상 피팅과 비전 태깅을 위한 단계별 스트리밍 파이프라인.',
+              prodSpec: 'Google Cloud Pub/Sub 기반 GPU 피팅 큐잉 및 리셀 인증 웹훅 처리.',
+            },
+          ],
+        },
+        {
+          id: 'data',
+          num: '06',
+          label: '데이터 · HW',
+          shortLabel: '06 데이터/HW',
+          nodes: [
+            {
+              id: 'data-sql',
+              icon: 'database',
+              label: '관계형 DB',
+              shortSub: 'SQLite → Cloud SQL',
+              devSpec: 'sql.js WASM SQLite 및 단말 IndexedDB 오프라인 우선 구조.',
+              prodSpec: 'Cloud SQL PostgreSQL HA (Multi-AZ) 및 행 단위 테넌트 격리.',
+            },
+            {
+              id: 'data-redis',
+              icon: 'zap',
+              label: '인메모리 캐시',
+              shortSub: 'TTL → Redis HA',
+              devSpec: '서버 메모리 20~30분 날씨 TTL 캐시 및 Rate Limit 버킷.',
+              prodSpec: 'Memorystore Redis 클러스터 (세션 블랙리스트 · 기상 · 인증 캐시).',
+            },
+            {
+              id: 'data-gpu',
+              icon: 'server',
+              label: '연산 · GPU 장비',
+              shortSub: 'Cloud Run · L4/A100',
+              devSpec: '단일 Express 5 서버 + 서버리스 Vertex AI 유료 API 추론.',
+              prodSpec: '오토스케일링 Cloud Run HA + 전용 NVIDIA L4 / A100 GPU 워커 풀.',
+            },
+            {
+              id: 'data-vault',
+              icon: 'lock',
+              label: '암호화 볼트',
+              shortSub: 'CMEK AES-256',
+              devSpec: '로컬 IndexedDB 페이스 볼트 및 서버 전용 환경변수 시크릿 격리.',
+              prodSpec: 'Cloud KMS CMEK (AES-256-GCM) · Secret Manager · VPC Service Controls.',
+            },
+          ],
+        },
+      ],
+      governance: [
+        {
+          id: 'gov-audit',
+          icon: 'activity',
+          label: '감사 로그',
+          shortSub: '추적',
+          devSpec: '비식별 접속 로그 및 커밋 전 자동 시크릿 스캔(verify:secrets) 적용.',
+          prodSpec: '위변조 방지 보안 감사 로그 및 침해사고 24시간 대응 매뉴얼(SOP) 운영.',
+        },
+        {
+          id: 'gov-rbac',
+          icon: 'userCheck',
+          label: '권한 제어',
+          shortSub: '테넌트 가드',
+          devSpec: 'resolveAuthorizedClosets 중앙 가드로 계정 간 교차 접근(IDOR) 원천 차단.',
+          prodSpec: '최소 권한 IAM 서비스 계정 분리 및 출시 전 외부 모의해킹 진단 수행.',
+        },
+        {
+          id: 'gov-cicd',
+          icon: 'gitBranch',
+          label: 'Git 배포',
+          shortSub: '자동 검증',
+          devSpec: 'oxlint · TypeScript strict · 210+ 단위/E2E 테스트 통과 후 자동 배포.',
+          prodSpec: 'PII · EXIF 누수 회귀 테스트 CI 게이트 및 무중단 카나리 배포.',
+        },
+      ],
+      privacyEyebrow: '핵심 리스크 대응 · Privacy-by-Design',
+      privacyHeading: '개인정보 4중 방어 아키텍처',
+      privacyBadge: '안면 0 Bytes · OAuth 토큰 무저장',
+      privacyCurrentLabel: '현재 구현 완료 (MVP)',
+      privacyProdLabel: '상용 확장 보안 고도화',
+      privacyRetentionLabel: '보유기간 및 파기 원칙',
+      privacyShields: [
+        {
+          id: 'biometric',
+          icon: 'scanFace',
+          code: '01',
+          shortLabel: '0B 로컬 안면',
+          title: '온디바이스 0-Byte 생체 격리',
+          statusTag: '구현 완료',
+          devStatus: '안면 피부톤 분석을 기기 내 MediaPipe WASM에서만 수행하고 로컬 IndexedDB에만 보관합니다 (외부 전송 0\u00A0Bytes).',
+          prodTarget: '웹 · iOS · Android 전 플랫폼에서 안면 원본 무전송 원칙을 영구 유지합니다.',
+          retention: '카메라 원본: 0초 즉시 휘발 · 로그아웃/탈퇴 시 로컬 볼트 전량 초기화.',
+        },
+        {
+          id: 'oidc',
+          icon: 'keyRound',
+          code: '02',
+          shortLabel: 'OAuth 무저장',
+          title: 'Stateless OIDC · 계정 탈취(ATO) 차단',
+          statusTag: '구현 완료',
+          devStatus: 'Apple/Google OIDC 서명을 서버에서 직접 검증하고 외부 IdP 토큰을 저장하지 않으며, 미검증 이메일 자동 병합을 금지합니다.',
+          prodTarget: '단기 Access + 회전 Refresh 토큰 및 iOS Keychain · Android Keystore 바인딩 추가.',
+          retention: '외부 IdP 토큰: 전면 미저장 · 만료 세션 12시간 주기 자동 소거.',
+        },
+        {
+          id: 'vault',
+          icon: 'shieldCheck',
+          code: '03',
+          shortLabel: '3-Zone 격리',
+          title: '테넌트 · 3-Zone 암호화 스토리지 격리',
+          statusTag: 'MVP + 상용 3-Zone',
+          devStatus: '모든 API에 resolveAuthorizedClosets 테넌트 가드를 강제하고 업로드 매직바이트 검증과 샌드박스 CSP를 적용했습니다.',
+          prodTarget: 'GCS 3-Zone 물리 분리 (공용 시드 / 비공개 버킷 15분 서명 URL + CMEK / 24시간 임시 VTON).',
+          retention: '임시 VTON 캐시: 24시간 자동 영구 삭제 · 사용자 의류 공개 URL 접근 원천 차단.',
+        },
+        {
+          id: 'exif',
+          icon: 'trash',
+          code: '04',
+          shortLabel: 'EXIF · 원스톱 파기',
+          title: 'EXIF 제거 · 무학습 AI · 원스톱 즉시 파기',
+          statusTag: '구현 완료',
+          devStatus: '클라이언트 배경 분리 · WebP 변환으로 GPS/EXIF와 실내 배경을 제거하고, PII 없는 Vertex 유료 무학습 추론과 탈퇴 즉시 원스톱 파기를 구현했습니다.',
+          prodTarget: 'Vertex AI VPC Service Controls 경계 격리 및 CI 단계 PII/EXIF 회귀 검증 자동화.',
+          retention: 'AI 페이로드: 0일 즉시 폐기 · 탈퇴 시 DB · 파일 · 캐시 · IndexedDB 동시 파기.',
         },
       ],
       mapsEyebrow: 'Google Cloud & Maps Platform',
-      mapsHeading: '약관을 준수하는 날씨 · 장소 · 케어 서버 프록시',
-      mapsSub:
-        '모든 Maps·Weather 호출은 Express 5 서버를 거치며 최소 X-Goog-FieldMask, 솔루션 식별 헤더, 미디어 무저장 원칙을 지킵니다.',
+      mapsHeading: '약관 준수 기상 · 장소 · AI 서버 프록시',
       mapsComplianceFooter:
-        'API 키 서버 전용 격리 · 최소 FieldMask 적용 · Street View 무료 메타데이터 선조회 · 미디어 영구 저장 0건',
+        'API 키 서버 전용 격리 · 최소 FieldMask · Street View 무료 메타데이터 선조회 · 미디어 DB 저장 0건',
       mapsNodes: [
         {
+          id: 'weather',
+          icon: 'cloudSun',
           code: '01',
-          apiName: 'Google Weather API v1',
-          role: '실황 · 예보 · 기상특보 · UV',
-          detail:
-            '한파·호우·대설·폭염 특보와 자외선 지수를 반영해 날씨 배너, 우산 동작, 선글라스·모자 제안을 보여줍니다.',
+          apiName: 'Weather API v1',
+          role: '특보 · 일교차 · UV',
+          detail: '실시간 기온 · 일교차 · 강수 특보 · 자외선 지수를 3D 코디와 우산 동작에 즉시 반영합니다.',
           compliance: '20~30분 메모리 TTL',
         },
         {
+          id: 'places',
+          icon: 'mapPin',
           code: '02',
           apiName: 'Places API (New)',
-          role: '방문 장소 & 주변 케어 지도',
-          detail:
-            '실제 방문할 장소 배경을 찾고, 의류 세탁 라벨에 맞는 가까운 드라이클리닝·수선실·가죽케어 매장을 지도에 표시합니다.',
+          role: '장소 · 주변 케어',
+          detail: '방문할 장소 맥락과 가까운 드라이클리닝 · 수선실 · 가죽 케어 매장을 지도에 표시합니다.',
           compliance: '최소 FieldMask',
         },
         {
+          id: 'streetview',
+          icon: 'compass',
           code: '03',
-          apiName: 'Place Photos & Street View',
-          role: '실제 장소 라이브 배경',
-          detail:
-            '이미지 요청 전 무료 streetview/metadata를 먼저 확인한 뒤 피팅 모델 뒤에 실제 거리와 공간 배경을 배치합니다.',
+          apiName: 'Street View · Photos',
+          role: '실제 장소 배경',
+          detail: '무료 streetview/metadata 사전 확인 후 피팅 모델 뒤에 실제 거리와 공간 배경을 띄웁니다.',
           compliance: '미디어 DB 무저장',
         },
         {
+          id: 'vertex',
+          icon: 'sparkles',
           code: '04',
-          apiName: 'Gemini & Vertex AI',
-          role: '의류 분류 · 가상 피팅 · 설명',
-          detail:
-            '날씨, 방문 장소, 피부톤, 11슬롯 옷장 데이터를 묶어 2K 멀티앵글 가상 피팅과 코디 추천 이유를 생성합니다.',
-          compliance: '자동 품질 검수',
+          apiName: 'Gemini · Vertex AI',
+          role: '무학습 VTON 추론',
+          detail: 'EXIF가 제거된 의류를 자동 태깅하고 재학습 없는 2K 멀티앵글 가상 피팅을 생성합니다.',
+          compliance: '0일 즉시 폐기',
         },
       ],
     },
@@ -1229,311 +1715,343 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       stanceIdle: '기본 자세',
       stanceWalk: '워킹',
       stanceRain: '우산',
-      rigLabel: '관절 · 슬롯',
-      rigValue: '21개 관절 · 11슬롯',
-      rigMeta: 'SpringBone 원단 및 핏 엔진',
-      morphLabel: '체형 · 회전',
-      morphValue: '28종 모프 · 8앵글',
-      morphMeta: '0°–360° 옵티컬 플로우 회전',
       pccsNote: 'PCCS 12톤 · MST-04',
       beforeLabel: '원본 사진',
       afterLabel: '배경 분리 WebP',
       sliderHint: '좌우로 드래그해 원본 사진과 배경 분리 WebP 결과를 비교하세요',
-      ingestionBadge: '의류 배경 분리 · Gemini 비전 분류',
-      ingestionMeta: '582 KB → 23 KB WebP (-96%) · 11슬롯 자동 분류',
+      ingestionBadge: 'EXIF / GPS · 배경 완전 제거',
+      ingestionMeta: '582 KB → 23 KB WebP (-96%)',
       cpwLabel: '평균 1회 착용 단가',
       cpwValue: '₩14,200',
-      cpwDelta: '지난달 대비 -18%',
+      cpwDelta: '전월 대비 -18%',
       balanceLabel: '옷장 활용률',
       balanceValue: '98.4%',
       balanceMeta: '이염 충돌 0건',
-      dupTitle: '세탁 관리 & 주변 케어 지도',
+      dupTitle: '세탁 · 주변 케어 지도',
       dupStatus: 'Places 연동',
-      dupDesc:
-        '세탁 라벨별 주의사항과 이염 위험을 확인하고, Google Places 지도로 가까운 세탁소와 수선실을 바로 찾습니다.',
-      ootdDate: '실시간 날씨',
-      ootdTitle: '기상특보 & 코디 추천 이유',
-      ootdMeta: 'Weather v1 · 자외선 액세서리 및 우산 안내',
-      topologyTitle: '기기 내 피부톤 분석 처리 흐름',
-      topologySteps: [
-        { title: '카메라', sub: '기기 내 프레임 입력' },
-        { title: 'MediaPipe WASM', sub: '로컬 MST-04 분석' },
-        { title: 'IndexedDB', sub: '로컬 저장소 보관' },
-      ],
-      topologyFooterLeft: '외부 얼굴 원본 전송량',
-      topologyFooterRight: '0 Bytes',
+      ootdDate: 'Weather v1',
+      ootdTitle: '기상특보 · UV 안내',
     },
     stack: {
-      eyebrow: '핵심 스펙',
-      heading: '실제 코드베이스 · 보안 · 생애주기 실측 지표',
-      note: '현재 저장소 테스트 · 빌드 · 보안 아키텍처 기준',
+      eyebrow: '검증 스펙',
+      heading: '실측 엔지니어링 · 보안 지표',
+      note: '현재 저장소 테스트 · 보안 명세 기준',
       heroKpis: [
         {
+          id: 'loop',
+          icon: 'refreshCw',
           value: '5-Stage',
-          label: '폐루프 의류 생애주기',
-          sub: '옷장 → 국지 기상 → 360° 피팅 → 캘린더 → CPW · 원탭 리셀',
+          label: '순환 생애주기',
+          detail: '옷장 → 국지 기상 → 360° 피팅 → 캘린더 → CPW · 정품 인증 원탭 리셀 연결.',
         },
         {
+          id: 'face',
+          icon: 'shieldCheck',
           value: '0 Bytes',
-          label: '안면 원본 외부 전송',
-          sub: '기기 내 MediaPipe WASM · IndexedDB 격리 볼트',
+          label: '안면 외부 전송',
+          detail: '기기 내 MediaPipe WASM 처리로 얼굴 카메라 원본이 외부로 전송되지 않습니다.',
         },
         {
+          id: 'tests',
+          icon: 'checkCircle',
           value: '210+',
-          label: '자동화 검증 테스트',
-          sub: '피팅 · 날씨 · 지도 · 케어 · 스로틀링 30+ 스위트',
+          label: '자동화 테스트',
+          detail: 'VTON · 날씨 · 지도 · 케어 · 보안 · 프레임 제어 30+ 자동 스위트 검증.',
         },
         {
+          id: 'apis',
+          icon: 'cloud',
           value: '4 APIs',
-          label: 'Google Cloud · Maps',
-          sub: 'Vertex/Gemini 무학습, Weather v1, Places (New), Street View',
+          label: 'Google Cloud',
+          detail: 'Vertex/Gemini 무학습, Weather API v1, Places API (New), Street View 연동.',
         },
       ],
-      benchmarkTitle: '실측 엔지니어링 & 보안 스펙 요약',
+      benchmarkTitle: '핵심 검증 항목',
       specs: [
         {
-          label: '의류 배경 분리 & EXIF/GPS 제거',
+          id: 'webp',
+          icon: 'imageMinus',
+          shortLabel: 'EXIF 제거',
+          label: '배경 분리 및 EXIF 제거',
           valueText: '582 KB → 23 KB (-96%)',
-          detail: 'WebP 재인코딩 단계에서 사생활 배경·GPS·기기 메타데이터 100% 제거',
+          detail: '클라이언트 WebP 재인코딩 단계에서 GPS · 기기 정보와 실내 사생활 배경을 제거합니다.',
         },
         {
+          id: 'defense',
+          icon: 'lock',
+          shortLabel: '4중 보안',
           label: 'Privacy-by-Design 4대 방어선',
-          valueText: '0 Bytes 생체 · 토큰 비보관',
-          detail: 'OIDC 서명 검증, 테넌트 격리, 무학습 AI 추론, 탈퇴 시 원스톱 즉시 파기',
+          valueText: '0B 생체 · 토큰 무저장',
+          detail: '온디바이스 WASM, Stateless OIDC, 테넌트 격리, 무학습 AI, 원스톱 즉시 파기.',
         },
         {
-          label: '사계절 3D 다중 레이어드 & 회전',
+          id: 'rig3d',
+          icon: 'box',
+          shortLabel: '3D 엔진',
+          label: '사계절 3D 다중 레이어링',
           valueText: '21관절 · 28모프 · 8앵글',
-          detail: '11슬롯 다겹 레이어링, 0°–360° 회전 및 120Hz/60Hz/30Hz 가변 프레임 제어',
+          detail: '11슬롯 다겹 피팅, 0°–360° 회전 및 120Hz/60Hz/30Hz 가변 프레임 제어.',
         },
         {
-          label: 'CPW 자산 분석 & 순환 케어 엔진',
+          id: 'cpw',
+          icon: 'coins',
+          shortLabel: 'CPW · 리셀',
+          label: 'CPW 분석 및 정품 인증 리셀',
           valueText: '11슬롯 · 253+ 아이템',
-          detail: '1회 착용 비용(CPW)·유휴 의류 감지, 세탁·이염 규칙 및 원탭 리셀 파이프라인',
+          detail: '1회 착용 단가와 유휴 의류를 식별해 구매 이력 기반 정품 인증 리셀로 연결합니다.',
         },
       ],
       cards: [
         {
+          id: 'three',
+          icon: 'box',
           eyebrow: '3D 그래픽',
           metric: 'Three.js 0.187',
-          title: '다중 레이어드 · 가변 프레임 제어',
-          detail: '21관절 리그, SpringBone 물리, 28모프, 8앵글 회전, 120Hz/30Hz 자동 페이싱.',
+          title: '다중 레이어 리그',
+          detail: '21관절 리그, SpringBone 물리, 28모프, 8앵글 회전, 120Hz/30Hz 페이서.',
           boundary: 'WebGL2',
         },
         {
+          id: 'ai',
+          icon: 'sparkles',
           eyebrow: '멀티모달 AI',
           metric: 'Gemini · Vertex',
-          title: '자동 태깅 · 2K VTON · 무학습 추론',
-          detail: 'PII 배제 프롬프트, 유료 무학습 경로, 자동 각도 검수 및 코디 이유 해설.',
-          boundary: 'No-Training',
+          title: '무학습 2K VTON',
+          detail: 'PII 배제 프롬프트, 유료 무학습 추론, 자동 각도 검수 및 코디 이유 해설.',
+          boundary: '0일 즉시 폐기',
         },
         {
+          id: 'maps',
+          icon: 'mapPin',
           eyebrow: '지도 · 기상',
           metric: 'Google Maps',
-          title: 'Weather v1 · Places · Street View',
-          detail: '실시간 기상특보·일교차 반영, 거리뷰 위치 시트 및 주변 세탁·수선 케어 지도.',
+          title: 'Weather · Places',
+          detail: 'Weather API v1 특보, Places API (New) 케어 지도, 무저장 거리뷰 프록시.',
           boundary: '서버 프록시',
         },
         {
+          id: 'security',
+          icon: 'shield',
           eyebrow: '온디바이스 보안',
-          metric: '0-Byte Biometric',
-          title: '로컬 피부톤 분석 · OIDC · 테넌트 격리',
-          detail: 'MediaPipe WASM 로컬 진단, OAuth 토큰 비보관, 계정별 스토리지 격리 · 원스톱 파기.',
-          boundary: 'Privacy-by-Design',
+          metric: '0-Byte 안면',
+          title: 'OIDC · 3-Zone',
+          detail: '로컬 MediaPipe WASM, OAuth 토큰 무저장, 테넌트 격리 및 원스톱 파기.',
+          boundary: '4대 방어선',
         },
         {
+          id: 'asset',
+          icon: 'badgeCheck',
           eyebrow: '의류 자산 OS',
-          metric: 'CPW · Care',
-          title: '착용 단가 · 유휴 감지 · 원탭 리셀',
-          detail: '캘린더 OOTD 로깅, 1회 착용 단가 산출, 유휴 의류 리셀 전환 및 중복 구매 차단.',
+          metric: 'CPW · 정품 리셀',
+          title: '순환 리셀 엔진',
+          detail: '캘린더 착용 로깅, 유휴 의류 감지, 명품 · 구매 이력 정품 인증 원탭 리셀.',
           boundary: '폐루프 엔진',
         },
         {
+          id: 'runtime',
+          icon: 'smartphone',
           eyebrow: '앱 런타임',
           metric: 'Capacitor 8',
-          title: 'React 19 · Express 5 · sql.js',
-          detail: 'TypeScript 7 strict, 오프라인 우선 IndexedDB, 웹·iOS·Android 단일 코드베이스.',
+          title: 'React 19 · Express 5',
+          detail: 'TypeScript 7 strict, 오프라인 우선 IndexedDB, 웹 · iOS · Android 단일 코드.',
           boundary: '크로스플랫폼',
         },
       ],
     },
     mission: {
-      eyebrow: '우리의 미션',
-      badge: '순환형 옷장 루프',
-      headingLead: '이미 가진 옷의 생애주기를 완성하는 ',
+      eyebrow: '01 · 우리의 미션',
+      badge: '정품 인증 순환 옷장',
+      headingLead: '보유 의류로 완성하는 ',
       headingAccent: '지속 가능한 AI 옷장',
-      statement:
-        '단발성 구매 전 피팅이나 파편화된 중고 장터 대신, 보유 의류·실시간 국지 기상·360° 다중 레이어링·CPW 착용 효율을 하나의 닫힌 순환 구조로 연결해 충동적 중복 구매를 줄이고 옷의 수명을 늘립니다.',
       commitments: [
         {
+          id: 'wear',
+          icon: 'shirt',
           num: '01',
-          title: '보유 의류 우선 착장',
+          title: '보유 의류 우선',
           tag: 'WEAR FIRST',
-          detail: '새 옷을 사기 전에 내 옷장 속 의류를 오늘 기온·강수에 맞춰 360° 다중 레이어드로 조합합니다.',
-        },
-        {
-          num: '02',
-          title: '1회 착용 비용(CPW) 계량화',
-          tag: 'CPW TELEMETRY',
-          detail: '캘린더 착용 기록으로 구매가 ÷ 착용 횟수를 자동 계산해 미착용 유휴 의류를 객관적으로 포착합니다.',
-        },
-        {
-          num: '03',
-          title: '원탭 리셀 & 공백 보완 구매',
-          tag: 'CIRCULAR EXIT',
-          detail: '이미 등록된 사진·메타데이터로 유휴 의류를 원탭 리셀로 순환하고, 신규 구매는 꼭 비어 있는 슬롯만 제안합니다.',
-        },
-      ],
-      diagramEyebrow: '패러다임 비교',
-      diagramTitle: '단절된 기존 기능군 vs iNVTRY 폐루프 생애주기',
-      diagramLegendSilo: '단절된 기존 사일로',
-      diagramLegendCore: 'iNVTRY 의류 생애주기 루프',
-      centerKicker: 'iNVTRY LOOP',
-      centerTitle: '의류 생애주기',
-      centerSub: 'Closed-Loop OS',
-      silos: [
-        {
-          side: 'left',
-          tag: '기존 사일로 01',
-          title: '1·2차 가상피팅군',
-          step1: '쇼핑몰 상품 카탈로그',
-          step2: '구매 전 단품 사이즈 확인',
-          gapNote: '보유 옷장·착용 이력 단절',
-        },
-        {
-          side: 'right',
-          tag: '기존 사일로 02',
-          title: '단독 중고거래군',
-          step1: '수동 재촬영 · 판매글 작성',
-          step2: '개별 직거래 앱 등록',
-          gapNote: '착용 빈도·유휴 감지 단절',
-        },
-      ],
-      loopNodes: [
-        {
-          id: 'closet',
-          num: '01',
-          title: '디지털 옷장',
-          subtitle: 'AI 11슬롯 아카이브',
-          detail: '배경 분리·EXIF 제거 WebP와 소재·계절 자동 태깅으로 보유 의류를 구조화합니다.',
-        },
-        {
-          id: 'weather',
-          num: '02',
-          title: '실시간 국지 기상',
-          subtitle: '기온 · 일교차 · 강수',
-          detail: 'Google Weather v1 실황·특보·UV를 착장 추천의 1차 제약 조건으로 주입합니다.',
-        },
-        {
-          id: 'avatar',
-          num: '03',
-          title: '360° 레이어드 아바타',
-          subtitle: '이너·미드·아우터 다겹',
-          detail: '사계절 일교차에 맞춘 다층 레이어링과 8앵글 회전 핏을 입기 전에 검증합니다.',
-        },
-        {
-          id: 'calendar',
-          num: '04',
-          title: '캘린더 기록',
-          subtitle: '일정별 OOTD 로깅',
-          detail: '실제 착용 이력을 누적해 최근 코디 중복 추천을 막고 활용 데이터를 쌓습니다.',
+          detail: '새 옷을 사기 전, 내 옷장 속 의류를 오늘 기온과 강수에 맞춰 360° 레이어드로 조합합니다.',
         },
         {
           id: 'cpw',
+          icon: 'barChart',
+          num: '02',
+          title: 'CPW 착용 효율',
+          tag: '구매가 ÷ 착용',
+          detail: '캘린더 착용 기록으로 1회 착용 단가와 미착용 유휴 의류를 객관적으로 파악합니다.',
+        },
+        {
+          id: 'resale',
+          icon: 'badgeCheck',
+          num: '03',
+          title: '정품 인증 리셀',
+          tag: '신뢰 순환',
+          detail: '명품과 구매 이력을 정품 인증 파트너와 연동해 가품 걱정 없는 투명한 원탭 리셀로 확장합니다.',
+        },
+      ],
+      centerKicker: 'iNVTRY LOOP',
+      centerTitle: '의류 순환 루프',
+      centerSub: '지속 가능한 AI 옷장',
+      autoPlayLabel: '자동 재생',
+      pausePlayLabel: '일시정지',
+      loopNodes: [
+        {
+          id: 'closet',
+          icon: 'shirt',
+          num: '01',
+          title: '디지털 옷장',
+          subtitle: '11슬롯 아카이브',
+          detail: 'EXIF가 제거된 WebP 의류와 소재 · 계절 · 구매 이력을 구조화해 저장합니다.',
+        },
+        {
+          id: 'weather',
+          icon: 'cloudSun',
+          num: '02',
+          title: '실시간 기상',
+          subtitle: '기온 · 강수 · UV',
+          detail: 'Google Weather API v1 일교차와 특보를 매일 아침 코디의 기준 조건으로 주입합니다.',
+        },
+        {
+          id: 'avatar',
+          icon: 'personStanding',
+          num: '03',
+          title: '360° 피팅',
+          subtitle: '다중 레이어드',
+          detail: '이너 · 미드 · 아우터를 8개 각도로 미리 겹쳐 입혀 입기 전에 핏을 검증합니다.',
+        },
+        {
+          id: 'calendar',
+          icon: 'calendar',
+          num: '04',
+          title: '캘린더 기록',
+          subtitle: '착용 이력',
+          detail: '실제 착용 코디를 날짜별로 기록해 중복 추천을 막고 활용 데이터를 축적합니다.',
+        },
+        {
+          id: 'cpw',
+          icon: 'coins',
           num: '05',
-          title: 'CPW · 유휴의류 식별',
-          subtitle: '구매가 ÷ 착용 횟수',
-          detail: '착용 빈도가 낮은 유휴 의류를 자동 포착해 리셀 전환과 중복 구매 차단을 연결합니다.',
+          title: 'CPW · 유휴 감지',
+          subtitle: '착용 가치',
+          detail: '착용 빈도가 낮은 유휴 의류를 자동 포착해 정품 인증 원탭 리셀과 중복 차단을 실행합니다.',
         },
       ],
       exits: [
         {
           id: 'resale',
-          title: '원탭 중고 리셀',
-          subtitle: '등록 사진·스펙 즉시 재활용',
+          icon: 'badgeCheck',
+          title: '정품 인증 원탭 리셀',
+          subtitle: '명품 · 구매 기록 연동 투명 거래',
+          detail: '이미 저장된 사진과 구매 영수증 · 정품 인증 연동을 결합해 믿을 수 있는 원탭 중고 리셀을 구현합니다.',
         },
         {
           id: 'purchase',
-          title: '맞춤 구매 연동',
-          subtitle: '부족 아이템만 선별 · 중복 차단',
+          icon: 'shoppingBag',
+          title: '공백 보완 맞춤 구매',
+          subtitle: '중복 차단 · 부족 슬롯만 제안',
+          detail: '보유 옷장에 실제로 비어 있는 레이어만 검증해 충동적 중복 구매를 원천적으로 줄입니다.',
         },
       ],
-      diagramFooter: '각 단계를 누르면 상세 동작을 확인할 수 있습니다 · 보유 의류 기반 순환 워크플로우',
+      nextLabel: '다음: 02 로드맵',
     },
     vision: {
-      eyebrow: 'Ainvtry 소개',
-      heading: '실시간 기상 반응형 개인 의류 자산 운영체제',
+      eyebrow: '03 · BM · 창업자',
+      heading: '실구동 MVP에서 신뢰 기반 순환 플랫폼으로',
       irBadge: '서울 · 2026',
       quote:
-        '“내 옷장 속 옷이 오늘 날씨와 장소에 어떻게 어울리고 얼마나 자주 입히는지 한눈에 볼 수 있다면, 이미 가진 옷을 끝까지 활용하고 불필요한 중복 구매를 줄일 수 있습니다.”',
-      body: 'Ainvtry(iNVTRY)는 서울에서 개발 중인 패션테크 스타트업입니다. 단발성 가상 피팅 위젯이 아니라 보유 의류·기상·3D 레이어링·CPW·원탭 리셀을 하나로 잇는 개인 의류 자산 운영체제를 만들고 있습니다.',
-      roadmapTitle: '개발 및 검증 로드맵',
+        '“내 옷장의 날씨 코디, 3D 핏, 실제 착용 횟수, 정품 구매 이력이 하나로 이어질 때, 옷은 더 오래 입히고 투명하게 순환됩니다.”',
+      roadmapTitle: '02 · 단계별 실행 로드맵',
       milestones: [
         {
+          id: 'stage-1',
+          icon: 'checkCircle',
           phase: '1단계',
           status: 'done',
-          title: '3D 다중 레이어드 리그 · 8앵글 VTON · 로컬 피부톤 분석',
-          detail: '21관절 · 28모프 · 11슬롯 레이어링, 의류 배경 분리(EXIF 제거), MediaPipe WASM 로컬 분석 구현 완료.',
+          title: '3D 엔진 · 0B 로컬 비전',
+          tag: '구현 완료',
+          detail: '21관절 · 28모프 · 11슬롯 레이어링, EXIF 제거 배경 분리, MediaPipe WASM 완료.',
         },
         {
+          id: 'stage-2',
+          icon: 'shieldCheck',
           phase: '2단계',
           status: 'done',
-          title: 'Google Maps 날씨·장소 배경 · Privacy-by-Design 4대 방어선',
-          detail: 'Weather v1 특보, Street View 위치 시트, 세탁·주변 케어 지도, OAuth 토큰 비보관 · 테넌트 격리 완료.',
+          title: '지도 프록시 · 4중 개인정보 방어',
+          tag: '구현 완료',
+          detail: 'Weather API v1 · Street View · 케어 지도, Stateless OIDC, 테넌트 격리 · 원스톱 파기 완료.',
         },
         {
+          id: 'stage-3',
+          icon: 'rocket',
           phase: '3단계',
           status: 'active',
-          title: '사전 CBT 정량 검증 · 특허 출원 · 3-Zone 클라우드 및 스토어 출시',
-          detail: '30~50명 클로즈드 베타(코디 시간·CPW 실측), 핵심 알고리즘 특허 출원, GCS 3-Zone · iOS/Android 출시.',
-        },
-      ],
-      revenueTitle: '지속 가능한 3중 수익 구조',
-      revenueNote: '일간 무료 코디 습관 위에서 AI 추론 원가를 자체 상쇄하는 구조',
-      revenuePillars: [
-        {
-          num: '01',
-          title: '프리미엄 구독',
-          mechanism: 'Pro Tier',
-          detail: '무제한 멀티앵글 가상 피팅, 고급 TPO·여행 캡슐 스타일링 및 심층 CPW 자산 리포트.',
-        },
-        {
-          num: '02',
-          title: '부족 아이템 제휴 커머스',
-          mechanism: 'Gap-Only Affiliate',
-          detail: '보유 옷장에 실제로 비어 있는 레이어·색상 공백만 정교하게 보완 추천해 높은 전환과 제로 중복 달성.',
-        },
-        {
-          num: '03',
-          title: '유휴 의류 원탭 리셀',
-          mechanism: 'Circular Resale',
-          detail: 'CPW 하위 미착용 의류를 기존 등록 사진·브랜드 메타데이터로 즉시 판매글 전환해 순환 수수료 창출.',
+          title: 'CBT · 정품 인증 리셀 · 클라우드 HA',
+          tag: '진행 중',
+          detail: '클로즈드 베타 실측, 핵심 특허, 명품 정품 인증 리셀 API, GCS 3-Zone CMEK · 앱 스토어 출시.',
         },
       ],
       moatsTitle: '4대 기술 · 제품 해자',
       moats: [
         {
-          title: '실구동 크로스플랫폼 MVP',
-          detail: 'React 19 · Capacitor 8(iOS/Android) · 210+ 테스트로 즉시 검증 가능한 코드베이스.',
+          id: 'mvp',
+          icon: 'smartphone',
+          title: '실구동 MVP',
+          tag: '210+ 테스트',
+          detail: 'React 19 · Capacitor 8(iOS/Android) 기반 즉시 시연 가능한 코드베이스.',
         },
         {
-          title: '사계절 360° 다중 레이어링',
-          detail: '단품 핏을 넘어 이너·미드·아우터·우산까지 일교차·강수 환경에 맞춰 전 각도 시뮬레이션.',
+          id: 'layer360',
+          icon: 'layers',
+          title: '360° 다중 레이어',
+          tag: '11슬롯',
+          detail: '일교차와 강수 환경에 맞춰 이너 · 미드 · 아우터 · 우산까지 전 각도 시뮬레이션.',
         },
         {
-          title: '폐루프 일간 리텐션 & 3중 BM',
-          detail: '매일 아침 기상 코디 습관 → CPW 통계 → 원탭 리셀 · 공백 보완 구매로 이어지는 선순환.',
+          id: 'provenance',
+          icon: 'badgeCheck',
+          title: '정품 인증 리셀 루프',
+          tag: '신뢰 공급',
+          detail: '착용 이력과 명품 구매 기록을 묶어 가품 리스크와 판매 등록 장벽을 동시에 해소.',
         },
         {
-          title: 'Privacy-by-Design 4대 방어선',
-          detail: '안면 외부 전송 0 Bytes, OAuth 토큰 비보관, 테넌트 격리, EXIF/PII 배제 무학습 AI · 원스톱 파기.',
+          id: 'privacy',
+          icon: 'lock',
+          title: '4중 개인정보 방어',
+          tag: '0B 생체',
+          detail: '온디바이스 WASM, OAuth 토큰 무저장, 3-Zone CMEK 격리 및 원스톱 파기.',
         },
       ],
-      statusMvp: '210+ 테스트 · 실구동 MVP',
-      statusRelease: 'iOS · Android 출시 준비',
+      nextToBmLabel: '다음: 03 BM · 창업자',
+      revenueTitle: '지속 가능한 3중 수익 모델 (BM)',
+      revenueNote: '매일 아침 코디 습관이 구독 · 제휴 · 정품 리셀로 자연스럽게 전환',
+      revenuePillars: [
+        {
+          id: 'pro',
+          icon: 'crown',
+          num: '01',
+          title: '프리미엄 구독',
+          mechanism: 'Pro SaaS',
+          detail: '무제한 2K 멀티앵글 가상 피팅, 여행 캡슐 · TPO 스타일링, 심층 CPW 자산 리포트.',
+        },
+        {
+          id: 'affiliate',
+          icon: 'shoppingBag',
+          num: '02',
+          title: '공백 보완 커머스',
+          mechanism: '제로 중복 제휴',
+          detail: '보유 옷장에 실제 비어 있는 레이어 · 색상 공백만 추천해 높은 전환과 제로 중복 달성.',
+        },
+        {
+          id: 'resale-bm',
+          icon: 'badgeCheck',
+          num: '03',
+          title: '정품 인증 원탭 리셀',
+          mechanism: '신뢰 순환 수수료',
+          detail: '명품 · 구매 기록 정품 인증 연동으로 유휴 의류를 투명한 중고 거래로 즉시 전환해 수수료 창출.',
+        },
+      ],
+      backToMissionLabel: '01 미션',
       founderRole: '창업자 & 엔지니어 · Ainvtry',
-      founderBio:
-        'Three.js 3D 그래픽, Gemini/Vertex AI 가상 피팅 파이프라인, Google Maps Platform 날씨·장소 프록시, 기기 내 WebAssembly 피부톤 분석, 보안 아키텍처와 Capacitor 모바일 앱까지 엔드투엔드로 설계·개발합니다.',
       hqLabel: '거점',
       hqValue: '대한민국 서울',
       domainLabel: '웹사이트',
@@ -1542,44 +2060,41 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       directCta: '창업자에게 메일 보내기',
     },
     footer: {
-      summary: 'Ainvtry (A inventory) — 3D 디지털 옷장 및 가상 피팅 앱. 서울에서 만듭니다.',
       rights: '© 2026 Ainvtry. All rights reserved.',
       privacy: '개인정보처리방침',
       terms: '이용약관',
-      contact: '문의',
-      backToTop: '맨 위로',
     },
     legal: {
       closeLabel: '안내 닫기',
-      updatedAt: '시행일 2026년 11월 22일 · ainvtry.com',
+      updatedAt: '시행일 2026년 11월 23일 · ainvtry.com',
       privacyTitle: '개인정보처리방침',
       privacySections: [
         {
           heading: '1. 온디바이스 생체 처리 및 페이스 메모리 볼트 원칙',
-          body: 'Ainvtry(iNVTRY)는 안면 피부톤 랜드마크 분석을 사용자 기기 내 클라이언트 MediaPipe WebAssembly에서만 수행하며 보정된 페이스 메모리는 로컬 IndexedDB에만 격리 저장합니다. 피부톤 보정 목적의 안면 카메라 원본 프레임은 외부 서버로 전송·저장되지 않습니다(외부 전송 0 Bytes).',
+          body: 'Ainvtry(iNVTRY)는 안면 피부톤 랜드마크 분석을 사용자 기기 내 클라이언트 MediaPipe WebAssembly에서만 수행하며 보정된 페이스 메모리는 로컬 IndexedDB에만 격리 저장합니다. 피부톤 보정 목적의 안면 카메라 원본 프레임은 외부 서버로 전송되거나 저장되지 않습니다 (외부 전송 0 Bytes).',
         },
         {
           heading: '2. OAuth 토큰 관리 및 스토리지 접근 권한 분리',
-          body: 'Apple·Google OAuth 로그인 시 서버가 OIDC 서명을 직접 검증하며 외부 IdP Access/Refresh 토큰은 저장하지 않고 미검증 이메일 자동 병합을 금지합니다. 내부 세션은 HttpOnly 쿠키와 Rate Limit으로 보호되며, 모든 옷장 API 및 파일 스토리지는 사용자별 테넌트 권한 검증으로 타 계정 접근을 원천 차단합니다.',
+          body: 'Apple · Google OAuth 로그인 시 서버가 OIDC 서명을 직접 검증하며 외부 IdP Access/Refresh 토큰은 저장하지 않고 미검증 이메일 자동 병합을 금지합니다. 내부 세션은 HttpOnly 쿠키와 Rate Limit으로 보호되며, 모든 옷장 API 및 파일 스토리지는 사용자별 테넌트 권한 검증으로 타 계정 접근을 원천 차단합니다.',
         },
         {
           heading: '3. 제3자 AI API 비식별화 · 무학습 추론 및 보유기간',
-          body: '의류 이미지는 클라이언트에서 크롭·배경 분리 및 WebP 재인코딩을 거쳐 EXIF/GPS 메타데이터와 생활 배경을 제거한 뒤 전송됩니다. AI 프롬프트에서 성명·이메일 등 직접 식별자(PII)를 완전 배제하고, 모델 재학습 미사용(No-Training) 유료 Vertex AI / Gemini 경로로 처리한 뒤 전송 페이로드는 응답 직후 즉시 파기합니다. 지도 미디어는 영구 DB에 저장하지 않습니다.',
+          body: '의류 이미지는 클라이언트에서 크롭 · 배경 분리 및 WebP 재인코딩을 거쳐 EXIF/GPS 메타데이터와 생활 배경을 제거한 뒤 전송됩니다. AI 프롬프트에서 성명 · 이메일 등 직접 식별자(PII)를 완전 배제하고, 모델 재학습 미사용(No-Training) 유료 Vertex AI / Gemini 경로로 처리한 뒤 전송 페이로드는 응답 직후 즉시 파기합니다. 지도 미디어는 영구 DB에 저장하지 않습니다.',
         },
         {
           heading: '4. 원스톱 즉시 영구 파기 및 개인정보 보호 문의',
-          body: '사용자는 계정 설정에서 언제든 회원 탈퇴를 실행해 계정·활성 세션·옷장 DB·업로드 이미지·임시 VTON 캐시 및 로컬 IndexedDB 볼트까지 즉시 영구 파기할 수 있습니다. 개인정보 관련 문의는 창업자 공식 이메일(raymond@ainvtry.com)로 연락해 주시기 바랍니다.',
+          body: '사용자는 계정 설정에서 언제든 회원 탈퇴를 실행해 계정 · 활성 세션 · 옷장 DB · 업로드 이미지 · 임시 VTON 캐시 및 로컬 IndexedDB 볼트까지 즉시 영구 파기할 수 있습니다. 개인정보 관련 문의는 창업자 공식 이메일(raymond@ainvtry.com)로 연락해 주시기 바랍니다.',
         },
       ],
       termsTitle: '이용약관',
       termsSections: [
         {
           heading: '1. 서비스 범위',
-          body: 'Ainvtry(ainvtry.com, 제품명 A inventory)는 3D 디지털 옷장 관리, 의류 자동 분류, 멀티앵글 가상 피팅, 세탁 케어 안내 및 날씨·장소 맞춤 코디 계획 기능을 제공합니다.',
+          body: 'Ainvtry(ainvtry.com, 제품명 A inventory)는 3D 디지털 옷장 관리, 의류 자동 분류, 멀티앵글 가상 피팅, 세탁 케어 안내, 날씨 · 장소 맞춤 코디 계획 및 구매 이력 기반 정품 인증 리셀 연동 기능을 제공합니다.',
         },
         {
           heading: '2. 사용자 콘텐츠 소유권',
-          body: '사용자가 등록한 모든 의류 사진, 코디 기록, 메모의 소유권은 전적으로 사용자에게 있습니다. Ainvtry는 사용자가 요청한 기능을 처리하고 표시하는 데 필요한 제한적 기술 권한만 사용합니다.',
+          body: '사용자가 등록한 모든 의류 사진, 코디 기록, 구매 이력의 소유권은 전적으로 사용자에게 있습니다. Ainvtry는 사용자가 요청한 기능을 처리하고 표시하는 데 필요한 제한적 기술 권한만 사용합니다.',
         },
         {
           heading: '3. 미리보기 및 세탁 안내 참고 기준',

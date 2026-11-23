@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check,
   ChevronsUpDown,
   Globe,
   Mail,
@@ -15,8 +14,8 @@ import {
   type LoginThreeVariantId,
 } from '../components/auth/loginThreeScenes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { EnterpriseBlueprintPanel, PrivacyDefensePanel } from './SiteBlueprintPanel.tsx';
 import {
-  ArchitectureLayerExplorer,
   BenchmarksIrScorecard,
   GoogleMapsPipelinePanel,
   ProductionStackMatrix,
@@ -31,15 +30,15 @@ import {
 import {
   AppPreviewShowcasePanel,
   AtelierShowcasePanel,
-  IngestionShowcasePanel,
   IntelligenceShowcasePanel,
-  PrivacyShowcasePanel,
+  StudioFeatureIconDock,
 } from './SiteShowcases.tsx';
 import {
   SITE_COPY,
   SITE_META,
   type LegalDocKind,
   type SiteLang,
+  type SitePrivacyShield,
   type SiteTheme,
   type SiteViewId,
 } from './siteContent.ts';
@@ -84,6 +83,29 @@ function SiteBrandMark({
   );
 }
 
+function handleTablistArrowKeys<T extends string>(
+  e: React.KeyboardEvent<HTMLDivElement>,
+  order: readonly T[],
+  current: T,
+  idPrefix: string,
+  onSelect: (next: T) => void
+) {
+  const idx = order.indexOf(current);
+  if (idx < 0) return;
+  let nextIdx = -1;
+  if (e.key === 'ArrowRight') nextIdx = (idx + 1) % order.length;
+  else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + order.length) % order.length;
+  else if (e.key === 'Home') nextIdx = 0;
+  else if (e.key === 'End') nextIdx = order.length - 1;
+  if (nextIdx >= 0) {
+    e.preventDefault();
+    const target = order[nextIdx];
+    triggerHaptic('selection');
+    onSelect(target);
+    document.getElementById(`${idPrefix}-${target}`)?.focus();
+  }
+}
+
 export default function AinvtrySiteApp() {
   const [theme, setTheme] = useState<SiteTheme>('dark');
   const [lang, setLang] = useState<SiteLang>('en');
@@ -97,7 +119,9 @@ export default function AinvtrySiteApp() {
   } | null>(null);
   const [activeView, setActiveView] = useState<SiteViewId>('home');
   const [studioTab, setStudioTab] = useState<'preview' | 'atelier' | 'intelligence'>('preview');
-  const [archTab, setArchTab] = useState<'stack' | 'maps' | 'vision'>('stack');
+  const [archTab, setArchTab] = useState<'blueprint' | 'privacy' | 'maps'>('blueprint');
+  const [selectedPrivacyShield, setSelectedPrivacyShield] =
+    useState<SitePrivacyShield['id']>('biometric');
   const [benchTab, setBenchTab] = useState<'kpi' | 'matrix'>('kpi');
   const [aboutTab, setAboutTab] = useState<'mission' | 'roadmap' | 'founder'>('mission');
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
@@ -205,6 +229,11 @@ export default function AinvtrySiteApp() {
   const handleNavigate = useCallback((view: SiteViewId) => {
     triggerHaptic('selection');
     setActiveView(view);
+  }, []);
+
+  const handleJumpToPrivacyShield = useCallback((shieldId: SitePrivacyShield['id']) => {
+    setSelectedPrivacyShield(shieldId);
+    setArchTab('privacy');
   }, []);
 
   const handleToggleSilk = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
@@ -395,9 +424,9 @@ export default function AinvtrySiteApp() {
         </header>
 
         {/* ================================================================
-            SINGLE-VIEWPORT SPATIAL STAGE — UNIFORM IR GLASS WINDOW FRAME
+            SINGLE-VIEWPORT SPATIAL STAGE — UNIFORM GLASS WINDOW FRAME
            ================================================================ */}
-        <main className="site-stage" aria-live="polite">
+        <main className="site-stage">
           {activeView === 'home' && (
             <section key="home" className="site-view site-view--home">
               <div className="site-hero-center">
@@ -431,11 +460,27 @@ export default function AinvtrySiteApp() {
             <section key="studio" className="site-view site-view--panel">
               <div className="site-glass-panel">
                 <div className="site-panel-header">
-                  <div className="site-subtab-group" role="tablist" aria-label="Studio modules">
+                  <div
+                    className="site-subtab-group"
+                    role="tablist"
+                    aria-label="Studio modules"
+                    onKeyDown={(e) =>
+                      handleTablistArrowKeys(
+                        e,
+                        ['preview', 'atelier', 'intelligence'] as const,
+                        studioTab,
+                        'site-studio-tab',
+                        setStudioTab
+                      )
+                    }
+                  >
                     <button
+                      id="site-studio-tab-preview"
                       type="button"
                       role="tab"
                       aria-selected={studioTab === 'preview'}
+                      aria-controls="site-studio-tabpanel"
+                      tabIndex={studioTab === 'preview' ? 0 : -1}
                       className={`site-subtab-pill ${studioTab === 'preview' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -445,9 +490,12 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.studioPreview}
                     </button>
                     <button
+                      id="site-studio-tab-atelier"
                       type="button"
                       role="tab"
                       aria-selected={studioTab === 'atelier'}
+                      aria-controls="site-studio-tabpanel"
+                      tabIndex={studioTab === 'atelier' ? 0 : -1}
                       className={`site-subtab-pill ${studioTab === 'atelier' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -457,9 +505,12 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.studioAtelier}
                     </button>
                     <button
+                      id="site-studio-tab-intelligence"
                       type="button"
                       role="tab"
                       aria-selected={studioTab === 'intelligence'}
+                      aria-controls="site-studio-tabpanel"
+                      tabIndex={studioTab === 'intelligence' ? 0 : -1}
                       className={`site-subtab-pill ${studioTab === 'intelligence' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -474,25 +525,21 @@ export default function AinvtrySiteApp() {
                   </span>
                 </div>
 
-                <div className="site-panel-body">
+                <div
+                  id="site-studio-tabpanel"
+                  className="site-panel-body"
+                  role="tabpanel"
+                  aria-labelledby={`site-studio-tab-${studioTab}`}
+                >
                   {studioTab === 'preview' ? (
                     <AppPreviewShowcasePanel copy={copy.appPreview} lang={lang} theme={theme} />
                   ) : (
                     <div className="site-panel-split">
-                      <div className="site-pillar-copy">
-                        <span className="site-pillar-code">{activeStudioPillar.code}</span>
-                        <p className="site-pillar-eyebrow">{activeStudioPillar.eyebrow}</p>
-                        <h2 className="site-pillar-title">{activeStudioPillar.title}</h2>
-                        <p className="site-pillar-desc">{activeStudioPillar.description}</p>
-                        <ul className="site-bullet-list">
-                          {activeStudioPillar.bullets.map((b) => (
-                            <li key={b}>
-                              <Check size={15} />
-                              <span>{b}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <StudioFeatureIconDock
+                        key={studioTab}
+                        pillar={activeStudioPillar}
+                        tapHint={copy.tapHint}
+                      />
 
                       {studioTab === 'atelier' ? (
                         <AtelierShowcasePanel copy={copy.interactive} />
@@ -508,29 +555,59 @@ export default function AinvtrySiteApp() {
 
           {activeView === 'technology' && (
             <section key="technology" className="site-view site-view--panel">
-              <div className="site-glass-panel">
+              <div className="site-glass-panel" data-arch-tab={archTab}>
                 <div className="site-panel-header">
                   <div
                     className="site-subtab-group"
                     role="tablist"
                     aria-label="Architecture modules"
+                    onKeyDown={(e) =>
+                      handleTablistArrowKeys(
+                        e,
+                        ['blueprint', 'privacy', 'maps'] as const,
+                        archTab,
+                        'site-arch-tab',
+                        setArchTab
+                      )
+                    }
                   >
                     <button
+                      id="site-arch-tab-blueprint"
                       type="button"
                       role="tab"
-                      aria-selected={archTab === 'stack'}
-                      className={`site-subtab-pill ${archTab === 'stack' ? 'is-active' : ''}`}
+                      aria-selected={archTab === 'blueprint'}
+                      aria-controls="site-arch-tabpanel"
+                      tabIndex={archTab === 'blueprint' ? 0 : -1}
+                      className={`site-subtab-pill ${archTab === 'blueprint' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
-                        setArchTab('stack');
+                        setArchTab('blueprint');
                       }}
                     >
-                      {copy.subtabs.archStack}
+                      {copy.subtabs.archBlueprint}
                     </button>
                     <button
+                      id="site-arch-tab-privacy"
+                      type="button"
+                      role="tab"
+                      aria-selected={archTab === 'privacy'}
+                      aria-controls="site-arch-tabpanel"
+                      tabIndex={archTab === 'privacy' ? 0 : -1}
+                      className={`site-subtab-pill ${archTab === 'privacy' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setArchTab('privacy');
+                      }}
+                    >
+                      {copy.subtabs.archPrivacy}
+                    </button>
+                    <button
+                      id="site-arch-tab-maps"
                       type="button"
                       role="tab"
                       aria-selected={archTab === 'maps'}
+                      aria-controls="site-arch-tabpanel"
+                      tabIndex={archTab === 'maps' ? 0 : -1}
                       className={`site-subtab-pill ${archTab === 'maps' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -539,38 +616,34 @@ export default function AinvtrySiteApp() {
                     >
                       {copy.subtabs.archMaps}
                     </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={archTab === 'vision'}
-                      className={`site-subtab-pill ${archTab === 'vision' ? 'is-active' : ''}`}
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        setArchTab('vision');
-                      }}
-                    >
-                      {copy.subtabs.archCutoutPrivacy}
-                    </button>
                   </div>
-                  <span className="site-pill-badge">{copy.architecture.badge}</span>
+                  <span className="site-pill-badge">
+                    {archTab === 'privacy' ? copy.architecture.privacyBadge : copy.architecture.badge}
+                  </span>
                 </div>
 
-                <div className="site-panel-body">
-                  {archTab === 'stack' && <ArchitectureLayerExplorer copy={copy.architecture} />}
-                  {archTab === 'maps' && <GoogleMapsPipelinePanel copy={copy.architecture} />}
-                  {archTab === 'vision' && (
-                    <div className="site-panel-split site-panel-split--vision">
-                      <IngestionShowcasePanel copy={copy.interactive} />
-                      <div className="site-vision-privacy-col">
-                        <span className="site-pillar-code">
-                          {copy.capabilities.pillars.ingestion.code}
-                        </span>
-                        <h3 className="site-pillar-title">
-                          {copy.capabilities.pillars.ingestion.title}
-                        </h3>
-                        <PrivacyShowcasePanel copy={copy.interactive} />
-                      </div>
-                    </div>
+                <div
+                  id="site-arch-tabpanel"
+                  className="site-panel-body"
+                  role="tabpanel"
+                  aria-labelledby={`site-arch-tab-${archTab}`}
+                >
+                  {archTab === 'blueprint' && (
+                    <EnterpriseBlueprintPanel
+                      copy={copy.architecture}
+                      tapHint={copy.tapHint}
+                      onSelectPrivacyShield={handleJumpToPrivacyShield}
+                    />
+                  )}
+                  {archTab === 'privacy' && (
+                    <PrivacyDefensePanel
+                      copy={copy.architecture}
+                      interactiveCopy={copy.interactive}
+                      initialShieldId={selectedPrivacyShield}
+                    />
+                  )}
+                  {archTab === 'maps' && (
+                    <GoogleMapsPipelinePanel copy={copy.architecture} tapHint={copy.tapHint} />
                   )}
                 </div>
               </div>
@@ -581,11 +654,27 @@ export default function AinvtrySiteApp() {
             <section key="benchmarks" className="site-view site-view--panel">
               <div className="site-glass-panel">
                 <div className="site-panel-header">
-                  <div className="site-subtab-group" role="tablist" aria-label="Benchmark views">
+                  <div
+                    className="site-subtab-group"
+                    role="tablist"
+                    aria-label="Specification views"
+                    onKeyDown={(e) =>
+                      handleTablistArrowKeys(
+                        e,
+                        ['kpi', 'matrix'] as const,
+                        benchTab,
+                        'site-bench-tab',
+                        setBenchTab
+                      )
+                    }
+                  >
                     <button
+                      id="site-bench-tab-kpi"
                       type="button"
                       role="tab"
                       aria-selected={benchTab === 'kpi'}
+                      aria-controls="site-bench-tabpanel"
+                      tabIndex={benchTab === 'kpi' ? 0 : -1}
                       className={`site-subtab-pill ${benchTab === 'kpi' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -595,9 +684,12 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.benchKpi}
                     </button>
                     <button
+                      id="site-bench-tab-matrix"
                       type="button"
                       role="tab"
                       aria-selected={benchTab === 'matrix'}
+                      aria-controls="site-bench-tabpanel"
+                      tabIndex={benchTab === 'matrix' ? 0 : -1}
                       className={`site-subtab-pill ${benchTab === 'matrix' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
@@ -607,14 +699,19 @@ export default function AinvtrySiteApp() {
                       {copy.subtabs.benchMatrix}
                     </button>
                   </div>
-                  <span className="site-pill-badge">{copy.architecture.badge}</span>
+                  <span className="site-pill-badge">{copy.stack.note}</span>
                 </div>
 
-                <div className="site-panel-body">
+                <div
+                  id="site-bench-tabpanel"
+                  className="site-panel-body"
+                  role="tabpanel"
+                  aria-labelledby={`site-bench-tab-${benchTab}`}
+                >
                   {benchTab === 'kpi' ? (
-                    <BenchmarksIrScorecard copy={copy.stack} />
+                    <BenchmarksIrScorecard copy={copy.stack} tapHint={copy.tapHint} />
                   ) : (
-                    <ProductionStackMatrix copy={copy.stack} />
+                    <ProductionStackMatrix copy={copy.stack} tapHint={copy.tapHint} />
                   )}
                 </div>
               </div>
@@ -626,29 +723,18 @@ export default function AinvtrySiteApp() {
               <div className="site-glass-panel" data-about-tab={aboutTab}>
                 <div className="site-panel-header">
                   <div
-                    className="site-subtab-group"
+                    className="site-subtab-group site-subtab-group--stepper"
                     role="tablist"
-                    aria-label="About sections"
-                    onKeyDown={(e) => {
-                      const order: readonly ('mission' | 'roadmap' | 'founder')[] = [
-                        'mission',
-                        'roadmap',
-                        'founder',
-                      ];
-                      const idx = order.indexOf(aboutTab);
-                      let next = -1;
-                      if (e.key === 'ArrowRight') next = (idx + 1) % order.length;
-                      else if (e.key === 'ArrowLeft') next = (idx - 1 + order.length) % order.length;
-                      else if (e.key === 'Home') next = 0;
-                      else if (e.key === 'End') next = order.length - 1;
-                      if (next >= 0) {
-                        e.preventDefault();
-                        const target = order[next];
-                        triggerHaptic('selection');
-                        setAboutTab(target);
-                        document.getElementById(`site-about-tab-${target}`)?.focus();
-                      }
-                    }}
+                    aria-label="About story steps"
+                    onKeyDown={(e) =>
+                      handleTablistArrowKeys(
+                        e,
+                        ['mission', 'roadmap', 'founder'] as const,
+                        aboutTab,
+                        'site-about-tab',
+                        setAboutTab
+                      )
+                    }
                   >
                     <button
                       id="site-about-tab-mission"
@@ -665,6 +751,7 @@ export default function AinvtrySiteApp() {
                     >
                       {copy.subtabs.aboutMission}
                     </button>
+                    <span className="site-stepper-arrow" aria-hidden="true">→</span>
                     <button
                       id="site-about-tab-roadmap"
                       type="button"
@@ -680,6 +767,7 @@ export default function AinvtrySiteApp() {
                     >
                       {copy.subtabs.aboutRoadmap}
                     </button>
+                    <span className="site-stepper-arrow" aria-hidden="true">→</span>
                     <button
                       id="site-about-tab-founder"
                       type="button"
@@ -707,10 +795,26 @@ export default function AinvtrySiteApp() {
                   role="tabpanel"
                   aria-labelledby={`site-about-tab-${aboutTab}`}
                 >
-                  {aboutTab === 'mission' && <AboutMissionPanel copy={copy.mission} />}
-                  {aboutTab === 'roadmap' && <AboutRoadmapPanel copy={copy.vision} />}
+                  {aboutTab === 'mission' && (
+                    <AboutMissionPanel
+                      copy={copy.mission}
+                      tapHint={copy.tapHint}
+                      onNextStep={() => setAboutTab('roadmap')}
+                    />
+                  )}
+                  {aboutTab === 'roadmap' && (
+                    <AboutRoadmapPanel
+                      copy={copy.vision}
+                      tapHint={copy.tapHint}
+                      onNextStep={() => setAboutTab('founder')}
+                    />
+                  )}
                   {aboutTab === 'founder' && (
-                    <AboutFounderPanel copy={copy.vision} betaMailto={betaMailto} />
+                    <AboutFounderPanel
+                      copy={copy.vision}
+                      betaMailto={betaMailto}
+                      onBackToMission={() => setAboutTab('mission')}
+                    />
                   )}
                 </div>
               </div>

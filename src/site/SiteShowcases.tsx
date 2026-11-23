@@ -1,20 +1,42 @@
-import { useState } from 'react';
-import {
-  Calendar,
-  Camera,
-  Cpu,
-  HardDrive,
-  ShieldCheck,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { useId, useState } from 'react';
+import { Calendar, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { SiteIcon } from './SiteIcon.tsx';
 import {
   resolveAppPreviewSrc,
   type SiteAppPreviewScreen,
   type SiteCopy,
   type SiteLang,
+  type SitePillarCopy,
   type SiteTheme,
 } from './siteContent.ts';
 
+function handleArrowKeys<T extends string>(
+  e: React.KeyboardEvent<HTMLDivElement>,
+  ids: readonly T[],
+  current: T,
+  domPrefix: string,
+  onSelect: (id: T) => void
+) {
+  const idx = ids.indexOf(current);
+  if (idx < 0) return;
+  let nextIdx = -1;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextIdx = (idx + 1) % ids.length;
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') nextIdx = (idx - 1 + ids.length) % ids.length;
+  else if (e.key === 'Home') nextIdx = 0;
+  else if (e.key === 'End') nextIdx = ids.length - 1;
+  if (nextIdx >= 0) {
+    e.preventDefault();
+    const target = ids[nextIdx];
+    triggerHaptic('selection');
+    onSelect(target);
+    document.getElementById(`${domPrefix}-${target}`)?.focus();
+  }
+}
+
+/**
+ * Icon-First Live Developing Mobile App Preview Showcase (4-Mode Synced).
+ */
 export function AppPreviewShowcasePanel({
   copy,
   lang,
@@ -25,10 +47,12 @@ export function AppPreviewShowcasePanel({
   readonly theme: SiteTheme;
 }) {
   const [activeId, setActiveId] = useState<SiteAppPreviewScreen['id']>('outfits');
+  const uid = useId();
   const activeScreen =
     copy.screens.find((screen) => screen.id === activeId) ?? copy.screens[0];
   const resolvedSrc = resolveAppPreviewSrc(activeScreen.id, lang, theme);
   const modeLabel = `${lang === 'ko' ? '한국어' : 'English'} · ${theme === 'dark' ? (lang === 'ko' ? '다크' : 'Dark') : lang === 'ko' ? '라이트' : 'Light'}`;
+  const screenIds = copy.screens.map((s) => s.id);
 
   return (
     <div className="site-app-preview-layout">
@@ -38,28 +62,58 @@ export function AppPreviewShowcasePanel({
           <span className="site-sync-mode-label">{modeLabel}</span>
         </div>
         <h2 className="site-pillar-title">{copy.title}</h2>
-        <p className="site-pillar-desc">{copy.description}</p>
 
-        <div className="site-preview-selector-grid" role="tablist" aria-label="App preview screens">
-          {copy.screens.map((screen, idx) => {
+        <div
+          className="site-preview-selector-grid"
+          role="tablist"
+          aria-label="App preview screens"
+          onKeyDown={(e) =>
+            handleArrowKeys(e, screenIds, activeScreen.id, `${uid}-screen`, setActiveId)
+          }
+        >
+          {copy.screens.map((screen) => {
             const isSelected = screen.id === activeScreen.id;
             return (
               <button
                 key={screen.id}
+                id={`${uid}-screen-${screen.id}`}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-controls={`${uid}-screen-caption`}
+                tabIndex={isSelected ? 0 : -1}
                 className={`site-preview-card-btn ${isSelected ? 'is-active' : ''}`}
-                onClick={() => setActiveId(screen.id)}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setActiveId(screen.id);
+                }}
               >
-                <span className="site-preview-card-index">0{idx + 1}</span>
+                <span className="site-icon-tile-glyph">
+                  <SiteIcon name={screen.icon} size={17} />
+                </span>
                 <span className="site-preview-card-text">
                   <strong>{screen.tabLabel}</strong>
-                  <small>{screen.title}</small>
+                  <small>{screen.metricTag}</small>
                 </span>
               </button>
             );
           })}
+        </div>
+
+        <div
+          id={`${uid}-screen-caption`}
+          className="site-icon-inspector site-preview-desktop-inspector"
+          role="tabpanel"
+          aria-labelledby={`${uid}-screen-${activeScreen.id}`}
+          aria-live="polite"
+        >
+          <div className="site-icon-inspector-main">
+            <span className="site-icon-inspector-glyph">
+              <SiteIcon name={activeScreen.icon} size={14} />
+            </span>
+            <strong className="site-icon-inspector-title">{activeScreen.title}</strong>
+            <p className="site-icon-inspector-text">{activeScreen.caption}</p>
+          </div>
         </div>
       </div>
 
@@ -83,28 +137,119 @@ export function AppPreviewShowcasePanel({
 
         <p className="site-preview-caption-text">{activeScreen.caption}</p>
 
-        {/* Compact 4-pill switcher for mobile viewports */}
+        {/* Compact 4-icon switcher for mobile viewports */}
         <div
           className="site-preview-mobile-pills"
           role="tablist"
           aria-label="Mobile app preview selector"
+          onKeyDown={(e) =>
+            handleArrowKeys(e, screenIds, activeScreen.id, `${uid}-mscreen`, setActiveId)
+          }
         >
           {copy.screens.map((screen) => {
             const isSelected = screen.id === activeScreen.id;
             return (
               <button
                 key={screen.id}
+                id={`${uid}-mscreen-${screen.id}`}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                tabIndex={isSelected ? 0 : -1}
                 className={`site-preview-mobile-pill ${isSelected ? 'is-active' : ''}`}
-                onClick={() => setActiveId(screen.id)}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setActiveId(screen.id);
+                }}
               >
-                {screen.tabLabel}
+                <SiteIcon name={screen.icon} size={13} />
+                <span>{screen.tabLabel}</span>
               </button>
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Icon-First Studio Feature Dock replacing long text walls & bullet lists.
+ * Clicking any of the 4 sculptural feature icons updates the concise 1-line inspector below.
+ */
+export function StudioFeatureIconDock({
+  pillar,
+  tapHint,
+}: {
+  readonly pillar: SitePillarCopy;
+  readonly tapHint: string;
+}) {
+  const [activeId, setActiveId] = useState<string>(pillar.features[0].id);
+  const uid = useId();
+  const activeFeature =
+    pillar.features.find((f) => f.id === activeId) ?? pillar.features[0];
+  const featIds = pillar.features.map((f) => f.id);
+
+  return (
+    <div className="site-studio-icon-dock">
+      <div className="site-studio-dock-head">
+        <span className="site-pillar-code">{pillar.code}</span>
+        <span className="site-pillar-eyebrow">{pillar.eyebrow}</span>
+        <h2 className="site-pillar-title">{pillar.title}</h2>
+      </div>
+
+      <div
+        className="site-studio-feature-grid"
+        role="tablist"
+        aria-label={pillar.title}
+        onKeyDown={(e) =>
+          handleArrowKeys(e, featIds, activeFeature.id, `${uid}-feat`, setActiveId)
+        }
+      >
+        {pillar.features.map((feat) => {
+          const isSelected = feat.id === activeFeature.id;
+          return (
+            <button
+              key={feat.id}
+              id={`${uid}-feat-${feat.id}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={`${uid}-feat-panel`}
+              tabIndex={isSelected ? 0 : -1}
+              className={`site-studio-feat-btn ${isSelected ? 'is-active' : ''}`}
+              onClick={() => {
+                triggerHaptic('selection');
+                setActiveId(feat.id);
+              }}
+            >
+              <span className="site-icon-tile-glyph">
+                <SiteIcon name={feat.icon} size={18} />
+              </span>
+              <span className="site-studio-feat-copy">
+                <strong>{feat.label}</strong>
+                <small>{feat.tag}</small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        id={`${uid}-feat-panel`}
+        className="site-icon-inspector"
+        role="tabpanel"
+        aria-labelledby={`${uid}-feat-${activeFeature.id}`}
+        aria-live="polite"
+      >
+        <div className="site-icon-inspector-main">
+          <span className="site-icon-inspector-glyph">
+            <SiteIcon name={activeFeature.icon} size={15} />
+          </span>
+          <strong className="site-icon-inspector-title">{activeFeature.label}</strong>
+          <p className="site-icon-inspector-text">{activeFeature.detail}</p>
+        </div>
+        <span className="site-inspector-hint-sr">{tapHint}</span>
       </div>
     </div>
   );
@@ -174,25 +319,15 @@ export function AtelierShowcasePanel({
                 type="button"
                 className={`site-stance-pill ${stance === id ? 'is-active' : ''}`}
                 aria-pressed={stance === id}
-                onClick={() => setStance(id)}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setStance(id);
+                }}
               >
                 {label}
               </button>
             ))}
           </div>
-        </div>
-      </div>
-
-      <div className="site-mini-spec-row">
-        <div className="site-mini-spec">
-          <span className="site-mini-spec-label">{copy.rigLabel}</span>
-          <strong className="site-mini-spec-value">{copy.rigValue}</strong>
-          <span className="site-mini-spec-sub">{copy.rigMeta}</span>
-        </div>
-        <div className="site-mini-spec">
-          <span className="site-mini-spec-label">{copy.morphLabel}</span>
-          <strong className="site-mini-spec-value">{copy.morphValue}</strong>
-          <span className="site-mini-spec-sub">{copy.morphMeta}</span>
         </div>
       </div>
     </div>
@@ -209,7 +344,6 @@ export function IngestionShowcasePanel({
   return (
     <div className="site-showcase-frame site-showcase-ingestion">
       <div className="site-compare-viewport" data-no-marble="true">
-        {/* After layer: Alpha-matted studio WebP cutout on precision alpha grid */}
         <div className="site-compare-layer site-compare-after">
           <img
             src="/assets/garments/beige-trench.webp"
@@ -221,7 +355,6 @@ export function IngestionShowcasePanel({
           <span className="site-compare-chip site-compare-chip--right">{copy.afterLabel}</span>
         </div>
 
-        {/* Before layer: Clipped original photograph */}
         <div
           className="site-compare-layer site-compare-before"
           style={{ clipPath: `inset(0 ${100 - splitPct}% 0 0)` }}
@@ -258,10 +391,8 @@ export function IngestionShowcasePanel({
       </div>
 
       <div className="site-ingestion-footer">
-        <div>
-          <p className="site-ingestion-badge">{copy.ingestionBadge}</p>
-          <p className="site-ingestion-meta">{copy.ingestionMeta}</p>
-        </div>
+        <span className="site-ingestion-badge">{copy.ingestionBadge}</span>
+        <span className="site-ingestion-meta">{copy.ingestionMeta}</span>
       </div>
     </div>
   );
@@ -287,7 +418,7 @@ export function IntelligenceShowcasePanel({
         <div className="site-bento-card">
           <span className="site-bento-label">{copy.balanceLabel}</span>
           <div className="site-bento-ring-row">
-            <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true" className="site-ring-svg">
+            <svg width="42" height="42" viewBox="0 0 44 44" aria-hidden="true" className="site-ring-svg">
               <circle cx="22" cy="22" r="18" className="site-ring-track" />
               <circle
                 cx="22"
@@ -306,58 +437,18 @@ export function IntelligenceShowcasePanel({
         </div>
       </div>
 
-      <div className="site-bento-strip">
-        <div className="site-bento-strip-head">
-          <span className="site-bento-strip-title">
-            <ShieldCheck size={15} />
-            {copy.dupTitle}
-          </span>
-          <span className="site-active-badge">{copy.dupStatus}</span>
+      <div className="site-bento-compact-row">
+        <div className="site-bento-pill-card">
+          <ShieldCheck size={15} aria-hidden="true" />
+          <strong>{copy.dupTitle}</strong>
+          <span className="site-bp-spec-tag">{copy.dupStatus}</span>
         </div>
-        <p className="site-bento-strip-desc">{copy.dupDesc}</p>
-      </div>
 
-      <div className="site-bento-ootd">
-        <div className="site-ootd-date-badge">
-          <Calendar size={14} />
-          <span>{copy.ootdDate}</span>
-        </div>
-        <div className="site-ootd-copy">
+        <div className="site-bento-pill-card">
+          <Calendar size={15} aria-hidden="true" />
           <strong>{copy.ootdTitle}</strong>
-          <span>{copy.ootdMeta}</span>
+          <span className="site-bp-spec-tag">{copy.ootdDate}</span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-export function PrivacyShowcasePanel({
-  copy,
-}: {
-  readonly copy: SiteCopy['interactive'];
-}) {
-  const icons = [Camera, Cpu, HardDrive] as const;
-
-  return (
-    <div className="site-showcase-frame site-showcase-privacy">
-      <p className="site-topology-kicker">{copy.topologyTitle}</p>
-      <div className="site-topology-grid">
-        {copy.topologySteps.map((step, idx) => {
-          const Icon = icons[idx] ?? HardDrive;
-          return (
-            <div key={step.title} className="site-topology-node">
-              <span className="site-topology-icon">
-                <Icon size={18} />
-              </span>
-              <strong>{step.title}</strong>
-              <span>{step.sub}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="site-topology-bar">
-        <span>{copy.topologyFooterLeft}</span>
-        <strong className="site-topology-zero">{copy.topologyFooterRight}</strong>
       </div>
     </div>
   );
