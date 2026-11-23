@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
 import { observeOpenModalDialogs } from '../../utils/adaptiveFramePacer.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
@@ -5,6 +6,7 @@ import {
   createLoginThreeController,
   DEFAULT_LOGIN_THREE_VARIANT,
   type LoginThreeController,
+  type LoginThreeOverlayRenderContext,
   type LoginThreeVariantId,
   type MarbleStepSnapshot,
 } from './loginThreeScenes.ts';
@@ -53,6 +55,19 @@ export interface UseMarbleBackdropStageOptions {
   readonly listenDocumentScroll?: boolean;
   /** Optional website-only bottom floor rail selector for physical marble containment. */
   readonly floorRailSelector?: string;
+  /** Optional single-canvas Pass 4 3D stage overlay callbacks (website-only; unused on Login). */
+  readonly onOverlayRender?: (ctx: LoginThreeOverlayRenderContext) => boolean;
+  readonly onOverlayResize?: (
+    width: number,
+    height: number,
+    renderer: THREE.WebGLRenderer,
+    isSoftwareGl?: boolean
+  ) => void;
+  readonly onOverlayDispose?: () => void;
+  readonly onOverlayContextRestored?: (renderer: THREE.WebGLRenderer) => void;
+  readonly externalMarbleHidden?: boolean;
+  readonly disableHeroMarbleInput?: boolean;
+  readonly onControllerReady?: (ctrl: LoginThreeController | null) => void;
 }
 
 export interface UseMarbleBackdropStageResult {
@@ -102,6 +117,8 @@ export function useMarbleBackdropStage(
     cooldownResetKey,
     cooldownResetMs = 680,
     floorRailSelector,
+    externalMarbleHidden,
+    disableHeroMarbleInput = false,
   } = options;
 
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -173,6 +190,18 @@ export function useMarbleBackdropStage(
     if (!portalSurgeOrigin) return;
     controllerRef.current?.triggerLoginSurge(portalSurgeOrigin.x, portalSurgeOrigin.y);
   }, [portalSurgeOrigin]);
+
+  useEffect(() => {
+    if (typeof externalMarbleHidden !== 'boolean') return;
+    controllerRef.current?.setExternalMarbleHidden?.(externalMarbleHidden);
+  }, [externalMarbleHidden]);
+
+  useEffect(() => {
+    if (disableHeroMarbleInput) {
+      controllerRef.current?.setPointerDown?.(false);
+      controllerRef.current?.setTilt(0, 0, 0, 0);
+    }
+  }, [disableHeroMarbleInput]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -258,6 +287,7 @@ export function useMarbleBackdropStage(
       }
 
       const opts = optionsRef.current;
+      if (opts.disableHeroMarbleInput) return;
       const minStrikeSpeed = snap.isGrabbing ? 0.04 : (opts.minStrikeSpeed ?? 0.16);
       if (!snap.userDriven || snap.elapsed < 0.45 || snap.speed < minStrikeSpeed) return;
 
@@ -364,6 +394,7 @@ export function useMarbleBackdropStage(
       activeTimers.add(timer);
     };
 
+    const initialOpts = optionsRef.current;
     const controller = createLoginThreeController(canvas, {
       initialDark: initialDarkRef.current,
       initialStage: initialStageRef.current,
@@ -371,14 +402,32 @@ export function useMarbleBackdropStage(
       reducedMotion,
       onMarbleStep: handleMarbleStep,
       onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
+      onOverlayRender: initialOpts.onOverlayRender
+        ? (ctx) => optionsRef.current.onOverlayRender?.(ctx) ?? false
+        : undefined,
+      onOverlayResize: initialOpts.onOverlayResize
+        ? (w, h, renderer, isSoftwareGl) =>
+            optionsRef.current.onOverlayResize?.(w, h, renderer, isSoftwareGl)
+        : undefined,
+      onOverlayDispose: initialOpts.onOverlayDispose
+        ? () => optionsRef.current.onOverlayDispose?.()
+        : undefined,
+      onOverlayContextRestored: initialOpts.onOverlayContextRestored
+        ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
+        : undefined,
     });
 
     if (!controller) {
       setWebglFallback(true);
+      optionsRef.current.onControllerReady?.(null);
       return undefined;
     }
 
     controllerRef.current = controller;
+    if (typeof optionsRef.current.externalMarbleHidden === 'boolean') {
+      controller.setExternalMarbleHidden?.(optionsRef.current.externalMarbleHidden);
+    }
+    optionsRef.current.onControllerReady?.(controller);
 
     // Auto-pause WebGL loop at 0fps whenever any modal dialog opens (shared across Login & Website)
     const stopModalObserver = observeOpenModalDialogs((hasOpenModal) => {
@@ -439,6 +488,7 @@ export function useMarbleBackdropStage(
       if (document.hidden || pausedModeRef.current || !Number.isFinite(e.deltaY) || e.deltaY === 0) {
         return;
       }
+      if (optionsRef.current.disableHeroMarbleInput) return;
       if (optionsRef.current.isEventExcluded?.(e.target)) return;
       const clientX = Number.isFinite(e.clientX) && e.clientX > 0 ? e.clientX : 0;
       const scrollX =
@@ -454,6 +504,7 @@ export function useMarbleBackdropStage(
     const onPointerDown = (e: PointerEvent) => {
       if (document.hidden || pausedModeRef.current) return;
       const opts = optionsRef.current;
+      if (opts.disableHeroMarbleInput) return;
       if (opts.isEventExcluded?.(e.target)) return;
 
       const target = e.target as HTMLElement | null;
@@ -483,6 +534,7 @@ export function useMarbleBackdropStage(
     const onPointerMove = (e: PointerEvent) => {
       if (document.hidden || pausedModeRef.current) return;
       const opts = optionsRef.current;
+      if (opts.disableHeroMarbleInput) return;
       if (opts.isEventExcluded?.(e.target)) return;
       if (e.buttons === 0 && opts.ignoreHoverOverSelector) {
         const target = e.target as HTMLElement | null;
@@ -514,6 +566,7 @@ export function useMarbleBackdropStage(
 
     const onTouchStart = (e: TouchEvent) => {
       if (document.hidden || pausedModeRef.current || e.touches.length !== 1) return;
+      if (optionsRef.current.disableHeroMarbleInput) return;
       if (optionsRef.current.isEventExcluded?.(e.target)) return;
       const t = e.touches[0];
       const { nx, ny } = getNormalizedPointer(t.clientX, t.clientY);
@@ -525,6 +578,7 @@ export function useMarbleBackdropStage(
       if (document.hidden || pausedModeRef.current || !touchFallbackActive || e.touches.length !== 1) {
         return;
       }
+      if (optionsRef.current.disableHeroMarbleInput) return;
       if (optionsRef.current.isEventExcluded?.(e.target)) return;
       const t = e.touches[0];
       const { nx, ny } = getNormalizedPointer(t.clientX, t.clientY);
@@ -550,6 +604,7 @@ export function useMarbleBackdropStage(
 
     const onDeviceOrientation = (e: DeviceOrientationEvent) => {
       if (document.hidden || pausedModeRef.current) return;
+      if (optionsRef.current.disableHeroMarbleInput) return;
       if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
       if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return;
 
@@ -704,6 +759,7 @@ export function useMarbleBackdropStage(
       resizeObserver?.disconnect();
       stopModalObserver();
       modalPausedRef.current = false;
+      optionsRef.current.onControllerReady?.(null);
       controller.dispose();
       controllerRef.current = null;
     };

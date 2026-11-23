@@ -12,7 +12,7 @@ dist
 dist-site
 dist-ssr
 *.local
-data/
+/data/
 .env
 .env.*
 !.env.example
