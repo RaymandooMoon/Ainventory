@@ -4,8 +4,10 @@ import {
   BarChart3,
   Box,
   Calendar,
+  Camera,
   CheckCircle2,
   Cloud,
+  CloudRain,
   CloudSun,
   Coins,
   Compass,
@@ -32,14 +34,18 @@ import {
   Rotate3d,
   ScanFace,
   Server,
+  Share2,
   Shield,
   ShieldCheck,
   Shirt,
   ShoppingBag,
   Smartphone,
   Sparkles,
+  Tag,
   Trash2,
   TrendingDown,
+  Truck,
+  Umbrella,
   UserCheck,
   Workflow,
   Zap,
@@ -52,8 +58,10 @@ export type SiteIconKey =
   | 'barChart'
   | 'box'
   | 'calendar'
+  | 'camera'
   | 'checkCircle'
   | 'cloud'
+  | 'cloudRain'
   | 'cloudSun'
   | 'coins'
   | 'compass'
@@ -80,14 +88,18 @@ export type SiteIconKey =
   | 'rotate3d'
   | 'scanFace'
   | 'server'
+  | 'share2'
   | 'shield'
   | 'shieldCheck'
   | 'shirt'
   | 'shoppingBag'
   | 'smartphone'
   | 'sparkles'
+  | 'tag'
   | 'trash'
   | 'trendingDown'
+  | 'truck'
+  | 'umbrella'
   | 'userCheck'
   | 'workflow'
   | 'zap';
@@ -98,8 +110,10 @@ const ICON_MAP: Readonly<Record<SiteIconKey, React.ComponentType<LucideProps>>> 
   barChart: BarChart3,
   box: Box,
   calendar: Calendar,
+  camera: Camera,
   checkCircle: CheckCircle2,
   cloud: Cloud,
+  cloudRain: CloudRain,
   cloudSun: CloudSun,
   coins: Coins,
   compass: Compass,
@@ -126,14 +140,18 @@ const ICON_MAP: Readonly<Record<SiteIconKey, React.ComponentType<LucideProps>>> 
   rotate3d: Rotate3d,
   scanFace: ScanFace,
   server: Server,
+  share2: Share2,
   shield: Shield,
   shieldCheck: ShieldCheck,
   shirt: Shirt,
   shoppingBag: ShoppingBag,
   smartphone: Smartphone,
   sparkles: Sparkles,
+  tag: Tag,
   trash: Trash2,
   trendingDown: TrendingDown,
+  truck: Truck,
+  umbrella: Umbrella,
   userCheck: UserCheck,
   workflow: Workflow,
   zap: Zap,

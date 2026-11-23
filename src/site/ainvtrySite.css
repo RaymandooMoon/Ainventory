@@ -930,7 +930,7 @@ html[lang='ko'] .site-vision-quote {
   overflow: hidden;
 }
 
-@media (max-height: 670px) {
+@media (max-height: 670px), (max-width: 859px) and (max-height: 780px) {
   .site-panel-body {
     justify-content: flex-start;
     overflow-y: auto;
@@ -3624,9 +3624,10 @@ html[lang='ko'] .site-vision-quote {
 
   .site-mission-manifesto {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px 8px;
   }
 
   .site-mission-manifesto .site-eyebrow,
@@ -3838,6 +3839,1059 @@ html[lang='ko'] .site-vision-quote {
   .site-opacity-drag-btn {
     padding: 0 12px 0 9px;
     font-size: 0.74rem;
+  }
+}
+
+/* ==========================================================================
+ * v3 Overhaul: Subtitle-Free Minimal Tiles, Variant B 6-Cut Clay Comic Theater,
+ * Variant B Google API x Three.js Live Theater & Unified Mission/Roadmap Strip
+ * ========================================================================== */
+
+.site-preview-card-title,
+.site-studio-feat-title,
+.site-spec-chip-title,
+.site-mission-pillar-title,
+.site-loop-node-title {
+  font-size: 0.79rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-mission-pillar-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-loop-node-title {
+  font-size: 0.73rem;
+}
+
+.site-spec-chip-title {
+  font-size: 0.74rem;
+}
+
+.site-loop-exit-chip > strong {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+  line-height: 1.25;
+}
+
+.site-icon-tile--compact {
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 92px;
+}
+
+.site-bp-node-btn {
+  min-height: 36px;
+}
+
+.site-bp-gov-btn {
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Monochrome Apple HIG Status Pills (LIVE / LIVE + TO-DO / TO-DO) */
+.site-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  font-size: 0.6rem;
+  font-weight: 720;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.site-status-pill.is-live {
+  background: var(--accent-sand);
+  color: #111114;
+}
+
+.site-status-pill.is-hybrid {
+  background: color-mix(in srgb, var(--accent-sand) 18%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--accent-sand) 65%, transparent);
+  color: var(--accent-sand);
+}
+
+.site-status-pill.is-todo {
+  background: color-mix(in srgb, var(--ink-primary) 10%, var(--bg-elevated));
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-secondary);
+}
+
+.site-status-dot {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 0.54rem;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.site-status-dot.is-live {
+  background: color-mix(in srgb, var(--accent-sand) 20%, transparent);
+  color: var(--accent-sand);
+}
+
+.site-status-dot.is-hybrid {
+  background: color-mix(in srgb, var(--accent-sand) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-sand) 45%, transparent);
+  color: var(--accent-sand);
+}
+
+.site-status-dot.is-todo {
+  background: color-mix(in srgb, var(--ink-primary) 8%, transparent);
+  border: 1px solid var(--hairline);
+  color: var(--ink-tertiary);
+}
+
+.site-root[data-site-theme='light'] .site-status-pill.is-live {
+  background: #1d1d1f;
+  color: #ffffff;
+}
+
+.site-root[data-site-theme='light'] .site-status-pill.is-hybrid,
+.site-root[data-site-theme='light'] .site-status-dot.is-live,
+.site-root[data-site-theme='light'] .site-status-dot.is-hybrid {
+  color: #5c4928;
+  border-color: rgba(92, 73, 40, 0.35);
+  background: rgba(154, 123, 66, 0.14);
+}
+
+.site-root[data-site-theme='light'] .site-status-dot.is-todo {
+  color: rgba(29, 29, 31, 0.78);
+  border-color: rgba(29, 29, 31, 0.24);
+  background: rgba(29, 29, 31, 0.08);
+}
+
+/* Dark theater frames stay obsidian in both themes — enforce high-contrast dark-surface tokens */
+.site-journey-stage-frame,
+.site-gapi-theater {
+  --accent-sand: #e2cfa8;
+  --ink-primary: #f5f5f7;
+  --ink-secondary: rgba(245, 245, 247, 0.86);
+  --hairline: rgba(255, 255, 255, 0.16);
+  --hairline-strong: rgba(255, 255, 255, 0.28);
+  --bg-elevated: rgba(18, 19, 24, 0.88);
+  --bg-surface: rgba(18, 19, 24, 0.82);
+}
+
+.site-root[data-site-theme='light'] .site-journey-stage-frame .site-status-pill.is-live,
+.site-root[data-site-theme='light'] .site-gapi-theater .site-status-pill.is-live {
+  background: #e2cfa8;
+  color: #111114;
+}
+
+.site-root[data-site-theme='light'] .site-journey-stage-frame .site-status-pill.is-hybrid,
+.site-root[data-site-theme='light'] .site-gapi-theater .site-status-pill.is-hybrid {
+  background: rgba(22, 23, 28, 0.86);
+  border-color: rgba(226, 207, 168, 0.72);
+  color: #f3e4c5;
+}
+
+.site-journey-stage-frame .site-status-pill.is-todo,
+.site-gapi-theater .site-status-pill.is-todo {
+  background: rgba(20, 22, 28, 0.88);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #f2f2f6;
+}
+
+.site-gapi-mood-pills .site-stance-pill {
+  background: rgba(16, 17, 22, 0.86);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ececf0;
+}
+
+.site-gapi-mood-pills .site-stance-pill.is-active {
+  background: #e2cfa8;
+  border-color: #e2cfa8;
+  color: #111114;
+}
+
+/* ==========================================================================
+ * Variant B — About 01 User Journey: Hero 3D Clay Comic Theater + 6-Cut Deck
+ * ========================================================================== */
+
+.site-journey-wrap,
+.site-gapi-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+}
+
+.site-journey-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+@media (min-width: 860px) {
+  .site-journey-split {
+    grid-template-columns: 1.24fr 0.96fr;
+    gap: 16px;
+  }
+}
+
+.site-journey-theater {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.site-journey-stage-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 296px;
+  max-height: 368px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+  background: #0d0e11;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.site-journey-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  animation: siteClayFadeIn 340ms var(--site-ease) both;
+}
+
+@keyframes siteClayFadeIn {
+  from {
+    opacity: 0.35;
+    transform: scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.site-journey-stage-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 9, 12, 0.62) 0%,
+    rgba(8, 9, 12, 0.04) 28%,
+    rgba(8, 9, 12, 0.14) 60%,
+    rgba(8, 9, 12, 0.86) 100%
+  );
+}
+
+.site-journey-stage-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.site-journey-hud-left,
+.site-journey-hud-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.site-journey-cut-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 9999px;
+  background: rgba(14, 15, 19, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f5f5f7;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
+}
+
+.site-journey-nav-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(14, 15, 19, 0.78);
+  color: #f5f5f7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.site-journey-nav-icon:hover {
+  border-color: var(--accent-sand);
+  background: rgba(24, 25, 30, 0.9);
+}
+
+.site-journey-play-btn {
+  position: static;
+  background: rgba(14, 15, 19, 0.74);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f5f5f7;
+  backdrop-filter: blur(8px);
+}
+
+.site-journey-bubble {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 11px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 207, 168, 0.34);
+  background: rgba(12, 13, 17, 0.82);
+  backdrop-filter: blur(12px);
+  color: #f5f5f7;
+}
+
+.site-journey-bubble-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(226, 207, 168, 0.16);
+  border: 1px solid rgba(226, 207, 168, 0.42);
+  color: var(--accent-sand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.site-journey-bubble p {
+  margin: 0;
+  font-size: 0.77rem;
+  font-weight: 560;
+  line-height: 1.42;
+  color: #f5f5f7;
+}
+
+/* Right: 2x3 Subtitle-Free 6-Cut Filmstrip */
+.site-journey-deck {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.site-journey-filmstrip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.site-journey-cut-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 62px;
+  min-width: 0;
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.site-journey-cut-btn:hover {
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+}
+
+.site-journey-cut-btn.is-active {
+  border-color: var(--accent-sand);
+  background: color-mix(in srgb, var(--accent-sand) 12%, var(--bg-elevated));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-sand) 32%, transparent);
+}
+
+.site-journey-cut-thumb {
+  width: 48px;
+  height: 38px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: #0d0e11;
+  flex-shrink: 0;
+}
+
+.site-journey-cut-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.site-journey-cut-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.site-journey-cut-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.site-journey-cut-num {
+  font-size: 0.6rem;
+  font-weight: 720;
+  color: var(--ink-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.site-journey-cut-btn.is-active .site-journey-cut-num {
+  color: var(--accent-sand);
+}
+
+.site-journey-cut-title {
+  font-size: 0.77rem;
+  font-weight: 660;
+  color: var(--ink-primary);
+  line-height: 1.22;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-journey-deck-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.site-journey-api-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.site-journey-api-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  color: var(--ink-secondary);
+  font-size: 0.64rem;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+ * Variant B — Architecture 03 Google API x 3D Live Engine Theater + 2x3 Dock
+ * ========================================================================== */
+
+.site-gapi-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+@media (min-width: 860px) {
+  .site-gapi-split {
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 16px;
+  }
+}
+
+.site-gapi-theater {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid var(--hairline-strong);
+  background: radial-gradient(
+    circle at 50% 35%,
+    color-mix(in srgb, var(--accent-sand) 11%, #14151a) 0%,
+    #0c0d11 76%
+  );
+  color: #f5f5f7;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 288px;
+  max-height: 360px;
+}
+
+.site-gapi-theater-hud {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.site-gapi-scene {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 228px;
+  overflow: hidden;
+}
+
+.site-gapi-weather-stage,
+.site-gapi-vector-stage,
+.site-gapi-vertex-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 228px;
+  padding-top: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-gapi-weather-glow {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(226, 207, 168, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+.site-gapi-weather-stage[data-mood='sunny'] .site-gapi-weather-glow {
+  transform: translate(44px, -28px) scale(1.12);
+  opacity: 0.95;
+}
+
+.site-gapi-weather-svg,
+.site-gapi-map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.site-rain-streak {
+  stroke: rgba(226, 207, 168, 0.72);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  animation: siteRainDrop 1.25s linear infinite;
+}
+
+.site-rain-streak.s2 {
+  animation-delay: -0.45s;
+}
+
+.site-rain-streak.s3 {
+  animation-delay: -0.82s;
+}
+
+@keyframes siteRainDrop {
+  0% {
+    transform: translate(6px, -26px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(-10px, 34px);
+    opacity: 0;
+  }
+}
+
+.site-rain-splash {
+  fill: var(--accent-sand);
+  animation: siteSplashPulse 1.3s ease-out infinite;
+}
+
+.site-rain-splash.s2 {
+  animation-delay: -0.6s;
+}
+
+@keyframes siteSplashPulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+.site-wind-ribbon {
+  stroke: rgba(226, 207, 168, 0.56);
+  stroke-width: 1.4;
+  stroke-dasharray: 28 24;
+  stroke-linecap: round;
+  animation: siteWindFlow 2.6s linear infinite;
+}
+
+.site-wind-ribbon.r2 {
+  animation-duration: 3.3s;
+  stroke-opacity: 0.38;
+}
+
+@keyframes siteWindFlow {
+  from {
+    stroke-dashoffset: 52;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.site-gapi-garment-img {
+  position: relative;
+  z-index: 2;
+  height: 132px;
+  margin-top: 22px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.55));
+  transition: transform 280ms var(--site-ease);
+}
+
+.site-gapi-garment-img.is-compact {
+  height: 136px;
+  margin-top: 8px;
+}
+
+.site-gapi-weather-stage[data-mood='wind'] .site-gapi-garment-img {
+  transform: skewX(-3deg) translateX(4px);
+}
+
+.site-gapi-weather-stage[data-mood='rain'] .site-gapi-garment-img {
+  transform: translateY(10px) scale(0.95);
+}
+
+.site-gapi-mood-pills {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.site-gapi-photo-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.site-gapi-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.site-gapi-photo-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 9, 12, 0.54) 0%,
+    rgba(8, 9, 12, 0.08) 42%,
+    rgba(8, 9, 12, 0.84) 100%
+  );
+}
+
+.site-gapi-compass-chip {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 207, 168, 0.4);
+  background: rgba(12, 13, 17, 0.78);
+  color: var(--accent-sand);
+  font-size: 0.62rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
+}
+
+.site-gapi-vector-pills {
+  position: relative;
+  z-index: 2;
+  margin-top: auto;
+  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.site-gapi-vector-pills span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 207, 168, 0.32);
+  background: rgba(16, 17, 22, 0.82);
+  color: #f5f5f7;
+  font-size: 0.62rem;
+  font-weight: 620;
+}
+
+.site-gapi-theater-foot {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 13px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 11, 15, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.site-gapi-theater-foot strong {
+  font-size: 0.8rem;
+  font-weight: 660;
+  color: #f5f5f7;
+  line-height: 1.25;
+}
+
+.site-gapi-theater-foot span {
+  font-size: 0.64rem;
+  color: var(--accent-sand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right: 2x3 Subtitle-Free Google API Icon Dock */
+.site-gapi-dock-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.site-gapi-dock-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.site-gapi-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 76px;
+  min-width: 0;
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.site-gapi-tile:hover {
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+}
+
+.site-gapi-tile.is-active {
+  border-color: var(--accent-sand);
+  background: color-mix(in srgb, var(--accent-sand) 12%, var(--bg-elevated));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-sand) 32%, transparent);
+}
+
+.site-gapi-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.site-gapi-tile-title {
+  font-size: 0.8rem;
+  font-weight: 660;
+  color: var(--ink-primary);
+  line-height: 1.22;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Unified 02 Mission & Roadmap Compact Stage Strip + 03 Founder Moats */
+.site-mission-roadmap-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.site-roadmap-mini-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 11px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.site-roadmap-mini-btn:hover {
+  border-color: var(--hairline-strong);
+}
+
+.site-roadmap-mini-btn.is-active {
+  border-color: var(--accent-sand);
+  background: color-mix(in srgb, var(--accent-sand) 12%, var(--bg-elevated));
+}
+
+.site-roadmap-mini-btn strong {
+  font-size: 0.72rem;
+  font-weight: 640;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.site-founder-moats-row {
+  margin-top: 0;
+}
+
+@media (max-width: 859px) {
+  .site-journey-wrap,
+  .site-gapi-wrap {
+    gap: 8px;
+  }
+
+  .site-journey-split,
+  .site-gapi-split {
+    gap: 8px;
+  }
+
+  .site-journey-stage-frame {
+    min-height: 186px;
+    max-height: 206px;
+  }
+
+  .site-journey-bubble {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    padding: 6px 9px;
+    gap: 7px;
+  }
+
+  .site-journey-bubble p {
+    font-size: 0.69rem;
+    line-height: 1.32;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .site-journey-filmstrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .site-journey-cut-btn {
+    min-height: 44px;
+    padding: 5px 7px;
+    gap: 5px;
+  }
+
+  .site-journey-cut-thumb {
+    display: none;
+  }
+
+  .site-journey-cut-title {
+    font-size: 0.68rem;
+  }
+
+  .site-journey-api-chips {
+    display: none;
+  }
+
+  .site-gapi-theater {
+    min-height: 178px;
+    max-height: 202px;
+  }
+
+  .site-gapi-scene {
+    min-height: 138px;
+  }
+
+  .site-gapi-weather-stage,
+  .site-gapi-vector-stage,
+  .site-gapi-vertex-stage {
+    min-height: 138px;
+    padding-top: 26px;
+  }
+
+  .site-gapi-garment-img {
+    height: 78px;
+    margin-top: 14px;
+  }
+
+  .site-gapi-theater-foot {
+    padding: 6px 10px;
+  }
+
+  .site-gapi-theater-foot strong {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .site-gapi-theater-foot span {
+    display: none;
+  }
+
+  .site-gapi-dock-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .site-gapi-tile {
+    min-height: 46px;
+    padding: 6px 7px;
+    gap: 4px;
+  }
+
+  .site-gapi-tile .site-icon-tile-glyph {
+    width: 24px;
+    height: 24px;
+  }
+
+  .site-gapi-tile-title {
+    font-size: 0.66rem;
+  }
+
+  .site-mission-roadmap-strip {
+    order: 3;
+    flex: 1 0 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .site-roadmap-mini-btn {
+    padding: 5px 6px;
+    gap: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-roadmap-mini-btn strong {
+    font-size: 0.64rem;
+    width: 100%;
+  }
+
+  .site-founder-moats-row {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .site-journey-stage-frame {
+    min-height: 162px;
+    max-height: 184px;
+  }
+
+  .site-journey-cut-top .site-status-dot {
+    display: none;
+  }
+
+  .site-gapi-tile-top .site-status-dot {
+    display: none;
+  }
+
+  .site-maps-compliance-bar {
+    display: none;
+  }
+
+  .site-gapi-mood-pills .site-stance-pill {
+    font-size: 0.62rem;
+    padding: 0 7px;
+    min-height: 24px;
   }
 }
 

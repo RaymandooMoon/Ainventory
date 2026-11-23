@@ -91,10 +91,7 @@ export function AppPreviewShowcasePanel({
                 <span className="site-icon-tile-glyph">
                   <SiteIcon name={screen.icon} size={17} />
                 </span>
-                <span className="site-preview-card-text">
-                  <strong>{screen.tabLabel}</strong>
-                  <small>{screen.metricTag}</small>
-                </span>
+                <strong className="site-preview-card-title">{screen.tabLabel}</strong>
               </button>
             );
           })}
@@ -112,6 +109,7 @@ export function AppPreviewShowcasePanel({
               <SiteIcon name={activeScreen.icon} size={14} />
             </span>
             <strong className="site-icon-inspector-title">{activeScreen.title}</strong>
+            <span className="site-bp-spec-tag is-primary">{activeScreen.metricTag}</span>
             <p className="site-icon-inspector-text">{activeScreen.caption}</p>
           </div>
         </div>
@@ -135,7 +133,9 @@ export function AppPreviewShowcasePanel({
           <div className="site-phone-home-bar" aria-hidden="true" />
         </div>
 
-        <p className="site-preview-caption-text">{activeScreen.caption}</p>
+        <p id={`${uid}-mscreen-caption`} className="site-preview-caption-text">
+          {activeScreen.caption}
+        </p>
 
         {/* Compact 4-icon switcher for mobile viewports */}
         <div
@@ -155,6 +155,7 @@ export function AppPreviewShowcasePanel({
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-controls={`${uid}-mscreen-caption`}
                 tabIndex={isSelected ? 0 : -1}
                 className={`site-preview-mobile-pill ${isSelected ? 'is-active' : ''}`}
                 onClick={() => {
@@ -193,8 +194,6 @@ export function StudioFeatureIconDock({
   return (
     <div className="site-studio-icon-dock">
       <div className="site-studio-dock-head">
-        <span className="site-pillar-code">{pillar.code}</span>
-        <span className="site-pillar-eyebrow">{pillar.eyebrow}</span>
         <h2 className="site-pillar-title">{pillar.title}</h2>
       </div>
 
@@ -226,10 +225,7 @@ export function StudioFeatureIconDock({
               <span className="site-icon-tile-glyph">
                 <SiteIcon name={feat.icon} size={18} />
               </span>
-              <span className="site-studio-feat-copy">
-                <strong>{feat.label}</strong>
-                <small>{feat.tag}</small>
-              </span>
+              <strong className="site-studio-feat-title">{feat.label}</strong>
             </button>
           );
         })}
@@ -247,6 +243,7 @@ export function StudioFeatureIconDock({
             <SiteIcon name={activeFeature.icon} size={15} />
           </span>
           <strong className="site-icon-inspector-title">{activeFeature.label}</strong>
+          <span className="site-bp-spec-tag is-primary">{activeFeature.tag}</span>
           <p className="site-icon-inspector-text">{activeFeature.detail}</p>
         </div>
         <span className="site-inspector-hint-sr">{tapHint}</span>
@@ -283,18 +280,18 @@ export function AtelierShowcasePanel({
             alt="Beige cotton twill trench coat 3D wardrobe cutout"
             width={480}
             height={640}
-            loading="lazy"
+            decoding="async"
             className="site-atelier-main-garment"
           />
           <div className="site-atelier-thumbs" aria-hidden="true">
             <div className="site-atelier-thumb">
-              <img src="/assets/garments/cream-knit.webp" alt="" width={120} height={120} loading="lazy" />
+              <img src="/assets/garments/cream-knit.webp" alt="" width={120} height={120} decoding="async" />
             </div>
             <div className="site-atelier-thumb">
-              <img src="/assets/garments/charcoal-slacks.webp" alt="" width={120} height={120} loading="lazy" />
+              <img src="/assets/garments/charcoal-slacks.webp" alt="" width={120} height={120} decoding="async" />
             </div>
             <div className="site-atelier-thumb">
-              <img src="/assets/garments/black-loafers.webp" alt="" width={120} height={120} loading="lazy" />
+              <img src="/assets/garments/black-loafers.webp" alt="" width={120} height={120} decoding="async" />
             </div>
           </div>
         </div>
@@ -350,7 +347,7 @@ export function IngestionShowcasePanel({
             alt="Alpha-matted WebP garment cutout"
             width={480}
             height={640}
-            loading="lazy"
+            decoding="async"
           />
           <span className="site-compare-chip site-compare-chip--right">{copy.afterLabel}</span>
         </div>
@@ -364,7 +361,7 @@ export function IngestionShowcasePanel({
             alt="Original garment photograph before background removal"
             width={480}
             height={640}
-            loading="lazy"
+            decoding="async"
           />
           <span className="site-compare-chip site-compare-chip--left">{copy.beforeLabel}</span>
         </div>

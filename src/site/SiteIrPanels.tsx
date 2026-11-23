@@ -27,102 +27,8 @@ function handleListArrows(
 }
 
 /**
- * Icon-First Google Cloud & Maps Platform Proxy Pipeline.
- * Four sculptural API icon tiles + single-line interactive bottom inspector.
- */
-export function GoogleMapsPipelinePanel({
-  copy,
-  tapHint,
-}: {
-  readonly copy: SiteCopy['architecture'];
-  readonly tapHint: string;
-}) {
-  const [selectedId, setSelectedId] = useState<string>(copy.mapsNodes[0].id);
-  const uid = useId();
-  const activeNode = copy.mapsNodes.find((n) => n.id === selectedId) ?? copy.mapsNodes[0];
-
-  return (
-    <div className="site-icon-view-wrap">
-      <div className="site-icon-view-head">
-        <div>
-          <p className="site-eyebrow">{copy.mapsEyebrow}</p>
-          <h3 className="site-pillar-title">{copy.mapsHeading}</h3>
-        </div>
-        <span className="site-stack-note">{tapHint}</span>
-      </div>
-
-      <div
-        className="site-icon-tile-grid site-icon-tile-grid--4"
-        role="tablist"
-        aria-label={copy.mapsHeading}
-        onKeyDown={(e) =>
-          handleListArrows(
-            e,
-            copy.mapsNodes.map((n) => n.id),
-            activeNode.id,
-            `${uid}-maps`,
-            setSelectedId
-          )
-        }
-      >
-        {copy.mapsNodes.map((node) => {
-          const isSelected = node.id === activeNode.id;
-          return (
-            <button
-              key={node.id}
-              id={`${uid}-maps-${node.id}`}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              aria-controls={`${uid}-maps-panel`}
-              tabIndex={isSelected ? 0 : -1}
-              className={`site-icon-tile ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                setSelectedId(node.id);
-              }}
-            >
-              <span className="site-icon-tile-top">
-                <span className="site-icon-tile-glyph">
-                  <SiteIcon name={node.icon} size={20} />
-                </span>
-                <span className="site-icon-tile-code">{node.code}</span>
-              </span>
-              <strong className="site-icon-tile-title">{node.apiName}</strong>
-              <span className="site-icon-tile-sub">{node.role}</span>
-              <span className="site-icon-tile-tag">{node.compliance}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        id={`${uid}-maps-panel`}
-        className="site-icon-inspector"
-        role="tabpanel"
-        aria-labelledby={`${uid}-maps-${activeNode.id}`}
-        aria-live="polite"
-      >
-        <div className="site-icon-inspector-main">
-          <span className="site-icon-inspector-glyph">
-            <SiteIcon name={activeNode.icon} size={15} />
-          </span>
-          <strong className="site-icon-inspector-title">{activeNode.apiName}</strong>
-          <span className="site-bp-spec-tag is-primary">{activeNode.compliance}</span>
-          <p className="site-icon-inspector-text">{activeNode.detail}</p>
-        </div>
-      </div>
-
-      <div className="site-maps-compliance-bar">
-        <span>{copy.mapsComplianceFooter}</span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Icon-First Key Metrics & Verified Spec Strip.
- * Sculptural KPI icon cards + interactive spec icon dock + single-line bottom inspector.
+ * Subtitle-Free Icon-First Key Metrics & Verified Spec Strip.
+ * Sculptural KPI icon cards + subtitle-free spec chips + single-line bottom inspector.
  */
 export function BenchmarksIrScorecard({
   copy,
@@ -158,10 +64,7 @@ export function BenchmarksIrScorecard({
   return (
     <div className="site-icon-view-wrap">
       <div className="site-icon-view-head">
-        <div>
-          <p className="site-eyebrow">{copy.eyebrow}</p>
-          <h2 className="site-pillar-title">{copy.heading}</h2>
-        </div>
+        <h2 className="site-pillar-title">{copy.heading}</h2>
         <span className="site-stack-note">{tapHint}</span>
       </div>
 
@@ -191,7 +94,7 @@ export function BenchmarksIrScorecard({
         })}
       </div>
 
-      {/* 4 Compact Verification Icon Chips */}
+      {/* 4 Compact Subtitle-Free Verification Icon Chips */}
       <div className="site-spec-chip-row" role="group" aria-label={copy.benchmarkTitle}>
         {copy.specs.map((spec) => {
           const itemKey = `spec:${spec.id}`;
@@ -211,10 +114,7 @@ export function BenchmarksIrScorecard({
               <span className="site-spec-chip-icon">
                 <SiteIcon name={spec.icon} size={15} />
               </span>
-              <span className="site-spec-chip-copy">
-                <strong>{spec.shortLabel}</strong>
-                <small>{spec.valueText}</small>
-              </span>
+              <strong className="site-spec-chip-title">{spec.shortLabel}</strong>
             </button>
           );
         })}
@@ -236,8 +136,8 @@ export function BenchmarksIrScorecard({
 }
 
 /**
- * Icon-First 6-Module Production Tech Stack Matrix.
- * Sculptural icon tiles with minimal labels; click any icon to read its concise 1-line spec.
+ * Subtitle-Free Icon-First 6-Module Production Tech Stack Matrix.
+ * Sculptural icon tiles with crisp single title; click any icon to inspect details below.
  */
 export function ProductionStackMatrix({
   copy,
@@ -253,10 +153,7 @@ export function ProductionStackMatrix({
   return (
     <div className="site-icon-view-wrap">
       <div className="site-icon-view-head">
-        <div>
-          <p className="site-eyebrow">{copy.eyebrow}</p>
-          <h2 className="site-pillar-title">{copy.heading}</h2>
-        </div>
+        <h2 className="site-pillar-title">{copy.heading}</h2>
         <span className="site-stack-note">{tapHint}</span>
       </div>
 
@@ -291,14 +188,10 @@ export function ProductionStackMatrix({
                 setSelectedId(card.id);
               }}
             >
-              <span className="site-icon-tile-top">
-                <span className="site-icon-tile-glyph">
-                  <SiteIcon name={card.icon} size={18} />
-                </span>
-                <span className="site-icon-tile-tag">{card.boundary}</span>
+              <span className="site-icon-tile-glyph">
+                <SiteIcon name={card.icon} size={19} />
               </span>
               <strong className="site-icon-tile-metric">{card.metric}</strong>
-              <span className="site-icon-tile-sub">{card.title}</span>
             </button>
           );
         })}

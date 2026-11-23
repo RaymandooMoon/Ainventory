@@ -155,7 +155,6 @@ export function EnterpriseBlueprintPanel({
                       </span>
                       <span className="site-bp-node-text">
                         <strong>{node.label}</strong>
-                        <small>{node.shortSub}</small>
                       </span>
                     </button>
                   );
@@ -184,7 +183,6 @@ export function EnterpriseBlueprintPanel({
                     <SiteIcon name={gov.icon} size={14} />
                   </span>
                   <strong>{gov.label}</strong>
-                  <small>{gov.shortSub}</small>
                 </button>
               );
             })}
@@ -249,7 +247,6 @@ export function EnterpriseBlueprintPanel({
                 </span>
                 <span className="site-bp-node-text">
                   <strong>{node.label}</strong>
-                  <small>{node.shortSub}</small>
                 </span>
               </button>
             );
@@ -290,20 +287,15 @@ export function EnterpriseBlueprintPanel({
 export function PrivacyDefensePanel({
   copy,
   interactiveCopy,
-  initialShieldId,
+  selectedId,
+  onSelect,
 }: {
   readonly copy: SiteCopy['architecture'];
   readonly interactiveCopy: SiteCopy['interactive'];
-  readonly initialShieldId: SitePrivacyShield['id'];
+  readonly selectedId: SitePrivacyShield['id'];
+  readonly onSelect: (id: SitePrivacyShield['id']) => void;
 }) {
-  const [selectedId, setSelectedId] = useState<SitePrivacyShield['id']>(initialShieldId);
-  const [prevInitial, setPrevInitial] = useState<SitePrivacyShield['id']>(initialShieldId);
   const uid = useId();
-
-  if (initialShieldId !== prevInitial) {
-    setPrevInitial(initialShieldId);
-    setSelectedId(initialShieldId);
-  }
 
   const activeShield =
     copy.privacyShields.find((s) => s.id === selectedId) ?? copy.privacyShields[0];
@@ -325,14 +317,14 @@ export function PrivacyDefensePanel({
       e.preventDefault();
       const target = copy.privacyShields[nextIdx];
       triggerHaptic('selection');
-      setSelectedId(target.id);
+      onSelect(target.id);
       document.getElementById(`${uid}-shield-${target.id}`)?.focus();
     }
   };
 
   return (
     <div className="site-privacy-panel">
-      {/* Top: 4 Sculptural Privacy-by-Design Shield Icon Tabs */}
+      {/* Top: 4 Sculptural Privacy-by-Design Shield Icon Tabs (Subtitle-Free) */}
       <div
         className="site-privacy-shield-dock"
         role="tablist"
@@ -353,7 +345,7 @@ export function PrivacyDefensePanel({
               className={`site-shield-tile ${isSelected ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
-                setSelectedId(shield.id);
+                onSelect(shield.id);
               }}
             >
               <span className="site-shield-tile-top">
@@ -363,7 +355,6 @@ export function PrivacyDefensePanel({
                 <span className="site-shield-tile-code">{shield.code}</span>
               </span>
               <strong className="site-shield-tile-label">{shield.shortLabel}</strong>
-              <span className="site-shield-tile-status">{shield.statusTag}</span>
             </button>
           );
         })}
@@ -386,10 +377,7 @@ export function PrivacyDefensePanel({
             <span className="site-privacy-detail-icon">
               <SiteIcon name={activeShield.icon} size={18} />
             </span>
-            <div>
-              <span className="site-arch-meta-label">{copy.privacyEyebrow}</span>
-              <h3 className="site-privacy-detail-title">{activeShield.title}</h3>
-            </div>
+            <h3 className="site-privacy-detail-title">{activeShield.title}</h3>
             <span className="site-bp-spec-tag is-primary">{activeShield.statusTag}</span>
           </div>
 

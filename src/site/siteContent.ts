@@ -99,13 +99,34 @@ export interface SitePrivacyShield {
 }
 
 export interface SitePipelineNode {
-  readonly id: string;
+  readonly id: 'weather' | 'streetview' | 'places' | 'vertex' | 'mediapipe' | 'calendar';
   readonly icon: SiteIconKey;
   readonly code: string;
   readonly apiName: string;
+  readonly status: 'live' | 'todo';
+  readonly statusLabel: string;
   readonly role: string;
+  readonly theaterHeadline: string;
+  readonly theaterTelemetry: string;
   readonly detail: string;
   readonly compliance: string;
+}
+
+export type JourneyCutStatus = 'live' | 'hybrid' | 'todo';
+
+export interface SiteJourneyCut {
+  readonly id: 'buy' | 'scan' | 'weather' | 'share' | 'care' | 'resale';
+  readonly num: string;
+  readonly icon: SiteIconKey;
+  readonly shortTitle: string;
+  readonly title: string;
+  readonly status: JourneyCutStatus;
+  readonly statusLabel: string;
+  readonly imageSrc: string;
+  readonly imageAlt: string;
+  readonly speechBubble: string;
+  readonly apiChips: readonly string[];
+  readonly detail: string;
 }
 
 export interface SiteIrKpi {
@@ -212,8 +233,8 @@ export interface SiteCopy {
     readonly archMaps: string;
     readonly benchKpi: string;
     readonly benchMatrix: string;
+    readonly aboutJourney: string;
     readonly aboutMission: string;
-    readonly aboutRoadmap: string;
     readonly aboutFounder: string;
   };
   readonly tapHint: string;
@@ -261,7 +282,13 @@ export interface SiteCopy {
     readonly privacyShields: readonly SitePrivacyShield[];
     readonly mapsEyebrow: string;
     readonly mapsHeading: string;
+    readonly mapsBadge: string;
     readonly mapsComplianceFooter: string;
+    readonly weatherMoods: {
+      readonly sunny: string;
+      readonly rain: string;
+      readonly wind: string;
+    };
     readonly mapsNodes: readonly SitePipelineNode[];
   };
   readonly interactive: {
@@ -293,6 +320,15 @@ export interface SiteCopy {
     readonly benchmarkTitle: string;
     readonly specs: readonly SiteBenchmarkRow[];
     readonly cards: readonly SiteSpecCard[];
+  };
+  readonly journey: {
+    readonly badge: string;
+    readonly autoPlayLabel: string;
+    readonly pausePlayLabel: string;
+    readonly prevLabel: string;
+    readonly nextCutLabel: string;
+    readonly nextStepLabel: string;
+    readonly cuts: readonly SiteJourneyCut[];
   };
   readonly mission: {
     readonly eyebrow: string;
@@ -368,11 +404,11 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       studioIntel: 'Care & CPW',
       archBlueprint: 'System Blueprint',
       archPrivacy: 'Privacy & Security',
-      archMaps: 'Maps & Weather',
+      archMaps: 'Google API × 3D',
       benchKpi: 'Key Metrics',
       benchMatrix: 'Tech Stack',
-      aboutMission: '01 Mission',
-      aboutRoadmap: '02 Roadmap',
+      aboutJourney: '01 User Journey',
+      aboutMission: '02 Mission & Roadmap',
       aboutFounder: '03 BM & Founder',
     },
     tapHint: 'Tap an icon to inspect',
@@ -788,46 +824,100 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           retention: 'AI payload: 0-day volatile · Account delete wipes DB, files, cache & IndexedDB.',
         },
       ],
-      mapsEyebrow: 'Google Cloud & Maps Platform',
-      mapsHeading: 'Server-Proxied Weather, Places & AI',
+      mapsEyebrow: 'Google Cloud · Maps · Three.js 0.187',
+      mapsHeading: 'Google API × 3D Live Engine',
+      mapsBadge: '5 Live · 1 TO-DO',
       mapsComplianceFooter:
         'Server-only keys · Minimal FieldMask · Free Street View metadata pre-check · 0 permanent media cached',
+      weatherMoods: {
+        sunny: 'Clear · Sun',
+        rain: 'Rain · Umbrella',
+        wind: 'Wind · Drape',
+      },
       mapsNodes: [
         {
           id: 'weather',
-          icon: 'cloudSun',
+          icon: 'umbrella',
           code: '01',
           apiName: 'Weather API v1',
-          role: 'Alerts · Swings · UV',
-          detail: 'Injects real temperature swings, rain alerts, and UV directly into daily 3D outfits and umbrella stance.',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '3D Motion · Rain',
+          theaterHeadline: 'Live Weather × 3D Umbrella Motion',
+          theaterTelemetry: 'Three.js 0.187 · Real-Time Weather Motion · Umbrella Rain Collision',
+          detail:
+            'Streams real temperature swings, precipitation alerts, and wind directly into Three.js 0.187 umbrella posture, raindrop collision, and outfit layering.',
           compliance: '20–30m Memory TTL',
-        },
-        {
-          id: 'places',
-          icon: 'mapPin',
-          code: '02',
-          apiName: 'Places API (New)',
-          role: 'Venues · Care Map',
-          detail: 'Matches TPO venue context and locates nearby dry-cleaners, tailors, and leather-care shops.',
-          compliance: 'Minimal FieldMask',
         },
         {
           id: 'streetview',
           icon: 'compass',
-          code: '03',
-          apiName: 'Street View · Photos',
-          role: 'Live Backdrops',
-          detail: 'Runs free streetview/metadata pre-check before streaming venue backdrops behind the 3D model.',
+          code: '02',
+          apiName: 'Street View',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: 'Avatar in Street',
+          theaterHeadline: 'Dressed Avatar in Real Destination Street',
+          theaterTelemetry: 'Free streetview/metadata Pre-Check · 37.54°N 127.05°E · 0 Media Stored',
+          detail:
+            'Verifies coverage via free Street View metadata pre-check and stages your dressed 3D avatar directly on the actual street you plan to visit.',
           compliance: '0 Media Stored in DB',
+        },
+        {
+          id: 'places',
+          icon: 'mapPin',
+          code: '03',
+          apiName: 'Places API (New)',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: 'TPO · Care Map',
+          theaterHeadline: 'Nearby Care & Venue Context Map',
+          theaterTelemetry: 'Minimal FieldMask · Dry Cleaners · Tailors · Leather Care',
+          detail:
+            'Matches venue TPO context for outfit recommendations and locates nearby dry-cleaners, tailors, and leather-care shops via server proxy.',
+          compliance: 'Minimal FieldMask',
         },
         {
           id: 'vertex',
           icon: 'sparkles',
           code: '04',
           apiName: 'Gemini · Vertex AI',
+          status: 'live',
+          statusLabel: 'LIVE',
           role: 'No-Training VTON',
-          detail: 'Tags EXIF-stripped garments and generates 2K multi-angle try-on renders with zero model training.',
+          theaterHeadline: 'PII-Free Auto Tagging & 2K Multi-Angle VTON',
+          theaterTelemetry: 'Paid Tier No-Training · 11-Slot Classification · 8-Angle QC',
+          detail:
+            'Auto-classifies front/back EXIF-stripped garment photos and synthesizes 2K multi-angle try-on views with zero training retention.',
           compliance: '0-Day Stateless',
+        },
+        {
+          id: 'mediapipe',
+          icon: 'scanFace',
+          code: '05',
+          apiName: 'MediaPipe WASM',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '0B Local Tone',
+          theaterHeadline: 'On-Device FaceLandmarker Skin-Tone Engine',
+          theaterTelemetry: '100% Client WASM · PCCS 12-Tone · 0 Bytes Uploaded',
+          detail:
+            'Calibrates personal skin tone and body proportions locally on-device with zero facial camera frames ever leaving your browser or phone.',
+          compliance: '0 Bytes Uploaded',
+        },
+        {
+          id: 'calendar',
+          icon: 'calendar',
+          code: '06',
+          apiName: 'Calendar API',
+          status: 'todo',
+          statusLabel: 'TO-DO',
+          role: 'OOTD · SNS Sync',
+          theaterHeadline: 'Google Calendar OOTD & SNS Tagging',
+          theaterTelemetry: 'TO-DO Roadmap · Calendar Event Save · Instagram Garment Tags',
+          detail:
+            'Planned integration: save modeled daily looks straight to Google Calendar events and export Instagram/SNS OOTD captions with garment tags.',
+          compliance: 'TO-DO Roadmap',
         },
       ],
     },
@@ -978,8 +1068,108 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
       ],
     },
+    journey: {
+      badge: '6-Cut AI Cycle',
+      autoPlayLabel: 'Auto',
+      pausePlayLabel: 'Pause',
+      prevLabel: 'Previous cut',
+      nextCutLabel: 'Next cut',
+      nextStepLabel: 'Next: 02 Mission & Roadmap',
+      cuts: [
+        {
+          id: 'buy',
+          num: '01',
+          icon: 'shoppingBag',
+          shortTitle: 'Buy Check',
+          title: 'Smart Purchase Decision',
+          status: 'live',
+          statusLabel: 'LIVE',
+          imageSrc: '/assets/journey/clay-cut-01-v1.webp',
+          imageAlt: 'Minimal 3D clay figurine comparing a boutique coat against owned closet duplicate hologram',
+          speechBubble: '“2 similar coats owned — 1 wear since last year. Buy this & list the idle one!”',
+          apiChips: ['Closet AI Compare', 'Wear & CPW History'],
+          detail:
+            'Compares a new item against your closet (similar count, purchase date, wear count) to guide smarter buy-or-resale decisions.',
+        },
+        {
+          id: 'scan',
+          num: '02',
+          icon: 'camera',
+          shortTitle: 'Smart Scan',
+          title: 'Auto Classify & Tag Lookup',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-02-v1.webp',
+          imageAlt: 'Minimal 3D clay figurine scanning a wool coat paper tag with instant studio packshot and care icons',
+          speechBubble: '“Snap front/back to auto-classify — or snap the tag/model code for clean web photo & care!”',
+          apiChips: ['Gemini Vision (LIVE)', 'Tag · Model Web Lookup (TO-DO)'],
+          detail:
+            'LIVE: Front/back photo AI auto-classification. TO-DO: Snap tag or model code to fetch clean official web photos & care instructions.',
+        },
+        {
+          id: 'weather',
+          num: '03',
+          icon: 'umbrella',
+          shortTitle: 'Weather & Street',
+          title: 'Weather 3D Motion & Street View',
+          status: 'live',
+          statusLabel: 'LIVE',
+          imageSrc: '/assets/journey/clay-cut-03-v1.webp',
+          imageAlt: 'Minimal 3D clay figurine in a trench coat walking down a rainy street with translucent umbrella',
+          speechBubble: '“Rain forecast! 3D umbrella stance & my dressed look right on the actual Street View.”',
+          apiChips: ['Weather API v1', 'Three.js 0.187', 'Street View'],
+          detail:
+            'Combines Weather API v1, owned closet, and on-device face/body data for 3D umbrella physics and Google Street View staging.',
+        },
+        {
+          id: 'share',
+          num: '04',
+          icon: 'share2',
+          shortTitle: 'Calendar & SNS',
+          title: 'Google Calendar & SNS OOTD',
+          status: 'todo',
+          statusLabel: 'TO-DO',
+          imageSrc: '/assets/journey/clay-cut-04-v1.webp',
+          imageAlt: 'Minimal 3D clay figurine pinning a miniature coat outfit onto a dark glass calendar lookbook wall',
+          speechBubble: '“Save today’s 3D look to Google Calendar & auto-tag my garments for Instagram OOTD!”',
+          apiChips: ['Google Calendar API (TO-DO)', 'SNS Auto-Tagging (TO-DO)'],
+          detail:
+            'TO-DO Roadmap: Save modeled outfits directly into Google Calendar and generate Instagram/SNS OOTD captions with garment tags.',
+        },
+        {
+          id: 'care',
+          num: '05',
+          icon: 'truck',
+          shortTitle: 'Care & Pickup',
+          title: 'Laundry Guide & Door Pickup',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-05-v1.webp',
+          imageAlt: 'Minimal 3D clay figurine checking fabric laundry care symbols beside a glowing pickup delivery cube',
+          speechBubble: '“Dry-clean wool coat — view care symbols and book door pickup via laundry service app!”',
+          apiChips: ['Care Rules · Places API (LIVE)', 'Laundry Pickup App (TO-DO)'],
+          detail:
+            'LIVE: Fabric care rules & nearby dry-cleaners via Places API. TO-DO: One-tap door pickup booking with laundry service apps.',
+        },
+        {
+          id: 'resale',
+          num: '06',
+          icon: 'badgeCheck',
+          shortTitle: 'Verified Resale',
+          title: 'Authentic One-Tap Resale',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-06-v1.webp',
+          imageAlt: 'Two minimal 3D clay figurines exchanging a verified authentic jacket with a golden seal in a resale gallery',
+          speechBubble: '“Unused piece found! Stored photos, AI analysis & purchase proof go straight to trusted resale.”',
+          apiChips: ['Idle CPW Alert (LIVE)', 'Auth Provenance Resale (TO-DO)'],
+          detail:
+            'LIVE: Dormant CPW detection. TO-DO: Bundle stored photos, AI metadata & retailer purchase records for transparent authentic resale.',
+        },
+      ],
+    },
     mission: {
-      eyebrow: '01 · Sustainability Mission',
+      eyebrow: '02 · Mission & Roadmap',
       badge: 'Verified Circular Wardrobe',
       headingLead: 'Wear what you own. ',
       headingAccent: 'Circulate with trust.',
@@ -1045,7 +1235,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           num: '04',
           title: 'Calendar',
           subtitle: 'OOTD Log',
-          detail: 'Logs real worn outfits by date to prevent repetition and build objective utilization history.',
+          detail: 'Logs real worn outfits by date and prepares Google Calendar sync + SNS OOTD garment tagging.',
         },
         {
           id: 'cpw',
@@ -1062,7 +1252,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'badgeCheck',
           title: 'Verified 1-Tap Resale',
           subtitle: 'Luxury & purchase-record authenticity',
-          detail: 'Reuses stored photos, purchase receipts, and authenticity partner checks for counterfeit-free one-tap resale.',
+          detail: 'Reuses stored photos, AI analysis, and purchase receipts with authenticity checks for transparent one-tap resale.',
         },
         {
           id: 'purchase',
@@ -1072,7 +1262,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           detail: 'Checks new items against your owned 11-slot closet so you only buy verified missing layers.',
         },
       ],
-      nextLabel: 'Next: 02 Roadmap',
+      nextLabel: 'Next: 03 BM & Founder',
     },
     vision: {
       eyebrow: '03 · BM & Founder',
@@ -1080,34 +1270,34 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       irBadge: 'Seoul · 2026',
       quote:
         '“When your closet connects daily weather, 3D fit, real wear counts, and verified authenticity, every garment lives longer and trades with trust.”',
-      roadmapTitle: '02 · Execution Roadmap',
+      roadmapTitle: 'Execution & TO-DO Roadmap',
       milestones: [
         {
           id: 'stage-1',
           icon: 'checkCircle',
-          phase: 'Stage 1',
+          phase: 'LIVE 01',
           status: 'done',
-          title: '3D Rig & 0B Local Vision',
-          tag: 'Completed',
-          detail: '21-bone rig, 28 morphs, 11-slot layering, EXIF-stripped WebP separation, and MediaPipe WASM.',
+          title: '3D Rig · 0B Vision',
+          tag: 'Implemented',
+          detail: 'LIVE: 21-bone umbrella rig, 28 morphs, 11-slot front/back auto-classification, EXIF strip, MediaPipe WASM.',
         },
         {
           id: 'stage-2',
           icon: 'shieldCheck',
-          phase: 'Stage 2',
+          phase: 'LIVE 02',
           status: 'done',
-          title: 'Maps Proxy & 4-Line Privacy',
-          tag: 'Completed',
-          detail: 'Weather API v1, Street View, nearby care map, stateless OIDC, tenant guard, and atomic erasure.',
+          title: 'Google API · 4-Shield',
+          tag: 'Implemented',
+          detail: 'LIVE: Weather API v1, Street View avatar backdrop, Places Care Map, Stateless OIDC, tenant guard & atomic erase.',
         },
         {
           id: 'stage-3',
           icon: 'rocket',
-          phase: 'Stage 3',
+          phase: 'TO-DO',
           status: 'active',
-          title: 'CBT · Auth Resale · Cloud HA',
-          tag: 'In Progress',
-          detail: 'Closed beta metrics, core patent, luxury authenticity resale API, GCS 3-Zone CMEK, iOS & Android launch.',
+          title: 'Tag · Calendar · SNS · Pickup · Resale',
+          tag: 'TO-DO Plan',
+          detail: 'TO-DO: Tag/model web image & care lookup, Google Calendar sync, Instagram/SNS OOTD tagging, laundry pickup app & verified authentic resale API.',
         },
       ],
       moatsTitle: 'Four Core Moats',
@@ -1170,7 +1360,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           detail: 'Monetizes one-tap resale backed by luxury purchase records and partner authenticity verification.',
         },
       ],
-      backToMissionLabel: '01 Mission',
+      backToMissionLabel: '01 User Journey',
       founderRole: 'Founder & Engineer · Ainvtry',
       hqLabel: 'Location',
       hqValue: 'Seoul, South Korea',
@@ -1248,11 +1438,11 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       studioIntel: '케어 · CPW',
       archBlueprint: '시스템 구성도',
       archPrivacy: '개인정보 · 보안',
-      archMaps: '지도 · 날씨',
+      archMaps: 'Google API × 3D',
       benchKpi: '핵심 지표',
       benchMatrix: '기술 스택',
-      aboutMission: '01 미션',
-      aboutRoadmap: '02 로드맵',
+      aboutJourney: '01 유저 여정',
+      aboutMission: '02 미션 · 로드맵',
       aboutFounder: '03 BM · 창업자',
     },
     tapHint: '아이콘을 눌러 간결한 설명 보기',
@@ -1668,46 +1858,100 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           retention: 'AI 페이로드: 0일 즉시 폐기 · 탈퇴 시 DB · 파일 · 캐시 · IndexedDB 동시 파기.',
         },
       ],
-      mapsEyebrow: 'Google Cloud & Maps Platform',
-      mapsHeading: '약관 준수 기상 · 장소 · AI 서버 프록시',
+      mapsEyebrow: 'Google Cloud · Maps · Three.js 0.187',
+      mapsHeading: 'Google API × 3D 라이브 엔진',
+      mapsBadge: '5 LIVE · 1 TO-DO',
       mapsComplianceFooter:
         'API 키 서버 전용 격리 · 최소 FieldMask · Street View 무료 메타데이터 선조회 · 미디어 DB 저장 0건',
+      weatherMoods: {
+        sunny: '맑음 · 햇빛',
+        rain: '비 · 우산 모션',
+        wind: '강풍 · 드레이프',
+      },
       mapsNodes: [
         {
           id: 'weather',
-          icon: 'cloudSun',
+          icon: 'umbrella',
           code: '01',
           apiName: 'Weather API v1',
-          role: '특보 · 일교차 · UV',
-          detail: '실시간 기온 · 일교차 · 강수 특보 · 자외선 지수를 3D 코디와 우산 동작에 즉시 반영합니다.',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '3D 모션 · 강수',
+          theaterHeadline: '실시간 날씨 × 3D 우산 모션 · 빗방울 물리',
+          theaterTelemetry: 'Three.js 0.187 · 실시간 기상 모션 · 우산 빗방울 충돌 물리',
+          detail:
+            '실시간 기온 · 일교차 · 강수 · 바람 데이터를 최신 Three.js 0.187 21관절 우산 모션, 빗방울 충돌 효과, 일일 코디 레이어링에 즉시 반영합니다.',
           compliance: '20~30분 메모리 TTL',
-        },
-        {
-          id: 'places',
-          icon: 'mapPin',
-          code: '02',
-          apiName: 'Places API (New)',
-          role: '장소 · 주변 케어',
-          detail: '방문할 장소 맥락과 가까운 드라이클리닝 · 수선실 · 가죽 케어 매장을 지도에 표시합니다.',
-          compliance: '최소 FieldMask',
         },
         {
           id: 'streetview',
           icon: 'compass',
-          code: '03',
-          apiName: 'Street View · Photos',
-          role: '실제 장소 배경',
-          detail: '무료 streetview/metadata 사전 확인 후 피팅 모델 뒤에 실제 거리와 공간 배경을 띄웁니다.',
+          code: '02',
+          apiName: 'Street View',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '거리 위 아바타',
+          theaterHeadline: '실제 방문할 거리뷰 위에 서 있는 내 캐릭터',
+          theaterTelemetry: 'streetview/metadata 무료 선조회 · 37.54°N 127.05°E · 미디어 무저장',
+          detail:
+            'Google Street View와 연동해 무료 메타데이터 확인 후 내가 입은 옷 그대로 실제 방문할 거리뷰 배경 위에 캐릭터를 연출합니다.',
           compliance: '미디어 DB 무저장',
+        },
+        {
+          id: 'places',
+          icon: 'mapPin',
+          code: '03',
+          apiName: 'Places API (New)',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '장소 · 케어 지도',
+          theaterHeadline: '장소 맥락 추천 · 주변 세탁 · 수선 지도',
+          theaterTelemetry: '최소 FieldMask · 드라이클리닝 · 수선실 · 가죽 케어 프록시',
+          detail:
+            '방문 장소 맥락에 맞는 코디를 돕고, 집에서 세탁하기 어려운 의류를 위해 가까운 드라이클리닝 · 수선실 · 가죽 케어를 지도에 연결합니다.',
+          compliance: '최소 FieldMask',
         },
         {
           id: 'vertex',
           icon: 'sparkles',
           code: '04',
           apiName: 'Gemini · Vertex AI',
-          role: '무학습 VTON 추론',
-          detail: 'EXIF가 제거된 의류를 자동 태깅하고 재학습 없는 2K 멀티앵글 가상 피팅을 생성합니다.',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '무학습 VTON',
+          theaterHeadline: 'PII 배제 앞뒤 자동 분류 · 2K 멀티앵글 피팅',
+          theaterTelemetry: '유료 무학습 경로 · 11슬롯 자동 분류 · 8앵글 품질 검수',
+          detail:
+            'EXIF가 제거된 의류 앞뒤 사진을 자동 분류하고, 모델 재학습 없는 2K 멀티앵글 가상 피팅과 코디 추천 해설을 제공합니다.',
           compliance: '0일 즉시 폐기',
+        },
+        {
+          id: 'mediapipe',
+          icon: 'scanFace',
+          code: '05',
+          apiName: 'MediaPipe WASM',
+          status: 'live',
+          statusLabel: 'LIVE',
+          role: '0B 로컬 피부톤',
+          theaterHeadline: '온디바이스 안면 피부톤 · 체형 보정 엔진',
+          theaterTelemetry: '100% 기기 내 WASM · PCCS 12톤 · 안면 외부 전송 0\u00A0Bytes',
+          detail:
+            '사용자 기기 안에서 MediaPipe WASM으로 얼굴 피부톤과 체형을 보정해 개인 맞춤 모델링을 제공하며 원본 얼굴은 외부로 전송하지 않습니다.',
+          compliance: '안면 전송 0\u00A0Bytes',
+        },
+        {
+          id: 'calendar',
+          icon: 'calendar',
+          code: '06',
+          apiName: 'Calendar API',
+          status: 'todo',
+          statusLabel: 'TO-DO',
+          role: '코디 저장 · SNS',
+          theaterHeadline: 'Google Calendar 코디 저장 · SNS OOTD 태깅',
+          theaterTelemetry: 'TO-DO 구현 계획 · 캘린더 일정 기록 · 인스타그램 착용 태깅',
+          detail:
+            '구현 계획(TO-DO): 모델링한 오늘 코디를 Google Calendar에 일정으로 저장하고 인스타그램 등 SNS 설명과 착용 의류 태깅을 자동 완성합니다.',
+          compliance: 'TO-DO 구현 계획',
         },
       ],
     },
@@ -1858,8 +2102,108 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
       ],
     },
+    journey: {
+      badge: '6컷 AI 여정',
+      autoPlayLabel: '자동 재생',
+      pausePlayLabel: '일시정지',
+      prevLabel: '이전 컷',
+      nextCutLabel: '다음 컷',
+      nextStepLabel: '다음: 02 미션 · 로드맵',
+      cuts: [
+        {
+          id: 'buy',
+          num: '01',
+          icon: 'shoppingBag',
+          shortTitle: '구매 판단',
+          title: '옷장 비교 기반 현명한 구매 결정',
+          status: 'live',
+          statusLabel: 'LIVE',
+          imageSrc: '/assets/journey/clay-cut-01-v1.webp',
+          imageAlt: '매장에서 미니멀 3D 클레이 캐릭터가 보유 옷장 중복 코트와 착용 기록 홀로그램을 비교하는 장면',
+          speechBubble: '“비슷한 코트가 2벌! 작년에 1회 입었으니 이건 사고 안 입는 옷은 중고로 팔자.”',
+          apiChips: ['옷장 유사도 비교', '구매 시기 · 착용 횟수'],
+          detail:
+            '구매 전 기존 옷장의 비슷한 옷 수량 · 구매 시기 · 착용 횟수를 비교해 새 옷 구매와 기존 옷 리셀 판단을 돕습니다.',
+        },
+        {
+          id: 'scan',
+          num: '02',
+          icon: 'camera',
+          shortTitle: '스마트 등록',
+          title: '앞뒤 자동 분류 · 택 모델명 검색',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-02-v1.webp',
+          imageAlt: '미니멀 3D 클레이 캐릭터가 울 코트 택을 스마트폰으로 스캔해 공식 이미지와 세탁 기호를 불러오는 장면',
+          speechBubble: '“앞뒤 사진은 자동 분류! 택이나 모델명만 찍으면 공식 이미지와 세탁법까지 자동 등록.”',
+          apiChips: ['앞뒤 AI 분류 (LIVE)', '택 · 모델명 웹 검색 (TO-DO)'],
+          detail:
+            'LIVE: 앞뒤 사진 AI 자동 감지 · 분류. TO-DO: 택 · 모델명 촬영 시 인터넷 공식 깨끗한 이미지 자동 등록 및 세탁법 안내.',
+        },
+        {
+          id: 'weather',
+          num: '03',
+          icon: 'umbrella',
+          shortTitle: '날씨 · 거리뷰',
+          title: '실시간 날씨 3D 모션 · 거리뷰 모델링',
+          status: 'live',
+          statusLabel: 'LIVE',
+          imageSrc: '/assets/journey/clay-cut-03-v1.webp',
+          imageAlt: '트렌치코트를 입은 미니멀 3D 클레이 캐릭터가 비 오는 거리뷰 배경에서 투명 우산을 쓰고 걷는 장면',
+          speechBubble: '“오늘 비 예보! 얼굴 · 체형 맞춤 코디를 3D 우산 모션과 실제 거리뷰 위에서 확인해요.”',
+          apiChips: ['Weather API v1', 'Three.js 0.187', 'Street View'],
+          detail:
+            '실시간 날씨 API · 보유 옷장 · 얼굴과 체형 정보로 코디를 추천하고 3D 우산 모션 및 Google Street View 위 모델링을 연출합니다.',
+        },
+        {
+          id: 'share',
+          num: '04',
+          icon: 'share2',
+          shortTitle: '캘린더 · SNS',
+          title: 'Google Calendar 저장 · SNS 태깅',
+          status: 'todo',
+          statusLabel: 'TO-DO',
+          imageSrc: '/assets/journey/clay-cut-04-v1.webp',
+          imageAlt: '미니멀 3D 클레이 캐릭터가 캘린더 룩북 벽면에 오늘의 코디를 정리하고 태깅하는 장면',
+          speechBubble: '“모델링한 코디를 구글 캘린더에 저장하고 인스타 OOTD 설명과 옷 태깅까지 한 번에!”',
+          apiChips: ['Google Calendar (TO-DO)', '인스타 · SNS 태깅 (TO-DO)'],
+          detail:
+            'TO-DO 구현 계획: 모델링한 코디를 Google Calendar에 저장하고 인스타그램 등 SNS 오늘 코디 설명과 의류 태깅을 지원합니다.',
+        },
+        {
+          id: 'care',
+          num: '05',
+          icon: 'truck',
+          shortTitle: '세탁 · 방문수거',
+          title: '세탁법 안내 · 세탁 앱 방문수거',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-05-v1.webp',
+          imageAlt: '미니멀 3D 클레이 캐릭터가 의류 세탁 기호를 확인하고 세탁 방문수거 박스를 신청하는 장면',
+          speechBubble: '“집에서 세탁 어려운 옷은 세탁법 확인 후 세탁 서비스 앱으로 방문수거 바로 신청!”',
+          apiChips: ['세탁법 · Places 지도 (LIVE)', '세탁 앱 방문수거 (TO-DO)'],
+          detail:
+            'LIVE: 입은 옷 세탁법 안내 및 주변 세탁소 지도. TO-DO: 집에서 세탁 어려운 의류의 세탁 서비스 앱 연동 방문수거 신청.',
+        },
+        {
+          id: 'resale',
+          num: '06',
+          icon: 'badgeCheck',
+          shortTitle: '정품 리셀',
+          title: '구매 이력 연동 투명 정품 중고거래',
+          status: 'hybrid',
+          statusLabel: 'LIVE + TO-DO',
+          imageSrc: '/assets/journey/clay-cut-06-v1.webp',
+          imageAlt: '두 미니멀 3D 클레이 캐릭터가 정품 인증 실과 영수증 태그가 붙은 재킷을 투명하게 거래하는 장면',
+          speechBubble: '“잘 안 입는 옷 발견! 기존 사진 · AI 분석 · 구매처 이력을 묶어 투명한 정품 중고거래로.”',
+          apiChips: ['미착용 CPW 감지 (LIVE)', '정품 인증 중고 연동 (TO-DO)'],
+          detail:
+            'LIVE: 잘 안 입는 옷 자동 탐지. TO-DO: 기존 촬영 사진 · AI 분석 정보 · 구매처 구매 이력을 연동한 투명한 정품 중고거래 플랫폼.',
+        },
+      ],
+    },
     mission: {
-      eyebrow: '01 · 우리의 미션',
+      eyebrow: '02 · 미션 · 로드맵',
       badge: '정품 인증 순환 옷장',
       headingLead: '보유 의류로 완성하는 ',
       headingAccent: '지속 가능한 AI 옷장',
@@ -1925,7 +2269,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           num: '04',
           title: '캘린더 기록',
           subtitle: '착용 이력',
-          detail: '실제 착용 코디를 날짜별로 기록해 중복 추천을 막고 활용 데이터를 축적합니다.',
+          detail: '실제 착용 코디를 날짜별로 기록하고 Google Calendar 저장 · SNS 태깅으로 확장합니다.',
         },
         {
           id: 'cpw',
@@ -1942,7 +2286,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'badgeCheck',
           title: '정품 인증 원탭 리셀',
           subtitle: '명품 · 구매 기록 연동 투명 거래',
-          detail: '이미 저장된 사진과 구매 영수증 · 정품 인증 연동을 결합해 믿을 수 있는 원탭 중고 리셀을 구현합니다.',
+          detail: '이미 저장된 사진 · AI 분석 정보 · 구매처 구매 이력을 정품 인증과 결합해 믿을 수 있는 원탭 중고 리셀을 구현합니다.',
         },
         {
           id: 'purchase',
@@ -1952,7 +2296,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           detail: '보유 옷장에 실제로 비어 있는 레이어만 검증해 충동적 중복 구매를 원천적으로 줄입니다.',
         },
       ],
-      nextLabel: '다음: 02 로드맵',
+      nextLabel: '다음: 03 BM · 창업자',
     },
     vision: {
       eyebrow: '03 · BM · 창업자',
@@ -1960,34 +2304,34 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       irBadge: '서울 · 2026',
       quote:
         '“내 옷장의 날씨 코디, 3D 핏, 실제 착용 횟수, 정품 구매 이력이 하나로 이어질 때, 옷은 더 오래 입히고 투명하게 순환됩니다.”',
-      roadmapTitle: '02 · 단계별 실행 로드맵',
+      roadmapTitle: '구현 현황 · TO-DO 로드맵',
       milestones: [
         {
           id: 'stage-1',
           icon: 'checkCircle',
-          phase: '1단계',
+          phase: 'LIVE 01',
           status: 'done',
-          title: '3D 엔진 · 0B 로컬 비전',
+          title: '3D 엔진 · 0B 비전',
           tag: '구현 완료',
-          detail: '21관절 · 28모프 · 11슬롯 레이어링, EXIF 제거 배경 분리, MediaPipe WASM 완료.',
+          detail: 'LIVE: 21관절 우산 리그 · 28모프 · 앞뒤 사진 AI 자동 분류 · EXIF 제거 · MediaPipe WASM 완료.',
         },
         {
           id: 'stage-2',
           icon: 'shieldCheck',
-          phase: '2단계',
+          phase: 'LIVE 02',
           status: 'done',
-          title: '지도 프록시 · 4중 개인정보 방어',
+          title: 'Google API · 4중 보안',
           tag: '구현 완료',
-          detail: 'Weather API v1 · Street View · 케어 지도, Stateless OIDC, 테넌트 격리 · 원스톱 파기 완료.',
+          detail: 'LIVE: Weather API v1 · Street View 아바타 · Places 케어 지도 · Stateless OIDC · 원스톱 파기 완료.',
         },
         {
           id: 'stage-3',
           icon: 'rocket',
-          phase: '3단계',
+          phase: 'TO-DO',
           status: 'active',
-          title: 'CBT · 정품 인증 리셀 · 클라우드 HA',
-          tag: '진행 중',
-          detail: '클로즈드 베타 실측, 핵심 특허, 명품 정품 인증 리셀 API, GCS 3-Zone CMEK · 앱 스토어 출시.',
+          title: '택 검색 · 캘린더 · SNS · 수거 · 리셀',
+          tag: 'TO-DO 계획',
+          detail: 'TO-DO: 택 · 모델명 공식 이미지 및 세탁법 자동 등록, Google Calendar 저장, 인스타그램 SNS 태깅, 세탁 방문수거 앱, 정품 인증 중고 연동.',
         },
       ],
       moatsTitle: '4대 기술 · 제품 해자',
@@ -2050,7 +2394,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           detail: '명품 · 구매 기록 정품 인증 연동으로 유휴 의류를 투명한 중고 거래로 즉시 전환해 수수료 창출.',
         },
       ],
-      backToMissionLabel: '01 미션',
+      backToMissionLabel: '01 유저 여정',
       founderRole: '창업자 & 엔지니어 · Ainvtry',
       hqLabel: '거점',
       hqValue: '대한민국 서울',

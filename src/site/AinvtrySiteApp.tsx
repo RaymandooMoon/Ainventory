@@ -15,18 +15,12 @@ import {
 } from '../components/auth/loginThreeScenes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { EnterpriseBlueprintPanel, PrivacyDefensePanel } from './SiteBlueprintPanel.tsx';
-import {
-  BenchmarksIrScorecard,
-  GoogleMapsPipelinePanel,
-  ProductionStackMatrix,
-} from './SiteIrPanels.tsx';
+import { GoogleApiTheaterPanel } from './SiteGoogleApiTheater.tsx';
+import { BenchmarksIrScorecard, ProductionStackMatrix } from './SiteIrPanels.tsx';
+import { AboutJourneyComicPanel } from './SiteJourneyComicPanel.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
-import {
-  AboutFounderPanel,
-  AboutMissionPanel,
-  AboutRoadmapPanel,
-} from './SiteMissionPanel.tsx';
+import { AboutFounderPanel, AboutMissionPanel } from './SiteMissionPanel.tsx';
 import {
   AppPreviewShowcasePanel,
   AtelierShowcasePanel,
@@ -123,7 +117,7 @@ export default function AinvtrySiteApp() {
   const [selectedPrivacyShield, setSelectedPrivacyShield] =
     useState<SitePrivacyShield['id']>('biometric');
   const [benchTab, setBenchTab] = useState<'kpi' | 'matrix'>('kpi');
-  const [aboutTab, setAboutTab] = useState<'mission' | 'roadmap' | 'founder'>('mission');
+  const [aboutTab, setAboutTab] = useState<'journey' | 'mission' | 'founder'>('journey');
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
   const [isDraggingOpacity, setIsDraggingOpacity] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKind | null>(null);
@@ -618,7 +612,11 @@ export default function AinvtrySiteApp() {
                     </button>
                   </div>
                   <span className="site-pill-badge">
-                    {archTab === 'privacy' ? copy.architecture.privacyBadge : copy.architecture.badge}
+                    {archTab === 'privacy'
+                      ? copy.architecture.privacyBadge
+                      : archTab === 'maps'
+                        ? copy.architecture.mapsBadge
+                        : copy.architecture.badge}
                   </span>
                 </div>
 
@@ -639,11 +637,12 @@ export default function AinvtrySiteApp() {
                     <PrivacyDefensePanel
                       copy={copy.architecture}
                       interactiveCopy={copy.interactive}
-                      initialShieldId={selectedPrivacyShield}
+                      selectedId={selectedPrivacyShield}
+                      onSelect={setSelectedPrivacyShield}
                     />
                   )}
                   {archTab === 'maps' && (
-                    <GoogleMapsPipelinePanel copy={copy.architecture} tapHint={copy.tapHint} />
+                    <GoogleApiTheaterPanel copy={copy.architecture} tapHint={copy.tapHint} />
                   )}
                 </div>
               </div>
@@ -729,13 +728,29 @@ export default function AinvtrySiteApp() {
                     onKeyDown={(e) =>
                       handleTablistArrowKeys(
                         e,
-                        ['mission', 'roadmap', 'founder'] as const,
+                        ['journey', 'mission', 'founder'] as const,
                         aboutTab,
                         'site-about-tab',
                         setAboutTab
                       )
                     }
                   >
+                    <button
+                      id="site-about-tab-journey"
+                      type="button"
+                      role="tab"
+                      aria-selected={aboutTab === 'journey'}
+                      aria-controls="site-about-tabpanel"
+                      tabIndex={aboutTab === 'journey' ? 0 : -1}
+                      className={`site-subtab-pill ${aboutTab === 'journey' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setAboutTab('journey');
+                      }}
+                    >
+                      {copy.subtabs.aboutJourney}
+                    </button>
+                    <span className="site-stepper-arrow" aria-hidden="true">→</span>
                     <button
                       id="site-about-tab-mission"
                       type="button"
@@ -750,22 +765,6 @@ export default function AinvtrySiteApp() {
                       }}
                     >
                       {copy.subtabs.aboutMission}
-                    </button>
-                    <span className="site-stepper-arrow" aria-hidden="true">→</span>
-                    <button
-                      id="site-about-tab-roadmap"
-                      type="button"
-                      role="tab"
-                      aria-selected={aboutTab === 'roadmap'}
-                      aria-controls="site-about-tabpanel"
-                      tabIndex={aboutTab === 'roadmap' ? 0 : -1}
-                      className={`site-subtab-pill ${aboutTab === 'roadmap' ? 'is-active' : ''}`}
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        setAboutTab('roadmap');
-                      }}
-                    >
-                      {copy.subtabs.aboutRoadmap}
                     </button>
                     <span className="site-stepper-arrow" aria-hidden="true">→</span>
                     <button
@@ -785,7 +784,11 @@ export default function AinvtrySiteApp() {
                     </button>
                   </div>
                   <span className="site-pill-badge">
-                    {aboutTab === 'mission' ? copy.mission.badge : copy.vision.irBadge}
+                    {aboutTab === 'journey'
+                      ? copy.journey.badge
+                      : aboutTab === 'mission'
+                        ? copy.mission.badge
+                        : copy.vision.irBadge}
                   </span>
                 </div>
 
@@ -795,16 +798,17 @@ export default function AinvtrySiteApp() {
                   role="tabpanel"
                   aria-labelledby={`site-about-tab-${aboutTab}`}
                 >
+                  {aboutTab === 'journey' && (
+                    <AboutJourneyComicPanel
+                      copy={copy.journey}
+                      tapHint={copy.tapHint}
+                      onNextStep={() => setAboutTab('mission')}
+                    />
+                  )}
                   {aboutTab === 'mission' && (
                     <AboutMissionPanel
                       copy={copy.mission}
-                      tapHint={copy.tapHint}
-                      onNextStep={() => setAboutTab('roadmap')}
-                    />
-                  )}
-                  {aboutTab === 'roadmap' && (
-                    <AboutRoadmapPanel
-                      copy={copy.vision}
+                      visionCopy={copy.vision}
                       tapHint={copy.tapHint}
                       onNextStep={() => setAboutTab('founder')}
                     />
@@ -813,7 +817,7 @@ export default function AinvtrySiteApp() {
                     <AboutFounderPanel
                       copy={copy.vision}
                       betaMailto={betaMailto}
-                      onBackToMission={() => setAboutTab('mission')}
+                      onBackToJourney={() => setAboutTab('journey')}
                     />
                   )}
                 </div>
