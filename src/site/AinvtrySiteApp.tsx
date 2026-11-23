@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowUpRight,
   Check,
   ChevronsUpDown,
   Globe,
@@ -24,6 +23,11 @@ import {
 } from './SiteIrPanels.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
+import {
+  AboutFounderPanel,
+  AboutMissionPanel,
+  AboutRoadmapPanel,
+} from './SiteMissionPanel.tsx';
 import {
   AppPreviewShowcasePanel,
   AtelierShowcasePanel,
@@ -95,7 +99,7 @@ export default function AinvtrySiteApp() {
   const [studioTab, setStudioTab] = useState<'preview' | 'atelier' | 'intelligence'>('preview');
   const [archTab, setArchTab] = useState<'stack' | 'maps' | 'vision'>('stack');
   const [benchTab, setBenchTab] = useState<'kpi' | 'matrix'>('kpi');
-  const [aboutMobileTab, setAboutMobileTab] = useState<'mission' | 'founder'>('mission');
+  const [aboutTab, setAboutTab] = useState<'mission' | 'roadmap' | 'founder'>('mission');
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
   const [isDraggingOpacity, setIsDraggingOpacity] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKind | null>(null);
@@ -619,102 +623,95 @@ export default function AinvtrySiteApp() {
 
           {activeView === 'about' && (
             <section key="about" className="site-view site-view--panel">
-              <div className="site-glass-panel" data-about-tab={aboutMobileTab}>
+              <div className="site-glass-panel" data-about-tab={aboutTab}>
                 <div className="site-panel-header">
-                  <div className="site-subtab-group site-about-tab-switcher" role="tablist" aria-label="About sections">
+                  <div
+                    className="site-subtab-group"
+                    role="tablist"
+                    aria-label="About sections"
+                    onKeyDown={(e) => {
+                      const order: readonly ('mission' | 'roadmap' | 'founder')[] = [
+                        'mission',
+                        'roadmap',
+                        'founder',
+                      ];
+                      const idx = order.indexOf(aboutTab);
+                      let next = -1;
+                      if (e.key === 'ArrowRight') next = (idx + 1) % order.length;
+                      else if (e.key === 'ArrowLeft') next = (idx - 1 + order.length) % order.length;
+                      else if (e.key === 'Home') next = 0;
+                      else if (e.key === 'End') next = order.length - 1;
+                      if (next >= 0) {
+                        e.preventDefault();
+                        const target = order[next];
+                        triggerHaptic('selection');
+                        setAboutTab(target);
+                        document.getElementById(`site-about-tab-${target}`)?.focus();
+                      }
+                    }}
+                  >
                     <button
+                      id="site-about-tab-mission"
                       type="button"
                       role="tab"
-                      aria-selected={aboutMobileTab === 'mission'}
-                      className={`site-subtab-pill ${aboutMobileTab === 'mission' ? 'is-active' : ''}`}
+                      aria-selected={aboutTab === 'mission'}
+                      aria-controls="site-about-tabpanel"
+                      tabIndex={aboutTab === 'mission' ? 0 : -1}
+                      className={`site-subtab-pill ${aboutTab === 'mission' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
-                        setAboutMobileTab('mission');
+                        setAboutTab('mission');
                       }}
                     >
                       {copy.subtabs.aboutMission}
                     </button>
                     <button
+                      id="site-about-tab-roadmap"
                       type="button"
                       role="tab"
-                      aria-selected={aboutMobileTab === 'founder'}
-                      className={`site-subtab-pill ${aboutMobileTab === 'founder' ? 'is-active' : ''}`}
+                      aria-selected={aboutTab === 'roadmap'}
+                      aria-controls="site-about-tabpanel"
+                      tabIndex={aboutTab === 'roadmap' ? 0 : -1}
+                      className={`site-subtab-pill ${aboutTab === 'roadmap' ? 'is-active' : ''}`}
                       onClick={() => {
                         triggerHaptic('selection');
-                        setAboutMobileTab('founder');
+                        setAboutTab('roadmap');
+                      }}
+                    >
+                      {copy.subtabs.aboutRoadmap}
+                    </button>
+                    <button
+                      id="site-about-tab-founder"
+                      type="button"
+                      role="tab"
+                      aria-selected={aboutTab === 'founder'}
+                      aria-controls="site-about-tabpanel"
+                      tabIndex={aboutTab === 'founder' ? 0 : -1}
+                      className={`site-subtab-pill ${aboutTab === 'founder' ? 'is-active' : ''}`}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setAboutTab('founder');
                       }}
                     >
                       {copy.subtabs.aboutFounder}
                     </button>
                   </div>
-                  <span className="site-about-desktop-kicker">{copy.vision.eyebrow}</span>
-                  <span className="site-pill-badge">{copy.vision.irBadge}</span>
+                  <span className="site-pill-badge">
+                    {aboutTab === 'mission' ? copy.mission.badge : copy.vision.irBadge}
+                  </span>
                 </div>
 
-                <div className="site-panel-body">
-                  <div className="site-vision-grid">
-                    <div className="site-vision-copy">
-                      <h2 className="site-section-title">{copy.vision.heading}</h2>
-                      <blockquote className="site-vision-quote">{copy.vision.quote}</blockquote>
-
-                      <div className="site-roadmap-block">
-                        <span className="site-arch-meta-label">{copy.vision.roadmapTitle}</span>
-                        <ol className="site-roadmap-list">
-                          {copy.vision.milestones.map((m) => (
-                            <li
-                              key={m.phase}
-                              className={`site-roadmap-item is-${m.status}`}
-                            >
-                              <span className="site-roadmap-phase">{m.phase}</span>
-                              <div className="site-roadmap-text">
-                                <strong>{m.title}</strong>
-                                <span>{m.detail}</span>
-                              </div>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
-
-                    <aside className="site-founder-card" aria-label="Company and founder details">
-                      <div className="site-founder-head">
-                        <div className="site-founder-avatar" aria-hidden="true">
-                          RM
-                        </div>
-                        <div>
-                          <h3 className="site-founder-name">{SITE_META.founderName}</h3>
-                          <p className="site-founder-role">{copy.vision.founderRole}</p>
-                          <a href={`mailto:${SITE_META.contactEmail}`} className="site-founder-email">
-                            {SITE_META.contactEmail}
-                          </a>
-                        </div>
-                      </div>
-
-                      <p className="site-founder-bio">{copy.vision.founderBio}</p>
-
-                      <dl className="site-dossier-list">
-                        <div>
-                          <dt>{copy.vision.hqLabel}</dt>
-                          <dd>{copy.vision.hqValue}</dd>
-                        </div>
-                        <div>
-                          <dt>{copy.vision.domainLabel}</dt>
-                          <dd>
-                            <strong>{SITE_META.domain}</strong>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{copy.vision.stackSummaryLabel}</dt>
-                          <dd>{copy.vision.stackSummaryValue}</dd>
-                        </div>
-                      </dl>
-
-                      <a href={betaMailto} className="site-founder-cta">
-                        <span>{copy.vision.directCta}</span>
-                        <ArrowUpRight size={16} />
-                      </a>
-                    </aside>
-                  </div>
+                <div
+                  id="site-about-tabpanel"
+                  className="site-panel-body"
+                  role="tabpanel"
+                  aria-labelledby={`site-about-tab-${aboutTab}`}
+                >
+                  {aboutTab === 'mission' && <AboutMissionPanel copy={copy.mission} />}
+                  {aboutTab === 'roadmap' && <AboutRoadmapPanel copy={copy.vision} />}
+                  {aboutTab === 'founder' && (
+                    <AboutFounderPanel copy={copy.vision} betaMailto={betaMailto} />
+                  )}
                 </div>
               </div>
             </section>

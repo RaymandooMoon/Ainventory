@@ -469,11 +469,13 @@ html[data-site-theme='light'] body {
 }
 
 /* Korean Typography Override: Crisp Upright Pretendard (Never slanted serif fallback) */
-html[lang='ko'] .site-hero-accent {
+html[lang='ko'] .site-hero-accent,
+html[lang='ko'] .site-mission-heading em,
+html[lang='ko'] .site-loop-center-title {
   font-family: var(--site-font-sans);
   font-style: normal;
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
 }
 
 html[lang='ko'] .site-vision-quote {
@@ -2255,57 +2257,625 @@ html[lang='ko'] .site-vision-quote {
 }
 
 /* ==========================================================================
- * About, Milestones & Founder
+ * About — Stitch Variant A (Our Mission | Roadmap & BM | Founder & Moats)
  * ========================================================================== */
 
-.site-about-tab-switcher {
-  display: inline-flex;
-}
-
-.site-about-desktop-kicker {
-  display: none;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-secondary);
+.site-mission-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: stretch;
+  width: 100%;
 }
 
 @media (min-width: 860px) {
-  .site-about-tab-switcher {
-    display: none;
-  }
-
-  .site-about-desktop-kicker {
-    display: inline-flex;
+  .site-mission-grid {
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: 20px;
     align-items: center;
-    min-height: 44px;
   }
 }
 
-.site-vision-grid {
+.site-mission-manifesto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-mission-heading {
+  margin: 0;
+  font-size: clamp(1.08rem, 1.85vw, 1.42rem);
+  font-weight: 680;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.site-mission-heading em {
+  font-family: var(--site-font-editorial);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent-sand);
+}
+
+.site-mission-statement {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.site-mission-commitments {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.site-mission-commit-card {
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.site-mission-commit-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.site-mission-commit-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.79rem;
+  color: var(--ink-primary);
+}
+
+.site-mission-commit-num {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-sand);
+  font-variant-numeric: tabular-nums;
+}
+
+.site-mission-commit-tag {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+.site-mission-commit-detail {
+  margin: 0;
+  font-size: 0.71rem;
+  line-height: 1.42;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* Right: Interactive iNVTRY Apparel Lifecycle Loop Stage */
+.site-mission-diagram-card {
+  padding: 13px 15px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.site-mission-diagram-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.site-mission-diagram-title {
+  margin: 2px 0 0;
+  font-size: 0.84rem;
+  font-weight: 640;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.site-mission-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.64rem;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+.site-legend-silo::before,
+.site-legend-core::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.site-legend-silo::before {
+  border-top: 1px dashed var(--hairline-strong);
+}
+
+.site-legend-core::before {
+  border-top: 1.5px solid var(--accent-sand);
+}
+
+.site-loop-stage {
+  display: grid;
+  grid-template-columns: 102px 20px minmax(0, 1fr) 20px 102px;
+  grid-template-areas: 'siloL gapL core gapR siloR';
+  align-items: center;
+  gap: 4px;
+}
+
+@media (min-width: 860px) and (max-width: 1119px) {
+  .site-loop-stage {
+    grid-template-columns: 92px 18px minmax(0, 1fr) 18px 92px;
+  }
+}
+
+.site-loop-silo {
+  padding: 9px 8px;
+  border-radius: 11px;
+  border: 1px dashed var(--hairline-strong);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  opacity: 0.82;
+}
+
+.site-loop-silo--left {
+  grid-area: siloL;
+}
+
+.site-loop-silo--right {
+  grid-area: siloR;
+}
+
+.site-loop-silo-tag {
+  font-size: 0.56rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+}
+
+.site-loop-silo-title {
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.site-loop-silo-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.64rem;
+  line-height: 1.3;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.site-loop-silo-arrow {
+  font-size: 0.64rem;
+  color: var(--ink-tertiary);
+  line-height: 1;
+}
+
+.site-loop-silo-gap {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--hairline);
+  font-size: 0.6rem;
+  line-height: 1.25;
+  color: var(--ink-tertiary);
+  word-break: keep-all;
+}
+
+.site-loop-gap-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px dashed var(--hairline-strong);
+  color: var(--ink-tertiary);
+  font-size: 0.66rem;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+}
+
+.site-loop-core {
+  grid-area: core;
+  position: relative;
+  min-height: 244px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-loop-orbit-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-primary);
+  pointer-events: none;
+}
+
+.site-loop-center-emblem {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1px;
+  pointer-events: none;
+  transform: translateY(2px);
+}
+
+.site-loop-center-kicker {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent-sand);
+}
+
+.site-loop-center-title {
+  font-family: var(--site-font-editorial);
+  font-style: italic;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.site-loop-center-sub {
+  font-size: 0.58rem;
+  color: var(--ink-tertiary);
+}
+
+.site-loop-nodes {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.site-loop-node-btn {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  min-height: 38px;
+  width: 146px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.site-loop-node-btn:hover {
+  border-color: var(--accent-sand);
+}
+
+.site-loop-node-btn:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.site-loop-node-btn.is-active {
+  border-color: var(--accent-sand);
+  background: color-mix(in srgb, var(--accent-sand) 12%, var(--bg-elevated));
+}
+
+.site-loop-node-num {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-sand);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.site-loop-node-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.site-loop-node-copy strong {
+  font-size: 0.69rem;
+  font-weight: 650;
+  line-height: 1.18;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-loop-node-copy small {
+  font-size: 0.58rem;
+  line-height: 1.15;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Clockwise 5-Point Pentagon Placement Matching iNVTRY Lifecycle Loop */
+.site-loop-node--closet {
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.site-loop-node--weather {
+  top: 72px;
+  right: 0;
+}
+
+.site-loop-node--avatar {
+  bottom: 10px;
+  right: 6px;
+}
+
+.site-loop-node--calendar {
+  bottom: 10px;
+  left: 6px;
+}
+
+.site-loop-node--cpw {
+  top: 72px;
+  left: 0;
+}
+
+.site-loop-exits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.site-loop-exit-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  color: var(--accent-sand);
+}
+
+.site-loop-exit-chip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.site-loop-exit-chip strong {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+}
+
+.site-loop-exit-chip span {
+  font-size: 0.63rem;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-loop-inspector {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+}
+
+.site-loop-inspector-code {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-sand);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.site-loop-inspector strong {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.site-loop-inspector p {
+  margin: 0;
+  font-size: 0.71rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* Tab 2: Roadmap + 3-Pillar Sustainable Business Model */
+.site-roadmap-bm-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 18px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (min-width: 860px) {
+  .site-roadmap-bm-grid {
+    grid-template-columns: 1.04fr 0.96fr;
+    gap: 28px;
+    align-items: center;
+  }
+}
+
+.site-roadmap-col,
+.site-bm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-bm-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.site-bm-note {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.site-bm-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-bm-card {
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.site-bm-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.site-bm-card-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.82rem;
+  color: var(--ink-primary);
+}
+
+.site-bm-card-detail {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* Tab 3: Founder Dossier + 4 Engineering/Product Moats */
+.site-vision-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
   align-items: center;
   width: 100%;
 }
 
 @media (min-width: 860px) {
   .site-vision-grid {
-    grid-template-columns: 1.14fr 0.86fr;
-    gap: 32px;
+    grid-template-columns: 1.12fr 0.88fr;
+    gap: 28px;
   }
 }
 
 .site-vision-quote {
-  margin: 10px 0 16px;
+  margin: 6px 0 10px;
   padding-left: 14px;
   border-left: 2px solid var(--hairline-strong);
   font-family: var(--site-font-editorial);
   font-style: italic;
-  font-size: clamp(0.9rem, 1.4vw, 1.06rem);
-  line-height: 1.5;
+  font-size: clamp(0.88rem, 1.35vw, 1.02rem);
+  line-height: 1.48;
   color: var(--ink-primary);
+}
+
+.site-founder-overview {
+  margin: 0 0 12px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.site-moats-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.site-moats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.site-moat-card {
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.site-moat-card strong {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+}
+
+.site-moat-card p {
+  margin: 0;
+  font-size: 0.69rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+  word-break: keep-all;
 }
 
 .site-roadmap-block {
@@ -2638,12 +3208,186 @@ html[lang='ko'] .site-vision-quote {
 }
 
 @media (max-width: 859px) {
-  .site-glass-panel[data-about-tab='mission'] .site-founder-card {
+  .site-mission-grid {
+    gap: 8px;
+  }
+
+  .site-mission-manifesto {
+    gap: 4px;
+  }
+
+  .site-mission-manifesto .site-eyebrow {
     display: none;
   }
 
-  .site-glass-panel[data-about-tab='founder'] .site-vision-copy {
+  .site-mission-commitments {
     display: none;
+  }
+
+  .site-mission-heading {
+    font-size: 1.02rem;
+    line-height: 1.22;
+  }
+
+  .site-mission-statement {
+    font-size: 0.71rem;
+    line-height: 1.38;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .site-mission-diagram-card {
+    padding: 9px 10px;
+    gap: 7px;
+  }
+
+  .site-mission-diagram-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding-bottom: 5px;
+  }
+
+  .site-mission-diagram-title {
+    font-size: 0.78rem;
+  }
+
+  .site-mission-legend {
+    display: none;
+  }
+
+  .site-loop-stage {
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas:
+      'siloL gapL siloR'
+      'core core core';
+    gap: 6px;
+  }
+
+  .site-loop-silo {
+    padding: 6px 8px;
+    gap: 2px;
+  }
+
+  .site-loop-silo-steps,
+  .site-loop-silo-gap {
+    display: none;
+  }
+
+  .site-loop-gap-badge:last-of-type {
+    display: none;
+  }
+
+  .site-loop-core {
+    min-height: auto;
+    padding: 4px 0 2px;
+  }
+
+  .site-loop-orbit-svg,
+  .site-loop-center-emblem {
+    display: none;
+  }
+
+  .site-loop-nodes {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .site-loop-node-btn {
+    position: static;
+    transform: none !important;
+    width: 100%;
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .site-loop-node--cpw {
+    grid-column: 1 / -1;
+  }
+
+  .site-loop-exits {
+    gap: 6px;
+  }
+
+  .site-loop-exit-chip {
+    padding: 6px 8px;
+  }
+
+  .site-loop-exit-chip span {
+    display: none;
+  }
+
+  .site-loop-inspector {
+    padding: 7px 9px;
+    gap: 6px;
+  }
+
+  .site-loop-inspector strong {
+    display: none;
+  }
+
+  .site-roadmap-bm-grid {
+    gap: 10px;
+  }
+
+  .site-roadmap-col .site-section-title {
+    display: none;
+  }
+
+  .site-roadmap-item {
+    grid-template-columns: 56px 1fr;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .site-roadmap-text span {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .site-bm-note {
+    display: none;
+  }
+
+  .site-bm-card {
+    padding: 7px 10px;
+    gap: 2px;
+  }
+
+  .site-bm-card-detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .site-founder-overview,
+  .site-moats-block {
+    display: none;
+  }
+
+  .site-vision-quote {
+    margin: 4px 0 0;
+    font-size: 0.78rem;
+    line-height: 1.42;
+  }
+
+  .site-founder-card {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .site-founder-bio {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .site-app-preview-copy .site-pillar-desc {
