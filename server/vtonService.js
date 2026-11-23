@@ -332,11 +332,13 @@ export function resolveTurnaroundSheetImageSize() {
 }
 
 export function resolveTurnaroundThinkingLevel() {
-  const raw = String(readServerEnvVar('GEMINI_VTON_THINKING_LEVEL') || 'LOW')
+  const raw = String(readServerEnvVar('GEMINI_VTON_THINKING_LEVEL') || '')
     .trim()
     .toUpperCase();
-  if (raw === 'OFF' || raw === 'NONE' || raw === 'DISABLED') return null;
-  return VALID_THINKING_LEVELS.has(raw) ? raw : 'LOW';
+  if (!raw || raw === 'OFF' || raw === 'NONE' || raw === 'DISABLED' || raw === 'AUTO' || raw === 'DEFAULT') {
+    return null;
+  }
+  return VALID_THINKING_LEVELS.has(raw) ? raw : null;
 }
 
 /**
@@ -3130,26 +3132,44 @@ async function generateWithGeminiModelChain(
     const sheetAspectRatio = is4x2Sheet ? '4:3' : '3:2';
     const sheetImageSize = resolveTurnaroundSheetImageSize();
     const sheetThinkingLevel = isTurnaroundSheet ? resolveTurnaroundThinkingLevel() : null;
+    // gemini-nano-banana-2.1 rejects thinkingLevel LOW/MEDIUM with HTTP 400 INVALID_ARGUMENT;
+    // omit thinkingConfig by default and only forward explicitly supported overrides.
+    const effectiveThinkingLevel =
+      sheetThinkingLevel &&
+      (model !== 'gemini-nano-banana-2.1' ||
+        sheetThinkingLevel === 'MINIMAL' ||
+        sheetThinkingLevel === 'HIGH')
+        ? sheetThinkingLevel
+        : null;
     const thinkingCfgObj =
-      supportsImageSize && sheetThinkingLevel
-        ? { thinkingConfig: { thinkingLevel: sheetThinkingLevel } }
+      supportsImageSize && effectiveThinkingLevel
+        ? { thinkingConfig: { thinkingLevel: effectiveThinkingLevel } }
         : {};
+    const hasThinkingCfg = Boolean(thinkingCfgObj.thinkingConfig);
 
     const requestConfigs = isTurnaroundSheet
       ? supportsImageSize
         ? [
+            ...(hasThinkingCfg
+              ? [
+                  {
+                    responseModalities: ['IMAGE'],
+                    imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
+                    ...thinkingCfgObj,
+                  },
+                  {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
+                    ...thinkingCfgObj,
+                  },
+                ]
+              : []),
             {
               responseModalities: ['IMAGE'],
               imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
-              ...thinkingCfgObj,
             },
             {
               responseModalities: ['TEXT', 'IMAGE'],
-              imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
-              ...thinkingCfgObj,
-            },
-            {
-              responseModalities: ['IMAGE'],
               imageConfig: { aspectRatio: sheetAspectRatio, imageSize: sheetImageSize },
             },
             {

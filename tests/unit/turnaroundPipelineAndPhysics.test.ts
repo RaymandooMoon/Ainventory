@@ -20,11 +20,11 @@ import {
 } from '../../src/utils/turnaroundPhysics.ts';
 
 describe('4x2 Nano Banana Blueprint Pipeline & Thinking Level', () => {
-  it('defaults turnaround thinking level to LOW for fast 2K latency and respects GEMINI_VTON_THINKING_LEVEL overrides', () => {
+  it('omits turnaround thinking level by default (avoiding unsupported LOW 400 on nano-banana-2.1) and respects explicit GEMINI_VTON_THINKING_LEVEL overrides', () => {
     const prev = process.env.GEMINI_VTON_THINKING_LEVEL;
     try {
       delete process.env.GEMINI_VTON_THINKING_LEVEL;
-      assert.equal(resolveTurnaroundThinkingLevel(), 'LOW');
+      assert.equal(resolveTurnaroundThinkingLevel(), null);
 
       process.env.GEMINI_VTON_THINKING_LEVEL = 'high';
       assert.equal(resolveTurnaroundThinkingLevel(), 'HIGH');
@@ -35,11 +35,14 @@ describe('4x2 Nano Banana Blueprint Pipeline & Thinking Level', () => {
       process.env.GEMINI_VTON_THINKING_LEVEL = 'minimal';
       assert.equal(resolveTurnaroundThinkingLevel(), 'MINIMAL');
 
+      process.env.GEMINI_VTON_THINKING_LEVEL = 'low';
+      assert.equal(resolveTurnaroundThinkingLevel(), 'LOW');
+
       process.env.GEMINI_VTON_THINKING_LEVEL = 'off';
       assert.equal(resolveTurnaroundThinkingLevel(), null);
 
       process.env.GEMINI_VTON_THINKING_LEVEL = 'invalid_value';
-      assert.equal(resolveTurnaroundThinkingLevel(), 'LOW');
+      assert.equal(resolveTurnaroundThinkingLevel(), null);
     } finally {
       if (prev === undefined) {
         delete process.env.GEMINI_VTON_THINKING_LEVEL;

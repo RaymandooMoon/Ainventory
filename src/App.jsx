@@ -52,7 +52,11 @@ import {
   runCircularThemeTransition,
 } from './utils/themeTransition.ts';
 import LoginPortalParticleWave from './components/auth/LoginPortalParticleWave.tsx';
-import { attachAntiGravityField } from './services/antiGravityMotion.ts';
+import {
+  attachAntiGravityField,
+  createAntiGravityState,
+  syncAntiGravityExternalPause,
+} from './services/antiGravityMotion.ts';
 
 const LoginView = lazy(() => import('./components/LoginView.jsx'));
 const WardrobeView = lazy(() => import('./components/WardrobeView.jsx'));
@@ -771,15 +775,33 @@ export default function App() {
     };
   }, [loginPortal, clearPortalTimers]);
 
-  // Attach Zero-G Anti-Gravity Physics Field to main app shell (garments gently float & rotate, accelerating on scroll/touch)
+  // Shared mutable state ref for Zero-G Anti-Gravity calculation cycles (zero React re-renders)
+  const antiGravityStateRef = useRef(null);
   const antiGravityEnabled =
     authReady && (!showAuthScreen || loginPortal?.phase === 'revealing');
+  const antiGravityModalPaused = Boolean(
+    selectedItemId !== null || profileModalOpen || accountSheetOpen || sampleImportOpen
+  );
+  const antiGravityModalPausedRef = useRef(antiGravityModalPaused);
+
   useEffect(() => {
     if (!antiGravityEnabled) return undefined;
     const shellEl = appShellRef.current;
     if (!shellEl) return undefined;
-    return attachAntiGravityField(shellEl);
+    if (!antiGravityStateRef.current) {
+      antiGravityStateRef.current = createAntiGravityState();
+    }
+    return attachAntiGravityField(shellEl, {
+      stateRef: antiGravityStateRef,
+      initialPaused: antiGravityModalPausedRef.current,
+    });
   }, [antiGravityEnabled]);
+
+  useEffect(() => {
+    antiGravityModalPausedRef.current = antiGravityModalPaused;
+    if (!antiGravityEnabled) return;
+    syncAntiGravityExternalPause(antiGravityStateRef, antiGravityModalPaused);
+  }, [antiGravityEnabled, antiGravityModalPaused]);
 
   const handleEnterSampleCloset = useCallback(() => {
     startLoginPortalTransition(() => {

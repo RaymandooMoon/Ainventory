@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
+import { observeOpenModalDialogs } from '../../utils/adaptiveFramePacer.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import {
   createLoginThreeController,
@@ -59,9 +60,17 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   const initialStageRef = useRef<'intro' | 'auth' | 'portal'>(stage);
   const initialVariantRef = useRef<LoginThreeVariantId>(motionVariant);
   const stageModeRef = useRef<'intro' | 'auth' | 'portal'>(stage);
+  const propPausedRef = useRef(paused);
+  const modalPausedRef = useRef(false);
   const pausedModeRef = useRef(paused);
   const stageCooldownUntilRef = useRef(0);
   const invalidateButtonCacheRef = useRef<(() => void) | null>(null);
+
+  const syncEffectivePause = () => {
+    const effective = propPausedRef.current || modalPausedRef.current;
+    pausedModeRef.current = effective;
+    controllerRef.current?.setPaused(effective);
+  };
 
   // Sync theme transitions cleanly (instant snap during View Transition circle reveal)
   useEffect(() => {
@@ -81,8 +90,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
   }, [stage]);
 
   useEffect(() => {
-    pausedModeRef.current = paused;
-    controllerRef.current?.setPaused(paused);
+    propPausedRef.current = paused;
+    syncEffectivePause();
   }, [paused]);
 
   useEffect(() => {
@@ -337,6 +346,12 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
     }
 
     controllerRef.current = controller;
+    // Sync initial pause state and auto-pause WebGL loop at 0fps whenever any modal dialog opens
+    const stopModalObserver = observeOpenModalDialogs((hasOpenModal) => {
+      modalPausedRef.current = hasOpenModal;
+      syncEffectivePause();
+    });
+    syncEffectivePause();
 
     // --- Pointer & Touch Tracking ---
     let lastNormX = 0;
@@ -594,6 +609,8 @@ const LoginBackdropCanvas = memo(function LoginBackdropCanvas({
         window.removeEventListener('deviceorientation', onDeviceOrientation);
       }
       if (resizeObserver) resizeObserver.disconnect();
+      stopModalObserver();
+      modalPausedRef.current = false;
       controller.dispose();
       controllerRef.current = null;
     };

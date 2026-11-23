@@ -1,4 +1,13 @@
 import * as THREE from 'three';
+import {
+  createAdaptivePacerState,
+  markPacerActivity,
+  recordFrameWorkCost,
+  resetPacerOnResume,
+  resolveFpsTier,
+  sampleDisplayRefreshHz,
+  shouldCommitFrame,
+} from '../../utils/adaptiveFramePacer.ts';
 
 export type LoginThreeVariantId = 'luxury' | 'aurora';
 
@@ -71,7 +80,6 @@ export interface LoginThreeController {
     impactStrength?: number,
     minBounceSpeed?: number
   ) => void;
-  setPlayBounds?: (bounds: { bottomInsetWorld?: number; topInsetWorld?: number }) => void;
   triggerPulse: (nx: number, ny: number, strength?: number) => void;
   triggerLoginSurge: (nx: number, ny: number) => void;
   resize: (width: number, height: number) => void;
@@ -214,14 +222,13 @@ const FLUID_SIM_FRAG = /* glsl */ `
       nextH += (dimple + collar) * uBurstStrength * 0.66;
     }
 
-    // 2. Rolling glass marble wave injection: displaced collar around marble rim
-    //    that radiates smoothly outward in 360° concentric rings as the marble rolls!
+    // 2. Rolling glass marble wave injection: deep fabric press core with soft taut-silk ring
     if (uMarbleWaveStrength > 0.001) {
       float dM = length((vUv - uMarbleWavePos) * aspectScale);
       float mr = max(0.018, uMarbleWaveRadius);
-      float coreDip = -exp(-(dM * dM) / (mr * mr * 0.72)) * 0.52;
-      float ringCrest = exp(-pow((dM - mr * 1.38) / (mr * 0.68), 2.0)) * 0.86;
-      nextH += (coreDip + ringCrest) * uMarbleWaveStrength * 0.52;
+      float coreDip = -exp(-(dM * dM) / (mr * mr * 0.95)) * 0.78;
+      float ringCrest = exp(-pow((dM - mr * 1.55) / (mr * 0.82), 2.0)) * 0.56;
+      nextH += (coreDip + ringCrest) * uMarbleWaveStrength * 0.48;
     }
 
     // Soft edge damping so waves fade invisibly at viewport borders without edge seams
@@ -246,6 +253,10 @@ const SILK_CLOTH_VERT = /* glsl */ `
   uniform float uTime;
   uniform float uAuthBlend;
   uniform float uSurge;
+  uniform vec2 uMarbleClothPos;
+  uniform float uMarbleClothRadius;
+  uniform float uMarbleSink;
+  uniform vec2 uMarbleVel;
 
   varying vec2 vUv;
   varying vec2 vScreenUv;
@@ -254,8 +265,9 @@ const SILK_CLOTH_VERT = /* glsl */ `
   varying vec3 vTangentDir;
   varying float vFoldHeight;
   varying float vFoldCrest;
+  varying float vMarblePit;
 
-  vec3 evalSilkDisplace(vec2 basePos, float t, float energy) {
+  vec3 evalSilkDisplace(vec2 basePos, float t, float energy, out float pitDepthOut) {
     vec2 p = basePos;
 
     vec2 d1 = normalize(vec2(0.82, 0.57));
@@ -287,6 +299,57 @@ const SILK_CLOTH_VERT = /* glsl */ `
       sin(ph3) * a3 +
       sin(ph4) * a4;
 
+    // True 3D gravitational depression bowl where the heavy glass marble sinks into taut silk
+    pitDepthOut = 0.0;
+    if (uMarbleSink > 0.005) {
+      vec2 md = basePos - uMarbleClothPos;
+      float r2 = dot(md, md);
+      float r = sqrt(r2 + 0.0001);
+      float R = max(0.24, uMarbleClothRadius);
+      float R2 = R * R;
+
+      // Dual-scale elastic membrane sag: deep cradle under the marble + broad catenary skirt
+      float coreWell = exp(-r2 / (R2 * 2.65));
+      float wideSag = exp(-r2 / (R2 * 16.5));
+      float press = uMarbleSink;
+
+      // Subtle radial tension gather folds radiating out from the depressed cloth rim
+      float ang = atan(md.y, md.x + 0.00001);
+      float pleatRing =
+        smoothstep(0.0, R * 0.75, r) * exp(-pow((r - R * 2.15) / (R * 1.55), 2.0));
+      float radialPleats =
+        (sin(ang * 7.0 + sin(ang * 3.0) * 0.65 + t * 0.18) * 0.65 +
+          cos(ang * 11.0 - 0.8) * 0.35) *
+        pleatRing *
+        0.095 *
+        press;
+
+      // Directional cloth bunching slightly ahead of roll & soft trailing trough behind
+      float velLen = length(uMarbleVel);
+      float motionWave = 0.0;
+      if (velLen > 0.01) {
+        vec2 vDir = uMarbleVel / velLen;
+        float along = dot(md, vDir) / R;
+        float bowRidge =
+          smoothstep(0.35, 1.45, along) *
+          exp(-pow((r - R * 1.65) / (R * 0.95), 2.0)) *
+          0.11;
+        float rearTrough =
+          smoothstep(0.25, 1.85, -along) *
+          exp(-r2 / (R2 * 9.0)) *
+          0.14;
+        motionWave = (bowRidge - rearTrough) * min(1.0, velLen * 0.65) * press;
+      }
+
+      // Pull surrounding silk fabric radially inward toward the heavy marble's pocket (det(J) > 0 safe)
+      vec2 inwardPull = -md * (0.20 * exp(-r2 / (R2 * 7.2)) * min(1.25, press));
+      xyShift += inwardPull;
+
+      float wellDepth = (coreWell * 0.92 + wideSag * 0.58) * press;
+      zHeight += -wellDepth + radialPleats + motionWave;
+      pitDepthOut = clamp(coreWell * 0.72 + wideSag * 0.45, 0.0, 1.0) * min(1.25, press);
+    }
+
     return vec3(basePos.x + xyShift.x, basePos.y + xyShift.y, zHeight);
   }
 
@@ -295,11 +358,13 @@ const SILK_CLOTH_VERT = /* glsl */ `
     float energy = mix(1.0, 0.74, uAuthBlend);
     float t = uTime * 0.85;
 
-    vec3 displaced = evalSilkDisplace(position.xy, t, energy);
+    float pitDepth = 0.0;
+    float pitDummy = 0.0;
+    vec3 displaced = evalSilkDisplace(position.xy, t, energy, pitDepth);
 
-    float eps = 0.08;
-    vec3 px = evalSilkDisplace(position.xy + vec2(eps, 0.0), t, energy);
-    vec3 py = evalSilkDisplace(position.xy + vec2(0.0, eps), t, energy);
+    float eps = 0.075;
+    vec3 px = evalSilkDisplace(position.xy + vec2(eps, 0.0), t, energy, pitDummy);
+    vec3 py = evalSilkDisplace(position.xy + vec2(0.0, eps), t, energy, pitDummy);
 
     vec3 tang = normalize(px - displaced);
     vec3 bitang = normalize(py - displaced);
@@ -309,7 +374,8 @@ const SILK_CLOTH_VERT = /* glsl */ `
     vNormalDir = normalize(worldRot * norm);
     vTangentDir = normalize(worldRot * tang);
     vFoldHeight = displaced.z;
-    vFoldCrest = clamp((displaced.z + 0.85) / 1.75, 0.0, 1.0);
+    vFoldCrest = clamp((displaced.z + 0.95) / 1.85, 0.0, 1.0);
+    vMarblePit = pitDepth;
 
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
     vWorldPos = worldPosition.xyz;
@@ -333,10 +399,11 @@ const SILK_CLOTH_FRAG = /* glsl */ `
   uniform float uSurge;
   uniform vec2 uPointer;
 
-  // Rolling marble footprint for under-orb shadow, dimple & refracted caustic pool
+  // Rolling marble footprint for under-orb gravity depression, shadow & refracted caustic pool
   uniform vec2 uMarbleUv;
   uniform float uMarbleRadius;
   uniform float uMarbleOpacity;
+  uniform float uMarbleSink;
 
   // C-infinity analytical wake ribbon behind the rolling marble
   uniform vec4 uTrailPts[${TRAIL_NODE_COUNT}];
@@ -360,6 +427,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
   varying vec3 vTangentDir;
   varying float vFoldHeight;
   varying float vFoldCrest;
+  varying float vMarblePit;
 
   vec4 decodeState(vec4 raw) {
     return mix(raw, raw * 2.0 - 1.0, uEncodedByte);
@@ -522,25 +590,52 @@ const SILK_CLOTH_FRAG = /* glsl */ `
       evalAnalyticRipples(suv, aspectScale, waveH, rippleGrad);
     }
 
-    // 2. Subtle physical weight dimple right underneath the resting/rolling glass marble
+    // 2. High-resolution per-pixel gravitational fabric depression right underneath the marble
+    //    (Complements the true 3D vertex bowl with razor-smooth concave slope, rim tension & pocket AO)
     vec2 mDelta = (suv - uMarbleUv) * aspectScale;
     float mDist2 = dot(mDelta, mDelta);
-    float mDimpleR = max(0.022, uMarbleRadius * 1.38);
-    float mInvR2 = 1.0 / (mDimpleR * mDimpleR);
-    float mDimple = exp(-mDist2 * mInvR2) * uMarbleOpacity;
-    vec2 mDimpleGrad = (2.0 * mDelta * mInvR2 * mDimple) * 0.0085;
+    float mDist = sqrt(mDist2 + 0.000001);
+    float mPress = uMarbleSink * uMarbleOpacity;
 
-    // 3. Smooth C-infinity wake behind the rolling marble
+    float mCoreR = max(0.022, uMarbleRadius * 1.32);
+    float mWideR = max(0.056, uMarbleRadius * 3.35);
+    float mInvCoreR2 = 1.0 / (mCoreR * mCoreR);
+    float mInvWideR2 = 1.0 / (mWideR * mWideR);
+
+    float mCoreDip = exp(-mDist2 * mInvCoreR2) * mPress;
+    float mWideDip = exp(-mDist2 * mInvWideR2) * mPress;
+
+    // Concave downward funnel gradient (+dh/dxy points outward -> subtracting from N tilts N inward into bowl!)
+    vec2 mDimpleGrad =
+      (2.0 * mDelta * mInvCoreR2 * mCoreDip) * 0.0155 +
+      (2.0 * mDelta * mInvWideR2 * mWideDip) * 0.0245;
+
+    // Delicate radial silk gather micro-pleats pulling taut around the sunken marble collar
+    float mAng = atan(mDelta.y, mDelta.x + 0.00001);
+    float gatherRing =
+      smoothstep(0.0, uMarbleRadius * 0.75, mDist) *
+      exp(-pow((mDist - uMarbleRadius * 2.15) / max(0.024, uMarbleRadius * 1.45), 2.0));
+    float gatherWave = sin(mAng * 8.0 + sin(mAng * 3.0) * 0.6) * 0.65 + cos(mAng * 13.0 - 0.5) * 0.35;
+    vec2 mTang = vec2(-mDelta.y, mDelta.x) / mDist;
+    vec2 gatherGrad = mTang * (gatherWave * gatherRing * mPress * 0.14);
+
+    // 3. Smooth C-infinity depressed cloth furrow trailing behind the rolling marble
     float trailC;
     float haloC;
     vec2 trailGrad;
     evalMarbleWake(suv, aspectScale, trailC, haloC, trailGrad);
 
-    float fboHeight = waveH * 1.25 - mDimple * 0.24 + trailC * 0.36 + haloC * 0.16;
-    vec2 fboVel = rippleGrad * 0.95 + trailGrad * 0.85;
+    // Depressed gravity pit + rebounding cloth furrow track (sunken core, subtle outer shoulder)
+    float pitTotal = clamp(mCoreDip * 0.68 + mWideDip * 0.42 + vMarblePit * 0.35, 0.0, 1.35);
+    float fboHeight = waveH * 1.15 - pitTotal * 0.62 - trailC * 0.40 + haloC * 0.14;
+    vec2 fboVel = rippleGrad * 0.85 - trailGrad * 0.75;
 
-    // Combine true 3D cloth normal with concentric ripples + marble weight dimple + wake
-    vec2 combinedGrad = rippleGrad * 3.45 + mDimpleGrad * 1.85 + trailGrad * 1.75;
+    // Combine true 3D cloth normal with concentric ripples + concave gravity funnel + depressed furrow wake
+    vec2 combinedGrad =
+      rippleGrad * 3.15 +
+      mDimpleGrad * 3.10 +
+      gatherGrad +
+      (-trailGrad * 1.65);
     vec3 N = normalize(vNormalDir + vec3(-combinedGrad.x, -combinedGrad.y, 0.0));
     vec3 T = normalize(vTangentDir - N * dot(N, vTangentDir));
     vec3 B = normalize(cross(N, T));
@@ -572,10 +667,16 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float sheen1 = charlieSheen(0.36, ndh1) * (0.14 + 0.42 * ndl1) * pow(1.0 - ndv, 1.55);
     float sheen2 = charlieSheen(0.42, ndh2) * (0.10 + 0.30 * ndl2) * pow(1.0 - ndv, 1.65);
 
-    float crest = clamp(vFoldCrest + fboHeight * 0.42, 0.0, 1.0);
-    float clothAO = smoothstep(0.06, 0.86, crest);
+    // Illuminated lower-right concave inner rim catchlight (makes gravity indentation unmistakable in both Light & Dark OLED!)
+    vec2 lightDir2D = normalize(L1.xy);
+    float rimFacingLight = clamp(dot(mDelta / mDist, -lightDir2D), 0.0, 1.0);
+    float pitRimRing = exp(-pow((mDist - uMarbleRadius * 1.72) / max(0.022, uMarbleRadius * 1.15), 2.0)) * mPress;
+    float pitRimCatch = pitRimRing * pow(rimFacingLight, 1.35) * (0.55 + 0.45 * wrapDiff1);
+
+    float crest = clamp(vFoldCrest + fboHeight * 0.46, 0.0, 1.0);
+    float clothAO = smoothstep(0.05, 0.86, crest);
     float rippleLuminance = clamp(
-      length(rippleGrad) * 3.6 + abs(waveH) * 1.05 + trailC * 0.42 + haloC * 0.18,
+      length(rippleGrad) * 3.3 + abs(waveH) * 0.95 + trailC * 0.26 + pitRimCatch * 0.72,
       0.0,
       0.95
     );
@@ -587,8 +688,11 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     float dye2 = 0.5 + 0.5 * cos(dyeUv.x * 1.4 - dyeUv.y * 1.7 - vFoldHeight * 0.8 - tDye * 1.15);
     float dye3 = 0.5 + 0.5 * sin((dyeUv.x - dyeUv.y) * 1.5 + vFoldHeight * 1.1 + tDye * 0.85);
 
-    // TRUE OLED DARK ENVELOPE
-    float oledFold = pow(smoothstep(0.22, 0.94, crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.26), 1.85);
+    // TRUE OLED DARK ENVELOPE (sunken pit darkens cleanly into velvet shadow while lit concave lip catches satin sheen)
+    float oledFold = pow(
+      smoothstep(0.22, 0.94, crest * 0.68 + wrapDiff1 * 0.38 + rippleLuminance * 0.24 + pitRimCatch * 0.32),
+      1.85
+    );
     float edgeDist = length((suv - 0.5) * vec2(1.06, 1.0));
     float oledEdgeFade = 1.0 - smoothstep(0.52, 1.02, edgeDist) * 0.58;
     float oledMask = oledFold * oledEdgeFade;
@@ -598,18 +702,18 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     luxDarkAlbedo = mix(luxDarkAlbedo, vec3(0.46, 0.37, 0.25), smoothstep(0.45, 0.92, dye3) * 0.55);
 
     vec3 luxDark = luxDarkAlbedo * (wrapDiff1 * 0.82 + wrapDiff2 * 0.28) * oledMask;
-    float luxLightMask = smoothstep(0.05, 0.75, oledMask + rippleLuminance * 0.62);
-    luxDark += vec3(0.88, 0.76, 0.58) * (satinAniso1 * 0.54 + sheen1 * 0.26) * luxLightMask;
-    luxDark += vec3(0.85, 0.88, 0.96) * (satinAniso2 * 0.34 + sheen2 * 0.22 + rippleLuminance * 0.34) * luxLightMask;
+    float luxLightMask = smoothstep(0.05, 0.75, oledMask + rippleLuminance * 0.58 + pitRimCatch * 0.52);
+    luxDark += vec3(0.88, 0.76, 0.58) * (satinAniso1 * 0.54 + sheen1 * 0.26 + pitRimCatch * 0.24) * luxLightMask;
+    luxDark += vec3(0.85, 0.88, 0.96) * (satinAniso2 * 0.34 + sheen2 * 0.22 + rippleLuminance * 0.30) * luxLightMask;
 
-    vec3 luxLightValley = vec3(0.66, 0.625, 0.585);
+    vec3 luxLightValley = vec3(0.64, 0.605, 0.565);
     vec3 luxLightSilk = vec3(0.92, 0.905, 0.885);
     luxLightSilk = mix(luxLightSilk, vec3(0.835, 0.815, 0.905), smoothstep(0.30, 0.86, dye2) * 0.42);
     luxLightSilk = mix(luxLightSilk, vec3(0.935, 0.865, 0.765), smoothstep(0.38, 0.90, dye3) * 0.40);
     vec3 luxLight = mix(luxLightValley, luxLightSilk, clothAO * (0.42 + 0.58 * wrapDiff1));
-    luxLight -= vec3(0.10, 0.095, 0.09) * max(-fboHeight, 0.0) * 0.60;
-    luxLight += vec3(0.98, 0.95, 0.90) * (satinAniso1 * 0.34 + sheen1 * 0.16);
-    luxLight += vec3(0.96, 0.97, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.26);
+    luxLight -= vec3(0.115, 0.108, 0.10) * max(-fboHeight, 0.0) * 0.78;
+    luxLight += vec3(0.98, 0.95, 0.90) * (satinAniso1 * 0.36 + sheen1 * 0.17 + pitRimCatch * 0.14);
+    luxLight += vec3(0.96, 0.97, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.24);
 
     vec3 colLuxury = mix(luxLight, luxDark, uThemeDark);
 
@@ -619,21 +723,21 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     aurBase = mix(aurBase, vec3(0.88, 0.64, 0.26), smoothstep(0.50, 0.94, dye1 * 0.65 + crest * 0.35) * 0.62);
 
     vec3 aurDark = aurBase * (wrapDiff1 * 0.85 + wrapDiff2 * 0.28) * oledMask;
-    float aurLightMask = smoothstep(0.04, 0.74, oledMask + rippleLuminance * 0.66);
+    float aurLightMask = smoothstep(0.04, 0.74, oledMask + rippleLuminance * 0.62 + pitRimCatch * 0.56);
     vec3 aurSpecTint = mix(vec3(0.56, 0.82, 1.0), vec3(1.0, 0.80, 0.58), dye3);
-    aurDark += aurSpecTint * (satinAniso1 * 0.56 + sheen1 * 0.28) * aurLightMask;
-    aurDark += mix(vec3(0.84, 0.64, 1.0), vec3(1.0, 0.74, 0.44), dye1) * (satinAniso2 * 0.36 + sheen2 * 0.24 + rippleLuminance * 0.36) * aurLightMask;
+    aurDark += aurSpecTint * (satinAniso1 * 0.56 + sheen1 * 0.28 + pitRimCatch * 0.26) * aurLightMask;
+    aurDark += mix(vec3(0.84, 0.64, 1.0), vec3(1.0, 0.74, 0.44), dye1) * (satinAniso2 * 0.36 + sheen2 * 0.24 + rippleLuminance * 0.32) * aurLightMask;
 
-    vec3 aurLightValley = vec3(0.67, 0.66, 0.78);
+    vec3 aurLightValley = vec3(0.65, 0.64, 0.76);
     vec3 aurLightSilk = vec3(0.955, 0.95, 0.975);
     aurLightSilk = mix(aurLightSilk, vec3(0.56, 0.77, 0.97), smoothstep(0.22, 0.85, dye1) * 0.52);
     aurLightSilk = mix(aurLightSilk, vec3(0.75, 0.63, 0.96), smoothstep(0.26, 0.88, dye2) * 0.48);
     aurLightSilk = mix(aurLightSilk, vec3(0.97, 0.68, 0.64), smoothstep(0.42, 0.90, dye3) * 0.46);
     aurLightSilk = mix(aurLightSilk, vec3(0.98, 0.87, 0.62), smoothstep(0.48, 0.92, crest * 0.6 + dye2 * 0.4) * 0.45);
     vec3 aurLight = mix(aurLightValley, aurLightSilk, clothAO * (0.42 + 0.58 * wrapDiff1));
-    aurLight -= vec3(0.09, 0.09, 0.12) * max(-fboHeight, 0.0) * 0.56;
-    aurLight += vec3(1.0, 0.98, 0.96) * (satinAniso1 * 0.36 + sheen1 * 0.18);
-    aurLight += vec3(0.95, 0.96, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.28);
+    aurLight -= vec3(0.105, 0.102, 0.132) * max(-fboHeight, 0.0) * 0.74;
+    aurLight += vec3(1.0, 0.98, 0.96) * (satinAniso1 * 0.38 + sheen1 * 0.18 + pitRimCatch * 0.15);
+    aurLight += vec3(0.95, 0.96, 1.0) * (satinAniso2 * 0.20 + rippleLuminance * 0.25);
 
     vec3 colAurora = mix(aurLight, aurDark, uThemeDark);
 
@@ -648,23 +752,31 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     vec3 ringTint = mix(vec3(0.97, 0.94, 0.90), vec3(0.90, 0.82, 0.68), uThemeDark);
     col += ringTint * ringBand * mix(0.25, 0.34, uThemeDark) * (0.40 + 0.60 * clothAO);
 
-    // UNDER-MARBLE CONTACT SHADOW + FOCUSED GLASS CAUSTIC LIGHT POOL ON SILK
+    // DEEP GRAVITY CRADLE SHADOW + CONTACT POCKET AO + FOCUSED GLASS CAUSTIC POOL ON SILK
     if (uMarbleOpacity > 0.01) {
-      // Soft contact shadow slightly offset down-right away from upper-left key light
-      vec2 shadowOffset = vec2(0.0085, -0.0105);
-      float dShadow = length(mDelta - shadowOffset);
-      float shadowMask = exp(-(dShadow * dShadow) / (uMarbleRadius * uMarbleRadius * 1.45)) * uMarbleOpacity;
-      col *= 1.0 - shadowMask * mix(0.26, 0.38, uThemeDark);
+      // 1. Broad soft bowl occlusion from the depressed fabric pocket
+      float wideBowlAO = exp(-(mDist2) / (uMarbleRadius * uMarbleRadius * 5.8)) * mPress;
+      col *= 1.0 - wideBowlAO * mix(0.16, 0.24, uThemeDark);
 
-      // Focused glass lens caustic glow projected down-right onto the silk folds
-      vec2 causticOffset = vec2(0.016, -0.018);
+      // 2. Deep under-marble cradle shadow slightly offset away from upper-left key light
+      vec2 shadowOffset = vec2(0.0065, -0.0085);
+      float dShadow = length(mDelta - shadowOffset);
+      float shadowMask = exp(-(dShadow * dShadow) / (uMarbleRadius * uMarbleRadius * 1.25)) * mPress;
+      col *= 1.0 - shadowMask * mix(0.42, 0.58, uThemeDark);
+
+      // 3. Tight contact rim crease directly where the glass marble hugs the sunken silk
+      float contactCrease = exp(-(mDist2) / (uMarbleRadius * uMarbleRadius * 0.72)) * mPress;
+      col *= 1.0 - contactCrease * mix(0.24, 0.35, uThemeDark);
+
+      // 4. Focused glass lens caustic glow projected down-right onto the curved inner wall of the silk pocket
+      vec2 causticOffset = vec2(0.014, -0.016);
       float dCaustic = length(mDelta - causticOffset);
-      float causticCore = exp(-(dCaustic * dCaustic) / (uMarbleRadius * uMarbleRadius * 0.65)) * uMarbleOpacity;
-      vec3 luxCaustic = mix(vec3(1.0, 0.95, 0.84), vec3(0.94, 0.80, 0.56), uThemeDark);
-      vec3 aurCaustic = mix(vec3(0.68, 0.88, 1.0), vec3(0.64, 0.86, 1.0), uThemeDark);
+      float causticCore = exp(-(dCaustic * dCaustic) / (uMarbleRadius * uMarbleRadius * 0.72)) * uMarbleOpacity;
+      vec3 luxCaustic = mix(vec3(1.0, 0.95, 0.84), vec3(0.96, 0.82, 0.58), uThemeDark);
+      vec3 aurCaustic = mix(vec3(0.68, 0.88, 1.0), vec3(0.66, 0.88, 1.0), uThemeDark);
       aurCaustic = mix(aurCaustic, vec3(0.96, 0.66, 0.90), smoothstep(-0.02, 0.03, mDelta.x - mDelta.y));
       vec3 causticTint = mix(luxCaustic, aurCaustic, activeAurora);
-      col += causticTint * causticCore * mix(0.24, 0.36, uThemeDark);
+      col += causticTint * causticCore * mix(0.24, 0.38, uThemeDark);
     }
 
     // Subtle auth-stage center calm (pure #000000 OLED in dark mode!)
@@ -734,6 +846,7 @@ const MARBLE_FRAG = /* glsl */ `
   uniform float uMarbleRadius;
   uniform float uMarbleOpacity;
   uniform float uMarbleAurora; // 0.0 = Luxury Crystal, 1.0 = Aurora Prism Crystal
+  uniform float uMarbleSink;
 
   varying vec3 vWorldNormal;
   varying vec3 vLocalPos;
@@ -753,8 +866,8 @@ const MARBLE_FRAG = /* glsl */ `
     vec3 refrG = refract(I, N, 1.0 / 1.52);
     vec3 refrB = refract(I, N, 1.0 / (1.54 + 0.036 * dispBoost));
 
-    // Spherical dome magnifying refraction offset in aspect-corrected screen UV
-    float lensCurve = mix(1.22, 1.88, pow(1.0 - ndv, 1.2));
+    // Spherical dome magnifying refraction offset in aspect-corrected screen UV (deepens slightly as marble sinks)
+    float lensCurve = mix(1.24, 1.94, pow(1.0 - ndv, 1.2)) * (1.0 + clamp(uMarbleSink, 0.0, 1.4) * 0.08);
     vec2 uvScale = vec2(1.0 / max(0.25, uAspect), 1.0) * uMarbleRadius * lensCurve;
     vec2 uvR = clamp(screenUv + refrR.xy * uvScale, vec2(0.004), vec2(0.996));
     vec2 uvG = clamp(screenUv + refrG.xy * uvScale, vec2(0.004), vec2(0.996));
@@ -826,9 +939,14 @@ const MARBLE_FRAG = /* glsl */ `
     // Lower-right focused caustic crescent inside the glass orb
     bodyCol += causticCol * causticFocus * mix(0.34, 0.56, uThemeDark);
 
+    // Sunken-cradle rim hugging: subtle silk-pocket wrap shadow around the lower embedded perimeter
+    float cradleWrap =
+      pow(1.0 - ndv, 2.2) * (1.0 - smoothstep(-0.65, 0.55, N.y)) * clamp(uMarbleSink, 0.0, 1.35);
+    bodyCol *= 1.0 - cradleWrap * mix(0.28, 0.36, uThemeDark);
+
     // Delicate inner-bevel edge definition in Light mode so clear glass stands out cleanly on bright silk
     float lightBevel = smoothstep(0.08, 0.36, 1.0 - ndv) * (1.0 - uThemeDark);
-    bodyCol = mix(bodyCol, bodyCol * mix(vec3(0.78, 0.76, 0.74), vec3(0.72, 0.78, 0.92), uMarbleAurora), lightBevel * 0.34);
+    bodyCol = mix(bodyCol, bodyCol * mix(vec3(0.76, 0.74, 0.72), vec3(0.70, 0.76, 0.90), uMarbleAurora), lightBevel * 0.38);
 
     // Fresnel glassy reflection shell
     bodyCol = mix(bodyCol, rimColor, clamp(fresnel * mix(0.42, 0.66, uThemeDark), 0.0, 0.78));
@@ -858,10 +976,9 @@ export function createLoginThreeController(
     initialVariant: LoginThreeVariantId;
     reducedMotion: boolean;
     onMarbleStep?: (snapshot: MarbleStepSnapshot) => void;
-    onFloorBounce?: (impact: number) => void;
   }
 ): LoginThreeController | null {
-  const { reducedMotion, onMarbleStep, onFloorBounce } = options;
+  const { reducedMotion, onMarbleStep } = options;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
@@ -1014,6 +1131,10 @@ export function createLoginThreeController(
       uMarbleUv: { value: new THREE.Vector2(0.5, 0.36) },
       uMarbleRadius: { value: 0.031 },
       uMarbleOpacity: { value: 1.0 },
+      uMarbleClothPos: { value: new THREE.Vector2(0.0, -0.95) },
+      uMarbleClothRadius: { value: 0.36 },
+      uMarbleSink: { value: 1.0 },
+      uMarbleVel: { value: new THREE.Vector2(0, 0) },
       uTrailPts: { value: trailPts },
       uTrailActive: { value: 0 },
       uPrevVariant: { value: initVarNum },
@@ -1061,6 +1182,7 @@ export function createLoginThreeController(
       uMarbleRadius: { value: 0.031 },
       uMarbleOpacity: { value: 1.0 },
       uMarbleAurora: { value: initVarNum },
+      uMarbleSink: { value: 1.0 },
     },
     vertexShader: MARBLE_VERT,
     fragmentShader: MARBLE_FRAG,
@@ -1074,6 +1196,13 @@ export function createLoginThreeController(
   // Reusable math objects (zero GC inside render loop)
   const rollAxis = new THREE.Vector3();
   const stepQuat = new THREE.Quaternion();
+  const invClothMat = new THREE.Matrix4();
+  const rayWorldPt = new THREE.Vector3();
+  const rayLocalOrigin = new THREE.Vector3();
+  const rayLocalTarget = new THREE.Vector3();
+  const rayLocalDir = new THREE.Vector3();
+  const clothHitCenter = new THREE.Vector2();
+  const clothHitRim = new THREE.Vector2();
 
   // --- Animation & Physics State ---
   let currentAspect = initialAspect;
@@ -1111,8 +1240,11 @@ export function createLoginThreeController(
   let marbleVx = 0.0;
   let marbleVy = 0.0;
   let marbleOpacity = 1.0;
-  let bottomInsetWorld = 0.0;
-  let topInsetWorld = 0.0;
+  // Second-order gravity sink spring: gently drops into the silk pocket on mount, deepens when resting/pressed
+  let marbleSink = reducedMotion ? 1.02 : 0.32;
+  let marbleSinkVel = reducedMotion ? 0.0 : 2.9;
+  let lastClothHitX = 0.0;
+  let lastClothHitY = -0.95;
 
   // Pointer grab / directional swipe / flick control for rolling the marble by hand
   let isPointerDown = false;
@@ -1163,20 +1295,33 @@ export function createLoginThreeController(
     return [clamp(vx, -3.6, 3.6), clamp(vy, -3.6, 3.6)];
   };
 
-  // Wave emission accumulators
+  // Wave emission & fixed-60Hz FBO simulation accumulators (keeps wave speed identical at 30/60/90/120Hz)
+  const FBO_FIXED_STEP_SEC = 1 / 60;
+  let fboStepAccum = 0;
   let rippleEmitAccum = 0;
   let pendingBurstU = 0.5;
   let pendingBurstV = 0.36;
   let pendingBurstStrength = 0.55; // Gentle welcoming settle ripple on mount
   let pendingBurstRadius = 0.032;
+  let queuedMarbleWaveU = 0.5;
+  let queuedMarbleWaveV = 0.36;
+  let queuedMarbleWaveStrength = 0;
   let fboEnergyTimer = 3.2;
 
   let isDisposed = false;
-  let isDocHidden = false;
+  let isDocHidden = typeof document !== 'undefined' ? document.hidden : false;
   let isExternallyPaused = false;
+  let isContextLost = false;
   let rafId = 0;
+  let softTimerId = 0;
+  let fenceRafId = 0;
+  let activeFenceSync: WebGLSync | null = null;
   let elapsed = 0;
   let lastNow = performance.now();
+  const pacer = createAdaptivePacerState({
+    allowHighRefresh: !isSoftwareGl,
+    now: lastNow,
+  });
 
   const worldToUv = (wx: number, wy: number): [number, number] => [
     clamp(0.5 + wx / (2 * Math.max(0.25, currentAspect)), 0.01, 0.99),
@@ -1198,6 +1343,35 @@ export function createLoginThreeController(
   const smoothstepJs = (edge0: number, edge1: number, x: number) => {
     const t = clamp((x - edge0) / Math.max(0.0001, edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
+  };
+
+  // Exact ray-plane intersection from screen NDC onto clothMesh local z=0 plane (zero GC)
+  const projectNdcToClothLocal = (ndcX: number, ndcY: number, out: THREE.Vector2): boolean => {
+    rayWorldPt.set(ndcX, ndcY, 0.5).unproject(clothCam);
+    rayLocalOrigin.copy(clothCam.position).applyMatrix4(invClothMat);
+    rayLocalTarget.copy(rayWorldPt).applyMatrix4(invClothMat);
+    rayLocalDir.subVectors(rayLocalTarget, rayLocalOrigin);
+    if (Math.abs(rayLocalDir.z) < 1e-5) return false;
+    const tHit = -rayLocalOrigin.z / rayLocalDir.z;
+    if (tHit <= 0) return false;
+    out.set(rayLocalOrigin.x + rayLocalDir.x * tHit, rayLocalOrigin.y + rayLocalDir.y * tHit);
+    return true;
+  };
+
+  // Analytical ambient silk fold height matching SILK_CLOTH_VERT (for subtle downhill fabric-valley gravity!)
+  const evalAmbientSilkZ = (px: number, py: number, t: number, energy: number): number => {
+    const curve = Math.sin(py * 0.34 - t * 0.24) * 0.95 + Math.cos(px * 0.28 + t * 0.19) * 0.55;
+    const ph1 = (px * 0.8211 + py * 0.5708) * 0.78 + curve * 0.85 + t * 0.42;
+    const ph2 = (px * -0.4789 + py * 0.8779) * 1.05 - curve * 0.55 - t * 0.34 + 1.2;
+    const ph3 = (px * 0.9403 + py * -0.3402) * 1.48 + curve * 0.40 + t * 0.50 + 2.4;
+    const ph4 = (px * 0.3490 + py * 0.9371) * 2.05 - t * 0.38 + 0.7;
+    return (
+      (Math.sin(ph1) * 0.62 +
+        Math.sin(ph2) * 0.36 +
+        Math.sin(ph3) * 0.18 +
+        Math.sin(ph4) * 0.09) *
+      energy
+    );
   };
 
   const resize = (width: number, height: number) => {
@@ -1235,7 +1409,7 @@ export function createLoginThreeController(
     const padX = marbleR * 2.35;
     const padY = marbleR * 2.35;
     marbleX = clamp(marbleX, -aspect + padX, aspect - padX);
-    marbleY = clamp(marbleY, -1 + bottomInsetWorld + padY, 1 - topInsetWorld - padY);
+    marbleY = clamp(marbleY, -1 + padY, 1 - padY);
 
     const nextDims = getSimDims(width, height);
     if (Math.abs(nextDims.sw - simW) > 32 || Math.abs(nextDims.sh - simH) > 32) {
@@ -1255,14 +1429,15 @@ export function createLoginThreeController(
   const renderFrame = (dt: number) => {
     if (isDisposed) return;
 
-    currentThemeDark += (targetThemeDark - currentThemeDark) * clamp(dt * 9.0, 0, 1);
-    currentAuthBlend += (targetAuthBlend - currentAuthBlend) * clamp(dt * 4.5, 0, 1);
-    currentSurge += (targetSurge - currentSurge) * clamp(dt * 3.8, 0, 1);
+    const expBlend = (rate: number) => 1.0 - Math.exp(-dt * rate);
+    currentThemeDark += (targetThemeDark - currentThemeDark) * expBlend(9.0);
+    currentAuthBlend += (targetAuthBlend - currentAuthBlend) * expBlend(4.5);
+    currentSurge += (targetSurge - currentSurge) * expBlend(3.8);
 
-    smoothPtrX += (targetPtrX - smoothPtrX) * clamp(dt * 6.0, 0, 1);
-    smoothPtrY += (targetPtrY - smoothPtrY) * clamp(dt * 6.0, 0, 1);
-    smoothGyroX += (targetGyroX - smoothGyroX) * clamp(dt * 9.5, 0, 1);
-    smoothGyroY += (targetGyroY - smoothGyroY) * clamp(dt * 9.5, 0, 1);
+    smoothPtrX += (targetPtrX - smoothPtrX) * expBlend(6.0);
+    smoothPtrY += (targetPtrY - smoothPtrY) * expBlend(6.0);
+    smoothGyroX += (targetGyroX - smoothGyroX) * expBlend(9.5);
+    smoothGyroY += (targetGyroY - smoothGyroY) * expBlend(9.5);
 
     if (variantSweep < 2.2) {
       variantSweep = Math.min(2.2, variantSweep + dt * 2.15);
@@ -1286,6 +1461,24 @@ export function createLoginThreeController(
         marbleVy += gy * gravityAccel * dt;
       }
 
+      // 1b. Subtle silk-fold downhill gravity: heavy marble gently feels the valleys of the draped cloth
+      if (!isGrabbingMarble) {
+        const silkEnergy = 1.0 - currentAuthBlend * 0.26;
+        const silkT = elapsed * 0.85;
+        const hEps = 0.16;
+        const dzDx =
+          (evalAmbientSilkZ(lastClothHitX + hEps, lastClothHitY, silkT, silkEnergy) -
+            evalAmbientSilkZ(lastClothHitX - hEps, lastClothHitY, silkT, silkEnergy)) /
+          (2 * hEps);
+        const dzDy =
+          (evalAmbientSilkZ(lastClothHitX, lastClothHitY + hEps, silkT, silkEnergy) -
+            evalAmbientSilkZ(lastClothHitX, lastClothHitY - hEps, silkT, silkEnergy)) /
+          (2 * hEps);
+        const foldGravity = 0.22;
+        marbleVx += -dzDx * foldGravity * dt;
+        marbleVy += -dzDy * foldGravity * dt;
+      }
+
       // 2. Direct finger/mouse rolling when directly grabbing the marble
       if (isPointerDown && isGrabbingMarble) {
         const dxPtr = pointerWorldX - marbleX;
@@ -1295,8 +1488,8 @@ export function createLoginThreeController(
         marbleVx += (dxPtr * springK - marbleVx * springDamp) * dt;
         marbleVy += (dyPtr * springK - marbleVy * springDamp) * dt;
       } else {
-        // Silky low-friction rolling glide across draped fabric so flicks travel generously
-        const friction = Math.exp(-dt * 1.12);
+        // Silky fabric rolling resistance: heavier sink in cloth slows gentle drifts smoothly
+        const friction = Math.exp(-dt * 1.24);
         marbleVx *= friction;
         marbleVy *= friction;
       }
@@ -1313,11 +1506,11 @@ export function createLoginThreeController(
       marbleX += marbleVx * dt;
       marbleY += marbleVy * dt;
 
-      // Soft elastic bounce off viewport edges & bottom pinball floor rail
+      // Soft elastic bounce off viewport edges (emits a concentric impact ripple + fabric press bob!)
       const minX = -currentAspect + marbleR * 2.2;
       const maxX = currentAspect - marbleR * 2.2;
-      const minY = -1.0 + bottomInsetWorld + marbleR * 2.15;
-      const maxY = 1.0 - topInsetWorld - marbleR * 2.15;
+      const minY = -1.0 + marbleR * 2.2;
+      const maxY = 1.0 - marbleR * 2.2;
       let bouncedImpact = 0;
 
       if (marbleX < minX) {
@@ -1331,17 +1524,9 @@ export function createLoginThreeController(
       }
 
       if (marbleY < minY) {
-        const floorImpact = Math.abs(marbleVy);
         marbleY = minY;
-        bouncedImpact = Math.max(bouncedImpact, floorImpact);
-        if (bottomInsetWorld > 0.001) {
-          marbleVy = floorImpact > 0.14 ? Math.max(floorImpact * 0.82, 0.48) : floorImpact * 0.56;
-          if (floorImpact > 0.14) {
-            onFloorBounce?.(floorImpact);
-          }
-        } else {
-          marbleVy = floorImpact * 0.56;
-        }
+        bouncedImpact = Math.max(bouncedImpact, Math.abs(marbleVy));
+        marbleVy = Math.abs(marbleVy) * 0.56;
       } else if (marbleY > maxY) {
         marbleY = maxY;
         bouncedImpact = Math.max(bouncedImpact, Math.abs(marbleVy));
@@ -1354,6 +1539,7 @@ export function createLoginThreeController(
         pendingBurstV = bv;
         pendingBurstStrength = clamp(bouncedImpact * 0.65, 0.28, 0.95);
         pendingBurstRadius = marbleR * 1.15;
+        marbleSinkVel += clamp(bouncedImpact * 1.45, 0.4, 2.2);
       }
     }
 
@@ -1372,7 +1558,7 @@ export function createLoginThreeController(
 
     // Smooth opacity: full crystal presence in Intro, subtle in Auth, fades cleanly on Portal open
     const targetMarbleOpacity = clamp((1.0 - currentSurge * 1.35) * (1.0 - currentAuthBlend * 0.35), 0, 1);
-    marbleOpacity += (targetMarbleOpacity - marbleOpacity) * clamp(dt * 8.0, 0, 1);
+    marbleOpacity += (targetMarbleOpacity - marbleOpacity) * (1.0 - Math.exp(-dt * 8.0));
 
     // Notify DOM button collision layer before rendering so bounces apply on the exact impact frame
     if (onMarbleStep && !reducedMotion && marbleOpacity > 0.08 && targetSurge < 0.5) {
@@ -1408,8 +1594,25 @@ export function createLoginThreeController(
       fboEnergyTimer = 4.2;
     }
 
-    // --- Update C-infinity Smooth Silk Wake behind Rolling Marble ---
-    const ageStep = dt / 0.78;
+    // --- Update Spring-Damped Gravity Sink Depth (sinks deeper at rest / under fingertip press, skims slightly at speed) ---
+    const targetSink = reducedMotion
+      ? 1.02
+      : isPointerDown && isGrabbingMarble
+        ? 1.24
+        : clamp(1.06 - marbleSpeed * 0.11, 0.76, 1.06);
+    if (reducedMotion) {
+      marbleSink = targetSink;
+      marbleSinkVel = 0;
+    } else {
+      const sinkStiffness = 34.0;
+      const sinkDamping = 7.4;
+      const sinkAccel = (targetSink - marbleSink) * sinkStiffness - marbleSinkVel * sinkDamping;
+      marbleSinkVel += sinkAccel * dt;
+      marbleSink = clamp(marbleSink + marbleSinkVel * dt, 0.15, 1.48);
+    }
+
+    // --- Update C-infinity Smooth Pressed-Fabric Crease Wake behind Rolling Marble ---
+    const ageStep = dt / 1.15;
     let maxAliveStrength = 0;
     for (let i = 0; i < TRAIL_NODE_COUNT; i += 1) {
       const n = trailPts[i];
@@ -1439,30 +1642,56 @@ export function createLoginThreeController(
 
     clothMat.uniforms.uTrailActive.value = maxAliveStrength > 0.004 ? 1.0 : 0.0;
 
-    // --- PASS 1: Step 2D Wave Equation FBO (HalfFloat GPUs) or Analytic Concentric Ripples ---
+    // --- PASS 1: Step 2D Wave Equation FBO (Fixed 60Hz Accumulator so 120fps visuals preserve exact wave speed) ---
     if (useHalfFloat) {
-      if (pendingBurstStrength > 0.001 || marbleWaveStrength > 0.001) {
+      if (marbleWaveStrength > 0.001) {
+        queuedMarbleWaveU = marbleU;
+        queuedMarbleWaveV = marbleV;
+        queuedMarbleWaveStrength = Math.max(queuedMarbleWaveStrength, marbleWaveStrength);
+      }
+      if (pendingBurstStrength > 0.001 || queuedMarbleWaveStrength > 0.001) {
         fboEnergyTimer = 4.5;
       }
       if (fboEnergyTimer > 0) {
         fboEnergyTimer = Math.max(0, fboEnergyTimer - dt);
-        simMat.uniforms.uPrevState.value = simRead.texture;
-        simMat.uniforms.uDecay.value = 0.976 + currentSurge * 0.008;
+        fboStepAccum = Math.min(fboStepAccum + dt, FBO_FIXED_STEP_SEC * 2.5);
+        // Ignite discrete bursts (tap / bounce / theme wave) with 0-frame latency
+        if (pendingBurstStrength > 0.001 && fboStepAccum < FBO_FIXED_STEP_SEC) {
+          fboStepAccum = FBO_FIXED_STEP_SEC;
+        }
 
-        (simMat.uniforms.uBurstPos.value as THREE.Vector2).set(pendingBurstU, pendingBurstV);
-        simMat.uniforms.uBurstStrength.value = pendingBurstStrength;
-        simMat.uniforms.uBurstRadius.value = pendingBurstRadius;
+        const fboSteps = Math.min(2, Math.floor(fboStepAccum / FBO_FIXED_STEP_SEC));
+        for (let stepIdx = 0; stepIdx < fboSteps; stepIdx += 1) {
+          fboStepAccum -= FBO_FIXED_STEP_SEC;
+          simMat.uniforms.uPrevState.value = simRead.texture;
+          simMat.uniforms.uDecay.value = 0.976 + currentSurge * 0.008;
 
-        (simMat.uniforms.uMarbleWavePos.value as THREE.Vector2).set(marbleU, marbleV);
-        simMat.uniforms.uMarbleWaveStrength.value = marbleWaveStrength;
-        simMat.uniforms.uMarbleWaveRadius.value = marbleR * 0.92;
+          (simMat.uniforms.uBurstPos.value as THREE.Vector2).set(pendingBurstU, pendingBurstV);
+          simMat.uniforms.uBurstStrength.value = pendingBurstStrength;
+          simMat.uniforms.uBurstRadius.value = pendingBurstRadius;
 
-        renderer.setRenderTarget(simWrite);
-        renderer.render(simScene, orthoCam);
+          (simMat.uniforms.uMarbleWavePos.value as THREE.Vector2).set(
+            queuedMarbleWaveU,
+            queuedMarbleWaveV
+          );
+          simMat.uniforms.uMarbleWaveStrength.value = queuedMarbleWaveStrength;
+          simMat.uniforms.uMarbleWaveRadius.value = marbleR * 0.92;
 
-        const temp = simRead;
-        simRead = simWrite;
-        simWrite = temp;
+          renderer.setRenderTarget(simWrite);
+          renderer.render(simScene, orthoCam);
+
+          const temp = simRead;
+          simRead = simWrite;
+          simWrite = temp;
+
+          // Consume impulse queues on the first fixed step so multi-step catchup doesn't double-inject
+          pendingBurstStrength = 0;
+          queuedMarbleWaveStrength = 0;
+        }
+      } else {
+        fboStepAccum = 0;
+        pendingBurstStrength = 0;
+        queuedMarbleWaveStrength = 0;
       }
     } else {
       const waveAgeStep = dt / 2.1;
@@ -1487,17 +1716,32 @@ export function createLoginThreeController(
         anyAnalyticAlive = true;
       }
       clothMat.uniforms.uAnalyticActive.value = anyAnalyticAlive ? 1.0 : 0.0;
+      pendingBurstStrength = 0;
     }
 
-    pendingBurstStrength = 0;
-
-    // --- PASS 2: Render 3D Silk Cloth + Ripple Field into backdropRT ---
+    // --- PASS 2: Render 3D Silk Cloth + Gravitational Depression Bowl into backdropRT ---
     // Camera stays completely steady on phone tilt (no gyro camera wobble!)
     clothCam.position.x = smoothPtrX * 0.14;
     clothCam.position.y = smoothPtrY * 0.10;
     clothCam.position.z = (clothCam.aspect < 0.82 ? 8.2 : 7.3) + currentAuthBlend * 0.5;
     clothCam.lookAt(0, 0, -0.4);
+    clothCam.updateMatrixWorld();
+    clothMesh.updateMatrixWorld();
 
+    // Project exact marble screen position onto the 3D silk cloth plane for pixel-locked 3D vertex depression
+    invClothMat.copy(clothMesh.matrixWorld).invert();
+    const marbleNdcX = marbleU * 2.0 - 1.0;
+    const marbleNdcY = marbleV * 2.0 - 1.0;
+    let clothRadius = 0.36;
+    if (projectNdcToClothLocal(marbleNdcX, marbleNdcY, clothHitCenter)) {
+      lastClothHitX = clothHitCenter.x;
+      lastClothHitY = clothHitCenter.y;
+      if (projectNdcToClothLocal(marbleNdcX, marbleNdcY + marbleR * 2.0, clothHitRim)) {
+        clothRadius = clamp(clothHitCenter.distanceTo(clothHitRim), 0.18, 0.95);
+      }
+    }
+
+    const effectiveSink = marbleSink * marbleOpacity;
     clothMat.uniforms.uFluidTex.value = simRead.texture;
     clothMat.uniforms.uTime.value = elapsed;
     clothMat.uniforms.uThemeDark.value = currentThemeDark;
@@ -1507,6 +1751,10 @@ export function createLoginThreeController(
     (clothMat.uniforms.uPointer.value as THREE.Vector2).set(smoothPtrX, smoothPtrY);
     (clothMat.uniforms.uMarbleUv.value as THREE.Vector2).set(marbleU, marbleV);
     clothMat.uniforms.uMarbleOpacity.value = marbleOpacity;
+    (clothMat.uniforms.uMarbleClothPos.value as THREE.Vector2).set(lastClothHitX, lastClothHitY);
+    clothMat.uniforms.uMarbleClothRadius.value = clothRadius;
+    clothMat.uniforms.uMarbleSink.value = effectiveSink;
+    (clothMat.uniforms.uMarbleVel.value as THREE.Vector2).set(marbleVx, marbleVy);
 
     renderer.setRenderTarget(backdropRT);
     renderer.render(clothScene, clothCam);
@@ -1523,7 +1771,9 @@ export function createLoginThreeController(
       const waveAtMarble = 1.0 - smoothstepJs(variantSweep - 0.26, variantSweep + 0.04, dBtn);
       const marbleAurora = prevVariantVal + (currentVariantVal - prevVariantVal) * waveAtMarble;
 
-      const worldR = marbleR * 2.0;
+      // Subtle perspective recession as the marble settles deeper into the fabric gravity well
+      const sinkScale = 1.0 - clamp(marbleSink, 0.0, 1.45) * 0.055;
+      const worldR = marbleR * 2.0 * sinkScale;
       marbleMesh.position.set(marbleX, marbleY, 0);
       marbleMesh.scale.set(worldR, worldR, worldR);
 
@@ -1531,6 +1781,7 @@ export function createLoginThreeController(
       marbleMat.uniforms.uThemeDark.value = currentThemeDark;
       marbleMat.uniforms.uMarbleOpacity.value = marbleOpacity;
       marbleMat.uniforms.uMarbleAurora.value = marbleAurora;
+      marbleMat.uniforms.uMarbleSink.value = marbleSink;
 
       renderer.autoClear = false;
       renderer.render(marbleScene, marbleCam);
@@ -1538,50 +1789,195 @@ export function createLoginThreeController(
     }
   };
 
+  const isLoopPaused = () =>
+    isDisposed || reducedMotion || isDocHidden || isExternallyPaused || isContextLost;
+
+  const clearPendingFence = () => {
+    if (fenceRafId) {
+      window.cancelAnimationFrame(fenceRafId);
+      fenceRafId = 0;
+    }
+    if (activeFenceSync) {
+      const gl = renderer.getContext();
+      if (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) {
+        try {
+          gl.deleteSync(activeFenceSync);
+        } catch {
+          // ignore if context was lost
+        }
+      }
+      activeFenceSync = null;
+    }
+  };
+
+  const stopLoop = () => {
+    if (rafId) {
+      window.cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    if (softTimerId) {
+      window.clearTimeout(softTimerId);
+      softTimerId = 0;
+    }
+    clearPendingFence();
+  };
+
+  const scheduleAfterDrawSoftware = (fn: () => void) => {
+    if (isLoopPaused()) return;
+    const gl = renderer.getContext();
+    if (typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext) {
+      clearPendingFence();
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      if (sync) {
+        activeFenceSync = sync;
+        gl.flush();
+        const pollFence = () => {
+          fenceRafId = 0;
+          if (isLoopPaused() || activeFenceSync !== sync) {
+            clearPendingFence();
+            return;
+          }
+          const status = gl.clientWaitSync(sync, 0, 0);
+          if (status === gl.TIMEOUT_EXPIRED) {
+            fenceRafId = window.requestAnimationFrame(pollFence);
+            return;
+          }
+          clearPendingFence();
+          softTimerId = window.setTimeout(() => {
+            softTimerId = 0;
+            fn();
+          }, 80);
+        };
+        fenceRafId = window.requestAnimationFrame(pollFence);
+        return;
+      }
+    }
+    softTimerId = window.setTimeout(() => {
+      softTimerId = 0;
+      fn();
+    }, 80);
+  };
+
+  const scheduleNextFrame = () => {
+    if (isLoopPaused()) return;
+    if (isSoftwareGl) {
+      scheduleAfterDrawSoftware(() => {
+        if (!isLoopPaused()) {
+          tick(performance.now());
+        }
+      });
+    } else if (!rafId) {
+      rafId = window.requestAnimationFrame(tick);
+    }
+  };
+
+  const syncLoopLifecycle = () => {
+    if (isLoopPaused()) {
+      pacer.fpsTier = 'paused';
+      stopLoop();
+      return;
+    }
+    if (!rafId && !softTimerId && !fenceRafId) {
+      const resumeNow = performance.now();
+      lastNow = resumeNow;
+      resetPacerOnResume(pacer, resumeNow);
+      scheduleNextFrame();
+    }
+  };
+
   const onContextLost = (e: Event) => {
     e.preventDefault();
-    isDocHidden = true;
+    isContextLost = true;
+    syncLoopLifecycle();
   };
   const onContextRestored = () => {
-    isDocHidden = false;
+    isContextLost = false;
     clearFluidTarget(simRead);
     clearFluidTarget(simWrite);
+    fboStepAccum = 0;
     lastNow = performance.now();
+    resetPacerOnResume(pacer, lastNow);
     renderFrame(0.016);
+    syncLoopLifecycle();
   };
   canvas.addEventListener('webglcontextlost', onContextLost, false);
   canvas.addEventListener('webglcontextrestored', onContextRestored, false);
 
   const onVisibilityChange = () => {
     isDocHidden = document.hidden;
-    if (!isDocHidden && !isExternallyPaused) {
-      lastNow = performance.now();
-    }
+    syncLoopLifecycle();
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   const tick = (now: number) => {
-    if (isDisposed) return;
-    rafId = window.requestAnimationFrame(tick);
-    if (isDocHidden || isExternallyPaused) return;
+    rafId = 0;
+    if (isLoopPaused()) return;
+
+    if (!isSoftwareGl) {
+      sampleDisplayRefreshHz(pacer, now);
+
+      const marbleSpeedNow = Math.hypot(marbleVx, marbleVy);
+      const isBoostActive =
+        isPointerDown ||
+        isGrabbingMarble ||
+        marbleSpeedNow > 0.08 ||
+        Math.abs(marbleSinkVel) > 0.055 ||
+        variantSweep < 2.15 ||
+        Math.abs(targetThemeDark - currentThemeDark) > 0.01 ||
+        Math.abs(targetAuthBlend - currentAuthBlend) > 0.01 ||
+        Math.abs(targetSurge - currentSurge) > 0.01;
+      const isStandardActive =
+        marbleSpeedNow > 0.018 ||
+        Math.abs(marbleSinkVel) > 0.015 ||
+        Math.hypot(targetGyroX, targetGyroY) > 0.05 ||
+        Math.hypot(targetPtrX - smoothPtrX, targetPtrY - smoothPtrY) > 0.012 ||
+        fboEnergyTimer > 0.05 ||
+        pendingBurstStrength > 0.001;
+
+      const tier = resolveFpsTier(pacer, now, {
+        paused: false,
+        isBoostActive,
+        isStandardActive,
+        boostHoldMs: 650,
+        idleHoldMs: 1800,
+      });
+
+      if (!shouldCommitFrame(pacer, now, tier)) {
+        pacer.skippedFrames += 1;
+        scheduleNextFrame();
+        return;
+      }
+
+      const workStart = performance.now();
+      const dt = clamp((now - lastNow) / 1000, 0.001, 0.05);
+      lastNow = now;
+      pacer.lastCommitNow = now;
+      pacer.committedFrames += 1;
+      elapsed += dt;
+      renderFrame(dt);
+      recordFrameWorkCost(pacer, Math.max(0, performance.now() - workStart), now, tier);
+      scheduleNextFrame();
+      return;
+    }
+
+    // Software WebGL path (paced via afterDraw GPU fence + 80ms wait)
     const dt = clamp((now - lastNow) / 1000, 0.001, 0.05);
     lastNow = now;
-    if (!reducedMotion) {
-      elapsed += dt;
-    }
+    pacer.lastCommitNow = now;
+    pacer.committedFrames += 1;
+    elapsed += dt;
     renderFrame(dt);
+    scheduleNextFrame();
   };
 
   resize(initialW, initialH);
   renderFrame(0.016);
-
-  if (!reducedMotion) {
-    rafId = window.requestAnimationFrame(tick);
-  }
+  syncLoopLifecycle();
 
   return {
     setTheme(isDark: boolean, snapImmediately = false) {
       targetThemeDark = isDark ? 1 : 0;
+      markPacerActivity(pacer, performance.now(), true);
       if (snapImmediately || reducedMotion) {
         currentThemeDark = targetThemeDark;
         renderFrame(0.001);
@@ -1590,6 +1986,7 @@ export function createLoginThreeController(
     setStage(stage: 'intro' | 'auth' | 'portal') {
       targetAuthBlend = stage === 'auth' ? 1 : 0;
       targetSurge = stage === 'portal' ? 1 : 0;
+      markPacerActivity(pacer, performance.now(), true);
       if (reducedMotion) {
         currentAuthBlend = targetAuthBlend;
         currentSurge = targetSurge;
@@ -1597,14 +1994,14 @@ export function createLoginThreeController(
       }
     },
     setPaused(paused: boolean) {
+      if (isExternallyPaused === paused) return;
       isExternallyPaused = paused;
-      if (!paused) {
-        lastNow = performance.now();
-      }
+      syncLoopLifecycle();
     },
     setVariant(variant: LoginThreeVariantId, originNx?: number, originNy?: number) {
       const nextVal = variant === 'aurora' ? 1 : 0;
       if (nextVal === currentVariantVal && variantSweep >= 2.0) return;
+      markPacerActivity(pacer, performance.now(), true);
 
       const u = typeof originNx === 'number' && Number.isFinite(originNx)
         ? clamp(originNx * 0.5 + 0.5, 0.02, 0.98)
@@ -1659,6 +2056,7 @@ export function createLoginThreeController(
       const moveDist = Math.hypot(dx, dy);
 
       if (isPointerDown) {
+        markPacerActivity(pacer, performance.now(), true);
         pointerTotalDragDist += moveDist;
         recordPtrSample(wx, wy);
         if (moveDist > 0.0008) {
@@ -1674,7 +2072,9 @@ export function createLoginThreeController(
         // Desktop hover brush: brushing past the marble rolls it cleanly in the cursor's travel direction
         const distToMarble = Math.hypot(wx - marbleX, wy - marbleY);
         const touchRange = marbleR * 3.4;
-        if (distToMarble < touchRange) {
+        const nearMarble = distToMarble < touchRange;
+        markPacerActivity(pacer, performance.now(), nearMarble || moveDist > 0.018);
+        if (nearMarble) {
           userDrivenMarble = true;
           const proximity = 0.35 + 0.65 * (1.0 - distToMarble / touchRange);
           marbleVx = clamp(marbleVx + dx * 14.5 * proximity, -3.2, 3.2);
@@ -1683,6 +2083,7 @@ export function createLoginThreeController(
       }
     },
     setPointerDown(down: boolean, nx?: number, ny?: number) {
+      markPacerActivity(pacer, performance.now(), true);
       if (down) {
         isPointerDown = true;
         ptrSamples.length = 0;
@@ -1739,6 +2140,7 @@ export function createLoginThreeController(
     },
     pushDirectionalSwipe(dxWorldNorm: number, dyWorldNorm: number) {
       if (!Number.isFinite(dxWorldNorm) || !Number.isFinite(dyWorldNorm)) return;
+      markPacerActivity(pacer, performance.now(), true);
       userDrivenMarble = true;
       const dx = dxWorldNorm * currentAspect;
       const dy = dyWorldNorm;
@@ -1747,6 +2149,7 @@ export function createLoginThreeController(
     },
     pushScrollImpulse(_nx: number, deltaY: number) {
       if (!Number.isFinite(deltaY) || deltaY === 0) return;
+      markPacerActivity(pacer, performance.now(), Math.abs(deltaY) > 12);
       userDrivenMarble = true;
       const impulse = clamp(-deltaY / 240, -1.15, 1.15);
       marbleVy = clamp(marbleVy + impulse * 0.95, -2.6, 2.6);
@@ -1756,7 +2159,11 @@ export function createLoginThreeController(
       // Strictly feeds gravity to the glass marble ONLY (zero cloth/camera/wave slosh!)
       targetGyroX = clamp(tx, -1, 1);
       targetGyroY = clamp(ty, -1, 1);
-      if (Math.hypot(targetGyroX, targetGyroY) > 0.09) {
+      const tiltMag = Math.hypot(targetGyroX, targetGyroY);
+      if (tiltMag > 0.05) {
+        markPacerActivity(pacer, performance.now(), tiltMag > 0.16);
+      }
+      if (tiltMag > 0.09) {
         userDrivenMarble = true;
       }
     },
@@ -1768,6 +2175,7 @@ export function createLoginThreeController(
       impactStrength = 0.85,
       minBounceSpeed = 0.62
     ) {
+      markPacerActivity(pacer, performance.now(), true);
       const nLen = Math.hypot(normalWorldX, normalWorldY) || 1;
       const nx = normalWorldX / nLen;
       const ny = normalWorldY / nLen;
@@ -1775,13 +2183,9 @@ export function createLoginThreeController(
       // Release active grab so dragging the marble into a button clicks cleanly and bounces away
       isGrabbingMarble = false;
 
-      const pad = marbleR * 2.15;
+      const pad = marbleR * 2.2;
       marbleX = clamp(marbleX + sepWorldX, -currentAspect + pad, currentAspect - pad);
-      marbleY = clamp(
-        marbleY + sepWorldY,
-        -1.0 + bottomInsetWorld + pad,
-        1.0 - topInsetWorld - pad
-      );
+      marbleY = clamp(marbleY + sepWorldY, -1.0 + pad, 1.0 - pad);
 
       // Reflect incoming velocity across the button surface normal with glassy elastic restitution
       const vn = marbleVx * nx + marbleVy * ny;
@@ -1807,19 +2211,11 @@ export function createLoginThreeController(
       pendingBurstV = bv;
       pendingBurstStrength = clamp(impactStrength, 0.35, 1.05);
       pendingBurstRadius = marbleR * 1.32;
+      marbleSinkVel += clamp(impactStrength * 1.6, 0.6, 2.0);
       fboEnergyTimer = 4.5;
     },
-    setPlayBounds(bounds: { bottomInsetWorld?: number; topInsetWorld?: number }) {
-      if (typeof bounds.bottomInsetWorld === 'number' && Number.isFinite(bounds.bottomInsetWorld)) {
-        bottomInsetWorld = clamp(bounds.bottomInsetWorld, 0, 0.85);
-      }
-      if (typeof bounds.topInsetWorld === 'number' && Number.isFinite(bounds.topInsetWorld)) {
-        topInsetWorld = clamp(bounds.topInsetWorld, 0, 0.85);
-      }
-      const pad = marbleR * 2.15;
-      marbleY = clamp(marbleY, -1.0 + bottomInsetWorld + pad, 1.0 - topInsetWorld - pad);
-    },
     triggerPulse(nx: number, ny: number, strength = 0.72) {
+      markPacerActivity(pacer, performance.now(), true);
       const u = clamp(nx * 0.5 + 0.5, 0.02, 0.98);
       const v = clamp(ny * 0.5 + 0.5, 0.02, 0.98);
       pendingBurstU = u;
@@ -1832,12 +2228,13 @@ export function createLoginThreeController(
     },
     triggerLoginSurge(_nx: number, _ny: number) {
       // Calmly fade marble during logo flight without emitting a duplicate pre-flight FBO ripple
+      markPacerActivity(pacer, performance.now(), true);
       targetSurge = 1;
     },
     resize,
     dispose() {
       isDisposed = true;
-      if (rafId) window.cancelAnimationFrame(rafId);
+      stopLoop();
       canvas.removeEventListener('webglcontextlost', onContextLost);
       canvas.removeEventListener('webglcontextrestored', onContextRestored);
       document.removeEventListener('visibilitychange', onVisibilityChange);
