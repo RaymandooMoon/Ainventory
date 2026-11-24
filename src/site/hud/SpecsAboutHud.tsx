@@ -15,6 +15,7 @@ import { handleTablistArrows } from './tablistArrows.ts';
 import {
   SITE_META,
   type SiteCopy,
+  type SiteLang,
   type SiteLifecycleExit,
   type SiteMilestone,
   type SiteMissionCommitment,
@@ -47,11 +48,12 @@ function prefersReducedMotion(): boolean {
 
 export interface SpecsStageHudProps {
   readonly copy: SiteCopy;
+  readonly lang: SiteLang;
   readonly interaction: StageInteractionState;
   readonly onUpdateInteraction: (patch: Partial<StageInteractionState>) => void;
 }
 
-export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsStageHudProps) {
+export function SpecsStageHud({ copy, lang, interaction, onUpdateInteraction }: SpecsStageHudProps) {
   const stack = copy.stack;
   const [explicitSelection, setExplicitSelection] = useState<{
     readonly pillar: number;
@@ -123,6 +125,10 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
           </div>
           <p className="hud-body-copy">{inspector.detail}</p>
         </div>
+
+        <span className="hud-deck-cue">
+          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+        </span>
 
         {/* 4 Hero KPI Cards synced bidirectionally with 3D Pillars 0..3 (BELOW) */}
         <div className="hud-grid-2" role="group" aria-label={stack.heading}>
@@ -229,6 +235,10 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
         <p className="hud-body-copy">{activeCard.detail}</p>
       </div>
 
+      <span className="hud-deck-cue">
+        {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+      </span>
+
       {/* 6 Production Stack Cards (BELOW) */}
       <div
         className="hud-grid-2"
@@ -283,6 +293,7 @@ type MissionInspectorChoice =
 
 export interface AboutStageHudProps {
   readonly copy: SiteCopy;
+  readonly lang: SiteLang;
   readonly betaMailto: string;
   readonly interaction: StageInteractionState;
   readonly onUpdateInteraction: (patch: Partial<StageInteractionState>) => void;
@@ -290,6 +301,7 @@ export interface AboutStageHudProps {
 
 export function AboutStageHud({
   copy,
+  lang,
   betaMailto,
   interaction,
   onUpdateInteraction,
@@ -426,6 +438,10 @@ export function AboutStageHud({
           <p className="hud-body-copy">{activeCut.detail}</p>
         </div>
 
+        <span className="hud-deck-cue">
+          {lang === 'ko' ? '장면 선택 · 탭하여 상세 보기' : 'SELECT CUT · TAP TO INSPECT'}
+        </span>
+
         {/* 6 Clickable Cut Cards synced live to aboutStage marble (BELOW) */}
         <div
           className="hud-grid-2"
@@ -532,6 +548,10 @@ export function AboutStageHud({
           </div>
           <p className="hud-body-copy">{inspector.detail}</p>
         </div>
+
+        <span className="hud-deck-cue">
+          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+        </span>
 
         {/* 3 Value Pillars (BELOW) */}
         <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={mission.badge}>
@@ -741,6 +761,10 @@ export function AboutStageHud({
         </div>
         <p className="hud-body-copy">{activeFounderInfo.detail}</p>
       </div>
+
+      <span className="hud-deck-cue">
+        {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+      </span>
 
       {/* 3-Pillar Circular Business Model Cards (BELOW) */}
       <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={vision.revenueTitle}>

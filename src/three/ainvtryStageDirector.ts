@@ -54,7 +54,7 @@ export const DEFAULT_STAGE_INTERACTION_STATE: Readonly<StageInteractionState> = 
   studioSubtab: 'preview',
   studioPreviewScreen: 'outfits',
   studioPose: 'stand',
-  studioModelMode: 'dressform',
+  studioModelMode: 'mannequin',
   studioAngleRad: 0,
   architectureSubtab: 'blueprint',
   architectureTier: 3, // 04 iNVTRY Core active by default

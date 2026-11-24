@@ -484,6 +484,7 @@ function SiteStageHudPanel({
         {activeStage === 'architecture' && (
           <ArchitectureStageHud
             copy={copy}
+            lang={lang}
             interaction={interaction}
             selectedPrivacyShield={selectedPrivacyShield}
             onSelectPrivacyShield={onSelectPrivacyShield}
@@ -494,6 +495,7 @@ function SiteStageHudPanel({
         {activeStage === 'specs' && (
           <SpecsStageHud
             copy={copy}
+            lang={lang}
             interaction={interaction}
             onUpdateInteraction={onUpdateInteraction}
           />
@@ -502,6 +504,7 @@ function SiteStageHudPanel({
         {activeStage === 'about' && (
           <AboutStageHud
             copy={copy}
+            lang={lang}
             betaMailto={betaMailto}
             interaction={interaction}
             onUpdateInteraction={onUpdateInteraction}

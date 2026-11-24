@@ -9,19 +9,21 @@
  *    and soft ground contact shadow.
  * 2. Dual 360° counter-rotating tilted champagne-gold orbital rings with
  *    specular glint nodes and 48 lightweight floating starlight dust points.
- * 3. Mode A (Immediate Default: `'dressform'`): High-Fashion Headless Couture
- *    Atelier Dress Form sculpted from a 64-segment anatomical `SplineCurve`
- *    `LatheGeometry`, obsidian wool-weave physical fabric + internal brushed-
- *    gold core spine revealed via Glass %, chamfered neck finial & minimalist
- *    coat-hanger hook (`iNVTRY` hanger signature), 3 elliptical tailoring
- *    measurement rings with seam glint nodes, brushed-gold stand pole & plinth,
- *    and reactive `Stand / Walk / Rain` couture choreography.
- * 4. Mode B: Auto drop-in `/models/mannequin.glb` (with Draco support, magic-
- *    byte `glTF` pre-verification for zero console errors, `Box3` 1.8u auto-
- *    scaling & grounding, PBR sheen/IBL tuning, and `AnimationMixer` crossfade)
- *    plus lazily-loaded toggleable 20-bone skinned CC0 GLB mannequin
- *    (`/assets/models/studio-mannequin-v1.glb`) when `studioModelMode === 'mannequin'`.
- * 5. Curved front champagne-gold 360° dial track (radius 2.08, y = -1.32)
+ * 3. Default Mode (`'mannequin'`): Photorealistic 39k-tri 68-bone Mixamo
+ *    Hugging Face fashion avatar (`/assets/models/hf-fashion-avatar-v1.glb`)
+ *    normalized via `Box3` to `1.94 u`, grounded flush at `y = 0`, PBR-tuned
+ *    for `RoomEnvironment` + `ACESFilmicToneMapping`, with 3-clip smooth
+ *    `THREE.AnimationMixer` crossfade (`Stand` / `Walk` / `Rain`) and live
+ *    right-hand smoked-glass umbrella grip attachment.
+ * 4. Couture Dress Form Mode (`'dressform'`): Hugging Face woven-wool Couture
+ *    Trench Coat on obsidian atelier bust & brushed champagne-gold `iNVTRY`
+ *    hanger stand (`/assets/models/hf-couture-coat-v1.glb`) normalized to
+ *    `1.94 u`, with zero-blank-frame instant procedural Obsidian Couture Dress
+ *    Form fallback silhouette shown only while the active GLB streams.
+ * 5. Silent Auto Drop-In `/models/mannequin.glb` (with lazy `DRACOLoader`
+ *    instantiated only when present, magic-byte `glTF` verification for zero
+ *    console errors, `Box3` 1.8u auto-scaling & grounding, and AnimationMixer).
+ * 6. Curved front champagne-gold 360° dial track (radius 2.08, y = -1.32)
  *    with reusable glowing marble controller synced to turntable rotation,
  *    plus translucent smoked-glass umbrella and diagonal 3D rain streaks.
  */
@@ -50,11 +52,22 @@ import {
  * 1. Stage Spatial, Model & Animation Constants
  * ========================================================================== */
 
+const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v1.glb';
+const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v1.glb';
 const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
-const CUSTOM_MANNEQUIN_TARGET_HEIGHT = 1.8;
-const STUDIO_MANNEQUIN_GLB_URL = '/assets/models/studio-mannequin-v1.glb';
 const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
-const MANNEQUIN_WORLD_SCALE = 1.44; // 1.615m anatomical mesh -> ~2.33 world units on turntable
+
+const MANNEQUIN_TARGET_HEIGHT = 1.94;
+const COUTURE_COAT_TARGET_HEIGHT = 1.94;
+const CUSTOM_MANNEQUIN_TARGET_HEIGHT = 1.8;
+
+const AVATAR_CROSSFADE_SEC = 0.28;
+const AVATAR_RAIN_HAND_FALLBACK = { x: -0.227, y: 1.226, z: 0.241 } as const;
+const AVATAR_REDUCED_MOTION_TIME: Readonly<Record<StageInteractionState['studioPose'], number>> = {
+  stand: 0,
+  walk: 0.33,
+  rain: 0.5,
+};
 
 const TORSO_SCALE_X = 1.18;
 const TORSO_SCALE_Z = 0.72;
@@ -77,11 +90,12 @@ const RAIN_COLUMN_RADIUS = 1.78;
 const RAIN_TOP_Y = 2.65;
 const RAIN_BOTTOM_Y = PEDESTAL_TOP_Y + 0.04;
 const UMBRELLA_DEFLECT_RADIUS = 0.92;
-const UMBRELLA_DEFLECT_Y_MANNEQUIN = 1.72;
+const UMBRELLA_DEFLECT_Y_AVATAR = 1.54;
+const UMBRELLA_DEFLECT_Y_COUTURE_COAT = 1.44;
 const UMBRELLA_DEFLECT_Y_DRESSFORM = 1.56;
 const UMBRELLA_DEFLECT_Y_CUSTOM = 1.38;
 
-type ActiveModelKind = 'dressform' | 'mannequin' | 'custom';
+type ActiveModelKind = 'avatar' | 'coutureCoat' | 'dressformFallback' | 'custom';
 
 export interface StudioStageOptions {
   readonly onModelLoaded?: () => void;
@@ -980,50 +994,35 @@ function buildUmbrella(
 }
 
 /* ==========================================================================
- * 7. Mode B: 20-Bone Skinned GLB Mannequin & Auto Drop-In Rig Builders
+ * 7. Hugging Face Photorealistic Avatar, Couture Coat & Auto Drop-In Rigs
  * ========================================================================== */
 
-type RigBoneName =
-  | 'pelvis'
-  | 'spine3'
-  | 'spine2'
-  | 'spine1'
-  | 'neck'
-  | 'head'
-  | 'clavicleL'
-  | 'shoulderL'
-  | 'elbowL'
-  | 'handL'
-  | 'clavicleR'
-  | 'shoulderR'
-  | 'elbowR'
-  | 'handR'
-  | 'hipL'
-  | 'kneeL'
-  | 'ankleL'
-  | 'hipR'
-  | 'kneeR'
-  | 'ankleR';
-
-type RigBoneMap = Partial<Record<RigBoneName, THREE.Bone>>;
-
-interface FigureMaterials {
-  readonly porcelainMat: THREE.MeshPhysicalMaterial;
-  readonly hairMat: THREE.MeshPhysicalMaterial;
-  readonly coatMat: THREE.MeshPhysicalMaterial;
-  readonly knitMat: THREE.MeshPhysicalMaterial;
-  readonly trouserMat: THREE.MeshPhysicalMaterial;
-  readonly shoeMat: THREE.MeshPhysicalMaterial;
-  readonly loadingHaloMat: THREE.MeshBasicMaterial;
-}
-
-interface SkinnedFigureRig {
+interface FashionAvatarRig {
   readonly root: THREE.Group;
   readonly modelSlot: THREE.Group;
-  readonly loadingHalo: THREE.Mesh;
-  readonly materials: FigureMaterials;
-  bones: RigBoneMap;
   loadedModel: THREE.Object3D | null;
+  mixer: THREE.AnimationMixer | null;
+  standAction: THREE.AnimationAction | null;
+  walkAction: THREE.AnimationAction | null;
+  rainAction: THREE.AnimationAction | null;
+  activeClip: StageInteractionState['studioPose'];
+  wasReducedMotion: boolean;
+  rightHandBone: THREE.Object3D | null;
+  rightPalmMiddleBone: THREE.Object3D | null;
+  rightPalmThumbBone: THREE.Object3D | null;
+  calibratedMaterials: THREE.MeshStandardMaterial[];
+  scaleFactor: number;
+  loadFade: number;
+  isLoaded: boolean;
+}
+
+interface CoutureCoatRig {
+  readonly root: THREE.Group;
+  readonly modelSlot: THREE.Group;
+  loadedModel: THREE.Object3D | null;
+  fabricMaterials: THREE.MeshStandardMaterial[];
+  hardwareMaterials: THREE.MeshStandardMaterial[];
+  coreMaterials: THREE.MeshStandardMaterial[];
   loadFade: number;
   isLoaded: boolean;
 }
@@ -1039,122 +1038,51 @@ interface CustomDropInRig {
   isLoaded: boolean;
 }
 
-function buildSkinnedFigureRig(woolBumpTex: THREE.Texture): SkinnedFigureRig {
+function buildFashionAvatarRig(): FashionAvatarRig {
   const root = new THREE.Group();
-  root.name = 'studio-fitting-figure';
+  root.name = 'studio-hf-fashion-avatar';
   root.visible = false;
 
-  // Luxury editorial PBR materials calibrated with baked studio vertex AO (`vertexColors: true`)
-  // and restrained envMapIntensity under RoomEnvironment + ACESFilmic so dark wool tailoring stays rich obsidian
-  const porcelainMat = new THREE.MeshPhysicalMaterial({
-    color: 0xdcc4ae,
-    vertexColors: true,
-    roughness: 0.5,
-    metalness: 0.02,
-    envMapIntensity: 0.48,
-    sheen: 0.28,
-    sheenRoughness: 0.7,
-    sheenColor: new THREE.Color(0xffe9d4),
-  });
-
-  const hairMat = new THREE.MeshPhysicalMaterial({
-    color: 0x1b1a20,
-    vertexColors: true,
-    roughness: 0.62,
-    metalness: 0.04,
-    envMapIntensity: 0.45,
-    sheen: 0.32,
-    sheenRoughness: 0.64,
-    sheenColor: new THREE.Color(0x63606e),
-    side: THREE.DoubleSide,
-  });
-
-  const coatMat = new THREE.MeshPhysicalMaterial({
-    color: 0x1d1e24,
-    vertexColors: true,
-    roughness: 0.85,
-    metalness: 0.03,
-    envMapIntensity: 0.42,
-    sheen: 0.74,
-    sheenRoughness: 0.56,
-    sheenColor: new THREE.Color(0xa69b8d),
-    bumpMap: woolBumpTex,
-    bumpScale: 0.0045,
-    side: THREE.DoubleSide,
-  });
-
-  const knitMat = new THREE.MeshPhysicalMaterial({
-    color: 0x111116,
-    vertexColors: true,
-    roughness: 0.94,
-    metalness: 0.02,
-    envMapIntensity: 0.35,
-    sheen: 0.42,
-    sheenRoughness: 0.78,
-    sheenColor: new THREE.Color(0x6c6864),
-    bumpMap: woolBumpTex,
-    bumpScale: 0.006,
-  });
-
-  const trouserMat = new THREE.MeshPhysicalMaterial({
-    color: 0x17181e,
-    vertexColors: true,
-    roughness: 0.86,
-    metalness: 0.03,
-    envMapIntensity: 0.4,
-    sheen: 0.54,
-    sheenRoughness: 0.66,
-    sheenColor: new THREE.Color(0x88817a),
-    bumpMap: woolBumpTex,
-    bumpScale: 0.003,
-    side: THREE.DoubleSide,
-  });
-
-  const shoeMat = new THREE.MeshPhysicalMaterial({
-    color: 0x121216,
-    vertexColors: true,
-    roughness: 0.28,
-    metalness: 0.14,
-    envMapIntensity: 0.85,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.22,
-  });
-
-  // Subtle luminous champagne atelier halo shown only while lazily streaming 20-bone GLB
-  const loadingHaloGeo = new THREE.RingGeometry(0.42, 0.455, 48);
-  loadingHaloGeo.rotateX(-Math.PI * 0.5);
-  const loadingHaloMat = new THREE.MeshBasicMaterial({
-    color: STAGE_PALETTE.champagneGoldBright,
-    transparent: true,
-    opacity: 0.55,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const loadingHalo = new THREE.Mesh(loadingHaloGeo, loadingHaloMat);
-  loadingHalo.position.set(0, 0.025, 0);
-  root.add(loadingHalo);
-
-  // Dedicated mount slot for the loaded 20-bone skinned GLB hierarchy
   const modelSlot = new THREE.Group();
-  modelSlot.name = 'studio-glb-mannequin-slot';
-  modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE);
+  modelSlot.name = 'studio-hf-fashion-avatar-slot';
   root.add(modelSlot);
 
   return {
     root,
     modelSlot,
-    loadingHalo,
-    materials: {
-      porcelainMat,
-      hairMat,
-      coatMat,
-      knitMat,
-      trouserMat,
-      shoeMat,
-      loadingHaloMat,
-    },
-    bones: {},
     loadedModel: null,
+    mixer: null,
+    standAction: null,
+    walkAction: null,
+    rainAction: null,
+    activeClip: 'stand',
+    wasReducedMotion: false,
+    rightHandBone: null,
+    rightPalmMiddleBone: null,
+    rightPalmThumbBone: null,
+    calibratedMaterials: [],
+    scaleFactor: 1,
+    loadFade: 0,
+    isLoaded: false,
+  };
+}
+
+function buildCoutureCoatRig(): CoutureCoatRig {
+  const root = new THREE.Group();
+  root.name = 'studio-hf-couture-coat';
+  root.visible = false;
+
+  const modelSlot = new THREE.Group();
+  modelSlot.name = 'studio-hf-couture-coat-slot';
+  root.add(modelSlot);
+
+  return {
+    root,
+    modelSlot,
+    loadedModel: null,
+    fabricMaterials: [],
+    hardwareMaterials: [],
+    coreMaterials: [],
     loadFade: 0,
     isLoaded: false,
   };
@@ -1181,78 +1109,20 @@ function buildCustomDropInRig(): CustomDropInRig {
   };
 }
 
-function disposeMaterialWithTextures(mat: THREE.Material): void {
-  const record = mat as unknown as Record<string, unknown>;
-  for (const val of Object.values(record)) {
-    if (val && typeof val === 'object' && (val as { isTexture?: boolean }).isTexture === true) {
-      (val as THREE.Texture).dispose();
-    }
-  }
-  mat.dispose();
-}
-
-function assignMannequinMaterials(
-  sceneRoot: THREE.Object3D,
-  materials: FigureMaterials,
-  bonesOut: RigBoneMap
-): void {
-  sceneRoot.traverse((obj) => {
-    if ((obj as THREE.Bone).isBone) {
-      const bone = obj as THREE.Bone;
-      bonesOut[bone.name as RigBoneName] = bone;
-      return;
-    }
-
-    if ((obj as THREE.SkinnedMesh).isSkinnedMesh || (obj as THREE.Mesh).isMesh) {
-      const mesh = obj as THREE.Mesh;
-      mesh.frustumCulled = false;
-
-      // Dispose default GLB material and any embedded textures before binding our luxury PBR materials
-      if (Array.isArray(mesh.material)) {
-        for (const m of mesh.material) disposeMaterialWithTextures(m);
-      } else if (mesh.material) {
-        disposeMaterialWithTextures(mesh.material);
-      }
-
-      switch (mesh.name) {
-        case 'mannequin_body':
-          mesh.material = materials.porcelainMat;
-          break;
-        case 'mannequin_hair':
-          mesh.material = materials.hairMat;
-          break;
-        case 'garment_coat':
-          mesh.material = materials.coatMat;
-          break;
-        case 'garment_knit':
-          mesh.material = materials.knitMat;
-          break;
-        case 'garment_slacks':
-          mesh.material = materials.trouserMat;
-          break;
-        case 'garment_shoes':
-          mesh.material = materials.shoeMat;
-          break;
-        default:
-          mesh.material = materials.coatMat;
-          break;
-      }
-    }
-  });
-}
-
-function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void {
-  const model = gltf.scene;
-
-  // Normalize scale via Box3 to exactly 1.8 world units tall, centered X/Z = 0, grounded at y = 0
+/**
+ * Scales a loaded glTF scene cleanly via `Box3` to `targetHeight`, centers
+ * X/Z to `0`, and grounds `box.min.y` flush at `y = 0` on the turntable.
+ */
+function normalizeModelToHeight(model: THREE.Object3D, targetHeight: number): number {
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
   box.getSize(size);
 
+  let scaleFactor = 1;
   if (size.y > 1e-4) {
-    const scaleFactor = CUSTOM_MANNEQUIN_TARGET_HEIGHT / size.y;
+    scaleFactor = targetHeight / size.y;
     model.scale.multiplyScalar(scaleFactor);
   }
 
@@ -1262,6 +1132,253 @@ function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void 
   model.position.x -= center.x;
   model.position.z -= center.z;
   model.position.y -= box.min.y;
+  return scaleFactor;
+}
+
+function getAvatarAction(
+  rig: FashionAvatarRig,
+  pose: StageInteractionState['studioPose']
+): THREE.AnimationAction | null {
+  if (pose === 'walk') return rig.walkAction;
+  if (pose === 'rain') return rig.rainAction;
+  return rig.standAction;
+}
+
+function snapAvatarToReducedMotionPose(
+  rig: FashionAvatarRig,
+  pose: StageInteractionState['studioPose']
+): void {
+  if (!rig.mixer) return;
+  const targetAction = getAvatarAction(rig, pose);
+  if (!targetAction) return;
+
+  const actions = [rig.standAction, rig.walkAction, rig.rainAction];
+  for (const act of actions) {
+    if (act && act !== targetAction) {
+      act.stop();
+    }
+  }
+  targetAction.enabled = true;
+  targetAction.reset();
+  targetAction.setEffectiveTimeScale(1);
+  targetAction.setEffectiveWeight(1);
+  targetAction.play();
+  targetAction.time = AVATAR_REDUCED_MOTION_TIME[pose];
+  rig.mixer.update(0);
+  rig.activeClip = pose;
+}
+
+function prepareFashionAvatarModel(
+  gltf: GLTF,
+  targetRig: FashionAvatarRig,
+  initialPose: StageInteractionState['studioPose'],
+  reducedMotion: boolean
+): void {
+  const model = gltf.scene;
+  targetRig.scaleFactor = normalizeModelToHeight(model, MANNEQUIN_TARGET_HEIGHT);
+
+  const calibratedSet = new Set<THREE.Material>();
+  targetRig.calibratedMaterials = [];
+  targetRig.rightHandBone = null;
+  targetRig.rightPalmMiddleBone = null;
+  targetRig.rightPalmThumbBone = null;
+
+  let fallbackRightHand: THREE.Object3D | null = null;
+
+  model.traverse((obj) => {
+    const objName = obj.name || '';
+    if (objName === 'mixamorig_RightHand_037') {
+      targetRig.rightHandBone = obj;
+    } else if (/RightHandMiddle1/i.test(objName)) {
+      targetRig.rightPalmMiddleBone = obj;
+    } else if (/RightHandThumb2/i.test(objName)) {
+      targetRig.rightPalmThumbBone = obj;
+    } else if (
+      !targetRig.rightHandBone &&
+      /RightHand(_\d+)?$/i.test(objName)
+    ) {
+      targetRig.rightHandBone = obj;
+    } else if (
+      !fallbackRightHand &&
+      /RightHand/i.test(objName) &&
+      !/Thumb|Index|Middle|Ring|Pinky/i.test(objName)
+    ) {
+      fallbackRightHand = obj;
+    }
+
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.frustumCulled = false;
+
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!mat || calibratedSet.has(mat)) continue;
+      calibratedSet.add(mat);
+
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+
+      // Preserve ALL original PBR albedo/normal/roughness maps and gently
+      // calibrate envMapIntensity & roughness for RoomEnvironment + ACESFilmic.
+      const matName = (mat.name || '').toLowerCase();
+      let baseEnv = 0.65;
+
+      if (matName.includes('bodymat')) {
+        baseEnv = 0.52;
+        mat.roughness = Math.max(mat.roughness, 0.58);
+        if (mat.transparent) {
+          mat.transparent = false;
+          mat.alphaTest = 0.45;
+          mat.depthWrite = true;
+        }
+      } else if (matName.includes('hairmat')) {
+        baseEnv = 0.55;
+        mat.roughness = Math.max(mat.roughness, 0.54);
+        if (mat.transparent) {
+          mat.transparent = false;
+          mat.alphaTest = 0.35;
+          mat.depthWrite = true;
+        }
+      } else if (matName.includes('topmat')) {
+        baseEnv = 0.92;
+        if (mat.transparent) {
+          mat.transparent = false;
+          mat.depthWrite = true;
+        }
+      } else if (matName.includes('bottommat')) {
+        baseEnv = 0.5;
+        mat.roughness = Math.max(mat.roughness, 0.78);
+        if (mat.transparent) {
+          mat.transparent = false;
+          mat.depthWrite = true;
+        }
+      } else if (matName.includes('shoesmat')) {
+        baseEnv = 0.78;
+        if (mat.transparent) {
+          mat.transparent = false;
+          mat.depthWrite = true;
+        }
+      }
+
+      mat.envMapIntensity = baseEnv;
+      mat.userData.baseEnvMapIntensity = baseEnv;
+      mat.needsUpdate = true;
+      targetRig.calibratedMaterials.push(mat);
+    }
+  });
+
+  if (!targetRig.rightHandBone && fallbackRightHand) {
+    targetRig.rightHandBone = fallbackRightHand;
+  }
+
+  // Bind 3-clip AnimationMixer ('Stand', 'Walk', 'Rain') with case-insensitive fallback
+  if (gltf.animations.length > 0) {
+    const mixer = new THREE.AnimationMixer(model);
+    const standClip =
+      gltf.animations.find((clip) => /^stand$/i.test(clip.name)) ??
+      gltf.animations.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
+      gltf.animations[0];
+    const walkClip =
+      gltf.animations.find((clip) => /^walk$/i.test(clip.name)) ??
+      gltf.animations.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
+      standClip;
+    const rainClip =
+      gltf.animations.find((clip) => /^rain$/i.test(clip.name)) ??
+      gltf.animations.find((clip) => /rain|umbrella|shelter/i.test(clip.name)) ??
+      standClip;
+
+    const standAction = mixer.clipAction(standClip);
+    standAction.setLoop(THREE.LoopRepeat, Infinity);
+
+    const walkAction =
+      walkClip === standClip ? standAction : mixer.clipAction(walkClip);
+    walkAction.setLoop(THREE.LoopRepeat, Infinity);
+
+    const rainAction =
+      rainClip === standClip
+        ? standAction
+        : rainClip === walkClip
+          ? walkAction
+          : mixer.clipAction(rainClip);
+    rainAction.setLoop(THREE.LoopRepeat, Infinity);
+
+    targetRig.mixer = mixer;
+    targetRig.standAction = standAction;
+    targetRig.walkAction = walkAction;
+    targetRig.rainAction = rainAction;
+    targetRig.wasReducedMotion = reducedMotion;
+
+    if (reducedMotion) {
+      snapAvatarToReducedMotionPose(targetRig, initialPose);
+    } else {
+      const startAction = getAvatarAction(targetRig, initialPose) ?? standAction;
+      startAction.enabled = true;
+      startAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
+      mixer.update(0);
+      targetRig.activeClip = initialPose;
+    }
+  }
+
+  targetRig.loadedModel = model;
+  targetRig.modelSlot.add(model);
+  targetRig.isLoaded = true;
+  targetRig.loadFade = reducedMotion ? 1 : 0;
+  targetRig.modelSlot.scale.setScalar(reducedMotion ? 1 : 0.985);
+}
+
+function prepareCoutureCoatModel(
+  gltf: GLTF,
+  targetRig: CoutureCoatRig,
+  reducedMotion: boolean
+): void {
+  const model = gltf.scene;
+  normalizeModelToHeight(model, COUTURE_COAT_TARGET_HEIGHT);
+
+  const seenMaterials = new Set<THREE.Material>();
+  targetRig.fabricMaterials = [];
+  targetRig.hardwareMaterials = [];
+  targetRig.coreMaterials = [];
+
+  model.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.frustumCulled = false;
+
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!mat || seenMaterials.has(mat)) continue;
+      seenMaterials.add(mat);
+
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+
+      const matName = (mat.name || '').toLowerCase();
+      if (matName.includes('button') || matName.includes('gold') || matName.includes('hardware')) {
+        mat.envMapIntensity = 1.25;
+        mat.userData.baseEnvMapIntensity = 1.25;
+        targetRig.hardwareMaterials.push(mat);
+      } else if (matName.includes('obsidian') || matName.includes('core') || matName.includes('bust')) {
+        mat.envMapIntensity = 0.95;
+        mat.userData.baseEnvMapIntensity = 0.95;
+        targetRig.coreMaterials.push(mat);
+      } else {
+        // Woven wool coat fabric: restrain envMapIntensity so ivory wool never blows out under ACESFilmic
+        mat.envMapIntensity = 0.65;
+        mat.userData.baseEnvMapIntensity = 0.65;
+        targetRig.fabricMaterials.push(mat);
+      }
+      mat.needsUpdate = true;
+    }
+  });
+
+  targetRig.loadedModel = model;
+  targetRig.modelSlot.add(model);
+  targetRig.isLoaded = true;
+  targetRig.loadFade = reducedMotion ? 1 : 0;
+  targetRig.modelSlot.scale.setScalar(reducedMotion ? 1 : 0.985);
+}
+
+function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void {
+  const model = gltf.scene;
+  normalizeModelToHeight(model, CUSTOM_MANNEQUIN_TARGET_HEIGHT);
 
   // Tune Showroom IBL & sheen across all imported PBR meshes
   model.traverse((obj) => {
@@ -1504,9 +1621,12 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   let currentMood: MoodMode = 'luxury';
   let currentTheme: ThemeMode = 'dark';
   let currentSubtab: StageInteractionState['studioSubtab'] = 'preview';
-  let requestedModelMode: StageInteractionState['studioModelMode'] = 'dressform';
+  let currentPose: StageInteractionState['studioPose'] = 'stand';
+  let currentReducedMotion = false;
+  let requestedModelMode: StageInteractionState['studioModelMode'] = 'mannequin';
   let userExplicitlySelectedDressform = false;
-  let builtInMannequinLoadStarted = false;
+  let avatarLoadStarted = false;
+  let coutureCoatLoadStarted = false;
 
   // Smooth runtime animation states (zero per-frame allocations)
   let currentAngleRad = 0;
@@ -1520,6 +1640,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   // Scratch vectors & matrices for allocation-free 60/120fps update loop
   const marbleAnchor = new THREE.Vector3();
   const handWorldPos = new THREE.Vector3();
+  const auxHandWorldPos = new THREE.Vector3();
   const invTurntableMatrix = new THREE.Matrix4();
 
   // Build shared procedural textures & scene components
@@ -1543,7 +1664,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   turntableGroup.position.set(0, PEDESTAL_TOP_Y, 0);
   group.add(turntableGroup);
 
-  // Shared soft contact shadow grounding dress form plinth or mannequin boots on turntable
+  // Shared soft contact shadow grounding avatar sneakers or couture stand on turntable
   const contactShadowTex = createRadialShadowTexture(64);
   const contactShadowGeo = new THREE.PlaneGeometry(0.92, 0.72);
   contactShadowGeo.rotateX(-Math.PI * 0.5);
@@ -1558,7 +1679,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   contactShadowMesh.position.set(0, 0.004, 0.04);
   turntableGroup.add(contactShadowMesh);
 
-  // Mode A: High-Fashion Headless Couture Atelier Dress Form (default immediate display)
+  // Instant Zero-Blank-Frame Placeholder: Procedural Obsidian Couture Dress Form
+  // Displayed ONLY while the active Hugging Face GLB streams (~200ms) or in SSR/offline fallback.
   const dressForm = buildAtelierDressForm(
     woolBumpTex,
     currentGlassRatio,
@@ -1567,11 +1689,15 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   );
   turntableGroup.add(dressForm.group);
 
-  // Mode B1: Lazy-loaded 20-Bone Skinned CC0 GLB Mannequin
-  const figure = buildSkinnedFigureRig(woolBumpTex);
-  turntableGroup.add(figure.root);
+  // Primary Default ('mannequin'): 39k-tri 68-bone Photorealistic Hugging Face Fashion Avatar
+  const avatar = buildFashionAvatarRig();
+  turntableGroup.add(avatar.root);
 
-  // Mode B2: Auto Drop-In `/models/mannequin.glb`
+  // Upgraded Couture Mode ('dressform'): Hugging Face Woven-Wool Trench Coat + iNVTRY Gold Stand
+  const coutureCoat = buildCoutureCoatRig();
+  turntableGroup.add(coutureCoat.root);
+
+  // Silent Auto Drop-In: Optional user-provided `/models/mannequin.glb` (with lazy Draco support)
   const customDropIn = buildCustomDropInRig();
   turntableGroup.add(customDropIn.root);
 
@@ -1586,7 +1712,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   group.add(dialTrack.group);
 
   /* ------------------------------------------------------------------------
-   * Dual-Mode Model Resolution & Abort-Safe GLTF/Draco Loader Pipeline
+   * Dual-Mode Model Resolution & Abort-Safe GLTF / Lazy-Draco Loader Pipeline
    * ------------------------------------------------------------------------ */
 
   const disposeSkeletons = (rootObj: THREE.Object3D | null): void => {
@@ -1605,27 +1731,201 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   const loadAbortController =
     canFetchInBrowser && typeof AbortController !== 'undefined' ? new AbortController() : null;
 
-  let gltfLoader: GLTFLoader | null = null;
+  let standardGltfLoader: GLTFLoader | null = null;
+  let dracoGltfLoader: GLTFLoader | null = null;
   let dracoLoader: DRACOLoader | null = null;
   let activeParseCount = 0;
   let latestEmitUiSync: StageContext['emitUiSync'] | null = null;
 
-  const disposeDracoIfIdle = (): void => {
+  const disposeLoadersIfIdle = (): void => {
     if (!disposed || activeParseCount > 0) return;
     dracoLoader?.dispose();
     dracoLoader = null;
-    gltfLoader = null;
+    dracoGltfLoader = null;
+    standardGltfLoader = null;
   };
 
-  const getGltfLoader = (): GLTFLoader | null => {
+  /** Plain GLTFLoader for uncompressed WebP GLBs (no DRACOLoader overhead). */
+  const getStandardGltfLoader = (): GLTFLoader | null => {
     if (!canFetchInBrowser || disposed) return null;
-    if (!gltfLoader) {
-      gltfLoader = new GLTFLoader();
+    if (!standardGltfLoader) {
+      standardGltfLoader = new GLTFLoader();
+    }
+    return standardGltfLoader;
+  };
+
+  /** Lazy Draco-enabled GLTFLoader instantiated ONLY when custom `/models/mannequin.glb` is present. */
+  const getDracoGltfLoader = (): GLTFLoader | null => {
+    if (!canFetchInBrowser || disposed) return null;
+    if (!dracoGltfLoader) {
+      dracoGltfLoader = new GLTFLoader();
       dracoLoader = new DRACOLoader();
       dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
-      gltfLoader.setDRACOLoader(dracoLoader);
+      dracoGltfLoader.setDRACOLoader(dracoLoader);
     }
-    return gltfLoader;
+    return dracoGltfLoader;
+  };
+
+  const fetchVerifiedGlbBuffer = (url: string): Promise<ArrayBuffer | null> =>
+    fetch(url, {
+      signal: loadAbortController?.signal,
+    })
+      .then((res) => {
+        if (!res.ok) return null;
+        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+        if (contentType.includes('text/html')) return null;
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        if (disposed || !buffer || !isValidGlbBuffer(buffer)) return null;
+        return buffer;
+      })
+      .catch(() => null);
+
+  /* ------------------------------------------------------------------------
+   * PBR Material Calibration Helpers for Loaded Hugging Face GLBs
+   * ------------------------------------------------------------------------ */
+
+  const syncAvatarMaterials = (): void => {
+    if (!avatar.isLoaded) return;
+    const themeScale = currentTheme === 'dark' ? 1.0 : 0.88;
+    const glassBoost = THREE.MathUtils.lerp(0.96, 1.06, currentGlassRatio);
+    for (const mat of avatar.calibratedMaterials) {
+      const baseEnv =
+        typeof mat.userData.baseEnvMapIntensity === 'number'
+          ? (mat.userData.baseEnvMapIntensity as number)
+          : 0.65;
+      mat.envMapIntensity = baseEnv * themeScale * glassBoost;
+    }
+  };
+
+  const syncCoutureCoatMaterials = (): void => {
+    if (!coutureCoat.isLoaded) return;
+    const isDark = currentTheme === 'dark';
+    const isAurora = currentMood === 'aurora';
+    const themeScale = isDark ? 1.0 : 0.86;
+
+    // Subtle sheen & ambient response on woven wool coat without blowing out ivory highlights
+    const fabricScale = THREE.MathUtils.lerp(0.94, 1.12, currentGlassRatio) * themeScale;
+    for (const mat of coutureCoat.fabricMaterials) {
+      const baseEnv =
+        typeof mat.userData.baseEnvMapIntensity === 'number'
+          ? (mat.userData.baseEnvMapIntensity as number)
+          : 0.65;
+      mat.envMapIntensity = baseEnv * fabricScale;
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.sheen = THREE.MathUtils.lerp(0.48, 0.88, currentGlassRatio);
+      }
+    }
+
+    // Gold hardware & brass buttons: preserve textured buttons, harmonize untextured stand gold with Mood × Theme
+    const hardwareScale = THREE.MathUtils.lerp(0.95, 1.16, currentGlassRatio) * (isDark ? 1.0 : 0.88);
+    for (const mat of coutureCoat.hardwareMaterials) {
+      const baseEnv =
+        typeof mat.userData.baseEnvMapIntensity === 'number'
+          ? (mat.userData.baseEnvMapIntensity as number)
+          : 1.25;
+      mat.envMapIntensity = baseEnv * hardwareScale;
+      if (!mat.map) {
+        mat.color.setHex(
+          isAurora
+            ? isDark
+              ? STAGE_PALETTE.auroraSilverGold
+              : STAGE_PALETTE.auroraSilverLightTheme
+            : isDark
+              ? STAGE_PALETTE.champagneGold
+              : STAGE_PALETTE.champagneGoldLightTheme
+        );
+      }
+    }
+
+    // Obsidian atelier bust & collar: subtle clearcoat gloss response to Glass %
+    for (const mat of coutureCoat.coreMaterials) {
+      const baseEnv =
+        typeof mat.userData.baseEnvMapIntensity === 'number'
+          ? (mat.userData.baseEnvMapIntensity as number)
+          : 0.95;
+      mat.envMapIntensity = baseEnv * THREE.MathUtils.lerp(0.9, 1.32, currentGlassRatio);
+      mat.roughness = THREE.MathUtils.lerp(0.44, 0.24, currentGlassRatio);
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.clearcoat = THREE.MathUtils.lerp(0.35, 0.9, currentGlassRatio);
+      }
+    }
+  };
+
+  /* ------------------------------------------------------------------------
+   * Model Loading & Zero-Blank-Frame Visibility Resolution
+   * ------------------------------------------------------------------------ */
+
+  const loadCoutureCoat = (): void => {
+    if (coutureCoatLoadStarted || disposed || !canFetchInBrowser) return;
+    coutureCoatLoadStarted = true;
+
+    void fetchVerifiedGlbBuffer(HF_COUTURE_COAT_GLB_URL).then((buffer) => {
+      if (disposed || !buffer) return;
+      const loader = getStandardGltfLoader();
+      if (!loader) return;
+      activeParseCount += 1;
+      loader.parse(
+        buffer,
+        '',
+        (gltf) => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          if (disposed) {
+            disposeSkeletons(gltf.scene);
+            disposeObject3D(gltf.scene);
+            disposeLoadersIfIdle();
+            return;
+          }
+          prepareCoutureCoatModel(gltf, coutureCoat, currentReducedMotion);
+          syncCoutureCoatMaterials();
+          syncActiveModelVisibility();
+          options?.onModelLoaded?.();
+        },
+        () => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          disposeLoadersIfIdle();
+          // Silently retain procedural Obsidian Couture Dress Form fallback if parse fails
+        }
+      );
+    });
+  };
+
+  const loadFashionAvatar = (): void => {
+    if (avatarLoadStarted || disposed || !canFetchInBrowser) return;
+    avatarLoadStarted = true;
+
+    void fetchVerifiedGlbBuffer(HF_FASHION_AVATAR_GLB_URL).then((buffer) => {
+      if (disposed || !buffer) return;
+      const loader = getStandardGltfLoader();
+      if (!loader) return;
+      activeParseCount += 1;
+      loader.parse(
+        buffer,
+        '',
+        (gltf) => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          if (disposed) {
+            disposeSkeletons(gltf.scene);
+            disposeObject3D(gltf.scene);
+            disposeLoadersIfIdle();
+            return;
+          }
+          prepareFashionAvatarModel(gltf, avatar, currentPose, currentReducedMotion);
+          syncAvatarMaterials();
+          syncActiveModelVisibility();
+          options?.onModelLoaded?.();
+
+          // Gently preload the Couture Trench Coat GLB after the primary avatar lands
+          loadCoutureCoat();
+        },
+        () => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          disposeLoadersIfIdle();
+          // Silently retain procedural Obsidian Couture Dress Form fallback if parse fails
+        }
+      );
+    });
   };
 
   const resolveActiveModelKind = (): ActiveModelKind => {
@@ -1633,120 +1933,63 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       return 'custom';
     }
     if (requestedModelMode === 'mannequin') {
-      return customDropIn.isLoaded ? 'custom' : 'mannequin';
+      if (customDropIn.isLoaded) return 'custom';
+      return avatar.isLoaded ? 'avatar' : 'dressformFallback';
     }
-    return 'dressform';
-  };
-
-  const loadBuiltInMannequin = (): void => {
-    if (builtInMannequinLoadStarted || disposed || !canFetchInBrowser) return;
-    builtInMannequinLoadStarted = true;
-
-    void fetch(STUDIO_MANNEQUIN_GLB_URL, {
-      signal: loadAbortController?.signal,
-    })
-      .then((res) => {
-        if (!res.ok) return null;
-        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-        if (contentType.includes('text/html')) return null;
-        return res.arrayBuffer();
-      })
-      .then((buffer) => {
-        if (disposed || !buffer || !isValidGlbBuffer(buffer)) return;
-        const loader = getGltfLoader();
-        if (!loader) return;
-        activeParseCount += 1;
-        loader.parse(
-          buffer,
-          '',
-          (gltf) => {
-            activeParseCount = Math.max(0, activeParseCount - 1);
-            if (disposed) {
-              disposeSkeletons(gltf.scene);
-              disposeObject3D(gltf.scene);
-              disposeDracoIfIdle();
-              return;
-            }
-            figure.loadedModel = gltf.scene;
-            figure.bones = {};
-            assignMannequinMaterials(gltf.scene, figure.materials, figure.bones);
-            figure.modelSlot.add(gltf.scene);
-            figure.isLoaded = true;
-            figure.loadFade = 0;
-            figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * 0.96);
-            applySkeletalPose(0, false);
-            syncActiveModelVisibility();
-            options?.onModelLoaded?.();
-          },
-          () => {
-            activeParseCount = Math.max(0, activeParseCount - 1);
-            disposeDracoIfIdle();
-            // Silently preserve stage resilience if parse fails
-          }
-        );
-      })
-      .catch(() => {
-        // Silently ignore aborted or offline fetches
-      });
+    return coutureCoat.isLoaded ? 'coutureCoat' : 'dressformFallback';
   };
 
   const syncActiveModelVisibility = (): ActiveModelKind => {
-    const activeKind = resolveActiveModelKind();
-    dressForm.group.visible = activeKind === 'dressform';
-    figure.root.visible = activeKind === 'mannequin';
-    customDropIn.root.visible = activeKind === 'custom';
-
-    if (activeKind === 'mannequin' && !figure.isLoaded && !builtInMannequinLoadStarted) {
-      loadBuiltInMannequin();
+    if (requestedModelMode === 'mannequin' && !avatar.isLoaded && !avatarLoadStarted) {
+      loadFashionAvatar();
+    } else if (requestedModelMode === 'dressform' && !coutureCoat.isLoaded && !coutureCoatLoadStarted) {
+      loadCoutureCoat();
     }
+
+    const activeKind = resolveActiveModelKind();
+    avatar.root.visible = activeKind === 'avatar';
+    coutureCoat.root.visible = activeKind === 'coutureCoat';
+    dressForm.group.visible = activeKind === 'dressformFallback';
+    customDropIn.root.visible = activeKind === 'custom';
     return activeKind;
   };
 
-  // Silent Auto Drop-In Check for `/models/mannequin.glb` (zero console errors & zero loader allocation if absent)
+  // Kick off primary Hugging Face Fashion Avatar stream immediately upon stage creation
   if (canFetchInBrowser) {
-    void fetch(CUSTOM_MANNEQUIN_GLB_URL, {
-      signal: loadAbortController?.signal,
-    })
-      .then((res) => {
-        if (!res.ok) return null;
-        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-        if (contentType.includes('text/html')) return null;
-        return res.arrayBuffer();
-      })
-      .then((buffer) => {
-        if (disposed || !buffer || !isValidGlbBuffer(buffer)) return;
-        const loader = getGltfLoader();
-        if (!loader) return;
-        activeParseCount += 1;
-        loader.parse(
-          buffer,
-          '',
-          (gltf) => {
-            activeParseCount = Math.max(0, activeParseCount - 1);
-            if (disposed) {
-              disposeSkeletons(gltf.scene);
-              disposeObject3D(gltf.scene);
-              disposeDracoIfIdle();
-              return;
-            }
-            prepareCustomDropInModel(gltf, customDropIn);
-            if (!userExplicitlySelectedDressform) {
-              requestedModelMode = 'mannequin';
-              latestEmitUiSync?.({ studioModelMode: 'mannequin' });
-            }
-            syncActiveModelVisibility();
-            options?.onModelLoaded?.();
-          },
-          () => {
-            activeParseCount = Math.max(0, activeParseCount - 1);
-            disposeDracoIfIdle();
-            // Silently fall back to Dress Form on corrupt custom drop-in
+    loadFashionAvatar();
+
+    // Silent Auto Drop-In Check for `/models/mannequin.glb` (zero console errors & zero Draco allocation if absent)
+    void fetchVerifiedGlbBuffer(CUSTOM_MANNEQUIN_GLB_URL).then((buffer) => {
+      if (disposed || !buffer) return;
+      const loader = getDracoGltfLoader();
+      if (!loader) return;
+      activeParseCount += 1;
+      loader.parse(
+        buffer,
+        '',
+        (gltf) => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          if (disposed) {
+            disposeSkeletons(gltf.scene);
+            disposeObject3D(gltf.scene);
+            disposeLoadersIfIdle();
+            return;
           }
-        );
-      })
-      .catch(() => {
-        // Silently ignore 404, aborted, or offline drop-in probes
-      });
+          prepareCustomDropInModel(gltf, customDropIn);
+          if (!userExplicitlySelectedDressform) {
+            requestedModelMode = 'mannequin';
+            latestEmitUiSync?.({ studioModelMode: 'mannequin' });
+          }
+          syncActiveModelVisibility();
+          options?.onModelLoaded?.();
+        },
+        () => {
+          activeParseCount = Math.max(0, activeParseCount - 1);
+          disposeLoadersIfIdle();
+          // Silently fall back to built-in Hugging Face showroom on corrupt custom drop-in
+        }
+      );
+    });
   }
 
   /* ------------------------------------------------------------------------
@@ -1763,7 +2006,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     umbrella.canopyMat.userData.targetOpacity = baseCanopyOpacity;
     umbrella.canopyMat.opacity = baseCanopyOpacity * rainBlend;
 
-    // Subtle smoked-glass translucency & clearcoat on Dress Form revealing internal gold spine
+    // Subtle smoked-glass translucency & clearcoat on fallback Dress Form revealing internal gold spine
     dressForm.torsoMat.opacity = THREE.MathUtils.lerp(1.0, 0.76, currentGlassRatio);
     dressForm.torsoMat.clearcoat = THREE.MathUtils.lerp(0.25, 0.85, currentGlassRatio);
     dressForm.torsoMat.roughness = THREE.MathUtils.lerp(0.42, 0.26, currentGlassRatio);
@@ -1773,6 +2016,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       currentTheme,
       THREE.MathUtils.lerp(0.18, 0.74, currentGlassRatio)
     );
+
+    syncAvatarMaterials();
+    syncCoutureCoatMaterials();
 
     const isDark = currentTheme === 'dark';
     pedestal.mirrorMat.opacity = THREE.MathUtils.lerp(
@@ -1801,7 +2047,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     applyGoldModeState(dialTrack.railGlowMat, mood, theme, 0.64);
     applyGoldModeState(umbrella.goldMat, mood, theme, 0.34);
 
-    // Couture Dress Form PBR & brushed gold hardware calibrated for Mood × Theme
+    // Fallback Couture Dress Form PBR & brushed gold hardware calibrated for Mood × Theme
     applyBrushedGoldHardwareMode(dressForm.goldHardwareMat, mood, theme, 0.14);
     applyBrushedGoldHardwareMode(dressForm.measureRingMat, mood, theme, 0.38);
     applyBrushedGoldHardwareMode(dressForm.seamGlintMat, mood, theme, 0.85);
@@ -1830,18 +2076,6 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     pedestal.shadowMat.opacity = isDark ? 0.76 : 0.3;
     contactShadowMat.color.setHex(isDark ? 0x040407 : 0x2d2924);
     contactShadowMat.opacity = isDark ? 0.72 : 0.4;
-    figure.materials.loadingHaloMat.color.setHex(
-      isAurora ? STAGE_PALETTE.auroraSilverGold : STAGE_PALETTE.champagneGoldBright
-    );
-
-    // Sculpted 20-bone mannequin editorial PBR materials tuned for Light & Dark legibility
-    figure.materials.coatMat.color.setHex(isDark ? 0x1d1e24 : 0x25262e);
-    figure.materials.coatMat.sheenColor.setHex(
-      isAurora ? (isDark ? 0x8fb5e6 : 0x6f8ab0) : isDark ? 0xa69b8d : 0x7d7264
-    );
-    figure.materials.trouserMat.color.setHex(isDark ? 0x17181e : 0x1e2027);
-    figure.materials.porcelainMat.color.setHex(isDark ? 0xdcc4ae : 0xcfb298);
-    figure.materials.hairMat.color.setHex(isDark ? 0x1b1a20 : 0x201f26);
 
     // Starlight dust blending & tint
     const nextStarBlend = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
@@ -1900,7 +2134,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   };
 
   /* ------------------------------------------------------------------------
-   * Mode A Choreography: Couture Atelier Dress Form (`Stand` / `Walk` / `Rain`)
+   * Procedural Fallback Choreography: Obsidian Couture Dress Form
    * ------------------------------------------------------------------------ */
 
   const applyDressFormPose = (elapsed: number, reducedMotion: boolean): void => {
@@ -1944,177 +2178,119 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   };
 
   /* ------------------------------------------------------------------------
-   * Mode B1 Choreography: Real 20-Bone Skeletal Animation (`Stand` / `Walk` / `Rain`)
+   * Primary Avatar Choreography: 3-Clip AnimationMixer (`Stand` / `Walk` / `Rain`)
    * ------------------------------------------------------------------------ */
 
-  const applySkeletalPose = (elapsed: number, reducedMotion: boolean): void => {
-    const bones = figure.bones;
+  const applyAvatarPose = (
+    dt: number,
+    pose: StageInteractionState['studioPose'],
+    reducedMotion: boolean
+  ): void => {
+    if (!avatar.isLoaded) return;
+
+    // Subtle arrival settle (feet stay locked at y = 0 since modelSlot origin sits at y = 0)
+    if (avatar.loadFade < 1) {
+      avatar.loadFade = reducedMotion ? 1 : Math.min(1, avatar.loadFade + dt * 4.2);
+      const eased = avatar.loadFade * avatar.loadFade * (3 - 2 * avatar.loadFade);
+      avatar.modelSlot.scale.setScalar(0.985 + 0.015 * eased);
+    }
+
     const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
-    const breathPhase = reducedMotion ? 0 : elapsed * 2.05;
-    const walkPhase = reducedMotion ? 0.65 : elapsed * 4.0;
+    avatar.modelSlot.rotation.set(
+      0,
+      reducedMotion ? 0 : hoverSmoothX * 0.055 * standWeight,
+      0
+    );
 
-    const breathWave = Math.sin(breathPhase);
-    const gaitWave = Math.sin(walkPhase);
-    const gaitCos = Math.cos(walkPhase);
-    const walkBounce = Math.abs(gaitWave) * 0.026 * walkBlend;
+    if (!avatar.mixer) return;
 
-    // Ground root with +0.006 sole compensation so boots rest flush on turntable top
-    figure.root.position.y = 0.006 + walkBounce;
-
-    if (!figure.isLoaded) return;
-
-    // Pelvis & spine counter-rotation + subtle editorial breathing
-    if (bones.pelvis) {
-      bones.pelvis.rotation.set(
-        0.02 * walkBlend - 0.015 * rainBlend,
-        gaitWave * 0.06 * walkBlend,
-        -gaitWave * 0.024 * walkBlend
-      );
-    }
-    if (bones.spine3) {
-      bones.spine3.rotation.set(
-        breathWave * 0.008 * (standWeight + rainBlend * 0.7),
-        -gaitWave * 0.05 * walkBlend + 0.02 * rainBlend,
-        0
-      );
-    }
-    if (bones.spine2) {
-      bones.spine2.rotation.set(
-        breathWave * 0.01 * (standWeight + rainBlend * 0.7) + 0.025 * walkBlend,
-        -gaitWave * 0.08 * walkBlend + 0.03 * rainBlend,
-        gaitWave * 0.02 * walkBlend - 0.018 * rainBlend
-      );
-    }
-    if (bones.spine1) {
-      bones.spine1.rotation.set(
-        breathWave * 0.012 * (standWeight + rainBlend * 0.7),
-        -gaitWave * 0.04 * walkBlend,
-        0
-      );
+    if (reducedMotion) {
+      if (!avatar.wasReducedMotion || avatar.activeClip !== pose) {
+        snapAvatarToReducedMotionPose(avatar, pose);
+      } else {
+        avatar.mixer.update(0);
+      }
+      avatar.wasReducedMotion = true;
+      return;
     }
 
-    // Poised head & neck subtle gaze tracking + gentle idle motion
-    const idleHeadYaw = reducedMotion ? 0 : Math.sin(elapsed * 0.62) * 0.045 * standWeight;
-    if (bones.neck) {
-      bones.neck.rotation.set(
-        hoverSmoothY * 0.035 + 0.02 * rainBlend,
-        (idleHeadYaw + hoverSmoothX * 0.05) * 0.45,
-        0
-      );
-    }
-    if (bones.head) {
-      bones.head.rotation.set(
-        hoverSmoothY * 0.06 + 0.03 * rainBlend,
-        idleHeadYaw + hoverSmoothX * 0.1 - 0.05 * rainBlend,
-        -gaitWave * 0.018 * walkBlend
-      );
-    }
-
-    // Clavicles breathing + subtle lift when holding umbrella
-    if (bones.clavicleL) {
-      bones.clavicleL.rotation.set(
-        0,
-        0,
-        -0.05 + breathWave * 0.012 * (standWeight + rainBlend * 0.6)
-      );
-    }
-    if (bones.clavicleR) {
-      bones.clavicleR.rotation.set(
-        0,
-        0,
-        0.05 * (standWeight + walkBlend) + 0.11 * rainBlend - breathWave * 0.012 * standWeight
-      );
+    if (avatar.wasReducedMotion) {
+      // Resume live loop cleanly from current pose after reduced-motion pause
+      const activeAction = getAvatarAction(avatar, pose);
+      if (activeAction) {
+        const actions = [avatar.standAction, avatar.walkAction, avatar.rainAction];
+        for (const act of actions) {
+          if (act && act !== activeAction) act.stop();
+        }
+        activeAction.enabled = true;
+        activeAction.setEffectiveTimeScale(1);
+        activeAction.setEffectiveWeight(1);
+        activeAction.play();
+      }
+      avatar.activeClip = pose;
+      avatar.wasReducedMotion = false;
+    } else if (pose !== avatar.activeClip) {
+      const prevAction = getAvatarAction(avatar, avatar.activeClip);
+      const nextAction = getAvatarAction(avatar, pose);
+      if (prevAction && nextAction && prevAction !== nextAction) {
+        nextAction.enabled = true;
+        nextAction.reset();
+        nextAction.setEffectiveTimeScale(1);
+        nextAction.setEffectiveWeight(1);
+        nextAction.play();
+        prevAction.crossFadeTo(nextAction, AVATAR_CROSSFADE_SEC, false);
+      }
+      avatar.activeClip = pose;
     }
 
-    // Left Arm (+X): palms-inward runway Stand / Walk / Rain
-    const leftArmSwing = gaitWave * 0.24;
-    if (bones.shoulderL) {
-      bones.shoulderL.rotation.set(
-        0.08 * standWeight + leftArmSwing * walkBlend + 0.09 * rainBlend,
-        -0.08 * standWeight - 0.06 * walkBlend - 0.08 * rainBlend,
-        -0.58 * standWeight - 0.56 * walkBlend - 0.57 * rainBlend
-      );
-    }
-    if (bones.elbowL) {
-      bones.elbowL.rotation.set(
-        0.16 * standWeight + (0.08 - Math.max(0, -leftArmSwing) * 0.35) * walkBlend + 0.12 * rainBlend,
-        0.28 * standWeight + 0.24 * walkBlend + 0.26 * rainBlend,
-        0.08 * standWeight + 0.06 * walkBlend + 0.08 * rainBlend
-      );
-    }
-    if (bones.handL) {
-      bones.handL.rotation.set(0, 0.24, -0.06);
-    }
-
-    // Right Arm (-X): Stand / opposing Walk swing / elevated chest-high Rain umbrella grip
-    const rightArmSwing = -gaitWave * 0.24;
-    if (bones.shoulderR) {
-      bones.shoulderR.rotation.set(
-        0.08 * standWeight + rightArmSwing * walkBlend - 0.72 * rainBlend,
-        0.08 * standWeight + 0.06 * walkBlend - 0.18 * rainBlend,
-        0.58 * standWeight + 0.56 * walkBlend + 0.38 * rainBlend
-      );
-    }
-    if (bones.elbowR) {
-      bones.elbowR.rotation.set(
-        0.16 * standWeight + (0.08 - Math.max(0, -rightArmSwing) * 0.35) * walkBlend - 1.38 * rainBlend,
-        -0.28 * standWeight - 0.24 * walkBlend + 0.26 * rainBlend,
-        -0.08 * standWeight - 0.06 * walkBlend - 0.14 * rainBlend
-      );
-    }
-    if (bones.handR) {
-      bones.handR.rotation.set(
-        0.24 * rainBlend,
-        -0.24 * (standWeight + walkBlend) + 0.12 * rainBlend,
-        0.06 * (standWeight + walkBlend)
-      );
-    }
-
-    // Legs (hip/knee/ankle): poised runway stance in Stand/Rain, smooth stride in Walk
-    const leftLegSwing = -gaitWave * 0.24;
-    const rightLegSwing = gaitWave * 0.24;
-    const leftKneeBend = Math.max(0, gaitCos) * 0.34 + 0.04;
-    const rightKneeBend = Math.max(0, -gaitCos) * 0.34 + 0.04;
-
-    if (bones.hipL) {
-      bones.hipL.rotation.set(
-        leftLegSwing * walkBlend - 0.02 * rainBlend,
-        0,
-        -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
-      );
-    }
-    if (bones.kneeL) {
-      bones.kneeL.rotation.set(leftKneeBend * walkBlend + 0.02 * rainBlend, 0, 0);
-    }
-    if (bones.ankleL) {
-      bones.ankleL.rotation.set(
-        -leftKneeBend * 0.35 * walkBlend,
-        0,
-        0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
-      );
-    }
-
-    if (bones.hipR) {
-      bones.hipR.rotation.set(
-        rightLegSwing * walkBlend + 0.015 * rainBlend,
-        0,
-        0.055 * (standWeight + rainBlend) + 0.045 * walkBlend
-      );
-    }
-    if (bones.kneeR) {
-      bones.kneeR.rotation.set(rightKneeBend * walkBlend + 0.015 * rainBlend, 0, 0);
-    }
-    if (bones.ankleR) {
-      bones.ankleR.rotation.set(
-        -rightKneeBend * 0.35 * walkBlend,
-        0,
-        -0.055 * (standWeight + rainBlend) - 0.045 * walkBlend
-      );
-    }
+    avatar.mixer.update(dt);
   };
 
   /* ------------------------------------------------------------------------
-   * Mode B2 Choreography: Auto Drop-In `/models/mannequin.glb`
+   * Couture Coat Choreography: Stand / Gentle Runway Sway / Sheltered Rain
+   * ------------------------------------------------------------------------ */
+
+  const applyCoutureCoatPose = (
+    dt: number,
+    elapsed: number,
+    reducedMotion: boolean
+  ): void => {
+    if (!coutureCoat.isLoaded) return;
+
+    if (coutureCoat.loadFade < 1) {
+      coutureCoat.loadFade = reducedMotion ? 1 : Math.min(1, coutureCoat.loadFade + dt * 4.2);
+      const eased = coutureCoat.loadFade * coutureCoat.loadFade * (3 - 2 * coutureCoat.loadFade);
+      coutureCoat.modelSlot.scale.setScalar(0.985 + 0.015 * eased);
+    }
+
+    const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
+    const breathWave = reducedMotion ? 0 : Math.sin(elapsed * 1.75);
+    const walkPhase = reducedMotion ? 0.65 : elapsed * 3.6;
+    const gaitWave = Math.sin(walkPhase);
+    const gaitLift = Math.abs(gaitWave);
+
+    coutureCoat.modelSlot.position.y =
+      Math.max(0, breathWave * 0.006 * standWeight + gaitLift * 0.018 * walkBlend);
+
+    const pitchX =
+      hoverSmoothY * 0.032 * (standWeight + rainBlend * 0.5) +
+      (0.018 + gaitLift * 0.012) * walkBlend +
+      0.032 * rainBlend;
+    const yawY =
+      hoverSmoothX * 0.07 * standWeight +
+      gaitWave * 0.125 * walkBlend +
+      (reducedMotion ? 0 : Math.sin(elapsed * 0.68) * 0.025 * standWeight) -
+      0.035 * rainBlend;
+    const rollZ =
+      -hoverSmoothX * 0.022 * standWeight -
+      gaitWave * 0.036 * walkBlend -
+      0.04 * rainBlend;
+
+    coutureCoat.modelSlot.rotation.set(pitchX, yawY, rollZ);
+  };
+
+  /* ------------------------------------------------------------------------
+   * Auto Drop-In Choreography: Custom `/models/mannequin.glb`
    * ------------------------------------------------------------------------ */
 
   const applyCustomDropInPose = (
@@ -2179,26 +2355,43 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
 
     const rainBreeze = reducedMotion ? 0 : Math.sin(elapsed * 2.8) * 0.025;
 
-    if (activeKind === 'mannequin' && figure.isLoaded && figure.bones.handR) {
+    if (activeKind === 'avatar' && avatar.isLoaded) {
       turntableGroup.updateMatrixWorld(true);
-      handWorldPos.set(0.015, 0.03, 0.04);
-      figure.bones.handR.localToWorld(handWorldPos);
       invTurntableMatrix.copy(turntableGroup.matrixWorld).invert();
-      handWorldPos.applyMatrix4(invTurntableMatrix);
-      handWorldPos.y = Math.max(handWorldPos.y, 1.48);
+
+      if (avatar.rightPalmMiddleBone && avatar.rightPalmThumbBone) {
+        // Exact center of her closed right fist between middle knuckle & thumb
+        avatar.rightPalmMiddleBone.getWorldPosition(handWorldPos);
+        avatar.rightPalmThumbBone.getWorldPosition(auxHandWorldPos);
+        handWorldPos.add(auxHandWorldPos).multiplyScalar(0.5);
+        handWorldPos.applyMatrix4(invTurntableMatrix);
+      } else if (avatar.rightHandBone) {
+        avatar.rightHandBone.getWorldPosition(handWorldPos);
+        handWorldPos.applyMatrix4(invTurntableMatrix);
+      } else {
+        const s = avatar.scaleFactor;
+        handWorldPos.set(
+          AVATAR_RAIN_HAND_FALLBACK.x * s,
+          AVATAR_RAIN_HAND_FALLBACK.y * s,
+          AVATAR_RAIN_HAND_FALLBACK.z * s
+        );
+      }
+
+      // Position handle grip cleanly in her raised right hand; tilt canopy directly overhead with face/hair clearance
       umbrella.group.position.copy(handWorldPos);
-      umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
-    } else if (activeKind === 'dressform') {
-      // Suspended gracefully overhead above the 2.12u coat-hanger hook with zero torso clipping
+      umbrella.group.rotation.set(-0.19 + rainBreeze * 0.45, 0, -0.14 + rainBreeze);
+    } else if (activeKind === 'coutureCoat') {
+      // Suspended gracefully overhead above the 1.94u Couture Trench Coat & gold iNVTRY hook
+      umbrella.group.position.set(-0.44, 1.1, -0.06);
+      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.22 + rainBreeze);
+    } else if (activeKind === 'dressformFallback') {
+      // Suspended gracefully overhead above the 2.12u procedural fallback hanger hook
       umbrella.group.position.set(-0.46, 1.22, -0.08);
       umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.25 + rainBreeze);
-    } else if (activeKind === 'custom') {
+    } else {
       // Suspended cleanly overhead above the 1.8u auto-scaled custom mannequin
       umbrella.group.position.set(-0.42, 0.96, -0.06);
       umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.22 + rainBreeze);
-    } else {
-      umbrella.group.position.set(-0.34, 1.5, 0.28);
-      umbrella.group.rotation.set(-0.14 + rainBreeze * 0.5, 0, -0.26 + rainBreeze);
     }
 
     const targetOpacity =
@@ -2227,11 +2420,13 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     if (reducedMotion) return;
 
     const deflectY =
-      activeKind === 'dressform'
-        ? UMBRELLA_DEFLECT_Y_DRESSFORM
-        : activeKind === 'custom'
-          ? UMBRELLA_DEFLECT_Y_CUSTOM
-          : UMBRELLA_DEFLECT_Y_MANNEQUIN;
+      activeKind === 'avatar'
+        ? UMBRELLA_DEFLECT_Y_AVATAR
+        : activeKind === 'coutureCoat'
+          ? UMBRELLA_DEFLECT_Y_COUTURE_COAT
+          : activeKind === 'custom'
+            ? UMBRELLA_DEFLECT_Y_CUSTOM
+            : UMBRELLA_DEFLECT_Y_DRESSFORM;
 
     const { drops, positions } = rain;
     for (let i = 0; i < drops.length; i++) {
@@ -2325,6 +2520,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       latestEmitUiSync = ctx.emitUiSync;
       currentAngleRad = ctx.interaction.studioAngleRad;
       currentSubtab = ctx.interaction.studioSubtab;
+      currentPose = ctx.interaction.studioPose;
+      currentReducedMotion = ctx.reducedMotion;
+
       if (
         customDropIn.isLoaded &&
         !userExplicitlySelectedDressform &&
@@ -2334,27 +2532,34 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         ctx.emitUiSync({ studioModelMode: 'mannequin' });
       } else {
         requestedModelMode = ctx.interaction.studioModelMode;
+        userExplicitlySelectedDressform = requestedModelMode === 'dressform';
       }
-      walkBlend = ctx.interaction.studioPose === 'walk' ? 1 : 0;
-      rainBlend = ctx.interaction.studioPose === 'rain' ? 1 : 0;
+
+      walkBlend = currentPose === 'walk' ? 1 : 0;
+      rainBlend = currentPose === 'rain' ? 1 : 0;
       turntableGroup.rotation.y = currentAngleRad;
 
       const activeKind = syncActiveModelVisibility();
 
-      if (figure.isLoaded && ctx.reducedMotion) {
-        figure.loadFade = 1;
-        figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE);
-        figure.loadingHalo.visible = false;
+      if (avatar.isLoaded && ctx.reducedMotion) {
+        avatar.loadFade = 1;
+        avatar.modelSlot.scale.setScalar(1);
+      }
+      if (coutureCoat.isLoaded && ctx.reducedMotion) {
+        coutureCoat.loadFade = 1;
+        coutureCoat.modelSlot.scale.setScalar(1);
       }
 
       syncVisualMode(ctx.mood, ctx.theme);
       syncGlass(ctx.glassRatio);
-      if (activeKind === 'dressform') {
+      if (activeKind === 'avatar') {
+        applyAvatarPose(0, currentPose, ctx.reducedMotion);
+      } else if (activeKind === 'coutureCoat') {
+        applyCoutureCoatPose(0, 0, ctx.reducedMotion);
+      } else if (activeKind === 'dressformFallback') {
         applyDressFormPose(0, ctx.reducedMotion);
-      } else if (activeKind === 'mannequin') {
-        applySkeletalPose(0, ctx.reducedMotion);
       } else {
-        applyCustomDropInPose(0, 0, ctx.interaction.studioPose, ctx.reducedMotion);
+        applyCustomDropInPose(0, 0, currentPose, ctx.reducedMotion);
       }
       updateUmbrella(activeKind, 0, ctx.reducedMotion);
     },
@@ -2377,6 +2582,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     onInteractionChange(patch: Partial<StageInteractionState>, _ctx: StageContext): void {
       if (patch.studioSubtab) {
         currentSubtab = patch.studioSubtab;
+      }
+      if (patch.studioPose) {
+        currentPose = patch.studioPose;
       }
       if (patch.studioModelMode) {
         requestedModelMode = patch.studioModelMode;
@@ -2407,6 +2615,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     update(dt: number, elapsed: number, ctx: StageContext): void {
+      currentReducedMotion = ctx.reducedMotion;
+      currentPose = ctx.interaction.studioPose;
+
       const dampFast = ctx.reducedMotion ? 1 : 1 - Math.exp(-10 * dt);
       const dampPose = ctx.reducedMotion ? 1 : 1 - Math.exp(-9.5 * dt);
       const dampHover = ctx.reducedMotion ? 1 : 1 - Math.exp(-6 * dt);
@@ -2421,8 +2632,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       hoverSmoothX = THREE.MathUtils.lerp(hoverSmoothX, hoverTargetX, dampHover);
       hoverSmoothY = THREE.MathUtils.lerp(hoverSmoothY, hoverTargetY, dampHover);
 
-      const targetWalk = ctx.interaction.studioPose === 'walk' ? 1 : 0;
-      const targetRain = ctx.interaction.studioPose === 'rain' ? 1 : 0;
+      const targetWalk = currentPose === 'walk' ? 1 : 0;
+      const targetRain = currentPose === 'rain' ? 1 : 0;
       walkBlend = THREE.MathUtils.lerp(walkBlend, targetWalk, dampPose);
       rainBlend = THREE.MathUtils.lerp(rainBlend, targetRain, dampPose);
 
@@ -2434,29 +2645,14 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
 
       const activeKind = syncActiveModelVisibility();
 
-      if (activeKind === 'dressform') {
+      if (activeKind === 'avatar') {
+        applyAvatarPose(dt, currentPose, ctx.reducedMotion);
+      } else if (activeKind === 'coutureCoat') {
+        applyCoutureCoatPose(dt, elapsed, ctx.reducedMotion);
+      } else if (activeKind === 'dressformFallback') {
         applyDressFormPose(elapsed, ctx.reducedMotion);
-      } else if (activeKind === 'mannequin') {
-        // Smooth arrival scale & halo dismissal once the lazily-loaded 20-bone GLB streams in
-        if (figure.isLoaded) {
-          if (figure.loadFade < 1) {
-            figure.loadFade = ctx.reducedMotion
-              ? 1
-              : Math.min(1, figure.loadFade + dt * 3.8);
-            const eased = figure.loadFade * figure.loadFade * (3 - 2 * figure.loadFade);
-            figure.modelSlot.scale.setScalar(MANNEQUIN_WORLD_SCALE * (0.96 + 0.04 * eased));
-            figure.materials.loadingHaloMat.opacity = 0.55 * (1 - eased);
-            figure.loadingHalo.visible = figure.loadFade < 0.99;
-          }
-        } else {
-          figure.loadingHalo.visible = true;
-          const pulse = ctx.reducedMotion ? 1 : 0.94 + Math.sin(elapsed * 3.2) * 0.08;
-          figure.loadingHalo.scale.setScalar(pulse);
-          figure.materials.loadingHaloMat.opacity = 0.35 + (pulse - 0.86) * 1.4;
-        }
-        applySkeletalPose(elapsed, ctx.reducedMotion);
       } else {
-        applyCustomDropInPose(dt, elapsed, ctx.interaction.studioPose, ctx.reducedMotion);
+        applyCustomDropInPose(dt, elapsed, currentPose, ctx.reducedMotion);
       }
 
       updateUmbrella(activeKind, elapsed, ctx.reducedMotion);
@@ -2469,6 +2665,17 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       latestEmitUiSync = null;
       loadAbortController?.abort();
 
+      if (avatar.mixer) {
+        avatar.mixer.stopAllAction();
+        if (avatar.loadedModel) {
+          avatar.mixer.uncacheRoot(avatar.loadedModel);
+        }
+        avatar.mixer = null;
+        avatar.standAction = null;
+        avatar.walkAction = null;
+        avatar.rainAction = null;
+      }
+
       if (customDropIn.mixer) {
         customDropIn.mixer.stopAllAction();
         if (customDropIn.loadedModel) {
@@ -2479,26 +2686,28 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         customDropIn.walkAction = null;
       }
 
-      disposeDracoIfIdle();
+      disposeLoadersIfIdle();
 
-      disposeSkeletons(figure.loadedModel);
+      disposeSkeletons(avatar.loadedModel);
+      disposeSkeletons(coutureCoat.loadedModel);
       disposeSkeletons(customDropIn.loadedModel);
 
-      // Only manually dispose mannequin PBR materials when 20-bone GLB never attached to scene graph;
-      // woolBumpTex is owned by dressForm.torsoMat inside `group` and disposed once by disposeObject3D.
-      if (!figure.isLoaded) {
-        figure.materials.porcelainMat.dispose();
-        figure.materials.hairMat.dispose();
-        figure.materials.coatMat.dispose();
-        figure.materials.knitMat.dispose();
-        figure.materials.trouserMat.dispose();
-        figure.materials.shoeMat.dispose();
-      }
-
+      // Disposes all geometries, materials, and embedded/procedural textures under `group`
       disposeObject3D(group);
-      figure.loadedModel = null;
-      figure.bones = {};
-      figure.isLoaded = false;
+
+      avatar.loadedModel = null;
+      avatar.rightHandBone = null;
+      avatar.rightPalmMiddleBone = null;
+      avatar.rightPalmThumbBone = null;
+      avatar.calibratedMaterials = [];
+      avatar.isLoaded = false;
+
+      coutureCoat.loadedModel = null;
+      coutureCoat.fabricMaterials = [];
+      coutureCoat.hardwareMaterials = [];
+      coutureCoat.coreMaterials = [];
+      coutureCoat.isLoaded = false;
+
       customDropIn.loadedModel = null;
       customDropIn.isLoaded = false;
     },

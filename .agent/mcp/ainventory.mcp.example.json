@@ -41,12 +41,20 @@
       },
       "timeoutSeconds": 300,
       "description": "Google Stitch UI design & screen generation MCP (put real key only in ~/.gemini/config/mcp_config.json or gitignored .agents/mcp_config.json)"
+    },
+    "blender": {
+      "command": "uvx",
+      "args": [
+        "mcp-for-blender==2.3.1"
+      ],
+      "description": "Blender MCP (ahujasid/mcp-for-blender) for 3D fashion asset import, retopology, rigging, PBR tuning, and GLB export"
     }
   },
   "_comments": {
     "antigravity_native_note": "Antigravity natively provides GitHub (gh plugin), Google Drive/Calendar plugins, filesystem tools (view_file/replace_file_content), and web search (google_search/browse). Do not enable duplicate MCP servers.",
     "stitch_mcp_note": "Antigravity reads global MCP configs from ~/.gemini/config/mcp_config.json and workspace MCP configs from .agents/mcp_config.json (.agent/mcp_config.json). Because Antigravity does not expand ${VAR} in JSON headers, keep real X-Goog-Api-Key values strictly in gitignored/personal configs.",
+    "blender_mcp_note": "Requires Blender 4.x with the Interface: MCP for Blender addon enabled (install via: uvx mcp-for-blender==2.3.1 install-addon).",
     "context_budget_note": "Keep total enabled MCP servers under 10 to preserve context window and avoid payload bloat.",
-    "full_catalog": "See .agent/mcp/mcp-servers.catalog.json for all 34 verbatim ECC MCP configurations."
+    "full_catalog": "See .agent/mcp/mcp-servers.catalog.json for all 35 ECC + Ainventory MCP configurations."
   }
 }
