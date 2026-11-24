@@ -12,7 +12,7 @@
  *    lightweight floating starlight dust points.
  * 3. Default Mode (`'mannequin'`): Blender 4.0.2 welded & Subdiv-L1 smoothed
  *    48k-tri MIT Microsoft Rocketbox 2K PBR pinstripe-suit editorial avatar
- *    (`/assets/models/hf-fashion-avatar-v2.glb`) normalized via `Box3` to
+ *    (`/assets/models/hf-fashion-avatar-v3.glb`) normalized via `Box3` to
  *    `1.94 u`, grounded flush at `y = 0`, PBR-tuned for `RoomEnvironment` +
  *    `ACESFilmicToneMapping`, with 3-clip smooth `THREE.AnimationMixer`
  *    crossfade (`Stand` / `Walk` / `Rain`) and live left-hand (or Mixamo
@@ -54,7 +54,7 @@ import {
  * 1. Stage Spatial, Model & Animation Constants
  * ========================================================================== */
 
-const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v2.glb';
+const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v3.glb';
 const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v1.glb';
 const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
 const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';

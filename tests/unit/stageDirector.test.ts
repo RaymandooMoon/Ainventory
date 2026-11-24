@@ -863,4 +863,37 @@ describe('AinvtryStageDirector', () => {
 
     director.dispose();
   });
+
+  it('references a versioned cache-busted avatar GLB containing Stand, Walk, and Rain animation clips', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const studioSrc = fs.readFileSync(
+      path.resolve('src/three/stages/studioStage.ts'),
+      'utf8'
+    );
+    const match = studioSrc.match(
+      /const\s+HF_FASHION_AVATAR_GLB_URL\s*=\s*'(\/assets\/models\/hf-fashion-avatar-v(\d+)\.glb)'/
+    );
+    assert.ok(match, 'studioStage.ts must declare a versioned HF_FASHION_AVATAR_GLB_URL');
+    const [, urlPath, versionStr] = match;
+    assert.ok(
+      Number(versionStr) >= 3,
+      `Expected cache-busted avatar version >= 3 for immutable /assets/* caching, got v${versionStr}`
+    );
+
+    const glbFile = path.resolve('site/public', urlPath.replace(/^\//, ''));
+    assert.ok(fs.existsSync(glbFile), `Expected avatar GLB to exist at ${glbFile}`);
+
+    const buf = fs.readFileSync(glbFile);
+    assert.equal(buf.subarray(0, 4).toString('ascii'), 'glTF', 'Avatar GLB must have valid glTF magic header');
+    const jsonChunkLen = buf.readUInt32LE(12);
+    const gltfJson = JSON.parse(buf.subarray(20, 20 + jsonChunkLen).toString('utf8')) as {
+      animations?: Array<{ name?: string }>;
+    };
+    const clipNames = (gltfJson.animations ?? []).map((clip) => clip.name);
+    assert.ok(clipNames.includes('Stand'), `Expected Stand clip in ${urlPath}, got ${clipNames.join(', ')}`);
+    assert.ok(clipNames.includes('Walk'), `Expected Walk clip in ${urlPath}, got ${clipNames.join(', ')}`);
+    assert.ok(clipNames.includes('Rain'), `Expected Rain clip in ${urlPath}, got ${clipNames.join(', ')}`);
+  });
 });
+
