@@ -3,16 +3,28 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 const rootDir = path.resolve(import.meta.dirname, 'site');
+const srcDir = path.resolve(import.meta.dirname, 'src');
 
 export default defineConfig({
   root: rootDir,
   publicDir: path.resolve(rootDir, 'public'),
   plugins: [react()],
+  resolve: {
+    alias: [
+      {
+        find: /^\/src\//,
+        replacement: `${srcDir.replace(/\\/g, '/')}/`,
+      },
+    ],
+  },
   server: {
     host: '0.0.0.0',
-    port: 3001,
+    port: Number(process.env.SITE_PORT || 3000),
     strictPort: true,
     allowedHosts: true,
+    fs: {
+      allow: [path.resolve(import.meta.dirname)],
+    },
   },
   preview: {
     host: '0.0.0.0',

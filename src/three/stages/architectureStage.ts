@@ -42,12 +42,12 @@ import {
  * ========================================================================== */
 
 const TIER_COUNT = 6;
-const TIER_WIDTH = 1.76;
-const TIER_HEIGHT = 0.44;
-const TIER_DEPTH = 1.76;
-const TIER_SPACING = 0.62;
-const TOWER_CENTER_Y = 0.05;
-const FLOOR_GRID_Y = -1.94;
+const TIER_WIDTH = 1.32;
+const TIER_HEIGHT = 0.34;
+const TIER_DEPTH = 1.32;
+const TIER_SPACING = 0.5;
+const TOWER_CENTER_Y = 0.06;
+const FLOOR_GRID_Y = -1.62;
 const DEFAULT_TOWER_YAW = Math.PI * 0.22;
 const DRAG_SENSITIVITY = 0.0085;
 
@@ -579,6 +579,7 @@ export function createArchitectureStage(): StageModule {
 
   let targetYaw = DEFAULT_TOWER_YAW;
   let currentYaw = DEFAULT_TOWER_YAW;
+  let towerOffsetY = 0;
   let hoveredTierIndex: number | null = null;
   let tapPulse = 0;
 
@@ -666,21 +667,19 @@ export function createArchitectureStage(): StageModule {
     tierRoot.add(baseGlowMesh);
     towerPivot.add(tierRoot);
 
-    const labelOpts = { accent: true, width: 248, height: 66, worldHeight: 0.25 } as const;
-    const blueprintLabel = createFloatingLabelSprite(TIER_SPECS[i].label, {
-      ...labelOpts,
-      subtext: TIER_SPECS[i].subtext,
-    });
-    blueprintLabel.sprite.position.set(-1.74, baseY, 0.24);
+    const labelOpts = { accent: true, width: 224, height: 52, worldHeight: 0.22 } as const;
+    const blueprintLabel = createFloatingLabelSprite(TIER_SPECS[i].label, labelOpts);
+    blueprintLabel.sprite.position.set(0, baseY + 0.02, 0.92);
+    blueprintLabel.sprite.material.depthTest = false;
+    blueprintLabel.sprite.renderOrder = 26;
     blueprintLabel.sprite.material.opacity = 0;
     blueprintLabel.sprite.visible = false;
     labelGroup.add(blueprintLabel.sprite);
 
-    const mapsLabel = createFloatingLabelSprite(MAPS_API_SPECS[i].label, {
-      ...labelOpts,
-      subtext: MAPS_API_SPECS[i].subtext,
-    });
-    mapsLabel.sprite.position.set(-1.74, baseY, 0.24);
+    const mapsLabel = createFloatingLabelSprite(MAPS_API_SPECS[i].label, labelOpts);
+    mapsLabel.sprite.position.set(0, baseY + 0.02, 0.92);
+    mapsLabel.sprite.material.depthTest = false;
+    mapsLabel.sprite.renderOrder = 26;
     mapsLabel.sprite.material.opacity = 0;
     mapsLabel.sprite.visible = false;
     labelGroup.add(mapsLabel.sprite);
@@ -941,6 +940,12 @@ export function createArchitectureStage(): StageModule {
     currentYaw = THREE.MathUtils.lerp(currentYaw, targetYaw, fast);
     towerPivot.rotation.y = currentYaw + (ctx.reducedMotion ? 0 : Math.sin(elapsed * 0.38) * 0.04);
 
+    // Gently glide the tower vertically so the selected tier stays centered in the left viewport
+    const targetTowerOffsetY = THREE.MathUtils.clamp(-activeTierY * 0.42, -0.58, 0.58);
+    towerOffsetY = THREE.MathUtils.lerp(towerOffsetY, targetTowerOffsetY, smooth);
+    towerPivot.position.y = towerOffsetY;
+    labelGroup.position.y = towerOffsetY;
+
     const targetMaps = architectureSubtab === 'maps' ? 1 : 0;
     prodBlend = THREE.MathUtils.lerp(prodBlend, architectureMode === 'prod' ? 1 : 0, smooth);
     privacyBlend = THREE.MathUtils.lerp(privacyBlend, architectureSubtab === 'privacy' ? 1 : 0, smooth);
@@ -949,7 +954,7 @@ export function createArchitectureStage(): StageModule {
     windBlend = THREE.MathUtils.lerp(windBlend, targetMaps * (weatherMood === 'wind' ? 1 : 0), smooth);
     sunnyBlend = THREE.MathUtils.lerp(sunnyBlend, targetMaps * (weatherMood === 'sunny' ? 1 : 0), smooth);
 
-    const targetLightY = isStageEntered && !instant ? ctx.marbleMesh.position.y : activeTierY;
+    const targetLightY = isStageEntered && !instant ? ctx.marbleMesh.position.y : activeTierY + towerOffsetY;
     marbleLight.position.set(0, THREE.MathUtils.lerp(marbleLight.position.y, targetLightY, fast), 0);
     const pulseWave = ctx.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(elapsed * 2.2);
     marbleLight.intensity = (isDark ? 2.85 : 1.75) + prodBlend * 0.95 + tapPulse * 0.75 + pulseWave * 0.3;
@@ -1051,7 +1056,7 @@ export function createArchitectureStage(): StageModule {
   };
 
   const getMarbleAnchor = (elapsed: number, state: StageInteractionState): THREE.Vector3 => {
-    const tierY = getTierCenterY(resolveActiveTierIndex(state));
+    const tierY = getTierCenterY(resolveActiveTierIndex(state)) + towerOffsetY;
     const amp = state.architectureSubtab === 'maps' ? 0.04 : 0.035;
     marbleAnchorOut.set(0, tierY + (lastReducedMotion ? 0 : Math.sin(elapsed * 2.2) * amp), 0);
     return marbleAnchorOut;

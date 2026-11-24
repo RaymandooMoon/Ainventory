@@ -58,6 +58,8 @@ interface StageDirectorRig {
   readonly dockColliders: DomDockColliderSync;
   lastElapsed: number;
   heroReturnPending: boolean;
+  heroReturnTargetScale: number;
+  heroReturnRevealed: boolean;
 }
 
 const SITE_MARBLE_TARGET_SELECTOR = '[data-marble-target="true"]';
@@ -165,6 +167,8 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   const interactionRef = useRef<StageInteractionState>(interaction);
   const onStageUiSyncRef = useRef(onStageUiSync);
   const tmpStartVecRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const tmpHeroCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const tmpHeroTargetPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   useEffect(() => {
     activeStageRef.current = activeStage;
@@ -188,13 +192,40 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
     if (nextStage === 'hero') {
       rig.stageMarble.group.visible = true;
+      rig.stageMarble.group.scale.setScalar(1);
       rig.heroReturnPending = true;
+      rig.heroReturnRevealed = false;
       ctrl?.setExternalMarbleHidden?.(true);
-      rig.director.returnToHero(rig.lastElapsed);
+      ctrl?.resetHeroMarble?.();
+
+      const restSnap = ctrl?.getMarbleSnapshot?.();
+      const heroCamPos = rig.director.getHeroCameraPosition(tmpHeroCamPosRef.current);
+      const halfH =
+        Math.tan(THREE.MathUtils.degToRad(rig.camera.fov * 0.5)) * Math.abs(heroCamPos.z);
+      const halfW = halfH * rig.camera.aspect;
+
+      let heroTargetPos = tmpHeroTargetPosRef.current.copy(HERO_MARBLE_WELL);
+      if (restSnap) {
+        heroTargetPos = tmpHeroTargetPosRef.current.set(
+          (restSnap.u * 2 - 1) * halfW,
+          (restSnap.v * 2 - 1) * halfH,
+          0
+        );
+        rig.heroReturnTargetScale = THREE.MathUtils.clamp(
+          (restSnap.radiusNormY * 2.0 * 0.91 * halfH) / 0.18,
+          0.48,
+          1.35
+        );
+      } else {
+        rig.heroReturnTargetScale = 1;
+      }
+
+      rig.director.returnToHero(rig.lastElapsed, heroTargetPos);
       if (!rig.director.isTransitionActive()) {
         rig.heroReturnPending = false;
+        rig.heroReturnRevealed = false;
         rig.stageMarble.group.visible = false;
-        ctrl?.resetHeroMarble?.();
+        rig.stageMarble.group.scale.setScalar(1);
         ctrl?.setExternalMarbleHidden?.(false);
       }
       ctrl?.requestRender?.();
@@ -215,6 +246,8 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     }
 
     rig.heroReturnPending = false;
+    rig.heroReturnRevealed = false;
+    rig.stageMarble.group.scale.setScalar(1);
     rig.stageMarble.group.visible = true;
     ctrl?.setExternalMarbleHidden?.(true);
     rig.director.transitionTo(nextStage, rig.lastElapsed, launchWorldPos);
@@ -319,6 +352,8 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         dockColliders,
         lastElapsed: 0,
         heroReturnPending: false,
+        heroReturnTargetScale: 1,
+        heroReturnRevealed: false,
       };
 
       updateStudioLighting(rig, moodRef.current, themeRef.current);
@@ -376,23 +411,47 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
       rig.director.update(ctx.dt, ctx.elapsed);
 
-      if (
-        rig.heroReturnPending &&
-        rig.director.getActiveStage() === 'hero' &&
-        !rig.director.isTransitionActive()
-      ) {
-        rig.heroReturnPending = false;
-        rig.stageMarble.group.visible = false;
-        controllerRef.current?.resetHeroMarble?.();
-        controllerRef.current?.setExternalMarbleHidden?.(false);
-        return false;
+      let marbleFade = 1;
+      if (rig.heroReturnPending && rig.director.getActiveStage() === 'hero') {
+        const progress = rig.director.getTransitionProgress();
+        const smoothT = progress * progress * (3 - 2 * progress);
+        rig.stageMarble.group.scale.setScalar(
+          THREE.MathUtils.lerp(1, rig.heroReturnTargetScale, smoothT)
+        );
+
+        if (progress >= 0.76 && !rig.heroReturnRevealed) {
+          rig.heroReturnRevealed = true;
+          controllerRef.current?.setExternalMarbleHidden?.(false);
+          const landingSnap = controllerRef.current?.getMarbleSnapshot?.();
+          if (landingSnap) {
+            controllerRef.current?.triggerPulse?.(
+              landingSnap.u * 2 - 1,
+              landingSnap.v * 2 - 1,
+              0.42
+            );
+          }
+        }
+
+        if (progress > 0.76) {
+          marbleFade = 1 - THREE.MathUtils.smoothstep(progress, 0.76, 1.0);
+        }
+
+        if (!rig.director.isTransitionActive()) {
+          rig.heroReturnPending = false;
+          rig.heroReturnRevealed = false;
+          rig.stageMarble.group.visible = false;
+          rig.stageMarble.group.scale.setScalar(1);
+          controllerRef.current?.setExternalMarbleHidden?.(false);
+          return false;
+        }
       }
 
       rig.stageMarble.updateVisual(
         moodRef.current,
         themeRef.current,
         glassPercentRef.current / 100,
-        ctx.elapsed
+        ctx.elapsed,
+        marbleFade
       );
 
       // Isolate ACESFilmic tone mapping strictly to the 3D stage overlay pass so

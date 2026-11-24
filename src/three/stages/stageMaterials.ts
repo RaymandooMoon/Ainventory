@@ -286,7 +286,8 @@ export interface StageMarbleHandle {
     mood: MoodMode,
     theme: ThemeMode,
     glassRatio: number,
-    elapsed: number
+    elapsed: number,
+    opacityScale?: number
   ) => void;
   readonly dispose: () => void;
 }
@@ -328,6 +329,8 @@ export function createStageMarbleMesh(): StageMarbleHandle {
     emissiveIntensity: 1.15,
     roughness: 0.2,
     metalness: 0.4,
+    transparent: true,
+    opacity: 1,
   });
   const nucleusMesh = new THREE.Mesh(nucleusGeo, nucleusMat);
   group.add(nucleusMesh);
@@ -335,6 +338,8 @@ export function createStageMarbleMesh(): StageMarbleHandle {
   // Delicate specular rim ring
   const rimGeo = new THREE.TorusGeometry(0.194, 0.0045, 8, 40);
   const rimMat = createChampagneGoldMaterial('luxury', 'dark', 0.4);
+  rimMat.transparent = true;
+  rimMat.opacity = 1;
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
   rimMesh.rotation.x = Math.PI * 0.42;
   group.add(rimMesh);
@@ -357,9 +362,11 @@ export function createStageMarbleMesh(): StageMarbleHandle {
     mood: MoodMode,
     theme: ThemeMode,
     glassRatio: number,
-    elapsed: number
+    elapsed: number,
+    opacityScale = 1
   ): void => {
     const g = THREE.MathUtils.clamp(glassRatio, 0, 1);
+    const fade = THREE.MathUtils.clamp(opacityScale, 0, 1);
     const isDark = theme === 'dark';
     const isAurora = mood === 'aurora';
     const pulse = 0.5 + 0.5 * Math.sin(elapsed * 2.4);
@@ -388,23 +395,25 @@ export function createStageMarbleMesh(): StageMarbleHandle {
       coreMat.transparent = true;
       coreMat.transmission = 0;
       coreMat.thickness = 0;
-      coreMat.opacity = THREE.MathUtils.lerp(0.86, 0.62, g);
+      coreMat.opacity = THREE.MathUtils.lerp(0.86, 0.62, g) * fade;
       coreMat.clearcoat = 1.0;
       coreMat.envMapIntensity = 1.6;
     } else {
-      coreMat.transmission = THREE.MathUtils.lerp(0.22, 0.58, g);
+      coreMat.transmission = THREE.MathUtils.lerp(0.22, 0.58, g) * fade;
       coreMat.thickness = 0.4;
-      coreMat.opacity = 0.94;
+      coreMat.opacity = 0.94 * fade;
       coreMat.clearcoat = 1.0;
       coreMat.envMapIntensity = 1.8;
     }
-    coreMat.emissiveIntensity = (isDark ? 0.34 : 0.22) + pulse * 0.14;
+    coreMat.emissiveIntensity = ((isDark ? 0.34 : 0.22) + pulse * 0.14) * fade;
 
-    nucleusMat.emissiveIntensity = (isDark ? 1.05 : 0.72) + pulse * 0.3;
+    nucleusMat.opacity = fade;
+    nucleusMat.emissiveIntensity = ((isDark ? 1.05 : 0.72) + pulse * 0.3) * fade;
     const nucleusScale = 0.94 + pulse * 0.1;
     nucleusMesh.scale.setScalar(nucleusScale);
 
     applyGoldModeState(rimMat, mood, theme, 0.35 + pulse * 0.15);
+    rimMat.opacity = fade;
     rimMesh.rotation.z = elapsed * 0.45;
     rimMesh.rotation.y = Math.sin(elapsed * 0.6) * 0.35;
 
@@ -413,7 +422,7 @@ export function createStageMarbleMesh(): StageMarbleHandle {
       haloMat.blending = nextBlending;
       haloMat.needsUpdate = true;
     }
-    haloMat.opacity = (isDark ? 0.62 : 0.32) + pulse * (isDark ? 0.18 : 0.1);
+    haloMat.opacity = ((isDark ? 0.62 : 0.32) + pulse * (isDark ? 0.18 : 0.1)) * fade;
     const haloScale = 0.92 + pulse * 0.14;
     haloSprite.scale.set(haloScale, haloScale, 1);
   };
@@ -573,7 +582,7 @@ export function createFloatingLabelSprite(
 
     const centerX = logicalWidth * 0.5;
     if (hasSubtext && opts.subtext) {
-      ctx2d.font = `600 16px ${fontStack}`;
+      ctx2d.font = `700 18px ${fontStack}`;
       ctx2d.fillStyle = highlighted
         ? isDark
           ? '#F3E5C8'
@@ -581,19 +590,19 @@ export function createFloatingLabelSprite(
         : isDark
           ? '#F5F5F7'
           : '#16161A';
-      ctx2d.fillText(text, centerX, logicalHeight * 0.37, pillW - 22);
+      ctx2d.fillText(text, centerX, logicalHeight * 0.36, pillW - 20);
 
-      ctx2d.font = `500 11.5px ${fontStack}`;
+      ctx2d.font = `600 13px ${fontStack}`;
       ctx2d.fillStyle = highlighted
         ? isDark
-          ? 'rgba(226, 207, 168, 0.88)'
-          : 'rgba(128, 96, 46, 0.92)'
+          ? 'rgba(226, 207, 168, 0.92)'
+          : 'rgba(128, 96, 46, 0.94)'
         : isDark
-          ? 'rgba(220, 222, 230, 0.72)'
-          : 'rgba(60, 62, 70, 0.75)';
-      ctx2d.fillText(opts.subtext, centerX, logicalHeight * 0.69, pillW - 24);
+          ? 'rgba(226, 228, 236, 0.8)'
+          : 'rgba(54, 56, 64, 0.82)';
+      ctx2d.fillText(opts.subtext, centerX, logicalHeight * 0.7, pillW - 22);
     } else {
-      ctx2d.font = `600 17px ${fontStack}`;
+      ctx2d.font = `700 20px ${fontStack}`;
       ctx2d.fillStyle = highlighted
         ? isDark
           ? '#F3E5C8'
@@ -601,7 +610,7 @@ export function createFloatingLabelSprite(
         : isDark
           ? '#F5F5F7'
           : '#16161A';
-      ctx2d.fillText(text, centerX, logicalHeight * 0.51, pillW - 22);
+      ctx2d.fillText(text, centerX, logicalHeight * 0.51, pillW - 20);
     }
 
     ctx2d.restore();

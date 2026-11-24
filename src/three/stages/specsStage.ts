@@ -42,16 +42,16 @@ import {
 const FLOOR_Y = -1.35;
 const MARBLE_Y = -1.04;
 const GRID_YAW = 0.25;
-const PILLAR_WIDTH = 0.62;
-const MAX_PROXIMITY_BOOST = 0.78;
-const PROXIMITY_NEAR_DIST = 1.13;
-const PROXIMITY_FAR_DIST = 2.55;
+const PILLAR_WIDTH = 0.42;
+const MAX_PROXIMITY_BOOST = 0.72;
+const PROXIMITY_NEAR_DIST = 0.95;
+const PROXIMITY_FAR_DIST = 2.35;
 const SPARKLE_COUNT = 68;
 const RIPPLE_RING_COUNT = 3;
-const LABEL_TOP_CLEARANCE = 0.18;
+const LABEL_TOP_CLEARANCE = 0.2;
 const POINTER_DRAG_SENSITIVITY = 0.0085;
-const CLUSTER_ORIGIN_X = -0.06;
-const CLUSTER_ORIGIN_Z = -0.78;
+const CLUSTER_ORIGIN_X = 0;
+const CLUSTER_ORIGIN_Z = -0.35;
 const COS_YAW = Math.cos(GRID_YAW);
 const SIN_YAW = Math.sin(GRID_YAW);
 
@@ -73,17 +73,16 @@ function projectGridToWorld(u: number, v: number): { readonly x: number; readonl
 }
 
 /**
- * 6 asymmetric gallery pillars aligned to `GRID_YAW` with clean air gaps
- * (>= 0.07 units), monotonic left-to-right screen projection, and strict
- * closest-pillar Euclidean XZ distance along the foreground marble arc.
+ * 6 sculpted glass pillars arranged tightly enough to fit the left split lane
+ * without clipping; the selected pillar surges taller, wider, and steps forward.
  */
 const PILLAR_LAYOUTS: readonly PillarLayoutSpec[] = [
-  { index: 0, label: SPECS_3D_PILLAR_LABELS[0], baseHeight: 1.35, ...projectGridToWorld(-1.72, -0.26) },
-  { index: 1, label: SPECS_3D_PILLAR_LABELS[1], baseHeight: 1.75, ...projectGridToWorld(-1.03, -0.20) },
-  { index: 2, label: SPECS_3D_PILLAR_LABELS[2], baseHeight: 2.35, ...projectGridToWorld(-0.34, -0.14) },
-  { index: 3, label: SPECS_3D_PILLAR_LABELS[3], baseHeight: 1.95, ...projectGridToWorld(0.35, 0.10) },
-  { index: 4, label: SPECS_3D_PILLAR_LABELS[4], baseHeight: 1.55, ...projectGridToWorld(1.04, 0.22) },
-  { index: 5, label: SPECS_3D_PILLAR_LABELS[5], baseHeight: 1.25, ...projectGridToWorld(1.73, 0.46) },
+  { index: 0, label: SPECS_3D_PILLAR_LABELS[0], baseHeight: 1.05, ...projectGridToWorld(-1.6, -0.06) },
+  { index: 1, label: SPECS_3D_PILLAR_LABELS[1], baseHeight: 1.22, ...projectGridToWorld(-0.96, -0.04) },
+  { index: 2, label: SPECS_3D_PILLAR_LABELS[2], baseHeight: 1.38, ...projectGridToWorld(-0.32, -0.02) },
+  { index: 3, label: SPECS_3D_PILLAR_LABELS[3], baseHeight: 1.28, ...projectGridToWorld(0.32, 0.02) },
+  { index: 4, label: SPECS_3D_PILLAR_LABELS[4], baseHeight: 1.14, ...projectGridToWorld(0.96, 0.04) },
+  { index: 5, label: SPECS_3D_PILLAR_LABELS[5], baseHeight: 1.02, ...projectGridToWorld(1.6, 0.06) },
 ];
 
 const ARC_MIN_X = PILLAR_LAYOUTS[0].x;
@@ -634,7 +633,7 @@ function buildMetricPillar(
   basePool.position.y = 0.018;
   root.add(basePool);
 
-  const label = createFloatingLabelSprite(spec.label, { worldHeight: 0.23 });
+  const label = createFloatingLabelSprite(spec.label, { worldHeight: 0.21 });
   const baseLabelScaleX = label.sprite.scale.x;
   const baseLabelScaleY = label.sprite.scale.y;
   label.sprite.position.set(0, spec.baseHeight + LABEL_TOP_CLEARANCE, 0);
@@ -684,42 +683,57 @@ function buildMetricPillar(
       reducedMotion: boolean
     ): void => {
       const isDark = nextTheme === 'dark';
-      const boost = Math.min(
-        proximity * MAX_PROXIMITY_BOOST + (isClosest ? 0.08 : 0),
-        MAX_PROXIMITY_BOOST
-      );
       const damp = reducedMotion ? 1 : 1 - Math.exp(-8.5 * dt);
-      entry.currentHeight = THREE.MathUtils.lerp(entry.currentHeight, spec.baseHeight + boost, damp);
-      currentProximity = THREE.MathUtils.lerp(currentProximity, proximity, damp);
 
-      const emphasis = isClosest ? Math.max(currentProximity, 0.88) : currentProximity * 0.72;
-      glassMesh.scale.y = entry.currentHeight;
-      edgesLine.scale.y = entry.currentHeight;
-      innerGlowMesh.scale.y = entry.currentHeight;
-      innerFilamentMesh.scale.y = entry.currentHeight;
+      // Selected pillar glides to center and rises cleanly below the top bar; unselected settle smaller
+      const targetHeight = isClosest
+        ? Math.max(2.05, spec.baseHeight + MAX_PROXIMITY_BOOST)
+        : spec.baseHeight * 0.65 + proximity * 0.14;
+      const targetWidthScale = isClosest ? 1.24 : 0.86;
+      const targetPosZ = spec.z + (isClosest ? 0.28 : 0);
 
-      edgesMat.opacity = THREE.MathUtils.lerp(isDark ? 0.34 : 0.46, isDark ? 0.98 : 0.96, emphasis);
-      innerGlowMat.opacity = THREE.MathUtils.lerp(isDark ? 0.14 : 0.1, isDark ? 0.72 : 0.44, emphasis);
+      entry.currentHeight = THREE.MathUtils.lerp(entry.currentHeight, targetHeight, damp);
+      currentProximity = THREE.MathUtils.lerp(currentProximity, isClosest ? 1 : proximity * 0.35, damp);
+      const nextWidthScale = THREE.MathUtils.lerp(glassMesh.scale.x, targetWidthScale, damp);
+      root.position.z = THREE.MathUtils.lerp(root.position.z, targetPosZ, damp);
+
+      const emphasis = isClosest ? Math.max(currentProximity, 0.96) : currentProximity * 0.32;
+      glassMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
+      edgesLine.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
+      innerGlowMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
+      innerFilamentMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
+      basePlinth.scale.set(nextWidthScale, 1, nextWidthScale);
+      basePool.scale.set(nextWidthScale, nextWidthScale, 1);
+
+      edgesMat.opacity = THREE.MathUtils.lerp(isDark ? 0.26 : 0.34, 1.0, emphasis);
+      innerGlowMat.opacity = THREE.MathUtils.lerp(isDark ? 0.08 : 0.06, isDark ? 0.84 : 0.52, emphasis);
       innerFilamentMat.opacity = THREE.MathUtils.lerp(
-        isDark ? 0.22 : 0.16,
-        isDark ? 0.76 : 0.52,
+        isDark ? 0.14 : 0.1,
+        isDark ? 0.9 : 0.62,
         emphasis
       );
       innerFilamentMat.emissiveIntensity = THREE.MathUtils.lerp(
-        isDark ? 0.32 : 0.22,
-        isDark ? 1.65 : 0.92,
+        isDark ? 0.22 : 0.16,
+        isDark ? 2.1 : 1.15,
         emphasis
       );
-      basePoolMat.opacity = THREE.MathUtils.lerp(isDark ? 0.16 : 0.1, isDark ? 0.68 : 0.36, emphasis);
+      basePoolMat.opacity = THREE.MathUtils.lerp(isDark ? 0.1 : 0.08, isDark ? 0.82 : 0.46, emphasis);
       basePlinthMat.emissiveIntensity = THREE.MathUtils.lerp(
-        isDark ? 0.2 : 0.14,
-        isDark ? 0.68 : 0.44,
+        isDark ? 0.14 : 0.1,
+        isDark ? 0.88 : 0.56,
         emphasis
       );
 
-      label.sprite.position.y = entry.currentHeight + LABEL_TOP_CLEARANCE + (isClosest ? 0.045 : 0);
-      const labelScale = isClosest ? 1.11 : THREE.MathUtils.lerp(0.95, 1.03, currentProximity);
+      label.sprite.position.y = entry.currentHeight + LABEL_TOP_CLEARANCE + (isClosest ? 0.06 : 0);
+      const labelScale = isClosest ? 1.12 : 0.72;
       label.sprite.scale.set(baseLabelScaleX * labelScale, baseLabelScaleY * labelScale, 1);
+      label.sprite.material.opacity = THREE.MathUtils.lerp(
+        label.sprite.material.opacity,
+        isClosest ? 1.0 : 0.3,
+        damp
+      );
+      label.sprite.material.depthTest = !isClosest;
+      label.sprite.renderOrder = isClosest ? 26 : 6;
       label.setHighlight(isClosest, nextTheme);
     },
   };
@@ -854,19 +868,18 @@ export function createSpecsStage(): StageModule {
   let reducedMotionEnabled = false;
   let focusedIndex: PillarIndex = 0;
   let closestIndex: PillarIndex = 0;
-  let pointerControlActive = false;
-  let targetArcX = PILLAR_LAYOUTS[0].x;
-  let prevMarbleX = targetArcX;
-  let prevMarbleZ = computeArcZ(targetArcX);
+  let carouselOffsetX = -PILLAR_LAYOUTS[0].x;
+  let carouselOffsetZ = -PILLAR_LAYOUTS[0].z * 0.4;
+  let dragAccumX = 0;
+  let prevMarbleX = 0;
+  let prevMarbleZ = 0.48;
   let stageActive = false;
   let disposed = false;
 
   // Pre-allocated scratch buffers (zero heap allocations per animation frame)
-  const marbleAnchor = new THREE.Vector3(targetArcX, MARBLE_Y, prevMarbleZ);
+  const marbleAnchor = new THREE.Vector3(0, MARBLE_Y, 0.48);
   const raycaster = new THREE.Raycaster();
   const pointerNdc = new THREE.Vector2();
-  const marblePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -MARBLE_Y);
-  const planeHit = new THREE.Vector3();
   const pillarDistances = new Float32Array(6);
 
   const softGlowTex = createRadialTexture(
@@ -885,6 +898,11 @@ export function createSpecsStage(): StageModule {
   const floorRig = buildArchitecturalFloor(group, softGlowTex);
   const rippleRig = buildRippleRig(group);
 
+  const carouselGroup = new THREE.Group();
+  carouselGroup.name = 'specs-pillar-carousel';
+  carouselGroup.position.set(carouselOffsetX, 0, carouselOffsetZ);
+  group.add(carouselGroup);
+
   const pillars: PillarEntry[] = [];
   const raycastTargets: THREE.Object3D[] = [];
   for (const spec of PILLAR_LAYOUTS) {
@@ -897,15 +915,15 @@ export function createSpecsStage(): StageModule {
       currentMood,
       currentTheme
     );
-    group.add(entry.root);
+    carouselGroup.add(entry.root);
     pillars.push(entry);
     raycastTargets.push(entry.glassMesh, entry.label.sprite);
   }
 
-  const sparkleField = buildSparkleField(group);
+  const sparkleField = buildSparkleField(carouselGroup);
 
   const marbleGlowLight = new THREE.PointLight(STAGE_PALETTE.champagneGoldBright, 0, 5.4, 1.8);
-  marbleGlowLight.position.set(targetArcX, MARBLE_Y + 0.14, prevMarbleZ);
+  marbleGlowLight.position.set(0, MARBLE_Y + 0.14, 0.48);
   group.add(marbleGlowLight);
 
   const galleryRimLight = new THREE.PointLight(0xeed7ae, 0, 9.2, 1.5);
@@ -938,16 +956,6 @@ export function createSpecsStage(): StageModule {
     }
   };
 
-  const projectNdcToArcX = (ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera): number => {
-    pointerNdc.set(ndcX, ndcY);
-    raycaster.setFromCamera(pointerNdc, camera);
-    if (raycaster.ray.intersectPlane(marblePlane, planeHit)) {
-      return THREE.MathUtils.clamp(planeHit.x, ARC_MIN_X, ARC_MAX_X);
-    }
-    const normalized = THREE.MathUtils.clamp((ndcX + 0.72) / 1.15, 0, 1);
-    return THREE.MathUtils.lerp(ARC_MIN_X, ARC_MAX_X, normalized);
-  };
-
   syncAllVisuals();
 
   return {
@@ -956,12 +964,11 @@ export function createSpecsStage(): StageModule {
     cameraPreset: STAGE_CAMERA_PRESETS.specs,
 
     getMarbleAnchor(elapsed: number, state: StageInteractionState): THREE.Vector3 {
-      if (!pointerControlActive) {
-        focusedIndex = clampPillarIndex(state.specsFocusedIndex);
-        targetArcX = PILLAR_LAYOUTS[focusedIndex].x;
-      }
+      focusedIndex = clampPillarIndex(state.specsFocusedIndex);
       const bobY = reducedMotionEnabled ? 0 : Math.sin(elapsed * 2.2) * 0.022;
-      marbleAnchor.set(targetArcX, MARBLE_Y + bobY, computeArcZ(targetArcX));
+      const activeSpec = PILLAR_LAYOUTS[focusedIndex];
+      const centeredX = activeSpec.x + carouselOffsetX;
+      marbleAnchor.set(centeredX, MARBLE_Y + bobY, 0.48);
       return marbleAnchor;
     },
 
@@ -973,21 +980,27 @@ export function createSpecsStage(): StageModule {
       reducedMotionEnabled = ctx.reducedMotion;
       focusedIndex = clampPillarIndex(ctx.interaction.specsFocusedIndex);
       closestIndex = focusedIndex;
-      pointerControlActive = false;
-      targetArcX = PILLAR_LAYOUTS[focusedIndex].x;
+      dragAccumX = 0;
 
-      const anchorZ = computeArcZ(targetArcX);
-      rippleRig.group.position.set(targetArcX, FLOOR_Y + 0.008, anchorZ);
-      floorRig.floorGlowMesh.position.set(targetArcX, FLOOR_Y + 0.006, anchorZ);
-      marbleGlowLight.position.set(targetArcX, MARBLE_Y + 0.14, anchorZ);
-      prevMarbleX = targetArcX;
+      const activeSpec = PILLAR_LAYOUTS[focusedIndex];
+      carouselOffsetX = -activeSpec.x;
+      carouselOffsetZ = -activeSpec.z * 0.4;
+      carouselGroup.position.set(carouselOffsetX, 0, carouselOffsetZ);
+
+      const anchorZ = 0.48;
+      rippleRig.group.position.set(0, FLOOR_Y + 0.008, anchorZ);
+      floorRig.floorGlowMesh.position.set(0, FLOOR_Y + 0.006, anchorZ);
+      marbleGlowLight.position.set(0, MARBLE_Y + 0.14, anchorZ);
+      prevMarbleX = 0;
       prevMarbleZ = anchorZ;
 
       syncAllVisuals();
       for (let i = 0; i < pillars.length; i++) {
         const pillar = pillars[i];
         pillar.resetToBase();
-        const dist = Math.hypot(targetArcX - pillar.spec.x, anchorZ - pillar.spec.z);
+        const wx = pillar.spec.x + carouselOffsetX;
+        const wz = pillar.spec.z + carouselOffsetZ;
+        const dist = Math.hypot(wx, anchorZ - wz);
         pillar.applyDynamic(
           ctx.reducedMotion ? computeProximityWeight(dist) : 0,
           i === closestIndex,
@@ -1001,7 +1014,7 @@ export function createSpecsStage(): StageModule {
 
     onExit(_ctx: StageContext): void {
       stageActive = false;
-      pointerControlActive = false;
+      dragAccumX = 0;
       syncLightVisuals(getScheme(currentMood, currentTheme));
     },
 
@@ -1022,27 +1035,28 @@ export function createSpecsStage(): StageModule {
     onInteractionChange(patch: Partial<StageInteractionState>, _ctx: StageContext): void {
       if (typeof patch.specsFocusedIndex === 'number') {
         focusedIndex = clampPillarIndex(patch.specsFocusedIndex);
-        pointerControlActive = false;
-        targetArcX = PILLAR_LAYOUTS[focusedIndex].x;
       }
     },
 
-    onPointerMove(ndcX: number, ndcY: number, ctx: StageContext): void {
-      pointerControlActive = true;
-      targetArcX = projectNdcToArcX(ndcX, ndcY, ctx.camera);
+    onPointerMove(_ndcX: number, _ndcY: number, _ctx: StageContext): void {
+      // Keep the selected pillar centered cleanly; tap, HUD click, drag, or mouse wheel switches focus.
     },
 
-    onPointerDrag(dx: number, _dy: number, _ctx: StageContext): void {
+    onPointerDrag(dx: number, _dy: number, ctx: StageContext): void {
       if (!Number.isFinite(dx) || dx === 0) return;
-      pointerControlActive = true;
-      targetArcX = THREE.MathUtils.clamp(
-        targetArcX + dx * POINTER_DRAG_SENSITIVITY,
-        ARC_MIN_X,
-        ARC_MAX_X
-      );
+      dragAccumX += dx * POINTER_DRAG_SENSITIVITY;
+      const stepThreshold = 0.42;
+      if (Math.abs(dragAccumX) >= stepThreshold) {
+        const dir = dragAccumX < 0 ? 1 : -1;
+        dragAccumX = 0;
+        const nextIdx = ((focusedIndex + dir + 6) % 6) as PillarIndex;
+        focusedIndex = nextIdx;
+        ctx.emitUiSync({ specsFocusedIndex: nextIdx });
+      }
     },
 
     onPointerTap(ndcX: number, ndcY: number, ctx: StageContext): void {
+      carouselGroup.updateMatrixWorld(true);
       pointerNdc.set(ndcX, ndcY);
       raycaster.setFromCamera(pointerNdc, ctx.camera);
 
@@ -1058,8 +1072,6 @@ export function createSpecsStage(): StageModule {
       if (tappedIndex === null) return;
 
       focusedIndex = tappedIndex;
-      pointerControlActive = false;
-      targetArcX = PILLAR_LAYOUTS[tappedIndex].x;
       ctx.emitUiSync({ specsFocusedIndex: tappedIndex });
     },
 
@@ -1067,13 +1079,20 @@ export function createSpecsStage(): StageModule {
       if (disposed) return;
       reducedMotionEnabled = ctx.reducedMotion;
 
-      if (!pointerControlActive) {
-        const nextFocused = clampPillarIndex(ctx.interaction.specsFocusedIndex);
-        if (nextFocused !== focusedIndex) {
-          focusedIndex = nextFocused;
-          targetArcX = PILLAR_LAYOUTS[focusedIndex].x;
-        }
+      const nextFocused = clampPillarIndex(ctx.interaction.specsFocusedIndex);
+      if (nextFocused !== focusedIndex) {
+        focusedIndex = nextFocused;
       }
+      closestIndex = focusedIndex;
+
+      // Smoothly glide the carousel so the selected pillar sits dead-center in the left 3D column
+      const activeSpec = PILLAR_LAYOUTS[focusedIndex];
+      const targetOffsetX = -activeSpec.x;
+      const targetOffsetZ = -activeSpec.z * 0.4;
+      const carouselDamp = ctx.reducedMotion ? 1 : 1 - Math.exp(-7.5 * dt);
+      carouselOffsetX = THREE.MathUtils.lerp(carouselOffsetX, targetOffsetX, carouselDamp);
+      carouselOffsetZ = THREE.MathUtils.lerp(carouselOffsetZ, targetOffsetZ, carouselDamp);
+      carouselGroup.position.set(carouselOffsetX, 0, carouselOffsetZ);
 
       const liveX = ctx.marbleMesh.position.x;
       const liveZ = ctx.marbleMesh.position.z;
@@ -1090,18 +1109,12 @@ export function createSpecsStage(): StageModule {
       );
       rippleRig.update(elapsed, glideSpeed, ctx.reducedMotion, currentTheme === 'dark');
 
-      let nearestIdx: PillarIndex = 0;
-      let nearestDist = Number.POSITIVE_INFINITY;
       for (let i = 0; i < pillars.length; i++) {
         const spec = pillars[i].spec;
-        const dist = Math.hypot(liveX - spec.x, liveZ - spec.z);
-        pillarDistances[i] = dist;
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestIdx = spec.index;
-        }
+        const wx = spec.x + carouselOffsetX;
+        const wz = spec.z + carouselOffsetZ;
+        pillarDistances[i] = Math.hypot(liveX - wx, liveZ - wz);
       }
-      closestIndex = nearestIdx;
 
       for (let i = 0; i < pillars.length; i++) {
         pillars[i].applyDynamic(

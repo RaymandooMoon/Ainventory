@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ActiveStageId, StageInteractionState } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
@@ -36,11 +37,7 @@ interface SheetGestureState {
 }
 
 const MOBILE_SHEET_MAX_WIDTH = 859;
-const EXPAND_SWIPE_PX = 28;
-const HANDLE_COLLAPSE_SWIPE_PX = 28;
-const HEADER_COLLAPSE_SWIPE_PX = 36;
-const SCROLL_COLLAPSE_SWIPE_PX = 44;
-const SCROLL_EXPAND_TOP_PX = 10;
+const HORIZONTAL_SWIPE_PX = 28;
 
 function isMobileSheetViewport(): boolean {
   return typeof window !== 'undefined' && window.innerWidth <= MOBILE_SHEET_MAX_WIDTH;
@@ -164,7 +161,7 @@ function SiteStageHudPanel({
     };
   }, []);
 
-  // Global touch/pointer move & release tracking for native mobile bottom-sheet swipe-up/down detents
+  // Horizontal swipe tracking on the right-side explanation drawer toggle handle
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
@@ -184,51 +181,30 @@ function SiteStageHudPanel({
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      if (g.zone !== 'handle' && absDx > 10 && absDx > absDy * 1.15) {
+      if (absDy > 14 && absDy > absDx * 1.15) {
         g.lockedOut = true;
         return;
       }
 
+      if (g.zone !== 'handle') return;
+
       const expanded = isSheetExpandedRef.current;
 
-      // Collapsed -> swipe upward expands sheet cleanly up below the top navbar
-      if (!expanded && dy < -EXPAND_SWIPE_PX && (g.zone === 'handle' || absDy > absDx * 1.15)) {
+      // Swipe left on handle -> expand right explanation drawer to full width
+      if (!expanded && dx < -HORIZONTAL_SWIPE_PX && absDx > absDy * 1.15) {
         g.handled = true;
         g.active = false;
-        if (g.zone === 'handle') {
-          markSuppressGrabClick();
-        }
+        markSuppressGrabClick();
         applySheetExpanded(true);
         return;
       }
 
-      // Expanded -> swipe downward on handle/header, or downward on scroll area while at top (scrollTop <= 2)
-      if (expanded && dy > 0 && (g.zone === 'handle' || absDy > absDx * 1.15)) {
-        if (g.zone === 'handle' && dy > HANDLE_COLLAPSE_SWIPE_PX) {
-          g.handled = true;
-          g.active = false;
-          markSuppressGrabClick();
-          applySheetExpanded(false);
-          return;
-        }
-        if (g.zone === 'header' && dy > HEADER_COLLAPSE_SWIPE_PX) {
-          g.handled = true;
-          g.active = false;
-          applySheetExpanded(false);
-          return;
-        }
-        if (g.zone === 'scroll') {
-          const currentScrollTop = scrollRef.current?.scrollTop ?? 0;
-          if (g.startScrollTop > 2 || currentScrollTop > 2) {
-            g.lockedOut = true;
-            return;
-          }
-          if (dy > SCROLL_COLLAPSE_SWIPE_PX) {
-            g.handled = true;
-            g.active = false;
-            applySheetExpanded(false);
-          }
-        }
+      // Swipe right on handle -> collapse back to Left-3D / Right-Explanation split view
+      if (expanded && dx > HORIZONTAL_SWIPE_PX && absDx > absDy * 1.15) {
+        g.handled = true;
+        g.active = false;
+        markSuppressGrabClick();
+        applySheetExpanded(false);
       }
     };
 
@@ -311,13 +287,6 @@ function SiteStageHudPanel({
   const handleGrabClick = () => {
     if (suppressGrabClickRef.current || !isMobileSheetViewport()) return;
     applySheetExpanded(!isSheetExpandedRef.current);
-  };
-
-  const handleScrollContainer = (e: React.UIEvent<HTMLDivElement>) => {
-    if (!isMobileSheetViewport()) return;
-    if (!isSheetExpandedRef.current && e.currentTarget.scrollTop > SCROLL_EXPAND_TOP_PX) {
-      applySheetExpanded(true);
-    }
   };
 
   const stageHeader = (() => {
@@ -426,7 +395,18 @@ function SiteStageHudPanel({
         onPointerDown={(e) => beginSheetGesture(e, 'handle')}
         onTouchStart={(e) => beginSheetGesture(e, 'handle')}
       >
-        <span className="site-hud-grab-bar" aria-hidden="true" />
+        <span className="site-hud-grab-cue" aria-hidden="true">
+          {isSheetExpanded ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          <span>
+            {isSheetExpanded
+              ? lang === 'ko'
+                ? '3D · 설명 분할'
+                : 'Split 3D'
+              : lang === 'ko'
+                ? '넓게 보기'
+                : 'Expand'}
+          </span>
+        </span>
       </button>
 
       <div
@@ -435,9 +415,6 @@ function SiteStageHudPanel({
         className="site-hud-scroll"
         role="tabpanel"
         aria-labelledby={`${stageHeader.prefix}-${stageHeader.current}`}
-        onScroll={handleScrollContainer}
-        onPointerDown={(e) => beginSheetGesture(e, 'scroll')}
-        onTouchStart={(e) => beginSheetGesture(e, 'scroll')}
       >
         {activeStage === 'studio' && (
           <StudioStageHud

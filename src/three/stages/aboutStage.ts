@@ -535,8 +535,8 @@ function buildLoopNodes(
 
     const labelHandle = createFloatingLabelSprite(spec.label, {
       width: spec.width,
-      height: 48,
-      worldHeight: 0.202,
+      height: 50,
+      worldHeight: 0.245,
     });
     labelHandle.sprite.material.depthTest = false;
     labelHandle.sprite.position.set(spec.labelOffset[0], spec.labelOffset[1], spec.labelOffset[2]);
@@ -605,8 +605,8 @@ function buildEmblemRig(
   const labelHandle = createFloatingLabelSprite('iNVTRY LOOP', {
     accent: true,
     width: 228,
-    height: 50,
-    worldHeight: 0.215,
+    height: 52,
+    worldHeight: 0.255,
   });
   labelHandle.sprite.material.depthTest = false;
   labelHandle.sprite.position.set(-0.04, 0.24, 0.22);

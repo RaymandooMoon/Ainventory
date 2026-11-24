@@ -39,8 +39,8 @@ export function StageTopControlsDock({
       readonly id: StageInteractionState['studioModelMode'];
       readonly label: string;
     }[] = [
-      { id: 'mannequin', label: lang === 'ko' ? '런웨이 3D' : 'Runway 3D' },
-      { id: 'dressform', label: lang === 'ko' ? '쿠튀르 코트' : 'Couture Coat' },
+      { id: 'mannequin', label: lang === 'ko' ? '전신' : 'Full' },
+      { id: 'dressform', label: lang === 'ko' ? '코트' : 'Coat' },
     ];
 
     const poses: readonly { readonly id: StudioPoseId; readonly label: string }[] = [

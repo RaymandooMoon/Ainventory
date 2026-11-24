@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BarChart3,
   ChevronsUpDown,
   Globe,
-  Mail,
   Moon,
   Sparkles,
   Sun,
@@ -22,6 +22,7 @@ import {
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
+import SiteStageAnalytics from './SiteStageAnalytics.tsx';
 import SiteStageHud from './SiteStageHud.tsx';
 import {
   BOTTOM_STAGE_PILLS,
@@ -34,10 +35,25 @@ import {
   type SitePrivacyShield,
   type SiteTheme,
 } from './siteContent.ts';
+import {
+  createStageSwitchTracker,
+  type StageAnalyticsSnapshot,
+  type StageSwitchTracker,
+  type StageSwitchTrigger,
+} from './stageAnalytics.ts';
 
-const MIN_UI_ALPHA = 0.1;
+const MIN_UI_ALPHA = 0.02;
 const MAX_UI_ALPHA = 0.96;
 const DEFAULT_UI_ALPHA = 0.5;
+
+declare global {
+  interface Window {
+    __AINVTRY_STAGE_ANALYTICS__?: {
+      readonly getSnapshot: () => StageAnalyticsSnapshot;
+      readonly reset: () => void;
+    };
+  }
+}
 
 function clampUiAlpha(value: number): number {
   return Math.max(MIN_UI_ALPHA, Math.min(MAX_UI_ALPHA, value));
@@ -101,9 +117,15 @@ export default function AinvtrySiteApp() {
   const [uiAlpha, setUiAlpha] = useState<number>(DEFAULT_UI_ALPHA);
   const [isDraggingOpacity, setIsDraggingOpacity] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKind | null>(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<StageId>(activeStage);
+  const stageInteractionRef = useRef<StageInteractionState>(stageInteraction);
+  const [stageTracker] = useState<StageSwitchTracker>(() => createStageSwitchTracker());
+  const [analyticsSnapshot, setAnalyticsSnapshot] = useState<StageAnalyticsSnapshot>(() =>
+    stageTracker.getSnapshot()
+  );
   const uiAlphaRef = useRef<number>(DEFAULT_UI_ALPHA);
   const opacityDragRef = useRef<{
     pointerId: number;
@@ -116,6 +138,24 @@ export default function AinvtrySiteApp() {
   useEffect(() => {
     activeStageRef.current = activeStage;
   }, [activeStage]);
+
+  useEffect(() => {
+    stageInteractionRef.current = stageInteraction;
+  }, [stageInteraction]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.__AINVTRY_STAGE_ANALYTICS__ = {
+      getSnapshot: () => stageTracker.getSnapshot(),
+      reset: () => {
+        stageTracker.reset();
+        setAnalyticsSnapshot(stageTracker.getSnapshot());
+      },
+    };
+    return () => {
+      delete window.__AINVTRY_STAGE_ANALYTICS__;
+    };
+  }, [stageTracker]);
 
   const copy = SITE_COPY[lang];
   const activeVariantMeta = getLoginThreeVariantMeta(motionVariant);
@@ -140,19 +180,33 @@ export default function AinvtrySiteApp() {
     }
   }, [theme, lang]);
 
-  // Escape key smoothly returns from any 3D stage back to HERO (when Legal Modal is closed)
+  // Escape key smoothly returns from any 3D stage back to HERO (when modals are closed)
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && legalDoc === null && activeStageRef.current !== 'hero') {
+      if (
+        e.key === 'Escape' &&
+        legalDoc === null &&
+        !analyticsOpen &&
+        activeStageRef.current !== 'hero'
+      ) {
         e.preventDefault();
         triggerHaptic('selection');
+        const detail = stageTracker.recordSwitch(
+          activeStageRef.current,
+          'hero',
+          stageInteractionRef.current,
+          'keyboard'
+        );
+        if (detail) {
+          setAnalyticsSnapshot(stageTracker.getSnapshot());
+        }
         setActiveStage('hero');
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [legalDoc]);
+  }, [analyticsOpen, legalDoc, stageTracker]);
 
   // Clean up one-shot gold ripple burst timer on unmount
   useEffect(() => {
@@ -163,30 +217,83 @@ export default function AinvtrySiteApp() {
     };
   }, []);
 
-  // Global desktop wheel opacity gesture (isolated from .site-hud-scroll & modals).
-  // Mobile HERO finger swipes are intentionally NOT intercepted here so users roll the
-  // 3D marble freely without triggering per-frame setUiAlpha re-renders; mobile users
-  // control Glass % cleanly via the dedicated bottom-right Glass % drag pill.
+  // Mouse wheel gesture:
+  // - Over the bottom-right Glass % pill -> adjust Glass % smoothly.
+  // - Over the active 3D stage canvas (outside HUD scroll/modals) -> cycle the active 3D item
+  //   (Specs pillars, Architecture tiers/APIs, Studio angle/screens, About journey/loop).
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     if (rootRef.current) {
       rootRef.current.style.setProperty('--site-ui-alpha', uiAlphaRef.current.toFixed(3));
     }
 
-    const isWheelExcluded = (target: EventTarget | null) => {
-      const el = target as HTMLElement | null;
-      if (!el || typeof el.closest !== 'function') return false;
-      return Boolean(
-        el.closest(
-          '.site-hud-scroll, [data-hud-surface="true"], input, textarea, select, [data-no-marble="true"], [role="dialog"], [aria-modal="true"]'
-        )
-      );
-    };
+    let lastWheelStepAt = 0;
+    const PREVIEW_SCREENS = ['outfits', 'closet', 'stats', 'profile'] as const;
 
     const onWheel = (e: WheelEvent) => {
-      if (!Number.isFinite(e.deltaY) || e.deltaY === 0 || isWheelExcluded(e.target)) return;
-      const step = (e.deltaY / 420) * 0.45;
-      applyUiAlpha(uiAlphaRef.current + step);
+      if (!Number.isFinite(e.deltaY) || e.deltaY === 0) return;
+      const el = e.target as HTMLElement | null;
+
+      if (el && typeof el.closest === 'function') {
+        if (el.closest('.site-opacity-drag-btn')) {
+          const step = (e.deltaY / 420) * 0.45;
+          applyUiAlpha(uiAlphaRef.current + step);
+          return;
+        }
+        if (
+          el.closest(
+            '.site-hud-scroll, [data-hud-surface="true"], input, textarea, select, [data-no-marble="true"], [role="dialog"], [aria-modal="true"]'
+          )
+        ) {
+          return;
+        }
+      }
+
+      const stage = activeStageRef.current;
+      if (stage === 'hero') return;
+
+      const now = performance.now();
+      if (now - lastWheelStepAt < 165) return;
+      lastWheelStepAt = now;
+
+      const dir = e.deltaY > 0 ? 1 : -1;
+      const prev = stageInteractionRef.current;
+      let patch: Partial<StageInteractionState> | null = null;
+
+      if (stage === 'specs') {
+        patch = { specsFocusedIndex: (prev.specsFocusedIndex + dir + 6) % 6 };
+      } else if (stage === 'architecture') {
+        if (prev.architectureSubtab === 'maps') {
+          patch = { googleApiIndex: (prev.googleApiIndex + dir + 6) % 6 };
+        } else if (prev.architectureSubtab === 'blueprint') {
+          patch = { architectureTier: (prev.architectureTier + dir + 6) % 6 };
+        }
+      } else if (stage === 'studio') {
+        if (prev.studioSubtab === 'preview') {
+          const curIdx = PREVIEW_SCREENS.indexOf(prev.studioPreviewScreen);
+          const nextScreen =
+            PREVIEW_SCREENS[((curIdx >= 0 ? curIdx : 0) + dir + PREVIEW_SCREENS.length) % PREVIEW_SCREENS.length];
+          patch = { studioPreviewScreen: nextScreen };
+        } else {
+          patch = { studioAngleRad: prev.studioAngleRad + dir * (Math.PI * 0.25) };
+        }
+      } else if (stage === 'about') {
+        if (prev.aboutSubtab === 'journey') {
+          patch = { aboutJourneyIndex: (prev.aboutJourneyIndex + dir + 6) % 6 };
+        } else if (prev.aboutSubtab === 'mission') {
+          patch = {
+            aboutLoopIndex: (prev.aboutLoopIndex + dir + 5) % 5,
+            aboutLoopPaused: true,
+          };
+        }
+      }
+
+      if (patch) {
+        triggerHaptic('selection');
+        const next = { ...prev, ...patch };
+        stageInteractionRef.current = next;
+        setStageInteraction(next);
+      }
     };
 
     window.addEventListener('wheel', onWheel, { passive: true });
@@ -196,26 +303,86 @@ export default function AinvtrySiteApp() {
     };
   }, [applyUiAlpha]);
 
-  const handleSelectStage = useCallback((nextStage: StageId) => {
-    triggerHaptic('selection');
-    setActiveStage(nextStage);
-
-    if (nextStage !== 'hero') {
-      const seq = Date.now();
-      setRippleBurst({ stageId: nextStage, seq });
-      if (rippleTimerRef.current) {
-        window.clearTimeout(rippleTimerRef.current);
+  const handleSelectStage = useCallback(
+    (nextStage: StageId, trigger: StageSwitchTrigger = 'dock') => {
+      triggerHaptic('selection');
+      const detail = stageTracker.recordSwitch(
+        activeStageRef.current,
+        nextStage,
+        stageInteractionRef.current,
+        trigger
+      );
+      if (detail) {
+        setAnalyticsSnapshot(stageTracker.getSnapshot());
       }
-      rippleTimerRef.current = window.setTimeout(() => {
-        setRippleBurst((prev) => (prev && prev.seq === seq ? null : prev));
-        rippleTimerRef.current = 0;
-      }, 920);
-    }
-  }, []);
+      setActiveStage(nextStage);
 
-  const handleUpdateInteraction = useCallback((patch: Partial<StageInteractionState>) => {
-    setStageInteraction((prev) => ({ ...prev, ...patch }));
-  }, []);
+      if (nextStage !== 'hero') {
+        const seq = Date.now();
+        setRippleBurst({ stageId: nextStage, seq });
+        if (rippleTimerRef.current) {
+          window.clearTimeout(rippleTimerRef.current);
+        }
+        rippleTimerRef.current = window.setTimeout(() => {
+          setRippleBurst((prev) => (prev && prev.seq === seq ? null : prev));
+          rippleTimerRef.current = 0;
+        }, 920);
+      }
+    },
+    [stageTracker]
+  );
+
+  const handleUpdateInteraction = useCallback(
+    (patch: Partial<StageInteractionState>) => {
+      const prev = stageInteractionRef.current;
+      const next = { ...prev, ...patch };
+      stageInteractionRef.current = next;
+      setStageInteraction(next);
+
+      if (
+        (patch.studioSubtab !== undefined && patch.studioSubtab !== prev.studioSubtab) ||
+        (patch.aboutSubtab !== undefined && patch.aboutSubtab !== prev.aboutSubtab)
+      ) {
+        const currStage = activeStageRef.current;
+        const detail = stageTracker.recordSwitch(currStage, currStage, next, 'subtab', prev);
+        if (detail) {
+          setAnalyticsSnapshot(stageTracker.getSnapshot());
+        }
+      }
+    },
+    [stageTracker]
+  );
+
+  const handleResetAnalytics = useCallback(() => {
+    stageTracker.reset();
+    setAnalyticsSnapshot(stageTracker.getSnapshot());
+  }, [stageTracker]);
+
+  const handleNavigateFromAnalytics = useCallback(
+    (targetStage: StageId, studioSubtab?: StageInteractionState['studioSubtab']) => {
+      const prevInteraction = stageInteractionRef.current;
+      const nextInteraction =
+        studioSubtab && targetStage === 'studio'
+          ? { ...prevInteraction, studioSubtab }
+          : prevInteraction;
+      if (nextInteraction !== prevInteraction) {
+        stageInteractionRef.current = nextInteraction;
+        setStageInteraction(nextInteraction);
+      }
+      const detail = stageTracker.recordSwitch(
+        activeStageRef.current,
+        targetStage,
+        nextInteraction,
+        'dock',
+        prevInteraction
+      );
+      if (detail) {
+        setAnalyticsSnapshot(stageTracker.getSnapshot());
+      }
+      setActiveStage(targetStage);
+    },
+    [stageTracker]
+  );
 
   const handleToggleSilk = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     triggerHaptic('selection');
@@ -287,10 +454,10 @@ export default function AinvtrySiteApp() {
       if (wasTap) {
         triggerHaptic('selection');
         const curr = uiAlphaRef.current;
-        if (curr > 0.35 && curr < 0.65) {
-          applyUiAlpha(0.18);
-        } else if (curr <= 0.35) {
-          applyUiAlpha(0.85);
+        if (curr > 0.3 && curr < 0.68) {
+          applyUiAlpha(0.08);
+        } else if (curr <= 0.3) {
+          applyUiAlpha(0.84);
         } else {
           applyUiAlpha(DEFAULT_UI_ALPHA);
         }
@@ -353,7 +520,7 @@ export default function AinvtrySiteApp() {
                 className={`site-brand-pill ${activeStage === 'hero' ? 'is-home-active' : ''}`}
                 data-marble-target="true"
                 data-marble-action="click"
-                onClick={() => handleSelectStage('hero')}
+                onClick={() => handleSelectStage('hero', 'brand')}
                 aria-label={copy.nav.homeAria}
                 aria-current={activeStage === 'hero' ? 'page' : undefined}
               >
@@ -387,7 +554,7 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleTheme}
                 aria-label={lang === 'en' ? 'Toggle theme' : '라이트 다크 모드 전환'}
               >
-                {theme === 'dark' ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
+                {theme === 'dark' ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
                 <span>{theme === 'dark' ? copy.nav.switchToLight : copy.nav.switchToDark}</span>
               </button>
               <button
@@ -398,7 +565,7 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleLang}
                 aria-label={lang === 'en' ? 'Switch language to Korean' : '영어로 전환'}
               >
-                <Globe size={15} aria-hidden="true" />
+                <Globe size={14} aria-hidden="true" />
                 <span>{copy.nav.switchLang}</span>
               </button>
             </div>
@@ -412,7 +579,6 @@ export default function AinvtrySiteApp() {
           {activeStage === 'hero' ? (
             <section key="hero" className="site-view site-view--home">
               <div className="site-hero-center">
-                <p className="site-hero-kicker">{copy.hero.kicker}</p>
                 <div className="site-hero-logo-wrap">
                   <SiteBrandMark theme={theme} size="hero" />
                 </div>
@@ -422,18 +588,6 @@ export default function AinvtrySiteApp() {
                   {copy.hero.titleTail}
                 </h1>
                 <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
-                <div className="site-hero-hint-pill" aria-hidden="true">
-                  <span>{copy.hero.marbleHint}</span>
-                </div>
-              </div>
-
-              <div className="site-hero-dock">
-                <div className="site-hero-cta-row">
-                  <a href={betaMailto} className="site-btn-secondary">
-                    <Mail size={15} aria-hidden="true" />
-                    <span>{copy.hero.secondaryCta}</span>
-                  </a>
-                </div>
               </div>
             </section>
           ) : (
@@ -471,7 +625,7 @@ export default function AinvtrySiteApp() {
                   data-stage-pill={pill.stageId}
                   aria-pressed={isSelected}
                   aria-current={isSelected ? 'page' : undefined}
-                  onClick={() => handleSelectStage(pill.stageId)}
+                  onClick={() => handleSelectStage(pill.stageId, 'dock')}
                 >
                   <span className="site-dock-pill-label">{copy.nav[pill.navKey]}</span>
                   {isBursting && (
@@ -501,49 +655,93 @@ export default function AinvtrySiteApp() {
                   className="site-bottombar-link"
                   onClick={() => setLegalDoc('privacy')}
                 >
-                  {copy.footer.privacy}
+                  <span className="site-bottombar-link-full">{copy.footer.privacy}</span>
+                  <span className="site-bottombar-link-short" aria-hidden="true">
+                    {lang === 'ko' ? '개인정보' : 'Privacy'}
+                  </span>
                 </button>
                 <button
                   type="button"
                   className="site-bottombar-link"
                   onClick={() => setLegalDoc('terms')}
                 >
-                  {copy.footer.terms}
+                  <span className="site-bottombar-link-full">{copy.footer.terms}</span>
+                  <span className="site-bottombar-link-short" aria-hidden="true">
+                    {lang === 'ko' ? '약관' : 'Terms'}
+                  </span>
                 </button>
               </div>
 
-              <button
-                type="button"
-                role="slider"
-                aria-label={copy.nav.opacityHint}
-                aria-valuemin={4}
-                aria-valuemax={90}
-                aria-valuenow={transparencyPct}
-                aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
-                title={copy.nav.opacityHint}
-                data-no-marble="true"
-                className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
-                onPointerDown={handleOpacityPointerDown}
-                onPointerMove={handleOpacityPointerMove}
-                onPointerUp={handleOpacityPointerUp}
-                onPointerCancel={handleOpacityPointerUp}
-                onKeyDown={handleOpacityKeyDown}
-              >
-                <span className="site-opacity-meter" aria-hidden="true">
-                  <span
-                    className="site-opacity-meter-fill"
-                    style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
-                  />
-                </span>
-                <ChevronsUpDown size={14} aria-hidden="true" />
-                <span className="site-opacity-label">
-                  {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
-                </span>
-              </button>
+              <div className="site-bottombar-right">
+                <button
+                  type="button"
+                  data-no-marble="true"
+                  className={`site-analytics-trigger-btn ${analyticsOpen ? 'is-active' : ''}`}
+                  aria-haspopup="dialog"
+                  aria-expanded={analyticsOpen}
+                  aria-label={
+                    lang === 'ko'
+                      ? `3D 스테이지 분석 차트 열기 (총 ${analyticsSnapshot.totalSwitches}회 전환)`
+                      : `Open 3D stage analytics charts (${analyticsSnapshot.totalSwitches} switches)`
+                  }
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setAnalyticsOpen(true);
+                  }}
+                >
+                  <BarChart3 size={14} aria-hidden="true" />
+                  <span className="site-analytics-trigger-label">
+                    {lang === 'ko' ? '분석' : 'Analytics'}
+                  </span>
+                  {analyticsSnapshot.totalSwitches > 0 && (
+                    <span className="site-analytics-trigger-count">
+                      {analyticsSnapshot.totalSwitches}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  role="slider"
+                  aria-label={copy.nav.opacityHint}
+                  aria-valuemin={4}
+                  aria-valuemax={90}
+                  aria-valuenow={transparencyPct}
+                  aria-valuetext={`${copy.nav.opacityLabel} ${transparencyPct}%`}
+                  title={copy.nav.opacityHint}
+                  data-no-marble="true"
+                  className={`site-opacity-drag-btn ${isDraggingOpacity ? 'is-dragging' : ''}`}
+                  onPointerDown={handleOpacityPointerDown}
+                  onPointerMove={handleOpacityPointerMove}
+                  onPointerUp={handleOpacityPointerUp}
+                  onPointerCancel={handleOpacityPointerUp}
+                  onKeyDown={handleOpacityKeyDown}
+                >
+                  <span className="site-opacity-meter" aria-hidden="true">
+                    <span
+                      className="site-opacity-meter-fill"
+                      style={{ height: `${Math.max(10, Math.min(100, transparencyPct))}%` }}
+                    />
+                  </span>
+                  <ChevronsUpDown size={14} aria-hidden="true" />
+                  <span className="site-opacity-label">
+                    {copy.nav.opacityLabel} <strong>{transparencyPct}%</strong>
+                  </span>
+                </button>
+              </div>
             </footer>
           </div>
         </div>
       </div>
+
+      <SiteStageAnalytics
+        isOpen={analyticsOpen}
+        lang={lang}
+        snapshot={analyticsSnapshot}
+        onClose={() => setAnalyticsOpen(false)}
+        onReset={handleResetAnalytics}
+        onNavigateStage={handleNavigateFromAnalytics}
+      />
 
       <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />
     </div>
