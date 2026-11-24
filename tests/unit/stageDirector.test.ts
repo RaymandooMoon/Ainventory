@@ -622,4 +622,109 @@ describe('AinvtryStageDirector', () => {
       assert.equal(director.getStage(st.id), undefined);
     }
   });
+
+  it('defaults Studio subtab to 3D Fitting (atelier) in DEFAULT_STAGE_INTERACTION_STATE', () => {
+    assert.equal(DEFAULT_STAGE_INTERACTION_STATE.studioSubtab, 'atelier');
+  });
+
+  it('animates studio-orbital-rings with live 3D gyroscopic precession & spin when reducedMotion is false and holds still when reducedMotion is true', () => {
+    const stage = createStudioStage();
+    const scene = new THREE.Scene();
+    scene.add(stage.group);
+    const camera = new THREE.PerspectiveCamera(40, 1440 / 900, 0.1, 100);
+    const marble = new THREE.Group();
+
+    const makeCtx = (reducedMotion: boolean): StageContext => ({
+      scene,
+      camera,
+      marbleMesh: marble,
+      glassRatio: 0.5,
+      mood: 'luxury',
+      theme: 'dark',
+      viewportAspect: 1440 / 900,
+      reducedMotion,
+      interaction: { ...DEFAULT_STAGE_INTERACTION_STATE },
+      emitUiSync: () => {},
+    });
+
+    const orbitalsGroup = stage.group.getObjectByName('studio-orbital-rings');
+    assert.ok(orbitalsGroup, 'studio-orbital-rings group must exist');
+    const outerPivot = orbitalsGroup.getObjectByName('studio-orbital-outer-pivot') ?? orbitalsGroup.children[0];
+    const outerSpin = outerPivot?.getObjectByName('studio-orbital-outer-spin') ?? outerPivot?.children[0];
+    const innerPivot = orbitalsGroup.getObjectByName('studio-orbital-inner-pivot') ?? orbitalsGroup.children[1];
+    const innerSpin = innerPivot?.getObjectByName('studio-orbital-inner-spin') ?? innerPivot?.children[0];
+    assert.ok(outerPivot && outerSpin && innerPivot && innerSpin, 'Outer and inner orbital pivots/spins must exist');
+
+    // Live motion: rings must visibly precess, counter-spin, and breathe across elapsed ticks
+    const liveCtx = makeCtx(false);
+    stage.onEnter(liveCtx);
+    stage.update(0.016, 0.1, liveCtx);
+    const outerPivotY1 = outerPivot.rotation.y;
+    const outerSpinZ1 = outerSpin.rotation.z;
+    const innerPivotY1 = innerPivot.rotation.y;
+    const innerSpinZ1 = innerSpin.rotation.z;
+    const orbitY1 = orbitalsGroup.position.y;
+
+    stage.update(0.016, 1.6, liveCtx);
+    const outerPivotY2 = outerPivot.rotation.y;
+    const outerSpinZ2 = outerSpin.rotation.z;
+    const innerPivotY2 = innerPivot.rotation.y;
+    const innerSpinZ2 = innerSpin.rotation.z;
+    const orbitY2 = orbitalsGroup.position.y;
+
+    assert.ok(
+      Math.abs(outerPivotY2 - outerPivotY1) > 0.5,
+      `Expected live outer gyroscopic precession (delta=${Math.abs(outerPivotY2 - outerPivotY1)})`
+    );
+    assert.ok(
+      Math.abs(outerSpinZ2 - outerSpinZ1) > 1.2,
+      `Expected live outer orbital sweep spin (delta=${Math.abs(outerSpinZ2 - outerSpinZ1)})`
+    );
+    assert.ok(
+      Math.abs(innerPivotY2 - innerPivotY1) > 0.6,
+      `Expected live inner counter-precession (delta=${Math.abs(innerPivotY2 - innerPivotY1)})`
+    );
+    assert.ok(
+      Math.abs(innerSpinZ2 - innerSpinZ1) > 1.5,
+      `Expected live inner counter-spin (delta=${Math.abs(innerSpinZ2 - innerSpinZ1)})`
+    );
+    assert.ok(
+      Math.abs(orbitY2 - orbitY1) > 0.01,
+      `Expected live vertical orbital breathing float (delta=${Math.abs(orbitY2 - orbitY1)})`
+    );
+
+    // Reduced motion: rings must remain completely stationary across elapsed ticks
+    const reducedCtx = makeCtx(true);
+    stage.update(0.016, 0.1, reducedCtx);
+    const staticSnapshot = {
+      outerPivotX: outerPivot.rotation.x,
+      outerPivotY: outerPivot.rotation.y,
+      outerPivotZ: outerPivot.rotation.z,
+      outerSpinZ: outerSpin.rotation.z,
+      innerPivotX: innerPivot.rotation.x,
+      innerPivotY: innerPivot.rotation.y,
+      innerPivotZ: innerPivot.rotation.z,
+      innerSpinZ: innerSpin.rotation.z,
+      orbitY: orbitalsGroup.position.y,
+    };
+
+    stage.update(0.016, 1.6, reducedCtx);
+    assert.deepEqual(
+      {
+        outerPivotX: outerPivot.rotation.x,
+        outerPivotY: outerPivot.rotation.y,
+        outerPivotZ: outerPivot.rotation.z,
+        outerSpinZ: outerSpin.rotation.z,
+        innerPivotX: innerPivot.rotation.x,
+        innerPivotY: innerPivot.rotation.y,
+        innerPivotZ: innerPivot.rotation.z,
+        innerSpinZ: innerSpin.rotation.z,
+        orbitY: orbitalsGroup.position.y,
+      },
+      staticSnapshot,
+      'Orbital rings must remain stationary when reducedMotion is true'
+    );
+
+    stage.dispose();
+  });
 });

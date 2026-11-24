@@ -106,87 +106,91 @@ export function SpecsStageHud({ copy, lang, interaction, onUpdateInteraction }: 
 
     return (
       <div className="hud-stack">
-        <div className="hud-section-head">
-          <div>
-            <span className="hud-eyebrow">{stack.eyebrow}</span>
-            <h2 className="hud-title">{stack.heading}</h2>
+        <div className="hud-display-zone">
+          <div className="hud-section-head">
+            <div>
+              <span className="hud-eyebrow">{stack.eyebrow}</span>
+              <h2 className="hud-title">{stack.heading}</h2>
+            </div>
+            <span className="hud-gold-badge">{focusedPillar.label}</span>
           </div>
-          <span className="hud-gold-badge">{focusedPillar.label}</span>
-        </div>
 
-        {/* Active KPI / Spec Description (ON TOP) */}
-        <div className="hud-inspector hud-inspector--top" aria-live="polite">
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={inspector.icon} size={14} />
-            </span>
-            <strong>{inspector.title}</strong>
-            <span className="hud-gold-badge">{inspector.badge}</span>
+          {/* Active KPI / Spec Description */}
+          <div className="hud-inspector hud-inspector--top" aria-live="polite">
+            <div className="hud-inline-head">
+              <span className="hud-icon-badge">
+                <SiteIcon name={inspector.icon} size={14} />
+              </span>
+              <strong>{inspector.title}</strong>
+              <span className="hud-gold-badge">{inspector.badge}</span>
+            </div>
+            <p className="hud-body-copy">{inspector.detail}</p>
           </div>
-          <p className="hud-body-copy">{inspector.detail}</p>
         </div>
 
-        <span className="hud-deck-cue">
-          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
-        </span>
+        <div className="hud-interactive-zone">
+          <span className="hud-deck-cue">
+            {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+          </span>
 
-        {/* 4 Hero KPI Cards synced bidirectionally with 3D Pillars 0..3 (BELOW) */}
-        <div className="hud-grid-2" role="group" aria-label={stack.heading}>
-          {stack.heroKpis.map((kpi, idx) => {
-            const itemKey = `kpi:${kpi.id}`;
-            const isSelected = derivedKey === itemKey;
-            return (
-              <button
-                key={kpi.id}
-                type="button"
-                aria-pressed={isSelected}
-                className={`hud-kpi-btn ${isSelected ? 'is-active' : ''}`}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setExplicitSelection({ pillar: idx, key: itemKey });
-                  onUpdateInteraction({ specsFocusedIndex: idx });
-                }}
-              >
-                <span className="hud-icon-badge">
-                  <SiteIcon name={kpi.icon} size={15} />
-                </span>
-                <strong className="hud-kpi-big">{kpi.value}</strong>
-                <span className="hud-kpi-label">{kpi.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 4 Verification Spec Cards synced with 3D Pillars (BELOW) */}
-        <div className="hud-subblock">
-          <span className="hud-eyebrow">{stack.benchmarkTitle}</span>
-          <div className="hud-grid-2" role="group" aria-label={stack.benchmarkTitle}>
-            {stack.specs.map((spec) => {
-              const itemKey = `spec:${spec.id}`;
+          {/* 4 Hero KPI Cards synced bidirectionally with 3D Pillars 0..3 */}
+          <div className="hud-grid-2" role="group" aria-label={stack.heading}>
+            {stack.heroKpis.map((kpi, idx) => {
+              const itemKey = `kpi:${kpi.id}`;
               const isSelected = derivedKey === itemKey;
-              const targetPillar = SPEC_TO_PILLAR_INDEX[spec.id] ?? 0;
               return (
                 <button
-                  key={spec.id}
+                  key={kpi.id}
                   type="button"
                   aria-pressed={isSelected}
-                  className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+                  className={`hud-kpi-btn ${isSelected ? 'is-active' : ''}`}
                   onClick={() => {
                     triggerHaptic('selection');
-                    setExplicitSelection({ pillar: targetPillar, key: itemKey });
-                    onUpdateInteraction({ specsFocusedIndex: targetPillar });
+                    setExplicitSelection({ pillar: idx, key: itemKey });
+                    onUpdateInteraction({ specsFocusedIndex: idx });
                   }}
                 >
-                  <div className="hud-tile-top">
-                    <span className="hud-icon-badge">
-                      <SiteIcon name={spec.icon} size={14} />
-                    </span>
-                    <span className="hud-mono-accent">{spec.valueText}</span>
-                  </div>
-                  <strong className="hud-tile-title">{spec.shortLabel}</strong>
+                  <span className="hud-icon-badge">
+                    <SiteIcon name={kpi.icon} size={15} />
+                  </span>
+                  <strong className="hud-kpi-big">{kpi.value}</strong>
+                  <span className="hud-kpi-label">{kpi.label}</span>
                 </button>
               );
             })}
+          </div>
+
+          {/* 4 Verification Spec Cards synced with 3D Pillars */}
+          <div className="hud-subblock">
+            <span className="hud-eyebrow">{stack.benchmarkTitle}</span>
+            <div className="hud-grid-2" role="group" aria-label={stack.benchmarkTitle}>
+              {stack.specs.map((spec) => {
+                const itemKey = `spec:${spec.id}`;
+                const isSelected = derivedKey === itemKey;
+                const targetPillar = SPEC_TO_PILLAR_INDEX[spec.id] ?? 0;
+                return (
+                  <button
+                    key={spec.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setExplicitSelection({ pillar: targetPillar, key: itemKey });
+                      onUpdateInteraction({ specsFocusedIndex: targetPillar });
+                    }}
+                  >
+                    <div className="hud-tile-top">
+                      <span className="hud-icon-badge">
+                        <SiteIcon name={spec.icon} size={14} />
+                      </span>
+                      <span className="hud-mono-accent">{spec.valueText}</span>
+                    </div>
+                    <strong className="hud-tile-title">{spec.shortLabel}</strong>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -208,74 +212,78 @@ export function SpecsStageHud({ copy, lang, interaction, onUpdateInteraction }: 
 
   return (
     <div className="hud-stack">
-      <div className="hud-section-head">
-        <div>
-          <span className="hud-eyebrow">{stack.eyebrow}</span>
-          <h2 className="hud-title">{stack.heading}</h2>
+      <div className="hud-display-zone">
+        <div className="hud-section-head">
+          <div>
+            <span className="hud-eyebrow">{stack.eyebrow}</span>
+            <h2 className="hud-title">{stack.heading}</h2>
+          </div>
+        </div>
+
+        {/* Active Stack Card Description */}
+        <div
+          id={stackPanelId}
+          className="hud-inspector hud-inspector--top"
+          role="tabpanel"
+          aria-labelledby={`${stackPrefix}-${activeCard.id}`}
+          aria-live="polite"
+        >
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeCard.icon} size={14} />
+            </span>
+            <strong>
+              {activeCard.metric} · {activeCard.title}
+            </strong>
+            <span className="hud-gold-badge">{activeCard.boundary}</span>
+          </div>
+          <p className="hud-body-copy">{activeCard.detail}</p>
         </div>
       </div>
 
-      {/* Active Stack Card Description (ON TOP) */}
-      <div
-        id={stackPanelId}
-        className="hud-inspector hud-inspector--top"
-        role="tabpanel"
-        aria-labelledby={`${stackPrefix}-${activeCard.id}`}
-        aria-live="polite"
-      >
-        <div className="hud-inline-head">
-          <span className="hud-icon-badge">
-            <SiteIcon name={activeCard.icon} size={14} />
-          </span>
-          <strong>
-            {activeCard.metric} · {activeCard.title}
-          </strong>
-          <span className="hud-gold-badge">{activeCard.boundary}</span>
+      <div className="hud-interactive-zone">
+        <span className="hud-deck-cue">
+          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+        </span>
+
+        {/* 6 Production Stack Cards */}
+        <div
+          className="hud-grid-2"
+          role="tablist"
+          aria-label="Tech stack modules"
+          onKeyDown={(e) =>
+            handleTablistArrows(e, stackCardIds, activeCard.id, stackPrefix, selectStackCard)
+          }
+        >
+          {stack.cards.map((card) => {
+            const isSelected = card.id === activeCard.id;
+            return (
+              <button
+                key={card.id}
+                id={`${stackPrefix}-${card.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls={stackPanelId}
+                tabIndex={isSelected ? 0 : -1}
+                className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  selectStackCard(card.id);
+                }}
+              >
+                <div className="hud-tile-top">
+                  <span className="hud-icon-badge">
+                    <SiteIcon name={card.icon} size={15} />
+                  </span>
+                  <span className="hud-chip-tag">{card.boundary}</span>
+                </div>
+                <strong className="hud-tile-title">{card.metric}</strong>
+                <span className="hud-sub-meta">{card.title}</span>
+              </button>
+            );
+          })}
         </div>
-        <p className="hud-body-copy">{activeCard.detail}</p>
-      </div>
-
-      <span className="hud-deck-cue">
-        {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
-      </span>
-
-      {/* 6 Production Stack Cards (BELOW) */}
-      <div
-        className="hud-grid-2"
-        role="tablist"
-        aria-label="Tech stack modules"
-        onKeyDown={(e) =>
-          handleTablistArrows(e, stackCardIds, activeCard.id, stackPrefix, selectStackCard)
-        }
-      >
-        {stack.cards.map((card) => {
-          const isSelected = card.id === activeCard.id;
-          return (
-            <button
-              key={card.id}
-              id={`${stackPrefix}-${card.id}`}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              aria-controls={stackPanelId}
-              tabIndex={isSelected ? 0 : -1}
-              className={`hud-tile-btn ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                selectStackCard(card.id);
-              }}
-            >
-              <div className="hud-tile-top">
-                <span className="hud-icon-badge">
-                  <SiteIcon name={card.icon} size={15} />
-                </span>
-                <span className="hud-chip-tag">{card.boundary}</span>
-              </div>
-              <strong className="hud-tile-title">{card.metric}</strong>
-              <span className="hud-sub-meta">{card.title}</span>
-            </button>
-          );
-        })}
       </div>
     </div>
   );
@@ -355,24 +363,65 @@ export function AboutStageHud({
 
     return (
       <div className="hud-stack">
-        {/* Minimal 3D Clay Diorama Theater + Speech Bubble */}
-        <div className="hud-journey-stage" data-cut-status={activeCut.status}>
-          <img
-            key={activeCut.id}
-            src={activeCut.imageSrc}
-            alt={activeCut.imageAlt}
-            width={960}
-            height={720}
-            decoding="async"
-            className="hud-journey-img"
-          />
-          <div className="hud-journey-scrim" aria-hidden="true" />
+        <div className="hud-display-zone">
+          {/* Minimal 3D Clay Diorama Theater + Speech Bubble */}
+          <div className="hud-journey-stage" data-cut-status={activeCut.status}>
+            <img
+              key={activeCut.id}
+              src={activeCut.imageSrc}
+              alt={activeCut.imageAlt}
+              width={960}
+              height={720}
+              decoding="async"
+              className="hud-journey-img"
+            />
+            <div className="hud-journey-scrim" aria-hidden="true" />
 
-          <div className="hud-journey-top">
-            <div className="hud-journey-badges">
-              <span className="hud-gold-badge">CUT {activeCut.num}</span>
-              <span className={`hud-status-pill is-${activeCut.status}`}>{activeCut.statusLabel}</span>
+            <div className="hud-journey-top">
+              <div className="hud-journey-badges">
+                <span className="hud-gold-badge">CUT {activeCut.num}</span>
+                <span className={`hud-status-pill is-${activeCut.status}`}>{activeCut.statusLabel}</span>
+              </div>
             </div>
+
+            <div className="hud-speech-bubble">
+              <span className="hud-icon-badge">
+                <SiteIcon name={activeCut.icon} size={13} />
+              </span>
+              <p>{activeCut.speechBubble}</p>
+            </div>
+          </div>
+
+          {/* Active Cut API Chips + Full Detail Inspector */}
+          <div
+            id={journeyPanelId}
+            className="hud-inspector hud-inspector--top"
+            role="tabpanel"
+            aria-labelledby={`${journeyPrefix}-${activeCut.id}`}
+            aria-live="polite"
+          >
+            <div className="hud-inline-head">
+              <span className="hud-icon-badge">
+                <SiteIcon name={activeCut.icon} size={14} />
+              </span>
+              <strong>{activeCut.title}</strong>
+            </div>
+            <div className="hud-chip-wrap">
+              {activeCut.apiChips.map((chip) => (
+                <span key={chip} className="hud-chip-tag">
+                  {chip}
+                </span>
+              ))}
+            </div>
+            <p className="hud-body-copy">{activeCut.detail}</p>
+          </div>
+        </div>
+
+        <div className="hud-interactive-zone">
+          <div className="hud-deck-head-row">
+            <span className="hud-deck-cue">
+              {lang === 'ko' ? '장면 선택 · 탭하여 상세 보기' : 'SELECT CUT · TAP TO INSPECT'}
+            </span>
 
             <div className="hud-journey-controls">
               <button
@@ -406,90 +455,55 @@ export function AboutStageHud({
             </div>
           </div>
 
-          <div className="hud-speech-bubble">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeCut.icon} size={13} />
-            </span>
-            <p>{activeCut.speechBubble}</p>
+          {/* 6 Clickable Cut Cards synced live to aboutStage marble */}
+          <div
+            className="hud-grid-2"
+            role="tablist"
+            aria-label={journey.badge}
+            onKeyDown={(e) =>
+              handleTablistArrows(e, journeyCutIds, activeCut.id, journeyPrefix, (id) => {
+                const nextIdx = journey.cuts.findIndex((c) => c.id === id);
+                if (nextIdx >= 0) {
+                  setJourneyAutoPlay(false);
+                  onUpdateInteraction({ aboutJourneyIndex: nextIdx });
+                }
+              })
+            }
+          >
+            {journey.cuts.map((cut, idx) => {
+              const isSelected = idx === activeIdx;
+              return (
+                <button
+                  key={cut.id}
+                  id={`${journeyPrefix}-${cut.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  aria-controls={journeyPanelId}
+                  tabIndex={isSelected ? 0 : -1}
+                  className={`hud-cut-pill ${isSelected ? 'is-active' : ''}`}
+                  onClick={() => selectCut(idx)}
+                >
+                  <span className="hud-mono-num">{cut.num}</span>
+                  <strong className="hud-cut-title">{cut.shortTitle}</strong>
+                  <span className={`hud-status-pill is-${cut.status}`}>{cut.shortStatusLabel}</span>
+                </button>
+              );
+            })}
           </div>
+
+          <button
+            type="button"
+            className="hud-bridge-btn"
+            onClick={() => {
+              triggerHaptic('selection');
+              onUpdateInteraction({ aboutSubtab: 'mission' });
+            }}
+          >
+            <span>{journey.nextStepLabel}</span>
+            <ArrowRight size={14} aria-hidden="true" />
+          </button>
         </div>
-
-        {/* Active Cut API Chips + Full Detail Inspector (ON TOP) */}
-        <div
-          id={journeyPanelId}
-          className="hud-inspector hud-inspector--top"
-          role="tabpanel"
-          aria-labelledby={`${journeyPrefix}-${activeCut.id}`}
-          aria-live="polite"
-        >
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={activeCut.icon} size={14} />
-            </span>
-            <strong>{activeCut.title}</strong>
-          </div>
-          <div className="hud-chip-wrap">
-            {activeCut.apiChips.map((chip) => (
-              <span key={chip} className="hud-chip-tag">
-                {chip}
-              </span>
-            ))}
-          </div>
-          <p className="hud-body-copy">{activeCut.detail}</p>
-        </div>
-
-        <span className="hud-deck-cue">
-          {lang === 'ko' ? '장면 선택 · 탭하여 상세 보기' : 'SELECT CUT · TAP TO INSPECT'}
-        </span>
-
-        {/* 6 Clickable Cut Cards synced live to aboutStage marble (BELOW) */}
-        <div
-          className="hud-grid-2"
-          role="tablist"
-          aria-label={journey.badge}
-          onKeyDown={(e) =>
-            handleTablistArrows(e, journeyCutIds, activeCut.id, journeyPrefix, (id) => {
-              const nextIdx = journey.cuts.findIndex((c) => c.id === id);
-              if (nextIdx >= 0) {
-                setJourneyAutoPlay(false);
-                onUpdateInteraction({ aboutJourneyIndex: nextIdx });
-              }
-            })
-          }
-        >
-          {journey.cuts.map((cut, idx) => {
-            const isSelected = idx === activeIdx;
-            return (
-              <button
-                key={cut.id}
-                id={`${journeyPrefix}-${cut.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                aria-controls={journeyPanelId}
-                tabIndex={isSelected ? 0 : -1}
-                className={`hud-cut-pill ${isSelected ? 'is-active' : ''}`}
-                onClick={() => selectCut(idx)}
-              >
-                <span className="hud-mono-num">{cut.num}</span>
-                <strong className="hud-cut-title">{cut.shortTitle}</strong>
-                <span className={`hud-status-pill is-${cut.status}`}>{cut.shortStatusLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          type="button"
-          className="hud-bridge-btn"
-          onClick={() => {
-            triggerHaptic('selection');
-            onUpdateInteraction({ aboutSubtab: 'mission' });
-          }}
-        >
-          <span>{journey.nextStepLabel}</span>
-          <ArrowRight size={14} aria-hidden="true" />
-        </button>
       </div>
     );
   }
@@ -529,190 +543,194 @@ export function AboutStageHud({
 
     return (
       <div className="hud-stack">
-        <div className="hud-mission-head">
-          <span className="hud-eyebrow">{mission.eyebrow}</span>
-          <h2 className="hud-mission-slogan">
-            <span>{mission.headingLead}</span>
-            <em>{mission.headingAccent}</em>
-          </h2>
-        </div>
-
-        {/* Active Inspector Description (ON TOP) */}
-        <div className="hud-inspector hud-inspector--top" aria-live="polite">
-          <div className="hud-inline-head">
-            <span className="hud-icon-badge">
-              <SiteIcon name={inspector.icon} size={14} />
-            </span>
-            <strong>{inspector.title}</strong>
-            <span className="hud-gold-badge">{inspector.badge}</span>
+        <div className="hud-display-zone">
+          <div className="hud-mission-head">
+            <span className="hud-eyebrow">{mission.eyebrow}</span>
+            <h2 className="hud-mission-slogan">
+              <span>{mission.headingLead}</span>
+              <em>{mission.headingAccent}</em>
+            </h2>
           </div>
-          <p className="hud-body-copy">{inspector.detail}</p>
+
+          {/* Active Inspector Description */}
+          <div className="hud-inspector hud-inspector--top" aria-live="polite">
+            <div className="hud-inline-head">
+              <span className="hud-icon-badge">
+                <SiteIcon name={inspector.icon} size={14} />
+              </span>
+              <strong>{inspector.title}</strong>
+              <span className="hud-gold-badge">{inspector.badge}</span>
+            </div>
+            <p className="hud-body-copy">{inspector.detail}</p>
+          </div>
         </div>
 
-        <span className="hud-deck-cue">
-          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
-        </span>
+        <div className="hud-interactive-zone">
+          <span className="hud-deck-cue">
+            {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+          </span>
 
-        {/* 3 Value Pillars (BELOW) */}
-        <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={mission.badge}>
-          {mission.commitments.map((item) => {
-            const isSelected = missionChoice.kind === 'pillar' && missionChoice.id === item.id;
-            return (
+          {/* 3 Value Pillars */}
+          <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={mission.badge}>
+            {mission.commitments.map((item) => {
+              const isSelected = missionChoice.kind === 'pillar' && missionChoice.id === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  className={`hud-tile-btn hud-tile-btn--compact ${isSelected ? 'is-active' : ''}`}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    const nextLoopIdx =
+                      item.id === 'wear'
+                        ? 2
+                        : item.id === 'cpw'
+                          ? 4
+                          : interaction.aboutLoopIndex;
+                    setMissionOverride({
+                      loopIndex: nextLoopIdx,
+                      choice: { kind: 'pillar', id: item.id },
+                    });
+                    if (item.id === 'wear' || item.id === 'cpw') {
+                      onUpdateInteraction({ aboutLoopIndex: nextLoopIdx, aboutLoopPaused: true });
+                    }
+                  }}
+                >
+                  <div className="hud-tile-top">
+                    <SiteIcon name={item.icon} size={14} className="hud-accent-icon" />
+                    <span className="hud-mono-num">{item.num}</span>
+                  </div>
+                  <strong className="hud-tile-title">{item.title}</strong>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 5-Node Interactive iNVTRY LOOP Selector + Pause Synced to 3D Ring */}
+          <div className="hud-card">
+            <div className="hud-control-row">
+              <div className="hud-inline-head">
+                <span className="hud-gold-badge">{mission.centerKicker}</span>
+                <strong>{mission.centerTitle}</strong>
+              </div>
               <button
-                key={item.id}
                 type="button"
-                aria-pressed={isSelected}
-                className={`hud-tile-btn hud-tile-btn--compact ${isSelected ? 'is-active' : ''}`}
+                className="hud-auto-btn"
+                aria-pressed={!interaction.aboutLoopPaused}
                 onClick={() => {
                   triggerHaptic('selection');
-                  const nextLoopIdx =
-                    item.id === 'wear'
-                      ? 2
-                      : item.id === 'cpw'
-                        ? 4
-                        : interaction.aboutLoopIndex;
-                  setMissionOverride({
-                    loopIndex: nextLoopIdx,
-                    choice: { kind: 'pillar', id: item.id },
-                  });
-                  if (item.id === 'wear' || item.id === 'cpw') {
-                    onUpdateInteraction({ aboutLoopIndex: nextLoopIdx, aboutLoopPaused: true });
-                  }
+                  onUpdateInteraction({ aboutLoopPaused: !interaction.aboutLoopPaused });
                 }}
               >
-                <div className="hud-tile-top">
-                  <SiteIcon name={item.icon} size={14} className="hud-accent-icon" />
-                  <span className="hud-mono-num">{item.num}</span>
-                </div>
-                <strong className="hud-tile-title">{item.title}</strong>
+                {interaction.aboutLoopPaused ? (
+                  <Play size={11} aria-hidden="true" />
+                ) : (
+                  <Pause size={11} aria-hidden="true" />
+                )}
+                <span>
+                  {interaction.aboutLoopPaused ? mission.autoPlayLabel : mission.pausePlayLabel}
+                </span>
               </button>
-            );
-          })}
-        </div>
-
-        {/* 5-Node Interactive iNVTRY LOOP Selector + Pause Synced to 3D Ring */}
-        <div className="hud-card">
-          <div className="hud-control-row">
-            <div className="hud-inline-head">
-              <span className="hud-gold-badge">{mission.centerKicker}</span>
-              <strong>{mission.centerTitle}</strong>
             </div>
-            <button
-              type="button"
-              className="hud-auto-btn"
-              aria-pressed={!interaction.aboutLoopPaused}
-              onClick={() => {
-                triggerHaptic('selection');
-                onUpdateInteraction({ aboutLoopPaused: !interaction.aboutLoopPaused });
-              }}
-            >
-              {interaction.aboutLoopPaused ? (
-                <Play size={11} aria-hidden="true" />
-              ) : (
-                <Pause size={11} aria-hidden="true" />
-              )}
-              <span>
-                {interaction.aboutLoopPaused ? mission.autoPlayLabel : mission.pausePlayLabel}
-              </span>
-            </button>
+
+            <div className="hud-loop-pills" role="group" aria-label={mission.centerTitle}>
+              {mission.loopNodes.map((node, idx) => {
+                const isSelected =
+                  missionChoice.kind === 'loop' && interaction.aboutLoopIndex === idx;
+                return (
+                  <button
+                    key={node.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={`hud-loop-pill ${isSelected ? 'is-active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setMissionOverride(null);
+                      onUpdateInteraction({ aboutLoopIndex: idx, aboutLoopPaused: true });
+                    }}
+                  >
+                    <span className="hud-mono-num">{node.num}</span>
+                    <SiteIcon name={node.icon} size={13} />
+                    <span>{node.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Dual Circular Exits */}
+            <div className="hud-grid-2">
+              {mission.exits.map((exit) => {
+                const isSelected = missionChoice.kind === 'exit' && missionChoice.id === exit.id;
+                return (
+                  <button
+                    key={exit.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={`hud-exit-btn ${exit.id === 'resale' ? 'is-featured' : ''} ${
+                      isSelected ? 'is-active' : ''
+                    }`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setMissionOverride({
+                        loopIndex: interaction.aboutLoopIndex,
+                        choice: { kind: 'exit', id: exit.id },
+                      });
+                    }}
+                  >
+                    <SiteIcon name={exit.icon} size={14} className="hud-accent-icon" />
+                    <div>
+                      <strong>{exit.title}</strong>
+                      <span className="hud-sub-meta">{exit.subtitle}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="hud-loop-pills" role="group" aria-label={mission.centerTitle}>
-            {mission.loopNodes.map((node, idx) => {
-              const isSelected =
-                missionChoice.kind === 'loop' && interaction.aboutLoopIndex === idx;
-              return (
-                <button
-                  key={node.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  className={`hud-loop-pill ${isSelected ? 'is-active' : ''}`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setMissionOverride(null);
-                    onUpdateInteraction({ aboutLoopIndex: idx, aboutLoopPaused: true });
-                  }}
-                >
-                  <span className="hud-mono-num">{node.num}</span>
-                  <SiteIcon name={node.icon} size={13} />
-                  <span>{node.title}</span>
-                </button>
-              );
-            })}
+          {/* 3 Roadmap Milestones (LIVE 01 / LIVE 02 / TO-DO) */}
+          <div className="hud-subblock">
+            <span className="hud-eyebrow">{vision.roadmapTitle}</span>
+            <div className="hud-roadmap-list" role="group" aria-label={vision.roadmapTitle}>
+              {vision.milestones.map((m) => {
+                const isSelected = missionChoice.kind === 'milestone' && missionChoice.id === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={`hud-roadmap-btn ${isSelected ? 'is-active' : ''}`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setMissionOverride({
+                        loopIndex: interaction.aboutLoopIndex,
+                        choice: { kind: 'milestone', id: m.id },
+                      });
+                    }}
+                  >
+                    <span className={`hud-status-pill ${m.status === 'done' ? 'is-live' : 'is-todo'}`}>
+                      {m.phase}
+                    </span>
+                    <strong>{m.title}</strong>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Dual Circular Exits */}
-          <div className="hud-grid-2">
-            {mission.exits.map((exit) => {
-              const isSelected = missionChoice.kind === 'exit' && missionChoice.id === exit.id;
-              return (
-                <button
-                  key={exit.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  className={`hud-exit-btn ${exit.id === 'resale' ? 'is-featured' : ''} ${
-                    isSelected ? 'is-active' : ''
-                  }`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setMissionOverride({
-                      loopIndex: interaction.aboutLoopIndex,
-                      choice: { kind: 'exit', id: exit.id },
-                    });
-                  }}
-                >
-                  <SiteIcon name={exit.icon} size={14} className="hud-accent-icon" />
-                  <div>
-                    <strong>{exit.title}</strong>
-                    <span className="hud-sub-meta">{exit.subtitle}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            className="hud-bridge-btn"
+            onClick={() => {
+              triggerHaptic('selection');
+              onUpdateInteraction({ aboutSubtab: 'founder' });
+            }}
+          >
+            <span>{mission.nextLabel}</span>
+            <ArrowRight size={14} aria-hidden="true" />
+          </button>
         </div>
-
-        {/* 3 Roadmap Milestones (LIVE 01 / LIVE 02 / TO-DO) */}
-        <div className="hud-subblock">
-          <span className="hud-eyebrow">{vision.roadmapTitle}</span>
-          <div className="hud-roadmap-list" role="group" aria-label={vision.roadmapTitle}>
-            {vision.milestones.map((m) => {
-              const isSelected = missionChoice.kind === 'milestone' && missionChoice.id === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  className={`hud-roadmap-btn ${isSelected ? 'is-active' : ''}`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setMissionOverride({
-                      loopIndex: interaction.aboutLoopIndex,
-                      choice: { kind: 'milestone', id: m.id },
-                    });
-                  }}
-                >
-                  <span className={`hud-status-pill ${m.status === 'done' ? 'is-live' : 'is-todo'}`}>
-                    {m.phase}
-                  </span>
-                  <strong>{m.title}</strong>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="hud-bridge-btn"
-          onClick={() => {
-            triggerHaptic('selection');
-            onUpdateInteraction({ aboutSubtab: 'founder' });
-          }}
-        >
-          <span>{mission.nextLabel}</span>
-          <ArrowRight size={14} aria-hidden="true" />
-        </button>
       </div>
     );
   }
@@ -732,129 +750,136 @@ export function AboutStageHud({
 
   return (
     <div className="hud-stack">
-      <div className="hud-section-head">
-        <div>
-          <span className="hud-eyebrow">{vision.eyebrow}</span>
-          <h2 className="hud-title">{vision.revenueTitle}</h2>
-        </div>
-        <button
-          type="button"
-          className="hud-auto-btn"
-          onClick={() => {
-            triggerHaptic('selection');
-            onUpdateInteraction({ aboutSubtab: 'journey' });
-          }}
-        >
-          <RotateCcw size={11} aria-hidden="true" />
-          <span>{vision.backToMissionLabel}</span>
-        </button>
-      </div>
-
-      {/* Active BM / Moat Description (ON TOP) */}
-      <div className="hud-inspector hud-inspector--top" aria-live="polite">
-        <div className="hud-inline-head">
-          <span className="hud-icon-badge">
-            <SiteIcon name={activeFounderInfo.icon} size={14} />
-          </span>
-          <strong>{activeFounderInfo.title}</strong>
-          <span className="hud-gold-badge">{activeFounderInfo.badge}</span>
-        </div>
-        <p className="hud-body-copy">{activeFounderInfo.detail}</p>
-      </div>
-
-      <span className="hud-deck-cue">
-        {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
-      </span>
-
-      {/* 3-Pillar Circular Business Model Cards (BELOW) */}
-      <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={vision.revenueTitle}>
-        {vision.revenuePillars.map((pillar) => {
-          const key = `bm:${pillar.id}`;
-          const isSelected = founderSelectedKey === key;
-          return (
-            <button
-              key={pillar.id}
-              type="button"
-              aria-pressed={isSelected}
-              className={`hud-tile-btn hud-tile-btn--compact ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                setFounderSelectedKey(key);
-              }}
-            >
-              <div className="hud-tile-top">
-                <SiteIcon name={pillar.icon} size={14} className="hud-accent-icon" />
-                <span className="hud-mono-num">{pillar.num}</span>
-              </div>
-              <strong className="hud-tile-title">{pillar.title}</strong>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 4 Core Moat Cards (BELOW) */}
-      <div className="hud-grid-2" role="group" aria-label={vision.moatsTitle}>
-        {vision.moats.map((moat) => {
-          const key = `moat:${moat.id}`;
-          const isSelected = founderSelectedKey === key;
-          return (
-            <button
-              key={moat.id}
-              type="button"
-              aria-pressed={isSelected}
-              className={`hud-cut-pill ${isSelected ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                setFounderSelectedKey(key);
-              }}
-            >
-              <SiteIcon name={moat.icon} size={13} className="hud-accent-icon" />
-              <strong className="hud-cut-title">{moat.title}</strong>
-              <span className="hud-chip-tag">{moat.tag}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <blockquote className="hud-quote">{vision.quote}</blockquote>
-
-      {/* Founder Dossier Card */}
-      <aside className="hud-founder-card" aria-label="Company and founder details">
-        <div className="hud-founder-head">
-          <div className="hud-founder-avatar" aria-hidden="true">
-            RM
-          </div>
-          <div className="hud-founder-id">
-            <h3>{SITE_META.founderName}</h3>
-            <p>{vision.founderRole}</p>
-            <a href={`mailto:${SITE_META.contactEmail}`} className="hud-founder-email">
-              {SITE_META.contactEmail}
-            </a>
-          </div>
-        </div>
-
-        <dl className="hud-dossier-grid">
+      <div className="hud-display-zone">
+        <div className="hud-section-head">
           <div>
-            <dt>{vision.hqLabel}</dt>
-            <dd>{vision.hqValue}</dd>
+            <span className="hud-eyebrow">{vision.eyebrow}</span>
+            <h2 className="hud-title">{vision.revenueTitle}</h2>
           </div>
-          <div>
-            <dt>{vision.domainLabel}</dt>
-            <dd>
-              <strong>{SITE_META.domain}</strong>
-            </dd>
-          </div>
-          <div className="hud-dossier-full">
-            <dt>{vision.stackSummaryLabel}</dt>
-            <dd>{vision.stackSummaryValue}</dd>
-          </div>
-        </dl>
+        </div>
 
-        <a href={betaMailto} className="hud-founder-cta">
-          <span>{vision.directCta}</span>
-          <ArrowUpRight size={15} aria-hidden="true" />
-        </a>
-      </aside>
+        {/* Active BM / Moat Description */}
+        <div className="hud-inspector hud-inspector--top" aria-live="polite">
+          <div className="hud-inline-head">
+            <span className="hud-icon-badge">
+              <SiteIcon name={activeFounderInfo.icon} size={14} />
+            </span>
+            <strong>{activeFounderInfo.title}</strong>
+            <span className="hud-gold-badge">{activeFounderInfo.badge}</span>
+          </div>
+          <p className="hud-body-copy">{activeFounderInfo.detail}</p>
+        </div>
+
+        <blockquote className="hud-quote">{vision.quote}</blockquote>
+
+        {/* Read-Only Founder Dossier Card */}
+        <aside className="hud-founder-card" aria-label="Company and founder details">
+          <div className="hud-founder-head">
+            <div className="hud-founder-avatar" aria-hidden="true">
+              RM
+            </div>
+            <div className="hud-founder-id">
+              <h3>{SITE_META.founderName}</h3>
+              <p>{vision.founderRole}</p>
+              <a href={`mailto:${SITE_META.contactEmail}`} className="hud-founder-email">
+                {SITE_META.contactEmail}
+              </a>
+            </div>
+          </div>
+
+          <dl className="hud-dossier-grid">
+            <div>
+              <dt>{vision.hqLabel}</dt>
+              <dd>{vision.hqValue}</dd>
+            </div>
+            <div>
+              <dt>{vision.domainLabel}</dt>
+              <dd>
+                <strong>{SITE_META.domain}</strong>
+              </dd>
+            </div>
+            <div className="hud-dossier-full">
+              <dt>{vision.stackSummaryLabel}</dt>
+              <dd>{vision.stackSummaryValue}</dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <div className="hud-interactive-zone">
+        <span className="hud-deck-cue">
+          {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
+        </span>
+
+        {/* 3-Pillar Circular Business Model Cards */}
+        <div className="hud-pill-grid hud-pill-grid--3" role="group" aria-label={vision.revenueTitle}>
+          {vision.revenuePillars.map((pillar) => {
+            const key = `bm:${pillar.id}`;
+            const isSelected = founderSelectedKey === key;
+            return (
+              <button
+                key={pillar.id}
+                type="button"
+                aria-pressed={isSelected}
+                className={`hud-tile-btn hud-tile-btn--compact ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setFounderSelectedKey(key);
+                }}
+              >
+                <div className="hud-tile-top">
+                  <SiteIcon name={pillar.icon} size={14} className="hud-accent-icon" />
+                  <span className="hud-mono-num">{pillar.num}</span>
+                </div>
+                <strong className="hud-tile-title">{pillar.title}</strong>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 4 Core Moat Cards */}
+        <div className="hud-grid-2" role="group" aria-label={vision.moatsTitle}>
+          {vision.moats.map((moat) => {
+            const key = `moat:${moat.id}`;
+            const isSelected = founderSelectedKey === key;
+            return (
+              <button
+                key={moat.id}
+                type="button"
+                aria-pressed={isSelected}
+                className={`hud-cut-pill ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setFounderSelectedKey(key);
+                }}
+              >
+                <SiteIcon name={moat.icon} size={13} className="hud-accent-icon" />
+                <strong className="hud-cut-title">{moat.title}</strong>
+                <span className="hud-chip-tag">{moat.tag}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="hud-founder-actions">
+          <a href={betaMailto} className="hud-founder-cta">
+            <span>{vision.directCta}</span>
+            <ArrowUpRight size={15} aria-hidden="true" />
+          </a>
+
+          <button
+            type="button"
+            className="hud-auto-btn"
+            onClick={() => {
+              triggerHaptic('selection');
+              onUpdateInteraction({ aboutSubtab: 'journey' });
+            }}
+          >
+            <RotateCcw size={11} aria-hidden="true" />
+            <span>{vision.backToMissionLabel}</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

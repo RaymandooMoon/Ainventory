@@ -7,14 +7,16 @@
  * 1. Layered frosted-crystal circular turntable pedestal (y = -1.25) with
  *    chamfered champagne-gold upper/lower rims, luminous inner studio disc,
  *    and soft ground contact shadow.
- * 2. Dual 360° counter-rotating tilted champagne-gold orbital rings with
- *    specular glint nodes and 48 lightweight floating starlight dust points.
- * 3. Default Mode (`'mannequin'`): Photorealistic 39k-tri 68-bone Mixamo
- *    Hugging Face fashion avatar (`/assets/models/hf-fashion-avatar-v1.glb`)
- *    normalized via `Box3` to `1.94 u`, grounded flush at `y = 0`, PBR-tuned
- *    for `RoomEnvironment` + `ACESFilmicToneMapping`, with 3-clip smooth
- *    `THREE.AnimationMixer` crossfade (`Stand` / `Walk` / `Rain`) and live
- *    right-hand smoked-glass umbrella grip attachment.
+ * 2. Dual 360° real-time gyroscopic precessing champagne-gold orbital rings
+ *    with sweeping luminous highlight arcs, glowing satellite orbs, and 48
+ *    lightweight floating starlight dust points.
+ * 3. Default Mode (`'mannequin'`): Blender 4.0.2 welded & Subdiv-L1 smoothed
+ *    48k-tri MIT Microsoft Rocketbox 2K PBR pinstripe-suit editorial avatar
+ *    (`/assets/models/hf-fashion-avatar-v2.glb`) normalized via `Box3` to
+ *    `1.94 u`, grounded flush at `y = 0`, PBR-tuned for `RoomEnvironment` +
+ *    `ACESFilmicToneMapping`, with 3-clip smooth `THREE.AnimationMixer`
+ *    crossfade (`Stand` / `Walk` / `Rain`) and live left-hand (or Mixamo
+ *    right-hand fallback) smoked-glass umbrella grip attachment.
  * 4. Couture Dress Form Mode (`'dressform'`): Hugging Face woven-wool Couture
  *    Trench Coat on obsidian atelier bust & brushed champagne-gold `iNVTRY`
  *    hanger stand (`/assets/models/hf-couture-coat-v1.glb`) normalized to
@@ -52,7 +54,7 @@ import {
  * 1. Stage Spatial, Model & Animation Constants
  * ========================================================================== */
 
-const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v1.glb';
+const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v2.glb';
 const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v1.glb';
 const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
 const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
@@ -62,7 +64,7 @@ const COUTURE_COAT_TARGET_HEIGHT = 1.94;
 const CUSTOM_MANNEQUIN_TARGET_HEIGHT = 1.8;
 
 const AVATAR_CROSSFADE_SEC = 0.28;
-const AVATAR_RAIN_HAND_FALLBACK = { x: -0.227, y: 1.226, z: 0.241 } as const;
+const AVATAR_RAIN_HAND_FALLBACK = { x: 0.1, y: 1.235, z: 0.151 } as const;
 const AVATAR_REDUCED_MOTION_TIME: Readonly<Record<StageInteractionState['studioPose'], number>> = {
   stand: 0,
   walk: 0.33,
@@ -370,6 +372,7 @@ interface OrbitalRig {
   readonly outerSpin: THREE.Group;
   readonly innerSpin: THREE.Group;
   readonly ringMat: THREE.MeshStandardMaterial;
+  readonly arcGlowMat: THREE.MeshStandardMaterial;
   readonly sparkMat: THREE.MeshStandardMaterial;
 }
 
@@ -378,45 +381,86 @@ function buildOrbitalSystem(mood: MoodMode, theme: ThemeMode): OrbitalRig {
   group.name = 'studio-orbital-rings';
   group.position.set(0, 0.06, 0);
 
+  const isDark = theme === 'dark';
   const ringMat = createChampagneGoldMaterial(mood, theme, 0.34);
+  const arcGlowMat = createChampagneGoldMaterial(mood, theme, 0.85);
+  arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
   const sparkMat = createChampagneGoldMaterial(mood, theme, 0.92);
 
-  // Outer sculpted orbital ring (~1.86 radius)
+  // Outer sculpted gyroscopic orbital ring (radius 1.86)
   const outerPivot = new THREE.Group();
-  outerPivot.rotation.set(Math.PI * 0.41, 0.22, -0.34);
+  outerPivot.name = 'studio-orbital-outer-pivot';
+  outerPivot.rotation.set(Math.PI * 0.4, 0.22, -0.32);
   const outerSpin = new THREE.Group();
-  const outerGeo = new THREE.TorusGeometry(1.86, 0.0105, 12, 96);
+  outerSpin.name = 'studio-orbital-outer-spin';
+
+  const outerGeo = new THREE.TorusGeometry(1.86, 0.011, 12, 96);
   outerSpin.add(new THREE.Mesh(outerGeo, ringMat));
 
-  const outerNodeGeo = new THREE.SphereGeometry(0.026, 12, 10);
-  const outerNodeA = new THREE.Mesh(outerNodeGeo, sparkMat);
+  // Sweeping luminous highlight arc + opposite counter-arc
+  const outerArcGeo = new THREE.TorusGeometry(1.86, 0.018, 12, 48, Math.PI * 0.44);
+  outerSpin.add(new THREE.Mesh(outerArcGeo, arcGlowMat));
+
+  const outerCounterArcGeo = new THREE.TorusGeometry(1.86, 0.018, 12, 48, Math.PI * 0.24);
+  const outerCounterArc = new THREE.Mesh(outerCounterArcGeo, arcGlowMat);
+  outerCounterArc.rotation.z = Math.PI;
+  outerSpin.add(outerCounterArc);
+
+  // 2 sculptural glowing satellite orbs on outer orbit
+  const outerNodeAGeo = new THREE.SphereGeometry(0.052, 16, 12);
+  const outerNodeA = new THREE.Mesh(outerNodeAGeo, sparkMat);
   outerNodeA.position.set(1.86, 0, 0);
   outerSpin.add(outerNodeA);
 
-  const outerNodeB = new THREE.Mesh(outerNodeGeo, sparkMat);
+  const outerNodeAHaloGeo = new THREE.TorusGeometry(0.082, 0.006, 10, 32);
+  const outerNodeAHalo = new THREE.Mesh(outerNodeAHaloGeo, arcGlowMat);
+  outerNodeAHalo.position.set(1.86, 0, 0);
+  outerNodeAHalo.rotation.set(Math.PI * 0.38, Math.PI * 0.22, 0);
+  outerSpin.add(outerNodeAHalo);
+
+  const outerNodeBGeo = new THREE.SphereGeometry(0.036, 14, 10);
+  const outerNodeB = new THREE.Mesh(outerNodeBGeo, sparkMat);
   outerNodeB.position.set(-1.86, 0, 0);
-  outerNodeB.scale.setScalar(0.72);
   outerSpin.add(outerNodeB);
 
   outerPivot.add(outerSpin);
   group.add(outerPivot);
 
-  // Inner counter-tilted orbital ring (~1.66 radius)
+  // Inner counter-precessing orbital ring (radius 1.64)
   const innerPivot = new THREE.Group();
-  innerPivot.rotation.set(Math.PI * 0.45, -0.26, 0.36);
+  innerPivot.name = 'studio-orbital-inner-pivot';
+  innerPivot.rotation.set(Math.PI * 0.46, -0.26, 0.34);
   const innerSpin = new THREE.Group();
-  const innerGeo = new THREE.TorusGeometry(1.66, 0.009, 12, 96);
+  innerSpin.name = 'studio-orbital-inner-spin';
+
+  const innerGeo = new THREE.TorusGeometry(1.64, 0.0095, 12, 96);
   innerSpin.add(new THREE.Mesh(innerGeo, ringMat));
 
-  const innerNodeGeo = new THREE.SphereGeometry(0.022, 12, 10);
-  const innerNode = new THREE.Mesh(innerNodeGeo, sparkMat);
-  innerNode.position.set(0, 1.66, 0);
-  innerSpin.add(innerNode);
+  // Sweeping luminous highlight arc on inner orbit
+  const innerArcGeo = new THREE.TorusGeometry(1.64, 0.016, 12, 48, Math.PI * 0.38);
+  innerSpin.add(new THREE.Mesh(innerArcGeo, arcGlowMat));
+
+  // 2 glowing satellite orbs on inner orbit
+  const innerNodeAGeo = new THREE.SphereGeometry(0.044, 16, 12);
+  const innerNodeA = new THREE.Mesh(innerNodeAGeo, sparkMat);
+  innerNodeA.position.set(0, 1.64, 0);
+  innerSpin.add(innerNodeA);
+
+  const innerNodeAHaloGeo = new THREE.TorusGeometry(0.072, 0.0055, 10, 32);
+  const innerNodeAHalo = new THREE.Mesh(innerNodeAHaloGeo, arcGlowMat);
+  innerNodeAHalo.position.set(0, 1.64, 0);
+  innerNodeAHalo.rotation.set(Math.PI * 0.42, -Math.PI * 0.24, 0);
+  innerSpin.add(innerNodeAHalo);
+
+  const innerNodeBGeo = new THREE.SphereGeometry(0.03, 14, 10);
+  const innerNodeB = new THREE.Mesh(innerNodeBGeo, sparkMat);
+  innerNodeB.position.set(0, -1.64, 0);
+  innerSpin.add(innerNodeB);
 
   innerPivot.add(innerSpin);
   group.add(innerPivot);
 
-  return { group, outerPivot, innerPivot, outerSpin, innerSpin, ringMat, sparkMat };
+  return { group, outerPivot, innerPivot, outerSpin, innerSpin, ringMat, arcGlowMat, sparkMat };
 }
 
 interface StarlightSeed {
@@ -1007,9 +1051,10 @@ interface FashionAvatarRig {
   rainAction: THREE.AnimationAction | null;
   activeClip: StageInteractionState['studioPose'];
   wasReducedMotion: boolean;
-  rightHandBone: THREE.Object3D | null;
-  rightPalmMiddleBone: THREE.Object3D | null;
-  rightPalmThumbBone: THREE.Object3D | null;
+  umbrellaHandBone: THREE.Object3D | null;
+  umbrellaPalmMiddleBone: THREE.Object3D | null;
+  umbrellaPalmThumbBone: THREE.Object3D | null;
+  umbrellaAnchorSide: 'left' | 'right';
   calibratedMaterials: THREE.MeshStandardMaterial[];
   scaleFactor: number;
   loadFade: number;
@@ -1057,9 +1102,10 @@ function buildFashionAvatarRig(): FashionAvatarRig {
     rainAction: null,
     activeClip: 'stand',
     wasReducedMotion: false,
-    rightHandBone: null,
-    rightPalmMiddleBone: null,
-    rightPalmThumbBone: null,
+    umbrellaHandBone: null,
+    umbrellaPalmMiddleBone: null,
+    umbrellaPalmThumbBone: null,
+    umbrellaAnchorSide: 'left',
     calibratedMaterials: [],
     scaleFactor: 1,
     loadFade: 0,
@@ -1179,25 +1225,36 @@ function prepareFashionAvatarModel(
 
   const calibratedSet = new Set<THREE.Material>();
   targetRig.calibratedMaterials = [];
-  targetRig.rightHandBone = null;
-  targetRig.rightPalmMiddleBone = null;
-  targetRig.rightPalmThumbBone = null;
+  targetRig.umbrellaHandBone = null;
+  targetRig.umbrellaPalmMiddleBone = null;
+  targetRig.umbrellaPalmThumbBone = null;
+  targetRig.umbrellaAnchorSide = 'left';
 
+  let rocketboxLeftHand: THREE.Object3D | null = null;
+  let rocketboxLeftPalmMiddle: THREE.Object3D | null = null;
+  let rocketboxLeftPalmThumb: THREE.Object3D | null = null;
+
+  let mixamoRightHand: THREE.Object3D | null = null;
+  let mixamoRightPalmMiddle: THREE.Object3D | null = null;
+  let mixamoRightPalmThumb: THREE.Object3D | null = null;
   let fallbackRightHand: THREE.Object3D | null = null;
 
   model.traverse((obj) => {
     const objName = obj.name || '';
-    if (objName === 'mixamorig_RightHand_037') {
-      targetRig.rightHandBone = obj;
+    if (/^Bip01[\s_]L[\s_]Hand$/i.test(objName)) {
+      rocketboxLeftHand = obj;
+    } else if (/^Bip01[\s_]L[\s_]Finger2$/i.test(objName)) {
+      rocketboxLeftPalmMiddle = obj;
+    } else if (/^Bip01[\s_]L[\s_]Finger01$/i.test(objName)) {
+      rocketboxLeftPalmThumb = obj;
+    } else if (objName === 'mixamorig_RightHand_037') {
+      mixamoRightHand = obj;
     } else if (/RightHandMiddle1/i.test(objName)) {
-      targetRig.rightPalmMiddleBone = obj;
+      mixamoRightPalmMiddle = obj;
     } else if (/RightHandThumb2/i.test(objName)) {
-      targetRig.rightPalmThumbBone = obj;
-    } else if (
-      !targetRig.rightHandBone &&
-      /RightHand(_\d+)?$/i.test(objName)
-    ) {
-      targetRig.rightHandBone = obj;
+      mixamoRightPalmThumb = obj;
+    } else if (!mixamoRightHand && /RightHand(_\d+)?$/i.test(objName)) {
+      mixamoRightHand = obj;
     } else if (
       !fallbackRightHand &&
       /RightHand/i.test(objName) &&
@@ -1222,7 +1279,26 @@ function prepareFashionAvatarModel(
       const matName = (mat.name || '').toLowerCase();
       let baseEnv = 0.65;
 
-      if (matName.includes('bodymat')) {
+      if (matName.includes('f020_body')) {
+        // Rocketbox charcoal pinstripe wool tailored suit + white blouse + silver pendant
+        baseEnv = 0.92;
+        mat.roughness = Math.max(mat.roughness, 0.62);
+        mat.transparent = false;
+        mat.depthWrite = true;
+      } else if (matName.includes('f020_head')) {
+        // Rocketbox photorealistic studio face + sleek hair
+        baseEnv = 0.68;
+        mat.roughness = Math.max(mat.roughness, 0.52);
+        mat.transparent = false;
+        mat.depthWrite = true;
+      } else if (matName.includes('f020_opacity')) {
+        // Rocketbox eyelashes / fine hair strands
+        baseEnv = 0.6;
+        mat.transparent = false;
+        mat.alphaTest = 0.42;
+        mat.depthWrite = true;
+        mat.side = THREE.DoubleSide;
+      } else if (matName.includes('bodymat')) {
         baseEnv = 0.52;
         mat.roughness = Math.max(mat.roughness, 0.58);
         if (mat.transparent) {
@@ -1266,8 +1342,20 @@ function prepareFashionAvatarModel(
     }
   });
 
-  if (!targetRig.rightHandBone && fallbackRightHand) {
-    targetRig.rightHandBone = fallbackRightHand;
+  if (rocketboxLeftHand || (rocketboxLeftPalmMiddle && rocketboxLeftPalmThumb)) {
+    targetRig.umbrellaAnchorSide = 'left';
+    targetRig.umbrellaHandBone = rocketboxLeftHand;
+    targetRig.umbrellaPalmMiddleBone = rocketboxLeftPalmMiddle;
+    targetRig.umbrellaPalmThumbBone = rocketboxLeftPalmThumb;
+  } else if (
+    mixamoRightHand ||
+    fallbackRightHand ||
+    (mixamoRightPalmMiddle && mixamoRightPalmThumb)
+  ) {
+    targetRig.umbrellaAnchorSide = 'right';
+    targetRig.umbrellaHandBone = mixamoRightHand ?? fallbackRightHand;
+    targetRig.umbrellaPalmMiddleBone = mixamoRightPalmMiddle;
+    targetRig.umbrellaPalmThumbBone = mixamoRightPalmThumb;
   }
 
   // Bind 3-clip AnimationMixer ('Stand', 'Walk', 'Rain') with case-insensitive fallback
@@ -1581,8 +1669,8 @@ function buildStudioLights(): StudioLightRig {
   const group = new THREE.Group();
   group.name = 'studio-lights';
 
-  // Key Light: upper left-front soft warm white (#FFF7EB, intensity 1.5)
-  const keyLight = new THREE.DirectionalLight(0xfff7eb, 1.5);
+  // Key Light: upper left-front soft warm white (#FFF7EB, intensity 1.72)
+  const keyLight = new THREE.DirectionalLight(0xfff7eb, 1.72);
   keyLight.position.set(-3.0, 4.2, 3.8);
   group.add(keyLight);
 
@@ -1591,8 +1679,8 @@ function buildStudioLights(): StudioLightRig {
   rimLight.position.set(3.2, 2.8, -3.1);
   group.add(rimLight);
 
-  // Fill Light: lower left-front cool silver (#8FA8C8, intensity 0.5)
-  const coolFillLight = new THREE.DirectionalLight(0x8fa8c8, 0.5);
+  // Fill Light: lower left-front cool silver (#8FA8C8, intensity 0.64)
+  const coolFillLight = new THREE.DirectionalLight(0x8fa8c8, 0.64);
   coolFillLight.position.set(-2.6, -0.35, 3.1);
   group.add(coolFillLight);
 
@@ -1620,7 +1708,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   let currentGlassRatio = 0.5;
   let currentMood: MoodMode = 'luxury';
   let currentTheme: ThemeMode = 'dark';
-  let currentSubtab: StageInteractionState['studioSubtab'] = 'preview';
+  let currentSubtab: StageInteractionState['studioSubtab'] = 'atelier';
   let currentPose: StageInteractionState['studioPose'] = 'stand';
   let currentReducedMotion = false;
   let requestedModelMode: StageInteractionState['studioModelMode'] = 'mannequin';
@@ -1689,7 +1777,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   );
   turntableGroup.add(dressForm.group);
 
-  // Primary Default ('mannequin'): 39k-tri 68-bone Photorealistic Hugging Face Fashion Avatar
+  // Primary Default ('mannequin'): 48k-tri Rocketbox 2K PBR Pinstripe-Suit Editorial Avatar
   const avatar = buildFashionAvatarRig();
   turntableGroup.add(avatar.root);
 
@@ -2042,6 +2130,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     syncGlass(currentGlassRatio);
     applyGoldModeState(pedestal.rimMat, mood, theme, 0.34);
     applyGoldModeState(orbitals.ringMat, mood, theme, 0.34);
+    applyGoldModeState(orbitals.arcGlowMat, mood, theme, 0.85);
+    orbitals.arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
     applyGoldModeState(orbitals.sparkMat, mood, theme, 0.94);
     applyGoldModeState(dialTrack.bandMat, mood, theme, 0.28);
     applyGoldModeState(dialTrack.railGlowMat, mood, theme, 0.64);
@@ -2108,11 +2198,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     // Luxury Showroom Lighting Rig calibrated for ACESFilmic + RoomEnvironment
     if (isDark) {
       lights.keyLight.color.setHex(isAurora ? 0xeaf2ff : 0xfff7eb);
-      lights.keyLight.intensity = 1.5;
+      lights.keyLight.intensity = 1.72;
       lights.rimLight.color.setHex(isAurora ? 0x9ec4f6 : 0xe6c792);
       lights.rimLight.intensity = 3.2;
       lights.coolFillLight.color.setHex(isAurora ? 0x98b8e6 : 0x8fa8c8);
-      lights.coolFillLight.intensity = 0.5;
+      lights.coolFillLight.intensity = 0.64;
       lights.fillLight.color.setHex(isAurora ? 0xcadbf5 : 0xf6efe6);
       lights.fillLight.groundColor.setHex(isAurora ? 0x151d2e : 0x1e1a16);
       lights.fillLight.intensity = 0.48;
@@ -2120,7 +2210,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       lights.pedestalGlow.intensity = 1.15;
     } else {
       lights.keyLight.color.setHex(isAurora ? 0xf3f7ff : 0xfff9f0);
-      lights.keyLight.intensity = 1.65;
+      lights.keyLight.intensity = 1.75;
       lights.rimLight.color.setHex(isAurora ? 0x8fb5e6 : 0xdcb982);
       lights.rimLight.intensity = 2.25;
       lights.coolFillLight.color.setHex(isAurora ? 0xb4ccf0 : 0x9eb4d0);
@@ -2359,14 +2449,14 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       turntableGroup.updateMatrixWorld(true);
       invTurntableMatrix.copy(turntableGroup.matrixWorld).invert();
 
-      if (avatar.rightPalmMiddleBone && avatar.rightPalmThumbBone) {
-        // Exact center of her closed right fist between middle knuckle & thumb
-        avatar.rightPalmMiddleBone.getWorldPosition(handWorldPos);
-        avatar.rightPalmThumbBone.getWorldPosition(auxHandWorldPos);
+      if (avatar.umbrellaPalmMiddleBone && avatar.umbrellaPalmThumbBone) {
+        // Exact center of her closed fist between middle knuckle & thumb
+        avatar.umbrellaPalmMiddleBone.getWorldPosition(handWorldPos);
+        avatar.umbrellaPalmThumbBone.getWorldPosition(auxHandWorldPos);
         handWorldPos.add(auxHandWorldPos).multiplyScalar(0.5);
         handWorldPos.applyMatrix4(invTurntableMatrix);
-      } else if (avatar.rightHandBone) {
-        avatar.rightHandBone.getWorldPosition(handWorldPos);
+      } else if (avatar.umbrellaHandBone) {
+        avatar.umbrellaHandBone.getWorldPosition(handWorldPos);
         handWorldPos.applyMatrix4(invTurntableMatrix);
       } else {
         const s = avatar.scaleFactor;
@@ -2377,9 +2467,13 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         );
       }
 
-      // Position handle grip cleanly in her raised right hand; tilt canopy directly overhead with face/hair clearance
+      // Position handle grip cleanly in her raised hand; tilt canopy gracefully inward over head
       umbrella.group.position.copy(handWorldPos);
-      umbrella.group.rotation.set(-0.19 + rainBreeze * 0.45, 0, -0.14 + rainBreeze);
+      if (avatar.umbrellaAnchorSide === 'left') {
+        umbrella.group.rotation.set(-0.14 + rainBreeze * 0.45, 0, 0.11 + rainBreeze);
+      } else {
+        umbrella.group.rotation.set(-0.19 + rainBreeze * 0.45, 0, -0.14 + rainBreeze);
+      }
     } else if (activeKind === 'coutureCoat') {
       // Suspended gracefully overhead above the 1.94u Couture Trench Coat & gold iNVTRY hook
       umbrella.group.position.set(-0.44, 1.1, -0.06);
@@ -2461,35 +2555,63 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     const subtabSpeed =
       currentSubtab === 'atelier' ? 1.25 : currentSubtab === 'intelligence' ? 0.85 : 1.0;
     const walkBoost = 1.0 + walkBlend * 0.72;
+    const isDark = currentTheme === 'dark';
 
-    if (!reducedMotion) {
-      orbitals.outerSpin.rotation.z = elapsed * 0.24 * subtabSpeed * walkBoost;
-      orbitals.innerSpin.rotation.z = -elapsed * 0.31 * subtabSpeed * walkBoost;
+    if (reducedMotion) {
+      orbitals.outerSpin.rotation.z = 0;
+      orbitals.innerSpin.rotation.z = 0;
+      orbitals.outerPivot.rotation.set(Math.PI * 0.4 + subtabRingLift * 0.35, 0.22, -0.32);
+      orbitals.innerPivot.rotation.set(Math.PI * 0.46 - subtabRingLift * 0.25, -0.26, 0.34);
+      orbitals.group.position.y = 0.06 + subtabRingLift;
+      orbitals.arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
+      orbitals.sparkMat.emissiveIntensity = isDark ? 0.94 : 0.58;
+      return;
     }
 
+    // Brisk counter-rotating orbital sweep
+    orbitals.outerSpin.rotation.z = elapsed * 0.96 * subtabSpeed * walkBoost;
+    orbitals.innerSpin.rotation.z = -elapsed * 1.28 * subtabSpeed * walkBoost;
+
+    // Continuous 3D gyroscopic precession + graceful tilt wave on both orbital rings
     orbitals.outerPivot.rotation.set(
-      Math.PI * 0.41 + hoverSmoothY * 0.06 + subtabRingLift * 0.4,
-      0.22 + hoverSmoothX * 0.08,
-      -0.34 + (reducedMotion ? 0 : Math.sin(elapsed * 0.45) * 0.03)
+      Math.PI * 0.4 +
+        Math.sin(elapsed * 0.68) * 0.14 +
+        hoverSmoothY * 0.06 +
+        subtabRingLift * 0.35,
+      0.22 + elapsed * 0.38 * subtabSpeed * walkBoost + hoverSmoothX * 0.08,
+      -0.32 + Math.cos(elapsed * 0.56) * 0.15
     );
     orbitals.innerPivot.rotation.set(
-      Math.PI * 0.45 - hoverSmoothY * 0.05 - subtabRingLift * 0.3,
-      -0.26 - hoverSmoothX * 0.07,
-      0.36 + (reducedMotion ? 0 : Math.cos(elapsed * 0.38) * 0.03)
+      Math.PI * 0.46 +
+        Math.cos(elapsed * 0.62) * 0.16 -
+        hoverSmoothY * 0.05 -
+        subtabRingLift * 0.25,
+      -0.26 - elapsed * 0.46 * subtabSpeed * walkBoost - hoverSmoothX * 0.07,
+      0.34 + Math.sin(elapsed * 0.52) * 0.14
     );
-    orbitals.group.position.y = 0.06 + subtabRingLift;
 
-    if (!reducedMotion) {
-      const { seeds, positions } = starlight;
-      for (let i = 0; i < seeds.length; i++) {
-        const s = seeds[i];
-        const a = s.baseAngle + elapsed * s.orbitSpeed;
-        positions[i * 3] = Math.cos(a) * s.baseRadius;
-        positions[i * 3 + 1] = s.baseY + Math.sin(elapsed * 1.15 + s.phase) * s.bobAmp;
-        positions[i * 3 + 2] = Math.sin(a) * s.baseRadius;
-      }
-      starlight.positionAttr.needsUpdate = true;
+    // Gentle vertical breathing float
+    orbitals.group.position.y = 0.06 + subtabRingLift + Math.sin(elapsed * 0.92) * 0.038;
+
+    // Subtle live shimmer pulse on sweeping luminous arcs & orbiting satellite orbs
+    const shimmerWave = 0.5 + 0.5 * Math.sin(elapsed * 2.4);
+    const sparkWave = 0.5 + 0.5 * Math.cos(elapsed * 3.1 + 0.7);
+    orbitals.arcGlowMat.emissiveIntensity = isDark
+      ? 0.76 + shimmerWave * 0.28
+      : 0.46 + shimmerWave * 0.18;
+    orbitals.sparkMat.emissiveIntensity = isDark
+      ? 0.88 + sparkWave * 0.34
+      : 0.54 + sparkWave * 0.22;
+
+    const { seeds, positions } = starlight;
+    for (let i = 0; i < seeds.length; i++) {
+      const s = seeds[i];
+      const a = s.baseAngle + elapsed * s.orbitSpeed;
+      positions[i * 3] = Math.cos(a) * s.baseRadius;
+      positions[i * 3 + 1] = s.baseY + Math.sin(elapsed * 1.15 + s.phase) * s.bobAmp;
+      positions[i * 3 + 2] = Math.sin(a) * s.baseRadius;
     }
+    starlight.positionAttr.needsUpdate = true;
   };
 
   /* ------------------------------------------------------------------------
@@ -2562,6 +2684,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         applyCustomDropInPose(0, 0, currentPose, ctx.reducedMotion);
       }
       updateUmbrella(activeKind, 0, ctx.reducedMotion);
+      updateOrbitalsAndDust(0, ctx.reducedMotion);
     },
 
     onExit(_ctx: StageContext): void {
@@ -2696,9 +2819,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       disposeObject3D(group);
 
       avatar.loadedModel = null;
-      avatar.rightHandBone = null;
-      avatar.rightPalmMiddleBone = null;
-      avatar.rightPalmThumbBone = null;
+      avatar.umbrellaHandBone = null;
+      avatar.umbrellaPalmMiddleBone = null;
+      avatar.umbrellaPalmThumbBone = null;
       avatar.calibratedMaterials = [];
       avatar.isLoaded = false;
 

@@ -321,8 +321,8 @@ function SiteStageHudPanel({
   const stageHeader = (() => {
     if (activeStage === 'studio') {
       const tabs: readonly SubtabOption<StageInteractionState['studioSubtab']>[] = [
-        { id: 'preview', label: copy.subtabs.studioPreview },
         { id: 'atelier', label: copy.subtabs.studioAtelier },
+        { id: 'preview', label: copy.subtabs.studioPreview },
         { id: 'intelligence', label: copy.subtabs.studioIntel },
       ];
       return {
@@ -417,51 +417,6 @@ function SiteStageHudPanel({
       </button>
 
       <div
-        className="site-hud-header"
-        data-tab-count={stageHeader.tabs.length}
-        onPointerDown={(e) => beginSheetGesture(e, 'header')}
-        onTouchStart={(e) => beginSheetGesture(e, 'header')}
-      >
-        <div
-          className="site-hud-subtabs"
-          role="tablist"
-          aria-label={stageHeader.ariaLabel}
-          onKeyDown={(e) =>
-            handleSubtabKeys(
-              e,
-              stageHeader.tabs as readonly SubtabOption<string>[],
-              stageHeader.current,
-              stageHeader.prefix,
-              stageHeader.onSelect as (next: string) => void
-            )
-          }
-        >
-          {stageHeader.tabs.map((tab) => {
-            const isSelected = tab.id === stageHeader.current;
-            return (
-              <button
-                key={tab.id}
-                id={`${stageHeader.prefix}-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                aria-controls="site-hud-tabpanel"
-                tabIndex={isSelected ? 0 : -1}
-                className={`site-hud-subtab-btn ${isSelected ? 'is-active' : ''}`}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  (stageHeader.onSelect as (next: string) => void)(tab.id);
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-        {showHeaderBadge && <span className="site-hud-badge">{stageHeader.badge}</span>}
-      </div>
-
-      <div
         ref={scrollRef}
         id="site-hud-tabpanel"
         className="site-hud-scroll"
@@ -510,6 +465,51 @@ function SiteStageHudPanel({
             onUpdateInteraction={onUpdateInteraction}
           />
         )}
+      </div>
+
+      <div
+        className="site-hud-footer-dock"
+        data-tab-count={stageHeader.tabs.length}
+        onPointerDown={(e) => beginSheetGesture(e, 'header')}
+        onTouchStart={(e) => beginSheetGesture(e, 'header')}
+      >
+        <div
+          className="site-hud-subtabs"
+          role="tablist"
+          aria-label={stageHeader.ariaLabel}
+          onKeyDown={(e) =>
+            handleSubtabKeys(
+              e,
+              stageHeader.tabs as readonly SubtabOption<string>[],
+              stageHeader.current,
+              stageHeader.prefix,
+              stageHeader.onSelect as (next: string) => void
+            )
+          }
+        >
+          {stageHeader.tabs.map((tab) => {
+            const isSelected = tab.id === stageHeader.current;
+            return (
+              <button
+                key={tab.id}
+                id={`${stageHeader.prefix}-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls="site-hud-tabpanel"
+                tabIndex={isSelected ? 0 : -1}
+                className={`site-hud-subtab-btn ${isSelected ? 'is-active' : ''}`}
+                onClick={() => {
+                  triggerHaptic('selection');
+                  (stageHeader.onSelect as (next: string) => void)(tab.id);
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+        {showHeaderBadge && <span className="site-hud-badge">{stageHeader.badge}</span>}
       </div>
     </aside>
   );

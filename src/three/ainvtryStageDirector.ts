@@ -51,7 +51,7 @@ export interface StageInteractionState {
 }
 
 export const DEFAULT_STAGE_INTERACTION_STATE: Readonly<StageInteractionState> = {
-  studioSubtab: 'preview',
+  studioSubtab: 'atelier',
   studioPreviewScreen: 'outfits',
   studioPose: 'stand',
   studioModelMode: 'mannequin',
