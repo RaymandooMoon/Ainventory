@@ -864,36 +864,80 @@ describe('AinvtryStageDirector', () => {
     director.dispose();
   });
 
-  it('references a versioned cache-busted avatar GLB containing Stand, Walk, and Rain animation clips', async () => {
+  it('references cache-busted v4 avatar and v2 couture coat GLBs with full SpringBone hierarchies', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const studioSrc = fs.readFileSync(
       path.resolve('src/three/stages/studioStage.ts'),
       'utf8'
     );
-    const match = studioSrc.match(
+
+    const parseGlbJson = (urlPath: string) => {
+      const glbFile = path.resolve('site/public', urlPath.replace(/^\//, ''));
+      assert.ok(fs.existsSync(glbFile), `Expected GLB to exist at ${glbFile}`);
+      const buf = fs.readFileSync(glbFile);
+      assert.equal(buf.subarray(0, 4).toString('ascii'), 'glTF', `${urlPath} must have valid glTF magic header`);
+      const jsonChunkLen = buf.readUInt32LE(12);
+      return JSON.parse(buf.subarray(20, 20 + jsonChunkLen).toString('utf8')) as {
+        animations?: Array<{ name?: string }>;
+        nodes?: Array<{ name?: string }>;
+        skins?: Array<{ joints?: number[] }>;
+      };
+    };
+
+    // 1. Primary Runway Avatar GLB (v4+): 3 clips + 9 Jiggle_* SpringBones (hair, blazer hem, bust)
+    const avatarMatch = studioSrc.match(
       /const\s+HF_FASHION_AVATAR_GLB_URL\s*=\s*'(\/assets\/models\/hf-fashion-avatar-v(\d+)\.glb)'/
     );
-    assert.ok(match, 'studioStage.ts must declare a versioned HF_FASHION_AVATAR_GLB_URL');
-    const [, urlPath, versionStr] = match;
+    assert.ok(avatarMatch, 'studioStage.ts must declare a versioned HF_FASHION_AVATAR_GLB_URL');
+    const [, avatarUrl, avatarVer] = avatarMatch;
     assert.ok(
-      Number(versionStr) >= 3,
-      `Expected cache-busted avatar version >= 3 for immutable /assets/* caching, got v${versionStr}`
+      Number(avatarVer) >= 4,
+      `Expected cache-busted SpringBone avatar version >= 4, got v${avatarVer}`
     );
 
-    const glbFile = path.resolve('site/public', urlPath.replace(/^\//, ''));
-    assert.ok(fs.existsSync(glbFile), `Expected avatar GLB to exist at ${glbFile}`);
+    const avatarJson = parseGlbJson(avatarUrl);
+    const clipNames = (avatarJson.animations ?? []).map((clip) => clip.name);
+    assert.ok(clipNames.includes('Stand'), `Expected Stand clip in ${avatarUrl}`);
+    assert.ok(clipNames.includes('Walk'), `Expected Walk clip in ${avatarUrl}`);
+    assert.ok(clipNames.includes('Rain'), `Expected Rain clip in ${avatarUrl}`);
 
-    const buf = fs.readFileSync(glbFile);
-    assert.equal(buf.subarray(0, 4).toString('ascii'), 'glTF', 'Avatar GLB must have valid glTF magic header');
-    const jsonChunkLen = buf.readUInt32LE(12);
-    const gltfJson = JSON.parse(buf.subarray(20, 20 + jsonChunkLen).toString('utf8')) as {
-      animations?: Array<{ name?: string }>;
-    };
-    const clipNames = (gltfJson.animations ?? []).map((clip) => clip.name);
-    assert.ok(clipNames.includes('Stand'), `Expected Stand clip in ${urlPath}, got ${clipNames.join(', ')}`);
-    assert.ok(clipNames.includes('Walk'), `Expected Walk clip in ${urlPath}, got ${clipNames.join(', ')}`);
-    assert.ok(clipNames.includes('Rain'), `Expected Rain clip in ${urlPath}, got ${clipNames.join(', ')}`);
+    const avatarJiggleJoints = (avatarJson.nodes ?? [])
+      .map((n) => n.name ?? '')
+      .filter((name) => /^Jiggle_/i.test(name) && !/_Tip$/i.test(name));
+    assert.ok(
+      avatarJiggleJoints.filter((n) => n.startsWith('Jiggle_Hair_')).length >= 3,
+      `Expected 3-link ponytail chain in ${avatarUrl}, got ${avatarJiggleJoints.join(', ')}`
+    );
+    assert.ok(
+      avatarJiggleJoints.filter((n) => n.startsWith('Jiggle_JacketHem_')).length >= 4,
+      `Expected 4 blazer hem SpringBones in ${avatarUrl}, got ${avatarJiggleJoints.join(', ')}`
+    );
+    assert.ok(
+      avatarJiggleJoints.filter((n) => n.startsWith('Jiggle_Bust_')).length >= 2,
+      `Expected L/R bust SpringBones in ${avatarUrl}, got ${avatarJiggleJoints.join(', ')}`
+    );
+
+    // 2. Couture Trench Coat GLB (v2+): Skinned 8-spoke perimeter skirt SpringBones
+    const coatMatch = studioSrc.match(
+      /const\s+HF_COUTURE_COAT_GLB_URL\s*=\s*'(\/assets\/models\/hf-couture-coat-v(\d+)\.glb)'/
+    );
+    assert.ok(coatMatch, 'studioStage.ts must declare a versioned HF_COUTURE_COAT_GLB_URL');
+    const [, coatUrl, coatVer] = coatMatch;
+    assert.ok(
+      Number(coatVer) >= 2,
+      `Expected cache-busted SpringBone couture coat version >= 2, got v${coatVer}`
+    );
+
+    const coatJson = parseGlbJson(coatUrl);
+    assert.ok((coatJson.skins ?? []).length >= 1, `Expected rigged skin in ${coatUrl}`);
+    const coatJiggleJoints = (coatJson.nodes ?? [])
+      .map((n) => n.name ?? '')
+      .filter((name) => /^Jiggle_CoatHem_/i.test(name) && !/_Tip$/i.test(name));
+    assert.ok(
+      coatJiggleJoints.length >= 8,
+      `Expected 8 perimeter skirt SpringBones in ${coatUrl}, got ${coatJiggleJoints.join(', ')}`
+    );
   });
 });
 

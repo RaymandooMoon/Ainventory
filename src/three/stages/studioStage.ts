@@ -12,16 +12,18 @@
  *    lightweight floating starlight dust points.
  * 3. Default Mode (`'mannequin'`): Blender 4.0.2 welded & Subdiv-L1 smoothed
  *    48k-tri MIT Microsoft Rocketbox 2K PBR pinstripe-suit editorial avatar
- *    (`/assets/models/hf-fashion-avatar-v3.glb`) normalized via `Box3` to
+ *    (`/assets/models/hf-fashion-avatar-v4.glb`) normalized via `Box3` to
  *    `1.94 u`, grounded flush at `y = 0`, PBR-tuned for `RoomEnvironment` +
  *    `ACESFilmicToneMapping`, with 3-clip smooth `THREE.AnimationMixer`
- *    crossfade (`Stand` / `Walk` / `Rain`) and live left-hand (or Mixamo
- *    right-hand fallback) smoked-glass umbrella grip attachment.
+ *    crossfade (`Stand` / `Walk` / `Rain`), real-time `SpringBoneSolver`
+ *    secondary physics (3-link ponytail hair, blazer hem drape, soft-body
+ *    bust inertia), and live left-hand smoked-glass umbrella grip attachment.
  * 4. Couture Dress Form Mode (`'dressform'`): Hugging Face woven-wool Couture
  *    Trench Coat on obsidian atelier bust & brushed champagne-gold `iNVTRY`
- *    hanger stand (`/assets/models/hf-couture-coat-v1.glb`) normalized to
- *    `1.94 u`, with zero-blank-frame instant procedural Obsidian Couture Dress
- *    Form fallback silhouette shown only while the active GLB streams.
+ *    hanger stand (`/assets/models/hf-couture-coat-v2.glb`) with 8-spoke
+ *    `SpringBoneSolver` skirt hem physics normalized to `1.94 u`, with
+ *    zero-blank-frame instant procedural Obsidian Couture Dress Form fallback
+ *    silhouette shown only while the active GLB streams.
  * 5. Silent Auto Drop-In `/models/mannequin.glb` (with lazy `DRACOLoader`
  *    instantiated only when present, magic-byte `glTF` verification for zero
  *    console errors, `Box3` 1.8u auto-scaling & grounding, and AnimationMixer).
@@ -49,13 +51,14 @@ import {
   createSmokedGlassMaterial,
   disposeObject3D,
 } from './stageMaterials.ts';
+import { SpringBoneSolver } from './springBoneSolver.ts';
 
 /* ==========================================================================
  * 1. Stage Spatial, Model & Animation Constants
  * ========================================================================== */
 
-const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v3.glb';
-const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v1.glb';
+const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v4.glb';
+const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v2.glb';
 const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
 const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
 
@@ -1058,6 +1061,7 @@ interface FashionAvatarRig {
   readonly modelSlot: THREE.Group;
   loadedModel: THREE.Object3D | null;
   mixer: THREE.AnimationMixer | null;
+  springSolver: SpringBoneSolver | null;
   standAction: THREE.AnimationAction | null;
   walkAction: THREE.AnimationAction | null;
   rainAction: THREE.AnimationAction | null;
@@ -1077,6 +1081,7 @@ interface CoutureCoatRig {
   readonly root: THREE.Group;
   readonly modelSlot: THREE.Group;
   loadedModel: THREE.Object3D | null;
+  springSolver: SpringBoneSolver | null;
   fabricMaterials: THREE.MeshStandardMaterial[];
   hardwareMaterials: THREE.MeshStandardMaterial[];
   coreMaterials: THREE.MeshStandardMaterial[];
@@ -1089,6 +1094,7 @@ interface CustomDropInRig {
   readonly modelSlot: THREE.Group;
   loadedModel: THREE.Object3D | null;
   mixer: THREE.AnimationMixer | null;
+  springSolver: SpringBoneSolver | null;
   standAction: THREE.AnimationAction | null;
   walkAction: THREE.AnimationAction | null;
   activeClip: 'stand' | 'walk';
@@ -1109,6 +1115,7 @@ function buildFashionAvatarRig(): FashionAvatarRig {
     modelSlot,
     loadedModel: null,
     mixer: null,
+    springSolver: null,
     standAction: null,
     walkAction: null,
     rainAction: null,
@@ -1138,6 +1145,7 @@ function buildCoutureCoatRig(): CoutureCoatRig {
     root,
     modelSlot,
     loadedModel: null,
+    springSolver: null,
     fabricMaterials: [],
     hardwareMaterials: [],
     coreMaterials: [],
@@ -1160,6 +1168,7 @@ function buildCustomDropInRig(): CustomDropInRig {
     modelSlot,
     loadedModel: null,
     mixer: null,
+    springSolver: null,
     standAction: null,
     walkAction: null,
     activeClip: 'stand',
@@ -1370,20 +1379,31 @@ function prepareFashionAvatarModel(
     targetRig.umbrellaPalmThumbBone = mixamoRightPalmThumb;
   }
 
+  // Strip any sampled Jiggle_* tracks so AnimationMixer never fights real-time SpringBoneSolver
+  const stripJiggleTracks = (clip: THREE.AnimationClip): THREE.AnimationClip => {
+    const filteredTracks = clip.tracks.filter(
+      (track) => !/(^|[/.])Jiggle_/i.test(track.name)
+    );
+    return filteredTracks.length === clip.tracks.length
+      ? clip
+      : new THREE.AnimationClip(clip.name, clip.duration, filteredTracks);
+  };
+
   // Bind 3-clip AnimationMixer ('Stand', 'Walk', 'Rain') with case-insensitive fallback
   if (gltf.animations.length > 0) {
     const mixer = new THREE.AnimationMixer(model);
+    const cleanedClips = gltf.animations.map(stripJiggleTracks);
     const standClip =
-      gltf.animations.find((clip) => /^stand$/i.test(clip.name)) ??
-      gltf.animations.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
-      gltf.animations[0];
+      cleanedClips.find((clip) => /^stand$/i.test(clip.name)) ??
+      cleanedClips.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
+      cleanedClips[0];
     const walkClip =
-      gltf.animations.find((clip) => /^walk$/i.test(clip.name)) ??
-      gltf.animations.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
+      cleanedClips.find((clip) => /^walk$/i.test(clip.name)) ??
+      cleanedClips.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
       standClip;
     const rainClip =
-      gltf.animations.find((clip) => /^rain$/i.test(clip.name)) ??
-      gltf.animations.find((clip) => /rain|umbrella|shelter/i.test(clip.name)) ??
+      cleanedClips.find((clip) => /^rain$/i.test(clip.name)) ??
+      cleanedClips.find((clip) => /rain|umbrella|shelter/i.test(clip.name)) ??
       standClip;
 
     const standAction = mixer.clipAction(standClip);
@@ -1420,6 +1440,8 @@ function prepareFashionAvatarModel(
 
   targetRig.loadedModel = model;
   targetRig.modelSlot.add(model);
+  const avatarSolver = SpringBoneSolver.fromObject3D(model);
+  targetRig.springSolver = avatarSolver.boneCount > 0 ? avatarSolver : null;
   targetRig.isLoaded = true;
   targetRig.loadFade = reducedMotion ? 1 : 0;
   targetRig.modelSlot.scale.setScalar(reducedMotion ? 1 : 0.985);
@@ -1471,6 +1493,8 @@ function prepareCoutureCoatModel(
 
   targetRig.loadedModel = model;
   targetRig.modelSlot.add(model);
+  const coatSolver = SpringBoneSolver.fromObject3D(model);
+  targetRig.springSolver = coatSolver.boneCount > 0 ? coatSolver : null;
   targetRig.isLoaded = true;
   targetRig.loadFade = reducedMotion ? 1 : 0;
   targetRig.modelSlot.scale.setScalar(reducedMotion ? 1 : 0.985);
@@ -1502,12 +1526,18 @@ function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void 
   // Bind Stand / Walk animation clips when embedded animations exist
   if (gltf.animations.length > 0) {
     const mixer = new THREE.AnimationMixer(model);
+    const cleanedClips = gltf.animations.map((clip) => {
+      const filtered = clip.tracks.filter((track) => !/(^|[/.])Jiggle_/i.test(track.name));
+      return filtered.length === clip.tracks.length
+        ? clip
+        : new THREE.AnimationClip(clip.name, clip.duration, filtered);
+    });
     const standClip =
-      gltf.animations.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
-      gltf.animations[0];
+      cleanedClips.find((clip) => /stand|idle|breath/i.test(clip.name)) ??
+      cleanedClips[0];
     const walkClip =
-      gltf.animations.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
-      gltf.animations[1] ??
+      cleanedClips.find((clip) => /walk|run|stride|catwalk/i.test(clip.name)) ??
+      cleanedClips[1] ??
       standClip;
 
     const standAction = mixer.clipAction(standClip);
@@ -1522,6 +1552,8 @@ function prepareCustomDropInModel(gltf: GLTF, targetRig: CustomDropInRig): void 
 
   targetRig.loadedModel = model;
   targetRig.modelSlot.add(model);
+  const customSolver = SpringBoneSolver.fromObject3D(model);
+  targetRig.springSolver = customSolver.boneCount > 0 ? customSolver : null;
   targetRig.isLoaded = true;
 }
 
@@ -1742,6 +1774,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   const handWorldPos = new THREE.Vector3();
   const auxHandWorldPos = new THREE.Vector3();
   const canopyStagePos = new THREE.Vector3();
+  const springWindScratch = new THREE.Vector3();
   const invTurntableMatrix = new THREE.Matrix4();
   const invStageMatrix = new THREE.Matrix4();
 
@@ -2684,6 +2717,53 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     starlight.positionAttr.needsUpdate = true;
   };
 
+  const updateSpringPhysics = (
+    activeKind: ActiveModelKind,
+    dt: number,
+    elapsed: number,
+    reducedMotion: boolean
+  ): void => {
+    const activeSolver =
+      activeKind === 'avatar'
+        ? avatar.springSolver
+        : activeKind === 'coutureCoat'
+          ? coutureCoat.springSolver
+          : activeKind === 'custom'
+            ? customDropIn.springSolver
+            : null;
+    if (!activeSolver) return;
+
+    // Synthesize subtle organic studio airflow + forward walk draft + diagonal rain gusts
+    const standWeight = Math.max(0, 1 - walkBlend - rainBlend);
+    const studioDraftX = Math.sin(elapsed * 0.95) * 0.42 * standWeight;
+    const studioDraftZ = Math.cos(elapsed * 0.72) * 0.32 * standWeight;
+
+    // Forward walk relative breeze trails hair & hems backward along the avatar's facing (-forward)
+    const walkGust = (1.65 + Math.sin(elapsed * 5.2) * 0.65) * walkBlend;
+    const sinYaw = Math.sin(currentAngleRad);
+    const cosYaw = Math.cos(currentAngleRad);
+    const walkWindX = -sinYaw * walkGust + Math.cos(elapsed * 3.1) * 0.38 * walkBlend;
+    const walkWindZ = -cosYaw * walkGust;
+
+    // Diagonal rain breeze aligned with rain streak direction (-X, +Z) + soft rhythmic gusts
+    const rainPulse = 0.76 + 0.3 * Math.sin(elapsed * 2.35) + 0.16 * Math.cos(elapsed * 4.1);
+    const rainWindX = -3.35 * rainPulse * rainBlend;
+    const rainWindZ = 1.15 * rainPulse * rainBlend;
+
+    springWindScratch.set(
+      studioDraftX + walkWindX + rainWindX,
+      0,
+      studioDraftZ + walkWindZ + rainWindZ
+    );
+
+    turntableGroup.updateMatrixWorld(true);
+    activeSolver.update({
+      dt,
+      windWorld: springWindScratch,
+      reducedMotion,
+    });
+  };
+
   /* ------------------------------------------------------------------------
    * StageModule Implementation
    * ------------------------------------------------------------------------ */
@@ -2732,6 +2812,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       turntableGroup.rotation.y = currentAngleRad;
 
       const activeKind = syncActiveModelVisibility();
+      avatar.springSolver?.reset();
+      coutureCoat.springSolver?.reset();
+      customDropIn.springSolver?.reset();
 
       if (avatar.isLoaded && ctx.reducedMotion) {
         avatar.loadFade = 1;
@@ -2753,6 +2836,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       } else {
         applyCustomDropInPose(0, 0, currentPose, ctx.reducedMotion);
       }
+      updateSpringPhysics(activeKind, 0, 0, ctx.reducedMotion);
       updateUmbrella(activeKind, 0, ctx.reducedMotion);
       updateOrbitalsAndDust(0, ctx.reducedMotion);
     },
@@ -2762,6 +2846,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       hoverTargetY = 0;
       hoverSmoothX = 0;
       hoverSmoothY = 0;
+      avatar.springSolver?.reset();
+      coutureCoat.springSolver?.reset();
+      customDropIn.springSolver?.reset();
     },
 
     onGlassChange(glassRatio: number): void {
@@ -2783,6 +2870,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         requestedModelMode = patch.studioModelMode;
         userExplicitlySelectedDressform = patch.studioModelMode === 'dressform';
         syncActiveModelVisibility();
+        avatar.springSolver?.reset();
+        coutureCoat.springSolver?.reset();
+        customDropIn.springSolver?.reset();
       }
     },
 
@@ -2848,6 +2938,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         applyCustomDropInPose(dt, elapsed, currentPose, ctx.reducedMotion);
       }
 
+      updateSpringPhysics(activeKind, dt, elapsed, ctx.reducedMotion);
       updateUmbrella(activeKind, elapsed, ctx.reducedMotion);
       updateRainParticles(activeKind, dt, ctx.reducedMotion);
       updateOrbitalsAndDust(elapsed, ctx.reducedMotion);
@@ -2878,6 +2969,10 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         customDropIn.standAction = null;
         customDropIn.walkAction = null;
       }
+
+      avatar.springSolver = null;
+      coutureCoat.springSolver = null;
+      customDropIn.springSolver = null;
 
       disposeLoadersIfIdle();
 
