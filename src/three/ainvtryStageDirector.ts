@@ -169,7 +169,8 @@ const PORTRAIT_ASPECT_THRESHOLD = 0.85;
 const DESKTOP_ASPECT_THRESHOLD = 1.0;
 const MOBILE_VIEWPORT_WIDTH_PX = 860;
 const DEFAULT_PORTRAIT_LOOK_Y_OFFSET = 0.42;
-const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 1.48;
+// Calibrated for top-pinned 3D control dock + resting 30dvh bottom sheet so avatar & umbrella sit centered
+const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 0.94;
 
 /**
  * Computes responsive camera position and lookAt vectors from a desktop base

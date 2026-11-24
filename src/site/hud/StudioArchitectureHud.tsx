@@ -2,8 +2,6 @@ import { useId, useMemo, useState } from 'react';
 import {
   ArrowRight,
   Calendar,
-  RotateCcw,
-  RotateCw,
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -18,15 +16,8 @@ import {
   type SiteLang,
   type SitePrivacyShield,
   type SiteTheme,
-  type StudioPoseId,
-  type WeatherMoodId,
 } from '../siteContent.ts';
 import { handleTablistArrows } from './tablistArrows.ts';
-
-function normalizeDegrees(angleRad: number): number {
-  const deg = Math.round(((angleRad * 180) / Math.PI) % 360);
-  return deg < 0 ? deg + 360 : deg;
-}
 
 /* ==========================================================================
  * 1. STUDIO STAGE HUD (3D Fitting | Live App | Care & CPW)
@@ -59,22 +50,6 @@ export function StudioStageHud({
     const pillar = copy.capabilities.pillars.atelier;
     const activeFeature = pillar.features.find((f) => f.id === atelierFeatId) ?? pillar.features[0];
     const poseInfo = copy.interactive.poseTelemetry[interaction.studioPose];
-    const angleDeg = normalizeDegrees(interaction.studioAngleRad);
-    const activeModelMode = interaction.studioModelMode ?? 'mannequin';
-
-    const modelModes: readonly {
-      readonly id: StageInteractionState['studioModelMode'];
-      readonly label: string;
-    }[] = [
-      { id: 'mannequin', label: lang === 'ko' ? '런웨이 3D' : 'Runway 3D' },
-      { id: 'dressform', label: lang === 'ko' ? '쿠튀르 코트' : 'Couture Coat' },
-    ];
-
-    const poses: readonly { readonly id: StudioPoseId; readonly label: string }[] = [
-      { id: 'stand', label: copy.interactive.stanceIdle },
-      { id: 'walk', label: copy.interactive.stanceWalk },
-      { id: 'rain', label: copy.interactive.stanceRain },
-    ];
 
     return (
       <div className="hud-stack">
@@ -117,107 +92,6 @@ export function StudioStageHud({
         </div>
 
         <div className="hud-interactive-zone">
-          <span className="hud-deck-cue">
-            {lang === 'ko' ? '3D 컨트롤 · 탭하여 전환' : '3D CONTROLS · TAP TO SWITCH'}
-          </span>
-
-          {/* Live 3D Pose, 360° Turntable & Dual-Mode Model Switcher synced directly to studioStage */}
-          <div className="hud-card hud-control-deck">
-            <div className="hud-control-zone">
-              <div className="hud-model-mode-row">
-                <span className="hud-eyebrow hud-model-mode-label">
-                  {lang === 'ko' ? '3D 모델' : '3D Model'}
-                </span>
-                <div
-                  className="hud-segmented hud-segmented--model"
-                  role="group"
-                  aria-label={lang === 'ko' ? '3D 모델 전환' : '3D model mode'}
-                >
-                  {modelModes.map((mode) => {
-                    const isSelected = activeModelMode === mode.id;
-                    return (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        className={`hud-seg-btn ${isSelected ? 'is-active' : ''}`}
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          onUpdateInteraction({ studioModelMode: mode.id });
-                        }}
-                      >
-                        {mode.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="hud-control-row">
-                <div className="hud-segmented" role="group" aria-label="3D pose posture">
-                  {poses.map((pose) => {
-                    const isSelected = interaction.studioPose === pose.id;
-                    return (
-                      <button
-                        key={pose.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        className={`hud-seg-btn ${isSelected ? 'is-active' : ''}`}
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          onUpdateInteraction({ studioPose: pose.id });
-                        }}
-                      >
-                        {pose.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Live 360° Turntable Angle Readout & Quick Step */}
-                <div className="hud-angle-ctrl">
-                  <button
-                    type="button"
-                    className="hud-icon-step-btn"
-                    aria-label="Rotate -45 degrees"
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      onUpdateInteraction({
-                        studioAngleRad: interaction.studioAngleRad - Math.PI * 0.25,
-                      });
-                    }}
-                  >
-                    <RotateCcw size={13} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="hud-angle-readout"
-                    title="Reset 0°"
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      onUpdateInteraction({ studioAngleRad: 0 });
-                    }}
-                  >
-                    {angleDeg}°
-                  </button>
-                  <button
-                    type="button"
-                    className="hud-icon-step-btn"
-                    aria-label="Rotate +45 degrees"
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      onUpdateInteraction({
-                        studioAngleRad: interaction.studioAngleRad + Math.PI * 0.25,
-                      });
-                    }}
-                  >
-                    <RotateCw size={13} aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <span className="hud-deck-cue">
             {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
           </span>
@@ -284,7 +158,7 @@ export function StudioStageHud({
 
     return (
       <div className="hud-stack">
-        <div className="hud-display-zone">
+        <div className="hud-display-zone hud-display-zone--preview">
           <div className="hud-section-head">
             <div>
               <span className="hud-eyebrow">{copy.appPreview.code}</span>
@@ -301,17 +175,19 @@ export function StudioStageHud({
             aria-labelledby={`${previewPrefix}-${activeScreen.id}`}
             aria-live="polite"
           >
-            <div className="hud-phone-frame" data-phone-theme={theme}>
-              <div className="hud-phone-island" aria-hidden="true" />
-              <img
-                key={`${activeScreen.id}-${lang}-${theme}`}
-                src={resolvedSrc}
-                alt={`${activeScreen.imageAlt} (${modeLabel})`}
-                width={500}
-                height={1044}
-                decoding="async"
-                className="hud-phone-img"
-              />
+            <div className="hud-phone-stage">
+              <div className="hud-phone-frame" data-phone-theme={theme}>
+                <div className="hud-phone-island" aria-hidden="true" />
+                <img
+                  key={`${activeScreen.id}-${lang}-${theme}`}
+                  src={resolvedSrc}
+                  alt={`${activeScreen.imageAlt} (${modeLabel})`}
+                  width={500}
+                  height={1044}
+                  decoding="async"
+                  className="hud-phone-img"
+                />
+              </div>
             </div>
 
             <div className="hud-preview-summary">
@@ -600,32 +476,6 @@ export function ArchitectureStageHud({
         </div>
 
         <div className="hud-interactive-zone">
-          {/* Dev (MVP) vs Prod Scale + GPU Toggle */}
-          <div className="hud-segmented hud-segmented--full" role="group" aria-label="Deployment scale mode">
-            <button
-              type="button"
-              aria-pressed={isMvp}
-              className={`hud-seg-btn ${isMvp ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                onUpdateInteraction({ architectureMode: 'mvp' });
-              }}
-            >
-              {arch.modeDevLabel}
-            </button>
-            <button
-              type="button"
-              aria-pressed={!isMvp}
-              className={`hud-seg-btn ${!isMvp ? 'is-active' : ''}`}
-              onClick={() => {
-                triggerHaptic('selection');
-                onUpdateInteraction({ architectureMode: 'prod' });
-              }}
-            >
-              {arch.modeProdLabel}
-            </button>
-          </div>
-
           {/* Privacy 4-Shield Quick Strip */}
           <div className="hud-privacy-strip">
             <span className="hud-strip-kicker">
@@ -895,11 +745,6 @@ export function ArchitectureStageHud({
   const mapsPrefix = `${uid}-gapi`;
   const mapsPanelId = `${uid}-gapi-panel`;
   const mapsNodeIds = arch.mapsNodes.map((n) => n.id);
-  const weatherOptions: readonly { readonly id: WeatherMoodId; readonly label: string }[] = [
-    { id: 'sunny', label: arch.weatherMoods.sunny },
-    { id: 'rain', label: arch.weatherMoods.rain },
-    { id: 'wind', label: arch.weatherMoods.wind },
-  ];
 
   return (
     <div className="hud-stack">
@@ -983,28 +828,6 @@ export function ArchitectureStageHud({
       </div>
 
       <div className="hud-interactive-zone">
-        {activeApi.id === 'weather' && (
-          <div className="hud-segmented hud-segmented--full" role="group" aria-label="3D weather mode">
-            {weatherOptions.map((item) => {
-              const isSelected = interaction.weatherMood === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  className={`hud-seg-btn ${isSelected ? 'is-active' : ''}`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    onUpdateInteraction({ weatherMood: item.id });
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         <span className="hud-deck-cue">
           {lang === 'ko' ? '항목 선택 · 탭하여 상세 보기' : 'SELECT ITEM · TAP TO INSPECT'}
         </span>

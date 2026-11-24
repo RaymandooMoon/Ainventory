@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActiveStageId, StageInteractionState } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
+import { StageTopControlsDock } from './hud/StageTopControlsDock.tsx';
 import { ArchitectureStageHud, StudioStageHud } from './hud/StudioArchitectureHud.tsx';
+import { getTopControlsDockKind } from './hud/topControlsDockState.ts';
 import type { SiteCopy, SiteLang, SitePrivacyShield, SiteTheme } from './siteContent.ts';
 
 export interface SiteStageHudProps {
@@ -386,6 +388,7 @@ function SiteStageHudPanel({
   })();
 
   const showHeaderBadge = Boolean(stageHeader.badge) && stageHeader.tabs.length < 3;
+  const topDockKind = getTopControlsDockKind(activeStage, interaction, copy);
   const grabAriaLabel = isSheetExpanded
     ? lang === 'ko'
       ? '패널 접기 (3D 무대 크게 보기)'
@@ -395,14 +398,24 @@ function SiteStageHudPanel({
       : 'Expand panel upward';
 
   return (
-    <aside
-      className="site-hud-panel"
-      data-hud-surface="true"
-      data-no-marble="true"
-      data-stage={activeStage}
-      data-sheet-expanded={isSheetExpanded ? 'true' : 'false'}
-      aria-label={`${activeStage} inspector`}
-    >
+    <>
+      <StageTopControlsDock
+        activeStage={activeStage}
+        copy={copy}
+        lang={lang}
+        interaction={interaction}
+        onUpdateInteraction={onUpdateInteraction}
+      />
+
+      <aside
+        className="site-hud-panel"
+        data-hud-surface="true"
+        data-no-marble="true"
+        data-stage={activeStage}
+        data-top-dock={topDockKind}
+        data-sheet-expanded={isSheetExpanded ? 'true' : 'false'}
+        aria-label={`${activeStage} inspector`}
+      >
       <button
         type="button"
         className="site-hud-grab-btn"
@@ -512,6 +525,7 @@ function SiteStageHudPanel({
         {showHeaderBadge && <span className="site-hud-badge">{stageHeader.badge}</span>}
       </div>
     </aside>
+    </>
   );
 }
 
