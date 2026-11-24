@@ -91,11 +91,11 @@ const RAIN_COUNT = 96;
 const RAIN_COLUMN_RADIUS = 1.78;
 const RAIN_TOP_Y = 2.65;
 const RAIN_BOTTOM_Y = PEDESTAL_TOP_Y + 0.04;
-const UMBRELLA_DEFLECT_RADIUS = 0.92;
-const UMBRELLA_DEFLECT_Y_AVATAR = 1.54;
-const UMBRELLA_DEFLECT_Y_COUTURE_COAT = 1.44;
-const UMBRELLA_DEFLECT_Y_DRESSFORM = 1.56;
-const UMBRELLA_DEFLECT_Y_CUSTOM = 1.38;
+const UMBRELLA_DEFLECT_RADIUS = 0.54;
+const UMBRELLA_DEFLECT_Y_AVATAR = 1.02;
+const UMBRELLA_DEFLECT_Y_COUTURE_COAT = 1.0;
+const UMBRELLA_DEFLECT_Y_DRESSFORM = 1.12;
+const UMBRELLA_DEFLECT_Y_CUSTOM = 0.92;
 
 type ActiveModelKind = 'avatar' | 'coutureCoat' | 'dressformFallback' | 'custom';
 
@@ -381,11 +381,17 @@ function buildOrbitalSystem(mood: MoodMode, theme: ThemeMode): OrbitalRig {
   group.name = 'studio-orbital-rings';
   group.position.set(0, 0.06, 0);
 
-  const isDark = theme === 'dark';
   const ringMat = createChampagneGoldMaterial(mood, theme, 0.34);
+  ringMat.transparent = true;
+  ringMat.depthWrite = false;
+
   const arcGlowMat = createChampagneGoldMaterial(mood, theme, 0.85);
-  arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
+  arcGlowMat.transparent = true;
+  arcGlowMat.depthWrite = false;
+
   const sparkMat = createChampagneGoldMaterial(mood, theme, 0.92);
+  sparkMat.transparent = true;
+  sparkMat.depthWrite = false;
 
   // Outer sculpted gyroscopic orbital ring (radius 1.86)
   const outerPivot = new THREE.Group();
@@ -394,31 +400,31 @@ function buildOrbitalSystem(mood: MoodMode, theme: ThemeMode): OrbitalRig {
   const outerSpin = new THREE.Group();
   outerSpin.name = 'studio-orbital-outer-spin';
 
-  const outerGeo = new THREE.TorusGeometry(1.86, 0.011, 12, 96);
+  const outerGeo = new THREE.TorusGeometry(1.86, 0.0085, 12, 96);
   outerSpin.add(new THREE.Mesh(outerGeo, ringMat));
 
   // Sweeping luminous highlight arc + opposite counter-arc
-  const outerArcGeo = new THREE.TorusGeometry(1.86, 0.018, 12, 48, Math.PI * 0.44);
+  const outerArcGeo = new THREE.TorusGeometry(1.86, 0.0135, 12, 48, Math.PI * 0.44);
   outerSpin.add(new THREE.Mesh(outerArcGeo, arcGlowMat));
 
-  const outerCounterArcGeo = new THREE.TorusGeometry(1.86, 0.018, 12, 48, Math.PI * 0.24);
+  const outerCounterArcGeo = new THREE.TorusGeometry(1.86, 0.0115, 12, 32, Math.PI * 0.24);
   const outerCounterArc = new THREE.Mesh(outerCounterArcGeo, arcGlowMat);
   outerCounterArc.rotation.z = Math.PI;
   outerSpin.add(outerCounterArc);
 
   // 2 sculptural glowing satellite orbs on outer orbit
-  const outerNodeAGeo = new THREE.SphereGeometry(0.052, 16, 12);
+  const outerNodeAGeo = new THREE.SphereGeometry(0.044, 16, 12);
   const outerNodeA = new THREE.Mesh(outerNodeAGeo, sparkMat);
   outerNodeA.position.set(1.86, 0, 0);
   outerSpin.add(outerNodeA);
 
-  const outerNodeAHaloGeo = new THREE.TorusGeometry(0.082, 0.006, 10, 32);
+  const outerNodeAHaloGeo = new THREE.TorusGeometry(0.072, 0.0045, 10, 32);
   const outerNodeAHalo = new THREE.Mesh(outerNodeAHaloGeo, arcGlowMat);
   outerNodeAHalo.position.set(1.86, 0, 0);
   outerNodeAHalo.rotation.set(Math.PI * 0.38, Math.PI * 0.22, 0);
   outerSpin.add(outerNodeAHalo);
 
-  const outerNodeBGeo = new THREE.SphereGeometry(0.036, 14, 10);
+  const outerNodeBGeo = new THREE.SphereGeometry(0.032, 14, 10);
   const outerNodeB = new THREE.Mesh(outerNodeBGeo, sparkMat);
   outerNodeB.position.set(-1.86, 0, 0);
   outerSpin.add(outerNodeB);
@@ -433,32 +439,38 @@ function buildOrbitalSystem(mood: MoodMode, theme: ThemeMode): OrbitalRig {
   const innerSpin = new THREE.Group();
   innerSpin.name = 'studio-orbital-inner-spin';
 
-  const innerGeo = new THREE.TorusGeometry(1.64, 0.0095, 12, 96);
+  const innerGeo = new THREE.TorusGeometry(1.64, 0.0075, 12, 96);
   innerSpin.add(new THREE.Mesh(innerGeo, ringMat));
 
   // Sweeping luminous highlight arc on inner orbit
-  const innerArcGeo = new THREE.TorusGeometry(1.64, 0.016, 12, 48, Math.PI * 0.38);
+  const innerArcGeo = new THREE.TorusGeometry(1.64, 0.012, 12, 48, Math.PI * 0.38);
   innerSpin.add(new THREE.Mesh(innerArcGeo, arcGlowMat));
 
   // 2 glowing satellite orbs on inner orbit
-  const innerNodeAGeo = new THREE.SphereGeometry(0.044, 16, 12);
+  const innerNodeAGeo = new THREE.SphereGeometry(0.038, 16, 12);
   const innerNodeA = new THREE.Mesh(innerNodeAGeo, sparkMat);
   innerNodeA.position.set(0, 1.64, 0);
   innerSpin.add(innerNodeA);
 
-  const innerNodeAHaloGeo = new THREE.TorusGeometry(0.072, 0.0055, 10, 32);
+  const innerNodeAHaloGeo = new THREE.TorusGeometry(0.064, 0.0045, 10, 32);
   const innerNodeAHalo = new THREE.Mesh(innerNodeAHaloGeo, arcGlowMat);
   innerNodeAHalo.position.set(0, 1.64, 0);
   innerNodeAHalo.rotation.set(Math.PI * 0.42, -Math.PI * 0.24, 0);
   innerSpin.add(innerNodeAHalo);
 
-  const innerNodeBGeo = new THREE.SphereGeometry(0.03, 14, 10);
+  const innerNodeBGeo = new THREE.SphereGeometry(0.026, 14, 10);
   const innerNodeB = new THREE.Mesh(innerNodeBGeo, sparkMat);
   innerNodeB.position.set(0, -1.64, 0);
   innerSpin.add(innerNodeB);
 
   innerPivot.add(innerSpin);
   group.add(innerPivot);
+
+  group.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      obj.renderOrder = 3;
+    }
+  });
 
   return { group, outerPivot, innerPivot, outerSpin, innerSpin, ringMat, arcGlowMat, sparkMat };
 }
@@ -956,35 +968,35 @@ function buildUmbrella(
     metalness: 0.25,
   });
 
-  // Sculpted handle grip resting cleanly inside the right hand palm (or suspended behind form)
-  const gripGeo = new THREE.CylinderGeometry(0.02, 0.022, 0.17, 14);
+  // Sculpted handle grip resting cleanly inside the hand palm (or suspended behind form)
+  const gripGeo = new THREE.CylinderGeometry(0.014, 0.015, 0.13, 14);
   const gripMesh = new THREE.Mesh(gripGeo, gripMat);
-  gripMesh.position.y = -0.02;
+  gripMesh.position.y = -0.015;
   group.add(gripMesh);
 
-  const pommelGeo = new THREE.SphereGeometry(0.022, 12, 10);
+  const pommelGeo = new THREE.SphereGeometry(0.016, 12, 10);
   const pommelMesh = new THREE.Mesh(pommelGeo, goldMat);
-  pommelMesh.position.y = -0.105;
+  pommelMesh.position.y = -0.08;
   group.add(pommelMesh);
 
   // Slim metallic champagne shaft extending cleanly to the canopy apex
-  const canopyRadius = 0.98;
-  const canopyPhi = Math.PI * 0.4;
-  const canopyScaleY = 0.62;
-  const canopyHolderY = 0.98;
+  const canopyRadius = 0.56;
+  const canopyPhi = Math.PI * 0.42;
+  const canopyScaleY = 0.54;
+  const canopyHolderY = 0.48;
   const apexLocalY = canopyRadius * canopyScaleY;
   const shaftTopY = canopyHolderY + apexLocalY;
-  const shaftBottomY = 0.04;
+  const shaftBottomY = 0.03;
   const shaftLength = shaftTopY - shaftBottomY;
 
-  const shaftGeo = new THREE.CylinderGeometry(0.01, 0.011, shaftLength, 12);
+  const shaftGeo = new THREE.CylinderGeometry(0.0072, 0.0078, shaftLength, 12);
   const shaftMesh = new THREE.Mesh(shaftGeo, goldMat);
   shaftMesh.position.y = shaftBottomY + shaftLength * 0.5;
   group.add(shaftMesh);
 
-  const runnerGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.045, 14);
+  const runnerGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.036, 14);
   const runnerMesh = new THREE.Mesh(runnerGeo, goldMat);
-  runnerMesh.position.y = shaftTopY - 0.16;
+  runnerMesh.position.y = shaftTopY - 0.11;
   group.add(runnerMesh);
 
   const canopyHolder = new THREE.Group();
@@ -1009,7 +1021,7 @@ function buildUmbrella(
   canopyHolder.add(canopyMesh);
 
   // 8 sculptural champagne-gold exterior ribs following the dome profile
-  const ribGeo = new THREE.TorusGeometry(canopyRadius + 0.004, 0.006, 6, 20, canopyPhi);
+  const ribGeo = new THREE.TorusGeometry(canopyRadius + 0.003, 0.0045, 6, 20, canopyPhi);
   ribGeo.rotateZ(Math.PI * 0.5 - canopyPhi);
   ribGeo.scale(1, canopyScaleY, 1);
 
@@ -1022,16 +1034,16 @@ function buildUmbrella(
   // Delicate outer perimeter trim ring along canopy lower edge
   const rimRadius = canopyRadius * Math.sin(canopyPhi);
   const rimY = canopyRadius * Math.cos(canopyPhi) * canopyScaleY;
-  const canopyRimGeo = new THREE.TorusGeometry(rimRadius, 0.0075, 8, 48);
+  const canopyRimGeo = new THREE.TorusGeometry(rimRadius, 0.0052, 8, 48);
   canopyRimGeo.rotateX(Math.PI * 0.5);
   const canopyRimMesh = new THREE.Mesh(canopyRimGeo, goldMat);
   canopyRimMesh.position.y = rimY;
   canopyHolder.add(canopyRimMesh);
 
   // Tapered gold top finial ferrule
-  const finialGeo = new THREE.ConeGeometry(0.018, 0.11, 12);
+  const finialGeo = new THREE.ConeGeometry(0.012, 0.075, 12);
   const finialMesh = new THREE.Mesh(finialGeo, goldMat);
-  finialMesh.position.y = apexLocalY + 0.048;
+  finialMesh.position.y = apexLocalY + 0.032;
   canopyHolder.add(finialMesh);
 
   return { group, canopyMat, goldMat, gripMat };
@@ -1729,7 +1741,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   const marbleAnchor = new THREE.Vector3();
   const handWorldPos = new THREE.Vector3();
   const auxHandWorldPos = new THREE.Vector3();
+  const canopyStagePos = new THREE.Vector3();
   const invTurntableMatrix = new THREE.Matrix4();
+  const invStageMatrix = new THREE.Matrix4();
 
   // Build shared procedural textures & scene components
   const woolBumpTex = createWoolWeaveBumpTexture(256);
@@ -2084,6 +2098,42 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
    * Visual Mode & Glass Synchronization
    * ------------------------------------------------------------------------ */
 
+  const syncOrbitalOpacity = (): void => {
+    const menuOpacity = 1 - currentGlassRatio;
+    const themeBoost = currentTheme === 'dark' ? 1.0 : 1.08;
+    const isDark = currentTheme === 'dark';
+    const glowScale = THREE.MathUtils.lerp(0.32, 1.0, menuOpacity);
+
+    orbitals.ringMat.transparent = true;
+    orbitals.ringMat.depthWrite = false;
+    orbitals.ringMat.opacity = THREE.MathUtils.clamp(
+      THREE.MathUtils.lerp(0.14, 0.68, menuOpacity) * themeBoost,
+      0.12,
+      0.74
+    );
+    orbitals.ringMat.emissiveIntensity = (isDark ? 0.3 : 0.18) * glowScale;
+
+    orbitals.arcGlowMat.transparent = true;
+    orbitals.arcGlowMat.depthWrite = false;
+    orbitals.arcGlowMat.opacity = THREE.MathUtils.clamp(
+      THREE.MathUtils.lerp(0.22, 0.8, menuOpacity) * themeBoost,
+      0.2,
+      0.86
+    );
+    orbitals.arcGlowMat.emissiveIntensity = (isDark ? 0.72 : 0.44) * glowScale;
+
+    orbitals.sparkMat.transparent = true;
+    orbitals.sparkMat.depthWrite = false;
+    orbitals.sparkMat.opacity = THREE.MathUtils.clamp(
+      THREE.MathUtils.lerp(0.28, 0.84, menuOpacity) * themeBoost,
+      0.26,
+      0.9
+    );
+    orbitals.sparkMat.emissiveIntensity = (isDark ? 0.82 : 0.5) * glowScale;
+  };
+
+  syncOrbitalOpacity();
+
   const syncGlass = (ratio: number): void => {
     currentGlassRatio = THREE.MathUtils.clamp(ratio, 0, 1);
 
@@ -2107,6 +2157,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
 
     syncAvatarMaterials();
     syncCoutureCoatMaterials();
+    syncOrbitalOpacity();
 
     const isDark = currentTheme === 'dark';
     pedestal.mirrorMat.opacity = THREE.MathUtils.lerp(
@@ -2131,8 +2182,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     applyGoldModeState(pedestal.rimMat, mood, theme, 0.34);
     applyGoldModeState(orbitals.ringMat, mood, theme, 0.34);
     applyGoldModeState(orbitals.arcGlowMat, mood, theme, 0.85);
-    orbitals.arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
     applyGoldModeState(orbitals.sparkMat, mood, theme, 0.94);
+    syncOrbitalOpacity();
     applyGoldModeState(dialTrack.bandMat, mood, theme, 0.28);
     applyGoldModeState(dialTrack.railGlowMat, mood, theme, 0.64);
     applyGoldModeState(umbrella.goldMat, mood, theme, 0.34);
@@ -2437,8 +2488,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     umbrella.group.visible = showUmbrella;
     if (!showUmbrella) return;
 
-    // Smoothly unfold from 0 -> 1 over the first 45% of rainBlend (no pop-in)
-    const unfoldT = THREE.MathUtils.clamp((rainBlend - 0.015) / 0.435, 0, 1);
+    // Wait until raised hand clears torso (rainBlend >= 0.30) before unfolding dome cleanly overhead
+    const unfoldT = THREE.MathUtils.clamp((rainBlend - 0.3) / 0.48, 0, 1);
     const unfoldScale = unfoldT * unfoldT * (3 - 2 * unfoldT);
     const easedFade = rainBlend * rainBlend * (3 - 2 * rainBlend);
     umbrella.group.scale.setScalar(Math.max(0.001, unfoldScale));
@@ -2467,25 +2518,25 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
         );
       }
 
-      // Position handle grip cleanly in her raised hand; tilt canopy gracefully inward over head
+      // Position handle grip cleanly in her raised hand; tilt sleek canopy squarely overhead
       umbrella.group.position.copy(handWorldPos);
       if (avatar.umbrellaAnchorSide === 'left') {
-        umbrella.group.rotation.set(-0.14 + rainBreeze * 0.45, 0, 0.11 + rainBreeze);
+        umbrella.group.rotation.set(-0.08 + rainBreeze * 0.4, 0, 0.12 + rainBreeze);
       } else {
-        umbrella.group.rotation.set(-0.19 + rainBreeze * 0.45, 0, -0.14 + rainBreeze);
+        umbrella.group.rotation.set(-0.12 + rainBreeze * 0.4, 0, -0.12 + rainBreeze);
       }
     } else if (activeKind === 'coutureCoat') {
-      // Suspended gracefully overhead above the 1.94u Couture Trench Coat & gold iNVTRY hook
-      umbrella.group.position.set(-0.44, 1.1, -0.06);
-      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.22 + rainBreeze);
+      // Positioned cleanly behind the left shoulder/sleeve so shaft never clips the woven coat
+      umbrella.group.position.set(-0.34, 1.48, -0.2);
+      umbrella.group.rotation.set(0.09 + rainBreeze * 0.35, 0, -0.18 + rainBreeze);
     } else if (activeKind === 'dressformFallback') {
-      // Suspended gracefully overhead above the 2.12u procedural fallback hanger hook
-      umbrella.group.position.set(-0.46, 1.22, -0.08);
-      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.25 + rainBreeze);
+      // Positioned cleanly behind the elliptical torso shoulder so handle & shaft stay fully outside
+      umbrella.group.position.set(-0.38, 1.56, -0.22);
+      umbrella.group.rotation.set(0.1 + rainBreeze * 0.35, 0, -0.2 + rainBreeze);
     } else {
-      // Suspended cleanly overhead above the 1.8u auto-scaled custom mannequin
-      umbrella.group.position.set(-0.42, 0.96, -0.06);
-      umbrella.group.rotation.set(0.04 + rainBreeze * 0.4, 0, -0.22 + rainBreeze);
+      // Positioned cleanly behind the 1.8u auto-scaled custom mannequin shoulder
+      umbrella.group.position.set(-0.34, 1.34, -0.2);
+      umbrella.group.rotation.set(0.09 + rainBreeze * 0.35, 0, -0.18 + rainBreeze);
     }
 
     const targetOpacity =
@@ -2522,6 +2573,20 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
             ? UMBRELLA_DEFLECT_Y_CUSTOM
             : UMBRELLA_DEFLECT_Y_DRESSFORM;
 
+    // Resolve live canopy dome center in stage space so deflection tracks offset & 360° turntable rotation
+    let deflectCenterX = 0;
+    let deflectCenterZ = 0;
+    let effectiveRadiusSq = 0;
+    if (umbrella.group.visible && umbrella.group.scale.x > 0.05) {
+      group.updateMatrixWorld(true);
+      invStageMatrix.copy(group.matrixWorld).invert();
+      canopyStagePos.set(0, 0.62, 0).applyMatrix4(umbrella.group.matrixWorld).applyMatrix4(invStageMatrix);
+      deflectCenterX = canopyStagePos.x;
+      deflectCenterZ = canopyStagePos.z;
+      const effR = UMBRELLA_DEFLECT_RADIUS * umbrella.group.scale.x;
+      effectiveRadiusSq = effR * effR;
+    }
+
     const { drops, positions } = rain;
     for (let i = 0; i < drops.length; i++) {
       const drop = drops[i];
@@ -2529,9 +2594,12 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       drop.x -= drop.speed * 0.18 * dt;
       drop.z += drop.speed * 0.04 * dt;
 
-      const horizontalSq = drop.x * drop.x + drop.z * drop.z;
+      const dx = drop.x - deflectCenterX;
+      const dz = drop.z - deflectCenterZ;
+      const horizontalSq = dx * dx + dz * dz;
       const hitUmbrella =
-        horizontalSq < UMBRELLA_DEFLECT_RADIUS * UMBRELLA_DEFLECT_RADIUS &&
+        effectiveRadiusSq > 0 &&
+        horizontalSq < effectiveRadiusSq &&
         drop.y <= deflectY &&
         drop.y > deflectY - 0.55;
 
@@ -2556,6 +2624,8 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       currentSubtab === 'atelier' ? 1.25 : currentSubtab === 'intelligence' ? 0.85 : 1.0;
     const walkBoost = 1.0 + walkBlend * 0.72;
     const isDark = currentTheme === 'dark';
+    const menuOpacity = 1 - currentGlassRatio;
+    const glowScale = THREE.MathUtils.lerp(0.32, 1.0, menuOpacity);
 
     if (reducedMotion) {
       orbitals.outerSpin.rotation.z = 0;
@@ -2563,8 +2633,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       orbitals.outerPivot.rotation.set(Math.PI * 0.4 + subtabRingLift * 0.35, 0.22, -0.32);
       orbitals.innerPivot.rotation.set(Math.PI * 0.46 - subtabRingLift * 0.25, -0.26, 0.34);
       orbitals.group.position.y = 0.06 + subtabRingLift;
-      orbitals.arcGlowMat.emissiveIntensity = isDark ? 0.85 : 0.52;
-      orbitals.sparkMat.emissiveIntensity = isDark ? 0.94 : 0.58;
+      orbitals.ringMat.emissiveIntensity = (isDark ? 0.3 : 0.18) * glowScale;
+      orbitals.arcGlowMat.emissiveIntensity = (isDark ? 0.72 : 0.44) * glowScale;
+      orbitals.sparkMat.emissiveIntensity = (isDark ? 0.82 : 0.5) * glowScale;
       return;
     }
 
@@ -2593,15 +2664,14 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     // Gentle vertical breathing float
     orbitals.group.position.y = 0.06 + subtabRingLift + Math.sin(elapsed * 0.92) * 0.038;
 
-    // Subtle live shimmer pulse on sweeping luminous arcs & orbiting satellite orbs
+    // Subtle live shimmer pulse proportional to menuOpacity so Glass 90% whispers like translucent mist
     const shimmerWave = 0.5 + 0.5 * Math.sin(elapsed * 2.4);
     const sparkWave = 0.5 + 0.5 * Math.cos(elapsed * 3.1 + 0.7);
-    orbitals.arcGlowMat.emissiveIntensity = isDark
-      ? 0.76 + shimmerWave * 0.28
-      : 0.46 + shimmerWave * 0.18;
-    orbitals.sparkMat.emissiveIntensity = isDark
-      ? 0.88 + sparkWave * 0.34
-      : 0.54 + sparkWave * 0.22;
+    orbitals.ringMat.emissiveIntensity = (isDark ? 0.3 : 0.18) * glowScale;
+    orbitals.arcGlowMat.emissiveIntensity =
+      (isDark ? 0.64 + shimmerWave * 0.22 : 0.4 + shimmerWave * 0.14) * glowScale;
+    orbitals.sparkMat.emissiveIntensity =
+      (isDark ? 0.76 + sparkWave * 0.26 : 0.46 + sparkWave * 0.18) * glowScale;
 
     const { seeds, positions } = starlight;
     for (let i = 0; i < seeds.length; i++) {

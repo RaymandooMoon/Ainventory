@@ -727,4 +727,140 @@ describe('AinvtryStageDirector', () => {
 
     stage.dispose();
   });
+
+  it('keeps studio-orbital-rings translucent with depthWrite off, synced to menu Glass % (10 -> 50 -> 90), and preserved across aurora/light mode', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, 1440 / 900, 0.1, 100);
+    camera.position.copy(HERO_CAMERA_PRESET.position);
+    const marble = new THREE.Group();
+    scene.add(marble);
+    const colliders = new DomDockColliderSync(
+      camera,
+      makeFakeElement({ left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 })
+    );
+    const director = new AinvtryStageDirector(
+      scene,
+      camera,
+      marble,
+      createHeroPhysicsStub().port,
+      colliders,
+      {},
+      { reducedMotion: true, initialAspect: 1440 / 900 }
+    );
+
+    const studioStage = createStudioStage();
+    director.registerStage(studioStage);
+    director.transitionTo('studio', 0);
+
+    const orbitalsGroup = studioStage.group.getObjectByName('studio-orbital-rings');
+    assert.ok(orbitalsGroup, 'studio-orbital-rings group must exist');
+
+    const materials = new Set<THREE.Material>();
+    let meshCount = 0;
+    orbitalsGroup.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      meshCount += 1;
+      assert.equal(mesh.renderOrder, 3, 'Every orbital mesh must use renderOrder = 3');
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of mats) {
+        if (mat) materials.add(mat);
+      }
+    });
+
+    assert.ok(meshCount >= 10, `Expected orbital meshes, got ${meshCount}`);
+    assert.ok(materials.size >= 3, `Expected at least 3 orbital materials, got ${materials.size}`);
+
+    const matList = Array.from(materials);
+    const sampleOpacities = (): number[] =>
+      matList.map((mat) => {
+        assert.equal(mat.transparent, true, 'Orbital material must have transparent === true');
+        assert.equal(mat.depthWrite, false, 'Orbital material must have depthWrite === false');
+        return mat.opacity;
+      });
+
+    director.setGlassPercent(10);
+    const op10 = sampleOpacities();
+
+    director.setGlassPercent(50);
+    const op50 = sampleOpacities();
+
+    director.setGlassPercent(90);
+    const op90 = sampleOpacities();
+
+    for (let i = 0; i < matList.length; i += 1) {
+      assert.ok(
+        op10[i] > op50[i] && op50[i] > op90[i],
+        `Expected orbital material[${i}] opacity to strictly decrease as Glass % rises 10 -> 50 -> 90 (${op10[i]} -> ${op50[i]} -> ${op90[i]})`
+      );
+      assert.ok(
+        op90[i] > 0 && op90[i] < 0.4,
+        `Expected orbital material[${i}] to whisper translucently at Glass 90% (got ${op90[i]})`
+      );
+    }
+
+    // Switching to Aurora + Light mode must never overwrite translucency
+    director.setVisualMode('aurora', 'light');
+    director.update(0.016, 0.5);
+    const opAuroraLight90 = sampleOpacities();
+    for (let i = 0; i < matList.length; i += 1) {
+      assert.ok(
+        opAuroraLight90[i] > 0 && opAuroraLight90[i] < 0.45,
+        `Expected orbital material[${i}] to remain translucent in aurora/light at Glass 90% (got ${opAuroraLight90[i]})`
+      );
+    }
+
+    director.dispose();
+  });
+
+  it('sizes unfolded studio-champagne-umbrella to compact luxury fashion proportions (width <= 1.25)', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, 1440 / 900, 0.1, 100);
+    camera.position.copy(HERO_CAMERA_PRESET.position);
+    const marble = new THREE.Group();
+    scene.add(marble);
+    const colliders = new DomDockColliderSync(
+      camera,
+      makeFakeElement({ left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 })
+    );
+    const director = new AinvtryStageDirector(
+      scene,
+      camera,
+      marble,
+      createHeroPhysicsStub().port,
+      colliders,
+      {},
+      { reducedMotion: true, initialAspect: 1440 / 900 }
+    );
+
+    const studioStage = createStudioStage();
+    director.registerStage(studioStage);
+    director.transitionTo('studio', 0);
+    director.updateInteraction({ studioPose: 'rain' });
+    director.update(0.016, 0.5);
+
+    const umbrellaGroup = studioStage.group.getObjectByName('studio-champagne-umbrella');
+    assert.ok(umbrellaGroup, 'studio-champagne-umbrella group must exist');
+    assert.equal(umbrellaGroup.visible, true, 'Umbrella must be visible in rain pose');
+    assert.ok(
+      umbrellaGroup.scale.x >= 0.99,
+      `Expected umbrella to be fully unfolded (scale.x=${umbrellaGroup.scale.x})`
+    );
+
+    studioStage.group.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(umbrellaGroup);
+    const size = new THREE.Vector3();
+    bounds.getSize(size);
+
+    assert.ok(
+      size.x > 0.8 && size.x <= 1.25,
+      `Expected compact luxury umbrella width in (0.8, 1.25], got size.x=${size.x.toFixed(3)}`
+    );
+    assert.ok(
+      size.z > 0.8 && size.z <= 1.25,
+      `Expected compact luxury umbrella depth in (0.8, 1.25], got size.z=${size.z.toFixed(3)}`
+    );
+
+    director.dispose();
+  });
 });
