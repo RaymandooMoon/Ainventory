@@ -200,6 +200,7 @@ export function AboutStageHud({
   const [founderSelectedId, setFounderSelectedId] = useState<string>(
     copy.vision.revenuePillars[0].id
   );
+  const [selectedFaqId, setSelectedFaqId] = useState<string>(copy.vision.faqs[0]?.id ?? '');
   const journeyIdxRef = useRef<number>(interaction.aboutJourneyIndex);
 
   useEffect(() => {
@@ -386,7 +387,7 @@ export function AboutStageHud({
     );
   }
 
-  // About Subtab 3: Model & Founder
+  // About Subtab 3: Model, FAQ & Founder
   const vision = copy.vision;
   const revenueItems: HudSpotlightItem[] = vision.revenuePillars.map((pillar) => ({
     id: pillar.id,
@@ -397,6 +398,14 @@ export function AboutStageHud({
     body: <p className="hud-body-copy">{pillar.detail}</p>,
   }));
 
+  const faqItems: HudSpotlightItem[] = vision.faqs.map((faq, idx) => ({
+    id: faq.id,
+    prefix: `Q${idx + 1}`,
+    prefixTone: 'mono',
+    title: faq.question,
+    body: <p className="hud-body-copy">{faq.answer}</p>,
+  }));
+
   return (
     <div className="hud-stack">
       <HudSpotlightDeck
@@ -405,6 +414,17 @@ export function AboutStageHud({
         onSelect={setFounderSelectedId}
         ariaLabel={vision.revenueTitle}
       />
+
+      <div className="hud-subblock">
+        <span className="hud-eyebrow">{vision.faqTitle}</span>
+        <HudSpotlightDeck
+          items={faqItems}
+          activeId={selectedFaqId}
+          onSelect={setSelectedFaqId}
+          ariaLabel={vision.faqTitle}
+          scrollToTopOnSelect={false}
+        />
+      </div>
 
       <aside className="hud-founder-card" aria-label="Founder contact">
         <div className="hud-founder-head">

@@ -263,7 +263,7 @@ export default function SiteStageAnalytics({
                     onClose();
                   }}
                 >
-                  <span>{isKo ? '3D 피팅 이동' : 'Explore 3D Fitting'}</span>
+                  <span>{isKo ? 'Three.js 3D 보기' : 'Explore Three.js 3D'}</span>
                   <ArrowUpRight size={15} aria-hidden="true" />
                 </button>
                 <button

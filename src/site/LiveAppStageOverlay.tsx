@@ -10,6 +10,7 @@ export interface LiveAppStageOverlayProps {
   readonly screen: LiveAppScreenId;
   readonly lang: SiteLang;
   readonly theme: SiteTheme;
+  readonly mood?: 'luxury' | 'aurora';
   readonly isSheetExpanded: boolean;
   readonly isVisible?: boolean;
   readonly fullStudio?: boolean;
@@ -47,6 +48,7 @@ export default function LiveAppStageOverlay({
   screen,
   lang,
   theme,
+  mood = 'luxury',
   isSheetExpanded,
   isVisible = true,
   fullStudio = false,
@@ -57,7 +59,7 @@ export default function LiveAppStageOverlay({
   const [geom, setGeom] = useState<FrameGeometry>(DEFAULT_GEOMETRY);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Boot the real live app on LoginView auth stage; subsequent theme/lang/tab sync uses postMessage
+  // Boot the real live app on LoginView auth stage; subsequent theme/lang/mood/tab sync uses postMessage
   const [initialSrc] = useState<string>(() => {
     const params = new URLSearchParams({
       embed: '1',
@@ -65,6 +67,7 @@ export default function LiveAppStageOverlay({
       auth_stage: 'auth',
       lang,
       theme,
+      login_motion: mood,
     });
     return `/app.html?${params.toString()}`;
   });
@@ -73,21 +76,28 @@ export default function LiveAppStageOverlay({
     screen: LiveAppScreenId;
     lang: SiteLang;
     theme: SiteTheme;
-  }>({ screen, lang, theme });
+    mood: 'luxury' | 'aurora';
+  }>({ screen, lang, theme, mood });
 
   useEffect(() => {
-    latestSyncRef.current = { screen, lang, theme };
-  }, [screen, lang, theme]);
+    latestSyncRef.current = { screen, lang, theme, mood };
+  }, [screen, lang, theme, mood]);
 
   const postSyncToIframe = useCallback(() => {
     const targetWindow = iframeRef.current?.contentWindow;
     if (!targetWindow || typeof window === 'undefined') return;
-    const { screen: nextScreen, lang: nextLang, theme: nextTheme } = latestSyncRef.current;
+    const {
+      screen: nextScreen,
+      lang: nextLang,
+      theme: nextTheme,
+      mood: nextMood,
+    } = latestSyncRef.current;
     const payload: LiveAppSyncFromParentPayload = {
       type: 'ainvtry-live-app-sync',
       screen: nextScreen,
       lang: nextLang,
       theme: nextTheme,
+      mood: nextMood,
     };
     targetWindow.postMessage(payload, window.location.origin);
   }, []);
@@ -95,7 +105,7 @@ export default function LiveAppStageOverlay({
   useEffect(() => {
     if (!isLoaded || !isVisible) return;
     postSyncToIframe();
-  }, [isLoaded, isVisible, screen, lang, theme, postSyncToIframe]);
+  }, [isLoaded, isVisible, screen, lang, theme, mood, postSyncToIframe]);
 
   // Listen for tab changes initiated directly inside the real live app frame
   useEffect(() => {

@@ -98,7 +98,7 @@ export const STUDIO_GARMENT_ASSETS = {
 export const SPECS_3D_PILLAR_LABELS = [
   '5-STAGE',
   '0B FACE',
-  '210+ TESTS',
+  '340+ TESTS',
   '4 APIs',
   '21-BONE',
   'EXIF -96%',
@@ -369,6 +369,17 @@ export interface SiteCopy {
     readonly marbleHint: string;
     readonly primaryCta: string;
     readonly secondaryCta: string;
+    readonly proofTabVton: string;
+    readonly proofTabExif: string;
+    readonly proofBadgeVton: string;
+    readonly proofBadgeExif: string;
+    readonly proofInputLabel: string;
+    readonly proofOutputLabel: string;
+    readonly proofFooterCta: string;
+    readonly proofMetrics: readonly {
+      readonly value: string;
+      readonly label: string;
+    }[];
   };
   readonly capabilities: {
     readonly badge: string;
@@ -479,6 +490,12 @@ export interface SiteCopy {
     readonly revenueTitle: string;
     readonly revenueNote: string;
     readonly revenuePillars: readonly SiteRevenuePillar[];
+    readonly faqTitle: string;
+    readonly faqs: readonly {
+      readonly id: string;
+      readonly question: string;
+      readonly answer: string;
+    }[];
     readonly backToMissionLabel: string;
     readonly founderRole: string;
     readonly hqLabel: string;
@@ -525,10 +542,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       studioIntel: 'Care',
       archBlueprint: 'Blueprint',
       archPrivacy: 'Privacy',
-      archMaps: 'Google API × 3D',
+      archMaps: 'Google API × Three.js 3D',
       benchKpi: 'Metrics',
       benchMatrix: 'Stack',
-      benchFitting: '3D Fitting',
+      benchFitting: 'Three.js 3D',
       benchCare: 'Care',
       aboutJourney: 'Journey',
       aboutMission: 'Mission',
@@ -601,14 +618,26 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
     },
     hero: {
-      kicker: '',
+      kicker: 'PRIVACY-FIRST DIGITAL CLOSET OS',
       titleLead: 'Your entire wardrobe, ',
       titleAccent: 'in one place',
       titleTail: '.',
-      subtitle: 'Duplicate checks, weather layering, garment care & 1-tap resale.',
+      subtitle: '1-photo cutout, 8-angle 2D VTON layering, weather context & 0B face privacy.',
       marbleHint: 'Roll the marble or select a stage below.',
-      primaryCta: 'Studio',
+      primaryCta: 'Launch Live Studio',
       secondaryCta: 'Contact Founder',
+      proofTabVton: '2D VTON',
+      proofTabExif: 'EXIF -96%',
+      proofBadgeVton: '8-ANGLE 2D VTON · LIVE PREVIEW',
+      proofBadgeExif: 'CLIENT WEBP · EXIF 0% STRIPPED',
+      proofInputLabel: '1-Photo Cutout · 24 KB',
+      proofOutputLabel: 'Live 8-Angle Fitting',
+      proofFooterCta: 'Open Live App',
+      proofMetrics: [
+        { value: '582→24 KB', label: 'EXIF 0% WebP' },
+        { value: '0 Bytes', label: 'Face Upload' },
+        { value: '340+', label: 'Auto Tests' },
+      ],
     },
     capabilities: {
       badge: 'Live',
@@ -742,7 +771,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
               label: 'CDN',
               shortSub: 'Cloudflare',
               devSpec: 'Cloudflare Workers static edge.',
-              prodSpec: 'Multi-region CDN for 3D & shell.',
+              prodSpec: 'Multi-region CDN for Three.js 3D & shell.',
             },
             {
               id: 'lb-waf',
@@ -782,7 +811,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
             {
               id: 'core-vton',
               icon: 'cpu',
-              label: '3D · VTON',
+              label: 'Three.js · VTON',
               shortSub: 'GPU',
               highlight: true,
               devSpec: 'Three.js 21-bone + No-Training VTON.',
@@ -912,7 +941,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'gitBranch',
           label: 'CI / CD',
           shortSub: 'Gate',
-          devSpec: 'oxlint · TS strict · 210+ tests.',
+          devSpec: 'oxlint · TS strict · 340+ tests.',
           prodSpec: 'PII/EXIF CI gate + canary deploy.',
         },
       ],
@@ -969,7 +998,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
       ],
       mapsEyebrow: 'APIs',
-      mapsHeading: 'Google API × 3D',
+      mapsHeading: 'Google API × Three.js 3D',
       mapsBadge: '5 Live',
       mapsComplianceFooter: 'Server keys · 0 media cached',
       weatherMoods: {
@@ -985,8 +1014,8 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           apiName: 'Weather API v1',
           status: 'live',
           statusLabel: 'LIVE',
-          role: '3D Rain',
-          theaterHeadline: 'Live Weather × 3D',
+          role: 'Three.js 3D',
+          theaterHeadline: 'Live Weather × Three.js 3D',
           theaterTelemetry: 'Rain · Umbrella',
           detail: 'Drives raindrop physics & daily layers.',
           compliance: 'TTL Cache',
@@ -1102,7 +1131,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       afterLabel: 'WebP',
       sliderHint: 'Compare original and WebP cutout',
       ingestionBadge: 'EXIF Stripped',
-      ingestionMeta: '582 KB → 23 KB WebP (-96%)',
+      ingestionMeta: '582 KB → 24 KB WebP (-96%)',
       cpwLabel: 'Cost / Wear',
       cpwValue: '₩14,200',
       cpwDelta: '-18% MoM',
@@ -1140,9 +1169,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'tests',
           icon: 'checkCircle',
-          value: '210+',
+          value: '340+',
           label: 'Auto Tests',
-          detail: '30+ unit & mobile E2E test suites.',
+          detail: '50+ unit, API & mobile E2E test suites.',
         },
         {
           id: 'apis',
@@ -1159,7 +1188,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'imageMinus',
           shortLabel: 'EXIF -96%',
           label: 'EXIF Strip',
-          valueText: '582→23 KB',
+          valueText: '582→24 KB',
           detail: 'Client WebP strips GPS, EXIF & background.',
         },
         {
@@ -1173,8 +1202,8 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'rig3d',
           icon: 'box',
-          shortLabel: '21-Bone 3D',
-          label: '3D Rig',
+          shortLabel: 'Three.js 21-Bone',
+          label: 'Three.js 3D Rig',
           valueText: '21-Bone · 8-Cut',
           detail: '21 bones, 28 morphs, 11 slots, 8 cuts.',
         },
@@ -1207,10 +1236,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
         {
           index: 2,
-          label: '210+ TESTS',
-          value: '210+',
+          label: '340+ TESTS',
+          value: '340+',
           title: 'Auto Tests',
-          detail: '30+ unit & mobile E2E test suites.',
+          detail: '50+ unit, API & mobile E2E test suites.',
           normalizedHeight: 0.88,
         },
         {
@@ -1225,14 +1254,14 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           index: 4,
           label: '21-BONE',
           value: '21-Bone · 8-Cut',
-          title: '3D Engine',
+          title: 'Three.js 3D',
           detail: '21 bones, 28 morphs, 11 slots, 8 cuts.',
           normalizedHeight: 0.78,
         },
         {
           index: 5,
           label: 'EXIF -96%',
-          value: '582→23 KB',
+          value: '582→24 KB',
           title: 'EXIF Strip',
           detail: 'Client WebP strips GPS, EXIF & background.',
           normalizedHeight: 0.94,
@@ -1242,9 +1271,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'three',
           icon: 'box',
-          eyebrow: '3D',
+          eyebrow: 'Three.js',
           metric: 'Three.js 0.187',
-          title: '3D Engine',
+          title: 'Three.js 3D',
           detail: '21-bone rig, SpringBone, 28 morphs, 8 cuts.',
           boundary: 'WebGL2',
         },
@@ -1450,13 +1479,36 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         { id: 'affiliate', icon: 'shoppingBag', num: '02', title: 'Gap Shop', mechanism: 'Affiliate', detail: 'Only missing layers — zero duplicates.' },
         { id: 'resale-bm', icon: 'badgeCheck', num: '03', title: 'Resale', mechanism: 'Fee', detail: 'Authentic receipt-verified trades.' },
       ],
+      faqTitle: 'FAQ',
+      faqs: [
+        {
+          id: 'faq-privacy',
+          question: 'Are face photos ever uploaded?',
+          answer: 'Never. MediaPipe WASM analyzes skin tone locally in RAM (0B uploaded), and garments are WebP-stripped of EXIF/GPS before inference.',
+        },
+        {
+          id: 'faq-vton',
+          question: 'How does 2D VTON differ from Three.js 3D?',
+          answer: 'Photorealistic 4+ layer fitting runs via 8-angle 2D VTON, while Three.js 3D powers interactive garment motion and live weather previews.',
+        },
+        {
+          id: 'faq-platform',
+          question: 'Which platforms are supported?',
+          answer: 'Web, iOS, and Android run from one React 19 + Capacitor 8 codebase with IndexedDB offline-first wardrobe storage.',
+        },
+        {
+          id: 'faq-partner',
+          question: 'Can fashion brands or investors pilot iNVTRY?',
+          answer: 'Yes. Reach out directly via raymond@ainvtry.com for private beta access, B2B SDK pilots, or IR materials.',
+        },
+      ],
       backToMissionLabel: 'Journey',
       founderRole: 'Founder',
       hqLabel: 'Location',
       hqValue: 'Seoul',
       domainLabel: 'Web',
       stackSummaryLabel: 'Focus',
-      stackSummaryValue: '3D Closet · Resale',
+      stackSummaryValue: 'Digital Closet · Resale',
       directCta: 'Email Raymond',
     },
     footer: {
@@ -1490,7 +1542,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       termsSections: [
         {
           heading: '1. Service Scope',
-          body: 'Ainvtry (ainvtry.com, product: A inventory) provides 3D digital wardrobe management, garment classification, multi-angle virtual try-on previews, garment care guidance, weather/TPO outfit planning, and purchase-verified resale preparation tools.',
+          body: 'Ainvtry (ainvtry.com, product: A inventory) provides digital wardrobe management, garment classification, multi-angle virtual try-on previews, Three.js 3D motion staging, garment care guidance, weather/TPO outfit planning, and purchase-verified resale preparation tools.',
         },
         {
           heading: '2. User Content Ownership',
@@ -1528,10 +1580,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       studioIntel: '케어',
       archBlueprint: '구성도',
       archPrivacy: '보안',
-      archMaps: 'Google API × 3D',
+      archMaps: 'Google API × Three.js 3D',
       benchKpi: '지표',
       benchMatrix: '스택',
-      benchFitting: '3D 피팅',
+      benchFitting: 'Three.js 3D',
       benchCare: '케어',
       aboutJourney: '여정',
       aboutMission: '미션',
@@ -1604,14 +1656,26 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       ],
     },
     hero: {
-      kicker: '',
+      kicker: '온디바이스 프라이버시 디지털 옷장 OS',
       titleLead: '내 옷장의 모든 순간, ',
       titleAccent: '하나로',
       titleTail: '.',
-      subtitle: '중복 확인부터 날씨 맞춤 코디, 세탁과 리셀까지.',
+      subtitle: '사진 1장 배경 제거 · 8방향 4겹+ 2D VTON · 온디바이스 0B 프라이버시.',
       marbleHint: '구슬을 굴리거나 하단 스테이지를 선택하세요.',
-      primaryCta: '스튜디오',
+      primaryCta: '라이브 스튜디오 체험',
       secondaryCta: '창업자 문의',
+      proofTabVton: '2D VTON',
+      proofTabExif: 'EXIF -96%',
+      proofBadgeVton: '8방향 2D VTON · 라이브 프리뷰',
+      proofBadgeExif: '로컬 WebP · EXIF 0% 제거',
+      proofInputLabel: '배경 제거 · 24 KB',
+      proofOutputLabel: '실시간 8방향 피팅',
+      proofFooterCta: '라이브 앱 열기',
+      proofMetrics: [
+        { value: '582→24 KB', label: 'EXIF 0% WebP' },
+        { value: '0 Bytes', label: '얼굴 외부 전송' },
+        { value: '340+', label: '자동 검증 테스트' },
+      ],
     },
     capabilities: {
       badge: '실시간',
@@ -1745,7 +1809,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
               label: 'CDN',
               shortSub: 'Cloudflare',
               devSpec: 'Cloudflare Workers 정적 배포.',
-              prodSpec: '멀티 리전 3D · 앱 셸 CDN.',
+              prodSpec: '멀티 리전 Three.js 3D · 앱 셸 CDN.',
             },
             {
               id: 'lb-waf',
@@ -1785,7 +1849,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
             {
               id: 'core-vton',
               icon: 'cpu',
-              label: '3D · VTON',
+              label: 'Three.js · VTON',
               shortSub: 'GPU',
               highlight: true,
               devSpec: 'Three.js 21관절 + 무학습 8방향 VTON.',
@@ -1915,7 +1979,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'gitBranch',
           label: 'CI/CD',
           shortSub: '검증',
-          devSpec: 'oxlint · TS strict · 210+ 테스트.',
+          devSpec: 'oxlint · TS strict · 340+ 테스트.',
           prodSpec: 'PII/EXIF CI · 카나리 배포.',
         },
       ],
@@ -1972,7 +2036,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
       ],
       mapsEyebrow: 'API',
-      mapsHeading: 'Google API × 3D',
+      mapsHeading: 'Google API × Three.js 3D',
       mapsBadge: '5 LIVE',
       mapsComplianceFooter: '키 격리 · 미디어 무저장',
       weatherMoods: {
@@ -1989,9 +2053,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           status: 'live',
           statusLabel: 'LIVE',
           role: '기상',
-          theaterHeadline: '날씨 × 3D 우산',
+          theaterHeadline: '날씨 × Three.js 3D 우산',
           theaterTelemetry: '빗방울 · 우산',
-          detail: '실시간 기상 → 3D 우산 · 레이어.',
+          detail: '실시간 기상 → Three.js 3D 우산 · 레이어.',
           compliance: 'TTL',
           sceneChips: ['맑음', '비', '바람'],
         },
@@ -2105,7 +2169,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       afterLabel: 'WebP',
       sliderHint: '원본과 배경 제거 WebP 비교',
       ingestionBadge: 'EXIF 제거',
-      ingestionMeta: '582 KB → 23 KB WebP (-96%)',
+      ingestionMeta: '582 KB → 24 KB WebP (-96%)',
       cpwLabel: '1회 착용 비용',
       cpwValue: '₩14,200',
       cpwDelta: '전월 대비 -18%',
@@ -2143,9 +2207,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'tests',
           icon: 'checkCircle',
-          value: '210+',
+          value: '340+',
           label: '자동 테스트',
-          detail: '단위 · 모바일 E2E 30+ 테스트 스위트.',
+          detail: '단위 · API · 모바일 E2E 50+ 테스트 스위트.',
         },
         {
           id: 'apis',
@@ -2162,7 +2226,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           icon: 'imageMinus',
           shortLabel: 'EXIF -96%',
           label: 'EXIF 제거',
-          valueText: '582→23 KB',
+          valueText: '582→24 KB',
           detail: '로컬 WebP 변환으로 위치 · EXIF · 배경 제거.',
         },
         {
@@ -2176,8 +2240,8 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'rig3d',
           icon: 'box',
-          shortLabel: '21관절 3D',
-          label: '3D 관절 리그',
+          shortLabel: 'Three.js 21관절',
+          label: 'Three.js 3D 리그',
           valueText: '21관절 · 8방향',
           detail: '21관절 · 28모프 · 11슬롯 · 8방향 회전.',
         },
@@ -2210,10 +2274,10 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         },
         {
           index: 2,
-          label: '210+ TESTS',
-          value: '210+',
+          label: '340+ TESTS',
+          value: '340+',
           title: '자동 테스트',
-          detail: '단위 · 모바일 E2E 30+ 테스트 스위트.',
+          detail: '단위 · API · 모바일 E2E 50+ 테스트 스위트.',
           normalizedHeight: 0.88,
         },
         {
@@ -2228,14 +2292,14 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           index: 4,
           label: '21-BONE',
           value: '21관절 · 8방향',
-          title: '3D 관절 리그',
+          title: 'Three.js 3D 리그',
           detail: '21관절 · 28모프 · 11슬롯 · 8방향 회전.',
           normalizedHeight: 0.78,
         },
         {
           index: 5,
           label: 'EXIF -96%',
-          value: '582→23 KB',
+          value: '582→24 KB',
           title: 'EXIF 제거 · 경량화',
           detail: '로컬 WebP 변환으로 위치 · EXIF · 배경 제거(-96%).',
           normalizedHeight: 0.94,
@@ -2245,9 +2309,9 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         {
           id: 'three',
           icon: 'box',
-          eyebrow: '3D',
+          eyebrow: 'Three.js',
           metric: 'Three.js 0.187',
-          title: '3D 엔진',
+          title: 'Three.js 3D',
           detail: '21관절 · SpringBone · 28모프 · 8방향 회전.',
           boundary: 'WebGL2',
         },
@@ -2316,7 +2380,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'LIVE',
           shortStatusLabel: 'LIVE',
           imageSrc: '/assets/journey/clay-cut-01-v1.webp',
-          imageAlt: '보유 코트와 착용 기록을 비교하는 3D 캐릭터',
+          imageAlt: '보유 코트와 착용 기록을 비교하는 클레이 캐릭터',
           speechBubble: '“비슷한 코트가 이미 2벌 있어요.”',
           apiChips: ['중복 확인'],
           detail: '새 옷을 사기 전에 내 옷장과 먼저 비교해 충동구매를 줄입니다.',
@@ -2331,7 +2395,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'LIVE+',
           shortStatusLabel: 'LIVE+',
           imageSrc: '/assets/journey/clay-cut-02-v1.webp',
-          imageAlt: '울 코트 택을 스캔해 세탁법을 불러오는 3D 캐릭터',
+          imageAlt: '울 코트 택을 스캔해 세탁법을 불러오는 클레이 캐릭터',
           speechBubble: '“찍기만 하면 정리부터 세탁법까지.”',
           apiChips: ['자동 정리'],
           detail: '사진으로 자동 분류하고(LIVE), 택 · 모델명 스캔으로 세탁법까지 불러옵니다(TO-DO).',
@@ -2346,7 +2410,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'LIVE',
           shortStatusLabel: 'LIVE',
           imageSrc: '/assets/journey/clay-cut-03-v1.webp',
-          imageAlt: '비 오는 거리 위에서 우산을 든 3D 캐릭터',
+          imageAlt: '비 오는 거리 위에서 우산을 든 클레이 캐릭터',
           speechBubble: '“비 오는 오늘, 우리 동네에서 미리 입어봐요.”',
           apiChips: ['날씨'],
           detail: '지금 있는 곳의 날씨와 거리 배경에 맞춰 여러 겹 코디를 미리 확인합니다.',
@@ -2361,7 +2425,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'TO-DO',
           shortStatusLabel: 'TO-DO',
           imageSrc: '/assets/journey/clay-cut-04-v1.webp',
-          imageAlt: '캘린더 룩북을 정리하는 3D 캐릭터',
+          imageAlt: '캘린더 룩북을 정리하는 클레이 캐릭터',
           speechBubble: '“오늘 입은 옷을 캘린더에 바로 기록.”',
           apiChips: ['캘린더'],
           detail: 'Google Calendar에 코디를 기록하고 SNS에 태그와 함께 공유합니다(TO-DO).',
@@ -2376,7 +2440,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'LIVE+',
           shortStatusLabel: 'LIVE+',
           imageSrc: '/assets/journey/clay-cut-05-v1.webp',
-          imageAlt: '세탁 기호를 확인하고 방문수거를 신청하는 3D 캐릭터',
+          imageAlt: '세탁 기호를 확인하고 방문수거를 신청하는 클레이 캐릭터',
           speechBubble: '“세탁법 확인하고 문 앞 방문수거 신청.”',
           apiChips: ['세탁'],
           detail: '주변 세탁소 찾기(LIVE)와 문 앞 방문수거(TO-DO)까지 한 번에 연결합니다.',
@@ -2391,7 +2455,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
           statusLabel: 'LIVE+',
           shortStatusLabel: 'LIVE+',
           imageSrc: '/assets/journey/clay-cut-06-v1.webp',
-          imageAlt: '영수증 태그가 붙은 재킷을 거래하는 3D 캐릭터',
+          imageAlt: '영수증 태그가 붙은 재킷을 거래하는 클레이 캐릭터',
           speechBubble: '“안 입는 옷, 사진과 이력 묶어 바로 판매.”',
           apiChips: ['리셀'],
           detail: '오래 안 입은 옷을 알려주고(LIVE), 정품 인증 구매 이력으로 바로 판매합니다(TO-DO).',
@@ -2453,13 +2517,36 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
         { id: 'affiliate', icon: 'shoppingBag', num: '02', title: '맞춤 추천', mechanism: '제휴', detail: '내 옷장과 겹치지 않고 꼭 필요한 아이템만 골라 추천합니다.' },
         { id: 'resale-bm', icon: 'badgeCheck', num: '03', title: '인증 리셀', mechanism: '수수료', detail: '정품 인증 구매 기록과 사진으로 안심 중고 거래를 연결합니다.' },
       ],
+      faqTitle: '자주 묻는 질문',
+      faqs: [
+        {
+          id: 'faq-privacy',
+          question: '얼굴 사진이 서버로 전송되나요?',
+          answer: '아니요. MediaPipe WASM이 기기 메모리에서만 피부톤을 분석(외부 전송 0B)하며, 의류 사진도 로컬 WebP로 EXIF · GPS를 제거한 뒤 처리합니다.',
+        },
+        {
+          id: 'faq-vton',
+          question: '2D VTON과 Three.js 3D의 역할 차이는 무엇인가요?',
+          answer: '실사 4겹+ 멀티앵글 가상 피팅은 8방향 2D VTON이 담당하고, 인터랙티브 의류 모션과 실시간 날씨 우산 연출은 Three.js 3D 엔진이 구동합니다.',
+        },
+        {
+          id: 'faq-platform',
+          question: '어떤 기기에서 사용할 수 있나요?',
+          answer: 'React 19 · Capacitor 8 단일 코드베이스로 웹 · iOS · Android를 모두 지원하며, 오프라인에서도 IndexedDB 옷장을 열람할 수 있습니다.',
+        },
+        {
+          id: 'faq-partner',
+          question: '패션 브랜드 제휴나 투자 문의는 어떻게 하나요?',
+          answer: '프라이빗 베타, B2B 브랜드 SDK 파일럿, IR 자료 요청 모두 raymond@ainvtry.com으로 창업자에게 직접 연락하실 수 있습니다.',
+        },
+      ],
       backToMissionLabel: '여정',
       founderRole: '창업자',
       hqLabel: '거점',
       hqValue: '서울',
       domainLabel: '웹',
       stackSummaryLabel: '핵심',
-      stackSummaryValue: '3D 옷장 · 리셀',
+      stackSummaryValue: '디지털 옷장 · 리셀',
       directCta: '창업자 메일',
     },
     footer: {
@@ -2493,7 +2580,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       termsSections: [
         {
           heading: '1. 서비스 범위',
-          body: 'Ainvtry(ainvtry.com, 제품명 A inventory)는 3D 디지털 옷장 관리, 의류 자동 분류, 멀티앵글 가상 피팅, 세탁 케어 안내, 날씨 · 장소 맞춤 코디 계획 및 구매 이력 기반 정품 인증 리셀 연동 기능을 제공합니다.',
+          body: 'Ainvtry(ainvtry.com, 제품명 A inventory)는 디지털 옷장 관리, 의류 자동 분류, 멀티앵글 가상 피팅, Three.js 3D 모션 연출, 세탁 케어 안내, 날씨 · 장소 맞춤 코디 계획 및 구매 이력 기반 정품 인증 리셀 연동 기능을 제공합니다.',
         },
         {
           heading: '2. 사용자 콘텐츠 소유권',

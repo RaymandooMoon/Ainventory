@@ -50,7 +50,7 @@ const SPARKLE_COUNT = 68;
 const RIPPLE_RING_COUNT = 3;
 const LABEL_TOP_CLEARANCE = 0.2;
 const POINTER_DRAG_SENSITIVITY = 0.0085;
-const CLUSTER_ORIGIN_X = 0;
+const CLUSTER_ORIGIN_X = -0.52;
 const CLUSTER_ORIGIN_Z = -0.35;
 const COS_YAW = Math.cos(GRID_YAW);
 const SIN_YAW = Math.sin(GRID_YAW);
@@ -77,12 +77,12 @@ function projectGridToWorld(u: number, v: number): { readonly x: number; readonl
  * without clipping; the selected pillar surges taller, wider, and steps forward.
  */
 const PILLAR_LAYOUTS: readonly PillarLayoutSpec[] = [
-  { index: 0, label: SPECS_3D_PILLAR_LABELS[0], baseHeight: 1.05, ...projectGridToWorld(-1.6, -0.06) },
-  { index: 1, label: SPECS_3D_PILLAR_LABELS[1], baseHeight: 1.22, ...projectGridToWorld(-0.96, -0.04) },
-  { index: 2, label: SPECS_3D_PILLAR_LABELS[2], baseHeight: 1.38, ...projectGridToWorld(-0.32, -0.02) },
-  { index: 3, label: SPECS_3D_PILLAR_LABELS[3], baseHeight: 1.28, ...projectGridToWorld(0.32, 0.02) },
-  { index: 4, label: SPECS_3D_PILLAR_LABELS[4], baseHeight: 1.14, ...projectGridToWorld(0.96, 0.04) },
-  { index: 5, label: SPECS_3D_PILLAR_LABELS[5], baseHeight: 1.02, ...projectGridToWorld(1.6, 0.06) },
+  { index: 0, label: SPECS_3D_PILLAR_LABELS[0], baseHeight: 1.05, ...projectGridToWorld(-1.35, -0.06) },
+  { index: 1, label: SPECS_3D_PILLAR_LABELS[1], baseHeight: 1.22, ...projectGridToWorld(-0.81, -0.04) },
+  { index: 2, label: SPECS_3D_PILLAR_LABELS[2], baseHeight: 1.38, ...projectGridToWorld(-0.27, -0.02) },
+  { index: 3, label: SPECS_3D_PILLAR_LABELS[3], baseHeight: 1.28, ...projectGridToWorld(0.27, 0.02) },
+  { index: 4, label: SPECS_3D_PILLAR_LABELS[4], baseHeight: 1.14, ...projectGridToWorld(0.81, 0.04) },
+  { index: 5, label: SPECS_3D_PILLAR_LABELS[5], baseHeight: 1.02, ...projectGridToWorld(1.35, 0.06) },
 ];
 
 const ARC_MIN_X = PILLAR_LAYOUTS[0].x;

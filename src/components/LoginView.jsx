@@ -398,13 +398,23 @@ export default function LoginView({
 
   const isEmbedMode = isLiveAppEmbedSession();
 
-  // Warm OutfitStudioView chunk in the background while user views embedded LoginView
+  // Warm OutfitStudioView chunk & sync parent silk mood while embedded inside ainvtry.com Studio
   useEffect(() => {
     if (!isEmbedMode) return undefined;
     const timerId = window.setTimeout(() => {
       void import('./OutfitStudioView.jsx').catch(() => {});
     }, 350);
-    return () => window.clearTimeout(timerId);
+    const handleEmbedMoodSync = (event) => {
+      const nextMood = event?.detail?.mood;
+      if (nextMood === 'luxury' || nextMood === 'aurora') {
+        setLoginMotionVariant(nextMood);
+      }
+    };
+    window.addEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+    return () => {
+      window.clearTimeout(timerId);
+      window.removeEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+    };
   }, [isEmbedMode]);
 
   const handleEnterSampleDemo = async () => {
@@ -726,6 +736,7 @@ export default function LoginView({
       data-auth-theme={effectiveTheme}
       data-auth-stage={authStage}
       data-portal-phase={portalPhase}
+      data-embed-mode={isEmbedMode ? 'true' : undefined}
     >
       {/* Instant zero-WebGL silk gradient in embed mode; full Three.js cloth in standalone app */}
       {isEmbedMode ? (
@@ -759,72 +770,82 @@ export default function LoginView({
         </Suspense>
       )}
 
-      {/* Top Utility Controls: Single Silk Palette Toggle (Left) + Theme & Lang (Right) */}
-      <header className="atelier-topbar">
-        <div className="atelier-utility-group">
-          <button
-            type="button"
-            className="atelier-utility-btn atelier-silk-toggle-btn"
-            data-motion-option={loginMotionVariant}
-            aria-label={
-              isEn
-                ? `Switch silk backdrop (${loginMotionVariant === 'luxury' ? 'Luxury' : 'Aurora'})`
-                : `실크 배경 전환 (현재 ${loginMotionVariant === 'luxury' ? '럭셔리' : '오로라'})`
-            }
-            onClick={(e) => {
-              triggerHaptic('selection');
-              if (typeof window !== 'undefined') {
-                const vw = Math.max(1, window.innerWidth);
-                const vh = Math.max(1, window.innerHeight);
-                const rect = e.currentTarget.getBoundingClientRect();
-                const cx = rect.left + rect.width * 0.5;
-                const cy = rect.top + rect.height * 0.5;
-                setVariantChangeOrigin({
-                  x: (cx / vw) * 2 - 1,
-                  y: -((cy / vh) * 2 - 1),
-                  seq: Date.now(),
-                });
+      {/* Top Utility Controls: Rendered only in standalone app (parent site topbar controls silk/theme/lang in embed mode) */}
+      {!isEmbedMode && (
+        <header className="atelier-topbar">
+          <div className="atelier-utility-group">
+            <button
+              type="button"
+              className="atelier-utility-btn atelier-silk-toggle-btn"
+              data-motion-option={loginMotionVariant}
+              aria-label={
+                isEn
+                  ? `Switch silk backdrop (${loginMotionVariant === 'luxury' ? 'Luxury' : 'Aurora'})`
+                  : `실크 배경 전환 (현재 ${loginMotionVariant === 'luxury' ? '럭셔리' : '오로라'})`
               }
-              setLoginMotionVariant((prev) => (prev === 'luxury' ? 'aurora' : 'luxury'));
-            }}
-          >
-            <Sparkles size={14} />
-            <span>
-              {loginMotionVariant === 'luxury'
-                ? isEn
-                  ? 'Luxury'
-                  : '럭셔리'
-                : isEn
-                  ? 'Aurora'
-                  : '오로라'}
-            </span>
-          </button>
-        </div>
+              onClick={(e) => {
+                triggerHaptic('selection');
+                if (typeof window !== 'undefined') {
+                  const vw = Math.max(1, window.innerWidth);
+                  const vh = Math.max(1, window.innerHeight);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const cx = rect.left + rect.width * 0.5;
+                  const cy = rect.top + rect.height * 0.5;
+                  setVariantChangeOrigin({
+                    x: (cx / vw) * 2 - 1,
+                    y: -((cy / vh) * 2 - 1),
+                    seq: Date.now(),
+                  });
+                }
+                setLoginMotionVariant((prev) => (prev === 'luxury' ? 'aurora' : 'luxury'));
+              }}
+            >
+              <Sparkles size={14} />
+              <span>
+                {loginMotionVariant === 'luxury'
+                  ? isEn
+                    ? 'Luxury'
+                    : '럭셔리'
+                  : isEn
+                    ? 'Aurora'
+                    : '오로라'}
+              </span>
+            </button>
+          </div>
 
-        <div className="atelier-utility-group">
-          <button
-            id={CARBON_DOM_CONTRACT.loginThemeToggleId}
-            type="button"
-            className="atelier-utility-btn"
-            aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
-            onClick={onToggleTheme}
-          >
-            {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            <span>{effectiveTheme === 'dark' ? 'Light' : 'Dark'}</span>
-          </button>
+          <div className="atelier-utility-group">
+            <button
+              id={CARBON_DOM_CONTRACT.loginThemeToggleId}
+              type="button"
+              className="atelier-utility-btn"
+              aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
+              onClick={onToggleTheme}
+            >
+              {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              <span>
+                {effectiveTheme === 'dark'
+                  ? isEn
+                    ? 'Light'
+                    : '라이트'
+                  : isEn
+                    ? 'Dark'
+                    : '다크'}
+              </span>
+            </button>
 
-          <button
-            id={CARBON_DOM_CONTRACT.loginLangToggleId}
-            type="button"
-            className="atelier-utility-btn"
-            aria-label={isEn ? 'Switch language' : '언어 전환'}
-            onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
-          >
-            <Globe size={15} />
-            <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
-          </button>
-        </div>
-      </header>
+            <button
+              id={CARBON_DOM_CONTRACT.loginLangToggleId}
+              type="button"
+              className="atelier-utility-btn"
+              aria-label={isEn ? 'Switch language' : '언어 전환'}
+              onClick={() => onChangeLang?.(lang === 'ko' ? 'en' : 'ko')}
+            >
+              <Globe size={15} />
+              <span>{lang === 'ko' ? 'EN' : 'KO'}</span>
+            </button>
+          </div>
+        </header>
+      )}
 
       <main className="atelier-auth-stage" data-auth-stage={authStage}>
         <div className="atelier-auth-column" data-auth-stage={authStage}>

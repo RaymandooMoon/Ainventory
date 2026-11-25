@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ArrowRight,
+  ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
   Globe,
@@ -20,6 +22,7 @@ import {
   type StageInteractionState,
 } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import HeroVisualProofCard from './HeroVisualProofCard.tsx';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
@@ -518,7 +521,7 @@ export default function AinvtrySiteApp() {
 
       <div className="site-shell">
         {/* ================================================================
-            PERSISTENT FLOATING UTILITY TOPBAR (MARBLE-HITTABLE IN HERO)
+            ZERO-CHROME EDITORIAL TOPBAR (MARBLE-HITTABLE IN HERO)
            ================================================================ */}
         <header className="site-header-stack">
           <div className="site-topbar">
@@ -534,6 +537,9 @@ export default function AinvtrySiteApp() {
               >
                 <SiteBrandMark theme={theme} size="nav" />
               </button>
+            </div>
+
+            <div className="site-topbar-right site-utility-rail">
               <button
                 type="button"
                 className="site-utility-pill"
@@ -542,18 +548,16 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleSilk}
                 aria-label={
                   lang === 'en'
-                    ? `Switch 3D silk backdrop (${activeVariantMeta.labelEn})`
-                    : `3D 실크 배경 전환 (${activeVariantMeta.labelKo})`
+                    ? `Switch Three.js 3D silk backdrop (${activeVariantMeta.labelEn})`
+                    : `Three.js 3D 실크 배경 전환 (${activeVariantMeta.labelKo})`
                 }
               >
-                <Sparkles size={14} aria-hidden="true" />
+                <Sparkles size={13} aria-hidden="true" />
                 <span>
                   {lang === 'en' ? activeVariantMeta.shortEn : activeVariantMeta.shortKo}
                 </span>
               </button>
-            </div>
-
-            <div className="site-topbar-right">
+              <span className="site-utility-sep" aria-hidden="true" />
               <button
                 type="button"
                 className="site-utility-pill"
@@ -562,9 +566,10 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleTheme}
                 aria-label={lang === 'en' ? 'Toggle theme' : '라이트 다크 모드 전환'}
               >
-                {theme === 'dark' ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
+                {theme === 'dark' ? <Sun size={13} aria-hidden="true" /> : <Moon size={13} aria-hidden="true" />}
                 <span>{theme === 'dark' ? copy.nav.switchToLight : copy.nav.switchToDark}</span>
               </button>
+              <span className="site-utility-sep" aria-hidden="true" />
               <button
                 type="button"
                 className="site-utility-pill"
@@ -573,7 +578,7 @@ export default function AinvtrySiteApp() {
                 onClick={handleToggleLang}
                 aria-label={lang === 'en' ? 'Switch language to Korean' : '영어로 전환'}
               >
-                <Globe size={14} aria-hidden="true" />
+                <Globe size={13} aria-hidden="true" />
                 <span>{copy.nav.switchLang}</span>
               </button>
             </div>
@@ -581,7 +586,7 @@ export default function AinvtrySiteApp() {
         </header>
 
         {/* ================================================================
-            CENTRAL SPATIAL STAGE: HERO OVERLAY OR LEFT-58% OPEN + RIGHT-38% HUD
+            CENTRAL SPATIAL STAGE: EDITORIAL HERO OR LIVE STUDIO / 3D + HUD
            ================================================================ */}
         <main className="site-stage">
           {hasVisitedStudio && (
@@ -589,6 +594,7 @@ export default function AinvtrySiteApp() {
               screen={stageInteraction.studioPreviewScreen}
               lang={lang}
               theme={theme}
+              mood={motionVariant}
               isSheetExpanded={false}
               isVisible={activeStage === 'studio'}
               fullStudio
@@ -600,16 +606,59 @@ export default function AinvtrySiteApp() {
 
           {activeStage === 'hero' ? (
             <section key="hero" className="site-view site-view--home">
-              <div className="site-hero-center">
-                <div className="site-hero-logo-wrap">
-                  <SiteBrandMark theme={theme} size="hero" />
+              <div className="site-hero-grid">
+                <div className="site-hero-editorial">
+                  <p className="site-hero-eyebrow">
+                    <span className="site-hero-diamond" aria-hidden="true">
+                      ◆
+                    </span>
+                    <span>{copy.hero.kicker}</span>
+                  </p>
+
+                  <h1 className="site-hero-title">
+                    <span className="site-hero-title-sheen">{copy.hero.titleLead}</span>
+                    <em className="site-hero-accent">{copy.hero.titleAccent}</em>
+                    <span className="site-hero-title-sheen">{copy.hero.titleTail}</span>
+                  </h1>
+
+                  <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
+
+                  <div className="site-hero-actions" data-no-marble="true">
+                    <button
+                      type="button"
+                      className="site-hero-cta site-hero-cta--primary"
+                      onClick={() => handleSelectStage('studio', 'dock')}
+                    >
+                      <span>{copy.hero.primaryCta}</span>
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </button>
+                    <a
+                      href={betaMailto}
+                      className="site-hero-cta site-hero-cta--secondary"
+                    >
+                      <span>{copy.hero.secondaryCta}</span>
+                      <ArrowUpRight size={14} aria-hidden="true" />
+                    </a>
+                  </div>
+
+                  <dl className="site-hero-proof-strip" aria-label={copy.stack.heading}>
+                    {copy.hero.proofMetrics.map((metric) => (
+                      <div key={metric.label} className="site-hero-proof-metric">
+                        <dt className="site-hero-proof-val">{metric.value}</dt>
+                        <dd className="site-hero-proof-lbl">{metric.label}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </div>
-                <h1 className="site-hero-title">
-                  {copy.hero.titleLead}
-                  <em className="site-hero-accent">{copy.hero.titleAccent}</em>
-                  {copy.hero.titleTail}
-                </h1>
-                <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
+
+                <div className="site-hero-visual">
+                  <HeroVisualProofCard
+                    copy={copy}
+                    lang={lang}
+                    theme={theme}
+                    onLaunchStudio={() => handleSelectStage('studio', 'dock')}
+                  />
+                </div>
               </div>
             </section>
           ) : (
@@ -628,13 +677,17 @@ export default function AinvtrySiteApp() {
         </main>
 
         {/* ================================================================
-            BOTTOM 4-PILL DOCK (WITH GOLD CONCENTRIC RIPPLE) + FOOTER RAIL
+            UNIFIED ARCHITECTURAL 4-STAGE HAIRLINE RAIL + FOOTER
            ================================================================ */}
         <div className="site-bottom-stack">
-          <nav className="site-pinball-dock site-dock" aria-label="Primary 3D stage navigation">
-            {BOTTOM_STAGE_PILLS.map((pill) => {
+          <nav
+            className="site-pinball-dock site-dock"
+            aria-label={lang === 'ko' ? '주요 스테이지 탐색' : 'Primary stage navigation'}
+          >
+            {BOTTOM_STAGE_PILLS.map((pill, idx) => {
               const isSelected = activeStage === pill.stageId;
               const isBursting = rippleBurst?.stageId === pill.stageId;
+              const stageIndex = String(idx + 1).padStart(2, '0');
               return (
                 <button
                   key={pill.stageId}
@@ -649,6 +702,9 @@ export default function AinvtrySiteApp() {
                   aria-current={isSelected ? 'page' : undefined}
                   onClick={() => handleSelectStage(pill.stageId, 'dock')}
                 >
+                  <span className="site-dock-pill-num" aria-hidden="true">
+                    {stageIndex}
+                  </span>
                   <span className="site-dock-pill-label">{copy.nav[pill.navKey]}</span>
                   {isBursting && (
                     <span

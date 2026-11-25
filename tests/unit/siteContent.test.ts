@@ -125,7 +125,7 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.equal(copy.architecture.governance.length, 3);
       assert.equal(copy.architecture.privacyShields.length, 4);
       assert.equal(copy.architecture.mapsNodes.length, 6);
-      assert.equal(copy.subtabs.archMaps, 'Google API × 3D');
+      assert.equal(copy.subtabs.archMaps, 'Google API × Three.js 3D');
       assert.ok(
         copy.architecture.tiers.some((tier) => tier.highlight && tier.id === 'core'),
         'Core service tier must spotlight iNVTRY'
@@ -287,8 +287,8 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.equal(copy.interactive.balanceValue, '98.4%');
       assert.equal(copy.interactive.balanceMeta, isKo ? '이염 충돌 0건' : '0 bleed conflicts');
 
-      // 2. Architecture — Privacy & Security + Google API × 3D
-      assert.equal(copy.interactive.ingestionMeta, '582 KB → 23 KB WebP (-96%)');
+      // 2. Architecture — Privacy & Security + Google API × Three.js 3D
+      assert.equal(copy.interactive.ingestionMeta, '582 KB → 24 KB WebP (-96%)');
       assert.ok(
         serialized.includes('resolveAuthorizedClosets'),
         `[${lang}] Must specify resolveAuthorizedClosets tenant guard`
@@ -319,8 +319,8 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       // 3. Specs — Key Metrics + Tech Stack
       assert.deepEqual(
         copy.stack.heroKpis.map((kpi) => kpi.value),
-        ['5-Stage', '0 Bytes', '210+', '4 APIs'],
-        `[${lang}] Hero KPIs must match 5-Stage / 0 Bytes / 210+ / 4 APIs`
+        ['5-Stage', '0 Bytes', '340+', '4 APIs'],
+        `[${lang}] Hero KPIs must match 5-Stage / 0 Bytes / 340+ / 4 APIs`
       );
       assert.ok(
         copy.stack.cards.some((card) => card.metric === 'Three.js 0.187'),
@@ -330,6 +330,7 @@ describe('ainvtry.com official site content & icon-first architecture contract',
         copy.stack.cards.some((card) => card.metric === 'Capacitor 8'),
         `[${lang}] Tech Stack must include Capacitor 8`
       );
+      assert.ok(copy.vision.faqs.length >= 4, `[${lang}] Vision must include at least 4 FAQ entries`);
 
       // 4. About — User Journey + Mission & Roadmap + BM & Founder
       assert.equal(copy.journey.badge, isKo ? '6컷 AI 여정' : '6-Cut AI Cycle');

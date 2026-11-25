@@ -259,7 +259,7 @@ export function getBucketLabel(bucket: StageAnalyticsBucket, lang: SiteLang): st
       case 'hero':
         return '히어로';
       case 'tryOn':
-        return '3D 피팅';
+        return '가상 피팅';
       case 'calendar':
         return '케어 · 가치';
       case 'other':
@@ -270,7 +270,7 @@ export function getBucketLabel(bucket: StageAnalyticsBucket, lang: SiteLang): st
     case 'hero':
       return 'Hero';
     case 'tryOn':
-      return '3D Fitting';
+      return 'Virtual Fit';
     case 'calendar':
       return 'Care & Value';
     case 'other':
@@ -334,14 +334,14 @@ export function buildStagePreferenceBars(
           ? id === 'hero'
             ? '실크 · 구슬 메인'
             : id === 'tryOn'
-              ? '3D 피팅 · 라이브 앱'
+              ? 'Three.js 3D · 라이브 앱'
               : id === 'calendar'
                 ? '착용 기록 · 여정'
                 : '기술 구조 · 지표'
           : id === 'hero'
             ? 'Silk & marble home'
             : id === 'tryOn'
-              ? '3D fitting & preview'
+              ? 'Three.js 3D & live app'
               : id === 'calendar'
                 ? 'Care, value & journey'
                 : 'Architecture & specs';

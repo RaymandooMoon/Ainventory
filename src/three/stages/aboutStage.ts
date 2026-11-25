@@ -79,10 +79,10 @@ interface LoopNodeSpec {
 
 // Calibrated to avoid right-HUD overlap on 16:9 desktop & edge clipping on 390px portrait
 const LOOP_NODE_SPECS: readonly LoopNodeSpec[] = [
-  { index: 0, label: 'Closet', width: 150, labelOffset: [-0.06, 0.28, 0.28] },
-  { index: 1, label: 'Weather', width: 168, labelOffset: [0.12, 0.36, 0.26] },
-  { index: 2, label: '360° Fit', width: 166, labelOffset: [-0.26, 0.32, 0.26] },
-  { index: 3, label: 'Calendar', width: 178, labelOffset: [0.06, 0.26, 0.26] },
+  { index: 0, label: 'Closet', width: 150, labelOffset: [-0.26, 0.28, 0.28] },
+  { index: 1, label: 'Weather', width: 168, labelOffset: [0.10, 0.34, 0.26] },
+  { index: 2, label: '360° Fit', width: 166, labelOffset: [-0.18, 0.32, 0.26] },
+  { index: 3, label: 'Calendar', width: 178, labelOffset: [0.34, 0.26, 0.26] },
   { index: 4, label: 'CPW', width: 132, labelOffset: [0.22, -0.22, 0.22] },
 ];
 

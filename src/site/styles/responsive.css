@@ -28,32 +28,155 @@
 
   .site-topbar-left,
   .site-topbar-right {
-    gap: 6px;
+    gap: 0;
   }
 
-  .site-brand-pill,
+  .site-brand-pill {
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  .site-utility-rail {
+    padding: 0 2px;
+  }
+
   .site-utility-pill {
     min-height: 44px;
-    padding: 0 11px;
-    gap: 5px;
-    font-size: 0.74rem;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 0.72rem;
   }
 
   .site-logo-frame--nav {
     width: 64px;
   }
 
-  /* Hero: clean luminous clarity without boxy scrim cards */
-  .site-hero-center {
-    padding: 0 8px;
+  /* Spatial Editorial Noir Mobile Hero: crisp single-viewport stack */
+  .site-view--home {
+    padding: 0 6px;
+  }
+
+  .site-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .site-hero-editorial {
+    align-items: center;
+    text-align: center;
+  }
+
+  .site-hero-eyebrow {
+    margin-bottom: 6px;
+    font-size: 0.62rem;
+    letter-spacing: 0.11em;
   }
 
   .site-hero-title {
-    font-size: clamp(1.88rem, 7.6vw, 2.75rem);
+    font-size: clamp(1.62rem, 6.6vw, 2.3rem);
+    line-height: 1.1;
   }
 
   .site-hero-subtitle {
-    font-size: 0.9rem;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    line-height: 1.44;
+    max-width: 360px;
+  }
+
+  .site-hero-actions {
+    width: 100%;
+    max-width: 360px;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1.18fr 0.82fr;
+    gap: 8px;
+  }
+
+  .site-hero-cta {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 0.78rem;
+  }
+
+  .site-hero-proof-strip {
+    margin-top: 10px;
+    padding-top: 8px;
+    max-width: 360px;
+  }
+
+  .site-hero-proof-metric {
+    align-items: center;
+    text-align: center;
+  }
+
+  .site-hero-proof-metric + .site-hero-proof-metric {
+    padding-left: 8px;
+  }
+
+  .site-hero-proof-metric:not(:last-child) {
+    padding-right: 8px;
+  }
+
+  .site-hero-proof-val {
+    font-size: 0.86rem;
+  }
+
+  .site-hero-proof-lbl {
+    font-size: 0.63rem;
+  }
+
+  .site-hero-visual {
+    justify-content: center;
+  }
+
+  .site-hero-proof-card {
+    max-width: 360px;
+    border-radius: 18px;
+  }
+
+  .site-hero-proof-head {
+    padding: 0 8px 0 10px;
+  }
+
+  .site-hero-proof-badge {
+    font-size: 0.58rem;
+    letter-spacing: 0.05em;
+  }
+
+  .site-hero-proof-tab {
+    min-height: 44px;
+    padding: 0 9px;
+    font-size: 0.64rem;
+  }
+
+  .site-hero-proof-tab::before {
+    inset: 9px 0;
+  }
+
+  .site-hero-proof-split,
+  .site-hero-proof-compare {
+    aspect-ratio: 16 / 9;
+  }
+
+  .site-hero-proof-garment {
+    padding: 8px 8px 26px;
+  }
+
+  .site-hero-proof-pill,
+  .site-hero-compare-tag {
+    font-size: 0.58rem;
+    padding: 2px 7px;
+  }
+
+  .site-hero-proof-foot {
+    padding: 0 10px;
+  }
+
+  .site-hero-proof-meta,
+  .site-hero-proof-link {
+    font-size: 0.65rem;
   }
 
   /* Top 3D Control Dock: Full-width right below topbar (zero collision) */
@@ -319,13 +442,18 @@
 
   .site-dock {
     width: 100%;
-    gap: 6px;
+    padding: 2px;
   }
 
   .site-dock-pill {
     min-height: 44px;
     padding: 0 6px;
+    gap: 4px;
     font-size: 0.76rem;
+  }
+
+  .site-dock-pill-num {
+    font-size: 0.62rem;
   }
 
   .site-bottombar-tray {
@@ -423,6 +551,10 @@
   .site-hud-panel[data-layout-mode='sheet'] .hud-grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .site-dock-pill-num {
+    display: none;
+  }
 }
 
 @media (max-width: 520px) and (max-height: 700px) {
@@ -431,6 +563,15 @@
   }
 
   .site-hud-panel[data-layout-mode='sheet'] .hud-journey-stage {
+    aspect-ratio: 16 / 8;
+  }
+
+  .site-hero-proof-strip {
+    display: none;
+  }
+
+  .site-hero-proof-split,
+  .site-hero-proof-compare {
     aspect-ratio: 16 / 8;
   }
 }
@@ -447,11 +588,14 @@
  * ========================================================================== */
 
 @media (max-width: 359px) {
-  .site-brand-pill,
+  .site-brand-pill {
+    padding: 0 2px;
+  }
+
   .site-utility-pill {
-    padding: 0 8px;
-    gap: 4px;
-    font-size: 0.7rem;
+    padding: 0 6px;
+    gap: 3px;
+    font-size: 0.68rem;
   }
 
   .site-logo-frame--nav {

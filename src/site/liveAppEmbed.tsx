@@ -13,6 +13,7 @@ export interface LiveAppSyncFromParentPayload {
   readonly screen?: LiveAppScreenId;
   readonly lang?: SiteLang;
   readonly theme?: SiteTheme;
+  readonly mood?: 'luxury' | 'aurora';
 }
 
 export interface LiveAppScreenNotifyPayload {
@@ -44,6 +45,7 @@ if (typeof window !== 'undefined') {
           screen: data.screen,
           lang: data.lang,
           theme: data.theme,
+          mood: data.mood,
         },
       })
     );

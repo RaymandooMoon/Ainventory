@@ -159,12 +159,12 @@ export const STAGE_CAMERA_PRESETS: Record<ActiveStageId, CameraPreset> = {
     lookAt: new THREE.Vector3(1.68, -0.02, 0),
   },
   specs: {
-    position: new THREE.Vector3(2.05, 1.38, 7.25),
-    lookAt: new THREE.Vector3(1.70, -0.14, 0),
+    position: new THREE.Vector3(1.92, 1.42, 7.85),
+    lookAt: new THREE.Vector3(1.72, -0.14, 0),
   },
   about: {
-    position: new THREE.Vector3(1.92, 0.48, 6.40),
-    lookAt: new THREE.Vector3(1.66, -0.10, 0),
+    position: new THREE.Vector3(1.96, 0.52, 7.55),
+    lookAt: new THREE.Vector3(1.68, -0.10, 0),
   },
 };
 

@@ -432,6 +432,17 @@
     max(16px, calc(env(safe-area-inset-bottom, 12px) + 8px));
 }
 
+.atelier-auth-root[data-embed-mode='true'] .atelier-auth-stage {
+  padding-top: clamp(14px, 3vh, 28px);
+  justify-content: center;
+}
+
+.atelier-auth-root[data-embed-mode='true'] .atelier-auth-column {
+  height: auto;
+  max-height: 100%;
+  justify-content: center;
+}
+
 .atelier-auth-stage[data-auth-stage='intro'] {
   height: 100vh;
   height: 100dvh;
