@@ -29,6 +29,8 @@
     "verify:quick": "npm run lint && npm run typecheck && npm run test:unit",
     "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
     "verify:full": "npm run verify && npm run test:e2e",
+    "ir:sync": "node --experimental-strip-types scripts/sync-ir-deck.mjs",
+    "ir:sync:check": "node --experimental-strip-types scripts/sync-ir-deck.mjs --check",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/* .agent/hooks/*.mjs"
   },
   "dependencies": {

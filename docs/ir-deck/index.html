@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iNVTRY (Ainvtry) — IR 사업계획서 v3.0 (Silk Theme · 16:9 · 4:3)</title>
+    <title>iNVTRY (Ainvtry) — IR 사업계획서 v3.1 (Silk Theme · Auto-Sync · 16:9 · 4:3)</title>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -252,7 +252,7 @@
 
               <div class="cover-tag-row">
                 <span class="badge badge--gold">
-                  <svg class="ic ic--xs"><use href="#ic-hanger" /></svg>3D DIGITAL CLOSET OS
+                  <svg class="ic ic--xs"><use href="#ic-hanger" /></svg>DIGITAL CLOSET OS
                 </span>
                 <span class="badge badge--live">
                   <svg class="ic ic--xs"><use href="#ic-smartphone" /></svg>LIVE MVP · WEB · iOS · ANDROID
@@ -263,23 +263,23 @@
               </div>
 
               <h1 class="cover-headline">
-                내 옷장을 <em>3D 자산</em>으로,<br />
+                내 옷장을 <em>디지털 자산</em>으로,<br />
                 입는 순간부터 리셀까지
               </h1>
 
               <p class="cover-lead">
-                사진 1장 디지털화 · 360° 4겹+ 3D 피팅 · 온디바이스 0B 보안 · 1탭 인증 리셀을
+                사진 1장 디지털화 · 360° 4겹+ AI 피팅 · 온디바이스 0B 보안 · 1탭 인증 리셀을
                 하나의 순환 루프로 통합한 <strong>Privacy-First AI 패션테크 OS</strong>
               </p>
 
               <div class="cover-kpi-strip">
                 <div class="cover-kpi">
                   <div class="cover-kpi-top">
-                    <span>3D ENGINE</span>
+                    <span>THREE.JS 3D</span>
                     <svg class="ic ic--xs"><use href="#ic-layers" /></svg>
                   </div>
                   <strong>60 FPS</strong>
-                  <span>21관절 · 4겹+ 물리</span>
+                  <span>21관절 · SpringBone 물리</span>
                 </div>
                 <div class="cover-kpi">
                   <div class="cover-kpi-top">
@@ -294,31 +294,31 @@
                     <span>EDGE STRIP</span>
                     <svg class="ic ic--xs"><use href="#ic-zap" /></svg>
                   </div>
-                  <strong>-96%</strong>
-                  <span>582KB → 23KB WebP</span>
+                  <strong data-ir-bind="garment.compression">-96%</strong>
+                  <span data-ir-bind="garment.pairShort">582KB → 24KB WebP</span>
                 </div>
                 <div class="cover-kpi">
                   <div class="cover-kpi-top">
                     <span>VERIFIED</span>
                     <svg class="ic ic--xs"><use href="#ic-check" /></svg>
                   </div>
-                  <strong>210+</strong>
-                  <span>단위·WebGL E2E 통과</span>
+                  <strong data-ir-bind="tests.roundedPlus">330+</strong>
+                  <span data-ir-bind="tests.summaryShort">51스위트 · 338케이스 통과</span>
                 </div>
               </div>
 
               <div class="cover-meta-bar">
                 <span class="cover-meta-item">
                   <svg class="ic ic--xs"><use href="#ic-briefcase" /></svg>
-                  <strong>IR 사업계획서 v3.0</strong>
+                  <strong>IR 사업계획서 v3.1</strong>
                 </span>
                 <span class="cover-meta-item">
                   <svg class="ic ic--xs"><use href="#ic-globe" /></svg>
-                  <strong class="tabular">www.ainvtry.com</strong>
+                  <strong class="tabular" data-ir-bind="meta.urlShort">www.ainvtry.com</strong>
                 </span>
                 <span class="cover-meta-item">
                   <svg class="ic ic--xs"><use href="#ic-mail" /></svg>
-                  <strong>Raymond Moon · raymond@ainvtry.com</strong>
+                  <strong data-ir-bind="meta.founderContact">Raymond Moon · raymond@ainvtry.com</strong>
                 </span>
               </div>
             </div>
@@ -336,8 +336,8 @@
                     <svg class="ic ic--sm"><use href="#ic-sparkles" /></svg>
                   </span>
                   <div>
-                    <span>THREE.JS 0.187 · VTON</span>
-                    <strong>360° 4겹+ · 실시간 날씨</strong>
+                    <span data-ir-bind="versions.threeVtonTag">THREE.JS 0.187 · VTON</span>
+                    <strong>360° 4겹+ 2D VTON · 실시간 날씨</strong>
                   </div>
                 </div>
               </div>
@@ -346,9 +346,9 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand">
-              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.0
+              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.1
             </span>
-            <span>Seoul, Republic of Korea · 2026.11</span>
+            <span data-ir-bind="meta.locationDate">Seoul, Republic of Korea · 2026.11</span>
             <span class="slide-footer-num">01 / 18</span>
           </footer>
         </section>
@@ -387,7 +387,7 @@
                   <button type="button" class="toc-item" data-jump-slide="0">
                     <span class="toc-num">01</span>
                     <svg class="ic ic--xs toc-ic"><use href="#ic-hanger" /></svg>
-                    <span class="toc-label">Cover — 3D 순환 옷장 OS</span>
+                    <span class="toc-label">Cover — 디지털 순환 옷장 OS</span>
                     <span class="toc-tag">COVER</span>
                   </button>
                   <button type="button" class="toc-item" data-jump-slide="2">
@@ -418,7 +418,7 @@
                     <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-cpu" /></svg></span>
                     <div>
                       <span class="kicker">PART 02 · PRODUCT &amp; MOAT</span>
-                      <h3 class="toc-part-title">실구동 제품 · 3D/AI · 0B 보안</h3>
+                      <h3 class="toc-part-title">실구동 제품 · AI VTON · 0B 보안</h3>
                     </div>
                   </div>
                   <span class="badge badge--live">06 – 09</span>
@@ -439,7 +439,7 @@
                   <button type="button" class="toc-item" data-jump-slide="7">
                     <span class="toc-num">08</span>
                     <svg class="ic ic--xs toc-ic"><use href="#ic-zap" /></svg>
-                    <span class="toc-label">Core Tech — 60fps·VTON·-96%</span>
+                    <span class="toc-label">Core Tech — Three.js·2D VTON·-96%</span>
                     <span class="toc-tag">ENGINE</span>
                   </button>
                   <button type="button" class="toc-item" data-jump-slide="8">
@@ -508,7 +508,7 @@
                     <span class="toc-num">14</span>
                     <svg class="ic ic--xs toc-ic"><use href="#ic-server" /></svg>
                     <span class="toc-label">Traction — 6-Tier 풀스택 검증</span>
-                    <span class="toc-tag">210+ TESTS</span>
+                    <span class="toc-tag" data-ir-bind="tests.tocTag">330+ TESTS</span>
                   </button>
                   <button type="button" class="toc-item" data-jump-slide="14">
                     <span class="toc-num">15</span>
@@ -549,7 +549,7 @@
           <header class="slide-header">
             <div>
               <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>PART 01 · EXECUTIVE SUMMARY</span>
-              <h2 class="slide-title">아이디어가 아닌 실구동 <em>3D 순환 옷장 OS</em></h2>
+              <h2 class="slide-title">아이디어가 아닌 실구동 <em>디지털 순환 옷장 OS</em></h2>
             </div>
             <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-hanger" /></svg>iNVTRY <strong>03 / 18</strong></span>
           </header>
@@ -563,7 +563,7 @@
                   <span class="badge badge--gold">CLOSED-LOOP</span>
                 </div>
                 <div class="kpi-num kpi-num--gold">5단계</div>
-                <p class="card-copy">촬영 → 날씨 → 3D 피팅 → CPW → 1탭 리셀</p>
+                <p class="card-copy">촬영 → 날씨 → AI 피팅 → CPW → 1탭 리셀</p>
               </div>
               <div class="card">
                 <div class="row-between">
@@ -578,8 +578,8 @@
                   <span class="ic-tile"><svg class="ic"><use href="#ic-check" /></svg></span>
                   <span class="badge badge--live">LIVE MVP</span>
                 </div>
-                <div class="kpi-num">210+</div>
-                <p class="card-copy">단위·모바일 WebGL E2E 통과 · 3플랫폼</p>
+                <div class="kpi-num" data-ir-bind="tests.roundedPlus">330+</div>
+                <p class="card-copy" data-ir-bind="tests.summaryLine">단위·API·WebGL E2E 51스위트(338케이스) · 3플랫폼</p>
               </div>
               <div class="card">
                 <div class="row-between">
@@ -603,7 +603,7 @@
               </div>
               <div class="flow-step">
                 <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-layers" /></svg></span>
-                <div class="flow-step-text"><span>03 · FITTING</span><strong>360° 4겹+ 3D</strong></div>
+                <div class="flow-step-text"><span>03 · FITTING</span><strong>360° 4겹+ VTON</strong></div>
               </div>
               <div class="flow-step">
                 <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-bar-chart" /></svg></span>
@@ -721,7 +721,7 @@
                   <span class="ic-tile ic-tile--risk"><svg class="ic"><use href="#ic-layers" /></svg></span>
                   <span class="badge badge--risk">PAIN 03</span>
                 </div>
-                <div class="pain-metric">단품 1벌 2D</div>
+                <div class="pain-metric">단품 1벌 정면</div>
                 <h3>레이어드·측후면 검증 불가</h3>
                 <p>기존 AI는 정면 단품 합성 한계 → 4겹 외출 코디 불가</p>
               </article>
@@ -786,7 +786,7 @@
           <header class="slide-header">
             <div>
               <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>PART 01 · ONE-SHOT UNIFIED RESOLUTION</span>
-              <h2 class="slide-title">흩어진 6가지 패션 문제, <em>단 하나의 3D OS</em>로 한 번에 해결</h2>
+              <h2 class="slide-title">흩어진 6가지 패션 문제, <em>단 하나의 옷장 OS</em>로 한 번에 해결</h2>
             </div>
             <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-hanger" /></svg>6 → 1 UNIFIED <strong>05 / 18</strong></span>
           </header>
@@ -837,7 +837,7 @@
                 <div class="converge-pill converge-pill--pain">
                   <span class="ic-tile ic-tile--sm ic-tile--risk"><svg class="ic ic--sm"><use href="#ic-layers" /></svg></span>
                   <div class="converge-pill-text">
-                    <strong>03. 단품 2D VTON</strong>
+                    <strong>03. 단품 정면 VTON</strong>
                     <span>4겹 레이어드 · 측후면 불가</span>
                   </div>
                   <span class="badge badge--risk">1벌 한계</span>
@@ -873,7 +873,7 @@
                 <div class="converge-medallion">
                   <span class="ic-tile ic-tile--gold"><svg class="ic ic--md"><use href="#ic-hanger" /></svg></span>
                   <div class="converge-big">6 <span>→</span> 1</div>
-                  <div class="converge-medallion-sub">iNVTRY 3D OS</div>
+                  <div class="converge-medallion-sub">iNVTRY OS</div>
                   <div class="converge-medallion-pills">
                     <span class="badge badge--gold">사진 1장 단일 그래프</span>
                     <span class="badge badge--live">5-STAGE CLOSED LOOP</span>
@@ -898,7 +898,7 @@
                 <div class="converge-pill converge-pill--sol">
                   <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-hanger" /></svg></span>
                   <div class="converge-pill-text">
-                    <strong>내 옷장 사전 3D 조합</strong>
+                    <strong>내 옷장 사전 AI 조합</strong>
                     <span>28체형 + 보유 옷 매칭 검증</span>
                   </div>
                   <span class="badge badge--live">LIVE</span>
@@ -906,10 +906,10 @@
                 <div class="converge-pill converge-pill--sol">
                   <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-layers" /></svg></span>
                   <div class="converge-pill-text">
-                    <strong>360° 4겹+ 물리 피팅</strong>
-                    <span>21관절 SpringBone · 8방향 QC</span>
+                    <strong>360° 4겹+ 멀티앵글 피팅</strong>
+                    <span>8방향 2D VTON + Three.js 물리</span>
                   </div>
-                  <span class="badge badge--live">60 FPS</span>
+                  <span class="badge badge--live">8-ANGLE</span>
                 </div>
                 <div class="converge-pill converge-pill--sol">
                   <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-map-pin" /></svg></span>
@@ -923,7 +923,7 @@
                   <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-shield" /></svg></span>
                   <div class="converge-pill-text">
                     <strong>0B 얼굴 · -96% 스트리핑</strong>
-                    <span>WASM 로컬 + 23KB 무학습</span>
+                    <span data-ir-bind="garment.wasmNote">WASM 로컬 + 24KB 무학습</span>
                   </div>
                   <span class="badge badge--live">0 BYTES</span>
                 </div>
@@ -965,14 +965,14 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
-            <span>One-Shot Unified Solution — 6 Fragmented Pains Converged Into 1 3D Wardrobe OS</span>
+            <span>One-Shot Unified Solution — 6 Fragmented Pains Converged Into 1 Unified Wardrobe OS</span>
             <span class="slide-footer-num">05 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 06 — USER JOURNEY (6-CUT 3D CLAY STORYBOARD)
+           SLIDE 06 — USER JOURNEY (6-CUT CLAY STORYBOARD)
            ================================================================= -->
       <div class="ir-slide-slot">
         <section id="slide-06" class="ir-slide" aria-label="6단계 사용자 여정">
@@ -991,7 +991,7 @@
                   <img src="../../site/public/assets/journey/clay-cut-01-v1.webp" alt="사기 전 중복 확인" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 01</span>
-                    <span class="badge badge--live">LIVE</span>
+                    <span class="badge badge--live" data-ir-bind="journey.buy.badge">LIVE</span>
                   </div>
                 </div>
                 <div class="journey-info">
@@ -1008,7 +1008,7 @@
                   <img src="../../site/public/assets/journey/clay-cut-02-v1.webp" alt="사진 등록 및 택 스캔" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 02</span>
-                    <span class="badge badge--hybrid">LIVE+</span>
+                    <span class="badge badge--hybrid" data-ir-bind="journey.scan.badge">LIVE+</span>
                   </div>
                 </div>
                 <div class="journey-info">
@@ -1025,14 +1025,14 @@
                   <img src="../../site/public/assets/journey/clay-cut-03-v1.webp" alt="내 동네 날씨 코디" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 03</span>
-                    <span class="badge badge--live">LIVE</span>
+                    <span class="badge badge--live" data-ir-bind="journey.weather.badge">LIVE</span>
                   </div>
                 </div>
                 <div class="journey-info">
                   <span class="ic-tile ic-tile--sm ic-tile--live"><svg class="ic ic--sm"><use href="#ic-cloud-rain" /></svg></span>
                   <div class="journey-info-text">
                     <strong>실시간 날씨 · 거리뷰 피팅</strong>
-                    <p>동네 배경 + 강수·우산 반영 4겹+ 3D 시뮬레이션</p>
+                    <p>동네 배경 + 강수·우산 반영 4겹+ AI 피팅</p>
                   </div>
                 </div>
               </article>
@@ -1042,7 +1042,7 @@
                   <img src="../../site/public/assets/journey/clay-cut-04-v1.webp" alt="캘린더 및 SNS 공유" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 04</span>
-                    <span class="badge badge--todo">TO-DO</span>
+                    <span class="badge badge--todo" data-ir-bind="journey.share.badge">TO-DO</span>
                   </div>
                 </div>
                 <div class="journey-info">
@@ -1059,7 +1059,7 @@
                   <img src="../../site/public/assets/journey/clay-cut-05-v1.webp" alt="세탁법 및 방문 수거" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 05</span>
-                    <span class="badge badge--hybrid">LIVE+</span>
+                    <span class="badge badge--hybrid" data-ir-bind="journey.care.badge">LIVE+</span>
                   </div>
                 </div>
                 <div class="journey-info">
@@ -1076,7 +1076,7 @@
                   <img src="../../site/public/assets/journey/clay-cut-06-v1.webp" alt="안 입는 옷 간편 판매" />
                   <div class="journey-media-badges">
                     <span class="badge">CUT 06</span>
-                    <span class="badge badge--hybrid">LIVE+</span>
+                    <span class="badge badge--hybrid" data-ir-bind="journey.resale.badge">LIVE+</span>
                   </div>
                 </div>
                 <div class="journey-info">
@@ -1126,7 +1126,7 @@
                   <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-layers" /></svg></span>
                   <div>
                     <strong>01 · 360° 레이어드 피팅</strong>
-                    <span>4겹+ 착장 · 실시간 날씨 · 거리뷰</span>
+                    <span>4겹+ 2D VTON · 실시간 날씨 · 거리뷰</span>
                   </div>
                 </div>
               </div>
@@ -1203,7 +1203,7 @@
           <header class="slide-header">
             <div>
               <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>PART 02 · CORE TECHNOLOGY ENGINE</span>
-              <h2 class="slide-title">60fps 3D 물리 × 멀티앵글 VTON × <em>-96% 엣지 전처리</em></h2>
+              <h2 class="slide-title">Three.js 3D 물리 × 멀티앵글 2D VTON × <em>-96% 전처리</em></h2>
             </div>
             <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-cpu" /></svg>HYBRID EDGE + CLOUD <strong>08 / 18</strong></span>
           </header>
@@ -1213,17 +1213,17 @@
               <div class="card card--gold">
                 <div class="row-between">
                   <span class="ic-tile ic-tile--gold"><svg class="ic"><use href="#ic-layers" /></svg></span>
-                  <span class="badge badge--gold">Three.js 0.187</span>
+                  <span class="badge badge--gold" data-ir-bind="versions.threeBadge">Three.js 0.187</span>
                 </div>
                 <div class="kpi-num kpi-num--gold">60 FPS</div>
-                <h3 class="card-title">21-Bone 리그 &amp; SpringBone 물리</h3>
+                <h3 class="card-title">Three.js 3D 아바타 &amp; SpringBone 물리</h3>
                 <div class="chip-row">
-                  <span class="micro-chip">28 체형 모프</span>
+                  <span class="micro-chip">21-Bone · 28 체형 모프</span>
                   <span class="micro-chip">코트·헤어 지글 물리</span>
                   <span class="micro-chip">Zero-GC 서브스텝</span>
                   <span class="micro-chip">WebGL 자동 복구</span>
                 </div>
-                <div class="card-foot-bar"><span>모바일 네이티브급</span><span class="accent">2D 폴백 내장</span></div>
+                <div class="card-foot-bar"><span>Three.js 인터랙티브 스테이지</span><span class="accent">2D 폴백 내장</span></div>
               </div>
 
               <div class="card">
@@ -1232,7 +1232,7 @@
                   <span class="badge badge--gold">Vertex · Gemini</span>
                 </div>
                 <div class="kpi-num">8-Angle QC</div>
-                <h3 class="card-title">4겹+ 멀티레이어 VTON &amp; 캐시</h3>
+                <h3 class="card-title">4겹+ 멀티앵글 2D VTON &amp; 캐시</h3>
                 <div class="chip-row">
                   <span class="micro-chip">0°~315° 일관성 검수</span>
                   <span class="micro-chip">@imgly 누끼 ₩0</span>
@@ -1251,7 +1251,7 @@
                 <h3 class="card-title">실시간 기상 · 거리뷰 무저장 프록시</h3>
                 <div class="chip-row">
                   <span class="micro-chip">Weather v1 강수/UV</span>
-                  <span class="micro-chip">3D 우산 · 바람 물리</span>
+                  <span class="micro-chip">Three.js 3D 우산·바람</span>
                   <span class="micro-chip">Street View 배경</span>
                   <span class="micro-chip">Places 세탁소 지도</span>
                 </div>
@@ -1265,14 +1265,14 @@
                 <img src="../../site/public/assets/garments/beige-trench.jpg" alt="전처리 전 원본 의류" class="exif-thumb" />
                 <div>
                   <span class="badge badge--risk" style="margin-bottom: 4px">BEFORE · 원본 JPEG</span>
-                  <div class="card-title tabular">582 KB · EXIF/GPS/실내 포함</div>
+                  <div class="card-title tabular" data-ir-bind="garment.beforeTitle">582 KB · EXIF/GPS/실내 포함</div>
                   <p class="card-copy">촬영 위치·기기 정보·배경 사생활 노출</p>
                 </div>
               </div>
 
               <div class="exif-meter">
                 <span class="kicker">ON-DEVICE STRIPPING</span>
-                <div class="exif-meter-big">-96%</div>
+                <div class="exif-meter-big" data-ir-bind="garment.compression">-96%</div>
                 <div class="exif-meter-bar" aria-hidden="true"><span></span></div>
                 <span class="source-note">WASM 로컬 변환 · 서버 ₩0</span>
               </div>
@@ -1281,7 +1281,7 @@
                 <img src="../../site/public/assets/garments/beige-trench.webp" alt="전처리 후 비식별 WebP" class="exif-thumb" />
                 <div>
                   <span class="badge badge--live" style="margin-bottom: 4px">AFTER · 비식별 WebP</span>
-                  <div class="card-title tabular">23 KB · EXIF 0% · 순수 의류</div>
+                  <div class="card-title tabular" data-ir-bind="garment.afterTitle">24 KB · EXIF 0% · 순수 의류</div>
                   <p class="card-copy">전송·저장비 96% 절감 + 프라이버시 보호</p>
                 </div>
               </div>
@@ -1290,7 +1290,7 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
-            <span>Core Technology — Verified 582KB → 23KB WebP Pipeline</span>
+            <span data-ir-bind="garment.pipelineFooter">Core Technology — Verified 582KB → 24KB WebP Pipeline</span>
             <span class="slide-footer-num">08 / 18</span>
           </footer>
         </section>
@@ -1320,7 +1320,7 @@
                 </div>
               </div>
               <div class="sec-arrow">
-                <span>23KB WebP →</span>
+                <span data-ir-bind="garment.flowArrow">24KB WebP →</span>
                 <span>0B Face</span>
               </div>
               <div class="sec-node">
@@ -1551,7 +1551,7 @@
           <header class="slide-header">
             <div>
               <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>PART 03 · COMPETITIVE LANDSCAPE</span>
-              <h2 class="slide-title">단편 앱을 넘어선 유일한 <em>3D 순환 자산 OS</em></h2>
+              <h2 class="slide-title">단편 앱을 넘어선 유일한 <em>순환 옷장 자산 OS</em></h2>
             </div>
             <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-target" /></svg>WHITE SPACE LEADER <strong>11 / 18</strong></span>
           </header>
@@ -1571,8 +1571,8 @@
 
                   <text x="190" y="14" text-anchor="middle" font-size="10.2" font-weight="750" fill="currentColor" opacity="0.82">▲ 0B 보안 · 구매→리셀 순환 완결</text>
                   <text x="190" y="278" text-anchor="middle" font-size="9.8" font-weight="650" fill="currentColor" opacity="0.56">▼ 단절된 단일 기능 · 프라이버시 취약</text>
-                  <text x="32" y="134" text-anchor="start" font-size="9.2" font-weight="650" fill="currentColor" opacity="0.64">◀ 2D 보관/단품</text>
-                  <text x="348" y="134" text-anchor="end" font-size="9.4" font-weight="780" fill="currentColor" opacity="0.86">3D 멀티레이어 OS ▶</text>
+                  <text x="32" y="134" text-anchor="start" font-size="9.2" font-weight="650" fill="currentColor" opacity="0.64">◀ 단품 보관/정면</text>
+                  <text x="348" y="134" text-anchor="end" font-size="9.4" font-weight="780" fill="currentColor" opacity="0.86">멀티레이어 AI OS ▶</text>
 
                   <circle cx="96" cy="206" r="15" fill="var(--svg-track)" stroke="var(--glass-border-strong)" />
                   <text x="96" y="233" text-anchor="middle" font-size="10" font-weight="680" fill="currentColor" opacity="0.76">기존 옷장 앱</text>
@@ -1588,7 +1588,7 @@
                   <text x="292" y="76" text-anchor="middle" font-size="10" font-weight="850" fill="var(--ink-inverse)">iNVTRY</text>
                   <text x="292" y="114" text-anchor="middle" font-size="10.5" font-weight="800" fill="var(--gold)">유일한 통합 OS</text>
                 </svg>
-                <div class="card-foot-bar"><span>X: 3D 멀티레이어 깊이</span><span>Y: 보안 · 순환 완결성</span></div>
+                <div class="card-foot-bar"><span>X: 멀티레이어 피팅 깊이</span><span>Y: 보안 · 순환 완결성</span></div>
               </div>
 
               <!-- Visual Icon Feature Matrix -->
@@ -1605,18 +1605,18 @@
                   </thead>
                   <tbody>
                     <tr>
-                      <td><strong>360° 4겹+ 3D</strong></td>
-                      <td><span class="check-pill check-pill--mid">2D</span></td>
+                      <td><strong>360° 4겹+ 피팅</strong></td>
+                      <td><span class="check-pill check-pill--mid">콜라주</span></td>
                       <td><span class="check-pill check-pill--mid">1벌 정면</span></td>
                       <td><span class="check-pill check-pill--no"><svg class="ic ic--xs"><use href="#ic-x" /></svg></span></td>
-                      <td class="col-highlight"><span class="check-pill check-pill--yes"><svg class="ic ic--xs"><use href="#ic-check" /></svg>21관절 물리</span></td>
+                      <td class="col-highlight"><span class="check-pill check-pill--yes"><svg class="ic ic--xs"><use href="#ic-check" /></svg>8방향 VTON</span></td>
                     </tr>
                     <tr>
                       <td><strong>기상·거리뷰 무대</strong></td>
                       <td><span class="check-pill check-pill--mid">텍스트</span></td>
                       <td><span class="check-pill check-pill--no"><svg class="ic ic--xs"><use href="#ic-x" /></svg></span></td>
                       <td><span class="check-pill check-pill--no"><svg class="ic ic--xs"><use href="#ic-x" /></svg></span></td>
-                      <td class="col-highlight"><span class="check-pill check-pill--yes"><svg class="ic ic--xs"><use href="#ic-check" /></svg>3D 기상·우산</span></td>
+                      <td class="col-highlight"><span class="check-pill check-pill--yes"><svg class="ic ic--xs"><use href="#ic-check" /></svg>실시간 기상·우산</span></td>
                     </tr>
                     <tr>
                       <td><strong>0B 얼굴·-96%</strong></td>
@@ -1697,7 +1697,7 @@
                 <h3 class="card-title">갭(Gap) 커머스</h3>
                 <div class="bm-price">5 ~ 12% <small>구매 수수료</small></div>
                 <div class="bm-meter"><span style="width: 72%"></span></div>
-                <p class="card-copy" style="font-size: 11px">내 옷장 공백 1벌 3D 사전 조합 → 제휴 결제</p>
+                <p class="card-copy" style="font-size: 11px">내 옷장 공백 1벌 AI 사전 조합 → 제휴 결제</p>
                 <div class="card-foot-bar"><span>무신사·29CM·자사몰</span><span class="accent">반품률↓</span></div>
               </div>
 
@@ -1718,10 +1718,10 @@
                   <span class="ic-tile ic-tile--sm"><svg class="ic ic--sm"><use href="#ic-briefcase" /></svg></span>
                   <span class="badge badge--todo">TIER 04 · B2B</span>
                 </div>
-                <h3 class="card-title">브랜드 3D SDK</h3>
+                <h3 class="card-title">브랜드 VTON SDK</h3>
                 <div class="bm-price">월정액+CPC <small>SaaS</small></div>
                 <div class="bm-meter"><span style="width: 48%"></span></div>
-                <p class="card-copy" style="font-size: 11px">편집숍·디자이너 신상 3D 시드 입점·반품 절감</p>
+                <p class="card-copy" style="font-size: 11px">편집숍·디자이너 신상 디지털 시드 입점·반품 절감</p>
                 <div class="card-foot-bar"><span>브랜드 파트너</span><span class="accent">2027 H2+</span></div>
               </div>
             </div>
@@ -1753,8 +1753,8 @@
                   <td><span class="badge badge--gold">옷장 20벌 Lock-in</span></td>
                 </tr>
                 <tr>
-                  <td><strong>② 3D·AI VTON</strong></td>
-                  <td>기본 3D 아바타 · 월 쿼터 제한</td>
+                  <td><strong>② AI VTON 피팅</strong></td>
+                  <td>기본 아바타 · 월 쿼터 제한</td>
                   <td class="col-highlight"><strong>무제한 4겹+ 8방향 VTON · 거리뷰 무대</strong></td>
                   <td><span class="badge badge--gold">외출·계절 쿼터 소진</span></td>
                 </tr>
@@ -1817,7 +1817,7 @@
 
                   <!-- Node 3: Right Lower -->
                   <rect x="218" y="250" width="150" height="46" rx="11" fill="var(--svg-node-fill)" stroke="var(--gold)" stroke-width="1.5" />
-                  <text x="293" y="269" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">③ 매일 4겹+ 3D 피팅</text>
+                  <text x="293" y="269" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">③ 매일 4겹+ AI 피팅</text>
                   <text x="293" y="285" text-anchor="middle" font-size="9.2" font-weight="750" fill="var(--gold)">Pro 월 구독 (ARR)</text>
 
                   <!-- Node 4: Left Lower -->
@@ -1861,16 +1861,16 @@
                     <div class="cost-item">
                       <div class="cost-head">
                         <span>02. 이미지 저장 · AI 전송 대역폭</span>
-                        <span style="color: var(--gold)">-96% 용량 절감</span>
+                        <span style="color: var(--gold)" data-ir-bind="garment.costHeadSaved">-96% 용량 절감</span>
                       </div>
                       <div class="cost-pair">
                         <div class="cost-bar-row">
                           <span>원본 JPEG</span>
-                          <div class="cost-track"><div class="cost-fill cost-fill--old" style="width: 96%">582 KB / 장 (EXIF·배경 포함)</div></div>
+                          <div class="cost-track"><div class="cost-fill cost-fill--old" style="width: 96%" data-ir-bind="garment.costOldBar">582 KB / 장 (EXIF·배경 포함)</div></div>
                         </div>
                         <div class="cost-bar-row">
                           <span style="color: var(--ink-primary)">iNVTRY WebP</span>
-                          <div class="cost-track"><div class="cost-fill cost-fill--new" style="width: 16%">23 KB</div><span class="cost-fill-note">-96% 압축 · IndexedDB 로컬 캐시</span></div>
+                          <div class="cost-track"><div class="cost-fill cost-fill--new" style="width: 16%" data-ir-bind="garment.costNewBar">24 KB</div><span class="cost-fill-note" data-ir-bind="garment.costNewNote">-96% 압축 · IndexedDB 로컬 캐시</span></div>
                         </div>
                       </div>
                     </div>
@@ -1973,21 +1973,21 @@
                   <div class="card card--gold">
                     <span class="ic-tile ic-tile--gold"><svg class="ic"><use href="#ic-globe" /></svg></span>
                     <strong style="font-size: 15px">ainvtry.com LIVE</strong>
-                    <p class="card-copy" style="font-size: 11px">공식 3D 인터랙티브 웹 Cloudflare Workers 글로벌 배포 운영</p>
+                    <p class="card-copy" style="font-size: 11px">Three.js 3D 공식 웹 Cloudflare Workers 글로벌 배포 운영</p>
                   </div>
                   <div class="card">
                     <span class="ic-tile ic-tile--live"><svg class="ic"><use href="#ic-check" /></svg></span>
-                    <strong class="tabular" style="font-size: 15px">210+ 자동화 테스트</strong>
+                    <strong class="tabular" style="font-size: 15px" data-ir-bind="tests.tractionTitle">330+ 자동화 테스트</strong>
                     <p class="card-copy" style="font-size: 11px">단위·모바일 WebGL E2E · strict TS · oxlint · 시크릿 스캔</p>
                   </div>
                   <div class="card">
                     <span class="ic-tile"><svg class="ic"><use href="#ic-smartphone" /></svg></span>
                     <strong style="font-size: 15px">단일 하이브리드 코드</strong>
-                    <p class="card-copy" style="font-size: 11px">React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)</p>
+                    <p class="card-copy" style="font-size: 11px" data-ir-bind="versions.stackShort">React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)</p>
                   </div>
                   <div class="card">
                     <span class="ic-tile ic-tile--gold"><svg class="ic"><use href="#ic-sparkles" /></svg></span>
-                    <strong style="font-size: 15px">자체 3D 모캡·물리</strong>
+                    <strong style="font-size: 15px">Three.js 3D 모캡·물리</strong>
                     <p class="card-copy" style="font-size: 11px">Blender 4.0 CMU 모캡 리타게팅 + SpringBone 지글 물리</p>
                   </div>
                 </div>
@@ -2013,8 +2013,8 @@
                 <div class="tier-stack">
                   <div class="tier-row">
                     <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--xs"><use href="#ic-smartphone" /></svg></span>
-                    <span class="tier-name">01. Client 3D Edge</span>
-                    <span class="tier-desc">React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB</span>
+                    <span class="tier-name">01. Client Edge</span>
+                    <span class="tier-desc" data-ir-bind="versions.clientEdge">React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB</span>
                   </div>
                   <div class="tier-row">
                     <span class="ic-tile ic-tile--sm"><svg class="ic ic--xs"><use href="#ic-shield" /></svg></span>
@@ -2029,7 +2029,7 @@
                   <div class="tier-row tier-row--core">
                     <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--xs"><use href="#ic-sparkles" /></svg></span>
                     <span class="tier-name">04. iNVTRY AI</span>
-                    <span class="tier-desc">Vertex AI / Gemini Paid No-Training 멀티레이어 VTON + 8방향 QC 워커</span>
+                    <span class="tier-desc">Vertex AI / Gemini Paid No-Training 멀티레이어 2D VTON + 8방향 QC 워커</span>
                   </div>
                   <div class="tier-row">
                     <span class="ic-tile ic-tile--sm"><svg class="ic ic--xs"><use href="#ic-cloud-rain" /></svg></span>
@@ -2064,7 +2064,7 @@
               <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>PART 04 · GO-TO-MARKET &amp; 18-MONTH ROADMAP</span>
               <h2 class="slide-title">옷장 락인(Lock-in)에서 <em>리셀 유동성</em>까지 3단계 실행</h2>
             </div>
-            <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-rocket" /></svg>LIVE 01·02 완료 <strong>15 / 18</strong></span>
+            <span class="slide-brand-pill"><svg class="ic ic--xs"><use href="#ic-rocket" /></svg><span data-ir-bind="roadmap.pill">LIVE 01·02 완료</span> <strong>15 / 18</strong></span>
           </header>
 
           <div class="slide-body">
@@ -2073,9 +2073,9 @@
               <div class="card phase-card">
                 <div class="row-between">
                   <span class="ic-tile ic-tile--live"><svg class="ic"><use href="#ic-check" /></svg></span>
-                  <span class="badge badge--live">PHASE 01 · 완료</span>
+                  <span class="badge badge--live" data-ir-bind="roadmap.stage-1.badge">PHASE 01 · 완료</span>
                 </div>
-                <h3 class="card-title">3D 피팅 · 온디바이스 기반</h3>
+                <h3 class="card-title">레이어드 피팅 · 온디바이스 기반</h3>
                 <div class="chip-row">
                   <span class="micro-chip">4겹+ VTON · 8방향 QC</span>
                   <span class="micro-chip">누끼 · WebP -96%</span>
@@ -2086,11 +2086,11 @@
               <div class="card phase-card">
                 <div class="row-between">
                   <span class="ic-tile ic-tile--live"><svg class="ic"><use href="#ic-check" /></svg></span>
-                  <span class="badge badge--live">PHASE 02 · 완료</span>
+                  <span class="badge badge--live" data-ir-bind="roadmap.stage-2.badge">PHASE 02 · 완료</span>
                 </div>
                 <h3 class="card-title">공간 맥락 · 보안 4대 방어선</h3>
                 <div class="chip-row">
-                  <span class="micro-chip">실시간 날씨 · 거리뷰 3D</span>
+                  <span class="micro-chip">실시간 날씨 · 거리뷰 무대</span>
                   <span class="micro-chip">주변 세탁·수선소 지도</span>
                   <span class="micro-chip">OIDC · 원클릭 영구파기</span>
                 </div>
@@ -2099,7 +2099,7 @@
               <div class="card card--gold phase-card">
                 <div class="row-between">
                   <span class="ic-tile ic-tile--gold"><svg class="ic"><use href="#ic-rocket" /></svg></span>
-                  <span class="badge badge--gold">PHASE 03 · 2026.Q4~27</span>
+                  <span class="badge badge--gold" data-ir-bind="roadmap.stage-3.badge">PHASE 03 · 2026.Q4~27</span>
                 </div>
                 <h3 class="card-title">정식 출시 · Pro · 인증 리셀</h3>
                 <div class="chip-row">
@@ -2131,7 +2131,7 @@
                     <span class="badge">CHANNEL 02</span>
                   </div>
                   <h3 class="card-title">360° OOTD 룩북 바이럴</h3>
-                  <p class="card-copy">실시간 날씨·동네 배경 3D 착장 카드를 인스타·틱톡에 공유해 자연 유입</p>
+                  <p class="card-copy">실시간 날씨·동네 배경 360° 착장 카드를 인스타·틱톡에 공유해 자연 유입</p>
                 </div>
                 <div class="card">
                   <div class="row-between">
@@ -2182,8 +2182,8 @@
                     <span class="badge badge--gold">SEOUL · FULL-STACK</span>
                   </div>
                   <div class="chip-row">
-                    <span class="micro-chip">Three.js · Blender 3D</span>
-                    <span class="micro-chip">VTON AI 파이프라인</span>
+                    <span class="micro-chip">Three.js 3D · Blender</span>
+                    <span class="micro-chip">2D VTON AI 파이프라인</span>
                     <span class="micro-chip">0B 보안 백엔드</span>
                     <span class="micro-chip">Web·iOS·Android 앱</span>
                   </div>
@@ -2201,7 +2201,7 @@
                   <div class="grid-3" style="flex: 1 1 auto">
                     <div class="card card--recessed" style="padding: 10px">
                       <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--xs"><use href="#ic-cpu" /></svg></span>
-                      <strong style="font-size: 12px">AI · 3D CV 리드</strong>
+                      <strong style="font-size: 12px">AI · 비전(VTON) 리드</strong>
                       <p class="card-copy" style="font-size: 10.4px">멀티앵글 정밀도 · 추론 단가 절감</p>
                       <div class="card-foot-bar"><span>M+1</span><span class="accent">R&amp;D</span></div>
                     </div>
@@ -2247,7 +2247,7 @@
                 </div>
 
                 <div class="card card--recessed" style="padding: 9px 12px; flex-direction: row; align-items: center; justify-content: space-between">
-                  <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700">ainvtry.com · raymond@ainvtry.com</span>
+                  <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 700" data-ir-bind="meta.domainContact">ainvtry.com · raymond@ainvtry.com</span>
                   <span class="badge badge--live">ACTIVE</span>
                 </div>
               </div>
@@ -2328,7 +2328,7 @@
                   <div class="fund-legend-item">
                     <span class="fund-swatch" style="background: var(--gold)"></span>
                     <div>
-                      <strong class="tabular" style="font-size: 12.5px; color: var(--gold)">45% · R&amp;D · AI / 3D</strong>
+                      <strong class="tabular" style="font-size: 12.5px; color: var(--gold)">45% · R&amp;D · AI / VTON</strong>
                       <p class="card-copy" style="font-size: 10.6px">멀티레이어 VTON 고도화 · 택 OCR · 캘린더·인증 리셀 개발</p>
                     </div>
                   </div>
@@ -2396,18 +2396,18 @@
               class="closing-logo"
             />
 
-            <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>THANK YOU · Q&amp;A &amp; LIVE 3D DEMO</span>
+            <span class="slide-eyebrow"><span class="slide-eyebrow-dot"></span>THANK YOU · Q&amp;A &amp; LIVE DEMO</span>
 
             <h2 class="closing-title">감사합니다</h2>
 
             <p class="closing-tagline">
-              <strong>“내 옷장을 3D 자산으로, 입는 순간부터 리셀까지”</strong><br />
-              파편화된 6가지 패션 문제를 단 하나의 Privacy-First 3D OS로 해결하는 iNVTRY입니다.
+              <strong>“내 옷장을 디지털 자산으로, 입는 순간부터 리셀까지”</strong><br />
+              파편화된 6가지 패션 문제를 단 하나의 Privacy-First 옷장 OS로 해결하는 iNVTRY입니다.
             </p>
 
             <div class="closing-pills">
               <span class="badge badge--live"><svg class="ic ic--xs"><use href="#ic-smartphone" /></svg>LIVE MVP · 3 PLATFORMS</span>
-              <span class="badge badge--gold"><svg class="ic ic--xs"><use href="#ic-layers" /></svg>6 PAINS → 1 3D OS</span>
+              <span class="badge badge--gold"><svg class="ic ic--xs"><use href="#ic-layers" /></svg>6 PAINS → 1 UNIFIED OS</span>
               <span class="badge badge--gold"><svg class="ic ic--xs"><use href="#ic-shield" /></svg>0-BYTE FACE PRIVACY</span>
               <span class="badge badge--gold"><svg class="ic ic--xs"><use href="#ic-crown" /></svg>4-LAYER MONETIZATION</span>
             </div>
@@ -2415,20 +2415,20 @@
             <div class="closing-contact-grid">
               <div class="closing-contact-card">
                 <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-globe" /></svg></span>
-                <span>LIVE 3D WEB DEMO</span>
-                <strong class="tabular">https://www.ainvtry.com</strong>
-                <small>모바일·데스크톱 실시간 3D 피팅 체험</small>
+                <span>LIVE WEB DEMO</span>
+                <strong class="tabular" data-ir-bind="meta.url">https://www.ainvtry.com</strong>
+                <small>Three.js 3D 공식 웹 · AI 피팅 체험</small>
               </div>
               <div class="closing-contact-card">
                 <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-users" /></svg></span>
                 <span>FOUNDER · CEO</span>
                 <strong>Raymond Moon (대표)</strong>
-                <small>제품 · 3D 엔진 · AI · 보안 총괄</small>
+                <small>제품 · AI VTON · Three.js · 보안 총괄</small>
               </div>
               <div class="closing-contact-card">
                 <span class="ic-tile ic-tile--sm ic-tile--gold"><svg class="ic ic--sm"><use href="#ic-mail" /></svg></span>
                 <span>DIRECT CONTACT</span>
-                <strong class="tabular">raymond@ainvtry.com</strong>
+                <strong class="tabular" data-ir-bind="meta.contactEmail">raymond@ainvtry.com</strong>
                 <small>투자 · TIPS · 브랜드·세탁 O2O 제휴</small>
               </div>
             </div>
@@ -2436,9 +2436,9 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand">
-              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.0
+              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v3.1
             </span>
-            <span>Seoul, Republic of Korea · 2026.11</span>
+            <span data-ir-bind="meta.locationDate">Seoul, Republic of Korea · 2026.11</span>
             <span class="slide-footer-num">18 / 18</span>
           </footer>
         </section>

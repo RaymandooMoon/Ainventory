@@ -1,0 +1,62 @@
+name: Sync Living IR Business Plan Deck
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'src/data/content.ts'
+      - 'site/public/assets/previews/**'
+      - 'site/public/assets/journey/**'
+      - 'site/public/assets/garments/**'
+      - 'tests/**'
+      - 'scripts/sync-ir-deck.mjs'
+  schedule:
+    # Weekly Monday 09:00 KST (00:00 UTC) safety-net batch sync
+    - cron: '0 0 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ir-deck-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-ir-deck:
+    name: Auto-Sync IR Deck with Live App & Site State
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run Living IR Deck batch sync
+        run: npm run ir:sync
+
+      - name: Verify zero drift & Three.js-only 3D terminology guardrails
+        run: |
+          npm run ir:sync:check
+          node --experimental-strip-types --test tests/unit/syncIrDeck.test.ts
+
+      - name: Commit & push synced IR deck if changed
+        run: |
+          if git diff --quiet -- docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json; then
+            echo "IR deck is already up to date with live app/site."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json
+          git commit -m "docs(ir-deck): auto-sync live app/site metrics and roadmap [skip ci]"
+          git push origin HEAD:main
