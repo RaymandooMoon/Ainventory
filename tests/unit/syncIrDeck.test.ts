@@ -58,6 +58,7 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
       [],
       `Non-Three.js "3D" wording detected in docs/ir-deck/index.html:\n${violations.join('\n')}`
     );
+    assert.ok(!html.includes('누끼'), 'docs/ir-deck/index.html must not contain informal "누끼" slang');
   });
 
   test('committed docs/ir-deck/index.html and hosted site/public/ir/index.html are in zero-drift sync with live codebase', async () => {

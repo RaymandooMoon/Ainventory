@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import {
   DEFAULT_LOGIN_THREE_VARIANT,
@@ -22,7 +22,6 @@ import {
   type MoodMode,
   type StageId,
   type StageInteractionState,
-  type StageModule,
   type ThemeMode,
 } from '../three/ainvtryStageDirector.ts';
 import {
@@ -34,6 +33,7 @@ import {
 } from '../three/stages/stageMaterials.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import type { SiteTheme } from './siteContent.ts';
+import { getLoadedStageFactory, preloadStageModule } from './stageModuleLoader.ts';
 
 export interface SiteMarbleHeroProps {
   readonly theme: SiteTheme;
@@ -208,12 +208,16 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       : isSpecsThreeBackground
         ? 'studio'
         : activeStage;
-  const effectiveInteraction: StageInteractionState = isSpecsThreeBackground
-    ? {
-        ...interaction,
-        studioSubtab: interaction.specsSubtab === 'care' ? 'intelligence' : 'atelier',
-      }
-    : interaction;
+  const effectiveInteraction: StageInteractionState = useMemo(
+    () =>
+      isSpecsThreeBackground
+        ? {
+            ...interaction,
+            studioSubtab: interaction.specsSubtab === 'care' ? 'intelligence' : 'atelier',
+          }
+        : interaction,
+    [interaction, isSpecsThreeBackground]
+  );
 
   const controllerRef = useRef<LoginThreeController | null>(null);
   const rigRef = useRef<StageDirectorRig | null>(null);
@@ -298,51 +302,44 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         return;
       }
 
-      // Lazy-load the requested 3D stage module on demand before transitioning
+      // Instantiate synchronously if the stage module is already cached; otherwise load on demand
       if (!rig.director.getStage(nextStage)) {
-        if (!loadingStagesRef.current.has(nextStage)) {
-          loadingStagesRef.current.add(nextStage);
-          const loadStage = async (): Promise<StageModule> => {
-            if (nextStage === 'studio') {
-              const mod = await import('../three/stages/studioStage.ts');
-              return mod.createStudioStage({
-                onModelLoaded: () => {
-                  controllerRef.current?.requestRender?.();
-                },
+        const cachedFactory = getLoadedStageFactory(nextStage);
+        if (cachedFactory) {
+          const stageMod = cachedFactory({
+            onModelLoaded: () => {
+              controllerRef.current?.requestRender?.();
+            },
+          });
+          rig.director.registerStage(stageMod);
+        } else {
+          if (!loadingStagesRef.current.has(nextStage)) {
+            loadingStagesRef.current.add(nextStage);
+            void preloadStageModule(nextStage)
+              .then((factory) => {
+                loadingStagesRef.current.delete(nextStage);
+                if (rigRef.current !== rig) {
+                  return;
+                }
+                if (!rig.director.getStage(nextStage)) {
+                  const stageMod = factory({
+                    onModelLoaded: () => {
+                      controllerRef.current?.requestRender?.();
+                    },
+                  });
+                  rig.director.registerStage(stageMod);
+                }
+                if (activeStageRef.current === nextStage) {
+                  syncStageTransition(rig, nextStage);
+                }
+              })
+              .catch((err) => {
+                loadingStagesRef.current.delete(nextStage);
+                console.warn(`[SiteMarbleHero] Failed to load 3D stage "${nextStage}":`, err);
               });
-            }
-            if (nextStage === 'architecture') {
-              const mod = await import('../three/stages/architectureStage.ts');
-              return mod.createArchitectureStage();
-            }
-            if (nextStage === 'specs') {
-              const mod = await import('../three/stages/specsStage.ts');
-              return mod.createSpecsStage();
-            }
-            const mod = await import('../three/stages/aboutStage.ts');
-            return mod.createAboutStage();
-          };
-          void loadStage()
-            .then((stageMod) => {
-              loadingStagesRef.current.delete(nextStage);
-              if (rigRef.current !== rig) {
-                stageMod.dispose();
-                return;
-              }
-              if (!rig.director.getStage(nextStage)) {
-                rig.director.registerStage(stageMod);
-              } else {
-                stageMod.dispose();
-              }
-              if (activeStageRef.current === nextStage) {
-                syncStageTransition(rig, nextStage);
-              }
-            })
-            .catch(() => {
-              loadingStagesRef.current.delete(nextStage);
-            });
+          }
+          return;
         }
-        return;
       }
 
       // Launching into an interactive 3D stage
@@ -665,12 +662,43 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   useEffect(() => {
     const rig = rigRef.current;
     if (!rig) {
-      if (effectiveThreeStage !== 'hero') {
-        controllerRef.current?.requestRender?.();
+      if (effectiveThreeStage === 'hero') {
+        controllerRef.current?.setExternalMarbleHidden?.(false);
+        return;
       }
-      return;
+
+      if (getLoadedStageFactory(effectiveThreeStage)) {
+        controllerRef.current?.setExternalMarbleHidden?.(true);
+        controllerRef.current?.requestRender?.();
+        return;
+      }
+
+      let cancelled = false;
+      void preloadStageModule(effectiveThreeStage)
+        .then(() => {
+          if (cancelled || activeStageRef.current !== effectiveThreeStage) return;
+          const liveRig = rigRef.current;
+          if (liveRig) {
+            syncStageTransition(liveRig, effectiveThreeStage);
+          } else {
+            controllerRef.current?.setExternalMarbleHidden?.(true);
+            controllerRef.current?.requestRender?.();
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            console.warn(
+              `[SiteMarbleHero] Failed to preload 3D stage "${effectiveThreeStage}":`,
+              err
+            );
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
     syncStageTransition(rig, effectiveThreeStage);
+    return undefined;
   }, [effectiveThreeStage, syncStageTransition]);
 
   // Sync Luxury/Aurora mood & Dark/Light theme into active 3D stage and studio lights

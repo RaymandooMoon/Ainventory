@@ -216,12 +216,14 @@ html[data-site-theme='light'] body {
   );
 }
 
+.site-marble-stage,
 .site-marble-stage.is-webgl-fallback {
   background:
-    radial-gradient(ellipse 78% 58% at 50% 30%, rgba(88, 76, 62, 0.38), transparent 72%),
+    radial-gradient(ellipse 78% 58% at 50% 30%, rgba(88, 76, 62, 0.36), transparent 72%),
     linear-gradient(155deg, #050507 0%, #101014 55%, #000000 100%);
 }
 
+.site-marble-stage[data-motion-theme='light'],
 .site-marble-stage.is-webgl-fallback[data-motion-theme='light'] {
   background:
     radial-gradient(ellipse 80% 60% at 50% 28%, rgba(255, 254, 250, 0.94), transparent 72%),

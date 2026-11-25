@@ -500,21 +500,23 @@
   }
 
   .site-bottombar-link {
-    min-width: auto;
+    min-width: 44px;
     min-height: 44px;
     justify-content: center;
-    padding: 0 5px;
+    padding: 0 7px;
     font-size: 0.69rem;
   }
 
   .site-bottombar-newsletter {
     gap: 3px;
-    padding: 0 5px;
+    padding: 0 7px;
   }
 
   .site-analytics-trigger-btn {
+    min-width: 44px;
     min-height: 44px;
-    padding: 0 7px;
+    justify-content: center;
+    padding: 0 8px;
     gap: 4px;
     font-size: 0.69rem;
     flex-shrink: 0;
@@ -616,7 +618,8 @@
   }
 
   .site-analytics-trigger-btn {
-    padding: 0 6px;
+    min-width: 44px;
+    padding: 0 8px;
     gap: 3px;
   }
 
@@ -649,7 +652,8 @@
   }
 
   .site-bottombar-link {
-    padding: 0 4px;
+    min-width: 44px;
+    padding: 0 6px;
     font-size: 0.66rem;
   }
 
@@ -699,14 +703,25 @@
     height: 11px;
   }
 
+  .site-bottombar {
+    gap: 2px;
+    padding: 0 4px;
+  }
+
+  .site-bottombar-left,
+  .site-bottombar-right {
+    gap: 2px;
+  }
+
   .site-bottombar-newsletter svg {
     display: none;
   }
 
   .site-bottombar-link {
-    min-width: auto;
-    padding: 0 3px;
-    font-size: 0.63rem;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 4px;
+    font-size: 0.62rem;
   }
 
   .site-analytics-trigger-label {
@@ -714,14 +729,15 @@
   }
 
   .site-analytics-trigger-btn {
-    min-width: 34px;
-    padding: 0 5px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 4px;
   }
 
   .site-opacity-drag-btn {
     padding: 0 6px;
     gap: 3px;
-    font-size: 0.64rem;
+    font-size: 0.62rem;
   }
 
   .site-top-3d-dock .hud-seg-btn {

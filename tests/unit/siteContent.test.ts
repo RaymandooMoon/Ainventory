@@ -320,8 +320,8 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       // 3. Specs — Key Metrics + Tech Stack
       assert.deepEqual(
         copy.stack.heroKpis.map((kpi) => kpi.value),
-        ['5-Stage', '0 Bytes', '340+', '4 APIs'],
-        `[${lang}] Hero KPIs must match 5-Stage / 0 Bytes / 340+ / 4 APIs`
+        ['5-Stage', '0 Bytes', '360+', '4 APIs'],
+        `[${lang}] Hero KPIs must match 5-Stage / 0 Bytes / 360+ / 4 APIs`
       );
       assert.ok(
         copy.stack.cards.some((card) => card.metric === 'Three.js 0.187'),
@@ -380,7 +380,7 @@ describe('ainvtry.com official site content & icon-first architecture contract',
     }
   });
 
-  it('configures site/public/_headers to allow ainvtry.com & www.ainvtry.com framing of /app.html and ships complete EN/KO newsletter copy', () => {
+  it('configures site/public/_headers to allow ainvtry.com & www.ainvtry.com framing of /app.html and ships complete EN/KO newsletter copy and clean architectureTechCatalog copy', () => {
     const headersPath = path.resolve(import.meta.dirname, '../../site/public/_headers');
     const headersRaw = fs.readFileSync(headersPath, 'utf8');
     assert.ok(
@@ -394,6 +394,26 @@ describe('ainvtry.com official site content & icon-first architecture contract',
     assert.ok(
       headersRaw.includes("frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com"),
       '_headers must restrict framing via CSP frame-ancestors to self, ainvtry.com, and www.ainvtry.com'
+    );
+
+    const techCatalogPath = path.resolve(
+      import.meta.dirname,
+      '../../src/site/hud/architectureTechCatalog.ts'
+    );
+    const techCatalogRaw = fs.readFileSync(techCatalogPath, 'utf8');
+    assert.ok(!techCatalogRaw.includes('누끼'), 'architectureTechCatalog must avoid informal 누끼 slang');
+    assert.equal(
+      techCatalogRaw.match(/[가-힣]·[가-힣]/),
+      null,
+      'architectureTechCatalog must space Korean middle dots ( · )'
+    );
+    assert.ok(
+      !techCatalogRaw.includes("'3D Engine'"),
+      'architectureTechCatalog must pair 3D wording with Three.js'
+    );
+    assert.ok(
+      techCatalogRaw.includes('360+ QA'),
+      'architectureTechCatalog QA badge must match live 360+ test count'
     );
 
     for (const lang of ['en', 'ko'] as const) {

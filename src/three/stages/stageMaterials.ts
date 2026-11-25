@@ -51,7 +51,10 @@ const ENV_RENDER_TARGETS = new WeakMap<THREE.Texture, THREE.WebGLRenderTarget>()
  */
 export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const roomEnv = new RoomEnvironment();
+  const envScene = softwareGlGlassFallback ? new THREE.Scene() : new RoomEnvironment();
+  if (softwareGlGlassFallback) {
+    envScene.background = new THREE.Color(0x16151a);
+  }
 
   const softboxGeo = new THREE.PlaneGeometry(1, 1);
   const keyMat = new THREE.MeshBasicMaterial({
@@ -82,9 +85,9 @@ export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture
   overheadPanel.scale.set(6.4, 2.8, 1);
   overheadPanel.lookAt(0, 0, 0);
 
-  roomEnv.add(keyBox, rimStrip, overheadPanel);
+  envScene.add(keyBox, rimStrip, overheadPanel);
 
-  const renderTarget = pmrem.fromScene(roomEnv, 0.035);
+  const renderTarget = pmrem.fromScene(envScene, softwareGlGlassFallback ? 0 : 0.035);
   const envTexture = renderTarget.texture;
   ENV_RENDER_TARGETS.set(envTexture, renderTarget);
 
@@ -92,7 +95,9 @@ export function createStudioEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture
   keyMat.dispose();
   rimMat.dispose();
   overheadMat.dispose();
-  roomEnv.dispose();
+  if (envScene instanceof RoomEnvironment) {
+    envScene.dispose();
+  }
   pmrem.dispose();
 
   return envTexture;

@@ -48,6 +48,7 @@ import {
   type StageSwitchTracker,
   type StageSwitchTrigger,
 } from './stageAnalytics.ts';
+import { warmStageModule } from './stageModuleLoader.ts';
 
 const MIN_UI_ALPHA = 0.02;
 const MAX_UI_ALPHA = 0.96;
@@ -719,6 +720,8 @@ export default function AinvtrySiteApp() {
                   data-stage-pill={pill.stageId}
                   aria-pressed={isSelected}
                   aria-current={isSelected ? 'page' : undefined}
+                  onPointerEnter={!isStudioLaunch ? () => warmStageModule(pill.stageId) : undefined}
+                  onFocus={!isStudioLaunch ? () => warmStageModule(pill.stageId) : undefined}
                   onClick={() => handleSelectStage(pill.stageId, 'dock')}
                 >
                   <span className="site-dock-pill-num" aria-hidden="true">

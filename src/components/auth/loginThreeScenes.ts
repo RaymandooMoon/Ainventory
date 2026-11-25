@@ -2455,6 +2455,12 @@ export function createLoginThreeController(
       markPacerActivity(pacer, performance.now(), true);
       if (reducedMotion && !isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
         renderFrame(0.016);
+      } else if (isSoftwareGl && softTimerId && !isLoopPaused()) {
+        window.clearTimeout(softTimerId);
+        softTimerId = 0;
+        if (!rafId) {
+          rafId = window.requestAnimationFrame(tick);
+        }
       }
     },
     triggerPulse(nx: number, ny: number, strength = 0.72) {
