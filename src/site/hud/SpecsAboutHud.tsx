@@ -184,7 +184,7 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
 }
 
 /* ==========================================================================
- * 4. ABOUT STAGE HUD (Journey | Mission | Model)
+ * 4. ABOUT STAGE HUD (Journey | Mission | Model | Connect)
  * ========================================================================== */
 
 export interface AboutStageHudProps {
@@ -400,8 +400,66 @@ export function AboutStageHud({
     );
   }
 
-  // About Subtab 3: Model, FAQ & Founder
   const vision = copy.vision;
+
+  // About Subtab 4: Connect (Newsletter, Founder Contact & Actions)
+  if (interaction.aboutSubtab === 'connect') {
+    return (
+      <div className="hud-stack">
+        <section
+          className="hud-card site-newsletter-inline-card"
+          aria-label={copy.newsletter.inlineTitle}
+        >
+          <div className="site-newsletter-inline-head">
+            <span className="hud-eyebrow">{copy.newsletter.kicker}</span>
+            <h3 className="site-newsletter-inline-title">{copy.newsletter.inlineTitle}</h3>
+            <p className="site-newsletter-inline-sub">{copy.newsletter.inlineSubtitle}</p>
+          </div>
+          <SiteNewsletterForm
+            copy={copy.newsletter}
+            lang={lang}
+            source="site_about"
+            variant="inline"
+          />
+        </section>
+
+        <aside className="hud-founder-card" aria-label="Founder contact">
+          <div className="hud-founder-head">
+            <div className="hud-founder-avatar" aria-hidden="true">
+              RM
+            </div>
+            <div className="hud-founder-id">
+              <h3>{SITE_META.founderName}</h3>
+              <p>
+                {vision.founderRole} · {vision.hqValue}
+              </p>
+              <a href={`mailto:${SITE_META.contactEmail}`} className="hud-founder-email">
+                {SITE_META.contactEmail}
+              </a>
+            </div>
+          </div>
+        </aside>
+
+        <div className="hud-founder-actions">
+          <a href={betaMailto} className="hud-founder-cta">
+            <span>{vision.directCta}</span>
+            <ArrowUpRight size={14} aria-hidden="true" />
+          </a>
+          <a
+            href={`${SITE_IR_DECK_HREF}?theme=${theme}&mood=${mood}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hud-founder-cta hud-founder-cta--secondary"
+          >
+            <FileText size={14} aria-hidden="true" />
+            <span>{vision.irDeckCta}</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // About Subtab 3: Model & FAQ
   const revenueItems: HudSpotlightItem[] = vision.revenuePillars.map((pillar) => ({
     id: pillar.id,
     icon: pillar.icon,
@@ -437,56 +495,6 @@ export function AboutStageHud({
           ariaLabel={vision.faqTitle}
           scrollToTopOnSelect={false}
         />
-      </div>
-
-      <section
-        className="hud-card site-newsletter-inline-card"
-        aria-label={copy.newsletter.inlineTitle}
-      >
-        <div className="site-newsletter-inline-head">
-          <span className="hud-eyebrow">{copy.newsletter.kicker}</span>
-          <h3 className="site-newsletter-inline-title">{copy.newsletter.inlineTitle}</h3>
-          <p className="site-newsletter-inline-sub">{copy.newsletter.inlineSubtitle}</p>
-        </div>
-        <SiteNewsletterForm
-          copy={copy.newsletter}
-          lang={lang}
-          source="site_about"
-          variant="inline"
-        />
-      </section>
-
-      <aside className="hud-founder-card" aria-label="Founder contact">
-        <div className="hud-founder-head">
-          <div className="hud-founder-avatar" aria-hidden="true">
-            RM
-          </div>
-          <div className="hud-founder-id">
-            <h3>{SITE_META.founderName}</h3>
-            <p>
-              {vision.founderRole} · {vision.hqValue}
-            </p>
-            <a href={`mailto:${SITE_META.contactEmail}`} className="hud-founder-email">
-              {SITE_META.contactEmail}
-            </a>
-          </div>
-        </div>
-      </aside>
-
-      <div className="hud-founder-actions">
-        <a href={betaMailto} className="hud-founder-cta">
-          <span>{vision.directCta}</span>
-          <ArrowUpRight size={14} aria-hidden="true" />
-        </a>
-        <a
-          href={`${SITE_IR_DECK_HREF}?theme=${theme}&mood=${mood}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hud-founder-cta hud-founder-cta--secondary"
-        >
-          <FileText size={14} aria-hidden="true" />
-          <span>{vision.irDeckCta}</span>
-        </a>
       </div>
     </div>
   );

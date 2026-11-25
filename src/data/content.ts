@@ -354,6 +354,7 @@ export interface SiteCopy {
     readonly aboutJourney: string;
     readonly aboutMission: string;
     readonly aboutFounder: string;
+    readonly aboutConnect: string;
   };
   readonly tapHint: string;
   readonly appPreview: {
@@ -584,6 +585,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       aboutJourney: 'Journey',
       aboutMission: 'Mission',
       aboutFounder: 'Model',
+      aboutConnect: 'Connect',
     },
     tapHint: 'Tap an item to inspect',
     appPreview: {
@@ -1654,6 +1656,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       aboutJourney: '여정',
       aboutMission: '미션',
       aboutFounder: '비즈니스',
+      aboutConnect: '소통',
     },
     tapHint: '카드를 눌러 자세히 보기',
     appPreview: {

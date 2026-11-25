@@ -333,7 +333,9 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       );
       assert.ok(copy.vision.faqs.length >= 4, `[${lang}] Vision must include at least 4 FAQ entries`);
 
-      // 4. About — User Journey + Mission & Roadmap + BM & Founder
+      // 4. About — User Journey + Mission & Roadmap + Model + Connect
+      assert.equal(copy.subtabs.aboutFounder, isKo ? '비즈니스' : 'Model');
+      assert.equal(copy.subtabs.aboutConnect, isKo ? '소통' : 'Connect');
       assert.equal(copy.journey.badge, isKo ? '6컷 AI 여정' : '6-Cut AI Cycle');
       assert.equal(copy.mission.centerKicker, 'iNVTRY LOOP');
       assert.deepEqual(

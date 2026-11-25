@@ -637,6 +637,11 @@ describe('AinvtryStageDirector', () => {
       director.handleLeftPointerDrag(0.12, 0);
       director.handleLeftPointerTap(-0.2, 0.1);
       director.update(0.016, 0.65);
+      if (id === 'about') {
+        director.updateInteraction({ aboutSubtab: 'connect' });
+        director.update(0.016, 0.67);
+        assert.equal(director.getInteraction().aboutSubtab, 'connect');
+      }
       assert.equal(director.getActiveStage(), id);
     }
 

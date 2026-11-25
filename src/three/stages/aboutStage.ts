@@ -913,7 +913,7 @@ export function createAboutStage(): StageModule {
     const state = ctx.interaction;
     const dampFactor = ctx.reducedMotion ? 1 : 1 - Math.exp(-7.2 * dt);
 
-    // 1. Sync orbital angle to active About subtab (`journey` / `mission` / `founder`)
+    // 1. Sync orbital angle to active About subtab (`journey` / `mission` / `founder` / `connect`)
     if (!manualScrubActive) {
       if (state.aboutSubtab === 'journey') {
         orbitAngle += shortestAngleDelta(orbitAngle, getJourneyCutAngle(state.aboutJourneyIndex)) * dampFactor;
@@ -940,8 +940,9 @@ export function createAboutStage(): StageModule {
 
     // 3. Interlocking inner sculptural ring gentle precession (halts when paused)
     if (!state.aboutLoopPaused && !ctx.reducedMotion) {
-      precessionPhase += dt * (state.aboutSubtab === 'founder' ? 0.28 : 0.44);
-      gyroRig.ring.rotation.z += dt * (state.aboutSubtab === 'founder' ? 0.12 : 0.2);
+      const isCalmSubtab = state.aboutSubtab === 'founder' || state.aboutSubtab === 'connect';
+      precessionPhase += dt * (isCalmSubtab ? 0.28 : 0.44);
+      gyroRig.ring.rotation.z += dt * (isCalmSubtab ? 0.12 : 0.2);
     }
     gyroRig.pivot.rotation.x =
       BASE_GYRO_TILT_X + Math.cos(precessionPhase * 0.72) * 0.14 + parallaxCurrentY * 1.1;
