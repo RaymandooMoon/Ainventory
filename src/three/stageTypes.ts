@@ -10,7 +10,7 @@ export interface StageInteractionState {
   studioModelMode: 'dressform' | 'mannequin';
   studioAngleRad: number;
   architectureSubtab: 'blueprint' | 'privacy' | 'maps';
-  architectureTier: number; // 0..5
+  architectureTier: number; // 0..6 (01 Client -> 07 Governance)
   architectureMode: 'mvp' | 'prod';
   googleApiIndex: number; // 0..5
   weatherMood: 'sunny' | 'rain' | 'wind';

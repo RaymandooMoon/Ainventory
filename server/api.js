@@ -36,9 +36,12 @@ import db, {
 import {
   SITE_DEMO_ROLE_CODE,
   assignUserRole,
+  getAdminContactEmail,
   getUserRbacContext,
   hasPermission,
   listRbacOverview,
+  resetUserPermissionOverrides,
+  setUserPermissionOverrides,
   updateRolePermissions,
 } from './rbac.js';
 import {
@@ -551,6 +554,8 @@ export function formatUserPayload(u) {
     role: rbac.roleCode,
     roleMeta: rbac.roleMeta,
     permissions: rbac.permissions,
+    permissionOverrides: rbac.overrides || {},
+    adminContactEmail: rbac.adminContactEmail || getAdminContactEmail(),
     isSiteDemo: rbac.roleCode === SITE_DEMO_ROLE_CODE,
     authProvider: u.auth_provider || 'email',
     defaultCloset: u.default_closet,
@@ -859,6 +864,7 @@ function requireAdmin(req, res, next) {
       error: '어드민 권한이 필요합니다.',
       code: 'PERMISSION_DENIED',
       requiredPermission: 'admin:manage_users',
+      adminContactEmail: getAdminContactEmail(),
     });
   }
   next();
@@ -877,6 +883,7 @@ function requirePermission(permissionCode, customMessage) {
         code: 'PERMISSION_DENIED',
         requiredPermission: permissionCode,
         role: req.user?.role || 'guest',
+        adminContactEmail: getAdminContactEmail(),
       });
     }
     next();
@@ -906,6 +913,7 @@ function blockIfSessionLacksPermission(permissionCode, customMessage) {
             code: 'PERMISSION_DENIED',
             requiredPermission: permissionCode,
             role: rbac.roleCode,
+            adminContactEmail: getAdminContactEmail(),
           });
         }
       }
@@ -4802,6 +4810,48 @@ export function createApiRouter(options = {}) {
         userId: result.userId,
         username: result.username,
         role: result.roleCode,
+        permissions: result.permissions,
+      });
+    }
+  );
+
+  router.put(
+    '/admin/users/:userId/permissions',
+    requireStrictUserAuth,
+    requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
+    (req, res) => {
+      const result = setUserPermissionOverrides(db, req.params.userId, req.body?.overrides);
+      if (!result.ok) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json({
+        ok: true,
+        userId: result.userId,
+        username: result.username,
+        role: result.role,
+        rolePermissions: result.rolePermissions,
+        overrides: result.overrides,
+        permissions: result.permissions,
+      });
+    }
+  );
+
+  router.delete(
+    '/admin/users/:userId/permissions',
+    requireStrictUserAuth,
+    requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
+    (req, res) => {
+      const result = resetUserPermissionOverrides(db, req.params.userId);
+      if (!result.ok) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json({
+        ok: true,
+        userId: result.userId,
+        username: result.username,
+        role: result.role,
+        rolePermissions: result.rolePermissions,
+        overrides: result.overrides,
         permissions: result.permissions,
       });
     }

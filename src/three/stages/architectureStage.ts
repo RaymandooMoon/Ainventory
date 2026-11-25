@@ -41,13 +41,13 @@ import {
  * 1. Constants, Palette Helpers & Tier Metadata
  * ========================================================================== */
 
-const TIER_COUNT = 6;
+const TIER_COUNT = 7;
 const TIER_WIDTH = 1.32;
-const TIER_HEIGHT = 0.34;
+const TIER_HEIGHT = 0.29;
 const TIER_DEPTH = 1.32;
-const TIER_SPACING = 0.5;
-const TOWER_CENTER_Y = 0.06;
-const FLOOR_GRID_Y = -1.62;
+const TIER_SPACING = 0.43;
+const TOWER_CENTER_Y = 0.05;
+const FLOOR_GRID_Y = -1.7;
 const DEFAULT_TOWER_YAW = Math.PI * 0.22;
 const DRAG_SENSITIVITY = 0.0085;
 
@@ -60,12 +60,13 @@ const RAIN_STREAK_COUNT = 52;
 const GPU_ACCENT_TIERS: readonly number[] = [3, 5]; // 04 iNVTRY Core & 06 Data · Hardware
 
 const TIER_SPECS = [
-  { label: '01 Client Apps', subtext: 'Web · iOS · Android' },
-  { label: '02 Edge Access', subtext: 'CDN · TLS · WAF' },
-  { label: '03 API Gateway', subtext: 'Auth · Rate · Schema' },
-  { label: '04 iNVTRY Core', subtext: '3D Fit · AI · Closet' },
-  { label: '05 Shared Base', subtext: 'Sync · Queue · Cache' },
-  { label: '06 Data · Hardware', subtext: 'SQLite · GPU Cluster' },
+  { label: '01 Client Apps', subtext: 'Web · iOS · Android', techBadges: ['⚛ React 19', '⚡ Vite · WASM', '📱 Capacitor'] },
+  { label: '02 Edge Access', subtext: 'CDN · TLS · WAF', techBadges: ['☁ Cloudflare', '🔒 TLS 1.3', '🛡 Armor WAF'] },
+  { label: '03 API Gateway', subtext: 'Auth · Rate · Schema', techBadges: ['⚙ Express 5', '🔑 OIDC · JWT', '✓ RBAC Guard'] },
+  { label: '04 iNVTRY Core', subtext: '3D Fit · AI · Closet', techBadges: ['◈ Three.js 3D', '✦ 8-Cut VTON', '◉ Maps Proxy'] },
+  { label: '05 Shared Base', subtext: 'Sync · Queue · Cache', techBadges: ['◎ OTel Log', '▣ GCS 3-Zone', '⇄ Pub/Sub'] },
+  { label: '06 Data · Hardware', subtext: 'SQLite · GPU Cluster', techBadges: ['⛁ SQLite / PG', '⚡ Redis HA', '▦ L4 / A100'] },
+  { label: '07 Governance', subtext: 'Audit · RBAC · CI/CD', techBadges: ['◈ Audit Log', '🛡 RBAC Matrix', '⎇ CI / CD'] },
 ] as const;
 
 const MAPS_API_SPECS = [
@@ -75,9 +76,11 @@ const MAPS_API_SPECS = [
   { label: '04 Vertex AI', subtext: 'No-Training VTON' },
   { label: '05 MediaPipe', subtext: '0B On-Device WASM' },
   { label: '06 Calendar API', subtext: 'Look Schedule Sync' },
+  { label: '07 Privacy Guard', subtext: 'Audit · RBAC · Zero-Train' },
 ] as const;
 
-const getTierCenterY = (index: number): number => TOWER_CENTER_Y + (2.5 - index) * TIER_SPACING;
+const getTierCenterY = (index: number): number =>
+  TOWER_CENTER_Y + ((TIER_COUNT - 1) * 0.5 - index) * TIER_SPACING;
 
 const resolveActiveTierIndex = (state: StageInteractionState): number => {
   const raw = state.architectureSubtab === 'maps' ? state.googleApiIndex : state.architectureTier;
@@ -550,8 +553,15 @@ function createWeatherOverlay(solarTexture: THREE.Texture) {
  * 4. Architecture 3D Stage Factory (`StageModule`)
  * ========================================================================== */
 
+interface TierTechSatellite {
+  readonly badge: FloatingLabelHandle;
+  readonly baseAngle: number;
+  readonly verticalOffset: number;
+}
+
 interface TierRuntime {
   readonly root: THREE.Group;
+  readonly baseY: number;
   readonly glassMat: THREE.MeshPhysicalMaterial;
   readonly edgeMat: THREE.LineBasicMaterial;
   readonly edgeHaloMat: THREE.LineBasicMaterial;
@@ -559,6 +569,7 @@ interface TierRuntime {
   readonly baseGlowMat: THREE.MeshBasicMaterial;
   readonly blueprintLabel: FloatingLabelHandle;
   readonly mapsLabel: FloatingLabelHandle;
+  readonly techSatellites: readonly TierTechSatellite[];
 }
 
 export function createArchitectureStage(): StageModule {
@@ -696,8 +707,28 @@ export function createArchitectureStage(): StageModule {
     mapsLabel.sprite.visible = false;
     labelGroup.add(mapsLabel.sprite);
 
+    // Expanding 3D tech-icon badges that fan outward when this tier is selected
+    const satOpts = { accent: false, width: 176, height: 42, worldHeight: 0.165 } as const;
+    const satAngles = [-Math.PI * 0.62, Math.PI * 0.62, 0.0];
+    const satOffsets = [0.22, 0.22, -0.24];
+    const techSatellites: TierTechSatellite[] = TIER_SPECS[i].techBadges.map((badgeText, sIdx) => {
+      const sat = createFloatingLabelSprite(badgeText, satOpts);
+      sat.sprite.position.set(0, baseY, 0.4);
+      sat.sprite.material.depthTest = false;
+      sat.sprite.renderOrder = 25;
+      sat.sprite.material.opacity = 0;
+      sat.sprite.visible = false;
+      labelGroup.add(sat.sprite);
+      return {
+        badge: sat,
+        baseAngle: satAngles[sIdx] ?? 0,
+        verticalOffset: satOffsets[sIdx] ?? 0,
+      };
+    });
+
     tiers.push({
       root: tierRoot,
+      baseY,
       glassMat,
       edgeMat,
       edgeHaloMat,
@@ -705,6 +736,7 @@ export function createArchitectureStage(): StageModule {
       baseGlowMat,
       blueprintLabel,
       mapsLabel,
+      techSatellites,
     });
   }
 
@@ -775,6 +807,9 @@ export function createArchitectureStage(): StageModule {
       tier.edgeHaloMat.color.setHex(edgeHaloHex);
       tier.blueprintLabel.setHighlight(true, currentTheme);
       tier.mapsLabel.setHighlight(true, currentTheme);
+      for (const sat of tier.techSatellites) {
+        sat.badge.setHighlight(true, currentTheme);
+      }
     }
 
     (floorGrid.gridMat.uniforms.uColor.value as THREE.Color).setHex(
@@ -1010,6 +1045,26 @@ export function createArchitectureStage(): StageModule {
         fast
       );
       tier.mapsLabel.sprite.visible = tier.mapsLabel.sprite.material.opacity > 0.015;
+
+      // Smoothly expand/retract 3D tech-icon satellites around the active blueprint tier
+      const satExpand = THREE.MathUtils.clamp(w * 1.15, 0, 1);
+      const satOpacityTarget = isSelected ? (1 - mapsBlend) * (1 - privacyBlend * 0.7) * 0.94 : 0;
+      for (let sIdx = 0; sIdx < tier.techSatellites.length; sIdx += 1) {
+        const sat = tier.techSatellites[sIdx];
+        const nextOp = isSelected
+          ? THREE.MathUtils.lerp(sat.badge.sprite.material.opacity, satOpacityTarget, fast)
+          : Math.max(0, sat.badge.sprite.material.opacity - dt * 6.5);
+        sat.badge.sprite.material.opacity = nextOp;
+        sat.badge.sprite.visible = nextOp > 0.04 && w > 0.15;
+        if (sat.badge.sprite.visible) {
+          const radius = THREE.MathUtils.lerp(0.32, 1.14, satExpand);
+          const bob = ctx.reducedMotion ? 0 : Math.sin(elapsed * 2.1 + sIdx * 1.9) * 0.032;
+          const x = Math.sin(sat.baseAngle) * radius;
+          const y = tier.baseY + sat.verticalOffset * satExpand + bob;
+          const z = 0.72 + Math.cos(sat.baseAngle) * 0.24 * satExpand;
+          sat.badge.sprite.position.set(x, y, z);
+        }
+      }
     }
 
     for (let i = 0; i < floorGrid.rippleMeshes.length; i += 1) {

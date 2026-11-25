@@ -23,6 +23,7 @@ import {
   isSiteDemoUser,
   setStoredToken,
 } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import { localizeApiMessage, localizeUserName, tx } from '../utils/i18n.ts';
 import {
   applyThemePreference,
@@ -62,6 +63,7 @@ function AccountSettingsContent({
   onChangeLang,
   onOpenProfile,
   onOpenSampleImport,
+  onOpenAdminPage,
   onLogout,
   onAccountDeleted,
   onOpenLegalDoc,
@@ -77,11 +79,7 @@ function AccountSettingsContent({
     user?.username === 'admin' ||
     hasUserPermission(user, 'admin:manage_roles');
   const isSiteDemo = isSiteDemoUser(user);
-  const canWriteCloset = hasUserPermission(user, 'closet:write');
-  const canChangePassword =
-    !user?.isSampleDemo && !isSiteDemo && hasUserPermission(user, 'profile:write');
-  const canDeleteAccount =
-    !user?.isSampleDemo && !isSiteDemo && hasUserPermission(user, 'account:delete');
+  const canDeleteAccount = !user?.isSampleDemo;
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
   const [adminCurrencyInput, setAdminCurrencyInput] = useState(() =>
     String(loadStoredEconomyState().iBalance ?? 0)
@@ -364,8 +362,43 @@ function AccountSettingsContent({
         )}
       </div>
 
-      {/* Password Change (Admin & Member accounts only) */}
-      {canChangePassword && (
+      {/* Admin Dedicated Management Page Entry */}
+      {isAdminUser && onOpenAdminPage && (
+        <div className="hig-sheet-card" data-admin-page-shortcut="true">
+          <div className="hig-sheet-row-between" style={{ gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShieldCheck size={16} />
+              <div>
+                <div className="hig-body" style={{ fontWeight: 700 }}>
+                  {tx(lang, '관리자 권한 관리 페이지', 'Admin Access Management Page')}
+                </div>
+                <div className="hig-caption">
+                  {tx(
+                    lang,
+                    '유저별 메뉴 접근 권한 및 메뉴 내 개별 버튼 권한을 설정합니다.',
+                    'Configure per-user menu access and per-menu button permissions.'
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              id="settings-open-admin-page-btn"
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                triggerHaptic('selection');
+                onClose?.();
+                onOpenAdminPage?.();
+              }}
+            >
+              <span>{tx(lang, '관리 페이지 열기', 'Open Admin')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Password Change (guarded by btn:account:password) */}
+      {!user?.isSampleDemo && (
         <div className="hig-sheet-card" data-password-change-card="true">
           <div className="hig-sheet-row-between">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -388,6 +421,9 @@ function AccountSettingsContent({
               type="button"
               className={`btn ${passwordSectionOpen ? 'btn-secondary' : 'btn-primary'} btn-sm`}
               onClick={() => {
+                if (!passwordSectionOpen && !guardUserPermission(user, 'btn:account:password')) {
+                  return;
+                }
                 setPasswordSectionOpen((v) => !v);
                 setPasswordError('');
               }}
@@ -641,13 +677,14 @@ function AccountSettingsContent({
           </button>
         </div>
 
-        {!user?.isSampleDemo && canWriteCloset && onOpenSampleImport && (
+        {!user?.isSampleDemo && onOpenSampleImport && (
           <div>
             <button
               id="settings-open-sample-import-btn"
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={() => {
+                if (!guardUserPermission(user, 'btn:closet:sample_import')) return;
                 onClose?.();
                 onOpenSampleImport?.();
               }}
@@ -911,7 +948,10 @@ function AccountSettingsContent({
               type="button"
               className="hig-danger-outline-btn"
               style={{ alignSelf: 'flex-start' }}
-              onClick={() => setConfirmDeleteStep(true)}
+              onClick={() => {
+                if (!guardUserPermission(user, 'btn:account:delete')) return;
+                setConfirmDeleteStep(true);
+              }}
             >
               <Trash2 size={14} />
               <span>
@@ -964,6 +1004,7 @@ export default function AccountSettingsSheet({
   onChangeLang,
   onOpenProfile,
   onOpenSampleImport,
+  onOpenAdminPage,
   onLogout,
   onAccountDeleted,
 }) {
@@ -990,6 +1031,7 @@ export default function AccountSettingsSheet({
             onChangeLang={onChangeLang}
             onOpenProfile={onOpenProfile}
             onOpenSampleImport={onOpenSampleImport}
+            onOpenAdminPage={onOpenAdminPage}
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onOpenLegalDoc={setLegalDoc}

@@ -11,6 +11,7 @@ import {
   toggleLaundryBasketItem,
 } from '../services/laundryBasketStore.ts';
 import { apiFetch } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import {
   formatCareSummaryTokens,
   resolveGarmentCareProfile,
@@ -54,6 +55,7 @@ const CARE_TUMBLE_OPTIONS = [
 ];
 
 function ItemDetailContent({
+  user,
   garment,
   lang = 'ko',
   onClose,
@@ -124,6 +126,7 @@ function ItemDetailContent({
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!guardUserPermission(user, 'btn:closet:edit_delete')) return;
     setSaving(true);
     try {
       const catOpt =
@@ -188,6 +191,7 @@ function ItemDetailContent({
   };
 
   const handleDelete = async () => {
+    if (!guardUserPermission(user, 'btn:closet:edit_delete')) return;
     setDeleting(true);
     try {
       await apiFetch(`/garments/${garment.id}`, { method: 'DELETE' });
@@ -772,6 +776,7 @@ function ItemDetailContent({
               <button
                 type="button"
                 onClick={() => {
+                  if (!guardUserPermission(user, 'btn:closet:laundry')) return;
                   triggerHaptic('selection');
                   const { added } = toggleLaundryBasketItem(Number(garment.id));
                   setInLaundryBasket(added);
@@ -890,6 +895,7 @@ function ItemDetailContent({
 }
 
 export default function ItemDetailSheet({
+  user,
   garment,
   open,
   lang = 'ko',
@@ -916,6 +922,7 @@ export default function ItemDetailSheet({
     >
       <ItemDetailContent
         key={`${garment.id}-${lang}`}
+        user={user}
         garment={garment}
         lang={lang}
         onClose={onClose}

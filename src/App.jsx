@@ -1,8 +1,15 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Calendar, Layers, LayoutGrid } from 'lucide-react';
+import { BarChart3, Calendar, Layers, LayoutGrid, ShieldCheck } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from './contracts/carbonDesignContract.ts';
 import { SampleImportSheet, StatusCapsule } from './components/common/AppUI.jsx';
+import PermissionDeniedModal from './components/PermissionDeniedModal.jsx';
 import { BottomTabBar } from './components/ui/BottomTabBar.tsx';
+import {
+  guardUserPermission,
+  notifyPermissionDenied,
+  resolveMenuPermissionCode,
+  subscribePermissionDenied,
+} from './utils/accessControl.ts';
 import {
   getAvatarSpecSnapshot,
   normalizeDominantHand,
@@ -25,6 +32,7 @@ import {
   getPrefetchedSampleGarments,
   getStoredToken,
   hasUserPermission,
+  isDemoVtonAccount,
   isLiveAppEmbedSession,
   isSiteDemoUser,
   loadInstantSampleGarmentsFallback,
@@ -73,6 +81,7 @@ const CalendarView = lazy(() => import('./components/CalendarView.jsx'));
 const StatsView = lazy(() => import('./components/StatsView.jsx'));
 const SkinToneAnalysisModal = lazy(() => import('./components/SkinToneAnalysisModal.jsx'));
 const AccountSettingsSheet = lazy(() => import('./components/AccountSettingsSheet.jsx'));
+const AdminManagementView = lazy(() => import('./components/AdminManagementView.jsx'));
 
 const DEFAULT_LOCAL_USER = {
   id: 0,
@@ -82,6 +91,11 @@ const DEFAULT_LOCAL_USER = {
   defaultCloset: 'sample',
   closetName: 'MY WARDROBE',
   isSampleDemo: true,
+  gender: 'female',
+  heightCm: 170,
+  weightKg: 52,
+  personalColor: 'winter_cool',
+  skinToneHex: '#F2DFD3',
   profileCompleted: true,
   handedness: 'right',
   dominantHand: 'right',
@@ -157,6 +171,7 @@ export default function App() {
 
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
+  const [permissionDeniedDetail, setPermissionDeniedDetail] = useState(null);
 
   const [lang, setLang] = useState(() => getStoredLang());
   const langRef = useRef(lang);
@@ -164,6 +179,12 @@ export default function App() {
     applyThemePreference(getStoredThemePreference())
   );
   const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    return subscribePermissionDenied((detail) => {
+      setPermissionDeniedDetail(detail || {});
+    });
+  }, []);
 
   useEffect(() => {
     const onQuotaExceeded = () => setGmpQuotaExceeded(true);
@@ -180,10 +201,14 @@ export default function App() {
     if (msg) emitStatusCapsule(msg);
   }, []);
 
-  const handleOpenProfileModal = useCallback((tab = 'skin') => {
-    setProfileModalTab(tab === 'body' ? 'body' : 'skin');
-    setProfileModalOpen(true);
-  }, []);
+  const handleOpenProfileModal = useCallback(
+    (tab = 'skin') => {
+      if (!guardUserPermission(user, 'menu:profile')) return;
+      setProfileModalTab(tab === 'body' ? 'body' : 'skin');
+      setProfileModalOpen(true);
+    },
+    [user]
+  );
 
   const handleOpenAccountSheet = useCallback(() => {
     setAccountSheetOpen(true);
@@ -362,6 +387,9 @@ export default function App() {
       if (cancelled) return;
       void prefetchSampleGarments();
       void import('./components/OutfitStudioView.jsx').catch(() => {});
+      void import('./services/vton2DService.ts')
+        .then((m) => m.loadShowcaseDemoVtonSlices('stylized_isometric'))
+        .catch(() => {});
       if (!isEmbedMode) {
         void import('./components/WardrobeView.jsx').catch(() => {});
       }
@@ -497,19 +525,26 @@ export default function App() {
           : prev
       );
 
-      if (user && !user.isSampleDemo && hasUserPermission(user, 'profile:write')) {
-        try {
-          await apiFetch('/auth/profile', {
-            method: 'POST',
-            body: JSON.stringify({
-              personal_color: saved.personalColor,
-              skin_tone_hex: saved.skinToneHex,
-              gender: resolvedGender,
-              handedness: getAvatarSpecSnapshot().spec.dominantHand,
-            }),
-          });
-        } catch (err) {
-          if (options?.throwOnError) throw err;
+      if (user && !user.isSampleDemo) {
+        if (!hasUserPermission(user, 'btn:profile:edit') || !hasUserPermission(user, 'profile:write')) {
+          if (!isSiteDemoUser(user)) {
+            guardUserPermission(user, 'btn:profile:edit');
+            return;
+          }
+        } else {
+          try {
+            await apiFetch('/auth/profile', {
+              method: 'POST',
+              body: JSON.stringify({
+                personal_color: saved.personalColor,
+                skin_tone_hex: saved.skinToneHex,
+                gender: resolvedGender,
+                handedness: getAvatarSpecSnapshot().spec.dominantHand,
+              }),
+            });
+          } catch (err) {
+            if (options?.throwOnError) throw err;
+          }
         }
       }
 
@@ -564,20 +599,27 @@ export default function App() {
           : prev
       );
 
-      if (user && !user.isSampleDemo && hasUserPermission(user, 'profile:write')) {
-        try {
-          await apiFetch('/auth/profile', {
-            method: 'POST',
-            body: JSON.stringify({
-              gender: resolvedGender,
-              height_cm: savedBody.heightCm,
-              weight_kg: savedBody.weightKg,
-              body_shape: savedBody.bodyShape,
-              handedness: getAvatarSpecSnapshot().spec.dominantHand,
-            }),
-          });
-        } catch (err) {
-          if (options?.throwOnError) throw err;
+      if (user && !user.isSampleDemo) {
+        if (!hasUserPermission(user, 'btn:profile:edit') || !hasUserPermission(user, 'profile:write')) {
+          if (!isSiteDemoUser(user)) {
+            guardUserPermission(user, 'btn:profile:edit');
+            return;
+          }
+        } else {
+          try {
+            await apiFetch('/auth/profile', {
+              method: 'POST',
+              body: JSON.stringify({
+                gender: resolvedGender,
+                height_cm: savedBody.heightCm,
+                weight_kg: savedBody.weightKg,
+                body_shape: savedBody.bodyShape,
+                handedness: getAvatarSpecSnapshot().spec.dominantHand,
+              }),
+            });
+          } catch (err) {
+            if (options?.throwOnError) throw err;
+          }
         }
       }
 
@@ -590,9 +632,32 @@ export default function App() {
     [user, bodySpec, skinProfile, lang, showToast]
   );
 
+  const isAdminAccount = hasUserPermission(user, 'admin:manage_roles');
+
+  const visibleTabs = useMemo(() => {
+    if (!isAdminAccount) return FLOATING_TABS;
+    return [
+      ...FLOATING_TABS,
+      {
+        key: 'admin',
+        label: lang === 'en' ? 'Admin' : '관리',
+        path: '/admin',
+        Icon: ShieldCheck,
+      },
+    ];
+  }, [isAdminAccount, lang]);
+
   const navigateTab = useCallback(
     (tabKey) => {
-      const target = FLOATING_TABS.find((t) => t.key === tabKey) || FLOATING_TABS[0];
+      const target =
+        visibleTabs.find((t) => t.key === tabKey) ||
+        (tabKey === 'admin'
+          ? { key: 'admin', label: 'Admin', path: '/admin', Icon: ShieldCheck }
+          : FLOATING_TABS[0]);
+      const requiredPerm = resolveMenuPermissionCode(target.key);
+      if (requiredPerm && !guardUserPermission(user, requiredPerm)) {
+        return;
+      }
       triggerHaptic('selection');
       setSelectedItemId(null);
       setActiveTab(target.key);
@@ -607,14 +672,38 @@ export default function App() {
         window.parent.postMessage(
           {
             type: 'ainvtry-live-app-screen',
-            screen: target.key === 'calendar' ? 'outfits' : target.key,
+            screen: target.key === 'calendar' || target.key === 'admin' ? 'outfits' : target.key,
           },
           window.location.origin
         );
       }
     },
-    [isEmbedMode]
+    [isEmbedMode, user, visibleTabs]
   );
+
+  // Enforce menu permission if user lands directly on /admin or a revoked tab URL
+  useEffect(() => {
+    if (!authReady || showAuthScreen || !user) return;
+    const reqPerm = resolveMenuPermissionCode(activeTab);
+    if (reqPerm && !hasUserPermission(user, reqPerm)) {
+      notifyPermissionDenied({
+        permissionCode: reqPerm,
+        adminContactEmail: user?.adminContactEmail,
+        username: user?.username,
+      });
+      const fallback =
+        FLOATING_TABS.find((t) => {
+          const p = resolveMenuPermissionCode(t.key);
+          return !p || hasUserPermission(user, p);
+        }) || FLOATING_TABS[0];
+      if (fallback.key !== activeTab) {
+        setActiveTab(fallback.key);
+        if (!isEmbedMode && typeof window !== 'undefined') {
+          window.history.replaceState({}, '', fallback.path);
+        }
+      }
+    }
+  }, [activeTab, authReady, isEmbedMode, showAuthScreen, user]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -911,7 +1000,11 @@ export default function App() {
   const antiGravityEnabled =
     authReady && (!showAuthScreen || loginPortal?.phase === 'revealing');
   const antiGravityModalPaused = Boolean(
-    selectedItemId !== null || profileModalOpen || accountSheetOpen || sampleImportOpen
+    selectedItemId !== null ||
+      profileModalOpen ||
+      accountSheetOpen ||
+      sampleImportOpen ||
+      permissionDeniedDetail !== null
   );
   const antiGravityModalPausedRef = useRef(antiGravityModalPaused);
 
@@ -935,10 +1028,18 @@ export default function App() {
   }, [antiGravityEnabled, antiGravityModalPaused]);
 
   const handleEnterSampleCloset = useCallback(() => {
+    void import('./services/vton2DService.ts')
+      .then((m) => m.loadShowcaseDemoVtonSlices('stylized_isometric'))
+      .catch(() => {});
     startLoginPortalTransition(() => {
       setStoredToken(null);
       setSampleDemoMode(true);
       setUser(DEFAULT_LOCAL_USER);
+      const prefetched = getPrefetchedSampleGarments();
+      if (prefetched && prefetched.length > 0) {
+        setGarments((prev) => (prev.length > 0 ? prev : prefetched));
+        setGarmentsLoading(false);
+      }
       setSelectedItemId(null);
       setActiveTab('outfits');
       if (!isEmbedMode && typeof window !== 'undefined') {
@@ -949,9 +1050,23 @@ export default function App() {
 
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
+      const demoAccount = isDemoVtonAccount(loggedInUser);
+      if (demoAccount) {
+        void prefetchSampleGarments();
+        void import('./services/vton2DService.ts')
+          .then((m) => m.loadShowcaseDemoVtonSlices('stylized_isometric'))
+          .catch(() => {});
+      }
       startLoginPortalTransition(() => {
         setSampleDemoMode(Boolean(loggedInUser?.isOfflineFallback));
         setUser(loggedInUser);
+        if (demoAccount) {
+          const prefetched = getPrefetchedSampleGarments();
+          if (prefetched && prefetched.length > 0) {
+            setGarments((prev) => (prev.length > 0 ? prev : prefetched));
+            setGarmentsLoading(false);
+          }
+        }
         try {
           syncAccountToAvatar(loggedInUser);
         } catch {
@@ -1061,7 +1176,18 @@ export default function App() {
   }, []);
 
   const handleOpenSampleImport = useCallback(() => {
+    if (!guardUserPermission(user, 'btn:closet:sample_import')) return;
     setSampleImportOpen(true);
+  }, [user]);
+
+  const handleOpenAdminPage = useCallback(() => {
+    setAccountSheetOpen(false);
+    navigateTab('admin');
+  }, [navigateTab]);
+
+  const handleSelfPermissionsChanged = useCallback((nextPermissions) => {
+    if (!Array.isArray(nextPermissions)) return;
+    setUser((prev) => (prev ? { ...prev, permissions: nextPermissions } : prev));
   }, []);
 
   const handleCloseSampleImport = useCallback(() => {
@@ -1165,6 +1291,7 @@ export default function App() {
         >
           {activeTab === 'closet' && (
             <WardrobeView
+              user={user}
               activeCloset={activeCloset}
               garments={garments}
               loading={garmentsLoading}
@@ -1205,6 +1332,7 @@ export default function App() {
 
           {activeTab === 'calendar' && (
             <CalendarView
+              user={user}
               activeCloset={activeCloset}
               garments={garments}
               theme={resolvedTheme}
@@ -1220,6 +1348,7 @@ export default function App() {
 
           {activeTab === 'stats' && (
             <StatsView
+              user={user}
               garments={garments}
               theme={resolvedTheme}
               lang={lang}
@@ -1232,13 +1361,26 @@ export default function App() {
               onSelectGarment={handleOpenGarmentDetail}
             />
           )}
+
+          {activeTab === 'admin' && isAdminAccount && (
+            <AdminManagementView
+              user={user}
+              theme={resolvedTheme}
+              lang={lang}
+              skinProfile={skinProfile}
+              onOpenProfile={handleOpenProfileModal}
+              onOpenAccount={handleOpenAccountSheet}
+              onUserPermissionsChanged={handleSelfPermissionsChanged}
+              showToast={showToast}
+            />
+          )}
         </Suspense>
       </main>
 
       {/* Unified Bottom-Center Floating Glassmorphism Tab Bar */}
       <BottomTabBar
         id={CARBON_DOM_CONTRACT.floatingTabBarId}
-        tabs={FLOATING_TABS}
+        tabs={visibleTabs}
         activeTab={activeTab}
         lang={lang}
         onSelectTab={navigateTab}
@@ -1248,6 +1390,7 @@ export default function App() {
       {selectedGarment && (
         <Suspense fallback={null}>
           <ItemDetailSheet
+            user={user}
             garment={selectedGarment}
             open={Boolean(selectedGarment)}
             lang={lang}
@@ -1291,6 +1434,7 @@ export default function App() {
             onChangeLang={handleChangeLang}
             onOpenProfile={handleOpenProfileModal}
             onOpenSampleImport={handleOpenSampleImport}
+            onOpenAdminPage={handleOpenAdminPage}
             onLogout={handleLogout}
             onAccountDeleted={handleAccountDeleted}
           />
@@ -1303,6 +1447,14 @@ export default function App() {
         onClose={handleCloseSampleImport}
         targetOwner={activeCloset}
         onImported={handleClosetUpdated}
+      />
+
+      <PermissionDeniedModal
+        open={Boolean(permissionDeniedDetail)}
+        detail={permissionDeniedDetail}
+        user={user}
+        lang={lang}
+        onClose={() => setPermissionDeniedDetail(null)}
       />
         </div>
       )}

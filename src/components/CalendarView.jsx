@@ -6,6 +6,7 @@ import {
   getStoredToken,
   isStaticStandaloneWithoutApi,
 } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import {
   localizeApiMessage,
   localizeCalendarNote,
@@ -71,6 +72,7 @@ function buildIcsText(logs, outfits, lang = 'ko') {
 }
 
 export default function CalendarView({
+  user,
   activeCloset,
   garments = [],
   theme = 'light',
@@ -120,6 +122,7 @@ export default function CalendarView({
   const attendanceClaimedToday = economyState.attendanceDates.includes(todayStr);
 
   const handleClaimAttendance = useCallback(() => {
+    if (!guardUserPermission(user, 'btn:calendar:attendance')) return;
     const res = claimDailyAttendance(economyState, todayStr);
     if (!res.ok) {
       triggerHaptic('warning');
@@ -155,7 +158,7 @@ export default function CalendarView({
         )
       );
     }
-  }, [economyState, todayStr, lang, showToast]);
+  }, [economyState, todayStr, lang, showToast, user]);
 
   const fetchCalendarData = useCallback(async () => {
     const q = encodeURIComponent(activeCloset || 'sample');
@@ -262,6 +265,7 @@ export default function CalendarView({
     temp_c,
     note,
   }) => {
+    if (!guardUserPermission(user, 'btn:calendar:log_wear')) return;
     setSaving(true);
     try {
       const fallbackItemIds =
@@ -337,6 +341,7 @@ export default function CalendarView({
   };
 
   const handleDeleteDrawerEntry = async (logId) => {
+    if (!guardUserPermission(user, 'btn:calendar:log_wear')) return;
     setSaving(true);
     try {
       await apiFetch(`/calendar/${logId}`, { method: 'DELETE' });
@@ -362,6 +367,7 @@ export default function CalendarView({
   };
 
   const handleExportIcs = async () => {
+    if (!guardUserPermission(user, 'btn:calendar:export_ics')) return;
     let ics = '';
     const token = getStoredToken();
     if (token && lang !== 'en' && !isStaticStandaloneWithoutApi()) {
@@ -426,6 +432,7 @@ export default function CalendarView({
                 type="button"
                 className="hig-circle-icon-btn"
                 onClick={() => {
+                  if (!guardUserPermission(user, 'btn:calendar:log_wear')) return;
                   triggerHaptic('selection');
                   setDrawerEntryId(null);
                   setDrawerOpen(true);

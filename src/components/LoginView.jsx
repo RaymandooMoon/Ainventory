@@ -51,12 +51,25 @@ const EMBED_SITE_DEMO_FALLBACK_USER = {
     'stats:read',
     'profile:read',
     'vton:preview',
+    'menu:outfits',
+    'menu:closet',
+    'menu:calendar',
+    'menu:stats',
+    'menu:profile',
+    'btn:outfits:stage_bg',
+    'btn:outfits:weather_scenario',
+    'btn:stats:detail',
   ],
+  adminContactEmail: 'raymond@ainvtry.com',
   defaultCloset: 'sample',
   closetName: 'SITE DEMO CLOSET',
-  gender: 'male',
-  heightCm: 176,
-  weightKg: 70,
+  ageGroup: '20s',
+  age: 23,
+  gender: 'female',
+  heightCm: 170,
+  weightKg: 52,
+  personalColor: 'winter_cool',
+  skinToneHex: '#F2DFD3',
   profileCompleted: true,
   handedness: 'right',
   dominantHand: 'right',
@@ -421,6 +434,9 @@ export default function LoginView({
       cancelIdle = scheduleIdleTask(() => {
         void prefetchSampleGarments();
         void import('./OutfitStudioView.jsx').catch(() => {});
+        void import('../services/vton2DService.ts')
+          .then((m) => m.loadShowcaseDemoVtonSlices('stylized_isometric'))
+          .catch(() => {});
       }, 450);
     });
     const handleEmbedMoodSync = (event) => {
@@ -448,8 +464,11 @@ export default function LoginView({
     setLoadingAction('sample');
     triggerHaptic('light');
 
-    // Kick off sample garment prefetch immediately alongside auth handshake
+    // Kick off sample garment & showcase 360° model prefetch immediately alongside auth handshake
     void prefetchSampleGarments();
+    void import('../services/vton2DService.ts')
+      .then((m) => m.loadShowcaseDemoVtonSlices('stylized_isometric'))
+      .catch(() => {});
 
     let deadlineId = 0;
     try {

@@ -158,10 +158,42 @@ export function hasUserPermission(
       permissionCode === 'packing:read' ||
       permissionCode === 'stats:read' ||
       permissionCode === 'profile:read' ||
-      permissionCode === 'vton:preview'
+      permissionCode === 'vton:preview' ||
+      permissionCode === 'menu:outfits' ||
+      permissionCode === 'menu:closet' ||
+      permissionCode === 'menu:calendar' ||
+      permissionCode === 'menu:stats' ||
+      permissionCode === 'menu:profile' ||
+      permissionCode === 'btn:outfits:stage_bg' ||
+      permissionCode === 'btn:outfits:weather_scenario' ||
+      permissionCode === 'btn:stats:detail'
     );
   }
   return !permissionCode.startsWith('admin:');
+}
+
+export function isDemoVtonAccount(
+  user:
+    | {
+        role?: string | null;
+        isSiteDemo?: boolean;
+        isSampleDemo?: boolean;
+        username?: string | null;
+        permissions?: string[] | null;
+      }
+    | null
+    | undefined
+): boolean {
+  if (!user) return false;
+  if (isSiteDemoUser(user) || Boolean(user.isSampleDemo)) return true;
+  if (
+    Array.isArray(user.permissions) &&
+    user.permissions.includes('vton:preview') &&
+    !user.permissions.includes('vton:synthesize')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function getConfiguredApiBaseUrl(): string {
@@ -372,6 +404,24 @@ async function rawNetworkFetch(
     if (!res.ok) {
       const errorMessage =
         typeof data.error === 'string' && data.error ? data.error : `요청 실패 (${res.status})`;
+      if (
+        res.status === 403 &&
+        data?.code === 'PERMISSION_DENIED' &&
+        typeof window !== 'undefined' &&
+        headers['X-Silent-Permission-Check'] !== '1'
+      ) {
+        window.dispatchEvent(
+          new CustomEvent('ainventory:permission-denied', {
+            detail: {
+              permissionCode:
+                typeof data.requiredPermission === 'string' ? data.requiredPermission : undefined,
+              message: errorMessage,
+              adminContactEmail:
+                typeof data.adminContactEmail === 'string' ? data.adminContactEmail : undefined,
+            },
+          })
+        );
+      }
       throw new ApiError(errorMessage, {
         status: res.status,
         data,
@@ -517,7 +567,13 @@ export async function apiFetch<T = Record<string, unknown>>(
     const cacheKey = sampleDemo ? `demo:${path}` : path;
     if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !skipStaleIdbCache) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-      if (mutatedCached) {
+      const isStaleSampleGarments =
+        path === '/garments?closet=sample' &&
+        Array.isArray(mutatedCached?.garments) &&
+        !(mutatedCached.garments as Array<{ name?: string }>).some(
+          (g) => g?.name === '블랙 시어 싸이하이 스타킹'
+        );
+      if (mutatedCached && !isStaleSampleGarments) {
         return coerceApiPayload<T>(mutatedCached);
       }
     }

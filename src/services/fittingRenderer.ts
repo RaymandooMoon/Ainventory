@@ -598,7 +598,7 @@ export function isSocksGarment(garment?: Partial<GarmentRecord> | null): boolean
   return (
     cat === 'socks' ||
     SOCKS_SUBCATEGORIES.has(sub) ||
-    /양말|삭스|덧신|socks?|hosiery/i.test(name)
+    /양말|삭스|덧신|스타킹|타이츠|socks?|hosiery|stockings?|tights?/i.test(name)
   );
 }
 

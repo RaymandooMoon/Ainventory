@@ -91,6 +91,8 @@ import {
   resolveEffectiveWeatherFromRaw,
 } from '../services/weatherPromptBuilder.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import { isDemoVtonAccount } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import { consumePostLoginReveal } from '../utils/logoTransition.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import {
@@ -685,15 +687,17 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     null;
   const hasFacePhoto = Boolean(activeFacePhotoUrl);
 
+  const isDemoAccount = useMemo(() => isDemoVtonAccount(user), [user]);
+
   const initialPostLoginRevealRef = useRef(null);
   if (initialPostLoginRevealRef.current === null) {
     initialPostLoginRevealRef.current = consumePostLoginReveal();
   }
   const [stageMode, setStageMode] = useState(() =>
-    initialPostLoginRevealRef.current ? 'flatlay' : 'ai-vton'
+    initialPostLoginRevealRef.current && !isDemoAccount ? 'flatlay' : 'ai-vton'
   );
   const [postLoginRevealActive, setPostLoginRevealActive] = useState(() =>
-    Boolean(initialPostLoginRevealRef.current)
+    Boolean(initialPostLoginRevealRef.current && !isDemoAccount)
   );
   const [postLoginProgress, setPostLoginProgress] = useState(0);
   const postLoginRevealActiveRef = useRef(postLoginRevealActive);
@@ -815,12 +819,19 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     };
   }, []);
 
-  const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(() =>
-    isDemoVtonShowcaseActive()
+  const [demoShowcaseEnabled, setDemoShowcaseEnabled] = useState(
+    () => isDemoVtonShowcaseActive() || isDemoAccount
   );
   const [hasServerConfiguredKey, setHasServerConfiguredKey] = useState(false);
   const hasServerConfiguredKeyRef = useRef(false);
   hasServerConfiguredKeyRef.current = hasServerConfiguredKey;
+
+  useEffect(() => {
+    if (!isDemoAccount) return;
+    setDemoShowcaseEnabled(true);
+    setPostLoginRevealActive(false);
+    setStageMode('ai-vton');
+  }, [isDemoAccount]);
 
   // Smart Credit-Saver & Persistent History Gallery state
   const [autoGenEnabled, setAutoGenEnabled] = useState(() => readStoredAutoGenEnabled());
@@ -1013,6 +1024,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   useEffect(() => {
     refreshHistoryList();
+    if (isDemoAccount) {
+      setHasServerConfiguredKey(false);
+      return undefined;
+    }
     let mounted = true;
     fetchServerGeminiConfigured()
       .then((configured) => {
@@ -1024,7 +1039,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     return () => {
       mounted = false;
     };
-  }, [refreshHistoryList]);
+  }, [refreshHistoryList, isDemoAccount]);
 
   // Sync VTON style preference changes from Profile modal
   useEffect(() => {
@@ -1590,7 +1605,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         abortControllerRef.current?.abort();
         clearFirstLookCountdown();
         setAiState(null);
-        setDemoShowcaseEnabled(false);
+        if (!isDemoAccount) {
+          setDemoShowcaseEnabled(false);
+        }
         setPinnedHistoryItem(null);
         setStageMode('flatlay');
       }
@@ -2017,7 +2034,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
           liveSnap.resolvedAvatarSpec?.dominantHand,
           'right'
         );
-        fetchServerProfileConfig(fallbackHand)
+        const resolveHandednessPromise = isDemoAccount
+          ? Promise.resolve({ handedness: fallbackHand, hasStoredRecord: false })
+          : fetchServerProfileConfig(fallbackHand);
+        resolveHandednessPromise
           .then((serverCfg) => {
             if (controller.signal.aborted) return null;
             const resolvedHand = serverCfg.hasStoredRecord
@@ -2140,7 +2160,10 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         if (controller.signal.aborted) return;
       }
 
-      if (demoShowcaseEnabled && (isDirectDemoClick || !hasServerConfiguredKeyRef.current)) {
+      if (
+        demoShowcaseEnabled &&
+        (isDemoAccount || isDirectDemoClick || !hasServerConfiguredKeyRef.current)
+      ) {
         applyShowcaseDemoSlices();
         return;
       }
@@ -2329,6 +2352,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
     equippedCount,
     retryNonce,
     demoShowcaseEnabled,
+    isDemoAccount,
     autoGenEnabled,
     pinnedHistoryItem,
     clearFirstLookCountdown,
@@ -2364,6 +2388,9 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
   const handleApproveStagedSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
+      if (!guardUserPermission(user, 'btn:outfits:ai_vton')) {
+        return;
+      }
       if (equippedCount === 0) {
         showToast('empty_outfit');
         return;
@@ -2380,12 +2407,15 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
-    [equippedCount, clearFirstLookCountdown, clearFrontOnlyFallbackState, showToast]
+    [user, equippedCount, clearFirstLookCountdown, clearFrontOnlyFallbackState, showToast]
   );
 
   const handleRetryAiSynthesis = useCallback(
     (e) => {
       e?.stopPropagation?.();
+      if (!guardUserPermission(user, 'btn:outfits:ai_vton')) {
+        return;
+      }
       if (equippedCount === 0) {
         showToast('empty_outfit');
         return;
@@ -2398,15 +2428,22 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       clearFrontOnlyFallbackState();
       setPinnedHistoryItem(null);
       setStagedNeedsApply(false);
-      setDemoShowcaseEnabled(false);
+      if (isDemoAccount) {
+        manualDemoRef.current = true;
+        setDemoShowcaseEnabled(true);
+      } else {
+        setDemoShowcaseEnabled(false);
+        userApprovedGenRef.current = true;
+        forceBypassCacheRef.current = true;
+      }
       setStatusToast(null);
-      userApprovedGenRef.current = true;
-      forceBypassCacheRef.current = true;
       setStageMode('ai-vton');
       setRetryNonce((n) => n + 1);
     },
     [
+      user,
       equippedCount,
+      isDemoAccount,
       scenarioVtonKey,
       clearFirstLookCountdown,
       clearFrontOnlyFallbackState,

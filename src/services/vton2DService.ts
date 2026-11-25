@@ -5334,10 +5334,23 @@ export function getShowcaseDemoSheetUrl(rawStyleMode?: string | null): string {
   const token = String(rawStyleMode || '')
     .trim()
     .toLowerCase();
-  if (token === 'stylized_isometric' || token !== 'photorealistic') {
-    return withPublicBaseUrl('/seed/vton-showcase-3x2-stylized.jpg');
+  if (token === 'photorealistic') {
+    return withPublicBaseUrl('/seed/vton-showcase-3x2-cyber-female.jpg?mode=photoreal');
   }
-  return withPublicBaseUrl('/seed/vton-showcase-3x2-photoreal.jpg');
+  return withPublicBaseUrl('/seed/vton-showcase-3x2-cyber-female.jpg?mode=stylized');
+}
+
+export function getShowcaseDemoSliceUrls(): Record<TurnaroundAngleDeg, string> {
+  return {
+    0: withPublicBaseUrl('/seed/demo-cyber-female-0.webp?v=3'),
+    45: withPublicBaseUrl('/seed/demo-cyber-female-45.webp?v=3'),
+    90: withPublicBaseUrl('/seed/demo-cyber-female-90.webp?v=3'),
+    135: withPublicBaseUrl('/seed/demo-cyber-female-135.webp?v=3'),
+    180: withPublicBaseUrl('/seed/demo-cyber-female-180.webp?v=3'),
+    225: withPublicBaseUrl('/seed/demo-cyber-female-225.webp?v=3'),
+    270: withPublicBaseUrl('/seed/demo-cyber-female-270.webp?v=3'),
+    315: withPublicBaseUrl('/seed/demo-cyber-female-315.webp?v=3'),
+  };
 }
 
 export function peekShowcaseDemoVtonSlice(
@@ -5352,8 +5365,13 @@ export function peekShowcaseDemoVtonSlice(
       ? 'photorealistic'
       : 'stylized_isometric';
   const normalizedAngle = normalizeTurnaroundAngleDeg(angleDeg, DEFAULT_TURNAROUND_ANGLE);
-  const { cacheKey } = resolveShowcaseCacheKey(normalizedStyle, options);
-  return showcaseMemorySlices[cacheKey]?.[normalizedAngle] || null;
+  const { cacheKey, mirrorForLeftHanded } = resolveShowcaseCacheKey(normalizedStyle, options);
+  const cached = showcaseMemorySlices[cacheKey]?.[normalizedAngle];
+  if (cached) return cached;
+  if (!mirrorForLeftHanded) {
+    return getShowcaseDemoSliceUrls()[normalizedAngle] || null;
+  }
+  return null;
 }
 
 export async function loadShowcaseDemoVtonSlices(
@@ -5380,13 +5398,16 @@ export async function loadShowcaseDemoVtonSlices(
     try {
       let baseSlices = showcaseMemorySlices[styleMode];
       if (!baseSlices) {
-        const sheetUrl = getShowcaseDemoSheetUrl(styleMode);
-        const forceFlipAngles: TurnaroundAngleDeg[] =
-          styleMode === 'stylized_isometric' ? [45, 90, 135] : [45, 90];
-        baseSlices = await sliceTurnaround2x2Sheet(sheetUrl, {
-          layout: 'turnaround_3x2',
-          forceFlipAngles,
-        });
+        const directSlices = getShowcaseDemoSliceUrls();
+        if (typeof Image !== 'undefined') {
+          await new Promise<void>((resolve) => {
+            const preloadFront = new Image();
+            preloadFront.onload = () => resolve();
+            preloadFront.onerror = () => resolve();
+            preloadFront.src = directSlices[0];
+          });
+        }
+        baseSlices = directSlices;
         showcaseMemorySlices[styleMode] = baseSlices;
       }
       if (!mirrorForLeftHanded) {

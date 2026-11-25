@@ -14,6 +14,7 @@ import {
   loadLaundryBasket,
 } from '../services/laundryBasketStore.ts';
 import { apiFetch } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import {
   localizeBrandName,
   localizeGarmentName,
@@ -64,6 +65,7 @@ const SORT_OPTIONS = [
  * MY WARDROBE — Apple HIG Inventory-First Closet Screen
  */
 export default function WardrobeView({
+  user,
   activeCloset,
   garments = [],
   loading = false,
@@ -275,6 +277,7 @@ export default function WardrobeView({
             data-laundry-basket-toggle="true"
             aria-label={tx(lang, '스마트 세탁 바구니 열기', 'Open Smart Laundry Basket')}
             onClick={() => {
+              if (!guardUserPermission(user, 'btn:closet:laundry')) return;
               triggerHaptic('selection');
               setLaundryModalOpen(true);
             }}
@@ -306,6 +309,7 @@ export default function WardrobeView({
                 className="hig-circle-icon-btn"
                 aria-label={tx(lang, '옷 등록', 'Add Item')}
                 onClick={() => {
+                  if (!guardUserPermission(user, 'btn:closet:add')) return;
                   triggerHaptic('selection');
                   setAddModalOpen(true);
                 }}
@@ -476,7 +480,10 @@ export default function WardrobeView({
                 <button
                   type="button"
                   className="hig-pill-action-btn"
-                  onClick={() => setAddModalOpen(true)}
+                  onClick={() => {
+                    if (!guardUserPermission(user, 'btn:closet:add')) return;
+                    setAddModalOpen(true);
+                  }}
                 >
                   <Plus size={15} />
                   <span>{tx(lang, '+ 옷 등록', '+ Add Item')}</span>

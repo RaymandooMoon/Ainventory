@@ -318,4 +318,99 @@ describe('RBAC Permission Management & site_demo Account Security', () => {
     });
     assert.equal(newLoginRes.status, 200);
   });
+
+  it('supports per-user menu and button permission overrides with reset and returns adminContactEmail on 403', async () => {
+    const adminHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${adminToken}`,
+    };
+    const demoHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${siteDemoToken}`,
+    };
+
+    const overviewRes = await fetch(`${baseUrl}/api/admin/roles`, { headers: adminHeaders });
+    assert.equal(overviewRes.status, 200);
+    const overview = (await overviewRes.json()) as {
+      adminContactEmail?: string;
+      users: Array<{ id: number; username: string; effectivePermissions: string[] }>;
+    };
+    assert.ok(overview.adminContactEmail && overview.adminContactEmail.includes('@'));
+    const siteDemoRow = overview.users.find((u) => u.username === 'site_demo')!;
+    assert.ok(siteDemoRow);
+    assert.ok(siteDemoRow.effectivePermissions.includes('menu:calendar'));
+
+    // Non-admin cannot modify per-user permissions (403 includes adminContactEmail)
+    const deniedPut = await fetch(`${baseUrl}/api/admin/users/${siteDemoRow.id}/permissions`, {
+      method: 'PUT',
+      headers: demoHeaders,
+      body: JSON.stringify({ overrides: { 'menu:calendar': 'deny' } }),
+    });
+    assert.equal(deniedPut.status, 403);
+    const deniedPutBody = (await deniedPut.json()) as {
+      code?: string;
+      adminContactEmail?: string;
+    };
+    assert.equal(deniedPutBody.code, 'PERMISSION_DENIED');
+    assert.ok(deniedPutBody.adminContactEmail && deniedPutBody.adminContactEmail.includes('@'));
+
+    // Admin denies menu:calendar and grants btn:outfits:store for site_demo
+    const putRes = await fetch(`${baseUrl}/api/admin/users/${siteDemoRow.id}/permissions`, {
+      method: 'PUT',
+      headers: adminHeaders,
+      body: JSON.stringify({
+        overrides: {
+          'menu:calendar': 'deny',
+          'btn:outfits:store': 'grant',
+        },
+      }),
+    });
+    assert.equal(putRes.status, 200);
+    const putBody = (await putRes.json()) as {
+      overrides?: Record<string, string>;
+      permissions?: string[];
+    };
+    assert.equal(putBody.overrides?.['menu:calendar'], 'deny');
+    assert.equal(putBody.overrides?.['btn:outfits:store'], 'grant');
+    assert.equal(putBody.permissions?.includes('menu:calendar'), false);
+    assert.equal(putBody.permissions?.includes('btn:outfits:store'), true);
+
+    // /api/auth/me for site_demo immediately reflects overrides
+    const meRes = await fetch(`${baseUrl}/api/auth/me`, { headers: demoHeaders });
+    assert.equal(meRes.status, 200);
+    const meBody = (await meRes.json()) as {
+      user?: { permissions?: string[]; adminContactEmail?: string };
+    };
+    assert.equal(meBody.user?.permissions?.includes('menu:calendar'), false);
+    assert.equal(meBody.user?.permissions?.includes('btn:outfits:store'), true);
+    assert.ok(meBody.user?.adminContactEmail && meBody.user.adminContactEmail.includes('@'));
+
+    // Reset overrides back to role defaults
+    const resetRes = await fetch(`${baseUrl}/api/admin/users/${siteDemoRow.id}/permissions`, {
+      method: 'DELETE',
+      headers: adminHeaders,
+    });
+    assert.equal(resetRes.status, 200);
+    const resetBody = (await resetRes.json()) as {
+      overrides?: Record<string, string>;
+      permissions?: string[];
+    };
+    assert.deepEqual(resetBody.overrides, {});
+    assert.equal(resetBody.permissions?.includes('menu:calendar'), true);
+    assert.equal(resetBody.permissions?.includes('btn:outfits:store'), false);
+  });
+
+  it('seeds matching cyber-noir real-closet items (black pleated mini skirt, sheer thigh-high stockings, moto jacket, combat boots, choker)', async () => {
+    const res = await fetch(`${baseUrl}/api/garments?closet=sample`, {
+      headers: { Authorization: `Bearer ${siteDemoToken}` },
+    });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { garments?: Array<{ name?: string; category?: string }> };
+    const names = (body.garments || []).map((g) => String(g.name || ''));
+    assert.ok(names.includes('블랙 플리츠 미니 스커트'));
+    assert.ok(names.includes('블랙 시어 싸이하이 스타킹'));
+    assert.ok(names.includes('블랙 크롭 레더 모토 라이더 자켓'));
+    assert.ok(names.includes('블랙 청키 러그솔 레이스업 컴뱃 부츠'));
+    assert.ok(names.includes('925 실버 레이어드 체인 초커 목걸이'));
+  });
 });

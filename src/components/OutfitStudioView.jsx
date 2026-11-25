@@ -52,7 +52,8 @@ import {
   evaluateUnderwearOuterInteraction,
   isSaggingEligibleBottom,
 } from '../shared/underwearStylingEngine.js';
-import { CITY_COORDS, apiFetch } from '../utils/api.ts';
+import { CITY_COORDS, apiFetch, isDemoVtonAccount } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import { fetchDirectOpenMeteoWeather } from '../utils/liveWeatherClient.ts';
 import {
   localizeApiMessage,
@@ -76,6 +77,7 @@ import {
 } from '../utils/tomorrowPromptPolicy.ts';
 import {
   ECONOMY_STATE_EVENT,
+  createDemoCyberpunkEconomyState,
   equipStageBackground,
   getStageBackgroundById,
   hasFreeDailyDrawRemaining,
@@ -701,12 +703,18 @@ function mapWeatherRecToSlots(rec, allGarments, weather, options = {}) {
   return next;
 }
 
-function buildInitialStudioSlots(garments, preEquippedGarment) {
+function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcaseLook = false) {
   const wearableList = (Array.isArray(garments) ? garments : []).filter((g) =>
     isWearableStudioGarment(g)
   );
   const findFirst = (slotKey) =>
     wearableList.find((g) => doesGarmentMatchSubSlot(g, slotKey)) || null;
+  const findMatching = (slotKey, pattern) =>
+    wearableList.find(
+      (g) =>
+        doesGarmentMatchSubSlot(g, slotKey) &&
+        pattern.test(`${g.name || ''} ${g.subcategory || ''} ${g.color || ''}`)
+    ) || null;
 
   if (preEquippedGarment && isWearableStudioGarment(preEquippedGarment)) {
     const targetSlot = mapGarmentToDefaultSubSlot(preEquippedGarment);
@@ -720,6 +728,48 @@ function buildInitialStudioSlots(garments, preEquippedGarment) {
     };
     next[targetSlot] = preEquippedGarment;
     return next;
+  }
+
+  if (preferDemoShowcaseLook && wearableList.length > 0) {
+    const showcaseOuter =
+      findMatching('outer', /크롭.*레더.*모토|cyber-black-moto-jacket/i) ||
+      findMatching('outer', /(블랙|black).*(라이더|모토|레더.*자켓|moto|rider|leather)/i) ||
+      findMatching('outer', /(블랙|black).*(보머|자켓|bomber|jacket)/i);
+    const showcaseTop =
+      findMatching('top', /(블랙|black).*(메리노|하프.*터틀넥|터틀넥|모크넥|mockneck|turtleneck)/i) ||
+      findMatching('top', /(차콜|블랙|black).*(모크넥|터틀넥|니트|turtleneck|knit|mock)/i) ||
+      findFirst('top');
+    const showcaseBottom =
+      findMatching('bottom', /(블랙|black).*(플리츠.*미니|미니.*스커트|플리츠.*스커트|pleated.*mini)/i) ||
+      findMatching('bottom', /(블랙|차콜|black).*(스커트|skirt)/i) ||
+      findMatching('bottom', /(블랙|차콜|black).*(카고|팬츠|슬랙스|cargo|pants)/i) ||
+      findFirst('bottom');
+    const showcaseSocks =
+      findMatching('socks', /(블랙|black).*(시어.*싸이하이|싸이하이|스타킹|thigh.?high|stocking)/i) ||
+      findMatching('socks', /(차콜|블랙|시어|나일론|black|sheer|charcoal)/i) ||
+      findFirst('socks');
+    const showcaseShoes =
+      findMatching('shoes', /(블랙|black).*(레이스업.*컴뱃|컴뱃.*부츠|combat.*boot)/i) ||
+      findMatching('shoes', /(매트 블랙|블랙|black).*(청키|러그솔|첼시|부츠|boot)/i) ||
+      findMatching('shoes', /부츠|boot/i) ||
+      findFirst('shoes');
+    const showcaseBelt = findMatching(
+      'acc_belt',
+      /(블랙|가죽|카프스킨|레더|black|leather).*벨트|belt/i
+    );
+    const showcaseNeck =
+      findMatching('jwl_neck', /(925.*실버|실버|silver).*(레이어드.*체인|초커|체인|choker|chain)/i) ||
+      findMatching('jwl_neck', /초커|체인|목걸이|choker|chain|necklace/i);
+    return {
+      ...EMPTY_STUDIO_SLOTS,
+      outer: showcaseOuter,
+      top: showcaseTop,
+      bottom: showcaseBottom,
+      socks: showcaseSocks,
+      shoes: showcaseShoes,
+      acc_belt: showcaseBelt,
+      jwl_neck: showcaseNeck,
+    };
   }
 
   if (wearableList.length > 0) {
@@ -1125,9 +1175,11 @@ export default function OutfitStudioView({
     });
   }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
 
+  const isDemoShowcaseAccount = useMemo(() => isDemoVtonAccount(user), [user]);
+
   const [rawSlots, setSlots] = useState(() =>
     preEquippedGarment || garments.length > 0
-      ? buildInitialStudioSlots(garments, preEquippedGarment)
+      ? buildInitialStudioSlots(garments, preEquippedGarment, isDemoShowcaseAccount)
       : { ...EMPTY_STUDIO_SLOTS }
   );
   const [hasExplicitSlotState, setHasExplicitSlotState] = useState(true);
@@ -1152,7 +1204,9 @@ export default function OutfitStudioView({
   const [underwearSimModalOpen, setUnderwearSimModalOpen] = useState(false);
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
-  const provisionalInitialSlotsRef = useRef(Boolean(!preEquippedGarment && garments.length > 0));
+  const provisionalInitialSlotsRef = useRef(
+    Boolean(!preEquippedGarment && !isDemoShowcaseAccount && garments.length > 0)
+  );
   const forceAutoApplyWeatherRef = useRef(false);
   const scenarioSnapshotsRef = useRef({});
   const ensuredSeedClosetsRef = useRef(new Set());
@@ -1245,7 +1299,11 @@ export default function OutfitStudioView({
     }, 1250);
   }, []);
 
-  const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
+  const [economyState, setEconomyState] = useState(() =>
+    isDemoShowcaseAccount
+      ? createDemoCyberpunkEconomyState(loadStoredEconomyState())
+      : loadStoredEconomyState()
+  );
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
   const [placeBackdropPref, setPlaceBackdropPref] = useState(() => getStoredPlaceBackdropPref());
@@ -1270,12 +1328,19 @@ export default function OutfitStudioView({
   }, []);
 
   useEffect(() => {
+    if (isDemoShowcaseAccount) {
+      setEconomyState((prev) => createDemoCyberpunkEconomyState(prev));
+    } else {
+      setEconomyState(loadStoredEconomyState());
+    }
+  }, [isDemoShowcaseAccount]);
+
+  useEffect(() => {
     const syncEconomy = (ev) => {
-      if (ev?.detail) {
-        setEconomyState(ev.detail);
-      } else {
-        setEconomyState(loadStoredEconomyState());
-      }
+      const incoming = ev?.detail ? ev.detail : loadStoredEconomyState();
+      setEconomyState(
+        isDemoShowcaseAccount ? createDemoCyberpunkEconomyState(incoming) : incoming
+      );
     };
     window.addEventListener(ECONOMY_STATE_EVENT, syncEconomy);
     window.addEventListener('storage', syncEconomy);
@@ -1283,7 +1348,7 @@ export default function OutfitStudioView({
       window.removeEventListener(ECONOMY_STATE_EVENT, syncEconomy);
       window.removeEventListener('storage', syncEconomy);
     };
-  }, []);
+  }, [isDemoShowcaseAccount]);
 
   const freeDailyDrawAvailable = hasFreeDailyDrawRemaining(economyState, getLocalDateKey());
   const equippedStageBg = useMemo(
@@ -1294,8 +1359,14 @@ export default function OutfitStudioView({
 
   const handleSelectStageBackground = useCallback(
     (bgId) => {
-      const next = equipStageBackground(bgId);
-      setEconomyState(next);
+      if (isDemoShowcaseAccount) {
+        setEconomyState((prev) =>
+          prev.unlockedIds.includes(bgId) ? { ...prev, equippedBackgroundId: bgId } : prev
+        );
+      } else {
+        const next = equipStageBackground(bgId);
+        setEconomyState(next);
+      }
       const item = getStageBackgroundById(bgId);
       showToast?.(
         tx(
@@ -1305,13 +1376,26 @@ export default function OutfitStudioView({
         )
       );
     },
-    [lang, showToast]
+    [isDemoShowcaseAccount, lang, showToast]
   );
 
-  const handleUpdateStageLighting = useCallback((patch) => {
-    const next = updateStageLightingSettings(patch);
-    setEconomyState(next);
-  }, []);
+  const handleUpdateStageLighting = useCallback(
+    (patch) => {
+      if (isDemoShowcaseAccount) {
+        setEconomyState((prev) => ({
+          ...prev,
+          ...(patch?.lightingPreset !== undefined ? { lightingPreset: patch.lightingPreset } : {}),
+          ...(patch?.lightingIntensity !== undefined
+            ? { lightingIntensity: patch.lightingIntensity }
+            : {}),
+        }));
+        return;
+      }
+      const next = updateStageLightingSettings(patch);
+      setEconomyState(next);
+    },
+    [isDemoShowcaseAccount]
+  );
 
   const handlePerformStoreDraw = useCallback(() => {
     const outcome = rollBackgroundGacha(economyState, getLocalDateKey());
@@ -1458,11 +1542,19 @@ export default function OutfitStudioView({
   useEffect(() => {
     if (garments.length === 0 || userModifiedSlotsRef.current) return;
     setSlots((prev) => {
+      if (isDemoShowcaseAccount) {
+        provisionalInitialSlotsRef.current = false;
+        const target = buildInitialStudioSlots(garments, preEquippedGarment || null, true);
+        const alreadyMatches = ALL_EQUIPPABLE_SLOT_KEYS.every(
+          (key) => (prev[key]?.id ?? null) === (target[key]?.id ?? null)
+        );
+        return alreadyMatches ? prev : target;
+      }
       if (Object.values(prev).some(Boolean)) return prev;
       provisionalInitialSlotsRef.current = true;
-      return buildInitialStudioSlots(garments, preEquippedGarment || null);
+      return buildInitialStudioSlots(garments, preEquippedGarment || null, false);
     });
-  }, [garments, preEquippedGarment]);
+  }, [garments, preEquippedGarment, isDemoShowcaseAccount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1574,6 +1666,12 @@ export default function OutfitStudioView({
             autoEquippedUmbrellaIdRef.current = null;
           }
           setSlots((prev) => {
+            if (isDemoShowcaseAccount && !shouldForceOverwriteSlots && !userModifiedSlotsRef.current) {
+              provisionalInitialSlotsRef.current = false;
+              return Object.values(prev).some(Boolean)
+                ? prev
+                : buildInitialStudioSlots(garments, preEquippedGarment || null, true);
+            }
             if (
               !shouldForceOverwriteSlots &&
               !provisionalInitialSlotsRef.current &&
@@ -1589,7 +1687,9 @@ export default function OutfitStudioView({
           setActiveRecId(chosenRec.id);
         } else if (recs.length === 0 && !userModifiedSlotsRef.current && garments.length > 0) {
           setSlots((prev) =>
-            Object.values(prev).some(Boolean) ? prev : buildInitialStudioSlots(garments, null)
+            Object.values(prev).some(Boolean)
+              ? prev
+              : buildInitialStudioSlots(garments, null, isDemoShowcaseAccount)
           );
           setHasExplicitSlotState(true);
         }
@@ -1597,7 +1697,9 @@ export default function OutfitStudioView({
       .catch(() => {
         if (!cancelled && !userModifiedSlotsRef.current && garments.length > 0) {
           setSlots((prev) =>
-            Object.values(prev).some(Boolean) ? prev : buildInitialStudioSlots(garments, null)
+            Object.values(prev).some(Boolean)
+              ? prev
+              : buildInitialStudioSlots(garments, null, isDemoShowcaseAccount)
           );
           setHasExplicitSlotState(true);
         }
@@ -1618,6 +1720,8 @@ export default function OutfitStudioView({
     garments,
     lookStyleConfig,
     isEquippedStageOutdoor,
+    isDemoShowcaseAccount,
+    preEquippedGarment,
   ]);
 
   const weather = useMemo(() => {
@@ -2153,7 +2257,7 @@ export default function OutfitStudioView({
     const hasRawSelection = Object.values(rawSlots).some(Boolean);
     const baseSlots =
       !hasRawSelection && !hasExplicitSlotState && garments.length > 0
-        ? buildInitialStudioSlots(garments, null)
+        ? buildInitialStudioSlots(garments, null, isDemoShowcaseAccount)
         : rawSlots;
 
     const next = { ...EMPTY_STUDIO_SLOTS };
@@ -3056,6 +3160,7 @@ export default function OutfitStudioView({
 
   const handleSaveOutfit = async (e) => {
     e?.preventDefault?.();
+    if (!guardUserPermission(user, 'btn:outfits:save')) return;
     if (equippedItems.length === 0) return;
     setSavingOutfit(true);
     try {
@@ -4079,6 +4184,7 @@ export default function OutfitStudioView({
                 freeDailyDrawAvailable ? 'has-free-draw' : ''
               }`.trim()}
               onClick={() => {
+                if (!guardUserPermission(user, 'btn:outfits:store')) return;
                 triggerHaptic('selection');
                 setStoreOpen(true);
               }}
@@ -4097,6 +4203,7 @@ export default function OutfitStudioView({
                 data-store-free-draw-bubble="true"
                 className="store-free-draw-bubble"
                 onClick={() => {
+                  if (!guardUserPermission(user, 'btn:outfits:store')) return;
                   triggerHaptic('selection');
                   setStoreOpen(true);
                 }}
@@ -4162,7 +4269,10 @@ export default function OutfitStudioView({
             dayTarget={dayTarget}
             scenarioKey={scenarioKey}
             locationLabel={resolvedCityDisplayLabel}
-            onOpenWeatherPopup={() => setWeatherPopupOpen(true)}
+            onOpenWeatherPopup={() => {
+              if (!guardUserPermission(user, 'btn:outfits:weather_scenario')) return;
+              setWeatherPopupOpen(true);
+            }}
             weatherPopupOpen={weatherPopupOpen}
             recommendations={recommendations}
             activeRecId={activeRecId}
@@ -4219,7 +4329,10 @@ export default function OutfitStudioView({
             onSelectPlaceMapSpot={handleSelectPlaceMapSpot}
             onChangePlaceBackdropHeading={handleChangePlaceBackdropHeading}
             onResetPlaceMapSpot={handleResetPlaceMapSpot}
-            onOpenBackgroundPicker={() => setBgPickerOpen(true)}
+            onOpenBackgroundPicker={() => {
+              if (!guardUserPermission(user, 'btn:outfits:stage_bg')) return;
+              setBgPickerOpen(true);
+            }}
             onOpenMobileDrawer={() => setMobileSheetOpen(true)}
             mobileDrawerOpen={mobileSheetOpen}
             saggingFit={effectiveSaggingFit}
@@ -5066,7 +5179,10 @@ export default function OutfitStudioView({
         economyState={economyState}
         onSelectBackground={handleSelectStageBackground}
         onUpdateLighting={handleUpdateStageLighting}
-        onOpenStore={() => setStoreOpen(true)}
+        onOpenStore={() => {
+          if (!guardUserPermission(user, 'btn:outfits:store')) return;
+          setStoreOpen(true);
+        }}
         placeBackdropPref={placeBackdropPref}
         placeBackdropData={placeBackdropData}
         selectedPlaceName={backdropTargetQuery}

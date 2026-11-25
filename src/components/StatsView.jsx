@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Moon, Palette, SlidersHorizontal, Sun } from 'lucide-react';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
 import { apiFetch } from '../utils/api.ts';
+import { guardUserPermission } from '../utils/accessControl.ts';
 import { tx } from '../utils/i18n.ts';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
@@ -17,6 +18,7 @@ import {
 import './stats/statsBento.css';
 
 export default function StatsView({
+  user,
   garments = [],
   theme,
   lang = 'ko',
@@ -28,6 +30,10 @@ export default function StatsView({
   onOpenAccount,
   onSelectGarment,
 }) {
+  const handleGuardedSelectGarment = (garment) => {
+    if (!guardUserPermission(user, 'btn:stats:detail')) return;
+    onSelectGarment?.(garment);
+  };
   const [activeOutfitCount, setActiveOutfitCount] = useState(0);
   const [wearLogCount, setWearLogCount] = useState(0);
 
@@ -203,7 +209,7 @@ export default function StatsView({
         <MostWornRankingCard
           garments={garments}
           lang={lang}
-          onSelectGarment={onSelectGarment}
+          onSelectGarment={handleGuardedSelectGarment}
           bentoIndex={4}
         />
 
@@ -211,7 +217,7 @@ export default function StatsView({
         <UnwornSleeperCard
           garments={garments}
           lang={lang}
-          onSelectGarment={onSelectGarment}
+          onSelectGarment={handleGuardedSelectGarment}
           bentoIndex={5}
         />
       </div>

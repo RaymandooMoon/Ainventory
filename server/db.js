@@ -836,6 +836,189 @@ export function ensureUnderwearAndSocksSeeds(closetOwner = 'sample') {
   return insertedCount;
 }
 
+const CYBER_DEMO_LOOK_SEEDS = [
+  {
+    idOffset: 921,
+    name: '블랙 크롭 레더 모토 라이더 자켓',
+    category: 'outer',
+    subcategory: 'leather_jacket',
+    color_name: '블랙',
+    color_hex: '#141418',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -2,
+    max_temp: 20,
+    water_resistant: true,
+    formality: 2,
+    brand: 'ACNE STUDIOS',
+    price: 1680000,
+    image_url: '/seed/cyber-black-moto-jacket.webp',
+    fabric: 'leather',
+    slot_key: 'outer',
+    notes: '실버 크롬 지퍼와 크롭 실루엣의 매트 블랙 카프스킨 모토 라이더 자켓',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      fit: 'cropped',
+      length_profile: 'cropped',
+      hardware: 'silver_chrome',
+    }),
+  },
+  {
+    idOffset: 922,
+    name: '블랙 플리츠 미니 스커트',
+    category: 'bottom',
+    subcategory: 'skirt',
+    color_name: '블랙',
+    color_hex: '#121216',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -4,
+    max_temp: 28,
+    water_resistant: false,
+    formality: 2,
+    brand: 'MIU MIU',
+    price: 920000,
+    image_url: '/seed/cyber-black-pleated-skirt.webp',
+    fabric: 'wool',
+    slot_key: 'bottom',
+    notes: '하이웨이스트 구조적 나이프 플리츠 라인의 제트 블랙 울 트윌 미니 스커트',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      fit: 'tailored',
+      length_profile: 'mini',
+    }),
+  },
+  {
+    idOffset: 923,
+    name: '블랙 시어 싸이하이 스타킹',
+    category: 'socks',
+    subcategory: 'sheer_socks',
+    color_name: '블랙',
+    color_hex: '#18181D',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -5,
+    max_temp: 26,
+    water_resistant: false,
+    formality: 2,
+    brand: 'WOLFORD',
+    price: 68000,
+    image_url: '/seed/cyber-black-sheer-stockings.webp',
+    fabric: 'nylon',
+    slot_key: 'socks',
+    notes: '매트 블랙 웰트 밴드와 30데니어 시어 텍스처의 싸이하이 오버니 스타킹',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      sock_height: 'thigh_high',
+      opacity_level: 'sheer',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
+    idOffset: 924,
+    name: '블랙 청키 러그솔 레이스업 컴뱃 부츠',
+    category: 'shoes',
+    subcategory: 'boots',
+    color_name: '블랙',
+    color_hex: '#141418',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 22,
+    water_resistant: true,
+    formality: 2,
+    brand: 'PRADA',
+    price: 1550000,
+    image_url: '/seed/cyber-black-combat-boots.webp',
+    fabric: 'leather',
+    slot_key: 'shoes',
+    notes: '청키 러그솔 플랫폼과 미드카프 레이스업 실루엣의 매트 블랙 레더 컴뱃 부츠',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      shaft_height: 'mid_calf',
+      sole_profile: 'chunky_lug',
+    }),
+  },
+  {
+    idOffset: 925,
+    name: '925 실버 레이어드 체인 초커 목걸이',
+    category: 'jewelry',
+    subcategory: 'necklace',
+    color_name: '실버',
+    color_hex: '#D6DBE2',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -15,
+    max_temp: 38,
+    water_resistant: true,
+    formality: 2,
+    brand: 'CHROME HEARTS',
+    price: 640000,
+    image_url: '/seed/cyber-silver-chain-choker.webp',
+    fabric: 'metal',
+    slot_key: 'jwl_neck',
+    notes: '925 스털링 실버 더블 레이어드 체인 실루엣의 미니멀 초커 네크리스',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      metal_finish: 'sterling_silver',
+    }),
+  },
+];
+
+function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
+  const existingRows = db
+    .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
+    .all(closetOwner);
+  const existingNames = new Set(existingRows.map((r) => String(r.name || '')));
+  const existingUrls = new Set(existingRows.map((r) => String(r.image_url || '')));
+
+  const today = new Date();
+  const fmtDate = (daysAgo) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const insertSeed = db.prepare(`
+    INSERT INTO garments (
+      closet_owner, name, category, subcategory, color_name, color_hex,
+      seasons, min_temp, max_temp, water_resistant, formality,
+      brand, price, wear_count, last_worn_date, status, is_favorite, image_url, notes,
+      fabric, slot_key, base_glb, physics_preset, custom_texture, garment_details_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?, ?, ?, ?, 0, ?)
+  `);
+
+  let insertedCount = 0;
+  for (const item of CYBER_DEMO_LOOK_SEEDS) {
+    if (existingNames.has(item.name) || existingUrls.has(item.image_url)) continue;
+    const spec = resolveManifestSlotAndGlb(item.category, item.subcategory);
+    insertSeed.run(
+      closetOwner,
+      item.name,
+      item.category,
+      item.subcategory,
+      item.color_name,
+      item.color_hex,
+      JSON.stringify(item.seasons),
+      item.min_temp,
+      item.max_temp,
+      item.water_resistant ? 1 : 0,
+      item.formality,
+      item.brand,
+      item.price,
+      14,
+      fmtDate(1),
+      item.image_url,
+      item.notes,
+      item.fabric,
+      item.slot_key || spec.slotKey,
+      spec.baseGlb,
+      spec.physicsPreset,
+      item.garment_details_json
+    );
+    existingNames.add(item.name);
+    existingUrls.add(item.image_url);
+    insertedCount += 1;
+  }
+  return insertedCount;
+}
+
 function ensureSampleClosetSeeded() {
   const sampleCount = db
     .prepare("SELECT COUNT(*) as cnt FROM garments WHERE closet_owner = 'sample'")
@@ -850,6 +1033,7 @@ function ensureSampleClosetSeeded() {
     ensureLayered10Seeds('sample');
     ensureLuxuryStreetSeeds('sample');
     ensureUnderwearAndSocksSeeds('sample');
+    ensureCyberDemoLookSeeds('sample');
     return;
   }
 
@@ -904,6 +1088,7 @@ function ensureSampleClosetSeeded() {
   ensureLayered10Seeds('sample');
   ensureLuxuryStreetSeeds('sample');
   ensureUnderwearAndSocksSeeds('sample');
+  ensureCyberDemoLookSeeds('sample');
 }
 
 function ensureSeasonalHighlightsForDemoClosets() {
@@ -1406,7 +1591,7 @@ export function ensureSiteDemoAccount() {
           default_closet, closet_name, verified_at, verification_hash,
           age_group, age, height_cm, weight_kg, gender, personal_color,
           skin_tone_hex, profile_completed, body_shape, handedness
-        ) VALUES (?, ?, ?, ?, ?, 'site_demo', 'sample', ?, ?, ?, '30s', 30, 174, 66, 'male', 'autumn_warm', '#DFC1A6', 1, 'standard_balanced', 'right')
+        ) VALUES (?, ?, ?, ?, ?, 'site_demo', 'sample', ?, ?, ?, '20s', 23, 170, 52, 'female', 'winter_cool', '#F2DFD3', 1, 'standard_balanced', 'right')
       `)
       .run(
         SITE_DEMO_USERNAME,
@@ -1426,13 +1611,18 @@ export function ensureSiteDemoAccount() {
       rawSecret.length > 0
         ? !verifyPassword(rawSecret, existing.password_hash)
         : existing.password_hash !== SITE_DEMO_LOCKED_HASH;
+    const isLegacyMaleDemoProfile =
+      existing.gender !== 'female' &&
+      Number(existing.height_cm || 0) === 174 &&
+      Number(existing.weight_kg || 0) === 66;
 
     if (
       shouldUpdateHash ||
       existing.default_closet !== 'sample' ||
       existing.role !== SITE_DEMO_ROLE_CODE ||
       !existing.verified_at ||
-      !existing.verification_hash
+      !existing.verification_hash ||
+      isLegacyMaleDemoProfile
     ) {
       db.prepare(`
         UPDATE users
@@ -1442,6 +1632,13 @@ export function ensureSiteDemoAccount() {
             closet_name = COALESCE(closet_name, '사이트 데모 옷장'),
             verified_at = COALESCE(verified_at, ?),
             verification_hash = COALESCE(verification_hash, ?),
+            age_group = CASE WHEN ? = 1 THEN '20s' ELSE age_group END,
+            age = CASE WHEN ? = 1 THEN 23 ELSE age END,
+            height_cm = CASE WHEN ? = 1 THEN 170 ELSE height_cm END,
+            weight_kg = CASE WHEN ? = 1 THEN 52 ELSE weight_kg END,
+            gender = CASE WHEN ? = 1 THEN 'female' ELSE gender END,
+            personal_color = CASE WHEN ? = 1 THEN 'winter_cool' ELSE personal_color END,
+            skin_tone_hex = CASE WHEN ? = 1 THEN '#F2DFD3' ELSE skin_tone_hex END,
             profile_completed = 1
         WHERE id = ?
       `).run(
@@ -1449,6 +1646,13 @@ export function ensureSiteDemoAccount() {
         SITE_DEMO_ROLE_CODE,
         nowIso,
         vHash,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
+        isLegacyMaleDemoProfile ? 1 : 0,
         userId
       );
     }

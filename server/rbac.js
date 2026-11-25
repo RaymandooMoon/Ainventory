@@ -7,6 +7,18 @@
 
 export const SITE_DEMO_ROLE_CODE = 'site_demo';
 export const SITE_DEMO_USERNAME = 'site_demo';
+export const DEFAULT_ADMIN_CONTACT_EMAIL = 'raymond@ainvtry.com';
+
+export function getAdminContactEmail() {
+  const envEmail =
+    typeof process.env.ADMIN_CONTACT_EMAIL === 'string'
+      ? process.env.ADMIN_CONTACT_EMAIL.trim()
+      : '';
+  if (envEmail && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(envEmail)) {
+    return envEmail;
+  }
+  return DEFAULT_ADMIN_CONTACT_EMAIL;
+}
 
 export const ROLE_DEFINITIONS = Object.freeze([
   {
@@ -183,6 +195,162 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
     nameEn: 'Manage Users & Demo Data',
     descriptionKo: '관리자 대시보드 조회, 사용자 생성 및 데모 데이터 초기화를 수행합니다.',
   },
+  // Menu-Level Access Permissions (유저별 메뉴 접근 권한)
+  {
+    code: 'menu:outfits',
+    groupName: 'menu',
+    nameKo: '메뉴 · 코디 스튜디오 (Outfits)',
+    nameEn: 'Menu · Outfits Studio',
+    descriptionKo: '코디 스튜디오 탭 진입 및 가상 피팅 화면을 조회합니다.',
+  },
+  {
+    code: 'menu:closet',
+    groupName: 'menu',
+    nameKo: '메뉴 · 옷장 (Closet)',
+    nameEn: 'Menu · Wardrobe Closet',
+    descriptionKo: '옷장 탭 진입 및 의류 목록을 조회합니다.',
+  },
+  {
+    code: 'menu:calendar',
+    groupName: 'menu',
+    nameKo: '메뉴 · 캘린더 (Calendar)',
+    nameEn: 'Menu · Wear Calendar',
+    descriptionKo: '착용 캘린더 탭 진입 및 일정 기록을 조회합니다.',
+  },
+  {
+    code: 'menu:stats',
+    groupName: 'menu',
+    nameKo: '메뉴 · 통계 (Stats)',
+    nameEn: 'Menu · Wardrobe Analytics',
+    descriptionKo: '옷장 통계·분석 탭에 진입합니다.',
+  },
+  {
+    code: 'menu:profile',
+    groupName: 'menu',
+    nameKo: '메뉴 · 프로필·체형 설정',
+    nameEn: 'Menu · Profile & Body',
+    descriptionKo: '피부톤·체형 프로필 설정 모달에 접근합니다.',
+  },
+  // Per-Menu Button Permissions (메뉴별 주요 버튼 실행 권한)
+  {
+    code: 'btn:outfits:save',
+    groupName: 'button',
+    nameKo: '코디 · 코디 저장 버튼',
+    nameEn: 'Outfits · Save Outfit Button',
+    descriptionKo: '코디 스튜디오에서 현재 코디를 저장하는 버튼입니다.',
+  },
+  {
+    code: 'btn:outfits:ai_vton',
+    groupName: 'button',
+    nameKo: '코디 · AI 가상 피팅 실행 버튼',
+    nameEn: 'Outfits · AI Fitting Button',
+    descriptionKo: '코디 스튜디오에서 실시간 AI 가상 피팅 합성을 실행하는 버튼입니다.',
+  },
+  {
+    code: 'btn:outfits:stage_bg',
+    groupName: 'button',
+    nameKo: '코디 · 배경·스테이지 설정 버튼',
+    nameEn: 'Outfits · Stage Background Button',
+    descriptionKo: '코디 스튜디오의 스테이지 배경 선택 및 조명 설정 버튼입니다.',
+  },
+  {
+    code: 'btn:outfits:store',
+    groupName: 'button',
+    nameKo: '코디 · 배경 스토어·뽑기 버튼',
+    nameEn: 'Outfits · Stage Store Button',
+    descriptionKo: '배경 스토어 및 일일 뽑기 모달을 여는 버튼입니다.',
+  },
+  {
+    code: 'btn:outfits:packing',
+    groupName: 'button',
+    nameKo: '코디 · 여행 패킹 리스트 버튼',
+    nameEn: 'Outfits · Packing List Button',
+    descriptionKo: '여행 패킹 리스트 및 코디 내보내기 버튼입니다.',
+  },
+  {
+    code: 'btn:outfits:weather_scenario',
+    groupName: 'button',
+    nameKo: '코디 · 날씨·장소 시나리오 버튼',
+    nameEn: 'Outfits · Weather & Place Button',
+    descriptionKo: '날씨 시나리오 및 장소 설정 팝업을 여는 버튼입니다.',
+  },
+  {
+    code: 'btn:closet:add',
+    groupName: 'button',
+    nameKo: '옷장 · 의류 등록(+) 버튼',
+    nameEn: 'Closet · Add Garment (+) Button',
+    descriptionKo: '옷장 상단 + 버튼으로 새 의류를 등록합니다.',
+  },
+  {
+    code: 'btn:closet:laundry',
+    groupName: 'button',
+    nameKo: '옷장 · 스마트 세탁 바구니 버튼',
+    nameEn: 'Closet · Laundry Basket Button',
+    descriptionKo: '옷장 상단 세탁 바구니 및 케어 관리 버튼입니다.',
+  },
+  {
+    code: 'btn:closet:edit_delete',
+    groupName: 'button',
+    nameKo: '옷장 · 의류 수정·삭제 버튼',
+    nameEn: 'Closet · Edit & Delete Button',
+    descriptionKo: '의류 상세 시트에서 아이템을 수정하거나 삭제하는 버튼입니다.',
+  },
+  {
+    code: 'btn:closet:sample_import',
+    groupName: 'button',
+    nameKo: '옷장 · 샘플 의류 가져오기 버튼',
+    nameEn: 'Closet · Import Sample Button',
+    descriptionKo: '샘플 캡슐 의류를 내 옷장으로 복사하는 버튼입니다.',
+  },
+  {
+    code: 'btn:calendar:log_wear',
+    groupName: 'button',
+    nameKo: '캘린더 · 착용 일정 추가(+) 버튼',
+    nameEn: 'Calendar · Add Wear Entry Button',
+    descriptionKo: '캘린더에서 새 착용 일정을 기록·편집하는 버튼입니다.',
+  },
+  {
+    code: 'btn:calendar:export_ics',
+    groupName: 'button',
+    nameKo: '캘린더 · ICS 내보내기 버튼',
+    nameEn: 'Calendar · Export (.ics) Button',
+    descriptionKo: '착용 캘린더를 외부 일정(.ics) 파일로 내보내는 버튼입니다.',
+  },
+  {
+    code: 'btn:calendar:attendance',
+    groupName: 'button',
+    nameKo: '캘린더 · 일일 출석 체크 버튼',
+    nameEn: 'Calendar · Attendance Check-In Button',
+    descriptionKo: '캘린더 상단의 일일 출석 리워드 수령 버튼입니다.',
+  },
+  {
+    code: 'btn:stats:detail',
+    groupName: 'button',
+    nameKo: '통계 · 아이템 상세 이동 버튼',
+    nameEn: 'Stats · Open Item Detail Button',
+    descriptionKo: '통계 카드에서 개별 의류 상세 시트로 이동합니다.',
+  },
+  {
+    code: 'btn:profile:edit',
+    groupName: 'button',
+    nameKo: '프로필 · 피부톤·체형 저장 버튼',
+    nameEn: 'Profile · Save Profile Button',
+    descriptionKo: '피부톤 및 체형 프로필을 수정·저장하는 버튼입니다.',
+  },
+  {
+    code: 'btn:account:password',
+    groupName: 'button',
+    nameKo: '계정 · 비밀번호 변경 버튼',
+    nameEn: 'Account · Change Password Button',
+    descriptionKo: '계정 설정에서 비밀번호를 변경하는 버튼입니다.',
+  },
+  {
+    code: 'btn:account:delete',
+    groupName: 'button',
+    nameKo: '계정 · 회원 탈퇴·삭제 버튼',
+    nameEn: 'Account · Delete Account Button',
+    descriptionKo: '계정 및 모든 데이터를 영구 삭제하는 버튼입니다.',
+  },
 ]);
 
 const ALL_PERMISSION_CODES = Object.freeze(PERMISSION_DEFINITIONS.map((p) => p.code));
@@ -197,6 +365,14 @@ export const SITE_DEMO_DEFAULT_PERMISSIONS = Object.freeze([
   'stats:read',
   'profile:read',
   'vton:preview',
+  'menu:outfits',
+  'menu:closet',
+  'menu:calendar',
+  'menu:stats',
+  'menu:profile',
+  'btn:outfits:stage_bg',
+  'btn:outfits:weather_scenario',
+  'btn:stats:detail',
 ]);
 
 export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
@@ -244,7 +420,18 @@ export function ensureRbacSchemaAndSeeds(db) {
       FOREIGN KEY (role_code) REFERENCES roles(code) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_permission_overrides (
+      user_id INTEGER NOT NULL,
+      permission_code TEXT NOT NULL,
+      effect TEXT NOT NULL CHECK(effect IN ('grant', 'deny')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, permission_code),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (permission_code) REFERENCES permissions(code) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_code);
+    CREATE INDEX IF NOT EXISTS idx_user_perm_overrides_user ON user_permission_overrides(user_id);
   `);
 
   const upsertRole = db.prepare(`
@@ -286,9 +473,13 @@ export function ensureRbacSchemaAndSeeds(db) {
     );
   }
 
-  // Seed default permissions for any role that has zero mapped permissions yet
+  // Seed default permissions for any role that has zero mapped permissions yet,
+  // and backfill newly introduced menu:* / btn:* defaults on existing DBs once.
   const countRolePerms = db.prepare(
     'SELECT COUNT(*) as c FROM role_permissions WHERE role_code = ?'
+  );
+  const countRoleUiPerms = db.prepare(
+    "SELECT COUNT(*) as c FROM role_permissions WHERE role_code = ? AND (permission_code LIKE 'menu:%' OR permission_code LIKE 'btn:%')"
   );
   const insertRolePerm = db.prepare(
     'INSERT OR IGNORE INTO role_permissions (role_code, permission_code) VALUES (?, ?)'
@@ -298,6 +489,15 @@ export function ensureRbacSchemaAndSeeds(db) {
     if (existingCount === 0) {
       for (const permCode of permCodes) {
         insertRolePerm.run(roleCode, permCode);
+      }
+    } else {
+      const existingUiCount = Number(countRoleUiPerms.get(roleCode)?.c || 0);
+      if (existingUiCount === 0) {
+        for (const permCode of permCodes) {
+          if (permCode.startsWith('menu:') || permCode.startsWith('btn:')) {
+            insertRolePerm.run(roleCode, permCode);
+          }
+        }
       }
     }
   }
@@ -413,14 +613,64 @@ export function getPermissionsForRole(db, roleCode) {
   return [...(DEFAULT_ROLE_PERMISSIONS[code] || [])];
 }
 
+export function getUserPermissionOverrides(db, userId) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+    return {};
+  }
+  try {
+    const rows = db
+      .prepare(
+        'SELECT permission_code, effect FROM user_permission_overrides WHERE user_id = ? ORDER BY permission_code ASC'
+      )
+      .all(numericUserId);
+    const map = {};
+    for (const row of rows) {
+      const code = String(row.permission_code || '');
+      const effect = row.effect === 'grant' ? 'grant' : row.effect === 'deny' ? 'deny' : null;
+      if (code && effect && VALID_PERMISSION_SET.has(code)) {
+        map[code] = effect;
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+export function computeEffectivePermissions(roleCode, rolePermissions, overrides) {
+  const effectiveSet = new Set(Array.isArray(rolePermissions) ? rolePermissions : []);
+  if (overrides && typeof overrides === 'object') {
+    for (const [code, effect] of Object.entries(overrides)) {
+      if (!VALID_PERMISSION_SET.has(code)) continue;
+      if (effect === 'grant') {
+        effectiveSet.add(code);
+      } else if (effect === 'deny') {
+        effectiveSet.delete(code);
+      }
+    }
+  }
+  // Safeguard: administrators always retain core admin access
+  if (roleCode === 'admin') {
+    effectiveSet.add('admin:manage_roles');
+    effectiveSet.add('admin:manage_users');
+  }
+  return Array.from(effectiveSet).sort();
+}
+
 export function getUserRbacContext(db, userRow) {
   const roleCode = resolveUserRoleCode(db, userRow);
   const roleMeta = getRoleMetadata(db, roleCode);
-  const permissions = getPermissionsForRole(db, roleCode);
+  const rolePermissions = getPermissionsForRole(db, roleCode);
+  const overrides = getUserPermissionOverrides(db, userRow?.id);
+  const permissions = computeEffectivePermissions(roleCode, rolePermissions, overrides);
   return {
     roleCode,
     roleMeta,
+    rolePermissions,
+    overrides,
     permissions,
+    adminContactEmail: getAdminContactEmail(),
   };
 }
 
@@ -517,6 +767,109 @@ export function updateRolePermissions(db, roleCode, rawPermissionCodes) {
   };
 }
 
+export function setUserPermissionOverrides(db, userId, rawOverrides) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+    return { ok: false, status: 400, error: '유효하지 않은 사용자 ID입니다.' };
+  }
+  if (!rawOverrides || typeof rawOverrides !== 'object' || Array.isArray(rawOverrides)) {
+    return { ok: false, status: 400, error: 'overrides 객체가 필요합니다.' };
+  }
+  const userRow = db
+    .prepare('SELECT id, username, role FROM users WHERE id = ?')
+    .get(numericUserId);
+  if (!userRow) {
+    return { ok: false, status: 404, error: '사용자를 찾을 수 없습니다.' };
+  }
+
+  const roleCode = resolveUserRoleCode(db, userRow);
+  const rolePermissions = getPermissionsForRole(db, roleCode);
+  const rolePermSet = new Set(rolePermissions);
+
+  db.transaction(() => {
+    const upsertOverride = db.prepare(`
+      INSERT INTO user_permission_overrides (user_id, permission_code, effect, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, permission_code) DO UPDATE SET
+        effect = excluded.effect,
+        updated_at = datetime('now')
+    `);
+    const deleteOverride = db.prepare(
+      'DELETE FROM user_permission_overrides WHERE user_id = ? AND permission_code = ?'
+    );
+
+    for (const [rawCode, rawEffect] of Object.entries(rawOverrides)) {
+      const code = String(rawCode || '').trim();
+      if (!VALID_PERMISSION_SET.has(code)) continue;
+      if (
+        roleCode === 'admin' &&
+        (code === 'admin:manage_roles' || code === 'admin:manage_users')
+      ) {
+        deleteOverride.run(numericUserId, code);
+        continue;
+      }
+
+      if (rawEffect === 'inherit' || rawEffect === null || rawEffect === '') {
+        deleteOverride.run(numericUserId, code);
+        continue;
+      }
+
+      const normalizedEffect =
+        rawEffect === true || rawEffect === 'grant'
+          ? 'grant'
+          : rawEffect === false || rawEffect === 'deny'
+            ? 'deny'
+            : null;
+      if (!normalizedEffect) continue;
+
+      // If the requested state matches the role default, drop redundant override row
+      const roleHasIt = rolePermSet.has(code);
+      if ((normalizedEffect === 'grant' && roleHasIt) || (normalizedEffect === 'deny' && !roleHasIt)) {
+        deleteOverride.run(numericUserId, code);
+      } else {
+        upsertOverride.run(numericUserId, code, normalizedEffect);
+      }
+    }
+  });
+
+  const nextOverrides = getUserPermissionOverrides(db, numericUserId);
+  const effectivePermissions = computeEffectivePermissions(roleCode, rolePermissions, nextOverrides);
+  return {
+    ok: true,
+    userId: numericUserId,
+    username: userRow.username,
+    role: roleCode,
+    rolePermissions,
+    overrides: nextOverrides,
+    permissions: effectivePermissions,
+  };
+}
+
+export function resetUserPermissionOverrides(db, userId) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+    return { ok: false, status: 400, error: '유효하지 않은 사용자 ID입니다.' };
+  }
+  const userRow = db
+    .prepare('SELECT id, username, role FROM users WHERE id = ?')
+    .get(numericUserId);
+  if (!userRow) {
+    return { ok: false, status: 404, error: '사용자를 찾을 수 없습니다.' };
+  }
+  db.prepare('DELETE FROM user_permission_overrides WHERE user_id = ?').run(numericUserId);
+  const roleCode = resolveUserRoleCode(db, userRow);
+  const rolePermissions = getPermissionsForRole(db, roleCode);
+  return {
+    ok: true,
+    userId: numericUserId,
+    username: userRow.username,
+    role: roleCode,
+    rolePermissions,
+    overrides: {},
+    permissions: computeEffectivePermissions(roleCode, rolePermissions, {}),
+  };
+}
+
 export function listRbacOverview(db) {
   const roles = db
     .prepare(
@@ -532,6 +885,8 @@ export function listRbacOverview(db) {
       isSystem: Boolean(r.is_system),
       permissions: getPermissionsForRole(db, r.code),
     }));
+
+  const rolePermMap = new Map(roles.map((r) => [r.code, r.permissions]));
 
   const permissions = db
     .prepare(
@@ -561,15 +916,34 @@ export function listRbacOverview(db) {
        ORDER BY u.id ASC`
     )
     .all()
-    .map((u) => ({
-      id: u.id,
-      username: u.username,
-      displayName: u.display_name,
-      email: u.email || null,
-      role: u.role_code || 'member',
-      defaultCloset: u.default_closet,
-      createdAt: u.created_at || null,
-    }));
+    .map((u) => {
+      const roleCode = u.role_code || 'member';
+      const rolePermissions = rolePermMap.get(roleCode) || getPermissionsForRole(db, roleCode);
+      const overrides = getUserPermissionOverrides(db, u.id);
+      const effectivePermissions = computeEffectivePermissions(
+        roleCode,
+        rolePermissions,
+        overrides
+      );
+      return {
+        id: u.id,
+        username: u.username,
+        displayName: u.display_name,
+        email: u.email || null,
+        role: roleCode,
+        defaultCloset: u.default_closet,
+        createdAt: u.created_at || null,
+        rolePermissions,
+        overrides,
+        overrideCount: Object.keys(overrides).length,
+        effectivePermissions,
+      };
+    });
 
-  return { roles, permissions, users };
+  return {
+    roles,
+    permissions,
+    users,
+    adminContactEmail: getAdminContactEmail(),
+  };
 }

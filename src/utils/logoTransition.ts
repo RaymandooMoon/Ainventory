@@ -1,4 +1,4 @@
-export type AppNavTab = 'closet' | 'outfits' | 'calendar' | 'stats';
+export type AppNavTab = 'closet' | 'outfits' | 'calendar' | 'stats' | 'admin';
 
 export interface LogoRect {
   left: number;
@@ -110,6 +110,9 @@ export function resolveInitialTabFromPath(pathname: string): AppNavTab {
   if (normalized.startsWith('/stats')) {
     return 'stats';
   }
+  if (normalized.startsWith('/admin')) {
+    return 'admin';
+  }
   return 'outfits';
 }
 
@@ -117,6 +120,7 @@ export function getPathForTab(tab: AppNavTab): string {
   if (tab === 'closet') return '/closet';
   if (tab === 'calendar') return '/calendar';
   if (tab === 'stats') return '/stats';
+  if (tab === 'admin') return '/admin';
   return '/';
 }
 

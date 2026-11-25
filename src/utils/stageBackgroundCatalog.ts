@@ -1175,6 +1175,30 @@ export function saveStoredEconomyState(state: StageEconomyState): StageEconomySt
   return normalized;
 }
 
+export const DEMO_CYBERPUNK_STAGE_BACKGROUND_ID = 's_cyber_megacity_plaza';
+
+export const DEMO_CYBERPUNK_UNLOCKED_IDS = [
+  's_cyber_megacity_plaza',
+  's_cyber_neon_atelier',
+  'a_cyber_neon_alley',
+  'a_cyber_arcade_lounge',
+] as const;
+
+export function createDemoCyberpunkEconomyState(
+  baseState?: Partial<StageEconomyState> | null
+): StageEconomyState {
+  const normalized = normalizeEconomyState(baseState);
+  const mergedUnlocked = Array.from(
+    new Set([...normalized.unlockedIds, ...DEMO_CYBERPUNK_UNLOCKED_IDS])
+  );
+  return normalizeEconomyState({
+    ...normalized,
+    unlockedIds: mergedUnlocked,
+    equippedBackgroundId: DEMO_CYBERPUNK_STAGE_BACKGROUND_ID,
+    lightingPreset: 'auto',
+  });
+}
+
 export function equipStageBackground(backgroundId: string): StageEconomyState {
   const cur = loadStoredEconomyState();
   if (!cur.unlockedIds.includes(backgroundId)) {

@@ -656,6 +656,175 @@
   box-shadow: var(--ctrl-active-shadow);
 }
 
+/* Expanding Technology Stack Icons inside Architecture Blueprint description */
+@keyframes hudTechExpandIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.hud-tech-expand-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.hud-tech-expand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-tech-expand-label {
+  font-size: 0.66rem;
+  font-weight: 680;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+}
+
+.hud-tech-expand-count {
+  font-size: 0.66rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+}
+
+.hud-tech-icon-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 6px;
+}
+
+.hud-tech-icon-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  animation: hudTechExpandIn 0.28s var(--site-ease) both;
+  animation-delay: var(--tech-delay, 0ms);
+  transition:
+    border-color 0.18s var(--site-ease),
+    background-color 0.18s var(--site-ease),
+    transform 0.16s var(--site-ease),
+    box-shadow 0.18s var(--site-ease);
+}
+
+.hud-tech-icon-chip:hover {
+  border-color: var(--accent-gold-hairline);
+  background: var(--bg-elevated);
+  transform: translateY(-1px);
+}
+
+.hud-tech-icon-chip.is-focused {
+  border-color: var(--accent-gold-hairline);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--accent-gold-hairline);
+}
+
+.hud-tech-icon-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  color: var(--accent-gold);
+}
+
+.hud-tech-icon-chip.is-focused .hud-tech-icon-glyph {
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  border-color: transparent;
+}
+
+.hud-tech-icon-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.hud-tech-icon-name {
+  font-size: 0.72rem;
+  font-weight: 660;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-tech-icon-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.hud-tech-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline-strong);
+  animation: hudTechExpandIn 0.22s var(--site-ease) both;
+}
+
+.hud-tech-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--ink-primary);
+}
+
+.hud-tech-detail-tag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--hairline);
+  font-size: 0.62rem;
+  font-weight: 650;
+  color: var(--accent-gold);
+}
+
+.hud-tech-detail-copy {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-tech-icon-chip,
+  .hud-tech-detail-card {
+    animation: none;
+  }
+}
+
 /* Opt-in City Weather Button */
 .hud-local-sync-row {
   display: flex;
