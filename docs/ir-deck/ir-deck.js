@@ -194,6 +194,39 @@
     }
   });
 
+  const siteBackLink = document.getElementById('ir-site-back');
+  if (siteBackLink && window.location.protocol === 'file:') {
+    siteBackLink.hidden = true;
+  }
+
+  // Touch horizontal swipe navigation in deck mode
+  const viewportEl = document.querySelector('.ir-deck-viewport');
+  if (viewportEl) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    viewportEl.addEventListener(
+      'touchstart',
+      (e) => {
+        if (currentView !== 'deck' || e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      },
+      { passive: true }
+    );
+    viewportEl.addEventListener(
+      'touchend',
+      (e) => {
+        if (currentView !== 'deck' || e.changedTouches.length !== 1) return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+          goToSlide(dx < 0 ? currentIndex + 1 : currentIndex - 1);
+        }
+      },
+      { passive: true }
+    );
+  }
+
   window.addEventListener('resize', updateScale, { passive: true });
 
   // Initialize state cleanly

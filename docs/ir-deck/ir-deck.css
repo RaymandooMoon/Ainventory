@@ -233,7 +233,40 @@ body {
   color: var(--ink-primary);
 }
 
-.ir-tb-btn.is-active {
+.ir-tb-btn:focus-visible,
+.ir-tb-select:focus-visible,
+.toc-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.ir-tb-site-back {
+  text-decoration: none;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-recessed);
+  color: var(--ink-primary);
+  font-weight: 680;
+  flex-shrink: 0;
+}
+
+.ir-tb-site-back:hover {
+  border-color: var(--gold-line);
+  color: var(--gold);
+}
+
+.ir-tb-site-back[hidden] {
+  display: none;
+}
+
+.ir-tb-btn.is-active,
+html[data-ratio='16-9'] .ir-tb-btn[data-set-ratio='16-9'],
+html[data-ratio='4-3'] .ir-tb-btn[data-set-ratio='4-3'],
+html[data-mood='luxury'] .ir-tb-btn[data-set-mood='luxury'],
+html[data-mood='aurora'] .ir-tb-btn[data-set-mood='aurora'],
+html[data-theme='light'] .ir-tb-btn[data-set-theme='light'],
+html[data-theme='dark'] .ir-tb-btn[data-set-theme='dark'],
+html[data-view='deck'] .ir-tb-btn[data-set-view='deck'],
+html[data-view='scroll'] .ir-tb-btn[data-set-view='scroll'] {
   background: var(--surface-pill-active);
   color: var(--ink-inverse);
 }
@@ -281,6 +314,24 @@ body {
   font-weight: 600;
   max-width: 176px;
   cursor: pointer;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .ir-toolbar {
+    top: max(8px, env(safe-area-inset-top));
+    padding: 4px 8px;
+    gap: 5px;
+  }
+
+  .ir-tb-btn,
+  .ir-tb-select {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .ir-deck-viewport {
+    padding-top: calc(74px + env(safe-area-inset-top));
+  }
 }
 
 /* ==========================================================================

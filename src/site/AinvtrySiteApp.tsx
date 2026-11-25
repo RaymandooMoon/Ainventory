@@ -667,6 +667,7 @@ export default function AinvtrySiteApp() {
               copy={copy}
               lang={lang}
               theme={theme}
+              mood={motionVariant}
               betaMailto={betaMailto}
               interaction={stageInteraction}
               selectedPrivacyShield={selectedPrivacyShield}

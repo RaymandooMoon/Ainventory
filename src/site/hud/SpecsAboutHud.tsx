@@ -3,10 +3,11 @@ import { ArrowUpRight, ChevronLeft, ChevronRight, FileText, Pause, Play } from '
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import {
+  SITE_IR_DECK_HREF,
   SITE_META,
-  SITE_REPORT_HREF,
   type SiteCopy,
   type SiteLang,
+  type SiteMood,
   type SiteTheme,
 } from '../siteContent.ts';
 import type { SiteIconKey } from '../SiteIcon.tsx';
@@ -189,6 +190,7 @@ export interface AboutStageHudProps {
   readonly copy: SiteCopy;
   readonly lang: SiteLang;
   readonly theme: SiteTheme;
+  readonly mood: SiteMood;
   readonly betaMailto: string;
   readonly interaction: StageInteractionState;
   readonly onUpdateInteraction: (patch: Partial<StageInteractionState>) => void;
@@ -196,8 +198,8 @@ export interface AboutStageHudProps {
 
 export function AboutStageHud({
   copy,
-  lang,
   theme,
+  mood,
   betaMailto,
   interaction,
   onUpdateInteraction,
@@ -458,13 +460,13 @@ export function AboutStageHud({
           <ArrowUpRight size={14} aria-hidden="true" />
         </a>
         <a
-          href={`${SITE_REPORT_HREF}?theme=${theme}&lang=${lang}`}
+          href={`${SITE_IR_DECK_HREF}?theme=${theme}&mood=${mood}`}
           target="_blank"
           rel="noopener noreferrer"
           className="hud-founder-cta hud-founder-cta--secondary"
         >
           <FileText size={14} aria-hidden="true" />
-          <span>{vision.reportCta}</span>
+          <span>{vision.irDeckCta}</span>
         </a>
       </div>
     </div>

@@ -57,8 +57,8 @@ function rootPublicAssetFallbackPlugin(): Plugin {
     server.middlewares.use((req, _res, next) => {
       if (req.url) {
         const [pathname, search] = req.url.split('?');
-        if (pathname === '/report' || pathname === '/report/') {
-          req.url = `/report/index.html${search ? `?${search}` : ''}`;
+        if (pathname === '/ir' || pathname === '/ir/') {
+          req.url = `/ir/index.html${search ? `?${search}` : ''}`;
         }
       }
       next();

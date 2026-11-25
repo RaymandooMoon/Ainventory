@@ -10,6 +10,9 @@ on:
       - 'site/public/assets/previews/**'
       - 'site/public/assets/journey/**'
       - 'site/public/assets/garments/**'
+      - 'docs/ir-deck/ir-deck.css'
+      - 'docs/ir-deck/ir-deck.js'
+      - 'docs/ir-deck/assets/bg/**'
       - 'tests/**'
       - 'scripts/sync-ir-deck.mjs'
   schedule:
@@ -51,12 +54,12 @@ jobs:
 
       - name: Commit & push synced IR deck if changed
         run: |
-          if git diff --quiet -- docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json; then
+          if git diff --quiet -- docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json site/public/ir && [ -z "$(git ls-files --others --exclude-standard -- site/public/ir)" ]; then
             echo "IR deck is already up to date with live app/site."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json
+          git add docs/ir-deck/index.html docs/ir-deck/ir-deck.data.json site/public/ir
           git commit -m "docs(ir-deck): auto-sync live app/site metrics and roadmap [skip ci]"
           git push origin HEAD:main

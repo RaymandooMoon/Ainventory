@@ -1,0 +1,2295 @@
+/* ==========================================================================
+ * iNVTRY (Ainvtry) Official IR Business Plan Deck v3.0
+ * Authentic Ainventory Homepage & Login Silk Backdrop (Zero Marble)
+ * Frosted Atelier Glass × Stitch Infographic System · Dual Ratio (16:9 & 4:3)
+ * 4 Official Site Themes: (Luxury | Aurora) × (Light | Dark)
+ * ========================================================================== */
+
+:root {
+  --slide-w: 1280px;
+  --slide-h: 720px;
+  --slide-pad-y: 30px;
+  --slide-pad-x: 42px;
+  --deck-scale: 1;
+
+  /* Default Backdrop: Homepage & Main Page Luxury Light Silk (Zero Marble) */
+  --silk-bg-image: url('./assets/bg/silk-luxury-light.webp');
+  --silk-veil: radial-gradient(
+    ellipse 92% 84% at 50% 48%,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(247, 244, 238, 0.24) 100%
+  );
+
+  /* Light Theme — Translucent Frosted Atelier Glass (Ported from ainvtrySite.css & loginAtelier.css) */
+  --stage-backdrop: #e6e1d9;
+  --surface-slide-base: #f2eee7;
+  --glass-card: rgba(255, 255, 255, 0.72);
+  --glass-card-strong: rgba(255, 255, 255, 0.84);
+  --glass-recessed: rgba(248, 245, 240, 0.62);
+  --glass-gold-tint: rgba(255, 250, 242, 0.78);
+  --glass-border: rgba(29, 29, 31, 0.13);
+  --glass-border-strong: rgba(29, 29, 31, 0.22);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  --glass-shadow: 0 14px 36px -14px rgba(29, 29, 31, 0.12), 0 2px 6px -2px rgba(29, 29, 31, 0.06);
+  --surface-pill-active: #1d1d1f;
+
+  --ink-primary: #1d1d1f;
+  --ink-secondary: rgba(29, 29, 31, 0.78);
+  --ink-tertiary: rgba(29, 29, 31, 0.56);
+  --ink-inverse: #f7f4ee;
+
+  --gold: #7a5f3e;
+  --gold-bright: #b69462;
+  --gold-line: rgba(122, 95, 62, 0.36);
+  --gold-soft: rgba(122, 95, 62, 0.12);
+
+  --status-live: #157a3c;
+  --status-live-bg: rgba(21, 122, 60, 0.11);
+  --status-live-line: rgba(21, 122, 60, 0.28);
+  --status-hybrid: #7a5f3e;
+  --status-hybrid-bg: rgba(122, 95, 62, 0.12);
+  --status-todo: #52525e;
+  --status-todo-bg: rgba(82, 82, 94, 0.11);
+  --status-risk: #b91c1c;
+  --status-risk-bg: rgba(185, 28, 28, 0.1);
+  --status-risk-line: rgba(185, 28, 28, 0.26);
+
+  --svg-node-fill: rgba(255, 255, 255, 0.88);
+  --svg-track: rgba(29, 29, 31, 0.1);
+
+  --shadow-slide: 0 28px 72px -18px rgba(29, 29, 31, 0.24), 0 0 0 1px rgba(29, 29, 31, 0.08);
+
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont,
+    'SF Pro Display', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
+  --font-editorial: Georgia, 'Times New Roman', serif;
+  --font-mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* Official Site Silk Mood × Theme Combinations */
+html[data-mood='aurora'][data-theme='light'] {
+  --silk-bg-image: url('./assets/bg/silk-aurora-light.webp');
+  --stage-backdrop: #e4e5ef;
+  --surface-slide-base: #eef0f7;
+  --silk-veil: radial-gradient(
+    ellipse 92% 84% at 50% 48%,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(244, 245, 252, 0.24) 100%
+  );
+}
+
+html[data-theme='dark'] {
+  --silk-bg-image: url('./assets/bg/silk-luxury-dark.webp');
+  --silk-veil: radial-gradient(
+    ellipse 92% 84% at 50% 48%,
+    rgba(0, 0, 0, 0.06) 0%,
+    rgba(0, 0, 0, 0.28) 100%
+  );
+
+  --stage-backdrop: #040406;
+  --surface-slide-base: #000000;
+  --glass-card: rgba(14, 14, 19, 0.66);
+  --glass-card-strong: rgba(18, 18, 24, 0.82);
+  --glass-recessed: rgba(24, 24, 32, 0.56);
+  --glass-gold-tint: rgba(28, 24, 19, 0.72);
+  --glass-border: rgba(245, 245, 247, 0.15);
+  --glass-border-strong: rgba(245, 245, 247, 0.24);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 20px 52px -16px rgba(0, 0, 0, 0.64), 0 4px 12px -4px rgba(0, 0, 0, 0.42);
+  --surface-pill-active: #f5f5f7;
+
+  --ink-primary: #f5f5f7;
+  --ink-secondary: rgba(235, 235, 242, 0.82);
+  --ink-tertiary: rgba(208, 208, 220, 0.64);
+  --ink-inverse: #0b0b0f;
+
+  --gold: #e2cfa8;
+  --gold-bright: #f2e1bc;
+  --gold-line: rgba(226, 207, 168, 0.36);
+  --gold-soft: rgba(226, 207, 168, 0.14);
+
+  --status-live: #4ade80;
+  --status-live-bg: rgba(74, 222, 128, 0.14);
+  --status-live-line: rgba(74, 222, 128, 0.32);
+  --status-hybrid: #e2cfa8;
+  --status-hybrid-bg: rgba(226, 207, 168, 0.15);
+  --status-todo: #b0b0be;
+  --status-todo-bg: rgba(255, 255, 255, 0.09);
+  --status-risk: #f87171;
+  --status-risk-bg: rgba(248, 113, 113, 0.14);
+  --status-risk-line: rgba(248, 113, 113, 0.32);
+
+  --svg-node-fill: rgba(16, 16, 22, 0.92);
+  --svg-track: rgba(245, 245, 247, 0.11);
+
+  --shadow-slide: 0 32px 84px -16px rgba(0, 0, 0, 0.82), 0 0 0 1px rgba(226, 207, 168, 0.2);
+}
+
+html[data-mood='aurora'][data-theme='dark'] {
+  --silk-bg-image: url('./assets/bg/silk-aurora-dark.webp');
+  --stage-backdrop: #03040a;
+}
+
+/* Native 4:3 Geometry (TIPS / VC / Classic Projector Standard) */
+html[data-ratio='4-3'] {
+  --slide-w: 1024px;
+  --slide-h: 768px;
+  --slide-pad-y: 28px;
+  --slide-pad-x: 34px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--stage-backdrop);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ir-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+ * Floating Presentation Control Chrome (Hidden on Print / PDF)
+ * ========================================================================== */
+
+.ir-toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border-strong);
+  background: var(--glass-card-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: var(--glass-specular), 0 12px 32px -10px rgba(0, 0, 0, 0.24);
+  max-width: calc(100vw - 20px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ir-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.ir-tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.ir-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 640;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ir-tb-btn:hover {
+  color: var(--ink-primary);
+}
+
+.ir-tb-btn:focus-visible,
+.ir-tb-select:focus-visible,
+.toc-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.ir-tb-site-back {
+  text-decoration: none;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-recessed);
+  color: var(--ink-primary);
+  font-weight: 680;
+  flex-shrink: 0;
+}
+
+.ir-tb-site-back:hover {
+  border-color: var(--gold-line);
+  color: var(--gold);
+}
+
+.ir-tb-site-back[hidden] {
+  display: none;
+}
+
+.ir-tb-btn.is-active,
+html[data-ratio='16-9'] .ir-tb-btn[data-set-ratio='16-9'],
+html[data-ratio='4-3'] .ir-tb-btn[data-set-ratio='4-3'],
+html[data-mood='luxury'] .ir-tb-btn[data-set-mood='luxury'],
+html[data-mood='aurora'] .ir-tb-btn[data-set-mood='aurora'],
+html[data-theme='light'] .ir-tb-btn[data-set-theme='light'],
+html[data-theme='dark'] .ir-tb-btn[data-set-theme='dark'],
+html[data-view='deck'] .ir-tb-btn[data-set-view='deck'],
+html[data-view='scroll'] .ir-tb-btn[data-set-view='scroll'] {
+  background: var(--surface-pill-active);
+  color: var(--ink-inverse);
+}
+
+.ir-tb-btn--action {
+  border: 1px solid var(--gold-line);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.ir-tb-btn--action:hover {
+  background: var(--gold);
+  color: var(--ink-inverse);
+}
+
+.ir-tb-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--glass-border-strong);
+  flex-shrink: 0;
+}
+
+.ir-tb-counter {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-primary);
+  min-width: 54px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-tb-select {
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 9999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-card);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  max-width: 176px;
+  cursor: pointer;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .ir-toolbar {
+    top: max(8px, env(safe-area-inset-top));
+    padding: 4px 8px;
+    gap: 5px;
+  }
+
+  .ir-tb-btn,
+  .ir-tb-select {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .ir-deck-viewport {
+    padding-top: calc(74px + env(safe-area-inset-top));
+  }
+}
+
+/* ==========================================================================
+ * Deck Viewport & Silk Backdrop Slide Canvas
+ * ========================================================================== */
+
+.ir-deck-viewport {
+  min-height: 100vh;
+  padding: 66px 24px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+html[data-view='deck'] .ir-deck-viewport {
+  height: 100vh;
+  overflow: hidden;
+  padding: 56px 16px 14px;
+  justify-content: center;
+  gap: 0;
+}
+
+.ir-slide-slot {
+  width: calc(var(--slide-w) * var(--deck-scale));
+  height: calc(var(--slide-h) * var(--deck-scale));
+  position: relative;
+  flex-shrink: 0;
+}
+
+html[data-view='deck'] .ir-slide-slot {
+  display: none;
+}
+
+html[data-view='deck'] .ir-slide-slot.is-current {
+  display: block;
+}
+
+.ir-slide {
+  width: var(--slide-w);
+  height: var(--slide-h);
+  transform: scale(var(--deck-scale));
+  transform-origin: top left;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--slide-pad-y) var(--slide-pad-x) 20px;
+  background-color: var(--surface-slide-base);
+  background-image: var(--silk-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 16px;
+  box-shadow: var(--shadow-slide);
+  color: var(--ink-primary);
+  isolation: isolate;
+}
+
+/* Subtle homepage silk vignette veil (guarantees AAA contrast without hiding silk folds) */
+.ir-slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--silk-veil);
+  pointer-events: none;
+}
+
+/* Top gold hairline ribbon */
+.ir-slide::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  z-index: 3;
+  background: linear-gradient(90deg, transparent 4%, var(--gold) 28%, var(--gold-bright) 50%, var(--gold) 72%, transparent 96%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.ir-slide > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ==========================================================================
+ * Icons & Icon Tiles (Crisp Lucide-style Inline SVG Symbols)
+ * ========================================================================== */
+
+.ic {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ic--xs { width: 13px; height: 13px; }
+.ic--sm { width: 14px; height: 14px; }
+.ic--md { width: 18px; height: 18px; }
+.ic--lg { width: 22px; height: 22px; }
+.ic--xl { width: 28px; height: 28px; }
+
+.ic-tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+  color: var(--ink-primary);
+  box-shadow: var(--glass-specular);
+}
+
+.ic-tile--sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.ic-tile--lg {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+
+.ic-tile--gold {
+  background: var(--gold-soft);
+  border-color: var(--gold-line);
+  color: var(--gold);
+}
+
+.ic-tile--live {
+  background: var(--status-live-bg);
+  border-color: var(--status-live-line);
+  color: var(--status-live);
+}
+
+.ic-tile--risk {
+  background: var(--status-risk-bg);
+  border-color: var(--status-risk-line);
+  color: var(--status-risk);
+}
+
+/* ==========================================================================
+ * Slide Header & Footer Chrome
+ * ========================================================================== */
+
+.slide-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 11px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.slide-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.slide-eyebrow-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.slide-title {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  line-height: 1.16;
+  color: var(--ink-primary);
+}
+
+.slide-title em {
+  font-family: var(--font-editorial);
+  font-style: italic;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+html[data-ratio='4-3'] .slide-title {
+  font-size: 21.5px;
+}
+
+.slide-brand-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--glass-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-specular);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.slide-brand-pill strong {
+  color: var(--ink-primary);
+  font-family: var(--font-mono);
+}
+
+.slide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slide-footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.slide-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-secondary);
+  font-weight: 700;
+}
+
+.slide-footer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.slide-footer-num {
+  font-family: var(--font-mono);
+  font-weight: 750;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+ * Frosted Glass Card Primitives & Badges
+ * ========================================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-recessed);
+  color: var(--ink-secondary);
+}
+
+.badge--live {
+  color: var(--status-live);
+  background: var(--status-live-bg);
+  border-color: var(--status-live-line);
+}
+
+.badge--hybrid,
+.badge--gold {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border-color: var(--gold-line);
+}
+
+.badge--todo {
+  color: var(--status-todo);
+  background: var(--status-todo-bg);
+}
+
+.badge--risk {
+  color: var(--status-risk);
+  background: var(--status-risk-bg);
+  border-color: var(--status-risk-line);
+}
+
+.badge--tbd {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px dashed var(--gold-line);
+}
+
+.card {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 13px 15px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.card--strong {
+  background: var(--glass-card-strong);
+}
+
+.card--recessed {
+  background: var(--glass-recessed);
+  box-shadow: var(--glass-specular);
+}
+
+.card--gold {
+  border-color: var(--gold-line);
+  background: var(--glass-gold-tint);
+}
+
+.card--accent-left {
+  border-left: 3px solid var(--gold);
+}
+
+.kicker {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: -0.015em;
+  line-height: 1.24;
+  color: var(--ink-primary);
+}
+
+.card-copy {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.44;
+  color: var(--ink-secondary);
+}
+
+.kpi-num {
+  font-size: 28px;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.kpi-num--gold {
+  color: var(--gold);
+}
+
+.kpi-num--lg {
+  font-size: 32px;
+}
+
+html[data-ratio='4-3'] .kpi-num {
+  font-size: 24px;
+}
+
+html[data-ratio='4-3'] .kpi-num--lg {
+  font-size: 26px;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.row-start {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.micro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.card-foot-bar {
+  margin-top: auto;
+  padding-top: 7px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-tertiary);
+}
+
+.card-foot-bar strong,
+.card-foot-bar .accent {
+  color: var(--gold);
+}
+
+.source-note {
+  font-size: 9.8px;
+  color: var(--ink-tertiary);
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* Grids */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+.split-45-55 { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 14px; flex: 1 1 auto; min-height: 0; }
+.split-55-45 { display: grid; grid-template-columns: 1.14fr 0.86fr; gap: 14px; flex: 1 1 auto; min-height: 0; }
+
+/* ==========================================================================
+ * SLIDE 01 — COVER (Homepage Silk Canvas + Frosted Hero Showcase)
+ * ========================================================================== */
+
+.ir-slide--cover {
+  padding: 34px 46px 20px;
+}
+
+html[data-ratio='4-3'] .ir-slide--cover {
+  padding: 30px 36px 20px;
+}
+
+.cover-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1.24fr 0.76fr;
+  gap: 28px;
+  align-items: center;
+  min-height: 0;
+}
+
+.cover-left {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.cover-logo {
+  height: 54px;
+  width: auto;
+  object-fit: contain;
+  align-self: flex-start;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.14));
+}
+
+.cover-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.cover-headline {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 850;
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+  color: var(--ink-primary);
+}
+
+html[data-ratio='4-3'] .cover-headline {
+  font-size: 33px;
+}
+
+.cover-headline em {
+  font-family: var(--font-editorial);
+  font-style: italic;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.cover-lead {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  max-width: 560px;
+}
+
+.cover-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.cover-kpi {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cover-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--gold);
+}
+
+.cover-kpi strong {
+  font-size: 16px;
+  font-weight: 820;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.cover-kpi span {
+  font-size: 9.8px;
+  font-weight: 650;
+  color: var(--ink-tertiary);
+}
+
+.cover-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--glass-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-specular);
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.cover-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.cover-meta-item strong {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+.cover-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.cover-phone-wrap {
+  position: relative;
+  width: 264px;
+  max-height: 550px;
+  border-radius: 30px;
+  padding: 8px;
+  background: var(--glass-card-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--gold-line);
+  box-shadow: var(--glass-specular), 0 30px 64px -18px rgba(0, 0, 0, 0.36);
+}
+
+html[data-ratio='4-3'] .cover-phone-wrap {
+  width: 242px;
+}
+
+.cover-phone-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 530px;
+  object-fit: cover;
+  border-radius: 23px;
+}
+
+.cover-float-badge {
+  position: absolute;
+  left: -34px;
+  bottom: 24px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  background: var(--glass-card-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--gold-line);
+  box-shadow: var(--glass-specular), 0 16px 32px -10px rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cover-float-badge span {
+  display: block;
+  font-size: 9px;
+  font-weight: 750;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+}
+
+.cover-float-badge strong {
+  font-size: 11.5px;
+  color: var(--ink-primary);
+}
+
+/* ==========================================================================
+ * SLIDE 02 — TABLE OF CONTENTS (Icon Quadrant Grid)
+ * ========================================================================== */
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.toc-part {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: 15px;
+  padding: 13px 15px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.toc-part--gold {
+  border-color: var(--gold-line);
+  background: var(--glass-gold-tint);
+}
+
+.toc-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.toc-part-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink-primary);
+}
+
+.toc-list {
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.toc-item {
+  display: grid;
+  grid-template-columns: 28px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink-primary);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.toc-item:hover {
+  border-color: var(--gold-line);
+  background: var(--gold-soft);
+}
+
+.toc-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.toc-ic {
+  color: var(--ink-tertiary);
+}
+
+.toc-label {
+  font-size: 11.8px;
+  font-weight: 660;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toc-tag {
+  font-size: 9px;
+  font-weight: 750;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--glass-card);
+  border: 1px solid var(--glass-border);
+  color: var(--ink-tertiary);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+ * SLIDE 03 — EXECUTIVE SUMMARY (5-Stage Ribbon + Icon KPIs)
+ * ========================================================================== */
+
+.flow-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.flow-step {
+  position: relative;
+  background: var(--glass-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--gold-line);
+  border-radius: 12px;
+  padding: 9px 11px;
+  box-shadow: var(--glass-specular);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.flow-step::after {
+  content: '›';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--ink-inverse);
+  font-size: 11px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.flow-step:last-child::after {
+  display: none;
+}
+
+.flow-step-text span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.flow-step-text strong {
+  display: block;
+  font-size: 11.4px;
+  font-weight: 760;
+  color: var(--ink-primary);
+  line-height: 1.2;
+}
+
+html[data-ratio='4-3'] .flow-step {
+  padding: 8px 9px;
+  gap: 7px;
+}
+
+html[data-ratio='4-3'] .flow-step-text strong {
+  font-size: 10.5px;
+}
+
+/* ==========================================================================
+ * SLIDE 04 — 6 FRAGMENTED PAINPOINTS (Icon-First Bento Grid)
+ * ========================================================================== */
+
+.pain-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pain-tile {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-top: 2.5px solid var(--status-risk);
+  border-radius: 14px;
+  padding: 13px 15px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.pain-metric {
+  font-size: 21px;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+  color: var(--status-risk);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+html[data-ratio='4-3'] .pain-metric {
+  font-size: 18px;
+}
+
+.pain-tile h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 780;
+  color: var(--ink-primary);
+  line-height: 1.25;
+}
+
+.pain-tile p {
+  margin: 0;
+  font-size: 11.2px;
+  line-height: 1.42;
+  color: var(--ink-secondary);
+}
+
+/* ==========================================================================
+ * SLIDE 05 — 6 → 1 CONVERGENCE HUB (Stitch Variant A Infographic)
+ * ========================================================================== */
+
+.converge-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 244px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+html[data-ratio='4-3'] .converge-stage {
+  grid-template-columns: minmax(0, 1fr) 196px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.converge-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.converge-col {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  min-height: 0;
+}
+
+.converge-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.converge-pill {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: 11px;
+  padding: 6px 10px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.converge-pill--pain {
+  border-left: 2.5px solid var(--status-risk);
+}
+
+.converge-pill--sol {
+  border-right: 2.5px solid var(--status-live);
+}
+
+.converge-pill-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.converge-pill-text strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 780;
+  color: var(--ink-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.converge-pill-text span {
+  display: block;
+  font-size: 10.2px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-ratio='4-3'] .converge-pill {
+  padding: 5px 8px;
+  gap: 7px;
+}
+
+html[data-ratio='4-3'] .converge-pill-text strong {
+  font-size: 11px;
+}
+
+html[data-ratio='4-3'] .converge-pill-text span {
+  font-size: 9.5px;
+}
+
+.converge-hub-col {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.converge-medallion {
+  width: 218px;
+  height: 218px;
+  border-radius: 50%;
+  background: var(--glass-card-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 2px solid var(--gold);
+  box-shadow:
+    var(--glass-specular),
+    0 0 0 10px var(--gold-soft),
+    0 24px 52px -14px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+  gap: 5px;
+}
+
+html[data-ratio='4-3'] .converge-medallion {
+  width: 184px;
+  height: 184px;
+  padding: 12px;
+}
+
+.converge-big {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.converge-big span {
+  color: var(--gold);
+}
+
+html[data-ratio='4-3'] .converge-big {
+  font-size: 30px;
+}
+
+.converge-medallion-sub {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+.converge-medallion-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+/* ==========================================================================
+ * SLIDE 06 — 6-CUT USER JOURNEY
+ * ========================================================================== */
+
+.journey-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.journey-card {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  min-height: 0;
+}
+
+.journey-media {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--glass-recessed);
+  overflow: hidden;
+}
+
+.journey-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.journey-media-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journey-media-badges .badge {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(16, 16, 20, 0.72);
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.journey-media-badges .badge--live {
+  background: rgba(16, 56, 32, 0.84);
+  color: #6ee7b7;
+  border-color: rgba(110, 231, 183, 0.45);
+}
+
+.journey-media-badges .badge--hybrid {
+  background: rgba(62, 46, 24, 0.86);
+  color: #f2e1bc;
+  border-color: rgba(242, 225, 188, 0.45);
+}
+
+.journey-info {
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+.journey-info-text {
+  min-width: 0;
+}
+
+.journey-info-text strong {
+  display: block;
+  font-size: 12.2px;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.journey-info-text p {
+  margin: 2px 0 0;
+  font-size: 10.6px;
+  color: var(--ink-secondary);
+  line-height: 1.32;
+}
+
+/* ==========================================================================
+ * SLIDE 07 — LIVE PRODUCT SHOWCASE (4 Phones)
+ * ========================================================================== */
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.showcase-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  min-height: 0;
+}
+
+.showcase-phone {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  border-radius: 18px;
+  background: var(--glass-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+}
+
+.showcase-phone img {
+  max-height: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 16px;
+  object-fit: contain;
+  box-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.34);
+}
+
+.showcase-meta {
+  width: 100%;
+  background: var(--glass-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.showcase-meta strong {
+  display: block;
+  font-size: 11.8px;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.showcase-meta span {
+  display: block;
+  font-size: 10px;
+  color: var(--ink-secondary);
+}
+
+/* ==========================================================================
+ * SLIDE 08 — CORE TECH + EXIF -96% VISUAL COMPRESSION INFOGRAPHIC
+ * ========================================================================== */
+
+.exif-infographic {
+  display: grid;
+  grid-template-columns: 1fr 220px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: var(--glass-card-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--gold-line);
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  flex-shrink: 0;
+}
+
+html[data-ratio='4-3'] .exif-infographic {
+  grid-template-columns: 1fr 170px 1fr;
+  padding: 10px 12px;
+}
+
+.exif-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.exif-thumb {
+  width: 68px;
+  height: 68px;
+  border-radius: 11px;
+  object-fit: cover;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-recessed);
+  flex-shrink: 0;
+}
+
+.exif-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.exif-meter-big {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.exif-meter-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-risk-bg);
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  display: flex;
+}
+
+.exif-meter-bar span {
+  display: block;
+  width: 4%;
+  min-width: 8px;
+  background: var(--status-live);
+}
+
+/* ==========================================================================
+ * SLIDE 09 — ZERO-TRUST DATA FLOW + 4 SHIELD BENTO CARDS
+ * ========================================================================== */
+
+.sec-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: var(--glass-gold-tint);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--gold-line);
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  flex-shrink: 0;
+}
+
+.sec-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 11px;
+  background: var(--glass-card);
+  border: 1px solid var(--glass-border);
+}
+
+.sec-node strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.sec-node span {
+  display: block;
+  font-size: 10px;
+  color: var(--ink-secondary);
+}
+
+.sec-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.shield-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.shield-card {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 13px 15px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vs-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.8px;
+  line-height: 1.32;
+}
+
+.vs-old {
+  color: var(--ink-tertiary);
+  text-decoration: line-through;
+  text-decoration-color: var(--status-risk);
+}
+
+.vs-new {
+  color: var(--ink-primary);
+  font-weight: 680;
+}
+
+/* ==========================================================================
+ * TABLES & ICON CHECK MATRIX (Slides 11 & 12)
+ * ========================================================================== */
+
+.ir-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--glass-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  border-radius: 13px;
+  overflow: hidden;
+  font-size: 11.4px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+}
+
+.ir-table th {
+  text-align: left;
+  padding: 9px 11px;
+  background: var(--glass-recessed);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.ir-table td {
+  padding: 8.5px 11px;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--ink-secondary);
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.ir-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.ir-table td.col-highlight,
+.ir-table th.col-highlight {
+  background: var(--gold-soft);
+  color: var(--ink-primary);
+  font-weight: 720;
+}
+
+.ir-table th.col-highlight {
+  color: var(--gold);
+}
+
+.ir-table--compact th { padding: 7px 10px; }
+.ir-table--compact td { padding: 7px 10px; font-size: 11px; }
+
+html[data-ratio='4-3'] .ir-table th,
+html[data-ratio='4-3'] .ir-table td {
+  padding: 6.5px 8px;
+  font-size: 10.4px;
+}
+
+.check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.6px;
+  font-weight: 700;
+}
+
+.check-pill--yes { color: var(--status-live); }
+.check-pill--mid { color: var(--ink-tertiary); }
+.check-pill--no { color: var(--status-risk); opacity: 0.72; }
+
+/* ==========================================================================
+ * SLIDE 10 — MARKET BARS
+ * ========================================================================== */
+
+.market-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11.4px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.bar-track {
+  height: 9px;
+  border-radius: 999px;
+  background: var(--svg-track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-bright) 100%);
+}
+
+/* ==========================================================================
+ * SLIDE 12 — BM ①: 4 BIG-NUMBER REVENUE BENTO CARDS (Stitch Hybrid)
+ * ========================================================================== */
+
+.bm-stream-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.bm-stream-card {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 13px 14px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bm-stream-card--primary {
+  border-color: var(--gold-line);
+  background: var(--glass-gold-tint);
+}
+
+.bm-price {
+  font-size: 21px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.bm-price--gold {
+  color: var(--gold);
+}
+
+.bm-price small {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ink-tertiary);
+}
+
+html[data-ratio='4-3'] .bm-price {
+  font-size: 17.5px;
+}
+
+.bm-meter {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--svg-track);
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.bm-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+}
+
+/* ==========================================================================
+ * SLIDE 13 — BM ②: STITCH COST COMPARISON BARS + 70%+ DONUT RING GAUGE
+ * ========================================================================== */
+
+.cost-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cost-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cost-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.4px;
+  font-weight: 740;
+}
+
+.cost-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cost-bar-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 680;
+  color: var(--ink-tertiary);
+}
+
+.cost-track {
+  height: 18px;
+  border-radius: 6px;
+  background: var(--svg-track);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.cost-fill {
+  height: 100%;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 9.8px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.cost-fill--old {
+  background: var(--status-risk-bg);
+  border: 1px solid var(--status-risk-line);
+  color: var(--status-risk);
+}
+
+.cost-fill--new {
+  background: var(--status-live-bg);
+  border: 1px solid var(--status-live-line);
+  color: var(--status-live);
+}
+
+.cost-fill-note {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.econ-bottom {
+  display: grid;
+  grid-template-columns: 162px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+html[data-ratio='4-3'] .econ-bottom {
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 9px;
+}
+
+.donut-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ==========================================================================
+ * SLIDE 14 — 6-TIER STACK DIAGRAM
+ * ========================================================================== */
+
+.tier-stack {
+  display: grid;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tier-row {
+  display: grid;
+  grid-template-columns: 30px 136px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+}
+
+html[data-ratio='4-3'] .tier-row {
+  grid-template-columns: 26px 112px minmax(0, 1fr);
+  gap: 7px;
+  padding: 5px 8px;
+}
+
+.tier-row--core {
+  background: var(--gold-soft);
+  border-color: var(--gold-line);
+}
+
+.tier-name {
+  font-size: 11.4px;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.tier-desc {
+  font-size: 10.6px;
+  color: var(--ink-secondary);
+  line-height: 1.28;
+}
+
+/* ==========================================================================
+ * SLIDE 15 — 3-PHASE TIMELINE STEPPER
+ * ========================================================================== */
+
+.phase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.phase-card {
+  position: relative;
+}
+
+.phase-card:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--gold);
+  z-index: 3;
+}
+
+/* ==========================================================================
+ * SLIDE 17 — USE OF FUNDS SVG DONUT + TRANCHE BAR
+ * ========================================================================== */
+
+.funds-panel {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+html[data-ratio='4-3'] .funds-panel {
+  grid-template-columns: 146px minmax(0, 1fr);
+  gap: 13px;
+}
+
+.fund-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.fund-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 11px;
+  background: var(--glass-recessed);
+  border: 1px solid var(--glass-border);
+}
+
+.fund-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+ * SLIDE 18 — THANK YOU CLOSING (Silk Centerpiece)
+ * ========================================================================== */
+
+.ir-slide--closing {
+  padding: 36px 46px 20px;
+}
+
+.closing-stage {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 15px;
+  min-height: 0;
+}
+
+.closing-logo {
+  height: 58px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.16));
+}
+
+.closing-title {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 880;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
+  color: var(--ink-primary);
+}
+
+html[data-ratio='4-3'] .closing-title {
+  font-size: 44px;
+}
+
+.closing-tagline {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.closing-tagline strong {
+  color: var(--ink-primary);
+}
+
+.closing-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.closing-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  width: 100%;
+  max-width: 880px;
+  margin-top: 4px;
+}
+
+.closing-contact-card {
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 13px 15px;
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.closing-contact-card span {
+  font-size: 9.5px;
+  font-weight: 780;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.closing-contact-card strong {
+  font-size: 13.5px;
+  font-weight: 780;
+  color: var(--ink-primary);
+}
+
+.closing-contact-card small {
+  font-size: 10.6px;
+  color: var(--ink-tertiary);
+}
+
+/* ==========================================================================
+ * PRINT / PDF EXPORT (Exact Silk Backdrop & Exact 16:9 / 4:3 Pagination)
+ * ========================================================================== */
+
+@media print {
+  html,
+  body {
+    background: var(--surface-slide-base) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ir-toolbar {
+    display: none !important;
+  }
+
+  .ir-deck-viewport {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .ir-slide-slot {
+    display: block !important;
+    width: var(--slide-w) !important;
+    height: var(--slide-h) !important;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden !important;
+  }
+
+  .ir-slide-slot:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .ir-slide {
+    transform: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: var(--slide-w) !important;
+    height: var(--slide-h) !important;
+  }
+}

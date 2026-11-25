@@ -7,8 +7,8 @@ import {
   BRAND_LOGO_ASSETS,
   resolveAppPreviewSrc,
   SITE_COPY,
+  SITE_IR_DECK_HREF,
   SITE_META,
-  SITE_REPORT_HREF,
   SPECS_3D_PILLAR_LABELS,
   stageIdToViewId,
   STUDIO_GARMENT_ASSETS,
@@ -340,39 +340,43 @@ describe('ainvtry.com official site content & icon-first architecture contract',
         copy.vision.milestones.map((m) => m.phase),
         ['LIVE 01', 'LIVE 02', 'TO-DO']
       );
-      assert.equal(copy.vision.reportCta, isKo ? '개편 보고서' : 'View Report');
+      assert.equal(copy.vision.irDeckCta, isKo ? '사업기획서' : 'Business Plan');
     }
   });
 
-  it('ships the hosted HTML redesign report and all referenced WebP visuals on disk', () => {
-    assert.equal(SITE_REPORT_HREF, '/report/');
+  it('ships the hosted HTML IR Business Plan (/ir/) and all referenced static visuals on disk', () => {
+    assert.equal(SITE_IR_DECK_HREF, '/ir/');
     const publicDir = path.resolve(import.meta.dirname, '../../site/public');
-    const reportPath = path.join(publicDir, 'report/index.html');
-    assert.ok(fs.existsSync(reportPath), `Missing hosted HTML report on disk: ${reportPath}`);
+    const irDir = path.join(publicDir, 'ir');
 
-    const html = fs.readFileSync(reportPath, 'utf8');
-    assert.equal(
-      html.match(/[가-힣]·[가-힣]/),
-      null,
-      'Hosted report HTML must place spaces around Korean middle dots ( · )'
-    );
-    assert.ok(!html.includes('누끼'), 'Hosted report HTML must avoid informal 누끼 slang');
-
-    const referencedAssets = new Set(html.match(/\/assets\/report\/[a-z0-9-]+\.webp/g) ?? []);
-    assert.ok(referencedAssets.size >= 15, `Expected report visuals in HTML (got ${referencedAssets.size})`);
-    for (const assetSrc of referencedAssets) {
-      const diskPath = path.join(publicDir, assetSrc.replace(/^\//, ''));
-      assert.ok(fs.existsSync(diskPath), `Missing report visual asset on disk: ${diskPath}`);
+    for (const rel of [
+      'index.html',
+      'ir-deck.css',
+      'ir-deck.js',
+      'ir-deck.data.json',
+      'assets/bg/silk-luxury-light.webp',
+      'assets/bg/silk-luxury-dark.webp',
+      'assets/bg/silk-aurora-light.webp',
+      'assets/bg/silk-aurora-dark.webp',
+    ]) {
+      const diskPath = path.join(irDir, rel);
+      assert.ok(fs.existsSync(diskPath), `Missing hosted IR Business Plan file on disk: ${diskPath}`);
     }
 
-    const reportAssetDir = path.join(publicDir, 'assets/report');
-    for (const filename of fs.readdirSync(reportAssetDir)) {
-      if (filename.endsWith('.webp')) {
-        assert.ok(
-          referencedAssets.has(`/assets/report/${filename}`),
-          `Unused orphan report visual on disk: ${filename}`
-        );
-      }
+    const html = fs.readFileSync(path.join(irDir, 'index.html'), 'utf8');
+    assert.ok(
+      !html.includes('../../site/public/assets/'),
+      'Hosted /ir/index.html must not contain unrewritten relative docs paths'
+    );
+
+    const referencedAssets = new Set(html.match(/\/assets\/[a-z0-9/_-]+\.(?:webp|png|jpg)/gi) ?? []);
+    assert.ok(
+      referencedAssets.size >= 14,
+      `Expected live app/journey/brand visuals in hosted IR deck (got ${referencedAssets.size})`
+    );
+    for (const assetSrc of referencedAssets) {
+      const diskPath = path.join(publicDir, assetSrc.replace(/^\//, ''));
+      assert.ok(fs.existsSync(diskPath), `Missing IR deck visual asset on disk: ${diskPath}`);
     }
   });
 });

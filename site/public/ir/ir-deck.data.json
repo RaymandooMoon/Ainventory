@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "3.1",
+  "syncMonth": "2026.11",
+  "meta": {
+    "brandName": "Ainvtry",
+    "logoMark": "iNVTRY",
+    "domain": "ainvtry.com",
+    "url": "https://www.ainvtry.com",
+    "urlShort": "www.ainvtry.com",
+    "founderName": "Raymond Moon",
+    "contactEmail": "raymond@ainvtry.com",
+    "founderContact": "Raymond Moon · raymond@ainvtry.com",
+    "domainContact": "ainvtry.com · raymond@ainvtry.com",
+    "locationDate": "Seoul, Republic of Korea · 2026.11"
+  },
+  "versions": {
+    "react": "19.3.1",
+    "reactMajor": "19",
+    "typescript": "7.0.2",
+    "typescriptMajor": "7",
+    "vite": "8.3.6",
+    "viteMajor": "8",
+    "express": "5.3.0",
+    "expressMajor": "5",
+    "capacitor": "8.6.0",
+    "capacitorMajor": "8",
+    "three": "0.187.0",
+    "threeMinor": "0.187",
+    "threeBadge": "Three.js 0.187",
+    "threeVtonTag": "THREE.JS 0.187 · VTON",
+    "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)",
+    "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
+  },
+  "tests": {
+    "suiteCount": 52,
+    "unitSuites": 40,
+    "apiSuites": 7,
+    "e2eSuites": 5,
+    "caseCount": 344,
+    "roundedPlus": "340+",
+    "summaryShort": "52스위트 · 344케이스 통과",
+    "summaryLine": "단위·API·WebGL E2E 52스위트(344케이스) · 3플랫폼"
+  },
+  "garment": {
+    "beforeBytes": 582332,
+    "afterBytes": 23528,
+    "beforeKb": 582,
+    "afterKb": 24,
+    "compressionPct": "-96%",
+    "pairShort": "582KB → 24KB WebP",
+    "beforeTitle": "582 KB · EXIF/GPS/실내 포함",
+    "afterTitle": "24 KB · EXIF 0% · 순수 의류",
+    "costOldBar": "582 KB / 장 (EXIF·배경 포함)",
+    "costNewBar": "24 KB",
+    "costNewNote": "-96% 압축 · IndexedDB 로컬 캐시",
+    "costHeadSaved": "-96% 용량 절감"
+  },
+  "journey": {
+    "buy": {
+      "num": "01",
+      "shortTitle": "중복 확인",
+      "status": "live",
+      "label": "LIVE",
+      "badgeClass": "badge badge--live"
+    },
+    "scan": {
+      "num": "02",
+      "shortTitle": "사진 등록",
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
+    },
+    "weather": {
+      "num": "03",
+      "shortTitle": "날씨 코디",
+      "status": "live",
+      "label": "LIVE",
+      "badgeClass": "badge badge--live"
+    },
+    "share": {
+      "num": "04",
+      "shortTitle": "캘린더",
+      "status": "todo",
+      "label": "TO-DO",
+      "badgeClass": "badge badge--todo"
+    },
+    "care": {
+      "num": "05",
+      "shortTitle": "세탁 · 수거",
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
+    },
+    "resale": {
+      "num": "06",
+      "shortTitle": "간편 판매",
+      "status": "hybrid",
+      "label": "LIVE+",
+      "badgeClass": "badge badge--hybrid"
+    }
+  },
+  "roadmap": {
+    "stage-1": {
+      "phase": "LIVE 01",
+      "status": "done",
+      "badgeText": "PHASE 01 · 완료",
+      "badgeClass": "badge badge--live",
+      "title": "레이어드 피팅 · 내 폰 피부톤"
+    },
+    "stage-2": {
+      "phase": "LIVE 02",
+      "status": "done",
+      "badgeText": "PHASE 02 · 완료",
+      "badgeClass": "badge badge--live",
+      "title": "실시간 날씨 · 세탁 지도 · 즉시 삭제"
+    },
+    "stage-3": {
+      "phase": "TO-DO",
+      "status": "active",
+      "badgeText": "PHASE 03 · 2026.Q4~27",
+      "badgeClass": "badge badge--gold",
+      "title": "택 스캔 · 캘린더 · 방문수거 · 리셀"
+    }
+  },
+  "roadmapPillText": "LIVE 01·02 완료",
+  "assets": {
+    "hashes": {
+      "site/public/assets/previews/app-fitting-live-ko-light.webp": "7c3576c7f19b",
+      "site/public/assets/previews/app-fitting-live-ko-dark.webp": "8362ea17a6e0",
+      "site/public/assets/previews/app-closet-ko-light.webp": "35cfc77b2231",
+      "site/public/assets/previews/app-closet-ko-dark.webp": "5915931b2567",
+      "site/public/assets/previews/app-stats-ko-light.webp": "fa8d7938d5cd",
+      "site/public/assets/previews/app-stats-ko-dark.webp": "b966417cede3",
+      "site/public/assets/previews/app-profile-ko-light.webp": "d4f6efdc2f2c",
+      "site/public/assets/previews/app-profile-ko-dark.webp": "44ad4bd5d770",
+      "site/public/assets/journey/clay-cut-01-v1.webp": "2ffdf12e3801",
+      "site/public/assets/journey/clay-cut-02-v1.webp": "34b2d763b46f",
+      "site/public/assets/journey/clay-cut-03-v1.webp": "1ab31b12b1c8",
+      "site/public/assets/journey/clay-cut-04-v1.webp": "6879fc46f371",
+      "site/public/assets/journey/clay-cut-05-v1.webp": "999eebed7a76",
+      "site/public/assets/journey/clay-cut-06-v1.webp": "7df5f8b3036d"
+    },
+    "missing": []
+  }
+}

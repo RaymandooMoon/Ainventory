@@ -6,13 +6,14 @@ import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
 import { StageTopControlsDock } from './hud/StageTopControlsDock.tsx';
 import { ArchitectureStageHud } from './hud/StudioArchitectureHud.tsx';
 import { getTopControlsDockKind } from './hud/topControlsDockState.ts';
-import type { SiteCopy, SiteLang, SitePrivacyShield, SiteTheme } from './siteContent.ts';
+import type { SiteCopy, SiteLang, SiteMood, SitePrivacyShield, SiteTheme } from './siteContent.ts';
 
 export interface SiteStageHudProps {
   readonly activeStage: ActiveStageId;
   readonly copy: SiteCopy;
   readonly lang: SiteLang;
   readonly theme: SiteTheme;
+  readonly mood: SiteMood;
   readonly betaMailto: string;
   readonly interaction: StageInteractionState;
   readonly selectedPrivacyShield: SitePrivacyShield['id'];
@@ -98,6 +99,7 @@ function SiteStageHudPanel({
   copy,
   lang,
   theme,
+  mood,
   betaMailto,
   interaction,
   selectedPrivacyShield,
@@ -506,6 +508,7 @@ function SiteStageHudPanel({
             copy={copy}
             lang={lang}
             theme={theme}
+            mood={mood}
             betaMailto={betaMailto}
             interaction={interaction}
             onUpdateInteraction={onUpdateInteraction}

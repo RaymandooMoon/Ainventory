@@ -346,6 +346,69 @@ export function applyBindingsToHtml(html, snapshot) {
   return { html: nextHtml, matchedCount: matchedKeys.size };
 }
 
+export function toHostedWebHtml(html) {
+  return html.replace(/\.\.\/\.\.\/site\/public\/assets\//g, '/assets/');
+}
+
+function syncHostedWebDeck(repoRoot, syncedDocsHtml, nextDataJson, checkOnly) {
+  const docsDir = path.join(repoRoot, 'docs', 'ir-deck');
+  const hostedDir = path.join(repoRoot, 'site', 'public', 'ir');
+  const hostedBgDir = path.join(hostedDir, 'assets', 'bg');
+
+  const expectedTextFiles = [
+    { rel: 'index.html', content: toHostedWebHtml(syncedDocsHtml) },
+    { rel: 'ir-deck.css', content: fs.readFileSync(path.join(docsDir, 'ir-deck.css'), 'utf8') },
+    { rel: 'ir-deck.js', content: fs.readFileSync(path.join(docsDir, 'ir-deck.js'), 'utf8') },
+    { rel: 'ir-deck.data.json', content: nextDataJson },
+  ];
+
+  const bgDir = path.join(docsDir, 'assets', 'bg');
+  const bgFiles = fs.existsSync(bgDir)
+    ? fs.readdirSync(bgDir).filter((name) => name.endsWith('.webp')).sort()
+    : [];
+
+  const drifted = [];
+
+  for (const file of expectedTextFiles) {
+    const dest = path.join(hostedDir, file.rel);
+    const current = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : null;
+    if (current !== file.content) {
+      drifted.push(`site/public/ir/${file.rel}`);
+      if (!checkOnly) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, file.content, 'utf8');
+      }
+    }
+  }
+
+  const expectedBgSet = new Set(bgFiles);
+  for (const name of bgFiles) {
+    const srcBuf = fs.readFileSync(path.join(bgDir, name));
+    const dest = path.join(hostedBgDir, name);
+    const curBuf = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+    if (!curBuf || !curBuf.equals(srcBuf)) {
+      drifted.push(`site/public/ir/assets/bg/${name}`);
+      if (!checkOnly) {
+        fs.mkdirSync(hostedBgDir, { recursive: true });
+        fs.writeFileSync(dest, srcBuf);
+      }
+    }
+  }
+
+  if (fs.existsSync(hostedBgDir)) {
+    for (const existing of fs.readdirSync(hostedBgDir)) {
+      if (existing.endsWith('.webp') && !expectedBgSet.has(existing)) {
+        drifted.push(`site/public/ir/assets/bg/${existing} (stale)`);
+        if (!checkOnly) {
+          fs.unlinkSync(path.join(hostedBgDir, existing));
+        }
+      }
+    }
+  }
+
+  return drifted;
+}
+
 async function main() {
   const snapshot = await collectIrDeckSnapshot(REPO_ROOT);
 
@@ -366,16 +429,22 @@ async function main() {
 
   const dataChanged = nextDataJson !== currentDataJson;
   const htmlChanged = nextHtml !== currentHtml;
+  const hostedDrifted = syncHostedWebDeck(REPO_ROOT, nextHtml, nextDataJson, CHECK_ONLY);
 
   if (CHECK_ONLY) {
-    if (dataChanged || htmlChanged) {
+    if (dataChanged || htmlChanged || hostedDrifted.length > 0) {
+      const reasons = [
+        dataChanged ? 'docs/ir-deck/ir-deck.data.json' : null,
+        htmlChanged ? 'docs/ir-deck/index.html' : null,
+        ...hostedDrifted,
+      ].filter(Boolean);
       process.stderr.write(
-        `[ir:sync:check] DRIFT DETECTED (${dataChanged ? 'ir-deck.data.json ' : ''}${htmlChanged ? 'index.html' : ''}). Run \`npm run ir:sync\` to update.\n`
+        `[ir:sync:check] DRIFT DETECTED (${reasons.join(', ')}). Run \`npm run ir:sync\` to update.\n`
       );
       process.exit(1);
     }
     process.stdout.write(
-      `[ir:sync:check] OK — IR deck is in sync with live app/site (${matchedCount} bindings, ${snapshot.tests.caseCount} tests across ${snapshot.tests.suiteCount} suites).\n`
+      `[ir:sync:check] OK — IR deck & hosted /ir/ are in sync with live app/site (${matchedCount} bindings, ${snapshot.tests.caseCount} tests across ${snapshot.tests.suiteCount} suites).\n`
     );
     return;
   }
@@ -388,7 +457,7 @@ async function main() {
   }
 
   process.stdout.write(
-    `[ir:sync] Synced ${matchedCount} live bindings (${snapshot.tests.roundedPlus} tests, ${snapshot.versions.threeBadge}, ${snapshot.garment.pairShort}) -> data:${dataChanged ? 'updated' : 'unchanged'}, html:${htmlChanged ? 'updated' : 'unchanged'}.\n`
+    `[ir:sync] Synced ${matchedCount} live bindings (${snapshot.tests.roundedPlus} tests, ${snapshot.versions.threeBadge}, ${snapshot.garment.pairShort}) -> data:${dataChanged ? 'updated' : 'unchanged'}, html:${htmlChanged ? 'updated' : 'unchanged'}, hosted(/ir/):${hostedDrifted.length > 0 ? `updated(${hostedDrifted.length})` : 'unchanged'}.\n`
   );
 }
 

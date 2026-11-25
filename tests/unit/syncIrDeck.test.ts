@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { applyBindingsToHtml, collectIrDeckSnapshot } from '../../scripts/sync-ir-deck.mjs';
+import {
+  applyBindingsToHtml,
+  collectIrDeckSnapshot,
+  toHostedWebHtml,
+} from '../../scripts/sync-ir-deck.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
 const DECK_HTML_PATH = path.join(REPO_ROOT, 'docs', 'ir-deck', 'index.html');
+const HOSTED_DECK_HTML_PATH = path.join(REPO_ROOT, 'site', 'public', 'ir', 'index.html');
 
 describe('Living IR Deck auto-sync & terminology guardrails', () => {
   test('collectIrDeckSnapshot reads real package versions, test counts, and garment compression', async () => {
@@ -55,7 +60,7 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
     );
   });
 
-  test('committed docs/ir-deck/index.html is in zero-drift sync with live codebase', async () => {
+  test('committed docs/ir-deck/index.html and hosted site/public/ir/index.html are in zero-drift sync with live codebase', async () => {
     const snapshot = await collectIrDeckSnapshot(REPO_ROOT);
     const currentHtml = fs.readFileSync(DECK_HTML_PATH, 'utf8');
     const { html: syncedHtml, matchedCount } = applyBindingsToHtml(currentHtml, snapshot);
@@ -65,6 +70,18 @@ describe('Living IR Deck auto-sync & terminology guardrails', () => {
       syncedHtml,
       currentHtml,
       'docs/ir-deck/index.html drifted from live codebase — run `npm run ir:sync`'
+    );
+
+    assert.ok(fs.existsSync(HOSTED_DECK_HTML_PATH), 'hosted site/public/ir/index.html must exist');
+    const hostedHtml = fs.readFileSync(HOSTED_DECK_HTML_PATH, 'utf8');
+    assert.equal(
+      hostedHtml,
+      toHostedWebHtml(syncedHtml),
+      'site/public/ir/index.html drifted from docs/ir-deck/index.html — run `npm run ir:sync`'
+    );
+    assert.ok(
+      !hostedHtml.includes('../../site/public/assets/'),
+      'hosted /ir/index.html must rewrite relative site asset paths to /assets/'
     );
   });
 });

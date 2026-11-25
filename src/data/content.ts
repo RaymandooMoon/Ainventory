@@ -82,7 +82,7 @@ export const SITE_META: SiteMeta = {
   copyrightYear: '2026',
 };
 
-export const SITE_REPORT_HREF = '/report/';
+export const SITE_IR_DECK_HREF = '/ir/';
 
 export const BRAND_LOGO_ASSETS = {
   light: '/assets/brand/invtry-logo-light.png',
@@ -506,7 +506,7 @@ export interface SiteCopy {
     readonly stackSummaryLabel: string;
     readonly stackSummaryValue: string;
     readonly directCta: string;
-    readonly reportCta: string;
+    readonly irDeckCta: string;
   };
   readonly footer: {
     readonly rights: string;
@@ -1513,7 +1513,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       stackSummaryLabel: 'Focus',
       stackSummaryValue: 'Digital Closet · Resale',
       directCta: 'Email Raymond',
-      reportCta: 'View Report',
+      irDeckCta: 'Business Plan',
     },
     footer: {
       rights: '© 2026 Ainvtry. All rights reserved.',
@@ -2552,7 +2552,7 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       stackSummaryLabel: '핵심',
       stackSummaryValue: '디지털 옷장 · 리셀',
       directCta: '창업자 메일',
-      reportCta: '개편 보고서',
+      irDeckCta: '사업기획서',
     },
     footer: {
       rights: '© 2026 Ainvtry. All rights reserved.',
