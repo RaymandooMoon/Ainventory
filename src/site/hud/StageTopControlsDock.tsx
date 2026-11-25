@@ -185,7 +185,7 @@ export function StageTopControlsDock({
               className={`hud-seg-btn ${isMvp ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
-                onUpdateInteraction({ architectureMode: 'mvp' });
+                onUpdateInteraction({ architectureMode: 'mvp', architectureTechIndex: null });
               }}
             >
               {arch.modeDevLabel}
@@ -196,7 +196,7 @@ export function StageTopControlsDock({
               className={`hud-seg-btn ${!isMvp ? 'is-active' : ''}`}
               onClick={() => {
                 triggerHaptic('selection');
-                onUpdateInteraction({ architectureMode: 'prod' });
+                onUpdateInteraction({ architectureMode: 'prod', architectureTechIndex: null });
               }}
             >
               {arch.modeProdLabel}

@@ -27,13 +27,24 @@
   }
 
   .site-topbar-left,
+  .site-topbar-center,
   .site-topbar-right {
     gap: 0;
   }
 
   .site-brand-pill {
     min-height: 44px;
-    padding: 0 4px;
+    height: 44px;
+    padding: 0 8px;
+  }
+
+  .site-home-callout {
+    top: calc(100% + 7px);
+    padding: 2px 4px 2px 9px;
+  }
+
+  .site-home-callout-action {
+    font-size: 0.69rem;
   }
 
   .site-utility-rail {
@@ -48,7 +59,7 @@
   }
 
   .site-logo-frame--nav {
-    width: 64px;
+    width: 90px;
   }
 
   /* Spatial Editorial Noir Mobile Hero: crisp single-viewport stack */
@@ -267,11 +278,7 @@
 
   .site-hud-panel[data-sheet-expanded='true'] {
     width: calc(100vw - 16px);
-    background: rgba(11, 11, 14, calc(0.68 + var(--site-ui-alpha) * 0.26));
-  }
-
-  .site-root[data-site-theme='light'] .site-hud-panel[data-sheet-expanded='true'] {
-    background: rgba(252, 250, 246, calc(0.76 + var(--site-ui-alpha) * 0.2));
+    background: var(--bg-panel);
   }
 
   /* Expand / Split Toggle Handle (>= 44px) */
@@ -449,23 +456,23 @@
   .site-dock {
     width: 100%;
     padding: 2px;
-    grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 0.85fr);
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1.16fr) minmax(0, 0.86fr) minmax(0, 0.86fr);
   }
 
   .site-dock-pill {
     min-height: 44px;
-    padding: 0 6px;
+    padding: 0 5px;
     gap: 4px;
-    font-size: 0.75rem;
+    font-size: 0.74rem;
   }
 
   .site-dock-pill--launch {
-    padding: 0 11px;
+    padding: 0 9px;
     gap: 4px;
   }
 
   .site-dock-pill-num {
-    font-size: 0.62rem;
+    font-size: 0.61rem;
   }
 
   .site-bottombar-tray {
@@ -593,24 +600,37 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .site-dock-pill:not(.site-dock-pill--launch) .site-dock-pill-num {
+  .site-dock {
+    grid-template-columns: minmax(0, 1.04fr) minmax(0, 1.24fr) minmax(0, 0.86fr) minmax(0, 0.86fr);
+  }
+
+  .site-dock-pill-label--full {
     display: none;
   }
 
+  .site-dock-pill-label--compact {
+    display: inline;
+  }
+
   .site-dock-pill {
-    font-size: 0.71rem;
-    padding: 0 5px;
+    font-size: 0.7rem;
+    padding: 0 4px;
     gap: 3px;
   }
 
+  .site-dock-pill-num {
+    font-size: 0.59rem;
+    letter-spacing: 0.02em;
+  }
+
   .site-dock-pill--launch {
-    padding: 0 10px;
-    font-size: 0.71rem;
+    padding: 0 8px;
+    font-size: 0.7rem;
   }
 
   .site-dock-pill-arrow {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
   }
 
   .site-analytics-trigger-label {
@@ -640,14 +660,40 @@
 }
 
 @media (max-width: 420px) {
+  .site-topbar {
+    gap: 4px;
+  }
+
+  .site-utility-pill {
+    padding: 0 6px;
+    gap: 3px;
+    font-size: 0.68rem;
+  }
+
+  .site-brand-pill {
+    padding: 0 6px;
+  }
+
+  .site-logo-frame--nav {
+    width: 82px;
+  }
+
+  .site-home-callout-action {
+    font-size: 0.66rem;
+  }
+
   .site-dock-pill {
     font-size: 0.67rem;
-    padding: 0 4px;
-    gap: 3px;
+    padding: 0 3px;
+    gap: 2.5px;
+  }
+
+  .site-dock-pill-num {
+    font-size: 0.57rem;
   }
 
   .site-dock-pill--launch {
-    padding: 0 9px;
+    padding: 0 7px;
     font-size: 0.67rem;
   }
 
@@ -673,34 +719,48 @@
  * ========================================================================== */
 
 @media (max-width: 359px) {
+  .site-topbar {
+    grid-template-columns: auto 1fr auto;
+    gap: 3px;
+  }
+
   .site-brand-pill {
-    padding: 0 2px;
+    padding: 0 4px;
   }
 
   .site-utility-pill {
-    padding: 0 6px;
-    gap: 3px;
-    font-size: 0.68rem;
+    padding: 0 5px;
+    gap: 2.5px;
+    font-size: 0.64rem;
   }
 
   .site-logo-frame--nav {
-    width: 54px;
+    width: 70px;
+  }
+
+  .site-home-callout-action {
+    font-size: 0.63rem;
   }
 
   .site-dock-pill {
-    font-size: 0.61rem;
+    font-size: 0.6rem;
     letter-spacing: -0.025em;
-    padding: 0 3px;
+    padding: 0 2px;
+    gap: 2px;
+  }
+
+  .site-dock-pill-num {
+    font-size: 0.53rem;
   }
 
   .site-dock-pill--launch {
-    padding: 0 7px;
-    font-size: 0.61rem;
+    padding: 0 6px;
+    font-size: 0.6rem;
   }
 
   .site-dock-pill-arrow {
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
   }
 
   .site-bottombar {

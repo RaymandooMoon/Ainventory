@@ -35,8 +35,8 @@
   border-radius: var(--r-panel);
   border: 1px solid var(--hairline-strong);
   background: var(--bg-panel);
-  backdrop-filter: blur(28px) saturate(165%);
-  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%);
   box-shadow: var(--glass-specular), var(--glass-shadow);
   overflow: hidden;
 }
@@ -438,8 +438,8 @@
   border-radius: var(--r-panel);
   border: 1px solid var(--hairline-strong);
   background: var(--bg-panel);
-  backdrop-filter: blur(28px) saturate(165%);
-  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%);
   box-shadow: var(--glass-specular), var(--glass-shadow);
   overflow: hidden;
 }

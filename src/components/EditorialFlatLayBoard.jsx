@@ -621,6 +621,8 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [slots, profile.dominantHand]
   );
 
+  const relightIdentityKey = `${profile.avatarConfigHash}::${outfitComboId}`;
+
   const resolvedLayers = useMemo(() => {
     if (Array.isArray(explicitLayers) && explicitLayers.length > 0) {
       return explicitLayers;
@@ -693,90 +695,96 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     }
   }, []);
 
-  const measureAiImageEl = useCallback((img, expectedSrc) => {
-    const cached = expectedSrc ? readCachedAiImageProbe(expectedSrc) : null;
-    if (cached) {
-      setAiImgAspect((prev) => (Math.abs(prev - cached.ratio) < 0.005 ? prev : cached.ratio));
-      setAiContentBounds((prev) => {
-        if (!cached.bounds) {
-          return prev?.src === expectedSrc ? null : prev;
-        }
-        if (
-          prev &&
-          prev.src === cached.bounds.src &&
-          Math.abs(prev.topRatio - cached.bounds.topRatio) < 0.005 &&
-          Math.abs(prev.bottomRatio - cached.bounds.bottomRatio) < 0.005
-        ) {
-          return prev;
-        }
-        return cached.bounds;
-      });
-      return;
-    }
-
-    const nw = img?.naturalWidth || 0;
-    const nh = img?.naturalHeight || 0;
-    if (nw < 16 || nh < 16) return;
-    const ratio = Math.round((nw / nh) * 1000) / 1000;
-    setAiImgAspect((prev) => (Math.abs(prev - ratio) < 0.005 ? prev : ratio));
-
-    if (typeof document === 'undefined') return;
-    const th = 128;
-    const tw = Math.max(16, Math.min(96, Math.round(ratio * th)));
-    const probe = document.createElement('canvas');
-    probe.width = tw;
-    probe.height = th;
-    try {
-      const ctx = probe.getContext('2d', { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0, tw, th);
-      const data = ctx.getImageData(0, 0, tw, th).data;
-      const topCornersTransparent = data[3] <= 36 && data[(tw - 1) * 4 + 3] <= 36;
-      if (!topCornersTransparent) {
-        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
-        setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
+  const measureAiImageEl = useCallback(
+    (img, expectedSrc) => {
+      const cached = expectedSrc ? readCachedAiImageProbe(expectedSrc) : null;
+      if (cached) {
+        setAiImgAspect((prev) => (Math.abs(prev - cached.ratio) < 0.005 ? prev : cached.ratio));
+        setAiContentBounds((prev) => {
+          if (!cached.bounds) {
+            return prev?.src === expectedSrc ? null : prev;
+          }
+          if (
+            prev &&
+            prev.src === cached.bounds.src &&
+            prev.identityKey === relightIdentityKey &&
+            Math.abs(prev.topRatio - cached.bounds.topRatio) < 0.005 &&
+            Math.abs(prev.bottomRatio - cached.bounds.bottomRatio) < 0.005
+          ) {
+            return prev;
+          }
+          return { ...cached.bounds, identityKey: relightIdentityKey };
+        });
         return;
       }
-      let minRow = th;
-      let maxRow = -1;
-      for (let y = 0; y < th; y += 1) {
-        const rowOff = y * tw;
-        let rowOpaque = 0;
-        for (let x = 0; x < tw; x += 1) {
-          if (data[(rowOff + x) * 4 + 3] > 36) {
-            rowOpaque += 1;
+
+      const nw = img?.naturalWidth || 0;
+      const nh = img?.naturalHeight || 0;
+      if (nw < 16 || nh < 16) return;
+      const ratio = Math.round((nw / nh) * 1000) / 1000;
+      setAiImgAspect((prev) => (Math.abs(prev - ratio) < 0.005 ? prev : ratio));
+
+      if (typeof document === 'undefined') return;
+      const th = 128;
+      const tw = Math.max(16, Math.min(96, Math.round(ratio * th)));
+      const probe = document.createElement('canvas');
+      probe.width = tw;
+      probe.height = th;
+      try {
+        const ctx = probe.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, tw, th);
+        const data = ctx.getImageData(0, 0, tw, th).data;
+        const topCornersTransparent = data[3] <= 36 && data[(tw - 1) * 4 + 3] <= 36;
+        if (!topCornersTransparent) {
+          writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
+          setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
+          return;
+        }
+        let minRow = th;
+        let maxRow = -1;
+        for (let y = 0; y < th; y += 1) {
+          const rowOff = y * tw;
+          let rowOpaque = 0;
+          for (let x = 0; x < tw; x += 1) {
+            if (data[(rowOff + x) * 4 + 3] > 36) {
+              rowOpaque += 1;
+            }
+          }
+          if (rowOpaque >= 1) {
+            if (y < minRow) minRow = y;
+            if (y > maxRow) maxRow = y;
           }
         }
-        if (rowOpaque >= 1) {
-          if (y < minRow) minRow = y;
-          if (y > maxRow) maxRow = y;
+        if (maxRow > minRow + Math.round(th * 0.2)) {
+          const nextBounds = {
+            src: expectedSrc,
+            identityKey: relightIdentityKey,
+            topRatio: Math.round((minRow / th) * 1000) / 1000,
+            bottomRatio: Math.round(((maxRow + 1) / th) * 1000) / 1000,
+          };
+          writeCachedAiImageProbe(expectedSrc, { ratio, bounds: nextBounds });
+          setAiContentBounds((prev) =>
+            prev &&
+            prev.src === nextBounds.src &&
+            prev.identityKey === nextBounds.identityKey &&
+            Math.abs(prev.topRatio - nextBounds.topRatio) < 0.005 &&
+            Math.abs(prev.bottomRatio - nextBounds.bottomRatio) < 0.005
+              ? prev
+              : nextBounds
+          );
+        } else {
+          writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
         }
+      } catch {
+        setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
+      } finally {
+        probe.width = 0;
+        probe.height = 0;
       }
-      if (maxRow > minRow + Math.round(th * 0.2)) {
-        const nextBounds = {
-          src: expectedSrc,
-          topRatio: Math.round((minRow / th) * 1000) / 1000,
-          bottomRatio: Math.round(((maxRow + 1) / th) * 1000) / 1000,
-        };
-        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: nextBounds });
-        setAiContentBounds((prev) =>
-          prev &&
-          prev.src === nextBounds.src &&
-          Math.abs(prev.topRatio - nextBounds.topRatio) < 0.005 &&
-          Math.abs(prev.bottomRatio - nextBounds.bottomRatio) < 0.005
-            ? prev
-            : nextBounds
-        );
-      } else {
-        writeCachedAiImageProbe(expectedSrc, { ratio, bounds: null });
-      }
-    } catch {
-      setAiContentBounds((prev) => (prev?.src === expectedSrc ? null : prev));
-    } finally {
-      probe.width = 0;
-      probe.height = 0;
-    }
-  }, []);
+    },
+    [relightIdentityKey]
+  );
 
   useEffect(() => {
     if (!aiImageUrl) return;
@@ -785,9 +793,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
       setAiImgAspect((prev) => (Math.abs(prev - cached.ratio) < 0.005 ? prev : cached.ratio));
       setAiContentBounds((prev) =>
         cached.bounds
-          ? prev?.src === cached.bounds.src
+          ? prev?.src === cached.bounds.src && prev?.identityKey === relightIdentityKey
             ? prev
-            : cached.bounds
+            : { ...cached.bounds, identityKey: relightIdentityKey }
           : prev?.src === aiImageUrl
             ? null
             : prev
@@ -798,7 +806,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     if (img?.complete && img.naturalWidth >= 16) {
       measureAiImageEl(img, aiImageUrl);
     }
-  }, [aiImageUrl, measureAiImageEl]);
+  }, [aiImageUrl, measureAiImageEl, relightIdentityKey]);
 
   useEffect(() => {
     if (!canPinchZoom) {
@@ -837,15 +845,23 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [aiImageUrl, measureAiImageEl]
   );
 
+  // Synchronously resolve cached probe or carry over same-outfit bounds across turnaround angles
+  // so rotating from 0° -> 45° R never drops to null fallback bounds for 1 frame (zero scale pop).
+  const cachedAiProbe = aiImageUrl ? readCachedAiImageProbe(aiImageUrl) : null;
+  const resolvedAiImgAspect = cachedAiProbe?.ratio ?? aiImgAspect;
   const activeContentBounds =
-    aiContentBounds && aiContentBounds.src === aiImageUrl ? aiContentBounds : null;
+    cachedAiProbe?.bounds ??
+    (aiContentBounds &&
+    (aiContentBounds.src === aiImageUrl || aiContentBounds.identityKey === relightIdentityKey)
+      ? aiContentBounds
+      : null);
 
   const floorPlacement = useMemo(
     () =>
       computeMannequinFloorPlacement({
         stageWidth: stageSize.width,
         stageHeight: stageSize.height,
-        imageAspectRatio: aiImgAspect,
+        imageAspectRatio: resolvedAiImgAspect,
         topRatio: activeContentBounds?.topRatio ?? null,
         bottomRatio: activeContentBounds?.bottomRatio ?? null,
         heightCm: resolvedHeightCm,
@@ -853,7 +869,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     [
       stageSize.width,
       stageSize.height,
-      aiImgAspect,
+      resolvedAiImgAspect,
       activeContentBounds?.topRatio,
       activeContentBounds?.bottomRatio,
       resolvedHeightCm,
@@ -1540,7 +1556,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
     safePanY,
   ]);
 
-  const relightIdentityKey = `${profile.avatarConfigHash}::${outfitComboId}`;
+  // relightIdentityKey is hoisted above floorPlacement so turnaround bounds stay locked per outfit.
 
   // Dual-layer counter-rotating 2.5D rotateY bridge + 105ms smoothstep S-curve crossfade
   // runs imperatively in rAF so angle transitions trigger zero extra React re-renders.

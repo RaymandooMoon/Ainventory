@@ -12,6 +12,7 @@ export interface StageInteractionState {
   architectureSubtab: 'blueprint' | 'privacy' | 'maps';
   architectureTier: number; // 0..6 (01 Client -> 07 Governance)
   architectureMode: 'mvp' | 'prod';
+  architectureTechIndex: number | null; // 0..N active tech icon synced between 3D blades & HUD
   googleApiIndex: number; // 0..5
   weatherMood: 'sunny' | 'rain' | 'wind';
   specsSubtab: 'kpi' | 'matrix' | 'fitting' | 'care';
@@ -31,6 +32,7 @@ export const DEFAULT_STAGE_INTERACTION_STATE: Readonly<StageInteractionState> = 
   architectureSubtab: 'blueprint',
   architectureTier: 3, // 04 iNVTRY Core active by default
   architectureMode: 'mvp',
+  architectureTechIndex: null,
   googleApiIndex: 0,
   weatherMood: 'rain',
   specsSubtab: 'kpi',
