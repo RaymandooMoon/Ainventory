@@ -1,0 +1,1351 @@
+/* ==========================================================================
+ * Ainvtry (iNVTRY) Official IR Business Plan Deck — Dual Ratio (16:9 & 4:3)
+ * Apple HIG Monochrome Minimal + Champagne Gold (#D6B889 / #8F6B36)
+ * Supports Light Editorial Ivory (Default Print/VC) & Dark OLED Runway Mode
+ * ========================================================================== */
+
+:root {
+  --slide-w: 1280px;
+  --slide-h: 720px;
+  --slide-pad-y: 36px;
+  --slide-pad-x: 48px;
+  --deck-scale: 1;
+
+  /* Light Editorial Alabaster Theme (Default for VC / Print / PDF) */
+  --stage-backdrop: #e9e6e0;
+  --surface-slide: #faf9f6;
+  --surface-card: #ffffff;
+  --surface-recessed: #f2efe9;
+  --surface-accent-tint: rgba(154, 116, 64, 0.08);
+  --surface-dark-pill: #16161a;
+
+  --ink-primary: #141418;
+  --ink-secondary: #484852;
+  --ink-tertiary: #72727e;
+  --ink-inverse: #faf9f6;
+
+  --gold: #8f6b36;
+  --gold-bright: #c9a66b;
+  --gold-line: rgba(143, 107, 54, 0.34);
+  --gold-soft: rgba(143, 107, 54, 0.14);
+  --hairline: rgba(20, 20, 24, 0.1);
+  --hairline-strong: rgba(20, 20, 24, 0.18);
+
+  --status-live: #15803d;
+  --status-live-bg: rgba(21, 128, 61, 0.1);
+  --status-hybrid: #8f6b36;
+  --status-hybrid-bg: rgba(143, 107, 54, 0.12);
+  --status-todo: #52525e;
+  --status-todo-bg: rgba(82, 82, 94, 0.1);
+  --status-risk: #b91c1c;
+  --status-risk-bg: rgba(185, 28, 28, 0.09);
+
+  --shadow-slide: 0 24px 64px -18px rgba(20, 20, 24, 0.2), 0 0 0 1px rgba(20, 20, 24, 0.08);
+  --shadow-card: 0 4px 16px -6px rgba(20, 20, 24, 0.07);
+
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+}
+
+html[data-theme='dark'] {
+  --stage-backdrop: #050507;
+  --surface-slide: #0b0b0f;
+  --surface-card: #131319;
+  --surface-recessed: #181820;
+  --surface-accent-tint: rgba(214, 184, 137, 0.1);
+  --surface-dark-pill: #f5f5f7;
+
+  --ink-primary: #f5f5f7;
+  --ink-secondary: #b8b8c4;
+  --ink-tertiary: #848494;
+  --ink-inverse: #0b0b0f;
+
+  --gold: #d6b889;
+  --gold-bright: #ead1a7;
+  --gold-line: rgba(214, 184, 137, 0.36);
+  --gold-soft: rgba(214, 184, 137, 0.14);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+
+  --status-live: #4ade80;
+  --status-live-bg: rgba(74, 222, 128, 0.12);
+  --status-hybrid: #d6b889;
+  --status-hybrid-bg: rgba(214, 184, 137, 0.14);
+  --status-todo: #a1a1b0;
+  --status-todo-bg: rgba(255, 255, 255, 0.08);
+  --status-risk: #f87171;
+  --status-risk-bg: rgba(248, 113, 113, 0.12);
+
+  --shadow-slide: 0 28px 72px -16px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(214, 184, 137, 0.22);
+  --shadow-card: 0 8px 24px -10px rgba(0, 0, 0, 0.48);
+}
+
+/* Native 4:3 Geometry (TIPS / VC / Classic Projector Standard) */
+html[data-ratio='4-3'] {
+  --slide-w: 1024px;
+  --slide-h: 768px;
+  --slide-pad-y: 34px;
+  --slide-pad-x: 38px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--stage-backdrop);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+ * Floating Presentation Control Chrome (Hidden on Print / PDF)
+ * ========================================================================== */
+
+.ir-toolbar {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline-strong);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.2);
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-theme='dark'] .ir-toolbar {
+  background: rgba(18, 18, 24, 0.88);
+  border-color: var(--gold-line);
+}
+
+.ir-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.ir-tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border-radius: 9999px;
+  background: var(--surface-recessed);
+  border: 1px solid var(--hairline);
+}
+
+.ir-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ir-tb-btn:hover {
+  color: var(--ink-primary);
+}
+
+.ir-tb-btn.is-active {
+  background: var(--surface-dark-pill);
+  color: var(--ink-inverse);
+}
+
+.ir-tb-btn--action {
+  border: 1px solid var(--gold-line);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.ir-tb-btn--action:hover {
+  background: var(--gold);
+  color: var(--ink-inverse);
+}
+
+.ir-tb-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--hairline-strong);
+  flex-shrink: 0;
+}
+
+.ir-tb-counter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-primary);
+  min-width: 58px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-tb-select {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-card);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 190px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+ * Deck Viewport & Slide Shell
+ * ========================================================================== */
+
+.ir-deck-viewport {
+  min-height: 100vh;
+  padding: 68px 24px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+html[data-view='deck'] .ir-deck-viewport {
+  height: 100vh;
+  overflow: hidden;
+  padding: 58px 16px 16px;
+  justify-content: center;
+  gap: 0;
+}
+
+.ir-slide-slot {
+  width: calc(var(--slide-w) * var(--deck-scale));
+  height: calc(var(--slide-h) * var(--deck-scale));
+  position: relative;
+  flex-shrink: 0;
+}
+
+html[data-view='deck'] .ir-slide-slot {
+  display: none;
+}
+
+html[data-view='deck'] .ir-slide-slot.is-current {
+  display: block;
+}
+
+.ir-slide {
+  width: var(--slide-w);
+  height: var(--slide-h);
+  transform: scale(var(--deck-scale));
+  transform-origin: top left;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--slide-pad-y) var(--slide-pad-x) 26px;
+  background: var(--surface-slide);
+  color: var(--ink-primary);
+  border-radius: 10px;
+  box-shadow: var(--shadow-slide);
+}
+
+/* Subtle luxury corner specular gradient */
+.ir-slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 70% 45% at 88% 0%,
+    rgba(214, 184, 137, 0.09),
+    transparent 68%
+  );
+  z-index: 0;
+}
+
+.ir-slide > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ==========================================================================
+ * Shared Slide Header & Footer Chrome
+ * ========================================================================== */
+
+.slide-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+}
+
+.slide-header > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.slide-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.slide-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 740;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.slide-subtitle {
+  margin: 0;
+  max-width: 390px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+  text-align: right;
+  word-break: keep-all;
+}
+
+.slide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.slide-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+}
+
+.slide-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.slide-footer-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.slide-footer-num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+ * Typography, Badges, Cards, Grids
+ * ========================================================================== */
+
+.kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card--gold {
+  border-color: var(--gold-line);
+  background: linear-gradient(180deg, var(--surface-accent-tint), var(--surface-card) 58%);
+}
+
+.card--recessed {
+  background: var(--surface-recessed);
+  border-color: var(--hairline);
+  box-shadow: none;
+}
+
+.card--accent-left {
+  border-left: 3px solid var(--gold);
+  border-radius: 4px 12px 12px 4px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.card-copy {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.54;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge--gold {
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+}
+
+.badge--live {
+  color: var(--status-live);
+  background: var(--status-live-bg);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+}
+
+.badge--hybrid {
+  color: var(--status-hybrid);
+  background: var(--status-hybrid-bg);
+  border: 1px solid var(--gold-line);
+}
+
+.badge--todo {
+  color: var(--status-todo);
+  background: var(--status-todo-bg);
+  border: 1px solid var(--hairline);
+}
+
+.badge--risk {
+  color: var(--status-risk);
+  background: var(--status-risk-bg);
+  border: 1px solid rgba(185, 28, 28, 0.22);
+}
+
+.badge--tbd {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px dashed rgba(217, 119, 6, 0.45);
+}
+
+html[data-theme='dark'] .badge--tbd {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-55-45 {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.split-45-55 {
+  display: grid;
+  grid-template-columns: 0.95fr 1.25fr;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kpi-num {
+  font-size: 32px;
+  font-weight: 760;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-num--gold {
+  color: var(--gold);
+}
+
+.clean-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.clean-list li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 12.2px;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.clean-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.clean-list strong {
+  color: var(--ink-primary);
+}
+
+/* ==========================================================================
+ * Slide 01 — Cover
+ * ========================================================================== */
+
+.ir-slide--cover {
+  padding: 46px 56px 32px;
+  background:
+    radial-gradient(ellipse 68% 72% at 80% 48%, rgba(214, 184, 137, 0.16), transparent 64%),
+    var(--surface-slide);
+}
+
+.cover-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1.32fr 0.82fr;
+  gap: 36px;
+  align-items: center;
+  min-height: 0;
+}
+
+.cover-left {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cover-logo {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+  align-self: flex-start;
+}
+
+.cover-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cover-headline {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 780;
+  line-height: 1.22;
+  letter-spacing: -0.035em;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.cover-headline em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+.cover-lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--ink-secondary);
+  max-width: 560px;
+  word-break: keep-all;
+}
+
+.cover-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.cover-meta-item span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: 3px;
+}
+
+.cover-meta-item strong {
+  font-size: 13px;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.cover-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  height: 100%;
+}
+
+.cover-phone-wrap {
+  position: relative;
+  padding: 10px;
+  border-radius: 34px;
+  border: 1.5px solid var(--gold-line);
+  background: #101014;
+  box-shadow: 0 28px 60px -18px rgba(0, 0, 0, 0.42);
+  height: 520px;
+  aspect-ratio: 500 / 1044;
+}
+
+html[data-theme='light'] .cover-phone-wrap {
+  background: #f0ece4;
+  box-shadow: 0 26px 56px -18px rgba(20, 20, 24, 0.25);
+}
+
+.cover-phone-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 25px;
+  display: block;
+}
+
+.cover-float-badge {
+  position: absolute;
+  right: -22px;
+  bottom: 42px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--gold-line);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cover-float-badge span {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+
+.cover-float-badge strong {
+  font-size: 13px;
+  color: var(--ink-primary);
+}
+
+/* ==========================================================================
+ * Slide 04 — 5-Stage Closed Loop
+ * ========================================================================== */
+
+.loop-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.loop-step {
+  position: relative;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-top: 3px solid var(--gold);
+  border-radius: 10px;
+  padding: 14px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loop-step-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--gold);
+}
+
+.loop-step h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.loop-step p {
+  margin: 0;
+  font-size: 11.8px;
+  line-height: 1.46;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* ==========================================================================
+ * Slide 05 — 6-Cut 3D Clay User Journey Gallery
+ * ========================================================================== */
+
+.journey-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.journey-card {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.journey-media {
+  position: relative;
+  height: 142px;
+  overflow: hidden;
+  background: #101015;
+  flex-shrink: 0;
+}
+
+.journey-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.journey-media-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.journey-media-badges .badge {
+  background: rgba(12, 12, 16, 0.82);
+  color: #f5f5f7;
+  border-color: rgba(214, 184, 137, 0.45);
+}
+
+.journey-media-badges .badge--live {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.45);
+}
+
+.journey-media-badges .badge--hybrid {
+  color: #ead1a7;
+}
+
+.journey-info {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+}
+
+.journey-info strong {
+  font-size: 13px;
+  font-weight: 720;
+  color: var(--ink-primary);
+}
+
+.journey-info p {
+  margin: 0;
+  font-size: 11.4px;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* ==========================================================================
+ * Slide 06 — Product Showcase (4 Live App Screens)
+ * ========================================================================== */
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.showcase-col {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.showcase-phone {
+  height: 368px;
+  aspect-ratio: 500 / 1044;
+  padding: 5px;
+  border-radius: 22px;
+  border: 1px solid var(--gold-line);
+  background: #101014;
+  box-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+html[data-theme='light'] .showcase-phone {
+  background: #f0ece4;
+}
+
+.showcase-phone img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 17px;
+  display: block;
+}
+
+.showcase-meta {
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.showcase-meta strong {
+  font-size: 13.5px;
+  font-weight: 720;
+  color: var(--ink-primary);
+}
+
+.showcase-meta span {
+  font-size: 11.3px;
+  line-height: 1.38;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* ==========================================================================
+ * Slide 07 — Core Tech + EXIF Strip Before/After
+ * ========================================================================== */
+
+.exif-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--gold-line);
+  background: var(--surface-recessed);
+}
+
+.exif-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.exif-thumb {
+  width: 74px;
+  height: 92px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline-strong);
+  object-fit: cover;
+  background: repeating-conic-gradient(rgba(128, 128, 128, 0.14) 0% 25%, transparent 0% 50%)
+    50% / 12px 12px;
+  flex-shrink: 0;
+}
+
+.exif-arrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  padding: 5px 10px;
+  border-radius: 9999px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+ * Tables (Security Moat / Competitive / Compliance)
+ * ========================================================================== */
+
+.ir-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--surface-card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+}
+
+.ir-table th,
+.ir-table td {
+  padding: 10px 13px;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+  line-height: 1.44;
+  word-break: keep-all;
+}
+
+.ir-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.ir-table thead th {
+  background: var(--surface-recessed);
+  font-size: 11px;
+  font-weight: 740;
+  letter-spacing: 0.03em;
+  color: var(--ink-secondary);
+}
+
+.ir-table th.col-highlight,
+.ir-table td.col-highlight {
+  background: var(--surface-accent-tint);
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.ir-table thead th.col-highlight {
+  color: var(--gold);
+}
+
+.ir-table--spacious th,
+.ir-table--spacious td {
+  padding: 13px 14px;
+}
+
+.card-foot-bar {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+.card-foot-bar span:last-child {
+  color: var(--ink-tertiary);
+  font-weight: 500;
+}
+
+/* ==========================================================================
+ * Slide 09 — Market TAM/SAM/SOM + Charts
+ * ========================================================================== */
+
+.market-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 9999px;
+  background: var(--surface-recessed);
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+}
+
+.bar-fill--muted {
+  background: var(--ink-tertiary);
+  opacity: 0.55;
+}
+
+.source-note {
+  margin: 0;
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+ * Slide 12 — Architecture 6-Tier Strip
+ * ========================================================================== */
+
+.tier-stack {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tier-row {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 42px 150px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-card);
+  font-size: 11.8px;
+}
+
+.tier-row--core {
+  border-color: var(--gold-line);
+  border-left: 3px solid var(--gold);
+  background: var(--surface-accent-tint);
+}
+
+.tier-num {
+  font-family: var(--font-mono);
+  font-weight: 760;
+  color: var(--gold);
+}
+
+.tier-name {
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.tier-desc {
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* ==========================================================================
+ * Slide 15 — Funding Stacked Allocation Bar
+ * ========================================================================== */
+
+.fund-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+}
+
+.fund-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 750;
+  color: #ffffff;
+}
+
+.fund-seg--1 { background: #8f6b36; width: 45%; }
+.fund-seg--2 { background: #2c2c34; width: 25%; }
+.fund-seg--3 { background: #5a5a68; width: 20%; }
+.fund-seg--4 { background: #a89578; width: 10%; color: #141418; }
+
+html[data-theme='dark'] .fund-seg--1 { background: #d6b889; color: #141418; }
+html[data-theme='dark'] .fund-seg--2 { background: #3b3b48; }
+html[data-theme='dark'] .fund-seg--3 { background: #646478; }
+html[data-theme='dark'] .fund-seg--4 { background: #8c7a5e; color: #faf9f6; }
+
+/* ==========================================================================
+ * Native 4:3 (1024 x 768) Adaptive Layout Tuning — Zero Clipping / Overflow
+ * ========================================================================== */
+
+html[data-ratio='4-3'] .slide-header {
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+html[data-ratio='4-3'] .slide-title {
+  font-size: 23px;
+}
+
+html[data-ratio='4-3'] .slide-subtitle {
+  max-width: 310px;
+  font-size: 11.8px;
+}
+
+html[data-ratio='4-3'] .ir-slide--cover {
+  padding: 38px 42px 28px;
+}
+
+html[data-ratio='4-3'] .cover-grid {
+  grid-template-columns: 1.25fr 0.85fr;
+  gap: 24px;
+}
+
+html[data-ratio='4-3'] .cover-headline {
+  font-size: 33px;
+}
+
+html[data-ratio='4-3'] .cover-lead {
+  font-size: 13.8px;
+}
+
+html[data-ratio='4-3'] .cover-phone-wrap {
+  height: 492px;
+}
+
+html[data-ratio='4-3'] .cover-float-badge {
+  right: -12px;
+  bottom: 28px;
+}
+
+html[data-ratio='4-3'] .card {
+  padding: 13px 14px;
+  gap: 6px;
+}
+
+html[data-ratio='4-3'] .card-title {
+  font-size: 14px;
+}
+
+html[data-ratio='4-3'] .card-copy,
+html[data-ratio='4-3'] .clean-list li {
+  font-size: 11.8px;
+  line-height: 1.46;
+}
+
+html[data-ratio='4-3'] .kpi-num {
+  font-size: 27px;
+}
+
+html[data-ratio='4-3'] .loop-step {
+  padding: 12px 10px;
+}
+
+html[data-ratio='4-3'] .loop-step h3 {
+  font-size: 12.8px;
+}
+
+html[data-ratio='4-3'] .loop-step p {
+  font-size: 11px;
+}
+
+html[data-ratio='4-3'] .journey-media {
+  height: 158px;
+}
+
+html[data-ratio='4-3'] .showcase-grid {
+  gap: 10px;
+}
+
+html[data-ratio='4-3'] .showcase-col {
+  padding: 12px 8px;
+  justify-content: space-between;
+}
+
+html[data-ratio='4-3'] .showcase-phone {
+  height: 416px;
+}
+
+html[data-ratio='4-3'] .ir-table {
+  font-size: 11.2px;
+}
+
+html[data-ratio='4-3'] .ir-table th,
+html[data-ratio='4-3'] .ir-table td {
+  padding: 9px 10px;
+}
+
+html[data-ratio='4-3'] .ir-table--spacious th,
+html[data-ratio='4-3'] .ir-table--spacious td {
+  padding: 13px 11px;
+}
+
+html[data-ratio='4-3'] .tier-row {
+  grid-template-columns: 36px 132px 1fr;
+  padding: 8px 10px;
+  font-size: 11.2px;
+}
+
+/* ==========================================================================
+ * Print / Headless PDF Export (Exact 16:9 or 4:3 Full-Bleed Pages)
+ * ========================================================================== */
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .ir-toolbar {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: var(--surface-slide) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ir-deck-viewport {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .ir-slide-slot {
+    display: block !important;
+    width: var(--slide-w) !important;
+    height: var(--slide-h) !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .ir-slide-slot:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .ir-slide {
+    transform: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}
