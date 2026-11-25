@@ -17,7 +17,7 @@ const CARE_SERVICE_QUERIES = {
     en: 'dry cleaner',
   },
   laundry: {
-    ko: '세탁소 크린토피아',
+    ko: '세탁소',
     en: 'laundry service',
   },
   alteration: {

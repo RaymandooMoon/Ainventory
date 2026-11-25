@@ -170,9 +170,9 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
   {
     code: 'vision:analyze',
     groupName: 'vision',
-    nameKo: 'AI 의류 사진 인식·누끼',
+    nameKo: 'AI 의류 사진 인식·배경 제거',
     nameEn: 'AI Garment Vision & Cutout',
-    descriptionKo: '유료 서버 비전 분석, 웹 조회 및 스튜디오 누끼 처리를 실행합니다.',
+    descriptionKo: '유료 서버 사진 분석, 웹 조회 및 스튜디오 배경 제거 처리를 실행합니다.',
   },
   {
     code: 'maps:proxy',
@@ -186,7 +186,7 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
     groupName: 'admin',
     nameKo: '역할·권한 관리',
     nameEn: 'Manage Roles & Permissions',
-    descriptionKo: '역할별 권한 매핑과 사용자 역할을 조회 및 변경합니다.',
+    descriptionKo: '역할별 권한 설정과 사용자 역할을 조회 및 변경합니다.',
   },
   {
     code: 'admin:manage_users',
@@ -195,7 +195,7 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
     nameEn: 'Manage Users & Demo Data',
     descriptionKo: '관리자 대시보드 조회, 사용자 생성 및 데모 데이터 초기화를 수행합니다.',
   },
-  // Menu-Level Access Permissions (유저별 메뉴 접근 권한)
+  // Menu-Level Access Permissions (사용자별 메뉴 접근 권한)
   {
     code: 'menu:outfits',
     groupName: 'menu',
@@ -229,7 +229,7 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
     groupName: 'menu',
     nameKo: '메뉴 · 프로필·체형 설정',
     nameEn: 'Menu · Profile & Body',
-    descriptionKo: '피부톤·체형 프로필 설정 모달에 접근합니다.',
+    descriptionKo: '피부톤·체형 프로필 설정 창에 접근합니다.',
   },
   // Per-Menu Button Permissions (메뉴별 주요 버튼 실행 권한)
   {
@@ -258,7 +258,7 @@ export const PERMISSION_DEFINITIONS = Object.freeze([
     groupName: 'button',
     nameKo: '코디 · 배경 스토어·뽑기 버튼',
     nameEn: 'Outfits · Stage Store Button',
-    descriptionKo: '배경 스토어 및 일일 뽑기 모달을 여는 버튼입니다.',
+    descriptionKo: '배경 스토어 및 일일 뽑기 창을 여는 버튼입니다.',
   },
   {
     code: 'btn:outfits:packing',

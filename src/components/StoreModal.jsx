@@ -245,7 +245,7 @@ export default function StoreModal({
       open={open}
       onClose={onClose}
       lang={lang}
-      eyebrow={tx(lang, '아틀리에 스토어 · STAGE BACKDROP GACHA', 'ATELIER STORE · STAGE GACHA')}
+      eyebrow={tx(lang, '아틀리에 스토어 · 스테이지 배경 뽑기', 'ATELIER STORE · STAGE GACHA')}
       title={tx(lang, '배경 스토어', 'Backdrop Store')}
       maxWidth={680}
     >

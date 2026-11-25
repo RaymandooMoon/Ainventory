@@ -257,7 +257,7 @@ test.describe('Guided 2-Photo Garment Registration, Hybrid Cutout, Web Match & M
     await page.locator('.hig-reg-sticky-preview [role="tab"]', { hasText: '뒷면' }).click();
     await page.locator('.hig-reg-sticky-preview button', { hasText: 'AI 스튜디오 보정' }).click();
     await expect.poll(() => captured.studioCutout?.side).toBe('back');
-    await expect(page.locator('.hig-reg-sticky-preview')).toContainText('AI 스튜디오 누끼 완료');
+    await expect(page.locator('.hig-reg-sticky-preview')).toContainText('AI 스튜디오 배경 제거 완료');
 
     // Apply Official Photo + Info from Web Proposal Card
     await webCard.locator('.hig-web-apply-primary').click();

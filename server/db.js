@@ -1464,7 +1464,7 @@ export function initDb() {
         15,
         todayStr,
         '/seed/studio-briefcase.jpg',
-        '왼손 그립 소켓 진자 물리(Pendulum Physics)가 적용된 비스포크 브리프케이스',
+        '이탈리안 풀그레인 레더 비스포크 서류가방',
       ]);
       ensureSignatureItem('wife', 'accessory', 'tote', 'leather', [
         'wife',
@@ -1483,7 +1483,7 @@ export function initDb() {
         18,
         todayStr,
         '/seed/studio-tote.jpg',
-        '보행 리듬에 따라 경쾌하게 흔들리는 쇼퍼 토트백',
+        '데일리로 들기 좋은 미니멀 페블 레더 쇼퍼 토트백',
       ]);
       ensureSignatureItem('husband', 'neckwear', 'scarf', 'wool', [
         'husband',
@@ -1502,7 +1502,7 @@ export function initDb() {
         9,
         todayStr,
         '/seed/studio-muffler.jpg',
-        '소프트 클로스 지글 피직스가 적용된 캐시미어 머플러',
+        '부드럽고 자연스럽게 떨어지는 퓨어 캐시미어 프린지 머플러',
       ]);
     } catch {
       // ignore migration error
@@ -1805,7 +1805,7 @@ export function seedIfEmpty(forceReset = false) {
     ensureDefaultUser({
       username: 'admin',
       password: process.env.ADMIN_INITIAL_PASSWORD || 'admin',
-      displayName: '어드민 (남편)',
+      displayName: '관리자 (남편)',
       role: 'admin',
       defaultCloset: 'husband',
       closetName: '남편의 사이버 아틀리에',
@@ -1851,10 +1851,10 @@ export function seedIfEmpty(forceReset = false) {
     ensureDefaultUser({
       username: 'wife',
       password: 'wife1234',
-      displayName: '와이프',
+      displayName: '아내',
       role: 'member',
       defaultCloset: 'wife',
-      closetName: '와이프의 시그니처 옷장',
+      closetName: '아내의 시그니처 옷장',
       email: 'wife@ainventory.kr',
       ageGroup: '30s',
       age: 32,
@@ -1967,7 +1967,7 @@ export function seedIfEmpty(forceReset = false) {
         '주말 데일리 착용률 1위 청바지', 'denim',
       ],
       [
-        'husband', '미니멀 화이트 스웨이드코트 스니커즈', 'shoes', 'sneakers', '화이트', '#EAE7E1',
+        'husband', '미니멀 화이트 스웨이드 코트 스니커즈', 'shoes', 'sneakers', '화이트', '#EAE7E1',
         JSON.stringify(['봄', '여름', '가을', '겨울']), 0, 32, 0, 'casual',
         '커먼프로젝트 무드', 248000, 31, fmtDate(1), 'active', 1, '/seed/white-sneakers.jpg',
         '앞코 스웨이드 소재라 비 오는 날은 피하는 편', 'leather',
@@ -2093,7 +2093,7 @@ export function seedIfEmpty(forceReset = false) {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'worn')
     `);
     insertLog.run('husband', fmtDate(1), null, JSON.stringify(casualCafeIds), '맑음', 15, '가볍게 동네 카페 외출');
-    insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름조금', 13, '와이프랑 성수동 쇼핑 데이트');
+    insertLog.run('husband', fmtDate(2), outfit2Id, JSON.stringify(weekendNavyIds), '구름 조금', 13, '아내와 성수동 쇼핑 데이트');
     insertLog.run('husband', fmtDate(5), outfit1Id, JSON.stringify(commuteItemIds), '비 조금', 11, '발수 트렌치코트 덕분에 쾌적했던 출근길');
     insertLog.run('wife', fmtDate(3), outfit3Id, JSON.stringify(wifeWalkIds), '맑음', 14, '올림픽공원 산책 코디');
 

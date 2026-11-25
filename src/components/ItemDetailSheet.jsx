@@ -48,8 +48,8 @@ const CARE_WASH_METHOD_OPTIONS = [
 ];
 
 const CARE_TUMBLE_OPTIONS = [
-  { key: 'no_tumble_flat', ko: '건조기 불가(뉘어 건조)', en: 'Flat Dry' },
-  { key: 'no_tumble_hang', ko: '건조기 불가(그늘 건조)', en: 'Line Dry' },
+  { key: 'no_tumble_flat', ko: '뉘어 건조 (건조기 불가)', en: 'Flat Dry' },
+  { key: 'no_tumble_hang', ko: '그늘 건조 (건조기 불가)', en: 'Line Dry' },
   { key: 'low_heat', ko: '저온 건조', en: 'Low Heat' },
   { key: 'allowed', ko: '건조기 가능', en: 'Tumble OK' },
 ];
@@ -343,7 +343,7 @@ function ItemDetailContent({
         }}
       >
         <Layers size={18} />
-        <span>{tx(lang, 'Outfits에서 코디해보기', 'Try in Outfits')}</span>
+        <span>{tx(lang, '코디 스튜디오에서 입어보기', 'Try in Outfits')}</span>
       </button>
 
       {/* Editable Metadata Form */}
@@ -836,7 +836,7 @@ function ItemDetailContent({
             rows={2}
             placeholder={tx(
               lang,
-              '예: 올려 입으면 복숭아뼈, 내려 입으면 끌려요',
+              '예: 올려 입으면 복사뼈, 내려 입으면 끌려요',
               'Fit, hem length, tailoring, or styling notes'
             )}
             value={memo}

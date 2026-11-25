@@ -34,7 +34,7 @@ import {
 
 const WEATHER_PRESETS = [
   { key: 'clear', ko: '맑음', en: 'Clear', Icon: Sun },
-  { key: 'partly', ko: '구름조금', en: 'Partly Cloudy', Icon: CloudSun },
+  { key: 'partly', ko: '구름 조금', en: 'Partly Cloudy', Icon: CloudSun },
   { key: 'cloudy', ko: '흐림', en: 'Cloudy', Icon: Cloud },
   { key: 'rain', ko: '비', en: 'Rain', Icon: CloudRain },
   { key: 'snow', ko: '눈', en: 'Snow', Icon: Snowflake },

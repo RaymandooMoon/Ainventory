@@ -92,7 +92,7 @@ const SAMPLE_PORTRAIT_BUTTONS = [
 const LIGHTING_SEGMENT_LABELS = {
   auto_d65: { ko: '자연광(기본)', en: 'Daylight' },
   studio_cool_fix: { ko: '형광등', en: 'Cool LED' },
-  indoor_warm_fix: { ko: '노란조명', en: 'Warm Lamp' },
+  indoor_warm_fix: { ko: '노란 조명', en: 'Warm Lamp' },
   raw_original: { ko: '원본', en: 'Original' },
 };
 
@@ -1474,7 +1474,7 @@ function ProfileModalContent({
                 {fallbackGender === 'male' && (
                   <Check size={13} strokeWidth={2.8} aria-hidden="true" />
                 )}
-                <span>{tx(lang, '남성 (Male)', 'Male')}</span>
+                <span>{tx(lang, '남성', 'Male')}</span>
               </button>
               <button
                 type="button"
@@ -1500,7 +1500,7 @@ function ProfileModalContent({
                 {fallbackGender === 'female' && (
                   <Check size={13} strokeWidth={2.8} aria-hidden="true" />
                 )}
-                <span>{tx(lang, '여성 (Female)', 'Female')}</span>
+                <span>{tx(lang, '여성', 'Female')}</span>
               </button>
             </div>
 
@@ -2024,7 +2024,7 @@ function ProfileModalContent({
                       <div className="avatar-face-photo-title-line">
                         <strong>
                           {isFacePhotoActive
-                            ? tx(lang, '내 얼굴 사진 반영 ON', 'My Face Photo Active')
+                            ? tx(lang, '내 얼굴 사진 반영 중', 'My Face Photo Active')
                             : tx(
                                 lang,
                                 '얼굴 사진 분석 완료 (일러스트 모드)',
@@ -2087,7 +2087,7 @@ function ProfileModalContent({
                       aria-checked={isFacePhotoActive}
                       aria-label={tx(
                         lang,
-                        '업로드한 얼굴 사진을 아바타에 연결 전환',
+                        '업로드한 얼굴 사진의 아바타 적용 켜기/끄기',
                         'Toggle portrait photo attachment on avatar'
                       )}
                       data-face-photo-toggle="true"
@@ -2400,7 +2400,7 @@ function ProfileModalContent({
                   aria-checked={isFacePhotoActive}
                   aria-label={tx(
                     lang,
-                    '업로드한 얼굴 사진을 아바타에 연결 전환',
+                    '업로드한 얼굴 사진의 아바타 적용 켜기/끄기',
                     'Toggle portrait photo attachment on avatar'
                   )}
                   data-face-photo-toggle="true"

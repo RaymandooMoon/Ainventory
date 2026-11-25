@@ -321,11 +321,11 @@ export const AVATAR_FRAME_OPTIONS: readonly AvatarOptionItem<AvatarFramePreset>[
   },
   {
     key: 'androgynous',
-    labelKo: '앤드로지너스 중성 프레임',
+    labelKo: '젠더리스 · 중성 프레임',
     labelEn: 'Androgynous Frame',
     shortKo: '중성형',
     shortEn: 'Androgynous',
-    descKo: '젠더 구애 없이 균형 잡힌 모던 에디토리얼 프로포션',
+    descKo: '성별에 구애받지 않는 균형 잡힌 모던 비율',
     descEn: 'Balanced gender-inclusive editorial proportions',
   },
   {
@@ -342,9 +342,9 @@ export const AVATAR_FRAME_OPTIONS: readonly AvatarOptionItem<AvatarFramePreset>[
 export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
   {
     key: 'hourglass',
-    labelKo: '아워글래스',
+    labelKo: '모래시계형 (아워글래스)',
     labelEn: 'Hourglass',
-    shortKo: '아워글래스',
+    shortKo: '모래시계형 (아워글래스)',
     shortEn: 'Hourglass',
     descKo: '어깨와 골반이 균형을 이루며 잘록한 허리 라인',
     descEn: 'Balanced bust/shoulders and hips with a defined waist',
@@ -362,9 +362,9 @@ export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
   },
   {
     key: 'pear',
-    labelKo: '페어 · 하체 볼륨',
+    labelKo: '서양배형 · 하체 볼륨',
     labelEn: 'Pear',
-    shortKo: '페어',
+    shortKo: '하체 볼륨형',
     shortEn: 'Pear',
     descKo: '차분한 상체와 안정감 있는 힙·허벅지 볼륨',
     descEn: 'Slender upper torso with fuller hip and thigh curves',
@@ -372,7 +372,7 @@ export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
   },
   {
     key: 'apple',
-    labelKo: '애플 · 복부 중심',
+    labelKo: '사과형 · 복부 중심',
     labelEn: 'Apple',
     shortKo: '애플',
     shortEn: 'Apple',
@@ -382,9 +382,9 @@ export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
   },
   {
     key: 'rectangle',
-    labelKo: '렉탱글 · 스트레이트',
+    labelKo: '일자형 · 스트레이트',
     labelEn: 'Rectangle',
-    shortKo: '렉탱글',
+    shortKo: '일자형',
     shortEn: 'Rectangle',
     descKo: '어깨·허리·골반 폭이 깔끔하게 이어지는 모던 실루엣',
     descEn: 'Clean straight alignment across shoulders, waist, and hips',
@@ -392,7 +392,7 @@ export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
   },
   {
     key: 'athletic',
-    labelKo: '애슬레틱 · 탄탄 머슬',
+    labelKo: '애슬레틱 · 탄탄한 근육형',
     labelEn: 'Athletic',
     shortKo: '애슬레틱',
     shortEn: 'Athletic',
@@ -406,7 +406,7 @@ export const AVATAR_ARCHETYPE_OPTIONS: readonly AvatarArchetypeOption[] = [
     labelEn: 'Petite Slim',
     shortKo: '쁘띠 슬림',
     shortEn: 'Petite',
-    descKo: '가볍고 여리여리한 골격과 슬림한 사지 두께',
+    descKo: '가볍고 슬림한 골격과 가느다란 팔다리',
     descEn: 'Compact, slender bone structure and lean limbs',
     legacyBodyShape: 'slim',
   },
@@ -432,9 +432,9 @@ export const CHEST_FORM_OPTIONS: readonly AvatarOptionItem<ChestContourForm>[] =
   },
   {
     key: 'pectoral',
-    labelKo: '펙토럴 · 탄탄한 흉곽',
+    labelKo: '탄탄한 가슴 · 흉곽',
     labelEn: 'Sculpted Pectoral',
-    shortKo: '펙토럴',
+    shortKo: '탄탄한 흉곽',
     shortEn: 'Pectoral',
   },
   {
@@ -456,7 +456,7 @@ export const CHEST_FORM_OPTIONS: readonly AvatarOptionItem<ChestContourForm>[] =
 export const HAIR_STYLE_OPTIONS: readonly AvatarOptionItem<AvatarHairStyle>[] = [
   {
     key: 'buzz_shaved',
-    labelKo: '버즈 · 쉐이브드',
+    labelKo: '버즈컷 · 셰이브드',
     labelEn: 'Buzz / Shaved',
     shortKo: '버즈컷',
     shortEn: 'Buzz',
@@ -597,44 +597,44 @@ export const HAIR_COLOR_SWATCHES: readonly HairColorSwatchOption[] = [
 export const FACIAL_HAIR_OPTIONS: readonly AvatarOptionItem<AvatarFacialHair>[] = [
   {
     key: 'none',
-    labelKo: '없음 (클린 쉐이브)',
+    labelKo: '수염 없음',
     labelEn: 'Clean Shaven',
     shortKo: '없음',
     shortEn: 'None',
   },
   {
     key: 'stubble',
-    labelKo: '라이트 스터블',
+    labelKo: '옅은 수염 (스터블)',
     labelEn: 'Light Stubble',
     shortKo: '스터블',
     shortEn: 'Stubble',
   },
   {
     key: 'mustache',
-    labelKo: '머스태시 (콧수염)',
+    labelKo: '콧수염',
     labelEn: 'Mustache',
-    shortKo: '머스태시',
+    shortKo: '콧수염',
     shortEn: 'Mustache',
   },
   {
     key: 'goatee',
-    labelKo: '고티 (턱·콧수염)',
+    labelKo: '턱·콧수염 (고티)',
     labelEn: 'Goatee',
     shortKo: '고티',
     shortEn: 'Goatee',
   },
   {
     key: 'short_boxed_beard',
-    labelKo: '숏 박스드 비어드',
+    labelKo: '짧은 턱수염',
     labelEn: 'Short Boxed Beard',
     shortKo: '숏 비어드',
     shortEn: 'Short Beard',
   },
   {
     key: 'full_beard',
-    labelKo: '풀 비어드',
+    labelKo: '풍성한 턱수염',
     labelEn: 'Full Beard',
-    shortKo: '풀 비어드',
+    shortKo: '풍성한 턱수염',
     shortEn: 'Full Beard',
   },
 ] as const;
@@ -672,7 +672,7 @@ export const HEAD_SHAPE_OPTIONS: readonly AvatarOptionItem<AvatarHeadShape>[] = 
     key: 'long',
     labelKo: '롱 (긴 얼굴형)',
     labelEn: 'Oblong',
-    shortKo: '긴형',
+    shortKo: '긴 얼굴형',
     shortEn: 'Oblong',
   },
 ] as const;
@@ -687,9 +687,9 @@ export const EYE_SHAPE_OPTIONS: readonly AvatarOptionItem<AvatarEyeShape>[] = [
   },
   {
     key: 'monolid',
-    labelKo: '모노리드 (무쌍)',
+    labelKo: '무쌍',
     labelEn: 'Monolid',
-    shortKo: '모노리드',
+    shortKo: '무쌍',
     shortEn: 'Monolid',
   },
   {
@@ -708,9 +708,9 @@ export const EYE_SHAPE_OPTIONS: readonly AvatarOptionItem<AvatarEyeShape>[] = [
   },
   {
     key: 'upturned',
-    labelKo: '업턴 (올라간 눈매)',
+    labelKo: '올라간 눈매',
     labelEn: 'Upturned',
-    shortKo: '업턴',
+    shortKo: '올라간 눈매',
     shortEn: 'Upturned',
   },
   {
@@ -754,9 +754,9 @@ export const MST_UNDERTONE_OPTIONS: readonly AvatarOptionItem<MstUndertone>[] = 
 ] as const;
 
 export const ISO_VIEW_ANGLE_OPTIONS: readonly IsoViewAngleOption[] = [
-  { angleDeg: 45, labelKo: '45° 쿼터 정면', labelEn: '45° Quarter Front', shortKo: '45°', shortEn: '45°' },
+  { angleDeg: 45, labelKo: '45° 반측면', labelEn: '45° Quarter Front', shortKo: '45°', shortEn: '45°' },
   { angleDeg: 0, labelKo: '0° 정면', labelEn: '0° Front', shortKo: '정면', shortEn: '0°' },
-  { angleDeg: -45, labelKo: '-45° 좌측 쿼터', labelEn: '-45° Quarter Left', shortKo: '-45°', shortEn: '-45°' },
+  { angleDeg: -45, labelKo: '-45° 좌측 반측면', labelEn: '-45° Quarter Left', shortKo: '-45°', shortEn: '-45°' },
   { angleDeg: -90, labelKo: '-90° 좌측면', labelEn: '-90° Left Profile', shortKo: '좌측', shortEn: '-90°' },
   { angleDeg: -135, labelKo: '-135° 좌측 후면', labelEn: '-135° Back Left', shortKo: '-135°', shortEn: '-135°' },
   { angleDeg: 180, labelKo: '180° 후면', labelEn: '180° Back', shortKo: '후면', shortEn: '180°' },

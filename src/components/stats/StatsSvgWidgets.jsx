@@ -174,7 +174,7 @@ export function WardrobeHeroSummaryCard({
             <span className="stats-kpi-note">
               {tx(
                 lang,
-                `${metrics.wornItems}점 실제 착용됨`,
+                `${metrics.wornItems}벌 착용`,
                 `${metrics.wornItems} pieces worn`
               )}
             </span>

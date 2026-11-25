@@ -110,7 +110,7 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'short_shirt', label: '반팔 셔츠' },
     { value: 'blouse', label: '블라우스 · 실크탑' },
     { value: 'tshirt', label: '티셔츠' },
-    { value: 'tank_top', label: '탱크탑 · 나시' },
+    { value: 'tank_top', label: '탱크탑' },
     { value: 'sleeveless', label: '슬리브리스 · 민소매' },
     { value: 'sweatshirt', label: '맨투맨' },
     { value: 'hoodie', label: '후드 스웨트' },
@@ -163,7 +163,7 @@ export const SUBCATEGORIES_BY_CAT = {
     { value: 'heels', label: '힐 · 펌프스' },
     { value: 'sandals', label: '스트랩 샌들' },
     { value: 'slides', label: '슬라이드 · 슬리퍼' },
-    { value: 'flip_flops', label: '쪼리 · 플립플랍' },
+    { value: 'flip_flops', label: '플립플랍' },
   ],
   accessory: [
     { value: 'bag', label: '크로스백 · 숄더백' },

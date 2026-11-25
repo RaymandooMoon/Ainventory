@@ -523,7 +523,7 @@ function resolveInspectorMaterialLabel(rawFabric, lang) {
   if (/poplin|포플린/.test(s)) return isEn ? 'Cotton Poplin' : '포플린 코튼';
   if (/oxford|옥스포드/.test(s)) return isEn ? 'Oxford Cotton' : '옥스포드 코튼';
   if (/denim|selvedge|데님|셀비지/.test(s)) return isEn ? 'Denim' : '데님';
-  if (/linen|리넨|린넨/.test(s)) return isEn ? 'Linen' : '리넨';
+  if (/linen|리넨|린넨/.test(s)) return isEn ? 'Linen' : '린넨';
   if (/merino|메리노/.test(s)) return isEn ? 'Merino Wool' : '메리노 울';
   if (/cashmere|캐시미어/.test(s)) return isEn ? 'Cashmere' : '캐시미어';
   if (/goose|down|구스|다운/.test(s)) return isEn ? 'Goose Down' : '구스다운';
@@ -566,7 +566,7 @@ function resolveGarmentInspectorSpecs(item, lang) {
   const rawColor = String(item?.color_name ?? '').trim();
   const colorLabel = rawColor
     ? sanitizeZeroHangulEn(localizeColorName(rawColor, lang), lang, 'Neutral')
-    : tx(lang, '모노톤', 'Neutral');
+    : tx(lang, '뉴트럴', 'Neutral');
   const materialLabel = resolveInspectorMaterialLabel(item?.fabric, lang);
   const seasonLabel = resolveInspectorSeasonLabel(item?.seasons, lang);
 
@@ -793,7 +793,7 @@ const LOOK_STYLE_STORAGE_KEY = 'ainventory_look_style_config_v1';
 const LOOK_STYLE_PRESETS = [
   {
     key: 'business_casual',
-    ko: '직장생활을 위한 비즈니스 캐주얼',
+    ko: '비즈니스 캐주얼',
     en: 'Business Casual',
   },
   {
@@ -2923,7 +2923,7 @@ export default function OutfitStudioView({
       },
       () => {
         setLocatingGps(false);
-        showToast?.(tx(lang, '위치 권한을 확인해주세요.', 'Please check location permissions.'));
+        showToast?.(tx(lang, '위치 권한을 확인해 주세요.', 'Please check location permissions.'));
       },
       { timeout: 6000 }
     );
@@ -2983,7 +2983,7 @@ export default function OutfitStudioView({
     showToast?.(
       isEquipped
         ? tx(lang, `${garment.name} 착용을 해제했어요.`, `Removed ${garment.name}.`)
-        : tx(lang, `UV 대비 ${garment.name}을(를) 착용했어요.`, `Equipped ${garment.name} for UV protection.`)
+        : tx(lang, `자외선 대비 ${garment.name}을(를) 착용했어요.`, `Equipped ${garment.name} for UV protection.`)
     );
   };
 
@@ -5154,7 +5154,7 @@ export default function OutfitStudioView({
                 setShowTomorrowPrompt(false);
               }}
             >
-              {tx(lang, '아니오', 'No, keep today')}
+              {tx(lang, '아니요', 'No, keep today')}
             </button>
             <button
               type="button"

@@ -88,15 +88,15 @@ export function tx(lang: string | undefined | null, ko: string, en: string): str
 
 const KO_DICT = {
   brandTitle: 'A inventory',
-  brandSub: 'Minimal Digital Wardrobe & Studio',
+  brandSub: '미니멀 디지털 옷장 & 스튜디오',
   brandSubtitle: '디지털 옷장 · 스튜디오',
   navWeather: '내일 날씨 코디',
   navShopping: '쇼핑 판독기',
   navShoppingBadge: '핵심',
   navWardrobe: '디지털 옷장',
-  navStudio: '코디 북 · Dress Me',
+  navStudio: '코디북 · 가상 피팅',
   navAnalytics: '캘린더 · CPW 리포트',
-  navAdmin: '어드민 · 서버 관리',
+  navAdmin: '관리자 · 서버 관리',
   mobileWeather: '내일코디',
   mobileWardrobe: '옷장',
   mobileShopping: '쇼핑판독',
@@ -108,7 +108,7 @@ const KO_DICT = {
   profileBtn: '프로필',
   closetPersonal: '내 옷장',
   closetHusband: '남편 옷장',
-  closetWife: '와이프 옷장',
+  closetWife: '아내 옷장',
   closetAll: '전체 옷장',
   myClosetFallback: '나만의 디지털 옷장',
   loginTitle: '로그인',
@@ -142,7 +142,7 @@ export type I18nKey = keyof typeof KO_DICT;
 
 const EN_DICT: Record<I18nKey, string> = {
   brandTitle: 'A inventory',
-  brandSub: 'Minimal Digital Wardrobe & Studio',
+  brandSub: '미니멀 디지털 옷장 & 스튜디오',
   brandSubtitle: 'Digital Wardrobe · Studio',
   navWeather: 'Tomorrow Weather Look',
   navShopping: 'Shopping Checker',
@@ -295,7 +295,7 @@ const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
   '미니멀 레더 코트 스니커즈': 'Minimal Leather Court Sneakers',
   '미니멀 풀그레인 레더 코트 스니커즈': 'Minimal Full-Grain Leather Court Sneakers',
   '미니멀 화이트 레더 스니커즈': 'Minimal White Leather Sneakers',
-  '미니멀 화이트 스웨이드코트 스니커즈': 'Minimal White Suede Court Sneakers',
+  '미니멀 화이트 스웨이드 코트 스니커즈': 'Minimal White Suede Court Sneakers',
   '클린 화이트 레더 스니커즈': 'Clean White Leather Sneakers',
   '클래식 스무스 레더 페니 로퍼': 'Classic Smooth Leather Penny Loafers',
   '클래식 굿이어웰트 페니 로퍼': 'Classic Goodyear-Welted Penny Loafers',
@@ -321,7 +321,7 @@ const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
   '코마 코튼 데일리 앵클 삭스': 'Combed Cotton Daily Ankle Socks',
   '심리스 모달 에어 이너탑': 'Seamless Modal Air Base Top',
   '심리스 립 모달 발열 이너탑': 'Seamless Ribbed Modal Thermal Top',
-  '브리즈 수피마 코튼 에어 이너웨어': 'Supima Cotton Air Base Layer',
+  '수피마 코튼 에어 이너웨어': 'Supima Cotton Air Base Layer',
   '경량 올리브 퀼팅 라이너 자켓': 'Lightweight Olive Quilted Liner Jacket',
   '경량 퀼팅 유틸리티 자켓': 'Lightweight Quilted Utility Jacket',
   '클래식 벨티드 맥 코트': 'Classic Belted Mac Coat',
@@ -367,7 +367,7 @@ const BRAND_KO_TO_EN: Readonly<Record<string, string>> = {
   '리바이스 프리미엄': "Levi's Premium",
   리바이스: "Levi's",
   버윅: 'Berwick',
-  보세: 'Indie Label',
+  '인디 브랜드': 'Indie Label',
 };
 
 const OUTFIT_TITLE_KO_TO_EN: Readonly<Record<string, string>> = {
@@ -381,7 +381,7 @@ const OUTFIT_TITLE_KO_TO_EN: Readonly<Record<string, string>> = {
   '바람 부는 날 포근한 레이어드 데일리룩': 'Cozy Windproof Layered Daily Look',
   '하루 종일 편안하고 정돈된 데일리룩': 'Effortless Refined Daily Look',
   '옷장 속 숨은 아이템을 깨우는 기분 전환룩': 'Fresh Wardrobe Rediscovery Look',
-  '오프라인 코디': 'Saved Outfit',
+  '저장된 코디': 'Saved Outfit',
   '데일리 룩': 'Daily Look',
   데일리룩: 'Daily Look',
   출근룩: 'Office Look',
@@ -398,11 +398,11 @@ const MEMO_KO_TO_EN: Readonly<Record<string, string>> = {
   '샘플 체험용 캡슐 아틀리에 아이템': 'Sample Atelier Capsule Item',
   '샘플 캡슐에서 가져온 아이템': 'Imported from Sample Capsule',
   '오프라인 쇼핑 판독 후 구매 등록': 'Added after In-Store Duplicate Check',
-  '왼손 그립 소켓 진자 물리(Pendulum Physics)가 적용된 비스포크 브리프케이스':
+  '이탈리안 풀그레인 레더 비스포크 서류가방':
     'Bespoke Italian full-grain leather briefcase',
-  '보행 리듬에 따라 경쾌하게 흔들리는 쇼퍼 토트백':
+  '데일리로 들기 좋은 미니멀 페블 레더 쇼퍼 토트백':
     'Minimal pebbled leather shopper tote for everyday carry',
-  '소프트 클로스 지글 피직스가 적용된 캐시미어 머플러':
+  '부드럽고 자연스럽게 떨어지는 퓨어 캐시미어 프린지 머플러':
     'Pure cashmere fringed scarf with soft natural drape',
   '간절기 출근 및 비 오는 날 주력 아우터 (생활 발수 코팅)':
     'Go-to mid-season commute & rainy-day outerwear (water-repellent finish)',
@@ -429,7 +429,7 @@ const MEMO_KO_TO_EN: Readonly<Record<string, string>> = {
   '다리가 길어 보이는 차콜 와이드 슬랙스': 'Elongating high-waisted charcoal wool trousers',
   '어디에나 잘 어울리는 데일리 스니커즈': 'Clean white leather sneakers that pair with everything',
   '가볍게 동네 카페 외출': 'Neighborhood Cafe Outing',
-  '와이프랑 성수동 쇼핑 데이트': 'Weekend Shopping Date in Seongsu',
+  '아내와 성수동 쇼핑 데이트': 'Weekend Shopping Date in Seongsu',
   '발수 트렌치코트 덕분에 쾌적했던 출근길': 'Dry Commute in Water-Repellent Trench',
   '올림픽공원 산책 코디': 'Olympic Park Walk',
   '일교차 큰 날 실패 없는 베이지 트렌치 + 화이트 셔츠 + 차콜 슬랙스 조합':
@@ -441,14 +441,14 @@ const MEMO_KO_TO_EN: Readonly<Record<string, string>> = {
 const USER_NAME_KO_TO_EN: Readonly<Record<string, string>> = {
   남편: 'Husband',
   '남편 (준호)': 'Husband (Junho)',
-  와이프: 'Wife',
-  '와이프 (서연)': 'Wife (Seoyeon)',
-  '어드민 (남편)': 'Admin',
-  어드민: 'Admin',
+  아내: 'Wife',
+  '아내 (서연)': 'Wife (Seoyeon)',
+  '관리자 (남편)': 'Admin',
+  관리자: 'Admin',
   'Apple 사용자': 'Apple Member',
   사용자: 'Member',
   신규회원: 'Member',
-  모바일E2E테스터: 'Mobile E2E Tester',
+  '모바일 E2E 테스터': 'Mobile E2E Tester',
 };
 
 const SEASON_KO_TO_EN: Readonly<Record<string, string>> = {
@@ -531,7 +531,7 @@ const FASHION_PHRASE_PAIRS: ReadonlyArray< readonly [string, string] > = [
   ['페니 로퍼', 'Penny Loafers'],
   ['첼시 부츠', 'Chelsea Boots'],
   ['코트 스니커즈', 'Court Sneakers'],
-  ['스웨이드코트', 'Suede Court'],
+  ['스웨이드 코트', 'Suede Court'],
   ['트렌치코트', 'Trench Coat'],
   ['롱코트', 'Long Coat'],
   ['맥 코트', 'Mac Coat'],
@@ -985,24 +985,24 @@ export function localizeUserName(
 
 const API_ERROR_KO_TO_EN: Readonly<Record<string, string>> = {
   '아이디(이메일) 또는 비밀번호가 올바르지 않습니다.': 'Invalid username/email or password.',
-  '유효한 이메일 주소를 입력해주세요.': 'Please enter a valid email address.',
-  '아이디 또는 이메일을 입력해주세요.': 'Please enter your username or email.',
+  '유효한 이메일 주소를 입력해 주세요.': 'Please enter a valid email address.',
+  '아이디 또는 이메일을 입력해 주세요.': 'Please enter your username or email.',
   '해당 계정을 찾을 수 없습니다.': 'Account not found.',
   '이미 이메일 인증이 완료된 계정입니다.': 'Email is already verified.',
   '이미 사용 중인 아이디입니다.': 'Username is already taken.',
   '이미 가입된 이메일 주소입니다.': 'Email address is already registered.',
-  '이메일 인증이 완료되지 않은 계정입니다. 먼저 이메일 인증을 완료해주세요.':
+  '이메일 인증이 완료되지 않은 계정입니다. 먼저 이메일 인증을 완료해 주세요.':
     'Please complete email verification first.',
   '로그인이 필요합니다.': 'Sign-in required.',
-  '옷 이름을 입력해주세요.': 'Please enter an item name.',
+  '옷 이름을 입력해 주세요.': 'Please enter an item name.',
   '아이템을 찾을 수 없습니다.': 'Item not found.',
-  '코디 이름과 의류를 선택해주세요.': 'Please select items and enter an outfit name.',
+  '코디 이름을 입력하고 의류를 선택해 주세요.': 'Please select items and enter an outfit name.',
   '기본 시스템 데모 계정은 삭제할 수 없습니다.': 'System demo accounts cannot be deleted.',
   '사이트 데모 계정은 비밀번호를 변경할 수 없습니다.': 'Site demo account password cannot be changed.',
-  '현재 비밀번호를 입력해주세요.': 'Please enter your current password.',
+  '현재 비밀번호를 입력해 주세요.': 'Please enter your current password.',
   '현재 비밀번호가 일치하지 않습니다.': 'Current password is incorrect.',
-  '새 비밀번호는 6자 이상 128자 이하로 입력해주세요.': 'New password must be 6–128 characters.',
-  '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.':
+  '새 비밀번호는 6자 이상 128자 이하로 입력해 주세요.': 'New password must be 6–128 characters.',
+  '새 비밀번호는 현재 비밀번호와 다르게 설정해 주세요.':
     'New password must differ from current password.',
 };
 
@@ -1026,16 +1026,16 @@ export function localizeMaterialLabel(
   const isEn = lang === 'en';
   if (!s) return isEn ? 'Atelier' : '아틀리에';
   if (/18k.*yellow|yellow.*gold|gold|골드|금/.test(s) && !/rose|로즈/.test(s)) {
-    return isEn ? '18K Gold' : '18K 금';
+    return isEn ? '18K Gold' : '18K 골드';
   }
   if (/rose.*gold|로즈\s*골드/.test(s)) {
     return isEn ? 'Rose Gold' : '로즈골드';
   }
   if (/silver|925|실버|은/.test(s)) {
-    return isEn ? '925 Silver' : '925 은';
+    return isEn ? '925 Silver' : '925 실버';
   }
   if (/bronze|brass|copper|브론즈|황동|구리|동/.test(s)) {
-    return isEn ? 'Bronze' : '동·브론즈';
+    return isEn ? 'Bronze' : '브론즈';
   }
   if (/platinum|titanium|플래티넘|백금|티타늄/.test(s)) {
     return isEn ? 'Platinum' : '플래티넘';
@@ -1100,6 +1100,6 @@ export function localizeMaterialLabel(
   if (isEn && HANGUL_REGEX.test(s)) {
     return replaceKoreanPhrasesAndRomanize(s);
   }
-  return isEn ? 'Atelier' : '패브릭';
+  return isEn ? 'Atelier' : '아틀리에';
 }
 

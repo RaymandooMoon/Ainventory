@@ -866,7 +866,7 @@ export default function LoginView({
               id={CARBON_DOM_CONTRACT.loginThemeToggleId}
               type="button"
               className="atelier-utility-btn"
-              aria-label={isEn ? 'Toggle light or dark mode' : '라이트 다크 모드 전환'}
+              aria-label={isEn ? 'Toggle light or dark mode' : '라이트/다크 모드 전환'}
               onClick={onToggleTheme}
             >
               {effectiveTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
@@ -1180,7 +1180,7 @@ export default function LoginView({
                         : cooldownSec > 0
                           ? isEn
                             ? `Resend ${cooldownSec}s`
-                            : `재발송 ${cooldownSec}s`
+                            : `재발송 ${cooldownSec}초`
                           : otpSent
                             ? isEn
                               ? 'Resend'
@@ -1300,7 +1300,7 @@ export default function LoginView({
                     onValueChange={setRegHeightCm}
                     lang={lang}
                     placeholder="176"
-                    aria-label={isEn ? 'Height (cm)' : '신장 cm'}
+                    aria-label={isEn ? 'Height (cm)' : '신장 (cm)'}
                     disabled={loading}
                   />
 
@@ -1316,7 +1316,7 @@ export default function LoginView({
                     onValueChange={setRegWeightKg}
                     lang={lang}
                     placeholder="70"
-                    aria-label={isEn ? 'Weight (kg)' : '체중 kg'}
+                    aria-label={isEn ? 'Weight (kg)' : '체중 (kg)'}
                     disabled={loading}
                   />
                 </div>

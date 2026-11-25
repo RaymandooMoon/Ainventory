@@ -1081,7 +1081,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
       window.removeEventListener(PROFILE_CONFIG_UPDATED_EVENT, handleProfileConfigUpdated);
   }, [resolvedAvatarSpec?.dominantHand, clearFrontOnlyFallbackState]);
 
-  // Dismiss open `기록`, `Look 1/2`, `밀도`, `코디안` popover, bottom Google Map adjuster, `원본 보기`, or `교정` modal cleanly on Escape key
+  // Dismiss open `기록`, `Look 1/2`, `밀도`, `스타일 노트` popover, bottom Google Map adjuster, `원본 보기`, or `교정` modal cleanly on Escape key
   useEffect(() => {
     if (
       !historyOpen &&
@@ -4464,7 +4464,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                 )}
               </div>
 
-              {/* In-Stage Style Note ("코디안") Button & Popover */}
+              {/* In-Stage Style Note ("스타일 노트") Button & Popover */}
               {rationaleNote.equippedCount > 0 && (
                 <div className="studio-stage-popover-anchor">
                   <button
@@ -4472,8 +4472,8 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     data-studio-rationale-trigger="true"
                     aria-haspopup="dialog"
                     aria-expanded={rationaleOpen}
-                    aria-label={isEn ? 'Style Note' : '코디안'}
-                    title={isEn ? 'Style Note' : '코디안'}
+                    aria-label={isEn ? 'Style Note' : '스타일 노트'}
+                    title={isEn ? 'Style Note' : '스타일 노트'}
                     className={`studio-stage-hud-chip-btn ${rationaleOpen ? 'is-open' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -4492,11 +4492,11 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                       className="studio-stage-glass-popover is-rationale-popover"
                       data-outfit-rationale-card="true"
                       role="dialog"
-                      aria-label={isEn ? 'Outfit Style Note' : '코디안 스타일링 노트'}
+                      aria-label={isEn ? 'Outfit Style Note' : '코디 스타일링 노트'}
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       <div className="studio-stage-popover-head">
-                        <strong>{isEn ? 'Style Note' : '코디안'}</strong>
+                        <strong>{isEn ? 'Style Note' : '스타일 노트'}</strong>
                         <button
                           type="button"
                           className="studio-stage-popover-close"
@@ -4719,7 +4719,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
               ? frontOnlyPopupInfo?.messageEn ||
                 'Due to a temporary connection issue, only the front view is shown.'
               : frontOnlyPopupInfo?.messageKo ||
-                '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.'}
+                '일시적인 통신 오류로 정면 모습만 표시됩니다.'}
           </span>
         </div>
       )}
@@ -5147,7 +5147,7 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
                     { key: 'angle_turn', ko: '각도·방향 중복/오류', en: 'Angle / Direction' },
                     { key: 'bag_strap', ko: '가방·스트랩 위치', en: 'Bag / Strap Side' },
                     { key: 'sagging_fit', ko: '새깅·언더웨어 보정', en: 'Sagging / Underwear' },
-                    { key: 'face_body', ko: '얼굴·체형 닮음', en: 'Face / Proportions' },
+                    { key: 'face_body', ko: '얼굴·체형 비율', en: 'Face / Proportions' },
                   ].map((chip) => {
                     const active = fixPresetKeys.includes(chip.key);
                     return (

@@ -456,7 +456,7 @@ export default function App() {
           const activeLang = langRef.current;
           showToast(
             localizeApiMessage(err?.message, activeLang) ||
-              tx(activeLang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
+              tx(activeLang, '옷장을 불러오지 못했습니다.', 'Failed to load wardrobe.')
           );
         }
       })
@@ -629,7 +629,7 @@ export default function App() {
       showToast(
         isSiteDemoUser(user)
           ? tx(lang, '체형 미리보기 적용됨 (데모 전용)', 'Body profile preview applied (Demo)')
-          : tx(lang, '체형 반영됨', 'Body profile applied')
+          : tx(lang, '체형 적용됨', 'Body profile applied')
       );
     },
     [user, bodySpec, skinProfile, lang, showToast]

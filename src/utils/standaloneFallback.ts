@@ -125,10 +125,10 @@ const DEFAULT_STANDALONE_USERS: StoredStandaloneUser[] = [
     id: 2,
     username: 'wife',
     email: 'wife@ainventory.kr',
-    displayName: '와이프 (서연)',
+    displayName: '아내 (서연)',
     role: 'member',
     defaultCloset: 'wife',
-    closetName: '와이프의 시그니처 옷장',
+    closetName: '아내의 시그니처 옷장',
     profileCompleted: true,
     emailVerified: true,
     personalColor: 'spring_warm',
@@ -143,7 +143,7 @@ const DEFAULT_STANDALONE_USERS: StoredStandaloneUser[] = [
     id: 3,
     username: 'admin',
     email: 'admin@ainventory.kr',
-    displayName: '어드민 (남편)',
+    displayName: '관리자 (남편)',
     role: 'admin',
     defaultCloset: 'husband',
     closetName: '남편의 사이버 아틀리에',
@@ -835,7 +835,7 @@ const WEATHER_SCENARIOS: Record<string, StandaloneScenarioSpec> = {
     precipProb: 10,
     humidity: 68,
     recommendedMotion: 'idle',
-    weatherTip: '33°C 이상의 무더운 폭염 날씨입니다. 통기성 좋은 리넨·코튼 상의와 선글라스를 매치하세요.',
+    weatherTip: '33°C 이상의 무더운 폭염 날씨입니다. 통기성 좋은 린넨·코튼 상의와 선글라스를 매치하세요.',
   },
   winter_cold: {
     key: 'winter_cold',
@@ -1127,7 +1127,7 @@ export async function handleStandaloneApiFallback(
   if (pathname === '/auth/send-verification' && method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw createHttpError('유효한 이메일 주소를 입력해주세요.', 400);
+      throw createHttpError('유효한 이메일 주소를 입력해 주세요.', 400);
     }
     const code = String(Math.floor(100000 + Math.random() * 900000));
     try {
@@ -1177,7 +1177,7 @@ export async function handleStandaloneApiFallback(
     const email = String(body.email || '').trim().toLowerCase();
     const rawPw = String(body.password || '');
     if (rawPw.length < 6) {
-      throw createHttpError('비밀번호는 6자 이상 입력해주세요.', 400);
+      throw createHttpError('비밀번호는 6자 이상 입력해 주세요.', 400);
     }
     const users = loadUsers();
     const newId = Date.now();
@@ -1241,13 +1241,13 @@ export async function handleStandaloneApiFallback(
     const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
     const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
     if (!currentPassword) {
-      throw createHttpError('현재 비밀번호를 입력해주세요.', 400);
+      throw createHttpError('현재 비밀번호를 입력해 주세요.', 400);
     }
     if (newPassword.length < 6 || newPassword.length > 128) {
-      throw createHttpError('새 비밀번호는 6자 이상 128자 이하로 입력해주세요.', 400);
+      throw createHttpError('새 비밀번호는 6자 이상 128자 이하로 입력해 주세요.', 400);
     }
     if (newPassword === currentPassword) {
-      throw createHttpError('새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.', 400);
+      throw createHttpError('새 비밀번호는 현재 비밀번호와 다르게 설정해 주세요.', 400);
     }
     const users = loadUsers();
     const target = users.find(

@@ -13,7 +13,7 @@ export const LOGIN_THREE_VARIANTS: readonly LoginThreeVariantMeta[] = [
   {
     id: 'luxury',
     num: 'A',
-    labelKo: '럭셔리 유체',
+    labelKo: '럭셔리 플루이드',
     labelEn: 'Luxury Fluid',
     shortKo: '럭셔리',
     shortEn: 'Luxury',

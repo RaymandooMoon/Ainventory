@@ -111,7 +111,7 @@ export default function NearbyCareMapModal({
           setErrorMsg(
             tx(
               lang,
-              'Google Maps 일일 할당량에 도달했습니다. 상단 안내 링크를 확인해주세요.',
+              'Google Maps 일일 할당량에 도달했습니다. 상단 안내 링크를 확인해 주세요.',
               'Google Maps daily quota reached. See the top notice for details.'
             )
           );
@@ -351,7 +351,7 @@ export default function NearbyCareMapModal({
             <div className="py-8 text-center text-xs text-neutral-500 dark:text-neutral-400 border border-black/8 dark:border-white/10 rounded-2xl">
               {tx(
                 lang,
-                '반경 3km 내 검색된 매장이 없습니다. 다른 서비스 탭을 선택해보세요.',
+                '반경 3km 내 검색된 매장이 없습니다. 다른 서비스 탭을 선택해 보세요.',
                 'No matching places found within 3km. Try another care category.'
               )}
             </div>

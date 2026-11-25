@@ -796,7 +796,7 @@ export function PermissionNoticeModal({ open, mode = 'camera', lang, onConfirm, 
           <p className="hig-body" style={{ fontSize: '0.88rem' }}>
             {isEn
               ? 'Selected or captured photos are used strictly for garment background removal (WebP cutout) and wardrobe registration, and are never shared with third parties without consent.'
-              : '선택하거나 촬영한 사진은 의류 배경 제거(WebP 누끼) 및 옷장 등록 용도로만 사용되며, 동의 없이 외부 제3자에게 공유되지 않습니다.'}
+              : '선택하거나 촬영한 사진은 의류 배경 제거(WebP 컷아웃) 및 옷장 등록 용도로만 사용되며, 동의 없이 외부 제3자에게 공유되지 않습니다.'}
           </p>
         </div>
 

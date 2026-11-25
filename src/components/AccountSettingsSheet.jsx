@@ -183,14 +183,14 @@ function AccountSettingsContent({
     setPasswordError('');
 
     if (!currentPassword) {
-      setPasswordError(tx(lang, '현재 비밀번호를 입력해주세요.', 'Enter your current password.'));
+      setPasswordError(tx(lang, '현재 비밀번호를 입력해 주세요.', 'Enter your current password.'));
       return;
     }
     if (newPassword.length < 6 || newPassword.length > 128) {
       setPasswordError(
         tx(
           lang,
-          '새 비밀번호는 6자 이상 128자 이하로 입력해주세요.',
+          '새 비밀번호는 6자 이상 128자 이하로 입력해 주세요.',
           'New password must be 6–128 characters.'
         )
       );
@@ -206,7 +206,7 @@ function AccountSettingsContent({
       setPasswordError(
         tx(
           lang,
-          '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.',
+          '새 비밀번호는 현재 비밀번호와 다르게 설정해 주세요.',
           'New password must differ from current password.'
         )
       );
@@ -359,7 +359,7 @@ function AccountSettingsContent({
           <div className="hig-caption" style={{ marginTop: 8, opacity: 0.85 }}>
             {tx(
               lang,
-              '데모 권한이 매핑된 계정입니다. 샘플 옷장 조회·3D/2.5D 피팅·통계 체험이 가능하며, 저장·삭제·AI 합성은 보호되어 있습니다.',
+              '사이트 데모 전용 계정입니다. 샘플 옷장 둘러보기, 가상 피팅, 통계 체험이 가능하며 저장·삭제·AI 합성은 제한됩니다.',
               'Mapped to the Site Demo role. Browse the sample wardrobe, try on outfits, and view stats while write/delete/AI synthesis remain protected.'
             )}
           </div>
@@ -379,7 +379,7 @@ function AccountSettingsContent({
                 <div className="hig-caption">
                   {tx(
                     lang,
-                    '유저별 메뉴 접근 권한 및 메뉴 내 개별 버튼 권한을 설정합니다.',
+                    '사용자별 메뉴 접근 권한 및 메뉴 내 개별 버튼 권한을 설정합니다.',
                     'Configure per-user menu access and per-menu button permissions.'
                   )}
                 </div>
@@ -621,7 +621,7 @@ function AccountSettingsContent({
       <div className="hig-sheet-card" data-nav-opacity-card="true">
         <div className="hig-sheet-row-between" style={{ marginBottom: 8 }}>
           <label htmlFor="settings-nav-opacity-slider" className="hig-caption" style={{ fontWeight: 620 }}>
-            {tx(lang, '하단 네비게이션 바 불투명도', 'Bottom Navigation Bar Opacity')}
+            {tx(lang, '하단 내비게이션 바 불투명도', 'Bottom Navigation Bar Opacity')}
           </label>
           <span
             className="hig-caption tabular-nums"
@@ -642,7 +642,7 @@ function AccountSettingsContent({
             value={navOpacity}
             aria-label={tx(
               lang,
-              '하단 네비게이션 바 불투명도 조절',
+              '하단 내비게이션 바 불투명도 조절',
               'Adjust bottom navigation bar opacity'
             )}
             onChange={(e) => {
@@ -971,12 +971,12 @@ function AccountSettingsContent({
       {canDeleteAccount && (
         <div className="hig-sheet-card">
           <div className="hig-caption" style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>
-            {tx(lang, '개인 데이터 및 계정 영구 파기', 'Permanent Account & Data Deletion')}
+            {tx(lang, '계정 및 개인 데이터 영구 삭제', 'Permanent Account & Data Deletion')}
           </div>
           <p className="hig-caption">
             {tx(
               lang,
-              '탈퇴 즉시 서버에 저장된 원본 의류 사진, 프로필, 코디 기록 및 기기 내 IndexedDB 캐시가 복구 불가능하게 영구 삭제됩니다.',
+              '탈퇴 즉시 서버에 저장된 의류 사진, 프로필, 코디 기록, 캘린더 기록 및 기기 내 IndexedDB 캐시가 영구 삭제되며 복구할 수 없습니다.',
               'Deleting your account immediately and permanently erases all garments, profile data, outfits, calendar logs, and local IndexedDB cache.'
             )}
           </p>
