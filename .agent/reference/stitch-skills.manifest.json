@@ -1,0 +1,126 @@
+{
+  "upstream": {
+    "repository": "google-labs-code/stitch-skills",
+    "url": "https://github.com/google-labs-code/stitch-skills",
+    "branch": "main",
+    "commit": "75f4696f162000fb69fca6a31489b5b21d47a506",
+    "pushedAt": "2026-11-24T21:51:04Z",
+    "license": "Apache-2.0",
+    "licenseFile": ".agent/LICENSE-STITCH-SKILLS.md"
+  },
+  "internalizedAt": "2026-11-25",
+  "canonicalDirectory": ".agent/skills",
+  "symlinkDirectory": ".agents/skills",
+  "adaptations": [
+    "Normalized 8 upstream `stitch::<slug>` frontmatter names to lowercase kebab-case `<slug>` matching directory names for full Agent Skills open-standard compatibility (Antigravity, Claude Code, Codex, Cursor, OpenCode).",
+    "Added provenance `metadata` (`origin`, `plugin`, `upstream_name`, `upstream_commit`, `license`) to all 16 SKILL.md frontmatters.",
+    "Resolved `<SKILL_DIR>` and `stitch-skills/plugins/...` script paths to concrete `.agent/skills/<name>/...` paths.",
+    "Enhanced `upload-to-stitch/scripts/upload_to_stitch.py` to support reading `STITCH_API_KEY` from the environment when `--api-key` is omitted (aligning with `.agent/rules/web/stitch-first-ui.md` secret hygiene) while preserving `--api-key` compatibility.",
+    "Added Ainventory project adaptation notes referencing Stitch project `projects/11505180160165595336`, design system asset `assets/98bc4c44edea4f0898f4a037ca720090`, `.stitch/DESIGN.md`, and `.agent/rules/web/stitch-first-ui.md`.",
+    "Fixed broken relative repository links in `shadcn-ui/README.md`."
+  ],
+  "plugins": {
+    "stitch-design": [
+      {
+        "name": "code-to-design",
+        "upstreamName": "stitch::code-to-design",
+        "upstreamPath": "plugins/stitch-design/skills/code-to-design",
+        "localPath": ".agent/skills/code-to-design"
+      },
+      {
+        "name": "extract-design-md",
+        "upstreamName": "stitch::extract-design-md",
+        "upstreamPath": "plugins/stitch-design/skills/extract-design-md",
+        "localPath": ".agent/skills/extract-design-md"
+      },
+      {
+        "name": "extract-static-html",
+        "upstreamName": "stitch::extract-static-html",
+        "upstreamPath": "plugins/stitch-design/skills/extract-static-html",
+        "localPath": ".agent/skills/extract-static-html"
+      },
+      {
+        "name": "generate-design",
+        "upstreamName": "stitch::generate-design",
+        "upstreamPath": "plugins/stitch-design/skills/generate-design",
+        "localPath": ".agent/skills/generate-design"
+      },
+      {
+        "name": "manage-design-system",
+        "upstreamName": "stitch::manage-design-system",
+        "upstreamPath": "plugins/stitch-design/skills/manage-design-system",
+        "localPath": ".agent/skills/manage-design-system"
+      },
+      {
+        "name": "upload-to-stitch",
+        "upstreamName": "stitch::upload-to-stitch",
+        "upstreamPath": "plugins/stitch-design/skills/upload-to-stitch",
+        "localPath": ".agent/skills/upload-to-stitch"
+      }
+    ],
+    "stitch-build": [
+      {
+        "name": "react-components",
+        "upstreamName": "stitch::react-components",
+        "upstreamPath": "plugins/stitch-build/skills/react-components",
+        "localPath": ".agent/skills/react-components"
+      },
+      {
+        "name": "react-native",
+        "upstreamName": "stitch::react-native",
+        "upstreamPath": "plugins/stitch-build/skills/react-native",
+        "localPath": ".agent/skills/react-native"
+      },
+      {
+        "name": "react-vite-dashboard",
+        "upstreamName": "react-vite-dashboard",
+        "upstreamPath": "plugins/stitch-build/skills/react-vite-dashboard",
+        "localPath": ".agent/skills/react-vite-dashboard"
+      },
+      {
+        "name": "remotion",
+        "upstreamName": "remotion",
+        "upstreamPath": "plugins/stitch-build/skills/remotion",
+        "localPath": ".agent/skills/remotion"
+      },
+      {
+        "name": "shadcn-ui",
+        "upstreamName": "shadcn-ui",
+        "upstreamPath": "plugins/stitch-build/skills/shadcn-ui",
+        "localPath": ".agent/skills/shadcn-ui"
+      }
+    ],
+    "stitch-utilities": [
+      {
+        "name": "design-md",
+        "upstreamName": "design-md",
+        "upstreamPath": "plugins/stitch-utilities/skills/design-md",
+        "localPath": ".agent/skills/design-md"
+      },
+      {
+        "name": "enhance-prompt",
+        "upstreamName": "enhance-prompt",
+        "upstreamPath": "plugins/stitch-utilities/skills/enhance-prompt",
+        "localPath": ".agent/skills/enhance-prompt"
+      },
+      {
+        "name": "site-md",
+        "upstreamName": "site-md",
+        "upstreamPath": "plugins/stitch-utilities/skills/site-md",
+        "localPath": ".agent/skills/site-md"
+      },
+      {
+        "name": "stitch-loop",
+        "upstreamName": "stitch-loop",
+        "upstreamPath": "plugins/stitch-utilities/skills/stitch-loop",
+        "localPath": ".agent/skills/stitch-loop"
+      },
+      {
+        "name": "taste-design",
+        "upstreamName": "taste-design",
+        "upstreamPath": "plugins/stitch-utilities/skills/taste-design",
+        "localPath": ".agent/skills/taste-design"
+      }
+    ]
+  }
+}

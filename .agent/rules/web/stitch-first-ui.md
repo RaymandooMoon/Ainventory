@@ -26,6 +26,20 @@ All new or changed UI design (screens, layouts, components, visual redesigns) MU
 - Never print, log, or commit the Stitch API key. Read `STITCH_API_KEY` from gitignored `.env.local` (or private MCP config) in memory and send it only in the `X-Goog-Api-Key` header.
 - Run `npm run verify:secrets` before committing any Stitch-related change.
 
+## Internalized Stitch Skills (`google-labs-code/stitch-skills`)
+
+All 16 official skills from `google-labs-code/stitch-skills` (Apache-2.0 — [.agent/LICENSE-STITCH-SKILLS.md](../../LICENSE-STITCH-SKILLS.md)) are internalized under `.agent/skills/` (`.agents/skills/`). Prefer these local skills at each stage of the Stitch-First workflow:
+
+| Workflow Stage | Local Skill(s) in `.agent/skills/` |
+| :--- | :--- |
+| **Prompt Polishing** | `enhance-prompt` |
+| **Screen & Variant Generation** | `generate-design` |
+| **Design System Sync & Authoring** | `manage-design-system`, `design-md`, `extract-design-md`, `taste-design` *(Ainventory `.stitch/DESIGN.md` takes precedence)* |
+| **Code → Stitch Migration & Asset Upload** | `code-to-design`, `extract-static-html`, `upload-to-stitch` |
+| **Stitch → Code & Multi-Page Build** | `react-components`, `react-vite-dashboard`, `shadcn-ui`, `site-md`, `stitch-loop`, `remotion` *(+ `react-native` retained for upstream parity)* |
+
+Verify internalized Stitch skills and helper scripts at any time with `npm run verify:stitch-skills`.
+
 ## Exceptions
 
 If Stitch is unreachable (auth/quota/outage), stop and report to the user; do not silently fall back to ad-hoc UI design. Proceed without Stitch only with explicit user approval.
