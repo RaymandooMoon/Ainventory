@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import { ArrowUpRight, ChevronLeft, ChevronRight, FileText, Pause, Play } from 'lucide-react';
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
-import { SITE_META, type SiteCopy, type SiteLang } from '../siteContent.ts';
+import {
+  SITE_META,
+  SITE_REPORT_HREF,
+  type SiteCopy,
+  type SiteLang,
+  type SiteTheme,
+} from '../siteContent.ts';
 import type { SiteIconKey } from '../SiteIcon.tsx';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
 
@@ -182,6 +188,7 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
 export interface AboutStageHudProps {
   readonly copy: SiteCopy;
   readonly lang: SiteLang;
+  readonly theme: SiteTheme;
   readonly betaMailto: string;
   readonly interaction: StageInteractionState;
   readonly onUpdateInteraction: (patch: Partial<StageInteractionState>) => void;
@@ -189,6 +196,8 @@ export interface AboutStageHudProps {
 
 export function AboutStageHud({
   copy,
+  lang,
+  theme,
   betaMailto,
   interaction,
   onUpdateInteraction,
@@ -447,6 +456,15 @@ export function AboutStageHud({
         <a href={betaMailto} className="hud-founder-cta">
           <span>{vision.directCta}</span>
           <ArrowUpRight size={14} aria-hidden="true" />
+        </a>
+        <a
+          href={`${SITE_REPORT_HREF}?theme=${theme}&lang=${lang}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hud-founder-cta hud-founder-cta--secondary"
+        >
+          <FileText size={14} aria-hidden="true" />
+          <span>{vision.reportCta}</span>
         </a>
       </div>
     </div>

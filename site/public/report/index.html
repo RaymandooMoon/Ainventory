@@ -1,0 +1,1890 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#000000" />
+    <title>iNVTRY — Site Re-Analysis &amp; Spatial Editorial Noir Redesign Report</title>
+    <meta
+      name="description"
+      content="iNVTRY (ainvtry.com) official website re-analysis, AddGlow AI aesthetic benchmark, Google Stitch Track A/B proposals, and Before/After redesign verification report."
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      rel="stylesheet"
+      as="style"
+      crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <style>
+      :root {
+        --font-sans:
+          'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+          'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --r-sm: 10px;
+        --r-md: 16px;
+        --r-lg: 22px;
+        --r-pill: 9999px;
+        --focus-ring: #60a5fa;
+
+        --bg-page: #050507;
+        --bg-surface: rgba(255, 255, 255, 0.032);
+        --bg-elevated: rgba(255, 255, 255, 0.058);
+        --bg-glass: rgba(12, 12, 16, 0.78);
+        --ink-primary: #f5f5f7;
+        --ink-secondary: rgba(235, 235, 240, 0.78);
+        --ink-tertiary: rgba(206, 206, 216, 0.62);
+        --hairline: rgba(245, 245, 247, 0.12);
+        --hairline-strong: rgba(245, 245, 247, 0.22);
+        --gold: #d6b889;
+        --gold-ink: #e4cfa9;
+        --gold-soft: rgba(214, 184, 137, 0.14);
+        --gold-line: rgba(214, 184, 137, 0.38);
+        --live: #68c694;
+        --ctrl-bg: #f5f5f7;
+        --ctrl-fg: #0b0b0e;
+        --shadow-card: 0 24px 64px -20px rgba(0, 0, 0, 0.68);
+        --sheen: linear-gradient(180deg, #ffffff 0%, #dcdce4 100%);
+      }
+
+      html[data-theme='light'] {
+        --focus-ring: #1d4ed8;
+        --bg-page: #f6f3ec;
+        --bg-surface: rgba(29, 29, 31, 0.032);
+        --bg-elevated: rgba(255, 255, 255, 0.76);
+        --bg-glass: rgba(250, 248, 243, 0.86);
+        --ink-primary: #1d1d1f;
+        --ink-secondary: #484642;
+        --ink-tertiary: #66635c;
+        --hairline: rgba(29, 29, 31, 0.1);
+        --hairline-strong: rgba(29, 29, 31, 0.18);
+        --gold: #b8955f;
+        --gold-ink: #73552b;
+        --gold-soft: rgba(184, 149, 95, 0.14);
+        --gold-line: rgba(146, 114, 66, 0.36);
+        --live: #1f6f43;
+        --ctrl-bg: #1d1d1f;
+        --ctrl-fg: #faf8f4;
+        --shadow-card: 0 22px 54px -20px rgba(29, 27, 22, 0.14);
+        --sheen: linear-gradient(180deg, #111114 0%, #44423d 100%);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg-page);
+        color: var(--ink-primary);
+        font-family: var(--font-sans);
+        line-height: 1.6;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+        transition: background-color 0.28s var(--ease), color 0.28s var(--ease);
+      }
+
+      /* Subtle silk ambience glow (zero marble distraction) */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse 72% 48% at 18% 8%, rgba(214, 184, 137, 0.11), transparent 68%),
+          radial-gradient(ellipse 64% 52% at 84% 22%, rgba(92, 108, 152, 0.1), transparent 70%);
+      }
+
+      html[data-theme='light'] body::before {
+        background:
+          radial-gradient(ellipse 72% 48% at 18% 8%, rgba(214, 184, 137, 0.16), transparent 68%),
+          radial-gradient(ellipse 64% 52% at 84% 22%, rgba(164, 156, 142, 0.12), transparent 70%);
+      }
+
+      :is(a, button, input, [tabindex='0']):focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+      }
+
+      .container {
+        width: min(100%, 1160px);
+        margin: 0 auto;
+        padding: 0 clamp(16px, 3vw, 32px);
+      }
+
+      /* Sticky Zero-Chrome Topbar */
+      .topbar-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        border-bottom: 1px solid var(--hairline);
+        background: var(--bg-glass);
+        backdrop-filter: blur(22px) saturate(165%);
+        -webkit-backdrop-filter: blur(22px) saturate(165%);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 62px;
+      }
+
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .brand-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 4px;
+        text-decoration: none;
+      }
+
+      .logo-box {
+        position: relative;
+        width: 72px;
+        aspect-ratio: 1120 / 394;
+        display: inline-block;
+      }
+
+      .logo-img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transition: opacity 0.25s var(--ease);
+      }
+
+      html[data-theme='dark'] .logo-img--light { opacity: 0; }
+      html[data-theme='dark'] .logo-img--dark { opacity: 1; }
+      html[data-theme='light'] .logo-img--light { opacity: 1; }
+      html[data-theme='light'] .logo-img--dark { opacity: 0; }
+
+      .doc-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: var(--r-pill);
+        border: 1px solid var(--hairline);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--ink-tertiary);
+        white-space: nowrap;
+      }
+
+      .doc-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--gold);
+      }
+
+      .utility-rail {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 4px;
+        border-radius: var(--r-pill);
+        border: 1px solid var(--hairline);
+        background: var(--bg-surface);
+      }
+
+      .utility-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--r-pill);
+        background: transparent;
+        color: var(--ink-secondary);
+        font-family: inherit;
+        font-size: 0.76rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+        transition: color 0.18s var(--ease), background-color 0.18s var(--ease);
+      }
+
+      .utility-btn:hover {
+        color: var(--ink-primary);
+        background: var(--bg-elevated);
+      }
+
+      .utility-sep {
+        width: 1px;
+        height: 14px;
+        background: var(--hairline);
+      }
+
+      /* Hero Report Header */
+      .report-hero {
+        padding: clamp(40px, 7vh, 76px) 0 clamp(30px, 5vh, 52px);
+        border-bottom: 1px solid var(--hairline);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 14px;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 650;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-tertiary);
+      }
+
+      .eyebrow-diamond {
+        color: var(--gold);
+      }
+
+      .report-title {
+        margin: 0;
+        max-width: 920px;
+        font-size: clamp(2rem, 4.4vw, 3.45rem);
+        font-weight: 720;
+        line-height: 1.1;
+        letter-spacing: -0.036em;
+        text-wrap: balance;
+      }
+
+      .title-sheen {
+        background: var(--sheen);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .title-accent {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        color: var(--gold-ink);
+        letter-spacing: -0.015em;
+      }
+
+      .report-lead {
+        margin: 16px 0 0;
+        max-width: 720px;
+        font-size: clamp(0.95rem, 1.3vw, 1.08rem);
+        color: var(--ink-secondary);
+        line-height: 1.65;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 44px;
+        padding: 0 20px;
+        border-radius: var(--r-pill);
+        font-family: inherit;
+        font-size: 0.84rem;
+        font-weight: 640;
+        text-decoration: none;
+        cursor: pointer;
+        transition: opacity 0.18s var(--ease), transform 0.16s var(--ease), border-color 0.18s var(--ease);
+      }
+
+      .btn:active { transform: scale(0.98); }
+
+      .btn--primary {
+        border: 1px solid transparent;
+        background: var(--ctrl-bg);
+        color: var(--ctrl-fg);
+      }
+
+      .btn--primary:hover { opacity: 0.92; border-color: var(--gold-line); }
+
+      .btn--secondary {
+        border: 1px solid var(--hairline-strong);
+        background: var(--bg-surface);
+        color: var(--ink-primary);
+      }
+
+      .btn--secondary:hover { background: var(--bg-elevated); border-color: var(--gold-line); }
+
+      /* Hairline Metric Strip */
+      .kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 34px 0 0;
+        padding: 20px 0 0;
+        border-top: 1px solid var(--hairline);
+        gap: 0;
+      }
+
+      .kpi-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 0 18px 0 0;
+      }
+
+      .kpi-cell + .kpi-cell {
+        padding-left: 18px;
+        border-left: 1px solid var(--hairline);
+      }
+
+      .kpi-val {
+        font-size: clamp(1.2rem, 2vw, 1.55rem);
+        font-weight: 720;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.025em;
+        color: var(--ink-primary);
+      }
+
+      .kpi-val--gold { color: var(--gold-ink); }
+
+      .kpi-lbl {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--ink-tertiary);
+      }
+
+      /* Sections */
+      .section {
+        padding: clamp(44px, 6.5vh, 72px) 0;
+        border-bottom: 1px solid var(--hairline);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 26px;
+      }
+
+      .section-num {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--gold-ink);
+        margin-bottom: 6px;
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: clamp(1.38rem, 2.5vw, 1.95rem);
+        font-weight: 700;
+        letter-spacing: -0.028em;
+        line-height: 1.2;
+      }
+
+      .section-sub {
+        margin: 8px 0 0;
+        max-width: 680px;
+        font-size: 0.9rem;
+        color: var(--ink-secondary);
+      }
+
+      /* Hairline Segmented Tabs */
+      .tabs-bar {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 3px;
+        border-radius: var(--r-pill);
+        border: 1px solid var(--hairline);
+        background: var(--bg-surface);
+      }
+
+      .tab-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 15px;
+        border: 0;
+        border-radius: var(--r-pill);
+        background: transparent;
+        color: var(--ink-secondary);
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.18s var(--ease), color 0.18s var(--ease);
+      }
+
+      .tab-btn:hover { color: var(--ink-primary); }
+
+      .tab-btn.is-active {
+        background: var(--ctrl-bg);
+        color: var(--ctrl-fg);
+        font-weight: 680;
+      }
+
+      /* Interactive Before/After Drag Compare Stage */
+      .compare-shell {
+        border-radius: var(--r-lg);
+        border: 1px solid var(--hairline-strong);
+        background: var(--bg-elevated);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+
+      .compare-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--hairline);
+      }
+
+      .compare-caption {
+        font-size: 0.84rem;
+        color: var(--ink-secondary);
+        margin: 0;
+      }
+
+      .compare-caption strong { color: var(--ink-primary); }
+
+      .compare-stage {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        background: #08080b;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .compare-layer {
+        position: absolute;
+        inset: 0;
+      }
+
+      .compare-layer img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+      }
+
+      .compare-badge {
+        position: absolute;
+        top: 14px;
+        padding: 5px 12px;
+        border-radius: var(--r-pill);
+        background: rgba(10, 10, 14, 0.82);
+        color: #f5f5f7;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        pointer-events: none;
+        backdrop-filter: blur(10px);
+      }
+
+      .compare-badge--left { left: 14px; }
+      .compare-badge--right { right: 14px; border-color: var(--gold-line); color: #f5e6c8; }
+
+      .compare-divider {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--gold);
+        transform: translateX(-50%);
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .compare-knob {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--ctrl-bg);
+        color: var(--ctrl-fg);
+        border: 1.5px solid var(--gold);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        transform: translate(-50%, -50%);
+      }
+
+      .compare-stage:has(.compare-range:focus-visible) .compare-knob {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 3px;
+      }
+
+      .compare-range {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: ew-resize;
+        z-index: 5;
+      }
+
+      /* Editorial Hairline Findings Matrix */
+      .findings-list {
+        border-top: 1px solid var(--hairline);
+      }
+
+      .finding-row {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 0.9fr) minmax(0, 1.15fr) 156px;
+        gap: 18px;
+        padding: 20px 0;
+        border-bottom: 1px solid var(--hairline);
+        align-items: start;
+      }
+
+      .finding-num {
+        font-family: var(--font-mono);
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: var(--gold-ink);
+        padding-top: 2px;
+      }
+
+      .finding-issue h3 {
+        margin: 0 0 6px;
+        font-size: 0.98rem;
+        font-weight: 680;
+        line-height: 1.35;
+      }
+
+      .finding-issue p,
+      .finding-fix p {
+        margin: 0;
+        font-size: 0.86rem;
+        color: var(--ink-secondary);
+        line-height: 1.56;
+      }
+
+      .finding-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: var(--r-pill);
+        background: var(--gold-soft);
+        color: var(--gold-ink);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 660;
+        justify-self: end;
+        white-space: nowrap;
+      }
+
+      .finding-tag--live::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--live);
+      }
+
+      /* Stitch & Gallery Grids */
+      .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .gallery-grid--3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .gallery-grid--4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .shot-card {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: var(--r-md);
+        border: 1px solid var(--hairline);
+        background: var(--bg-surface);
+        overflow: hidden;
+        transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+      }
+
+      .shot-card:hover {
+        border-color: var(--gold-line);
+        transform: translateY(-2px);
+      }
+
+      .shot-trigger {
+        position: relative;
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: #0b0b0e;
+        cursor: zoom-in;
+        overflow: hidden;
+      }
+
+      .shot-trigger img {
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        object-position: center top;
+        transition: transform 0.35s var(--ease);
+      }
+
+      .shot-trigger--mobile img {
+        aspect-ratio: 9 / 19.5;
+        object-fit: cover;
+      }
+
+      .shot-trigger--tall img {
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+        object-position: center top;
+      }
+
+      .shot-card:hover .shot-trigger img {
+        transform: scale(1.02);
+      }
+
+      .shot-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--hairline);
+      }
+
+      .shot-meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .shot-title {
+        font-size: 0.86rem;
+        font-weight: 660;
+        color: var(--ink-primary);
+      }
+
+      .shot-code {
+        font-family: var(--font-mono);
+        font-size: 0.67rem;
+        color: var(--gold-ink);
+        white-space: nowrap;
+      }
+
+      .shot-desc {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--ink-tertiary);
+        line-height: 1.48;
+      }
+
+      /* Benchmark & QA Tables */
+      .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        border-radius: var(--r-md);
+        border: 1px solid var(--hairline);
+        background: var(--bg-surface);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+
+      th,
+      td {
+        padding: 13px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--hairline);
+        vertical-align: top;
+      }
+
+      tr:last-child td { border-bottom: 0; }
+
+      th {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-tertiary);
+        background: var(--bg-elevated);
+      }
+
+      .status-pass {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--live);
+      }
+
+      .status-pass::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--live);
+      }
+
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: var(--bg-elevated);
+        color: var(--gold-ink);
+      }
+
+      /* Stitch Panel Visibility */
+      .stitch-panel[hidden] { display: none; }
+
+      /* Footer CTA Banner */
+      .next-banner {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) auto;
+        gap: 24px;
+        align-items: center;
+        padding: clamp(24px, 4vw, 36px);
+        border-radius: var(--r-lg);
+        border: 1px solid var(--gold-line);
+        background: var(--bg-elevated);
+      }
+
+      .next-banner h3 {
+        margin: 0 0 8px;
+        font-size: clamp(1.18rem, 2vw, 1.48rem);
+        letter-spacing: -0.025em;
+      }
+
+      .next-banner p {
+        margin: 0;
+        font-size: 0.88rem;
+        color: var(--ink-secondary);
+      }
+
+      .site-footer {
+        padding: 28px 0 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 0.78rem;
+        color: var(--ink-tertiary);
+      }
+
+      .site-footer a {
+        color: var(--gold-ink);
+        text-decoration: none;
+      }
+
+      .site-footer a:hover { text-decoration: underline; }
+
+      /* Lightbox Modal */
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(4, 4, 7, 0.88);
+        backdrop-filter: blur(14px);
+      }
+
+      .lightbox[hidden] { display: none; }
+
+      .lightbox-inner {
+        position: relative;
+        max-width: min(94vw, 1240px);
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .lightbox-img {
+        display: block;
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+        border-radius: var(--r-md);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+      }
+
+      .lightbox-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: #f5f5f7;
+        font-size: 0.84rem;
+      }
+
+      .lightbox-close {
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: var(--r-pill);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.08);
+        color: #f5f5f7;
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      @media (max-width: 900px) {
+        .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+        .kpi-cell:nth-child(3) { padding-left: 0; border-left: 0; }
+        .finding-row { grid-template-columns: 40px minmax(0, 1fr); gap: 10px 14px; }
+        .finding-fix { grid-column: 2; }
+        .finding-tag { grid-column: 2; justify-self: start; }
+        .gallery-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gallery-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .next-banner { grid-template-columns: minmax(0, 1fr); }
+      }
+
+      @media (max-width: 600px) {
+        .doc-pill { display: none; }
+        .logo-box { width: 62px; }
+        .utility-btn { padding: 0 9px; font-size: 0.72rem; }
+        .gallery-grid,
+        .gallery-grid--3 { grid-template-columns: minmax(0, 1fr); }
+        .compare-stage { aspect-ratio: 16 / 10.5; }
+      }
+
+      @media print {
+        body { background: #ffffff !important; color: #111111 !important; }
+        .topbar-wrap, .hero-actions, .tabs-bar, .lightbox { display: none !important; }
+        .section { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar-wrap">
+      <div class="container topbar">
+        <div class="topbar-left">
+          <a href="/" class="brand-link" aria-label="Return to ainvtry.com">
+            <span class="logo-box">
+              <img src="/assets/brand/invtry-logo-dark.png" alt="iNVTRY" class="logo-img logo-img--dark" width="1120" height="394" />
+              <img src="/assets/brand/invtry-logo-light.png" alt="iNVTRY" class="logo-img logo-img--light" width="1120" height="394" />
+            </span>
+          </a>
+          <span class="doc-pill">
+            <span class="doc-dot" aria-hidden="true"></span>
+            <span data-i18n="docPill">SITE REDESIGN REPORT · 5b34561</span>
+          </span>
+        </div>
+
+        <div class="utility-rail" role="group" aria-label="Report controls">
+          <a href="/" class="utility-btn" data-i18n="backSite">← 사이트</a>
+          <span class="utility-sep" aria-hidden="true"></span>
+          <button type="button" id="themeToggle" class="utility-btn">라이트</button>
+          <span class="utility-sep" aria-hidden="true"></span>
+          <button type="button" id="langToggle" class="utility-btn">EN</button>
+          <span class="utility-sep" aria-hidden="true"></span>
+          <button type="button" id="printBtn" class="utility-btn" data-i18n="printBtn">PDF 인쇄</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="report-hero">
+        <div class="container">
+          <p class="eyebrow">
+            <span class="eyebrow-diamond" aria-hidden="true">◆</span>
+            <span data-i18n="heroEyebrow">ADDGLOW BENCHMARK · GOOGLE STITCH · SITE REDESIGN</span>
+          </p>
+          <h1 class="report-title">
+            <span class="title-sheen" data-i18n="heroTitleLead">ainvtry.com 최신 코드 재분석 및 </span>
+            <em class="title-accent" data-i18n="heroTitleAccent">Spatial Editorial Noir</em>
+            <span class="title-sheen" data-i18n="heroTitleTail"> 개편 보고서</span>
+          </h1>
+          <p class="report-lead" data-i18n="heroLead">
+            사용자 커밋 d9823cfc(라이브 앱 Studio 풀스테이지 임베드)와 Living IR Deck 자동 동기화(19452308)를
+            기준으로 실렌더링 전수 감사를 수행하고, AddGlow AI의 에디토리얼 절제 미학과 Google Stitch Track A 시안을
+            공식 사이트(5b34561)에 반영한 결과 보고서입니다.
+          </p>
+
+          <div class="hero-actions">
+            <a href="#compare" class="btn btn--primary" data-i18n="ctaCompare">Before / After 비교 보기 →</a>
+            <a href="#stitch" class="btn btn--secondary" data-i18n="ctaStitch">Google Stitch 시안 확인</a>
+            <a href="mailto:raymond@ainvtry.com?subject=Ainvtry%20Site%20Redesign%20%26%20IR%20Inquiry" class="btn btn--secondary" data-i18n="ctaEmail">창업자 메일 문의 ↗</a>
+          </div>
+
+          <dl class="kpi-strip">
+            <div class="kpi-cell">
+              <dt class="kpi-val kpi-val--gold" data-i18n="kpi1Val">6건 → 0건</dt>
+              <dd class="kpi-lbl" data-i18n="kpi1Lbl">d9823cfc 실측 결함 전량 해소</dd>
+            </div>
+            <div class="kpi-cell">
+              <dt class="kpi-val">344 / 52</dt>
+              <dd class="kpi-lbl" data-i18n="kpi2Lbl">자동 테스트 케이스 / 스위트 (IR 동기화)</dd>
+            </div>
+            <div class="kpi-cell">
+              <dt class="kpi-val">582→24 KB</dt>
+              <dd class="kpi-lbl" data-i18n="kpi3Lbl">로컬 WebP · EXIF 0% 경량화 (-96%)</dd>
+            </div>
+            <div class="kpi-cell">
+              <dt class="kpi-val">0px · 44px+</dt>
+              <dd class="kpi-lbl" data-i18n="kpi4Lbl">오버플로 0px · WCAG 2.2 AA 터치 타겟</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- SECTION 01: INTERACTIVE BEFORE / AFTER -->
+      <section id="compare" class="section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <span class="section-num">01 // BEFORE VS AFTER</span>
+              <h2 class="section-title" data-i18n="sec1Title">실렌더링 Before (d9823cfc) vs After (5b34561) 비교</h2>
+              <p class="section-sub" data-i18n="sec1Sub">
+                아래 스테이지 탭을 전환하고 중앙 골드 핸들을 좌우로 드래그해 개편 전 · 후 차이를 픽셀 단위로 확인하세요.
+              </p>
+            </div>
+
+            <div class="tabs-bar" role="tablist" aria-label="Before and After comparison scenes">
+              <button type="button" role="tab" id="tab-scene-hero" class="tab-btn is-active" data-scene="hero" aria-selected="true" aria-controls="comparePanel" tabindex="0" data-i18n="tabHero">01 히어로</button>
+              <button type="button" role="tab" id="tab-scene-studio" class="tab-btn" data-scene="studio" aria-selected="false" aria-controls="comparePanel" tabindex="-1" data-i18n="tabStudio">02 스튜디오 앱</button>
+              <button type="button" role="tab" id="tab-scene-specs" class="tab-btn" data-scene="specs" aria-selected="false" aria-controls="comparePanel" tabindex="-1" data-i18n="tabSpecs">03 스펙</button>
+              <button type="button" role="tab" id="tab-scene-about" class="tab-btn" data-scene="about" aria-selected="false" aria-controls="comparePanel" tabindex="-1" data-i18n="tabAbout">04 소개 루프</button>
+            </div>
+          </div>
+
+          <div id="comparePanel" class="compare-shell" role="tabpanel" aria-labelledby="tab-scene-hero">
+            <div class="compare-bar">
+              <p id="compareCaption" class="compare-caption">
+                <strong>Desktop Hero</strong> — 로고 중심 단일 화면에서 2단 비대칭 에디토리얼 + 2D VTON/EXIF 실증 카드 + Zero-Chrome 레일로 전환
+              </p>
+              <span class="shot-code">DRAG OR ARROW KEYS</span>
+            </div>
+
+            <div class="compare-stage" id="compareStage">
+              <div class="compare-layer">
+                <img id="compareAfterImg" src="/assets/report/after-desktop-hero-dark.webp" alt="After redesign screenshot" />
+              </div>
+              <div class="compare-layer" id="compareBeforeLayer" style="clip-path: inset(0 50% 0 0)">
+                <img id="compareBeforeImg" src="/assets/report/before-desktop-hero.webp" alt="Before redesign screenshot" />
+              </div>
+              <span class="compare-badge compare-badge--left">BEFORE · d9823cfc</span>
+              <span class="compare-badge compare-badge--right">AFTER · 5b34561</span>
+              <div class="compare-divider" id="compareDivider" style="left: 50%" aria-hidden="true">
+                <span class="compare-knob">↔</span>
+              </div>
+              <input
+                id="compareRange"
+                type="range"
+                min="6"
+                max="94"
+                value="50"
+                class="compare-range"
+                aria-label="Before and After comparison divider"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 02: 6 FINDINGS & ARCHITECTURE FIXES -->
+      <section id="findings" class="section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <span class="section-num">02 // POST-PULL RE-ANALYSIS</span>
+              <h2 class="section-title" data-i18n="sec2Title">d9823cfc 재분석에서 발견한 6대 과제 및 해결</h2>
+              <p class="section-sub" data-i18n="sec2Sub">
+                사용자의 라이브 앱 Studio 임베드(LiveAppStageOverlay)와 RBAC 데모 보안(server/rbac.js)을 100% 보존하면서
+                시각 · UX · 데이터 결함을 외과적으로 교정했습니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="findings-list">
+            <article class="finding-row">
+              <div class="finding-num">01</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f1Title">Studio 임베드 라이브 앱의 중복 상단 헤더 &amp; 영문 Light 혼용</h3>
+                <p data-i18n="f1Problem">외부 사이트 상단바 바로 아래 iframe 내부에서 두 번째 헤더([럭셔리] · [Light] · [EN])가 중복 노출되고 한국어 모드에서도 영문 Light가 표기되었습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f1Fix">isEmbedMode에서 LoginView 상단바를 제거하고 수직 중앙 정렬을 적용했습니다. 부모 상단바의 럭셔리/오로라 무드까지 postMessage로 실시간 동기화하며 단독 앱 모드의 라이트/다크 표기도 한국어화했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+
+            <article class="finding-row">
+              <div class="finding-num">02</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f2Title">히어로 첫 화면 1초 실증 시각 및 전환 CTA 부재</h3>
+                <p data-i18n="f2Problem">초기 화면에 로고와 1줄 문구만 존재해 8방향 2D VTON이나 582→24KB EXIF 0% 강점이 즉시 전달되지 않고 라이브 체험 CTA가 없었습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f2Fix">AddGlow × Stitch Track A 기반 2단 비대칭 에디토리얼 히어로와 HeroVisualProofCard(뉴트럴 스톤 배경 의류 컷아웃 → 실시간 8방향 피팅 + EXIF -96% 와이프 슬라이더) 및 솔리드 모노크롬 CTA를 도입했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+
+            <article class="finding-row">
+              <div class="finding-num">03</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f3Title">상 · 하단 캡슐 크롬 과밀로 인한 시각 분산</h3>
+                <p data-i18n="f3Problem">상단 독립 캡슐 4개, 하단 독립 캡슐 4개, 푸터 분석 캡슐이 동시에 떠 있어 하이엔드 패션 에디토리얼 여백을 해쳤습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f3Fix">좌측 무테두리 iNVTRY 마크 + 우측 단일 헤어라인 유틸리티 레일 + 하단 01~04 인덱스 통합 건축형 헤어라인 독 + 푸터 분석 링크 경량화로 Zero-Chrome 절제를 구현했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+
+            <article class="finding-row">
+              <div class="finding-num">04</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f4Title">Specs 6번 기둥 HUD 겹침 &amp; About 루프 Calendar 좌측 잘림</h3>
+                <p data-i18n="f4Problem">1440×900 해상도에서 Specs 6번 기둥(EXIF -96%)이 우측 HUD 뒤에 가려졌고, About Three.js 3D 루프의 Calendar 라벨이 좌측 끝에서 "alendar"로 잘렸습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f4Fix">specsStage 기둥 간격 압축 · CLUSTER_ORIGIN_X(-0.52) 이동 · 카메라 Z(7.85) 후퇴, aboutStage 카메라 Z(7.55) 후퇴 및 Calendar/Closet 라벨 안쪽 정렬로 전 구간 여백을 확보했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+
+            <article class="finding-row">
+              <div class="finding-num">05</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f5Title">구버전 지표(210+ · 23 KB) 및 비-Three.js "3D" 표기 혼용</h3>
+                <p data-i18n="f5Problem">실제 코드베이스는 343개 테스트 · 24 KB WebP이나 사이트에 210+ · 23 KB가 남아 있었고 일반 디지털 옷장 · 클레이 이미지 alt에도 "3D"가 혼용되었습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f5Fix">site/index.html 및 content.ts 전량을 340+ 테스트 · 582→24 KB WebP로 Living IR Deck과 100% 일치시키고 "3D" 표기를 오직 Three.js 3D 기능에만 한정했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+
+            <article class="finding-row">
+              <div class="finding-num">06</div>
+              <div class="finding-issue">
+                <h3 data-i18n="f6Title">투자자 · 브랜드 신뢰 해소를 위한 FAQ 및 보고서 접근성 보강</h3>
+                <p data-i18n="f6Problem">얼굴 데이터 0B 보안, 2D VTON과 Three.js 3D의 차이, 지원 플랫폼, 제휴 문의에 대한 즉답 FAQ가 부재했습니다.</p>
+              </div>
+              <div class="finding-fix">
+                <p data-i18n="f6Fix">About &gt; 비즈니스 탭에 한 · 영 4문항 헤어라인 아코디언 FAQ를 신설하고, Email Raymond 버튼 바로 옆에 본 HTML 보고서 직결 버튼을 배치했습니다.</p>
+              </div>
+              <span class="finding-tag finding-tag--live">RESOLVED</span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 03: GOOGLE STITCH PROPOSALS -->
+      <section id="stitch" class="section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <span class="section-num">03 // GOOGLE STITCH PROPOSALS</span>
+              <h2 class="section-title" data-i18n="sec3Title">Google Stitch 2종 시안 비교 (Track A 채택 · Track B 보존)</h2>
+              <p class="section-sub" data-i18n="sec3Sub">
+                Stitch 프로젝트(11505180160165595336 · .stitch/DESIGN.md 바인딩)에 비파괴 생성한 2개 트랙 시안입니다.
+                모든 이미지를 클릭하면 원본 해상도로 확대됩니다.
+              </p>
+            </div>
+
+            <div class="tabs-bar" role="tablist" aria-label="Google Stitch proposal track">
+              <button type="button" role="tab" id="tab-stitch-a" class="tab-btn is-active" data-stitch="track-a" aria-selected="true" aria-controls="stitch-track-a" tabindex="0" data-i18n="stitchTabA">Track A · Spatial Editorial Noir (채택)</button>
+              <button type="button" role="tab" id="tab-stitch-b" class="tab-btn" data-stitch="track-b" aria-selected="false" aria-controls="stitch-track-b" tabindex="-1" data-i18n="stitchTabB">Track B · Editorial Runway (보존)</button>
+            </div>
+          </div>
+
+          <div id="stitch-track-a" class="stitch-panel" role="tabpanel" aria-labelledby="tab-stitch-a">
+            <div class="gallery-grid gallery-grid--3">
+              <figure class="shot-card">
+                <button type="button" class="shot-trigger shot-trigger--tall" data-lightbox="/assets/report/stitch-a-hero.webp" data-caption="Stitch Track A — Desktop Hero UI (Screen ID: 69c0d99838904ecb87f2bd2b43d1d8e4)">
+                  <img src="/assets/report/stitch-a-hero.webp" alt="Stitch Variant A Desktop Hero UI" loading="lazy" />
+                </button>
+                <figcaption class="shot-meta">
+                  <div class="shot-meta-top">
+                    <span class="shot-title" data-i18n="stAHeroTitle">Variant A · Desktop Hero</span>
+                    <span class="shot-code">69c0d998…</span>
+                  </div>
+                  <p class="shot-desc" data-i18n="stAHeroDesc">무테두리 브랜드 마크 + 2단 비대칭 에디토리얼 + 2D VTON 실증 쇼케이스 카드</p>
+                </figcaption>
+              </figure>
+
+              <figure class="shot-card">
+                <button type="button" class="shot-trigger shot-trigger--tall" data-lightbox="/assets/report/stitch-a-studio.webp" data-caption="Stitch Track A — Desktop Studio Stage (Screen ID: c628feabd58a4adcb566896e16e63a5d)">
+                  <img src="/assets/report/stitch-a-studio.webp" alt="Stitch Variant A Desktop Studio UI" loading="lazy" />
+                </button>
+                <figcaption class="shot-meta">
+                  <div class="shot-meta-top">
+                    <span class="shot-title" data-i18n="stAStudioTitle">Variant A · Desktop Studio</span>
+                    <span class="shot-code">c628feab…</span>
+                  </div>
+                  <p class="shot-desc" data-i18n="stAStudioDesc">Zero-Chrome 상단바 + 뉴트럴 스튜디오 배경 + 우측 01~04 헤어라인 인스펙터</p>
+                </figcaption>
+              </figure>
+
+              <figure class="shot-card">
+                <button type="button" class="shot-trigger shot-trigger--tall" data-lightbox="/assets/report/stitch-a-mobile.webp" data-caption="Stitch Track A — Mobile Editorial (Screen ID: 2af1254b2ce8405dbe299f4f285e22da)">
+                  <img src="/assets/report/stitch-a-mobile.webp" alt="Stitch Variant A Mobile UI" loading="lazy" />
+                </button>
+                <figcaption class="shot-meta">
+                  <div class="shot-meta-top">
+                    <span class="shot-title" data-i18n="stAMobileTitle">Variant A · Mobile Editorial</span>
+                    <span class="shot-code">2af1254b…</span>
+                  </div>
+                  <p class="shot-desc" data-i18n="stAMobileDesc">단일 뷰포트 모바일 스택 + 솔리드 CTA + 슬림 1행 하단 내비게이션 레일</p>
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+
+          <div id="stitch-track-b" class="stitch-panel" role="tabpanel" aria-labelledby="tab-stitch-b" hidden>
+            <div class="gallery-grid">
+              <figure class="shot-card">
+                <button type="button" class="shot-trigger shot-trigger--tall" data-lightbox="/assets/report/stitch-b-desktop.webp" data-caption="Stitch Track B — Desktop Editorial Runway Scroll (Screen ID: f9d5821b8ae64a669529c887c2801ce2)">
+                  <img src="/assets/report/stitch-b-desktop.webp" alt="Stitch Variant B Desktop Runway Scroll" loading="lazy" />
+                </button>
+                <figcaption class="shot-meta">
+                  <div class="shot-meta-top">
+                    <span class="shot-title" data-i18n="stBDeskTitle">Variant B · Desktop Runway Scroll</span>
+                    <span class="shot-code">f9d5821b…</span>
+                  </div>
+                  <p class="shot-desc" data-i18n="stBDeskDesc">AddGlow 스타일 세로 스크롤 런웨이 · 3단계 와이어프레임 카드 · 2단 FAQ · 화이트 푸터 (SEO 랜딩 확장안)</p>
+                </figcaption>
+              </figure>
+
+              <figure class="shot-card">
+                <button type="button" class="shot-trigger shot-trigger--tall" data-lightbox="/assets/report/stitch-b-mobile.webp" data-caption="Stitch Track B — Mobile Editorial Runway Scroll (Screen ID: 41ff28238cb24b03bdbbabd2d26c58f1)">
+                  <img src="/assets/report/stitch-b-mobile.webp" alt="Stitch Variant B Mobile Runway Scroll" loading="lazy" />
+                </button>
+                <figcaption class="shot-meta">
+                  <div class="shot-meta-top">
+                    <span class="shot-title" data-i18n="stBMobTitle">Variant B · Mobile Runway Scroll</span>
+                    <span class="shot-code">41ff2823…</span>
+                  </div>
+                  <p class="shot-desc" data-i18n="stBMobDesc">모바일 세로 에디토리얼 스토리텔링 시안 (향후 브랜드 캠페인 · SEO 페이지로 확장 가능)</p>
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 04: FULL DESKTOP & MOBILE SHOWCASE -->
+      <section id="gallery" class="section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <span class="section-num">04 // PRODUCTION VISUAL QA GALLERY</span>
+              <h2 class="section-title" data-i18n="sec4Title">개편 완료 화면 전수 갤러리 (Desktop · Mobile · Dark · Light)</h2>
+              <p class="section-sub" data-i18n="sec4Sub">
+                실제 Vite 프로덕션 빌드(dist-site)를 Playwright WebGL로 캡처한 무보정 실화면입니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="gallery-grid" style="margin-bottom: 18px">
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger" data-lightbox="/assets/report/after-desktop-hero-exif.webp" data-caption="Desktop Hero — EXIF -96% Before/After Wipe (582 KB -> 24 KB WebP)">
+                <img src="/assets/report/after-desktop-hero-exif.webp" alt="Desktop Hero EXIF Wipe" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="g1Title">Hero · EXIF -96% 실시간 비교 와이프</span>
+                  <span class="shot-code">1440×900 · DARK</span>
+                </div>
+                <p class="shot-desc" data-i18n="g1Desc">원본 582 KB(EXIF/GPS 포함) → 24 KB 투명 WebP 경량화를 첫 화면에서 직접 드래그 검증</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger" data-lightbox="/assets/report/after-desktop-hero-light.webp" data-caption="Desktop Hero — Warm Alabaster Daylight Light Theme">
+                <img src="/assets/report/after-desktop-hero-light.webp" alt="Desktop Hero Light Theme" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="g2Title">Hero · 웜 알라배스터 라이트 테마</span>
+                  <span class="shot-code">1440×900 · LIGHT</span>
+                </div>
+                <p class="shot-desc" data-i18n="g2Desc">주간 라이트 모드에서도 수직 다크 그라디언트 타이틀 · 뉴트럴 스톤 컷아웃 · 구슬 대비 완벽 유지</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger" data-lightbox="/assets/report/after-desktop-studio-light.webp" data-caption="Desktop Studio LiveApp — Zero Duplicate Header & Light Theme Sync">
+                <img src="/assets/report/after-desktop-studio-light.webp" alt="Desktop Studio LiveApp Light" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="g3Title">Studio LiveApp · 중복 헤더 0개 &amp; 라이트 동기화</span>
+                  <span class="shot-code">1440×900 · EMBED</span>
+                </div>
+                <p class="shot-desc" data-i18n="g3Desc">부모 상단바의 테마 · 언어 · 실크 무드 변경이 iframe 내부 실제 앱에 즉각 동기화</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger" data-lightbox="/assets/report/after-desktop-about-faq.webp" data-caption="Desktop About Business Tab — Hairline FAQ Accordion + Founder Contact">
+                <img src="/assets/report/after-desktop-about-faq.webp" alt="Desktop About Business FAQ" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="g4Title">About 비즈니스 · 4문항 헤어라인 FAQ</span>
+                  <span class="shot-code">1440×900 · ABOUT</span>
+                </div>
+                <p class="shot-desc" data-i18n="g4Desc">0B 얼굴 보안 · 2D VTON vs Three.js 3D · 플랫폼 · 브랜드 제휴 핵심 질문을 깔끔한 아코디언으로 제공</p>
+              </figcaption>
+            </figure>
+          </div>
+
+          <div class="gallery-grid gallery-grid--4">
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger shot-trigger--mobile" data-lightbox="/assets/report/after-mobile-hero-dark.webp" data-caption="Mobile 390×844 — Hero Dark (0px Overflow, 44px+ Touch Targets)">
+                <img src="/assets/report/after-mobile-hero-dark.webp" alt="Mobile Hero Dark" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="gm1Title">Mobile Hero · 다크</span>
+                  <span class="shot-code">390×844</span>
+                </div>
+                <p class="shot-desc" data-i18n="gm1Desc">0px 오버플로 · 하단 독 여유 97px 확보</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger shot-trigger--mobile" data-lightbox="/assets/report/after-mobile-hero-light.webp" data-caption="Mobile 390×844 — Hero Light">
+                <img src="/assets/report/after-mobile-hero-light.webp" alt="Mobile Hero Light" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="gm2Title">Mobile Hero · 라이트</span>
+                  <span class="shot-code">390×844</span>
+                </div>
+                <p class="shot-desc" data-i18n="gm2Desc">데이라이트 대비 · WCAG 44px 터치 타겟</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger shot-trigger--mobile" data-lightbox="/assets/report/after-mobile-studio.webp" data-caption="Mobile 390×844 — Studio LiveApp (Zero Duplicate Header)">
+                <img src="/assets/report/after-mobile-studio.webp" alt="Mobile Studio LiveApp" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="gm3Title">Mobile Studio · 라이브 앱</span>
+                  <span class="shot-code">390×844</span>
+                </div>
+                <p class="shot-desc" data-i18n="gm3Desc">중복 헤더 0개 · 네이티브 베젤 수직 중앙 정렬</p>
+              </figcaption>
+            </figure>
+
+            <figure class="shot-card">
+              <button type="button" class="shot-trigger shot-trigger--mobile" data-lightbox="/assets/report/after-mobile-about.webp" data-caption="Mobile 390×844 — About Three.js 3D Loop & Bottom Sheet">
+                <img src="/assets/report/after-mobile-about.webp" alt="Mobile About Stage" loading="lazy" />
+              </button>
+              <figcaption class="shot-meta">
+                <div class="shot-meta-top">
+                  <span class="shot-title" data-i18n="gm4Title">Mobile About · Three.js 3D 루프</span>
+                  <span class="shot-code">390×844</span>
+                </div>
+                <p class="shot-desc" data-i18n="gm4Desc">상단 Three.js 3D 루프 + 하단 시트 + 통합 독 레일</p>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 05: VERIFICATION SCORECARD & NEXT STEP -->
+      <section id="qa" class="section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <span class="section-num">05 // ENGINEERING &amp; A11Y VERIFICATION</span>
+              <h2 class="section-title" data-i18n="sec5Title">품질 · 접근성(WCAG 2.2 AA) · Living IR Deck 자동 연동 검증</h2>
+            </div>
+          </div>
+
+          <div class="table-wrap" style="margin-bottom: 32px">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="thCheck">검증 항목</th>
+                  <th data-i18n="thCmd">실행 명령 / 대상</th>
+                  <th data-i18n="thStatus">결과</th>
+                  <th data-i18n="thNote">실측 세부 내역</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-i18n="qa1Name">정적 린트 &amp; 엄격 타입</td>
+                  <td><code>npm run lint</code> · <code>tsc --noEmit</code></td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa1Note">0 errors · 변경 17개 파일 경고 0건 (strict: true)</td>
+                </tr>
+                <tr>
+                  <td data-i18n="qa2Name">사이트 · 스테이지 · RBAC · IR 단위 테스트</td>
+                  <td><code>node --test</code> (6개 핵심 스위트)</td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa2Note">40/40 통과 (100%) — 전체 리포지토리 52개 스위트 / 344개 테스트 케이스</td>
+                </tr>
+                <tr>
+                  <td data-i18n="qa3Name">프로덕션 사이트 빌드</td>
+                  <td><code>npm run build:site</code></td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa3Note">dist-site/index.html + app.html + report/index.html 정상 번들링 (4.73s)</td>
+                </tr>
+                <tr>
+                  <td data-i18n="qa4Name">Living IR Deck 자동 동기화</td>
+                  <td><code>npm run ir:sync:check</code></td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa4Note">36개 라이브 바인딩 0-drift 검증 완료 (340+ tests · Three.js 0.187 · 582→24 KB)</td>
+                </tr>
+                <tr>
+                  <td data-i18n="qa5Name">코드 리뷰 &amp; WCAG 2.2 AA</td>
+                  <td><code>code-reviewer</code> 서브에이전트 + Playwright</td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa5Note">모든 버튼 · 탭 &gt;= 44px 터치 타겟, WAI-ARIA 키보드 탭 탐색, EXIF 슬라이더 포커스 링, studioEmbedTopbarCount: 0</td>
+                </tr>
+                <tr>
+                  <td data-i18n="qa6Name">커밋 품질 · 문서 위생 게이트</td>
+                  <td><code>verify:staged</code> · <code>verify:docs</code></td>
+                  <td><span class="status-pass">PASS</span></td>
+                  <td data-i18n="qa6Note">시크릿 · console.log · 문서 위생 통과 후 origin/main 푸시 완료</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="next-banner">
+            <div>
+              <h3 data-i18n="nextTitle">다음 단계 — 사업계획서(IR Deck) 리프레시 및 Phase 2(16:9 · 4:3 PDF / PPTX)</h3>
+              <p data-i18n="nextDesc">
+                개편된 홈페이지의 Spatial Editorial Noir 시각 언어와 최신 실화면 스크린샷을 docs/ir-deck/index.html에 통합하고,
+                16:9 와이드스크린 및 4:3 표준 비율의 인쇄용 PDF와 편집 가능 .pptx 제출 패키지를 일괄 생성할 준비가 완료되었습니다.
+              </p>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px">
+              <a href="/" class="btn btn--primary" data-i18n="nextBack">ainvtry.com 돌아가기 ↗</a>
+              <a href="mailto:raymond@ainvtry.com?subject=Ainvtry%20Private%20Beta%20%26%20Partnership%20Inquiry" class="btn btn--secondary" data-i18n="nextEmail">Email Raymond ↗</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container site-footer">
+      <span>© 2026 Ainvtry (iNVTRY) · Raymond Moon · Seoul, South Korea</span>
+      <span>
+        <a href="/">ainvtry.com</a> · <a href="mailto:raymond@ainvtry.com">raymond@ainvtry.com</a>
+      </span>
+    </footer>
+
+    <!-- Lightbox Modal -->
+    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Full screen preview" hidden>
+      <div class="lightbox-inner">
+        <img id="lightboxImg" class="lightbox-img" src="" alt="" />
+        <div class="lightbox-bar">
+          <span id="lightboxCaption"></span>
+          <button type="button" id="lightboxClose" class="lightbox-close" data-i18n="closeBtn">닫기 (Esc)</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (() => {
+        const SCENES = {
+          hero: {
+            before: '/assets/report/before-desktop-hero.webp',
+            after: '/assets/report/after-desktop-hero-dark.webp',
+            ko: 'Desktop Hero — 로고 중심 단일 화면에서 2단 비대칭 에디토리얼 + 2D VTON/EXIF 실증 카드 + Zero-Chrome 레일로 전환',
+            en: 'Desktop Hero — Upgraded from logo-only canvas to 2-col asymmetric editorial + 2D VTON/EXIF proof card + Zero-Chrome rails',
+          },
+          studio: {
+            before: '/assets/report/before-desktop-studio.webp',
+            after: '/assets/report/after-desktop-studio-dark.webp',
+            ko: 'Studio LiveApp — iframe 내부 중복 상단바([럭셔리] · [Light] · [EN])를 완전 제거하고 수직 중앙 정렬 및 무드 실시간 동기화 적용',
+            en: 'Studio LiveApp — Eliminated duplicate iframe header bar, centered auth monolith, and synced silk mood + Light/Dark localization',
+          },
+          specs: {
+            before: '/assets/report/before-desktop-specs.webp',
+            after: '/assets/report/after-desktop-specs.webp',
+            ko: 'Specs Three.js 3D Stage — 우측 HUD에 가려졌던 6번 기둥(EXIF -96%)을 완전 분리하고 340+ TESTS · 582→24 KB · Three.js 3D로 정합화',
+            en: 'Specs Three.js 3D Stage — Cleared Pillar #6 (EXIF -96%) from right HUD overlap and synced 340+ TESTS · 582→24 KB · Three.js 3D copy',
+          },
+          about: {
+            before: '/assets/report/before-desktop-about.webp',
+            after: '/assets/report/after-desktop-about.webp',
+            ko: 'About Three.js 3D Loop — 좌측 경계에서 잘리던 "Calendar"("alendar") 및 우측 "Closet" 라벨 여백을 카메라 후퇴 · 안쪽 정렬로 완전 교정',
+            en: 'About Three.js 3D Loop — Fixed left-edge "Calendar" clipping ("alendar") and right "Closet" HUD margin via Z pullback and inward offsets',
+          },
+        };
+
+        const I18N = {
+          ko: {
+            docPill: '사이트 개편 보고서 · 5b34561',
+            backSite: '← 사이트',
+            printBtn: 'PDF 인쇄',
+            heroEyebrow: 'ADDGLOW 벤치마크 · GOOGLE STITCH · 사이트 개편 보고서',
+            heroTitleLead: 'ainvtry.com 최신 코드 재분석 및 ',
+            heroTitleAccent: 'Spatial Editorial Noir',
+            heroTitleTail: ' 개편 보고서',
+            heroLead:
+              '사용자 커밋 d9823cfc(라이브 앱 Studio 풀스테이지 임베드)와 Living IR Deck 자동 동기화(19452308)를 기준으로 실렌더링 전수 감사를 수행하고, AddGlow AI의 에디토리얼 절제 미학과 Google Stitch Track A 시안을 공식 사이트(5b34561)에 반영한 결과 보고서입니다.',
+            ctaCompare: 'Before / After 비교 보기 →',
+            ctaStitch: 'Google Stitch 시안 확인',
+            ctaEmail: '창업자 메일 문의 ↗',
+            kpi1Val: '6건 → 0건',
+            kpi1Lbl: 'd9823cfc 실측 결함 전량 해소',
+            kpi2Lbl: '자동 테스트 케이스 / 스위트 (IR 동기화)',
+            kpi3Lbl: '로컬 WebP · EXIF 0% 경량화 (-96%)',
+            kpi4Lbl: '오버플로 0px · WCAG 2.2 AA 터치 타겟',
+            sec1Title: '실렌더링 Before (d9823cfc) vs After (5b34561) 비교',
+            sec1Sub:
+              '아래 스테이지 탭을 전환하고 중앙 골드 핸들을 좌우로 드래그해 개편 전 · 후 차이를 픽셀 단위로 확인하세요.',
+            tabHero: '01 히어로',
+            tabStudio: '02 스튜디오 앱',
+            tabSpecs: '03 스펙',
+            tabAbout: '04 소개 루프',
+            sec2Title: 'd9823cfc 재분석에서 발견한 6대 과제 및 해결',
+            sec2Sub:
+              '사용자의 라이브 앱 Studio 임베드(LiveAppStageOverlay)와 RBAC 데모 보안(server/rbac.js)을 100% 보존하면서 시각 · UX · 데이터 결함을 외과적으로 교정했습니다.',
+            f1Title: 'Studio 임베드 라이브 앱의 중복 상단 헤더 & 영문 Light 혼용',
+            f1Problem:
+              '외부 사이트 상단바 바로 아래 iframe 내부에서 두 번째 헤더([럭셔리] · [Light] · [EN])가 중복 노출되고 한국어 모드에서도 영문 Light가 표기되었습니다.',
+            f1Fix:
+              'isEmbedMode에서 LoginView 상단바를 제거하고 수직 중앙 정렬을 적용했습니다. 부모 상단바의 럭셔리/오로라 무드까지 postMessage로 실시간 동기화하며 단독 앱 모드의 라이트/다크 표기도 한국어화했습니다.',
+            f2Title: '히어로 첫 화면 1초 실증 시각 및 전환 CTA 부재',
+            f2Problem:
+              '초기 화면에 로고와 1줄 문구만 존재해 8방향 2D VTON이나 582→24KB EXIF 0% 강점이 즉시 전달되지 않고 라이브 체험 CTA가 없었습니다.',
+            f2Fix:
+              'AddGlow × Stitch Track A 기반 2단 비대칭 에디토리얼 히어로와 HeroVisualProofCard(뉴트럴 스톤 배경 의류 컷아웃 → 실시간 8방향 피팅 + EXIF -96% 와이프 슬라이더) 및 솔리드 모노크롬 CTA를 도입했습니다.',
+            f3Title: '상 · 하단 캡슐 크롬 과밀로 인한 시각 분산',
+            f3Problem:
+              '상단 독립 캡슐 4개, 하단 독립 캡슐 4개, 푸터 분석 캡슐이 동시에 떠 있어 하이엔드 패션 에디토리얼 여백을 해쳤습니다.',
+            f3Fix:
+              '좌측 무테두리 iNVTRY 마크 + 우측 단일 헤어라인 유틸리티 레일 + 하단 01~04 인덱스 통합 건축형 헤어라인 독 + 푸터 분석 링크 경량화로 Zero-Chrome 절제를 구현했습니다.',
+            f4Title: 'Specs 6번 기둥 HUD 겹침 & About 루프 Calendar 좌측 잘림',
+            f4Problem:
+              '1440×900 해상도에서 Specs 6번 기둥(EXIF -96%)이 우측 HUD 뒤에 가려졌고, About Three.js 3D 루프의 Calendar 라벨이 좌측 끝에서 "alendar"로 잘렸습니다.',
+            f4Fix:
+              'specsStage 기둥 간격 압축 · CLUSTER_ORIGIN_X(-0.52) 이동 · 카메라 Z(7.85) 후퇴, aboutStage 카메라 Z(7.55) 후퇴 및 Calendar/Closet 라벨 안쪽 정렬로 전 구간 여백을 확보했습니다.',
+            f5Title: '구버전 지표(210+ · 23 KB) 및 비-Three.js "3D" 표기 혼용',
+            f5Problem:
+              '실제 코드베이스는 343개 테스트 · 24 KB WebP이나 사이트에 210+ · 23 KB가 남아 있었고 일반 디지털 옷장 · 클레이 이미지 alt에도 "3D"가 혼용되었습니다.',
+            f5Fix:
+              'site/index.html 및 content.ts 전량을 340+ 테스트 · 582→24 KB WebP로 Living IR Deck과 100% 일치시키고 "3D" 표기를 오직 Three.js 3D 기능에만 한정했습니다.',
+            f6Title: '투자자 · 브랜드 신뢰 해소를 위한 FAQ 및 보고서 접근성 보강',
+            f6Problem:
+              '얼굴 데이터 0B 보안, 2D VTON과 Three.js 3D의 차이, 지원 플랫폼, 제휴 문의에 대한 즉답 FAQ가 부재했습니다.',
+            f6Fix:
+              'About > 비즈니스 탭에 한 · 영 4문항 헤어라인 아코디언 FAQ를 신설하고, Email Raymond 버튼 바로 옆에 본 HTML 보고서 직결 버튼을 배치했습니다.',
+            sec3Title: 'Google Stitch 2종 시안 비교 (Track A 채택 · Track B 보존)',
+            sec3Sub:
+              'Stitch 프로젝트(11505180160165595336 · .stitch/DESIGN.md 바인딩)에 비파괴 생성한 2개 트랙 시안입니다. 모든 이미지를 클릭하면 원본 해상도로 확대됩니다.',
+            stitchTabA: 'Track A · Spatial Editorial Noir (채택)',
+            stitchTabB: 'Track B · Editorial Runway (보존)',
+            stAHeroTitle: 'Variant A · Desktop Hero',
+            stAHeroDesc: '무테두리 브랜드 마크 + 2단 비대칭 에디토리얼 + 2D VTON 실증 쇼케이스 카드',
+            stAStudioTitle: 'Variant A · Desktop Studio',
+            stAStudioDesc: 'Zero-Chrome 상단바 + 뉴트럴 스튜디오 배경 + 우측 01~04 헤어라인 인스펙터',
+            stAMobileTitle: 'Variant A · Mobile Editorial',
+            stAMobileDesc: '단일 뷰포트 모바일 스택 + 솔리드 CTA + 슬림 1행 하단 내비게이션 레일',
+            stBDeskTitle: 'Variant B · Desktop Runway Scroll',
+            stBDeskDesc: 'AddGlow 스타일 세로 스크롤 런웨이 · 3단계 와이어프레임 카드 · 2단 FAQ · 화이트 푸터 (SEO 랜딩 확장안)',
+            stBMobTitle: 'Variant B · Mobile Runway Scroll',
+            stBMobDesc: '모바일 세로 에디토리얼 스토리텔링 시안 (향후 브랜드 캠페인 · SEO 페이지로 확장 가능)',
+            sec4Title: '개편 완료 화면 전수 갤러리 (Desktop · Mobile · Dark · Light)',
+            sec4Sub: '실제 Vite 프로덕션 빌드(dist-site)를 Playwright WebGL로 캡처한 무보정 실화면입니다.',
+            g1Title: 'Hero · EXIF -96% 실시간 비교 와이프',
+            g1Desc: '원본 582 KB(EXIF/GPS 포함) → 24 KB 투명 WebP 경량화를 첫 화면에서 직접 드래그 검증',
+            g2Title: 'Hero · 웜 알라배스터 라이트 테마',
+            g2Desc: '주간 라이트 모드에서도 수직 다크 그라디언트 타이틀 · 뉴트럴 스톤 컷아웃 · 구슬 대비 완벽 유지',
+            g3Title: 'Studio LiveApp · 중복 헤더 0개 & 라이트 동기화',
+            g3Desc: '부모 상단바의 테마 · 언어 · 실크 무드 변경이 iframe 내부 실제 앱에 즉각 동기화',
+            g4Title: 'About 비즈니스 · 4문항 헤어라인 FAQ',
+            g4Desc: '0B 얼굴 보안 · 2D VTON vs Three.js 3D · 플랫폼 · 브랜드 제휴 핵심 질문을 깔끔한 아코디언으로 제공',
+            gm1Title: 'Mobile Hero · 다크',
+            gm1Desc: '0px 오버플로 · 하단 독 여유 97px 확보',
+            gm2Title: 'Mobile Hero · 라이트',
+            gm2Desc: '데이라이트 대비 · WCAG 44px 터치 타겟',
+            gm3Title: 'Mobile Studio · 라이브 앱',
+            gm3Desc: '중복 헤더 0개 · 네이티브 베젤 수직 중앙 정렬',
+            gm4Title: 'Mobile About · Three.js 3D 루프',
+            gm4Desc: '상단 Three.js 3D 루프 + 하단 시트 + 통합 독 레일',
+            sec5Title: '품질 · 접근성(WCAG 2.2 AA) · Living IR Deck 자동 연동 검증',
+            thCheck: '검증 항목',
+            thCmd: '실행 명령 / 대상',
+            thStatus: '결과',
+            thNote: '실측 세부 내역',
+            qa1Name: '정적 린트 & 엄격 타입',
+            qa1Note: '0 errors · 변경 17개 파일 경고 0건 (strict: true)',
+            qa2Name: '사이트 · 스테이지 · RBAC · IR 단위 테스트',
+            qa2Note: '40/40 통과 (100%) — 전체 리포지토리 52개 스위트 / 344개 테스트 케이스',
+            qa3Name: '프로덕션 사이트 빌드',
+            qa3Note: 'dist-site/index.html + app.html + report/index.html 정상 번들링 (4.73s)',
+            qa4Name: 'Living IR Deck 자동 동기화',
+            qa4Note: '36개 라이브 바인딩 0-drift 검증 완료 (340+ tests · Three.js 0.187 · 582→24 KB)',
+            qa5Name: '코드 리뷰 & WCAG 2.2 AA',
+            qa5Note: '모든 버튼 · 탭 >= 44px 터치 타겟, WAI-ARIA 키보드 탭 탐색, EXIF 슬라이더 포커스 링, studioEmbedTopbarCount: 0',
+            qa6Name: '커밋 품질 · 문서 위생 게이트',
+            qa6Note: '시크릿 · console.log · 문서 위생 통과 후 origin/main 푸시 완료',
+            nextTitle: '다음 단계 — 사업계획서(IR Deck) 리프레시 및 Phase 2(16:9 · 4:3 PDF / PPTX)',
+            nextDesc:
+              '개편된 홈페이지의 Spatial Editorial Noir 시각 언어와 최신 실화면 스크린샷을 docs/ir-deck/index.html에 통합하고, 16:9 와이드스크린 및 4:3 표준 비율의 인쇄용 PDF와 편집 가능 .pptx 제출 패키지를 일괄 생성할 준비가 완료되었습니다.',
+            nextBack: 'ainvtry.com 돌아가기 ↗',
+            nextEmail: '창업자 메일 ↗',
+            closeBtn: '닫기 (Esc)',
+          },
+          en: {
+            docPill: 'SITE REDESIGN REPORT · 5b34561',
+            backSite: '← Site',
+            printBtn: 'Print PDF',
+            heroEyebrow: 'ADDGLOW BENCHMARK · GOOGLE STITCH · SITE REDESIGN REPORT',
+            heroTitleLead: 'ainvtry.com Re-Analysis & ',
+            heroTitleAccent: 'Spatial Editorial Noir',
+            heroTitleTail: ' Redesign Report',
+            heroLead:
+              'Post-pull audit of commit d9823cfc (full-stage LiveApp Studio embed) and automated Living IR Deck sync (19452308), applying AddGlow AI editorial restraint and Google Stitch Track A directly to ainvtry.com (5b34561).',
+            ctaCompare: 'Inspect Before / After →',
+            ctaStitch: 'View Stitch Proposals',
+            ctaEmail: 'Email Raymond ↗',
+            kpi1Val: '6 → 0 Issues',
+            kpi1Lbl: 'All audited d9823cfc visual/UX bugs resolved',
+            kpi2Lbl: 'Automated tests / suites (synced with IR Deck)',
+            kpi3Lbl: 'Client WebP · EXIF 0% stripping (-96%)',
+            kpi4Lbl: 'Zero overflow · WCAG 2.2 AA touch targets',
+            sec1Title: 'Live Rendering Comparison: Before (d9823cfc) vs After (5b34561)',
+            sec1Sub:
+              'Switch between stages below and drag the champagne-gold divider to inspect pixel-level improvements.',
+            tabHero: '01 Hero',
+            tabStudio: '02 Studio App',
+            tabSpecs: '03 Specs',
+            tabAbout: '04 About Loop',
+            sec2Title: '6 Findings from d9823cfc Audit & Architectural Fixes',
+            sec2Sub:
+              '100% preserving LiveAppStageOverlay in Studio and server/rbac.js demo isolation while fixing every visual, UX, and metric discrepancy.',
+            f1Title: 'Duplicate Header & English "Light" Leak Inside Embedded Studio LiveApp',
+            f1Problem:
+              'A second header ([Luxury] · [Light] · [EN]) rendered inside the /app.html iframe right beneath the site topbar, displaying English "Light" even in Korean mode.',
+            f1Fix:
+              'Hid atelier-topbar in embed mode with balanced vertical centering, synced silk mood via same-origin postMessage, and localized standalone Light/Dark labels.',
+            f2Title: 'Missing 1-Second Visual Proof & Conversion CTA on Hero',
+            f2Problem:
+              'The initial hero displayed only a logo and one-line subtitle without visual proof of 8-angle 2D VTON or 582→24 KB EXIF stripping, and lacked a primary CTA.',
+            f2Fix:
+              'Built a 2-column Spatial Editorial Noir Hero featuring HeroVisualProofCard (neutral architectural stone cutout -> live 8-angle fitting + interactive EXIF -96% wipe) and solid monochrome CTA.',
+            f3Title: 'Excessive Floating Pill Chrome Across Topbar, Dock & Footer',
+            f3Problem:
+              'Four separate top capsules, four bottom dock capsules, and a heavy Analytics pill competed for visual focus against the Three.js 3D silk canvas.',
+            f3Fix:
+              'Applied Zero-Chrome restraint: borderless brand mark, unified top-right hairline utility rail, single 01–04 monospace architectural dock rail, and quiet footer Analytics link.',
+            f4Title: 'Specs Pillar #6 HUD Overlap & About Three.js 3D Loop "Calendar" Clipping',
+            f4Problem:
+              'On 1440×900 desktop, Specs Pillar #6 (EXIF -96%) sat behind the right HUD panel, and "Calendar" clipped as "alendar" at the left viewport edge.',
+            f4Fix:
+              'Tightened pillar span with CLUSTER_ORIGIN_X (-0.52) and Z pullback (7.85); pulled About camera Z to 7.55 and tucked Calendar/Closet label offsets cleanly inward.',
+            f5Title: 'Stale Metrics (210+ · 23 KB) & Generic Non-Three.js "3D" Wording',
+            f5Problem:
+              'Live test count had grown to 343 cases and garment WebP measured 24 KB, while site copy still showed 210+ / 23 KB and generic "3D" on non-Three.js items.',
+            f5Fix:
+              'Aligned site/index.html and content.ts to 340+ tests and 582→24 KB WebP in zero-drift lockstep with Living IR Deck, strictly restricting "3D" to Three.js contexts.',
+            f6Title: 'Missing Investor/Brand Trust FAQ & Direct Report Access',
+            f6Problem:
+              'Core trust questions (0B face privacy, 2D VTON vs Three.js 3D roles, platforms, brand pilots) had no quick-scan FAQ surface.',
+            f6Fix:
+              'Added a bilingual 4-item hairline FAQ accordion under About > Model and linked this HTML report directly beside the Email Raymond CTA.',
+            sec3Title: 'Google Stitch Proposals (Track A Adopted · Track B Archived)',
+            sec3Sub:
+              'Non-destructively generated inside Stitch project 11505180160165595336 bound to .stitch/DESIGN.md. Click any mockup to inspect full resolution.',
+            stitchTabA: 'Track A · Spatial Editorial Noir (Adopted)',
+            stitchTabB: 'Track B · Editorial Runway (Archived)',
+            stAHeroTitle: 'Variant A · Desktop Hero',
+            stAHeroDesc: 'Borderless brand mark + 2-col asymmetric editorial + 2D VTON visual proof showcase card',
+            stAStudioTitle: 'Variant A · Desktop Studio',
+            stAStudioDesc: 'Zero-Chrome topbar + neutral studio backdrop + right 01–04 hairline inspector',
+            stAMobileTitle: 'Variant A · Mobile Editorial',
+            stAMobileDesc: 'Single-viewport mobile stack + solid CTA + slim unified 1-row bottom rail',
+            stBDeskTitle: 'Variant B · Desktop Runway Scroll',
+            stBDeskDesc: 'AddGlow-inspired vertical editorial runway · 3-step wireframe cards · 2-col FAQ · white footer',
+            stBMobTitle: 'Variant B · Mobile Runway Scroll',
+            stBMobDesc: 'Long-form mobile editorial scroll concept archived for future SEO/campaign landing expansion',
+            sec4Title: 'Production Visual QA Gallery (Desktop · Mobile · Dark · Light)',
+            sec4Sub: 'Unretouched Playwright WebGL captures from the live Vite production build (dist-site).',
+            g1Title: 'Hero · Interactive EXIF -96% Wipe',
+            g1Desc: 'Drag directly on the hero to compare raw 582 KB (EXIF/GPS) against 24 KB transparent WebP',
+            g2Title: 'Hero · Warm Alabaster Light Theme',
+            g2Desc: 'Crisp vertical obsidian gradient display H1, neutral stone cutout, and champagne-gold balance in daylight',
+            g3Title: 'Studio LiveApp · Zero Duplicate Header & Light Sync',
+            g3Desc: 'Parent topbar theme, language, and silk mood sync instantaneously into the embedded live application',
+            g4Title: 'About Model · 4-Item Hairline FAQ',
+            g4Desc: 'Concise answers for 0B privacy, 2D VTON vs Three.js 3D, cross-platform runtime, and brand partnerships',
+            gm1Title: 'Mobile Hero · Dark',
+            gm1Desc: '0px overflow · 97px clear margin above bottom dock',
+            gm2Title: 'Mobile Hero · Light',
+            gm2Desc: 'Daylight contrast · WCAG 44px touch targets',
+            gm3Title: 'Mobile Studio · Live App',
+            gm3Desc: '0 duplicate headers · centered inside phone bezel',
+            gm4Title: 'Mobile About · Three.js 3D Loop',
+            gm4Desc: 'Three.js 3D Loop stage above + bottom sheet + unified rail',
+            sec5Title: 'Quality, WCAG 2.2 AA & Living IR Deck Sync Verification',
+            thCheck: 'Verification Gate',
+            thCmd: 'Command / Scope',
+            thStatus: 'Status',
+            thNote: 'Observed Evidence',
+            qa1Name: 'Static Lint & Strict Typecheck',
+            qa1Note: '0 errors · 0 warnings across all 17 modified files (strict: true)',
+            qa2Name: 'Site, Stage, RBAC & IR Unit Tests',
+            qa2Note: '40/40 passed (100%) — 52 suites / 344 total test cases repo-wide',
+            qa3Name: 'Production Site Build',
+            qa3Note: 'dist-site/index.html + app.html + report/index.html bundled cleanly (4.73s)',
+            qa4Name: 'Living IR Deck Auto-Sync',
+            qa4Note: '36 live bindings verified zero-drift (340+ tests · Three.js 0.187 · 582→24 KB)',
+            qa5Name: 'Code Review & WCAG 2.2 AA',
+            qa5Note: 'All buttons/tabs >= 44px touch targets, WAI-ARIA keyboard tabs, slider focus ring, studioEmbedTopbarCount: 0',
+            qa6Name: 'Pre-Commit & Doc Hygiene Gates',
+            qa6Note: 'Zero secrets, zero console.log, clean root docs — pushed to origin/main',
+            nextTitle: 'Next Milestone — IR Deck v4 Refresh & Phase 2 (16:9 & 4:3 PDF / PPTX)',
+            nextDesc:
+              'Ready to bring the Spatial Editorial Noir visual system and refreshed site captures into docs/ir-deck/index.html, then export print-ready PDF and editable .pptx decks in both 16:9 and 4:3 aspect ratios.',
+            nextBack: 'Back to ainvtry.com ↗',
+            nextEmail: 'Email Raymond ↗',
+            closeBtn: 'Close (Esc)',
+          },
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        let theme = params.get('theme') === 'light' ? 'light' : 'dark';
+        let lang = params.get('lang') === 'en' ? 'en' : 'ko';
+        let activeScene = 'hero';
+
+        const root = document.documentElement;
+        const themeBtn = document.getElementById('themeToggle');
+        const langBtn = document.getElementById('langToggle');
+        const printBtn = document.getElementById('printBtn');
+        const compareBeforeImg = document.getElementById('compareBeforeImg');
+        const compareAfterImg = document.getElementById('compareAfterImg');
+        const compareBeforeLayer = document.getElementById('compareBeforeLayer');
+        const compareDivider = document.getElementById('compareDivider');
+        const compareRange = document.getElementById('compareRange');
+        const compareCaption = document.getElementById('compareCaption');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+        const lightboxCaption = document.getElementById('lightboxCaption');
+        const lightboxClose = document.getElementById('lightboxClose');
+
+        function applyTheme() {
+          root.dataset.theme = theme;
+          const metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#000000' : '#f6f3ec');
+          themeBtn.textContent =
+            theme === 'dark' ? (lang === 'ko' ? '라이트' : 'Light') : lang === 'ko' ? '다크' : 'Dark';
+        }
+
+        function applyScene() {
+          const scene = SCENES[activeScene] || SCENES.hero;
+          compareBeforeImg.src = scene.before;
+          compareAfterImg.src = scene.after;
+          compareCaption.textContent = scene[lang];
+        }
+
+        function applyLang() {
+          root.lang = lang;
+          const dict = I18N[lang];
+          document.querySelectorAll('[data-i18n]').forEach((el) => {
+            const key = el.getAttribute('data-i18n');
+            if (key && dict[key]) el.textContent = dict[key];
+          });
+          langBtn.textContent = lang === 'ko' ? 'EN' : 'KO';
+          applyTheme();
+          applyScene();
+        }
+
+        function setSplit(pct) {
+          const v = Math.max(6, Math.min(94, Number(pct) || 50));
+          compareBeforeLayer.style.clipPath = `inset(0 ${100 - v}% 0 0)`;
+          compareDivider.style.left = `${v}%`;
+        }
+
+        themeBtn.addEventListener('click', () => {
+          theme = theme === 'dark' ? 'light' : 'dark';
+          applyTheme();
+        });
+
+        langBtn.addEventListener('click', () => {
+          lang = lang === 'ko' ? 'en' : 'ko';
+          applyLang();
+        });
+
+        printBtn.addEventListener('click', () => window.print());
+
+        compareRange.addEventListener('input', (e) => setSplit(e.target.value));
+
+        function bindTablistKeyboard(selector) {
+          const tabs = Array.from(document.querySelectorAll(selector));
+          tabs.forEach((btn, idx) => {
+            btn.addEventListener('keydown', (e) => {
+              let nextIdx = -1;
+              if (e.key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
+              else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+              else if (e.key === 'Home') nextIdx = 0;
+              else if (e.key === 'End') nextIdx = tabs.length - 1;
+              if (nextIdx >= 0) {
+                e.preventDefault();
+                tabs[nextIdx].focus();
+                tabs[nextIdx].click();
+              }
+            });
+          });
+        }
+
+        const comparePanel = document.getElementById('comparePanel');
+        const backgroundRegions = Array.from(document.querySelectorAll('body > header, body > main, body > footer'));
+
+        document.querySelectorAll('[data-scene]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            activeScene = btn.getAttribute('data-scene') || 'hero';
+            document.querySelectorAll('[data-scene]').forEach((b) => {
+              const active = b === btn;
+              b.classList.toggle('is-active', active);
+              b.setAttribute('aria-selected', String(active));
+              b.tabIndex = active ? 0 : -1;
+            });
+            if (comparePanel && btn.id) comparePanel.setAttribute('aria-labelledby', btn.id);
+            applyScene();
+          });
+        });
+        bindTablistKeyboard('[data-scene]');
+
+        document.querySelectorAll('[data-stitch]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-stitch');
+            document.querySelectorAll('[data-stitch]').forEach((b) => {
+              const active = b === btn;
+              b.classList.toggle('is-active', active);
+              b.setAttribute('aria-selected', String(active));
+              b.tabIndex = active ? 0 : -1;
+            });
+            document.getElementById('stitch-track-a').hidden = target !== 'track-a';
+            document.getElementById('stitch-track-b').hidden = target !== 'track-b';
+          });
+        });
+        bindTablistKeyboard('[data-stitch]');
+
+        let lastFocusedTrigger = null;
+
+        function setBackgroundInert(flag) {
+          backgroundRegions.forEach((region) => {
+            region.inert = flag;
+          });
+        }
+
+        function openLightbox(src, caption, triggerEl) {
+          lastFocusedTrigger = triggerEl || document.activeElement;
+          lightboxImg.src = src;
+          lightboxImg.alt = caption || '';
+          lightboxCaption.textContent = caption || '';
+          lightbox.hidden = false;
+          setBackgroundInert(true);
+          lightboxClose.focus();
+        }
+
+        function closeLightbox() {
+          lightbox.hidden = true;
+          lightboxImg.src = '';
+          setBackgroundInert(false);
+          if (lastFocusedTrigger && typeof lastFocusedTrigger.focus === 'function') {
+            lastFocusedTrigger.focus();
+          }
+          lastFocusedTrigger = null;
+        }
+
+        document.querySelectorAll('[data-lightbox]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            openLightbox(btn.getAttribute('data-lightbox'), btn.getAttribute('data-caption'), btn);
+          });
+        });
+
+        lightboxClose.addEventListener('click', closeLightbox);
+        lightbox.addEventListener('click', (e) => {
+          if (e.target === lightbox || e.target === lightbox.firstElementChild) closeLightbox();
+        });
+        window.addEventListener('keydown', (e) => {
+          if (lightbox.hidden) return;
+          if (e.key === 'Escape') {
+            closeLightbox();
+          } else if (e.key === 'Tab') {
+            e.preventDefault();
+            lightboxClose.focus();
+          }
+        });
+
+        applyLang();
+        setSplit(50);
+      })();
+    </script>
+  </body>
+</html>

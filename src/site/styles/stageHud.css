@@ -1229,35 +1229,63 @@
 }
 
 .hud-founder-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 /* Monochrome inverted luxury CTA (no flashy gold fill) */
 .hud-founder-cta {
   width: 100%;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-height: 46px;
-  padding: 0 18px;
+  padding: 0 12px;
   border-radius: var(--r-pill);
   border: 1px solid transparent;
   background: var(--ctrl-active-bg);
   color: var(--ctrl-active-fg);
-  font-size: 0.83rem;
+  font-size: 0.81rem;
   font-weight: 660;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
   text-decoration: none;
   box-shadow: var(--ctrl-active-shadow);
   transition:
     opacity 0.2s var(--site-ease),
+    background-color 0.2s var(--site-ease),
     transform 0.16s var(--site-ease),
     border-color 0.2s var(--site-ease);
 }
 
+.hud-founder-cta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-founder-cta svg {
+  flex-shrink: 0;
+}
+
 .hud-founder-cta:hover {
   opacity: 0.92;
+  border-color: var(--accent-gold-hairline);
+}
+
+.hud-founder-cta--secondary {
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border-color: var(--hairline-strong);
+  box-shadow: none;
+}
+
+.hud-founder-cta--secondary:hover {
+  opacity: 1;
+  background: var(--bg-elevated);
   border-color: var(--accent-gold-hairline);
 }
 

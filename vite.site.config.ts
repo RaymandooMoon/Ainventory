@@ -54,6 +54,15 @@ function ainventoryBackendPlugin(): Plugin {
  */
 function rootPublicAssetFallbackPlugin(): Plugin {
   const mountStaticFallback = async (server: ViteDevServer | PreviewServer): Promise<void> => {
+    server.middlewares.use((req, _res, next) => {
+      if (req.url) {
+        const [pathname, search] = req.url.split('?');
+        if (pathname === '/report' || pathname === '/report/') {
+          req.url = `/report/index.html${search ? `?${search}` : ''}`;
+        }
+      }
+      next();
+    });
     const { default: express } = await import('express');
     const staticApp = express();
     staticApp.disable('x-powered-by');

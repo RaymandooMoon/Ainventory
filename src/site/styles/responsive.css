@@ -435,6 +435,12 @@
     font-size: 0.72rem;
   }
 
+  .site-hud-panel[data-layout-mode='split'][data-sheet-expanded='false'] .hud-founder-cta {
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 0.74rem;
+  }
+
   /* Bottom 4-Stage Dock & Compact Footer */
   .site-bottom-stack {
     gap: 6px;
@@ -641,6 +647,10 @@
 
   .site-hud-panel[data-layout-mode='split'] .hud-spot-title {
     font-size: 0.75rem;
+  }
+
+  .hud-founder-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .site-analytics-kpi-strip {

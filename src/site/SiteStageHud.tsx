@@ -505,6 +505,7 @@ function SiteStageHudPanel({
           <AboutStageHud
             copy={copy}
             lang={lang}
+            theme={theme}
             betaMailto={betaMailto}
             interaction={interaction}
             onUpdateInteraction={onUpdateInteraction}
