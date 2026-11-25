@@ -9,6 +9,10 @@
     --hud-panel-width: clamp(350px, 42vw, 460px);
     --hud-panel-right-inset: 14px;
   }
+
+  .site-hud-panel[data-stage='about'] {
+    width: clamp(420px, 48vw, 560px);
+  }
 }
 
 /* ==========================================================================
@@ -248,7 +252,8 @@
   }
 
   /* Right Split Drawer (Studio / Architecture / Specs + Foldable About) */
-  .site-hud-panel {
+  .site-hud-panel,
+  .site-hud-panel[data-stage='about'] {
     --hud-top-dock-offset: 0px;
     top: calc(max(8px, env(safe-area-inset-top)) + 52px + var(--hud-top-dock-offset));
     left: auto;
@@ -276,7 +281,8 @@
     --hud-top-dock-offset: 60px;
   }
 
-  .site-hud-panel[data-sheet-expanded='true'] {
+  .site-hud-panel[data-sheet-expanded='true'],
+  .site-hud-panel[data-stage='about'][data-sheet-expanded='true'] {
     width: calc(100vw - 16px);
     background: var(--bg-panel);
   }
@@ -311,7 +317,8 @@
     line-height: 1;
   }
 
-  .site-hud-scroll {
+  .site-hud-scroll,
+  .site-hud-panel[data-stage='about'] .site-hud-scroll {
     padding: 8px 8px 10px;
   }
 
@@ -323,6 +330,12 @@
     min-height: 44px;
     padding: 0 3px;
     font-size: 0.7rem;
+  }
+
+  .site-hud-footer-dock[data-tab-count='4'] .site-hud-subtab-btn {
+    padding: 0 2px;
+    font-size: 0.66rem;
+    letter-spacing: -0.02em;
   }
 
   .hud-spot-trigger {
@@ -434,6 +447,37 @@
 
   .site-hud-panel[data-sheet-expanded='true'] .hud-metric-chips {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-pain-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-hud-panel[data-sheet-expanded='true'] .hud-pain-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-bm-funnel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-loop-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .hud-loop-pill {
+    flex: 1 1 calc(33.3% - 5px);
+    min-width: 72px;
+  }
+
+  .hud-journey-stage {
+    max-height: clamp(132px, 22dvh, 210px);
+  }
+
+  .hud-journey-stage.is-expanded {
+    max-height: clamp(200px, 36dvh, 300px);
   }
 
   .hud-node-pill {
@@ -567,11 +611,12 @@
 /* ==========================================================================
  * Smartphone About Stage — Adaptive Bottom Sheet (<= 520px)
  * Gives the 3D iNVTRY Loop unobstructed full-width stage above & spacious
- * full-width reading area below for Journey / Mission / Founder cards.
+ * full-width reading area below for Journey / Pain Points / Business Model / Connect.
  * ========================================================================== */
 
 @media (max-width: 520px) {
-  .site-hud-panel[data-layout-mode='sheet'] {
+  .site-hud-panel[data-layout-mode='sheet'],
+  .site-hud-panel[data-stage='about'][data-layout-mode='sheet'] {
     top: auto;
     left: 8px;
     right: 8px;
@@ -581,7 +626,8 @@
     animation: siteFadeUp 0.3s var(--site-ease) both;
   }
 
-  .site-hud-panel[data-layout-mode='sheet'][data-sheet-expanded='true'] {
+  .site-hud-panel[data-layout-mode='sheet'][data-sheet-expanded='true'],
+  .site-hud-panel[data-stage='about'][data-layout-mode='sheet'][data-sheet-expanded='true'] {
     width: auto;
     height: calc(100dvh - 172px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
@@ -593,11 +639,19 @@
   }
 
   .site-hud-panel[data-layout-mode='sheet'] .hud-journey-stage {
-    aspect-ratio: 16 / 9;
+    max-height: clamp(136px, 24dvh, 210px);
+  }
+
+  .site-hud-panel[data-layout-mode='sheet'] .hud-journey-stage.is-expanded {
+    max-height: clamp(200px, 36dvh, 300px);
   }
 
   .site-hud-panel[data-layout-mode='sheet'] .hud-grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .site-hud-panel[data-layout-mode='sheet'] .hud-pain-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .site-dock {
@@ -655,7 +709,7 @@
   }
 
   .site-hud-panel[data-layout-mode='sheet'] .hud-journey-stage {
-    aspect-ratio: 16 / 8;
+    max-height: clamp(120px, 21dvh, 176px);
   }
 }
 

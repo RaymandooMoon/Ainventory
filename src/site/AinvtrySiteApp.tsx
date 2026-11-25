@@ -129,8 +129,7 @@ export default function AinvtrySiteApp() {
   const [stageInteraction, setStageInteraction] = useState<StageInteractionState>(() => ({
     ...DEFAULT_STAGE_INTERACTION_STATE,
   }));
-  const [selectedPrivacyShield, setSelectedPrivacyShield] =
-    useState<SitePrivacyShield['id']>('biometric');
+  const selectedPrivacyShield = stageInteraction.privacyShieldId;
   const [rippleBurst, setRippleBurst] = useState<{
     readonly stageId: ActiveStageId;
     readonly seq: number;
@@ -318,6 +317,10 @@ export default function AinvtrySiteApp() {
       } else if (stage === 'architecture') {
         if (prev.architectureSubtab === 'maps') {
           patch = { googleApiIndex: (prev.googleApiIndex + dir + 6) % 6 };
+        } else if (prev.architectureSubtab === 'privacy') {
+          const shields: readonly SitePrivacyShield['id'][] = ['biometric', 'oidc', 'vault', 'exif'];
+          const curIdx = Math.max(0, shields.indexOf(prev.privacyShieldId));
+          patch = { privacyShieldId: shields[(curIdx + dir + shields.length) % shields.length] };
         } else if (prev.architectureSubtab === 'blueprint') {
           patch = {
             architectureTier: (prev.architectureTier + dir + 7) % 7,
@@ -327,11 +330,6 @@ export default function AinvtrySiteApp() {
       } else if (stage === 'about') {
         if (prev.aboutSubtab === 'journey') {
           patch = { aboutJourneyIndex: (prev.aboutJourneyIndex + dir + 6) % 6 };
-        } else if (prev.aboutSubtab === 'mission') {
-          patch = {
-            aboutLoopIndex: (prev.aboutLoopIndex + dir + 5) % 5,
-            aboutLoopPaused: true,
-          };
         }
       }
 
@@ -353,6 +351,9 @@ export default function AinvtrySiteApp() {
   const handleSelectStage = useCallback(
     (nextStage: StageId, trigger: StageSwitchTrigger = 'dock') => {
       triggerHaptic('selection');
+      if (nextStage === 'specs') {
+        warmStageModule('studio');
+      }
       const detail = stageTracker.recordSwitch(
         activeStageRef.current,
         nextStage,
@@ -390,6 +391,14 @@ export default function AinvtrySiteApp() {
       setStageInteraction(next);
 
       if (
+        patch.specsSubtab === 'fitting' ||
+        patch.specsSubtab === 'care' ||
+        patch.architectureSubtab !== undefined
+      ) {
+        setHomeCalloutOpen(false);
+      }
+
+      if (
         (patch.studioSubtab !== undefined && patch.studioSubtab !== prev.studioSubtab) ||
         (patch.aboutSubtab !== undefined && patch.aboutSubtab !== prev.aboutSubtab)
       ) {
@@ -401,6 +410,13 @@ export default function AinvtrySiteApp() {
       }
     },
     [stageTracker]
+  );
+
+  const handleSelectPrivacyShield = useCallback(
+    (id: SitePrivacyShield['id']) => {
+      handleUpdateInteraction({ privacyShieldId: id });
+    },
+    [handleUpdateInteraction]
   );
 
   const handleResetAnalytics = useCallback(() => {
@@ -773,7 +789,7 @@ export default function AinvtrySiteApp() {
               betaMailto={betaMailto}
               interaction={stageInteraction}
               selectedPrivacyShield={selectedPrivacyShield}
-              onSelectPrivacyShield={setSelectedPrivacyShield}
+              onSelectPrivacyShield={handleSelectPrivacyShield}
               onUpdateInteraction={handleUpdateInteraction}
             />
           )}
@@ -792,6 +808,12 @@ export default function AinvtrySiteApp() {
               const isBursting = rippleBurst?.stageId === pill.stageId;
               const isStudioLaunch = pill.stageId === 'studio';
               const stageIndex = String(idx + 1).padStart(2, '0');
+              const handleWarmPill = () => {
+                warmStageModule(pill.stageId);
+                if (pill.stageId === 'specs') {
+                  warmStageModule('studio');
+                }
+              };
               return (
                 <button
                   key={pill.stageId}
@@ -805,8 +827,8 @@ export default function AinvtrySiteApp() {
                   aria-label={isStudioLaunch ? copy.hero.primaryCta : undefined}
                   aria-pressed={isSelected}
                   aria-current={isSelected ? 'page' : undefined}
-                  onPointerEnter={!isStudioLaunch ? () => warmStageModule(pill.stageId) : undefined}
-                  onFocus={!isStudioLaunch ? () => warmStageModule(pill.stageId) : undefined}
+                  onPointerEnter={!isStudioLaunch ? handleWarmPill : undefined}
+                  onFocus={!isStudioLaunch ? handleWarmPill : undefined}
                   onClick={() => handleSelectStage(pill.stageId, 'dock')}
                 >
                   <span className="site-dock-pill-num" aria-hidden="true">

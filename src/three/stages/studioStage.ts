@@ -2088,10 +2088,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     return activeKind;
   };
 
-  // Enable Three.js in-memory asset cache; active model GLBs are fetched lazily inside syncActiveModelVisibility()
-  // once a non-preview 3D subtab becomes visible.
+  // Enable Three.js in-memory asset cache and eagerly stream the primary avatar GLB as soon as studioStage is loaded
+  // (studioStage itself is lazy-loaded on Specs entry, so HERO startup stays 0-fetch).
   THREE.Cache.enabled = true;
   if (canFetchInBrowser) {
+    loadFashionAvatar();
     if (options?.customModelUrl) {
       void fetchVerifiedGlbBuffer(options.customModelUrl).then((buffer) => {
         if (disposed || !buffer) return;

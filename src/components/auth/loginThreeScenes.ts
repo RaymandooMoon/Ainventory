@@ -2461,6 +2461,8 @@ export function createLoginThreeController(
         if (!rafId) {
           rafId = window.requestAnimationFrame(tick);
         }
+      } else if (!isLoopPaused() && !rafId && !softTimerId && !fenceRafId) {
+        syncLoopLifecycle();
       }
     },
     triggerPulse(nx: number, ny: number, strength = 0.72) {

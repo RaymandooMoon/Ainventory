@@ -1002,5 +1002,208 @@ describe('AinvtryStageDirector', () => {
       `Expected 8 perimeter skirt SpringBones in ${coatUrl}, got ${coatJiggleJoints.join(', ')}`
     );
   });
+
+  it('frames About stage cleanly beside the wider desktop inspector (50vw) while preserving other stages', () => {
+    const aboutPos = new THREE.Vector3();
+    const aboutLook = new THREE.Vector3();
+    const archPos = new THREE.Vector3();
+    const archLook = new THREE.Vector3();
+
+    computeResponsiveCameraPreset(
+      STAGE_CAMERA_PRESETS.about,
+      1440 / 900,
+      aboutPos,
+      aboutLook,
+      false,
+      0.06,
+      1440,
+      'split',
+      'about'
+    );
+    computeResponsiveCameraPreset(
+      STAGE_CAMERA_PRESETS.about,
+      1440 / 900,
+      archPos,
+      archLook,
+      false,
+      0.06,
+      1440,
+      'split',
+      'architecture'
+    );
+
+    assert.ok(
+      aboutPos.x > archPos.x + 0.15,
+      `Wider About panel must shift desktop camera further +X (${aboutPos.x.toFixed(3)} vs ${archPos.x.toFixed(3)})`
+    );
+    assert.ok(
+      aboutPos.z > STAGE_CAMERA_PRESETS.about.position.z * 1.08,
+      `Wider About panel must pull desktop camera Z back cleanly (${aboutPos.z.toFixed(3)})`
+    );
+  });
+
+  it('binds Architecture Privacy hexagonal vault shield & Google APIs to their real operational tiers (no orbit torus rings)', () => {
+    const stage = createArchitectureStage();
+    const scene = new THREE.Scene();
+    scene.add(stage.group);
+    const camera = new THREE.PerspectiveCamera(40, 1440 / 900, 0.1, 100);
+    const marble = new THREE.Group();
+
+    const makeCtx = (patch: Partial<StageInteractionState>): StageContext => ({
+      scene,
+      camera,
+      marbleMesh: marble,
+      glassRatio: 0.5,
+      mood: 'luxury',
+      theme: 'dark',
+      viewportAspect: 1440 / 900,
+      reducedMotion: true,
+      interaction: { ...DEFAULT_STAGE_INTERACTION_STATE, ...patch },
+      emitUiSync: () => {},
+    });
+
+    // Must use hexagonal vault shield cage instead of legacy circular orbit halos
+    const vaultShield = stage.group.getObjectByName('architecture-privacy-shield');
+    assert.ok(vaultShield, 'Architecture stage must build hexagonal architecture-privacy-shield');
+    assert.ok(
+      stage.group.getObjectByName('architecture-privacy-hex-cage'),
+      'Architecture privacy shield must contain faceted hexagonal cage'
+    );
+    assert.ok(
+      stage.group.getObjectByName('architecture-privacy-vault-clamps'),
+      'Architecture privacy shield must contain corner vault lock clamps'
+    );
+    assert.equal(
+      stage.group.getObjectByName('architecture-privacy-halos'),
+      undefined,
+      'Legacy circular orbit rings (architecture-privacy-halos) must be removed'
+    );
+
+    // Privacy Shield -> real security tiers (01 Client highest Y > 03 Gateway > 05 Shared)
+    const biometricY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'privacy',
+      privacyShieldId: 'biometric',
+    }).y;
+    const oidcY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'privacy',
+      privacyShieldId: 'oidc',
+    }).y;
+    const vaultY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'privacy',
+      privacyShieldId: 'vault',
+    }).y;
+    assert.ok(
+      biometricY > oidcY && oidcY > vaultY,
+      `Privacy shields must descend real tiers 01 > 03 > 05 (${biometricY.toFixed(2)} > ${oidcY.toFixed(2)} > ${vaultY.toFixed(2)})`
+    );
+
+    // Vault shield turns visible in privacy mode and wraps the active tier
+    const privacyCtx = makeCtx({ architectureSubtab: 'privacy', privacyShieldId: 'oidc' });
+    stage.onEnter(privacyCtx);
+    stage.update(0.016, 1.0, privacyCtx);
+    assert.equal(vaultShield.visible, true, 'Hexagonal vault shield must be visible in privacy subtab');
+
+    // Google APIs -> real operational tiers (order in content.ts mapsNodes):
+    // 0: weather (Tier 04 Core), 3: vertex (Tier 06 Data/HW), 4: mediapipe (Tier 01 Client), 5: calendar (Tier 04 Core)
+    const mediaPipeY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'maps',
+      googleApiIndex: 4,
+    }).y;
+    const weatherY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'maps',
+      googleApiIndex: 0,
+    }).y;
+    const calendarY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'maps',
+      googleApiIndex: 5,
+    }).y;
+    const vertexY = stage.getMarbleAnchor(0, {
+      ...DEFAULT_STAGE_INTERACTION_STATE,
+      architectureSubtab: 'maps',
+      googleApiIndex: 3,
+    }).y;
+    assert.ok(
+      Math.abs(weatherY - calendarY) < 1e-4,
+      'Weather API and Calendar API must both bind to Tier 04 Core'
+    );
+    assert.ok(
+      mediaPipeY > weatherY && weatherY > vertexY,
+      `Google APIs must bind to real tiers: MediaPipe(01) > Weather(04) > Vertex(06) (${mediaPipeY.toFixed(2)} > ${weatherY.toFixed(2)} > ${vertexY.toFixed(2)})`
+    );
+
+    stage.dispose();
+  });
+
+  it('plays the 2-phase Architecture -> Specs opening choreography and snaps instantly when reducedMotion is true', () => {
+    const stage = createSpecsStage();
+    const scene = new THREE.Scene();
+    scene.add(stage.group);
+    const camera = new THREE.PerspectiveCamera(40, 1440 / 900, 0.1, 100);
+    const marble = new THREE.Group();
+
+    const makeCtx = (reducedMotion: boolean): StageContext => ({
+      scene,
+      camera,
+      marbleMesh: marble,
+      glassRatio: 0.5,
+      mood: 'luxury',
+      theme: 'dark',
+      viewportAspect: 1440 / 900,
+      reducedMotion,
+      interaction: { ...DEFAULT_STAGE_INTERACTION_STATE },
+      emitUiSync: () => {},
+    });
+
+    const bridgeBanner = stage.group.getObjectByName('specs-intro-arch-bridge-banner');
+    const pillar0 = stage.group.getObjectByName('specs-pillar-0');
+    const pillar5 = stage.group.getObjectByName('specs-pillar-5');
+    assert.ok(bridgeBanner && pillar0 && pillar5, 'Specs stage must expose bridge banner and 6 pillars');
+
+    // Phase 1 (0.2s): stacked vertically like the 6-tier Architecture tower
+    const liveCtx = makeCtx(false);
+    stage.onEnter(liveCtx);
+    stage.update(0.016, 0.2, liveCtx);
+    assert.equal(bridgeBanner.visible, true, 'Bridge banner must be visible during Phase 1 Architecture stack hold');
+    assert.ok(
+      Math.abs(pillar5.position.x - pillar0.position.x) < 0.05,
+      `Phase 1 must stack modules vertically over one tower spine (dx=${Math.abs(pillar5.position.x - pillar0.position.x).toFixed(3)})`
+    );
+    assert.ok(
+      pillar0.position.y > pillar5.position.y + 1.0,
+      `Phase 1 Tier 01 module must stack above Tier 06 module (${pillar0.position.y.toFixed(2)} vs ${pillar5.position.y.toFixed(2)})`
+    );
+
+    // Settled (2.4s): unfolded horizontally across the benchmark grid
+    for (let i = 0; i < 48; i += 1) {
+      stage.update(0.05, 0.25 + i * 0.05, liveCtx);
+    }
+    assert.equal(bridgeBanner.visible, false, 'Bridge banner must fade out after unfolding completes');
+    assert.ok(
+      pillar5.position.x - pillar0.position.x > 1.8,
+      `Settled Specs pillars must fan out horizontally across benchmark grid (span=${(pillar5.position.x - pillar0.position.x).toFixed(2)})`
+    );
+    assert.ok(
+      Math.abs(pillar0.position.y - pillar5.position.y) < 0.05,
+      'Settled Specs pillars must rest on the same benchmark floor plane'
+    );
+
+    // Reduced motion: skips directly to settled horizontal layout on enter
+    const reducedCtx = makeCtx(true);
+    stage.onEnter(reducedCtx);
+    stage.update(0.016, 0.05, reducedCtx);
+    assert.equal(bridgeBanner.visible, false, 'reducedMotion must skip Architecture->Specs intro bridge banner');
+    assert.ok(
+      pillar5.position.x - pillar0.position.x > 1.8,
+      'reducedMotion must snap directly to settled benchmark grid'
+    );
+
+    stage.dispose();
+  });
 });
 

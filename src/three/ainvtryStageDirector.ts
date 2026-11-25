@@ -150,7 +150,12 @@ const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 0.06;
 const SHEET_PORTRAIT_LOOK_Y_OFFSET = 0.64;
 const CAMERA_HALF_FOV_TAN = Math.tan(THREE.MathUtils.degToRad(20));
 
-function estimateRightPanelFraction(viewportWidth?: number, safeAspect = 16 / 9): number {
+function estimateRightPanelFraction(
+  viewportWidth?: number,
+  safeAspect = 16 / 9,
+  stageId?: StageId
+): number {
+  const isAboutContentFocus = stageId === 'about';
   if (typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) && viewportWidth > 0) {
     if (viewportWidth < 640) {
       // Compact mobile split view: right explanation drawer occupies ~54%, left 3D gets ~46%
@@ -161,10 +166,15 @@ function estimateRightPanelFraction(viewportWidth?: number, safeAspect = 16 / 9)
       return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.44, 0.54);
     }
     const insetPx = Math.min(34, Math.max(16, viewportWidth * 0.024));
+    if (isAboutContentFocus) {
+      const panelPx = Math.min(680, Math.max(460, viewportWidth * 0.5)) + insetPx;
+      return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.46, 0.56);
+    }
     const panelPx = Math.min(536, Math.max(390, viewportWidth * 0.37)) + insetPx;
     return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.34, 0.46);
   }
-  return safeAspect < PORTRAIT_ASPECT_THRESHOLD ? 0.54 : 0.4;
+  if (safeAspect < PORTRAIT_ASPECT_THRESHOLD) return 0.54;
+  return isAboutContentFocus ? 0.5 : 0.4;
 }
 
 /**
@@ -182,7 +192,8 @@ export function computeResponsiveCameraPreset(
   isHero = false,
   portraitLookYOffset = 0.06,
   viewportWidth?: number,
-  layoutMode: CameraLayoutMode = 'split'
+  layoutMode: CameraLayoutMode = 'split',
+  stageId?: StageId
 ): void {
   const safeAspect = Number.isFinite(aspect) && aspect > 0.2 ? aspect : 16 / 9;
 
@@ -205,17 +216,18 @@ export function computeResponsiveCameraPreset(
     return;
   }
 
-  const panelFraction = estimateRightPanelFraction(viewportWidth, safeAspect);
+  const panelFraction = estimateRightPanelFraction(viewportWidth, safeAspect, stageId);
   const leftFraction = Math.max(0.42, 1 - panelFraction);
   const effectiveLeftAspect = safeAspect * leftFraction;
 
   // Pull Z back generously on narrow portrait splits so full-width 3D assemblies clear the right drawer
-  const zScale = THREE.MathUtils.clamp(0.35 / Math.max(effectiveLeftAspect, 0.16), 1.0, 1.54);
-  const posZ = base.position.z * zScale;
+  const baseZScale = THREE.MathUtils.clamp(0.35 / Math.max(effectiveLeftAspect, 0.16), 1.0, 1.54);
+  const aboutScaleBoost = stageId === 'about' && safeAspect >= PORTRAIT_ASPECT_THRESHOLD ? 1.12 : 1.0;
+  const posZ = base.position.z * baseZScale * aboutScaleBoost;
 
   // Center world X=0 squarely in the open LEFT column
   const visibleHalfWidth = posZ * CAMERA_HALF_FOV_TAN * safeAspect;
-  const targetLookX = THREE.MathUtils.clamp(panelFraction * visibleHalfWidth * 1.02, 0.62, 2.62);
+  const targetLookX = THREE.MathUtils.clamp(panelFraction * visibleHalfWidth * 1.02, 0.62, 2.95);
 
   const parallaxScale = THREE.MathUtils.clamp((safeAspect - 0.45) / 0.75, 0.28, 1.0);
   const parallaxX = (base.position.x - base.lookAt.x) * parallaxScale;
@@ -542,7 +554,8 @@ export class AinvtryStageDirector {
       this.activeStage === 'hero',
       MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
       this.viewportWidth,
-      this.resolveLayoutMode(this.activeStage)
+      this.resolveLayoutMode(this.activeStage),
+      this.activeStage
     );
 
     if (this.ctx.reducedMotion && !this.isTransitioning) {
@@ -603,7 +616,9 @@ export class AinvtryStageDirector {
         this.camToLook,
         true,
         DEFAULT_PORTRAIT_LOOK_Y_OFFSET,
-        this.viewportWidth
+        this.viewportWidth,
+        'split',
+        'hero'
       );
       this.setupMarbleArc(this.tmpStartPos, heroEndMarbleWorldPos ?? HERO_MARBLE_WELL);
     } else if (nextModule) {
@@ -621,7 +636,8 @@ export class AinvtryStageDirector {
         false,
         MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
         this.viewportWidth,
-        this.resolveLayoutMode(nextStage)
+        this.resolveLayoutMode(nextStage),
+        nextStage
       );
 
       const anchor = nextModule.getMarbleAnchor(elapsed, this.ctx.interaction);

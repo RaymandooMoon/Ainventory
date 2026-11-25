@@ -1,5 +1,5 @@
 import type { SiteIconKey } from '../SiteIcon.tsx';
-import type { SiteLang } from '../siteContent.ts';
+import type { SiteLang, SitePipelineNode, SitePrivacyShield } from '../siteContent.ts';
 
 export interface ArchTechItem {
   readonly id: string;
@@ -10,10 +10,47 @@ export interface ArchTechItem {
   readonly descEn: string;
 }
 
+export interface TierUnifiedTechItem extends ArchTechItem {
+  readonly nodeId: string;
+  readonly nodeIndex: number;
+  readonly techIndexInNode: number;
+}
+
 export interface GovernanceUnifiedTechItem extends ArchTechItem {
   readonly nodeId: 'gov-audit' | 'gov-rbac' | 'gov-cicd';
   readonly pillarIndex: 0 | 1 | 2;
 }
+
+export interface ArchitectureLayerBinding {
+  readonly tierIndex: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  readonly tierNum: string;
+  readonly labelKo: string;
+  readonly labelEn: string;
+}
+
+/**
+ * Single source of truth mapping each Google API node to the ACTUAL architectural tier
+ * where that API executes (shared between 3D tower highlighting and HUD badges).
+ */
+export const GOOGLE_API_TIER_MAP: Readonly<Record<SitePipelineNode['id'], ArchitectureLayerBinding>> = {
+  weather: { tierIndex: 3, tierNum: '04', labelKo: '04 코어 · Geo 프록시', labelEn: '04 Core · Geo Proxy' },
+  streetview: { tierIndex: 3, tierNum: '04', labelKo: '04 코어 · 거리 프록시', labelEn: '04 Core · Scene Proxy' },
+  places: { tierIndex: 3, tierNum: '04', labelKo: '04 코어 · 케어 지도', labelEn: '04 Core · Care Proxy' },
+  vertex: { tierIndex: 5, tierNum: '06', labelKo: '06 데이터 · HW 추론', labelEn: '06 Data · HW Compute' },
+  mediapipe: { tierIndex: 0, tierNum: '01', labelKo: '01 클라이언트 · 로컬 WASM', labelEn: '01 Client · Local WASM' },
+  calendar: { tierIndex: 3, tierNum: '04', labelKo: '04 코어 · 일정 연동', labelEn: '04 Core · OOTD Sync' },
+};
+
+/**
+ * Single source of truth mapping each 4-Line Privacy defense to the ACTUAL architectural tier
+ * where that security boundary is enforced.
+ */
+export const PRIVACY_SHIELD_TIER_MAP: Readonly<Record<SitePrivacyShield['id'], ArchitectureLayerBinding>> = {
+  biometric: { tierIndex: 0, tierNum: '01', labelKo: '01 클라이언트 · 온디바이스', labelEn: '01 Client · On-Device' },
+  oidc: { tierIndex: 2, tierNum: '03', labelKo: '03 게이트웨이 · 인증 경계', labelEn: '03 Gateway · Auth Boundary' },
+  vault: { tierIndex: 4, tierNum: '05', labelKo: '05 공통 · 3-Zone 격리', labelEn: '05 Shared · 3-Zone Vault' },
+  exif: { tierIndex: 6, tierNum: '07', labelKo: '07 거버넌스 · 전 계층 통제', labelEn: '07 Governance · Full Stack' },
+};
 
 type ArchModeKey = 'mvp' | 'prod';
 
@@ -23,81 +60,53 @@ interface NodeTechEntry {
 }
 
 /**
- * Deduplicated, zero-overlap technology stack catalog expanded inside the
- * Architecture Blueprint HUD across Tiers 01..07 (MVP & Prod).
+ * Consolidated, deduplicated technology stack catalog across ALL 7 Architecture tiers
+ * (01 Client -> 07 Governance) in both MVP and Prod modes.
  *
- * Ownership boundaries (single source of truth):
- * - 01 Client     : Browser/PWA, Capacitor Mobile, Seed Asset QC & Telemetry Ops
- * - 02 Edge       : CDN Delivery, TLS/HSTS, Rate Limiter, Cloud LB & WAF
- * - 03 Gateway    : Express 5 / Cloud Run Routing, Stateless OIDC/JWT, Payload Schema Guard
- * - 04 Core       : Three.js 3D & VTON Engine, 11-Slot Closet/CPW, Geo/Weather Proxy, Resale
- * - 05 Shared     : Runtime Logging/OTel, Object Storage (3-Zone / Signed URL), Async Queue
- * - 06 Data · HW  : SQL DB, TTL/Redis Cache, Vertex AI & NVIDIA L4/A100 GPU, Secrets/KMS Vault
- * - 07 Governance : Audit (PII Audit · Secret Gate), RBAC (Menu/Btn UI · IDOR), CI/CD (360+ QA)
+ * Guarantees enforced by unit tests:
+ * 1. Every item ID and normalized name is globally unique per mode across all 7 tiers.
+ * 2. Every icon inside any single tier (01..07) is 100% unique so every tier renders a
+ *    clean, unified, single-row icon strip matching 07 Governance.
  */
 const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
   /* ----------------------------------------------------------------------
-   * 01 CLIENT APPS
+   * 01 CLIENT APPS (Consolidated 6 unique items: Web 2 + Mobile 2 + Ops 2)
    * ---------------------------------------------------------------------- */
   'invtry-web': {
     mvp: [
       {
         id: 'react19',
         icon: 'globe',
-        name: 'React 19 + TS 7',
-        badge: 'UI',
-        descKo: '컴포넌트 기반 반응형 SPA 및 엄격한 타입 검증',
-        descEn: 'Strict-typed component SPA with concurrent UI updates',
-      },
-      {
-        id: 'vite8',
-        icon: 'zap',
-        name: 'Vite 8 · Priority',
-        badge: 'Perf',
-        descKo: '초고속 ESM 코드 스플리팅 및 페인트 후 리소스 우선순위 스케줄러',
-        descEn: 'Fast ESM code splitting with post-paint resource priority scheduling',
+        name: 'React 19 · Vite 8',
+        badge: 'SPA',
+        descKo: 'React 19 · TypeScript 7 strict · Vite 8 코드 스플리팅 및 페인트 후 리소스 스케줄러',
+        descEn: 'Strict-typed React 19 + TS 7 SPA with Vite 8 code splitting & priority scheduler',
       },
       {
         id: 'mediapipe',
         icon: 'scanFace',
-        name: 'MediaPipe WASM',
-        badge: '0B Face',
-        descKo: '안면 랜드마크 · 피부톤 분석을 기기 로컬에서 0B 처리 및 보관',
-        descEn: '0-byte on-device face landmark & skin-tone inference kept strictly local',
-      },
-      {
-        id: 'bg-removal',
-        icon: 'imageMinus',
-        name: 'WebP Cutout',
-        badge: 'WASM',
-        descKo: '의류 배경 제거 및 투명 WebP 정규화 파이프라인',
-        descEn: 'Client-side garment background removal to transparent WebP',
+        name: 'MediaPipe · WebP WASM',
+        badge: '0B Local',
+        descKo: '안면 피부톤 0B 로컬 추론 및 의류 배경 제거 · 투명 WebP 정규화 파이프라인',
+        descEn: '0-byte local face skin-tone inference paired with on-device WebP cutout removal',
       },
     ],
     prod: [
       {
         id: 'pwa-sw',
         icon: 'globe',
-        name: 'Service Worker PWA',
+        name: 'PWA · IndexedDB',
         badge: 'Offline',
-        descKo: '오프라인 앱 셸 캐싱 및 설치형 PWA 런타임',
-        descEn: 'Installable PWA shell with resilient offline caching',
-      },
-      {
-        id: 'indexeddb',
-        icon: 'database',
-        name: 'IndexedDB Sync',
-        badge: 'Local-First',
-        descKo: '오프라인 우선 옷장 로컬 캐시 및 낙관적 동기화 큐',
-        descEn: 'Offline-first closet cache with optimistic mutation queue',
+        descKo: '설치형 Service Worker 앱 셸과 오프라인 우선 IndexedDB 낙관적 동기화 큐',
+        descEn: 'Installable PWA shell backed by offline-first IndexedDB optimistic sync queue',
       },
       {
         id: 'mediapipe-prod',
         icon: 'scanFace',
         name: 'On-Device WASM',
         badge: '0B Face',
-        descKo: '전 플랫폼 얼굴 원본 서버 무전송 원칙의 로컬 비전 추론',
-        descEn: 'Zero-upload on-device vision inference for biometric privacy',
+        descKo: '전 플랫폼 얼굴 원본 서버 무전송 원칙의 기기 내 비전 추론 엔진',
+        descEn: 'Zero-upload on-device vision inference enforcing biometric privacy across clients',
       },
     ],
   },
@@ -106,26 +115,18 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
       {
         id: 'capacitor8',
         icon: 'smartphone',
-        name: 'Capacitor 8',
+        name: 'Capacitor 8 · Haptics',
         badge: 'Hybrid',
-        descKo: '단일 웹 코드베이스 기반 iOS · Android 네이티브 브리지',
-        descEn: 'Single-codebase iOS & Android native WebView bridge',
-      },
-      {
-        id: 'haptics',
-        icon: 'sparkles',
-        name: 'Native Haptics',
-        badge: 'UX',
-        descKo: '착장 선택 · 탭 전환 시 네이티브 촉각 피드백 연동',
-        descEn: 'Tactile native haptic feedback for garment & tab actions',
+        descKo: '단일 웹 코드베이스 기반 iOS · Android 네이티브 브리지 및 촉각 햅틱 피드백',
+        descEn: 'Single-codebase iOS & Android Capacitor 8 bridge with native haptic feedback',
       },
       {
         id: 'camera-native',
         icon: 'camera',
-        name: 'Camera Bridge',
+        name: 'Camera EXIF Strip',
         badge: 'Capture',
-        descKo: '모바일 카메라 의류 촬영 및 EXIF 즉시 제거 파이프라인',
-        descEn: 'Native camera capture with instant EXIF metadata stripping',
+        descKo: '모바일 카메라 의류 촬영 직후 기기 내 EXIF · GPS 메타데이터 즉시 제거',
+        descEn: 'Native camera capture with instant client-side EXIF & GPS metadata stripping',
       },
     ],
     prod: [
@@ -134,24 +135,16 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         icon: 'lock',
         name: 'Keychain / Keystore',
         badge: 'Secure',
-        descKo: '하드웨어 보안 영역에 세션 자격증명 암호화 저장',
-        descEn: 'Hardware-backed credential storage on iOS & Android',
+        descKo: '하드웨어 보안 영역에 세션 자격증명을 암호화 보관하는 네이티브 저장소',
+        descEn: 'Hardware-backed credential storage on iOS Keychain & Android Keystore',
       },
       {
         id: 'store-release',
         icon: 'rocket',
-        name: 'App Store / Play',
-        badge: 'Release',
-        descKo: '서명된 AAB · IPA 자동 배포 및 유니버설 딥링크 라우팅',
-        descEn: 'Signed AAB & IPA store builds with universal deep links',
-      },
-      {
-        id: 'capacitor-push',
-        icon: 'zap',
-        name: 'Native Push & Sync',
+        name: 'Store Release · Push',
         badge: 'Mobile',
-        descKo: '날씨 · 코디 리마인더 및 백그라운드 상태 동기화',
-        descEn: 'Weather outfit reminders and background state sync',
+        descKo: '서명된 AAB · IPA 스토어 자동 배포, 유니버설 딥링크 및 날씨 코디 푸시',
+        descEn: 'Signed AAB & IPA store builds with universal deep links & weather reminders',
       },
     ],
   },
@@ -162,16 +155,16 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         icon: 'layoutGrid',
         name: 'Seed Asset QC',
         badge: 'Assets',
-        descKo: '8방향 모델 비율 · 컷아웃 및 시드 의류 에셋 품질 검수',
-        descEn: 'Quality checks for 8-angle model proportions & seed garment cutouts',
+        descKo: '8방향 모델 비율 · 배경 제거 컷아웃 및 시드 의류 에셋 자동 품질 검수',
+        descEn: 'Automated quality checks for 8-angle model proportions & seed garment cutouts',
       },
       {
         id: 'demo-sandbox',
         icon: 'box',
         name: 'Demo Sandbox',
         badge: 'Preview',
-        descKo: '비로그인 방문자용 읽기 전용 시연 옷장 및 스타일 프리셋 운영',
-        descEn: 'Read-only showcase wardrobe & style preset sandbox for visitors',
+        descKo: '비로그인 방문자용 읽기 전용 시연 옷장 및 스타일 프리셋 샌드박스',
+        descEn: 'Read-only showcase wardrobe & style preset sandbox for first-time visitors',
       },
     ],
     prod: [
@@ -180,22 +173,22 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         icon: 'barChart',
         name: 'Quality Telemetry',
         badge: 'SLA',
-        descKo: 'VTON 합성 성공률 · 응답 지연시간 실시간 모니터링 콘솔',
-        descEn: 'Real-time VTON synthesis success rate & latency SLA dashboard',
+        descKo: 'VTON 합성 성공률 · 응답 지연시간 실시간 모니터링 운영 콘솔',
+        descEn: 'Real-time VTON synthesis success rate & latency SLA monitoring console',
       },
       {
         id: 'catalog-ops',
         icon: 'layoutGrid',
         name: 'Catalog Curation',
         badge: 'Ops',
-        descKo: '시즌 룩북 · 브랜드 텍소노미 · 스타일 템플릿 운영 도구',
+        descKo: '시즌 룩북 · 브랜드 분류 체계 · 스타일 템플릿 큐레이션 콘솔',
         descEn: 'Seasonal lookbook, brand taxonomy & style template curation console',
       },
     ],
   },
 
   /* ----------------------------------------------------------------------
-   * 02 EDGE ACCESS
+   * 02 EDGE ACCESS (Consolidated 4 unique items: CDN 2 + LB/WAF 2)
    * ---------------------------------------------------------------------- */
   cdn: {
     mvp: [
@@ -205,7 +198,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         name: 'Cloudflare Workers',
         badge: 'Edge',
         descKo: '전 세계 엣지 POP에서 정적 앱 셸과 시드 WebP 초저지연 전송',
-        descEn: 'Low-latency global edge delivery for static app shell & WebP',
+        descEn: 'Low-latency global edge delivery for static app shell & WebP assets',
       },
       {
         id: 'brotli-webp',
@@ -213,7 +206,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         name: 'HTTP/3 + WebP',
         badge: 'Perf',
         descKo: 'QUIC HTTP/3 멀티플렉싱 및 불변 압축 이미지 캐시 헤더',
-        descEn: 'HTTP/3 multiplexing with immutable compressed asset caching',
+        descEn: 'HTTP/3 multiplexing with immutable compressed asset cache headers',
       },
     ],
     prod: [
@@ -231,7 +224,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         name: 'Tiered Edge Cache',
         badge: 'Cache',
         descKo: '오리진 부하를 차단하는 계층형 엣지 리밸리데이션',
-        descEn: 'Tiered stale-while-revalidate caching shielding origins',
+        descEn: 'Tiered stale-while-revalidate caching shielding origin compute',
       },
     ],
   },
@@ -275,7 +268,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
   },
 
   /* ----------------------------------------------------------------------
-   * 03 API GATEWAY
+   * 03 API GATEWAY (Consolidated 3 unique items)
    * ---------------------------------------------------------------------- */
   'invtry-gw': {
     mvp: [
@@ -333,7 +326,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
   },
 
   /* ----------------------------------------------------------------------
-   * 04 iNVTRY CORE (Pure Domain Engines — Infra/GPU lives in Tier 06)
+   * 04 iNVTRY CORE (Consolidated 6 unique items: VTON 2 + Closet 1 + Geo 2 + Resale 1)
    * ---------------------------------------------------------------------- */
   'core-vton': {
     mvp: [
@@ -342,24 +335,16 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         icon: 'rotate3d',
         name: 'Three.js r187',
         badge: 'Three.js 3D',
-        descKo: '21-Bone 스켈레탈 모션, 28종 체형 모프 및 SpringBone 물리',
-        descEn: '21-bone skeletal motion, 28 body morphs & SpringBone physics',
+        descKo: '21관절 스켈레탈 모션, 28종 체형 모프, SpringBone 물리 및 WebGL 복구 폴백',
+        descEn: '21-bone skeletal motion, 28 body morphs, SpringBone physics & WebGL recovery',
       },
       {
         id: 'vton-8cut',
         icon: 'sparkles',
         name: '8-Angle VTON',
         badge: 'AI Fitting',
-        descKo: '무학습 8방향 가상 피팅, 스타일 밀도 선택(미니멀 · 밸런스 · 레이어드) 및 2D 폴백',
-        descEn: 'No-training 8-angle VTON with styling density presets & 2D fallback',
-      },
-      {
-        id: 'webgl-guard',
-        icon: 'shield',
-        name: 'WebGL Recovery',
-        badge: 'Resilience',
-        descKo: 'webglcontextlost 감지 시 자동 복구 및 안정적 2D 폴백 전환',
-        descEn: 'Automatic webglcontextlost recovery with seamless 2D fallback',
+        descKo: '무학습 4겹+ 8방향 가상 피팅 및 스타일 밀도 선택(미니멀 · 밸런스 · 레이어드)',
+        descEn: 'No-training 4+ layer 8-angle VTON with Minimal / Balanced / Layered presets',
       },
     ],
     prod: [
@@ -386,44 +371,20 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
       {
         id: 'slot-11',
         icon: 'shirt',
-        name: '11-Slot Taxonomy',
-        badge: 'Domain',
-        descKo: '아우터 · 상의 · 하의 · 양말 · 신발 · 주얼리 11슬롯 정밀 착장 규칙',
-        descEn: '11-slot garment taxonomy covering outerwear through jewelry',
-      },
-      {
-        id: 'color-math',
-        icon: 'droplets',
-        name: 'CIELAB Color Match',
-        badge: 'Duplicate',
-        descKo: '오프라인 쇼핑 시 기존 보유 의류와의 색상 · 실루엣 중복 판독',
-        descEn: 'Perceptual color & silhouette similarity for duplicate detection',
-      },
-      {
-        id: 'cpw-engine',
-        icon: 'trendingDown',
-        name: 'CPW Analytics',
-        badge: 'Metrics',
-        descKo: '착용 횟수 대비 단가(Cost-Per-Wear) 및 스마트 세탁 바구니 추적',
-        descEn: 'Automated Cost-Per-Wear tracking & smart laundry basket logic',
+        name: '11-Slot · CIELAB · CPW',
+        badge: 'Closet OS',
+        descKo: '11슬롯 착장 규칙, CIELAB 색상 중복 판독 및 1회 착용 비용(CPW) · 스마트 세탁 바구니',
+        descEn: '11-slot taxonomy, CIELAB duplicate detection, CPW metrics & smart laundry basket',
       },
     ],
     prod: [
       {
         id: 'wardrobe-bi',
         icon: 'barChart',
-        name: 'Wardrobe Analytics',
+        name: 'Wardrobe BI · Capsule',
         badge: 'Insights',
-        descKo: '계절별 활용률 · 미착용 자산 · 스타일 분포 분석 파이프라인',
-        descEn: 'Seasonal utilization, idle asset & style distribution analytics',
-      },
-      {
-        id: 'capsule-engine',
-        icon: 'shirt',
-        name: 'Capsule Engine',
-        badge: 'Styling',
-        descKo: '착용 로그와 기온 곡선 기반 시즌별 캡슐 워드로브 자동 추천',
-        descEn: 'Seasonal capsule wardrobe optimization driven by wear history',
+        descKo: '계절별 활용률 · 미착용 자산 분석 및 기온 곡선 기반 캡슐 워드로브 자동 추천',
+        descEn: 'Seasonal utilization, idle asset insights & temperature-driven capsule recommendations',
       },
     ],
   },
@@ -434,24 +395,16 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         icon: 'cloudSun',
         name: 'Weather API v1',
         badge: 'Climate',
-        descKo: '실시간 기온 · 체감온도 · 강수 확률 기반 데일리 코디 추천',
-        descEn: 'Real-time temperature & precipitation-aware outfit styling',
+        descKo: '실시간 기온 · 체감온도 · 강수 확률 기반 데일리 레이어드 코디 추천',
+        descEn: 'Real-time temperature & precipitation-aware daily layered outfit styling',
       },
       {
-        id: 'places-api',
+        id: 'places-street',
         icon: 'mapPin',
-        name: 'Places API (New)',
-        badge: 'Geo',
-        descKo: '주변 세탁소 · 수선실 탐색 및 지역 기반 스타일 컨텍스트 제공',
-        descEn: 'Nearby laundry & tailoring discovery with local context',
-      },
-      {
-        id: 'street-view',
-        icon: 'compass',
-        name: 'Street View Proxy',
-        badge: 'Stage',
-        descKo: '서버 프록시 경유로 API 키를 보호하며 실사 거리 배경 연동',
-        descEn: 'Server-proxied Street View backdrops keeping API keys hidden',
+        name: 'Street View · Places',
+        badge: 'Geo Proxy',
+        descKo: '서버 프록시 경유 무저장 거리 배경(Street View) 및 주변 세탁 · 수선 지도(Places New)',
+        descEn: 'Server-proxied zero-cache Street View staging & nearby care map via Places (New)',
       },
     ],
     prod: [
@@ -459,7 +412,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
         id: 'geo-proxy',
         icon: 'globe',
         name: 'Regional Geo-Proxy',
-        badge: 'Edge',
+        badge: 'Geo',
         descKo: '리전별 기상 · 지도 API 프록시 및 할당량 보호 계층',
         descEn: 'Regional weather & maps proxy with quota protection',
       },
@@ -478,42 +431,26 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
       {
         id: 'idle-detect',
         icon: 'tag',
-        name: 'Idle Garment AI',
+        name: 'Idle AI · 1-Tap Export',
         badge: 'Circular',
-        descKo: '장기 미착용 의류 자동 탐지 및 예상 리셀가 산출',
-        descEn: 'Automatic idle garment detection with resale value estimate',
-      },
-      {
-        id: 'onetap-export',
-        icon: 'share2',
-        name: '1-Tap Spec Export',
-        badge: 'Card',
-        descKo: '배경 제거 사진 · 소재 · 실측 · 착용 횟수를 판매 카드 포맷으로 즉시 생성',
-        descEn: 'One-tap export of cutout photos, fabric & wear specs',
+        descKo: '장기 미착용 의류 자동 탐지 및 배경 제거 사진 · 소재 · 착용 이력 판매 카드 즉시 생성',
+        descEn: 'Idle garment detection with one-tap cutout photo, fabric & wear-spec resale card',
       },
     ],
     prod: [
       {
         id: 'receipt-auth',
         icon: 'badgeCheck',
-        name: 'Receipt Authenticity',
+        name: 'Authentic Resale API',
         badge: 'Verified',
-        descKo: '구매 영수증 · 착용 로그 기반 중고 리셀 정품 보증 워크플로우',
-        descEn: 'Receipt-backed provenance & wear-history authenticity tokens',
-      },
-      {
-        id: 'partner-api',
-        icon: 'truck',
-        name: 'Resale Partner API',
-        badge: 'Webhook',
-        descKo: '검수 파트너 플랫폼 직접 등록 및 정산 상태 웹훅 동기화',
-        descEn: 'Direct partner marketplace listing & settlement webhooks',
+        descKo: '구매 영수증 · 착용 로그 정품 보증 및 검수 파트너 마켓 직접 등록 · 정산 웹훅',
+        descEn: 'Receipt-backed authenticity provenance with direct partner listing & settlement webhooks',
       },
     ],
   },
 
   /* ----------------------------------------------------------------------
-   * 05 SHARED BASE
+   * 05 SHARED BASE (Consolidated 6 unique items: Log 2 + Storage 2 + Queue 2)
    * ---------------------------------------------------------------------- */
   'shared-log': {
     mvp: [
@@ -631,7 +568,7 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
   },
 
   /* ----------------------------------------------------------------------
-   * 06 DATA · HARDWARE
+   * 06 DATA · HARDWARE (Consolidated 6 unique items: DB 2 + Cache 1 + GPU 2 + Vault 1)
    * ---------------------------------------------------------------------- */
   'data-sql': {
     mvp: [
@@ -746,25 +683,16 @@ const NODE_TECH_CATALOG: Readonly<Record<string, NodeTechEntry>> = {
       {
         id: 'cloud-kms',
         icon: 'lock',
-        name: 'Cloud KMS CMEK',
+        name: 'KMS CMEK · VPC-SC',
         badge: 'AES-256',
-        descKo: '고객 관리 암호화 키(CMEK) 기반 저장 데이터 AES-256 암호화',
-        descEn: 'Customer-managed AES-256 encryption keys via Cloud KMS',
-      },
-      {
-        id: 'vpc-sc',
-        icon: 'shieldCheck',
-        name: 'VPC Service Controls',
-        badge: 'Perimeter',
-        descKo: '데이터 반출을 원천 차단하는 VPC 보안 경계 격리',
-        descEn: 'Strict VPC security perimeter preventing data exfiltration',
+        descKo: '고객 관리 암호화 키(CMEK) AES-256 저장 암호화 및 VPC 보안 경계 데이터 반출 차단',
+        descEn: 'Customer-managed AES-256 Cloud KMS encryption paired with VPC Service Controls',
       },
     ],
   },
 
   /* ----------------------------------------------------------------------
    * 07 GOVERNANCE (Consolidated 6 unique items: Audit 2 + RBAC 2 + CI/CD 2)
-   * Every icon within MVP (6) and within Prod (6) is 100% distinct.
    * ---------------------------------------------------------------------- */
   'gov-audit': {
     mvp: [
@@ -898,6 +826,24 @@ export function getTechItemsForBlueprintNode(
 }
 
 /**
+ * Returns the unified, deduplicated tech strip across all sub-nodes in ANY Architecture
+ * tier (01..07), preserving 1:1 linkage to each node pill and 3D Tech Drawer blade.
+ */
+export function getUnifiedTierTechItems(
+  nodeIds: readonly string[],
+  mode: ArchModeKey
+): readonly TierUnifiedTechItem[] {
+  const unified: TierUnifiedTechItem[] = [];
+  nodeIds.forEach((nodeId, nodeIndex) => {
+    const items = getTechItemsForBlueprintNode(nodeId, mode);
+    items.forEach((item, techIndexInNode) => {
+      unified.push({ ...item, nodeId, nodeIndex, techIndexInNode });
+    });
+  });
+  return unified;
+}
+
+/**
  * Returns the unified, deduplicated 07 Governance stack across all three
  * pillars (`gov-audit`, `gov-rbac`, `gov-cicd`) so all consolidated governance
  * icons render together while remaining 1:1 linked to each pillar & 3D blade.
@@ -905,14 +851,16 @@ export function getTechItemsForBlueprintNode(
 export function getUnifiedGovernanceTechItems(
   mode: ArchModeKey
 ): readonly GovernanceUnifiedTechItem[] {
-  const unified: GovernanceUnifiedTechItem[] = [];
-  GOVERNANCE_PILLAR_ORDER.forEach((nodeId, idx) => {
-    const pillarIndex = idx as 0 | 1 | 2;
-    for (const item of getTechItemsForBlueprintNode(nodeId, mode)) {
-      unified.push({ ...item, nodeId, pillarIndex });
-    }
-  });
-  return unified;
+  return getUnifiedTierTechItems(GOVERNANCE_PILLAR_ORDER, mode).map((item) => ({
+    id: item.id,
+    icon: item.icon,
+    name: item.name,
+    badge: item.badge,
+    descKo: item.descKo,
+    descEn: item.descEn,
+    nodeId: item.nodeId as 'gov-audit' | 'gov-rbac' | 'gov-cicd',
+    pillarIndex: item.nodeIndex as 0 | 1 | 2,
+  }));
 }
 
 export function getTechItemDescription(item: ArchTechItem, lang: SiteLang): string {

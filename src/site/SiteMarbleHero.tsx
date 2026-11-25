@@ -232,14 +232,13 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   const tmpHeroCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const tmpHeroTargetPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
-  useEffect(() => {
-    activeStageRef.current = effectiveThreeStage;
-    themeRef.current = theme;
-    moodRef.current = mood;
-    glassPercentRef.current = glassPercent;
-    interactionRef.current = effectiveInteraction;
-    onStageUiSyncRef.current = onStageUiSync;
-  });
+  // Sync refs synchronously on render so rAF overlay passes never see a stale stage or subtab
+  activeStageRef.current = effectiveThreeStage;
+  themeRef.current = theme;
+  moodRef.current = mood;
+  glassPercentRef.current = glassPercent;
+  interactionRef.current = effectiveInteraction;
+  onStageUiSyncRef.current = onStageUiSync;
 
   const getTargetRoot = useCallback(
     (stageEl: HTMLElement) => viewportRootRef.current ?? stageEl.parentElement,
@@ -359,6 +358,11 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         typeof performance !== 'undefined'
           ? Math.max(rig.lastElapsed, (performance.now() - rig.startWallMs) / 1000)
           : rig.lastElapsed;
+      // Sync latest interaction (e.g. studioSubtab = 'atelier' for Specs -> Three.js 3D) BEFORE onEnter runs
+      const prePatch = diffStageInteraction(rig.director.getInteraction(), interactionRef.current);
+      if (prePatch) {
+        rig.director.updateInteraction(prePatch);
+      }
       rig.heroReturnPending = false;
       rig.heroReturnRevealed = false;
       rig.stageMarble.group.scale.setScalar(1);
@@ -658,6 +662,16 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     onControllerReady: handleControllerReady,
   });
 
+  // Sync HUD interaction changes into active 3D stage BEFORE stage transitions run
+  useEffect(() => {
+    const rig = rigRef.current;
+    if (!rig) return;
+    const patch = diffStageInteraction(rig.director.getInteraction(), effectiveInteraction);
+    if (!patch) return;
+    rig.director.updateInteraction(patch);
+    controllerRef.current?.requestRender?.();
+  }, [effectiveInteraction]);
+
   // Sync stage transitions (including Specs -> 3D Fitting/Care live Three.js background)
   useEffect(() => {
     const rig = rigRef.current;
@@ -701,6 +715,33 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     return undefined;
   }, [effectiveThreeStage, syncStageTransition]);
 
+  // Proactively pre-warm & register hidden studioStage when entering Specs so Three.js 3D opens instantly
+  useEffect(() => {
+    if (activeStage !== 'specs') return undefined;
+    let cancelled = false;
+    void preloadStageModule('studio')
+      .then((factory) => {
+        if (cancelled) return;
+        const liveRig = rigRef.current;
+        if (!liveRig || liveRig.director.getStage('studio')) return;
+        const stageMod = factory({
+          onModelLoaded: () => {
+            controllerRef.current?.requestRender?.();
+          },
+        });
+        liveRig.director.registerStage(stageMod);
+        if (activeStageRef.current === 'studio') {
+          syncStageTransition(liveRig, 'studio');
+        }
+      })
+      .catch(() => {
+        // Best-effort prefetch; clicking Three.js 3D retries on demand if offline
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStage, syncStageTransition]);
+
   // Sync Luxury/Aurora mood & Dark/Light theme into active 3D stage and studio lights
   useEffect(() => {
     const rig = rigRef.current;
@@ -717,16 +758,6 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     rig.director.setGlassPercent(glassPercent);
     controllerRef.current?.requestRender?.();
   }, [glassPercent]);
-
-  // Sync HUD interaction changes into active 3D stage (diffed to avoid feedback loops)
-  useEffect(() => {
-    const rig = rigRef.current;
-    if (!rig) return;
-    const patch = diffStageInteraction(rig.director.getInteraction(), effectiveInteraction);
-    if (!patch) return;
-    rig.director.updateInteraction(patch);
-    controllerRef.current?.requestRender?.();
-  }, [effectiveInteraction]);
 
   // Open 3D viewport direct pointer gestures (Zero HUD interference) + double-tap 0° reset
   useEffect(() => {

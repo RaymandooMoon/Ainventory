@@ -175,6 +175,19 @@
   animation: siteFadeUp 0.34s var(--site-ease) both;
 }
 
+/* Content-focused wider editorial inspector on About stage (desktop) */
+.site-hud-panel[data-stage='about'] {
+  width: clamp(460px, 50vw, 680px);
+  max-height: min(
+    780px,
+    calc(100dvh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom))
+  );
+}
+
+.site-hud-panel[data-stage='about'] .site-hud-scroll {
+  padding: 14px 16px 12px;
+}
+
 .site-hud-grab-btn {
   display: none;
 }
@@ -265,6 +278,11 @@
   border-radius: var(--r-pill);
   background: var(--accent-gold);
   transform: translateX(-50%);
+}
+
+.site-hud-footer-dock[data-tab-count='4'] .site-hud-subtab-btn {
+  padding: 0 6px;
+  font-size: 0.76rem;
 }
 
 /* --------------------------------------------------------------------------
@@ -888,6 +906,22 @@
   color: var(--ink-secondary);
 }
 
+.hud-tier-binding-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--accent-gold-soft);
+  color: var(--accent-gold-ink);
+  font-size: 0.68rem;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hud-tech-icon-btn,
   .hud-tech-detail-card {
@@ -1274,8 +1308,18 @@
   position: relative;
   border-radius: var(--r-md);
   overflow: hidden;
+  width: 100%;
   aspect-ratio: 16 / 10;
+  min-height: 140px;
+  max-height: clamp(148px, 28dvh, 320px);
+  flex-shrink: 0;
   background: var(--bg-sunken);
+  transition: max-height 0.28s var(--site-ease);
+}
+
+.hud-journey-stage.is-expanded {
+  aspect-ratio: 4 / 3;
+  max-height: clamp(240px, 46dvh, 450px);
 }
 
 .hud-journey-img {
@@ -1283,6 +1327,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.36s var(--site-ease);
 }
 
 .hud-journey-scrim {
@@ -1343,6 +1388,12 @@
   transition: background-color 0.18s var(--site-ease), transform 0.14s var(--site-ease);
 }
 
+.hud-auto-btn--compact {
+  min-height: 44px;
+  padding: 0 11px;
+  font-size: 0.71rem;
+}
+
 .hud-auto-btn:hover {
   background: var(--bg-elevated);
 }
@@ -1400,9 +1451,288 @@
 .hud-subblock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 8px;
+  gap: 8px;
+  padding-top: 10px;
   border-top: 1px solid var(--hairline);
+}
+
+/* About Content-Focused Editorial Sections */
+.hud-about-editorial {
+  gap: 14px;
+}
+
+.hud-about-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.hud-about-section-head .hud-eyebrow {
+  margin: 0;
+}
+
+.hud-about-section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 680;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+}
+
+/* Merged 5-Stage iNVTRY Loop Pill Strip (synced with 3D Möbius Ribbon) */
+.hud-loop-pills {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.hud-loop-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.18s var(--site-ease),
+    border-color 0.18s var(--site-ease),
+    color 0.18s var(--site-ease),
+    transform 0.14s var(--site-ease);
+}
+
+.hud-loop-pill:hover {
+  color: var(--ink-primary);
+  border-color: var(--hairline-strong);
+  background: var(--bg-elevated);
+}
+
+.hud-loop-pill:active {
+  transform: scale(0.97);
+}
+
+.hud-loop-pill.is-active {
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  border-color: transparent;
+  font-weight: 680;
+  box-shadow: var(--ctrl-active-shadow);
+}
+
+.hud-loop-pill-num {
+  font-size: 0.64rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+.hud-loop-active-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+}
+
+.hud-loop-active-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  color: var(--ink-primary);
+  font-size: 0.84rem;
+}
+
+.hud-loop-active-head svg {
+  color: var(--accent-gold-ink);
+  flex-shrink: 0;
+}
+
+.hud-loop-active-head .hud-gold-badge {
+  margin-left: auto;
+}
+
+/* Pain Points 6-Problem Editorial Grid (Business Plan Slide 04) */
+.hud-pain-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hud-pain-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-sunken);
+  padding: 11px 12px;
+  transition: border-color 0.2s var(--site-ease), background-color 0.2s var(--site-ease);
+}
+
+.hud-pain-card:hover {
+  border-color: var(--hairline-strong);
+  background: var(--bg-surface);
+}
+
+.hud-pain-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.hud-pain-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-micro);
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  color: var(--accent-gold-ink);
+}
+
+.hud-pain-code {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.hud-pain-metric {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--accent-gold-ink);
+}
+
+.hud-pain-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 680;
+  line-height: 1.32;
+  letter-spacing: -0.015em;
+  color: var(--ink-primary);
+}
+
+.hud-pain-detail {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 460;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+}
+
+.hud-pain-bottleneck {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-elevated);
+}
+
+.hud-pain-bottleneck-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--accent-gold-ink);
+}
+
+/* Business Model Detailed Funnel & 3-Layer AI Cost Defense (Slides 12–13) */
+.hud-bm-funnel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hud-bm-funnel-step {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+.hud-bm-funnel-label {
+  font-size: 0.77rem;
+  font-weight: 680;
+  line-height: 1.25;
+  color: var(--ink-primary);
+}
+
+.hud-bm-funnel-val {
+  font-size: 0.69rem;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.34;
+  color: var(--ink-secondary);
+}
+
+.hud-bm-cost-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hud-bm-cost-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-sunken);
+}
+
+.hud-bm-cost-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hud-bm-cost-head strong {
+  font-size: 0.8rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.hud-bm-cost-metric {
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-gold-ink);
+}
+
+.hud-bm-footnote {
+  margin: 2px 2px 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--ink-tertiary);
+}
+
+/* Connect Tab — FAQ Pinned at Top */
+.hud-connect-faq-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .hud-founder-card {

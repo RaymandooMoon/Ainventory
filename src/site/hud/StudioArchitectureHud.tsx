@@ -13,8 +13,9 @@ import {
 import { useLiveLocalContext } from '../useLiveLocalContext.ts';
 import {
   getTechItemDescription,
-  getTechItemsForBlueprintNode,
-  getUnifiedGovernanceTechItems,
+  getUnifiedTierTechItems,
+  GOOGLE_API_TIER_MAP,
+  PRIVACY_SHIELD_TIER_MAP,
 } from './architectureTechCatalog.ts';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
 
@@ -301,17 +302,26 @@ export function ArchitectureStageHud({
       return Math.min(nodeIdx, 2);
     };
 
-    const renderGovernanceTechExpansion = (currentPillar: SiteBlueprintNode) => {
-      const govItems = getUnifiedGovernanceTechItems(modeKey);
-      if (govItems.length === 0) return null;
+    const renderUnifiedTierTechExpansion = (
+      currentNode: SiteBlueprintNode,
+      tierNodes: readonly SiteBlueprintNode[],
+      tierKey: string
+    ) => {
+      const nodeIds = tierNodes.map((n) => n.id);
+      const unifiedItems = getUnifiedTierTechItems(nodeIds, modeKey);
+      if (unifiedItems.length === 0) return null;
 
       const activeTech =
-        (selectedTechId ? govItems.find((item) => item.id === selectedTechId) : null) ??
-        null;
+        (selectedTechId ? unifiedItems.find((item) => item.id === selectedTechId) : null) ??
+        (interaction.architectureTechIndex !== null && tierNodes.length <= 1
+          ? unifiedItems[Math.min(interaction.architectureTechIndex, unifiedItems.length - 1)]
+          : null);
+
+      const hasMultipleNodes = tierNodes.length > 1;
 
       return (
         <div
-          key={`gov-unified-${modeKey}`}
+          key={`tier-${tierKey}-${modeKey}`}
           className="hud-tech-expand-wrap"
           data-arch-tech-expand="true"
         >
@@ -323,21 +333,23 @@ export function ArchitectureStageHud({
               {activeTech
                 ? activeTech.badge
                 : lang === 'ko'
-                  ? `${govItems.length}개 통합`
-                  : `${govItems.length} Unified`}
+                  ? `${unifiedItems.length}개 통합`
+                  : `${unifiedItems.length} Unified`}
             </span>
           </div>
 
           <div className="hud-tech-icon-strip hud-tech-icon-strip--icons-only" role="list">
-            {govItems.map((tech, idx) => {
+            {unifiedItems.map((tech, idx) => {
               const isFocused = activeTech?.id === tech.id;
-              const isInActivePillar = tech.nodeId === currentPillar.id;
-              const showPillarSep =
-                idx > 0 && govItems[idx - 1]?.pillarIndex !== tech.pillarIndex;
+              const isInActiveNode = !hasMultipleNodes || tech.nodeId === currentNode.id;
+              const showNodeSep =
+                hasMultipleNodes &&
+                idx > 0 &&
+                unifiedItems[idx - 1]?.nodeIndex !== tech.nodeIndex;
 
               return (
                 <Fragment key={tech.id}>
-                  {showPillarSep && (
+                  {showNodeSep && (
                     <span className="hud-tech-pillar-sep" aria-hidden="true" />
                   )}
                   <button
@@ -351,7 +363,7 @@ export function ArchitectureStageHud({
                     className={`hud-tech-icon-btn ${
                       isFocused
                         ? 'is-focused'
-                        : isInActivePillar
+                        : isInActiveNode
                           ? 'is-pillar-active'
                           : 'is-pillar-muted'
                     }`}
@@ -361,95 +373,16 @@ export function ArchitectureStageHud({
                       setSelectedNodeId(tech.nodeId);
                       setSelectedTechId(nextSelected);
                       onUpdateInteraction({
-                        architectureTier: govTierIndex,
-                        architectureTechIndex: nextSelected ? tech.pillarIndex : null,
+                        architectureTier: isGovActive ? govTierIndex : interaction.architectureTier,
+                        architectureTechIndex: nextSelected
+                          ? resolveBladeIndexForTierNode(tierNodes, tech.nodeId, tech.techIndexInNode)
+                          : null,
                       });
                     }}
                   >
                     <SiteIcon name={tech.icon} size={18} />
                   </button>
                 </Fragment>
-              );
-            })}
-          </div>
-
-          <div className={`hud-tech-detail-collapse ${activeTech ? 'is-open' : ''}`}>
-            <div className="hud-tech-detail-collapse-inner">
-              {activeTech && (
-                <div className="hud-tech-detail-card">
-                  <div className="hud-tech-detail-title">
-                    <SiteIcon name={activeTech.icon} size={14} />
-                    <strong>{activeTech.name}</strong>
-                    <span className="hud-tech-detail-tag">{activeTech.badge}</span>
-                  </div>
-                  <p className="hud-tech-detail-copy">{getTechItemDescription(activeTech, lang)}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const renderTechExpansion = (
-      currentNode: SiteBlueprintNode,
-      tierNodes: readonly SiteBlueprintNode[]
-    ) => {
-      const techItems = getTechItemsForBlueprintNode(currentNode.id, modeKey);
-      if (techItems.length === 0) return null;
-
-      const activeTech =
-        (selectedTechId ? techItems.find((item) => item.id === selectedTechId) : null) ??
-        (interaction.architectureTechIndex !== null && tierNodes.length <= 1
-          ? techItems[Math.min(interaction.architectureTechIndex, techItems.length - 1)]
-          : null);
-
-      return (
-        <div
-          key={`${currentNode.id}-${modeKey}`}
-          className="hud-tech-expand-wrap"
-          data-arch-tech-expand="true"
-        >
-          <div className="hud-tech-expand-head">
-            <span className="hud-tech-expand-label">
-              {lang === 'ko' ? '적용 기술 스택' : 'Technology Stack'}
-            </span>
-            <span className="hud-tech-expand-count">
-              {activeTech
-                ? activeTech.badge
-                : lang === 'ko'
-                  ? '아이콘 선택'
-                  : 'Tap icon'}
-            </span>
-          </div>
-
-          <div className="hud-tech-icon-strip hud-tech-icon-strip--icons-only" role="list">
-            {techItems.map((tech, idx) => {
-              const isFocused = activeTech?.id === tech.id;
-              return (
-                <button
-                  key={tech.id}
-                  type="button"
-                  role="listitem"
-                  aria-pressed={isFocused}
-                  aria-expanded={isFocused}
-                  aria-label={`${tech.name} (${tech.badge})`}
-                  title={`${tech.name} · ${tech.badge}`}
-                  style={{ '--tech-delay': `${idx * 48}ms` } as CSSProperties}
-                  className={`hud-tech-icon-btn ${isFocused ? 'is-focused' : ''}`}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    const nextSelected = isFocused ? null : tech.id;
-                    setSelectedTechId(nextSelected);
-                    onUpdateInteraction({
-                      architectureTechIndex: nextSelected
-                        ? resolveBladeIndexForTierNode(tierNodes, currentNode.id, idx)
-                        : null,
-                    });
-                  }}
-                >
-                  <SiteIcon name={tech.icon} size={18} />
-                </button>
               );
             })}
           </div>
@@ -554,7 +487,7 @@ export function ArchitectureStageHud({
                         setSelectedTechId(null);
                         onUpdateInteraction({
                           architectureTier: isGovActive ? govTierIndex : interaction.architectureTier,
-                          architectureTechIndex: isGovActive ? Math.min(nodeIdx, 2) : null,
+                          architectureTechIndex: activeNodes.length > 1 ? Math.min(nodeIdx, 2) : null,
                         });
                       }}
                     >
@@ -565,9 +498,7 @@ export function ArchitectureStageHud({
                 })}
               </div>
               <p className="hud-body-copy">{specText}</p>
-              {isGovActive
-                ? renderGovernanceTechExpansion(currentNode)
-                : renderTechExpansion(currentNode, activeNodes)}
+              {renderUnifiedTierTechExpansion(currentNode, activeNodes, activeNum)}
             </div>
           </div>
         </section>
@@ -576,17 +507,22 @@ export function ArchitectureStageHud({
   }
 
   if (interaction.architectureSubtab === 'privacy') {
-    const shieldItems: HudSpotlightItem[] = arch.privacyShields.map((shield) => ({
-      id: shield.id,
-      icon: shield.icon,
-      title: shield.shortLabel,
-      body: (
-        <div className="hud-spot-stack">
-          <p className="hud-body-copy">{shield.devStatus}</p>
-          <p className="hud-sub-meta">{shield.retention}</p>
-        </div>
-      ),
-    }));
+    const shieldItems: HudSpotlightItem[] = arch.privacyShields.map((shield) => {
+      const binding = PRIVACY_SHIELD_TIER_MAP[shield.id];
+      return {
+        id: shield.id,
+        icon: shield.icon,
+        title: shield.shortLabel,
+        badge: binding ? `${binding.tierNum} ${lang === 'ko' ? binding.labelKo.slice(3) : binding.labelEn.slice(3)}` : undefined,
+        badgeTone: 'gold',
+        body: (
+          <div className="hud-spot-stack">
+            <p className="hud-body-copy">{shield.devStatus}</p>
+            <p className="hud-sub-meta">{shield.retention}</p>
+          </div>
+        ),
+      };
+    });
 
     return (
       <div className="hud-stack">
@@ -657,56 +593,61 @@ export function ArchitectureStageHud({
 
   // Architecture Subtab 3: Maps / API
   const activeApi = arch.mapsNodes[interaction.googleApiIndex] ?? arch.mapsNodes[0];
-  const apiItems: HudSpotlightItem[] = arch.mapsNodes.map((node) => ({
-    id: node.id,
-    icon: node.icon,
-    title: node.apiName,
-    badge: node.statusLabel,
-    badgeTone: node.status === 'live' ? 'live' : 'todo',
-    body: (
-      <div className="hud-spot-stack">
-        <p className="hud-body-copy">{node.detail}</p>
+  const apiItems: HudSpotlightItem[] = arch.mapsNodes.map((node) => {
+    const binding = GOOGLE_API_TIER_MAP[node.id];
+    const tierTag = binding ? (lang === 'ko' ? binding.labelKo : binding.labelEn) : '';
+    return {
+      id: node.id,
+      icon: node.icon,
+      title: node.apiName,
+      badge: node.statusLabel,
+      badgeTone: node.status === 'live' ? 'live' : 'todo',
+      body: (
+        <div className="hud-spot-stack">
+          {tierTag && <span className="hud-tier-binding-tag">{tierTag}</span>}
+          <p className="hud-body-copy">{node.detail}</p>
 
-        {node.id === 'streetview' && node.coordinates && (
-          <div className="hud-media-banner">
-            <img
-              src="/assets/journey/clay-cut-03-v1.webp"
-              alt={node.theaterHeadline}
-              width={960}
-              height={720}
-              decoding="async"
-              className="hud-banner-img"
-            />
-            <span className="hud-banner-chip">{node.coordinates}</span>
-          </div>
-        )}
+          {node.id === 'streetview' && node.coordinates && (
+            <div className="hud-media-banner">
+              <img
+                src="/assets/journey/clay-cut-03-v1.webp"
+                alt={node.theaterHeadline}
+                width={960}
+                height={720}
+                decoding="async"
+                className="hud-banner-img"
+              />
+              <span className="hud-banner-chip">{node.coordinates}</span>
+            </div>
+          )}
 
-        {node.id === 'places' && node.nearbyCareSpots && (
-          <div className="hud-pill-grid hud-pill-grid--3">
-            {node.nearbyCareSpots.map((spot) => (
-              <div key={spot.label} className="hud-metric-chip is-emphasis">
-                <span className="hud-metric-chip-label">{spot.label}</span>
-                <strong className="hud-metric-chip-val">{spot.distance}</strong>
-              </div>
-            ))}
-          </div>
-        )}
+          {node.id === 'places' && node.nearbyCareSpots && (
+            <div className="hud-pill-grid hud-pill-grid--3">
+              {node.nearbyCareSpots.map((spot) => (
+                <div key={spot.label} className="hud-metric-chip is-emphasis">
+                  <span className="hud-metric-chip-label">{spot.label}</span>
+                  <strong className="hud-metric-chip-val">{spot.distance}</strong>
+                </div>
+              ))}
+            </div>
+          )}
 
-        {node.id === 'calendar' && (
-          <div className="hud-media-banner">
-            <img
-              src="/assets/journey/clay-cut-04-v1.webp"
-              alt={node.theaterHeadline}
-              width={960}
-              height={720}
-              decoding="async"
-              className="hud-banner-img"
-            />
-          </div>
-        )}
-      </div>
-    ),
-  }));
+          {node.id === 'calendar' && (
+            <div className="hud-media-banner">
+              <img
+                src="/assets/journey/clay-cut-04-v1.webp"
+                alt={node.theaterHeadline}
+                width={960}
+                height={720}
+                decoding="async"
+                className="hud-banner-img"
+              />
+            </div>
+          )}
+        </div>
+      ),
+    };
+  });
 
   return (
     <div className="hud-stack">

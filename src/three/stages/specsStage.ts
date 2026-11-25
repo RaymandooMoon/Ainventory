@@ -55,6 +55,17 @@ const CLUSTER_ORIGIN_Z = -0.35;
 const COS_YAW = Math.cos(GRID_YAW);
 const SIN_YAW = Math.sin(GRID_YAW);
 
+// 2-Phase Architecture -> Specs Opening Choreography:
+// Phase 1 (0 -> INTRO_HOLD_STACK): Present the 6 glass modules stacked vertically like the 6-tier Architecture tower
+// Phase 2 (INTRO_HOLD_STACK -> INTRO_UNFOLD_END): Fan each tier down onto the benchmark grid and rise into 6 metric pillars
+const INTRO_HOLD_STACK = 0.68;
+const INTRO_UNFOLD_END = 1.92;
+const ARCH_STACK_SLAB_SCALE_XZ = 3.15;
+const ARCH_STACK_SLAB_HEIGHT = 0.21;
+const ARCH_STACK_STEP_Y = 0.34;
+const ARCH_STACK_BASE_Y = FLOOR_Y + 0.34;
+const ARCH_STACK_YAW = 0.44;
+
 type PillarIndex = 0 | 1 | 2 | 3 | 4 | 5;
 
 interface PillarLayoutSpec {
@@ -517,7 +528,10 @@ interface PillarEntry {
     isClosest: boolean,
     dt: number,
     theme: ThemeMode,
-    reducedMotion: boolean
+    reducedMotion: boolean,
+    introUnfoldT: number,
+    stackOriginX: number,
+    stackOriginZ: number
   ) => void;
 }
 
@@ -680,10 +694,14 @@ function buildMetricPillar(
       isClosest: boolean,
       dt: number,
       nextTheme: ThemeMode,
-      reducedMotion: boolean
+      reducedMotion: boolean,
+      introUnfoldT: number,
+      stackOriginX: number,
+      stackOriginZ: number
     ): void => {
       const isDark = nextTheme === 'dark';
       const damp = reducedMotion ? 1 : 1 - Math.exp(-8.5 * dt);
+      const t = THREE.MathUtils.clamp(introUnfoldT, 0, 1);
 
       // Selected pillar glides to center and rises cleanly below the top bar; unselected settle smaller
       const targetHeight = isClosest
@@ -694,44 +712,58 @@ function buildMetricPillar(
 
       entry.currentHeight = THREE.MathUtils.lerp(entry.currentHeight, targetHeight, damp);
       currentProximity = THREE.MathUtils.lerp(currentProximity, isClosest ? 1 : proximity * 0.35, damp);
-      const nextWidthScale = THREE.MathUtils.lerp(glassMesh.scale.x, targetWidthScale, damp);
-      root.position.z = THREE.MathUtils.lerp(root.position.z, targetPosZ, damp);
+
+      // Morph smoothly from 6-tier vertical Architecture glass slab (t=0) -> upright benchmark pillar (t=1)
+      const stackY = ARCH_STACK_BASE_Y + (5 - spec.index) * ARCH_STACK_STEP_Y;
+      const arcLift = Math.sin(t * Math.PI) * 0.24;
+      const settledX = spec.x;
+      const settledZ = THREE.MathUtils.lerp(root.position.z, targetPosZ, damp);
+      const liveX = THREE.MathUtils.lerp(stackOriginX, settledX, t);
+      const liveY = THREE.MathUtils.lerp(stackY, FLOOR_Y, t) + arcLift;
+      const liveZ = THREE.MathUtils.lerp(stackOriginZ, settledZ, t);
+      root.position.set(liveX, liveY, liveZ);
+      root.rotation.y = THREE.MathUtils.lerp(ARCH_STACK_YAW, GRID_YAW, t);
+
+      const settledWidth = THREE.MathUtils.lerp(
+        glassMesh.scale.x > 1.8 ? targetWidthScale : glassMesh.scale.x,
+        targetWidthScale,
+        damp
+      );
+      const liveWidth = THREE.MathUtils.lerp(ARCH_STACK_SLAB_SCALE_XZ, settledWidth, t);
+      const liveHeight = THREE.MathUtils.lerp(ARCH_STACK_SLAB_HEIGHT, entry.currentHeight, t);
 
       const emphasis = isClosest ? Math.max(currentProximity, 0.96) : currentProximity * 0.32;
-      glassMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
-      edgesLine.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
-      innerGlowMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
-      innerFilamentMesh.scale.set(nextWidthScale, entry.currentHeight, nextWidthScale);
-      basePlinth.scale.set(nextWidthScale, 1, nextWidthScale);
-      basePool.scale.set(nextWidthScale, nextWidthScale, 1);
+      const stackGlowBoost = (1 - t) * 0.42;
+      glassMesh.scale.set(liveWidth, liveHeight, liveWidth);
+      edgesLine.scale.set(liveWidth, liveHeight, liveWidth);
+      innerGlowMesh.scale.set(liveWidth, liveHeight, liveWidth);
+      innerFilamentMesh.scale.set(liveWidth, liveHeight, liveWidth);
+      basePlinth.scale.set(liveWidth, 1, liveWidth);
+      basePool.scale.set(liveWidth * t, liveWidth * t, 1);
 
-      edgesMat.opacity = THREE.MathUtils.lerp(isDark ? 0.26 : 0.34, 1.0, emphasis);
-      innerGlowMat.opacity = THREE.MathUtils.lerp(isDark ? 0.08 : 0.06, isDark ? 0.84 : 0.52, emphasis);
-      innerFilamentMat.opacity = THREE.MathUtils.lerp(
-        isDark ? 0.14 : 0.1,
-        isDark ? 0.9 : 0.62,
-        emphasis
-      );
+      edgesMat.opacity = Math.min(1, THREE.MathUtils.lerp(isDark ? 0.26 : 0.34, 1.0, emphasis) + stackGlowBoost);
+      innerGlowMat.opacity = THREE.MathUtils.lerp(isDark ? 0.08 : 0.06, isDark ? 0.84 : 0.52, emphasis) * (0.35 + 0.65 * t);
+      innerFilamentMat.opacity =
+        THREE.MathUtils.lerp(isDark ? 0.14 : 0.1, isDark ? 0.9 : 0.62, emphasis) * t;
       innerFilamentMat.emissiveIntensity = THREE.MathUtils.lerp(
         isDark ? 0.22 : 0.16,
         isDark ? 2.1 : 1.15,
         emphasis
       );
-      basePoolMat.opacity = THREE.MathUtils.lerp(isDark ? 0.1 : 0.08, isDark ? 0.82 : 0.46, emphasis);
+      basePoolMat.opacity = THREE.MathUtils.lerp(isDark ? 0.1 : 0.08, isDark ? 0.82 : 0.46, emphasis) * t;
       basePlinthMat.emissiveIntensity = THREE.MathUtils.lerp(
         isDark ? 0.14 : 0.1,
         isDark ? 0.88 : 0.56,
         emphasis
       );
 
-      label.sprite.position.y = entry.currentHeight + LABEL_TOP_CLEARANCE + (isClosest ? 0.06 : 0);
+      const labelReveal = THREE.MathUtils.smoothstep(t, 0.58, 0.98);
+      label.sprite.position.y = liveHeight + LABEL_TOP_CLEARANCE + (isClosest ? 0.06 : 0);
       const labelScale = isClosest ? 1.12 : 0.72;
       label.sprite.scale.set(baseLabelScaleX * labelScale, baseLabelScaleY * labelScale, 1);
-      label.sprite.material.opacity = THREE.MathUtils.lerp(
-        label.sprite.material.opacity,
-        isClosest ? 1.0 : 0.3,
-        damp
-      );
+      label.sprite.material.opacity =
+        THREE.MathUtils.lerp(label.sprite.material.opacity, isClosest ? 1.0 : 0.3, damp) * labelReveal;
+      label.sprite.visible = label.sprite.material.opacity > 0.015;
       label.sprite.material.depthTest = !isClosest;
       label.sprite.renderOrder = isClosest ? 26 : 6;
       label.setHighlight(isClosest, nextTheme);
@@ -873,6 +905,7 @@ export function createSpecsStage(): StageModule {
   let dragAccumX = 0;
   let prevMarbleX = 0;
   let prevMarbleZ = 0.48;
+  let introClock = INTRO_UNFOLD_END;
   let stageActive = false;
   let disposed = false;
 
@@ -921,6 +954,21 @@ export function createSpecsStage(): StageModule {
     raycastTargets.push(entry.glassMesh, entry.label.sprite);
   }
 
+  // Opening choreography bridge banner showing 6-Tier Architecture unfolding into 6 Specs pillars
+  const introBanner = createFloatingLabelSprite('6-TIER ARCHITECTURE → SPECS', {
+    accent: true,
+    width: 344,
+    height: 54,
+    worldHeight: 0.22,
+  });
+  introBanner.sprite.name = 'specs-intro-arch-bridge-banner';
+  introBanner.sprite.position.set(0, ARCH_STACK_BASE_Y + 6 * ARCH_STACK_STEP_Y + 0.22, 0.55);
+  introBanner.sprite.material.depthTest = false;
+  introBanner.sprite.renderOrder = 30;
+  introBanner.sprite.material.opacity = 0;
+  introBanner.sprite.visible = false;
+  group.add(introBanner.sprite);
+
   const sparkleField = buildSparkleField(carouselGroup);
 
   const marbleGlowLight = new THREE.PointLight(STAGE_PALETTE.champagneGoldBright, 0, 5.4, 1.8);
@@ -945,6 +993,7 @@ export function createSpecsStage(): StageModule {
     floorRig.applyTheme(scheme, currentTheme, currentGlassRatio);
     rippleRig.applyTheme(scheme, currentTheme);
     sparkleField.applyTheme(scheme, currentTheme);
+    introBanner.setHighlight(true, currentTheme);
     syncLightVisuals(scheme);
     for (const pillar of pillars) {
       pillar.applyTheme(
@@ -982,6 +1031,7 @@ export function createSpecsStage(): StageModule {
       focusedIndex = clampPillarIndex(ctx.interaction.specsFocusedIndex);
       closestIndex = focusedIndex;
       dragAccumX = 0;
+      introClock = ctx.reducedMotion ? INTRO_UNFOLD_END : 0;
 
       const activeSpec = PILLAR_LAYOUTS[focusedIndex];
       carouselOffsetX = -activeSpec.x;
@@ -996,6 +1046,10 @@ export function createSpecsStage(): StageModule {
       prevMarbleZ = anchorZ;
 
       syncAllVisuals();
+      const initUnfold = ctx.reducedMotion ? 1 : 0;
+      introBanner.sprite.material.opacity = ctx.reducedMotion ? 0 : 0.96;
+      introBanner.sprite.visible = !ctx.reducedMotion;
+
       for (let i = 0; i < pillars.length; i++) {
         const pillar = pillars[i];
         pillar.resetToBase();
@@ -1007,7 +1061,10 @@ export function createSpecsStage(): StageModule {
           i === closestIndex,
           0,
           currentTheme,
-          ctx.reducedMotion
+          ctx.reducedMotion,
+          initUnfold,
+          -carouselOffsetX,
+          -carouselOffsetZ
         );
       }
       rippleRig.update(0, 0, ctx.reducedMotion, currentTheme === 'dark');
@@ -1017,6 +1074,8 @@ export function createSpecsStage(): StageModule {
       stageActive = false;
       dragAccumX = 0;
       hoveredIndex = null;
+      introBanner.sprite.material.opacity = 0;
+      introBanner.sprite.visible = false;
       syncLightVisuals(getScheme(currentMood, currentTheme));
     },
 
@@ -1037,6 +1096,9 @@ export function createSpecsStage(): StageModule {
     onInteractionChange(patch: Partial<StageInteractionState>, _ctx: StageContext): void {
       if (typeof patch.specsFocusedIndex === 'number') {
         focusedIndex = clampPillarIndex(patch.specsFocusedIndex);
+        introClock = INTRO_UNFOLD_END;
+      } else if (patch.specsSubtab !== undefined) {
+        introClock = INTRO_UNFOLD_END;
       }
     },
 
@@ -1095,6 +1157,28 @@ export function createSpecsStage(): StageModule {
       if (disposed) return;
       reducedMotionEnabled = ctx.reducedMotion;
 
+      if (ctx.reducedMotion) {
+        introClock = INTRO_UNFOLD_END;
+      } else if (introClock < INTRO_UNFOLD_END) {
+        introClock = Math.min(INTRO_UNFOLD_END, introClock + dt);
+      }
+
+      const rawUnfold = THREE.MathUtils.clamp(
+        (introClock - INTRO_HOLD_STACK) / (INTRO_UNFOLD_END - INTRO_HOLD_STACK),
+        0,
+        1
+      );
+      const bannerAlpha = ctx.reducedMotion
+        ? 0
+        : (0.55 + 0.45 * THREE.MathUtils.smoothstep(introClock, 0, 0.16)) *
+          (1 - THREE.MathUtils.smoothstep(rawUnfold, 0.12, 0.55));
+      introBanner.sprite.material.opacity = bannerAlpha * 0.96;
+      introBanner.sprite.visible = bannerAlpha > 0.015;
+      if (introBanner.sprite.visible) {
+        introBanner.sprite.position.y =
+          ARCH_STACK_BASE_Y + 6 * ARCH_STACK_STEP_Y + 0.22 + Math.sin(elapsed * 2.0) * 0.025;
+      }
+
       const nextFocused = clampPillarIndex(ctx.interaction.specsFocusedIndex);
       if (nextFocused !== focusedIndex) {
         focusedIndex = nextFocused;
@@ -1133,23 +1217,40 @@ export function createSpecsStage(): StageModule {
       }
 
       const hoverLiftLerp = ctx.reducedMotion ? 1 : 1 - Math.exp(-10 * dt);
+      const stackOriginX = -carouselOffsetX;
+      const stackOriginZ = -carouselOffsetZ;
       for (let i = 0; i < pillars.length; i++) {
         const isHovered = hoveredIndex === i;
         const baseWeight = computeProximityWeight(pillarDistances[i]);
         const effectiveWeight = isHovered ? Math.min(1, Math.max(baseWeight, 0.72)) : baseWeight;
+
+        // Per-tier cascade unfold from Tier 01 down to Tier 06
+        const tierStart = INTRO_HOLD_STACK + i * 0.045;
+        const tierSpan = Math.max(0.35, INTRO_UNFOLD_END - INTRO_HOLD_STACK - 5 * 0.045);
+        const tierRaw = ctx.reducedMotion
+          ? 1
+          : THREE.MathUtils.clamp((introClock - tierStart) / tierSpan, 0, 1);
+        const tierEase =
+          tierRaw < 0.5 ? 4 * tierRaw * tierRaw * tierRaw : 1 - Math.pow(-2 * tierRaw + 2, 3) / 2;
+
         pillars[i].applyDynamic(
           effectiveWeight,
           i === closestIndex || isHovered,
           dt,
           currentTheme,
-          ctx.reducedMotion
+          ctx.reducedMotion,
+          tierEase,
+          stackOriginX,
+          stackOriginZ
         );
-        const targetLiftY = isHovered && !ctx.reducedMotion ? 0.045 : 0;
-        pillars[i].root.position.y = THREE.MathUtils.lerp(
-          pillars[i].root.position.y,
-          FLOOR_Y + targetLiftY,
-          hoverLiftLerp
-        );
+        if (tierEase >= 0.99) {
+          const targetLiftY = isHovered && !ctx.reducedMotion ? 0.045 : 0;
+          pillars[i].root.position.y = THREE.MathUtils.lerp(
+            pillars[i].root.position.y,
+            FLOOR_Y + targetLiftY,
+            hoverLiftLerp
+          );
+        }
       }
       sparkleField.update(dt, elapsed, ctx.reducedMotion);
     },
@@ -1158,6 +1259,7 @@ export function createSpecsStage(): StageModule {
       if (disposed) return;
       disposed = true;
       stageActive = false;
+      introBanner.dispose();
       for (const pillar of pillars) {
         pillar.root.remove(pillar.label.sprite);
         pillar.label.dispose();

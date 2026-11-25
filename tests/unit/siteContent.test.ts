@@ -152,7 +152,11 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.equal(copy.mission.exits.length, 2);
       assert.equal(copy.vision.milestones.length, 3);
       assert.equal(copy.vision.moats.length, 4);
-      assert.equal(copy.vision.revenuePillars.length, 3);
+      assert.equal(copy.vision.revenuePillars.length, 4);
+      assert.equal(copy.painPoints.items.length, 6);
+      assert.ok(copy.painPoints.bottleneckTitle.length > 0);
+      assert.equal(copy.vision.businessModel.funnelSteps.length, 4);
+      assert.equal(copy.vision.businessModel.costDefenses.length, 3);
 
       // Legal & Privacy compliance
       assert.ok(copy.legal.privacySections.length >= 4);
@@ -317,11 +321,15 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.equal(calendarNode?.status, 'todo');
       assert.equal(calendarNode?.statusLabel, 'TO-DO');
 
-      // 3. Specs — Key Metrics + Tech Stack
+      // 3. Specs — Key Metrics + Tech Stack (deduplicated pure engineering specs)
       assert.deepEqual(
         copy.stack.heroKpis.map((kpi) => kpi.value),
-        ['5-Stage', '0 Bytes', '360+', '4 APIs'],
-        `[${lang}] Hero KPIs must match 5-Stage / 0 Bytes / 360+ / 4 APIs`
+        isKo ? ['582→24 KB', '21관절', '360+', '4 APIs'] : ['582→24 KB', '21-Bone', '360+', '4 APIs'],
+        `[${lang}] Hero KPIs must spotlight pure deduplicated engineering specs`
+      );
+      assert.ok(
+        !copy.stack.pillarLabels.includes('5-STAGE') && !copy.stack.pillarLabels.includes('0B FACE'),
+        `[${lang}] Specs 3D pillars must exclude duplicated About/Privacy items`
       );
       assert.ok(
         copy.stack.cards.some((card) => card.metric === 'Three.js 0.187'),
@@ -333,8 +341,9 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       );
       assert.ok(copy.vision.faqs.length >= 4, `[${lang}] Vision must include at least 4 FAQ entries`);
 
-      // 4. About — User Journey + Mission & Roadmap + Model + Connect
-      assert.equal(copy.subtabs.aboutFounder, isKo ? '비즈니스' : 'Model');
+      // 4. About — User Journey+Mission | Pain Points | Business Model | Connect
+      assert.equal(copy.subtabs.aboutMission, isKo ? '페인포인트' : 'Pain Points');
+      assert.equal(copy.subtabs.aboutFounder, isKo ? '비즈니스 모델' : 'Business Model');
       assert.equal(copy.subtabs.aboutConnect, isKo ? '소통' : 'Connect');
       assert.equal(copy.journey.badge, isKo ? '6컷 AI 여정' : '6-Cut AI Cycle');
       assert.equal(copy.mission.centerKicker, 'iNVTRY LOOP');
@@ -430,14 +439,21 @@ describe('ainvtry.com official site content & icon-first architecture contract',
     }
   });
 
-  it('enforces zero duplicate buttons, names, or sibling icons across all 7 Architecture tiers and unifies 07 Governance cleanly', async () => {
+  it('enforces zero duplicate buttons, names, or tier-level icons across all 7 Architecture tiers and binds API/Privacy to real operational tiers', async () => {
     const {
       getTechItemsForBlueprintNode,
       getUnifiedGovernanceTechItems,
+      getUnifiedTierTechItems,
+      GOOGLE_API_TIER_MAP,
+      PRIVACY_SHIELD_TIER_MAP,
     } = await import('../../src/site/hud/architectureTechCatalog.ts');
 
     const arch = SITE_COPY.en.architecture;
     const allNodes = [...arch.tiers.flatMap((t) => t.nodes), ...arch.governance];
+    const allTierNodeGroups = [
+      ...arch.tiers.map((t) => ({ num: t.num, nodeIds: t.nodes.map((n) => n.id) })),
+      { num: '07', nodeIds: arch.governance.map((n) => n.id) },
+    ];
 
     for (const mode of ['mvp', 'prod'] as const) {
       const seenIds = new Set<string>();
@@ -469,21 +485,44 @@ describe('ainvtry.com official site content & icon-first architecture contract',
         }
       }
 
-      // 07 Governance unified strip: 6 consolidated items (2 Audit + 2 RBAC + 2 CI/CD) with 6 unique icons
+      // Every tier 01..07 unified strip must have 100% unique icons and <= 6 consolidated items
+      for (const tierGroup of allTierNodeGroups) {
+        const unified = getUnifiedTierTechItems(tierGroup.nodeIds, mode);
+        assert.ok(
+          unified.length >= 3 && unified.length <= 6,
+          `[${mode}] Tier ${tierGroup.num} must consolidate cleanly to 3..6 items (got ${unified.length})`
+        );
+        const tierIcons = new Set(unified.map((item) => item.icon));
+        assert.equal(
+          tierIcons.size,
+          unified.length,
+          `[${mode}] Every icon in Tier ${tierGroup.num} unified strip must be unique`
+        );
+      }
+
+      // 07 Governance unified strip: 6 consolidated items (2 Audit + 2 RBAC + 2 CI/CD)
       const unifiedGov = getUnifiedGovernanceTechItems(mode);
       assert.equal(unifiedGov.length, 6, `[${mode}] 07 Governance must expose 6 consolidated items`);
-      const govIcons = new Set(unifiedGov.map((item) => item.icon));
-      assert.equal(
-        govIcons.size,
-        unifiedGov.length,
-        `[${mode}] Every icon in 07 Governance unified strip must be unique`
-      );
       assert.deepEqual(
         [0, 1, 2].map((pillarIdx) => unifiedGov.filter((item) => item.pillarIndex === pillarIdx).length),
         [2, 2, 2],
         `[${mode}] 07 Governance must balance 2 Audit + 2 RBAC + 2 CI/CD items`
       );
     }
+
+    // Real Google API -> Operational Tier bindings
+    assert.equal(GOOGLE_API_TIER_MAP.weather.tierIndex, 3);
+    assert.equal(GOOGLE_API_TIER_MAP.streetview.tierIndex, 3);
+    assert.equal(GOOGLE_API_TIER_MAP.places.tierIndex, 3);
+    assert.equal(GOOGLE_API_TIER_MAP.calendar.tierIndex, 3);
+    assert.equal(GOOGLE_API_TIER_MAP.vertex.tierIndex, 5);
+    assert.equal(GOOGLE_API_TIER_MAP.mediapipe.tierIndex, 0);
+
+    // Real Privacy Defense -> Security Tier bindings
+    assert.equal(PRIVACY_SHIELD_TIER_MAP.biometric.tierIndex, 0);
+    assert.equal(PRIVACY_SHIELD_TIER_MAP.oidc.tierIndex, 2);
+    assert.equal(PRIVACY_SHIELD_TIER_MAP.vault.tierIndex, 4);
+    assert.equal(PRIVACY_SHIELD_TIER_MAP.exif.tierIndex, 6);
   });
 });
 

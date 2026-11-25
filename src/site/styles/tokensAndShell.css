@@ -439,6 +439,35 @@ html[data-site-theme='light'] body {
   }
 }
 
+/* Desktop: anchor callout beside the brand pill so it never overlaps .site-top-3d-dock */
+@media (min-width: 860px) {
+  .site-home-callout {
+    top: 50%;
+    left: calc(100% + 10px);
+    transform: translateY(-50%) translateX(-4px) scale(0.96);
+  }
+
+  .site-home-callout::before {
+    top: 50%;
+    left: -5px;
+    border-top: 0;
+    border-left: 1px solid var(--accent-gold-hairline);
+    border-bottom: 1px solid var(--accent-gold-hairline);
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .site-home-callout.is-visible {
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
+@media (min-width: 860px) and (hover: hover) and (pointer: fine) {
+  .site-brand-pill:hover + .site-home-callout,
+  .site-brand-pill:focus-visible + .site-home-callout {
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
 .site-home-callout-action {
   display: inline-flex;
   align-items: center;
