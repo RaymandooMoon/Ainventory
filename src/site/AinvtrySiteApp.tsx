@@ -24,7 +24,6 @@ import {
 } from '../three/stageTypes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
-import HeroVisualProofCard from './HeroVisualProofCard.tsx';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteNewsletterModal from './SiteNewsletterModal.tsx';
@@ -291,7 +290,7 @@ export default function AinvtrySiteApp() {
         if (prev.architectureSubtab === 'maps') {
           patch = { googleApiIndex: (prev.googleApiIndex + dir + 6) % 6 };
         } else if (prev.architectureSubtab === 'blueprint') {
-          patch = { architectureTier: (prev.architectureTier + dir + 6) % 6 };
+          patch = { architectureTier: (prev.architectureTier + dir + 7) % 7 };
         }
       } else if (stage === 'about') {
         if (prev.aboutSubtab === 'journey') {
@@ -668,14 +667,6 @@ export default function AinvtrySiteApp() {
                   <p className="site-hero-subtitle">{copy.hero.subtitle}</p>
 
                   <div className="site-hero-actions" data-no-marble="true">
-                    <button
-                      type="button"
-                      className="site-hero-cta site-hero-cta--primary"
-                      onClick={() => handleSelectStage('studio', 'dock')}
-                    >
-                      <span>{copy.hero.primaryCta}</span>
-                      <ArrowRight size={15} aria-hidden="true" />
-                    </button>
                     <a
                       href={betaMailto}
                       className="site-hero-cta site-hero-cta--secondary"
@@ -684,24 +675,6 @@ export default function AinvtrySiteApp() {
                       <ArrowUpRight size={14} aria-hidden="true" />
                     </a>
                   </div>
-
-                  <dl className="site-hero-proof-strip" aria-label={copy.stack.heading}>
-                    {copy.hero.proofMetrics.map((metric) => (
-                      <div key={metric.label} className="site-hero-proof-metric">
-                        <dt className="site-hero-proof-val">{metric.value}</dt>
-                        <dd className="site-hero-proof-lbl">{metric.label}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-
-                <div className="site-hero-visual">
-                  <HeroVisualProofCard
-                    copy={copy}
-                    lang={lang}
-                    theme={theme}
-                    onLaunchStudio={() => handleSelectStage('studio', 'dock')}
-                  />
                 </div>
               </div>
             </section>
@@ -732,14 +705,15 @@ export default function AinvtrySiteApp() {
             {BOTTOM_STAGE_PILLS.map((pill, idx) => {
               const isSelected = activeStage === pill.stageId;
               const isBursting = rippleBurst?.stageId === pill.stageId;
+              const isStudioLaunch = pill.stageId === 'studio';
               const stageIndex = String(idx + 1).padStart(2, '0');
               return (
                 <button
                   key={pill.stageId}
                   type="button"
-                  className={`site-pinball-bumper site-dock-pill ${isSelected ? 'is-active' : ''} ${
-                    isBursting ? 'is-ripple-burst' : ''
-                  }`}
+                  className={`site-pinball-bumper site-dock-pill ${
+                    isStudioLaunch ? 'site-dock-pill--launch' : ''
+                  } ${isSelected ? 'is-active' : ''} ${isBursting ? 'is-ripple-burst' : ''}`}
                   data-marble-target="true"
                   data-marble-action="click"
                   data-stage-pill={pill.stageId}
@@ -750,7 +724,12 @@ export default function AinvtrySiteApp() {
                   <span className="site-dock-pill-num" aria-hidden="true">
                     {stageIndex}
                   </span>
-                  <span className="site-dock-pill-label">{copy.nav[pill.navKey]}</span>
+                  <span className="site-dock-pill-label">
+                    {isStudioLaunch ? copy.hero.primaryCta : copy.nav[pill.navKey]}
+                  </span>
+                  {isStudioLaunch && (
+                    <ArrowRight size={14} className="site-dock-pill-arrow" aria-hidden="true" />
+                  )}
                   {isBursting && (
                     <span
                       key={rippleBurst.seq}

@@ -1143,6 +1143,56 @@
   outline-offset: 2px;
 }
 
+.atelier-demo-gold-btn {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(246, 224, 174, 0.78);
+  background: linear-gradient(135deg, #ebd097 0%, #d4af64 52%, #b98f3f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 251, 238, 0.62),
+    0 10px 26px -10px rgba(212, 175, 100, 0.55);
+  color: #14110b;
+  font-family: inherit;
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease,
+    opacity 0.2s ease;
+}
+
+.atelier-demo-gold-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f3dca8 0%, #dfc079 52%, #c79d4d 100%);
+  border-color: rgba(255, 239, 198, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 253, 244, 0.75),
+    0 12px 30px -10px rgba(212, 175, 100, 0.68);
+}
+
+.atelier-demo-gold-btn:active:not(:disabled) {
+  transform: scale(0.988);
+}
+
+.atelier-demo-gold-btn:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.atelier-demo-gold-btn:focus-visible {
+  outline: 2px solid #f0d79c;
+  outline-offset: 2px;
+}
+
 .atelier-divider {
   display: flex;
   align-items: center;

@@ -1390,7 +1390,7 @@ export default function LoginView({
                       ? '사이트 데모로 체험하기'
                       : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
                 }
-                className={isEmbedMode ? 'atelier-primary-btn' : 'atelier-text-btn'}
+                className="atelier-demo-gold-btn"
                 disabled={loading}
                 aria-busy={loadingAction === 'sample'}
                 onClick={handleEnterSampleDemo}

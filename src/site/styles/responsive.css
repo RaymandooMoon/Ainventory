@@ -85,19 +85,19 @@
   }
 
   .site-hero-actions {
-    width: 100%;
+    width: auto;
     max-width: 360px;
-    margin-top: 12px;
-    display: grid;
-    grid-template-columns: 1.18fr 0.82fr;
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
     gap: 8px;
   }
 
   .site-hero-cta {
-    width: 100%;
+    width: auto;
     min-height: 44px;
-    padding: 0 12px;
-    font-size: 0.78rem;
+    padding: 0 18px;
+    font-size: 0.8rem;
   }
 
   .site-hero-proof-strip {
@@ -449,13 +449,19 @@
   .site-dock {
     width: 100%;
     padding: 2px;
+    grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 0.85fr);
   }
 
   .site-dock-pill {
     min-height: 44px;
     padding: 0 6px;
     gap: 4px;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
+  }
+
+  .site-dock-pill--launch {
+    padding: 0 11px;
+    gap: 4px;
   }
 
   .site-dock-pill-num {
@@ -467,7 +473,8 @@
   }
 
   .site-bottombar {
-    gap: 6px;
+    gap: 4px;
+    min-width: 0;
   }
 
   .site-bottombar-rights,
@@ -480,29 +487,45 @@
     display: inline;
   }
 
-  .site-bottombar-left,
-  .site-bottombar-right {
+  .site-bottombar-left {
     gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .site-bottombar-right {
+    gap: 4px;
+    flex-shrink: 0;
   }
 
   .site-bottombar-link {
-    min-width: 40px;
+    min-width: auto;
     min-height: 44px;
     justify-content: center;
     padding: 0 5px;
-    font-size: 0.7rem;
+    font-size: 0.69rem;
   }
 
   .site-bottombar-newsletter {
-    gap: 4px;
-    padding: 0 6px;
+    gap: 3px;
+    padding: 0 5px;
   }
 
-  .site-analytics-trigger-btn,
+  .site-analytics-trigger-btn {
+    min-height: 44px;
+    padding: 0 7px;
+    gap: 4px;
+    font-size: 0.69rem;
+    flex-shrink: 0;
+  }
+
   .site-opacity-drag-btn {
     min-height: 44px;
-    padding: 0 8px;
-    font-size: 0.7rem;
+    padding: 0 9px;
+    gap: 4px;
+    font-size: 0.69rem;
+    flex-shrink: 0;
   }
 
   /* Analytics Modal Responsive */
@@ -568,8 +591,38 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .site-dock-pill-num {
+  .site-dock-pill:not(.site-dock-pill--launch) .site-dock-pill-num {
     display: none;
+  }
+
+  .site-dock-pill {
+    font-size: 0.71rem;
+    padding: 0 5px;
+    gap: 3px;
+  }
+
+  .site-dock-pill--launch {
+    padding: 0 10px;
+    font-size: 0.71rem;
+  }
+
+  .site-dock-pill-arrow {
+    width: 12px;
+    height: 12px;
+  }
+
+  .site-analytics-trigger-label {
+    display: none;
+  }
+
+  .site-analytics-trigger-btn {
+    padding: 0 6px;
+    gap: 3px;
+  }
+
+  .site-bottombar-newsletter svg {
+    width: 11px;
+    height: 11px;
   }
 }
 
@@ -581,21 +634,33 @@
   .site-hud-panel[data-layout-mode='sheet'] .hud-journey-stage {
     aspect-ratio: 16 / 8;
   }
-
-  .site-hero-proof-strip {
-    display: none;
-  }
-
-  .site-hero-proof-split,
-  .site-hero-proof-compare {
-    aspect-ratio: 16 / 8;
-  }
 }
 
 @media (max-width: 420px) {
   .site-dock-pill {
-    font-size: 0.72rem;
-    padding: 0 5px;
+    font-size: 0.67rem;
+    padding: 0 4px;
+    gap: 3px;
+  }
+
+  .site-dock-pill--launch {
+    padding: 0 9px;
+    font-size: 0.67rem;
+  }
+
+  .site-bottombar-link {
+    padding: 0 4px;
+    font-size: 0.66rem;
+  }
+
+  .site-bottombar-newsletter svg {
+    display: none;
+  }
+
+  .site-opacity-drag-btn {
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 0.67rem;
   }
 }
 
@@ -619,9 +684,19 @@
   }
 
   .site-dock-pill {
-    font-size: 0.65rem;
+    font-size: 0.61rem;
     letter-spacing: -0.025em;
     padding: 0 3px;
+  }
+
+  .site-dock-pill--launch {
+    padding: 0 7px;
+    font-size: 0.61rem;
+  }
+
+  .site-dock-pill-arrow {
+    width: 11px;
+    height: 11px;
   }
 
   .site-bottombar-newsletter svg {
@@ -629,9 +704,9 @@
   }
 
   .site-bottombar-link {
-    min-width: 34px;
-    padding: 0 4px;
-    font-size: 0.66rem;
+    min-width: auto;
+    padding: 0 3px;
+    font-size: 0.63rem;
   }
 
   .site-analytics-trigger-label {
@@ -639,14 +714,14 @@
   }
 
   .site-analytics-trigger-btn {
-    min-width: 40px;
-    padding: 0 6px;
+    min-width: 34px;
+    padding: 0 5px;
   }
 
   .site-opacity-drag-btn {
-    padding: 0 7px;
-    gap: 4px;
-    font-size: 0.68rem;
+    padding: 0 6px;
+    gap: 3px;
+    font-size: 0.64rem;
   }
 
   .site-top-3d-dock .hud-seg-btn {

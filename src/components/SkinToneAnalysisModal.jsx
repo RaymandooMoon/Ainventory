@@ -1514,19 +1514,23 @@ function ProfileModalContent({
           </div>
 
           <div
-            className="mt-4 pt-4 border-t border-black/8 dark:border-white/10 space-y-2.5"
+            className="profile-ai-style-block profile-density-block"
             data-profile-styling-density="true"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-semibold text-neutral-900 dark:text-white">
+            <div className="profile-ai-row-head">
+              <span className="profile-ai-row-title">
                 {tx(lang, '기본 착장 밀도 성향', 'Default Styling Density')}
               </span>
-              <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+              <span className="profile-ai-status-chip">
                 {tx(lang, '스튜디오 코디 자동 반영', 'Synced with Studio')}
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={tx(lang, '착장 밀도 선택', 'Select styling density')}>
+            <div
+              className="profile-vton-style-segmented profile-vton-style-segmented--3"
+              role="group"
+              aria-label={tx(lang, '착장 밀도 선택', 'Select styling density')}
+            >
               {STYLING_DENSITY_OPTIONS.map((opt) => {
                 const active = draftStylingPref.density === opt.key;
                 return (
@@ -1535,32 +1539,29 @@ function ProfileModalContent({
                     type="button"
                     aria-pressed={active}
                     onClick={() => updateDraftStylingPref({ density: opt.key })}
-                    className={`min-h-[40px] px-2 rounded-xl text-[12px] font-semibold border transition-colors ${
-                      active
-                        ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
-                        : 'bg-black/[0.03] dark:bg-white/[0.04] text-neutral-700 dark:text-neutral-300 border-black/10 dark:border-white/10'
-                    }`}
+                    className={`profile-vton-style-btn ${active ? 'is-active' : ''}`}
                   >
-                    {tx(lang, opt.labelKo, opt.labelEn)}
+                    {active && <Check size={13} strokeWidth={2.8} aria-hidden="true" />}
+                    <span>{tx(lang, opt.labelKo, opt.labelEn)}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="profile-density-toggle-row">
               <button
                 type="button"
                 aria-pressed={draftStylingPref.includeBag}
                 onClick={() =>
                   updateDraftStylingPref({ includeBag: !draftStylingPref.includeBag })
                 }
-                className={`min-h-[38px] px-3 rounded-xl text-[11px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${
-                  draftStylingPref.includeBag
-                    ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
-                    : 'bg-transparent text-neutral-600 dark:text-neutral-400 border-black/10 dark:border-white/12'
+                className={`profile-density-toggle-btn ${
+                  draftStylingPref.includeBag ? 'is-active' : ''
                 }`}
               >
-                {draftStylingPref.includeBag && <Check size={12} strokeWidth={2.8} />}
+                {draftStylingPref.includeBag && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
                 <span>{tx(lang, '가방 포함', 'Include Bag')}</span>
               </button>
               <button
@@ -1571,13 +1572,13 @@ function ProfileModalContent({
                     includeAccessory: !draftStylingPref.includeAccessory,
                   })
                 }
-                className={`min-h-[38px] px-3 rounded-xl text-[11px] font-medium border flex items-center justify-center gap-1.5 transition-colors ${
-                  draftStylingPref.includeAccessory
-                    ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-950 dark:border-white'
-                    : 'bg-transparent text-neutral-600 dark:text-neutral-400 border-black/10 dark:border-white/12'
+                className={`profile-density-toggle-btn ${
+                  draftStylingPref.includeAccessory ? 'is-active' : ''
                 }`}
               >
-                {draftStylingPref.includeAccessory && <Check size={12} strokeWidth={2.8} />}
+                {draftStylingPref.includeAccessory && (
+                  <Check size={13} strokeWidth={2.8} aria-hidden="true" />
+                )}
                 <span>{tx(lang, '액세서리 포함', 'Include Accessories')}</span>
               </button>
             </div>
