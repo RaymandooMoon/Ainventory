@@ -192,15 +192,27 @@ export type BodyShapeKey =
   | 'athletic_muscular'
   | 'plus_curvy';
 
+export interface UserRoleMeta {
+  code: string;
+  nameKo: string;
+  nameEn: string;
+  descriptionKo?: string;
+  descriptionEn?: string;
+  isSystem?: boolean;
+}
+
 export interface UserProfile {
   id: number;
   username: string;
   email?: string | null;
   displayName: string;
-  role: 'admin' | 'member';
+  role: 'admin' | 'member' | 'site_demo' | 'guest';
+  roleMeta?: UserRoleMeta | null;
+  permissions?: string[];
   defaultCloset: string;
   closetName?: string | null;
   isSampleDemo?: boolean;
+  isSiteDemo?: boolean;
   profileCompleted?: boolean;
   emailVerified?: boolean;
   ageGroup?: string | null;

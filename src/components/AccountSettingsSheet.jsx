@@ -3,6 +3,7 @@ import {
   CloudOff,
   FileText,
   Globe,
+  KeyRound,
   LogOut,
   Moon,
   Palette,
@@ -15,7 +16,13 @@ import {
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
-import { apiFetch, flushPendingOfflineSync } from '../utils/api.ts';
+import {
+  apiFetch,
+  flushPendingOfflineSync,
+  hasUserPermission,
+  isSiteDemoUser,
+  setStoredToken,
+} from '../utils/api.ts';
 import { localizeApiMessage, localizeUserName, tx } from '../utils/i18n.ts';
 import {
   applyThemePreference,
@@ -65,11 +72,29 @@ function AccountSettingsContent({
   const [confirmDeleteStep, setConfirmDeleteStep] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const isAdminUser = user?.role === 'admin' || user?.username === 'admin';
+  const isAdminUser =
+    user?.role === 'admin' ||
+    user?.username === 'admin' ||
+    hasUserPermission(user, 'admin:manage_roles');
+  const isSiteDemo = isSiteDemoUser(user);
+  const canWriteCloset = hasUserPermission(user, 'closet:write');
+  const canChangePassword =
+    !user?.isSampleDemo && !isSiteDemo && hasUserPermission(user, 'profile:write');
+  const canDeleteAccount =
+    !user?.isSampleDemo && !isSiteDemo && hasUserPermission(user, 'account:delete');
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
   const [adminCurrencyInput, setAdminCurrencyInput] = useState(() =>
     String(loadStoredEconomyState().iBalance ?? 0)
   );
+  const [rbacOverview, setRbacOverview] = useState(null);
+  const [rbacSelectedRole, setRbacSelectedRole] = useState('site_demo');
+  const [rbacSaving, setRbacSaving] = useState(false);
+  const [passwordSectionOpen, setPasswordSectionOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -95,6 +120,161 @@ function AccountSettingsContent({
     window.addEventListener(ECONOMY_STATE_EVENT, syncEconomy);
     return () => window.removeEventListener(ECONOMY_STATE_EVENT, syncEconomy);
   }, [isAdminUser]);
+
+  useEffect(() => {
+    if (!isAdminUser) return undefined;
+    let active = true;
+    apiFetch('/admin/roles')
+      .then((data) => {
+        if (active && data?.roles) {
+          setRbacOverview(data);
+        }
+      })
+      .catch(() => {
+        // Admin RBAC overview unavailable in offline mode
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdminUser]);
+
+  const handleToggleRolePermission = async (roleCode, permCode) => {
+    if (!rbacOverview || rbacSaving) return;
+    const targetRole = rbacOverview.roles.find((r) => r.code === roleCode);
+    if (!targetRole) return;
+    const hasPerm = targetRole.permissions.includes(permCode);
+    const nextPerms = hasPerm
+      ? targetRole.permissions.filter((p) => p !== permCode)
+      : [...targetRole.permissions, permCode];
+    setRbacSaving(true);
+    try {
+      const res = await apiFetch(`/admin/roles/${encodeURIComponent(roleCode)}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify({ permissions: nextPerms }),
+      });
+      setRbacOverview((prev) =>
+        prev
+          ? {
+              ...prev,
+              roles: prev.roles.map((r) =>
+                r.code === roleCode
+                  ? { ...r, permissions: Array.isArray(res?.permissions) ? res.permissions : nextPerms }
+                  : r
+              ),
+            }
+          : prev
+      );
+      emitStatusCapsule(tx(lang, '역할 권한이 저장되었습니다', 'Role permissions updated'));
+    } catch (err) {
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '권한 변경 실패', 'Failed to update permissions')
+      );
+    } finally {
+      setRbacSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (changingPassword) return;
+    setPasswordError('');
+
+    if (!currentPassword) {
+      setPasswordError(tx(lang, '현재 비밀번호를 입력해주세요.', 'Enter your current password.'));
+      return;
+    }
+    if (newPassword.length < 6 || newPassword.length > 128) {
+      setPasswordError(
+        tx(
+          lang,
+          '새 비밀번호는 6자 이상 128자 이하로 입력해주세요.',
+          'New password must be 6–128 characters.'
+        )
+      );
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        tx(lang, '새 비밀번호 확인이 일치하지 않습니다.', 'New passwords do not match.')
+      );
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError(
+        tx(
+          lang,
+          '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.',
+          'New password must differ from current password.'
+        )
+      );
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await apiFetch('/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+      if (res?.token) {
+        setStoredToken(res.token);
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError('');
+      setPasswordSectionOpen(false);
+      triggerHaptic('success');
+      emitStatusCapsule(
+        tx(
+          lang,
+          '비밀번호가 변경되었습니다 · 기존 세션은 모두 만료되었습니다',
+          'Password updated · previous sessions signed out'
+        )
+      );
+    } catch (err) {
+      triggerHaptic('warning');
+      setPasswordError(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '비밀번호 변경에 실패했습니다.', 'Failed to change password.')
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleChangeUserRole = async (targetUserId, nextRoleCode) => {
+    if (!rbacOverview || rbacSaving) return;
+    setRbacSaving(true);
+    try {
+      await apiFetch(`/admin/users/${encodeURIComponent(String(targetUserId))}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ roleCode: nextRoleCode }),
+      });
+      setRbacOverview((prev) =>
+        prev
+          ? {
+              ...prev,
+              users: prev.users.map((u) =>
+                Number(u.id) === Number(targetUserId) ? { ...u, role: nextRoleCode } : u
+              ),
+            }
+          : prev
+      );
+      emitStatusCapsule(tx(lang, '사용자 권한이 변경되었습니다', 'User role updated'));
+    } catch (err) {
+      emitStatusCapsule(
+        localizeApiMessage(err?.message, lang) ||
+          tx(lang, '사용자 역할 변경 실패', 'Failed to update user role')
+      );
+    } finally {
+      setRbacSaving(false);
+    }
+  };
 
   const handleThemeSelect = (nextPref, event) => {
     triggerHaptic('selection');
@@ -153,7 +333,7 @@ function AccountSettingsContent({
 
   return (
     <div className="hig-item-detail-body">
-      {/* User Summary + Official iNVTRY Brand Signature */}
+      {/* User Summary + Role Badge + Official iNVTRY Brand Signature */}
       <div className="hig-sheet-card">
         <div className="hig-sheet-row-between">
           <div>
@@ -164,10 +344,123 @@ function AccountSettingsContent({
               @{user?.username || 'wardrobe'}
               {bodySpec ? ` · ${bodySpec.heightCm}cm · ${bodySpec.weightKg}kg` : ''}
             </div>
+            <div className="hig-caption" style={{ marginTop: 4, fontWeight: 620 }}>
+              <ShieldCheck size={12} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} />
+              {lang === 'en'
+                ? user?.roleMeta?.nameEn || (isSiteDemo ? 'Site Demo Role' : user?.role || 'Member')
+                : user?.roleMeta?.nameKo || (isSiteDemo ? '사이트 데모 권한' : user?.role || '일반 회원')}
+            </div>
           </div>
           <BrandLogo effectiveTheme={theme} className="is-compact" alt="iNVTRY" />
         </div>
+        {isSiteDemo && (
+          <div className="hig-caption" style={{ marginTop: 8, opacity: 0.85 }}>
+            {tx(
+              lang,
+              '데모 권한이 매핑된 계정입니다. 샘플 옷장 조회·3D/2.5D 피팅·통계 체험이 가능하며, 저장·삭제·AI 합성은 보호되어 있습니다.',
+              'Mapped to the Site Demo role. Browse the sample wardrobe, try on outfits, and view stats while write/delete/AI synthesis remain protected.'
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Password Change (Admin & Member accounts only) */}
+      {canChangePassword && (
+        <div className="hig-sheet-card" data-password-change-card="true">
+          <div className="hig-sheet-row-between">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <KeyRound size={15} />
+              <div>
+                <div className="hig-body" style={{ fontWeight: 680 }}>
+                  {tx(lang, '비밀번호 변경', 'Change Password')}
+                </div>
+                <div className="hig-caption">
+                  {tx(
+                    lang,
+                    '변경 즉시 기존 기기의 로그인 세션이 모두 만료됩니다.',
+                    'Updating revokes all existing sessions across devices.'
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              id="settings-toggle-password-btn"
+              type="button"
+              className={`btn ${passwordSectionOpen ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+              onClick={() => {
+                setPasswordSectionOpen((v) => !v);
+                setPasswordError('');
+              }}
+            >
+              <span>
+                {passwordSectionOpen ? tx(lang, '닫기', 'Close') : tx(lang, '변경', 'Change')}
+              </span>
+            </button>
+          </div>
+
+          {passwordSectionOpen && (
+            <form
+              onSubmit={handleChangePassword}
+              style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}
+              noValidate
+            >
+              <input
+                id="settings-current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder={tx(lang, '현재 비밀번호', 'Current password')}
+                className="hig-native-input"
+                required
+              />
+              <input
+                id="settings-new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder={tx(lang, '새 비밀번호 (6자 이상)', 'New password (6+ chars)')}
+                className="hig-native-input"
+                required
+              />
+              <input
+                id="settings-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder={tx(lang, '새 비밀번호 확인', 'Confirm new password')}
+                className="hig-native-input"
+                required
+              />
+
+              {passwordError && (
+                <div
+                  role="alert"
+                  className="hig-caption"
+                  style={{ color: 'var(--accent-danger, #c62828)', fontWeight: 600 }}
+                >
+                  {passwordError}
+                </div>
+              )}
+
+              <button
+                id="settings-change-password-btn"
+                type="submit"
+                disabled={changingPassword}
+                className="btn btn-primary btn-sm btn-full"
+              >
+                <span>
+                  {changingPassword
+                    ? tx(lang, '변경 중…', 'Updating…')
+                    : tx(lang, '새 비밀번호 저장', 'Save New Password')}
+                </span>
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* 1-Tap Shortcut to Photo · Skin Tone · Body Profile */}
       <div className="hig-sheet-card">
@@ -348,7 +641,7 @@ function AccountSettingsContent({
           </button>
         </div>
 
-        {!user?.isSampleDemo && onOpenSampleImport && (
+        {!user?.isSampleDemo && canWriteCloset && onOpenSampleImport && (
           <div>
             <button
               id="settings-open-sample-import-btn"
@@ -474,6 +767,90 @@ function AccountSettingsContent({
         </div>
       )}
 
+      {/* Admin Only: RBAC Role & User-Permission Management */}
+      {isAdminUser && rbacOverview && (
+        <div className="hig-sheet-card" data-admin-rbac-panel="true">
+          <div className="hig-body" style={{ fontWeight: 700, marginBottom: 4 }}>
+            <ShieldCheck size={14} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />
+            {tx(lang, '권한 관리 (RBAC)', 'Role & Permission Management (RBAC)')}
+          </div>
+          <div className="hig-caption" style={{ marginBottom: 8 }}>
+            {tx(
+              lang,
+              '역할별 허용 권한과 사용자 매핑을 실시간으로 관리합니다.',
+              'Manage permissions per role and assign user role mappings.'
+            )}
+          </div>
+
+          <div className="hig-grid-3" style={{ marginBottom: 10 }}>
+            {rbacOverview.roles.map((roleItem) => (
+              <button
+                key={roleItem.code}
+                type="button"
+                className={`btn ${rbacSelectedRole === roleItem.code ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                onClick={() => setRbacSelectedRole(roleItem.code)}
+              >
+                <span>{lang === 'en' ? roleItem.nameEn : roleItem.nameKo}</span>
+              </button>
+            ))}
+          </div>
+
+          {(() => {
+            const activeRole = rbacOverview.roles.find((r) => r.code === rbacSelectedRole);
+            if (!activeRole) return null;
+            return (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {rbacOverview.permissions.map((perm) => {
+                  const granted = activeRole.permissions.includes(perm.code);
+                  const lockedAdminPerm =
+                    activeRole.code === 'admin' &&
+                    (perm.code === 'admin:manage_roles' || perm.code === 'admin:manage_users');
+                  return (
+                    <button
+                      key={perm.code}
+                      type="button"
+                      disabled={rbacSaving || lockedAdminPerm}
+                      className={`btn ${granted ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                      style={{ fontSize: 11, padding: '4px 8px' }}
+                      onClick={() => handleToggleRolePermission(activeRole.code, perm.code)}
+                    >
+                      <span>{lang === 'en' ? perm.nameEn : perm.nameKo}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          <div className="hig-caption" style={{ fontWeight: 620, marginBottom: 6 }}>
+            {tx(lang, '사용자 권한 매핑', 'User Role Mapping')}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rbacOverview.users.map((u) => (
+              <div key={u.id} className="hig-sheet-row-between" style={{ gap: 8 }}>
+                <span className="hig-caption tabular-nums" style={{ fontWeight: 600 }}>
+                  @{u.username}
+                </span>
+                <select
+                  aria-label={`${u.username} role`}
+                  value={u.role}
+                  disabled={rbacSaving || u.username === 'admin'}
+                  onChange={(e) => handleChangeUserRole(u.id, e.target.value)}
+                  className="hig-native-input"
+                  style={{ maxWidth: 160, minHeight: 32, padding: '4px 8px', fontSize: 12 }}
+                >
+                  {rbacOverview.roles.map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {lang === 'en' ? r.nameEn : r.nameKo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Legal Disclosures: Privacy Policy & Terms of Service */}
       <div className="hig-grid-2">
         <button
@@ -508,14 +885,14 @@ function AccountSettingsContent({
       >
         <LogOut size={16} />
         <span>
-          {user?.isSampleDemo
-            ? tx(lang, '체험 종료 및 로그인 화면으로 이동', 'Exit Demo & Go to Sign In')
+          {user?.isSampleDemo || isSiteDemo
+            ? tx(lang, '데모 종료 및 로그인 화면으로 이동', 'Exit Demo & Go to Sign In')
             : tx(lang, '로그아웃', 'Sign Out')}
         </span>
       </button>
 
       {/* Mandatory Store Compliance: Immediate Permanent Account & Data Deletion */}
-      {!user?.isSampleDemo && (
+      {canDeleteAccount && (
         <div className="hig-sheet-card">
           <div className="hig-caption" style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>
             {tx(lang, '개인 데이터 및 계정 영구 파기', 'Permanent Account & Data Deletion')}

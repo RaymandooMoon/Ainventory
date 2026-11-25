@@ -199,25 +199,40 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 }: SiteMarbleHeroProps) {
   const isDark = theme === 'dark';
   const mood: MoodMode = motionVariant;
+  const isSpecsThreeBackground =
+    activeStage === 'specs' &&
+    (interaction.specsSubtab === 'fitting' || interaction.specsSubtab === 'care');
+  const effectiveThreeStage: StageId =
+    activeStage === 'studio'
+      ? 'hero'
+      : isSpecsThreeBackground
+        ? 'studio'
+        : activeStage;
+  const effectiveInteraction: StageInteractionState = isSpecsThreeBackground
+    ? {
+        ...interaction,
+        studioSubtab: interaction.specsSubtab === 'care' ? 'intelligence' : 'atelier',
+      }
+    : interaction;
 
   const controllerRef = useRef<LoginThreeController | null>(null);
   const rigRef = useRef<StageDirectorRig | null>(null);
-  const activeStageRef = useRef<StageId>(activeStage);
+  const activeStageRef = useRef<StageId>(effectiveThreeStage);
   const themeRef = useRef<ThemeMode>(theme);
   const moodRef = useRef<MoodMode>(mood);
   const glassPercentRef = useRef<number>(glassPercent);
-  const interactionRef = useRef<StageInteractionState>(interaction);
+  const interactionRef = useRef<StageInteractionState>(effectiveInteraction);
   const onStageUiSyncRef = useRef(onStageUiSync);
   const tmpStartVecRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const tmpHeroCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const tmpHeroTargetPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   useEffect(() => {
-    activeStageRef.current = activeStage;
+    activeStageRef.current = effectiveThreeStage;
     themeRef.current = theme;
     moodRef.current = mood;
     glassPercentRef.current = glassPercent;
-    interactionRef.current = interaction;
+    interactionRef.current = effectiveInteraction;
     onStageUiSyncRef.current = onStageUiSync;
   });
 
@@ -572,9 +587,10 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   const { stageRef, canvasRef, webglFallback } = useMarbleBackdropStage({
     isDark,
     stage: 'intro',
+    paused: activeStage === 'studio',
     motionVariant,
     variantChangeOrigin,
-    cooldownResetKey: activeStage,
+    cooldownResetKey: effectiveThreeStage,
     cooldownResetMs: 620,
     getTargetRoot,
     getTargetSelector: getSiteTargetSelector,
@@ -600,12 +616,12 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     onControllerReady: handleControllerReady,
   });
 
-  // Sync stage transitions
+  // Sync stage transitions (including Specs -> 3D Fitting/Care live Three.js background)
   useEffect(() => {
     const rig = rigRef.current;
     if (!rig) return;
-    syncStageTransition(rig, activeStage);
-  }, [activeStage, syncStageTransition]);
+    syncStageTransition(rig, effectiveThreeStage);
+  }, [effectiveThreeStage, syncStageTransition]);
 
   // Sync Luxury/Aurora mood & Dark/Light theme into active 3D stage and studio lights
   useEffect(() => {
@@ -628,15 +644,15 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   useEffect(() => {
     const rig = rigRef.current;
     if (!rig) return;
-    const patch = diffStageInteraction(rig.director.getInteraction(), interaction);
+    const patch = diffStageInteraction(rig.director.getInteraction(), effectiveInteraction);
     if (!patch) return;
     rig.director.updateInteraction(patch);
     controllerRef.current?.requestRender?.();
-  }, [interaction]);
+  }, [effectiveInteraction]);
 
   // Open 3D viewport direct pointer gestures (Zero HUD interference) + double-tap 0° reset
   useEffect(() => {
-    if (activeStage === 'hero' || typeof window === 'undefined') return undefined;
+    if (effectiveThreeStage === 'hero' || typeof window === 'undefined') return undefined;
 
     let activePointerId: number | null = null;
     let lastX = 0;
@@ -741,7 +757,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
     };
-  }, [activeStage, canvasRef, stageRef]);
+  }, [effectiveThreeStage, canvasRef, stageRef]);
 
   return (
     <div

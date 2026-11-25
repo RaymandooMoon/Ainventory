@@ -15,7 +15,10 @@ export function getTopControlsDockKind(
   interaction: StageInteractionState,
   copy: SiteCopy
 ): TopControlsDockKind {
-  if (activeStage === 'studio' && interaction.studioSubtab === 'atelier') {
+  if (
+    activeStage === 'specs' &&
+    (interaction.specsSubtab === 'fitting' || interaction.specsSubtab === 'care')
+  ) {
     return 'studio-3d';
   }
   if (activeStage === 'architecture' && interaction.architectureSubtab === 'blueprint') {

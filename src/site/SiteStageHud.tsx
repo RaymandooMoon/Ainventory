@@ -4,7 +4,7 @@ import type { ActiveStageId, StageInteractionState } from '../three/ainvtryStage
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
 import { StageTopControlsDock } from './hud/StageTopControlsDock.tsx';
-import { ArchitectureStageHud, StudioStageHud } from './hud/StudioArchitectureHud.tsx';
+import { ArchitectureStageHud } from './hud/StudioArchitectureHud.tsx';
 import { getTopControlsDockKind } from './hud/topControlsDockState.ts';
 import type { SiteCopy, SiteLang, SitePrivacyShield, SiteTheme } from './siteContent.ts';
 
@@ -374,6 +374,8 @@ function SiteStageHudPanel({
       const tabs: readonly SubtabOption<StageInteractionState['specsSubtab']>[] = [
         { id: 'kpi', label: copy.subtabs.benchKpi },
         { id: 'matrix', label: copy.subtabs.benchMatrix },
+        { id: 'fitting', label: copy.subtabs.benchFitting },
+        { id: 'care', label: copy.subtabs.benchCare },
       ];
       return {
         ariaLabel: 'Specification views',
@@ -479,16 +481,6 @@ function SiteStageHudPanel({
         role="tabpanel"
         aria-labelledby={`${stageHeader.prefix}-${stageHeader.current}`}
       >
-        {activeStage === 'studio' && (
-          <StudioStageHud
-            copy={copy}
-            lang={lang}
-            theme={theme}
-            interaction={interaction}
-            onUpdateInteraction={onUpdateInteraction}
-          />
-        )}
-
         {activeStage === 'architecture' && (
           <ArchitectureStageHud
             copy={copy}
@@ -570,6 +562,9 @@ function SiteStageHudPanel({
 }
 
 export default function SiteStageHud(props: SiteStageHudProps) {
+  if (props.activeStage === 'studio') {
+    return null;
+  }
   return <SiteStageHudPanel key={props.activeStage} {...props} />;
 }
 

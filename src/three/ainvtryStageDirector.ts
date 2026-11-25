@@ -42,7 +42,7 @@ export interface StageInteractionState {
   architectureMode: 'mvp' | 'prod';
   googleApiIndex: number; // 0..5
   weatherMood: 'sunny' | 'rain' | 'wind';
-  specsSubtab: 'kpi' | 'matrix';
+  specsSubtab: 'kpi' | 'matrix' | 'fitting' | 'care';
   specsFocusedIndex: number; // 0..5
   aboutSubtab: 'journey' | 'mission' | 'founder';
   aboutJourneyIndex: number; // 0..5

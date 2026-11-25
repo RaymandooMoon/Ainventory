@@ -22,6 +22,7 @@ import db, {
   computeVerificationHash,
   ensureLuxuryStreetSeeds,
   ensureNewSubcategoryMaterialSeeds,
+  ensureSiteDemoAccount,
   ensureUnderwearAndSocksSeeds,
   getServerProfileConfig,
   hashPassword,
@@ -32,6 +33,14 @@ import db, {
   seedIfEmpty,
   verifyPassword,
 } from './db.js';
+import {
+  SITE_DEMO_ROLE_CODE,
+  assignUserRole,
+  getUserRbacContext,
+  hasPermission,
+  listRbacOverview,
+  updateRolePermissions,
+} from './rbac.js';
 import {
   analyzeShoppingCandidate,
   buildTripPackingList,
@@ -531,13 +540,17 @@ export function formatUserPayload(u) {
     }
   }
   const resolvedBody = computeBodyMetrics(u);
+  const rbac = getUserRbacContext(db, u);
 
   return {
     id: u.id,
     username: u.username,
     email: u.email || null,
     displayName: u.display_name,
-    role: u.role,
+    role: rbac.roleCode,
+    roleMeta: rbac.roleMeta,
+    permissions: rbac.permissions,
+    isSiteDemo: rbac.roleCode === SITE_DEMO_ROLE_CODE,
     authProvider: u.auth_provider || 'email',
     defaultCloset: u.default_closet,
     closetName: u.closet_name || null,
@@ -632,6 +645,30 @@ export function resolveAuthorizedClosets(req, requestedCloset, options = {}) {
         ok: false,
         status: 403,
         error: '샘플 체험 모드에서는 샘플 옷장(sample)만 조회할 수 있습니다.',
+      };
+    }
+    return {
+      ok: true,
+      primaryCloset: 'sample',
+      closets: ['sample'],
+      isAllCouple: false,
+    };
+  }
+
+  // 1b. Site Demo RBAC Account: strictly confined to read-only 'sample' closet
+  if (req.user.role === SITE_DEMO_ROLE_CODE) {
+    if (mode === 'write') {
+      return {
+        ok: false,
+        status: 403,
+        error: '사이트 데모 권한에서는 조회·피팅 체험만 가능합니다.',
+      };
+    }
+    if (rawReq && rawReq !== 'sample') {
+      return {
+        ok: false,
+        status: 403,
+        error: '사이트 데모 권한에서는 샘플 옷장(sample)만 조회할 수 있습니다.',
       };
     }
     return {
@@ -813,10 +850,69 @@ function requireStrictUserAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ error: '어드민 권한이 필요합니다.' });
+  if (
+    !req.user ||
+    (req.user.role !== 'admin' && !hasPermission(req.user, 'admin:manage_users'))
+  ) {
+    return res.status(403).json({
+      error: '어드민 권한이 필요합니다.',
+      code: 'PERMISSION_DENIED',
+      requiredPermission: 'admin:manage_users',
+    });
   }
   next();
+}
+
+function requirePermission(permissionCode, customMessage) {
+  return (req, res, next) => {
+    if (!req.user || !hasPermission(req.user, permissionCode)) {
+      const isSiteDemo = req.user?.role === SITE_DEMO_ROLE_CODE;
+      return res.status(403).json({
+        error:
+          customMessage ||
+          (isSiteDemo
+            ? '사이트 데모 권한에서는 조회·피팅 체험만 가능합니다.'
+            : '현재 계정의 권한으로는 이 작업을 수행할 수 없습니다.'),
+        code: 'PERMISSION_DENIED',
+        requiredPermission: permissionCode,
+        role: req.user?.role || 'guest',
+      });
+    }
+    next();
+  };
+}
+
+function blockIfSessionLacksPermission(permissionCode, customMessage) {
+  return (req, res, next) => {
+    const token = getAuthToken(req);
+    if (!token) return next();
+    try {
+      const session = db
+        .prepare(`
+          SELECT s.expires_at, u.*
+          FROM sessions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.token = ?
+        `)
+        .get(token);
+      if (session && new Date(session.expires_at) >= new Date()) {
+        const rbac = getUserRbacContext(db, session);
+        if (!hasPermission(rbac.permissions, permissionCode)) {
+          return res.status(403).json({
+            error:
+              customMessage ||
+              '사이트 데모 권한에서는 외부 유료 API 프록시를 사용할 수 없습니다.',
+            code: 'PERMISSION_DENIED',
+            requiredPermission: permissionCode,
+            role: rbac.roleCode,
+          });
+        }
+      }
+    } catch {
+      // Ignore lookup failure on public proxy check
+    }
+    return next();
+  };
 }
 
 function isHttpsRequest(req) {
@@ -828,19 +924,23 @@ function isHttpsRequest(req) {
   return forwardedProto === 'https';
 }
 
-function issueUserSession(req, res, userRow) {
+function issueUserSession(req, res, userRow, options = {}) {
+  const { ttlMs = 30 * 24 * 60 * 60 * 1000, setCookie = true } = options;
   const token = crypto.randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const expires = new Date(Date.now() + ttlMs).toISOString();
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(
     token,
     userRow.id,
     expires
   );
-  const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `ainventory_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${secureAttr}`
-  );
+  if (setCookie) {
+    const secureAttr = isHttpsRequest(req) ? '; Secure' : '';
+    const maxAgeSec = Math.max(60, Math.floor(ttlMs / 1000));
+    res.setHeader(
+      'Set-Cookie',
+      `ainventory_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${secureAttr}`
+    );
+  }
   return token;
 }
 
@@ -1730,6 +1830,36 @@ export function createApiRouter(options = {}) {
     });
   });
 
+  // 4a. One-Tap Site Demo Session (RBAC-scoped read-only 'site_demo' user; never exposes secret password)
+  router.post('/auth/site-demo', (req, res) => {
+    const rate = checkRateLimit(`site-demo:${req.ip || 'local'}`, 60);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `데모 체험 요청이 너무 많습니다. ${rate.retryAfterSec}초 후에 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const demoUser = ensureSiteDemoAccount();
+    if (!demoUser) {
+      return res.status(503).json({ error: '사이트 데모 계정을 초기화할 수 없습니다.' });
+    }
+
+    const isEmbedRequest = Boolean(req.body?.embed);
+    // Keep site_demo sessions short-lived (2 hours) and avoid overwriting standalone cookies when embedded
+    const token = issueUserSession(req, res, demoUser, {
+      ttlMs: 2 * 60 * 60 * 1000,
+      setCookie: !isEmbedRequest,
+    });
+
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({
+      token,
+      user: formatUserPayload(demoUser),
+    });
+  });
+
   // 4b. Sign in with Apple (Hardened against raw body / email auto-linking ATO)
   router.post('/auth/apple', async (req, res) => {
     const rate = checkRateLimit(`apple:${req.ip || 'local'}`, MAX_AUTH_ATTEMPTS_PER_WINDOW);
@@ -2026,7 +2156,12 @@ export function createApiRouter(options = {}) {
     });
   });
 
-  router.post('/maps/autocomplete', async (req, res) => {
+  const guardMapsProxy = blockIfSessionLacksPermission(
+    'maps:proxy',
+    '사이트 데모 권한에서는 지도·장소 배경 API를 사용할 수 없습니다.'
+  );
+
+  router.post('/maps/autocomplete', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:ac:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2054,7 +2189,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.post('/maps/search-places', async (req, res) => {
+  router.post('/maps/search-places', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:search:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2081,7 +2216,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.get('/maps/place/:placeId', async (req, res) => {
+  router.get('/maps/place/:placeId', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:place:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2105,7 +2240,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.post('/maps/nearby-care', async (req, res) => {
+  router.post('/maps/nearby-care', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:care:${req.ip || 'local'}`, 60);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2134,7 +2269,7 @@ export function createApiRouter(options = {}) {
   });
 
   // Google Maps Platform Place Photos (New) + Street View Static API Backdrop Proxy
-  router.get('/maps/place-backdrop', async (req, res) => {
+  router.get('/maps/place-backdrop', guardMapsProxy, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const rate = checkRateLimit(`maps:backdrop:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
@@ -2161,7 +2296,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.get('/maps/place-photo', async (req, res) => {
+  router.get('/maps/place-photo', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:photo:${req.ip || 'local'}`, 120);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2188,7 +2323,7 @@ export function createApiRouter(options = {}) {
     }
   });
 
-  router.get('/maps/streetview', async (req, res) => {
+  router.get('/maps/streetview', guardMapsProxy, async (req, res) => {
     const rate = checkRateLimit(`maps:sv:${req.ip || 'local'}`, 120);
     if (!rate.allowed) {
       return res.status(429).json({
@@ -2224,6 +2359,117 @@ export function createApiRouter(options = {}) {
   router.get('/auth/me', requireStrictUserAuth, (req, res) => {
     res.json({ user: req.user });
   });
+
+  router.get('/auth/permissions', (req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      role: req.user?.role || 'guest',
+      roleMeta: req.user?.roleMeta || null,
+      permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
+      isSiteDemo: Boolean(req.user?.isSiteDemo),
+    });
+  });
+
+  const handleChangePassword = (req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+
+    if (req.user?.isSiteDemo || String(req.user?.username || '').toLowerCase() === 'site_demo') {
+      return res.status(403).json({
+        error: '사이트 데모 계정은 비밀번호를 변경할 수 없습니다.',
+        code: 'PERMISSION_DENIED',
+        requiredPermission: 'profile:write',
+      });
+    }
+
+    const rateKey = `pwchange:${req.ip || 'local'}:${req.user.id}`;
+    const blocked = peekRateLimitBlocked(rateKey, MAX_AUTH_ATTEMPTS_PER_WINDOW);
+    if (blocked.blocked) {
+      return res.status(429).json({
+        error: `비밀번호 변경 시도가 너무 많습니다. ${blocked.retryAfterSec}초 후 다시 시도해주세요.`,
+        code: 'RATE_LIMITED',
+        retryAfterSec: blocked.retryAfterSec,
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body || {};
+    if (
+      typeof currentPassword !== 'string' ||
+      currentPassword.length === 0 ||
+      currentPassword.length > MAX_PASSWORD_LEN
+    ) {
+      return res.status(400).json({
+        error: '현재 비밀번호를 입력해주세요.',
+        code: 'INVALID_CURRENT_PASSWORD',
+      });
+    }
+
+    if (
+      typeof newPassword !== 'string' ||
+      newPassword.length < MIN_PASSWORD_LEN ||
+      newPassword.length > MAX_PASSWORD_LEN
+    ) {
+      return res.status(400).json({
+        error: `새 비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해주세요.`,
+        code: 'INVALID_NEW_PASSWORD',
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        error: '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.',
+        code: 'SAME_PASSWORD',
+      });
+    }
+
+    const userRow = db
+      .prepare('SELECT id, username, password_hash, role FROM users WHERE id = ?')
+      .get(req.user.id);
+    if (!userRow) {
+      return res.status(404).json({
+        error: '계정 정보를 찾을 수 없습니다.',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    if (!verifyPassword(currentPassword, userRow.password_hash)) {
+      const failRate = checkRateLimit(rateKey, MAX_AUTH_ATTEMPTS_PER_WINDOW);
+      if (!failRate.allowed) {
+        return res.status(429).json({
+          error: `비밀번호 변경 시도가 너무 많습니다. ${failRate.retryAfterSec}초 후 다시 시도해주세요.`,
+          code: 'RATE_LIMITED',
+          retryAfterSec: failRate.retryAfterSec,
+        });
+      }
+      return res.status(401).json({
+        error: '현재 비밀번호가 일치하지 않습니다.',
+        code: 'INVALID_CURRENT_PASSWORD',
+      });
+    }
+
+    const nextHash = hashPassword(newPassword);
+    db.transaction(() => {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(nextHash, userRow.id);
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userRow.id);
+    });
+
+    rateBuckets.delete(rateKey);
+
+    const token = issueUserSession(req, res, userRow);
+    return res.json({ ok: true, token });
+  };
+
+  router.post(
+    '/auth/password',
+    requireStrictUserAuth,
+    requirePermission('profile:write', '사이트 데모 계정은 비밀번호를 변경할 수 없습니다.'),
+    handleChangePassword
+  );
+  router.put(
+    '/auth/password',
+    requireStrictUserAuth,
+    requirePermission('profile:write', '사이트 데모 계정은 비밀번호를 변경할 수 없습니다.'),
+    handleChangePassword
+  );
 
   // Server-side Profile Configuration (stores handedness, default: 'right')
   router.get('/profile/config', (req, res) => {
@@ -2291,12 +2537,28 @@ export function createApiRouter(options = {}) {
     return res.json({ ok: true, config });
   };
 
-  router.put('/profile/config', handleSaveProfileConfig);
-  router.post('/profile/config', handleSaveProfileConfig);
-  router.patch('/profile/config', handleSaveProfileConfig);
+  const guardProfileConfigWrite = (req, res, next) => {
+    if (req.user?.role === SITE_DEMO_ROLE_CODE && !hasPermission(req.user, 'profile:write')) {
+      return res.status(403).json({
+        error: '사이트 데모 권한에서는 서버 프로필 설정을 변경할 수 없습니다.',
+        code: 'PERMISSION_DENIED',
+        requiredPermission: 'profile:write',
+        role: req.user.role,
+      });
+    }
+    return next();
+  };
+
+  router.put('/profile/config', guardProfileConfigWrite, handleSaveProfileConfig);
+  router.post('/profile/config', guardProfileConfigWrite, handleSaveProfileConfig);
+  router.patch('/profile/config', guardProfileConfigWrite, handleSaveProfileConfig);
 
   // 4c. Immediate Account & Personal Data Permanent Purge (Requirement 10.a: App Store & Play Store compliance)
-  router.delete('/auth/account', requireStrictUserAuth, (req, res) => {
+  router.delete(
+    '/auth/account',
+    requireStrictUserAuth,
+    requirePermission('account:delete', '사이트 데모 계정은 삭제할 수 없습니다.'),
+    (req, res) => {
     if (req.body?.confirmPermanentDelete !== true) {
       return res.status(400).json({
         error: '계정 영구 삭제를 위해 확인 플래그(confirmPermanentDelete: true)가 필요합니다.',
@@ -2420,7 +2682,11 @@ export function createApiRouter(options = {}) {
   });
 
   // 5. First-login closet name setup (Requirement 8.a: keeps real user closet EMPTY unless starter explicitly imported!)
-  router.post('/auth/closet-setup', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/auth/closet-setup',
+    requireStrictUserAuth,
+    requirePermission('profile:write'),
+    (req, res) => {
     const closetName = String(req.body?.closet_name || req.body?.closetName || '')
       .trim()
       .slice(0, 80);
@@ -2640,8 +2906,18 @@ export function createApiRouter(options = {}) {
       generatedWardrobe,
     });
   };
-  router.post('/auth/profile-setup', requireStrictUserAuth, handleProfileSetup);
-  router.post('/auth/profile', requireStrictUserAuth, handleProfileSetup);
+  router.post(
+    '/auth/profile-setup',
+    requireStrictUserAuth,
+    requirePermission('profile:write'),
+    handleProfileSetup
+  );
+  router.post(
+    '/auth/profile',
+    requireStrictUserAuth,
+    requirePermission('profile:write'),
+    handleProfileSetup
+  );
 
   // Statistical wardrobe benchmarks endpoint
   router.get('/wardrobe/benchmarks', (req, res) => {
@@ -2675,7 +2951,11 @@ export function createApiRouter(options = {}) {
   });
 
   // Selective Sample Import into Authorized Closet (Requirement 8.a)
-  router.post('/garments/import-samples', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/garments/import-samples',
+    requireStrictUserAuth,
+    requirePermission('closet:write'),
+    (req, res) => {
     const requestedCloset = req.body?.closet_owner || req.user.defaultCloset;
     const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'write' });
     if (!authz.ok) {
@@ -2758,7 +3038,11 @@ export function createApiRouter(options = {}) {
   });
 
   // Multimodal Front + Back + Neck/Care Tag Vision Analysis (Server-side Gemini 4 Hydrogen)
-  router.post('/garments/vision-analyze', requireStrictUserAuth, async (req, res) => {
+  router.post(
+    '/garments/vision-analyze',
+    requireStrictUserAuth,
+    requirePermission('vision:analyze', '사이트 데모 권한에서는 AI 의류 사진 분석을 사용할 수 없습니다.'),
+    async (req, res) => {
     const rate = checkRateLimit(
       `garmentvision:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -2787,7 +3071,11 @@ export function createApiRouter(options = {}) {
   });
 
   // Official Retail Product Web Search via Gemini Google Search Grounding + SSRF-Safe Image Fetch
-  router.post('/garments/web-lookup', requireStrictUserAuth, async (req, res) => {
+  router.post(
+    '/garments/web-lookup',
+    requireStrictUserAuth,
+    requirePermission('vision:analyze', '사이트 데모 권한에서는 외부 의류 웹 조회를 사용할 수 없습니다.'),
+    async (req, res) => {
     const rate = checkRateLimit(
       `garmentweblookup:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -2829,7 +3117,11 @@ export function createApiRouter(options = {}) {
   });
 
   // AI Studio Cutout Refinement (Server-side gemini-3.1-flash-lite-image)
-  router.post('/garments/studio-cutout', requireStrictUserAuth, async (req, res) => {
+  router.post(
+    '/garments/studio-cutout',
+    requireStrictUserAuth,
+    requirePermission('vision:analyze', '사이트 데모 권한에서는 AI 스튜디오 누끼 생성을 사용할 수 없습니다.'),
+    async (req, res) => {
     const rate = checkRateLimit(
       `garmentcutout:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -2905,7 +3197,20 @@ export function createApiRouter(options = {}) {
     res.json({ garments: rows, isSampleDemo: Boolean(req.isSampleDemo || authz.primaryCloset === 'sample') });
   });
 
-  router.post('/garments/ensure-material-seeds', (req, res) => {
+  router.post(
+    '/garments/ensure-material-seeds',
+    (req, res, next) => {
+      if (req.user?.role === SITE_DEMO_ROLE_CODE && !hasPermission(req.user, 'closet:write')) {
+        return res.status(403).json({
+          error: '사이트 데모 권한에서는 옷장 아이템을 변경할 수 없습니다.',
+          code: 'PERMISSION_DENIED',
+          requiredPermission: 'closet:write',
+          role: req.user.role,
+        });
+      }
+      return next();
+    },
+    (req, res) => {
     const requestedCloset = req.body?.closet_owner || req.query.closet;
     const authz = resolveAuthorizedClosets(req, requestedCloset, { mode: 'read' });
     if (!authz.ok) {
@@ -2929,7 +3234,11 @@ export function createApiRouter(options = {}) {
     res.json({ ok: true, inserted: insertedCount, insertedCount, garments: rows });
   });
 
-  router.post('/garments', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/garments',
+    requireStrictUserAuth,
+    requirePermission('closet:write'),
+    (req, res) => {
     const writeRate = checkRateLimit(
       `garmentwrite:${req.user?.id || req.ip || 'local'}`,
       MAX_GARMENT_WRITES_PER_WINDOW
@@ -3110,7 +3419,11 @@ export function createApiRouter(options = {}) {
     res.status(201).json({ garment: parseGarmentRow(created) });
   });
 
-  router.patch('/garments/:id', requireStrictUserAuth, (req, res) => {
+  router.patch(
+    '/garments/:id',
+    requireStrictUserAuth,
+    requirePermission('closet:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '아이템을 찾을 수 없습니다.' });
@@ -3287,7 +3600,11 @@ export function createApiRouter(options = {}) {
     res.json({ garment: parseGarmentRow(updated) });
   });
 
-  router.post('/garments/:id/wear', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/garments/:id/wear',
+    requireStrictUserAuth,
+    requirePermission('closet:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '아이템을 찾을 수 없습니다.' });
@@ -3310,7 +3627,11 @@ export function createApiRouter(options = {}) {
     res.json({ garment: parseGarmentRow(updated) });
   });
 
-  router.delete('/garments/:id', requireStrictUserAuth, (req, res) => {
+  router.delete(
+    '/garments/:id',
+    requireStrictUserAuth,
+    requirePermission('closet:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM garments WHERE id = ?').get(id);
     if (!existing) {
@@ -3466,7 +3787,11 @@ export function createApiRouter(options = {}) {
     res.json({ history: rows });
   });
 
-  router.post('/shopping/decision', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/shopping/decision',
+    requireStrictUserAuth,
+    requirePermission('shopping:write'),
+    (req, res) => {
     const { checkId, decision, addToCloset = false, brand = '' } = req.body || {};
     const check = db.prepare('SELECT * FROM shopping_checks WHERE id = ?').get(Number(checkId));
     if (!check) return res.status(404).json({ error: '판독 기록을 찾을 수 없습니다.' });
@@ -3646,7 +3971,11 @@ export function createApiRouter(options = {}) {
     res.json({ outfits });
   });
 
-  router.post('/outfits', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/outfits',
+    requireStrictUserAuth,
+    requirePermission('outfit:write'),
+    (req, res) => {
     const {
       closet_owner = req.user.defaultCloset,
       title,
@@ -3695,7 +4024,11 @@ export function createApiRouter(options = {}) {
     res.status(201).json({ id: result.lastInsertRowid });
   });
 
-  router.delete('/outfits/:id', requireStrictUserAuth, (req, res) => {
+  router.delete(
+    '/outfits/:id',
+    requireStrictUserAuth,
+    requirePermission('outfit:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM outfits WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '코디를 찾을 수 없습니다.' });
@@ -3777,7 +4110,11 @@ export function createApiRouter(options = {}) {
     res.send(lines.join('\r\n'));
   });
 
-  router.post('/calendar', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/calendar',
+    requireStrictUserAuth,
+    requirePermission('calendar:write'),
+    (req, res) => {
     const todayStr = new Date().toISOString().slice(0, 10);
     const {
       closet_owner = req.body?.owner || req.user.defaultCloset,
@@ -3880,7 +4217,11 @@ export function createApiRouter(options = {}) {
     res.status(201).json({ ok: true, id: insertedId, status: resolvedStatus });
   });
 
-  router.patch('/calendar/:id', requireStrictUserAuth, (req, res) => {
+  router.patch(
+    '/calendar/:id',
+    requireStrictUserAuth,
+    requirePermission('calendar:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '일정 기록을 찾을 수 없습니다.' });
@@ -3919,7 +4260,11 @@ export function createApiRouter(options = {}) {
     res.json({ ok: true, status: nextStatus });
   });
 
-  router.delete('/calendar/:id', requireStrictUserAuth, (req, res) => {
+  router.delete(
+    '/calendar/:id',
+    requireStrictUserAuth,
+    requirePermission('calendar:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM wear_logs WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '일정 기록을 찾을 수 없습니다.' });
@@ -3948,7 +4293,11 @@ export function createApiRouter(options = {}) {
     res.json({ lists });
   });
 
-  router.post('/packing-lists', requireStrictUserAuth, (req, res) => {
+  router.post(
+    '/packing-lists',
+    requireStrictUserAuth,
+    requirePermission('packing:write'),
+    (req, res) => {
     const {
       closet_owner = req.user.defaultCloset,
       title = '',
@@ -4003,7 +4352,11 @@ export function createApiRouter(options = {}) {
     });
   });
 
-  router.patch('/packing-lists/:id', requireStrictUserAuth, (req, res) => {
+  router.patch(
+    '/packing-lists/:id',
+    requireStrictUserAuth,
+    requirePermission('packing:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '패킹 리스트를 찾을 수 없습니다.' });
@@ -4028,7 +4381,11 @@ export function createApiRouter(options = {}) {
     res.json({ ok: true, items });
   });
 
-  router.delete('/packing-lists/:id', requireStrictUserAuth, (req, res) => {
+  router.delete(
+    '/packing-lists/:id',
+    requireStrictUserAuth,
+    requirePermission('packing:write'),
+    (req, res) => {
     const id = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM packing_lists WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: '패킹 리스트를 찾을 수 없습니다.' });
@@ -4206,14 +4563,18 @@ export function createApiRouter(options = {}) {
       });
     }
 
+    const assignedRole =
+      role === 'admin' ? 'admin' : role === 'site_demo' ? 'site_demo' : 'member';
     const assignedCloset =
-      default_closet && String(default_closet).trim()
-        ? String(default_closet).trim()
-        : `closet_${cleanU}`;
+      assignedRole === 'site_demo'
+        ? 'sample'
+        : default_closet && String(default_closet).trim()
+          ? String(default_closet).trim()
+          : `closet_${cleanU}`;
     const nowIso = new Date().toISOString();
     const vHash = computeVerificationHash(cleanU, `${cleanU}@ainventory.kr`, nowIso);
     try {
-      db.prepare(`
+      const inserted = db.prepare(`
         INSERT INTO users (
           username, email, password_hash, display_name, role, default_closet,
           closet_name, verified_at, verification_hash
@@ -4223,13 +4584,17 @@ export function createApiRouter(options = {}) {
         `${cleanU}@ainventory.kr`,
         hashPassword(pwStr),
         String(display_name).trim().slice(0, 60),
-        role === 'admin' ? 'admin' : 'member',
+        assignedRole,
         assignedCloset,
         `${String(display_name).trim().slice(0, 60)}의 옷장`,
         nowIso,
         vHash
       );
-      res.status(201).json({ ok: true });
+      const insertedId = Number(inserted?.lastInsertRowid || 0);
+      if (insertedId > 0) {
+        assignUserRole(db, insertedId, assignedRole);
+      }
+      res.status(201).json({ ok: true, id: insertedId, role: assignedRole });
     } catch (err) {
       const msg = String(err?.message || '');
       if (/UNIQUE constraint failed/i.test(msg)) {
@@ -4240,6 +4605,54 @@ export function createApiRouter(options = {}) {
       res.status(500).json({ error: '사용자 생성 중 서버 오류가 발생했습니다.' });
     }
   });
+
+  // Admin RBAC Management Endpoints
+  router.get(
+    '/admin/roles',
+    requireStrictUserAuth,
+    requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
+    (_req, res) => {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json(listRbacOverview(db));
+    }
+  );
+
+  router.put(
+    '/admin/roles/:roleCode/permissions',
+    requireStrictUserAuth,
+    requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
+    (req, res) => {
+      const result = updateRolePermissions(db, req.params.roleCode, req.body?.permissions);
+      if (!result.ok) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json({
+        ok: true,
+        roleCode: result.roleCode,
+        permissions: result.permissions,
+      });
+    }
+  );
+
+  router.put(
+    '/admin/users/:userId/role',
+    requireStrictUserAuth,
+    requirePermission('admin:manage_roles', '권한 관리 접근 권한이 필요합니다.'),
+    (req, res) => {
+      const targetRole = req.body?.roleCode ?? req.body?.role;
+      const result = assignUserRole(db, req.params.userId, targetRole);
+      if (!result.ok) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json({
+        ok: true,
+        userId: result.userId,
+        username: result.username,
+        role: result.roleCode,
+        permissions: result.permissions,
+      });
+    }
+  );
 
   router.post('/admin/reset-demo', requireStrictUserAuth, requireAdmin, (_req, res) => {
     seedIfEmpty(true);

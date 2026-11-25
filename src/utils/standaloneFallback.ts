@@ -845,6 +845,68 @@ export async function handleStandaloneApiFallback(
     return { token: `standalone_tok_${found.id}_${Date.now()}`, user: clean };
   }
 
+  if (pathname === '/auth/site-demo' && method === 'POST') {
+    const siteDemoUser: UserProfile = {
+      id: 9001,
+      username: 'site_demo',
+      email: 'site-demo@ainvtry.com',
+      displayName: '사이트 데모',
+      role: 'site_demo',
+      roleMeta: {
+        code: 'site_demo',
+        nameKo: '사이트 데모 권한',
+        nameEn: 'Site Demo Role',
+        descriptionKo: '라이브 앱 UI를 안전하게 체험하는 읽기·피팅 미리보기 전용 권한',
+        descriptionEn: 'Read-only live preview access to the curated sample wardrobe and fitting UI',
+        isSystem: true,
+      },
+      permissions: [
+        'closet:read_sample',
+        'outfit:read',
+        'calendar:read',
+        'packing:read',
+        'stats:read',
+        'profile:read',
+        'vton:preview',
+      ],
+      isSiteDemo: true,
+      defaultCloset: 'sample',
+      closetName: '사이트 데모 옷장',
+      profileCompleted: true,
+      emailVerified: true,
+      personalColor: 'autumn_warm',
+      personalColorLabelKo: '가을 웜톤',
+      personalColorLabelEn: 'Autumn Warm',
+      gender: 'male',
+      heightCm: 174,
+      weightKg: 66,
+      bodyShape: 'standard_balanced',
+      skinToneHex: '#DFC1A6',
+      handedness: 'right',
+      dominantHand: 'right',
+    };
+    setActiveSessionUser(siteDemoUser);
+    return { token: `standalone_site_demo_${Date.now()}`, user: siteDemoUser };
+  }
+
+  if (pathname === '/auth/permissions' && method === 'GET') {
+    const active = getActiveSessionUser();
+    return {
+      role: active?.role || 'guest',
+      roleMeta: active?.roleMeta || null,
+      permissions: active?.permissions || [
+        'closet:read_sample',
+        'outfit:read',
+        'calendar:read',
+        'packing:read',
+        'stats:read',
+        'profile:read',
+        'vton:preview',
+      ],
+      isSiteDemo: Boolean(active?.isSiteDemo || active?.role === 'site_demo'),
+    };
+  }
+
   if (pathname === '/auth/apple' && method === 'POST') {
     const sub = String(body.appleSub || body.apple_sub || 'apple_hig_member_01').trim();
     const subSuffix = (await sha256Hex(sub)).slice(0, 8);
@@ -1023,6 +1085,51 @@ export async function handleStandaloneApiFallback(
   if (pathname === '/auth/logout' && method === 'POST') {
     setActiveSessionUser(null);
     return { ok: true };
+  }
+
+  if (pathname === '/auth/password' && (method === 'POST' || method === 'PUT')) {
+    const activeUser = getActiveSessionUser();
+    if (!activeUser || activeUser.isSampleDemo) {
+      throw createHttpError('로그인이 필요합니다.', 401);
+    }
+    if (
+      activeUser.isSiteDemo ||
+      activeUser.role === 'site_demo' ||
+      String(activeUser.username || '').toLowerCase() === 'site_demo'
+    ) {
+      throw createHttpError('사이트 데모 계정은 비밀번호를 변경할 수 없습니다.', 403);
+    }
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+    if (!currentPassword) {
+      throw createHttpError('현재 비밀번호를 입력해주세요.', 400);
+    }
+    if (newPassword.length < 6 || newPassword.length > 128) {
+      throw createHttpError('새 비밀번호는 6자 이상 128자 이하로 입력해주세요.', 400);
+    }
+    if (newPassword === currentPassword) {
+      throw createHttpError('새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.', 400);
+    }
+    const users = loadUsers();
+    const target = users.find(
+      (u) => u.id === activeUser.id || u.username === activeUser.username
+    );
+    if (!target) {
+      throw createHttpError('계정 정보를 찾을 수 없습니다.', 404);
+    }
+    const valid = await verifyStandalonePassword(currentPassword, target);
+    if (!valid) {
+      throw createHttpError('현재 비밀번호가 일치하지 않습니다.', 401);
+    }
+    const nextHash = await hashStandalonePassword(newPassword);
+    const nextUsers = users.map((u) =>
+      u.id === target.id || u.username === target.username ? { ...u, passwordHash: nextHash } : u
+    );
+    saveUsers(nextUsers);
+    return {
+      ok: true,
+      token: `standalone-${target.username}-${Date.now()}`,
+    };
   }
 
   if (pathname === '/auth/closet-setup' && method === 'POST') {

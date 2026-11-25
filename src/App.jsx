@@ -23,6 +23,9 @@ import { loadMemorizedFaceIdentity } from './services/faceMemoryStore.ts';
 import {
   apiFetch,
   getStoredToken,
+  hasUserPermission,
+  isLiveAppEmbedSession,
+  isSiteDemoUser,
   setSampleDemoMode,
   setStoredToken,
 } from './utils/api.ts';
@@ -110,8 +113,13 @@ function parseAppLocation() {
 }
 
 export default function App() {
+  const isEmbedMode = isLiveAppEmbedSession();
   const [initialLoc] = useState(() => parseAppLocation());
   const [hasInitialToken] = useState(() => {
+    if (isEmbedMode && initialLoc.showAuth) {
+      setSampleDemoMode(false);
+      return false;
+    }
     const token = Boolean(getStoredToken());
     if (!token) {
       setSampleDemoMode(true);
@@ -119,7 +127,9 @@ export default function App() {
     return token;
   });
 
-  const [user, setUser] = useState(() => (hasInitialToken ? null : DEFAULT_LOCAL_USER));
+  const [user, setUser] = useState(() =>
+    hasInitialToken || (isEmbedMode && initialLoc.showAuth) ? null : DEFAULT_LOCAL_USER
+  );
   const [authReady, setAuthReady] = useState(() => !hasInitialToken);
   const [showAuthScreen, setShowAuthScreen] = useState(initialLoc.showAuth);
   const [loginPortal, setLoginPortal] = useState(null);
@@ -262,6 +272,7 @@ export default function App() {
 
   // Browser URL <-> Tab / Item Detail Route Synchronization
   useEffect(() => {
+    if (isEmbedMode) return undefined;
     const handlePopState = () => {
       const loc = parseAppLocation();
       setShowAuthScreen(loc.showAuth);
@@ -270,7 +281,7 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [isEmbedMode]);
 
   // Boot session -> Only verify `/auth/me` asynchronously when a stored token exists
   useEffect(() => {
@@ -336,8 +347,9 @@ export default function App() {
   const activeCloset = user?.defaultCloset || 'sample';
 
   // Quietly pre-warm main landing chunks while user is on the Login screen so login transition has zero bundle-load stall
+  // (Skipped in embed mode so mobile dev sockets stay clear for instant site_demo login)
   useEffect(() => {
-    if (!showAuthScreen || typeof window === 'undefined') return undefined;
+    if (!showAuthScreen || isEmbedMode || typeof window === 'undefined') return undefined;
     let cancelled = false;
     const warm = () => {
       if (cancelled) return;
@@ -349,7 +361,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [showAuthScreen]);
+  }, [showAuthScreen, isEmbedMode]);
 
   // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats (also preloads immediately during loginPortal!)
   useEffect(() => {
@@ -432,7 +444,7 @@ export default function App() {
           : prev
       );
 
-      if (user && !user.isSampleDemo) {
+      if (user && !user.isSampleDemo && hasUserPermission(user, 'profile:write')) {
         try {
           await apiFetch('/auth/profile', {
             method: 'POST',
@@ -448,7 +460,11 @@ export default function App() {
         }
       }
 
-      showToast(tx(lang, '피부톤 적용됨', 'Skin tone applied'));
+      showToast(
+        isSiteDemoUser(user)
+          ? tx(lang, '피부톤 미리보기 적용됨 (데모 전용)', 'Skin tone preview applied (Demo)')
+          : tx(lang, '피부톤 적용됨', 'Skin tone applied')
+      );
     },
     [user, bodySpec, skinProfile, lang, showToast]
   );
@@ -495,7 +511,7 @@ export default function App() {
           : prev
       );
 
-      if (user && !user.isSampleDemo) {
+      if (user && !user.isSampleDemo && hasUserPermission(user, 'profile:write')) {
         try {
           await apiFetch('/auth/profile', {
             method: 'POST',
@@ -512,20 +528,40 @@ export default function App() {
         }
       }
 
-      showToast(tx(lang, '체형 반영됨', 'Body profile applied'));
+      showToast(
+        isSiteDemoUser(user)
+          ? tx(lang, '체형 미리보기 적용됨 (데모 전용)', 'Body profile preview applied (Demo)')
+          : tx(lang, '체형 반영됨', 'Body profile applied')
+      );
     },
     [user, bodySpec, skinProfile, lang, showToast]
   );
 
-  const navigateTab = useCallback((tabKey) => {
-    const target = FLOATING_TABS.find((t) => t.key === tabKey) || FLOATING_TABS[0];
-    triggerHaptic('selection');
-    setSelectedItemId(null);
-    setActiveTab(target.key);
-    if (typeof window !== 'undefined' && window.location.pathname !== target.path) {
-      window.history.pushState({}, '', target.path);
-    }
-  }, []);
+  const navigateTab = useCallback(
+    (tabKey) => {
+      const target = FLOATING_TABS.find((t) => t.key === tabKey) || FLOATING_TABS[0];
+      triggerHaptic('selection');
+      setSelectedItemId(null);
+      setActiveTab(target.key);
+      if (
+        !isEmbedMode &&
+        typeof window !== 'undefined' &&
+        window.location.pathname !== target.path
+      ) {
+        window.history.pushState({}, '', target.path);
+      }
+      if (isEmbedMode && typeof window !== 'undefined' && window.parent !== window) {
+        window.parent.postMessage(
+          {
+            type: 'ainvtry-live-app-screen',
+            screen: target.key === 'calendar' ? 'outfits' : target.key,
+          },
+          window.location.origin
+        );
+      }
+    },
+    [isEmbedMode]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -537,35 +573,77 @@ export default function App() {
     return () => window.removeEventListener('ainventory:navigate-tab', handleBrandNavigate);
   }, [navigateTab]);
 
-  const handleOpenGarmentDetail = useCallback((garment) => {
-    if (!garment) return;
-    setSelectedItemId(Number(garment.id));
-    if (typeof window !== 'undefined') {
-      const nextPath = `/item/${garment.id}`;
-      if (window.location.pathname !== nextPath) {
-        window.history.pushState({}, '', nextPath);
+  // Sync language, theme, and tab spotlight from parent showcase site when embedded
+  useEffect(() => {
+    if (!isEmbedMode || typeof window === 'undefined') return undefined;
+    const handleEmbedSync = (event) => {
+      const detail = event?.detail || {};
+      if (detail.lang === 'ko' || detail.lang === 'en') {
+        const normalized = setStoredLang(detail.lang);
+        setLang(normalized);
       }
-    }
-  }, []);
+      if (detail.theme === 'dark' || detail.theme === 'light') {
+        const applied = applyThemePreference(detail.theme);
+        setResolvedTheme(applied);
+      }
+      if (!showAuthScreen && detail.screen) {
+        if (detail.screen === 'profile') {
+          setProfileModalTab('skin');
+          setProfileModalOpen(true);
+        } else if (
+          detail.screen === 'outfits' ||
+          detail.screen === 'closet' ||
+          detail.screen === 'stats'
+        ) {
+          setProfileModalOpen(false);
+          setSelectedItemId(null);
+          setActiveTab(detail.screen);
+        }
+      }
+    };
+    window.addEventListener('ainvtry:embed-sync', handleEmbedSync);
+    return () => window.removeEventListener('ainvtry:embed-sync', handleEmbedSync);
+  }, [isEmbedMode, showAuthScreen]);
+
+  const handleOpenGarmentDetail = useCallback(
+    (garment) => {
+      if (!garment) return;
+      setSelectedItemId(Number(garment.id));
+      if (!isEmbedMode && typeof window !== 'undefined') {
+        const nextPath = `/item/${garment.id}`;
+        if (window.location.pathname !== nextPath) {
+          window.history.pushState({}, '', nextPath);
+        }
+      }
+    },
+    [isEmbedMode]
+  );
 
   const handleCloseGarmentDetail = useCallback(() => {
     setSelectedItemId(null);
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
+    if (
+      !isEmbedMode &&
+      typeof window !== 'undefined' &&
+      window.location.pathname.startsWith('/item/')
+    ) {
       const fallbackTab = FLOATING_TABS.find((t) => t.key === activeTab) || FLOATING_TABS[0];
       window.history.pushState({}, '', fallbackTab.path);
     }
-  }, [activeTab]);
+  }, [activeTab, isEmbedMode]);
 
-  const handleTryInOutfits = useCallback((garment) => {
-    if (!garment) return;
-    setPreEquippedGarment(garment);
-    setStudioSessionKey((k) => k + 1);
-    setSelectedItemId(null);
-    setActiveTab('outfits');
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', '/outfits');
-    }
-  }, []);
+  const handleTryInOutfits = useCallback(
+    (garment) => {
+      if (!garment) return;
+      setPreEquippedGarment(garment);
+      setStudioSessionKey((k) => k + 1);
+      setSelectedItemId(null);
+      setActiveTab('outfits');
+      if (!isEmbedMode && typeof window !== 'undefined') {
+        window.history.pushState({}, '', '/outfits');
+      }
+    },
+    [isEmbedMode]
+  );
 
   const handleToggleTheme = useCallback(
     (event) => {
@@ -620,7 +698,7 @@ export default function App() {
           window.matchMedia('(prefers-reduced-motion: reduce)').matches
       );
 
-      if (reducedMotion || typeof window === 'undefined') {
+      if (reducedMotion || isEmbedMode || typeof window === 'undefined') {
         commitAppState();
         setLoginPortal(null);
         setShowAuthScreen(false);
@@ -702,7 +780,7 @@ export default function App() {
 
       portalTimersRef.current = [revealTimer, safetyCeilingTimer];
     },
-    [clearPortalTimers]
+    [clearPortalTimers, isEmbedMode]
   );
 
   // Hardware-accelerated GPU clip-path circular reveal on .hig-native-shell (zero WebGL mask-image readback stall!)
@@ -810,27 +888,31 @@ export default function App() {
       setUser(DEFAULT_LOCAL_USER);
       setSelectedItemId(null);
       setActiveTab('outfits');
-      if (typeof window !== 'undefined') {
+      if (!isEmbedMode && typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/');
       }
     });
-  }, [startLoginPortalTransition]);
+  }, [isEmbedMode, startLoginPortalTransition]);
 
   const handleLoginSuccess = useCallback(
     (loggedInUser) => {
       startLoginPortalTransition(() => {
-        setSampleDemoMode(false);
+        setSampleDemoMode(Boolean(loggedInUser?.isOfflineFallback));
         setUser(loggedInUser);
-        syncAccountToAvatar(loggedInUser);
+        try {
+          syncAccountToAvatar(loggedInUser);
+        } catch {
+          // Ignore storage restrictions inside sandboxed embed iframes
+        }
         setSelectedItemId(null);
         setActiveTab('outfits');
         setRefreshKey((k) => k + 1);
-        if (typeof window !== 'undefined') {
+        if (!isEmbedMode && typeof window !== 'undefined') {
           window.history.replaceState({}, '', '/');
         }
       });
     },
-    [startLoginPortalTransition, syncAccountToAvatar]
+    [isEmbedMode, startLoginPortalTransition, syncAccountToAvatar]
   );
 
   const handleLogout = useCallback(async () => {
@@ -847,10 +929,10 @@ export default function App() {
     setSampleDemoMode(false);
     setUser(null);
     setShowAuthScreen(true);
-    if (typeof window !== 'undefined') {
+    if (!isEmbedMode && typeof window !== 'undefined') {
       window.history.replaceState({}, '', '/?auth=1');
     }
-  }, [clearPortalTimers, user]);
+  }, [clearPortalTimers, isEmbedMode, user]);
 
   const handleAccountDeleted = useCallback(() => {
     garmentsMutationSeqRef.current += 1;
@@ -860,10 +942,10 @@ export default function App() {
     setUser(null);
     setGarments([]);
     setShowAuthScreen(true);
-    if (typeof window !== 'undefined') {
+    if (!isEmbedMode && typeof window !== 'undefined') {
       window.history.replaceState({}, '', '/?auth=1');
     }
-  }, []);
+  }, [isEmbedMode]);
 
   const handleGarmentRegistered = useCallback((created) => {
     if (created) {
@@ -885,14 +967,21 @@ export default function App() {
     );
   }, []);
 
-  const handleGarmentDeleted = useCallback((deletedId) => {
-    garmentsMutationSeqRef.current += 1;
-    setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
-    setSelectedItemId(null);
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/item/')) {
-      window.history.pushState({}, '', '/closet');
-    }
-  }, []);
+  const handleGarmentDeleted = useCallback(
+    (deletedId) => {
+      garmentsMutationSeqRef.current += 1;
+      setGarments((prev) => prev.filter((g) => Number(g.id) !== Number(deletedId)));
+      setSelectedItemId(null);
+      if (
+        !isEmbedMode &&
+        typeof window !== 'undefined' &&
+        window.location.pathname.startsWith('/item/')
+      ) {
+        window.history.pushState({}, '', '/closet');
+      }
+    },
+    [isEmbedMode]
+  );
 
   const handleClosetUpdated = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -999,7 +1088,28 @@ export default function App() {
           <StatusCapsule />
 
       <main className="hig-native-viewport">
-        <Suspense fallback={<div className="hig-screen-container" aria-busy="true" />}>
+        <Suspense
+          fallback={
+            <div
+              className="hig-screen-container"
+              aria-busy="true"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                minHeight: '60vh',
+                color: 'var(--hig-text-secondary, #8e8e93)',
+                fontSize: '0.84rem',
+                fontWeight: 500,
+              }}
+            >
+              <div className="hig-spinner" aria-hidden="true" />
+              <span>{lang === 'en' ? 'Opening Studio...' : '스튜디오 준비 중...'}</span>
+            </div>
+          }
+        >
           {activeTab === 'closet' && (
             <WardrobeView
               activeCloset={activeCloset}

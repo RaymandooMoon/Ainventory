@@ -4,13 +4,11 @@ import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts'
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import { SiteIcon } from '../SiteIcon.tsx';
 import {
-  resolveAppPreviewSrc,
   STUDIO_GARMENT_ASSETS,
   type SiteBlueprintNode,
   type SiteCopy,
   type SiteLang,
   type SitePrivacyShield,
-  type SiteTheme,
 } from '../siteContent.ts';
 import { useLiveLocalContext } from '../useLiveLocalContext.ts';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
@@ -22,7 +20,6 @@ import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx'
 export interface StudioStageHudProps {
   readonly copy: SiteCopy;
   readonly lang: SiteLang;
-  readonly theme: SiteTheme;
   readonly interaction: StageInteractionState;
   readonly onUpdateInteraction: (patch: Partial<StageInteractionState>) => void;
 }
@@ -30,7 +27,6 @@ export interface StudioStageHudProps {
 export function StudioStageHud({
   copy,
   lang,
-  theme,
   interaction,
   onUpdateInteraction,
 }: StudioStageHudProps) {
@@ -67,7 +63,6 @@ export function StudioStageHud({
     const activeScreen =
       copy.appPreview.screens.find((s) => s.id === interaction.studioPreviewScreen) ??
       copy.appPreview.screens[0];
-    const resolvedSrc = resolveAppPreviewSrc(activeScreen.id, lang, theme);
 
     const screenItems: HudSpotlightItem[] = copy.appPreview.screens.map((screen) => {
       const compactMetrics =
@@ -147,22 +142,7 @@ export function StudioStageHud({
     });
 
     return (
-      <div className="hud-stack hud-app-preview-layout">
-        <div className="hud-phone-stage">
-          <div className="hud-phone-frame" data-phone-theme={theme}>
-            <div className="hud-phone-island" aria-hidden="true" />
-            <img
-              key={`${activeScreen.id}-${lang}-${theme}`}
-              src={resolvedSrc}
-              alt={activeScreen.imageAlt}
-              width={500}
-              height={1044}
-              decoding="async"
-              className="hud-phone-img"
-            />
-          </div>
-        </div>
-
+      <div className="hud-stack">
         <HudSpotlightDeck
           items={screenItems}
           activeId={activeScreen.id}

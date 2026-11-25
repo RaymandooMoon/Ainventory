@@ -347,6 +347,8 @@ export interface SiteCopy {
     readonly archMaps: string;
     readonly benchKpi: string;
     readonly benchMatrix: string;
+    readonly benchFitting: string;
+    readonly benchCare: string;
     readonly aboutJourney: string;
     readonly aboutMission: string;
     readonly aboutFounder: string;
@@ -526,6 +528,8 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       archMaps: 'Google API × 3D',
       benchKpi: 'Metrics',
       benchMatrix: 'Stack',
+      benchFitting: '3D Fitting',
+      benchCare: 'Care',
       aboutJourney: 'Journey',
       aboutMission: 'Mission',
       aboutFounder: 'Model',
@@ -1527,6 +1531,8 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
       archMaps: 'Google API × 3D',
       benchKpi: '지표',
       benchMatrix: '스택',
+      benchFitting: '3D 피팅',
+      benchCare: '케어',
       aboutJourney: '여정',
       aboutMission: '미션',
       aboutFounder: '비즈니스',

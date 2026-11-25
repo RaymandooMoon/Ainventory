@@ -992,6 +992,12 @@ const API_ERROR_KO_TO_EN: Readonly<Record<string, string>> = {
   '아이템을 찾을 수 없습니다.': 'Item not found.',
   '코디 이름과 의류를 선택해주세요.': 'Please select items and enter an outfit name.',
   '기본 시스템 데모 계정은 삭제할 수 없습니다.': 'System demo accounts cannot be deleted.',
+  '사이트 데모 계정은 비밀번호를 변경할 수 없습니다.': 'Site demo account password cannot be changed.',
+  '현재 비밀번호를 입력해주세요.': 'Please enter your current password.',
+  '현재 비밀번호가 일치하지 않습니다.': 'Current password is incorrect.',
+  '새 비밀번호는 6자 이상 128자 이하로 입력해주세요.': 'New password must be 6–128 characters.',
+  '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.':
+    'New password must differ from current password.',
 };
 
 export function localizeApiMessage(

@@ -10,6 +10,7 @@ export function resolveInitialAuthStage(search = ''): AuthStageMode {
   const params = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
   if (
     params.get('stage') === 'auth' ||
+    params.get('auth_stage') === 'auth' ||
     params.get('autostart') === '1' ||
     Boolean(params.get('verify_token'))
   ) {

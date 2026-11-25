@@ -13,6 +13,11 @@ import {
   createVtonQcMiddleware,
   sanitizeQcLogString,
 } from './vtonQcMiddleware.js';
+import {
+  SITE_DEMO_ROLE_CODE,
+  getUserRbacContext,
+  hasPermission,
+} from './rbac.js';
 
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SYNTHESES_PER_WINDOW = 360;
@@ -101,10 +106,13 @@ function extractAuthToken(req) {
   }
 }
 
-function resolveAuthorizedClosetsForUser(userRow) {
+function resolveAuthorizedClosetsForUser(userRow, resolvedRoleCode = null) {
   const defaultCloset = String(userRow?.default_closet || '').trim();
-  const role = String(userRow?.role || 'member').trim();
+  const role = String(resolvedRoleCode || userRow?.role || 'member').trim();
 
+  if (role === SITE_DEMO_ROLE_CODE) {
+    return ['sample'];
+  }
   if (role === 'admin') {
     return [...new Set(['husband', 'wife', 'sample', defaultCloset].filter(Boolean))];
   }
@@ -144,11 +152,14 @@ function requireVtonSessionOrSample(req, res, next) {
         .get(token);
 
       if (session && session.expires_at && new Date(session.expires_at) >= new Date()) {
+        const rbac = getUserRbacContext(db, session);
         req.vtonAuth = {
           isAuthenticated: true,
           isSampleGuest: false,
           userRow: session,
-          authorizedClosets: resolveAuthorizedClosetsForUser(session),
+          roleCode: rbac.roleCode,
+          permissions: rbac.permissions,
+          authorizedClosets: resolveAuthorizedClosetsForUser(session, rbac.roleCode),
         };
         return next();
       }
@@ -463,9 +474,26 @@ export function createVtonRouter(options = {}) {
     return next();
   }
 
+  function requireVtonSynthesizePermission(req, res, next) {
+    if (
+      req.vtonAuth?.isAuthenticated &&
+      !hasPermission(req.vtonAuth.permissions, 'vton:synthesize')
+    ) {
+      return res.status(403).json({
+        error:
+          '사이트 데모 권한에서는 AI 가상 피팅 합성을 실행할 수 없습니다. 로컬 3D/2.5D 피팅 미리보기를 이용해 주세요.',
+        code: 'PERMISSION_DENIED',
+        requiredPermission: 'vton:synthesize',
+        role: req.vtonAuth.roleCode || 'site_demo',
+      });
+    }
+    return next();
+  }
+
   router.post(
     '/synthesize',
     requireVtonSessionOrSample,
+    requireVtonSynthesizePermission,
     vtonJsonParser,
     prepareVtonSynthesisParams,
     vtonQualityControlMiddleware,

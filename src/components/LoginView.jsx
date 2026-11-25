@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,14 +12,13 @@ import {
   Sun,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
-import { apiFetch, setStoredToken } from '../utils/api.ts';
+import { apiFetch, isLiveAppEmbedSession, setStoredToken } from '../utils/api.ts';
 import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
 import BrandLogo from './auth/BrandLogo.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
 import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
-import LoginBackdropCanvas from './auth/LoginBackdropCanvas.tsx';
 import { normalizeLoginThreeVariant } from './auth/loginThreeScenes.ts';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
@@ -27,6 +26,36 @@ import { resolveInitialAuthStage } from '../utils/authStage.ts';
 import { capturePendingLogoFlight } from '../utils/logoTransition.ts';
 import './auth/loginAtelier.css';
 
+const LoginBackdropCanvas = lazy(() => import('./auth/LoginBackdropCanvas.tsx'));
+
+const EMBED_SITE_DEMO_FALLBACK_USER = {
+  id: 9001,
+  username: 'site_demo',
+  displayName: 'iNVTRY Site Demo',
+  email: 'demo@ainvtry.com',
+  role: 'site_demo',
+  isSiteDemo: true,
+  isOfflineFallback: true,
+  permissions: [
+    'closet:read_sample',
+    'outfit:read',
+    'calendar:read',
+    'packing:read',
+    'stats:read',
+    'profile:read',
+    'vton:preview',
+  ],
+  defaultCloset: 'sample',
+  closetName: 'SITE DEMO CLOSET',
+  gender: 'male',
+  heightCm: 176,
+  weightKg: 70,
+  profileCompleted: true,
+  handedness: 'right',
+  dominantHand: 'right',
+};
+
+const DEMO_LOGIN_HARD_TIMEOUT_MS = 2500;
 const GOOGLE_SIGN_IN_BTN_ID = 'google-sign-in-btn';
 
 /**
@@ -367,15 +396,60 @@ export default function LoginView({
     executeLogin();
   };
 
-  const handleEnterSampleDemo = () => {
+  const isEmbedMode = isLiveAppEmbedSession();
+
+  // Warm OutfitStudioView chunk in the background while user views embedded LoginView
+  useEffect(() => {
+    if (!isEmbedMode) return undefined;
+    const timerId = window.setTimeout(() => {
+      void import('./OutfitStudioView.jsx').catch(() => {});
+    }, 350);
+    return () => window.clearTimeout(timerId);
+  }, [isEmbedMode]);
+
+  const handleEnterSampleDemo = async () => {
     if (loading) return;
     setError('');
     setFieldErrors({});
     setLoadingAction('sample');
     triggerHaptic('light');
-    void import('./OutfitStudioView.jsx');
-    capturePendingLogoFlight(brandLogoRef.current);
+
+    let deadlineId = 0;
     try {
+      const data = await Promise.race([
+        apiFetch('/auth/site-demo', {
+          method: 'POST',
+          body: JSON.stringify({ embed: isEmbedMode }),
+          timeoutMs: DEMO_LOGIN_HARD_TIMEOUT_MS,
+        }),
+        new Promise((resolve) => {
+          deadlineId = window.setTimeout(() => resolve(null), DEMO_LOGIN_HARD_TIMEOUT_MS);
+        }),
+      ]);
+      if (deadlineId) window.clearTimeout(deadlineId);
+
+      if (data && typeof data === 'object' && data.token && data.user) {
+        setStoredToken(String(data.token));
+        capturePendingLogoFlight(brandLogoRef.current);
+        onLoginSuccess(data.user);
+        return;
+      }
+
+      if (isEmbedMode) {
+        setStoredToken(null);
+        onLoginSuccess(EMBED_SITE_DEMO_FALLBACK_USER);
+        return;
+      }
+      capturePendingLogoFlight(brandLogoRef.current);
+      onEnterSampleDemo?.();
+    } catch {
+      if (deadlineId) window.clearTimeout(deadlineId);
+      if (isEmbedMode) {
+        setStoredToken(null);
+        onLoginSuccess(EMBED_SITE_DEMO_FALLBACK_USER);
+        return;
+      }
+      capturePendingLogoFlight(brandLogoRef.current);
       onEnterSampleDemo?.();
     } finally {
       setLoadingAction(null);
@@ -653,15 +727,37 @@ export default function LoginView({
       data-auth-stage={authStage}
       data-portal-phase={portalPhase}
     >
-      {/* Seamless Fullscreen Three.js 3D Draped Silk Cloth Stage */}
-      <LoginBackdropCanvas
-        effectiveTheme={effectiveTheme}
-        lang={lang}
-        stage={isPortalExiting ? 'portal' : authStage}
-        paused={portalPhase === 'revealing'}
-        motionVariant={loginMotionVariant}
-        variantChangeOrigin={variantChangeOrigin}
-      />
+      {/* Instant zero-WebGL silk gradient in embed mode; full Three.js cloth in standalone app */}
+      {isEmbedMode ? (
+        <div
+          className="atelier-backdrop-stage is-webgl-fallback"
+          data-motion-theme={effectiveTheme}
+          data-motion-variant={loginMotionVariant}
+          aria-hidden="true"
+        >
+          <div className="atelier-dither-veil" />
+        </div>
+      ) : (
+        <Suspense
+          fallback={
+            <div
+              className="atelier-backdrop-stage is-webgl-fallback"
+              data-motion-theme={effectiveTheme}
+              data-motion-variant={loginMotionVariant}
+              aria-hidden="true"
+            />
+          }
+        >
+          <LoginBackdropCanvas
+            effectiveTheme={effectiveTheme}
+            lang={lang}
+            stage={isPortalExiting ? 'portal' : authStage}
+            paused={portalPhase === 'revealing'}
+            motionVariant={loginMotionVariant}
+            variantChangeOrigin={variantChangeOrigin}
+          />
+        </Suspense>
+      )}
 
       {/* Top Utility Controls: Single Silk Palette Toggle (Left) + Theme & Lang (Right) */}
       <header className="atelier-topbar">
@@ -888,42 +984,6 @@ export default function LoginView({
                   autoComplete="current-password"
                   disabled={loading}
                 />
-
-                {isDev && (
-                  <div className="atelier-seed-bar">
-                    <span className="atelier-seed-label">
-                      {isEn ? 'Quick Seed' : '빠른 시드 계정'}
-                    </span>
-                    <div className="atelier-seed-btns">
-                      <button
-                        type="button"
-                        className="atelier-seed-pill"
-                        disabled={loading}
-                        onClick={() => {
-                          setUsername('admin');
-                          setPassword('admin');
-                          setError('');
-                          setFieldErrors({});
-                        }}
-                      >
-                        {tr(lang, 'closetHusband')}
-                      </button>
-                      <button
-                        type="button"
-                        className="atelier-seed-pill"
-                        disabled={loading}
-                        onClick={() => {
-                          setUsername('wife');
-                          setPassword('wife1234');
-                          setError('');
-                          setFieldErrors({});
-                        }}
-                      >
-                        {tr(lang, 'closetWife')}
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* Slim Inline System Note at bottom of form (role="status", aria-live="polite") */}
                 {error && (
@@ -1247,21 +1307,41 @@ export default function LoginView({
               </form>
             )}
 
-            {/* Secondary Text Button: Experience with Sample Closet (DESIGN.md v3) */}
+            {/* Secondary Text Button (or Highlighted Site Demo CTA in Embed Mode) */}
             <div className="atelier-sample-demo-row">
               <button
                 id={CARBON_DOM_CONTRACT.sampleDemoButtonId}
                 type="button"
                 aria-label={
                   isEn
-                    ? 'Experience with Sample Closet'
-                    : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
+                    ? isEmbedMode
+                      ? 'Enter Live Site Demo'
+                      : 'Experience with Sample Closet'
+                    : isEmbedMode
+                      ? '사이트 데모로 체험하기'
+                      : CARBON_DOM_CONTRACT.sampleDemoAriaLabel
                 }
-                className="atelier-text-btn"
+                className={isEmbedMode ? 'atelier-primary-btn' : 'atelier-text-btn'}
                 disabled={loading}
+                aria-busy={loadingAction === 'sample'}
                 onClick={handleEnterSampleDemo}
               >
-                <span>{isEn ? 'Explore with Sample Closet' : '샘플 옷장으로 체험하기'}</span>
+                {loadingAction === 'sample' ? (
+                  <>
+                    <Loader2 size={16} className="atelier-spin" />
+                    <span>{isEn ? 'Entering demo...' : '데모 진입 중...'}</span>
+                  </>
+                ) : (
+                  <span>
+                    {isEmbedMode
+                      ? isEn
+                        ? 'Try Site Demo Account'
+                        : '사이트 데모 체험하기'
+                      : isEn
+                        ? 'Explore with Sample Closet'
+                        : '샘플 옷장으로 체험하기'}
+                  </span>
+                )}
               </button>
             </div>
           </section>

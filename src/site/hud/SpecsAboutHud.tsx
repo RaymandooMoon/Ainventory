@@ -39,7 +39,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /* ==========================================================================
- * 3. SPECS STAGE HUD (Metrics | Stack)
+ * 3. SPECS STAGE HUD (Metrics | Stack | 3D Fitting | Care)
  * ========================================================================== */
 
 export interface SpecsStageHudProps {
@@ -50,6 +50,12 @@ export interface SpecsStageHudProps {
 }
 
 export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsStageHudProps) {
+  const [fittingFeatId, setFittingFeatId] = useState<string>(
+    copy.capabilities.pillars.atelier.features[0].id
+  );
+  const [careFeatId, setCareFeatId] = useState<string>(
+    copy.capabilities.pillars.intelligence.features[0].id
+  );
   const stack = copy.stack;
   const focusedPillarIdx = Math.max(0, Math.min(5, interaction.specsFocusedIndex));
 
@@ -77,6 +83,65 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
             }
           }}
           ariaLabel={stack.heading}
+        />
+      </div>
+    );
+  }
+
+  if (interaction.specsSubtab === 'fitting') {
+    const pillar = copy.capabilities.pillars.atelier;
+    const items: HudSpotlightItem[] = pillar.features.map((feat) => ({
+      id: feat.id,
+      icon: feat.icon,
+      title: feat.label,
+      body: <p className="hud-body-copy">{feat.detail}</p>,
+    }));
+
+    return (
+      <div className="hud-stack">
+        <HudSpotlightDeck
+          items={items}
+          activeId={fittingFeatId}
+          onSelect={setFittingFeatId}
+          ariaLabel={pillar.title}
+        />
+      </div>
+    );
+  }
+
+  if (interaction.specsSubtab === 'care') {
+    const carePillar = copy.capabilities.pillars.intelligence;
+    const careItems: HudSpotlightItem[] = carePillar.features.map((feat) => ({
+      id: feat.id,
+      icon: feat.icon,
+      title: feat.label,
+      body: <p className="hud-body-copy">{feat.detail}</p>,
+    }));
+
+    return (
+      <div className="hud-stack">
+        <div className="hud-grid-2">
+          <div className="hud-card hud-kpi-card">
+            <span className="hud-metric-chip-label">{copy.interactive.cpwLabel}</span>
+            <div className="hud-kpi-val-row">
+              <strong className="hud-kpi-big">{copy.interactive.cpwValue}</strong>
+              <span className="hud-gold-badge">{copy.interactive.cpwDelta}</span>
+            </div>
+          </div>
+
+          <div className="hud-card hud-kpi-card">
+            <span className="hud-metric-chip-label">{copy.interactive.balanceLabel}</span>
+            <div className="hud-kpi-val-row">
+              <strong className="hud-kpi-big">{copy.interactive.balanceValue}</strong>
+            </div>
+          </div>
+        </div>
+
+        <HudSpotlightDeck
+          items={careItems}
+          activeId={careFeatId}
+          onSelect={setCareFeatId}
+          ariaLabel={carePillar.title}
         />
       </div>
     );

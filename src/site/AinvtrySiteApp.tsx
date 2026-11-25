@@ -20,6 +20,7 @@ import {
   type StageInteractionState,
 } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
 import SiteMarbleHero from './SiteMarbleHero.tsx';
 import SiteStageAnalytics from './SiteStageAnalytics.tsx';
@@ -104,6 +105,7 @@ export default function AinvtrySiteApp() {
   } | null>(null);
 
   const [activeStage, setActiveStage] = useState<StageId>('hero');
+  const [hasVisitedStudio, setHasVisitedStudio] = useState<boolean>(false);
   const [stageInteraction, setStageInteraction] = useState<StageInteractionState>(() => ({
     ...DEFAULT_STAGE_INTERACTION_STATE,
   }));
@@ -228,7 +230,6 @@ export default function AinvtrySiteApp() {
     }
 
     let lastWheelStepAt = 0;
-    const PREVIEW_SCREENS = ['outfits', 'closet', 'stats', 'profile'] as const;
 
     const onWheel = (e: WheelEvent) => {
       if (!Number.isFinite(e.deltaY) || e.deltaY === 0) return;
@@ -250,7 +251,7 @@ export default function AinvtrySiteApp() {
       }
 
       const stage = activeStageRef.current;
-      if (stage === 'hero') return;
+      if (stage === 'hero' || stage === 'studio') return;
 
       const now = performance.now();
       if (now - lastWheelStepAt < 165) return;
@@ -261,21 +262,16 @@ export default function AinvtrySiteApp() {
       let patch: Partial<StageInteractionState> | null = null;
 
       if (stage === 'specs') {
-        patch = { specsFocusedIndex: (prev.specsFocusedIndex + dir + 6) % 6 };
+        if (prev.specsSubtab === 'fitting' || prev.specsSubtab === 'care') {
+          patch = { studioAngleRad: prev.studioAngleRad + dir * (Math.PI * 0.25) };
+        } else {
+          patch = { specsFocusedIndex: (prev.specsFocusedIndex + dir + 6) % 6 };
+        }
       } else if (stage === 'architecture') {
         if (prev.architectureSubtab === 'maps') {
           patch = { googleApiIndex: (prev.googleApiIndex + dir + 6) % 6 };
         } else if (prev.architectureSubtab === 'blueprint') {
           patch = { architectureTier: (prev.architectureTier + dir + 6) % 6 };
-        }
-      } else if (stage === 'studio') {
-        if (prev.studioSubtab === 'preview') {
-          const curIdx = PREVIEW_SCREENS.indexOf(prev.studioPreviewScreen);
-          const nextScreen =
-            PREVIEW_SCREENS[((curIdx >= 0 ? curIdx : 0) + dir + PREVIEW_SCREENS.length) % PREVIEW_SCREENS.length];
-          patch = { studioPreviewScreen: nextScreen };
-        } else {
-          patch = { studioAngleRad: prev.studioAngleRad + dir * (Math.PI * 0.25) };
         }
       } else if (stage === 'about') {
         if (prev.aboutSubtab === 'journey') {
@@ -314,6 +310,9 @@ export default function AinvtrySiteApp() {
       );
       if (detail) {
         setAnalyticsSnapshot(stageTracker.getSnapshot());
+      }
+      if (nextStage === 'studio') {
+        setHasVisitedStudio(true);
       }
       setActiveStage(nextStage);
 
@@ -361,17 +360,23 @@ export default function AinvtrySiteApp() {
   const handleNavigateFromAnalytics = useCallback(
     (targetStage: StageId, studioSubtab?: StageInteractionState['studioSubtab']) => {
       const prevInteraction = stageInteractionRef.current;
+      const resolvedStage: StageId =
+        targetStage === 'studio' && (studioSubtab === 'atelier' || studioSubtab === 'intelligence')
+          ? 'specs'
+          : targetStage;
       const nextInteraction =
-        studioSubtab && targetStage === 'studio'
-          ? { ...prevInteraction, studioSubtab }
-          : prevInteraction;
+        targetStage === 'studio' && studioSubtab === 'atelier'
+          ? { ...prevInteraction, specsSubtab: 'fitting' as const }
+          : targetStage === 'studio' && studioSubtab === 'intelligence'
+            ? { ...prevInteraction, specsSubtab: 'care' as const }
+            : prevInteraction;
       if (nextInteraction !== prevInteraction) {
         stageInteractionRef.current = nextInteraction;
         setStageInteraction(nextInteraction);
       }
       const detail = stageTracker.recordSwitch(
         activeStageRef.current,
-        targetStage,
+        resolvedStage,
         nextInteraction,
         'dock',
         prevInteraction
@@ -379,7 +384,10 @@ export default function AinvtrySiteApp() {
       if (detail) {
         setAnalyticsSnapshot(stageTracker.getSnapshot());
       }
-      setActiveStage(targetStage);
+      if (resolvedStage === 'studio') {
+        setHasVisitedStudio(true);
+      }
+      setActiveStage(resolvedStage);
     },
     [stageTracker]
   );
@@ -576,6 +584,20 @@ export default function AinvtrySiteApp() {
             CENTRAL SPATIAL STAGE: HERO OVERLAY OR LEFT-58% OPEN + RIGHT-38% HUD
            ================================================================ */}
         <main className="site-stage">
+          {hasVisitedStudio && (
+            <LiveAppStageOverlay
+              screen={stageInteraction.studioPreviewScreen}
+              lang={lang}
+              theme={theme}
+              isSheetExpanded={false}
+              isVisible={activeStage === 'studio'}
+              fullStudio
+              onSelectScreen={(nextScreen) =>
+                handleUpdateInteraction({ studioPreviewScreen: nextScreen })
+              }
+            />
+          )}
+
           {activeStage === 'hero' ? (
             <section key="hero" className="site-view site-view--home">
               <div className="site-hero-center">

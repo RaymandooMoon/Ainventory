@@ -15,6 +15,14 @@ import {
   getStudioSeedImageForGarment,
   seedWardrobeBenchmarks,
 } from './wardrobeStatsAndGenerator.js';
+import {
+  SITE_DEMO_ROLE_CODE,
+  SITE_DEMO_USERNAME,
+  assignUserRole,
+  ensureRbacSchemaAndSeeds,
+} from './rbac.js';
+
+const SITE_DEMO_LOCKED_HASH = '!locked_site_demo_secret_unset!';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -1351,6 +1359,93 @@ export function initDb() {
   } catch {
     // ignore migration error
   }
+
+  ensureRbacSchemaAndSeeds(db);
+}
+
+/**
+ * Ensures the dedicated read-only 'site_demo' account exists and is mapped to the
+ * 'site_demo' RBAC role. Its password is read strictly from `process.env.SITE_DEMO_PASSWORD`
+ * (server-side secret). When unset, the stored password_hash is a non-matchable sentinel
+ * so direct password login remains locked while POST /api/auth/site-demo issues a
+ * short-lived RBAC-scoped session.
+ */
+export function ensureSiteDemoAccount() {
+  const nowIso = new Date().toISOString();
+  const email = 'site-demo@ainvtry.com';
+  const vHash = computeVerificationHash(SITE_DEMO_USERNAME, email, nowIso);
+  const rawSecret =
+    typeof process.env.SITE_DEMO_PASSWORD === 'string'
+      ? process.env.SITE_DEMO_PASSWORD.trim()
+      : '';
+  const desiredPasswordHash =
+    rawSecret.length > 0 ? hashPassword(rawSecret) : SITE_DEMO_LOCKED_HASH;
+
+  const existing = db
+    .prepare('SELECT * FROM users WHERE username = ?')
+    .get(SITE_DEMO_USERNAME);
+
+  let userId = 0;
+  if (!existing) {
+    const inserted = db
+      .prepare(`
+        INSERT INTO users (
+          username, email, password_hash, display_name, role, auth_provider,
+          default_closet, closet_name, verified_at, verification_hash,
+          age_group, age, height_cm, weight_kg, gender, personal_color,
+          skin_tone_hex, profile_completed, body_shape, handedness
+        ) VALUES (?, ?, ?, ?, ?, 'site_demo', 'sample', ?, ?, ?, '30s', 30, 174, 66, 'male', 'autumn_warm', '#DFC1A6', 1, 'standard_balanced', 'right')
+      `)
+      .run(
+        SITE_DEMO_USERNAME,
+        email,
+        desiredPasswordHash,
+        '사이트 데모',
+        SITE_DEMO_ROLE_CODE,
+        '사이트 데모 옷장',
+        nowIso,
+        vHash
+      );
+    userId = Number(inserted?.lastInsertRowid || 0);
+  } else {
+    userId = Number(existing.id);
+    // Sync password hash strictly with process.env.SITE_DEMO_PASSWORD (or lock if unset)
+    const shouldUpdateHash =
+      rawSecret.length > 0
+        ? !verifyPassword(rawSecret, existing.password_hash)
+        : existing.password_hash !== SITE_DEMO_LOCKED_HASH;
+
+    if (
+      shouldUpdateHash ||
+      existing.default_closet !== 'sample' ||
+      existing.role !== SITE_DEMO_ROLE_CODE ||
+      !existing.verified_at ||
+      !existing.verification_hash
+    ) {
+      db.prepare(`
+        UPDATE users
+        SET password_hash = ?,
+            role = ?,
+            default_closet = 'sample',
+            closet_name = COALESCE(closet_name, '사이트 데모 옷장'),
+            verified_at = COALESCE(verified_at, ?),
+            verification_hash = COALESCE(verification_hash, ?),
+            profile_completed = 1
+        WHERE id = ?
+      `).run(
+        shouldUpdateHash ? desiredPasswordHash : existing.password_hash,
+        SITE_DEMO_ROLE_CODE,
+        nowIso,
+        vHash,
+        userId
+      );
+    }
+  }
+
+  if (userId > 0) {
+    assignUserRole(db, userId, SITE_DEMO_ROLE_CODE);
+  }
+  return db.prepare('SELECT * FROM users WHERE username = ?').get(SITE_DEMO_USERNAME);
 }
 
 export function seedIfEmpty(forceReset = false) {
@@ -1368,6 +1463,13 @@ export function seedIfEmpty(forceReset = false) {
 
     // Always keep the isolated 'sample' closet populated for read-only Sample Demo mode
     ensureSampleClosetSeeded();
+
+    // Always ensure RBAC tables/mappings and the dedicated 'site_demo' user exist.
+    // Its password is stored exclusively in process.env.SITE_DEMO_PASSWORD (server secret).
+    // When SITE_DEMO_PASSWORD is unset, direct password login stays locked (non-matchable sentinel hash),
+    // while POST /api/auth/site-demo issues a short-lived RBAC-scoped demo session.
+    ensureRbacSchemaAndSeeds(db);
+    ensureSiteDemoAccount();
 
     if (!shouldSeedDemoAccounts(forceReset)) {
       return;
@@ -1399,7 +1501,7 @@ export function seedIfEmpty(forceReset = false) {
       const existing = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
       const vHash = computeVerificationHash(username, email, nowIso);
       if (!existing) {
-        db.prepare(`
+        const inserted = db.prepare(`
           INSERT INTO users (
             username, email, password_hash, display_name, role, default_closet, closet_name,
             verified_at, verification_hash, age_group, age, height_cm, weight_kg, gender,
@@ -1430,6 +1532,10 @@ export function seedIfEmpty(forceReset = false) {
           hipCm,
           headCm
         );
+        const insertedId = Number(inserted?.lastInsertRowid || 0);
+        if (insertedId > 0) {
+          assignUserRole(db, insertedId, role);
+        }
       } else if (
         !existing.verified_at ||
         !existing.verification_hash ||

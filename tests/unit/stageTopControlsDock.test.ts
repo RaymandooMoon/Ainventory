@@ -15,24 +15,32 @@ function makeInteraction(patch: Partial<StageInteractionState> = {}): StageInter
 }
 
 describe('getTopControlsDockKind', () => {
-  it('returns studio-3d when Studio stage is on 3D Fitting (atelier) subtab', () => {
+  it('returns studio-3d when Specs stage is on 3D Fitting or Care Three.js background subtabs', () => {
     assert.equal(
-      getTopControlsDockKind('studio', makeInteraction({ studioSubtab: 'atelier' }), SITE_COPY.en),
+      getTopControlsDockKind('specs', makeInteraction({ specsSubtab: 'fitting' }), SITE_COPY.en),
+      'studio-3d'
+    );
+    assert.equal(
+      getTopControlsDockKind('specs', makeInteraction({ specsSubtab: 'care' }), SITE_COPY.ko),
       'studio-3d'
     );
   });
 
-  it('returns none for Studio Live App and Care & CPW subtabs', () => {
+  it('returns none for Studio live-app-only stage and Specs Metrics/Stack subtabs', () => {
     assert.equal(
       getTopControlsDockKind('studio', makeInteraction({ studioSubtab: 'preview' }), SITE_COPY.en),
       'none'
     );
     assert.equal(
-      getTopControlsDockKind(
-        'studio',
-        makeInteraction({ studioSubtab: 'intelligence' }),
-        SITE_COPY.ko
-      ),
+      getTopControlsDockKind('studio', makeInteraction({ studioSubtab: 'atelier' }), SITE_COPY.en),
+      'none'
+    );
+    assert.equal(
+      getTopControlsDockKind('specs', makeInteraction({ specsSubtab: 'kpi' }), SITE_COPY.en),
+      'none'
+    );
+    assert.equal(
+      getTopControlsDockKind('specs', makeInteraction({ specsSubtab: 'matrix' }), SITE_COPY.ko),
       'none'
     );
   });
@@ -73,7 +81,7 @@ describe('getTopControlsDockKind', () => {
     );
   });
 
-  it('returns none for Architecture Privacy, Specs, and About stages', () => {
+  it('returns none for Architecture Privacy and About stages', () => {
     assert.equal(
       getTopControlsDockKind(
         'architecture',
@@ -82,7 +90,6 @@ describe('getTopControlsDockKind', () => {
       ),
       'none'
     );
-    assert.equal(getTopControlsDockKind('specs', makeInteraction(), SITE_COPY.en), 'none');
     assert.equal(getTopControlsDockKind('about', makeInteraction(), SITE_COPY.ko), 'none');
   });
 });

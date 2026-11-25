@@ -16,14 +16,69 @@ import {
   setOfflineUserScope,
   writeCachedResponse,
 } from './offlineSync.ts';
-import { handleStandaloneApiFallback } from './standaloneFallback.ts';
 import { resolveApiRuntimeConfig } from './apiRuntimeConfig.ts';
+
+async function runStandaloneFallback(
+  path: string,
+  options: ApiRequestOptions = {}
+): Promise<Record<string, unknown>> {
+  const mod = await import('./standaloneFallback.ts');
+  return mod.handleStandaloneApiFallback(path, options);
+}
 
 const TOKEN_KEY = 'ainventory_auth_token';
 const SAMPLE_DEMO_KEY = 'ainventory_sample_demo_mode';
 const SAMPLE_DEMO_MUTATED_KEY = 'ainventory_sample_demo_mutated';
 const API_RUNTIME_CONFIG = resolveApiRuntimeConfig(import.meta.env);
 const API_BASE_URL = API_RUNTIME_CONFIG.apiBaseUrl;
+
+let inMemoryEmbedToken = '';
+let inMemoryEmbedSampleDemo = false;
+
+export function isLiveAppEmbedSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  if ((window as unknown as Record<string, unknown>).__AINVTRY_LIVE_EMBED__ === true) {
+    return true;
+  }
+  try {
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function isSiteDemoUser(
+  user: { role?: string | null; isSiteDemo?: boolean; username?: string | null } | null | undefined
+): boolean {
+  if (!user) return false;
+  return Boolean(user.isSiteDemo || user.role === 'site_demo' || user.username === 'site_demo');
+}
+
+export function hasUserPermission(
+  user:
+    | { role?: string | null; permissions?: string[] | null; isSampleDemo?: boolean }
+    | null
+    | undefined,
+  permissionCode: string
+): boolean {
+  if (!user || !permissionCode) return false;
+  if (Array.isArray(user.permissions)) {
+    return user.permissions.includes(permissionCode);
+  }
+  if (user.role === 'admin') return true;
+  if (user.role === 'site_demo' || user.role === 'guest' || user.isSampleDemo) {
+    return (
+      permissionCode === 'closet:read_sample' ||
+      permissionCode === 'outfit:read' ||
+      permissionCode === 'calendar:read' ||
+      permissionCode === 'packing:read' ||
+      permissionCode === 'stats:read' ||
+      permissionCode === 'profile:read' ||
+      permissionCode === 'vton:preview'
+    );
+  }
+  return !permissionCode.startsWith('admin:');
+}
 
 export function getConfiguredApiBaseUrl(): string {
   return API_BASE_URL;
@@ -35,6 +90,7 @@ export function isStaticStandaloneWithoutApi(): boolean {
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
+  timeoutMs?: number;
 }
 
 export class ApiError extends Error {
@@ -61,6 +117,9 @@ export class ApiError extends Error {
 }
 
 export function getStoredToken(): string {
+  if (isLiveAppEmbedSession()) {
+    return inMemoryEmbedToken;
+  }
   if (typeof localStorage === 'undefined') return '';
   try {
     return localStorage.getItem(TOKEN_KEY) || '';
@@ -76,6 +135,17 @@ if (initialBootstrapToken) {
 }
 
 export function setStoredToken(token: string | null | undefined): void {
+  if (isLiveAppEmbedSession()) {
+    if (token) {
+      inMemoryEmbedToken = token;
+      inMemoryEmbedSampleDemo = false;
+      setOfflineUserScope(`embed_${token.slice(0, 20)}`);
+    } else {
+      inMemoryEmbedToken = '';
+      setOfflineUserScope(null);
+    }
+    return;
+  }
   if (typeof localStorage === 'undefined') return;
   try {
     if (token) {
@@ -93,6 +163,9 @@ export function setStoredToken(token: string | null | undefined): void {
 }
 
 export function isSampleDemoMode(): boolean {
+  if (isLiveAppEmbedSession()) {
+    return inMemoryEmbedSampleDemo;
+  }
   if (typeof localStorage === 'undefined') return false;
   try {
     return localStorage.getItem(SAMPLE_DEMO_KEY) === '1';
@@ -102,6 +175,10 @@ export function isSampleDemoMode(): boolean {
 }
 
 export function setSampleDemoMode(enabled: boolean): void {
+  if (isLiveAppEmbedSession()) {
+    inMemoryEmbedSampleDemo = Boolean(enabled);
+    return;
+  }
   if (typeof localStorage === 'undefined') return;
   try {
     if (enabled) {
@@ -159,38 +236,76 @@ async function rawNetworkFetch(
   }
 
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const res = await fetch(`${API_BASE_URL}${normalizedPath}`, {
-    ...options,
-    headers,
-  });
-  const contentType = String(res.headers?.get?.('content-type') || '').toLowerCase();
-  const isJson = contentType.includes('application/json');
+  const { timeoutMs = 12000, signal: externalSignal, ...fetchInit } = options;
+  const controller =
+    typeof AbortController !== 'undefined' && timeoutMs > 0 ? new AbortController() : null;
+  let didTimeout = false;
+  const timerId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => {
+          didTimeout = true;
+          controller.abort();
+        }, timeoutMs)
+      : null;
 
-  // Static hosts / SPA routers / Capacitor WebViews return text/html or non-JSON 200/404/405/5xx when no API server is running.
-  // Never treat non-JSON 400/401/403/413/429 gateway rejections as "backend unavailable" so auth/rate-limit errors surface!
-  if (!isJson) {
-    const isStaticOrGatewayDown =
-      res.status === 200 || res.status === 404 || res.status === 405 || res.status >= 500;
-    throw new ApiError(
-      isStaticOrGatewayDown ? `API 서버 미연결 (${res.status})` : `요청 거부 (${res.status})`,
-      {
-        status: res.status,
-        isBackendUnavailable: isStaticOrGatewayDown,
-      }
-    );
+  const onExternalAbort = () => controller?.abort();
+  if (externalSignal && controller) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
   }
 
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) {
-    const errorMessage =
-      typeof data.error === 'string' && data.error ? data.error : `요청 실패 (${res.status})`;
-    throw new ApiError(errorMessage, {
-      status: res.status,
-      data,
-      isBackendUnavailable: res.status === 502 || res.status === 503 || res.status === 504,
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${normalizedPath}`, {
+      ...fetchInit,
+      headers,
+      signal: controller ? controller.signal : externalSignal,
     });
+    const contentType = String(res.headers?.get?.('content-type') || '').toLowerCase();
+    const isJson = contentType.includes('application/json');
+
+    // Static hosts / SPA routers / Capacitor WebViews return text/html or non-JSON 200/404/405/5xx when no API server is running.
+    // Never treat non-JSON 400/401/403/413/429 gateway rejections as "backend unavailable" so auth/rate-limit errors surface!
+    if (!isJson) {
+      const isStaticOrGatewayDown =
+        res.status === 200 || res.status === 404 || res.status === 405 || res.status >= 500;
+      throw new ApiError(
+        isStaticOrGatewayDown ? `API 서버 미연결 (${res.status})` : `요청 거부 (${res.status})`,
+        {
+          status: res.status,
+          isBackendUnavailable: isStaticOrGatewayDown,
+        }
+      );
+    }
+
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      const errorMessage =
+        typeof data.error === 'string' && data.error ? data.error : `요청 실패 (${res.status})`;
+      throw new ApiError(errorMessage, {
+        status: res.status,
+        data,
+        isBackendUnavailable: res.status === 502 || res.status === 503 || res.status === 504,
+      });
+    }
+    return data;
+  } catch (err) {
+    if (didTimeout) {
+      throw new ApiError('서버 응답 시간이 초과되었습니다.', {
+        status: 0,
+        isBackendUnavailable: true,
+      });
+    }
+    throw err;
+  } finally {
+    if (timerId !== null) clearTimeout(timerId);
+    if (externalSignal && controller) {
+      externalSignal.removeEventListener('abort', onExternalAbort);
+    }
   }
-  return data;
 }
 
 let explicitlyOffline = false;
@@ -277,7 +392,7 @@ export async function apiFetch<T = Record<string, unknown>>(
           const seed = await rawNetworkFetch('/garments?closet=sample');
           await writeCachedResponse('demo:/garments?closet=sample', seed);
         } catch {
-          const localSeed = await handleStandaloneApiFallback('/garments?closet=sample', {});
+          const localSeed = await runStandaloneFallback('/garments?closet=sample', {});
           await writeCachedResponse('demo:/garments?closet=sample', localSeed);
         }
       }
@@ -290,7 +405,7 @@ export async function apiFetch<T = Record<string, unknown>>(
           const seed = await rawNetworkFetch('/outfits?closet=sample');
           await writeCachedResponse('demo:/outfits?closet=sample', seed);
         } catch {
-          const localSeed = await handleStandaloneApiFallback('/outfits?closet=sample', {});
+          const localSeed = await runStandaloneFallback('/outfits?closet=sample', {});
           await writeCachedResponse('demo:/outfits?closet=sample', localSeed);
         }
       }
@@ -324,7 +439,7 @@ export async function apiFetch<T = Record<string, unknown>>(
         const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
         if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
       }
-      const localData = await handleStandaloneApiFallback(path, options);
+      const localData = await runStandaloneFallback(path, options);
       if (!skipStaleIdbCache) {
         await writeCachedResponse(cacheKey, localData).catch(() => {});
       }
@@ -350,7 +465,7 @@ export async function apiFetch<T = Record<string, unknown>>(
           const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
           if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
         }
-        const localData = await handleStandaloneApiFallback(path, options);
+        const localData = await runStandaloneFallback(path, options);
         if (!skipStaleIdbCache) {
           await writeCachedResponse(cacheKey, localData).catch(() => {});
         }
@@ -377,13 +492,13 @@ export async function apiFetch<T = Record<string, unknown>>(
       }
     }
     if (isBrowserOffline) {
-      return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
+      return coerceApiPayload<T>(await runStandaloneFallback(path, options));
     }
     try {
       return coerceApiPayload<T>(await rawNetworkFetch(path, options));
     } catch (err) {
       if (isNetworkOrBackendUnavailable(err)) {
-        return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
+        return coerceApiPayload<T>(await runStandaloneFallback(path, options));
       }
       throw err;
     }
@@ -396,7 +511,7 @@ export async function apiFetch<T = Record<string, unknown>>(
     );
   }
   if (isProfileConfigEndpoint && isBrowserOffline) {
-    return coerceApiPayload<T>(await handleStandaloneApiFallback(path, options));
+    return coerceApiPayload<T>(await runStandaloneFallback(path, options));
   }
 
   try {
@@ -405,7 +520,7 @@ export async function apiFetch<T = Record<string, unknown>>(
   } catch (err) {
     if (isNetworkOrBackendUnavailable(err)) {
       if (isAuthEndpoint || isProfileConfigEndpoint || path === '/garments/import-samples') {
-        const res = await handleStandaloneApiFallback(path, options);
+        const res = await runStandaloneFallback(path, options);
         if (path === '/garments/import-samples' && Array.isArray(res.garments)) {
           const first = res.garments[0] as GarmentRecord | undefined;
           const targetCloset = first?.closet_owner || 'sample';

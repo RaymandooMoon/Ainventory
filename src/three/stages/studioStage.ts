@@ -2061,6 +2061,20 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   };
 
   const syncActiveModelVisibility = (): ActiveModelKind => {
+    const isAppPreview = currentSubtab === 'preview';
+    turntableGroup.visible = !isAppPreview;
+    pedestal.group.visible = !isAppPreview;
+    dialTrack.group.visible = !isAppPreview;
+    if (isAppPreview) {
+      rain.lines.visible = false;
+      umbrella.group.visible = false;
+      avatar.root.visible = false;
+      coutureCoat.root.visible = false;
+      dressForm.group.visible = false;
+      customDropIn.root.visible = false;
+      return resolveActiveModelKind();
+    }
+
     if (requestedModelMode === 'mannequin' && !avatar.isLoaded && !avatarLoadStarted) {
       loadFashionAvatar();
     } else if (requestedModelMode === 'dressform' && !coutureCoat.isLoaded && !coutureCoatLoadStarted) {
@@ -2855,6 +2869,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     onInteractionChange(patch: Partial<StageInteractionState>, _ctx: StageContext): void {
       if (patch.studioSubtab) {
         currentSubtab = patch.studioSubtab;
+        syncActiveModelVisibility();
       }
       if (patch.studioPose) {
         currentPose = patch.studioPose;
@@ -2891,6 +2906,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     onPointerDrag(dx: number, _dy: number, ctx: StageContext): void {
+      if (currentSubtab === 'preview') return;
       const deltaRad = dx * 4.6;
       targetAngleRad += deltaRad;
       angleVelocityRad = ctx.reducedMotion
@@ -2907,6 +2923,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     onPointerTap(ndcX: number, _ndcY: number, ctx: StageContext): void {
+      if (currentSubtab === 'preview') return;
       const direction = ndcX >= -0.15 ? 1 : -1;
       angleVelocityRad = 0;
       pendingAngleSync = false;
@@ -2916,6 +2933,7 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     onPointerDoubleTap(_ndcX: number, _ndcY: number, ctx: StageContext): void {
+      if (currentSubtab === 'preview') return;
       angleVelocityRad = 0;
       pendingAngleSync = false;
       targetAngleRad = 0;
@@ -2968,6 +2986,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       }
 
       const activeKind = syncActiveModelVisibility();
+
+      if (currentSubtab === 'preview') {
+        updateOrbitalsAndDust(elapsed, ctx.reducedMotion);
+        return;
+      }
 
       if (activeKind === 'avatar') {
         applyAvatarPose(dt, currentPose, ctx.reducedMotion);

@@ -9,15 +9,6 @@
     --hud-panel-width: clamp(350px, 42vw, 460px);
     --hud-panel-right-inset: 14px;
   }
-
-  .hud-app-preview-layout {
-    grid-template-columns: 140px minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .hud-phone-frame {
-    max-width: 140px;
-  }
 }
 
 /* ==========================================================================
@@ -238,21 +229,57 @@
     padding: 0 10px 10px;
   }
 
-  .hud-app-preview-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+  /* Full-Frame Live Application Stage (<= 859px) */
+  .site-live-app-stage {
+    top: calc(max(8px, env(safe-area-inset-top)) + 50px);
+    bottom: calc(109px + env(safe-area-inset-bottom) + clamp(144px, 20dvh, 180px) + 6px);
+    left: 6px;
+    right: 6px;
   }
 
-  .hud-phone-stage {
-    position: static;
+  .site-live-app-stage[data-full-studio='true'] {
+    bottom: calc(109px + env(safe-area-inset-bottom));
   }
 
-  .site-hud-panel[data-sheet-expanded='false'] .hud-phone-frame {
-    max-width: 112px;
+  .site-live-app-phone {
+    padding: 4px;
+    border-radius: 24px;
   }
 
-  .site-hud-panel[data-sheet-expanded='true'] .hud-phone-frame {
-    max-width: 164px;
+  .site-live-app-screen {
+    border-radius: 20px;
+  }
+
+  .site-live-app-island {
+    top: 4px;
+    height: 7px;
+    min-width: 32px;
+  }
+
+  .site-hud-panel[data-layout-mode='app-bottom'] {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: calc(109px + env(safe-area-inset-bottom));
+    width: auto;
+    height: clamp(144px, 20dvh, 180px);
+    transform: none;
+  }
+
+  .site-hud-panel[data-layout-mode='app-bottom'][data-sheet-expanded='true'] {
+    width: auto;
+    height: calc(100dvh - 172px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  .site-hud-panel[data-layout-mode='app-bottom'] .site-hud-grab-btn {
+    min-height: 34px;
+    padding: 3px 12px 4px;
+    align-items: center;
+    touch-action: pan-y;
+  }
+
+  .site-hud-panel[data-layout-mode='app-bottom'] .hud-metric-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hud-grid-2 {

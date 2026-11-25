@@ -186,6 +186,20 @@
     linear-gradient(155deg, #060608 0%, #0d0d10 52%, #050507 100%);
 }
 
+.atelier-backdrop-stage.is-webgl-fallback[data-motion-variant='aurora'] {
+  background:
+    radial-gradient(ellipse 85% 65% at 42% 24%, rgba(210, 228, 252, 0.85), transparent 72%),
+    radial-gradient(ellipse 75% 70% at 78% 76%, rgba(176, 198, 232, 0.48), transparent 68%),
+    linear-gradient(155deg, #f3f6fb 0%, #e4ebf5 52%, #d4dfee 100%);
+}
+
+.atelier-backdrop-stage.is-webgl-fallback[data-motion-theme='dark'][data-motion-variant='aurora'] {
+  background:
+    radial-gradient(ellipse 80% 60% at 42% 24%, rgba(44, 72, 112, 0.44), transparent 70%),
+    radial-gradient(ellipse 70% 65% at 78% 82%, rgba(28, 42, 74, 0.54), transparent 70%),
+    linear-gradient(155deg, #070a12 0%, #04060b 55%, #000000 100%);
+}
+
 /* ==========================================================================
  * Choreographed Login Portal Exit (Dissolve Everything Except Flying Logo)
  * ========================================================================== */
@@ -1187,53 +1201,6 @@
 }
 
 /* Dev Seed Quick-Fill Bar (>= 48px touch target & 8px gap) */
-.atelier-seed-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border-radius: 14px;
-  background: var(--atelier-surface-subtle);
-}
-
-.atelier-seed-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--atelier-ink-secondary);
-  line-height: 1.5;
-}
-
-.atelier-seed-btns {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.atelier-seed-pill {
-  min-height: 48px;
-  min-width: 48px;
-  padding: 0 12px;
-  border-radius: 11px;
-  border: 1px solid var(--atelier-secondary-border);
-  background: var(--atelier-surface-elevated);
-  box-shadow: var(--atelier-pill-specular);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  color: var(--atelier-ink-primary);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.atelier-seed-pill:hover {
-  border-color: var(--atelier-input-border-hover);
-}
-
 /* ==========================================================================
 /* ==========================================================================
  * Google Sign-In Official Button & Apple Button Stack (DESIGN.md v3)
