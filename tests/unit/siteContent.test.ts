@@ -429,6 +429,62 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.ok(copy.newsletter.unsubscribeCta.length > 0);
     }
   });
+
+  it('enforces zero duplicate buttons, names, or sibling icons across all 7 Architecture tiers and unifies 07 Governance cleanly', async () => {
+    const {
+      getTechItemsForBlueprintNode,
+      getUnifiedGovernanceTechItems,
+    } = await import('../../src/site/hud/architectureTechCatalog.ts');
+
+    const arch = SITE_COPY.en.architecture;
+    const allNodes = [...arch.tiers.flatMap((t) => t.nodes), ...arch.governance];
+
+    for (const mode of ['mvp', 'prod'] as const) {
+      const seenIds = new Set<string>();
+      const seenNames = new Set<string>();
+
+      for (const node of allNodes) {
+        const items = getTechItemsForBlueprintNode(node.id, mode);
+        assert.ok(items.length >= 1, `[${mode}] Node ${node.id} must define at least 1 tech item`);
+        const nodeIcons = new Set<string>();
+        for (const item of items) {
+          assert.ok(
+            !seenIds.has(item.id),
+            `[${mode}] Duplicate Architecture tech item id "${item.id}" in node ${node.id}`
+          );
+          seenIds.add(item.id);
+
+          const normalizedName = item.name.trim().toLowerCase();
+          assert.ok(
+            !seenNames.has(normalizedName),
+            `[${mode}] Duplicate Architecture tech item name "${item.name}" in node ${node.id}`
+          );
+          seenNames.add(normalizedName);
+
+          assert.ok(
+            !nodeIcons.has(item.icon),
+            `[${mode}] Duplicate icon "${item.icon}" within node ${node.id}`
+          );
+          nodeIcons.add(item.icon);
+        }
+      }
+
+      // 07 Governance unified strip: 6 consolidated items (2 Audit + 2 RBAC + 2 CI/CD) with 6 unique icons
+      const unifiedGov = getUnifiedGovernanceTechItems(mode);
+      assert.equal(unifiedGov.length, 6, `[${mode}] 07 Governance must expose 6 consolidated items`);
+      const govIcons = new Set(unifiedGov.map((item) => item.icon));
+      assert.equal(
+        govIcons.size,
+        unifiedGov.length,
+        `[${mode}] Every icon in 07 Governance unified strip must be unique`
+      );
+      assert.deepEqual(
+        [0, 1, 2].map((pillarIdx) => unifiedGov.filter((item) => item.pillarIndex === pillarIdx).length),
+        [2, 2, 2],
+        `[${mode}] 07 Governance must balance 2 Audit + 2 RBAC + 2 CI/CD items`
+      );
+    }
+  });
 });
 
 

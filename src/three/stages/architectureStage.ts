@@ -87,16 +87,16 @@ interface TierSpecEntry {
 const TIER_SPECS: readonly TierSpecEntry[] = [
   {
     label: '01 Client Apps',
-    subtext: 'Web · iOS · Android',
+    subtext: 'Web · Mobile · Ops',
     mvpTechIcons: [
-      { icon: 'react', label: 'React 19', tag: 'SPA · TS7' },
-      { icon: 'bolt', label: 'Vite · WASM', tag: '0B FACE' },
-      { icon: 'mobile', label: 'Capacitor 8', tag: 'HYBRID' },
+      { icon: 'react', label: 'Web PWA', tag: 'REACT · 0B' },
+      { icon: 'mobile', label: 'Capacitor 8', tag: 'iOS · AOS' },
+      { icon: 'sparkle', label: 'Seed QC', tag: 'SANDBOX' },
     ],
     prodTechIcons: [
-      { icon: 'mobile', label: 'PWA Offline', tag: 'SW SHELL' },
-      { icon: 'database', label: 'IndexedDB', tag: 'LOCAL SYNC' },
+      { icon: 'mobile', label: 'PWA · IDB', tag: 'OFFLINE' },
       { icon: 'lock', label: 'Keychain', tag: 'STORE HA' },
+      { icon: 'activity', label: 'Telemetry', tag: 'CATALOG' },
     ],
   },
   {
@@ -115,11 +115,11 @@ const TIER_SPECS: readonly TierSpecEntry[] = [
   },
   {
     label: '03 API Gateway',
-    subtext: 'Auth · Rate · Schema',
+    subtext: 'Express · OIDC · Guard',
     mvpTechIcons: [
-      { icon: 'server', label: 'Express 5', tag: 'REST API' },
+      { icon: 'server', label: 'Express 5', tag: 'REST · GZIP' },
       { icon: 'key', label: 'OIDC · JWT', tag: 'STATELESS' },
-      { icon: 'shieldCheck', label: 'RBAC MW', tag: 'ROUTE ACL' },
+      { icon: 'shield', label: 'CORS Guard', tag: 'BOUNDARY' },
     ],
     prodTechIcons: [
       { icon: 'cloud', label: 'Cloud Run', tag: 'AUTOSCALE' },
@@ -129,24 +129,24 @@ const TIER_SPECS: readonly TierSpecEntry[] = [
   },
   {
     label: '04 iNVTRY Core',
-    subtext: '3D Fit · AI · Closet',
+    subtext: '3D Fit · Closet · Geo · Resale',
     mvpTechIcons: [
       { icon: 'cube3d', label: 'Three.js 3D', tag: '21-BONE' },
-      { icon: 'sparkle', label: '8-Cut VTON', tag: 'NO-TRAIN' },
-      { icon: 'mapPin', label: 'Maps Proxy', tag: 'WEATHER' },
+      { icon: 'sparkle', label: '11-Slot CPW', tag: 'CIELAB' },
+      { icon: 'mapPin', label: 'Geo · Resale', tag: 'MAPS API' },
     ],
     prodTechIcons: [
-      { icon: 'gpu', label: 'L4/A100 Pool', tag: 'VPC GPU' },
-      { icon: 'sparkle', label: 'Vertex AI', tag: 'ENTERPRISE' },
-      { icon: 'bolt', label: 'Geo · Redis', tag: '20M TTL' },
+      { icon: 'cube3d', label: 'Three.js PBR', tag: 'VTON PIPE' },
+      { icon: 'sparkle', label: 'Wardrobe BI', tag: 'CAPSULE' },
+      { icon: 'mapPin', label: 'Geo · Resale', tag: 'PARTNER' },
     ],
   },
   {
     label: '05 Shared Base',
-    subtext: 'Sync · Queue · Cache',
+    subtext: 'Logs · Storage · Queue',
     mvpTechIcons: [
-      { icon: 'activity', label: 'PII Logger', tag: 'MASKED' },
-      { icon: 'storage', label: 'Tenant Dir', tag: '4MB GUARD' },
+      { icon: 'activity', label: 'Req Logger', tag: 'SAFE ERR' },
+      { icon: 'storage', label: 'Media Path', tag: '4MB GUARD' },
       { icon: 'sync', label: 'SSE Retry', tag: '8-CUT JOB' },
     ],
     prodTechIcons: [
@@ -157,29 +157,29 @@ const TIER_SPECS: readonly TierSpecEntry[] = [
   },
   {
     label: '06 Data · Hardware',
-    subtext: 'SQLite · GPU Cluster',
+    subtext: 'SQL · Cache · GPU · Vault',
     mvpTechIcons: [
-      { icon: 'database', label: 'SQLite WASM', tag: 'LOCAL DB' },
-      { icon: 'bolt', label: 'Mem Cache', tag: '20M TTL' },
-      { icon: 'gpu', label: 'Vertex API', tag: 'SINGLE NODE' },
+      { icon: 'database', label: 'SQLite WASM', tag: 'ATOMIC DB' },
+      { icon: 'bolt', label: 'TTL Cache', tag: '20M TTL' },
+      { icon: 'gpu', label: 'Vertex · Env', tag: 'ZERO-LEAK' },
     ],
     prodTechIcons: [
       { icon: 'database', label: 'CloudSQL HA', tag: 'POSTGRES' },
       { icon: 'bolt', label: 'Redis HA', tag: 'SUB-MS' },
-      { icon: 'gpu', label: 'L4 / A100', tag: 'MULTI-AZ' },
+      { icon: 'gpu', label: 'L4 / A100', tag: 'KMS CMEK' },
     ],
   },
   {
     label: '07 Governance',
     subtext: 'Cross-Cutting Control Plane',
     mvpTechIcons: [
-      { icon: 'activity', label: 'Audit Mask', tag: 'PII TRACE' },
-      { icon: 'shieldCheck', label: 'RBAC UI', tag: 'MENU/BTN' },
-      { icon: 'gitBranch', label: 'oxlint CI', tag: '340+ QA' },
+      { icon: 'activity', label: 'Audit Gate', tag: 'PII · HOOK' },
+      { icon: 'shieldCheck', label: 'RBAC · IDOR', tag: 'MENU/BTN' },
+      { icon: 'gitBranch', label: 'CI · E2E', tag: '360+ QA' },
     ],
     prodTechIcons: [
-      { icon: 'activity', label: 'WORM Audit', tag: 'SIEM SOC' },
-      { icon: 'key', label: 'Least IAM', tag: 'ZERO-TRUST' },
+      { icon: 'activity', label: 'WORM Audit', tag: 'SIEM · SOC' },
+      { icon: 'key', label: 'Least IAM', tag: 'PENTEST' },
       { icon: 'gitBranch', label: 'Canary CD', tag: 'SBOM GATE' },
     ],
   },
