@@ -51,3 +51,8 @@ __pycache__/
 .agent/mcp_config.json
 .agents/mcp_config.json
 .mcp.json
+
+# Quixel Megascans (Fab Standard License: never redistribute raw/synced assets in public repos)
+.megascans-inbox/
+site/public/assets/megascans/
+public/assets/megascans/

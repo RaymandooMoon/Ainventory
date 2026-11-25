@@ -13,6 +13,10 @@ import {
   peekCachedSoftwareWebGl,
   scheduleAfterSoftwareDraw,
 } from './threeRuntimeCapabilities.ts';
+import {
+  applyMegascansPbrToMaterial,
+  createMegascansSession,
+} from '../../three/megascans/megascansMaterialLoader.ts';
 
 export type GachaThreePhase = 'idle' | 'spinning' | 'revealed';
 
@@ -701,6 +705,45 @@ export default function StoreThreeGachaStage({
 
     wakeRenderRef.current = requestRender;
 
+    // Silent Drop-In Quixel Megascans PBR upgrades (gacha-plinth + gacha-metal)
+    const megascansSession = createMegascansSession({ renderer, isSoftwareGl });
+    if (!isSoftwareGl) {
+      if (plinthMat instanceof THREE.MeshStandardMaterial) {
+        void megascansSession.loadSlot('gacha-plinth').then((loaded) => {
+          if (disposed || !loaded) return;
+          applyMegascansPbrToMaterial(plinthMat, loaded.textures, {
+            slotId: 'gacha-plinth',
+            repeat: loaded.entry.repeat,
+            normalStrength: loaded.entry.normalStrength,
+            normalConvention: loaded.entry.normalConvention,
+            preserveOriginalAlbedo: loaded.entry.preserveOriginalAlbedo,
+            aoMapIntensity: loaded.entry.aoMapIntensity,
+            keepScalarRoughness: true,
+            keepScalarMetalness: true,
+            targetGeometries: [plinthGeo],
+          });
+          requestRender();
+        });
+      }
+      if (brushedMetalMat instanceof THREE.MeshStandardMaterial) {
+        void megascansSession.loadSlot('gacha-metal').then((loaded) => {
+          if (disposed || !loaded) return;
+          applyMegascansPbrToMaterial(brushedMetalMat, loaded.textures, {
+            slotId: 'gacha-metal',
+            repeat: loaded.entry.repeat,
+            normalStrength: loaded.entry.normalStrength,
+            normalConvention: loaded.entry.normalConvention,
+            preserveOriginalAlbedo: true,
+            aoMapIntensity: loaded.entry.aoMapIntensity,
+            keepScalarRoughness: true,
+            keepScalarMetalness: true,
+            targetGeometries: [collarGeo, deckBezelGeo],
+          });
+          requestRender();
+        });
+      }
+    }
+
     const handleResize = () => {
       if (disposed || !container) return;
       const w = Math.max(1, container.clientWidth);
@@ -738,6 +781,8 @@ export default function StoreThreeGachaStage({
         resizeObserver?.disconnect();
         canvas.removeEventListener('webglcontextlost', onContextLost, false);
         canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
+        megascansSession.dispose();
+        stoneBumpTex?.dispose();
         scene.environment = null;
         envTexture?.dispose();
         contactShadowDark.dispose();

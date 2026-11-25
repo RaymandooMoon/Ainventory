@@ -32,6 +32,9 @@
     "verify:full": "npm run verify && npm run test:e2e",
     "ir:sync": "node --experimental-strip-types scripts/sync-ir-deck.mjs",
     "ir:sync:check": "node --experimental-strip-types scripts/sync-ir-deck.mjs --check",
+    "megascans:init": "python3 scripts/sync-megascans.py --init-inbox",
+    "megascans:sync": "python3 scripts/sync-megascans.py",
+    "megascans:check": "python3 scripts/sync-megascans.py --check",
     "hooks:install": "git config core.hooksPath .githooks && chmod +x .githooks/* .agent/hooks/*.mjs"
   },
   "dependencies": {

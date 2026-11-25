@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   CloudOff,
   FileText,
   Globe,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { translateSubTypeLabel } from '../services/skinToneAnalyzer.ts';
+import { canAccessAdminMegascansLab } from '../three/megascans/megascansCatalog.ts';
 import {
   apiFetch,
   flushPendingOfflineSync,
@@ -64,6 +66,7 @@ function AccountSettingsContent({
   onOpenProfile,
   onOpenSampleImport,
   onOpenAdminPage,
+  onOpenMegascansLab,
   onLogout,
   onAccountDeleted,
   onOpenLegalDoc,
@@ -78,6 +81,7 @@ function AccountSettingsContent({
     user?.role === 'admin' ||
     user?.username === 'admin' ||
     hasUserPermission(user, 'admin:manage_roles');
+  const canOpenMegascansLab = isAdminUser && canAccessAdminMegascansLab(user);
   const isSiteDemo = isSiteDemoUser(user);
   const canDeleteAccount = !user?.isSampleDemo;
   const [economyState, setEconomyState] = useState(() => loadStoredEconomyState());
@@ -392,6 +396,41 @@ function AccountSettingsContent({
               }}
             >
               <span>{tx(lang, '관리 페이지 열기', 'Open Admin')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Only: Quixel Megascans Three.js PBR & GLB Lab */}
+      {canOpenMegascansLab && onOpenMegascansLab && (
+        <div className="hig-sheet-card" data-admin-megascans-shortcut="true">
+          <div className="hig-sheet-row-between" style={{ gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Box size={16} />
+              <div>
+                <div className="hig-body" style={{ fontWeight: 700 }}>
+                  {tx(lang, 'Quixel Megascans 3D 랩', 'Quixel Megascans 3D Lab')}
+                </div>
+                <div className="hig-caption">
+                  {tx(
+                    lang,
+                    'Fab.com PBR 텍스처·GLB 드래그&드롭 검증 및 slot.config.json 생성',
+                    'Drag & drop Fab.com PBR textures or GLB models to calibrate slots & export config.'
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              id="settings-open-megascans-lab-btn"
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                triggerHaptic('selection');
+                onClose?.();
+                onOpenMegascansLab?.();
+              }}
+            >
+              <span>{tx(lang, '3D 랩 열기', 'Open 3D Lab')}</span>
             </button>
           </div>
         </div>
@@ -1005,6 +1044,7 @@ export default function AccountSettingsSheet({
   onOpenProfile,
   onOpenSampleImport,
   onOpenAdminPage,
+  onOpenMegascansLab,
   onLogout,
   onAccountDeleted,
 }) {
@@ -1032,6 +1072,7 @@ export default function AccountSettingsSheet({
             onOpenProfile={onOpenProfile}
             onOpenSampleImport={onOpenSampleImport}
             onOpenAdminPage={onOpenAdminPage}
+            onOpenMegascansLab={onOpenMegascansLab}
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onOpenLegalDoc={setLegalDoc}

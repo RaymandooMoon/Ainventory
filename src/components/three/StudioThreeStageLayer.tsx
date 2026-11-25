@@ -26,6 +26,14 @@ import {
   peekCachedSoftwareWebGl,
   scheduleAfterSoftwareDraw,
 } from './threeRuntimeCapabilities.ts';
+import {
+  type FittingFloorSlotId,
+  resolveFittingFloorSlotId,
+} from '../../three/megascans/megascansCatalog.ts';
+import {
+  applyMegascansPbrToMaterial,
+  createMegascansSession,
+} from '../../three/megascans/megascansMaterialLoader.ts';
 
 export interface StudioThreeStageLayerProps {
   isOutdoor: boolean;
@@ -421,6 +429,7 @@ export default function StudioThreeStageLayer({
   );
 
   const propsRef = useRef({
+    stageBackgroundId,
     isOutdoor,
     weatherMode,
     timeOfDay,
@@ -438,6 +447,7 @@ export default function StudioThreeStageLayer({
     mirrorX,
   });
   propsRef.current = {
+    stageBackgroundId,
     isOutdoor,
     weatherMode,
     timeOfDay,
@@ -457,6 +467,9 @@ export default function StudioThreeStageLayer({
 
   const triggerWakeRef = useRef<(() => void) | null>(null);
   const syncCutoutTexRef = useRef<((url: string | null | undefined) => void) | null>(null);
+  const syncFloorPresetRef = useRef<
+    ((bgId: string | undefined, outdoor: boolean) => void) | null
+  >(null);
   const [isSoftwareGlAttr, setIsSoftwareGlAttr] = useState<boolean>(
     () => peekCachedSoftwareWebGl() ?? true
   );
@@ -1085,13 +1098,22 @@ export default function StudioThreeStageLayer({
           (p.weatherMode === 'wind' || p.weatherMode === 'coldwave' || lf.opticalRegime === 'wind');
 
         if (floorMat instanceof THREE.MeshStandardMaterial) {
+          const hasOrm = Boolean(floorMat.userData.hasMegascansOrm);
           floorMat.roughness = isSunshower
-            ? 0.11
+            ? hasOrm
+              ? 0.22
+              : 0.11
             : isOutdoorRain
-              ? 0.16
+              ? hasOrm
+                ? 0.28
+                : 0.16
               : isOutdoorSnow
-                ? 0.84
-                : 0.72;
+                ? hasOrm
+                  ? 0.96
+                  : 0.84
+                : hasOrm
+                  ? 1.0
+                  : 0.72;
           floorMat.metalness = isSunshower ? 0.68 : isOutdoorRain ? 0.52 : 0.14;
         }
         // Keep dry outdoor stone paving 100% crisp at human scale; enable wet/snow/sunshower floor sheen
@@ -1401,6 +1423,52 @@ export default function StudioThreeStageLayer({
       syncCutoutTexRef.current = syncCutoutTexture;
       syncCutoutTexture(propsRef.current.modelImageUrl);
 
+      // Silent Drop-In Quixel Megascans 3-preset floor upgrades (stone / oak / outdoor)
+      const megascansSession = createMegascansSession({ renderer, isSoftwareGl });
+      let activeFloorSlotId: FittingFloorSlotId | null = null;
+      let floorSlotToken = 0;
+
+      const syncFloorMegascansPreset = (bgId: string | undefined, outdoor: boolean) => {
+        if (disposed || isSoftwareGl || !(floorMat instanceof THREE.MeshStandardMaterial)) {
+          return;
+        }
+        const nextSlot = resolveFittingFloorSlotId(bgId, outdoor);
+        if (nextSlot === activeFloorSlotId) return;
+        activeFloorSlotId = nextSlot;
+        const myToken = ++floorSlotToken;
+
+        void megascansSession.loadSlot(nextSlot).then((loaded) => {
+          if (disposed || myToken !== floorSlotToken) return;
+          if (loaded) {
+            applyMegascansPbrToMaterial(floorMat, loaded.textures, {
+              slotId: nextSlot,
+              repeat: loaded.entry.repeat,
+              normalStrength: loaded.entry.normalStrength,
+              normalConvention: loaded.entry.normalConvention,
+              preserveOriginalAlbedo: loaded.entry.preserveOriginalAlbedo,
+              aoMapIntensity: loaded.entry.aoMapIntensity,
+              keepScalarRoughness: true,
+              keepScalarMetalness: true,
+              targetGeometries: [floorGeo],
+            });
+          } else if (floorMat.userData.megascansSlotId) {
+            floorMat.map = null;
+            floorMat.normalMap = null;
+            floorMat.aoMap = null;
+            floorMat.roughnessMap = null;
+            floorMat.metalnessMap = null;
+            floorMat.bumpMap = stoneBumpTex;
+            floorMat.userData.megascansSlotId = null;
+            floorMat.userData.hasMegascansOrm = false;
+            floorMat.needsUpdate = true;
+          }
+          requestRender();
+        });
+      };
+
+      syncFloorPresetRef.current = syncFloorMegascansPreset;
+      syncFloorMegascansPreset(propsRef.current.stageBackgroundId, propsRef.current.isOutdoor);
+
       triggerWakeRef.current = () => {
         if (propsRef.current.paused) {
           cancelScheduledFrames();
@@ -1446,10 +1514,13 @@ export default function StudioThreeStageLayer({
         disposed = true;
         triggerWakeRef.current = null;
         syncCutoutTexRef.current = null;
+        syncFloorPresetRef.current = null;
         cancelScheduledFrames();
         resizeObserver?.disconnect();
         canvas.removeEventListener('webglcontextlost', onContextLost, false);
         canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
+        megascansSession.dispose();
+        stoneBumpTex?.dispose();
         scene.environment = null;
         envTexture?.dispose();
         dummyCutoutTex.dispose();
@@ -1483,6 +1554,10 @@ export default function StudioThreeStageLayer({
   useEffect(() => {
     syncCutoutTexRef.current?.(modelImageUrl);
   }, [modelImageUrl]);
+
+  useEffect(() => {
+    syncFloorPresetRef.current?.(stageBackgroundId, isOutdoor);
+  }, [stageBackgroundId, isOutdoor]);
 
   useEffect(() => {
     triggerWakeRef.current?.();
