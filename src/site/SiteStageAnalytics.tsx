@@ -263,7 +263,7 @@ export default function SiteStageAnalytics({
                     onClose();
                   }}
                 >
-                  <span>{isKo ? '3D 피팅(Try-On) 이동' : 'Explore 3D Try-On'}</span>
+                  <span>{isKo ? '3D 피팅 이동' : 'Explore 3D Fitting'}</span>
                   <ArrowUpRight size={15} aria-hidden="true" />
                 </button>
                 <button
@@ -275,7 +275,7 @@ export default function SiteStageAnalytics({
                     onClose();
                   }}
                 >
-                  <span>{isKo ? '케어 · 캘린더 보기' : 'Open Calendar & Care'}</span>
+                  <span>{isKo ? '케어 · 가치 보기' : 'Open Care & Value'}</span>
                   <ArrowUpRight size={15} aria-hidden="true" />
                 </button>
               </div>

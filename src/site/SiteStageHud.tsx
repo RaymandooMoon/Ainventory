@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import type { ActiveStageId, StageInteractionState } from '../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import { SpecsStageHud, AboutStageHud } from './hud/SpecsAboutHud.tsx';
@@ -23,6 +23,7 @@ export interface SiteStageHudProps {
 interface SubtabOption<T extends string> {
   readonly id: T;
   readonly label: string;
+  readonly fullLabel?: string;
 }
 
 interface SheetGestureState {
@@ -37,10 +38,19 @@ interface SheetGestureState {
 }
 
 const MOBILE_SHEET_MAX_WIDTH = 859;
-const HORIZONTAL_SWIPE_PX = 28;
+const ABOUT_BOTTOM_SHEET_MAX_WIDTH = 520;
+const SWIPE_THRESHOLD_PX = 26;
 
 function isMobileSheetViewport(): boolean {
   return typeof window !== 'undefined' && window.innerWidth <= MOBILE_SHEET_MAX_WIDTH;
+}
+
+function isAboutBottomSheetViewport(stage: ActiveStageId): boolean {
+  return (
+    stage === 'about' &&
+    typeof window !== 'undefined' &&
+    window.innerWidth <= ABOUT_BOTTOM_SHEET_MAX_WIDTH
+  );
 }
 
 function readGesturePoint(e: PointerEvent | TouchEvent): { x: number; y: number } | null {
@@ -80,9 +90,8 @@ function handleSubtabKeys<T extends string>(
 }
 
 /**
- * Right-38% Desktop / 2-Detent Expandable Mobile Bottom Sheet Stitch v4 Frosted Glass HUD Overlay.
- * Floats cleanly beside (or anchored at 35dvh resting detent on mobile, expanding smoothly on scroll/swipe/handle tap)
- * the live interactive Three.js 3D stage without blocking 3D pointer gestures, binding 100% lossless KO/EN content.
+ * Right-column Desktop / Split-Drawer Mobile (Studio, Architecture, Specs) +
+ * Adaptive Bottom-Sheet Mobile (About <= 520px) Frosted Glass HUD Overlay.
  */
 function SiteStageHudPanel({
   activeStage,
@@ -97,6 +106,9 @@ function SiteStageHudPanel({
 }: SiteStageHudProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const [isCompactPhone, setIsCompactPhone] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.innerWidth <= ABOUT_BOTTOM_SHEET_MAX_WIDTH
+  );
   const isSheetExpandedRef = useRef(false);
   const suppressGrabClickRef = useRef(false);
   const suppressTimerRef = useRef<number | null>(null);
@@ -110,6 +122,8 @@ function SiteStageHudPanel({
     startY: 0,
     startScrollTop: 0,
   });
+
+  const useBottomSheet = activeStage === 'about' && isCompactPhone;
 
   const activeSubtabKey =
     activeStage === 'studio'
@@ -147,21 +161,27 @@ function SiteStageHudPanel({
   // Reset mobile expanded state cleanly if viewport grows into desktop HUD layout
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const mql = window.matchMedia(`(max-width: ${MOBILE_SHEET_MAX_WIDTH}px)`);
-    const onViewportChange = (e: MediaQueryListEvent) => {
+    const mobileMql = window.matchMedia(`(max-width: ${MOBILE_SHEET_MAX_WIDTH}px)`);
+    const phoneMql = window.matchMedia(`(max-width: ${ABOUT_BOTTOM_SHEET_MAX_WIDTH}px)`);
+    const onMobileChange = (e: MediaQueryListEvent) => {
       if (!e.matches) {
         gestureRef.current.active = false;
         isSheetExpandedRef.current = false;
         setIsSheetExpanded(false);
       }
     };
-    mql.addEventListener('change', onViewportChange);
+    const onPhoneChange = (e: MediaQueryListEvent) => {
+      setIsCompactPhone(e.matches);
+    };
+    mobileMql.addEventListener('change', onMobileChange);
+    phoneMql.addEventListener('change', onPhoneChange);
     return () => {
-      mql.removeEventListener('change', onViewportChange);
+      mobileMql.removeEventListener('change', onMobileChange);
+      phoneMql.removeEventListener('change', onPhoneChange);
     };
   }, []);
 
-  // Horizontal swipe tracking on the right-side explanation drawer toggle handle
+  // Swipe tracking: vertical for About bottom-sheet (<=520px), horizontal for split-drawer
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
@@ -180,6 +200,31 @@ function SiteStageHudPanel({
       const dy = pt.y - g.startY;
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
+      const bottomSheetMode = isAboutBottomSheetViewport(activeStage);
+
+      if (bottomSheetMode) {
+        if (absDx > 14 && absDx > absDy * 1.15) {
+          g.lockedOut = true;
+          return;
+        }
+        if (g.zone !== 'handle' && g.zone !== 'header') return;
+
+        const expanded = isSheetExpandedRef.current;
+        if (!expanded && dy < -SWIPE_THRESHOLD_PX && absDy > absDx * 1.15) {
+          g.handled = true;
+          g.active = false;
+          markSuppressGrabClick();
+          applySheetExpanded(true);
+          return;
+        }
+        if (expanded && dy > SWIPE_THRESHOLD_PX && absDy > absDx * 1.15) {
+          g.handled = true;
+          g.active = false;
+          markSuppressGrabClick();
+          applySheetExpanded(false);
+        }
+        return;
+      }
 
       if (absDy > 14 && absDy > absDx * 1.15) {
         g.lockedOut = true;
@@ -191,7 +236,7 @@ function SiteStageHudPanel({
       const expanded = isSheetExpandedRef.current;
 
       // Swipe left on handle -> expand right explanation drawer to full width
-      if (!expanded && dx < -HORIZONTAL_SWIPE_PX && absDx > absDy * 1.15) {
+      if (!expanded && dx < -SWIPE_THRESHOLD_PX && absDx > absDy * 1.15) {
         g.handled = true;
         g.active = false;
         markSuppressGrabClick();
@@ -200,7 +245,7 @@ function SiteStageHudPanel({
       }
 
       // Swipe right on handle -> collapse back to Left-3D / Right-Explanation split view
-      if (expanded && dx > HORIZONTAL_SWIPE_PX && absDx > absDy * 1.15) {
+      if (expanded && dx > SWIPE_THRESHOLD_PX && absDx > absDy * 1.15) {
         g.handled = true;
         g.active = false;
         markSuppressGrabClick();
@@ -241,7 +286,7 @@ function SiteStageHudPanel({
         suppressTimerRef.current = null;
       }
     };
-  }, [applySheetExpanded, markSuppressGrabClick]);
+  }, [activeStage, applySheetExpanded, markSuppressGrabClick]);
 
   const beginSheetGesture = (
     e: React.PointerEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
@@ -251,7 +296,6 @@ function SiteStageHudPanel({
 
     const isTouch = 'touches' in e;
     if (!isTouch) {
-      // Touch devices are handled exclusively via touchstart/touchmove/touchend
       if (e.pointerType === 'touch') return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (gestureRef.current.active && gestureRef.current.source === 'touch') return;
@@ -301,7 +345,6 @@ function SiteStageHudPanel({
         prefix: 'hud-studio-tab',
         tabs,
         current: interaction.studioSubtab,
-        badge: null,
         onSelect: (id: StageInteractionState['studioSubtab']) =>
           onUpdateInteraction({ studioSubtab: id }),
       };
@@ -311,14 +354,17 @@ function SiteStageHudPanel({
       const tabs: readonly SubtabOption<StageInteractionState['architectureSubtab']>[] = [
         { id: 'blueprint', label: copy.subtabs.archBlueprint },
         { id: 'privacy', label: copy.subtabs.archPrivacy },
-        { id: 'maps', label: copy.subtabs.archMaps },
+        {
+          id: 'maps',
+          label: 'Google API',
+          fullLabel: copy.subtabs.archMaps,
+        },
       ];
       return {
         ariaLabel: 'Architecture modules',
         prefix: 'hud-arch-tab',
         tabs,
         current: interaction.architectureSubtab,
-        badge: null,
         onSelect: (id: StageInteractionState['architectureSubtab']) =>
           onUpdateInteraction({ architectureSubtab: id }),
       };
@@ -334,7 +380,6 @@ function SiteStageHudPanel({
         prefix: 'hud-specs-tab',
         tabs,
         current: interaction.specsSubtab,
-        badge: copy.stack.note,
         onSelect: (id: StageInteractionState['specsSubtab']) =>
           onUpdateInteraction({ specsSubtab: id }),
       };
@@ -350,21 +395,35 @@ function SiteStageHudPanel({
       prefix: 'hud-about-tab',
       tabs,
       current: interaction.aboutSubtab,
-      badge: null,
       onSelect: (id: StageInteractionState['aboutSubtab']) =>
         onUpdateInteraction({ aboutSubtab: id }),
     };
   })();
 
-  const showHeaderBadge = Boolean(stageHeader.badge) && stageHeader.tabs.length < 3;
   const topDockKind = getTopControlsDockKind(activeStage, interaction, copy);
   const grabAriaLabel = isSheetExpanded
     ? lang === 'ko'
       ? '패널 접기 (3D 무대 크게 보기)'
       : 'Collapse panel to reveal 3D stage'
     : lang === 'ko'
-      ? '패널 위로 펼치기'
-      : 'Expand panel upward';
+      ? '패널 넓게 펼치기'
+      : 'Expand panel';
+
+  const grabText = useBottomSheet
+    ? isSheetExpanded
+      ? lang === 'ko'
+        ? '3D 루프 보기'
+        : 'Show 3D Loop'
+      : lang === 'ko'
+        ? '전체 보기'
+        : 'Expand'
+    : isSheetExpanded
+      ? lang === 'ko'
+        ? '3D · 설명 분할'
+        : 'Split 3D'
+      : lang === 'ko'
+        ? '넓게 보기'
+        : 'Expand';
 
   return (
     <>
@@ -381,33 +440,37 @@ function SiteStageHudPanel({
         data-hud-surface="true"
         data-no-marble="true"
         data-stage={activeStage}
+        data-layout-mode={useBottomSheet ? 'sheet' : 'split'}
         data-top-dock={topDockKind}
         data-sheet-expanded={isSheetExpanded ? 'true' : 'false'}
         aria-label={`${activeStage} inspector`}
       >
-      <button
-        type="button"
-        className="site-hud-grab-btn"
-        aria-expanded={isSheetExpanded}
-        aria-controls="site-hud-tabpanel"
-        aria-label={grabAriaLabel}
-        onClick={handleGrabClick}
-        onPointerDown={(e) => beginSheetGesture(e, 'handle')}
-        onTouchStart={(e) => beginSheetGesture(e, 'handle')}
-      >
-        <span className="site-hud-grab-cue" aria-hidden="true">
-          {isSheetExpanded ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          <span>
-            {isSheetExpanded
-              ? lang === 'ko'
-                ? '3D · 설명 분할'
-                : 'Split 3D'
-              : lang === 'ko'
-                ? '넓게 보기'
-                : 'Expand'}
+        <button
+          type="button"
+          className="site-hud-grab-btn"
+          aria-expanded={isSheetExpanded}
+          aria-controls="site-hud-tabpanel"
+          aria-label={grabAriaLabel}
+          onClick={handleGrabClick}
+          onPointerDown={(e) => beginSheetGesture(e, 'handle')}
+          onTouchStart={(e) => beginSheetGesture(e, 'handle')}
+        >
+          {useBottomSheet && <span className="site-hud-grab-pill" aria-hidden="true" />}
+          <span className="site-hud-grab-cue" aria-hidden="true">
+            {useBottomSheet ? (
+              isSheetExpanded ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronUp size={14} />
+              )
+            ) : isSheetExpanded ? (
+              <ChevronRight size={14} />
+            ) : (
+              <ChevronLeft size={14} />
+            )}
+            <span>{grabText}</span>
           </span>
-        </span>
-      </button>
+        </button>
 
       <div
         ref={scrollRef}
@@ -489,6 +552,7 @@ function SiteStageHudPanel({
                 aria-controls="site-hud-tabpanel"
                 tabIndex={isSelected ? 0 : -1}
                 className={`site-hud-subtab-btn ${isSelected ? 'is-active' : ''}`}
+                title={tab.fullLabel}
                 onClick={() => {
                   triggerHaptic('selection');
                   (stageHeader.onSelect as (next: string) => void)(tab.id);
@@ -499,7 +563,6 @@ function SiteStageHudPanel({
             );
           })}
         </div>
-        {showHeaderBadge && <span className="site-hud-badge">{stageHeader.badge}</span>}
       </div>
     </aside>
     </>

@@ -106,9 +106,12 @@ export interface StageModule {
   onPointerMove?(ndcX: number, ndcY: number, ctx: StageContext): void;
   onPointerDrag?(dx: number, dy: number, ctx: StageContext): void;
   onPointerTap?(ndcX: number, ndcY: number, ctx: StageContext): void;
+  onPointerDoubleTap?(ndcX: number, ndcY: number, ctx: StageContext): void;
   update(dt: number, elapsed: number, ctx: StageContext): void;
   dispose(): void;
 }
+
+export type CameraLayoutMode = 'split' | 'sheet';
 
 /**
  * Adapter around the existing HERO marble physics controller so the director
@@ -135,7 +138,7 @@ export interface DirectorOptions {
 }
 
 /* ==========================================================================
- * 2. Camera Presets & Responsive Left-58% / Portrait Framing Solver
+ * 2. Camera Presets & Responsive Split / Bottom-Sheet Framing Solver
  * ========================================================================== */
 
 export const HERO_CAMERA_PRESET: CameraPreset = {
@@ -166,31 +169,35 @@ export const STAGE_CAMERA_PRESETS: Record<ActiveStageId, CameraPreset> = {
 };
 
 const PORTRAIT_ASPECT_THRESHOLD = 0.85;
+const ABOUT_SHEET_MAX_WIDTH = 520;
 const DEFAULT_PORTRAIT_LOOK_Y_OFFSET = 0.06;
 const MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET = 0.06;
+const SHEET_PORTRAIT_LOOK_Y_OFFSET = 0.64;
 const CAMERA_HALF_FOV_TAN = Math.tan(THREE.MathUtils.degToRad(20));
 
 function estimateRightPanelFraction(viewportWidth?: number, safeAspect = 16 / 9): number {
   if (typeof viewportWidth === 'number' && Number.isFinite(viewportWidth) && viewportWidth > 0) {
     if (viewportWidth < 640) {
-      // Compact mobile split view: right explanation drawer occupies ~55%, left 3D gets ~45%
-      return 0.55;
+      // Compact mobile split view: right explanation drawer occupies ~54%, left 3D gets ~46%
+      return 0.54;
     }
-    if (viewportWidth < 960) {
-      const panelPx = Math.min(440, Math.max(310, viewportWidth * 0.48)) + 12;
-      return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.42, 0.54);
+    if (viewportWidth < 860) {
+      const panelPx = Math.min(400, Math.max(260, viewportWidth * 0.54 - 8)) + 8;
+      return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.44, 0.54);
     }
-    const insetPx = Math.min(34, Math.max(18, viewportWidth * 0.024));
-    const panelPx = Math.min(580, Math.max(420, viewportWidth * 0.44)) + insetPx;
-    return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.34, 0.48);
+    const insetPx = Math.min(34, Math.max(16, viewportWidth * 0.024));
+    const panelPx = Math.min(536, Math.max(390, viewportWidth * 0.37)) + insetPx;
+    return THREE.MathUtils.clamp(panelPx / viewportWidth, 0.34, 0.46);
   }
-  return safeAspect < PORTRAIT_ASPECT_THRESHOLD ? 0.55 : 0.44;
+  return safeAspect < PORTRAIT_ASPECT_THRESHOLD ? 0.54 : 0.4;
 }
 
 /**
- * Computes responsive camera position and lookAt vectors so the 3D subject
- * fills the open LEFT viewport column boldly across desktop, tablet, and mobile
- * split layouts while the explanation panel docks cleanly on the RIGHT.
+ * Computes responsive camera position and lookAt vectors:
+ * - `layoutMode === 'split'`: centers the 3D subject cleanly inside the open LEFT column
+ *   across desktop, foldable, and mobile right-split drawers without HUD overlap.
+ * - `layoutMode === 'sheet'`: centers X = 0 and elevates the subject above the bottom
+ *   glass sheet (used on smartphone About stage <= 520px).
  */
 export function computeResponsiveCameraPreset(
   base: CameraPreset,
@@ -199,7 +206,8 @@ export function computeResponsiveCameraPreset(
   outLook: THREE.Vector3,
   isHero = false,
   portraitLookYOffset = 0.06,
-  viewportWidth?: number
+  viewportWidth?: number,
+  layoutMode: CameraLayoutMode = 'split'
 ): void {
   const safeAspect = Number.isFinite(aspect) && aspect > 0.2 ? aspect : 16 / 9;
 
@@ -213,19 +221,28 @@ export function computeResponsiveCameraPreset(
     return;
   }
 
+  if (layoutMode === 'sheet') {
+    const pull = THREE.MathUtils.clamp(0.84 / safeAspect, 1.32, 1.78);
+    const posZ = base.position.z * pull;
+    const lookDrop = Math.max(SHEET_PORTRAIT_LOOK_Y_OFFSET, portraitLookYOffset);
+    outPos.set(0, base.position.y - lookDrop * 0.24, posZ);
+    outLook.set(0, base.lookAt.y - lookDrop, base.lookAt.z);
+    return;
+  }
+
   const panelFraction = estimateRightPanelFraction(viewportWidth, safeAspect);
-  const leftFraction = Math.max(0.4, 1 - panelFraction);
+  const leftFraction = Math.max(0.42, 1 - panelFraction);
   const effectiveLeftAspect = safeAspect * leftFraction;
 
-  // Zoom pullback so the left 3D model fits cleanly inside the open left column without clipping
-  const zScale = THREE.MathUtils.clamp(0.32 / Math.max(effectiveLeftAspect, 0.16), 1.0, 1.38);
+  // Pull Z back generously on narrow portrait splits so full-width 3D assemblies clear the right drawer
+  const zScale = THREE.MathUtils.clamp(0.35 / Math.max(effectiveLeftAspect, 0.16), 1.0, 1.54);
   const posZ = base.position.z * zScale;
 
-  // Center world X=0 inside the open LEFT column with balanced inward margin to prevent left clipping
+  // Center world X=0 squarely in the open LEFT column
   const visibleHalfWidth = posZ * CAMERA_HALF_FOV_TAN * safeAspect;
-  const targetLookX = THREE.MathUtils.clamp(panelFraction * visibleHalfWidth * 0.92, 0.58, 2.55);
+  const targetLookX = THREE.MathUtils.clamp(panelFraction * visibleHalfWidth * 1.02, 0.62, 2.62);
 
-  const parallaxScale = THREE.MathUtils.clamp((safeAspect - 0.45) / 0.75, 0.32, 1.0);
+  const parallaxScale = THREE.MathUtils.clamp((safeAspect - 0.45) / 0.75, 0.28, 1.0);
   const parallaxX = (base.position.x - base.lookAt.x) * parallaxScale;
 
   const isCompact =
@@ -347,6 +364,7 @@ function easeInOutCubic(t: number): number {
 export class AinvtryStageDirector {
   private activeStage: StageId = 'hero';
   private readonly stages = new Map<ActiveStageId, StageModule>();
+  private readonly stageFactories = new Map<ActiveStageId, () => StageModule>();
 
   // Camera interpolation state
   private readonly camFromPos = HERO_CAMERA_PRESET.position.clone();
@@ -445,6 +463,30 @@ export class AinvtryStageDirector {
     this.stages.set(stage.id, stage);
   }
 
+  /** Register a lazy stage factory instantiated on first visit to reduce startup GPU/CPU stall. */
+  public registerStageFactory(id: ActiveStageId, factory: () => StageModule): void {
+    this.stageFactories.set(id, factory);
+  }
+
+  private ensureStage(id: ActiveStageId): StageModule | undefined {
+    const existing = this.stages.get(id);
+    if (existing) return existing;
+    const factory = this.stageFactories.get(id);
+    if (!factory) return undefined;
+    this.stageFactories.delete(id);
+    const created = factory();
+    this.registerStage(created);
+    return created;
+  }
+
+  private resolveLayoutMode(stage: StageId): CameraLayoutMode {
+    if (stage !== 'about') return 'split';
+    if (this.viewportWidth !== undefined) {
+      return this.viewportWidth <= ABOUT_SHEET_MAX_WIDTH ? 'sheet' : 'split';
+    }
+    return this.ctx.viewportAspect < 0.65 ? 'sheet' : 'split';
+  }
+
   public getStage(id: ActiveStageId): StageModule | undefined {
     return this.stages.get(id);
   }
@@ -488,8 +530,8 @@ export class AinvtryStageDirector {
 
   /**
    * Re-computes responsive framing using exact viewport pixel dimensions so
-   * narrow mobile widths (< 768px) switch cleanly to unobstructed bottom-sheet
-   * framing regardless of orientation.
+   * desktop, foldable split-drawer, and smartphone About bottom-sheet framing
+   * match CSS breakpoints cleanly.
    */
   public setViewportSize(width: number, height: number): void {
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
@@ -500,8 +542,7 @@ export class AinvtryStageDirector {
   }
 
   /**
-   * Re-computes responsive framing when the viewport aspect ratio changes
-   * (desktop left-58% framing vs. narrow portrait centered framing).
+   * Re-computes responsive framing when the viewport aspect ratio changes.
    */
   public setViewportAspect(aspect: number): void {
     if (!Number.isFinite(aspect) || aspect <= 0) return;
@@ -525,7 +566,8 @@ export class AinvtryStageDirector {
       this.camToLook,
       this.activeStage === 'hero',
       MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
-      this.viewportWidth
+      this.viewportWidth,
+      this.resolveLayoutMode(this.activeStage)
     );
 
     if (this.ctx.reducedMotion && !this.isTransitioning) {
@@ -550,8 +592,8 @@ export class AinvtryStageDirector {
 
     const prevStage = this.activeStage;
 
-    // Validate target before mutating active stage state
-    const nextModule = nextStage === 'hero' ? undefined : this.stages.get(nextStage);
+    // Validate & lazily instantiate target before mutating active stage state
+    const nextModule = nextStage === 'hero' ? undefined : this.ensureStage(nextStage);
     if (nextStage !== 'hero' && !nextModule) {
       return;
     }
@@ -603,7 +645,8 @@ export class AinvtryStageDirector {
         this.camToLook,
         false,
         MOBILE_DRAWER_PORTRAIT_LOOK_Y_OFFSET,
-        this.viewportWidth
+        this.viewportWidth,
+        this.resolveLayoutMode(nextStage)
       );
 
       const anchor = nextModule.getMarbleAnchor(elapsed, this.ctx.interaction);
@@ -654,22 +697,28 @@ export class AinvtryStageDirector {
     }
   }
 
-  /** Forward pointer drag in left 58% viewport to active 3D stage. */
+  /** Forward pointer drag in open 3D viewport to active 3D stage. */
   public handleLeftPointerDrag(dx: number, dy: number): void {
     if (this.activeStage === 'hero' || this.isTransitioning) return;
     this.stages.get(this.activeStage)?.onPointerDrag?.(dx, dy, this.ctx);
   }
 
-  /** Forward pointer hover/move (NDC -1..1) in left viewport to active 3D stage. */
+  /** Forward pointer hover/move (NDC -1..1) in open 3D viewport to active 3D stage. */
   public handleLeftPointerMove(ndcX: number, ndcY: number): void {
     if (this.activeStage === 'hero') return;
     this.stages.get(this.activeStage)?.onPointerMove?.(ndcX, ndcY, this.ctx);
   }
 
-  /** Forward click/tap (NDC -1..1) in left viewport to active 3D stage. */
+  /** Forward click/tap (NDC -1..1) in open 3D viewport to active 3D stage. */
   public handleLeftPointerTap(ndcX: number, ndcY: number): void {
     if (this.activeStage === 'hero' || this.isTransitioning) return;
     this.stages.get(this.activeStage)?.onPointerTap?.(ndcX, ndcY, this.ctx);
+  }
+
+  /** Forward double-tap / double-click (NDC -1..1) to reset active 3D turntable or focus. */
+  public handleLeftPointerDoubleTap(ndcX: number, ndcY: number): void {
+    if (this.activeStage === 'hero' || this.isTransitioning) return;
+    this.stages.get(this.activeStage)?.onPointerDoubleTap?.(ndcX, ndcY, this.ctx);
   }
 
   /** Call once per requestAnimationFrame inside the existing WebGL render loop. */
@@ -741,6 +790,7 @@ export class AinvtryStageDirector {
       this.ctx.scene.remove(stage.group);
     });
     this.stages.clear();
+    this.stageFactories.clear();
     this.dockColliders.clear();
   }
 

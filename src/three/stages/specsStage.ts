@@ -897,6 +897,7 @@ export function createSpecsStage(): StageModule {
 
   const floorRig = buildArchitecturalFloor(group, softGlowTex);
   const rippleRig = buildRippleRig(group);
+  let hoveredIndex: PillarIndex | null = null;
 
   const carouselGroup = new THREE.Group();
   carouselGroup.name = 'specs-pillar-carousel';
@@ -1015,6 +1016,7 @@ export function createSpecsStage(): StageModule {
     onExit(_ctx: StageContext): void {
       stageActive = false;
       dragAccumX = 0;
+      hoveredIndex = null;
       syncLightVisuals(getScheme(currentMood, currentTheme));
     },
 
@@ -1038,8 +1040,22 @@ export function createSpecsStage(): StageModule {
       }
     },
 
-    onPointerMove(_ndcX: number, _ndcY: number, _ctx: StageContext): void {
-      // Keep the selected pillar centered cleanly; tap, HUD click, drag, or mouse wheel switches focus.
+    onPointerMove(ndcX: number, ndcY: number, ctx: StageContext): void {
+      if (disposed || !stageActive) return;
+      carouselGroup.updateMatrixWorld(true);
+      pointerNdc.set(ndcX, ndcY);
+      raycaster.setFromCamera(pointerNdc, ctx.camera);
+
+      const hits = raycaster.intersectObjects(raycastTargets, false);
+      let nextHovered: PillarIndex | null = null;
+      for (const hit of hits) {
+        const idx = extractPillarIndex(hit.object);
+        if (idx !== null) {
+          nextHovered = idx;
+          break;
+        }
+      }
+      hoveredIndex = nextHovered;
     },
 
     onPointerDrag(dx: number, _dy: number, ctx: StageContext): void {
@@ -1116,13 +1132,23 @@ export function createSpecsStage(): StageModule {
         pillarDistances[i] = Math.hypot(liveX - wx, liveZ - wz);
       }
 
+      const hoverLiftLerp = ctx.reducedMotion ? 1 : 1 - Math.exp(-10 * dt);
       for (let i = 0; i < pillars.length; i++) {
+        const isHovered = hoveredIndex === i;
+        const baseWeight = computeProximityWeight(pillarDistances[i]);
+        const effectiveWeight = isHovered ? Math.min(1, Math.max(baseWeight, 0.72)) : baseWeight;
         pillars[i].applyDynamic(
-          computeProximityWeight(pillarDistances[i]),
-          i === closestIndex,
+          effectiveWeight,
+          i === closestIndex || isHovered,
           dt,
           currentTheme,
           ctx.reducedMotion
+        );
+        const targetLiftY = isHovered && !ctx.reducedMotion ? 0.045 : 0;
+        pillars[i].root.position.y = THREE.MathUtils.lerp(
+          pillars[i].root.position.y,
+          FLOOR_Y + targetLiftY,
+          hoverLiftLerp
         );
       }
       sparkleField.update(dt, elapsed, ctx.reducedMotion);

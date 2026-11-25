@@ -208,10 +208,11 @@ export function useMarbleBackdropStage(
     const stageEl = stageRef.current;
     if (!canvas || !stageEl || typeof window === 'undefined') return undefined;
 
-    const reducedMotion = Boolean(
-      typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    );
+    const reducedMotionQuery =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    let reducedMotion = Boolean(reducedMotionQuery?.matches);
 
     let cachedTargets: CachedTarget[] = [];
     let cachedStageRect: DOMRect | null = null;
@@ -715,6 +716,21 @@ export function useMarbleBackdropStage(
       activeTimers.add(initialBoundsTimer);
     }
 
+    const handleReducedMotionChange = (event: MediaQueryListEvent) => {
+      reducedMotion = event.matches;
+      controller.setReducedMotion?.(reducedMotion);
+      if (reducedMotion && gyroAttached) {
+        window.removeEventListener('deviceorientation', onDeviceOrientation);
+        gyroAttached = false;
+        controller.setTilt(0, 0, 0, 0);
+      } else if (!reducedMotion && devOrientCtor && !gyroAttached && !requiresIosPermission) {
+        attachGyro();
+      }
+    };
+    if (reducedMotionQuery && typeof reducedMotionQuery.addEventListener === 'function') {
+      reducedMotionQuery.addEventListener('change', handleReducedMotionChange);
+    }
+
     const listenScroll = Boolean(optionsRef.current.listenDocumentScroll);
     window.addEventListener('resize', handleResize, { passive: true });
     document.addEventListener('visibilitychange', handleVisibility);
@@ -736,6 +752,9 @@ export function useMarbleBackdropStage(
       invalidateCacheRef.current = null;
       activeTimers.forEach((tid) => window.clearTimeout(tid));
       activeTimers.clear();
+      if (reducedMotionQuery && typeof reducedMotionQuery.removeEventListener === 'function') {
+        reducedMotionQuery.removeEventListener('change', handleReducedMotionChange);
+      }
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (listenScroll) {

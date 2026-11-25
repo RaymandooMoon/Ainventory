@@ -200,7 +200,27 @@ function createArchitecturalFloorGrid() {
   return { group: floorGroup, gridMat, rippleRingMats, rippleMeshes };
 }
 
-function createGpuComputeRimAccent(tierIndex: number) {
+interface SharedGpuAccentGeometries {
+  readonly finGeo: THREE.BoxGeometry;
+  readonly railGeo: THREE.BufferGeometry;
+  readonly ledGeo: THREE.BoxGeometry;
+}
+
+function createSharedGpuAccentGeometries(): SharedGpuAccentGeometries {
+  const rHalf = TIER_WIDTH * 0.5 + 0.13;
+  return {
+    finGeo: new THREE.BoxGeometry(0.16, 0.11, 0.035),
+    railGeo: new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-rHalf, 0, -rHalf),
+      new THREE.Vector3(rHalf, 0, -rHalf),
+      new THREE.Vector3(rHalf, 0, rHalf),
+      new THREE.Vector3(-rHalf, 0, rHalf),
+    ]),
+    ledGeo: new THREE.BoxGeometry(0.14, 0.022, 0.022),
+  };
+}
+
+function createGpuComputeRimAccent(tierIndex: number, shared: SharedGpuAccentGeometries) {
   const accentGroup = new THREE.Group();
   accentGroup.name = `gpu-compute-rim-${tierIndex}`;
   const baseY = getTierCenterY(tierIndex);
@@ -211,7 +231,6 @@ function createGpuComputeRimAccent(tierIndex: number) {
   bracketMat.transparent = true;
   bracketMat.opacity = 0;
 
-  const finGeo = new THREE.BoxGeometry(0.16, 0.11, 0.035);
   const cOff = TIER_WIDTH * 0.5 + 0.11;
   const corners: ReadonlyArray<readonly [number, number, number]> = [
     [cOff, cOff, Math.PI * 0.25],
@@ -220,19 +239,13 @@ function createGpuComputeRimAccent(tierIndex: number) {
     [cOff, -cOff, -Math.PI * 0.25],
   ];
   for (const [cx, cz, ry] of corners) {
-    const fin = new THREE.Mesh(finGeo, bracketMat);
+    const fin = new THREE.Mesh(shared.finGeo, bracketMat);
     fin.position.set(cx, 0, cz);
     fin.rotation.y = ry;
     accentGroup.add(fin);
   }
 
   const rHalf = TIER_WIDTH * 0.5 + 0.13;
-  const railGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-rHalf, 0, -rHalf),
-    new THREE.Vector3(rHalf, 0, -rHalf),
-    new THREE.Vector3(rHalf, 0, rHalf),
-    new THREE.Vector3(-rHalf, 0, rHalf),
-  ]);
   const railMat = new THREE.LineBasicMaterial({
     color: STAGE_PALETTE.champagneGoldBright,
     transparent: true,
@@ -240,9 +253,8 @@ function createGpuComputeRimAccent(tierIndex: number) {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  accentGroup.add(new THREE.LineLoop(railGeo, railMat));
+  accentGroup.add(new THREE.LineLoop(shared.railGeo, railMat));
 
-  const ledGeo = new THREE.BoxGeometry(0.14, 0.022, 0.022);
   const ledMat = new THREE.MeshBasicMaterial({
     color: 0xfff0ce,
     transparent: true,
@@ -258,7 +270,7 @@ function createGpuComputeRimAccent(tierIndex: number) {
       [-rHalf, -0.06, s, Math.PI * 0.5],
     ];
     for (const [x, y, z, ry] of slots) {
-      const bar = new THREE.Mesh(ledGeo, ledMat);
+      const bar = new THREE.Mesh(shared.ledGeo, ledMat);
       bar.position.set(x, y, z);
       bar.rotation.y = ry;
       accentGroup.add(bar);
@@ -699,8 +711,9 @@ export function createArchitectureStage(): StageModule {
   const floorGrid = createArchitecturalFloorGrid();
   towerPivot.add(floorGrid.group);
 
+  const sharedGpuAccentGeos = createSharedGpuAccentGeometries();
   const gpuAccents = GPU_ACCENT_TIERS.map((tierIdx) => {
-    const accent = createGpuComputeRimAccent(tierIdx);
+    const accent = createGpuComputeRimAccent(tierIdx, sharedGpuAccentGeos);
     towerPivot.add(accent.group);
     return accent;
   });

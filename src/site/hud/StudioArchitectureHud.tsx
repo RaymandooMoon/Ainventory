@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { LocateFixed, SlidersHorizontal } from 'lucide-react';
+import { CloudSun, SlidersHorizontal } from 'lucide-react';
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import { SiteIcon } from '../SiteIcon.tsx';
@@ -85,7 +85,7 @@ export function StudioStageHud({
                 <>
                   <div className="hud-metric-chip is-emphasis">
                     <span className="hud-metric-chip-label">
-                      {lang === 'ko' ? '현재 위치' : 'Street'}
+                      {lang === 'ko' ? '현재 도시' : 'City'}
                     </span>
                     <strong className="hud-metric-chip-val">{localContext.placeLabel}</strong>
                   </div>
@@ -113,25 +113,31 @@ export function StudioStageHud({
                 <button
                   type="button"
                   className="hud-local-sync-btn"
-                  disabled={localContext.isLocatingGps}
+                  disabled={localContext.isLoading}
                   onClick={() => {
                     triggerHaptic('selection');
-                    localContext.requestGpsLocation();
+                    localContext.requestCityWeather();
                   }}
                 >
-                  <LocateFixed size={13} aria-hidden="true" />
+                  <CloudSun size={14} aria-hidden="true" />
                   <span>
-                    {localContext.isLocatingGps
+                    {localContext.isLoading
                       ? lang === 'ko'
-                        ? '위치 확인 중…'
-                        : 'Locating…'
-                      : lang === 'ko'
-                        ? '내 위치 불러오기'
-                        : 'Use My GPS'}
+                        ? '도시 날씨 조회 중…'
+                        : 'Checking weather…'
+                      : localContext.status === 'city'
+                        ? lang === 'ko'
+                          ? '도시 날씨 새로고침'
+                          : 'Refresh City Weather'
+                        : lang === 'ko'
+                          ? '현재 도시 날씨 조회'
+                          : 'Check City Weather'}
                   </span>
                 </button>
                 {localContext.errorHint && (
-                  <span className="hud-local-sync-hint">{localContext.errorHint}</span>
+                  <span className="hud-local-sync-hint" role="status">
+                    {localContext.errorHint}
+                  </span>
                 )}
               </div>
             )}
@@ -141,7 +147,7 @@ export function StudioStageHud({
     });
 
     return (
-      <div className="hud-stack">
+      <div className="hud-stack hud-app-preview-layout">
         <div className="hud-phone-stage">
           <div className="hud-phone-frame" data-phone-theme={theme}>
             <div className="hud-phone-island" aria-hidden="true" />
@@ -258,8 +264,6 @@ export function ArchitectureStageHud({
           prefix: tier.num,
           prefixTone: 'mono',
           title: tier.label,
-          badge: isMvp ? arch.devTag : arch.prodTag,
-          badgeTone: 'gold',
           body: (
             <div className="hud-spot-stack">
               <div className="hud-tier-nodes">
@@ -296,8 +300,6 @@ export function ArchitectureStageHud({
         prefix: '07',
         prefixTone: 'mono',
         title: arch.govLabel,
-        badge: isMvp ? arch.devTag : arch.prodTag,
-        badgeTone: 'gold',
         body: (() => {
           const currentGov = resolveNodeForList(arch.governance);
           return (

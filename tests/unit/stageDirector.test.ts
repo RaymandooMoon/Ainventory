@@ -222,64 +222,76 @@ function createHarness(options: { reducedMotion?: boolean; aspect?: number } = {
 }
 
 describe('computeResponsiveCameraPreset', () => {
-  it('preserves left-58% +X camera shift on wide desktop aspects (>= 1.0)', () => {
+  it('centers 3D centerpiece cleanly in the open left column on wide desktop aspects (>= 1.0)', () => {
     const outPos = new THREE.Vector3();
     const outLook = new THREE.Vector3();
 
-    computeResponsiveCameraPreset(STAGE_CAMERA_PRESETS.studio, 1440 / 900, outPos, outLook, false);
-    assert.ok(outPos.equals(STAGE_CAMERA_PRESETS.studio.position));
-    assert.ok(outLook.equals(STAGE_CAMERA_PRESETS.studio.lookAt));
-    assert.ok(outPos.x > 0, 'Desktop preset shifts +X so 3D centerpiece frames cleanly on left 58%');
+    computeResponsiveCameraPreset(STAGE_CAMERA_PRESETS.studio, 1440 / 900, outPos, outLook, false, 0.06, 1440);
+    assert.ok(outPos.x > 0.62, 'Desktop split preset shifts +X so 3D centerpiece frames cleanly on left column');
+    assert.ok(outLook.x > 0.62);
+    assert.equal(outPos.z, STAGE_CAMERA_PRESETS.studio.position.z);
   });
 
-  it('re-centers X = 0, lowers lookAt Y, and pulls Z back on narrow portrait mobile aspects (390x844)', () => {
+  it('keeps left-column +X split framing with pullback on portrait mobile split stages (390x844) and centers X=0 on bottom-sheet mode', () => {
     const base = STAGE_CAMERA_PRESETS.architecture;
-    const outPos = new THREE.Vector3();
-    const outLook = new THREE.Vector3();
+    const splitPos = new THREE.Vector3();
+    const splitLook = new THREE.Vector3();
 
-    computeResponsiveCameraPreset(base, 390 / 844, outPos, outLook, false);
-    assert.equal(outPos.x, 0);
-    assert.equal(outLook.x, 0);
-    assert.ok(Math.abs(outLook.y - (base.lookAt.y - 0.42)) < 1e-6);
-    assert.ok(outPos.z > base.position.z * 1.4, 'Portrait framing must pull camera Z back');
-    assert.ok(outPos.z <= base.position.z * 1.82 + 1e-6, 'Portrait pullback must remain clamped');
+    computeResponsiveCameraPreset(base, 390 / 844, splitPos, splitLook, false, 0.06, 390, 'split');
+    assert.ok(splitPos.x > 0.6, 'Portrait split drawer keeps positive +X shift so subject clears right drawer');
+    assert.ok(splitLook.x > 0.6);
+    assert.ok(splitPos.z > base.position.z * 1.4, 'Portrait split framing must pull camera Z back');
+    assert.ok(splitPos.z <= base.position.z * 1.54 + 1e-6, 'Portrait split pullback remains clamped');
+
+    // Bottom-sheet framing (About stage on smartphone <= 520px)
+    const sheetPos = new THREE.Vector3();
+    const sheetLook = new THREE.Vector3();
+    computeResponsiveCameraPreset(STAGE_CAMERA_PRESETS.about, 390 / 844, sheetPos, sheetLook, false, 0.06, 390, 'sheet');
+    assert.equal(sheetPos.x, 0, 'Bottom-sheet mode centers X = 0');
+    assert.equal(sheetLook.x, 0);
+    assert.ok(sheetLook.y < STAGE_CAMERA_PRESETS.about.lookAt.y - 0.5, 'Bottom-sheet lowers lookAt Y to elevate 3D loop above sheet');
+    assert.ok(sheetPos.z > STAGE_CAMERA_PRESETS.about.position.z * 1.18);
 
     // HERO portrait pullback
     const heroPos = new THREE.Vector3();
     const heroLook = new THREE.Vector3();
-    computeResponsiveCameraPreset(HERO_CAMERA_PRESET, 390 / 844, heroPos, heroLook, true);
+    computeResponsiveCameraPreset(HERO_CAMERA_PRESET, 390 / 844, heroPos, heroLook, true, 0.06, 390);
     assert.ok(heroPos.z > HERO_CAMERA_PRESET.position.z);
-    assert.ok(heroPos.z <= HERO_CAMERA_PRESET.position.z * 1.38 + 1e-6);
+    assert.ok(heroPos.z <= HERO_CAMERA_PRESET.position.z * 1.32 + 1e-6);
   });
 
-  it('smoothly blends intermediate aspects and guards against non-positive or NaN aspect ratios', () => {
+  it('smoothly adapts intermediate aspects and guards against non-positive or NaN aspect ratios', () => {
     const base = STAGE_CAMERA_PRESETS.specs;
     const midPos = new THREE.Vector3();
     const midLook = new THREE.Vector3();
+    const widePos = new THREE.Vector3();
+    const wideLook = new THREE.Vector3();
 
-    computeResponsiveCameraPreset(base, 0.925, midPos, midLook, false);
-    assert.ok(midPos.x > 0 && midPos.x < base.position.x);
+    computeResponsiveCameraPreset(base, 0.62, midPos, midLook, false);
+    computeResponsiveCameraPreset(base, 16 / 9, widePos, wideLook, false);
+    assert.ok(midPos.x > 0 && midPos.x < widePos.x);
     assert.ok(midPos.z > base.position.z);
 
     const safePos = new THREE.Vector3();
     const safeLook = new THREE.Vector3();
     computeResponsiveCameraPreset(base, Number.NaN, safePos, safeLook, false);
-    assert.ok(safePos.equals(base.position), 'Invalid aspect should fall back cleanly to 16:9 desktop');
-    assert.ok(safeLook.equals(base.lookAt));
+    assert.ok(safePos.equals(widePos), 'Invalid aspect falls back cleanly to 16:9 desktop framing');
+    assert.ok(safeLook.equals(wideLook));
   });
 
-  it('activates centered mobile sheet framing below 860px width to match CSS bottom-sheet breakpoint', () => {
+  it('keeps right-split framing on foldable/compact widths while centering About sheet below 520px', () => {
     const base = STAGE_CAMERA_PRESETS.studio;
     const compactPos = new THREE.Vector3();
     const compactLook = new THREE.Vector3();
-    computeResponsiveCameraPreset(base, 800 / 700, compactPos, compactLook, false, 1.48, 800);
-    assert.equal(compactPos.x, 0, '800px compact tablet (<860px) must center X = 0 for bottom sheet');
-    assert.equal(compactLook.x, 0);
+    computeResponsiveCameraPreset(base, 572 / 854, compactPos, compactLook, false, 0.06, 572, 'split');
+    assert.ok(compactPos.x > 0.6, '572px foldable keeps split-drawer +X framing');
+    assert.ok(compactPos.z > base.position.z);
 
     const desktopPos = new THREE.Vector3();
     const desktopLook = new THREE.Vector3();
-    computeResponsiveCameraPreset(base, 1280 / 800, desktopPos, desktopLook, false, 1.48, 1280);
-    assert.ok(desktopPos.equals(base.position), '1280px desktop (>=860px) keeps left-58% +X offset');
+    computeResponsiveCameraPreset(base, 1280 / 800, desktopPos, desktopLook, false, 0.06, 1280, 'split');
+    assert.ok(desktopPos.x > 0.6, '1280px desktop keeps left-column +X offset');
+    assert.equal(desktopPos.z, base.position.z);
   });
 });
 
@@ -410,8 +422,17 @@ describe('AinvtryStageDirector', () => {
       h.marbleMesh.position.y > chordMid.y + 0.12,
       `Expected Bezier Y arc lift above chord (${h.marbleMesh.position.y} vs ${chordMid.y})`
     );
-    // Camera is halfway between HERO and Studio preset
-    const midCamX = (HERO_CAMERA_PRESET.position.x + STAGE_CAMERA_PRESETS.studio.position.x) * 0.5;
+    // Camera is halfway between HERO and computed Studio desktop framing
+    const expectedStudioPos = new THREE.Vector3();
+    const expectedStudioLook = new THREE.Vector3();
+    computeResponsiveCameraPreset(
+      STAGE_CAMERA_PRESETS.studio,
+      1440 / 900,
+      expectedStudioPos,
+      expectedStudioLook,
+      false
+    );
+    const midCamX = (HERO_CAMERA_PRESET.position.x + expectedStudioPos.x) * 0.5;
     assert.ok(Math.abs(h.camera.position.x - midCamX) < 1e-3);
 
     // Finish remaining 0.425s (plus one tick to guarantee rawT >= 1)
@@ -419,7 +440,7 @@ describe('AinvtryStageDirector', () => {
       h.director.update(0.05, 0.45 + i * 0.05);
     }
     assert.equal(h.director.isTransitionActive(), false);
-    assert.ok(h.camera.position.distanceTo(STAGE_CAMERA_PRESETS.studio.position) < 1e-3);
+    assert.ok(h.camera.position.distanceTo(expectedStudioPos) < 1e-3);
     assert.ok(h.marbleMesh.position.distanceTo(studioAnchor) < 1e-3);
 
     // Next active frame updates studio stage
@@ -555,20 +576,26 @@ describe('AinvtryStageDirector', () => {
     assert.deepEqual(h.mocks.studio.tapCalls, [{ ndcX: -0.3, ndcY: 0.15 }]);
   });
 
-  it('updates responsive camera framing when viewport switches between desktop and portrait aspect', () => {
+  it('updates responsive camera framing when viewport switches between desktop, portrait split, and smartphone About sheet', () => {
     const h = createHarness({ reducedMotion: true, aspect: 1440 / 900 });
     h.director.transitionTo('studio', 0);
-    assert.ok(h.camera.position.x > 0.5, 'Desktop studio camera keeps +X shift');
+    const desktopStudioPos = h.camera.position.clone();
+    assert.ok(desktopStudioPos.x > 0.5, 'Desktop studio camera keeps +X shift');
 
-    h.director.setViewportAspect(390 / 844);
-    assert.equal(h.camera.position.x, 0, 'Portrait studio camera centers X = 0');
+    h.director.setViewportSize(390, 844);
+    assert.ok(h.camera.position.x > 0.5, 'Portrait studio split drawer keeps +X shift');
     assert.ok(
       h.camera.position.z > STAGE_CAMERA_PRESETS.studio.position.z * 1.4,
       'Portrait studio camera pulls Z back'
     );
 
+    // About stage on smartphone (<= 520px) switches to centered bottom-sheet framing
+    h.director.transitionTo('about', 0.2);
+    assert.equal(h.camera.position.x, 0, 'Smartphone About sheet centers X = 0');
+
     h.director.setViewportAspect(1440 / 900);
-    assert.ok(h.camera.position.equals(STAGE_CAMERA_PRESETS.studio.position));
+    h.director.transitionTo('studio', 0.4);
+    assert.ok(h.camera.position.distanceTo(desktopStudioPos) < 1e-3);
   });
 
   it('runs real Studio/Architecture/Specs/About 3D stage modules end-to-end and disposes cleanly', () => {

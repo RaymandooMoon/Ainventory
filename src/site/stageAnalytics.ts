@@ -205,17 +205,6 @@ export function createStageSwitchTracker(initial?: StageAnalyticsSnapshot): Stag
         totalSwitches: nextState.totalSwitches,
       };
 
-      console.info(
-        `[Ainvtry Analytics] 3D Stage Switch: ${fromStage} (${fromBucket}) -> ${toStage} (${toBucket}) [${trigger}]`,
-        {
-          hero: nextByBucket.hero,
-          tryOn: nextByBucket.tryOn,
-          calendar: nextByBucket.calendar,
-          other: nextByBucket.other,
-          total: nextState.totalSwitches,
-        }
-      );
-
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         window.dispatchEvent(
           new CustomEvent<StageSwitchEventDetail>('ainvtry:stage-switch', { detail })
@@ -242,37 +231,37 @@ export function createStageSwitchTracker(initial?: StageAnalyticsSnapshot): Stag
 
 const BUCKET_COLORS: Readonly<Record<StageAnalyticsBucket, string>> = {
   hero: '#d6b889',
-  tryOn: '#7ea8e8',
-  calendar: '#6cc49b',
-  other: '#a59eb8',
+  tryOn: '#9b958c',
+  calendar: '#b8a283',
+  other: '#6f737b',
 };
 
 const STAGE_COLORS: Readonly<Record<StageId, string>> = {
   hero: '#d6b889',
-  studio: '#7ea8e8',
-  architecture: '#8fa6c2',
-  specs: '#6cc49b',
-  about: '#c49d76',
+  studio: '#b8a283',
+  architecture: '#8c877f',
+  specs: '#6f737b',
+  about: '#a69882',
 };
 
 const PIE_PALETTE = [
   '#d6b889',
-  '#7ea8e8',
-  '#6cc49b',
-  '#c78f7b',
-  '#a59eb8',
-  '#8c96a6',
+  '#a69882',
+  '#8c877f',
+  '#6f737b',
+  '#b8a993',
+  '#565a63',
 ] as const;
 
 export function getBucketLabel(bucket: StageAnalyticsBucket, lang: SiteLang): string {
   if (lang === 'ko') {
     switch (bucket) {
       case 'hero':
-        return '히어로 (홈)';
+        return '히어로';
       case 'tryOn':
-        return '3D 피팅 (Try-On)';
+        return '3D 피팅';
       case 'calendar':
-        return '케어 · 캘린더';
+        return '케어 · 가치';
       case 'other':
         return '아키텍처 · 스펙';
     }
@@ -281,11 +270,11 @@ export function getBucketLabel(bucket: StageAnalyticsBucket, lang: SiteLang): st
     case 'hero':
       return 'Hero';
     case 'tryOn':
-      return 'Try-On (3D Fitting)';
+      return '3D Fitting';
     case 'calendar':
-      return 'Calendar & Care';
+      return 'Care & Value';
     case 'other':
-      return 'Architecture & Specs';
+      return 'Arch & Specs';
   }
 }
 

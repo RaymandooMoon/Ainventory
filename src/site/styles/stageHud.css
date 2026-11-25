@@ -1,0 +1,1130 @@
+/* ==========================================================================
+ * Ainvtry — Stage Top 3D Control Dock & Frosted Glass Inspector HUD
+ * Quiet Luxury Editorial Hierarchy · Zero Nested-Box Clutter
+ * ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * 1. Top-Pinned Floating 3D Controls Dock (Studio / Architecture)
+ * -------------------------------------------------------------------------- */
+
+.site-top-3d-dock {
+  position: fixed;
+  top: var(--hud-top-dock-top);
+  left: clamp(16px, 2.6vw, 36px);
+  right: calc(var(--hud-panel-width) + var(--hud-panel-right-inset) + 16px);
+  z-index: 16;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.site-top-3d-dock-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  box-shadow: var(--glass-specular), 0 12px 32px -12px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  max-width: 100%;
+}
+
+.site-top-3d-dock-inner--single {
+  min-width: 240px;
+}
+
+.site-top-dock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--bg-sunken);
+}
+
+.hud-segmented--full {
+  width: 100%;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.hud-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--site-ease),
+    color 0.2s var(--site-ease),
+    box-shadow 0.2s var(--site-ease),
+    transform 0.16s var(--site-ease);
+}
+
+.hud-seg-btn:hover {
+  color: var(--ink-primary);
+}
+
+.hud-seg-btn:active {
+  transform: scale(0.97);
+}
+
+.hud-seg-btn.is-active {
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  font-weight: 660;
+  box-shadow: var(--ctrl-active-shadow);
+}
+
+.hud-angle-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--bg-sunken);
+}
+
+.hud-icon-step-btn,
+.hud-angle-readout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 0.18s var(--site-ease),
+    color 0.18s var(--site-ease),
+    transform 0.14s var(--site-ease);
+}
+
+.hud-icon-step-btn:hover,
+.hud-angle-readout:hover {
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+}
+
+.hud-angle-readout {
+  padding: 0 8px;
+  color: var(--accent-gold-ink);
+  font-weight: 660;
+}
+
+.hud-icon-step-btn:active,
+.hud-angle-readout:active {
+  transform: scale(0.95);
+}
+
+/* --------------------------------------------------------------------------
+ * 2. Desktop Right Floating Frosted-Glass HUD Panel
+ * -------------------------------------------------------------------------- */
+
+.site-hud-panel {
+  position: fixed;
+  top: max(72px, calc(64px + env(safe-area-inset-top)));
+  bottom: calc(128px + env(safe-area-inset-bottom));
+  right: var(--hud-panel-right-inset);
+  margin-block: auto;
+  width: var(--hud-panel-width);
+  height: fit-content;
+  max-height: min(
+    640px,
+    calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom))
+  );
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--hairline);
+  background: var(--bg-panel);
+  backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  box-shadow: var(--glass-specular), var(--glass-shadow);
+  overflow: hidden;
+  pointer-events: auto;
+  animation: siteFadeUp 0.34s var(--site-ease) both;
+}
+
+.site-hud-grab-btn {
+  display: none;
+}
+
+.site-hud-grab-pill {
+  display: block;
+  width: 34px;
+  height: 3.5px;
+  border-radius: var(--r-pill);
+  background: var(--hairline-strong);
+  margin: 0 auto 2px;
+}
+
+.site-hud-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.site-hud-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.site-hud-scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
+}
+
+/* Bottom Subtab Dock (Flat Underline Editorial Navigation) */
+.site-hud-footer-dock {
+  flex-shrink: 0;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg-sunken);
+}
+
+.site-hud-subtabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.site-hud-subtab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-tertiary);
+  font-family: inherit;
+  font-size: 0.79rem;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.2s var(--site-ease),
+    background-color 0.2s var(--site-ease);
+}
+
+.site-hud-subtab-btn:hover {
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+}
+
+.site-hud-subtab-btn.is-active {
+  color: var(--ink-primary);
+  font-weight: 680;
+  background: var(--bg-elevated);
+}
+
+.site-hud-subtab-btn.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 22px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent-gold);
+  transform: translateX(-50%);
+}
+
+/* --------------------------------------------------------------------------
+ * 3. Quiet Editorial Spotlight Deck (Zero Nested-Box Clutter)
+ * -------------------------------------------------------------------------- */
+
+.hud-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hud-spot-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hud-spot-card {
+  position: relative;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  transition:
+    background-color 0.24s var(--site-ease),
+    border-color 0.24s var(--site-ease),
+    box-shadow 0.24s var(--site-ease);
+}
+
+/* Quiet hairline dividers between collapsed rows */
+.hud-spot-card:not(.is-active) + .hud-spot-card:not(.is-active)::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--hairline);
+  pointer-events: none;
+}
+
+.hud-spot-card:not(.is-active):hover {
+  background: var(--bg-surface);
+}
+
+.hud-spot-card.is-active {
+  background: var(--bg-elevated);
+  border-color: var(--hairline);
+  box-shadow: var(--glass-specular);
+  margin-bottom: 4px;
+}
+
+/* Subtle champagne gold vertical hairline strictly on the active row */
+.hud-spot-card.is-active::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent-gold);
+  pointer-events: none;
+}
+
+.hud-spot-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 12px 10px 14px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud-spot-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hud-spot-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hud-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-micro);
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  transition: color 0.2s var(--site-ease);
+}
+
+.hud-spot-card.is-active .hud-icon-badge {
+  color: var(--accent-gold-ink);
+}
+
+.hud-spot-title {
+  font-size: 0.87rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.016em;
+  color: var(--ink-secondary);
+  min-width: 0;
+  transition: color 0.2s var(--site-ease);
+}
+
+.hud-spot-card.is-active .hud-spot-title {
+  color: var(--ink-primary);
+  font-weight: 680;
+}
+
+.hud-mono-num,
+.hud-spot-metric {
+  font-size: 0.72rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hud-spot-card.is-active .hud-mono-num,
+.hud-spot-card.is-active .hud-spot-metric {
+  color: var(--accent-gold-ink);
+}
+
+/* Restrained status indicator: calm dot for LIVE, hairline micro-tag for LIVE+ / TO-DO */
+.hud-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.66rem;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hud-status-pill.is-live {
+  color: var(--ink-tertiary);
+}
+
+.hud-status-pill.is-live::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-live);
+}
+
+.hud-status-pill.is-hybrid {
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-gold-soft);
+  color: var(--status-hybrid);
+}
+
+.hud-status-pill.is-todo {
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  color: var(--status-todo);
+}
+
+.hud-spot-chevron {
+  color: var(--ink-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.26s var(--site-ease), color 0.2s var(--site-ease);
+}
+
+.hud-spot-chevron.is-open {
+  transform: rotate(180deg);
+  color: var(--accent-gold-ink);
+}
+
+/* Smooth CSS grid-row accordion expansion */
+.hud-spot-body-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s var(--site-ease),
+    opacity 0.22s var(--site-ease);
+}
+
+.hud-spot-card.is-active .hud-spot-body-wrap {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.hud-spot-body-inner {
+  overflow: hidden;
+}
+
+.hud-spot-body {
+  padding: 0 14px 14px;
+}
+
+.hud-spot-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-body-copy {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 460;
+  line-height: 1.56;
+  letter-spacing: -0.01em;
+  color: var(--ink-secondary);
+}
+
+.hud-sub-meta {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 520;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+}
+
+.hud-eyebrow {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0 0 6px 4px;
+}
+
+/* --------------------------------------------------------------------------
+ * 4. Read-Only Surface Metrics vs Interactive Controls
+ * -------------------------------------------------------------------------- */
+
+.hud-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Read-only recessed cards (no outer border clutter) */
+.hud-card {
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+  padding: 12px 14px;
+}
+
+.hud-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-kpi-val-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hud-kpi-big {
+  font-size: 1.24rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.hud-gold-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-gold-soft);
+  color: var(--accent-gold-ink);
+  font-size: 0.68rem;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Read-only telemetry chips */
+.hud-metric-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
+}
+
+.hud-pill-grid--3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hud-metric-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+.hud-metric-chip.is-emphasis {
+  background: var(--bg-surface);
+}
+
+.hud-metric-chip-label {
+  font-size: 0.66rem;
+  font-weight: 640;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.hud-metric-chip-val {
+  font-size: 0.8rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Interactive tactile pills (Architecture tier nodes) */
+.hud-tier-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hud-node-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 560;
+  cursor: pointer;
+  transition:
+    background-color 0.18s var(--site-ease),
+    border-color 0.18s var(--site-ease),
+    color 0.18s var(--site-ease),
+    transform 0.14s var(--site-ease);
+}
+
+.hud-node-pill:hover {
+  color: var(--ink-primary);
+  border-color: var(--hairline-strong);
+  background: var(--bg-elevated);
+}
+
+.hud-node-pill:active {
+  transform: scale(0.97);
+}
+
+.hud-node-pill.is-active {
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  border-color: transparent;
+  font-weight: 660;
+  box-shadow: var(--ctrl-active-shadow);
+}
+
+/* Opt-in City Weather Button */
+.hud-local-sync-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud-local-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--site-ease),
+    border-color 0.2s var(--site-ease),
+    transform 0.15s var(--site-ease);
+}
+
+.hud-local-sync-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: var(--accent-gold-hairline);
+}
+
+.hud-local-sync-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.hud-local-sync-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.hud-local-sync-hint {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-tertiary);
+}
+
+/* --------------------------------------------------------------------------
+ * 5. Studio -> Live App 2-Column Editorial Preview Layout
+ * -------------------------------------------------------------------------- */
+
+.hud-app-preview-layout {
+  display: grid;
+  grid-template-columns: 164px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.hud-phone-stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  position: sticky;
+  top: 0;
+}
+
+.hud-phone-frame {
+  position: relative;
+  width: 100%;
+  max-width: 164px;
+  padding: 5px;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--hairline-strong);
+  background: #0b0b0e;
+  box-shadow: 0 16px 34px -14px rgba(0, 0, 0, 0.52);
+  overflow: hidden;
+}
+
+.hud-phone-frame[data-phone-theme='light'] {
+  background: #ebe7df;
+  box-shadow: 0 14px 30px -14px rgba(29, 27, 22, 0.18);
+}
+
+.hud-phone-island {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 34%;
+  height: 9px;
+  border-radius: var(--r-pill);
+  background: #050507;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.hud-phone-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 500 / 1044;
+  object-fit: cover;
+  border-radius: calc(var(--r-panel) - 5px);
+}
+
+/* --------------------------------------------------------------------------
+ * 6. Architecture -> Privacy Compare Slider & Media Banners
+ * -------------------------------------------------------------------------- */
+
+.hud-compare-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.site-compare-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background:
+    repeating-conic-gradient(var(--checker-a) 0% 25%, transparent 0% 50%) 50% / 14px 14px;
+}
+
+.site-compare-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.site-compare-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.site-compare-chip {
+  position: absolute;
+  top: 8px;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(12, 12, 15, 0.72);
+  color: #f5f5f7;
+  font-size: 0.64rem;
+  font-weight: 660;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.site-compare-chip--left {
+  left: 8px;
+}
+
+.site-compare-chip--right {
+  right: 8px;
+}
+
+.site-compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--accent-gold);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.site-compare-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.36);
+  transform: translate(-50%, -50%);
+}
+
+.site-compare-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.hud-compare-meta {
+  display: flex;
+  justify-content: center;
+}
+
+.hud-mono-val {
+  font-size: 0.73rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+}
+
+.hud-media-banner {
+  position: relative;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--bg-sunken);
+}
+
+.hud-banner-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.hud-banner-chip {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(12, 12, 15, 0.74);
+  color: #f5f5f7;
+  font-size: 0.68rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+ * 7. About -> Journey Cinema, Mission & Founder Card
+ * -------------------------------------------------------------------------- */
+
+.hud-journey-stage {
+  position: relative;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background: var(--bg-sunken);
+}
+
+.hud-journey-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hud-journey-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 8, 10, 0.52) 0%,
+    rgba(8, 8, 10, 0.06) 44%,
+    rgba(8, 8, 10, 0.74) 100%
+  );
+  pointer-events: none;
+}
+
+.hud-journey-top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.hud-journey-badges,
+.hud-journey-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-journey-controls .hud-icon-step-btn,
+.hud-journey-controls .hud-auto-btn {
+  background: rgba(12, 12, 16, 0.66);
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hud-auto-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s var(--site-ease), transform 0.14s var(--site-ease);
+}
+
+.hud-auto-btn:hover {
+  background: var(--bg-elevated);
+}
+
+.hud-auto-btn:active {
+  transform: scale(0.96);
+}
+
+.hud-speech-bubble {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  padding: 7px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(12, 12, 15, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hud-speech-bubble p {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 540;
+  line-height: 1.4;
+  color: #f5f5f7;
+}
+
+.hud-mission-head {
+  padding: 2px 4px;
+}
+
+.hud-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hud-mission-slogan {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 660;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+}
+
+.hud-mission-slogan em {
+  font-style: normal;
+  color: var(--accent-gold-ink);
+}
+
+.hud-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.hud-founder-card {
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+}
+
+.hud-founder-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hud-founder-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-elevated);
+  color: var(--accent-gold-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.hud-founder-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud-founder-id h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.hud-founder-id p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--ink-secondary);
+}
+
+.hud-founder-email {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 540;
+  color: var(--accent-gold-ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.hud-founder-email:hover {
+  text-decoration: underline;
+}
+
+.hud-founder-actions {
+  display: flex;
+}
+
+/* Monochrome inverted luxury CTA (no flashy gold fill) */
+.hud-founder-cta {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  font-size: 0.83rem;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  box-shadow: var(--ctrl-active-shadow);
+  transition:
+    opacity 0.2s var(--site-ease),
+    transform 0.16s var(--site-ease),
+    border-color 0.2s var(--site-ease);
+}
+
+.hud-founder-cta:hover {
+  opacity: 0.92;
+  border-color: var(--accent-gold-hairline);
+}
+
+.hud-founder-cta:active {
+  transform: scale(0.985);
+}

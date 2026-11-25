@@ -86,6 +86,7 @@ export interface LoginThreeController {
   setTheme: (isDark: boolean, snapImmediately?: boolean) => void;
   setStage: (stage: 'intro' | 'auth' | 'portal') => void;
   setPaused: (paused: boolean) => void;
+  setReducedMotion?: (enabled: boolean) => void;
   setVariant: (variant: LoginThreeVariantId, originNx?: number, originNy?: number) => void;
   setPointer: (nx: number, ny: number, velocity: number) => void;
   setPointerDown?: (isDown: boolean, nx?: number, ny?: number, isQuickTap?: boolean) => void;
@@ -1059,7 +1060,6 @@ export function createLoginThreeController(
   }
 ): LoginThreeController | null {
   const {
-    reducedMotion,
     onMarbleStep,
     onFloorBounce,
     onOverlayRender,
@@ -1067,6 +1067,7 @@ export function createLoginThreeController(
     onOverlayDispose,
     onOverlayContextRestored,
   } = options;
+  let reducedMotion = Boolean(options.reducedMotion);
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
@@ -1419,10 +1420,16 @@ export function createLoginThreeController(
     now: lastNow,
   });
 
+  const worldToUvU = (wx: number): number =>
+    clamp(0.5 + wx / (2 * Math.max(0.25, currentAspect)), 0.01, 0.99);
+  const worldToUvV = (wy: number): number => clamp(0.5 + wy * 0.5, 0.01, 0.99);
+
   const worldToUv = (wx: number, wy: number): [number, number] => [
-    clamp(0.5 + wx / (2 * Math.max(0.25, currentAspect)), 0.01, 0.99),
-    clamp(0.5 + wy * 0.5, 0.01, 0.99),
+    worldToUvU(wx),
+    worldToUvV(wy),
   ];
+
+  const expBlendFactor = (dtVal: number, rate: number): number => 1.0 - Math.exp(-dtVal * rate);
 
   const nxNyToWorld = (nx: number, ny: number): [number, number] => [
     clamp(nx, -1, 1) * currentAspect,
@@ -1519,6 +1526,8 @@ export function createLoginThreeController(
       simWrite = createFluidRT(simW, simH);
       clearFluidTarget(simRead);
       clearFluidTarget(simWrite);
+      simMat.uniforms.uPrevState.value = simRead.texture;
+      clothMat.uniforms.uFluidTex.value = simRead.texture;
       (simMat.uniforms.uTexelSize.value as THREE.Vector2).set(1 / simW, 1 / simH);
       (clothMat.uniforms.uFluidTexel.value as THREE.Vector2).set(1 / simW, 1 / simH);
     }
@@ -1526,18 +1535,20 @@ export function createLoginThreeController(
     onOverlayResize?.(width, height, renderer, isSoftwareGl);
   };
 
-  const renderFrame = (dt: number) => {
+  let isRenderingFrame = false;
+  let pendingFollowupRender = false;
+
+  const renderFrameBody = (dt: number) => {
     if (isDisposed) return;
 
-    const expBlend = (rate: number) => 1.0 - Math.exp(-dt * rate);
-    currentThemeDark += (targetThemeDark - currentThemeDark) * expBlend(9.0);
-    currentAuthBlend += (targetAuthBlend - currentAuthBlend) * expBlend(4.5);
-    currentSurge += (targetSurge - currentSurge) * expBlend(3.8);
+    currentThemeDark += (targetThemeDark - currentThemeDark) * expBlendFactor(dt, 9.0);
+    currentAuthBlend += (targetAuthBlend - currentAuthBlend) * expBlendFactor(dt, 4.5);
+    currentSurge += (targetSurge - currentSurge) * expBlendFactor(dt, 3.8);
 
-    smoothPtrX += (targetPtrX - smoothPtrX) * expBlend(6.0);
-    smoothPtrY += (targetPtrY - smoothPtrY) * expBlend(6.0);
-    smoothGyroX += (targetGyroX - smoothGyroX) * expBlend(9.5);
-    smoothGyroY += (targetGyroY - smoothGyroY) * expBlend(9.5);
+    smoothPtrX += (targetPtrX - smoothPtrX) * expBlendFactor(dt, 6.0);
+    smoothPtrY += (targetPtrY - smoothPtrY) * expBlendFactor(dt, 6.0);
+    smoothGyroX += (targetGyroX - smoothGyroX) * expBlendFactor(dt, 9.5);
+    smoothGyroY += (targetGyroY - smoothGyroY) * expBlendFactor(dt, 9.5);
 
     if (variantSweep < 2.2) {
       variantSweep = Math.min(2.2, variantSweep + dt * 2.15);
@@ -1640,9 +1651,8 @@ export function createLoginThreeController(
       }
 
       if (bouncedImpact > 0.14) {
-        const [bu, bv] = worldToUv(marbleX, marbleY);
-        pendingBurstU = bu;
-        pendingBurstV = bv;
+        pendingBurstU = worldToUvU(marbleX);
+        pendingBurstV = worldToUvV(marbleY);
         pendingBurstStrength = clamp(bouncedImpact * 0.68, 0.30, 0.98);
         pendingBurstRadius = marbleR * 1.22;
         marbleSinkVel += clamp(bouncedImpact * 2.15, 0.65, 2.9);
@@ -1680,9 +1690,8 @@ export function createLoginThreeController(
       marbleOpacity > 0.08 &&
       targetSurge < 0.5
     ) {
-      const [preU, preV] = worldToUv(marbleX, marbleY);
-      marbleSnapshot.u = preU;
-      marbleSnapshot.v = preV;
+      marbleSnapshot.u = worldToUvU(marbleX);
+      marbleSnapshot.v = worldToUvV(marbleY);
       marbleSnapshot.radiusNormY = marbleR;
       marbleSnapshot.vx = marbleVx;
       marbleSnapshot.vy = marbleVy;
@@ -1694,7 +1703,8 @@ export function createLoginThreeController(
       onMarbleStep(marbleSnapshot);
     }
 
-    const [marbleU, marbleV] = worldToUv(marbleX, marbleY);
+    const marbleU = worldToUvU(marbleX);
+    const marbleV = worldToUvV(marbleY);
 
     // --- Emit Concentric Circular Ripples Around the Rolling Marble ---
     let marbleWaveStrength = 0;
@@ -1930,6 +1940,35 @@ export function createLoginThreeController(
     }
   };
 
+  const renderFrame = (dt: number) => {
+    if (isDisposed || isContextLost) return;
+    if (isRenderingFrame) {
+      pendingFollowupRender = true;
+      return;
+    }
+    isRenderingFrame = true;
+    try {
+      renderFrameBody(dt);
+    } finally {
+      isRenderingFrame = false;
+    }
+    if (
+      pendingFollowupRender &&
+      !isDisposed &&
+      !isContextLost &&
+      !isDocHidden &&
+      !isExternallyPaused
+    ) {
+      pendingFollowupRender = false;
+      isRenderingFrame = true;
+      try {
+        renderFrameBody(0.001);
+      } finally {
+        isRenderingFrame = false;
+      }
+    }
+  };
+
   const isLoopPaused = () =>
     isDisposed || reducedMotion || isDocHidden || isExternallyPaused || isContextLost;
 
@@ -2140,6 +2179,27 @@ export function createLoginThreeController(
       if (isExternallyPaused === paused) return;
       isExternallyPaused = paused;
       syncLoopLifecycle();
+    },
+    setReducedMotion(enabled: boolean) {
+      const next = Boolean(enabled);
+      if (reducedMotion === next) return;
+      reducedMotion = next;
+      if (reducedMotion) {
+        currentThemeDark = targetThemeDark;
+        currentAuthBlend = targetAuthBlend;
+        currentSurge = targetSurge;
+        variantSweep = 2.2;
+        prevVariantVal = currentVariantVal;
+        clothMat.uniforms.uPrevVariant.value = currentVariantVal;
+        marbleVx = 0;
+        marbleVy = 0;
+        marbleSink = 1.24;
+        marbleSinkVel = 0;
+      }
+      syncLoopLifecycle();
+      if (!isDisposed && !isContextLost && !isDocHidden && !isExternallyPaused) {
+        renderFrame(0.001);
+      }
     },
     setVariant(variant: LoginThreeVariantId, originNx?: number, originNy?: number) {
       const nextVal = variant === 'aurora' ? 1 : 0;
@@ -2383,6 +2443,7 @@ export function createLoginThreeController(
       marbleY = clamp(marbleY, -1.0 + playBottomInset + pad, 1.0 - playTopInset - pad);
     },
     setExternalMarbleHidden(hidden: boolean) {
+      if (isExternalMarbleHidden === hidden) return;
       isExternalMarbleHidden = hidden;
       if (hidden) {
         isPointerDown = false;

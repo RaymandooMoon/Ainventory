@@ -33,7 +33,6 @@
  */
 
 import * as THREE from 'three';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   STAGE_CAMERA_PRESETS,
@@ -59,8 +58,6 @@ import { SpringBoneSolver } from './springBoneSolver.ts';
 
 const HF_FASHION_AVATAR_GLB_URL = '/assets/models/hf-fashion-avatar-v4.glb';
 const HF_COUTURE_COAT_GLB_URL = '/assets/models/hf-couture-coat-v2.glb';
-const CUSTOM_MANNEQUIN_GLB_URL = '/models/mannequin.glb';
-const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
 
 const MANNEQUIN_TARGET_HEIGHT = 1.94;
 const COUTURE_COAT_TARGET_HEIGHT = 1.94;
@@ -104,6 +101,7 @@ type ActiveModelKind = 'avatar' | 'coutureCoat' | 'dressformFallback' | 'custom'
 
 export interface StudioStageOptions {
   readonly onModelLoaded?: () => void;
+  readonly customModelUrl?: string;
 }
 
 /* ==========================================================================
@@ -1762,6 +1760,11 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
 
   // Smooth runtime animation states (zero per-frame allocations)
   let currentAngleRad = 0;
+  let targetAngleRad = 0;
+  let angleVelocityRad = 0;
+  let lastAngleSyncMs = 0;
+  let pendingAngleSync = false;
+  let lastEmittedAngleRad: number | null = null;
   let walkBlend = 0;
   let rainBlend = 0;
   let hoverTargetX = 0;
@@ -1867,38 +1870,21 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     canFetchInBrowser && typeof AbortController !== 'undefined' ? new AbortController() : null;
 
   let standardGltfLoader: GLTFLoader | null = null;
-  let dracoGltfLoader: GLTFLoader | null = null;
-  let dracoLoader: DRACOLoader | null = null;
   let activeParseCount = 0;
   let latestEmitUiSync: StageContext['emitUiSync'] | null = null;
 
   const disposeLoadersIfIdle = (): void => {
     if (!disposed || activeParseCount > 0) return;
-    dracoLoader?.dispose();
-    dracoLoader = null;
-    dracoGltfLoader = null;
     standardGltfLoader = null;
   };
 
-  /** Plain GLTFLoader for uncompressed WebP GLBs (no DRACOLoader overhead). */
+  /** Plain GLTFLoader for uncompressed WebP GLBs (zero Draco bundle overhead). */
   const getStandardGltfLoader = (): GLTFLoader | null => {
     if (!canFetchInBrowser || disposed) return null;
     if (!standardGltfLoader) {
       standardGltfLoader = new GLTFLoader();
     }
     return standardGltfLoader;
-  };
-
-  /** Lazy Draco-enabled GLTFLoader instantiated ONLY when custom `/models/mannequin.glb` is present. */
-  const getDracoGltfLoader = (): GLTFLoader | null => {
-    if (!canFetchInBrowser || disposed) return null;
-    if (!dracoGltfLoader) {
-      dracoGltfLoader = new GLTFLoader();
-      dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
-      dracoGltfLoader.setDRACOLoader(dracoLoader);
-    }
-    return dracoGltfLoader;
   };
 
   const fetchVerifiedGlbBuffer = (url: string): Promise<ArrayBuffer | null> =>
@@ -2093,38 +2079,38 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
   if (canFetchInBrowser) {
     loadFashionAvatar();
 
-    // Silent Auto Drop-In Check for `/models/mannequin.glb` (zero console errors & zero Draco allocation if absent)
-    void fetchVerifiedGlbBuffer(CUSTOM_MANNEQUIN_GLB_URL).then((buffer) => {
-      if (disposed || !buffer) return;
-      const loader = getDracoGltfLoader();
-      if (!loader) return;
-      activeParseCount += 1;
-      loader.parse(
-        buffer,
-        '',
-        (gltf) => {
-          activeParseCount = Math.max(0, activeParseCount - 1);
-          if (disposed) {
-            disposeSkeletons(gltf.scene);
-            disposeObject3D(gltf.scene);
+    if (options?.customModelUrl) {
+      void fetchVerifiedGlbBuffer(options.customModelUrl).then((buffer) => {
+        if (disposed || !buffer) return;
+        const loader = getStandardGltfLoader();
+        if (!loader) return;
+        activeParseCount += 1;
+        loader.parse(
+          buffer,
+          '',
+          (gltf) => {
+            activeParseCount = Math.max(0, activeParseCount - 1);
+            if (disposed) {
+              disposeSkeletons(gltf.scene);
+              disposeObject3D(gltf.scene);
+              disposeLoadersIfIdle();
+              return;
+            }
+            prepareCustomDropInModel(gltf, customDropIn);
+            if (!userExplicitlySelectedDressform) {
+              requestedModelMode = 'mannequin';
+              latestEmitUiSync?.({ studioModelMode: 'mannequin' });
+            }
+            syncActiveModelVisibility();
+            options?.onModelLoaded?.();
+          },
+          () => {
+            activeParseCount = Math.max(0, activeParseCount - 1);
             disposeLoadersIfIdle();
-            return;
           }
-          prepareCustomDropInModel(gltf, customDropIn);
-          if (!userExplicitlySelectedDressform) {
-            requestedModelMode = 'mannequin';
-            latestEmitUiSync?.({ studioModelMode: 'mannequin' });
-          }
-          syncActiveModelVisibility();
-          options?.onModelLoaded?.();
-        },
-        () => {
-          activeParseCount = Math.max(0, activeParseCount - 1);
-          disposeLoadersIfIdle();
-          // Silently fall back to built-in Hugging Face showroom on corrupt custom drop-in
-        }
-      );
-    });
+        );
+      });
+    }
   }
 
   /* ------------------------------------------------------------------------
@@ -2774,10 +2760,10 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     cameraPreset: STAGE_CAMERA_PRESETS.studio,
 
     getMarbleAnchor(elapsed: number, state: StageInteractionState): THREE.Vector3 {
-      const wrappedAngle = Math.atan2(
-        Math.sin(state.studioAngleRad),
-        Math.cos(state.studioAngleRad)
-      );
+      const displayAngle = pendingAngleSync || Math.abs(angleVelocityRad) > 0.002
+        ? currentAngleRad
+        : state.studioAngleRad;
+      const wrappedAngle = Math.atan2(Math.sin(displayAngle), Math.cos(displayAngle));
       const phi = (wrappedAngle / Math.PI) * DIAL_MAX_PHI;
       const idleFloat = Math.sin(elapsed * 2.2) * 0.007;
 
@@ -2791,6 +2777,10 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     onEnter(ctx: StageContext): void {
       latestEmitUiSync = ctx.emitUiSync;
       currentAngleRad = ctx.interaction.studioAngleRad;
+      targetAngleRad = ctx.interaction.studioAngleRad;
+      angleVelocityRad = 0;
+      pendingAngleSync = false;
+      lastEmittedAngleRad = null;
       currentSubtab = ctx.interaction.studioSubtab;
       currentPose = ctx.interaction.studioPose;
       currentReducedMotion = ctx.reducedMotion;
@@ -2846,6 +2836,9 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       hoverTargetY = 0;
       hoverSmoothX = 0;
       hoverSmoothY = 0;
+      angleVelocityRad = 0;
+      pendingAngleSync = false;
+      lastEmittedAngleRad = null;
       avatar.springSolver?.reset();
       coutureCoat.springSolver?.reset();
       customDropIn.springSolver?.reset();
@@ -2865,6 +2858,17 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       }
       if (patch.studioPose) {
         currentPose = patch.studioPose;
+      }
+      if (typeof patch.studioAngleRad === 'number' && Number.isFinite(patch.studioAngleRad)) {
+        const isSelfEcho =
+          lastEmittedAngleRad !== null &&
+          Math.abs(patch.studioAngleRad - lastEmittedAngleRad) < 1e-4;
+        if (!isSelfEcho) {
+          targetAngleRad = patch.studioAngleRad;
+          angleVelocityRad = 0;
+          pendingAngleSync = false;
+          lastEmittedAngleRad = null;
+        }
       }
       if (patch.studioModelMode) {
         requestedModelMode = patch.studioModelMode;
@@ -2887,29 +2891,66 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     },
 
     onPointerDrag(dx: number, _dy: number, ctx: StageContext): void {
-      const nextAngle = ctx.interaction.studioAngleRad + dx * 4.5;
-      ctx.emitUiSync({ studioAngleRad: nextAngle });
+      const deltaRad = dx * 4.6;
+      targetAngleRad += deltaRad;
+      angleVelocityRad = ctx.reducedMotion
+        ? 0
+        : THREE.MathUtils.clamp(dx * 52, -13, 13);
+      pendingAngleSync = true;
+
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (ctx.reducedMotion || nowMs - lastAngleSyncMs >= 85) {
+        lastAngleSyncMs = nowMs;
+        lastEmittedAngleRad = targetAngleRad;
+        ctx.emitUiSync({ studioAngleRad: targetAngleRad });
+      }
     },
 
     onPointerTap(ndcX: number, _ndcY: number, ctx: StageContext): void {
       const direction = ndcX >= -0.15 ? 1 : -1;
-      const nextAngle = ctx.interaction.studioAngleRad + direction * (Math.PI * 0.25);
-      ctx.emitUiSync({ studioAngleRad: nextAngle });
+      angleVelocityRad = 0;
+      pendingAngleSync = false;
+      targetAngleRad = ctx.interaction.studioAngleRad + direction * (Math.PI * 0.25);
+      lastEmittedAngleRad = targetAngleRad;
+      ctx.emitUiSync({ studioAngleRad: targetAngleRad });
+    },
+
+    onPointerDoubleTap(_ndcX: number, _ndcY: number, ctx: StageContext): void {
+      angleVelocityRad = 0;
+      pendingAngleSync = false;
+      targetAngleRad = 0;
+      lastEmittedAngleRad = 0;
+      ctx.emitUiSync({ studioAngleRad: 0 });
     },
 
     update(dt: number, elapsed: number, ctx: StageContext): void {
       currentReducedMotion = ctx.reducedMotion;
       currentPose = ctx.interaction.studioPose;
 
-      const dampFast = ctx.reducedMotion ? 1 : 1 - Math.exp(-10 * dt);
+      const dampFast = ctx.reducedMotion ? 1 : 1 - Math.exp(-11 * dt);
       const dampPose = ctx.reducedMotion ? 1 : 1 - Math.exp(-9.5 * dt);
       const dampHover = ctx.reducedMotion ? 1 : 1 - Math.exp(-6 * dt);
 
-      currentAngleRad = THREE.MathUtils.lerp(
-        currentAngleRad,
-        ctx.interaction.studioAngleRad,
-        dampFast
-      );
+      if (!ctx.reducedMotion && Math.abs(angleVelocityRad) > 0.0025) {
+        targetAngleRad += angleVelocityRad * dt;
+        angleVelocityRad *= Math.exp(-5.4 * dt);
+        pendingAngleSync = true;
+        const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (nowMs - lastAngleSyncMs >= 85) {
+          lastAngleSyncMs = nowMs;
+          lastEmittedAngleRad = targetAngleRad;
+          ctx.emitUiSync({ studioAngleRad: targetAngleRad });
+        }
+      } else if (pendingAngleSync) {
+        angleVelocityRad = 0;
+        pendingAngleSync = false;
+        lastEmittedAngleRad = targetAngleRad;
+        ctx.emitUiSync({ studioAngleRad: targetAngleRad });
+      } else if (Math.abs(targetAngleRad - ctx.interaction.studioAngleRad) > 1e-4) {
+        targetAngleRad = ctx.interaction.studioAngleRad;
+      }
+
+      currentAngleRad = THREE.MathUtils.lerp(currentAngleRad, targetAngleRad, dampFast);
       turntableGroup.rotation.y = currentAngleRad;
 
       hoverSmoothX = THREE.MathUtils.lerp(hoverSmoothX, hoverTargetX, dampHover);

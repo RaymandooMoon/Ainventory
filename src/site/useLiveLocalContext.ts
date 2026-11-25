@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SiteLang } from './siteContent.ts';
 
-export type LocalContextSource = 'loading' | 'ip' | 'gps' | 'unavailable';
+export type LocalContextSource = 'idle' | 'loading' | 'city' | 'unavailable';
 
 export interface LiveLocalContext {
   readonly status: LocalContextSource;
-  readonly isLocatingGps: boolean;
+  readonly isLoading: boolean;
   readonly placeLabel: string;
-  readonly streetLabel: string | null;
   readonly weatherLabel: string;
   readonly temperatureC: number | null;
   readonly isRainy: boolean;
-  readonly coords: { readonly lat: number; readonly lon: number } | null;
   readonly errorHint: string | null;
-  readonly requestGpsLocation: () => void;
+  readonly requestCityWeather: () => void;
 }
 
 interface OpenMeteoResponse {
@@ -29,27 +27,7 @@ interface GeoJsResponse {
   readonly longitude?: string;
   readonly city?: string;
   readonly region?: string;
-}
-
-interface BigDataCloudResponse {
-  readonly city?: string;
-  readonly locality?: string;
-  readonly principalSubdivision?: string;
-}
-
-interface NominatimResponse {
-  readonly address?: {
-    readonly road?: string;
-    readonly pedestrian?: string;
-    readonly neighbourhood?: string;
-    readonly suburb?: string;
-    readonly quarter?: string;
-    readonly borough?: string;
-    readonly city_district?: string;
-    readonly city?: string;
-    readonly town?: string;
-    readonly village?: string;
-  };
+  readonly country?: string;
 }
 
 function describeWmoWeather(code: number, lang: SiteLang): { label: string; isRainy: boolean } {
@@ -74,8 +52,14 @@ function describeWmoWeather(code: number, lang: SiteLang): { label: string; isRa
   return { label: lang === 'ko' ? '흐림' : 'Cloudy', isRainy: false };
 }
 
-async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 5500): Promise<T | null> {
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  signal: AbortSignal,
+  timeoutMs = 5000
+): Promise<T | null> {
   const controller = new AbortController();
+  const onParentAbort = () => controller.abort();
+  signal.addEventListener('abort', onParentAbort, { once: true });
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
@@ -88,17 +72,19 @@ async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 5500): Promise<T
     return null;
   } finally {
     window.clearTimeout(timer);
+    signal.removeEventListener('abort', onParentAbort);
   }
 }
 
-async function fetchFreeWeather(
+async function fetchCityWeather(
   lat: number,
-  lon: number
+  lon: number,
+  signal: AbortSignal
 ): Promise<{ temperatureC: number | null; weatherCode: number | null; isRainy: boolean }> {
   const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
     '&current=temperature_2m,weather_code,precipitation&timezone=auto';
-  const data = await fetchJsonWithTimeout<OpenMeteoResponse>(url, 5500);
+  const data = await fetchJsonWithTimeout<OpenMeteoResponse>(url, signal, 5000);
   const tempRaw = data?.current?.temperature_2m;
   const codeRaw = data?.current?.weather_code;
   const precip = data?.current?.precipitation ?? 0;
@@ -112,222 +98,108 @@ async function fetchFreeWeather(
   return { temperatureC, weatherCode, isRainy };
 }
 
-async function fetchFreeStreetName(
-  lat: number,
-  lon: number,
-  lang: SiteLang
-): Promise<{ placeLabel: string | null; streetLabel: string | null }> {
-  const nomUrl =
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}` +
-    `&zoom=17&accept-language=${lang === 'ko' ? 'ko,en' : 'en'}`;
-  const bdcUrl =
-    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat.toFixed(5)}&longitude=${lon.toFixed(5)}` +
-    `&localityLanguage=${lang === 'ko' ? 'ko' : 'en'}`;
-
-  const [nom, bdc] = await Promise.all([
-    fetchJsonWithTimeout<NominatimResponse>(nomUrl, 4500),
-    fetchJsonWithTimeout<BigDataCloudResponse>(bdcUrl, 4500),
-  ]);
-
-  const addr = nom?.address;
-  const road = addr?.road ?? addr?.pedestrian ?? null;
-  const area =
-    addr?.neighbourhood ??
-    addr?.quarter ??
-    addr?.suburb ??
-    addr?.borough ??
-    addr?.city_district ??
-    bdc?.locality ??
-    null;
-  const rawCity =
-    addr?.city ?? addr?.town ?? addr?.village ?? bdc?.city ?? bdc?.principalSubdivision ?? null;
-  const city = rawCity
-    ? rawCity.replace(/(특별자치시|특별자치도|특별시|광역시)$/, '')
-    : null;
-
-  const parts = [city, area, road].filter(
-    (v, idx, arr): v is string => Boolean(v) && arr.indexOf(v) === idx
-  );
-  if (parts.length >= 2) {
-    return {
-      placeLabel: `${parts[0]} · ${parts[parts.length - 1]}`,
-      streetLabel: road ?? area,
-    };
-  }
-  if (parts.length === 1) {
-    return {
-      placeLabel: parts[0],
-      streetLabel: road ?? area,
-    };
-  }
-
-  return { placeLabel: null, streetLabel: null };
-}
-
 interface InternalLiveState {
   readonly status: LocalContextSource;
-  readonly isLocatingGps: boolean;
-  readonly coords: { readonly lat: number; readonly lon: number } | null;
   readonly rawPlace: string | null;
-  readonly rawStreet: string | null;
   readonly rawWeatherCode: number | null;
   readonly temperatureC: number | null;
   readonly isRainy: boolean;
-  readonly errorKind: 'denied' | 'unsupported' | 'timeout' | null;
 }
 
 const INITIAL_STATE: InternalLiveState = {
-  status: 'loading',
-  isLocatingGps: false,
-  coords: null,
+  status: 'idle',
   rawPlace: null,
-  rawStreet: null,
   rawWeatherCode: null,
   temperatureC: null,
   isRainy: false,
-  errorKind: null,
 };
 
+/**
+ * Privacy-first, zero-permission opt-in city weather lookup.
+ * - Fires ZERO network requests on mount and never invokes navigator.geolocation
+ *   (honoring `Permissions-Policy: geolocation=()` in `site/public/_headers`).
+ * - Only queries coarse IP city + Open-Meteo current weather when explicitly requested.
+ */
 export function useLiveLocalContext(lang: SiteLang): LiveLocalContext {
   const [state, setState] = useState<InternalLiveState>(INITIAL_STATE);
-  const langRef = useRef<SiteLang>(lang);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    langRef.current = lang;
-  }, [lang]);
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
-  // Automatic zero-permission free IP city + Open-Meteo live weather lookup on mount
-  useEffect(() => {
-    let cancelled = false;
+  const requestCityWeather = useCallback(() => {
+    if (typeof window === 'undefined' || typeof fetch !== 'function') {
+      setState({
+        status: 'unavailable',
+        rawPlace: null,
+        rawWeatherCode: null,
+        temperatureC: null,
+        isRainy: false,
+      });
+      return;
+    }
 
-    const loadCoarseLocation = async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setState((prev) => ({
+      ...prev,
+      status: 'loading',
+    }));
+
+    void (async () => {
       const geo = await fetchJsonWithTimeout<GeoJsResponse>(
         'https://get.geojs.io/v1/ip/geo.json',
+        controller.signal,
         4500
       );
-      if (cancelled) return;
+      if (controller.signal.aborted) return;
 
       const lat = geo?.latitude ? Number.parseFloat(geo.latitude) : Number.NaN;
       const lon = geo?.longitude ? Number.parseFloat(geo.longitude) : Number.NaN;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        setState((prev) => (prev.status === 'gps' ? prev : { ...prev, status: 'unavailable' }));
+        setState({
+          status: 'unavailable',
+          rawPlace: null,
+          rawWeatherCode: null,
+          temperatureC: null,
+          isRainy: false,
+        });
         return;
       }
 
-      const [weather, street] = await Promise.all([
-        fetchFreeWeather(lat, lon),
-        fetchFreeStreetName(lat, lon, langRef.current),
-      ]);
-      if (cancelled) return;
+      const weather = await fetchCityWeather(lat, lon, controller.signal);
+      if (controller.signal.aborted) return;
 
-      const fallbackCity = [geo?.city, geo?.region].filter(Boolean).join(' · ') || null;
+      const cityParts = [geo?.city, geo?.region].filter(
+        (v, idx, arr): v is string => Boolean(v && v.trim()) && arr.indexOf(v) === idx
+      );
+      const place = cityParts.slice(0, 2).join(' · ') || geo?.country || null;
 
-      setState((prev) => {
-        if (prev.status === 'gps') return prev;
-        return {
-          status: 'ip',
-          isLocatingGps: false,
-          coords: { lat, lon },
-          rawPlace: street.placeLabel ?? fallbackCity,
-          rawStreet: street.streetLabel,
-          rawWeatherCode: weather.weatherCode,
-          temperatureC: weather.temperatureC,
-          isRainy: weather.isRainy,
-          errorKind: null,
-        };
+      setState({
+        status: 'city',
+        rawPlace: place,
+        rawWeatherCode: weather.weatherCode,
+        temperatureC: weather.temperatureC,
+        isRainy: weather.isRainy,
       });
-    };
-
-    void loadCoarseLocation();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Re-localize resolved street name cleanly when user switches KO <-> EN
-  const lat = state.coords?.lat ?? null;
-  const lon = state.coords?.lon ?? null;
-  useEffect(() => {
-    if (lat === null || lon === null) return undefined;
-    let cancelled = false;
-    void fetchFreeStreetName(lat, lon, lang).then((localized) => {
-      if (cancelled || !localized.placeLabel) return;
-      setState((prev) => ({
-        ...prev,
-        rawPlace: localized.placeLabel,
-        rawStreet: localized.streetLabel ?? prev.rawStreet,
-      }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [lat, lon, lang]);
-
-  // Precise user-triggered GPS + Free OpenStreetMap Street + Open-Meteo Live Weather
-  const requestGpsLocation = useCallback(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setState((prev) => ({
-        ...prev,
-        isLocatingGps: false,
-        errorKind: 'unsupported',
-      }));
-      return;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      isLocatingGps: true,
-      errorKind: null,
-    }));
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const nextLat = pos.coords.latitude;
-        const nextLon = pos.coords.longitude;
-        void (async () => {
-          const [street, weather] = await Promise.all([
-            fetchFreeStreetName(nextLat, nextLon, langRef.current),
-            fetchFreeWeather(nextLat, nextLon),
-          ]);
-          setState({
-            status: 'gps',
-            isLocatingGps: false,
-            coords: { lat: nextLat, lon: nextLon },
-            rawPlace:
-              street.placeLabel ?? `${nextLat.toFixed(2)}°, ${nextLon.toFixed(2)}°`,
-            rawStreet: street.streetLabel,
-            rawWeatherCode: weather.weatherCode,
-            temperatureC: weather.temperatureC,
-            isRainy: weather.isRainy,
-            errorKind: null,
-          });
-        })();
-      },
-      (err) => {
-        setState((prev) => ({
-          ...prev,
-          isLocatingGps: false,
-          errorKind: err.code === err.PERMISSION_DENIED ? 'denied' : 'timeout',
-        }));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: 120000,
-      }
-    );
+    })();
   }, []);
 
   const placeLabel =
     state.rawPlace ??
     (state.status === 'loading'
       ? lang === 'ko'
-        ? '내 위치 확인 중…'
-        : 'Detecting location…'
+        ? '도시 확인 중…'
+        : 'Checking city…'
       : lang === 'ko'
-        ? '내 위치 자동 연동'
-        : 'Auto Current Location');
+        ? '서울 · 명동'
+        : 'Seoul · Myeongdong');
 
   const weatherLabel = (() => {
     if (state.temperatureC !== null && state.rawWeatherCode !== null) {
@@ -338,36 +210,26 @@ export function useLiveLocalContext(lang: SiteLang): LiveLocalContext {
       return `${state.temperatureC}°C`;
     }
     if (state.status === 'loading') {
-      return lang === 'ko' ? '실시간 날씨 확인 중…' : 'Checking weather…';
+      return lang === 'ko' ? '날씨 조회 중…' : 'Checking weather…';
     }
-    return lang === 'ko' ? '실시간 지역 날씨' : 'Live Local Weather';
+    return lang === 'ko' ? '실시간 날씨 조회 가능' : 'Opt-in live weather';
   })();
 
   const errorHint =
-    state.errorKind === 'denied'
+    state.status === 'unavailable'
       ? lang === 'ko'
-        ? '위치 권한이 거부되어 현재 IP 기준 지역을 표시합니다.'
-        : 'Location permission denied — showing approximate area.'
-      : state.errorKind === 'timeout'
-        ? lang === 'ko'
-          ? '정밀 위치 확인 시간이 초과되었습니다.'
-          : 'GPS lookup timed out.'
-        : state.errorKind === 'unsupported'
-          ? lang === 'ko'
-            ? '이 브라우저에서 정밀 위치 기능을 지원하지 않습니다.'
-            : 'Geolocation is unavailable in this browser.'
-          : null;
+        ? '날씨 서버 연결이 제한되어 기본 서울 프리뷰를 표시합니다.'
+        : 'Live weather unavailable — showing Seoul preview.'
+      : null;
 
   return {
     status: state.status,
-    isLocatingGps: state.isLocatingGps,
+    isLoading: state.status === 'loading',
     placeLabel,
-    streetLabel: state.rawStreet,
     weatherLabel,
     temperatureC: state.temperatureC,
     isRainy: state.isRainy,
-    coords: state.coords,
     errorHint,
-    requestGpsLocation,
+    requestCityWeather,
   };
 }
