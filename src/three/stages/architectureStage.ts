@@ -1,12 +1,15 @@
 /**
  * architectureStage.ts
  * ---------------------------------------------------------------------------
- * Interactive 3D Architecture Stage ("6-Tier Smoked-Glass Tower") for ainvtry.com.
+ * Interactive 3D Architecture Stage ("6-Tier Smoked-Glass Tower + Cross-Cutting Governance Frame") for ainvtry.com.
  *
  * Implements the frozen `StageModule` contract from `ainvtryStageDirector.ts`:
- *  - 6 stacked translucent smoked-glass tiers (01 Client Apps -> 06 Data · Hardware)
+ *  - 6 stacked translucent smoked-glass operational tiers (01 Client Apps -> 06 Data · Hardware)
  *    with champagne-gold wireframes, active bloom rim halos, inner glow shells,
  *    base reflection puddles, floating active-tier badges, and tap raycasting.
+ *  - 07 Governance rendered as an encompassing Cross-Cutting Vertical Control Plane Frame
+ *    (4 structural corner pillars, top/bottom perimeter crowns, per-tier audit ticks, and a
+ *    gliding cross-layer scan ring) wrapping all 6 tiers from top to bottom.
  *  - ~112 rising golden micro-particles streaming vertically along the tower spine
  *    with live `MVP <-> Prod Scale + GPU` throughput & GPU compute rim accents.
  *  - Reused glowing gold marble docking inside the active tier (or mapped Google API
@@ -26,6 +29,7 @@ import {
   type StageModule,
   type ThemeMode,
 } from '../ainvtryStageDirector.ts';
+import { BRAND_LOGO_ASSETS } from '../../data/content.ts';
 import {
   STAGE_PALETTE,
   applyGoldModeState,
@@ -33,23 +37,33 @@ import {
   createChampagneGoldMaterial,
   createFloatingLabelSprite,
   createSmokedGlassMaterial,
+  createTierTechDrawer,
+  createTopSurfaceLogoFallbackTexture,
   disposeObject3D,
+  type ArchStackMode,
   type FloatingLabelHandle,
+  type TechRibbonItem,
+  type TierTechDrawerHandle,
 } from './stageMaterials.ts';
 
 /* ==========================================================================
  * 1. Constants, Palette Helpers & Tier Metadata
  * ========================================================================== */
 
+const SLAB_COUNT = 6;
+const GOV_TIER_INDEX = 6;
 const TIER_COUNT = 7;
 const TIER_WIDTH = 1.32;
 const TIER_HEIGHT = 0.29;
 const TIER_DEPTH = 1.32;
 const TIER_SPACING = 0.43;
-const TOWER_CENTER_Y = 0.05;
-const FLOOR_GRID_Y = -1.7;
+const TOWER_CENTER_Y = -0.04;
+const FLOOR_GRID_Y = -1.72;
 const DEFAULT_TOWER_YAW = Math.PI * 0.22;
 const DRAG_SENSITIVITY = 0.0085;
+
+const GOV_FRAME_HALF_W = TIER_WIDTH * 0.5 + 0.28;
+const GOV_FRAME_HALF_D = TIER_DEPTH * 0.5 + 0.28;
 
 const STREAM_PARTICLE_COUNT = 112;
 const STREAM_Y_MIN = -2.1;
@@ -59,15 +73,117 @@ const STREAM_SPAN = STREAM_Y_MAX - STREAM_Y_MIN;
 const RAIN_STREAK_COUNT = 52;
 const GPU_ACCENT_TIERS: readonly number[] = [3, 5]; // 04 iNVTRY Core & 06 Data · Hardware
 
-const TIER_SPECS = [
-  { label: '01 Client Apps', subtext: 'Web · iOS · Android', techBadges: ['⚛ React 19', '⚡ Vite · WASM', '📱 Capacitor'] },
-  { label: '02 Edge Access', subtext: 'CDN · TLS · WAF', techBadges: ['☁ Cloudflare', '🔒 TLS 1.3', '🛡 Armor WAF'] },
-  { label: '03 API Gateway', subtext: 'Auth · Rate · Schema', techBadges: ['⚙ Express 5', '🔑 OIDC · JWT', '✓ RBAC Guard'] },
-  { label: '04 iNVTRY Core', subtext: '3D Fit · AI · Closet', techBadges: ['◈ Three.js 3D', '✦ 8-Cut VTON', '◉ Maps Proxy'] },
-  { label: '05 Shared Base', subtext: 'Sync · Queue · Cache', techBadges: ['◎ OTel Log', '▣ GCS 3-Zone', '⇄ Pub/Sub'] },
-  { label: '06 Data · Hardware', subtext: 'SQLite · GPU Cluster', techBadges: ['⛁ SQLite / PG', '⚡ Redis HA', '▦ L4 / A100'] },
-  { label: '07 Governance', subtext: 'Audit · RBAC · CI/CD', techBadges: ['◈ Audit Log', '🛡 RBAC Matrix', '⎇ CI / CD'] },
-] as const;
+const INTRO_HOLD_TOP = 0.85;
+const INTRO_PIVOT_END = 2.25;
+const INTRO_TOP_PITCH = 1.28; // ~73 deg forward tilt showing Tier 01 top face with iNVTRY logo
+
+interface TierSpecEntry {
+  readonly label: string;
+  readonly subtext: string;
+  readonly mvpTechIcons: readonly TechRibbonItem[];
+  readonly prodTechIcons: readonly TechRibbonItem[];
+}
+
+const TIER_SPECS: readonly TierSpecEntry[] = [
+  {
+    label: '01 Client Apps',
+    subtext: 'Web · iOS · Android',
+    mvpTechIcons: [
+      { icon: 'react', label: 'React 19', tag: 'SPA · TS7' },
+      { icon: 'bolt', label: 'Vite · WASM', tag: '0B FACE' },
+      { icon: 'mobile', label: 'Capacitor 8', tag: 'HYBRID' },
+    ],
+    prodTechIcons: [
+      { icon: 'mobile', label: 'PWA Offline', tag: 'SW SHELL' },
+      { icon: 'database', label: 'IndexedDB', tag: 'LOCAL SYNC' },
+      { icon: 'lock', label: 'Keychain', tag: 'STORE HA' },
+    ],
+  },
+  {
+    label: '02 Edge Access',
+    subtext: 'CDN · TLS · WAF',
+    mvpTechIcons: [
+      { icon: 'cloud', label: 'CF Workers', tag: 'EDGE POP' },
+      { icon: 'lock', label: 'TLS 1.3', tag: 'HSTS · CSP' },
+      { icon: 'shield', label: 'Rate Limit', tag: 'API GUARD' },
+    ],
+    prodTechIcons: [
+      { icon: 'cloud', label: 'Multi-CDN', tag: 'GLOBAL HA' },
+      { icon: 'server', label: 'Anycast LB', tag: 'FAILOVER' },
+      { icon: 'shieldCheck', label: 'Armor WAF', tag: 'L7 DDoS' },
+    ],
+  },
+  {
+    label: '03 API Gateway',
+    subtext: 'Auth · Rate · Schema',
+    mvpTechIcons: [
+      { icon: 'server', label: 'Express 5', tag: 'REST API' },
+      { icon: 'key', label: 'OIDC · JWT', tag: 'STATELESS' },
+      { icon: 'shieldCheck', label: 'RBAC MW', tag: 'ROUTE ACL' },
+    ],
+    prodTechIcons: [
+      { icon: 'cloud', label: 'Cloud Run', tag: 'AUTOSCALE' },
+      { icon: 'sync', label: 'JWT Rotate', tag: 'ZERO-TRUST' },
+      { icon: 'shieldCheck', label: 'Schema Guard', tag: 'ALLOWLIST' },
+    ],
+  },
+  {
+    label: '04 iNVTRY Core',
+    subtext: '3D Fit · AI · Closet',
+    mvpTechIcons: [
+      { icon: 'cube3d', label: 'Three.js 3D', tag: '21-BONE' },
+      { icon: 'sparkle', label: '8-Cut VTON', tag: 'NO-TRAIN' },
+      { icon: 'mapPin', label: 'Maps Proxy', tag: 'WEATHER' },
+    ],
+    prodTechIcons: [
+      { icon: 'gpu', label: 'L4/A100 Pool', tag: 'VPC GPU' },
+      { icon: 'sparkle', label: 'Vertex AI', tag: 'ENTERPRISE' },
+      { icon: 'bolt', label: 'Geo · Redis', tag: '20M TTL' },
+    ],
+  },
+  {
+    label: '05 Shared Base',
+    subtext: 'Sync · Queue · Cache',
+    mvpTechIcons: [
+      { icon: 'activity', label: 'PII Logger', tag: 'MASKED' },
+      { icon: 'storage', label: 'Tenant Dir', tag: '4MB GUARD' },
+      { icon: 'sync', label: 'SSE Retry', tag: '8-CUT JOB' },
+    ],
+    prodTechIcons: [
+      { icon: 'activity', label: 'OTel Trace', tag: 'CLOUD LOG' },
+      { icon: 'storage', label: 'GCS 3-Zone', tag: '15M SIGN' },
+      { icon: 'sync', label: 'Pub/Sub DLQ', tag: 'EVENT BUS' },
+    ],
+  },
+  {
+    label: '06 Data · Hardware',
+    subtext: 'SQLite · GPU Cluster',
+    mvpTechIcons: [
+      { icon: 'database', label: 'SQLite WASM', tag: 'LOCAL DB' },
+      { icon: 'bolt', label: 'Mem Cache', tag: '20M TTL' },
+      { icon: 'gpu', label: 'Vertex API', tag: 'SINGLE NODE' },
+    ],
+    prodTechIcons: [
+      { icon: 'database', label: 'CloudSQL HA', tag: 'POSTGRES' },
+      { icon: 'bolt', label: 'Redis HA', tag: 'SUB-MS' },
+      { icon: 'gpu', label: 'L4 / A100', tag: 'MULTI-AZ' },
+    ],
+  },
+  {
+    label: '07 Governance',
+    subtext: 'Cross-Cutting Control Plane',
+    mvpTechIcons: [
+      { icon: 'activity', label: 'Audit Mask', tag: 'PII TRACE' },
+      { icon: 'shieldCheck', label: 'RBAC UI', tag: 'MENU/BTN' },
+      { icon: 'gitBranch', label: 'oxlint CI', tag: '340+ QA' },
+    ],
+    prodTechIcons: [
+      { icon: 'activity', label: 'WORM Audit', tag: 'SIEM SOC' },
+      { icon: 'key', label: 'Least IAM', tag: 'ZERO-TRUST' },
+      { icon: 'gitBranch', label: 'Canary CD', tag: 'SBOM GATE' },
+    ],
+  },
+];
 
 const MAPS_API_SPECS = [
   { label: '01 Weather API', subtext: '3D Rain · Wind · Sun' },
@@ -76,11 +192,19 @@ const MAPS_API_SPECS = [
   { label: '04 Vertex AI', subtext: 'No-Training VTON' },
   { label: '05 MediaPipe', subtext: '0B On-Device WASM' },
   { label: '06 Calendar API', subtext: 'Look Schedule Sync' },
-  { label: '07 Privacy Guard', subtext: 'Audit · RBAC · Zero-Train' },
+  { label: '07 Privacy Guard', subtext: 'Cross-Cutting Zero-Train' },
 ] as const;
 
+const getSlabCenterY = (slabIndex: number): number =>
+  TOWER_CENTER_Y + ((SLAB_COUNT - 1) * 0.5 - slabIndex) * TIER_SPACING;
+
+const GOV_TOP_Y = getSlabCenterY(0) + TIER_HEIGHT * 0.5 + 0.18;
+const GOV_BOT_Y = getSlabCenterY(SLAB_COUNT - 1) - TIER_HEIGHT * 0.5 - 0.18;
+const GOV_MID_Y = (GOV_TOP_Y + GOV_BOT_Y) * 0.5;
+const GOV_FRAME_H = GOV_TOP_Y - GOV_BOT_Y;
+
 const getTierCenterY = (index: number): number =>
-  TOWER_CENTER_Y + ((TIER_COUNT - 1) * 0.5 - index) * TIER_SPACING;
+  index >= SLAB_COUNT ? TOWER_CENTER_Y : getSlabCenterY(index);
 
 const resolveActiveTierIndex = (state: StageInteractionState): number => {
   const raw = state.architectureSubtab === 'maps' ? state.googleApiIndex : state.architectureTier;
@@ -553,12 +677,6 @@ function createWeatherOverlay(solarTexture: THREE.Texture) {
  * 4. Architecture 3D Stage Factory (`StageModule`)
  * ========================================================================== */
 
-interface TierTechSatellite {
-  readonly badge: FloatingLabelHandle;
-  readonly baseAngle: number;
-  readonly verticalOffset: number;
-}
-
 interface TierRuntime {
   readonly root: THREE.Group;
   readonly baseY: number;
@@ -569,7 +687,7 @@ interface TierRuntime {
   readonly baseGlowMat: THREE.MeshBasicMaterial;
   readonly blueprintLabel: FloatingLabelHandle;
   readonly mapsLabel: FloatingLabelHandle;
-  readonly techSatellites: readonly TierTechSatellite[];
+  readonly techDrawer: TierTechDrawerHandle;
 }
 
 export function createArchitectureStage(): StageModule {
@@ -589,6 +707,59 @@ export function createArchitectureStage(): StageModule {
   const baseGlowTex = createSoftGlowTexture(128, true);
   const solarGlowTex = createSoftGlowTexture(128, false);
 
+  // Top-surface iNVTRY logo textures (immediate procedural fallback + async official PNG upgrade)
+  let topLogoDarkTex: THREE.Texture = createTopSurfaceLogoFallbackTexture('dark');
+  let topLogoLightTex: THREE.Texture = createTopSurfaceLogoFallbackTexture('light');
+  let isDisposed = false;
+
+  const topLogoMat = new THREE.MeshBasicMaterial({
+    map: topLogoDarkTex,
+    transparent: true,
+    opacity: 0.96,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  if (typeof window !== 'undefined') {
+    const texLoader = new THREE.TextureLoader();
+    const loadBrandTex = (url: string, target: 'dark' | 'light'): void => {
+      texLoader.load(
+        url,
+        (loaded) => {
+          if (isDisposed) {
+            loaded.dispose();
+            return;
+          }
+          loaded.colorSpace = THREE.SRGBColorSpace;
+          loaded.minFilter = THREE.LinearMipmapLinearFilter;
+          loaded.magFilter = THREE.LinearFilter;
+          loaded.anisotropy = 4;
+          if (target === 'dark') {
+            topLogoDarkTex.dispose();
+            topLogoDarkTex = loaded;
+            if (currentTheme === 'dark') {
+              topLogoMat.map = loaded;
+              topLogoMat.needsUpdate = true;
+            }
+          } else {
+            topLogoLightTex.dispose();
+            topLogoLightTex = loaded;
+            if (currentTheme === 'light') {
+              topLogoMat.map = loaded;
+              topLogoMat.needsUpdate = true;
+            }
+          }
+        },
+        undefined,
+        () => {
+          // Keep crisp procedural canvas fallback silently if asset fails to load
+        }
+      );
+    };
+    loadBrandTex(BRAND_LOGO_ASSETS.dark, 'dark');
+    loadBrandTex(BRAND_LOGO_ASSETS.light, 'light');
+  }
+
   const tierBoxGeo = new THREE.BoxGeometry(TIER_WIDTH, TIER_HEIGHT, TIER_DEPTH);
   const tierEdgeGeo = new THREE.EdgesGeometry(tierBoxGeo);
   const innerShellGeo = new THREE.BoxGeometry(TIER_WIDTH - 0.08, TIER_HEIGHT - 0.06, TIER_DEPTH - 0.08);
@@ -597,8 +768,14 @@ export function createArchitectureStage(): StageModule {
   let currentGlassRatio = 0.5;
   let currentMood: MoodMode = 'luxury';
   let currentTheme: ThemeMode = 'dark';
+  let currentArchMode: ArchStackMode = 'mvp';
   let lastReducedMotion = false;
   let isStageEntered = false;
+
+  // 2-Phase Intro Choreography state: Top-Face iNVTRY Logo -> Sideways Pivot & Layer Reveal
+  let introClock = INTRO_PIVOT_END;
+  let userDraggedDuringIntro = false;
+  let lastSelectedTierIdx = 3;
 
   let targetYaw = DEFAULT_TOWER_YAW;
   let currentYaw = DEFAULT_TOWER_YAW;
@@ -615,6 +792,15 @@ export function createArchitectureStage(): StageModule {
 
   const activeWeights = new Float32Array(TIER_COUNT);
   activeWeights[3] = 1; // 04 iNVTRY Core highlighted by default
+  const drawerUnfurls = new Float32Array(TIER_COUNT);
+  const drawerOpacities = new Float32Array(TIER_COUNT);
+  const slabScalesY = new Float32Array(SLAB_COUNT);
+  const slabCentersY = new Float32Array(SLAB_COUNT);
+  for (let i = 0; i < SLAB_COUNT; i += 1) {
+    slabScalesY[i] = 1;
+    slabCentersY[i] = getSlabCenterY(i);
+  }
+  let dynamicGovBotY = GOV_BOT_Y;
 
   const marbleAnchorOut = new THREE.Vector3(0, getTierCenterY(3), 0);
   const raycaster = new THREE.Raycaster();
@@ -623,12 +809,13 @@ export function createArchitectureStage(): StageModule {
   const tmpColorB = new THREE.Color();
   const tmpColorMix = new THREE.Color();
 
-  // Build 6 stacked translucent smoked-glass tiers
+  // Build 6 stacked operational smoked-glass tiers (01 Client -> 06 Data · Hardware)
+  // + 07 Governance as an encompassing Cross-Cutting Vertical Control Plane wrapping all 6 slabs.
   const tiers: TierRuntime[] = [];
   const tierHitMeshes: THREE.Mesh[] = [];
 
-  for (let i = 0; i < TIER_COUNT; i += 1) {
-    const baseY = getTierCenterY(i);
+  for (let i = 0; i < SLAB_COUNT; i += 1) {
+    const baseY = getSlabCenterY(i);
     const tierRoot = new THREE.Group();
     tierRoot.name = `architecture-tier-${i}`;
     tierRoot.position.y = baseY;
@@ -688,6 +875,20 @@ export function createArchitectureStage(): StageModule {
     baseGlowMesh.position.y = -TIER_HEIGHT * 0.5 + 0.015;
     baseGlowMesh.renderOrder = 1;
     tierRoot.add(baseGlowMesh);
+
+    // Emboss the official iNVTRY brand mark onto the TOP surface (+Y face) of Tier 01 for the intro reveal
+    if (i === 0) {
+      const topLogoW = TIER_WIDTH * 0.88;
+      const topLogoH = topLogoW * (394 / 1120);
+      const topLogoGeo = new THREE.PlaneGeometry(topLogoW, topLogoH);
+      const topLogoMesh = new THREE.Mesh(topLogoGeo, topLogoMat);
+      topLogoMesh.name = 'architecture-top-surface-logo';
+      topLogoMesh.rotation.x = -Math.PI * 0.5;
+      topLogoMesh.position.y = TIER_HEIGHT * 0.5 + 0.008;
+      topLogoMesh.renderOrder = 5;
+      tierRoot.add(topLogoMesh);
+    }
+
     towerPivot.add(tierRoot);
 
     const labelOpts = { accent: true, width: 224, height: 52, worldHeight: 0.22 } as const;
@@ -707,24 +908,14 @@ export function createArchitectureStage(): StageModule {
     mapsLabel.sprite.visible = false;
     labelGroup.add(mapsLabel.sprite);
 
-    // Expanding 3D tech-icon badges that fan outward when this tier is selected
-    const satOpts = { accent: false, width: 176, height: 42, worldHeight: 0.165 } as const;
-    const satAngles = [-Math.PI * 0.62, Math.PI * 0.62, 0.0];
-    const satOffsets = [0.22, 0.22, -0.24];
-    const techSatellites: TierTechSatellite[] = TIER_SPECS[i].techBadges.map((badgeText, sIdx) => {
-      const sat = createFloatingLabelSprite(badgeText, satOpts);
-      sat.sprite.position.set(0, baseY, 0.4);
-      sat.sprite.material.depthTest = false;
-      sat.sprite.renderOrder = 25;
-      sat.sprite.material.opacity = 0;
-      sat.sprite.visible = false;
-      labelGroup.add(sat.sprite);
-      return {
-        badge: sat,
-        baseAngle: satAngles[sIdx] ?? 0,
-        verticalOffset: satOffsets[sIdx] ?? 0,
-      };
-    });
+    // True 3D horizontally sliding Tech Drawer with mode-specific MVP vs Prod GPU HA icon blades
+    const techDrawer = createTierTechDrawer(
+      TIER_SPECS[i].label,
+      TIER_SPECS[i].mvpTechIcons,
+      TIER_SPECS[i].prodTechIcons
+    );
+    techDrawer.group.position.set(0, baseY + 0.02, 0.68);
+    labelGroup.add(techDrawer.group);
 
     tiers.push({
       root: tierRoot,
@@ -736,9 +927,190 @@ export function createArchitectureStage(): StageModule {
       baseGlowMat,
       blueprintLabel,
       mapsLabel,
-      techSatellites,
+      techDrawer,
     });
   }
+
+  // ── 07 Governance: Cross-Cutting Vertical Control Plane wrapping ALL 6 tiers (01..06) ──
+  const govRoot = new THREE.Group();
+  govRoot.name = 'architecture-tier-6-governance-frame';
+  govRoot.position.y = GOV_MID_Y;
+
+  const govGlassMat = createSmokedGlassMaterial(currentGlassRatio, currentMood, currentTheme);
+  const govEdgeMat = new THREE.LineBasicMaterial({
+    color: STAGE_PALETTE.champagneGold,
+    transparent: true,
+    opacity: 0.36,
+    depthWrite: false,
+  });
+  const govEdgeHaloMat = new THREE.LineBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0.06,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const govInnerShellMat = new THREE.MeshBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0.08,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const govBaseGlowMat = new THREE.MeshBasicMaterial({
+    map: baseGlowTex,
+    color: 0xffe4b2,
+    transparent: true,
+    opacity: 0.04,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const pillarGeo = new THREE.BoxGeometry(0.044, GOV_FRAME_H, 0.044);
+  const pillarEdgeGeo = new THREE.EdgesGeometry(pillarGeo);
+  const tickGeo = new THREE.BoxGeometry(0.082, 0.02, 0.082);
+  const crownBarXGeo = new THREE.BoxGeometry(GOV_FRAME_HALF_W * 2 + 0.044, 0.032, 0.032);
+  const crownBarZGeo = new THREE.BoxGeometry(0.032, 0.032, GOV_FRAME_HALF_D * 2 + 0.044);
+
+  const govCorners: ReadonlyArray<readonly [number, number]> = [
+    [-GOV_FRAME_HALF_W, -GOV_FRAME_HALF_D],
+    [GOV_FRAME_HALF_W, -GOV_FRAME_HALF_D],
+    [GOV_FRAME_HALF_W, GOV_FRAME_HALF_D],
+    [-GOV_FRAME_HALF_W, GOV_FRAME_HALF_D],
+  ];
+
+  for (const [cx, cz] of govCorners) {
+    const pillar = new THREE.Mesh(pillarGeo, govGlassMat);
+    pillar.position.set(cx, 0, cz);
+    pillar.userData.tierIndex = GOV_TIER_INDEX;
+    pillar.renderOrder = 2;
+    govRoot.add(pillar);
+    tierHitMeshes.push(pillar);
+
+    const pillarLines = new THREE.LineSegments(pillarEdgeGeo, govEdgeMat);
+    pillarLines.position.set(cx, 0, cz);
+    pillarLines.renderOrder = 3;
+    govRoot.add(pillarLines);
+
+    const pillarHalo = new THREE.LineSegments(pillarEdgeGeo, govEdgeHaloMat);
+    pillarHalo.position.set(cx, 0, cz);
+    pillarHalo.scale.set(1.22, 1.003, 1.22);
+    pillarHalo.renderOrder = 3;
+    govRoot.add(pillarHalo);
+
+    // Per-tier audit node ticks linking the vertical Governance pillar to each of the 6 operational slabs
+    for (let s = 0; s < SLAB_COUNT; s += 1) {
+      const tick = new THREE.Mesh(tickGeo, govInnerShellMat);
+      tick.position.set(cx, getSlabCenterY(s) - GOV_MID_Y, cz);
+      tick.renderOrder = 4;
+      govRoot.add(tick);
+    }
+  }
+
+  // Top Crown & Bottom Base horizontal perimeter bars
+  const halfH = GOV_FRAME_H * 0.5;
+  for (const yOff of [halfH, -halfH]) {
+    for (const zOff of [-GOV_FRAME_HALF_D, GOV_FRAME_HALF_D]) {
+      const barX = new THREE.Mesh(crownBarXGeo, govGlassMat);
+      barX.position.set(0, yOff, zOff);
+      barX.userData.tierIndex = GOV_TIER_INDEX;
+      barX.renderOrder = 2;
+      govRoot.add(barX);
+      tierHitMeshes.push(barX);
+    }
+    for (const xOff of [-GOV_FRAME_HALF_W, GOV_FRAME_HALF_W]) {
+      const barZ = new THREE.Mesh(crownBarZGeo, govGlassMat);
+      barZ.position.set(xOff, yOff, 0);
+      barZ.userData.tierIndex = GOV_TIER_INDEX;
+      barZ.renderOrder = 2;
+      govRoot.add(barZ);
+      tierHitMeshes.push(barZ);
+    }
+  }
+
+  // Crisp top & bottom perimeter halo wireframes
+  const ringPts = [
+    new THREE.Vector3(-GOV_FRAME_HALF_W, 0, -GOV_FRAME_HALF_D),
+    new THREE.Vector3(GOV_FRAME_HALF_W, 0, -GOV_FRAME_HALF_D),
+    new THREE.Vector3(GOV_FRAME_HALF_W, 0, GOV_FRAME_HALF_D),
+    new THREE.Vector3(-GOV_FRAME_HALF_W, 0, GOV_FRAME_HALF_D),
+  ];
+  const govPerimeterGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+
+  for (const yOff of [halfH, -halfH]) {
+    const ringLine = new THREE.LineLoop(govPerimeterGeo, govEdgeMat);
+    ringLine.position.y = yOff;
+    ringLine.renderOrder = 3;
+    govRoot.add(ringLine);
+
+    const ringHalo = new THREE.LineLoop(govPerimeterGeo, govEdgeHaloMat);
+    ringHalo.position.y = yOff;
+    ringHalo.scale.setScalar(1.015);
+    ringHalo.renderOrder = 3;
+    govRoot.add(ringHalo);
+  }
+
+  // Gliding Cross-Cutting Audit Scan Ring (sweeps across all 6 tiers when 07 Governance is active)
+  const govScanMat = new THREE.LineBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const govScanRing = new THREE.LineLoop(govPerimeterGeo, govScanMat);
+  govScanRing.scale.setScalar(0.97);
+  govScanRing.renderOrder = 4;
+  govRoot.add(govScanRing);
+
+  // Subtle base beacon glow plane at the bottom of the Governance frame
+  const govCrownGlowPlane = new THREE.Mesh(baseGlowPlaneGeo, govBaseGlowMat);
+  govCrownGlowPlane.rotation.x = -Math.PI * 0.5;
+  govCrownGlowPlane.position.y = -halfH;
+  govCrownGlowPlane.scale.setScalar(1.38);
+  govCrownGlowPlane.renderOrder = 1;
+  govRoot.add(govCrownGlowPlane);
+
+  towerPivot.add(govRoot);
+
+  // Floating 07 Governance bottom badge & expanding tech drawer
+  const govLabelOpts = { accent: true, width: 224, height: 52, worldHeight: 0.22 } as const;
+  const govBlueprintLabel = createFloatingLabelSprite(TIER_SPECS[GOV_TIER_INDEX].label, govLabelOpts);
+  govBlueprintLabel.sprite.position.set(0, GOV_BOT_Y + 0.06, 0.92);
+  govBlueprintLabel.sprite.material.depthTest = false;
+  govBlueprintLabel.sprite.renderOrder = 26;
+  govBlueprintLabel.sprite.material.opacity = 0;
+  govBlueprintLabel.sprite.visible = false;
+  labelGroup.add(govBlueprintLabel.sprite);
+
+  const govMapsLabel = createFloatingLabelSprite(MAPS_API_SPECS[GOV_TIER_INDEX].label, govLabelOpts);
+  govMapsLabel.sprite.position.set(0, GOV_BOT_Y + 0.06, 0.92);
+  govMapsLabel.sprite.material.depthTest = false;
+  govMapsLabel.sprite.renderOrder = 26;
+  govMapsLabel.sprite.material.opacity = 0;
+  govMapsLabel.sprite.visible = false;
+  labelGroup.add(govMapsLabel.sprite);
+
+  const govTechDrawer = createTierTechDrawer(
+    TIER_SPECS[GOV_TIER_INDEX].label,
+    TIER_SPECS[GOV_TIER_INDEX].mvpTechIcons,
+    TIER_SPECS[GOV_TIER_INDEX].prodTechIcons
+  );
+  govTechDrawer.group.position.set(0, GOV_BOT_Y + 0.06, 0.68);
+  labelGroup.add(govTechDrawer.group);
+
+  tiers.push({
+    root: govRoot,
+    baseY: GOV_BOT_Y + 0.06,
+    glassMat: govGlassMat,
+    edgeMat: govEdgeMat,
+    edgeHaloMat: govEdgeHaloMat,
+    innerShellMat: govInnerShellMat,
+    baseGlowMat: govBaseGlowMat,
+    blueprintLabel: govBlueprintLabel,
+    mapsLabel: govMapsLabel,
+    techDrawer: govTechDrawer,
+  });
 
   const floorGrid = createArchitecturalFloorGrid();
   towerPivot.add(floorGrid.group);
@@ -807,10 +1179,14 @@ export function createArchitectureStage(): StageModule {
       tier.edgeHaloMat.color.setHex(edgeHaloHex);
       tier.blueprintLabel.setHighlight(true, currentTheme);
       tier.mapsLabel.setHighlight(true, currentTheme);
-      for (const sat of tier.techSatellites) {
-        sat.badge.setHighlight(true, currentTheme);
-      }
+      tier.techDrawer.setModeAndTheme(currentArchMode, currentTheme);
     }
+
+    topLogoMat.map = isDark ? topLogoDarkTex : topLogoLightTex;
+    topLogoMat.needsUpdate = true;
+
+    govScanMat.color.setHex(edgeHaloHex);
+    setMaterialBlending(govScanMat, glowBlend);
 
     (floorGrid.gridMat.uniforms.uColor.value as THREE.Color).setHex(
       pickTone(isAurora, isDark, STAGE_PALETTE.champagneGold, 0x8a7048, 0x7ea2d4, 0x627896)
@@ -982,15 +1358,116 @@ export function createArchitectureStage(): StageModule {
 
     const { architectureSubtab, architectureMode, weatherMood } = ctx.interaction;
     const activeIdx = resolveActiveTierIndex(ctx.interaction);
-    const activeTierY = getTierCenterY(activeIdx);
+
+    // Sync MVP vs Prod GPU tech blades immediately on mode toggle & replay horizontal unfurl
+    const nextArchMode: ArchStackMode = architectureMode === 'prod' ? 'prod' : 'mvp';
+    if (nextArchMode !== currentArchMode) {
+      currentArchMode = nextArchMode;
+      for (let i = 0; i < TIER_COUNT; i += 1) {
+        tiers[i].techDrawer.setModeAndTheme(currentArchMode, currentTheme);
+      }
+      drawerUnfurls[activeIdx] = snap ? 1 : 0;
+      tapPulse = 0.85;
+    }
+
+    if (activeIdx !== lastSelectedTierIdx) {
+      lastSelectedTierIdx = activeIdx;
+      drawerUnfurls[activeIdx] = snap ? 1 : 0;
+    }
+
+    // 2-Phase Intro Choreography:
+    //  Phase 1 (0 -> INTRO_HOLD_TOP): Pitch forward so Tier 01's top face + iNVTRY logo face viewer
+    //  Phase 2 (INTRO_HOLD_TOP -> INTRO_PIVOT_END): Pivot sideways & fan all 6 slabs apart
+    if (ctx.reducedMotion) {
+      introClock = INTRO_PIVOT_END;
+    } else if (!instant && introClock < INTRO_PIVOT_END) {
+      introClock = Math.min(INTRO_PIVOT_END, introClock + dt);
+    }
+    const rawPivotT = THREE.MathUtils.clamp(
+      (introClock - INTRO_HOLD_TOP) / (INTRO_PIVOT_END - INTRO_HOLD_TOP),
+      0,
+      1
+    );
+    const pivotEase =
+      rawPivotT < 0.5
+        ? 4 * rawPivotT * rawPivotT * rawPivotT
+        : 1 - Math.pow(-2 * rawPivotT + 2, 3) / 2;
+    const layerSpread = THREE.MathUtils.lerp(0.2, 1.0, pivotEase);
+    const drawerIntroGate = THREE.MathUtils.smoothstep(pivotEase, 0.62, 1.0);
 
     tapPulse = instant ? tapPulse : Math.max(0, tapPulse - dt * 2.4);
     currentYaw = THREE.MathUtils.lerp(currentYaw, targetYaw, fast);
-    towerPivot.rotation.y = currentYaw + (ctx.reducedMotion ? 0 : Math.sin(elapsed * 0.38) * 0.04);
 
-    // Gently glide the tower vertically so the selected tier stays centered in the left viewport
-    const targetTowerOffsetY = THREE.MathUtils.clamp(-activeTierY * 0.42, -0.58, 0.58);
-    towerOffsetY = THREE.MathUtils.lerp(towerOffsetY, targetTowerOffsetY, smooth);
+    const idleYawSway = ctx.reducedMotion ? 0 : Math.sin(elapsed * 0.38) * 0.04 * pivotEase;
+    towerPivot.rotation.x = THREE.MathUtils.lerp(INTRO_TOP_PITCH, 0, pivotEase);
+    towerPivot.rotation.y =
+      !userDraggedDuringIntro && rawPivotT < 1
+        ? THREE.MathUtils.lerp(0.0, DEFAULT_TOWER_YAW, pivotEase)
+        : currentYaw + idleYawSway;
+
+    // Bright top-surface iNVTRY logo during Phase 1 -> refined glass engraving once pivoted sideways
+    topLogoMat.opacity = THREE.MathUtils.lerp(0.98, isDark ? 0.52 : 0.62, pivotEase);
+
+    const aspect = ctx.camera instanceof THREE.PerspectiveCamera ? ctx.camera.aspect : 1.5;
+    const isNarrowSplit = aspect < 0.85;
+
+    // Update activeWeights first so we can compute exact collision-free vertical accordion layout
+    const govActiveWeight = THREE.MathUtils.lerp(
+      activeWeights[GOV_TIER_INDEX],
+      activeIdx === GOV_TIER_INDEX ? 1 : hoveredTierIndex === GOV_TIER_INDEX ? 0.35 : 0,
+      smooth
+    );
+    activeWeights[GOV_TIER_INDEX] = govActiveWeight;
+
+    const slabGap = TIER_SPACING - TIER_HEIGHT;
+    const activeHeightBoost = isNarrowSplit ? 1.82 : 2.55; // Slab stretches to ~2.82x (mobile) / ~3.55x (desktop) tall!
+    const heightExpandFactor = (1 - mapsBlend) * (1 - privacyBlend * 0.55) * drawerIntroGate;
+
+    let totalStackH = (SLAB_COUNT - 1) * slabGap;
+    for (let i = 0; i < SLAB_COUNT; i += 1) {
+      const isSelected = i === activeIdx;
+      const isHovered = hoveredTierIndex === i;
+      activeWeights[i] = THREE.MathUtils.lerp(
+        activeWeights[i],
+        isSelected ? 1 : isHovered ? 0.35 : 0,
+        smooth
+      );
+      const expandW = isSelected ? activeWeights[i] : Math.max(0, activeWeights[i] - 0.35) / 0.65;
+      const scY = 1 + expandW * heightExpandFactor * activeHeightBoost;
+      slabScalesY[i] = scY;
+      totalStackH += TIER_HEIGHT * scY;
+    }
+
+    let cursorY = TOWER_CENTER_Y + totalStackH * 0.5;
+    for (let i = 0; i < SLAB_COUNT; i += 1) {
+      const h = TIER_HEIGHT * slabScalesY[i];
+      slabCentersY[i] = cursorY - h * 0.5;
+      cursorY -= h + slabGap;
+    }
+
+    const dynamicGovFrameH = totalStackH + 0.36;
+    dynamicGovBotY = TOWER_CENTER_Y - dynamicGovFrameH * 0.5;
+    const govDrawerOffset = isNarrowSplit ? -0.6 : -0.76;
+    const activeDynamicY = activeIdx < SLAB_COUNT ? slabCentersY[activeIdx] : dynamicGovBotY;
+
+    // Center monolith cleanly during top-logo showcase, then glide vertically to frame expanded active tier
+    // When 07 Governance is active, lift the tower cleanly so the entire 3D cage sits unobstructed above the bottom cards
+    const govLiftY = isNarrowSplit ? 0.58 : 0.54;
+    const settledTowerOffsetY =
+      activeIdx === GOV_TIER_INDEX
+        ? govLiftY
+        : THREE.MathUtils.clamp(-activeDynamicY * 0.48, -0.78, 0.78);
+    const targetTowerOffsetY = THREE.MathUtils.lerp(0.08, settledTowerOffsetY, pivotEase);
+    towerOffsetY = instant
+      ? targetTowerOffsetY
+      : THREE.MathUtils.lerp(towerOffsetY, targetTowerOffsetY, smooth);
+    // Slightly scale tower on desktop when 07 Governance is selected so both the full 3D cage and bottom drawer clear top/bottom docks
+    const targetTowerScale =
+      activeIdx === GOV_TIER_INDEX && !isNarrowSplit ? THREE.MathUtils.lerp(1, 0.78, pivotEase) : 1;
+    const nextTowerScale = instant
+      ? targetTowerScale
+      : THREE.MathUtils.lerp(towerPivot.scale.x, targetTowerScale, smooth);
+    towerPivot.scale.setScalar(nextTowerScale);
     towerPivot.position.y = towerOffsetY;
     labelGroup.position.y = towerOffsetY;
 
@@ -1002,7 +1479,7 @@ export function createArchitectureStage(): StageModule {
     windBlend = THREE.MathUtils.lerp(windBlend, targetMaps * (weatherMood === 'wind' ? 1 : 0), smooth);
     sunnyBlend = THREE.MathUtils.lerp(sunnyBlend, targetMaps * (weatherMood === 'sunny' ? 1 : 0), smooth);
 
-    const targetLightY = isStageEntered && !instant ? ctx.marbleMesh.position.y : activeTierY + towerOffsetY;
+    const targetLightY = isStageEntered && !instant ? ctx.marbleMesh.position.y : activeDynamicY + towerOffsetY;
     marbleLight.position.set(0, THREE.MathUtils.lerp(marbleLight.position.y, targetLightY, fast), 0);
     const pulseWave = ctx.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(elapsed * 2.2);
     marbleLight.intensity = (isDark ? 2.85 : 1.75) + prodBlend * 0.95 + tapPulse * 0.75 + pulseWave * 0.3;
@@ -1014,87 +1491,152 @@ export function createArchitectureStage(): StageModule {
 
     for (let i = 0; i < TIER_COUNT; i += 1) {
       const tier = tiers[i];
+      const isGov = i === GOV_TIER_INDEX;
       const isSelected = i === activeIdx;
       const isHovered = hoveredTierIndex === i;
-      activeWeights[i] = THREE.MathUtils.lerp(activeWeights[i], isSelected ? 1 : isHovered ? 0.35 : 0, smooth);
       const w = activeWeights[i];
+      const auditHaloBoost = !isGov ? govActiveWeight * 0.28 : 0;
+      const effectiveW = Math.min(1, w + auditHaloBoost) * pivotEase;
 
-      const sc = 1 + w * 0.018 + (isSelected ? tapPulse * 0.014 : 0);
-      tier.root.scale.set(sc, 1 + w * 0.012, sc);
-      applyTierGlassGlow(tier, w);
+      // Fan the 6 slabs apart from the compact top-logo monolith into their dynamic accordion Y centers
+      // Anchor 07 Governance cleanly underneath the bottom of the 3D Governance frame so the 3D cage is never obscured
+      const dynamicCenterY = isGov
+        ? (dynamicGovBotY + govDrawerOffset) * nextTowerScale
+        : slabCentersY[i] * nextTowerScale;
+      if (!isGov) {
+        const compactY = TOWER_CENTER_Y + (2.5 - i) * 0.085;
+        tier.root.position.y = THREE.MathUtils.lerp(compactY, slabCentersY[i], layerSpread);
+      }
+
+      const scBase = isGov
+        ? 1 + w * 0.012 + (isSelected ? tapPulse * 0.01 : 0)
+        : 1 + w * 0.02 + (isSelected ? tapPulse * 0.014 : 0);
+      // Selected operational 3D prism expands BOTH vertically (to frame its cards) and horizontally
+      const scX = isGov
+        ? scBase
+        : scBase + w * heightExpandFactor * (isNarrowSplit ? 0.16 : 0.42);
+      const govScaleY = (dynamicGovFrameH / GOV_FRAME_H) * (1 + w * 0.006);
+      const scY = isGov
+        ? THREE.MathUtils.lerp(0.24, govScaleY, layerSpread)
+        : slabScalesY[i];
+      tier.root.scale.set(scX, scY, scBase);
+      applyTierGlassGlow(tier, isGov ? effectiveW : i === 0 ? Math.max(effectiveW, (1 - pivotEase) * 0.55) : effectiveW);
 
       tmpColorA.setHex(baseEdgeHex);
       tmpColorB.setHex(activeEdgeHex);
-      tier.edgeMat.color.copy(tmpColorA).lerp(tmpColorB, w);
-      tier.edgeMat.opacity = (isDark ? 0.42 : 0.56) + w * (isDark ? 0.56 : 0.4);
-      tier.edgeHaloMat.opacity = w * (isDark ? 0.46 : 0.22) * (1 + prodBlend * 0.25 + (isSelected ? tapPulse * 0.35 : 0));
-      tier.innerShellMat.opacity = (isDark ? 0.02 : 0.015) + w * (isDark ? 0.24 : 0.14) * innerPulse * (1 + prodBlend * 0.22);
-      tier.baseGlowMat.opacity = (isDark ? 0.05 : 0.03) + w * (isDark ? 0.46 : 0.24) * innerPulse * (1 + prodBlend * 0.18);
+      tier.edgeMat.color.copy(tmpColorA).lerp(tmpColorB, effectiveW);
+      const govIntroFade = isGov ? THREE.MathUtils.smoothstep(pivotEase, 0.25, 0.9) : 1;
+      tier.edgeMat.opacity = isGov
+        ? ((isDark ? 0.32 : 0.42) + w * (isDark ? 0.64 : 0.5)) * govIntroFade
+        : (isDark ? 0.42 : 0.56) + effectiveW * (isDark ? 0.56 : 0.4);
+      tier.edgeHaloMat.opacity = isGov
+        ? ((isDark ? 0.06 : 0.04) + w * (isDark ? 0.62 : 0.34) * (1 + prodBlend * 0.2 + (isSelected ? tapPulse * 0.35 : 0))) * govIntroFade
+        : effectiveW * (isDark ? 0.46 : 0.22) * (1 + prodBlend * 0.25 + (isSelected ? tapPulse * 0.35 : 0));
+      tier.innerShellMat.opacity = isGov
+        ? ((isDark ? 0.14 : 0.12) + w * (isDark ? 0.72 : 0.52) * innerPulse) * govIntroFade
+        : (isDark ? 0.02 : 0.015) + effectiveW * (isDark ? 0.24 : 0.14) * innerPulse * (1 + prodBlend * 0.22);
+      tier.baseGlowMat.opacity = isGov
+        ? ((isDark ? 0.03 : 0.02) + w * (isDark ? 0.38 : 0.22) * innerPulse) * govIntroFade
+        : (isDark ? 0.05 : 0.03) + w * (isDark ? 0.46 : 0.24) * innerPulse * (1 + prodBlend * 0.18);
 
-      const labelTarget = isSelected ? 0.95 : isHovered ? 0.72 : 0;
+      // Hover shows compact title pill; selected blueprint tier slides open its horizontal Tech Drawer
+      const showCompactBlueprintLabel = !isSelected && isHovered && drawerIntroGate > 0.5;
+      const blueprintLabelTarget = showCompactBlueprintLabel ? 0.8 : 0;
+      tier.blueprintLabel.sprite.position.y = dynamicCenterY + 0.02;
       tier.blueprintLabel.sprite.material.opacity = THREE.MathUtils.lerp(
         tier.blueprintLabel.sprite.material.opacity,
-        labelTarget * (1 - mapsBlend),
+        blueprintLabelTarget * (1 - mapsBlend),
         fast
       );
       tier.blueprintLabel.sprite.visible = tier.blueprintLabel.sprite.material.opacity > 0.015;
 
+      const mapsLabelTarget = (isSelected ? 0.95 : isHovered ? 0.72 : 0) * drawerIntroGate;
+      tier.mapsLabel.sprite.position.y = dynamicCenterY + 0.02;
       tier.mapsLabel.sprite.material.opacity = THREE.MathUtils.lerp(
         tier.mapsLabel.sprite.material.opacity,
-        labelTarget * mapsBlend,
+        mapsLabelTarget * mapsBlend,
         fast
       );
       tier.mapsLabel.sprite.visible = tier.mapsLabel.sprite.material.opacity > 0.015;
 
-      // Smoothly expand/retract 3D tech-icon satellites around the active blueprint tier
-      const satExpand = THREE.MathUtils.clamp(w * 1.15, 0, 1);
-      const satOpacityTarget = isSelected ? (1 - mapsBlend) * (1 - privacyBlend * 0.7) * 0.94 : 0;
-      for (let sIdx = 0; sIdx < tier.techSatellites.length; sIdx += 1) {
-        const sat = tier.techSatellites[sIdx];
-        const nextOp = isSelected
-          ? THREE.MathUtils.lerp(sat.badge.sprite.material.opacity, satOpacityTarget, fast)
-          : Math.max(0, sat.badge.sprite.material.opacity - dt * 6.5);
-        sat.badge.sprite.material.opacity = nextOp;
-        sat.badge.sprite.visible = nextOp > 0.04 && w > 0.15;
-        if (sat.badge.sprite.visible) {
-          const radius = THREE.MathUtils.lerp(0.32, 1.14, satExpand);
-          const bob = ctx.reducedMotion ? 0 : Math.sin(elapsed * 2.1 + sIdx * 1.9) * 0.032;
-          const x = Math.sin(sat.baseAngle) * radius;
-          const y = tier.baseY + sat.verticalOffset * satExpand + bob;
-          const z = 0.72 + Math.cos(sat.baseAngle) * 0.24 * satExpand;
-          sat.badge.sprite.position.set(x, y, z);
+      // True 3D horizontally sliding Tech Drawer centered INSIDE the tall expanded glass prism
+      const drawerTargetOp = isSelected
+        ? (1 - mapsBlend) * (1 - privacyBlend * 0.72) * drawerIntroGate
+        : 0;
+      if (isSelected && drawerTargetOp > 0.02) {
+        drawerOpacities[i] = snap
+          ? drawerTargetOp
+          : THREE.MathUtils.lerp(drawerOpacities[i], drawerTargetOp, fast);
+        drawerUnfurls[i] = snap
+          ? 1
+          : Math.min(1, drawerUnfurls[i] + dt * 2.35);
+      } else {
+        drawerOpacities[i] = snap ? 0 : Math.max(0, drawerOpacities[i] - dt * 16);
+        if (drawerOpacities[i] <= 0.015) {
+          drawerUnfurls[i] = 0;
         }
       }
+
+      const bob = ctx.reducedMotion ? 0 : Math.sin(elapsed * 1.9 + i) * 0.014;
+      tier.techDrawer.group.position.set(
+        isNarrowSplit ? 0.05 : 0,
+        dynamicCenterY + bob,
+        isNarrowSplit ? 0.58 : 0.76
+      );
+      tier.techDrawer.group.scale.setScalar(isGov && !isNarrowSplit ? 0.8 : 1);
+      tier.techDrawer.setUnfurl(
+        drawerUnfurls[i],
+        drawerOpacities[i],
+        isNarrowSplit,
+        aspect,
+        isSelected ? ctx.interaction.architectureTechIndex : null
+      );
+    }
+
+    // Animate the cross-cutting Governance Audit Scan Ring sweeping vertically across all 6 tiers
+    const scanVisible = govActiveWeight > 0.04 && pivotEase > 0.6;
+    govScanRing.visible = scanVisible;
+    if (scanVisible) {
+      const scanWave = ctx.reducedMotion ? 0 : Math.sin(elapsed * 1.45);
+      govScanRing.position.y = scanWave * (GOV_FRAME_H * 0.44);
+      govScanMat.opacity =
+        govActiveWeight *
+        pivotEase *
+        (isDark ? 0.68 : 0.44) *
+        (0.75 + 0.25 * Math.abs(Math.cos(elapsed * 1.45)));
     }
 
     for (let i = 0; i < floorGrid.rippleMeshes.length; i += 1) {
       const wave = ctx.reducedMotion ? 0.5 : (elapsed * 0.45 + i * 0.33) % 1;
       floorGrid.rippleMeshes[i].scale.setScalar(0.92 + wave * 0.26);
-      floorGrid.rippleRingMats[i].opacity = Math.sin(wave * Math.PI) * (isDark ? 0.24 : 0.18) * (1 + prodBlend * 0.35);
+      floorGrid.rippleRingMats[i].opacity =
+        Math.sin(wave * Math.PI) * (isDark ? 0.24 : 0.18) * (1 + prodBlend * 0.35) * pivotEase;
     }
 
-    updateParticleStream(dt, elapsed, activeTierY, ctx.reducedMotion);
+    updateParticleStream(dt, elapsed, activeDynamicY, ctx.reducedMotion);
 
-    const showGpu = prodBlend > 0.008;
+    const showGpu = prodBlend > 0.008 && pivotEase > 0.45;
     for (let i = 0; i < gpuAccents.length; i += 1) {
       const accent = gpuAccents[i];
       accent.group.visible = showGpu;
       if (!showGpu) continue;
-      accent.group.position.y = accent.baseY + (ctx.reducedMotion ? 0 : Math.sin(elapsed * 2.6 + i * 1.4) * 0.025);
+      const accentTierIdx = GPU_ACCENT_TIERS[i];
+      const accentY = accentTierIdx < SLAB_COUNT ? slabCentersY[accentTierIdx] : accent.baseY;
+      accent.group.position.y = accentY + (ctx.reducedMotion ? 0 : Math.sin(elapsed * 2.6 + i * 1.4) * 0.025);
       accent.group.scale.setScalar(THREE.MathUtils.lerp(0.94, 1.0, prodBlend));
-      accent.bracketMat.opacity = prodBlend * (isDark ? 0.92 : 0.88);
-      accent.railMat.opacity = prodBlend * (isDark ? 0.56 : 0.44);
+      accent.bracketMat.opacity = prodBlend * pivotEase * (isDark ? 0.92 : 0.88);
+      accent.railMat.opacity = prodBlend * pivotEase * (isDark ? 0.56 : 0.44);
       const ledPulse = ctx.reducedMotion ? 0.85 : 0.65 + 0.35 * Math.sin(elapsed * 5.2 + i * 2.1);
-      accent.ledMat.opacity = prodBlend * ledPulse * (isDark ? 0.95 : 0.82);
+      accent.ledMat.opacity = prodBlend * pivotEase * ledPulse * (isDark ? 0.95 : 0.82);
     }
 
-    const showPrivacy = privacyBlend > 0.006;
+    const showPrivacy = privacyBlend > 0.006 && pivotEase > 0.5;
     privacyOverlay.group.visible = showPrivacy;
     if (showPrivacy) {
       for (let i = 0; i < privacyOverlay.rings.length; i += 1) {
         const ring = privacyOverlay.rings[i];
-        ring.ringMat.opacity = privacyBlend * ring.baseOpacity * (isDark ? 1.0 : 0.85);
-        ring.beadMat.opacity = privacyBlend * (isDark ? 0.94 : 0.82);
+        ring.ringMat.opacity = privacyBlend * pivotEase * ring.baseOpacity * (isDark ? 1.0 : 0.85);
+        ring.beadMat.opacity = privacyBlend * pivotEase * (isDark ? 0.94 : 0.82);
         ring.pivot.scale.setScalar(THREE.MathUtils.lerp(0.88, 1.0, privacyBlend));
         if (!ctx.reducedMotion) {
           ring.pivot.rotation.y += ring.orbitSpeed * dt;
@@ -1111,6 +1653,23 @@ export function createArchitectureStage(): StageModule {
    * Raycasting & Public StageModule Lifecycle Hooks
    * ------------------------------------------------------------------------ */
 
+  const pickActiveTechBladeIndex = (ndcX: number, ndcY: number, ctx: StageContext): number | null => {
+    if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) return null;
+    if (ctx.interaction.architectureSubtab !== 'blueprint') return null;
+    const activeIdx = resolveActiveTierIndex(ctx.interaction);
+    const activeDrawer = tiers[activeIdx]?.techDrawer;
+    if (!activeDrawer || !activeDrawer.group.visible || drawerOpacities[activeIdx] < 0.25) {
+      return null;
+    }
+    labelGroup.updateMatrixWorld(true);
+    pointerNdc.set(ndcX, ndcY);
+    raycaster.setFromCamera(pointerNdc, ctx.camera);
+    const hits = raycaster.intersectObjects([...activeDrawer.bladeSprites], false);
+    if (hits.length === 0) return null;
+    const rawBladeIdx = hits[0].object.userData.techBladeIndex;
+    return typeof rawBladeIdx === 'number' && rawBladeIdx >= 0 ? rawBladeIdx : null;
+  };
+
   const pickTierIndex = (ndcX: number, ndcY: number, ctx: StageContext): number | null => {
     if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) return null;
     towerPivot.updateMatrixWorld(true);
@@ -1124,7 +1683,10 @@ export function createArchitectureStage(): StageModule {
   };
 
   const getMarbleAnchor = (elapsed: number, state: StageInteractionState): THREE.Vector3 => {
-    const tierY = getTierCenterY(resolveActiveTierIndex(state)) + towerOffsetY;
+    const activeIdx = resolveActiveTierIndex(state);
+    const s = towerPivot.scale.x;
+    const tierY =
+      (activeIdx === GOV_TIER_INDEX ? dynamicGovBotY : slabCentersY[activeIdx]) * s + towerOffsetY;
     const amp = state.architectureSubtab === 'maps' ? 0.04 : 0.035;
     marbleAnchorOut.set(0, tierY + (lastReducedMotion ? 0 : Math.sin(elapsed * 2.2) * amp), 0);
     return marbleAnchorOut;
@@ -1135,12 +1697,24 @@ export function createArchitectureStage(): StageModule {
     currentGlassRatio = THREE.MathUtils.clamp(ctx.glassRatio, 0, 1);
     currentMood = ctx.mood;
     currentTheme = ctx.theme;
+    currentArchMode = ctx.interaction.architectureMode === 'prod' ? 'prod' : 'mvp';
     lastReducedMotion = ctx.reducedMotion;
+    lastSelectedTierIdx = resolveActiveTierIndex(ctx.interaction);
+
+    // Start the 2-phase intro: Top-surface iNVTRY logo showcase -> sideways layer reveal
+    introClock = ctx.reducedMotion ? INTRO_PIVOT_END : 0;
+    userDraggedDuringIntro = false;
     targetYaw = DEFAULT_TOWER_YAW;
     currentYaw = DEFAULT_TOWER_YAW;
-    towerPivot.rotation.y = DEFAULT_TOWER_YAW;
+    towerPivot.rotation.x = ctx.reducedMotion ? 0 : INTRO_TOP_PITCH;
+    towerPivot.rotation.y = ctx.reducedMotion ? DEFAULT_TOWER_YAW : 0;
     hoveredTierIndex = null;
     tapPulse = 0.45;
+
+    for (let i = 0; i < TIER_COUNT; i += 1) {
+      drawerUnfurls[i] = ctx.reducedMotion && i === lastSelectedTierIdx ? 1 : 0;
+      drawerOpacities[i] = 0;
+    }
 
     syncVisualPalette();
     applyFrame(0, 0, ctx, true);
@@ -1172,10 +1746,17 @@ export function createArchitectureStage(): StageModule {
     if (patch.architectureTier !== undefined || patch.googleApiIndex !== undefined) {
       tapPulse = 0.72;
     }
+    if (patch.architectureMode !== undefined) {
+      tapPulse = 0.85;
+    }
+    if (patch.architectureTechIndex !== undefined) {
+      tapPulse = Math.max(tapPulse, 0.52);
+    }
   };
 
   const onPointerDrag = (dx: number, _dy: number, _ctx: StageContext): void => {
     if (!Number.isFinite(dx)) return;
+    userDraggedDuringIntro = true;
     targetYaw += dx * DRAG_SENSITIVITY;
   };
 
@@ -1184,14 +1765,32 @@ export function createArchitectureStage(): StageModule {
   };
 
   const onPointerTap = (ndcX: number, ndcY: number, ctx: StageContext): void => {
+    const hitBlade = pickActiveTechBladeIndex(ndcX, ndcY, ctx);
+    if (hitBlade !== null) {
+      tapPulse = 0.85;
+      const nextTechIndex = ctx.interaction.architectureTechIndex === hitBlade ? null : hitBlade;
+      ctx.emitUiSync({ architectureTechIndex: nextTechIndex });
+      return;
+    }
+
     const hitTier = pickTierIndex(ndcX, ndcY, ctx);
     if (hitTier === null) return;
     tapPulse = 1.0;
     ctx.emitUiSync(
       ctx.interaction.architectureSubtab === 'maps'
         ? { googleApiIndex: hitTier }
-        : { architectureTier: hitTier }
+        : { architectureTier: hitTier, architectureTechIndex: null }
     );
+  };
+
+  const dispose = (): void => {
+    isDisposed = true;
+    for (let i = 0; i < tiers.length; i += 1) {
+      tiers[i].techDrawer.dispose();
+    }
+    topLogoDarkTex.dispose();
+    topLogoLightTex.dispose();
+    disposeObject3D(group);
   };
 
   return {
@@ -1208,6 +1807,6 @@ export function createArchitectureStage(): StageModule {
     onPointerMove,
     onPointerTap,
     update: (dt, elapsed, ctx) => applyFrame(dt, elapsed, ctx, false),
-    dispose: () => disposeObject3D(group),
+    dispose,
   };
 }

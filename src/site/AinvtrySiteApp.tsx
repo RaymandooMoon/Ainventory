@@ -1,14 +1,16 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
   BarChart3,
   ChevronsUpDown,
   Globe,
+  Home,
   Mail,
   Moon,
   Sparkles,
   Sun,
+  X,
 } from 'lucide-react';
 import {
   cycleLoginThreeVariant,
@@ -155,9 +157,32 @@ export default function AinvtrySiteApp() {
     moved: number;
   } | null>(null);
   const rippleTimerRef = useRef<number>(0);
+  const [homeCalloutOpen, setHomeCalloutOpen] = useState(false);
+  const homeCalloutTimerRef = useRef<number>(0);
+  const prevStageForCalloutRef = useRef<StageId>('hero');
 
   useEffect(() => {
     activeStageRef.current = activeStage;
+    const prev = prevStageForCalloutRef.current;
+    prevStageForCalloutRef.current = activeStage;
+
+    if (homeCalloutTimerRef.current) {
+      window.clearTimeout(homeCalloutTimerRef.current);
+      homeCalloutTimerRef.current = 0;
+    }
+
+    if (activeStage === 'hero') {
+      setHomeCalloutOpen(false);
+      return;
+    }
+
+    if (prev === 'hero') {
+      setHomeCalloutOpen(true);
+      homeCalloutTimerRef.current = window.setTimeout(() => {
+        setHomeCalloutOpen(false);
+        homeCalloutTimerRef.current = 0;
+      }, 4800);
+    }
   }, [activeStage]);
 
   useEffect(() => {
@@ -230,11 +255,14 @@ export default function AinvtrySiteApp() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [analyticsOpen, legalDoc, newsletterOpen, stageTracker]);
 
-  // Clean up one-shot gold ripple burst timer on unmount
+  // Clean up one-shot gold ripple burst & home callout timers on unmount
   useEffect(() => {
     return () => {
       if (rippleTimerRef.current) {
         window.clearTimeout(rippleTimerRef.current);
+      }
+      if (homeCalloutTimerRef.current) {
+        window.clearTimeout(homeCalloutTimerRef.current);
       }
     };
   }, []);
@@ -291,7 +319,10 @@ export default function AinvtrySiteApp() {
         if (prev.architectureSubtab === 'maps') {
           patch = { googleApiIndex: (prev.googleApiIndex + dir + 6) % 6 };
         } else if (prev.architectureSubtab === 'blueprint') {
-          patch = { architectureTier: (prev.architectureTier + dir + 7) % 7 };
+          patch = {
+            architectureTier: (prev.architectureTier + dir + 7) % 7,
+            architectureTechIndex: null,
+          };
         }
       } else if (stage === 'about') {
         if (prev.aboutSubtab === 'journey') {
@@ -518,6 +549,7 @@ export default function AinvtrySiteApp() {
     <div
       ref={rootRef}
       className="site-root"
+      style={{ '--site-ui-alpha': uiAlpha.toFixed(3) } as CSSProperties}
       data-site-theme={theme}
       data-active-view={activeView}
       data-active-stage={activeStage}
@@ -569,21 +601,23 @@ export default function AinvtrySiteApp() {
            ================================================================ */}
         <header className="site-header-stack">
           <div className="site-topbar">
-            <div className="site-topbar-left">
+            <div className="site-topbar-left site-utility-rail">
               <button
                 type="button"
-                className={`site-brand-pill ${activeStage === 'hero' ? 'is-home-active' : ''}`}
+                className="site-utility-pill"
                 data-marble-target="true"
                 data-marble-action="click"
-                onClick={() => handleSelectStage('hero', 'brand')}
-                aria-label={copy.nav.homeAria}
-                aria-current={activeStage === 'hero' ? 'page' : undefined}
+                onClick={handleToggleTheme}
+                aria-label={lang === 'en' ? 'Toggle theme' : '라이트 다크 모드 전환'}
               >
-                <SiteBrandMark theme={theme} size="nav" />
+                {theme === 'dark' ? (
+                  <Sun size={13} aria-hidden="true" />
+                ) : (
+                  <Moon size={13} aria-hidden="true" />
+                )}
+                <span>{theme === 'dark' ? copy.nav.switchToLight : copy.nav.switchToDark}</span>
               </button>
-            </div>
-
-            <div className="site-topbar-right site-utility-rail">
+              <span className="site-utility-sep" aria-hidden="true" />
               <button
                 type="button"
                 className="site-utility-pill"
@@ -601,19 +635,69 @@ export default function AinvtrySiteApp() {
                   {lang === 'en' ? activeVariantMeta.shortEn : activeVariantMeta.shortKo}
                 </span>
               </button>
-              <span className="site-utility-sep" aria-hidden="true" />
+            </div>
+
+            <div className="site-topbar-center">
               <button
                 type="button"
-                className="site-utility-pill"
+                className={`site-brand-pill ${activeStage === 'hero' ? 'is-home-active' : ''}`}
                 data-marble-target="true"
                 data-marble-action="click"
-                onClick={handleToggleTheme}
-                aria-label={lang === 'en' ? 'Toggle theme' : '라이트 다크 모드 전환'}
+                onClick={() => handleSelectStage('hero', 'brand')}
+                title={
+                  activeStage === 'hero'
+                    ? copy.nav.homeAria
+                    : lang === 'ko'
+                      ? '로고를 누르면 홈으로 돌아갑니다'
+                      : 'Tap logo to return Home'
+                }
+                aria-label={
+                  activeStage === 'hero'
+                    ? copy.nav.homeAria
+                    : lang === 'ko'
+                      ? '홈으로 돌아가기 (iNVTRY 로고)'
+                      : 'Return to Home (iNVTRY logo)'
+                }
+                aria-current={activeStage === 'hero' ? 'page' : undefined}
               >
-                {theme === 'dark' ? <Sun size={13} aria-hidden="true" /> : <Moon size={13} aria-hidden="true" />}
-                <span>{theme === 'dark' ? copy.nav.switchToLight : copy.nav.switchToDark}</span>
+                <SiteBrandMark theme={theme} size="nav" />
               </button>
-              <span className="site-utility-sep" aria-hidden="true" />
+
+              {activeStage !== 'hero' && (
+                <div
+                  className={`site-home-callout ${homeCalloutOpen ? 'is-visible' : ''}`}
+                  role="status"
+                  aria-live="polite"
+                  data-home-callout="true"
+                >
+                  <button
+                    type="button"
+                    className="site-home-callout-action"
+                    onClick={() => handleSelectStage('hero', 'brand')}
+                  >
+                    <Home size={12} strokeWidth={2.2} aria-hidden="true" />
+                    <span>
+                      {lang === 'ko'
+                        ? '로고를 누르면 홈으로 이동합니다'
+                        : 'Tap logo to return Home'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="site-home-callout-close"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      setHomeCalloutOpen(false);
+                    }}
+                    aria-label={lang === 'ko' ? '안내 닫기' : 'Dismiss hint'}
+                  >
+                    <X size={11} strokeWidth={2.4} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="site-topbar-right site-utility-rail">
               <button
                 type="button"
                 className="site-utility-pill"
@@ -718,6 +802,7 @@ export default function AinvtrySiteApp() {
                   data-marble-target="true"
                   data-marble-action="click"
                   data-stage-pill={pill.stageId}
+                  aria-label={isStudioLaunch ? copy.hero.primaryCta : undefined}
                   aria-pressed={isSelected}
                   aria-current={isSelected ? 'page' : undefined}
                   onPointerEnter={!isStudioLaunch ? () => warmStageModule(pill.stageId) : undefined}
@@ -727,11 +812,20 @@ export default function AinvtrySiteApp() {
                   <span className="site-dock-pill-num" aria-hidden="true">
                     {stageIndex}
                   </span>
-                  <span className="site-dock-pill-label">
-                    {isStudioLaunch ? copy.hero.primaryCta : copy.nav[pill.navKey]}
-                  </span>
+                  {isStudioLaunch ? (
+                    <span className="site-dock-pill-label">
+                      <span className="site-dock-pill-label--full">
+                        {lang === 'ko' ? '라이브 스튜디오' : 'Live Studio'}
+                      </span>
+                      <span className="site-dock-pill-label--compact" aria-hidden="true">
+                        {lang === 'ko' ? '스튜디오' : 'Studio'}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="site-dock-pill-label">{copy.nav[pill.navKey]}</span>
+                  )}
                   {isStudioLaunch && (
-                    <ArrowRight size={14} className="site-dock-pill-arrow" aria-hidden="true" />
+                    <ArrowRight size={13} className="site-dock-pill-arrow" aria-hidden="true" />
                   )}
                   {isBursting && (
                     <span
