@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iNVTRY (Ainvtry) — IR 사업계획서 초안 v1.0 (16:9 · 4:3)</title>
+    <title>iNVTRY (Ainvtry) — IR 사업계획서 초안 v2.0 (16:9 · 4:3)</title>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -50,25 +50,28 @@
       <span class="ir-tb-sep" aria-hidden="true"></span>
 
       <button type="button" id="ir-btn-prev" class="ir-tb-btn" aria-label="이전 슬라이드">←</button>
-      <span id="ir-slide-counter" class="ir-tb-counter">01 / 15</span>
+      <span id="ir-slide-counter" class="ir-tb-counter">01 / 18</span>
       <button type="button" id="ir-btn-next" class="ir-tb-btn" aria-label="다음 슬라이드">→</button>
 
       <select id="ir-slide-jump" class="ir-tb-select" aria-label="슬라이드 바로가기">
-        <option value="0">01. Cover</option>
-        <option value="1">02. Executive Summary</option>
-        <option value="2">03. Problem</option>
-        <option value="3">04. Solution — 5-Stage Loop</option>
-        <option value="4">05. User Journey (6-Cut)</option>
-        <option value="5">06. Product Showcase (MVP)</option>
-        <option value="6">07. Core Technology</option>
-        <option value="7">08. Privacy-by-Design Moat</option>
-        <option value="8">09. Market Size &amp; Why Now</option>
-        <option value="9">10. Competitive Landscape</option>
-        <option value="10">11. Business Model</option>
-        <option value="11">12. Traction &amp; Architecture</option>
-        <option value="12">13. GTM &amp; Roadmap</option>
-        <option value="13">14. Team &amp; Governance</option>
-        <option value="14">15. Funding Ask &amp; Contact</option>
+        <option value="0">01. 표지 (Cover)</option>
+        <option value="1">02. 목차 (Contents)</option>
+        <option value="2">03. Executive Summary</option>
+        <option value="3">04. 6대 파편화된 페인포인트</option>
+        <option value="4">05. 단일 OS 일괄 해결 매트릭스</option>
+        <option value="5">06. User Journey (6-Cut)</option>
+        <option value="6">07. 실구동 앱 쇼케이스 (MVP)</option>
+        <option value="7">08. Core Technology Engine</option>
+        <option value="8">09. Privacy-by-Design 4대 방어선</option>
+        <option value="9">10. Market Size &amp; Why Now</option>
+        <option value="10">11. Competitive Landscape</option>
+        <option value="11">12. BM ① 4중 수익 모델 &amp; 티어</option>
+        <option value="12">13. BM ② 플라이휠 &amp; 단위경제학</option>
+        <option value="13">14. Traction &amp; 6-Tier Architecture</option>
+        <option value="14">15. GTM &amp; 18M Roadmap</option>
+        <option value="15">16. Team &amp; Security Governance</option>
+        <option value="16">17. Funding Ask &amp; Use of Funds</option>
+        <option value="17">18. 감사합니다 (Thank You)</option>
       </select>
 
       <button type="button" id="ir-btn-print" class="ir-tb-btn ir-tb-btn--action">
@@ -78,7 +81,7 @@
 
     <main class="ir-deck-viewport">
       <!-- =================================================================
-           SLIDE 01 — COVER
+           SLIDE 01 — COVER (표지)
            ================================================================= -->
       <div class="ir-slide-slot is-current">
         <section id="slide-01" class="ir-slide ir-slide--cover" aria-label="표지">
@@ -112,7 +115,7 @@
               <div class="cover-meta-grid">
                 <div class="cover-meta-item">
                   <span>DOCUMENT</span>
-                  <strong>IR 사업계획서 초안 v1.0</strong>
+                  <strong>IR 사업계획서 초안 v2.0</strong>
                 </div>
                 <div class="cover-meta-item">
                   <span>LIVE DEMO</span>
@@ -146,19 +149,178 @@
               <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Draft
             </span>
             <span>Seoul, Republic of Korea · 2026.11</span>
-            <span class="slide-footer-num">01 / 15</span>
+            <span class="slide-footer-num">01 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 02 — EXECUTIVE SUMMARY
+           SLIDE 02 — TABLE OF CONTENTS (목차)
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-02" class="ir-slide" aria-label="핵심 요약">
+        <section id="slide-02" class="ir-slide" aria-label="목차">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">01 · EXECUTIVE SUMMARY</span>
+              <span class="slide-eyebrow">TABLE OF CONTENTS · EXECUTIVE AGENDA</span>
+              <h2 class="slide-title">사업계획서 목차 — 문제 해결부터 수익 모델·투자 제안까지</h2>
+            </div>
+            <p class="slide-subtitle">
+              4개 파트 · 총 18슬라이드 구성 (클릭 시 해당 슬라이드로 즉시 이동)
+            </p>
+          </header>
+
+          <div class="slide-body">
+            <div class="toc-grid">
+              <!-- PART 01 -->
+              <div class="toc-part toc-part--gold">
+                <div class="toc-part-head">
+                  <div>
+                    <span class="kicker" style="margin-bottom: 2px">PART 01 · OVERVIEW, PAIN &amp; RESOLUTION</span>
+                    <h3 class="toc-part-title">비전 요약 · 6대 페인포인트 &amp; 단일 OS 해결</h3>
+                  </div>
+                  <span class="badge badge--gold">01 – 05</span>
+                </div>
+                <div class="toc-list">
+                  <button type="button" class="toc-item" data-jump-slide="0">
+                    <span class="toc-num">01</span>
+                    <span class="toc-label">Cover — 내 옷장을 3D 자산으로, 입는 순간부터 리셀까지</span>
+                    <span class="toc-tag">COVER</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="2">
+                    <span class="toc-num">03</span>
+                    <span class="toc-label">Executive Summary — 실구동 3D 순환 옷장 OS 핵심 요약</span>
+                    <span class="toc-tag">SUMMARY</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="3">
+                    <span class="toc-num">04</span>
+                    <span class="toc-label">Problem — 옷장·피팅·날씨·보안·리셀의 6대 페인포인트</span>
+                    <span class="toc-tag">6 PAINS</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="4">
+                    <span class="toc-num">05</span>
+                    <span class="toc-label">Solution — 6대 문제를 단일 루프로 한 번에 해결한 구조</span>
+                    <span class="toc-tag">6→1 MATRIX</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- PART 02 -->
+              <div class="toc-part">
+                <div class="toc-part-head">
+                  <div>
+                    <span class="kicker" style="margin-bottom: 2px">PART 02 · LIVE PRODUCT, TECH &amp; PRIVACY MOAT</span>
+                    <h3 class="toc-part-title">실구동 제품 · 3D/AI 엔진 &amp; 4대 보안 해자</h3>
+                  </div>
+                  <span class="badge badge--live">06 – 09</span>
+                </div>
+                <div class="toc-list">
+                  <button type="button" class="toc-item" data-jump-slide="5">
+                    <span class="toc-num">06</span>
+                    <span class="toc-label">User Journey — 일상 6대 결정적 순간 (LIVE vs 로드맵)</span>
+                    <span class="toc-tag">6-CUT</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="6">
+                    <span class="toc-num">07</span>
+                    <span class="toc-label">Product Showcase — Web·iOS·Android 실제 빌드 화면</span>
+                    <span class="toc-tag">LIVE APP</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="7">
+                    <span class="toc-num">08</span>
+                    <span class="toc-label">Core Technology — 60fps 3D·멀티앵글 VTON·-96% 전처리</span>
+                    <span class="toc-tag">BENCHMARK</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="8">
+                    <span class="toc-num">09</span>
+                    <span class="toc-label">Unfair Moat — 경쟁 불가 「4대 데이터 보안 방어선」</span>
+                    <span class="toc-tag">0B PRIVACY</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- PART 03 -->
+              <div class="toc-part toc-part--gold">
+                <div class="toc-part-head">
+                  <div>
+                    <span class="kicker" style="margin-bottom: 2px">PART 03 · MARKET, COMPETITION &amp; DETAILED BM</span>
+                    <h3 class="toc-part-title">시장 기회 · 경쟁 우위 &amp; 심층 비즈니스 모델</h3>
+                  </div>
+                  <span class="badge badge--gold">10 – 13</span>
+                </div>
+                <div class="toc-list">
+                  <button type="button" class="toc-item" data-jump-slide="9">
+                    <span class="toc-num">10</span>
+                    <span class="toc-label">Market Size — 글로벌 리셀($393B) × 버추얼 피팅($23.9B)</span>
+                    <span class="toc-tag">TAM/SAM</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="10">
+                    <span class="toc-num">11</span>
+                    <span class="toc-label">Competitive Landscape — 2×2 포지셔닝 &amp; 5대 역량 비교</span>
+                    <span class="toc-tag">WHITE SPACE</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="11">
+                    <span class="toc-num">12</span>
+                    <span class="toc-label">Business Model ① — 4중 수익 모델 &amp; Free/Pro 티어 설계</span>
+                    <span class="toc-tag">REVENUE</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="12">
+                    <span class="toc-num">13</span>
+                    <span class="toc-label">Business Model ② — 수익 플라이휠 &amp; AI 원가 통제 구조</span>
+                    <span class="toc-tag">UNIT ECON</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- PART 04 -->
+              <div class="toc-part">
+                <div class="toc-part-head">
+                  <div>
+                    <span class="kicker" style="margin-bottom: 2px">PART 04 · EXECUTION, TEAM &amp; INVESTMENT ASK</span>
+                    <h3 class="toc-part-title">개발 검증 실적 · GTM 로드맵 · 팀 &amp; 투자 제안</h3>
+                  </div>
+                  <span class="badge badge--gold">14 – 18</span>
+                </div>
+                <div class="toc-list">
+                  <button type="button" class="toc-item" data-jump-slide="13">
+                    <span class="toc-num">14</span>
+                    <span class="toc-label">Traction &amp; Architecture — 6-Tier 풀스택 코드베이스 검증</span>
+                    <span class="toc-tag">6-TIER</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="14">
+                    <span class="toc-num">15</span>
+                    <span class="toc-label">GTM &amp; Roadmap — 3단계 실행 계획 &amp; 초기 고객 획득 전략</span>
+                    <span class="toc-tag">18M PLAN</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="15">
+                    <span class="toc-num">16</span>
+                    <span class="toc-label">Team &amp; Governance — 창업자·핵심 채용·2027 보안 거버넌스</span>
+                    <span class="toc-tag">TEAM &amp; IP</span>
+                  </button>
+                  <button type="button" class="toc-item" data-jump-slide="16">
+                    <span class="toc-num">17</span>
+                    <span class="toc-label">Funding Ask — 투자 제안 · 자금 집행 · 마일스톤 (+ 18. Closing)</span>
+                    <span class="toc-tag">ASK &amp; Q&amp;A</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="slide-footer">
+            <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
+            <span>Table of Contents — 4 Parts · 18 Slides</span>
+            <span class="slide-footer-num">02 / 18</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- =================================================================
+           SLIDE 03 — EXECUTIVE SUMMARY
+           ================================================================= -->
+      <div class="ir-slide-slot">
+        <section id="slide-03" class="ir-slide" aria-label="핵심 요약">
+          <header class="slide-header">
+            <div>
+              <span class="slide-eyebrow">PART 01 · EXECUTIVE SUMMARY</span>
               <h2 class="slide-title">아이디어가 아닌 실구동 제품 — 옷장의 전 생애주기를 자산화</h2>
             </div>
             <p class="slide-subtitle">
@@ -236,16 +398,16 @@
               <div class="card card--accent-left">
                 <div class="row-between">
                   <span class="kicker" style="margin: 0">03 · MONETIZATION LOOP</span>
-                  <span class="badge badge--gold">3대 수익원</span>
+                  <span class="badge badge--gold">4중 수익원</span>
                 </div>
-                <h3 class="card-title">구독 × 갭 커머스 × 이력 인증 리셀의 복합 수익</h3>
+                <h3 class="card-title">구독 × 갭 커머스 × 인증 리셀 × B2B의 복합 수익</h3>
                 <ul class="clean-list">
                   <li><strong>Pro 구독</strong>: 무제한 4겹+ 360° VTON 및 CPW·옷장 가치 리포트.</li>
                   <li><strong>중복 없는 제휴 추천</strong>: 옷장 공백(Gap)만 채우는 고전환 커머스 수수료.</li>
-                  <li><strong>이력 인증 리셀</strong>: 저장된 사진·착용 이력을 묶어 1탭 판매(수수료 + 케어 O2O).</li>
+                  <li><strong>이력 인증 리셀·O2O</strong>: 저장된 사진·착용 이력을 묶어 1탭 판매 + 세탁 중개.</li>
                 </ul>
                 <div class="card-foot-bar">
-                  <span>SUB + CPS + RESALE</span>
+                  <span>SUB + CPS + RESALE + B2B</span>
                   <span>$0 Edge Preprocess</span>
                 </div>
               </div>
@@ -255,212 +417,296 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Executive Summary</span>
-            <span class="slide-footer-num">02 / 15</span>
+            <span class="slide-footer-num">03 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 03 — PROBLEM
+           SLIDE 04 — PROBLEM: 6 FRAGMENTED PAINPOINTS
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-03" class="ir-slide" aria-label="문제 정의">
+        <section id="slide-04" class="ir-slide" aria-label="6대 파편화된 페인포인트">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">02 · PROBLEM STATEMENT</span>
-              <h2 class="slide-title">패션 소비는 매년 커지지만, 옷장 관리·피팅·프라이버시는 단절되어 있습니다</h2>
+              <span class="slide-eyebrow">PART 01 · FRAGMENTED PAIN POINTS</span>
+              <h2 class="slide-title">옷장·피팅·날씨·보안·리셀까지 — 파편화된 6대 페인포인트</h2>
             </div>
             <p class="slide-subtitle">
-              소비자는 중복 구매와 방치된 옷장 자산으로 손실을 겪고, 기존 패션 AI는 신뢰와 실용성을 해결하지 못합니다.
+              패션 소비 전 과정에서 문제는 동시다발로 발생하지만, 기존 앱들은 각자 단편 기능에만 머물러 있습니다.
             </p>
           </header>
 
           <div class="slide-body">
-            <div class="grid-3" style="flex: 1 1 auto">
-              <div class="card">
+            <div class="pain-grid-6">
+              <article class="pain-tile">
                 <div class="row-between">
-                  <span class="kicker" style="margin: 0">PAIN 01 · CONSUMPTION WASTE</span>
-                  <span class="badge badge--risk">연 $743B 반품</span>
+                  <span class="kicker" style="margin: 0">PAIN 01 · 중복 구매</span>
+                  <span class="badge badge--risk">매장 충동소비</span>
                 </div>
-                <h3 class="card-title">“입을 옷이 없다”는 착각과 반복되는 중복 구매</h3>
-                <p class="card-copy">
-                  소비자는 자신이 보유한 옷의 수량·색상·착용 빈도를 기억하지 못해 매장에서 유사한 아우터·니트를
-                  반복 구매하고, 온라인 쇼핑에서는 핏·조합 실패로 막대한 반품 비용이 발생합니다.
+                <h3>“입을 옷 없다” 착각과 유사 의류 중복 구매</h3>
+                <p>
+                  내 옷장에 검은 코트·니트가 몇 벌인지 기억나지 않아 매장에서 비슷한 옷을 반복 구매하고,
+                  결국 70% 이상이 방치됩니다.
                 </p>
-                <div class="card card--recessed" style="margin-top: auto; padding: 11px 12px">
-                  <ul class="clean-list">
-                    <li>글로벌 유통 반품 부담 연간 <strong>$743B</strong> (Mordor 2026)</li>
-                    <li>안 입는 옷을 중고로 팔려 해도 <strong>사진 촬영·정보 입력 마찰</strong>로 방치</li>
-                  </ul>
+                <div class="card-foot-bar">
+                  <span>기억 의존 소비</span>
+                  <span>보유 자산 블랙박스</span>
                 </div>
-              </div>
+              </article>
 
-              <div class="card">
+              <article class="pain-tile">
                 <div class="row-between">
-                  <span class="kicker" style="margin: 0">PAIN 02 · BROKEN FASHION AI</span>
-                  <span class="badge badge--risk">단일 2D 한계</span>
+                  <span class="kicker" style="margin: 0">PAIN 02 · 온라인 반품</span>
+                  <span class="badge badge--risk">연 $743B 손실</span>
                 </div>
-                <h3 class="card-title">기존 가상 피팅·옷장 앱의 구조적 한계</h3>
-                <p class="card-copy">
-                  기존 옷장 앱은 단순 사진 앨범에 머물러 있고, 기존 VTON 툴은 단품 1벌만 정면 2D로 합성해
-                  실제 출근·외출 시 필요한 <strong>다중 레이어드·날씨·측면/후면 핏</strong>을 검증할 수 없습니다.
+                <h3>내 옷과 어울릴지 모르는 핏·조합 실패</h3>
+                <p>
+                  쇼핑몰 모델 컷만 보고 구매했다가 실제 보유한 바지·아우터와 비율·색감이 맞지 않아
+                  막대한 반품 비용과 피로가 누적됩니다.
                 </p>
-                <div class="card card--recessed" style="margin-top: auto; padding: 11px 12px">
-                  <ul class="clean-list">
-                    <li>셔츠 + 니트 + 코트 <strong>4겹 이상 레이어드 조합 불가</strong></li>
-                    <li>오늘 기온·비·장소(TPO)와 단절된 정적 코디 추천</li>
-                  </ul>
+                <div class="card-foot-bar">
+                  <span>Mordor 2026</span>
+                  <span>글로벌 반품 $743B</span>
                 </div>
-              </div>
+              </article>
 
-              <div class="card">
+              <article class="pain-tile">
                 <div class="row-between">
-                  <span class="kicker" style="margin: 0">PAIN 03 · PRIVACY &amp; TRUST CRISIS</span>
-                  <span class="badge badge--risk">보안 리스크</span>
+                  <span class="kicker" style="margin: 0">PAIN 03 · 단품 2D VTON</span>
+                  <span class="badge badge--risk">현실 괴리</span>
                 </div>
-                <h3 class="card-title">민감 생체·실내 사진의 무방비 클라우드 전송</h3>
-                <p class="card-copy">
-                  패션 AI는 얼굴·전신 체형·사적인 실내 공간이 담긴 사진을 다루지만, 다수 초기 앱이 원본
-                  JPEG(GPS·EXIF 포함)를 공용 버킷에 저장하고 무료 AI API로 전송해 심각한 유출 불안을 초래합니다.
+                <h3>4겹 레이어드·측후면 검증이 불가한 기존 AI</h3>
+                <p>
+                  기존 가상 피팅은 단품 1벌만 정면 2D로 합성해 셔츠·니트·재킷·롱코트 겹쳐 입기와
+                  걸을 때의 드레이프·기장을 확인할 수 없습니다.
                 </p>
-                <div class="card card--recessed" style="margin-top: auto; padding: 11px 12px">
-                  <ul class="clean-list">
-                    <li>얼굴 사진 외부 업로드·AI 학습 재활용에 대한 <strong>사용자 거부감</strong></li>
-                    <li>정부·VC 심사 및 앱스토어 심사에서 <strong>데이터 격리·파기 기준 급상승</strong></li>
-                  </ul>
+                <div class="card-foot-bar">
+                  <span>정면 1벌 한계</span>
+                  <span>실제 외출 코디 불가</span>
                 </div>
-              </div>
+              </article>
+
+              <article class="pain-tile">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">PAIN 04 · 환경 단절</span>
+                  <span class="badge badge--risk">TPO 미반영</span>
+                </div>
+                <h3>오늘 기온·비·장소와 따로 노는 정적 코디</h3>
+                <p>
+                  날씨 앱, 옷장 앱, 지도 앱이 모두 분리되어 아침마다 체감온도·강수·외출 장소에 맞는
+                  레이어드 조합을 매번 감으로 결정합니다.
+                </p>
+                <div class="card-foot-bar">
+                  <span>날씨·장소 단절</span>
+                  <span>매일 아침 의사결정 피로</span>
+                </div>
+              </article>
+
+              <article class="pain-tile">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">PAIN 05 · 프라이버시 공포</span>
+                  <span class="badge badge--risk">유출·학습 우려</span>
+                </div>
+                <h3>원본 셀카·GPS·실내 사진의 무방비 클라우드 전송</h3>
+                <p>
+                  얼굴·전신·집 안 배경과 GPS EXIF가 담긴 원본 사진을 외부 서버와 무료 AI에 넘기는 구조가
+                  사용자 거부감과 규제 리스크를 키웁니다.
+                </p>
+                <div class="card-foot-bar">
+                  <span>생체·위치 노출</span>
+                  <span>스토어·정부 심사 장벽</span>
+                </div>
+              </article>
+
+              <article class="pain-tile">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">PAIN 06 · 관리·리셀 마찰</span>
+                  <span class="badge badge--risk">자산 동결</span>
+                </div>
+                <h3>세탁·이염 관리 부재와 번거로운 중고 판매</h3>
+                <p>
+                  세탁·수선 시기를 놓쳐 옷을 망치고, 안 입는 옷을 팔려 해도 다시 촬영·사이즈 측정·글 작성의
+                  마찰 때문에 옷장에 그대로 묵혀둡니다.
+                </p>
+                <div class="card-foot-bar">
+                  <span>촬영·입력 귀찮음</span>
+                  <span>중고 거래 신뢰 부족</span>
+                </div>
+              </article>
             </div>
 
-            <div class="card card--gold" style="padding: 12px 18px">
-              <div class="row-between">
+            <div class="card card--gold" style="padding: 11px 18px">
+              <div class="row-between" style="gap: 16px">
                 <div>
-                  <span class="kicker" style="margin-bottom: 2px">INSIGHT — WHY NOW</span>
-                  <strong style="font-size: 13.5px">
-                    사용자가 원하는 것은 “새 옷을 또 사게 만드는 광고 앱”이 아니라, 내 옷장의 가치를 극대화하고 안심하고 순환시키는 Personal Asset OS입니다.
+                  <span class="kicker" style="margin-bottom: 2px">THE CORE BOTTLENECK · 파편화의 역설</span>
+                  <strong style="font-size: 13px">
+                    소비자는 이 6가지 문제를 풀려 옷장·피팅·날씨·세탁·중고 앱을 따로 깔지만, 데이터가 끊겨 결국 어느 앱도 매일 쓰지 못합니다.
                   </strong>
                 </div>
-                <span class="badge badge--gold">CLOSET AS ASSET</span>
+                <span class="badge badge--risk">6 FRAGMENTED APPS</span>
               </div>
             </div>
           </div>
 
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
-            <span>Problem Statement · Source: Mordor Intelligence (2026), Ainvtry Security Whitepaper</span>
-            <span class="slide-footer-num">03 / 15</span>
+            <span>Problem Statement — 6 Fragmented Pain Points Across the Wardrobe Lifecycle</span>
+            <span class="slide-footer-num">04 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 04 — SOLUTION (5-STAGE CLOSED LOOP)
+           SLIDE 05 — SOLUTION: 6 PAINS RESOLVED IN ONE UNIFIED OS
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-04" class="ir-slide" aria-label="솔루션 5단계 순환 구조">
+        <section id="slide-05" class="ir-slide" aria-label="6대 페인포인트 일괄 해결 솔루션">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">03 · SOLUTION — THE 5-STAGE CLOSED LOOP</span>
-              <h2 class="slide-title">가진 옷을 더 잘 입고, 안 입는 옷은 다시 순환하는 완결형 루프</h2>
+              <span class="slide-eyebrow">PART 01 · ONE-SHOT UNIFIED RESOLUTION</span>
+              <h2 class="slide-title">흩어진 6대 페인포인트를 「단 하나의 3D 순환 OS」로 한 번에 해결</h2>
             </div>
             <p class="slide-subtitle">
-              단절된 5개의 패션 행동(정리·날씨·피팅·착용·리셀)을 단일 3D 디지털 옷장 데이터 그래프 위에서 연결합니다.
+              사진 한 장으로 생성된 단일 옷장 데이터 그래프 위에서 6가지 문제를 5단계 순환 루프로 일괄 해결했습니다.
             </p>
           </header>
 
-          <div class="slide-body" style="justify-content: space-between">
-            <div class="loop-flow">
-              <div class="loop-step">
-                <div class="row-between">
-                  <span class="loop-step-num">STAGE 01</span>
-                  <span class="badge badge--live">LIVE</span>
-                </div>
-                <h3>AI 옷장 디지털화</h3>
-                <p>사진 촬영 즉시 기기 내 누끼·EXIF/GPS 제거·WebP 경량화(-96%) 및 카테고리·색상 자동 분류.</p>
+          <div class="slide-body" style="gap: 11px">
+            <!-- Top Unified 5-Stage Closed Loop Ribbon -->
+            <div class="loop-ribbon" aria-label="iNVTRY 5단계 통합 루프">
+              <div class="loop-chip">
+                <div class="loop-chip-head"><span>STAGE 01</span><span>LIVE</span></div>
+                <strong>사진 1장 자동 디지털화</strong>
               </div>
-
-              <div class="loop-step">
-                <div class="row-between">
-                  <span class="loop-step-num">STAGE 02</span>
-                  <span class="badge badge--live">LIVE</span>
-                </div>
-                <h3>실시간 날씨 · TPO</h3>
-                <p>현재 GPS 기온·강수·자외선과 Street View 거리 배경을 반영해 오늘 상황에 맞는 코디 제안.</p>
+              <div class="loop-chip">
+                <div class="loop-chip-head"><span>STAGE 02</span><span>LIVE</span></div>
+                <strong>실시간 날씨 · TPO 연동</strong>
               </div>
-
-              <div class="loop-step">
-                <div class="row-between">
-                  <span class="loop-step-num">STAGE 03</span>
-                  <span class="badge badge--live">LIVE</span>
-                </div>
-                <h3>360° 4겹+ 3D 피팅</h3>
-                <p>Three.js 21관절·SpringBone 물리 + 8방향 멀티앵글 AI VTON으로 레이어드 실루엣 사전 검증.</p>
+              <div class="loop-chip">
+                <div class="loop-chip-head"><span>STAGE 03</span><span>LIVE</span></div>
+                <strong>360° 4겹+ 3D 피팅</strong>
               </div>
-
-              <div class="loop-step">
-                <div class="row-between">
-                  <span class="loop-step-num">STAGE 04</span>
-                  <span class="badge badge--hybrid">LIVE+</span>
-                </div>
-                <h3>착용 기록 · CPW</h3>
-                <p>OOTD 착용 로그로 아이템별 1회 착용 비용(CPW)과 미착용 휴면 의류를 자동 산출·알림.</p>
+              <div class="loop-chip">
+                <div class="loop-chip-head"><span>STAGE 04</span><span>LIVE+</span></div>
+                <strong>착용 CPW · 세탁 케어</strong>
               </div>
-
-              <div class="loop-step">
-                <div class="row-between">
-                  <span class="loop-step-num">STAGE 05</span>
-                  <span class="badge badge--hybrid">LIVE+</span>
-                </div>
-                <h3>이력 인증 원탭 리셀</h3>
-                <p>이미 확보된 누끼 사진·구매/착용 이력을 묶어 30초 만에 신뢰도 높은 중고 판매글 등록.</p>
+              <div class="loop-chip">
+                <div class="loop-chip-head"><span>STAGE 05</span><span>LIVE+</span></div>
+                <strong>이력 인증 원탭 리셀</strong>
               </div>
             </div>
 
-            <div class="grid-2" style="flex: 1 1 auto">
-              <div class="card card--gold">
-                <div class="row-between">
-                  <span class="kicker" style="margin: 0">CIRCULAR EXIT A · SMART PURCHASE GATE</span>
-                  <span class="badge badge--live">중복 방지</span>
+            <!-- 6:1 Pain -> Unified Resolution Matrix -->
+            <div class="resolve-grid">
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 01 · 중복 구매</span>
+                  <strong>매장서 비슷한 옷 반복 구매</strong>
                 </div>
-                <h3 class="card-title">매장·온라인 결제 직전 “사기 전 중복 판독”</h3>
-                <p class="card-copy">
-                  새로운 옷을 비추면 보유 중인 유사 아이템 수량, 마지막 착용일, 기존 옷들과의 레이어드 매칭 점수를
-                  즉시 계산합니다. 충동구매는 막고, 정말 부족한 <strong>“옷장 갭(Gap) 아이템”</strong>만 정밀 추천해
-                  제휴 전환율을 극대화합니다.
-                </p>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>3초 오프라인 중복 판독 게이트</strong>
+                    <span class="badge badge--live">LIVE</span>
+                  </div>
+                  <span class="resolve-desc">사진 대조 즉시 보유 유사 벌수·최근 착용일 확인 → 충동소비 차단</span>
+                </div>
               </div>
 
-              <div class="card card--gold">
-                <div class="row-between">
-                  <span class="kicker" style="margin: 0">CIRCULAR EXIT B · PROVENANCE-BACKED RESALE</span>
-                  <span class="badge badge--gold">원탭 현금화</span>
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 02 · 온라인 반품</span>
+                  <strong>내 옷과 어울릴지 모르는 핏 실패</strong>
                 </div>
-                <h3 class="card-title">촬영 마찰 제로 “이력 인증 리셀 &amp; 세탁 케어”</h3>
-                <p class="card-copy">
-                  기존 중고 거래의 가장 큰 장벽인 촬영·상세 작성·상태 신뢰 문제를 해결합니다. 옷장에 축적된
-                  고화질 누끼 이미지·착용 횟수·세탁 케어 이력이 자동 첨부되어 판매자는 1탭으로 현금화하고,
-                  구매자는 검증된 상태의 의류를 안심 거래합니다.
-                </p>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>실제 내 옷장 기준 사전 3D 조합</strong>
+                    <span class="badge badge--live">LIVE</span>
+                  </div>
+                  <span class="resolve-desc">28종 내 체형 모프 + 보유 하의·아우터와 매칭 검증 후 갭(Gap)만 구매</span>
+                </div>
+              </div>
+
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 03 · 단품 2D 한계</span>
+                  <strong>4겹 레이어드 · 측후면 확인 불가</strong>
+                </div>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>21관절 SpringBone + 8방향 VTON</strong>
+                    <span class="badge badge--live">LIVE</span>
+                  </div>
+                  <span class="resolve-desc">셔츠·니트·재킷·롱코트 4겹+ 360° 회전·보행 드레이프 실시간 검증</span>
+                </div>
+              </div>
+
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 04 · 날씨·TPO 단절</span>
+                  <strong>기온·강수·장소와 따로 노는 코디</strong>
+                </div>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>실시간 기상 · 동네 Street View 무대</strong>
+                    <span class="badge badge--live">LIVE</span>
+                  </div>
+                  <span class="resolve-desc">Google Weather·거리뷰 연동으로 오늘 비/바람·우산·장소별 즉시 피팅</span>
+                </div>
+              </div>
+
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 05 · 프라이버시 공포</span>
+                  <strong>원본 셀카·GPS·실내 클라우드 유출</strong>
+                </div>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>0-Byte 얼굴 + EXIF -96% 스트리핑</strong>
+                    <span class="badge badge--live">LIVE</span>
+                  </div>
+                  <span class="resolve-desc">기기 내 WASM 피부톤(0B 전송) + 23KB 비식별 WebP + 무학습 AI</span>
+                </div>
+              </div>
+
+              <div class="resolve-row">
+                <div class="resolve-before">
+                  <span class="resolve-before-tag">PAIN 06 · 관리·리셀 마찰</span>
+                  <strong>세탁 방치 · 중고 촬영/입력 귀찮음</strong>
+                </div>
+                <div class="resolve-arrow" aria-hidden="true">→</div>
+                <div class="resolve-after">
+                  <div class="resolve-after-head">
+                    <strong>CPW 알림 · 세탁 지도 · 1탭 인증 리셀</strong>
+                    <span class="badge badge--hybrid">LIVE+</span>
+                  </div>
+                  <span class="resolve-desc">이염·주변 세탁소(LIVE) + 저장 누끼·착용 이력 묶어 30초 안심 판매</span>
+                </div>
               </div>
             </div>
           </div>
 
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
-            <span>Solution — 5-Stage Closed Loop OS</span>
-            <span class="slide-footer-num">04 / 15</span>
+            <span>Unified Solution — 6 Fragmented Pains Solved Inside 1 Closed-Loop 3D Wardrobe OS</span>
+            <span class="slide-footer-num">05 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 05 — USER JOURNEY (6-CUT 3D CLAY STORYBOARD)
+           SLIDE 06 — USER JOURNEY (6-CUT 3D CLAY STORYBOARD)
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-05" class="ir-slide" aria-label="6단계 사용자 여정">
+        <section id="slide-06" class="ir-slide" aria-label="6단계 사용자 여정">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">04 · USER JOURNEY — 6-CUT SCENARIO</span>
+              <span class="slide-eyebrow">PART 02 · USER JOURNEY — 6-CUT SCENARIO</span>
               <h2 class="slide-title">일상 속 6가지 결정적 순간에 개입하는 iNVTRY</h2>
             </div>
             <p class="slide-subtitle">
@@ -559,19 +805,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>User Journey — Live vs Roadmap Transparency</span>
-            <span class="slide-footer-num">05 / 15</span>
+            <span class="slide-footer-num">06 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 06 — PRODUCT SHOWCASE (4 REAL LIVE APP SCREENS)
+           SLIDE 07 — PRODUCT SHOWCASE (4 REAL LIVE APP SCREENS)
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-06" class="ir-slide" aria-label="실구동 MVP 화면">
+        <section id="slide-07" class="ir-slide" aria-label="실구동 MVP 화면">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">05 · LIVE PRODUCT SHOWCASE</span>
+              <span class="slide-eyebrow">PART 02 · LIVE PRODUCT SHOWCASE</span>
               <h2 class="slide-title">실구동 크로스플랫폼 하이브리드 앱 (Web · iOS · Android)</h2>
             </div>
             <p class="slide-subtitle">
@@ -650,19 +896,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Product Showcase — Actual Production App Screenshots (KR/EN · Light/Dark)</span>
-            <span class="slide-footer-num">06 / 15</span>
+            <span class="slide-footer-num">07 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 07 — CORE TECHNOLOGY
+           SLIDE 08 — CORE TECHNOLOGY
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-07" class="ir-slide" aria-label="핵심 기술 스택">
+        <section id="slide-08" class="ir-slide" aria-label="핵심 기술 스택">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">06 · CORE TECHNOLOGY ENGINE</span>
+              <span class="slide-eyebrow">PART 02 · CORE TECHNOLOGY ENGINE</span>
               <h2 class="slide-title">모바일 60fps 3D 물리 × 멀티앵글 VTON × 공간 기상 엔진</h2>
             </div>
             <p class="slide-subtitle">
@@ -759,19 +1005,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Core Technology — Verified Benchmark (582KB → 23KB WebP Pipeline)</span>
-            <span class="slide-footer-num">07 / 15</span>
+            <span class="slide-footer-num">08 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 08 — UNFAIR MOAT: PRIVACY-BY-DESIGN 4 LINES OF DEFENSE
+           SLIDE 09 — UNFAIR MOAT: PRIVACY-BY-DESIGN 4 LINES OF DEFENSE
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-08" class="ir-slide" aria-label="프라이버시 보안 해자">
+        <section id="slide-09" class="ir-slide" aria-label="프라이버시 보안 해자">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">07 · UNFAIR MOAT — PRIVACY-BY-DESIGN</span>
+              <span class="slide-eyebrow">PART 02 · UNFAIR MOAT — PRIVACY-BY-DESIGN</span>
               <h2 class="slide-title">경쟁사가 쉽게 모방할 수 없는 「4대 데이터 보안 방어선」</h2>
             </div>
             <p class="slide-subtitle">
@@ -863,19 +1109,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Security Moat — Source: docs/ARCHITECTURE_SECURITY.md &amp; BUSINESS_PLAN_2027_SECURITY.md</span>
-            <span class="slide-footer-num">08 / 15</span>
+            <span class="slide-footer-num">09 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 09 — MARKET SIZE (TAM / SAM / SOM) & WHY NOW
+           SLIDE 10 — MARKET SIZE (TAM / SAM / SOM) & WHY NOW
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-09" class="ir-slide" aria-label="시장 규모 및 성장 배경">
+        <section id="slide-10" class="ir-slide" aria-label="시장 규모 및 성장 배경">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">08 · MARKET OPPORTUNITY &amp; WHY NOW</span>
+              <span class="slide-eyebrow">PART 03 · MARKET OPPORTUNITY &amp; WHY NOW</span>
               <h2 class="slide-title">고성장 글로벌 리셀($393B) × 버추얼 피팅($23.9B) 교차점</h2>
             </div>
             <p class="slide-subtitle">
@@ -964,19 +1210,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Market Size &amp; Why Now</span>
-            <span class="slide-footer-num">09 / 15</span>
+            <span class="slide-footer-num">10 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 10 — COMPETITIVE LANDSCAPE & POSITIONING
+           SLIDE 11 — COMPETITIVE LANDSCAPE & POSITIONING
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-10" class="ir-slide" aria-label="경쟁 구도 및 포지셔닝">
+        <section id="slide-11" class="ir-slide" aria-label="경쟁 구도 및 포지셔닝">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">09 · COMPETITIVE LANDSCAPE</span>
+              <span class="slide-eyebrow">PART 03 · COMPETITIVE LANDSCAPE</span>
               <h2 class="slide-title">단순 옷장·단품 VTON·중고 마켓을 넘어선 유일한 순환 자산 OS</h2>
             </div>
             <p class="slide-subtitle">
@@ -1095,88 +1341,275 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Competitive Landscape &amp; Defensibility</span>
-            <span class="slide-footer-num">10 / 15</span>
+            <span class="slide-footer-num">11 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 11 — BUSINESS MODEL & UNIT ECONOMICS
+           SLIDE 12 — BUSINESS MODEL ①: 4-LAYER REVENUE & TIER ARCHITECTURE
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-11" class="ir-slide" aria-label="비즈니스 모델 및 수익 구조">
+        <section id="slide-12" class="ir-slide" aria-label="비즈니스 모델 1 — 4중 수익 구조 및 티어 설계">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">10 · BUSINESS MODEL &amp; UNIT ECONOMICS</span>
-              <h2 class="slide-title">구독 × 갭 커머스 × 이력 인증 리셀의 3중 순환 수익 엔진</h2>
+              <span class="slide-eyebrow">PART 03 · BUSINESS MODEL ① — REVENUE &amp; TIER ARCHITECTURE</span>
+              <h2 class="slide-title">Pro 구독 × 갭 커머스 × 인증 리셀 × B2B 4중 수익 모델</h2>
             </div>
             <p class="slide-subtitle">
-              온디바이스 전처리($0)와 캐시 재활용으로 AI 변동비를 억제하며 고마진 반복 매출을 구축합니다.
+              무료 유틸리티(중복 체크·옷장 정리)로 락인한 뒤, 사용 단계마다 고마진 수익원이 순차 작동합니다.
+            </p>
+          </header>
+
+          <div class="slide-body" style="gap: 12px">
+            <!-- 4 Revenue Streams -->
+            <div class="bm-stream-grid" style="flex: 1 1 auto">
+              <div class="bm-stream-card bm-stream-card--primary">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">01 · SUBSCRIPTION</span>
+                  <span class="badge badge--gold">반복 매출</span>
+                </div>
+                <h3 class="card-title">iNVTRY Pro 멤버십</h3>
+                <div class="bm-price bm-price--gold">₩6,900~9,900 <small>/월 [TBD]</small></div>
+                <p class="card-copy" style="font-size: 11.2px">
+                  무제한 4겹+ 360° AI 피팅, 8방향 QC, CPW·휴면 자산 리포트, 날씨·이염 알림 (연간 20% 할인)
+                </p>
+                <div class="card-foot-bar">
+                  <span>CORE ARR</span>
+                  <span>Phase 03 오픈</span>
+                </div>
+              </div>
+
+              <div class="bm-stream-card">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">02 · GAP COMMERCE</span>
+                  <span class="badge badge--gold">제휴 CPS</span>
+                </div>
+                <h3 class="card-title">중복 없는 갭(Gap) 커머스</h3>
+                <div class="bm-price">5 ~ 12% <small>구매 전환 수수료</small></div>
+                <p class="card-copy" style="font-size: 11.2px">
+                  보유 옷장에 없는 공백 1벌만 정밀 추천 → 내 옷과 3D 사전 레이어드 후 무신사·29CM·자사몰 제휴 결제
+                </p>
+                <div class="card-foot-bar">
+                  <span>HIGH CVR</span>
+                  <span>반품률↓ · 전환↑</span>
+                </div>
+              </div>
+
+              <div class="bm-stream-card">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">03 · RESALE &amp; O2O</span>
+                  <span class="badge badge--gold">거래 수수료</span>
+                </div>
+                <h3 class="card-title">이력 인증 리셀 · 세탁 O2O</h3>
+                <div class="bm-price">3 ~ 8% <small>거래·중개 Take Rate</small></div>
+                <p class="card-copy" style="font-size: 11.2px">
+                  90일+ 미착용 의류 자동 감지 → 저장 누끼·착용 이력 묶어 1탭 안심 거래 + 비대면 세탁·수선 수거 중개
+                </p>
+                <div class="card-foot-bar">
+                  <span>CIRCULAR GMV</span>
+                  <span>공급 마찰 제로</span>
+                </div>
+              </div>
+
+              <div class="bm-stream-card">
+                <div class="row-between">
+                  <span class="kicker" style="margin: 0">04 · B2B2C BRAND</span>
+                  <span class="badge badge--todo">확장 수익</span>
+                </div>
+                <h3 class="card-title">브랜드 3D 시드 &amp; VTON SDK</h3>
+                <div class="bm-price">월정액 + CPC <small>B2B SaaS</small></div>
+                <p class="card-copy" style="font-size: 11.2px">
+                  편집숍·디자이너 신상을 3D 옷장 시드 에셋으로 입점해 구매 전 체험 제공 및 브랜드 반품 손실 절감
+                </p>
+                <div class="card-foot-bar">
+                  <span>SCALE UPSIDE</span>
+                  <span>2027 하반기+</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conversion Bridge Banner -->
+            <div class="card card--gold" style="padding: 9px 15px">
+              <div class="row-between" style="gap: 12px">
+                <strong style="font-size: 12px">
+                  FREEMIUM → MULTI-STREAM CONVERSION: 무료 옷장·중복 체크(₩0)로 진입해 Pro 구독(ARR) · 갭 커머스(CPS) · 인증 리셀(Take Rate)로 확장
+                </strong>
+                <span class="badge badge--gold">LTV STACK</span>
+              </div>
+            </div>
+
+            <!-- Free vs Pro Conversion Trigger Table -->
+            <table class="ir-table ir-table--compact" aria-label="Free vs Pro 티어 설계 및 유료 전환 트리거">
+              <thead>
+                <tr>
+                  <th style="width: 18%">구분 / 고객 여정</th>
+                  <th style="width: 30%">Free 티어 (무료 락인 · 저비용 유입)</th>
+                  <th class="col-highlight" style="width: 30%">iNVTRY Pro (유료 전환 · 고마진 구독)</th>
+                  <th style="width: 22%">수익화 · 업셀 트리거</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>옷장 디지털화 · 중복 체크</strong></td>
+                  <td>온디바이스 누끼·EXIF 제거·옷장 등록 및 매장 중복 판독 <strong>무료 무제한</strong> ($0 원가)</td>
+                  <td class="col-highlight">세탁 택 OCR 자동 인식 · 소재별 이염/보관 경고 · 대용량 클라우드 백업</td>
+                  <td>옷장 15~20벌 누적 시 높은 전환 비용(Lock-in) 형성</td>
+                </tr>
+                <tr>
+                  <td><strong>3D 레이어드 · AI VTON</strong></td>
+                  <td>기본 3D 아바타 · 월 제한 횟수 AI 피팅 (비용 상한선 고정)</td>
+                  <td class="col-highlight"><strong>무제한 4겹+ 360° 8방향 멀티앵글 VTON</strong> · 실시간 거리뷰·날씨 프리미엄 무대</td>
+                  <td>계절 전환·외출 직전 피팅 쿼터 소진 시 즉시 Pro 전환</td>
+                </tr>
+                <tr>
+                  <td><strong>커머스 · CPW · 리셀</strong></td>
+                  <td>기본 착용 기록 · 주변 세탁/수선소 지도 탐색 · 갭 추천 딥링크</td>
+                  <td class="col-highlight">상세 CPW·휴면 자산 가치 리포트 · <strong>인증 리셀 수수료 우대 &amp; 우선 노출</strong></td>
+                  <td>미착용 옷 1벌 리셀 수익으로 연간 구독료 즉시 회수</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <footer class="slide-footer">
+            <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
+            <span>Business Model ① — 4-Layer Revenue &amp; Freemium Conversion Matrix</span>
+            <span class="slide-footer-num">12 / 18</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- =================================================================
+           SLIDE 13 — BUSINESS MODEL ②: MONETIZATION FLYWHEEL & UNIT ECONOMICS
+           ================================================================= -->
+      <div class="ir-slide-slot">
+        <section id="slide-13" class="ir-slide" aria-label="비즈니스 모델 2 — 수익 플라이휠 및 단위경제학">
+          <header class="slide-header">
+            <div>
+              <span class="slide-eyebrow">PART 03 · BUSINESS MODEL ② — FLYWHEEL &amp; UNIT ECONOMICS</span>
+              <h2 class="slide-title">수익 선순환 플라이휠과 AI 원가 통제 기반 고마진 단위경제학</h2>
+            </div>
+            <p class="slide-subtitle">
+              생성형 AI 앱의 최대 약점인 추론 변동비를 3단계로 억제하고, 한 명의 유저에서 4중 LTV를 회수합니다.
             </p>
           </header>
 
           <div class="slide-body">
-            <div class="grid-3" style="flex: 1 1 auto">
-              <div class="card card--gold">
+            <div class="split-45-55">
+              <!-- Left: Custom Circular Monetization Flywheel SVG -->
+              <div class="card" style="justify-content: space-between">
                 <div class="row-between">
-                  <span class="kicker" style="margin: 0">STREAM 01 · SUBSCRIPTION</span>
-                  <span class="badge badge--gold">월 구독</span>
+                  <span class="kicker" style="margin: 0">COMPOUNDING MONETIZATION FLYWHEEL</span>
+                  <span class="badge badge--gold">MULTI-LTV LOOP</span>
                 </div>
-                <h3 class="card-title">iNVTRY Pro 멤버십</h3>
-                <div class="kpi-num kpi-num--gold" style="font-size: 24px">₩6,900~9,900 <span style="font-size: 12px; font-weight: 500; color: var(--ink-tertiary)">/월 [TBD]</span></div>
-                <ul class="clean-list">
-                  <li>무제한 4겹+ 360° 8방향 AI 가상 피팅</li>
-                  <li>상세 CPW · 휴면 자산 가치 리포트</li>
-                  <li>날씨·이염·세탁 주기 스마트 알림</li>
-                </ul>
+                <svg
+                  viewBox="0 0 380 318"
+                  width="100%"
+                  style="max-height: 318px; margin: auto 0"
+                  role="img"
+                  aria-label="iNVTRY 5단계 수익 선순환 플라이휠"
+                >
+                  <!-- Center Hub & Ring -->
+                  <circle cx="190" cy="160" r="106" fill="none" stroke="rgba(143,107,54,0.42)" stroke-width="2" stroke-dasharray="5 5" />
+                  <circle cx="190" cy="160" r="46" fill="var(--surface-slide)" />
+                  <circle cx="190" cy="160" r="46" fill="rgba(143,107,54,0.16)" stroke="#8f6b36" stroke-width="1.8" />
+                  <text x="190" y="155" text-anchor="middle" font-size="11.5" font-weight="800" fill="#8f6b36">iNVTRY</text>
+                  <text x="190" y="172" text-anchor="middle" font-size="9.5" font-weight="700" fill="currentColor" opacity="0.78">복합 LTV 엔진</text>
+
+                  <!-- Node 1: Top -->
+                  <rect x="115" y="12" width="150" height="46" rx="10" fill="var(--surface-slide)" />
+                  <rect x="115" y="12" width="150" height="46" rx="10" fill="rgba(143,107,54,0.12)" stroke="#8f6b36" stroke-width="1.4" />
+                  <text x="190" y="31" text-anchor="middle" font-size="10.5" font-weight="800" fill="currentColor">① 무료 유입 · 중복 체크</text>
+                  <text x="190" y="47" text-anchor="middle" font-size="9.2" font-weight="600" fill="#8f6b36">Low CAC · 서버 원가 ₩0</text>
+
+                  <!-- Node 2: Right Upper -->
+                  <rect x="242" y="96" width="132" height="48" rx="10" fill="var(--surface-slide)" />
+                  <rect x="242" y="96" width="132" height="48" rx="10" fill="rgba(143,107,54,0.08)" stroke="rgba(143,107,54,0.55)" stroke-width="1.3" />
+                  <text x="308" y="116" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">② 옷장 20벌+ 등록</text>
+                  <text x="308" y="132" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" opacity="0.72">강력한 데이터 Lock-In</text>
+
+                  <!-- Node 3: Right Lower -->
+                  <rect x="214" y="246" width="154" height="48" rx="10" fill="var(--surface-slide)" />
+                  <rect x="214" y="246" width="154" height="48" rx="10" fill="rgba(143,107,54,0.14)" stroke="#8f6b36" stroke-width="1.4" />
+                  <text x="291" y="266" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">③ 매일 4겹+ 3D 피팅</text>
+                  <text x="291" y="282" text-anchor="middle" font-size="9.2" font-weight="700" fill="#8f6b36">Pro 월 구독 전환 (ARR)</text>
+
+                  <!-- Node 4: Left Lower -->
+                  <rect x="12" y="246" width="154" height="48" rx="10" fill="var(--surface-slide)" />
+                  <rect x="12" y="246" width="154" height="48" rx="10" fill="rgba(143,107,54,0.08)" stroke="rgba(143,107,54,0.55)" stroke-width="1.3" />
+                  <text x="89" y="266" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">④ 옷장 갭(Gap) 발견</text>
+                  <text x="89" y="282" text-anchor="middle" font-size="9.2" font-weight="700" fill="#8f6b36">제휴 CPS 5~12% 수익</text>
+
+                  <!-- Node 5: Left Upper -->
+                  <rect x="6" y="96" width="132" height="48" rx="10" fill="var(--surface-slide)" />
+                  <rect x="6" y="96" width="132" height="48" rx="10" fill="rgba(143,107,54,0.12)" stroke="#8f6b36" stroke-width="1.4" />
+                  <text x="72" y="116" text-anchor="middle" font-size="10.2" font-weight="800" fill="currentColor">⑤ 휴면 감지 · 리셀</text>
+                  <text x="72" y="132" text-anchor="middle" font-size="9.2" font-weight="700" fill="#8f6b36">Take Rate 3~8% + O2O</text>
+                </svg>
+                <div class="card-foot-bar">
+                  <span>리셀 현금화 → 새 옷 재구매</span>
+                  <span>이탈 없는 순환 LTV</span>
+                </div>
               </div>
 
-              <div class="card">
-                <div class="row-between">
-                  <span class="kicker" style="margin: 0">STREAM 02 · GAP COMMERCE</span>
-                  <span class="badge badge--gold">제휴 CPS</span>
-                </div>
-                <h3 class="card-title">중복 없는 맞춤 추천 커머스</h3>
-                <div class="kpi-num" style="font-size: 24px">5 ~ 12% <span style="font-size: 12px; font-weight: 500; color: var(--ink-tertiary)">제휴 수수료</span></div>
-                <ul class="clean-list">
-                  <li>보유 옷장에 <strong>정말 없는 1벌</strong>만 정밀 매칭</li>
-                  <li>구매 전 3D 내 옷장 레이어드 사전 검증으로 반품률 절감</li>
-                  <li>패션 플랫폼·편집숍 API/딥링크 제휴 확장</li>
-                </ul>
-              </div>
+              <!-- Right: AI Cost Control Table + Unit Economics Levers -->
+              <div style="display: flex; flex-direction: column; gap: 11px; justify-content: space-between">
+                <table class="ir-table ir-table--compact" aria-label="AI 원가 방어 구조 비교">
+                  <thead>
+                    <tr>
+                      <th style="width: 24%">비용 항목</th>
+                      <th style="width: 31%">일반 생성형 패션 AI</th>
+                      <th class="col-highlight" style="width: 45%">iNVTRY 3단계 원가 통제 구조</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>누끼 · 피부톤 전처리</strong></td>
+                      <td>서버 GPU 클라우드 호출 (유저 증가 시 적자 확대)</td>
+                      <td class="col-highlight"><strong>온디바이스 WASM 100% 처리 (₩0)</strong> · 582KB → 23KB WebP로 스토리지·전송비 -96%</td>
+                    </tr>
+                    <tr>
+                      <td><strong>멀티레이어 VTON 호출</strong></td>
+                      <td>매 요청마다 중복 추론 실행</td>
+                      <td class="col-highlight"><strong>착장 조합 해시 캐시 + 8방향 턴테이블 재활용</strong>으로 동일 코디 재조회 비용 ₩0</td>
+                    </tr>
+                    <tr>
+                      <td><strong>무료 유저 남용 리스크</strong></td>
+                      <td>무제한 체험 시 API 비용 폭증</td>
+                      <td class="col-highlight"><strong>Free 월 호출 쿼터 상한 + Pro 티어 과금</strong>으로 유료 공헌이익률 70%+ 구조 설계</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-              <div class="card">
-                <div class="row-between">
-                  <span class="kicker" style="margin: 0">STREAM 03 · VERIFIED RESALE</span>
-                  <span class="badge badge--gold">거래 수수료</span>
-                </div>
-                <h3 class="card-title">이력 인증 원탭 리셀 &amp; 케어 O2O</h3>
-                <div class="kpi-num" style="font-size: 24px">3 ~ 8% <span style="font-size: 12px; font-weight: 500; color: var(--ink-tertiary)">거래·연계 수수료</span></div>
-                <ul class="clean-list">
-                  <li>사진·구매/착용 이력 자동 첨부 안심 리셀</li>
-                  <li>휴면 의류 자동 감지 → 원탭 현금화 공급 확보</li>
-                  <li>세탁·수선 방문 수거 파트너 O2O 중개 수수료</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="card card--recessed" style="padding: 13px 16px">
-              <div class="row-between" style="margin-bottom: 6px">
-                <span class="kicker" style="margin: 0">AI COST DISCIPLINE &amp; UNIT ECONOMICS</span>
-                <span class="badge badge--tbd">상세 재무 추정 [TBD]</span>
-              </div>
-              <div class="grid-3">
-                <div>
-                  <strong style="font-size: 12.5px">① 온디바이스 비용 제로화</strong>
-                  <p class="card-copy" style="font-size: 11.5px">피부톤(WASM)·누끼·WebP 압축을 단말에서 수행해 서버 GPU 비용 0원.</p>
-                </div>
-                <div>
-                  <strong style="font-size: 12.5px">② VTON 캐시 &amp; 티어 제한</strong>
-                  <p class="card-copy" style="font-size: 11.5px">조합 해시 캐시 재사용 + Free/Pro 호출 쿼터로 유료 매출총이익률 방어.</p>
-                </div>
-                <div>
-                  <strong style="font-size: 12.5px">③ 자연 유입(Low CAC)</strong>
-                  <p class="card-copy" style="font-size: 11.5px">매장 중복 판독·OOTD 캘린더 공유를 통한 오가닉 유입으로 CAC 절감.</p>
+                <div class="card card--gold" style="flex: 1 1 auto; gap: 10px">
+                  <div class="row-between">
+                    <span class="kicker" style="margin: 0">TARGET UNIT ECONOMICS FRAMEWORK (상용화 기준)</span>
+                    <span class="badge badge--tbd">재무 세부 [TBD]</span>
+                  </div>
+                  <div class="grid-3" style="flex: 1 1 auto">
+                    <div class="card card--recessed" style="padding: 11px">
+                      <span class="kicker" style="margin-bottom: 2px">MARGIN TARGET</span>
+                      <strong class="tabular" style="font-size: 18px; color: var(--gold)">70%+</strong>
+                      <p class="card-copy" style="font-size: 10.8px">온디바이스 $0 전처리 + 캐시 적중 기반 Pro 구독 매출총이익률 목표</p>
+                      <div class="card-foot-bar" style="padding-top: 6px"><span>GROSS MARGIN</span><span>AI 원가 방어</span></div>
+                    </div>
+                    <div class="card card--recessed" style="padding: 11px">
+                      <span class="kicker" style="margin-bottom: 2px">CAC EFFICIENCY</span>
+                      <strong style="font-size: 16px">Organic Hook</strong>
+                      <p class="card-copy" style="font-size: 10.8px">매장 중복 체크 유틸리티 · 360° OOTD SNS 공유로 유료 광고 의존 축소</p>
+                      <div class="card-foot-bar" style="padding-top: 6px"><span>LOW CAC</span><span>바이럴 루프</span></div>
+                    </div>
+                    <div class="card card--recessed" style="padding: 11px">
+                      <span class="kicker" style="margin-bottom: 2px">LTV EXPANSION</span>
+                      <strong style="font-size: 16px">4-Way Stack</strong>
+                      <p class="card-copy" style="font-size: 10.8px">구독 ARPU 외 갭 커머스 CPS + 연 2~4벌 인증 리셀 수수료 누적 회수</p>
+                      <div class="card-foot-bar" style="padding-top: 6px"><span>MULTI-LTV</span><span>이탈 최소화</span></div>
+                    </div>
+                  </div>
+                  <p class="source-note">
+                    * 베타 출시 후 실측 코호트(전환율·리텐션·평균 API 원가·ARPU)를 반영해 3개년 손익계산서(P&amp;L) 확정 예정
+                  </p>
                 </div>
               </div>
             </div>
@@ -1184,20 +1617,20 @@
 
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
-            <span>Business Model &amp; Unit Economics</span>
-            <span class="slide-footer-num">11 / 15</span>
+            <span>Business Model ② — Circular Flywheel &amp; AI Cost-Disciplined Unit Economics</span>
+            <span class="slide-footer-num">13 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 12 — TRACTION & ENGINEERING READINESS
+           SLIDE 14 — TRACTION & ENGINEERING READINESS
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-12" class="ir-slide" aria-label="개발 검증 실적 및 아키텍처">
+        <section id="slide-14" class="ir-slide" aria-label="개발 검증 실적 및 아키텍처">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">11 · TRACTION &amp; PRODUCTION ARCHITECTURE</span>
+              <span class="slide-eyebrow">PART 04 · TRACTION &amp; PRODUCTION ARCHITECTURE</span>
               <h2 class="slide-title">즉시 스케일업 가능한 6-Tier 풀스택 코드베이스 검증 완료</h2>
             </div>
             <p class="slide-subtitle">
@@ -1278,19 +1711,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Traction &amp; 6-Tier Production Architecture</span>
-            <span class="slide-footer-num">12 / 15</span>
+            <span class="slide-footer-num">14 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 13 — GO-TO-MARKET & 18-MONTH ROADMAP
+           SLIDE 15 — GO-TO-MARKET & 18-MONTH ROADMAP
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-13" class="ir-slide" aria-label="성장 전략 및 로드맵">
+        <section id="slide-15" class="ir-slide" aria-label="성장 전략 및 로드맵">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">12 · GO-TO-MARKET &amp; 18-MONTH ROADMAP</span>
+              <span class="slide-eyebrow">PART 04 · GO-TO-MARKET &amp; 18-MONTH ROADMAP</span>
               <h2 class="slide-title">옷장 등록 락인(Lock-in)부터 리셀 유동성 확장까지 3단계 실행</h2>
             </div>
             <p class="slide-subtitle">
@@ -1368,19 +1801,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Go-to-Market Strategy &amp; 18-Month Roadmap</span>
-            <span class="slide-footer-num">13 / 15</span>
+            <span class="slide-footer-num">15 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 14 — TEAM & GOVERNANCE
+           SLIDE 16 — TEAM & GOVERNANCE
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-14" class="ir-slide" aria-label="팀 구성 및 거버넌스">
+        <section id="slide-16" class="ir-slide" aria-label="팀 구성 및 거버넌스">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">13 · TEAM &amp; SECURITY GOVERNANCE</span>
+              <span class="slide-eyebrow">PART 04 · TEAM &amp; SECURITY GOVERNANCE</span>
               <h2 class="slide-title">풀스택·3D·AI·보안을 직접 구현한 실행력 있는 창업팀</h2>
             </div>
             <p class="slide-subtitle">
@@ -1468,19 +1901,19 @@
           <footer class="slide-footer">
             <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
             <span>Team, Hiring Plan &amp; Security Governance</span>
-            <span class="slide-footer-num">14 / 15</span>
+            <span class="slide-footer-num">16 / 18</span>
           </footer>
         </section>
       </div>
 
       <!-- =================================================================
-           SLIDE 15 — FUNDING ASK, USE OF FUNDS & CLOSING
+           SLIDE 17 — FUNDING ASK, USE OF FUNDS & 18M MILESTONES
            ================================================================= -->
       <div class="ir-slide-slot">
-        <section id="slide-15" class="ir-slide" aria-label="투자 제안 및 자금 집행 계획">
+        <section id="slide-17" class="ir-slide" aria-label="투자 제안 및 자금 집행 계획">
           <header class="slide-header">
             <div>
-              <span class="slide-eyebrow">14 · FUNDING ASK &amp; USE OF FUNDS</span>
+              <span class="slide-eyebrow">PART 04 · FUNDING ASK &amp; USE OF FUNDS</span>
               <h2 class="slide-title">18개월 상용 스케일업과 순환 리셀 안착을 위한 투자 제안</h2>
             </div>
             <p class="slide-subtitle">
@@ -1550,38 +1983,93 @@
               </div>
             </div>
 
-            <!-- Closing Banner -->
-            <div class="card card--gold" style="padding: 16px 22px">
-              <div class="row-between">
-                <div style="display: flex; align-items: center; gap: 18px">
-                  <img
-                    src="../../site/public/assets/brand/invtry-logo-light.png"
-                    data-light-src="../../site/public/assets/brand/invtry-logo-light.png"
-                    data-dark-src="../../site/public/assets/brand/invtry-logo-dark.png"
-                    alt="iNVTRY"
-                    style="height: 28px; width: auto"
-                  />
-                  <div>
-                    <strong style="font-size: 15px; display: block">
-                      “가진 옷을 더 잘 입고, 안 입는 옷은 다시 순환하는 3D 옷장 OS”
-                    </strong>
-                    <span class="card-copy" style="font-size: 12px">
-                      라이브 데모 체험 및 투자·제휴 미팅 문의는 언제든 환영합니다.
-                    </span>
-                  </div>
+            <!-- 18M Execution Milestone Strip -->
+            <div class="card card--recessed" style="padding: 13px 16px">
+              <div class="row-between" style="margin-bottom: 6px">
+                <span class="kicker" style="margin: 0">POST-INVESTMENT 18-MONTH VALUE INFLECTION</span>
+                <span class="badge badge--gold">SERIES A READY</span>
+              </div>
+              <div class="grid-3">
+                <div>
+                  <strong style="font-size: 12.2px; color: var(--gold)">M+1 ~ M+6 · 정식 출시 &amp; 보안 인증</strong>
+                  <p class="card-copy" style="font-size: 11px">App Store/Play 출시, GCS 3-Zone·모의해킹 완료, 초기 서울 2030 코호트 확보</p>
                 </div>
-                <div style="text-align: right; font-family: var(--font-mono); font-size: 12px">
-                  <strong style="display: block; color: var(--gold)">https://www.ainvtry.com</strong>
-                  <span style="color: var(--ink-secondary)">raymond@ainvtry.com · Raymond Moon</span>
+                <div>
+                  <strong style="font-size: 12.2px">M+7 ~ M+12 · 구독 &amp; 갭 커머스 점화</strong>
+                  <p class="card-copy" style="font-size: 11px">iNVTRY Pro 유료 전환·택 OCR·OOTD 바이럴 루프 및 편집숍 CPS 제휴 개시</p>
+                </div>
+                <div>
+                  <strong style="font-size: 12.2px">M+13 ~ M+18 · 인증 리셀 &amp; 후속 투자</strong>
+                  <p class="card-copy" style="font-size: 11px">이력 인증 원탭 리셀·세탁 O2O 거래량 검증, 핵심 특허 출원 및 Pre-A/Series A 진입</p>
                 </div>
               </div>
             </div>
           </div>
 
           <footer class="slide-footer">
-            <span class="slide-footer-brand"><span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY)</span>
-            <span>Thank You · Q&amp;A &amp; Live 3D Demo Available</span>
-            <span class="slide-footer-num">15 / 15</span>
+            <span class="slide-footer-brand"><span class="slide-footer-dot"></span>iNVTRY IR Deck</span>
+            <span>Funding Ask, Use of Funds &amp; 18-Month Value Inflection</span>
+            <span class="slide-footer-num">17 / 18</span>
+          </footer>
+        </section>
+      </div>
+
+      <!-- =================================================================
+           SLIDE 18 — THANK YOU & CLOSING (감사합니다)
+           ================================================================= -->
+      <div class="ir-slide-slot">
+        <section id="slide-18" class="ir-slide ir-slide--closing" aria-label="감사합니다">
+          <div class="closing-stage">
+            <img
+              src="../../site/public/assets/brand/invtry-logo-light.png"
+              data-light-src="../../site/public/assets/brand/invtry-logo-light.png"
+              data-dark-src="../../site/public/assets/brand/invtry-logo-dark.png"
+              alt="iNVTRY 로고"
+              class="closing-logo"
+            />
+
+            <span class="closing-eyebrow">THANK YOU · Q&amp;A &amp; LIVE 3D DEMO</span>
+
+            <h2 class="closing-title">감사합니다</h2>
+
+            <p class="closing-tagline">
+              <strong>“내 옷장을 3D 자산으로, 입는 순간부터 리셀까지”</strong><br />
+              파편화된 6가지 패션 문제를 단 하나의 Privacy-First 3D 순환 OS로 해결하는 iNVTRY입니다.<br />
+              실시간 3D 라이브 데모와 투자·제휴 논의를 언제든 환영합니다.
+            </p>
+
+            <div class="closing-pills">
+              <span class="badge badge--live">LIVE MVP · WEB · iOS · ANDROID</span>
+              <span class="badge badge--gold">6 PAINS → 1 CLOSED-LOOP OS</span>
+              <span class="badge badge--gold">0-BYTE FACE PRIVACY</span>
+              <span class="badge badge--gold">4-LAYER MONETIZATION</span>
+            </div>
+
+            <div class="closing-contact-grid">
+              <div class="closing-contact-card">
+                <span>LIVE 3D WEB DEMO</span>
+                <strong class="tabular">https://www.ainvtry.com</strong>
+                <small>모바일·데스크톱 실시간 3D 피팅 체험</small>
+              </div>
+              <div class="closing-contact-card">
+                <span>FOUNDER · CEO</span>
+                <strong>Raymond Moon (대표)</strong>
+                <small>제품 · 3D 엔진 · AI · 보안 아키텍처 총괄</small>
+              </div>
+              <div class="closing-contact-card">
+                <span>DIRECT CONTACT</span>
+                <strong class="tabular">raymond@ainvtry.com</strong>
+                <small>투자 · TIPS · 브랜드/세탁 O2O 제휴 문의</small>
+              </div>
+            </div>
+          </div>
+
+          <footer class="slide-footer">
+            <span class="slide-footer-brand">
+              <span class="slide-footer-dot"></span>Ainvtry Inc. (iNVTRY) · Confidential IR Deck v2.0
+            </span>
+            <span>Seoul, Republic of Korea · 2026.11</span>
+            <span class="slide-footer-num">18 / 18</span>
           </footer>
         </section>
       </div>

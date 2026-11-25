@@ -149,6 +149,16 @@
     printBtn.addEventListener('click', () => window.print());
   }
 
+  // Clickable Table of Contents jump links
+  document.querySelectorAll('[data-jump-slide]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const target = Number.parseInt(el.getAttribute('data-jump-slide') || '', 10);
+      if (Number.isFinite(target)) {
+        goToSlide(target);
+      }
+    });
+  });
+
   // Keyboard navigation in deck mode
   window.addEventListener('keydown', (e) => {
     if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;

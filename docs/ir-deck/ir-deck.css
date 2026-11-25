@@ -1302,6 +1302,502 @@ html[data-ratio='4-3'] .tier-row {
 }
 
 /* ==========================================================================
+ * v2.0 — Slide 02 Table of Contents (Agenda), Pain->Resolution, BM x2, Closing
+ * ========================================================================== */
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.toc-part {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 15px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-card);
+}
+
+.toc-part--gold {
+  border-color: var(--gold-line);
+  background: linear-gradient(155deg, var(--surface-card) 58%, var(--surface-accent-tint) 100%);
+}
+
+.toc-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.toc-part-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 740;
+  color: var(--ink-primary);
+  letter-spacing: -0.015em;
+}
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
+.toc-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--surface-recessed);
+  color: var(--ink-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.toc-item:hover {
+  border-color: var(--gold-line);
+  background: var(--surface-accent-tint);
+}
+
+.toc-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 760;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.toc-label {
+  font-size: 12.2px;
+  font-weight: 640;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.toc-tag {
+  font-family: var(--font-mono);
+  font-size: 9.8px;
+  font-weight: 650;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+/* Slide 04 — 6 Fragmented Painpoints Grid */
+.pain-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pain-tile {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-top: 2px solid rgba(185, 28, 28, 0.35);
+  border-radius: 12px;
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+}
+
+html[data-theme='dark'] .pain-tile {
+  border-top-color: rgba(248, 113, 113, 0.45);
+}
+
+.pain-tile h3 {
+  margin: 0;
+  font-size: 13.8px;
+  font-weight: 730;
+  line-height: 1.3;
+  color: var(--ink-primary);
+  word-break: keep-all;
+}
+
+.pain-tile p {
+  margin: 0;
+  font-size: 11.7px;
+  line-height: 1.46;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* Slide 05 — Unified One-Shot Resolution Matrix */
+.loop-ribbon {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.loop-chip {
+  background: var(--surface-recessed);
+  border: 1px solid var(--gold-line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.loop-chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--gold);
+}
+
+.loop-chip strong {
+  font-size: 12px;
+  font-weight: 720;
+  color: var(--ink-primary);
+}
+
+.resolve-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.resolve-row {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 11px 14px;
+  display: grid;
+  grid-template-columns: 0.88fr 22px 1.24fr;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-card);
+}
+
+.resolve-before {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.resolve-before-tag {
+  font-family: var(--font-mono);
+  font-size: 9.8px;
+  font-weight: 720;
+  color: var(--status-risk);
+  letter-spacing: 0.04em;
+}
+
+.resolve-before strong {
+  font-size: 12.2px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  line-height: 1.32;
+  word-break: keep-all;
+}
+
+.resolve-arrow {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.resolve-after {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid var(--gold);
+}
+
+.resolve-after-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.resolve-after strong {
+  font-size: 12.6px;
+  font-weight: 750;
+  color: var(--ink-primary);
+  line-height: 1.3;
+  word-break: keep-all;
+}
+
+.resolve-after span.resolve-desc {
+  font-size: 11.1px;
+  line-height: 1.38;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+/* Slide 12 — Detailed BM Part 1 (4 Streams + Free vs Pro Table) */
+.bm-stream-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.bm-stream-card {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+}
+
+.bm-stream-card--primary {
+  border-color: var(--gold-line);
+  background: linear-gradient(160deg, var(--surface-card) 55%, var(--surface-accent-tint) 100%);
+}
+
+.bm-price {
+  font-size: 20px;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.bm-price--gold {
+  color: var(--gold);
+}
+
+.bm-price small {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ink-tertiary);
+}
+
+.ir-table--compact th,
+.ir-table--compact td {
+  padding: 7.5px 11px;
+  font-size: 11.4px;
+  line-height: 1.36;
+}
+
+/* Slide 18 — Dedicated Luxury Thank You / Closing Slide */
+.ir-slide--closing {
+  padding: 46px 56px 28px;
+}
+
+.ir-slide--closing::before {
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 35%, rgba(214, 184, 137, 0.14), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 50% 90%, rgba(143, 107, 54, 0.08), transparent 72%);
+}
+
+.closing-stage {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.closing-logo {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
+}
+
+.closing-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 720;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.closing-title {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  color: var(--ink-primary);
+}
+
+.closing-tagline {
+  margin: 0;
+  max-width: 680px;
+  font-size: 17px;
+  font-weight: 520;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+  word-break: keep-all;
+}
+
+.closing-tagline strong {
+  color: var(--ink-primary);
+}
+
+.closing-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.closing-contact-grid {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  text-align: left;
+}
+
+.closing-contact-card {
+  background: var(--surface-card);
+  border: 1px solid var(--gold-line);
+  border-radius: 12px;
+  padding: 13px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: var(--shadow-card);
+}
+
+.closing-contact-card span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.closing-contact-card strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.closing-contact-card small {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+
+/* v2.0 4:3 (1024 x 768) Adaptive Overrides */
+html[data-ratio='4-3'] .toc-grid {
+  gap: 12px;
+}
+
+html[data-ratio='4-3'] .toc-part {
+  padding: 13px 14px;
+}
+
+html[data-ratio='4-3'] .toc-label {
+  font-size: 11.4px;
+}
+
+html[data-ratio='4-3'] .pain-grid-6 {
+  gap: 10px;
+}
+
+html[data-ratio='4-3'] .pain-tile {
+  padding: 11px 12px;
+}
+
+html[data-ratio='4-3'] .pain-tile h3 {
+  font-size: 12.8px;
+}
+
+html[data-ratio='4-3'] .pain-tile p {
+  font-size: 11.2px;
+}
+
+html[data-ratio='4-3'] .loop-chip {
+  padding: 7px 8px;
+}
+
+html[data-ratio='4-3'] .loop-chip strong {
+  font-size: 11px;
+}
+
+html[data-ratio='4-3'] .resolve-row {
+  grid-template-columns: 0.85fr 20px 1.25fr;
+  padding: 10px 11px;
+  gap: 8px;
+}
+
+html[data-ratio='4-3'] .resolve-before strong,
+html[data-ratio='4-3'] .resolve-after strong {
+  font-size: 11.5px;
+}
+
+html[data-ratio='4-3'] .resolve-after span.resolve-desc {
+  font-size: 10.6px;
+}
+
+html[data-ratio='4-3'] .bm-stream-grid {
+  gap: 9px;
+}
+
+html[data-ratio='4-3'] .bm-stream-card {
+  padding: 11px 11px;
+}
+
+html[data-ratio='4-3'] .bm-price {
+  font-size: 17px;
+}
+
+html[data-ratio='4-3'] .ir-table--compact th,
+html[data-ratio='4-3'] .ir-table--compact td {
+  padding: 7px 9px;
+  font-size: 10.7px;
+}
+
+html[data-ratio='4-3'] .closing-title {
+  font-size: 46px;
+}
+
+html[data-ratio='4-3'] .closing-contact-grid {
+  max-width: 100%;
+}
+
+/* ==========================================================================
  * Print / Headless PDF Export (Exact 16:9 or 4:3 Full-Bleed Pages)
  * ========================================================================== */
 
