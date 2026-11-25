@@ -1,6 +1,6 @@
 # AGENTS.md — Ainventory Agent Instructions & ECC Full-Fidelity Root Guide
 
-> **라이선스 및 출처 고지**: 본 지침 및 `.agent/` 하위 규칙·에이전트·워크플로우·스킬 체계는 `affaan-m/everything-claude-code` (`v2.2.3`, MIT License — [.agent/LICENSE-ECC.md](.agent/LICENSE-ECC.md)) 원문을 요약 없이 그대로 이식하여 `Ainventory` 프로젝트 및 Google Antigravity 에이전트 환경에 맞게 계층 분리한 정본입니다.
+> **라이선스 및 출처 고지**: 본 지침 및 `.agent/` 하위 규칙·에이전트·워크플로우·스킬 체계는 `affaan-m/everything-claude-code` (`v2.2.3`, MIT License — [.agent/LICENSE-ECC.md](.agent/LICENSE-ECC.md)) 및 `google-labs-code/stitch-skills` (`75f4696f`, Apache License 2.0 — [.agent/LICENSE-STITCH-SKILLS.md](.agent/LICENSE-STITCH-SKILLS.md)) 원문을 `Ainventory` 프로젝트 및 Google Antigravity 에이전트 환경에 맞게 내재화·계층 분리한 정본입니다.
 
 ---
 
@@ -28,11 +28,12 @@ npm run verify:quick
 # 3) 프로덕션 빌드 포함 통합 검증 (lint + typecheck + vite build)
 npm run verify
 
-# 4) Staged 변경분 품질·시크릿·린터 설정 보호 점검 / console.log 점검 / 문서 위생 점검
+# 4) Staged 변경분 품질·시크릿·린터 설정 보호 점검 / console.log 점검 / 문서 위생 / Stitch 스킬 검증
 npm run verify:staged
 npm run verify:secrets
 npm run verify:console
 npm run verify:docs
+npm run verify:stitch-skills
 
 # 5) 모바일 뷰포트(ios-notch, android-foldable) WebGL Playwright E2E 전체 검증
 npm run test:e2e
@@ -47,7 +48,7 @@ npm run hooks:install
 2. **린터 설정 보호 (`Config Protection`)**: 에러를 우회하기 위해 [.oxlintrc.json](.oxlintrc.json) 규칙을 임의로 완화하거나 삭제하지 마세요. 항상 실제 소스 코드를 수정합니다.
 3. **디자인 계약 준수**: UI/CSS 변경 시 [.agent/rules/web/design-quality.md](.agent/rules/web/design-quality.md)와 더불어 프로젝트 고유 디자인 계약인 [src/contracts/carbonDesignContract.ts](src/contracts/carbonDesignContract.ts) 및 [src/styles/atelierTokens.css](src/styles/atelierTokens.css)의 무채색 미니멀·8pt 그리드·`tabular-nums` 원칙을 우선 준수합니다.
 4. **네이티브 플러그인 우선**: GitHub 작업은 MCP 중복 실행 대신 Antigravity 내장 `gh` CLI(`github` 스킬)를 우선 사용합니다.
-5. **Stitch-First UI 디자인 (필수 법칙)**: 앞으로 **모든 UI 디자인은 반드시 Google Stitch로 먼저 진행**합니다. Stitch에서 시안(기본 2종, 비파괴 생성)을 만들어 사용자가 선택한 뒤에만 코드에 반영하며, 디자인 시스템은 [.stitch/DESIGN.md](.stitch/DESIGN.md) 기반 자산을 사용합니다. API 키는 절대 출력·커밋하지 않습니다. 상세: [.agent/rules/web/stitch-first-ui.md](.agent/rules/web/stitch-first-ui.md)
+5. **Stitch-First UI 디자인 (필수 법칙)**: 앞으로 **모든 UI 디자인은 반드시 Google Stitch로 먼저 진행**합니다. Stitch에서 시안(기본 2종, 비파괴 생성)을 만들어 사용자가 선택한 뒤에만 코드에 반영하며, 디자인 시스템은 [.stitch/DESIGN.md](.stitch/DESIGN.md) 기반 자산을 사용합니다. 내재화된 공식 Stitch 스킬 16종(`generate-design`, `manage-design-system`, `design-md`, `extract-design-md`, `extract-static-html`, `code-to-design`, `upload-to-stitch`, `react-components`, `enhance-prompt`, `stitch-loop` 등)을 `.agent/skills/`에서 직접 호출하며, API 키는 절대 출력·커밋하지 않습니다. 상세: [.agent/rules/web/stitch-first-ui.md](.agent/rules/web/stitch-first-ui.md)
 
 ### 0-4. 컨텍스트 초과(`HTTP 400`) 방지를 위한 하위 원문 온디맨드 참조 인덱스
 루트 파일 비대화를 막기 위해 상세 원문은 `.agent/`(및 호환 심볼릭 링크 `.agents/`) 하위에 분리 배치되어 있습니다. 작업 성격에 맞는 파일만 `view_file` 또는 `/슬래시` 명령으로 온디맨드 열람하세요.
@@ -57,10 +58,10 @@ npm run hooks:install
 | **도메인 규칙 (28개)** | [.agent/rules/README.md](.agent/rules/README.md)<br/>`.agent/rules/{common,typescript,react,web}/*.md` | 공통 원칙(`common/` 10개) 및 파일 확장자별 상세 규칙(`typescript/` 5개, `react/` 5개, `web/` 7개) |
 | **역할별 에이전트 (32개)** | `.agent/agents/*.md` | `planner`, `architect`, `a11y-architect`, `typescript-reviewer`, `react-reviewer`, `react-build-resolver`, `build-error-resolver`, `performance-optimizer`, `tdd-guide`, `e2e-runner`, `code-reviewer`, `security-reviewer` 등 |
 | **슬래시 워크플로우 (72개)** | `.agent/workflows/*.md` | `/plan`, `/tdd`, `/e2e`, `/verify`, `/code-review`, `/build-fix`, `/react-review`, `/react-build`, `/react-test`, `/gradle-build`, `/refactor-clean`, `/security-scan`, `/pr` 등 |
-| **정본 스킬 원문 (68개)** | `.agent/skills/<name>/SKILL.md` | `tdd-workflow`, `e2e-testing`, `verification-loop`, `react-patterns`, `react-performance`, `react-testing`, `typescript-patterns`, `vite-patterns`, `frontend-design-direction`, `blender-motion-state-inspection`, `security-review` 등 |
+| **정본 스킬 원문 (84개: ECC 68 + Stitch 16)** | `.agent/skills/<name>/SKILL.md` | ECC(`tdd-workflow`, `e2e-testing`, `verification-loop`, `react-patterns`, `react-performance`, `react-testing`, `typescript-patterns`, `vite-patterns`, `frontend-design-direction`, `blender-motion-state-inspection`, `security-review` 등 68개) + Google Stitch(`generate-design`, `manage-design-system`, `code-to-design`, `extract-design-md`, `extract-static-html`, `upload-to-stitch`, `react-components`, `react-vite-dashboard`, `shadcn-ui`, `remotion`, `react-native`, `design-md`, `enhance-prompt`, `site-md`, `stitch-loop`, `taste-design` 16개) |
 | **모드 컨텍스트 (3개)** | `.agent/contexts/{dev,research,review}.md` | 구현 모드(`dev`), 탐색/리서치 모드(`research`), 코드 리뷰 모드(`review`) 전환 시 참조 |
-| **검증 훅 & MCP** | `.agent/hooks/*.mjs`, `.githooks/*`, `.agent/mcp/*` | 커밋/푸시 자동 품질 게이트 및 MCP 서버 레퍼런스 카탈로그 |
-| **무수정 원본 아카이브** | [.agent/reference/CLAUDE.orig.md](.agent/reference/CLAUDE.orig.md), [.agent/reference/AGENTS.orig.md](.agent/reference/AGENTS.orig.md) | 치환 전 순수 원본 대조용 백업 |
+| **검증 훅 & MCP** | `.agent/hooks/*.mjs`, `.githooks/*`, `.agent/mcp/*` | 커밋/푸시 자동 품질 게이트, Stitch 스킬 무결성 검증(`verify-stitch-skills.mjs`) 및 MCP 서버 레퍼런스 카탈로그 |
+| **무수정 원본 아카이브 & 매니페스트** | [.agent/reference/CLAUDE.orig.md](.agent/reference/CLAUDE.orig.md), [.agent/reference/AGENTS.orig.md](.agent/reference/AGENTS.orig.md), [.agent/reference/stitch-skills.manifest.json](.agent/reference/stitch-skills.manifest.json) | 치환 전 ECC 원본 백업 및 내재화된 Stitch 스킬 업스트림 출처·커밋 매니페스트 |
 
 ---
 
@@ -147,8 +148,9 @@ Use the following skills when working on related files:
 |---------|-------|
 | `README.md` | `docs-governance` / `/update-docs` |
 | `.github/workflows/*.yml` | `delivery-gate` / `verification-loop` |
-| `*.tsx`, `*.jsx`, `src/components/**` | `react-patterns`, `react-performance`, `react-testing` — for React-specific work invoke `/react-review`, `/react-build`, `/react-test` |
+| `*.tsx`, `*.jsx`, `src/components/**` | `react-patterns`, `react-performance`, `react-testing`, `react-components` — for React-specific work invoke `/react-review`, `/react-build`, `/react-test` |
 | `*.ts`, `src/services/**`, `src/utils/**` | `typescript-patterns`, `vite-patterns`, `error-handling` |
+| `.stitch/**`, `site/**`, UI design flows | `generate-design`, `manage-design-system`, `design-md`, `extract-design-md`, `extract-static-html`, `code-to-design`, `upload-to-stitch`, `enhance-prompt`, `stitch-loop`, `site-md`, `taste-design` |
 | `tests/e2e/**`, `playwright.config.ts` | `e2e-testing`, `browser-qa` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.
@@ -316,15 +318,16 @@ Troubleshoot failures: check test isolation → verify mocks → fix implementat
 
 ```text
 .agent/ (symlinked at .agents/)
-├── agents/          — 32 specialized subagents (TypeScript, React, Architecture, QA, Security, Perf)
-├── skills/          — 68 canonical workflow skills and domain playbooks
-├── workflows/       — 72 slash-command workflows (62 commands + 10 core shims)
-├── rules/           — 28 domain guidelines (common + typescript + react + web)
-├── contexts/        — 3 operating mode contexts (dev, research, review)
-├── hooks/           — 4 Node ESM quality & security verification scripts
-├── mcp/             — Verbatim ECC MCP catalog + Ainventory MCP example config
-├── reference/       — Unmodified upstream CLAUDE.orig.md & AGENTS.orig.md
-└── LICENSE-ECC.md   — Upstream MIT License notice
+├── agents/                  — 32 specialized subagents (TypeScript, React, Architecture, QA, Security, Perf)
+├── skills/                  — 84 canonical workflow skills (68 ECC + 16 Google Stitch Skills)
+├── workflows/               — 72 slash-command workflows (62 commands + 10 core shims)
+├── rules/                   — 28 domain guidelines (common + typescript + react + web)
+├── contexts/                — 3 operating mode contexts (dev, research, review)
+├── hooks/                   — 5 Node ESM quality, security & Stitch-skill verification scripts
+├── mcp/                     — Verbatim ECC MCP catalog + Ainventory MCP example config
+├── reference/               — Unmodified ECC originals + stitch-skills.manifest.json provenance
+├── LICENSE-ECC.md           — Upstream ECC MIT License notice
+└── LICENSE-STITCH-SKILLS.md — Upstream google-labs-code/stitch-skills Apache-2.0 License notice
 ```
 
 ## Success Metrics

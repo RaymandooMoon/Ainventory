@@ -24,6 +24,7 @@
     "test:e2e": "playwright test",
     "verify:console": "node .agent/hooks/check-console-log.mjs --all",
     "verify:docs": "node .agent/hooks/check-doc-hygiene.mjs",
+    "verify:stitch-skills": "node .agent/hooks/verify-stitch-skills.mjs",
     "verify:secrets": "node .agent/hooks/pre-commit-quality.mjs --secrets-only",
     "verify:staged": "node .agent/hooks/pre-commit-quality.mjs",
     "verify:quick": "npm run lint && npm run typecheck && npm run test:unit",
