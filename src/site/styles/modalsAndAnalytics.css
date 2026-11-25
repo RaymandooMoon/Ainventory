@@ -115,6 +115,318 @@
 }
 
 /* --------------------------------------------------------------------------
+ * Newsletter Subscription Modal & Inline Card
+ * -------------------------------------------------------------------------- */
+
+.site-newsletter-modal-card {
+  width: min(100%, 480px);
+}
+
+.site-newsletter-modal-sub {
+  margin: 6px 0 0;
+  font-size: 0.84rem;
+  line-height: 1.54;
+  color: var(--ink-secondary);
+}
+
+.site-newsletter-inline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-surface);
+}
+
+.site-newsletter-inline-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.site-newsletter-inline-title {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  color: var(--ink-primary);
+}
+
+.site-newsletter-inline-sub {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.48;
+  color: var(--ink-secondary);
+}
+
+.site-newsletter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.site-newsletter-hp {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.site-newsletter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.site-newsletter-label {
+  font-size: 0.76rem;
+  font-weight: 620;
+  color: var(--ink-secondary);
+}
+
+.site-newsletter-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.site-newsletter-input-icon {
+  position: absolute;
+  left: 13px;
+  color: var(--ink-tertiary);
+  pointer-events: none;
+}
+
+.site-newsletter-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px 0 38px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--bg-sunken);
+  color: var(--ink-primary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.3;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color 0.18s var(--site-ease), background-color 0.18s var(--site-ease);
+}
+
+.site-newsletter-input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.site-newsletter-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+  background: var(--bg-surface);
+}
+
+.site-newsletter-input[aria-invalid='true'] {
+  border-color: #f87171;
+}
+
+.site-newsletter-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 2px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.site-newsletter-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent-gold);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.site-newsletter-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-micro);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.site-root[data-site-theme='light'] .site-newsletter-error {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.site-newsletter-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-micro);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--accent-gold-soft);
+  color: var(--ink-primary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.site-newsletter-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  background: var(--ctrl-active-bg);
+  color: var(--ctrl-active-fg);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 660;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--ctrl-active-shadow);
+  transition: transform 0.14s var(--site-ease), opacity 0.18s var(--site-ease);
+}
+
+.site-newsletter-submit-btn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.site-newsletter-submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.site-newsletter-submit-btn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.site-newsletter-privacy-note {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+.site-newsletter-success {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent-gold-hairline);
+  background: var(--bg-sunken);
+}
+
+.site-newsletter-success-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-newsletter-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-gold-soft);
+  color: var(--status-live);
+  flex-shrink: 0;
+}
+
+.site-newsletter-success-copy {
+  min-width: 0;
+}
+
+.site-newsletter-success-copy h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 680;
+  color: var(--ink-primary);
+}
+
+.site-newsletter-email-echo {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--accent-gold-ink);
+  overflow-wrap: anywhere;
+}
+
+.site-newsletter-success-body {
+  margin: 0;
+  font-size: 0.81rem;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.site-newsletter-success-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.site-newsletter-secondary-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.site-newsletter-text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-micro);
+  background: transparent;
+  color: var(--ink-tertiary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 540;
+  cursor: pointer;
+  transition: color 0.16s var(--site-ease);
+}
+
+.site-newsletter-text-btn:hover:not(:disabled) {
+  color: var(--ink-primary);
+}
+
+@keyframes siteNewsletterSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.site-newsletter-spin {
+  animation: siteNewsletterSpin 0.8s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
  * Session Usability Analytics Sheet
  * -------------------------------------------------------------------------- */
 

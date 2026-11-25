@@ -35,8 +35,14 @@ if (typeof window !== 'undefined') {
     applyThemePreference(initialTheme);
   }
 
+  const TRUSTED_SITE_ORIGINS = new Set(['https://ainvtry.com', 'https://www.ainvtry.com']);
+  const isTrustedParentOrigin = (origin: string): boolean => {
+    if (origin === window.location.origin) return true;
+    return TRUSTED_SITE_ORIGINS.has(window.location.origin) && TRUSTED_SITE_ORIGINS.has(origin);
+  };
+
   window.addEventListener('message', (event: MessageEvent) => {
-    if (event.origin !== window.location.origin) return;
+    if (!isTrustedParentOrigin(event.origin)) return;
     const data = event.data as Partial<LiveAppSyncFromParentPayload> | null;
     if (!data || data.type !== 'ainvtry-live-app-sync') return;
     window.dispatchEvent(

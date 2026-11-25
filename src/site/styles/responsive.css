@@ -480,19 +480,29 @@
     display: inline;
   }
 
+  .site-bottombar-left,
+  .site-bottombar-right {
+    gap: 2px;
+  }
+
   .site-bottombar-link {
-    min-width: 44px;
+    min-width: 40px;
     min-height: 44px;
     justify-content: center;
+    padding: 0 5px;
+    font-size: 0.7rem;
+  }
+
+  .site-bottombar-newsletter {
+    gap: 4px;
     padding: 0 6px;
-    font-size: 0.72rem;
   }
 
   .site-analytics-trigger-btn,
   .site-opacity-drag-btn {
     min-height: 44px;
-    padding: 0 10px;
-    font-size: 0.72rem;
+    padding: 0 8px;
+    font-size: 0.7rem;
   }
 
   /* Analytics Modal Responsive */
@@ -614,19 +624,29 @@
     padding: 0 3px;
   }
 
+  .site-bottombar-newsletter svg {
+    display: none;
+  }
+
+  .site-bottombar-link {
+    min-width: 34px;
+    padding: 0 4px;
+    font-size: 0.66rem;
+  }
+
   .site-analytics-trigger-label {
     display: none;
   }
 
   .site-analytics-trigger-btn {
-    min-width: 44px;
-    padding: 0 8px;
+    min-width: 40px;
+    padding: 0 6px;
   }
 
   .site-opacity-drag-btn {
-    padding: 0 8px;
+    padding: 0 7px;
     gap: 4px;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
   }
 
   .site-top-3d-dock .hud-seg-btn {

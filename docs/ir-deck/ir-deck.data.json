@@ -32,14 +32,14 @@
     "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
   },
   "tests": {
-    "suiteCount": 53,
+    "suiteCount": 54,
     "unitSuites": 41,
-    "apiSuites": 7,
+    "apiSuites": 8,
     "e2eSuites": 5,
-    "caseCount": 349,
-    "roundedPlus": "340+",
-    "summaryShort": "53스위트 · 349케이스 통과",
-    "summaryLine": "단위·API·WebGL E2E 53스위트(349케이스) · 3플랫폼"
+    "caseCount": 352,
+    "roundedPlus": "350+",
+    "summaryShort": "54스위트 · 352케이스 통과",
+    "summaryLine": "단위·API·WebGL E2E 54스위트(352케이스) · 3플랫폼"
   },
   "garment": {
     "beforeBytes": 582332,

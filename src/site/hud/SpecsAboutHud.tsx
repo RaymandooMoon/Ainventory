@@ -11,6 +11,7 @@ import {
   type SiteTheme,
 } from '../siteContent.ts';
 import type { SiteIconKey } from '../SiteIcon.tsx';
+import { SiteNewsletterForm } from '../SiteNewsletterModal.tsx';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
 
 const PILLAR_ICONS: readonly SiteIconKey[] = [
@@ -198,6 +199,7 @@ export interface AboutStageHudProps {
 
 export function AboutStageHud({
   copy,
+  lang,
   theme,
   mood,
   betaMailto,
@@ -436,6 +438,23 @@ export function AboutStageHud({
           scrollToTopOnSelect={false}
         />
       </div>
+
+      <section
+        className="hud-card site-newsletter-inline-card"
+        aria-label={copy.newsletter.inlineTitle}
+      >
+        <div className="site-newsletter-inline-head">
+          <span className="hud-eyebrow">{copy.newsletter.kicker}</span>
+          <h3 className="site-newsletter-inline-title">{copy.newsletter.inlineTitle}</h3>
+          <p className="site-newsletter-inline-sub">{copy.newsletter.inlineSubtitle}</p>
+        </div>
+        <SiteNewsletterForm
+          copy={copy.newsletter}
+          lang={lang}
+          source="site_about"
+          variant="inline"
+        />
+      </section>
 
       <aside className="hud-founder-card" aria-label="Founder contact">
         <div className="hud-founder-head">

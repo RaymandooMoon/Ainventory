@@ -5,6 +5,7 @@ import {
   BarChart3,
   ChevronsUpDown,
   Globe,
+  Mail,
   Moon,
   Sparkles,
   Sun,
@@ -26,6 +27,7 @@ import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
 import HeroVisualProofCard from './HeroVisualProofCard.tsx';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
+import SiteNewsletterModal from './SiteNewsletterModal.tsx';
 import SiteStageAnalytics from './SiteStageAnalytics.tsx';
 import SiteStageHud from './SiteStageHud.tsx';
 
@@ -136,6 +138,7 @@ export default function AinvtrySiteApp() {
   const [isDraggingOpacity, setIsDraggingOpacity] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKind | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [newsletterOpen, setNewsletterOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const activeStageRef = useRef<StageId>(activeStage);
@@ -206,6 +209,7 @@ export default function AinvtrySiteApp() {
         e.key === 'Escape' &&
         legalDoc === null &&
         !analyticsOpen &&
+        !newsletterOpen &&
         activeStageRef.current !== 'hero'
       ) {
         e.preventDefault();
@@ -224,7 +228,7 @@ export default function AinvtrySiteApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [analyticsOpen, legalDoc, stageTracker]);
+  }, [analyticsOpen, legalDoc, newsletterOpen, stageTracker]);
 
   // Clean up one-shot gold ripple burst timer on unmount
   useEffect(() => {
@@ -771,6 +775,25 @@ export default function AinvtrySiteApp() {
                 </a>
                 <button
                   type="button"
+                  data-no-marble="true"
+                  className={`site-bottombar-link site-bottombar-newsletter ${
+                    newsletterOpen ? 'is-active' : ''
+                  }`}
+                  aria-haspopup="dialog"
+                  aria-expanded={newsletterOpen}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setNewsletterOpen(true);
+                  }}
+                >
+                  <Mail size={13} aria-hidden="true" />
+                  <span className="site-bottombar-link-full">{copy.footer.newsletter}</span>
+                  <span className="site-bottombar-link-short" aria-hidden="true">
+                    {copy.footer.newsletterShort}
+                  </span>
+                </button>
+                <button
+                  type="button"
                   className="site-bottombar-link"
                   onClick={() => setLegalDoc('privacy')}
                 >
@@ -860,6 +883,13 @@ export default function AinvtrySiteApp() {
         onClose={() => setAnalyticsOpen(false)}
         onReset={handleResetAnalytics}
         onNavigateStage={handleNavigateFromAnalytics}
+      />
+
+      <SiteNewsletterModal
+        isOpen={newsletterOpen}
+        copy={copy.newsletter}
+        lang={lang}
+        onClose={() => setNewsletterOpen(false)}
       />
 
       <SiteLegalModal doc={legalDoc} copy={copy.legal} onClose={handleCloseLegal} />

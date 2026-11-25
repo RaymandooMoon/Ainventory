@@ -379,5 +379,34 @@ describe('ainvtry.com official site content & icon-first architecture contract',
       assert.ok(fs.existsSync(diskPath), `Missing IR deck visual asset on disk: ${diskPath}`);
     }
   });
+
+  it('configures site/public/_headers to allow ainvtry.com & www.ainvtry.com framing of /app.html and ships complete EN/KO newsletter copy', () => {
+    const headersPath = path.resolve(import.meta.dirname, '../../site/public/_headers');
+    const headersRaw = fs.readFileSync(headersPath, 'utf8');
+    assert.ok(
+      !headersRaw.includes('X-Frame-Options: DENY'),
+      '_headers must not set global X-Frame-Options: DENY which blocks /app.html Studio embed'
+    );
+    assert.ok(
+      headersRaw.includes('/app.html') && headersRaw.includes('! X-Frame-Options'),
+      '_headers must detach X-Frame-Options on /app.html for apex/www compatibility'
+    );
+    assert.ok(
+      headersRaw.includes("frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com"),
+      '_headers must restrict framing via CSP frame-ancestors to self, ainvtry.com, and www.ainvtry.com'
+    );
+
+    for (const lang of ['en', 'ko'] as const) {
+      const copy = SITE_COPY[lang];
+      assert.ok(copy.footer.newsletter.length > 0);
+      assert.ok(copy.footer.newsletterShort.length > 0);
+      assert.ok(copy.newsletter.title.length > 0);
+      assert.ok(copy.newsletter.submitLabel.length > 0);
+      assert.ok(copy.newsletter.consentLabel.length > 0);
+      assert.ok(copy.newsletter.successTitle.length > 0);
+      assert.ok(copy.newsletter.unsubscribeCta.length > 0);
+    }
+  });
 });
+
 

@@ -1154,6 +1154,18 @@ export function initDb() {
       items_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      lang TEXT NOT NULL DEFAULT 'ko',
+      source TEXT NOT NULL DEFAULT 'site_footer',
+      status TEXT NOT NULL DEFAULT 'subscribed',
+      consent_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      unsubscribed_at TEXT DEFAULT NULL
+    );
   `);
 
   const alterStatements = [

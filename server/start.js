@@ -19,7 +19,7 @@ if (process.env.TRUST_PROXY === '1' || process.env.RENDER === 'true') {
   app.set('trust proxy', 1);
 }
 
-const APP_CSP = [
+const BASE_CSP_DIRECTIVES = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval' blob:",
   "style-src 'self' 'unsafe-inline'",
@@ -30,20 +30,36 @@ const APP_CSP = [
   "connect-src 'self' blob: data: https://api.open-meteo.com https://appleid.apple.com https://staticimgly.com https://cdn.jsdelivr.net",
   "object-src 'none'",
   "base-uri 'self'",
-  process.env.ALLOW_PREVIEW_IFRAME === '1' ? '' : "frame-ancestors 'none'",
+];
+
+const APP_CSP = [
+  ...BASE_CSP_DIRECTIVES,
+  process.env.ALLOW_PREVIEW_IFRAME === '1'
+    ? ''
+    : "frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com",
+]
+  .filter(Boolean)
+  .join('; ');
+
+const EMBED_APP_CSP = [
+  ...BASE_CSP_DIRECTIVES,
+  process.env.ALLOW_PREVIEW_IFRAME === '1'
+    ? ''
+    : "frame-ancestors 'self' https://ainvtry.com https://www.ainvtry.com",
 ]
   .filter(Boolean)
   .join('; ');
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  if (process.env.ALLOW_PREVIEW_IFRAME !== '1') {
-    res.setHeader('X-Frame-Options', 'DENY');
+  const isEmbedAppPath = req.path === '/app.html';
+  if (process.env.ALLOW_PREVIEW_IFRAME !== '1' && !isEmbedAppPath) {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   }
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=()');
   if (!req.path.startsWith('/uploads/')) {
-    res.setHeader('Content-Security-Policy', APP_CSP);
+    res.setHeader('Content-Security-Policy', isEmbedAppPath ? EMBED_APP_CSP : APP_CSP);
   }
   if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');

@@ -510,8 +510,39 @@ export interface SiteCopy {
   };
   readonly footer: {
     readonly rights: string;
+    readonly newsletter: string;
+    readonly newsletterShort: string;
     readonly privacy: string;
     readonly terms: string;
+  };
+  readonly newsletter: {
+    readonly kicker: string;
+    readonly title: string;
+    readonly subtitle: string;
+    readonly inlineTitle: string;
+    readonly inlineSubtitle: string;
+    readonly emailLabel: string;
+    readonly emailPlaceholder: string;
+    readonly consentLabel: string;
+    readonly submitLabel: string;
+    readonly submittingLabel: string;
+    readonly closeLabel: string;
+    readonly privacyNote: string;
+    readonly invalidEmailError: string;
+    readonly consentRequiredError: string;
+    readonly rateLimitedError: string;
+    readonly genericError: string;
+    readonly successTitle: string;
+    readonly successBody: string;
+    readonly alreadyTitle: string;
+    readonly alreadyBody: string;
+    readonly offlineTitle: string;
+    readonly offlineBody: string;
+    readonly mailtoFallbackCta: string;
+    readonly doneCta: string;
+    readonly unsubscribeCta: string;
+    readonly unsubscribedNotice: string;
+    readonly changeEmailCta: string;
   };
   readonly legal: {
     readonly closeLabel: string;
@@ -1517,8 +1548,39 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     },
     footer: {
       rights: '© 2026 Ainvtry. All rights reserved.',
+      newsletter: 'Newsletter',
+      newsletterShort: 'Updates',
       privacy: 'Privacy Policy',
       terms: 'Terms of Service',
+    },
+    newsletter: {
+      kicker: 'PRIVATE UPDATES',
+      title: 'Get the iNVTRY Newsletter',
+      subtitle: 'Receive private beta invites, 8-angle fitting drops, and release notes directly from Seoul.',
+      inlineTitle: 'Newsletter',
+      inlineSubtitle: 'Private beta access & product release notes.',
+      emailLabel: 'Email address',
+      emailPlaceholder: 'you@domain.com',
+      consentLabel: 'I agree to receive occasional Ainvtry email updates and know I can unsubscribe anytime.',
+      submitLabel: 'Subscribe',
+      submittingLabel: 'Subscribing…',
+      closeLabel: 'Close newsletter dialog',
+      privacyNote: 'Zero spam · Email only · Unsubscribe in one click.',
+      invalidEmailError: 'Please enter a valid email address.',
+      consentRequiredError: 'Please confirm email update consent before subscribing.',
+      rateLimitedError: 'Too many requests. Please try again in a few minutes.',
+      genericError: 'Could not complete your subscription. Please try again.',
+      successTitle: 'You are on the list',
+      successBody: 'We will send private beta invites and major release notes to this address.',
+      alreadyTitle: 'Already subscribed',
+      alreadyBody: 'This email is already registered for Ainvtry updates.',
+      offlineTitle: 'Saved on this device',
+      offlineBody: 'The subscription server is currently offline. Tap below to confirm directly via email so we never miss you.',
+      mailtoFallbackCta: 'Send Confirmation Email',
+      doneCta: 'Done',
+      unsubscribeCta: 'Unsubscribe',
+      unsubscribedNotice: 'Your email has been unsubscribed from Ainvtry updates.',
+      changeEmailCta: 'Use another email',
     },
     legal: {
       closeLabel: 'Close legal notice',
@@ -2556,8 +2618,39 @@ export const SITE_COPY: Readonly<Record<SiteLang, SiteCopy>> = {
     },
     footer: {
       rights: '© 2026 Ainvtry. All rights reserved.',
+      newsletter: '뉴스레터 받기',
+      newsletterShort: '뉴스레터',
       privacy: '개인정보처리방침',
       terms: '이용약관',
+    },
+    newsletter: {
+      kicker: 'NEWSLETTER',
+      title: 'iNVTRY 뉴스레터 받기',
+      subtitle: '프라이빗 베타 초대, 새로운 기능 업데이트 및 제품 소식을 이메일로 받아보세요.',
+      inlineTitle: '뉴스레터 받기',
+      inlineSubtitle: '프라이빗 베타 초대 · 주요 업데이트 소식.',
+      emailLabel: '이메일 주소',
+      emailPlaceholder: 'name@example.com',
+      consentLabel: '뉴스레터 발송을 위한 이메일 수집 · 이용에 동의하며 언제든 수신 거부할 수 있습니다.',
+      submitLabel: '뉴스레터 구독하기',
+      submittingLabel: '구독 등록 중…',
+      closeLabel: '뉴스레터 창 닫기',
+      privacyNote: '광고성 스팸 없음 · 이메일 외 수집 없음 · 언제든 즉시 수신 거부.',
+      invalidEmailError: '올바른 이메일 주소를 입력해주세요.',
+      consentRequiredError: '이메일 수신 및 개인정보 수집 동의에 체크해주세요.',
+      rateLimitedError: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+      genericError: '구독 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      successTitle: '뉴스레터 구독이 완료되었습니다',
+      successBody: '프라이빗 베타 초대와 주요 릴리스 소식을 보내드리겠습니다.',
+      alreadyTitle: '이미 구독 중인 이메일입니다',
+      alreadyBody: '입력하신 주소는 이미 iNVTRY 뉴스레터에 등록되어 있습니다.',
+      offlineTitle: '이 기기에 구독 요청을 임시 저장했습니다',
+      offlineBody: '현재 서버와 연결할 수 없어 아래 버튼으로 확인 메일을 보내주시면 바로 등록해 드립니다.',
+      mailtoFallbackCta: '이메일로 구독 신청 보내기',
+      doneCta: '확인',
+      unsubscribeCta: '수신 거부',
+      unsubscribedNotice: '뉴스레터 수신 거부가 처리되었습니다.',
+      changeEmailCta: '다른 이메일로 등록',
     },
     legal: {
       closeLabel: '안내 닫기',

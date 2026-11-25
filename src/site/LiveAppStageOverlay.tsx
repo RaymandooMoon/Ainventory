@@ -39,6 +39,14 @@ const DEFAULT_GEOMETRY: FrameGeometry = {
   showIsland: true,
 };
 
+const TRUSTED_SITE_ORIGINS = new Set(['https://ainvtry.com', 'https://www.ainvtry.com']);
+
+function isTrustedEmbedOrigin(origin: string): boolean {
+  if (typeof window === 'undefined') return false;
+  if (origin === window.location.origin) return true;
+  return TRUSTED_SITE_ORIGINS.has(window.location.origin) && TRUSTED_SITE_ORIGINS.has(origin);
+}
+
 /**
  * Interactive showcase frame hosting the real in-development Ainventory live application
  * (`/app.html?embed=1&auth=1&auth_stage=auth`) starting from the authentic LoginView screen,
@@ -99,7 +107,16 @@ export default function LiveAppStageOverlay({
       theme: nextTheme,
       mood: nextMood,
     };
-    targetWindow.postMessage(payload, window.location.origin);
+    const targets = TRUSTED_SITE_ORIGINS.has(window.location.origin)
+      ? Array.from(TRUSTED_SITE_ORIGINS)
+      : [window.location.origin];
+    for (const targetOrigin of targets) {
+      try {
+        targetWindow.postMessage(payload, targetOrigin);
+      } catch {
+        // Ignore cross-subdomain target mismatch; matching origin succeeds
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -111,7 +128,7 @@ export default function LiveAppStageOverlay({
   useEffect(() => {
     if (typeof window === 'undefined' || !onSelectScreen) return undefined;
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      if (!isTrustedEmbedOrigin(event.origin)) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
       const data = event.data as Partial<LiveAppScreenNotifyPayload> | null;
       if (!data || data.type !== 'ainvtry-live-app-screen') return;

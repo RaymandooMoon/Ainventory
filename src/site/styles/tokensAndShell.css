@@ -1133,6 +1133,18 @@ html[data-site-theme='light'] body {
   color: var(--ink-primary);
 }
 
+.site-bottombar-newsletter {
+  gap: 5px;
+  color: var(--accent-gold-ink);
+  font-weight: 580;
+}
+
+.site-bottombar-newsletter:hover,
+.site-bottombar-newsletter.is-active {
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+}
+
 .site-bottombar-link-short {
   display: none;
 }

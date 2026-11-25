@@ -131,6 +131,7 @@ const MAX_GARMENT_WRITES_PER_WINDOW = 60;
 const MAX_SHOPPING_ANALYSES_PER_WINDOW = 45;
 const MAX_WARDROBE_REGEN_PER_WINDOW = 10;
 const MAX_ANALYTICS_READS_PER_WINDOW = 120;
+const MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW = 15;
 const MAX_MAP_ENTRIES = 2000;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MIN_PASSWORD_LEN = 6;
@@ -1100,6 +1101,158 @@ export function createApiRouter(options = {}) {
   };
   router.get('/sample-catalog', sendSampleCatalog);
   router.get('/garments/samples', sendSampleCatalog);
+
+  // =========================================================================
+  // Official Site Newsletter Subscription (Public Subscribe & Unsubscribe)
+  // =========================================================================
+  const NEWSLETTER_EMAIL_RE = /^[^\s@<>()[\]\\,;:"']+@[^\s@<>()[\]\\,;:"']+\.[a-z]{2,63}$/i;
+  const NEWSLETTER_ALLOWED_SOURCES = new Set([
+    'site_footer',
+    'site_about',
+    'site_hero',
+    'site_modal',
+  ]);
+
+  function normalizeNewsletterEmail(raw) {
+    if (typeof raw !== 'string') return null;
+    if (/[\r\n\u0000-\u001f]/.test(raw)) return null;
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized || normalized.length > 254) return null;
+    if (normalized.includes('..')) return null;
+    if (!NEWSLETTER_EMAIL_RE.test(normalized)) return null;
+    const [localPart, domainPart] = normalized.split('@');
+    if (!localPart || !domainPart || localPart.length > 64 || domainPart.length > 190) {
+      return null;
+    }
+    return normalized;
+  }
+
+  router.post('/newsletter/subscribe', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
+    const rate = checkRateLimit(`newsletter:sub:${clientIp}`, MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    // Honeypot check: silently acknowledge bot submissions without writing to DB
+    if (typeof body.website === 'string' && body.website.trim().length > 0) {
+      return res.status(200).json({ ok: true, status: 'subscribed' });
+    }
+
+    const email = normalizeNewsletterEmail(body.email);
+    if (!email) {
+      return res.status(400).json({
+        error: '올바른 이메일 주소를 입력해주세요.',
+        code: 'INVALID_EMAIL',
+      });
+    }
+
+    if (body.consent !== true) {
+      return res.status(400).json({
+        error: '뉴스레터 수신 및 개인정보 수집 동의가 필요합니다.',
+        code: 'CONSENT_REQUIRED',
+      });
+    }
+
+    const lang = body.lang === 'en' ? 'en' : 'ko';
+    const rawSource = typeof body.source === 'string' ? body.source.trim() : 'site_modal';
+    const source = NEWSLETTER_ALLOWED_SOURCES.has(rawSource) ? rawSource : 'site_modal';
+
+    try {
+      const existing = db
+        .prepare('SELECT id, status FROM newsletter_subscribers WHERE email = ?')
+        .get(email);
+
+      if (existing) {
+        if (existing.status === 'subscribed') {
+          db.prepare(
+            "UPDATE newsletter_subscribers SET lang = ?, source = ?, updated_at = datetime('now') WHERE id = ?"
+          ).run(lang, source, existing.id);
+          return res.status(200).json({
+            ok: true,
+            status: 'already_subscribed',
+            email,
+          });
+        }
+        db.prepare(
+          "UPDATE newsletter_subscribers SET status = 'subscribed', lang = ?, source = ?, consent_at = datetime('now'), updated_at = datetime('now'), unsubscribed_at = NULL WHERE id = ?"
+        ).run(lang, source, existing.id);
+        return res.status(200).json({
+          ok: true,
+          status: 'subscribed',
+          resubscribed: true,
+          email,
+        });
+      }
+
+      db.prepare(
+        `INSERT INTO newsletter_subscribers (email, lang, source, status)
+         VALUES (?, ?, ?, 'subscribed')`
+      ).run(email, lang, source);
+
+      return res.status(201).json({
+        ok: true,
+        status: 'subscribed',
+        email,
+      });
+    } catch (err) {
+      console.error('[Newsletter] Subscribe failed:', err?.message || err);
+      return res.status(500).json({
+        error: '뉴스레터 구독 처리 중 오류가 발생했습니다.',
+        code: 'NEWSLETTER_SUBSCRIBE_FAILED',
+      });
+    }
+  });
+
+  router.post('/newsletter/unsubscribe', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const clientIp = String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 64);
+    const rate = checkRateLimit(
+      `newsletter:unsub:${clientIp}`,
+      MAX_NEWSLETTER_SUBSCRIBES_PER_WINDOW
+    );
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: rate.retryAfterSec,
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const email = normalizeNewsletterEmail(body.email);
+    if (!email) {
+      return res.status(400).json({
+        error: '올바른 이메일 주소를 입력해주세요.',
+        code: 'INVALID_EMAIL',
+      });
+    }
+
+    try {
+      db.prepare(
+        "UPDATE newsletter_subscribers SET status = 'unsubscribed', unsubscribed_at = datetime('now'), updated_at = datetime('now') WHERE email = ?"
+      ).run(email);
+      // Uniform response to avoid subscriber email enumeration
+      return res.status(200).json({
+        ok: true,
+        status: 'unsubscribed',
+      });
+    } catch (err) {
+      console.error('[Newsletter] Unsubscribe failed:', err?.message || err);
+      return res.status(500).json({
+        error: '수신 거부 처리 중 오류가 발생했습니다.',
+        code: 'NEWSLETTER_UNSUBSCRIBE_FAILED',
+      });
+    }
+  });
 
   const writeVerificationOutboxHtml = ({
     username,
@@ -4657,6 +4810,24 @@ export function createApiRouter(options = {}) {
   router.post('/admin/reset-demo', requireStrictUserAuth, requireAdmin, (_req, res) => {
     seedIfEmpty(true);
     res.json({ ok: true });
+  });
+
+  router.get('/admin/newsletter/subscribers', requireStrictUserAuth, requireAdmin, (_req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const rows = db
+      .prepare(
+        `SELECT id, email, lang, source, status, consent_at, created_at, updated_at, unsubscribed_at
+         FROM newsletter_subscribers
+         ORDER BY created_at DESC, id DESC
+         LIMIT 500`
+      )
+      .all();
+    const activeCount = rows.filter((r) => r.status === 'subscribed').length;
+    return res.json({
+      total: rows.length,
+      activeCount,
+      subscribers: rows,
+    });
   });
 
   router.use((err, _req, res, _next) => {
