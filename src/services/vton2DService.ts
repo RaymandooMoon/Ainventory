@@ -5342,14 +5342,14 @@ export function getShowcaseDemoSheetUrl(rawStyleMode?: string | null): string {
 
 export function getShowcaseDemoSliceUrls(): Record<TurnaroundAngleDeg, string> {
   return {
-    0: withPublicBaseUrl('/seed/demo-cyber-female-0.webp?v=3'),
-    45: withPublicBaseUrl('/seed/demo-cyber-female-45.webp?v=3'),
-    90: withPublicBaseUrl('/seed/demo-cyber-female-90.webp?v=3'),
-    135: withPublicBaseUrl('/seed/demo-cyber-female-135.webp?v=3'),
-    180: withPublicBaseUrl('/seed/demo-cyber-female-180.webp?v=3'),
-    225: withPublicBaseUrl('/seed/demo-cyber-female-225.webp?v=3'),
-    270: withPublicBaseUrl('/seed/demo-cyber-female-270.webp?v=3'),
-    315: withPublicBaseUrl('/seed/demo-cyber-female-315.webp?v=3'),
+    0: withPublicBaseUrl('/seed/demo-cyber-female-0.webp?v=4'),
+    45: withPublicBaseUrl('/seed/demo-cyber-female-45.webp?v=4'),
+    90: withPublicBaseUrl('/seed/demo-cyber-female-90.webp?v=4'),
+    135: withPublicBaseUrl('/seed/demo-cyber-female-135.webp?v=4'),
+    180: withPublicBaseUrl('/seed/demo-cyber-female-180.webp?v=4'),
+    225: withPublicBaseUrl('/seed/demo-cyber-female-225.webp?v=4'),
+    270: withPublicBaseUrl('/seed/demo-cyber-female-270.webp?v=4'),
+    315: withPublicBaseUrl('/seed/demo-cyber-female-315.webp?v=4'),
   };
 }
 

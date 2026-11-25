@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { CloudSun, SlidersHorizontal } from 'lucide-react';
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
@@ -14,6 +14,7 @@ import { useLiveLocalContext } from '../useLiveLocalContext.ts';
 import {
   getTechItemDescription,
   getTechItemsForBlueprintNode,
+  getUnifiedGovernanceTechItems,
 } from './architectureTechCatalog.ts';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
 
@@ -221,6 +222,7 @@ export function ArchitectureStageHud({
 }: ArchitectureStageHudProps) {
   const arch = copy.architecture;
   const [selectedNodeId, setSelectedNodeId] = useState<string>('core-vton');
+  const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [splitPct, setSplitPct] = useState<number>(52);
 
   const allBlueprintNodes = useMemo<readonly SiteBlueprintNode[]>(
@@ -232,6 +234,48 @@ export function ArchitectureStageHud({
   const isGovActive = interaction.architectureTier === govTierIndex;
   const activeTier = arch.tiers[interaction.architectureTier] ?? arch.tiers[3];
 
+  // Sync left 3D Tech Drawer blade clicks -> right HUD pillar / tech item selection
+  useEffect(() => {
+    const bladeIdx = interaction.architectureTechIndex;
+    if (bladeIdx === null) {
+      setSelectedTechId(null);
+      return;
+    }
+
+    if (isGovActive) {
+      const targetPillar = arch.governance[Math.min(bladeIdx, arch.governance.length - 1)];
+      if (targetPillar) {
+        setSelectedNodeId((prev) => (prev === targetPillar.id ? prev : targetPillar.id));
+      }
+      return;
+    }
+
+    const tierNodes = activeTier.nodes;
+    if (tierNodes.length > 1) {
+      setSelectedNodeId((prev) => {
+        const currentIdx = tierNodes.findIndex((n) => n.id === prev);
+        const currentBlade =
+          currentIdx >= 0
+            ? tierNodes.length === 2
+              ? currentIdx === 0
+                ? 0
+                : bladeIdx >= 1
+                  ? bladeIdx
+                  : 1
+              : Math.min(currentIdx, 2)
+            : -1;
+        if (currentBlade === bladeIdx) return prev;
+        const mappedNode = tierNodes[Math.min(bladeIdx, tierNodes.length - 1)];
+        return mappedNode ? mappedNode.id : prev;
+      });
+    }
+  }, [
+    isGovActive,
+    interaction.architectureTechIndex,
+    arch.governance,
+    activeTier.nodes,
+  ]);
+
   if (interaction.architectureSubtab === 'blueprint') {
     const isMvp = interaction.architectureMode === 'mvp';
     const modeKey = isMvp ? 'mvp' : 'prod';
@@ -241,14 +285,124 @@ export function ArchitectureStageHud({
       return hit ?? nodes[0] ?? allBlueprintNodes[0];
     };
 
-    const renderTechExpansion = (currentNode: SiteBlueprintNode) => {
+    const resolveBladeIndexForTierNode = (
+      nodes: readonly SiteBlueprintNode[],
+      nodeId: string,
+      techIdx: number
+    ): number => {
+      if (nodes.length <= 1) {
+        return Math.min(techIdx, 2);
+      }
+      const nodeIdx = nodes.findIndex((n) => n.id === nodeId);
+      if (nodeIdx < 0) return 0;
+      if (nodes.length === 2) {
+        return nodeIdx === 0 ? 0 : Math.min(1 + techIdx, 2);
+      }
+      return Math.min(nodeIdx, 2);
+    };
+
+    const renderGovernanceTechExpansion = (currentPillar: SiteBlueprintNode) => {
+      const govItems = getUnifiedGovernanceTechItems(modeKey);
+      if (govItems.length === 0) return null;
+
+      const activeTech =
+        (selectedTechId ? govItems.find((item) => item.id === selectedTechId) : null) ??
+        null;
+
+      return (
+        <div
+          key={`gov-unified-${modeKey}`}
+          className="hud-tech-expand-wrap"
+          data-arch-tech-expand="true"
+        >
+          <div className="hud-tech-expand-head">
+            <span className="hud-tech-expand-label">
+              {lang === 'ko' ? '적용 기술 스택' : 'Technology Stack'}
+            </span>
+            <span className="hud-tech-expand-count">
+              {activeTech
+                ? activeTech.badge
+                : lang === 'ko'
+                  ? `${govItems.length}개 통합`
+                  : `${govItems.length} Unified`}
+            </span>
+          </div>
+
+          <div className="hud-tech-icon-strip hud-tech-icon-strip--icons-only" role="list">
+            {govItems.map((tech, idx) => {
+              const isFocused = activeTech?.id === tech.id;
+              const isInActivePillar = tech.nodeId === currentPillar.id;
+              const showPillarSep =
+                idx > 0 && govItems[idx - 1]?.pillarIndex !== tech.pillarIndex;
+
+              return (
+                <Fragment key={tech.id}>
+                  {showPillarSep && (
+                    <span className="hud-tech-pillar-sep" aria-hidden="true" />
+                  )}
+                  <button
+                    type="button"
+                    role="listitem"
+                    aria-pressed={isFocused}
+                    aria-expanded={isFocused}
+                    aria-label={`${tech.name} (${tech.badge})`}
+                    title={`${tech.name} · ${tech.badge}`}
+                    style={{ '--tech-delay': `${idx * 36}ms` } as CSSProperties}
+                    className={`hud-tech-icon-btn ${
+                      isFocused
+                        ? 'is-focused'
+                        : isInActivePillar
+                          ? 'is-pillar-active'
+                          : 'is-pillar-muted'
+                    }`}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      const nextSelected = isFocused ? null : tech.id;
+                      setSelectedNodeId(tech.nodeId);
+                      setSelectedTechId(nextSelected);
+                      onUpdateInteraction({
+                        architectureTier: govTierIndex,
+                        architectureTechIndex: nextSelected ? tech.pillarIndex : null,
+                      });
+                    }}
+                  >
+                    <SiteIcon name={tech.icon} size={18} />
+                  </button>
+                </Fragment>
+              );
+            })}
+          </div>
+
+          <div className={`hud-tech-detail-collapse ${activeTech ? 'is-open' : ''}`}>
+            <div className="hud-tech-detail-collapse-inner">
+              {activeTech && (
+                <div className="hud-tech-detail-card">
+                  <div className="hud-tech-detail-title">
+                    <SiteIcon name={activeTech.icon} size={14} />
+                    <strong>{activeTech.name}</strong>
+                    <span className="hud-tech-detail-tag">{activeTech.badge}</span>
+                  </div>
+                  <p className="hud-tech-detail-copy">{getTechItemDescription(activeTech, lang)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const renderTechExpansion = (
+      currentNode: SiteBlueprintNode,
+      tierNodes: readonly SiteBlueprintNode[]
+    ) => {
       const techItems = getTechItemsForBlueprintNode(currentNode.id, modeKey);
       if (techItems.length === 0) return null;
-      const focusedIdx = interaction.architectureTechIndex;
+
       const activeTech =
-        focusedIdx !== null && focusedIdx >= 0
-          ? techItems[Math.min(focusedIdx, techItems.length - 1)]
-          : null;
+        (selectedTechId ? techItems.find((item) => item.id === selectedTechId) : null) ??
+        (interaction.architectureTechIndex !== null && tierNodes.length <= 1
+          ? techItems[Math.min(interaction.architectureTechIndex, techItems.length - 1)]
+          : null);
 
       return (
         <div
@@ -285,8 +439,12 @@ export function ArchitectureStageHud({
                   className={`hud-tech-icon-btn ${isFocused ? 'is-focused' : ''}`}
                   onClick={() => {
                     triggerHaptic('selection');
+                    const nextSelected = isFocused ? null : tech.id;
+                    setSelectedTechId(nextSelected);
                     onUpdateInteraction({
-                      architectureTechIndex: isFocused ? null : idx,
+                      architectureTechIndex: nextSelected
+                        ? resolveBladeIndexForTierNode(tierNodes, currentNode.id, idx)
+                        : null,
                     });
                   }}
                 >
@@ -322,6 +480,7 @@ export function ArchitectureStageHud({
 
     const handlePickTier = (tierIdx: number) => {
       triggerHaptic('selection');
+      setSelectedTechId(null);
       onUpdateInteraction({ architectureTier: tierIdx, architectureTechIndex: null });
       const firstNode =
         tierIdx === govTierIndex ? arch.governance[0] : arch.tiers[tierIdx]?.nodes[0];
@@ -379,7 +538,7 @@ export function ArchitectureStageHud({
           <div className="hud-spot-body">
             <div className="hud-spot-stack">
               <div className="hud-tier-nodes">
-                {activeNodes.map((node) => {
+                {activeNodes.map((node, nodeIdx) => {
                   const isNodeSelected = currentNode.id === node.id;
                   return (
                     <button
@@ -391,11 +550,12 @@ export function ArchitectureStageHud({
                       }`}
                       onClick={() => {
                         triggerHaptic('selection');
+                        setSelectedNodeId(node.id);
+                        setSelectedTechId(null);
                         onUpdateInteraction({
                           architectureTier: isGovActive ? govTierIndex : interaction.architectureTier,
-                          architectureTechIndex: null,
+                          architectureTechIndex: isGovActive ? Math.min(nodeIdx, 2) : null,
                         });
-                        setSelectedNodeId(node.id);
                       }}
                     >
                       <SiteIcon name={node.icon} size={13} />
@@ -405,7 +565,9 @@ export function ArchitectureStageHud({
                 })}
               </div>
               <p className="hud-body-copy">{specText}</p>
-              {renderTechExpansion(currentNode)}
+              {isGovActive
+                ? renderGovernanceTechExpansion(currentNode)
+                : renderTechExpansion(currentNode, activeNodes)}
             </div>
           </div>
         </section>

@@ -393,6 +393,7 @@ function SiteStageHudPanel({
       { id: 'journey', label: copy.subtabs.aboutJourney },
       { id: 'mission', label: copy.subtabs.aboutMission },
       { id: 'founder', label: copy.subtabs.aboutFounder },
+      { id: 'connect', label: copy.subtabs.aboutConnect },
     ];
     return {
       ariaLabel: 'About story steps',

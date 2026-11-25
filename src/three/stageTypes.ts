@@ -17,7 +17,7 @@ export interface StageInteractionState {
   weatherMood: 'sunny' | 'rain' | 'wind';
   specsSubtab: 'kpi' | 'matrix' | 'fitting' | 'care';
   specsFocusedIndex: number; // 0..5
-  aboutSubtab: 'journey' | 'mission' | 'founder';
+  aboutSubtab: 'journey' | 'mission' | 'founder' | 'connect';
   aboutJourneyIndex: number; // 0..5
   aboutLoopIndex: number; // 0..4
   aboutLoopPaused: boolean;
