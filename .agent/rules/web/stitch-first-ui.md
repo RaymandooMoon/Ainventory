@@ -16,14 +16,21 @@ All new or changed UI design (screens, layouts, components, visual redesigns) MU
 ## Mandatory Workflow
 
 1. **Design in Stitch first** — Create the design via the Stitch MCP (`https://stitch.googleapis.com/mcp`) in project `projects/11505180160165595336` (`A inventory UI rev`) using `generate_screen_from_text` or `generate_variants`.
-2. **Bind the design system** — Always pass the Ainventory design system generated from [.stitch/DESIGN.md](../../../.stitch/DESIGN.md) (`assets/98bc4c44edea4f0898f4a037ca720090`). Keep `.stitch/DESIGN.md` in sync with real tokens (`src/contracts/carbonDesignContract.ts`, `src/styles/atelierTokens.css`, `src/index.css`) when tokens change.
+2. **Bind the design system** — Always pass the Ainventory design system generated from [.stitch/DESIGN.md](../../../.stitch/DESIGN.md) (`assets/98bc4c44edea4f0898f4a037ca720090`). Keep `.stitch/DESIGN.md` in sync with real tokens (`src/contracts/carbonDesignContract.ts`, `src/styles/atelierTokens.css`, `src/index.css`, `src/site/styles/tokensAndShell.css`) when tokens change. When passing the bound design system to `generate_screen_from_text`, keep generation prompts strictly structural (layout, sections, interactions, copy) and omit raw hex codes, font names, or radius values; reserve exact hex codes for targeted `edit_screens` calls only. *(See skill: `generate-design`, `manage-design-system`, `enhance-prompt`)*
 3. **Non-destructive** — Never overwrite or edit existing Stitch screens or design systems; generate new screens/variants instead (propose 2 variants by default).
-4. **Report for review** — Give the user each variant's Screen ID, title, and key layout changes so they can preview at stitch.google.com.
+4. **Download, audit & report for review** — Download generated HTML and full-resolution screenshots (`screenshot.downloadUrl` with `=w{width}` appended) into `.stitch/designs/` via shell/curl (`fetch-stitch.sh`), visually inspect each `.png` before coding, and persist updated screen IDs and sync timestamps in `.stitch/metadata.json`. Give the user each variant's Screen ID, title, and key layout changes so they can preview at stitch.google.com. *(See skill: `generate-design`, `react-components`, `stitch-loop`)*
 5. **User picks, then implement** — Do not change React/CSS source until the user selects a design. Implement on a separate branch, matching the chosen Stitch screen and the Ainventory design contract (monochrome, 8pt grid, `tabular-nums`, 44–48px hit targets).
+
+## Checkpoints & Artifact Hygiene
+
+- Pause and obtain explicit user approval (showing file paths, sizes, and types) before uploading local HTML/images/`DESIGN.md` to Stitch or creating a new Stitch design system.
+- If `.stitch/designs/{page}.{html,png}` already exists locally, ask whether to refresh from Stitch MCP or reuse local files before overwriting.
+- Confirm the local dev server URL/port before running automated HTML/DOM snapshot capture, and terminate temporary capture servers immediately after extraction. *(See skill: `upload-to-stitch`, `manage-design-system`, `extract-static-html`, `react-components`)*
 
 ## Security
 
 - Never print, log, or commit the Stitch API key. Read `STITCH_API_KEY` from gitignored `.env.local` (or private MCP config) in memory and send it only in the `X-Goog-Api-Key` header.
+- Never pass large files (>5 KB, including `.stitch/DESIGN.md` and extracted HTML/images) as inline base64 through MCP tool arguments; upload via `.agent/skills/upload-to-stitch/scripts/upload_to_stitch.py` reading `STITCH_API_KEY` from the environment rather than `--api-key` CLI arguments. *(See skill: `upload-to-stitch`, `manage-design-system`, `code-to-design`)*
 - Run `npm run verify:secrets` before committing any Stitch-related change.
 
 ## Internalized Stitch Skills (`google-labs-code/stitch-skills`)

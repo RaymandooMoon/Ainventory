@@ -1,0 +1,77 @@
+{
+  "distilled_at": "2026-11-25T16:22:00Z",
+  "skills_scanned": 84,
+  "rules_scanned": 29,
+  "scope": "google-labs-code/stitch-skills (16 internalized skills)",
+  "candidates": {
+    "bound-design-system-structural-prompts": {
+      "principle": "When passing the bound Stitch design system asset, keep generation prompts strictly structural and omit raw hex codes, font names, or radius values; reserve exact hex codes for targeted edit_screens calls only.",
+      "verdict": "Append",
+      "target": ".agent/rules/web/stitch-first-ui.md#Mandatory Workflow",
+      "evidence": [
+        "generate-design",
+        "manage-design-system",
+        "enhance-prompt"
+      ],
+      "status": "applied"
+    },
+    "stitch-upload-and-artifact-checkpoints": {
+      "principle": "Require explicit user confirmation before uploading local HTML/images/DESIGN.md to Stitch, overwriting existing .stitch/designs/ assets, or running automated snapshot capture against a local dev server.",
+      "verdict": "New Section",
+      "target": ".agent/rules/web/stitch-first-ui.md#Checkpoints & Artifact Hygiene",
+      "evidence": [
+        "upload-to-stitch",
+        "manage-design-system",
+        "extract-static-html",
+        "react-components"
+      ],
+      "status": "applied"
+    },
+    "stitch-metadata-and-fullres-visual-audit": {
+      "principle": "Download generated HTML and full-resolution screenshots (=w{width}) via shell/curl into .stitch/designs/, inspect each PNG before coding, and persist screen IDs and sync timestamps in .stitch/metadata.json.",
+      "verdict": "Append",
+      "target": ".agent/rules/web/stitch-first-ui.md#Mandatory Workflow",
+      "evidence": [
+        "generate-design",
+        "manage-design-system",
+        "react-components",
+        "stitch-loop"
+      ],
+      "status": "applied"
+    },
+    "stitch-python-uploader-for-large-files": {
+      "principle": "Upload files larger than 5 KB (including .stitch/DESIGN.md and extracted HTML/images) via upload_to_stitch.py reading STITCH_API_KEY from the environment instead of inline MCP base64 arguments or --api-key CLI flags.",
+      "verdict": "Append",
+      "target": ".agent/rules/web/stitch-first-ui.md#Security",
+      "evidence": [
+        "upload-to-stitch",
+        "manage-design-system",
+        "code-to-design"
+      ],
+      "status": "applied"
+    },
+    "no-dead-stitch-anchors-or-fabricated-metrics": {
+      "principle": "Replace all Stitch placeholder anchors (href='#') with real routes or handlers, never fabricate metrics/SLAs or unobserved design tokens, and omit filler UI copy.",
+      "verdict": "Append",
+      "target": ".agent/rules/web/design-quality.md#Anti-Template Policy",
+      "evidence": [
+        "react-components",
+        "stitch-loop",
+        "taste-design",
+        "extract-design-md"
+      ],
+      "status": "applied"
+    },
+    "touch-target-and-responsive-bounds": {
+      "principle": "Enforce minimum 44-48px touch targets and zero horizontal overflow on mobile viewports.",
+      "verdict": "Already Covered",
+      "target": ".agent/rules/web/stitch-first-ui.md#Mandatory Workflow",
+      "evidence": [
+        "taste-design",
+        "react-vite-dashboard",
+        "shadcn-ui"
+      ],
+      "status": "already_covered"
+    }
+  }
+}

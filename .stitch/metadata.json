@@ -1,0 +1,19 @@
+{
+  "name": "projects/11505180160165595336",
+  "projectId": "11505180160165595336",
+  "title": "A inventory UI rev",
+  "deviceType": "DESKTOP",
+  "designSystem": {
+    "assetName": "assets/98bc4c44edea4f0898f4a037ca720090",
+    "assetId": "98bc4c44edea4f0898f4a037ca720090",
+    "localSpec": ".stitch/DESIGN.md",
+    "primaryColor": "#F5F5F7",
+    "secondaryColor": "#D6B889",
+    "backgroundColor": "#000000",
+    "lightBackgroundColor": "#F6F3EC",
+    "fontFamily": "Pretendard Variable"
+  },
+  "lastSyncTime": null,
+  "syncNote": "Bootstrapped locally before Stitch MCP connection. Run get_project and list_screens via Stitch MCP to hydrate live screen instances.",
+  "screens": {}
+}

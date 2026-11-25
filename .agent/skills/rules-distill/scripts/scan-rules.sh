@@ -8,7 +8,17 @@
 
 set -euo pipefail
 
-RULES_DIR="${RULES_DISTILL_DIR:-${1:-$HOME/.claude/rules}}"
+if [[ -n "${RULES_DISTILL_DIR:-}" ]]; then
+  RULES_DIR="$RULES_DISTILL_DIR"
+elif [[ -n "${1:-}" ]]; then
+  RULES_DIR="$1"
+elif [[ -d "$PWD/.agent/rules" ]]; then
+  RULES_DIR="$PWD/.agent/rules"
+elif [[ -d "$PWD/.agents/rules" ]]; then
+  RULES_DIR="$PWD/.agents/rules"
+else
+  RULES_DIR="$HOME/.claude/rules"
+fi
 
 if [[ ! -d "$RULES_DIR" ]]; then
   jq -n --arg path "$RULES_DIR" '{"error":"rules directory not found","path":$path}' >&2

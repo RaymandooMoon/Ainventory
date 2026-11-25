@@ -53,6 +53,26 @@ colors:
   success-dark: "#4ADE80"
   focus-ring: "#1D4ED8"
   focus-ring-dark: "#60A5FA"
+  # Official Site Surface — "ainvtry.com · Spatial Editorial Noir" (src/site/styles/tokensAndShell.css)
+  site-dark-canvas: "#000000"
+  site-dark-panel-solid: "#141418"
+  site-dark-ink: "#F5F5F7"
+  site-dark-ctrl-active-bg: "#F5F5F7"
+  site-dark-ctrl-active-fg: "#101013"
+  site-dark-gold: "#D6B889"
+  site-dark-gold-ink: "#E2CFA8"
+  site-dark-status-live: "#68C694"
+  site-light-canvas: "#F6F3EC"
+  site-light-panel-solid: "#FAF8F4"
+  site-light-ink: "#1D1D1F"
+  site-light-ink-secondary: "#484642"
+  site-light-ink-tertiary: "#63605A"
+  site-light-ctrl-active-bg: "#1D1D1F"
+  site-light-ctrl-active-fg: "#FAF8F4"
+  site-light-gold: "#B8955F"
+  site-light-gold-ink: "#73552B"
+  site-light-status-live: "#1F6F43"
+  site-light-status-hybrid: "#7C5C2E"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Pretendard Variable', 'Pretendard', system-ui, sans-serif"
@@ -116,6 +136,30 @@ typography:
     lineHeight: 1.2
     letterSpacing: "0em"
     fontFeature: "tnum"
+  site-hero-display:
+    fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
+    fontSize: "3.65rem"
+    fontWeight: 700
+    lineHeight: 1.09
+    letterSpacing: "-0.036em"
+  site-hero-editorial-accent:
+    fontFamily: "'Instrument Serif', 'Cormorant Garamond', Georgia, serif"
+    fontSize: "3.65rem"
+    fontWeight: 400
+    lineHeight: 1.09
+    letterSpacing: "-0.016em"
+  site-hero-subtitle:
+    fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
+    fontSize: "1.02rem"
+    fontWeight: 480
+    lineHeight: 1.56
+    letterSpacing: "-0.012em"
+  site-eyebrow:
+    fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
+    fontSize: "0.7rem"
+    fontWeight: 680
+    lineHeight: 1.2
+    letterSpacing: "0.14em"
 rounded:
   micro: "8px"
   sm: "10px"
@@ -274,6 +318,33 @@ components:
     typography: "{typography.caption}"
     rounded: "{rounded.md}"
     padding: "16px"
+  site-cta-primary:
+    backgroundColor: "{colors.site-dark-ctrl-active-bg}"
+    textColor: "{colors.site-dark-ctrl-active-fg}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    height: "46px"
+    padding: "22px"
+  site-cta-secondary:
+    backgroundColor: "rgba(13, 13, 16, 0.46)"
+    textColor: "{colors.site-dark-ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    height: "46px"
+    padding: "22px"
+  site-stage-dock:
+    backgroundColor: "rgba(13, 13, 16, 0.46)"
+    textColor: "{colors.site-dark-ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    height: "52px"
+    padding: "3px"
+  site-hud-panel:
+    backgroundColor: "rgba(11, 11, 14, 0.47)"
+    textColor: "{colors.site-dark-ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.squircle}"
+    padding: "20px"
 ---
 
 ## Overview
@@ -309,10 +380,12 @@ components:
 4. **고정된 무대, 바뀌는 조명.** 상태가 바뀌어도 무대(레이아웃 박스)는 움직이지 않고, 조명(불투명도·블러·쉬머)과 내용만 바뀐다 → Zero-CLS.
 
 ### Source of Truth in Code
-- 아키텍처/DOM 계약: `src/contracts/carbonDesignContract.ts`
-- 전역 토큰·모션: `src/index.css` (`--bg-*`, `--ink-*`, `--space-*`, `--radius-*`, `--type-*`, `--spring-ease`)
-- 스튜디오 스코프 토큰: `src/styles/atelierTokens.css` (`--atelier-*`)
-- UI 프리미티브: `src/components/ui/uiPrimitives.css`, `navigation.css`
+- 앱 아키텍처/DOM 계약: `src/contracts/carbonDesignContract.ts`
+- 앱 전역 토큰·모션: `src/index.css` (`--bg-*`, `--ink-*`, `--space-*`, `--radius-*`, `--type-*`, `--spring-ease`)
+- 앱 스튜디오 스코프 토큰: `src/styles/atelierTokens.css` (`--atelier-*`)
+- 앱 UI 프리미티브: `src/components/ui/uiPrimitives.css`, `navigation.css`
+- 공식 사이트(`ainvtry.com`) 토큰·셸·HUD·모달·반응형: `src/site/styles/tokensAndShell.css`, `stageHud.css`, `modalsAndAnalytics.css`, `responsive.css`
+- 공식 사이트 헌장·사이트맵·로드맵: `.stitch/SITE.md`
 - 사전 감사: `.stitch/UX_AUDIT.md`
 
 ## Colors
@@ -537,6 +610,44 @@ components:
 - **상태 전환 매트릭스 (Outfits)**: 플랫레이 ↔ 생성 중 ↔ AI 모델 뷰 ↔ 피부톤/체형 시트 — 무대 박스 크기·HUD 위치 변화 0px, 바뀌는 것은 무대 내용(crossfade 240ms)과 HUD 내용뿐.
 - `prefers-reduced-motion: reduce` → 쉬머·스윕·파티클·원형 확산 정지, crossfade만 120ms.
 
+## Official Site Surface — `ainvtry.com` (Spatial Editorial Noir)
+
+공식 제품 쇼케이스 사이트(`site/index.html`, `src/site/`, 빌드 `vite.site.config.ts`)는 모바일 앱과 동일한 **무채색 미니멀 · 동심원 스쿼클 · `iNVTRY` 원라인 로고** 계약을 계승하되, 단일 뷰포트(`100dvh`) 3D 실크·마블 런웨이 캔버스 위에 부유하는 **Spatial Editorial Noir** 프로스트 글래스 셸을 정의한다. (상세 IA·사이트맵·로드맵: `.stitch/SITE.md`)
+
+### Site Color Palette & Glass Materiality (`src/site/styles/tokensAndShell.css`)
+
+| Role | Dark Default ("OLED Obsidian Glass") | Light ("Warm Alabaster Daylight") | CSS Variable | 용도 |
+| :--- | :--- | :--- | :--- | :--- |
+| Canvas | `#000000` (True OLED Black) | `#F6F3EC` (Warm Alabaster) | `--bg-canvas` | 3D 실크/마블 배경 아래 기본 캔버스 |
+| Glass Chrome | `rgba(13,13,16, 0.03 + α×0.86)` (`#141418` solid 폴백) | `rgba(252,250,246, 0.05 + α×0.87)` (`#FAF8F4` solid 폴백) | `--bg-glass` | 탑바 유틸리티 레일, 하단 4스테이지 독, 보조 CTA |
+| Inspector Panel | `rgba(11,11,14, 0.03 + α×0.88)` | `rgba(252,250,246, 0.05 + α×0.89)` | `--bg-panel` | 우측 3D HUD 패널, 푸터 트레이, 모달 카드 |
+| Ink Primary | `#F5F5F7` | `#1D1D1F` | `--ink-primary` | 히어로 헤드라인, 패널 제목 |
+| Ink Secondary | `rgba(235,235,240,0.78)` | `#484642` | `--ink-secondary` | 서브타이틀, 본문, 비활성 탭 |
+| Ink Tertiary | `rgba(206,206,216,0.68)` | `#63605A` | `--ink-tertiary` | 키커, 저작권, 메타데이터 |
+| Active Chrome (Inverted) | `#F5F5F7` bg / `#101013` ink | `#1D1D1F` bg / `#FAF8F4` ink | `--ctrl-active-bg/fg` | `01 Live Studio` 론치 필, 1차 CTA, 활성 세그먼트 |
+| Champagne Gold Accent | `#D6B889` / ink `#E2CFA8` | `#B8955F` / ink `#73552B` | `--accent-gold` / `-ink` | 헤어라인, 활성 언더라인, 히어로 이탤릭 포인트, Glass 미터 |
+| Status Live / Hybrid | `#68C694` / `#D6B889` | `#1F6F43` / `#7C5C2E` | `--status-live/hybrid` | 6컷 저니·API 파이프라인 상태 배지 |
+| Focus Ring | `#60A5FA` | `#1D4ED8` | `--focus-ring` | 키보드 `:focus-visible` 2px 링 + 2px 오프셋 |
+
+- **동적 글래스 알파 (`--site-ui-alpha`)**: 기본값 `0.5` (`Glass 50%`), 범위 `0.02–0.96`. 우하단 수직 드래그/휠 슬라이더로 모든 글래스 표면의 불투명도(`--bg-glass`, `--bg-panel`)와 블러(`calc(2px + α × 26px)`)를 실시간 연동한다.
+- **앱 Sand(`#D8C3A5`) vs 사이트 Champagne Gold(`#D6B889`) 정렬 메모**: 현재 공식 사이트는 에디토리얼 웜 톤을 위해 `#D6B889`를 사용하며, 앱 스튜디오는 `#D8C3A5`를 사용한다. 향후 토큰 통합 또는 의도적 분리(마케팅 vs 앱) 여부를 디자인 시스템 버전업 시 명시적으로 관리한다.
+
+### Site Typography, Geometry & Layout
+- **Sans Stack**: `'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif` (EN/KO 이중 언어 지원, `word-break: keep-all`).
+- **Editorial Italic Accent**: 현재 코드(`tokensAndShell.css` L11)는 `Georgia, 'Times New Roman', serif`를 사용 중이나, `taste-design` 기준에 따라 **라틴 이탤릭 포인트는 `Instrument Serif` 또는 `Cormorant Garamond` 등 모던 에디토리얼 세리프로 고도화**한다(한글 강조는 Pretendard 유지).
+- **Scale**: 히어로 타이틀 `clamp(2.15rem, 4.25vw, 3.65rem)` (700, `-0.036em`, line-height `1.09`), 서브타이틀 `clamp(0.9rem, 1.24vw, 1.02rem)` (480, `1.56`, `max-width: 500px`), 키커 `0.7rem` (680, `+0.14em`, 대문자). 수치(`01`–`04`, `Glass %`, KPI, 각도)는 예외 없이 `tabular-nums`.
+- **Concentric Radii**: 앱과 100% 동일 (`--r-micro: 8px`, `--r-sm: 10px`, `--r-md: 14px`, `--r-panel: 22px`, `--r-lg: 26px`, `--r-pill: 9999px`).
+- **Shell & Components**:
+  - **Zero-Chrome 3-Column Topbar** (`max-width: 1320px`): 좌(테마 + 3D 실크 무드 필 레일) · 중(공식 듀얼 테마 `iNVTRY` 로고 `width: 108px` + 서브스테이지 복귀 콜아웃) · 우(`EN/KO` 전환 필).
+  - **4-Stage Hairline Bottom Dock** (`max-width: 760px`): `01 Live Studio`(반전 1차 론치 필) · `02 Architecture` · `03 Specs` · `04 About` + 전환 시 골드 리플 버스트.
+  - **Right Floating Inspector HUD** (`clamp(390px, 37vw, 536px)`): FLIP 애니메이션 `HudSpotlightDeck` + 상단 3D 컨트롤 독(`.site-top-3d-dock`).
+  - **Full-Bleed Bottombar Tray**: 저작권, `raymond@ainvtry.com`, 뉴스레터 모달, 개인정보/약관 모달, 세션 분석 차트 모달, 수직 드래그 `Glass %` 슬라이더.
+- **Responsive Breakpoints & Fallbacks**: `<= 1080px`(컴팩트 데스크톱 HUD) · `<= 859px`(태블릿/폴더블 분할 드로어) · `<= 520px`(About 바텀시트) · `<= 359px`(폴드 커버 320px), 전 컨트롤 최소 `44px` 터치 타깃, `html[data-vibrancy-fallback='solid']` 및 `prefers-reduced-transparency` / `prefers-reduced-motion` 완전 지원.
+- **현행 사이트 감사 메모 (차기 Stitch 개선 대상)**:
+  1. Hero에 1차 제품 진입 CTA(`Launch Live Studio`)가 제거되어 `Contact Founder` 보조 버튼만 노출 중이며, 미사용 `HeroVisualProofCard.tsx`(226줄) 및 `.site-hero-proof-*` CSS(~350줄)가 잔존 → `.stitch/next-prompt.md`의 2종 시안으로 정리 예정.
+  2. `/ir/` IR 사업계획서 링크가 `About -> Model` 최하단에만 위치 → 상단/푸터 발견성 검토.
+  3. `SiteStageAnalytics.tsx` 모달에 키보드 `Tab` 포커스 트랩 보강 필요(`SiteNewsletterModal.tsx` 수준과 통일).
+
 ## Do's and Don'ts
 
 ### Do's
@@ -559,6 +670,11 @@ components:
 
 ## Stitch Generation Notes (for screen prompts)
 
+### App Screens (`Ainventory — Haute Atelier v5`)
 - 기본 바이브 문구: *"High-fashion luxury maison editorial private fitting studio; minimal runway silhouette framing, dramatic volumetric spotlight beams & kinetic silk/organza motion; monochrome chrome on paper white #FFFFFF, gallery gray #F5F5F7 and warm linen #F4F0E8 (dark: true OLED black #000000 pixels-off primary background, deep surface #121214, elevated #1C1C1E); sand #D8C3A5 hairline accents only; MANDATORY: always display the exact continuous one-line hanger-garments 'iNVTRY' calligraphy logo mark across every screen (never replace with generic serif/sans text); Keep all product copy and button text in Korean."*
 - 이미지 일체화: *"Garment packshot cards use #F7F7F5 backgrounds with transparent cutouts and a soft top-left key light; AI model silhouette lit with warm linen bounce light (dark: sand rim light on pure OLED black #000000); icons inherit ink color."*
 - 정제는 `edit_screens`로 프롬프트당 1–2개 요소만(예: "Replace generic text header with the exact continuous one-line hanger-garments iNVTRY logo"), UI 요소명(`navigation bar`, `primary call-to-action button`, `card layout`, `floating HUD`, `bottom sheet`)을 정확히 지목한다.
+
+### Official Site (`ainvtry.com — Spatial Editorial Noir`)
+- **MCP 바운드 생성 시 (`designSystem: "assets/98bc4c44edea4f0898f4a037ca720090"` 전달)**: `generate-design` 원칙에 따라 생성 프롬프트에는 hex 코드·폰트명을 중복 기재하지 않고 **레이아웃·섹션 구조·인터랙션·카피**만 기술한다 (예시: `.stitch/next-prompt.md`).
+- **언바운드 / 웹 UI 직접 투입 시 기본 바이브 문구**: *"Spatial Editorial Noir single-viewport (100dvh) luxury fashion tech showcase for Ainvtry (ainvtry.com); dark default true OLED black #000000 canvas behind atmospheric kinetic 3D silk and rolling obsidian marble (light mode: warm alabaster #F6F3EC); translucent obsidian frosted-glass chrome with 1px specular hairline rims and concentric squircle geometry (22px panels, 14px cards, pill CTAs); inverted alabaster white #F5F5F7 primary CTA with #101013 ink; restrained champagne gold #D6B889 hairlines and modern editorial italic serif accent only (no neon/purple gradients, no emojis, no generic 3-equal-card rows, no scroll-down filler text); MANDATORY: centered continuous one-line hanger-garments 'iNVTRY' calligraphy logo in the zero-chrome 3-column header; real verified metrics in tabular numerals only."*

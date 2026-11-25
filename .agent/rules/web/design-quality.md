@@ -20,6 +20,8 @@ Do not ship generic template-looking UI. Frontend output should look intentional
 - Safe gray-on-white styling with one decorative accent color
 - Dashboard-by-numbers layouts with sidebar + cards + charts and no point of view
 - Default font stacks used without a deliberate reason
+- Unresolved Stitch placeholder anchors (`href="#"`) left in shipped navigation or header logos
+- Fabricated metrics, uptime SLAs, response times, unobserved design tokens, or filler UI copy (`"Scroll to explore"`, bouncing scroll chevrons, generic AI marketing clichés) *(See skill: `react-components`, `stitch-loop`, `taste-design`, `extract-design-md`)*
 
 ### Required Qualities
 
@@ -65,3 +67,4 @@ Do not default to dark mode automatically. Choose the visual direction the produ
 - [ ] Does it use hierarchy rather than uniform emphasis?
 - [ ] Would this look believable in a real product screenshot?
 - [ ] If it supports both themes, do both light and dark feel intentional?
+- [ ] Are all navigation anchors and header logos wired to real routes/handlers (zero `href="#"`) and all displayed numbers backed by real data?

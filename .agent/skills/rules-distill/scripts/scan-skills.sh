@@ -14,11 +14,21 @@
 set -euo pipefail
 
 GLOBAL_DIR="${RULES_DISTILL_GLOBAL_DIR:-$HOME/.claude/skills}"
-CWD_SKILLS_DIR="${RULES_DISTILL_PROJECT_DIR:-${1:-$PWD/.claude/skills}}"
-# Validate CWD_SKILLS_DIR looks like a .claude/skills path (defense-in-depth).
+if [[ -n "${RULES_DISTILL_PROJECT_DIR:-}" ]]; then
+  CWD_SKILLS_DIR="$RULES_DISTILL_PROJECT_DIR"
+elif [[ -n "${1:-}" ]]; then
+  CWD_SKILLS_DIR="$1"
+elif [[ -d "$PWD/.agent/skills" ]]; then
+  CWD_SKILLS_DIR="$PWD/.agent/skills"
+elif [[ -d "$PWD/.agents/skills" ]]; then
+  CWD_SKILLS_DIR="$PWD/.agents/skills"
+else
+  CWD_SKILLS_DIR="$PWD/.claude/skills"
+fi
+# Validate CWD_SKILLS_DIR looks like a known agent skills path (defense-in-depth).
 # Only warn when the path exists — a nonexistent path poses no traversal risk.
-if [[ -n "$CWD_SKILLS_DIR" && -d "$CWD_SKILLS_DIR" && "$CWD_SKILLS_DIR" != */.claude/skills* ]]; then
-  echo "Warning: CWD_SKILLS_DIR does not look like a .claude/skills path: $CWD_SKILLS_DIR" >&2
+if [[ -n "$CWD_SKILLS_DIR" && -d "$CWD_SKILLS_DIR" && "$CWD_SKILLS_DIR" != */.agent/skills* && "$CWD_SKILLS_DIR" != */.agents/skills* && "$CWD_SKILLS_DIR" != */.claude/skills* ]]; then
+  echo "Warning: CWD_SKILLS_DIR does not look like an .agent/.agents/.claude skills path: $CWD_SKILLS_DIR" >&2
 fi
 
 # Extract a frontmatter field (handles both quoted and unquoted single-line values).
