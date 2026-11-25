@@ -64,6 +64,7 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic, withPublicBaseUrl } from '../utils/nativeBridge.ts';
+import { computeNextVisibleBatch } from '../utils/resourcePriority.ts';
 import { buildAutoOutfitTitle } from '../utils/outfitTitleGenerator.ts';
 import {
   getLocalDateKey,
@@ -1125,7 +1126,7 @@ export default function OutfitStudioView({
   }, [skinProfile, bodySpec, user, storedAvatarSpec, storedAvatarHash]);
 
   const [rawSlots, setSlots] = useState(() =>
-    preEquippedGarment
+    preEquippedGarment || garments.length > 0
       ? buildInitialStudioSlots(garments, preEquippedGarment)
       : { ...EMPTY_STUDIO_SLOTS }
   );
@@ -1137,6 +1138,8 @@ export default function OutfitStudioView({
   const [seasonFilter, setSeasonFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
+  const [drawerVisibleCount, setDrawerVisibleCount] = useState(18);
+  const drawerLoadMoreRef = useRef(null);
   const [selectedInspectorId, setSelectedInspectorId] = useState(
     () => preEquippedGarment?.id ?? null
   );
@@ -1149,6 +1152,7 @@ export default function OutfitStudioView({
   const [underwearSimModalOpen, setUnderwearSimModalOpen] = useState(false);
 
   const userModifiedSlotsRef = useRef(Boolean(preEquippedGarment));
+  const provisionalInitialSlotsRef = useRef(Boolean(!preEquippedGarment && garments.length > 0));
   const forceAutoApplyWeatherRef = useRef(false);
   const scenarioSnapshotsRef = useRef({});
   const ensuredSeedClosetsRef = useRef(new Set());
@@ -1450,6 +1454,16 @@ export default function OutfitStudioView({
     }
   }, [weatherSnapshotScopeKey, rawSlots, activeRecId, manualRainUmbrellaCleared]);
 
+  // Seed provisional outfit slots immediately as soon as garments load (never wait on weather/Open-Meteo roundtrip!)
+  useEffect(() => {
+    if (garments.length === 0 || userModifiedSlotsRef.current) return;
+    setSlots((prev) => {
+      if (Object.values(prev).some(Boolean)) return prev;
+      provisionalInitialSlotsRef.current = true;
+      return buildInitialStudioSlots(garments, preEquippedGarment || null);
+    });
+  }, [garments, preEquippedGarment]);
+
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({
@@ -1560,9 +1574,14 @@ export default function OutfitStudioView({
             autoEquippedUmbrellaIdRef.current = null;
           }
           setSlots((prev) => {
-            if (!shouldForceOverwriteSlots && Object.values(prev).some(Boolean)) {
+            if (
+              !shouldForceOverwriteSlots &&
+              !provisionalInitialSlotsRef.current &&
+              Object.values(prev).some(Boolean)
+            ) {
               return prev;
             }
+            provisionalInitialSlotsRef.current = false;
             return mappedSlots;
           });
           setHasExplicitSlotState(true);
@@ -2327,6 +2346,29 @@ export default function OutfitStudioView({
       jewelry: jwlCount,
     };
   }, [slots]);
+
+  useEffect(() => {
+    setDrawerVisibleCount(18);
+  }, [activeSlotKey, occasionFilter, seasonFilter, searchQuery, mobileSheetOpen]);
+
+  useEffect(() => {
+    if (drawerVisibleCount >= slotGarments.length) return undefined;
+    const sentinel = drawerLoadMoreRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') {
+      setDrawerVisibleCount(slotGarments.length);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setDrawerVisibleCount((prev) => computeNextVisibleBatch(prev, slotGarments.length, 24));
+        }
+      },
+      { rootMargin: '280px 0px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [drawerVisibleCount, slotGarments.length, mobileSheetOpen]);
 
   const isBottomSaggingEligible = useMemo(
     () => isSaggingEligibleBottom(slots.bottom),
@@ -3880,70 +3922,77 @@ export default function OutfitStudioView({
       );
     }
 
-    return slotGarments.length === 0 ? (
-      <div className="studio-slot-empty-state" data-slot-empty-state="true">
-        <p className="studio-slot-empty-title">
-          {isFilterEmptyOnly
-            ? tx(
-                lang,
-                '검색어 또는 필터 조건에 맞는 의류가 없습니다.',
-                'No garments match the current search or filter.'
-              )
-            : totalWearableCount === 0
+    if (slotGarments.length === 0) {
+      return (
+        <div className="studio-slot-empty-state" data-slot-empty-state="true">
+          <p className="studio-slot-empty-title">
+            {isFilterEmptyOnly
               ? tx(
                   lang,
-                  '아직 옷장에 등록된 의류가 없습니다.',
-                  'Your closet has no garments yet.'
+                  '검색어 또는 필터 조건에 맞는 의류가 없습니다.',
+                  'No garments match the current search or filter.'
+                )
+              : totalWearableCount === 0
+                ? tx(
+                    lang,
+                    '아직 옷장에 등록된 의류가 없습니다.',
+                    'Your closet has no garments yet.'
+                  )
+                : tx(
+                    lang,
+                    '이 카테고리에 선택 가능한 의류가 없습니다.',
+                    'No selectable garments in this category yet.'
+                  )}
+          </p>
+          <p className="studio-slot-empty-desc">
+            {isFilterEmptyOnly
+              ? tx(
+                  lang,
+                  '필터를 초기화하면 이 카테고리의 전체 의류를 다시 확인할 수 있습니다.',
+                  'Reset filters to view all garments available in this slot.'
                 )
               : tx(
                   lang,
-                  '이 카테고리에 선택 가능한 의류가 없습니다.',
-                  'No selectable garments in this category yet.'
+                  '옷장에서 의류 사진을 등록하면 4각도 AI 가상 피팅과 날씨 코디에 즉시 활용됩니다.',
+                  'Add garments in your Closet to try them on across 4 angles and weather scenes.'
                 )}
-        </p>
-        <p className="studio-slot-empty-desc">
-          {isFilterEmptyOnly
-            ? tx(
-                lang,
-                '필터를 초기화하면 이 카테고리의 전체 의류를 다시 확인할 수 있습니다.',
-                'Reset filters to view all garments available in this slot.'
-              )
-            : tx(
-                lang,
-                '옷장에서 의류 사진을 등록하면 4각도 AI 가상 피팅과 날씨 코디에 즉시 활용됩니다.',
-                'Add garments in your Closet to try them on across 4 angles and weather scenes.'
-              )}
-        </p>
-        {isFilterEmptyOnly ? (
-          <button
-            type="button"
-            data-reset-outfit-filters="true"
-            className="studio-empty-cta-btn"
-            onClick={() => {
-              triggerHaptic('selection');
-              setOccasionFilter('all');
-              setSeasonFilter('all');
-              setSearchQuery('');
-            }}
-          >
-            <RotateCcw size={14} />
-            <span>{tx(lang, '필터·검색 초기화', 'Reset Search & Filter')}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            data-empty-go-closet-btn="true"
-            className="studio-empty-cta-btn is-primary"
-            onClick={handleNavigateToCloset}
-          >
-            <Plus size={15} />
-            <span>{tx(lang, '옷장에서 의류 추가하기', 'Add Garments in Closet')}</span>
-          </button>
-        )}
-      </div>
-    ) : (
+          </p>
+          {isFilterEmptyOnly ? (
+            <button
+              type="button"
+              data-reset-outfit-filters="true"
+              className="studio-empty-cta-btn"
+              onClick={() => {
+                triggerHaptic('selection');
+                setOccasionFilter('all');
+                setSeasonFilter('all');
+                setSearchQuery('');
+              }}
+            >
+              <RotateCcw size={14} />
+              <span>{tx(lang, '필터·검색 초기화', 'Reset Search & Filter')}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-empty-go-closet-btn="true"
+              className="studio-empty-cta-btn is-primary"
+              onClick={handleNavigateToCloset}
+            >
+              <Plus size={15} />
+              <span>{tx(lang, '옷장에서 의류 추가하기', 'Add Garments in Closet')}</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    const visibleSlotGarments = slotGarments.slice(0, drawerVisibleCount);
+    const hasMoreDrawerItems = drawerVisibleCount < slotGarments.length;
+
+    return (
       <div className="studio-mini-inventory-grid">
-        {slotGarments.map((item) => {
+        {visibleSlotGarments.map((item, idx) => {
           const isExpanded = selectedInspectorId === item.id;
           const isEquippedOpposite = Boolean(oppositeItem && oppositeItem.id === item.id);
           const oppositeBadgeLabel = oppositeSlotKey?.endsWith('_left')
@@ -3965,7 +4014,13 @@ export default function OutfitStudioView({
               }}
             >
               <div className="studio-mini-squircle">
-                <GarmentObject25D item={item} alt={displayName} padding="10%" />
+                <GarmentObject25D
+                  item={item}
+                  alt={displayName}
+                  padding="10%"
+                  eager={idx < 4}
+                  fetchPriority={idx < 4 ? 'auto' : 'low'}
+                />
                 {isExpanded && (
                   <span className="atelier-packshot-selected-tag">
                     {tx(lang, '선택', 'Pick')}
@@ -3986,6 +4041,13 @@ export default function OutfitStudioView({
             </button>
           );
         })}
+        {hasMoreDrawerItems && (
+          <div
+            ref={drawerLoadMoreRef}
+            aria-hidden="true"
+            style={{ gridColumn: '1 / -1', height: 20 }}
+          />
+        )}
       </div>
     );
   };

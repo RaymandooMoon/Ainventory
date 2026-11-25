@@ -8,6 +8,7 @@ import {
 } from '../shared/garmentTaxonomy.js';
 import { localizeGarmentName } from '../utils/i18n.ts';
 import { withPublicBaseUrl } from '../utils/nativeBridge.ts';
+import { resolveImageLoadingProps } from '../utils/resourcePriority.ts';
 
 function rgbDist(a, b) {
   return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -633,6 +634,7 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
   imgStyle = {},
   allowStorePhoto = false,
   eager = false,
+  fetchPriority,
 }) {
   const rawSrc = src || item?.image_url || '';
   const cat = category || item?.category || 'top';
@@ -715,15 +717,24 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
 
   const cacheKey = `v4|${resolvedSrc}|${shouldTintSeed ? targetHex.toUpperCase() : 'RAW_CUTOUT'}`;
 
+  const imagePriorityProps = resolveImageLoadingProps({ eager, priority: fetchPriority });
   const containerRef = useRef(null);
   const [isNearViewport, setIsNearViewport] = useState(
-    () => Boolean(eager) || typeof IntersectionObserver === 'undefined'
+    () =>
+      Boolean(eager || imagePriorityProps.fetchPriority === 'high') ||
+      typeof IntersectionObserver === 'undefined'
   );
   const [asyncTinted, setAsyncTinted] = useState(null);
   const [failedKey, setFailedKey] = useState(null);
 
   useEffect(() => {
-    if (isNearViewport || !needsCanvasProcessing || TINTED_URL_CACHE.has(cacheKey)) {
+    if (eager || imagePriorityProps.fetchPriority === 'high') {
+      setIsNearViewport(true);
+    }
+  }, [eager, imagePriorityProps.fetchPriority]);
+
+  useEffect(() => {
+    if (isNearViewport) {
       return undefined;
     }
     const el = containerRef.current;
@@ -738,13 +749,13 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
           obs.disconnect();
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '260px' }
     );
     obs.observe(el);
     return () => {
       obs.disconnect();
     };
-  }, [isNearViewport, needsCanvasProcessing, cacheKey]);
+  }, [isNearViewport]);
 
   useEffect(() => {
     if (!needsCanvasProcessing || !isNearViewport || TINTED_URL_CACHE.has(cacheKey)) {
@@ -803,30 +814,33 @@ const StudioGarmentImage = memo(function StudioGarmentImage({
           }}
         />
       )}
-      <img
-        ref={imgRef}
-        src={displaySrc}
-        alt={label}
-        loading={eager ? 'eager' : 'lazy'}
-        decoding={eager ? 'sync' : 'async'}
-        onLoad={() => setLoadedSrc(displaySrc)}
-        onError={() => {
-          if (rawDisplaySrc !== fallbackSeedSrc) {
-            setFailedKey(cacheKey);
-          } else {
-            setLoadedSrc(displaySrc);
-          }
-        }}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          display: 'block',
-          opacity: isReady ? 1 : 0,
-          transition: 'opacity 0.28s var(--spring-ease)',
-          ...imgStyle,
-        }}
-      />
+      {isNearViewport && (
+        <img
+          ref={imgRef}
+          src={displaySrc}
+          alt={label}
+          loading={imagePriorityProps.loading}
+          decoding={imagePriorityProps.decoding}
+          fetchPriority={imagePriorityProps.fetchPriority}
+          onLoad={() => setLoadedSrc(displaySrc)}
+          onError={() => {
+            if (rawDisplaySrc !== fallbackSeedSrc) {
+              setFailedKey(cacheKey);
+            } else {
+              setLoadedSrc(displaySrc);
+            }
+          }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            display: 'block',
+            opacity: isReady ? 1 : 0,
+            transition: 'opacity 0.28s var(--spring-ease)',
+            ...imgStyle,
+          }}
+        />
+      )}
     </div>
   );
 });

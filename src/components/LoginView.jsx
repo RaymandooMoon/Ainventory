@@ -12,14 +12,21 @@ import {
   Sun,
 } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
-import { apiFetch, isLiveAppEmbedSession, setStoredToken } from '../utils/api.ts';
+import {
+  apiFetch,
+  isLiveAppEmbedSession,
+  prefetchSampleGarments,
+  setSampleDemoMode,
+  setStoredToken,
+} from '../utils/api.ts';
 import { localizeApiMessage, tr } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { scheduleAfterFirstPaint, scheduleIdleTask } from '../utils/resourcePriority.ts';
 import AuthFieldInput from './auth/AuthFieldInput.tsx';
 import BrandLogo from './auth/BrandLogo.tsx';
 import GoogleSignInButton from './auth/GoogleSignInButton.tsx';
 import GoogleSignInFallbackModal from './auth/GoogleSignInFallbackModal.tsx';
-import { normalizeLoginThreeVariant } from './auth/loginThreeScenes.ts';
+import { normalizeLoginThreeVariant } from './auth/loginThreeVariants.ts';
 import { LegalDisclosureModal } from './common/AppUI.jsx';
 import { isGoogleSignInConfigured, requestGoogleIdToken } from '../services/googleIdentity.ts';
 import { resolveInitialAuthStage } from '../utils/authStage.ts';
@@ -397,23 +404,40 @@ export default function LoginView({
   };
 
   const isEmbedMode = isLiveAppEmbedSession();
+  const [backdropReady, setBackdropReady] = useState(false);
 
-  // Warm OutfitStudioView chunk & sync parent silk mood while embedded inside ainvtry.com Studio
+  // Defer Three.js LoginBackdropCanvas mount until after first DOM paint (standalone only)
   useEffect(() => {
-    if (!isEmbedMode) return undefined;
-    const timerId = window.setTimeout(() => {
-      void import('./OutfitStudioView.jsx').catch(() => {});
-    }, 350);
+    if (isEmbedMode) return undefined;
+    return scheduleAfterFirstPaint(() => {
+      setBackdropReady(true);
+    });
+  }, [isEmbedMode]);
+
+  // Idle-prefetch sample wardrobe & Studio chunk while Login is displayed so Demo entry has 0ms garment wait
+  useEffect(() => {
+    let cancelIdle = null;
+    const cancelPaint = scheduleAfterFirstPaint(() => {
+      cancelIdle = scheduleIdleTask(() => {
+        void prefetchSampleGarments();
+        void import('./OutfitStudioView.jsx').catch(() => {});
+      }, 450);
+    });
     const handleEmbedMoodSync = (event) => {
       const nextMood = event?.detail?.mood;
       if (nextMood === 'luxury' || nextMood === 'aurora') {
         setLoginMotionVariant(nextMood);
       }
     };
-    window.addEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+    if (isEmbedMode) {
+      window.addEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+    }
     return () => {
-      window.clearTimeout(timerId);
-      window.removeEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+      cancelPaint();
+      cancelIdle?.();
+      if (isEmbedMode) {
+        window.removeEventListener('ainvtry:embed-sync', handleEmbedMoodSync);
+      }
     };
   }, [isEmbedMode]);
 
@@ -423,6 +447,9 @@ export default function LoginView({
     setFieldErrors({});
     setLoadingAction('sample');
     triggerHaptic('light');
+
+    // Kick off sample garment prefetch immediately alongside auth handshake
+    void prefetchSampleGarments();
 
     let deadlineId = 0;
     try {
@@ -447,6 +474,7 @@ export default function LoginView({
 
       if (isEmbedMode) {
         setStoredToken(null);
+        setSampleDemoMode(true);
         onLoginSuccess(EMBED_SITE_DEMO_FALLBACK_USER);
         return;
       }
@@ -456,6 +484,7 @@ export default function LoginView({
       if (deadlineId) window.clearTimeout(deadlineId);
       if (isEmbedMode) {
         setStoredToken(null);
+        setSampleDemoMode(true);
         onLoginSuccess(EMBED_SITE_DEMO_FALLBACK_USER);
         return;
       }
@@ -738,8 +767,8 @@ export default function LoginView({
       data-portal-phase={portalPhase}
       data-embed-mode={isEmbedMode ? 'true' : undefined}
     >
-      {/* Instant zero-WebGL silk gradient in embed mode; full Three.js cloth in standalone app */}
-      {isEmbedMode ? (
+      {/* Instant zero-WebGL silk gradient on first paint & embed mode; Three.js cloth mounts after first paint in standalone */}
+      {isEmbedMode || !backdropReady ? (
         <div
           className="atelier-backdrop-stage is-webgl-fallback"
           data-motion-theme={effectiveTheme}

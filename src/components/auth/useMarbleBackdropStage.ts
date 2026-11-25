@@ -2,14 +2,16 @@ import type * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
 import { observeOpenModalDialogs } from '../../utils/adaptiveFramePacer.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
-import {
-  createLoginThreeController,
-  DEFAULT_LOGIN_THREE_VARIANT,
-  type LoginThreeController,
-  type LoginThreeOverlayRenderContext,
-  type LoginThreeVariantId,
-  type MarbleStepSnapshot,
+import { scheduleAfterFirstPaint } from '../../utils/resourcePriority.ts';
+import type {
+  LoginThreeController,
+  LoginThreeOverlayRenderContext,
+  MarbleStepSnapshot,
 } from './loginThreeScenes.ts';
+import {
+  DEFAULT_LOGIN_THREE_VARIANT,
+  type LoginThreeVariantId,
+} from './loginThreeVariants.ts';
 import {
   computeFloorInsetWorld,
   computeMarbleTargetHit,
@@ -67,6 +69,7 @@ export interface UseMarbleBackdropStageOptions {
   readonly onOverlayContextRestored?: (renderer: THREE.WebGLRenderer) => void;
   readonly externalMarbleHidden?: boolean;
   readonly disableHeroMarbleInput?: boolean;
+  readonly deferBootUntilPaint?: boolean;
   readonly onControllerReady?: (ctrl: LoginThreeController | null) => void;
 }
 
@@ -395,47 +398,77 @@ export function useMarbleBackdropStage(
       activeTimers.add(timer);
     };
 
-    const initialOpts = optionsRef.current;
-    const controller = createLoginThreeController(canvas, {
-      initialDark: initialDarkRef.current,
-      initialStage: initialStageRef.current,
-      initialVariant: initialVariantRef.current,
-      reducedMotion,
-      onMarbleStep: handleMarbleStep,
-      onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
-      onOverlayRender: initialOpts.onOverlayRender
-        ? (ctx) => optionsRef.current.onOverlayRender?.(ctx) ?? false
-        : undefined,
-      onOverlayResize: initialOpts.onOverlayResize
-        ? (w, h, renderer, isSoftwareGl) =>
-            optionsRef.current.onOverlayResize?.(w, h, renderer, isSoftwareGl)
-        : undefined,
-      onOverlayDispose: initialOpts.onOverlayDispose
-        ? () => optionsRef.current.onOverlayDispose?.()
-        : undefined,
-      onOverlayContextRestored: initialOpts.onOverlayContextRestored
-        ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
-        : undefined,
-    });
+    let disposed = false;
+    let cleanupRuntime: (() => void) | null = null;
 
-    if (!controller) {
-      setWebglFallback(true);
-      optionsRef.current.onControllerReady?.(null);
-      return undefined;
-    }
+    const bootThreeController = async () => {
+      let createControllerFn:
+        | typeof import('./loginThreeScenes.ts').createLoginThreeController
+        | null = null;
+      try {
+        const mod = await import('./loginThreeScenes.ts');
+        createControllerFn = mod.createLoginThreeController;
+      } catch {
+        if (!disposed) {
+          setWebglFallback(true);
+          optionsRef.current.onControllerReady?.(null);
+        }
+        return;
+      }
 
-    controllerRef.current = controller;
-    if (typeof optionsRef.current.externalMarbleHidden === 'boolean') {
-      controller.setExternalMarbleHidden?.(optionsRef.current.externalMarbleHidden);
-    }
-    optionsRef.current.onControllerReady?.(controller);
+      if (disposed || !createControllerFn) return;
 
-    // Auto-pause WebGL loop at 0fps whenever any modal dialog opens (shared across Login & Website)
-    const stopModalObserver = observeOpenModalDialogs((hasOpenModal) => {
-      modalPausedRef.current = hasOpenModal;
+      const initialOpts = optionsRef.current;
+      const controller = createControllerFn(canvas, {
+        initialDark: initialDarkRef.current,
+        initialStage: initialStageRef.current,
+        initialVariant: initialVariantRef.current,
+        reducedMotion,
+        onMarbleStep: handleMarbleStep,
+        onFloorBounce: floorRailSelector ? handleFloorBounce : undefined,
+        onOverlayRender: initialOpts.onOverlayRender
+          ? (ctx) => optionsRef.current.onOverlayRender?.(ctx) ?? false
+          : undefined,
+        onOverlayResize: initialOpts.onOverlayResize
+          ? (w, h, renderer, isSoftwareGl) =>
+              optionsRef.current.onOverlayResize?.(w, h, renderer, isSoftwareGl)
+          : undefined,
+        onOverlayDispose: initialOpts.onOverlayDispose
+          ? () => optionsRef.current.onOverlayDispose?.()
+          : undefined,
+        onOverlayContextRestored: initialOpts.onOverlayContextRestored
+          ? (renderer) => optionsRef.current.onOverlayContextRestored?.(renderer)
+          : undefined,
+      });
+
+      if (!controller) {
+        setWebglFallback(true);
+        optionsRef.current.onControllerReady?.(null);
+        return;
+      }
+
+      if (disposed) {
+        controller.dispose();
+        return;
+      }
+
+      controllerRef.current = controller;
+      controller.setTheme(optionsRef.current.isDark, true);
+      controller.setStage(stageModeRef.current);
+      if (optionsRef.current.motionVariant) {
+        controller.setVariant(optionsRef.current.motionVariant);
+      }
+      if (typeof optionsRef.current.externalMarbleHidden === 'boolean') {
+        controller.setExternalMarbleHidden?.(optionsRef.current.externalMarbleHidden);
+      }
+      optionsRef.current.onControllerReady?.(controller);
+
+      // Auto-pause WebGL loop at 0fps whenever any modal dialog opens (shared across Login & Website)
+      const stopModalObserver = observeOpenModalDialogs((hasOpenModal) => {
+        modalPausedRef.current = hasOpenModal;
+        syncEffectivePause();
+      });
       syncEffectivePause();
-    });
-    syncEffectivePause();
 
     // Website-only bottom floor rail physical containment (never runs when floorRailSelector is unset)
     let observedFloorEl: HTMLElement | null = null;
@@ -748,39 +781,59 @@ export function useMarbleBackdropStage(
     window.addEventListener('touchend', onTouchEnd, { passive: true });
     window.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
+      cleanupRuntime = () => {
+        if (reducedMotionQuery && typeof reducedMotionQuery.removeEventListener === 'function') {
+          reducedMotionQuery.removeEventListener('change', handleReducedMotionChange);
+        }
+        window.removeEventListener('resize', handleResize);
+        document.removeEventListener('visibilitychange', handleVisibility);
+        if (listenScroll) {
+          document.removeEventListener('scroll', invalidateCache, true);
+        }
+        window.removeEventListener('wheel', onWheel);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerdown', onPointerDown);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerCancel);
+        window.removeEventListener('pointerleave', onPointerLeave);
+        window.removeEventListener('touchstart', onTouchStart);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', onTouchEnd);
+        window.removeEventListener('touchcancel', onTouchEnd);
+        window.removeEventListener('click', requestIosGyro, true);
+        window.removeEventListener('touchend', requestIosGyro, true);
+        if (gyroAttached) {
+          window.removeEventListener('deviceorientation', onDeviceOrientation);
+        }
+        resizeObserver?.disconnect();
+        stopModalObserver();
+        modalPausedRef.current = false;
+        optionsRef.current.onControllerReady?.(null);
+        controller.dispose();
+        controllerRef.current = null;
+      };
+    };
+
+    const shouldDefer = optionsRef.current.deferBootUntilPaint !== false;
+    const cancelScheduledBoot = shouldDefer
+      ? scheduleAfterFirstPaint(() => {
+          if (!disposed) {
+            void bootThreeController();
+          }
+        })
+      : (() => {
+          void bootThreeController();
+          return () => {};
+        })();
+
     return () => {
+      disposed = true;
+      cancelScheduledBoot();
       invalidateCacheRef.current = null;
       activeTimers.forEach((tid) => window.clearTimeout(tid));
       activeTimers.clear();
-      if (reducedMotionQuery && typeof reducedMotionQuery.removeEventListener === 'function') {
-        reducedMotionQuery.removeEventListener('change', handleReducedMotionChange);
-      }
-      window.removeEventListener('resize', handleResize);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (listenScroll) {
-        document.removeEventListener('scroll', invalidateCache, true);
-      }
-      window.removeEventListener('wheel', onWheel);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerCancel);
-      window.removeEventListener('pointerleave', onPointerLeave);
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.removeEventListener('touchcancel', onTouchEnd);
-      window.removeEventListener('click', requestIosGyro, true);
-      window.removeEventListener('touchend', requestIosGyro, true);
-      if (gyroAttached) {
-        window.removeEventListener('deviceorientation', onDeviceOrientation);
-      }
-      resizeObserver?.disconnect();
-      stopModalObserver();
-      modalPausedRef.current = false;
-      optionsRef.current.onControllerReady?.(null);
-      controller.dispose();
-      controllerRef.current = null;
+      cleanupRuntime?.();
+      cleanupRuntime = null;
     };
   }, [floorRailSelector]);
 

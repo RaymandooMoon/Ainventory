@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -14,20 +14,22 @@ import {
   DEFAULT_LOGIN_THREE_VARIANT,
   getLoginThreeVariantMeta,
   type LoginThreeVariantId,
-} from '../components/auth/loginThreeScenes.ts';
+} from '../components/auth/loginThreeVariants.ts';
 import {
   DEFAULT_STAGE_INTERACTION_STATE,
   type ActiveStageId,
   type StageId,
   type StageInteractionState,
-} from '../three/ainvtryStageDirector.ts';
+} from '../three/stageTypes.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { scheduleAfterFirstPaint } from '../utils/resourcePriority.ts';
 import HeroVisualProofCard from './HeroVisualProofCard.tsx';
 import LiveAppStageOverlay from './LiveAppStageOverlay.tsx';
 import SiteLegalModal from './SiteLegalModal.tsx';
-import SiteMarbleHero from './SiteMarbleHero.tsx';
 import SiteStageAnalytics from './SiteStageAnalytics.tsx';
 import SiteStageHud from './SiteStageHud.tsx';
+
+const SiteMarbleHero = lazy(() => import('./SiteMarbleHero.tsx'));
 import {
   BOTTOM_STAGE_PILLS,
   BRAND_LOGO_ASSETS,
@@ -79,7 +81,9 @@ function SiteBrandMark({
         aria-hidden={isDark}
         width={1120}
         height={394}
+        loading={isDark ? 'lazy' : 'eager'}
         decoding="async"
+        fetchPriority={isDark ? 'low' : 'high'}
         className={`site-logo-img ${!isDark ? 'is-visible' : ''}`}
       />
       <img
@@ -88,7 +92,9 @@ function SiteBrandMark({
         aria-hidden={!isDark}
         width={1120}
         height={394}
+        loading={isDark ? 'eager' : 'lazy'}
         decoding="async"
+        fetchPriority={isDark ? 'high' : 'low'}
         className={`site-logo-img site-logo-img--overlay ${isDark ? 'is-visible' : ''}`}
       />
     </span>
@@ -98,6 +104,13 @@ function SiteBrandMark({
 export default function AinvtrySiteApp() {
   const [theme, setTheme] = useState<SiteTheme>('dark');
   const [lang, setLang] = useState<SiteLang>('en');
+  const [heroThreeReady, setHeroThreeReady] = useState(false);
+
+  useEffect(() => {
+    return scheduleAfterFirstPaint(() => {
+      setHeroThreeReady(true);
+    });
+  }, []);
   const [motionVariant, setMotionVariant] = useState<LoginThreeVariantId>(
     DEFAULT_LOGIN_THREE_VARIANT
   );
@@ -507,17 +520,44 @@ export default function AinvtrySiteApp() {
     >
       {/* ================================================================
           PERSISTENT SINGLE-CANVAS 3D SILK + MARBLE + 4-STAGE DIRECTOR
+          Deferred until after first paint so Hero & Studio paint immediately
          ================================================================ */}
-      <SiteMarbleHero
-        theme={theme}
-        motionVariant={motionVariant}
-        variantChangeOrigin={variantOrigin}
-        activeStage={activeStage}
-        glassPercent={transparencyPct}
-        interaction={stageInteraction}
-        onStageUiSync={handleUpdateInteraction}
-        viewportRootRef={rootRef}
-      />
+      {heroThreeReady ? (
+        <Suspense
+          fallback={
+            <div
+              className="site-marble-stage is-webgl-fallback"
+              data-motion-theme={theme}
+              data-motion-variant={motionVariant}
+              data-active-stage={activeStage}
+              aria-hidden="true"
+            >
+              <div className="site-marble-veil" />
+            </div>
+          }
+        >
+          <SiteMarbleHero
+            theme={theme}
+            motionVariant={motionVariant}
+            variantChangeOrigin={variantOrigin}
+            activeStage={activeStage}
+            glassPercent={transparencyPct}
+            interaction={stageInteraction}
+            onStageUiSync={handleUpdateInteraction}
+            viewportRootRef={rootRef}
+          />
+        </Suspense>
+      ) : (
+        <div
+          className="site-marble-stage is-webgl-fallback"
+          data-motion-theme={theme}
+          data-motion-variant={motionVariant}
+          data-active-stage={activeStage}
+          aria-hidden="true"
+        >
+          <div className="site-marble-veil" />
+        </div>
+      )}
 
       <div className="site-shell">
         {/* ================================================================

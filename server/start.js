@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createApiRouter } from './api.js';
 import { createCorsMiddleware } from './cors.js';
 import db, { ROOT_DIR, UPLOADS_DIR, closeAndFlushDatabase } from './db.js';
+import { createJsonGzipMiddleware } from './httpCompression.js';
 import { createVtonRouter } from './vtonRouter.js';
 
 const app = express();
@@ -53,6 +54,7 @@ app.use((req, res, next) => {
 const apiCorsMiddleware = createCorsMiddleware();
 const uploadsCorsMiddleware = createCorsMiddleware({ methods: 'GET, HEAD, OPTIONS' });
 app.use('/api', apiCorsMiddleware);
+app.use('/api', createJsonGzipMiddleware());
 
 app.get('/api/build-info', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -78,9 +80,23 @@ app.use(
 
 app.use(
   express.static(distDir, {
+    etag: true,
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.html') || filePath.endsWith('.webmanifest')) {
+      const normalized = filePath.replace(/\\/g, '/');
+      if (normalized.endsWith('.html') || normalized.endsWith('.webmanifest')) {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      } else if (
+        normalized.includes('/assets/') &&
+        /-[a-zA-Z0-9_-]{8,}\.(js|css|woff2?)$/.test(normalized)
+      ) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (
+        normalized.includes('/seed/') ||
+        normalized.includes('/models/') ||
+        normalized.includes('/textures/') ||
+        normalized.includes('/assets/')
+      ) {
+        res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
       }
     },
   })

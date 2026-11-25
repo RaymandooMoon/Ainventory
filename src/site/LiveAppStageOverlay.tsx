@@ -229,6 +229,7 @@ export default function LiveAppStageOverlay({
           <iframe
             ref={iframeRef}
             src={initialSrc}
+            loading="eager"
             title={
               lang === 'ko'
                 ? 'iNVTRY 라이브 앱 데모 체험'

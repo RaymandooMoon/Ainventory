@@ -21,6 +21,8 @@ const GarmentObject25D = memo(function GarmentObject25D({
   className = '',
   stageId,
   style = {},
+  eager = false,
+  fetchPriority,
 }) {
   const stageRef = useRef(null);
   const rafRef = useRef(0);
@@ -196,6 +198,8 @@ const GarmentObject25D = memo(function GarmentObject25D({
           subcategory={subcategory}
           colorHex={colorHex}
           alt={alt}
+          eager={eager}
+          fetchPriority={fetchPriority}
           allowStorePhoto={Boolean(src && (src.startsWith('data:') || src.startsWith('/uploads/')))}
           className="garment-25d-cutout"
           style={{

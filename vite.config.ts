@@ -10,22 +10,29 @@ import {
 
 function ainventoryBackendPlugin(): Plugin {
   const mountApi = async (server: ViteDevServer | PreviewServer): Promise<void> => {
-    const [{ default: express }, { createApiRouter }, { createVtonRouter }, { UPLOADS_DIR }] =
-      await Promise.all([
-        import('express'),
-        import('./server/api.js'),
-        import('./server/vtonRouter.js'),
-        import('./server/db.js'),
-      ]);
+    const [
+      { default: express },
+      { createApiRouter },
+      { createVtonRouter },
+      { UPLOADS_DIR },
+      { createJsonGzipMiddleware },
+    ] = await Promise.all([
+      import('express'),
+      import('./server/api.js'),
+      import('./server/vtonRouter.js'),
+      import('./server/db.js'),
+      import('./server/httpCompression.js'),
+    ]);
     const app = express();
     app.disable('x-powered-by');
+    app.use('/api', createJsonGzipMiddleware());
     app.get('/api/build-info', (_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
       res.json({ architecture: 'hig-2.5d', version: '2.5.0' });
     });
     app.use('/api/vton', createVtonRouter());
     app.use('/api', createApiRouter());
-    app.use('/uploads', express.static(UPLOADS_DIR));
+    app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1h' }));
     server.middlewares.use(app);
   };
 

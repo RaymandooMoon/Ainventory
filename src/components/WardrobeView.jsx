@@ -21,12 +21,17 @@ import {
   tx,
 } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { computeNextVisibleBatch } from '../utils/resourcePriority.ts';
 import AddGarmentModal from './AddGarmentModal.jsx';
 import GarmentObject25D from './GarmentObject25D.jsx';
 import NearbyCareMapModal from './NearbyCareMapModal.jsx';
 import SmartLaundryBasketModal from './SmartLaundryBasketModal.jsx';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
+
+const WARDROBE_INITIAL_VISIBLE = 16;
+const WARDROBE_VISIBLE_BATCH = 20;
+const WARDROBE_HIGH_PRIORITY_COUNT = 6;
 
 const ACCESSORY_WARDROBE_SUBPARTS = [
   { key: 'all', ko: '전체', en: 'All' },
@@ -155,6 +160,41 @@ export default function WardrobeView({
     }
     return searched;
   }, [categoryFilteredGarments, searchQuery, sortBy, lang]);
+
+  const [visibleCount, setVisibleCount] = useState(WARDROBE_INITIAL_VISIBLE);
+  const loadMoreSentinelRef = useRef(null);
+
+  useEffect(() => {
+    setVisibleCount(WARDROBE_INITIAL_VISIBLE);
+  }, [activeCategory, activeSubPart, searchQuery, sortBy, activeCloset]);
+
+  const hasMoreGarments = visibleCount < filteredGarments.length;
+
+  useEffect(() => {
+    if (!hasMoreGarments) return undefined;
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') {
+      setVisibleCount(filteredGarments.length);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCount((prev) =>
+            computeNextVisibleBatch(prev, filteredGarments.length, WARDROBE_VISIBLE_BATCH)
+          );
+        }
+      },
+      { rootMargin: '360px 0px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreGarments, filteredGarments.length, visibleCount]);
+
+  const visibleGarments = useMemo(
+    () => filteredGarments.slice(0, visibleCount),
+    [filteredGarments, visibleCount]
+  );
 
   // Auto-seed 5 material items when user opens Jewelry or a specific Accessory/Jewelry sub-part that has 0 items
   useEffect(() => {
@@ -403,7 +443,7 @@ export default function WardrobeView({
       )}
 
       {/* Main 2~4 Column Squircle Inventory Grid */}
-      {loading ? (
+      {loading && garments.length === 0 ? (
         <div className="hig-wardrobe-grid" aria-busy="true">
           {[1, 2, 3, 4, 5, 6].map((n) => (
             <div key={n} className="hig-squircle-skeleton" />
@@ -444,47 +484,63 @@ export default function WardrobeView({
               </div>
             </div>
           ) : (
-            filteredGarments.map((item, idx) => {
-              const displayName =
-                lang === 'en' && typeof item.name_en === 'string' && item.name_en.trim()
-                  ? item.name_en.trim()
-                  : localizeGarmentName(item.name, lang);
-              const displayBrand = localizeBrandName(item.brand, lang);
-              const isAccOrJwl =
-                isJewelryGarment(item) ||
-                normalizeWardrobeCategoryKey(item.category) === 'accessory';
-              const materialText =
-                isAccOrJwl && item.fabric ? localizeMaterialLabel(item.fabric, lang) : '';
-              const subtitle = [displayBrand, materialText].filter(Boolean).join(' · ');
-              const wearCount = Number(item.wear_count || 0);
+            <>
+              {visibleGarments.map((item, idx) => {
+                const displayName =
+                  lang === 'en' && typeof item.name_en === 'string' && item.name_en.trim()
+                    ? item.name_en.trim()
+                    : localizeGarmentName(item.name, lang);
+                const displayBrand = localizeBrandName(item.brand, lang);
+                const isAccOrJwl =
+                  isJewelryGarment(item) ||
+                  normalizeWardrobeCategoryKey(item.category) === 'accessory';
+                const materialText =
+                  isAccOrJwl && item.fabric ? localizeMaterialLabel(item.fabric, lang) : '';
+                const subtitle = [displayBrand, materialText].filter(Boolean).join(' · ');
+                const wearCount = Number(item.wear_count || 0);
+                const isAboveFold = idx < WARDROBE_HIGH_PRIORITY_COUNT;
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-garment-id={item.id}
-                  className="hig-wardrobe-card"
-                  style={{ '--card-stagger': Math.min(idx, 11) }}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    onSelectGarment?.(item);
-                  }}
-                >
-                  <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
-                    <GarmentObject25D item={item} alt={displayName} padding="13%" />
-                    {wearCount > 0 && (
-                      <span className="hig-card-wear-badge tabular-nums">
-                        {tx(lang, `${wearCount}회`, `${wearCount}×`)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="hig-garment-meta">
-                    <span className="hig-garment-name">{displayName}</span>
-                    {subtitle ? <span className="hig-garment-brand">{subtitle}</span> : null}
-                  </div>
-                </button>
-              );
-            })
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-garment-id={item.id}
+                    className="hig-wardrobe-card"
+                    style={{ '--card-stagger': Math.min(idx, 11) }}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onSelectGarment?.(item);
+                    }}
+                  >
+                    <div className={CARBON_DOM_CONTRACT.cutoutTileClass}>
+                      <GarmentObject25D
+                        item={item}
+                        alt={displayName}
+                        padding="13%"
+                        eager={isAboveFold}
+                        fetchPriority={isAboveFold ? 'high' : 'low'}
+                      />
+                      {wearCount > 0 && (
+                        <span className="hig-card-wear-badge tabular-nums">
+                          {tx(lang, `${wearCount}회`, `${wearCount}×`)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="hig-garment-meta">
+                      <span className="hig-garment-name">{displayName}</span>
+                      {subtitle ? <span className="hig-garment-brand">{subtitle}</span> : null}
+                    </div>
+                  </button>
+                );
+              })}
+              {hasMoreGarments && (
+                <div
+                  ref={loadMoreSentinelRef}
+                  aria-hidden="true"
+                  style={{ gridColumn: '1 / -1', height: 24 }}
+                />
+              )}
+            </>
           )}
         </div>
       )}

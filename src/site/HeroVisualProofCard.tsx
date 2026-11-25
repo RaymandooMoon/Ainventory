@@ -120,7 +120,9 @@ export default function HeroVisualProofCard({
                 alt={copy.hero.proofInputLabel}
                 width={640}
                 height={853}
+                loading="eager"
                 decoding="async"
+                fetchPriority="high"
                 className="site-hero-proof-garment"
               />
               <figcaption className="site-hero-proof-pill">{copy.hero.proofInputLabel}</figcaption>
@@ -136,7 +138,9 @@ export default function HeroVisualProofCard({
                 alt={copy.hero.proofOutputLabel}
                 width={390}
                 height={844}
+                loading="eager"
                 decoding="async"
+                fetchPriority="high"
                 className="site-hero-proof-vton"
               />
               <figcaption className="site-hero-proof-pill site-hero-proof-pill--accent">
@@ -153,7 +157,9 @@ export default function HeroVisualProofCard({
                   alt={copy.interactive.afterLabel}
                   width={640}
                   height={853}
+                  loading="lazy"
                   decoding="async"
+                  fetchPriority="low"
                 />
               </div>
 
@@ -166,7 +172,9 @@ export default function HeroVisualProofCard({
                   alt={copy.interactive.beforeLabel}
                   width={640}
                   height={853}
+                  loading="lazy"
                   decoding="async"
+                  fetchPriority="low"
                 />
               </div>
 

@@ -3,7 +3,7 @@ import { CARBON_DOM_CONTRACT } from '../../contracts/carbonDesignContract.ts';
 import {
   DEFAULT_LOGIN_THREE_VARIANT,
   type LoginThreeVariantId,
-} from './loginThreeScenes.ts';
+} from './loginThreeVariants.ts';
 import { useMarbleBackdropStage, type MarbleHitParams } from './useMarbleBackdropStage.ts';
 
 export interface LoginBackdropCanvasProps {

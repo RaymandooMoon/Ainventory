@@ -2,9 +2,11 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import {
   DEFAULT_LOGIN_THREE_VARIANT,
-  type LoginThreeController,
-  type LoginThreeOverlayRenderContext,
   type LoginThreeVariantId,
+} from '../components/auth/loginThreeVariants.ts';
+import type {
+  LoginThreeController,
+  LoginThreeOverlayRenderContext,
 } from '../components/auth/loginThreeScenes.ts';
 import {
   useMarbleBackdropStage,
@@ -15,15 +17,14 @@ import {
   DomDockColliderSync,
   HERO_CAMERA_PRESET,
   HERO_MARBLE_WELL,
+  type ActiveStageId,
   type HeroMarblePhysicsPort,
   type MoodMode,
   type StageId,
   type StageInteractionState,
+  type StageModule,
   type ThemeMode,
 } from '../three/ainvtryStageDirector.ts';
-import { createAboutStage } from '../three/stages/aboutStage.ts';
-import { createArchitectureStage } from '../three/stages/architectureStage.ts';
-import { createSpecsStage } from '../three/stages/specsStage.ts';
 import {
   createStageMarbleMesh,
   createStudioEnvMap,
@@ -31,7 +32,6 @@ import {
   setSoftwareGlGlassFallback,
   type StageMarbleHandle,
 } from '../three/stages/stageMaterials.ts';
-import { createStudioStage } from '../three/stages/studioStage.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 import type { SiteTheme } from './siteContent.ts';
 
@@ -217,6 +217,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
   const controllerRef = useRef<LoginThreeController | null>(null);
   const rigRef = useRef<StageDirectorRig | null>(null);
+  const loadingStagesRef = useRef<Set<ActiveStageId>>(new Set());
   const activeStageRef = useRef<StageId>(effectiveThreeStage);
   const themeRef = useRef<ThemeMode>(theme);
   const moodRef = useRef<MoodMode>(mood);
@@ -297,6 +298,53 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         return;
       }
 
+      // Lazy-load the requested 3D stage module on demand before transitioning
+      if (!rig.director.getStage(nextStage)) {
+        if (!loadingStagesRef.current.has(nextStage)) {
+          loadingStagesRef.current.add(nextStage);
+          const loadStage = async (): Promise<StageModule> => {
+            if (nextStage === 'studio') {
+              const mod = await import('../three/stages/studioStage.ts');
+              return mod.createStudioStage({
+                onModelLoaded: () => {
+                  controllerRef.current?.requestRender?.();
+                },
+              });
+            }
+            if (nextStage === 'architecture') {
+              const mod = await import('../three/stages/architectureStage.ts');
+              return mod.createArchitectureStage();
+            }
+            if (nextStage === 'specs') {
+              const mod = await import('../three/stages/specsStage.ts');
+              return mod.createSpecsStage();
+            }
+            const mod = await import('../three/stages/aboutStage.ts');
+            return mod.createAboutStage();
+          };
+          void loadStage()
+            .then((stageMod) => {
+              loadingStagesRef.current.delete(nextStage);
+              if (rigRef.current !== rig) {
+                stageMod.dispose();
+                return;
+              }
+              if (!rig.director.getStage(nextStage)) {
+                rig.director.registerStage(stageMod);
+              } else {
+                stageMod.dispose();
+              }
+              if (activeStageRef.current === nextStage) {
+                syncStageTransition(rig, nextStage);
+              }
+            })
+            .catch(() => {
+              loadingStagesRef.current.delete(nextStage);
+            });
+        }
+        return;
+      }
+
       // Launching into an interactive 3D stage
       let launchWorldPos: THREE.Vector3 | undefined;
       if (currentStage === 'hero' && !rig.heroReturnPending) {
@@ -338,6 +386,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     ): StageDirectorRig => {
       if (rigRef.current) return rigRef.current;
 
+      THREE.Cache.enabled = true;
       setSoftwareGlGlassFallback(isSoftwareGl);
 
       const safeAspect = width / Math.max(1, height);
@@ -398,17 +447,6 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         }
       );
 
-      director.registerStageFactory('studio', () =>
-        createStudioStage({
-          onModelLoaded: () => {
-            controllerRef.current?.requestRender?.();
-          },
-        })
-      );
-      director.registerStageFactory('architecture', () => createArchitectureStage());
-      director.registerStageFactory('specs', () => createSpecsStage());
-      director.registerStageFactory('about', () => createAboutStage());
-
       director.setViewportSize(width, height);
       director.setVisualMode(moodRef.current, themeRef.current);
       director.setGlassPercent(glassPercentRef.current);
@@ -455,14 +493,18 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
   const handleOverlayResize = useCallback(
     (width: number, height: number, renderer: THREE.WebGLRenderer, isSoftwareGl = false) => {
+      if (isSoftwareGl) {
+        setSoftwareGlGlassFallback(true);
+      }
+      // Defer creating StageDirectorRig + PMREM studio envMap until the user actually enters a 3D stage
+      if (!rigRef.current && activeStageRef.current === 'hero') {
+        return;
+      }
       const reducedMotion = Boolean(
         typeof window !== 'undefined' &&
           typeof window.matchMedia === 'function' &&
           window.matchMedia('(prefers-reduced-motion: reduce)').matches
       );
-      if (isSoftwareGl) {
-        setSoftwareGlGlassFallback(true);
-      }
       const rig = ensureRig(renderer, width, height, reducedMotion, isSoftwareGl);
       const aspect = width / Math.max(1, height);
       rig.camera.aspect = aspect;
@@ -476,6 +518,9 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     (ctx: LoginThreeOverlayRenderContext): boolean => {
       if (ctx.isSoftwareGl) {
         setSoftwareGlGlassFallback(true);
+      }
+      if (!rigRef.current && activeStageRef.current === 'hero') {
+        return false;
       }
       const rig = ensureRig(ctx.renderer, ctx.width, ctx.height, ctx.reducedMotion, ctx.isSoftwareGl);
       const wallElapsed =
@@ -619,7 +664,12 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
   // Sync stage transitions (including Specs -> 3D Fitting/Care live Three.js background)
   useEffect(() => {
     const rig = rigRef.current;
-    if (!rig) return;
+    if (!rig) {
+      if (effectiveThreeStage !== 'hero') {
+        controllerRef.current?.requestRender?.();
+      }
+      return;
+    }
     syncStageTransition(rig, effectiveThreeStage);
   }, [effectiveThreeStage, syncStageTransition]);
 

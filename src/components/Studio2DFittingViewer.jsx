@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Award,
@@ -115,14 +115,19 @@ import {
 import { computeVtonStageProgress } from '../utils/vtonStageProgress.ts';
 import { STYLING_DENSITY_OPTIONS } from '../services/stylingPreferenceStore.ts';
 import { buildOutfitRationaleNote } from '../utils/outfitRationaleEngine.ts';
+import {
+  scheduleAfterFirstPaint,
+  staggeredImagePreload,
+} from '../utils/resourcePriority.ts';
 import EditorialFlatLayBoard from './EditorialFlatLayBoard.jsx';
 import FittingAtelierBackdrop from './FittingAtelierBackdrop.tsx';
 import StageGroundDeck from './FittingWeatherGroundDeck.tsx';
 import StageStreetViewMapSheet from './StageStreetViewMapSheet.tsx';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-import StudioThreeStageLayer from './three/StudioThreeStageLayer.tsx';
 import '../styles/atelierTokens.css';
 import './Studio2DFittingViewer.css';
+
+const StudioThreeStageLayer = lazy(() => import('./three/StudioThreeStageLayer.tsx'));
 
 const AUTOGEN_STORAGE_KEY = 'ainventory_vton_autogen_v1';
 
@@ -151,18 +156,15 @@ function writeStoredAutoGenEnabled(enabled) {
   }
 }
 
-function preloadImageUrls(urls) {
-  if (typeof Image === 'undefined' || !Array.isArray(urls)) return;
-  for (const url of urls) {
-    if (typeof url === 'string' && url.length > 0) {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-      if (typeof img.decode === 'function') {
-        img.decode().catch(() => {});
-      }
-    }
-  }
+function preloadImageUrls(urls, activeUrl = null) {
+  if (typeof Image === 'undefined' || !Array.isArray(urls) || urls.length === 0) return;
+  const resolvedActive =
+    typeof activeUrl === 'string' && activeUrl.length > 0
+      ? activeUrl
+      : urls.length === 1
+        ? urls[0]
+        : null;
+  staggeredImagePreload(urls, { activeUrl: resolvedActive, delayMs: 85 });
 }
 
 const ORDERED_SLOT_KEYS = [
@@ -843,7 +845,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
 
   const zoom = 1;
   const pan = useMemo(() => ({ x: 0, y: 0 }), []);
-  const [threeStageAvailable, setThreeStageAvailable] = useState(true);
+  const [threeStageAvailable, setThreeStageAvailable] = useState(false);
+  const [threeStageMountReady, setThreeStageMountReady] = useState(false);
+
+  useEffect(() => {
+    return scheduleAfterFirstPaint(() => {
+      setThreeStageMountReady(true);
+    });
+  }, []);
   const [floorPlacement, setFloorPlacement] = useState(() => ({
     effectiveBaseScale: 1,
     soleTransformOrigin: '50% 95.5%',
@@ -2054,14 +2063,14 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
             clearFirstLookCountdown();
             setAiLoading(false);
             setProgressiveBgAnglesLoading(false);
-            if (slices) {
-              preloadImageUrls(Object.values(slices));
-            }
             const targetUrl =
               slices?.[liveSnap.canonicalSliceAngle] ||
               slices?.[0] ||
               slices?.[45] ||
               null;
+            if (slices) {
+              preloadImageUrls(Object.values(slices), targetUrl);
+            }
             if (targetUrl) {
               clearFrontOnlyFallbackState();
               recordScenarioVtonSnapshot(
@@ -3399,36 +3408,41 @@ const Studio2DFittingViewer = memo(function Studio2DFittingViewer({
         suppressContactShadow={threeStageAvailable}
       />
 
-      {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Single GLSL Silhouette Cast Shadow + Contact AO & Volumetric Weather */}
-      {Boolean(resolvedAiImageUrl) && stageMode === 'ai-vton' && !canReturnToCharacter && (
-        <StudioThreeStageLayer
-          isOutdoor={isStageOutdoor}
-          weatherMode={stageEffectiveWeather}
-          timeOfDay={timeOfDay}
-          auraTier={resolvedBgItem?.tier || auraTier}
-          theme={resolvedTheme}
-          angleScrollDeg={angleScrollDeg}
-          paused={false}
-          hasCharacter={true}
-          stageBackgroundId={resolvedBgItem.id}
-          weather={weather}
-          clockNowMs={clockNowMs}
-          lightingPreset={normalizedLightingPreset}
-          lightingIntensity={clampedLightingIntensity}
-          modelImageUrl={resolvedAiImageUrl}
-          soleStageTopPct={floorPlacement.soleStageTopPct}
-          topRatio={floorPlacement.topRatio}
-          bottomRatio={floorPlacement.bottomRatio}
-          heightCm={
-            bodySpec?.heightCm ??
-            resolvedAvatarSpec?.body?.heightCm ??
-            user?.heightCm ??
-            172
-          }
-          mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
-          onWebGlAvailabilityChange={setThreeStageAvailable}
-        />
-      )}
+      {/* Layer 1B (z-12): Hybrid Three.js Spatial Lighting, Single GLSL Silhouette Cast Shadow + Contact AO & Volumetric Weather (Lazy-loaded after first paint) */}
+      {threeStageMountReady &&
+        Boolean(resolvedAiImageUrl) &&
+        stageMode === 'ai-vton' &&
+        !canReturnToCharacter && (
+          <Suspense fallback={null}>
+            <StudioThreeStageLayer
+              isOutdoor={isStageOutdoor}
+              weatherMode={stageEffectiveWeather}
+              timeOfDay={timeOfDay}
+              auraTier={resolvedBgItem?.tier || auraTier}
+              theme={resolvedTheme}
+              angleScrollDeg={angleScrollDeg}
+              paused={false}
+              hasCharacter={true}
+              stageBackgroundId={resolvedBgItem.id}
+              weather={weather}
+              clockNowMs={clockNowMs}
+              lightingPreset={normalizedLightingPreset}
+              lightingIntensity={clampedLightingIntensity}
+              modelImageUrl={resolvedAiImageUrl}
+              soleStageTopPct={floorPlacement.soleStageTopPct}
+              topRatio={floorPlacement.topRatio}
+              bottomRatio={floorPlacement.bottomRatio}
+              heightCm={
+                bodySpec?.heightCm ??
+                resolvedAvatarSpec?.body?.heightCm ??
+                user?.heightCm ??
+                172
+              }
+              mirrorX={angleSpec.mirrorX || pinnedHistoryForceMirrorX}
+              onWebGlAvailabilityChange={setThreeStageAvailable}
+            />
+          </Suspense>
+        )}
 
       {/* Top Status Pill:
           1) Initial recommended flat-lay First-Look reverse countdown (auto pre-gen notice; touch any garment to cancel)

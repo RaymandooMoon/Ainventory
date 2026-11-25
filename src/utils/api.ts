@@ -35,6 +35,90 @@ const API_BASE_URL = API_RUNTIME_CONFIG.apiBaseUrl;
 let inMemoryEmbedToken = '';
 let inMemoryEmbedSampleDemo = false;
 
+interface SampleGarmentsPrefetchCache {
+  garments: GarmentRecord[];
+  fetchedAt: number;
+}
+
+const SAMPLE_PREFETCH_TTL_MS = 90_000;
+let sampleGarmentsPrefetchCache: SampleGarmentsPrefetchCache | null = null;
+let sampleGarmentsPrefetchInFlight: Promise<GarmentRecord[]> | null = null;
+
+export function getPrefetchedSampleGarments(): GarmentRecord[] | null {
+  if (!sampleGarmentsPrefetchCache) return null;
+  if (Date.now() - sampleGarmentsPrefetchCache.fetchedAt > SAMPLE_PREFETCH_TTL_MS) {
+    sampleGarmentsPrefetchCache = null;
+    return null;
+  }
+  return sampleGarmentsPrefetchCache.garments;
+}
+
+export async function loadInstantSampleGarmentsFallback(): Promise<GarmentRecord[]> {
+  const cached = getPrefetchedSampleGarments();
+  if (cached && cached.length > 0) return cached;
+  try {
+    const local = await runStandaloneFallback('/garments?closet=sample', {});
+    const list = Array.isArray(local?.garments) ? (local.garments as GarmentRecord[]) : [];
+    if (list.length > 0 && !sampleGarmentsPrefetchCache) {
+      sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export function prefetchSampleGarments(): Promise<GarmentRecord[]> {
+  const cached = getPrefetchedSampleGarments();
+  if (cached && cached.length > 0) {
+    return Promise.resolve(cached);
+  }
+  if (sampleGarmentsPrefetchInFlight) {
+    return sampleGarmentsPrefetchInFlight;
+  }
+
+  const job = (async (): Promise<GarmentRecord[]> => {
+    try {
+      if (isEffectivelyOffline() || STATIC_STANDALONE_BUILD) {
+        return await loadInstantSampleGarmentsFallback();
+      }
+      const data = await rawNetworkFetch('/garments?closet=sample', {
+        headers: { 'X-Demo-Mode': 'sample' },
+        timeoutMs: 4500,
+      });
+      const list = Array.isArray(data?.garments) ? (data.garments as GarmentRecord[]) : [];
+      if (list.length > 0) {
+        sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
+        writeCachedResponse('demo:/garments?closet=sample', data).catch(() => {});
+        writeCachedResponse('/garments?closet=sample', data).catch(() => {});
+        return list;
+      }
+    } catch {
+      // Fall through to cached / standalone catalog fallback below
+    }
+    try {
+      const idbCached =
+        (await readCachedResponse<Record<string, unknown>>('demo:/garments?closet=sample')) ||
+        (await readCachedResponse<Record<string, unknown>>('/garments?closet=sample'));
+      const list = Array.isArray(idbCached?.garments)
+        ? (idbCached.garments as GarmentRecord[])
+        : [];
+      if (list.length > 0) {
+        sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
+        return list;
+      }
+    } catch {
+      // Ignore cache read error
+    }
+    return await loadInstantSampleGarmentsFallback();
+  })().finally(() => {
+    sampleGarmentsPrefetchInFlight = null;
+  });
+
+  sampleGarmentsPrefetchInFlight = job;
+  return job;
+}
+
 export function isLiveAppEmbedSession(): boolean {
   if (typeof window === 'undefined') return false;
   if ((window as unknown as Record<string, unknown>).__AINVTRY_LIVE_EMBED__ === true) {
@@ -229,8 +313,10 @@ async function rawNetworkFetch(
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
-  if (sampleDemo) {
+  const explicitSampleHeader = headers['X-Demo-Mode'] === 'sample';
+  if (sampleDemo || explicitSampleHeader) {
     headers['X-Demo-Mode'] = 'sample';
+    delete headers.Authorization;
   } else if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -260,6 +346,7 @@ async function rawNetworkFetch(
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${normalizedPath}`, {
+      credentials: fetchInit.credentials ?? 'same-origin',
       ...fetchInit,
       headers,
       signal: controller ? controller.signal : externalSignal,
@@ -434,6 +521,18 @@ export async function apiFetch<T = Record<string, unknown>>(
         return coerceApiPayload<T>(mutatedCached);
       }
     }
+    if (path === '/garments?closet=sample' && !isSampleDemoMutated()) {
+      const prefetched = getPrefetchedSampleGarments();
+      if (prefetched && prefetched.length > 0) {
+        return coerceApiPayload<T>({ garments: prefetched, _fromPrefetch: true });
+      }
+      if (sampleGarmentsPrefetchInFlight) {
+        const awaited = await sampleGarmentsPrefetchInFlight.catch(() => []);
+        if (awaited.length > 0) {
+          return coerceApiPayload<T>({ garments: awaited, _fromPrefetch: true });
+        }
+      }
+    }
     if (isBrowserOffline) {
       if (!skipStaleIdbCache) {
         const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
@@ -447,18 +546,46 @@ export async function apiFetch<T = Record<string, unknown>>(
     }
     try {
       // Flush any queued offline mutations BEFORE fetching & overwriting GET cache
-      if (!sampleDemo && getStoredToken()) {
-        const queuedCount = await getQueuedMutationCount();
+      // (skip in read-only live embed sessions so IndexedDB never stalls initial studio loading)
+      if (!sampleDemo && !isLiveAppEmbedSession() && getStoredToken()) {
+        const queuedCount = await getQueuedMutationCount().catch(() => 0);
         if (queuedCount > 0) {
           await flushPendingOfflineSync().catch(() => 0);
         }
       }
       const data = await rawNetworkFetch(path, options);
+      if (path === '/garments?closet=sample' && Array.isArray(data?.garments) && data.garments.length > 0) {
+        sampleGarmentsPrefetchCache = {
+          garments: data.garments as GarmentRecord[],
+          fetchedAt: Date.now(),
+        };
+      }
       if (!skipStaleIdbCache) {
         writeCachedResponse(cacheKey, data).catch(() => {});
       }
       return coerceApiPayload<T>(data);
     } catch (err) {
+      // Resilient recovery for public sample closet even if an expired/stale Bearer token returned 401/403
+      if (path === '/garments?closet=sample') {
+        try {
+          const sampleRetry = await rawNetworkFetch('/garments?closet=sample', {
+            headers: { 'X-Demo-Mode': 'sample' },
+            timeoutMs: 4500,
+          });
+          if (Array.isArray(sampleRetry?.garments) && sampleRetry.garments.length > 0) {
+            sampleGarmentsPrefetchCache = {
+              garments: sampleRetry.garments as GarmentRecord[],
+              fetchedAt: Date.now(),
+            };
+            writeCachedResponse('demo:/garments?closet=sample', sampleRetry).catch(() => {});
+            return coerceApiPayload<T>(sampleRetry);
+          }
+        } catch {
+          // Fall through to cached / standalone sample garments fallback
+        }
+        const localSample = await runStandaloneFallback('/garments?closet=sample', options);
+        return coerceApiPayload<T>({ ...localSample, _fromOfflineCache: true });
+      }
       // Network failure or missing backend fallback (never swallow genuine HTTP 401/4xx JSON API errors)
       if (isNetworkOrBackendUnavailable(err)) {
         if (!skipStaleIdbCache) {

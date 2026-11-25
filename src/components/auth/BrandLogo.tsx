@@ -35,7 +35,9 @@ const BrandLogo = memo(
           aria-hidden={isDark}
           width={1120}
           height={394}
+          loading={isDark ? 'lazy' : 'eager'}
           decoding="async"
+          fetchPriority={isDark ? 'low' : 'high'}
           className={`atelier-logo-img atelier-logo-img--light ${!isDark ? 'is-visible' : ''}`}
         />
         <img
@@ -44,7 +46,9 @@ const BrandLogo = memo(
           aria-hidden={!isDark}
           width={1120}
           height={394}
+          loading={isDark ? 'eager' : 'lazy'}
           decoding="async"
+          fetchPriority={isDark ? 'high' : 'low'}
           className={`atelier-logo-img atelier-logo-img--dark atelier-logo-img--overlay ${isDark ? 'is-visible' : ''}`}
         />
       </span>

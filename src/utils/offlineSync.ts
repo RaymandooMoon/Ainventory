@@ -65,11 +65,40 @@ interface QueuedMutationRecord {
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+let idbUnavailableForSession = false;
+const IDB_OP_TIMEOUT_MS = 1000;
 const syncListeners = new Set<SyncStateListener>();
 let memoryUserScope = '';
 const memoryCacheStore = new Map<string, CacheRow>();
 const memoryQueueStore = new Map<number, QueuedMutationRecord>();
 let memoryQueueAutoId = 1;
+
+function withIdbTimeout<T>(
+  runner: (finish: (val: T) => void) => void,
+  fallback: T,
+  timeoutMs = IDB_OP_TIMEOUT_MS
+): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const done = (val: T) => {
+      if (settled) return;
+      settled = true;
+      if (timerId !== null) clearTimeout(timerId);
+      resolve(val);
+    };
+    const timerId =
+      timeoutMs > 0
+        ? setTimeout(() => {
+            done(fallback);
+          }, timeoutMs)
+        : null;
+    try {
+      runner(done);
+    } catch {
+      done(fallback);
+    }
+  });
+}
 
 function readInitialUserScope(): string {
   if (memoryUserScope) return memoryUserScope;
@@ -129,10 +158,30 @@ export function subscribeOfflineSync(listener: SyncStateListener): () => void {
 }
 
 function openOfflineDb(): Promise<IDBDatabase | null> {
-  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (idbUnavailableForSession || typeof indexedDB === 'undefined') {
+    return Promise.resolve(null);
+  }
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise<IDBDatabase | null>((resolve) => {
+    let settled = false;
+    const finish = (db: IDBDatabase | null, markUnavailable = false) => {
+      if (settled) return;
+      settled = true;
+      if (timerId !== null) clearTimeout(timerId);
+      if (!db) {
+        dbPromise = null;
+        if (markUnavailable) {
+          idbUnavailableForSession = true;
+        }
+      }
+      resolve(db);
+    };
+    const timerId = setTimeout(() => {
+      // Third-party / nested mobile iframes can stall indexedDB.open indefinitely; fall back cleanly to in-memory cache
+      finish(null, true);
+    }, IDB_OP_TIMEOUT_MS);
+
     try {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
@@ -144,14 +193,21 @@ function openOfflineDb(): Promise<IDBDatabase | null> {
           idb.createObjectStore(STORE_QUEUE, { keyPath: 'id', autoIncrement: true });
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => {
-        dbPromise = null;
-        resolve(null);
+      req.onsuccess = () => {
+        if (settled) {
+          try {
+            req.result.close();
+          } catch {
+            // ignore close error
+          }
+          return;
+        }
+        finish(req.result);
       };
+      req.onerror = () => finish(null, true);
+      req.onblocked = () => finish(null, true);
     } catch {
-      dbPromise = null;
-      resolve(null);
+      finish(null, true);
     }
   });
   return dbPromise;
@@ -180,34 +236,31 @@ export async function readCachedResponse<T = Record<string, unknown>>(
     return row.data as T;
   }
 
-  return new Promise<T | null>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_CACHE, 'readonly');
-      const req = tx.objectStore(STORE_CACHE).get(key);
-      req.onsuccess = () => {
-        const row = req.result as CacheRow | undefined;
-        if (!row || row.data === undefined) {
-          resolve(null);
+  return withIdbTimeout<T | null>((finish) => {
+    const tx = idb.transaction(STORE_CACHE, 'readonly');
+    const req = tx.objectStore(STORE_CACHE).get(key);
+    req.onsuccess = () => {
+      const row = req.result as CacheRow | undefined;
+      if (!row || row.data === undefined) {
+        finish(null);
+        return;
+      }
+      if (key !== DEAD_LETTER_KEY && !isDemoKey) {
+        if (
+          row.userScope &&
+          row.userScope !== 'default' &&
+          activeScope !== 'default' &&
+          row.userScope !== activeScope
+        ) {
+          finish(null);
           return;
         }
-        if (key !== DEAD_LETTER_KEY && !isDemoKey) {
-          if (
-            row.userScope &&
-            row.userScope !== 'default' &&
-            activeScope !== 'default' &&
-            row.userScope !== activeScope
-          ) {
-            resolve(null);
-            return;
-          }
-        }
-        resolve(row.data as T);
-      };
-      req.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
+      }
+      finish(row.data as T);
+    };
+    req.onerror = () => finish(null);
+    tx.onabort = () => finish(null);
+  }, null);
 }
 
 export async function writeCachedResponse(
@@ -230,16 +283,13 @@ export async function writeCachedResponse(
     return;
   }
 
-  return new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_CACHE, 'readwrite');
-      tx.objectStore(STORE_CACHE).put(row);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  return withIdbTimeout<void>((finish) => {
+    const tx = idb.transaction(STORE_CACHE, 'readwrite');
+    tx.objectStore(STORE_CACHE).put(row);
+    tx.oncomplete = () => finish();
+    tx.onerror = () => finish();
+    tx.onabort = () => finish();
+  }, undefined);
 }
 
 async function deleteCachedResponseKey(key: string): Promise<void> {
@@ -248,16 +298,13 @@ async function deleteCachedResponseKey(key: string): Promise<void> {
     memoryCacheStore.delete(key);
     return;
   }
-  await new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_CACHE, 'readwrite');
-      tx.objectStore(STORE_CACHE).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  await withIdbTimeout<void>((finish) => {
+    const tx = idb.transaction(STORE_CACHE, 'readwrite');
+    tx.objectStore(STORE_CACHE).delete(key);
+    tx.oncomplete = () => finish();
+    tx.onerror = () => finish();
+    tx.onabort = () => finish();
+  }, undefined);
 }
 
 /**
@@ -275,27 +322,24 @@ export async function clearUserSessionOfflineCache(specificScope?: string): Prom
     }
     return;
   }
-  await new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_CACHE, 'readwrite');
-      const store = tx.objectStore(STORE_CACHE);
-      const req = store.getAll();
-      req.onsuccess = () => {
-        const rows = (Array.isArray(req.result) ? req.result : []) as CacheRow[];
-        for (const row of rows) {
-          const k = String(row.key || '');
-          if (k.startsWith('demo:') || k === DEAD_LETTER_KEY) continue;
-          if (!specificScope || !row.userScope || row.userScope === specificScope) {
-            store.delete(k);
-          }
+  await withIdbTimeout<void>((finish) => {
+    const tx = idb.transaction(STORE_CACHE, 'readwrite');
+    const store = tx.objectStore(STORE_CACHE);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const rows = (Array.isArray(req.result) ? req.result : []) as CacheRow[];
+      for (const row of rows) {
+        const k = String(row.key || '');
+        if (k.startsWith('demo:') || k === DEAD_LETTER_KEY) continue;
+        if (!specificScope || !row.userScope || row.userScope === specificScope) {
+          store.delete(k);
         }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+      }
+    };
+    tx.oncomplete = () => finish();
+    tx.onerror = () => finish();
+    tx.onabort = () => finish();
+  }, undefined);
 }
 
 function matchesTargetClosetQuery(cacheKey: string, targetCloset?: string): boolean {
@@ -336,19 +380,16 @@ async function listCacheEntriesByPrefix(
     return Array.from(memoryCacheStore.values()).filter(filterRow);
   }
 
-  return new Promise<CacheRow[]>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_CACHE, 'readonly');
-      const req = tx.objectStore(STORE_CACHE).getAll();
-      req.onsuccess = () => {
-        const all = (Array.isArray(req.result) ? req.result : []) as CacheRow[];
-        resolve(all.filter(filterRow));
-      };
-      req.onerror = () => resolve([]);
-    } catch {
-      resolve([]);
-    }
-  });
+  return withIdbTimeout<CacheRow[]>((finish) => {
+    const tx = idb.transaction(STORE_CACHE, 'readonly');
+    const req = tx.objectStore(STORE_CACHE).getAll();
+    req.onsuccess = () => {
+      const all = (Array.isArray(req.result) ? req.result : []) as CacheRow[];
+      finish(all.filter(filterRow));
+    };
+    req.onerror = () => finish([]);
+    tx.onabort = () => finish([]);
+  }, []);
 }
 
 function resolveCachePrefixForMutationPath(mutationPath: string): string | null {
@@ -391,16 +432,13 @@ export async function enqueueOfflineMutation(entry: {
     memoryQueueAutoId += 1;
     memoryQueueStore.set(assignedId, { ...record, id: assignedId });
   } else {
-    await new Promise<void>((resolve) => {
-      try {
-        const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-        tx.objectStore(STORE_QUEUE).add(record);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      } catch {
-        resolve();
-      }
-    });
+    await withIdbTimeout<void>((finish) => {
+      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+      tx.objectStore(STORE_QUEUE).add(record);
+      tx.oncomplete = () => finish();
+      tx.onerror = () => finish();
+      tx.onabort = () => finish();
+    }, undefined);
   }
   const count = await getQueuedMutationCount();
   const onlineNow = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
@@ -410,16 +448,13 @@ export async function enqueueOfflineMutation(entry: {
 export async function getQueuedMutationCount(): Promise<number> {
   const idb = await openOfflineDb();
   if (!idb) return memoryQueueStore.size;
-  return new Promise<number>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_QUEUE, 'readonly');
-      const req = tx.objectStore(STORE_QUEUE).count();
-      req.onsuccess = () => resolve(Number(req.result) || 0);
-      req.onerror = () => resolve(0);
-    } catch {
-      resolve(0);
-    }
-  });
+  return withIdbTimeout<number>((finish) => {
+    const tx = idb.transaction(STORE_QUEUE, 'readonly');
+    const req = tx.objectStore(STORE_QUEUE).count();
+    req.onsuccess = () => finish(Number(req.result) || 0);
+    req.onerror = () => finish(0);
+    tx.onabort = () => finish(0);
+  }, 0);
 }
 
 function rewritePathWithIdMap(path: string, idMap: Map<number, number>): string {
@@ -503,16 +538,13 @@ async function deleteQueueRecord(idb: IDBDatabase | null, recordId: number): Pro
     memoryQueueStore.delete(recordId);
     return;
   }
-  await new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-      tx.objectStore(STORE_QUEUE).delete(recordId);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  await withIdbTimeout<void>((finish) => {
+    const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+    tx.objectStore(STORE_QUEUE).delete(recordId);
+    tx.oncomplete = () => finish();
+    tx.onerror = () => finish();
+    tx.onabort = () => finish();
+  }, undefined);
 }
 
 async function putQueueRecord(idb: IDBDatabase | null, record: QueuedMutationRecord): Promise<void> {
@@ -522,16 +554,13 @@ async function putQueueRecord(idb: IDBDatabase | null, record: QueuedMutationRec
     }
     return;
   }
-  await new Promise<void>((resolve) => {
-    try {
-      const tx = idb.transaction(STORE_QUEUE, 'readwrite');
-      tx.objectStore(STORE_QUEUE).put(record);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  await withIdbTimeout<void>((finish) => {
+    const tx = idb.transaction(STORE_QUEUE, 'readwrite');
+    tx.objectStore(STORE_QUEUE).put(record);
+    tx.oncomplete = () => finish();
+    tx.onerror = () => finish();
+    tx.onabort = () => finish();
+  }, undefined);
 }
 
 let flushing = false;
@@ -554,17 +583,14 @@ export async function flushOfflineQueue(
   try {
     const items = !idb
       ? Array.from(memoryQueueStore.values()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
-      : await new Promise<QueuedMutationRecord[]>((resolve) => {
-          try {
-            const tx = idb.transaction(STORE_QUEUE, 'readonly');
-            const req = tx.objectStore(STORE_QUEUE).getAll();
-            req.onsuccess = () =>
-              resolve((Array.isArray(req.result) ? req.result : []) as QueuedMutationRecord[]);
-            req.onerror = () => resolve([]);
-          } catch {
-            resolve([]);
-          }
-        });
+      : await withIdbTimeout<QueuedMutationRecord[]>((finish) => {
+          const tx = idb.transaction(STORE_QUEUE, 'readonly');
+          const req = tx.objectStore(STORE_QUEUE).getAll();
+          req.onsuccess = () =>
+            finish((Array.isArray(req.result) ? req.result : []) as QueuedMutationRecord[]);
+          req.onerror = () => finish([]);
+          tx.onabort = () => finish([]);
+        }, []);
 
     for (const item of items) {
       if (

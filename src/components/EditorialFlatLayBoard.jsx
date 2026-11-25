@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  lazy,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ArrowLeft, Check, MoveHorizontal, X } from 'lucide-react';
 import { CARBON_DOM_CONTRACT } from '../contracts/carbonDesignContract.ts';
 import { getMstSwatch } from '../services/monkSkinTone.ts';
@@ -13,6 +23,7 @@ import {
   resolve360AngleRenderSpec,
 } from '../services/vton2DService.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import { scheduleIdleTask } from '../utils/resourcePriority.ts';
 import {
   computeCrossfadeBridgeState,
   computeDirectionalBlurPx,
@@ -20,7 +31,10 @@ import {
 } from '../utils/turnaroundPhysics.ts';
 import { computeGroundShadowScaleX } from '../utils/turnaroundMorph.ts';
 import StudioGarmentImage from './StudioGarmentImage.jsx';
-import StudioCharacterRelightCanvas from './three/StudioCharacterRelightCanvas.tsx';
+
+const StudioCharacterRelightCanvas = lazy(
+  () => import('./three/StudioCharacterRelightCanvas.tsx')
+);
 
 const SWIPE_MIN_DISTANCE_PX = 40;
 const SWIPE_FAST_FLICK_VELOCITY_PX_PER_MS = 0.8;
@@ -417,6 +431,7 @@ const FlatLayLookbookSurface = memo(function FlatLayLookbookSurface({
                     alt={displayName}
                     allowStorePhoto={allowStorePhoto}
                     eager
+                    fetchPriority="high"
                     className="editorial-flatlay-garment-media"
                     style={{ width: '100%', height: '100%' }}
                     imgStyle={{
@@ -626,7 +641,29 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const hasAiImage = Boolean(stageMode === 'ai-vton' && aiImageUrl);
   const canPinchZoom = false;
   const [relightCanvasReady, setRelightCanvasReady] = useState(false);
+  const [aiPrimaryPainted, setAiPrimaryPainted] = useState(false);
+  const [relightMountReady, setRelightMountReady] = useState(false);
   const isRelightCanvasActive = Boolean(hasAiImage && relightCanvasReady);
+
+  useEffect(() => {
+    if (!hasAiImage) {
+      setAiPrimaryPainted(false);
+      setRelightMountReady(false);
+      setRelightCanvasReady(false);
+      return undefined;
+    }
+    if (aiImgRef.current?.complete && aiImgRef.current.naturalWidth > 0) {
+      setAiPrimaryPainted(true);
+    }
+    return undefined;
+  }, [hasAiImage, aiImageUrl]);
+
+  useEffect(() => {
+    if (!hasAiImage || !aiPrimaryPainted || relightMountReady) return undefined;
+    return scheduleIdleTask(() => {
+      setRelightMountReady(true);
+    }, 320);
+  }, [hasAiImage, aiPrimaryPainted, relightMountReady]);
 
   const stageRef = useRef(null);
   const aiImgRef = useRef(null);
@@ -793,6 +830,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
 
   const handleAiImageLoad = useCallback(
     (e) => {
+      setAiPrimaryPainted(true);
       const src = aiImageUrl || e.currentTarget.currentSrc || e.currentTarget.src || '';
       measureAiImageEl(e.currentTarget, src);
     },
@@ -1755,29 +1793,35 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 data-relight-webgl={isRelightCanvasActive ? 'active' : 'fallback'}
                 style={modelSizeStyle}
               >
-                <StudioCharacterRelightCanvas
-                  imageUrl={aiImageUrl}
-                  angleDeg={safeAngleDeg}
-                  mirrorX={effectiveMirrorX}
-                  identityKey={relightIdentityKey}
-                  angleSlices={angleSlices}
-                  continuousAngleDeg={liveContinuousAngleDeg}
-                  isLiveScrubbing={Boolean(isAngleScrubbing || isRotatingDrag)}
-                  lightingFrame={stageLightingFrame}
-                  externalYawDeg={relightExternalYawDeg}
-                  kineticBlurPx={kineticBlurPx}
-                  widthPx={floorPlacement.renderedContentW || null}
-                  heightPx={floorPlacement.renderedContentH || null}
-                  transformOrigin={floorPlacement.soleTransformOrigin}
-                  transformStyle={relightCanvasTransformStyle}
-                  prefersReducedMotion={prefersReducedMotion}
-                  onWebGlReadyChange={setRelightCanvasReady}
-                />
+                {relightMountReady && (
+                  <Suspense fallback={null}>
+                    <StudioCharacterRelightCanvas
+                      imageUrl={aiImageUrl}
+                      angleDeg={safeAngleDeg}
+                      mirrorX={effectiveMirrorX}
+                      identityKey={relightIdentityKey}
+                      angleSlices={angleSlices}
+                      continuousAngleDeg={liveContinuousAngleDeg}
+                      isLiveScrubbing={Boolean(isAngleScrubbing || isRotatingDrag)}
+                      lightingFrame={stageLightingFrame}
+                      externalYawDeg={relightExternalYawDeg}
+                      kineticBlurPx={kineticBlurPx}
+                      widthPx={floorPlacement.renderedContentW || null}
+                      heightPx={floorPlacement.renderedContentH || null}
+                      transformOrigin={floorPlacement.soleTransformOrigin}
+                      transformStyle={relightCanvasTransformStyle}
+                      prefersReducedMotion={prefersReducedMotion}
+                      onWebGlReadyChange={setRelightCanvasReady}
+                    />
+                  </Suspense>
+                )}
                 <img
                   ref={outgoingGhostImgRef}
                   alt=""
                   aria-hidden="true"
                   draggable={false}
+                  decoding="async"
+                  fetchPriority="low"
                   className={`studio-2d-media-el editorial-ai-vton-img editorial-ai-vton-img-ghost ${
                     isRelightCanvasActive ? 'is-relight-canvas-backed' : ''
                   }`.trim()}
@@ -1789,6 +1833,9 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 <img
                   ref={aiImgRef}
                   src={aiImageUrl}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
                   onLoad={handleAiImageLoad}
                   alt={
                     isEn

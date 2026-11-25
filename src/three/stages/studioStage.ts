@@ -2036,9 +2036,6 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
           syncAvatarMaterials();
           syncActiveModelVisibility();
           options?.onModelLoaded?.();
-
-          // Gently preload the Couture Trench Coat GLB after the primary avatar lands
-          loadCoutureCoat();
         },
         () => {
           activeParseCount = Math.max(0, activeParseCount - 1);
@@ -2075,10 +2072,12 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
       return resolveActiveModelKind();
     }
 
-    if (requestedModelMode === 'mannequin' && !avatar.isLoaded && !avatarLoadStarted) {
-      loadFashionAvatar();
-    } else if (requestedModelMode === 'dressform' && !coutureCoat.isLoaded && !coutureCoatLoadStarted) {
-      loadCoutureCoat();
+    if (canFetchInBrowser) {
+      if (requestedModelMode === 'mannequin' && !avatar.isLoaded && !avatarLoadStarted) {
+        loadFashionAvatar();
+      } else if (requestedModelMode === 'dressform' && !coutureCoat.isLoaded && !coutureCoatLoadStarted) {
+        loadCoutureCoat();
+      }
     }
 
     const activeKind = resolveActiveModelKind();
@@ -2089,10 +2088,10 @@ export function createStudioStage(options?: StudioStageOptions): StageModule {
     return activeKind;
   };
 
-  // Kick off primary Hugging Face Fashion Avatar stream immediately upon stage creation
+  // Enable Three.js in-memory asset cache; active model GLBs are fetched lazily inside syncActiveModelVisibility()
+  // once a non-preview 3D subtab becomes visible.
+  THREE.Cache.enabled = true;
   if (canFetchInBrowser) {
-    loadFashionAvatar();
-
     if (options?.customModelUrl) {
       void fetchVerifiedGlbBuffer(options.customModelUrl).then((buffer) => {
         if (disposed || !buffer) return;

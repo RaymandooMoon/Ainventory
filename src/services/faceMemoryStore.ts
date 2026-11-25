@@ -87,6 +87,14 @@ function openFaceMemoryDb(): Promise<IDBDatabase | null> {
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (db: IDBDatabase | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timerId);
+      resolve(db);
+    };
+    const timerId = setTimeout(() => finish(null), 1200);
     try {
       const req = indexedDB.open(FACE_MEMORY_DB_NAME, FACE_MEMORY_DB_VERSION);
       req.onupgradeneeded = () => {
@@ -95,10 +103,21 @@ function openFaceMemoryDb(): Promise<IDBDatabase | null> {
           db.createObjectStore(FACE_MEMORY_STORE_NAME);
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        if (settled) {
+          try {
+            req.result.close();
+          } catch {
+            // ignore close error
+          }
+          return;
+        }
+        finish(req.result);
+      };
+      req.onerror = () => finish(null);
+      req.onblocked = () => finish(null);
     } catch {
-      resolve(null);
+      finish(null);
     }
   });
 }

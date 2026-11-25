@@ -22,13 +22,17 @@ import {
 import { loadMemorizedFaceIdentity } from './services/faceMemoryStore.ts';
 import {
   apiFetch,
+  getPrefetchedSampleGarments,
   getStoredToken,
   hasUserPermission,
   isLiveAppEmbedSession,
   isSiteDemoUser,
+  loadInstantSampleGarmentsFallback,
+  prefetchSampleGarments,
   setSampleDemoMode,
   setStoredToken,
 } from './utils/api.ts';
+import { scheduleIdleTask } from './utils/resourcePriority.ts';
 import {
   getStoredLang,
   localizeApiMessage,
@@ -139,8 +143,10 @@ export default function App() {
   const [preEquippedGarment, setPreEquippedGarment] = useState(null);
   const [studioSessionKey, setStudioSessionKey] = useState(0);
 
-  const [garments, setGarments] = useState([]);
-  const [garmentsLoading, setGarmentsLoading] = useState(true);
+  const [garments, setGarments] = useState(() => getPrefetchedSampleGarments() || []);
+  const [garmentsLoading, setGarmentsLoading] = useState(
+    () => !(getPrefetchedSampleGarments()?.length > 0)
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   const garmentsMutationSeqRef = useRef(0);
 
@@ -153,6 +159,7 @@ export default function App() {
   const [sampleImportOpen, setSampleImportOpen] = useState(false);
 
   const [lang, setLang] = useState(() => getStoredLang());
+  const langRef = useRef(lang);
   const [resolvedTheme, setResolvedTheme] = useState(() =>
     applyThemePreference(getStoredThemePreference())
   );
@@ -165,6 +172,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    langRef.current = lang;
     syncDocumentLang(lang);
   }, [lang]);
 
@@ -346,44 +354,86 @@ export default function App() {
 
   const activeCloset = user?.defaultCloset || 'sample';
 
-  // Quietly pre-warm main landing chunks while user is on the Login screen so login transition has zero bundle-load stall
-  // (Skipped in embed mode so mobile dev sockets stay clear for instant site_demo login)
+  // Quietly pre-warm sample garments & active landing chunk during browser idle while user is on Login screen
   useEffect(() => {
-    if (!showAuthScreen || isEmbedMode || typeof window === 'undefined') return undefined;
+    if (!showAuthScreen || typeof window === 'undefined') return undefined;
     let cancelled = false;
-    const warm = () => {
+    const cancelIdle = scheduleIdleTask(() => {
       if (cancelled) return;
-      void import('./components/OutfitStudioView.jsx');
-      void import('./components/WardrobeView.jsx');
-    };
-    const timer = window.setTimeout(warm, 320);
+      void prefetchSampleGarments();
+      void import('./components/OutfitStudioView.jsx').catch(() => {});
+      if (!isEmbedMode) {
+        void import('./components/WardrobeView.jsx').catch(() => {});
+      }
+    }, 550);
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      cancelIdle();
     };
   }, [showAuthScreen, isEmbedMode]);
 
-  // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats (also preloads immediately during loginPortal!)
+  // Load inventory garments for Closet, Detail, Outfits, Calendar & Stats (also hydrates instantly from prefetch!)
   useEffect(() => {
     if (!authReady || (showAuthScreen && !loginPortal)) return undefined;
     let cancelled = false;
+    let settled = false;
     const seqAtStart = garmentsMutationSeqRef.current;
     const q = encodeURIComponent(activeCloset);
 
-    apiFetch(`/garments?closet=${q}`)
+    if (activeCloset === 'sample') {
+      const prefetched = getPrefetchedSampleGarments();
+      if (prefetched && prefetched.length > 0) {
+        setGarments((prev) => (prev.length > 0 ? prev : prefetched));
+        setGarmentsLoading(false);
+      }
+    }
+
+    // Safety net: if sample closet network fetch takes > 2.2s on slow mobile/proxy links,
+    // immediately hydrate the bundled sample catalog so Closet & Outfits never stall on empty skeletons.
+    const provisionalFallbackTimer =
+      activeCloset === 'sample' && typeof window !== 'undefined'
+        ? window.setTimeout(() => {
+            if (cancelled || settled || garmentsMutationSeqRef.current !== seqAtStart) return;
+            void loadInstantSampleGarmentsFallback().then((fallbackList) => {
+              if (cancelled || settled || garmentsMutationSeqRef.current !== seqAtStart) return;
+              if (fallbackList.length > 0) {
+                setGarments((prev) => (prev.length > 0 ? prev : fallbackList));
+                setGarmentsLoading(false);
+              }
+            });
+          }, 2200)
+        : null;
+
+    apiFetch(`/garments?closet=${q}`, { timeoutMs: 8000 })
       .then((res) => {
         if (cancelled || garmentsMutationSeqRef.current !== seqAtStart) return;
-        setGarments(Array.isArray(res?.garments) ? res.garments : []);
+        settled = true;
+        const nextList = Array.isArray(res?.garments) ? res.garments : [];
+        if (nextList.length > 0 || activeCloset !== 'sample') {
+          setGarments(nextList);
+        } else {
+          void loadInstantSampleGarmentsFallback().then((fallbackList) => {
+            if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
+              setGarments(fallbackList);
+            }
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
+          settled = true;
+          const activeLang = langRef.current;
           showToast(
-            localizeApiMessage(err?.message, lang) ||
-              tx(lang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
+            localizeApiMessage(err?.message, activeLang) ||
+              tx(activeLang, '인벤토리를 불러오지 못했습니다.', 'Failed to load wardrobe.')
           );
         }
       })
       .finally(() => {
+        settled = true;
+        if (provisionalFallbackTimer !== null) {
+          window.clearTimeout(provisionalFallbackTimer);
+        }
         if (!cancelled && garmentsMutationSeqRef.current === seqAtStart) {
           setGarmentsLoading(false);
         }
@@ -391,8 +441,11 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      if (provisionalFallbackTimer !== null) {
+        window.clearTimeout(provisionalFallbackTimer);
+      }
     };
-  }, [activeCloset, authReady, showAuthScreen, loginPortal, refreshKey, lang, showToast]);
+  }, [activeCloset, authReady, showAuthScreen, loginPortal, refreshKey, showToast]);
 
   const selectedGarment = useMemo(() => {
     if (selectedItemId === null || selectedItemId === undefined) return null;
