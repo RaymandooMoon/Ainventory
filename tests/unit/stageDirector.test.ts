@@ -655,6 +655,37 @@ describe('AinvtryStageDirector', () => {
     }
   });
 
+  it('builds the sculpted Möbius Ribbon 3D circularity sculpture with central crystal prism and 5 loop nodes in About stage', () => {
+    const aboutStage = createAboutStage();
+    assert.ok(
+      aboutStage.group.getObjectByName('about-mobius-ribbon'),
+      'About stage must contain sculpted Möbius ribbon group'
+    );
+    assert.ok(
+      aboutStage.group.getObjectByName('about-mobius-glass-surface'),
+      'About stage must build watertight smoked-glass Möbius surface'
+    );
+    assert.ok(
+      aboutStage.group.getObjectByName('about-mobius-edge-rail'),
+      'About stage must build single unbroken 4π edge rail'
+    );
+    assert.ok(
+      aboutStage.group.getObjectByName('about-core-prism-pivot'),
+      'About stage must suspend central faceted crystal prism'
+    );
+    assert.ok(
+      aboutStage.group.getObjectByName('about-mobius-flow-particles'),
+      'About stage must include 4π Möbius flow micro-particles'
+    );
+    for (let i = 0; i < 5; i += 1) {
+      assert.ok(
+        aboutStage.group.getObjectByName(`about-loop-node-${i}`),
+        `About stage must mount interactive loop node ${i}`
+      );
+    }
+    aboutStage.dispose();
+  });
+
   it('defaults Studio subtab to 3D Fitting (atelier) in DEFAULT_STAGE_INTERACTION_STATE', () => {
     assert.equal(DEFAULT_STAGE_INTERACTION_STATE.studioSubtab, 'atelier');
   });
