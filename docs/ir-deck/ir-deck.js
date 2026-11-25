@@ -17,6 +17,7 @@
   const params = new URLSearchParams(window.location.search);
   const initialRatio = params.get('ratio') === '4-3' ? '4-3' : '16-9';
   const initialTheme = params.get('theme') === 'dark' ? 'dark' : 'light';
+  const initialMood = params.get('mood') === 'aurora' ? 'aurora' : 'luxury';
   const initialView = params.get('view') === 'scroll' ? 'scroll' : 'deck';
   const parsedSlide = Number.parseInt(params.get('slide') || '1', 10);
   let currentIndex = Number.isFinite(parsedSlide)
@@ -25,12 +26,14 @@
 
   let currentRatio = initialRatio;
   let currentTheme = initialTheme;
+  let currentMood = initialMood;
   let currentView = initialView;
 
   function syncUrl() {
     if (window.location.protocol === 'file:') return;
     const nextParams = new URLSearchParams();
     nextParams.set('ratio', currentRatio);
+    nextParams.set('mood', currentMood);
     nextParams.set('theme', currentTheme);
     nextParams.set('view', currentView);
     if (currentView === 'deck') {
@@ -43,7 +46,7 @@
   function updateScale() {
     const dims = RATIO_DIMENSIONS[currentRatio] || RATIO_DIMENSIONS['16-9'];
     const padX = currentView === 'deck' ? 32 : 48;
-    const padY = currentView === 'deck' ? 76 : 0;
+    const padY = currentView === 'deck' ? 78 : 0;
     const maxW = Math.max(320, window.innerWidth - padX);
     const scaleX = maxW / dims.width;
 
@@ -68,6 +71,17 @@
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
     updateScale();
+    syncUrl();
+  }
+
+  function applyMood(mood) {
+    currentMood = mood === 'aurora' ? 'aurora' : 'luxury';
+    root.setAttribute('data-mood', currentMood);
+    document.querySelectorAll('[data-set-mood]').forEach((btn) => {
+      const active = btn.getAttribute('data-set-mood') === currentMood;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
     syncUrl();
   }
 
@@ -130,6 +144,9 @@
   document.querySelectorAll('[data-set-ratio]').forEach((btn) => {
     btn.addEventListener('click', () => applyRatio(btn.getAttribute('data-set-ratio') || '16-9'));
   });
+  document.querySelectorAll('[data-set-mood]').forEach((btn) => {
+    btn.addEventListener('click', () => applyMood(btn.getAttribute('data-set-mood') || 'luxury'));
+  });
   document.querySelectorAll('[data-set-theme]').forEach((btn) => {
     btn.addEventListener('click', () => applyTheme(btn.getAttribute('data-set-theme') || 'light'));
   });
@@ -181,6 +198,7 @@
 
   // Initialize state cleanly
   applyRatio(currentRatio);
+  applyMood(currentMood);
   applyTheme(currentTheme);
   applyView(currentView);
   goToSlide(currentIndex, false);
