@@ -71,18 +71,20 @@ export default function BackgroundPickerModal({
   onUpdatePlaceBackdropPref,
   onOpenMapAdjuster,
   onRefreshPlaceBackdrop,
+  defaultLightingIntensity = DEFAULT_LIGHTING_INTENSITY,
 }) {
   const unlockedSet = new Set(economyState?.unlockedIds || ['c_atelier_plaster']);
   const equippedId = economyState?.equippedBackgroundId || 'c_atelier_plaster';
   const equippedItem = getStageBackgroundById(equippedId);
   const unlockedCount = unlockedSet.size;
 
+  const resolvedDefaultIntensity = clampLightingIntensity(defaultLightingIntensity);
   const activePreset = normalizeLightingPreset(economyState?.lightingPreset);
   const activeIntensity = clampLightingIntensity(
-    economyState?.lightingIntensity ?? DEFAULT_LIGHTING_INTENSITY
+    economyState?.lightingIntensity ?? resolvedDefaultIntensity
   );
   const isCustomLighting =
-    activePreset !== DEFAULT_LIGHTING_PRESET || activeIntensity !== DEFAULT_LIGHTING_INTENSITY;
+    activePreset !== DEFAULT_LIGHTING_PRESET || activeIntensity !== resolvedDefaultIntensity;
   const sliderLampPower = Math.max(0, Math.min(1, activeIntensity / 100));
   const sliderLampRgb = (() => {
     if (activePreset !== 'auto') {
@@ -673,7 +675,7 @@ export default function BackgroundPickerModal({
                   triggerHaptic('selection');
                   onUpdateLighting?.({
                     lightingPreset: DEFAULT_LIGHTING_PRESET,
-                    lightingIntensity: DEFAULT_LIGHTING_INTENSITY,
+                    lightingIntensity: resolvedDefaultIntensity,
                   });
                 }}
               >

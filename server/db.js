@@ -887,6 +887,30 @@ const CYBER_DEMO_LOOK_SEEDS = [
     }),
   },
   {
+    idOffset: 926,
+    name: '블랙 버클 벨티드 플리츠 미니 스커트',
+    category: 'bottom',
+    subcategory: 'skirt',
+    color_name: '블랙',
+    color_hex: '#101015',
+    seasons: ['spring', 'summer', 'fall', 'winter'],
+    min_temp: -4,
+    max_temp: 28,
+    water_resistant: false,
+    formality: 2,
+    brand: 'PRADA',
+    price: 1180000,
+    image_url: '/seed/cyber-black-belted-pleated-skirt.webp',
+    fabric: 'wool',
+    slot_key: 'bottom',
+    notes: '건메탈 핀 버클 레더 벨트와 날렵한 나이프 플리츠가 결합된 제트 블랙 미니 스커트',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      fit: 'tailored',
+      length_profile: 'mini',
+    }),
+  },
+  {
     idOffset: 923,
     name: '블랙 시어 싸이하이 스타킹',
     category: 'socks',
@@ -913,6 +937,32 @@ const CYBER_DEMO_LOOK_SEEDS = [
     }),
   },
   {
+    idOffset: 927,
+    name: '블랙 시어 더블밴드 오버니 스타킹',
+    category: 'socks',
+    subcategory: 'sheer_socks',
+    color_name: '블랙',
+    color_hex: '#16161C',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -5,
+    max_temp: 26,
+    water_resistant: false,
+    formality: 2,
+    brand: 'FALKE',
+    price: 54000,
+    image_url: '/seed/cyber-black-overknee-stockings.webp',
+    fabric: 'nylon',
+    slot_key: 'socks',
+    notes: '더블 웰트 커프와 40데니어 세미 시어 블랙 니트 텍스처의 오버니 스타킹',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      sock_height: 'over_knee',
+      opacity_level: 'semi_sheer',
+      thickness: 'thin',
+      fit: 'slim',
+    }),
+  },
+  {
     idOffset: 924,
     name: '블랙 청키 러그솔 레이스업 컴뱃 부츠',
     category: 'shoes',
@@ -930,6 +980,30 @@ const CYBER_DEMO_LOOK_SEEDS = [
     fabric: 'leather',
     slot_key: 'shoes',
     notes: '청키 러그솔 플랫폼과 미드카프 레이스업 실루엣의 매트 블랙 레더 컴뱃 부츠',
+    garment_details_json: JSON.stringify({
+      target_gender: 'female',
+      shaft_height: 'mid_calf',
+      sole_profile: 'chunky_lug',
+    }),
+  },
+  {
+    idOffset: 928,
+    name: '블랙 플랫폼 레이스업 미드카프 워커 부츠',
+    category: 'shoes',
+    subcategory: 'boots',
+    color_name: '블랙',
+    color_hex: '#121216',
+    seasons: ['spring', 'fall', 'winter'],
+    min_temp: -10,
+    max_temp: 22,
+    water_resistant: true,
+    formality: 2,
+    brand: 'RICK OWENS',
+    price: 1720000,
+    image_url: '/seed/cyber-black-platform-walker-boots.webp',
+    fabric: 'leather',
+    slot_key: 'shoes',
+    notes: '볼드 플랫폼 트랙솔과 하이 샤프트 레이스업 디테일의 옵시디언 카프스킨 워커 부츠',
     garment_details_json: JSON.stringify({
       target_gender: 'female',
       shaft_height: 'mid_calf',
@@ -961,7 +1035,7 @@ const CYBER_DEMO_LOOK_SEEDS = [
   },
 ];
 
-function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
+export function ensureCyberDemoLookSeeds(closetOwner = 'sample') {
   const existingRows = db
     .prepare('SELECT name, image_url FROM garments WHERE closet_owner = ?')
     .all(closetOwner);

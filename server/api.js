@@ -20,6 +20,7 @@ import db, {
   SQLITE_DRIVER,
   UPLOADS_DIR,
   computeVerificationHash,
+  ensureCyberDemoLookSeeds,
   ensureLuxuryStreetSeeds,
   ensureNewSubcategoryMaterialSeeds,
   ensureSiteDemoAccount,
@@ -3329,6 +3330,7 @@ export function createApiRouter(options = {}) {
         ensureNewSubcategoryMaterialSeeds(c);
         ensureLuxuryStreetSeeds(c);
         ensureUnderwearAndSocksSeeds(c);
+        ensureCyberDemoLookSeeds(c);
       } else {
         const hasAny = db.prepare('SELECT 1 FROM garments WHERE closet_owner = ? LIMIT 1').get(c);
         if (hasAny) {
@@ -3387,7 +3389,10 @@ export function createApiRouter(options = {}) {
     const insertedCount =
       ensureNewSubcategoryMaterialSeeds(targetCloset) +
       ensureLuxuryStreetSeeds(targetCloset) +
-      ensureUnderwearAndSocksSeeds(targetCloset);
+      ensureUnderwearAndSocksSeeds(targetCloset) +
+      (targetCloset === 'sample' || targetCloset === 'husband' || targetCloset === 'wife'
+        ? ensureCyberDemoLookSeeds(targetCloset)
+        : 0);
     const rows = db
       .prepare('SELECT * FROM garments WHERE closet_owner = ? ORDER BY is_favorite DESC, id DESC')
       .all(targetCloset)

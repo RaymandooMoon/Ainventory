@@ -76,6 +76,8 @@ import {
   shouldShowTomorrowOutfitPrompt,
 } from '../utils/tomorrowPromptPolicy.ts';
 import {
+  DEFAULT_LIGHTING_INTENSITY,
+  DEMO_CYBERPUNK_LIGHTING_INTENSITY,
   ECONOMY_STATE_EVENT,
   createDemoCyberpunkEconomyState,
   equipStageBackground,
@@ -713,7 +715,9 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
     wearableList.find(
       (g) =>
         doesGarmentMatchSubSlot(g, slotKey) &&
-        pattern.test(`${g.name || ''} ${g.subcategory || ''} ${g.color || ''}`)
+        pattern.test(
+          `${g.name || ''} ${g.name_en || ''} ${g.subcategory || ''} ${g.color_name || ''} ${g.image_url || ''}`
+        )
     ) || null;
 
   if (preEquippedGarment && isWearableStudioGarment(preEquippedGarment)) {
@@ -732,7 +736,7 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
 
   if (preferDemoShowcaseLook && wearableList.length > 0) {
     const showcaseOuter =
-      findMatching('outer', /크롭.*레더.*모토|cyber-black-moto-jacket/i) ||
+      findMatching('outer', /cyber-black-moto-jacket|크롭.*레더.*모토/i) ||
       findMatching('outer', /(블랙|black).*(라이더|모토|레더.*자켓|moto|rider|leather)/i) ||
       findMatching('outer', /(블랙|black).*(보머|자켓|bomber|jacket)/i);
     const showcaseTop =
@@ -740,16 +744,19 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
       findMatching('top', /(차콜|블랙|black).*(모크넥|터틀넥|니트|turtleneck|knit|mock)/i) ||
       findFirst('top');
     const showcaseBottom =
-      findMatching('bottom', /(블랙|black).*(플리츠.*미니|미니.*스커트|플리츠.*스커트|pleated.*mini)/i) ||
+      findMatching('bottom', /cyber-black-belted-pleated-skirt|버클.*벨티드.*플리츠.*미니/i) ||
+      findMatching('bottom', /cyber-black-pleated-skirt|(블랙|black).*(플리츠.*미니|미니.*스커트|pleated.*mini)/i) ||
       findMatching('bottom', /(블랙|차콜|black).*(스커트|skirt)/i) ||
       findMatching('bottom', /(블랙|차콜|black).*(카고|팬츠|슬랙스|cargo|pants)/i) ||
       findFirst('bottom');
     const showcaseSocks =
-      findMatching('socks', /(블랙|black).*(시어.*싸이하이|싸이하이|스타킹|thigh.?high|stocking)/i) ||
+      findMatching('socks', /cyber-black-sheer-stockings|(블랙|black).*(시어.*싸이하이|싸이하이.*스타킹|thigh.?high)/i) ||
+      findMatching('socks', /cyber-black-overknee-stockings|(블랙|black).*(오버니|스타킹|over.?knee|stocking)/i) ||
       findMatching('socks', /(차콜|블랙|시어|나일론|black|sheer|charcoal)/i) ||
       findFirst('socks');
     const showcaseShoes =
-      findMatching('shoes', /(블랙|black).*(레이스업.*컴뱃|컴뱃.*부츠|combat.*boot)/i) ||
+      findMatching('shoes', /cyber-black-combat-boots|(블랙|black).*(레이스업.*컴뱃|컴뱃.*부츠|combat.*boot)/i) ||
+      findMatching('shoes', /cyber-black-platform-walker-boots|(블랙|black).*(플랫폼.*레이스업|워커.*부츠|walker.*boot)/i) ||
       findMatching('shoes', /(매트 블랙|블랙|black).*(청키|러그솔|첼시|부츠|boot)/i) ||
       findMatching('shoes', /부츠|boot/i) ||
       findFirst('shoes');
@@ -758,7 +765,7 @@ function buildInitialStudioSlots(garments, preEquippedGarment, preferDemoShowcas
       /(블랙|가죽|카프스킨|레더|black|leather).*벨트|belt/i
     );
     const showcaseNeck =
-      findMatching('jwl_neck', /(925.*실버|실버|silver).*(레이어드.*체인|초커|체인|choker|chain)/i) ||
+      findMatching('jwl_neck', /cyber-silver-chain-choker|(925.*실버|실버|silver).*(레이어드.*체인|초커|체인|choker|chain)/i) ||
       findMatching('jwl_neck', /초커|체인|목걸이|choker|chain|necklace/i);
     return {
       ...EMPTY_STUDIO_SLOTS,
@@ -2300,6 +2307,7 @@ export default function OutfitStudioView({
     rawSlots,
     hasExplicitSlotState,
     garments,
+    isDemoShowcaseAccount,
     isRainyWeatherActive,
     isEquippedStageOutdoor,
     manualRainUmbrellaCleared,
@@ -5197,6 +5205,9 @@ export default function OutfitStudioView({
         }}
         streetViewUnavailable={isLiveSvUnavailableForTarget}
         streetViewBillingRequired={liveSvBillingError}
+        defaultLightingIntensity={
+          isDemoShowcaseAccount ? DEMO_CYBERPUNK_LIGHTING_INTENSITY : DEFAULT_LIGHTING_INTENSITY
+        }
       />
 
       {/* In-App Stage Background Store & Tiered Gacha Modal */}

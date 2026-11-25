@@ -259,9 +259,12 @@ const COLOR_PREFIXES_SORTED = [...Object.keys(COLOR_KO_TO_EN)].sort((a, b) => b.
 const EXACT_GARMENT_KO_TO_EN: Readonly<Record<string, string>> = {
   // Cyber-Noir Female Demo Showcase Closet Items (`server/db.js`)
   '블랙 크롭 레더 모토 라이더 자켓': 'Cropped Black Leather Moto Jacket',
+  '블랙 버클 벨티드 플리츠 미니 스커트': 'Black Belted Pleated Mini Skirt',
   '블랙 플리츠 미니 스커트': 'Black Pleated Mini Skirt',
   '블랙 시어 싸이하이 스타킹': 'Black Sheer Thigh-High Stockings',
+  '블랙 시어 더블밴드 오버니 스타킹': 'Black Sheer Double-Band Over-the-Knee Stockings',
   '블랙 청키 러그솔 레이스업 컴뱃 부츠': 'Black Chunky Lug-Sole Combat Boots',
+  '블랙 플랫폼 레이스업 미드카프 워커 부츠': 'Black Platform Lace-Up Mid-Calf Walker Boots',
   '925 실버 레이어드 체인 초커 목걸이': '925 Silver Layered Chain Choker',
   // Sample closet & Sample capsule catalog (`server/db.js`, `server/api.js`, `standaloneFallback.ts`)
   '발수 코튼 개버딘 트렌치코트': 'Water-Repellent Cotton Gabardine Trench Coat',

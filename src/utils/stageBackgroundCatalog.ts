@@ -1176,6 +1176,7 @@ export function saveStoredEconomyState(state: StageEconomyState): StageEconomySt
 }
 
 export const DEMO_CYBERPUNK_STAGE_BACKGROUND_ID = 's_cyber_megacity_plaza';
+export const DEMO_CYBERPUNK_LIGHTING_INTENSITY = 50;
 
 export const DEMO_CYBERPUNK_UNLOCKED_IDS = [
   's_cyber_megacity_plaza',
@@ -1196,6 +1197,7 @@ export function createDemoCyberpunkEconomyState(
     unlockedIds: mergedUnlocked,
     equippedBackgroundId: DEMO_CYBERPUNK_STAGE_BACKGROUND_ID,
     lightingPreset: 'auto',
+    lightingIntensity: DEMO_CYBERPUNK_LIGHTING_INTENSITY,
   });
 }
 

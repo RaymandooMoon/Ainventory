@@ -400,17 +400,26 @@ describe('RBAC Permission Management & site_demo Account Security', () => {
     assert.equal(resetBody.permissions?.includes('btn:outfits:store'), false);
   });
 
-  it('seeds matching cyber-noir real-closet items (black pleated mini skirt, sheer thigh-high stockings, moto jacket, combat boots, choker)', async () => {
+  it('seeds matching cyber-noir real-closet items (2 black pleated mini skirts, 2 sheer stockings, 2 chunky lace-up combat boots, moto jacket, choker)', async () => {
     const res = await fetch(`${baseUrl}/api/garments?closet=sample`, {
       headers: { Authorization: `Bearer ${siteDemoToken}` },
     });
     assert.equal(res.status, 200);
-    const body = (await res.json()) as { garments?: Array<{ name?: string; category?: string }> };
+    const body = (await res.json()) as {
+      garments?: Array<{ name?: string; category?: string; image_url?: string }>;
+    };
     const names = (body.garments || []).map((g) => String(g.name || ''));
+    const urls = (body.garments || []).map((g) => String(g.image_url || ''));
+    assert.ok(names.includes('블랙 버클 벨티드 플리츠 미니 스커트'));
     assert.ok(names.includes('블랙 플리츠 미니 스커트'));
     assert.ok(names.includes('블랙 시어 싸이하이 스타킹'));
+    assert.ok(names.includes('블랙 시어 더블밴드 오버니 스타킹'));
     assert.ok(names.includes('블랙 크롭 레더 모토 라이더 자켓'));
     assert.ok(names.includes('블랙 청키 러그솔 레이스업 컴뱃 부츠'));
+    assert.ok(names.includes('블랙 플랫폼 레이스업 미드카프 워커 부츠'));
     assert.ok(names.includes('925 실버 레이어드 체인 초커 목걸이'));
+    assert.ok(urls.includes('/seed/cyber-black-belted-pleated-skirt.webp'));
+    assert.ok(urls.includes('/seed/cyber-black-overknee-stockings.webp'));
+    assert.ok(urls.includes('/seed/cyber-black-platform-walker-boots.webp'));
   });
 });

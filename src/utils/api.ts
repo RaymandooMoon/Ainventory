@@ -44,6 +44,43 @@ const SAMPLE_PREFETCH_TTL_MS = 90_000;
 let sampleGarmentsPrefetchCache: SampleGarmentsPrefetchCache | null = null;
 let sampleGarmentsPrefetchInFlight: Promise<GarmentRecord[]> | null = null;
 
+const REQUIRED_CYBER_DEMO_IMAGE_URLS = [
+  '/seed/cyber-black-moto-jacket.webp',
+  '/seed/cyber-black-belted-pleated-skirt.webp',
+  '/seed/cyber-black-pleated-skirt.webp',
+  '/seed/cyber-black-sheer-stockings.webp',
+  '/seed/cyber-black-overknee-stockings.webp',
+  '/seed/cyber-black-combat-boots.webp',
+  '/seed/cyber-black-platform-walker-boots.webp',
+  '/seed/cyber-silver-chain-choker.webp',
+] as const;
+
+function hasAllCyberDemoShowcaseGarments(garments: readonly unknown[]): boolean {
+  const urls = new Set(
+    garments.map((g) => String((g as { image_url?: unknown })?.image_url || '').trim())
+  );
+  return REQUIRED_CYBER_DEMO_IMAGE_URLS.every((url) => urls.has(url));
+}
+
+async function mergeMissingCyberDemoGarments(
+  garments: GarmentRecord[]
+): Promise<GarmentRecord[]> {
+  if (hasAllCyberDemoShowcaseGarments(garments)) {
+    return garments;
+  }
+  try {
+    const mod = await import('./standaloneFallback.ts');
+    const existingUrls = new Set(garments.map((g) => String(g?.image_url || '').trim()));
+    const existingNames = new Set(garments.map((g) => String(g?.name || '').trim()));
+    const missing = mod.CYBER_DEMO_SHOWCASE_GARMENTS.filter(
+      (item) => !existingUrls.has(item.image_url) && !existingNames.has(item.name)
+    );
+    return missing.length > 0 ? [...missing, ...garments] : garments;
+  } catch {
+    return garments;
+  }
+}
+
 export function getPrefetchedSampleGarments(): GarmentRecord[] | null {
   if (!sampleGarmentsPrefetchCache) return null;
   if (Date.now() - sampleGarmentsPrefetchCache.fetchedAt > SAMPLE_PREFETCH_TTL_MS) {
@@ -55,11 +92,11 @@ export function getPrefetchedSampleGarments(): GarmentRecord[] | null {
 
 export async function loadInstantSampleGarmentsFallback(): Promise<GarmentRecord[]> {
   const cached = getPrefetchedSampleGarments();
-  if (cached && cached.length > 0) return cached;
+  if (cached && cached.length > 0 && hasAllCyberDemoShowcaseGarments(cached)) return cached;
   try {
     const local = await runStandaloneFallback('/garments?closet=sample', {});
     const list = Array.isArray(local?.garments) ? (local.garments as GarmentRecord[]) : [];
-    if (list.length > 0 && !sampleGarmentsPrefetchCache) {
+    if (list.length > 0) {
       sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
     }
     return list;
@@ -70,7 +107,7 @@ export async function loadInstantSampleGarmentsFallback(): Promise<GarmentRecord
 
 export function prefetchSampleGarments(): Promise<GarmentRecord[]> {
   const cached = getPrefetchedSampleGarments();
-  if (cached && cached.length > 0) {
+  if (cached && cached.length > 0 && hasAllCyberDemoShowcaseGarments(cached)) {
     return Promise.resolve(cached);
   }
   if (sampleGarmentsPrefetchInFlight) {
@@ -86,11 +123,13 @@ export function prefetchSampleGarments(): Promise<GarmentRecord[]> {
         headers: { 'X-Demo-Mode': 'sample' },
         timeoutMs: 4500,
       });
-      const list = Array.isArray(data?.garments) ? (data.garments as GarmentRecord[]) : [];
-      if (list.length > 0) {
+      const rawList = Array.isArray(data?.garments) ? (data.garments as GarmentRecord[]) : [];
+      if (rawList.length > 0) {
+        const list = await mergeMissingCyberDemoGarments(rawList);
+        const mergedPayload = list === rawList ? data : { ...data, garments: list };
         sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
-        writeCachedResponse('demo:/garments?closet=sample', data).catch(() => {});
-        writeCachedResponse('/garments?closet=sample', data).catch(() => {});
+        writeCachedResponse('demo:/garments?closet=sample', mergedPayload).catch(() => {});
+        writeCachedResponse('/garments?closet=sample', mergedPayload).catch(() => {});
         return list;
       }
     } catch {
@@ -100,11 +139,17 @@ export function prefetchSampleGarments(): Promise<GarmentRecord[]> {
       const idbCached =
         (await readCachedResponse<Record<string, unknown>>('demo:/garments?closet=sample')) ||
         (await readCachedResponse<Record<string, unknown>>('/garments?closet=sample'));
-      const list = Array.isArray(idbCached?.garments)
+      const rawList = Array.isArray(idbCached?.garments)
         ? (idbCached.garments as GarmentRecord[])
         : [];
-      if (list.length > 0) {
+      if (rawList.length > 0) {
+        const list = await mergeMissingCyberDemoGarments(rawList);
         sampleGarmentsPrefetchCache = { garments: list, fetchedAt: Date.now() };
+        if (list !== rawList && idbCached) {
+          const mergedPayload = { ...idbCached, garments: list };
+          writeCachedResponse('demo:/garments?closet=sample', mergedPayload).catch(() => {});
+          writeCachedResponse('/garments?closet=sample', mergedPayload).catch(() => {});
+        }
         return list;
       }
     } catch {
@@ -565,21 +610,25 @@ export async function apiFetch<T = Record<string, unknown>>(
       path.startsWith('/weather-styling?');
     const skipStaleIdbCache = isLiveStatusEndpoint || isLiveWeatherEndpoint;
     const cacheKey = sampleDemo ? `demo:${path}` : path;
+    const isSampleGarmentsRequest = path === '/garments?closet=sample';
     if (sampleDemo && isSampleDemoMutated() && !isProfileConfigEndpoint && !skipStaleIdbCache) {
       const mutatedCached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-      const isStaleSampleGarments =
-        path === '/garments?closet=sample' &&
-        Array.isArray(mutatedCached?.garments) &&
-        !(mutatedCached.garments as Array<{ name?: string }>).some(
-          (g) => g?.name === '블랙 시어 싸이하이 스타킹'
-        );
-      if (mutatedCached && !isStaleSampleGarments) {
+      if (mutatedCached) {
+        if (isSampleGarmentsRequest && Array.isArray(mutatedCached.garments)) {
+          const rawList = mutatedCached.garments as GarmentRecord[];
+          const mergedList = await mergeMissingCyberDemoGarments(rawList);
+          if (mergedList !== rawList) {
+            const healedPayload = { ...mutatedCached, garments: mergedList };
+            writeCachedResponse(cacheKey, healedPayload).catch(() => {});
+            return coerceApiPayload<T>(healedPayload);
+          }
+        }
         return coerceApiPayload<T>(mutatedCached);
       }
     }
-    if (path === '/garments?closet=sample' && !isSampleDemoMutated()) {
+    if (isSampleGarmentsRequest && !isSampleDemoMutated()) {
       const prefetched = getPrefetchedSampleGarments();
-      if (prefetched && prefetched.length > 0) {
+      if (prefetched && prefetched.length > 0 && hasAllCyberDemoShowcaseGarments(prefetched)) {
         return coerceApiPayload<T>({ garments: prefetched, _fromPrefetch: true });
       }
       if (sampleGarmentsPrefetchInFlight) {
@@ -592,7 +641,18 @@ export async function apiFetch<T = Record<string, unknown>>(
     if (isBrowserOffline) {
       if (!skipStaleIdbCache) {
         const cached = await readCachedResponse<Record<string, unknown>>(cacheKey);
-        if (cached) return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+        if (cached) {
+          if (isSampleGarmentsRequest && Array.isArray(cached.garments)) {
+            const rawList = cached.garments as GarmentRecord[];
+            const mergedList = await mergeMissingCyberDemoGarments(rawList);
+            if (mergedList !== rawList) {
+              const healedPayload = { ...cached, garments: mergedList };
+              writeCachedResponse(cacheKey, healedPayload).catch(() => {});
+              return coerceApiPayload<T>({ ...healedPayload, _fromOfflineCache: true });
+            }
+          }
+          return coerceApiPayload<T>({ ...cached, _fromOfflineCache: true });
+        }
       }
       const localData = await runStandaloneFallback(path, options);
       if (!skipStaleIdbCache) {
@@ -609,10 +669,15 @@ export async function apiFetch<T = Record<string, unknown>>(
           await flushPendingOfflineSync().catch(() => 0);
         }
       }
-      const data = await rawNetworkFetch(path, options);
-      if (path === '/garments?closet=sample' && Array.isArray(data?.garments) && data.garments.length > 0) {
+      let data = await rawNetworkFetch(path, options);
+      if (isSampleGarmentsRequest && Array.isArray(data?.garments) && data.garments.length > 0) {
+        const rawList = data.garments as GarmentRecord[];
+        const mergedList = await mergeMissingCyberDemoGarments(rawList);
+        if (mergedList !== rawList) {
+          data = { ...data, garments: mergedList };
+        }
         sampleGarmentsPrefetchCache = {
-          garments: data.garments as GarmentRecord[],
+          garments: mergedList,
           fetchedAt: Date.now(),
         };
       }
@@ -622,15 +687,20 @@ export async function apiFetch<T = Record<string, unknown>>(
       return coerceApiPayload<T>(data);
     } catch (err) {
       // Resilient recovery for public sample closet even if an expired/stale Bearer token returned 401/403
-      if (path === '/garments?closet=sample') {
+      if (isSampleGarmentsRequest) {
         try {
-          const sampleRetry = await rawNetworkFetch('/garments?closet=sample', {
+          let sampleRetry = await rawNetworkFetch('/garments?closet=sample', {
             headers: { 'X-Demo-Mode': 'sample' },
             timeoutMs: 4500,
           });
           if (Array.isArray(sampleRetry?.garments) && sampleRetry.garments.length > 0) {
+            const rawList = sampleRetry.garments as GarmentRecord[];
+            const mergedList = await mergeMissingCyberDemoGarments(rawList);
+            if (mergedList !== rawList) {
+              sampleRetry = { ...sampleRetry, garments: mergedList };
+            }
             sampleGarmentsPrefetchCache = {
-              garments: sampleRetry.garments as GarmentRecord[],
+              garments: mergedList,
               fetchedAt: Date.now(),
             };
             writeCachedResponse('demo:/garments?closet=sample', sampleRetry).catch(() => {});
