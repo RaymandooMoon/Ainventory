@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { isDemoVtonAccount } from '../../src/utils/api.ts';
 import {
@@ -74,15 +76,27 @@ describe('Cyberpunk Female Demo Showcase Defaults', () => {
     assert.deepEqual(base.unlockedIds, ['c_studio_minimal']);
   });
 
-  it('resolves high-resolution female cyber-couture turnaround sheet and 8 pre-matted transparent WebP slices', () => {
+  it('resolves high-resolution female cyber-couture turnaround sheet and 8 proportion-unified 720x960 RGBA WebP slices', () => {
     const stylizedUrl = getShowcaseDemoSheetUrl('stylized_isometric');
     const photorealUrl = getShowcaseDemoSheetUrl('photorealistic');
     assert.match(stylizedUrl, /vton-showcase-3x2-cyber-female\.jpg/);
     assert.match(photorealUrl, /vton-showcase-3x2-cyber-female\.jpg/);
 
     const slices = getShowcaseDemoSliceUrls();
+    const seedDir = path.resolve(import.meta.dirname, '../../public/seed');
     for (const deg of [0, 45, 90, 135, 180, 225, 270, 315] as const) {
-      assert.match(slices[deg], new RegExp(`demo-cyber-female-${deg}\\.webp(\\?v=[a-z0-9]+)?$`));
+      assert.match(slices[deg], new RegExp(`demo-cyber-female-${deg}\\.webp\\?v=4$`));
+      const diskPath = path.join(seedDir, `demo-cyber-female-${deg}.webp`);
+      assert.ok(fs.existsSync(diskPath), `Missing demo slice on disk: ${diskPath}`);
+      const buf = fs.readFileSync(diskPath);
+      assert.equal(buf.toString('ascii', 0, 4), 'RIFF');
+      assert.equal(buf.toString('ascii', 8, 12), 'WEBP');
+      assert.equal(buf.toString('ascii', 12, 16), 'VP8X');
+      assert.ok((buf[20] & 0x10) !== 0, `Slice ${deg}deg must carry WebP alpha channel`);
+      const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
+      const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+      assert.equal(width, 720, `Slice ${deg}deg width must be 720`);
+      assert.equal(height, 960, `Slice ${deg}deg height must be 960`);
     }
   });
 });
