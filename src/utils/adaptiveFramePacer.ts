@@ -17,11 +17,11 @@ export type AdaptiveFpsTier = 'boost120' | 'active60' | 'idle30' | 'paused';
 export type DetectedRefreshHz = 60 | 90 | 120;
 
 export const TIER_MIN_INTERVAL_MS: Readonly<Record<AdaptiveFpsTier, number>> = {
-  // Thresholds intentionally sit ~1.0–2.3ms below nominal vSync (8.33 / 16.67 / 33.33ms)
-  // so real-world browser rAF jitter never causes accidental frame skipping.
-  boost120: 7.2,
-  active60: 15.2,
-  idle30: 31.0,
+  // Thresholds sit safely below nominal vSync (8.33 / 16.67 / 33.33ms) and Safari's 1ms
+  // timestamp coarsening so 60Hz/120Hz rAF jitter never causes accidental half-rate drops.
+  boost120: 6.0,
+  active60: 13.5,
+  idle30: 28.5,
   paused: Number.POSITIVE_INFINITY,
 };
 
@@ -213,6 +213,9 @@ export function shouldCommitFrame(
   if (tier === 'paused') return false;
   if (state.lastCommitNow <= 0) return true;
   const elapsed = now - state.lastCommitNow;
+  if (tier === 'active60' && state.detectedRefreshHz <= 60) {
+    return elapsed >= 4.0;
+  }
   return elapsed >= getTierMinIntervalMs(tier);
 }
 

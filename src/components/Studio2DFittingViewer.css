@@ -10248,4 +10248,17 @@ html[data-vibrancy-fallback='solid']
   outline-color: #1d1d1f;
 }
 
-
+/* iOS Safari CoreAnimation compositor fast-path over live Studio WebGL canvases */
+html[data-ios-safari='true'] .studio-2d-vton-viewer :is(
+  button,
+  .studio-weather-context-pill,
+  .studio-stage-glass-popover,
+  .studio-garment-tile,
+  .studio-rail-slot-chip,
+  .studio-turnaround-dock,
+  .studio-turnaround-slider-track,
+  .studio-stage-action-pill
+) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

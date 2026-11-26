@@ -106,15 +106,19 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     assert.match(loginCss, /\.atelier-input\s*\{[^}]*font-size:\s*(?:16px|1rem)/);
   });
 
-  it('does not attach capture-phase touchend DeviceOrientationEvent.requestPermission trap', () => {
+  it('does not attach window capture-phase touchend/click DeviceOrientationEvent.requestPermission trap', () => {
     const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
     assert.ok(
-      !hookSrc.includes("addEventListener('touchend', requestIosGyro"),
-      'requestIosGyro must NOT intercept touchend on iOS Safari'
+      !hookSrc.includes("window.addEventListener('touchend', requestIosGyro"),
+      'requestIosGyro must NOT attach a window-level touchend trap on iOS Safari'
     );
     assert.ok(
       !hookSrc.includes("addEventListener('click', requestIosGyro, true)"),
       'requestIosGyro must NOT intercept clicks in capture phase'
+    );
+    assert.ok(
+      hookSrc.includes("stageEl.addEventListener('touchend', requestIosGyroOnStageTap"),
+      'Gyro permission on open Hero canvas should be scoped strictly to stageEl'
     );
     assert.ok(
       hookSrc.includes('GYRO_IGNORE_SELECTOR'),
@@ -122,14 +126,46 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     );
   });
 
-  it('applies iOS Safari WebGL GPU memory, single-pass glass, and fast-boot safeguards', () => {
+  it('applies iOS Safari WebGL GPU memory, native HalfFloat FBO, direct 3D-stage cloth pass, and CoreAnimation fast path', () => {
     const scenesSrc = readRepoFile('src/components/auth/loginThreeScenes.ts');
+    const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
+    const pacerSrc = readRepoFile('src/utils/adaptiveFramePacer.ts');
+    const tokensCss = readRepoFile('src/site/styles/tokensAndShell.css');
     const heroSrc = readRepoFile('src/site/SiteMarbleHero.tsx');
     const studioLayerSrc = readRepoFile('src/components/three/StudioThreeStageLayer.tsx');
     const relightSrc = readRepoFile('src/components/three/StudioCharacterRelightCanvas.tsx');
 
     assert.ok(scenesSrc.includes('isIosSafariRuntime'));
-    assert.ok(scenesSrc.includes('backdropScale'));
+    assert.ok(scenesSrc.includes('antialias: !isIosSafari'));
+    assert.ok(
+      scenesSrc.includes('const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);'),
+      'iOS Safari should use native Metal HalfFloat wave FBO instead of slow 12-loop analytic fallback'
+    );
+    assert.ok(
+      scenesSrc.includes('uTrailBounds'),
+      'SILK_CLOTH_FRAG must early-out pixels outside uTrailBounds'
+    );
+    assert.ok(
+      scenesSrc.includes('const needsMarblePass = !isExternalMarbleHidden && marbleOpacity > 0.01;'),
+      '3D stages should bypass backdropRT + blitScene when hero marble is hidden'
+    );
+    assert.match(
+      tokensCss,
+      /\.site-marble-stage\s*\{[^}]*pointer-events:\s*auto[^}]*touch-action:\s*none/
+    );
+    assert.ok(
+      tokensCss.includes("html[data-ios-safari='true'] .site-root :is(") &&
+        tokensCss.includes('backdrop-filter: none;'),
+      'iOS Safari should disable multi-layer CoreAnimation backdrop-filter stalls over live WebGL'
+    );
+    assert.ok(
+      hookSrc.includes("stageEl.addEventListener('touchmove', onStageTouchMove, { passive: false })"),
+      'Marble stage must prevent iOS rubber-band pointercancel during single-finger drags'
+    );
+    assert.ok(
+      pacerSrc.includes('if (tier === \'active60\' && state.detectedRefreshHz <= 60)'),
+      'adaptiveFramePacer must never drop 60Hz ticks to 30fps on Safari 1ms-quantized timestamps'
+    );
     assert.ok(heroSrc.includes('setSoftwareGlGlassFallback(isSoftwareGl || isIosSafariRuntime())'));
     assert.ok(heroSrc.includes('deferBootUntilPaint: false'));
     assert.ok(studioLayerSrc.includes('isIosSafariRuntime'));

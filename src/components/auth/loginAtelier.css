@@ -1715,3 +1715,22 @@
     transition-delay: 0ms !important;
   }
 }
+
+.atelier-backdrop-stage[data-motion-stage='intro'] {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+html[data-ios-safari='true'] .atelier-auth-root :is(
+  .atelier-monolith,
+  .atelier-topbar-pill,
+  .atelier-pill-btn,
+  .atelier-intro-cta,
+  .atelier-curation-card,
+  .atelier-demo-banner,
+  .atelier-toast
+) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+

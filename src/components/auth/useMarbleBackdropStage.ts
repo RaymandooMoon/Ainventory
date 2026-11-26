@@ -701,7 +701,7 @@ export function useMarbleBackdropStage(
     const GYRO_IGNORE_SELECTOR =
       'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="dialog"], [aria-modal="true"], [data-hud-surface="true"], [data-no-marble="true"]';
 
-    const requestIosGyro = (event: MouseEvent) => {
+    const requestIosGyro = (event: Event) => {
       if (gyroPermissionRequested || !requiresIosPermission || !devOrientCtor?.requestPermission) {
         return;
       }
@@ -717,6 +717,7 @@ export function useMarbleBackdropStage(
       }
       gyroPermissionRequested = true;
       window.removeEventListener('click', requestIosGyro, false);
+      stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
       try {
         const resultPromise = devOrientCtor.requestPermission();
         if (resultPromise && typeof resultPromise.then === 'function') {
@@ -733,10 +734,26 @@ export function useMarbleBackdropStage(
       }
     };
 
+    const requestIosGyroOnStageTap = (event: TouchEvent) => {
+      if (event.touches.length > 0) return;
+      requestIosGyro(event);
+    };
+
+    // Guard single-finger drags strictly on stageEl (sibling of .site-shell / modals)
+    // so iOS Safari never hijacks marble rolling or 3D stage orbiting with viewport rubber-band.
+    const onStageTouchMove = (e: TouchEvent) => {
+      if (document.hidden || pausedModeRef.current || e.touches.length !== 1) return;
+      if (optionsRef.current.isEventExcluded?.(e.target)) return;
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
     if (!reducedMotion && devOrientCtor) {
       if (requiresIosPermission) {
         if (isTopLevelWindow) {
           window.addEventListener('click', requestIosGyro, false);
+          stageEl.addEventListener('touchend', requestIosGyroOnStageTap, { passive: true });
         }
       } else {
         attachGyro();
@@ -800,6 +817,7 @@ export function useMarbleBackdropStage(
     window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
     window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    stageEl.addEventListener('touchmove', onStageTouchMove, { passive: false });
 
       cleanupRuntime = () => {
         if (reducedMotionQuery && typeof reducedMotionQuery.removeEventListener === 'function') {
@@ -820,6 +838,8 @@ export function useMarbleBackdropStage(
         window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('touchend', onTouchEnd);
         window.removeEventListener('touchcancel', onTouchEnd);
+        stageEl.removeEventListener('touchmove', onStageTouchMove);
+        stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
         window.removeEventListener('click', requestIosGyro, false);
         if (gyroAttached) {
           window.removeEventListener('deviceorientation', onDeviceOrientation);
