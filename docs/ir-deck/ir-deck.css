@@ -3249,6 +3249,686 @@ html, body {
 }
 
 /* ============================================================================
+ * v5.4 Page-by-Page Review Polish (Slides 02–08, 11–17)
+ * ============================================================================ */
+
+/* Slide 02 — Taller visual act banners, cleaner list rows */
+.s02-act-visual {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 146px;
+}
+
+.s02-items {
+  flex: none;
+  gap: 7px;
+}
+
+.s02-item {
+  padding: 8px 10px;
+}
+
+/* Slide 03 — Expanded 5-stage visual loop cards */
+.s03-loop-stage--expanded {
+  padding: 14px 16px 12px;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s03-nodes--expanded {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.s03-nodes--expanded .s03-node {
+  padding: 10px 10px 12px;
+  gap: 7px;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.s03-nodes--expanded .s03-node-thumb {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 150px;
+}
+
+.s03-nodes--expanded .s03-node-thumb--garments {
+  padding: 10px;
+  gap: 8px;
+}
+
+.s03-loop-stage--expanded .s03-return-svg {
+  height: 36px;
+  flex: none;
+}
+
+/* Slide 07 — Clean numbered 5-phone runway */
+.s07-grid--5 .s07-col {
+  gap: 8px;
+  justify-content: center;
+}
+
+.s07-grid--5 .s07-phone {
+  max-width: 222px;
+}
+
+.s07-cap--clean {
+  align-items: center;
+  text-align: center;
+  padding-top: 7px;
+  border-top: 1px solid var(--hairline);
+}
+
+.s07-cap--clean .s07-cap-title {
+  font-size: 13px;
+  font-weight: 740;
+  white-space: nowrap;
+}
+
+/* Slide 08 — Equal 50/50 Before/After + Live Weather Cube Showcase */
+.s08-top {
+  flex: none;
+}
+
+.s08-eng {
+  padding: 14px 18px;
+  gap: 10px;
+}
+
+.s08-eng-val {
+  font-size: 32px;
+}
+
+.s08-lab-duo {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.s08-lab-half {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s08-garments--lg {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.s08-thumb-box--lg {
+  width: 132px;
+  gap: 6px;
+}
+
+.s08-thumb--lg {
+  width: 132px;
+  height: 132px;
+  border-radius: 14px;
+}
+
+.s08-after-stack--lg {
+  padding: 7px;
+  gap: 6px;
+}
+
+.s08-after-stack--lg img {
+  height: 54px;
+}
+
+.s08-bars--compact {
+  gap: 9px;
+  flex: none;
+}
+
+.s08-bars--compact .s08-bar-row {
+  gap: 4px;
+}
+
+.s08-bars--compact .s08-bar-meta {
+  font-size: 11.5px;
+}
+
+.s08-bars--compact .s08-bar-track {
+  height: 12px;
+}
+
+.s08-weather-big {
+  height: 100%;
+  min-height: 0;
+  border-radius: 14px;
+}
+
+.s08-weather-big img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Slide 11 — Official Site Visual Top + Clean Comparison Matrix Bottom */
+.s11-right--site-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s11-site-top {
+  flex: 1 1 auto;
+  min-height: 175px;
+  border-radius: 14px;
+}
+
+.s11-site-top img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.s11-matrix-card--clean {
+  flex: none;
+  padding: 10px 14px;
+}
+
+.s11-matrix-card--clean .s11-table th {
+  padding: 0 4px 7px;
+  font-size: 9.5px;
+}
+
+.s11-matrix-card--clean .s11-table td {
+  padding: 7px 4px;
+  font-size: 11.5px;
+}
+
+/* Slide 12 — 4 Equal-Height Revenue Cards with Taller Live Previews */
+.s12-equal-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.s12-pillar--equal {
+  height: 100%;
+  padding: 12px 13px;
+  gap: 9px;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.s12-shot--tall {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 158px;
+  border-radius: 10px;
+}
+
+.s12-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.s12-pillar--equal .s12-val {
+  font-size: 25px;
+}
+
+/* Slide 13 — Full-Width Official Homepage Loop Stage */
+.s13-full-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.s13-full-browser {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.s13-full-browser .browser-viewport {
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.s13-full-browser .browser-viewport img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.s13-loop-steps--full {
+  flex: none;
+  gap: 10px;
+}
+
+.s13-loop-steps--full .s13-step-chip {
+  padding: 8px 10px;
+  border-radius: 10px;
+  gap: 3px;
+}
+
+.s13-loop-steps--full .s13-step-chip strong {
+  font-size: 12px;
+}
+
+.s13-loop-steps--full .s13-step-chip span {
+  font-size: 10px;
+}
+
+/* Slide 14 — Dual Side-by-Side Official Site Browsers */
+.s14-dual-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.s14-dual-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.s14-browser-full {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.s14-browser-full .browser-viewport {
+  background: var(--bg-elevated);
+}
+
+.s14-browser-full .browser-viewport img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.s14-proofs--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: none;
+}
+
+.s14-stack-strip {
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+  min-height: 60px;
+}
+
+.s14-stack-strip .s14-tier-stack {
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+/* Slide 15 — 3-Column Equal Visual GTM Cards */
+.s15-phase {
+  padding: 13px 16px;
+  gap: 8px;
+}
+
+.s15-gtm--3col {
+  padding: 12px 16px;
+  gap: 9px;
+}
+
+.s15-ch-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.s15-ch-card {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+}
+
+.s15-ch-card--gold {
+  border-color: var(--hairline-gold);
+  background: linear-gradient(180deg, var(--accent-gold-soft), var(--bg-elevated));
+}
+
+.s15-ch-art {
+  flex: 1 1 auto;
+  min-height: 118px;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--bg-recessed);
+}
+
+.s15-ch-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.s15-ch-art--center img {
+  object-position: center center;
+}
+
+.s15-ch-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.s15-ch-title {
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.s15-ch-sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.s15-loop-footer {
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline-gold);
+  background: var(--accent-gold-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: none;
+}
+
+.s15-loop-flow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+/* Slide 16 — Compact Org Timeline + 4 Visual Homepage Shield Cards */
+.s16-org--compact {
+  padding: 13px 15px;
+  grid-template-columns: 1.04fr 1.46fr;
+  gap: 12px;
+  align-items: stretch;
+  flex: none;
+  min-width: 0;
+}
+
+.s16-founder--compact {
+  padding: 12px 14px;
+  gap: 9px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.s16-founder-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.s16-founder-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.s16-hiring-track {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.s16-hiring-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.s16-hiring-steps {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 16px minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.s16-role--step {
+  padding: 10px 11px;
+  gap: 6px;
+  justify-content: space-between;
+  background: var(--bg-surface);
+  min-width: 0;
+}
+
+.s16-role-sub {
+  font-size: 11px;
+  color: var(--ink-secondary);
+  line-height: 1.3;
+}
+
+.s16-step-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.s16-shields--visual {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px;
+}
+
+.s16-shield--visual {
+  padding: 15px 14px;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 0;
+  min-width: 0;
+}
+
+.s16-shield-img {
+  flex: none;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-gold);
+  background: var(--bg-elevated);
+}
+
+.s16-shield-img img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Slide 17 — Compact Donut + Bar Legend + Equal-Height Milestones */
+.s17-grid--refined {
+  grid-template-columns: 0.78fr 1.22fr;
+  gap: 14px;
+  min-height: 0;
+}
+
+.s17-donut-card--refined {
+  padding: 14px 16px;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s17-donut-svg--refined {
+  width: 184px;
+  height: 184px;
+  margin: 0 auto;
+  flex: none;
+}
+
+.s17-legend--bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.s17-leg-card {
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.s17-leg-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.s17-leg-desc {
+  font-size: 10.5px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.s17-leg-track {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-recessed);
+  overflow: hidden;
+}
+
+.s17-leg-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.s17-right {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s17-anchors {
+  flex: none;
+}
+
+.s17-stairs-card {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s17-stairs--equal {
+  padding-top: 4px;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s17-stairs--equal .s17-step {
+  height: 100%;
+  padding: 10px 11px;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s17-stairs--equal .s17-step-thumb {
+  position: relative;
+  flex: 1 1 0;
+  height: 0;
+  min-height: 92px;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.s17-stairs--equal .s17-step-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  display: block;
+}
+
+.s17-stairs--equal .s17-step-3 .s17-step-thumb img {
+  object-position: center center;
+}
+
+.s17-step-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+}
+
+/* ============================================================================
  * 4:3 Compact Ratio Adaptation (1024x768)
  * ============================================================================ */
 :root[data-ratio='4-3'] .ir-slide {
@@ -3263,32 +3943,52 @@ html, body {
 :root[data-ratio='4-3'] .s01-site-preview { height: 132px; }
 :root[data-ratio='4-3'] .s02-acts { gap: 10px; }
 :root[data-ratio='4-3'] .s02-act { padding: 10px; }
-:root[data-ratio='4-3'] .s02-act-visual { height: 68px; }
+:root[data-ratio='4-3'] .s02-act-visual { min-height: 132px; }
 :root[data-ratio='4-3'] .s02-label { font-size: 11px; }
 :root[data-ratio='4-3'] .s03-g-val { font-size: 21px; }
 :root[data-ratio='4-3'] .s03-ring { width: 54px; height: 54px; }
-:root[data-ratio='4-3'] .s03-node-thumb { height: 64px; }
+:root[data-ratio='4-3'] .s03-nodes--expanded .s03-node-thumb { min-height: 132px; }
 :root[data-ratio='4-3'] .s05-stage { grid-template-columns: 1fr 215px 1fr; }
 :root[data-ratio='4-3'] .s05-phone-hub { width: 122px; height: 248px; }
 :root[data-ratio='4-3'] .s07-grid--5 { gap: 9px; }
-:root[data-ratio='4-3'] .s07-grid--5 .s07-cap-title { font-size: 10.5px; }
-:root[data-ratio='4-3'] .s08-lab-main--rich { grid-template-columns: 224px 1fr 176px; gap: 12px; }
-:root[data-ratio='4-3'] .s08-thumb-box,
-:root[data-ratio='4-3'] .s08-thumb { width: 88px; height: 88px; }
-:root[data-ratio='4-3'] .s08-after-stack img { height: 36px; }
-:root[data-ratio='4-3'] .s08-pct-num { font-size: 36px; }
+:root[data-ratio='4-3'] .s07-cap--clean .s07-cap-title { font-size: 11px; }
+:root[data-ratio='4-3'] .s08-eng-val { font-size: 26px; }
+:root[data-ratio='4-3'] .s08-lab-duo { gap: 10px; }
+:root[data-ratio='4-3'] .s08-garments--lg { gap: 12px; }
+:root[data-ratio='4-3'] .s08-thumb-box--lg,
+:root[data-ratio='4-3'] .s08-thumb--lg { width: 104px; height: 104px; }
+:root[data-ratio='4-3'] .s08-after-stack--lg img { height: 42px; }
 :root[data-ratio='4-3'] .s09-visual-grid { grid-template-columns: 1.15fr 1fr; gap: 10px; }
 :root[data-ratio='4-3'] .s09-kpi-val { font-size: 14px; }
-:root[data-ratio='4-3'] .s11-mannequin-card { grid-template-columns: 112px 1fr; }
-:root[data-ratio='4-3'] .s12-val { font-size: 20px; }
-:root[data-ratio='4-3'] .s12-shot { height: 74px; }
-:root[data-ratio='4-3'] .s13-margin-card { grid-template-columns: 158px 1fr; }
-:root[data-ratio='4-3'] .s13-gauge-svg { width: 154px; height: 102px; }
-:root[data-ratio='4-3'] .s14-specs-banner { grid-template-columns: 150px 1fr; height: 96px; }
-:root[data-ratio='4-3'] .s14-specs-img { height: 78px; }
-:root[data-ratio='4-3'] .s14-tier { grid-template-columns: 104px 1fr auto; }
-:root[data-ratio='4-3'] .s15-funnel { grid-template-columns: 1.35fr 70px 0.72fr; }
-:root[data-ratio='4-3'] .s16-org { grid-template-columns: 1.25fr 22px 1fr 1fr 1fr; gap: 8px; padding: 12px; }
+:root[data-ratio='4-3'] .s11-site-top { min-height: 155px; }
+:root[data-ratio='4-3'] .s11-matrix-card--clean .s11-table td { padding: 6px 3px; font-size: 10.5px; }
+:root[data-ratio='4-3'] .s12-equal-grid { gap: 9px; }
+:root[data-ratio='4-3'] .s12-pillar--equal .s12-val { font-size: 20px; }
+:root[data-ratio='4-3'] .s12-shot--tall { min-height: 136px; }
+:root[data-ratio='4-3'] .s13-loop-steps--full .s13-step-chip strong { font-size: 10.5px; }
+:root[data-ratio='4-3'] .s14-dual-grid { gap: 10px; }
+:root[data-ratio='4-3'] .s14-stack-strip { padding: 8px 10px; }
+:root[data-ratio='4-3'] .s14-stack-strip .s14-tier-stack { font-size: 10px; }
+:root[data-ratio='4-3'] .s15-ch-grid { gap: 9px; }
+:root[data-ratio='4-3'] .s15-ch-title { font-size: 12.5px; }
+:root[data-ratio='4-3'] .s15-ch-art { min-height: 112px; }
+:root[data-ratio='4-3'] .s16-org--compact { grid-template-columns: 0.98fr 1.42fr; gap: 8px; padding: 9px; }
+:root[data-ratio='4-3'] .s16-founder--compact { padding: 9px 10px; }
+:root[data-ratio='4-3'] .s16-founder-top .badge { font-size: 8.5px; padding: 2px 6px; }
+:root[data-ratio='4-3'] .s16-hiring-track { padding: 9px 10px; }
+:root[data-ratio='4-3'] .s16-hiring-steps { grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr) 10px minmax(0, 1fr); gap: 4px; }
+:root[data-ratio='4-3'] .s16-role--step { padding: 7px 8px; }
+:root[data-ratio='4-3'] .s16-role--step .badge,
+:root[data-ratio='4-3'] .s16-role--step .chip { font-size: 8.5px; padding: 2px 5px; }
+:root[data-ratio='4-3'] .s16-role-sub { font-size: 10px; }
+:root[data-ratio='4-3'] .s16-shields--visual { gap: 8px; }
+:root[data-ratio='4-3'] .s16-shield--visual { padding: 11px 10px; }
+:root[data-ratio='4-3'] .s17-grid--refined { grid-template-columns: 0.82fr 1.18fr; gap: 10px; }
+:root[data-ratio='4-3'] .s17-donut-svg--refined { width: 172px; height: 172px; }
+:root[data-ratio='4-3'] .s17-leg-top { font-size: 10.5px; }
+:root[data-ratio='4-3'] .s17-leg-desc { font-size: 9.5px; }
+:root[data-ratio='4-3'] .s17-anchor-val { font-size: 20px; }
+:root[data-ratio='4-3'] .s17-stairs--equal .s17-step-thumb { min-height: 92px; }
 :root[data-ratio='4-3'] .s18-h1 { font-size: 40px; }
 :root[data-ratio='4-3'] .s18-floating-phone { width: 132px; height: 270px; }
 
