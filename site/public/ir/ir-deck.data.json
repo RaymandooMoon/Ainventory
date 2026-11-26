@@ -11,7 +11,28 @@
     "contactEmail": "raymond@ainvtry.com",
     "founderContact": "Raymond Moon · raymond@ainvtry.com",
     "domainContact": "ainvtry.com · raymond@ainvtry.com",
-    "locationDate": "Seoul, Republic of Korea · 2026.11"
+    "locationDate": "대한민국 서울 · 2026.11"
+  },
+  "hero": {
+    "kicker": "내 폰에서 안전하게 지키는 디지털 옷장",
+    "titleLead": "내 옷장의 모든 순간",
+    "titleAccent": "iNVTRY",
+    "subtitle": "사진 1장 배경 제거 · 8방향 4겹 AI 가상 피팅 · 날씨 연동 · 얼굴 전송 0건.",
+    "tocCover": "01 · 표지 — 내 옷장의 모든 순간 · iNVTRY",
+    "tocAgendaItem": "표지 · 내 옷장의 모든 순간",
+    "en": {
+      "kicker": "PRIVACY-FIRST DIGITAL CLOSET",
+      "titleLead": "Every moment of your wardrobe",
+      "titleAccent": "iNVTRY",
+      "subtitle": "1-photo cutout, 8-angle 4-layer AI virtual try-on, live weather & 0B face privacy."
+    }
+  },
+  "performance": {
+    "maxFps": 120,
+    "fpsLabel": "120 FPS",
+    "fpsCompact": "120FPS",
+    "fpsThreeChip": "Three.js 3D · 120FPS",
+    "fpsMorphChip": "120 FPS · 28체형"
   },
   "versions": {
     "react": "19.3.1",
@@ -27,7 +48,7 @@
     "three": "0.187.0",
     "threeMinor": "0.187",
     "threeBadge": "Three.js 0.187",
-    "threeVtonTag": "THREE.JS 0.187 · VTON",
+    "threeVtonTag": "Three.js 0.187 · 가상 피팅",
     "stackShort": "React 19 · Vite 8 · Express 5 · Capacitor 8 (iOS/Android)",
     "clientEdge": "React 19 · Capacitor 8 · Three.js 0.187 · MediaPipe WASM(0B) · IndexedDB"
   },
@@ -38,8 +59,8 @@
     "e2eSuites": 5,
     "caseCount": 408,
     "roundedPlus": "400+",
-    "summaryShort": "60스위트 · 408케이스 통과",
-    "summaryLine": "단위·API·WebGL E2E 60스위트(408케이스) · 3플랫폼"
+    "summaryShort": "60개 묶음 · 408개 검증 통과",
+    "summaryLine": "자동 품질 검증 60개 묶음(408개 항목) · 웹·앱"
   },
   "garment": {
     "beforeBytes": 582332,
@@ -48,11 +69,11 @@
     "afterKb": 24,
     "compressionPct": "-96%",
     "pairShort": "582KB → 24KB WebP",
-    "beforeTitle": "582 KB · EXIF/GPS/실내 포함",
-    "afterTitle": "24 KB · EXIF 0% · 순수 의류",
-    "costOldBar": "582 KB / 장 (EXIF·배경 포함)",
+    "beforeTitle": "582 KB · 위치정보·방 배경 포함",
+    "afterTitle": "24 KB · 위치정보 삭제 · 옷만 분리",
+    "costOldBar": "장당 582 KB (위치정보·배경 포함)",
     "costNewBar": "24 KB",
-    "costNewNote": "-96% 압축 · IndexedDB 로컬 캐시",
+    "costNewNote": "-96% 압축 · 내 폰에 안전 보관",
     "costHeadSaved": "-96% 용량 절감"
   },
   "journey": {
@@ -103,26 +124,26 @@
     "stage-1": {
       "phase": "LIVE 01",
       "status": "done",
-      "badgeText": "PHASE 01 · 완료",
+      "badgeText": "1단계 · 완료",
       "badgeClass": "badge badge--live",
       "title": "레이어드 피팅 · 내 폰 피부톤"
     },
     "stage-2": {
       "phase": "LIVE 02",
       "status": "done",
-      "badgeText": "PHASE 02 · 완료",
+      "badgeText": "2단계 · 완료",
       "badgeClass": "badge badge--live",
       "title": "실시간 날씨 · 세탁 지도 · 즉시 삭제"
     },
     "stage-3": {
       "phase": "TO-DO",
       "status": "active",
-      "badgeText": "PHASE 03 · 2026.Q4~27",
+      "badgeText": "3단계 · 2026.Q4~27",
       "badgeClass": "badge badge--gold",
       "title": "택 스캔 · 캘린더 · 방문수거 · 리셀"
     }
   },
-  "roadmapPillText": "LIVE 01·02 완료",
+  "roadmapPillText": "1·2단계 개발 완료",
   "assets": {
     "hashes": {
       "site/public/assets/previews/app-fitting-live-ko-light.webp": "0b2c2deb6bd9",

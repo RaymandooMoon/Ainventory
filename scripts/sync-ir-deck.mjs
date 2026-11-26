@@ -88,8 +88,8 @@ function collectTestMetrics(repoRoot) {
     e2eSuites,
     caseCount: totalCases,
     roundedPlus: `${roundedTen}+`,
-    summaryShort: `${files.length}스위트 · ${totalCases}케이스 통과`,
-    summaryLine: `단위·API·WebGL E2E ${files.length}스위트(${totalCases}케이스) · 3플랫폼`,
+    summaryShort: `${files.length}개 묶음 · ${totalCases}개 검증 통과`,
+    summaryLine: `자동 품질 검증 ${files.length}개 묶음(${totalCases}개 항목) · 웹·앱`,
   };
 }
 
@@ -110,11 +110,11 @@ function collectGarmentMetrics(repoRoot, garmentAssets) {
     afterKb: webpKb,
     compressionPct: `-${savedPct}%`,
     pairShort: `${jpgKb}KB → ${webpKb}KB WebP`,
-    beforeTitle: `${jpgKb} KB · EXIF/GPS/실내 포함`,
-    afterTitle: `${webpKb} KB · EXIF 0% · 순수 의류`,
-    costOldBar: `${jpgKb} KB / 장 (EXIF·배경 포함)`,
+    beforeTitle: `${jpgKb} KB · 위치정보·방 배경 포함`,
+    afterTitle: `${webpKb} KB · 위치정보 삭제 · 옷만 분리`,
+    costOldBar: `장당 ${jpgKb} KB (위치정보·배경 포함)`,
     costNewBar: `${webpKb} KB`,
-    costNewNote: `-${savedPct}% 압축 · IndexedDB 로컬 캐시`,
+    costNewNote: `-${savedPct}% 압축 · 내 폰에 안전 보관`,
     costHeadSaved: `-${savedPct}% 용량 절감`,
   };
 }
@@ -249,7 +249,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
     three: cleanSemver(deps.three),
     threeMinor: majorMinor(deps.three),
     threeBadge: `Three.js ${majorMinor(deps.three)}`,
-    threeVtonTag: `THREE.JS ${majorMinor(deps.three)} · VTON`,
+    threeVtonTag: `Three.js ${majorMinor(deps.three)} · 가상 피팅`,
     stackShort: `React ${majorOnly(deps.react)} · Vite ${majorOnly(deps.vite)} · Express ${majorOnly(deps.express)} · Capacitor ${majorOnly(deps['@capacitor/core'])} (iOS/Android)`,
     clientEdge: `React ${majorOnly(deps.react)} · Capacitor ${majorOnly(deps['@capacitor/core'])} · Three.js ${majorMinor(deps.three)} · MediaPipe WASM(0B) · IndexedDB`,
   };
@@ -269,19 +269,49 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
   /** @type {Record<string, { phase: string, status: string, badgeText: string, badgeClass: string, title: string }>} */
   const roadmap = {};
   ko.vision.milestones.forEach((m, idx) => {
-    const phaseNum = String(idx + 1).padStart(2, '0');
+    const phaseNum = String(idx + 1);
     const isDone = m.status === 'done';
     roadmap[m.id] = {
       phase: m.phase,
       status: m.status,
-      badgeText: isDone ? `PHASE ${phaseNum} · 완료` : `PHASE ${phaseNum} · 2026.Q4~27`,
+      badgeText: isDone ? `${phaseNum}단계 · 완료` : `${phaseNum}단계 · 2026.Q4~27`,
       badgeClass: milestoneStatusToClass(m.status),
       title: m.title,
     };
   });
 
   const liveDoneCount = ko.vision.milestones.filter((m) => m.status === 'done').length;
-  const roadmapPillText = liveDoneCount >= 2 ? `LIVE 01·02 완료` : `LIVE ${liveDoneCount} 완료`;
+  const roadmapPillText = liveDoneCount >= 2 ? `1·2단계 개발 완료` : `${liveDoneCount}단계 완료`;
+
+  const en = contentMod.SITE_COPY.en;
+  const pacerSrc = fs.readFileSync(
+    path.join(repoRoot, 'src', 'utils', 'adaptiveFramePacer.ts'),
+    'utf8'
+  );
+  const supports120Fps =
+    pacerSrc.includes("boost120") && pacerSrc.includes("detectedRefreshHz: allowHighRefresh ? 120 : 60");
+  const maxFps = supports120Fps ? 120 : 60;
+  const performance = {
+    maxFps,
+    fpsLabel: `${maxFps} FPS`,
+    fpsCompact: `${maxFps}FPS`,
+    fpsThreeChip: `Three.js 3D · ${maxFps}FPS`,
+    fpsMorphChip: `${maxFps} FPS · 28체형`,
+  };
+  const hero = {
+    kicker: ko.hero.kicker,
+    titleLead: ko.hero.titleLead,
+    titleAccent: ko.hero.titleAccent,
+    subtitle: ko.hero.subtitle,
+    tocCover: `01 · 표지 — ${ko.hero.titleLead} · ${siteMeta.logoMark}`,
+    tocAgendaItem: `표지 · ${ko.hero.titleLead}`,
+    en: {
+      kicker: en.hero.kicker,
+      titleLead: en.hero.titleLead,
+      titleAccent: en.hero.titleAccent,
+      subtitle: en.hero.subtitle,
+    },
+  };
 
   return {
     schemaVersion: '5.3',
@@ -296,8 +326,10 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
       contactEmail: siteMeta.contactEmail,
       founderContact: `${siteMeta.founderName} · ${siteMeta.contactEmail}`,
       domainContact: `${siteMeta.domain} · ${siteMeta.contactEmail}`,
-      locationDate: `Seoul, Republic of Korea · ${git.syncMonth}`,
+      locationDate: `대한민국 서울 · ${git.syncMonth}`,
     },
+    hero,
+    performance,
     versions,
     tests,
     garment,
@@ -317,6 +349,17 @@ function buildBindingsMap(snapshot) {
     'meta.domainContact': { text: snapshot.meta.domainContact },
     'meta.locationDate': { text: snapshot.meta.locationDate },
 
+    'hero.kicker': { text: snapshot.hero.kicker },
+    'hero.titleLead': { text: snapshot.hero.titleLead },
+    'hero.subtitle': { text: snapshot.hero.subtitle },
+    'hero.tocCover': { text: snapshot.hero.tocCover },
+    'hero.tocAgendaItem': { text: snapshot.hero.tocAgendaItem },
+
+    'performance.maxFps': { text: String(snapshot.performance.maxFps) },
+    'performance.fpsLabel': { text: snapshot.performance.fpsLabel },
+    'performance.fpsThreeChip': { text: snapshot.performance.fpsThreeChip },
+    'performance.fpsMorphChip': { text: snapshot.performance.fpsMorphChip },
+
     'versions.threeBadge': { text: snapshot.versions.threeBadge },
     'versions.threeVtonTag': { text: snapshot.versions.threeVtonTag },
     'versions.stackShort': { text: snapshot.versions.stackShort },
@@ -325,8 +368,8 @@ function buildBindingsMap(snapshot) {
     'tests.roundedPlus': { text: snapshot.tests.roundedPlus },
     'tests.summaryShort': { text: snapshot.tests.summaryShort },
     'tests.summaryLine': { text: snapshot.tests.summaryLine },
-    'tests.tractionTitle': { text: `${snapshot.tests.roundedPlus} 자동화 테스트` },
-    'tests.tocTag': { text: `${snapshot.tests.roundedPlus} TESTS` },
+    'tests.tractionTitle': { text: `${snapshot.tests.roundedPlus} 자동 품질 검증` },
+    'tests.tocTag': { text: `${snapshot.tests.roundedPlus} 검증` },
 
     'garment.compression': { text: snapshot.garment.compressionPct },
     'garment.pairShort': { text: snapshot.garment.pairShort },
@@ -336,9 +379,9 @@ function buildBindingsMap(snapshot) {
     'garment.costNewBar': { text: snapshot.garment.costNewBar },
     'garment.costNewNote': { text: snapshot.garment.costNewNote },
     'garment.costHeadSaved': { text: snapshot.garment.costHeadSaved },
-    'garment.wasmNote': { text: `WASM 로컬 + ${snapshot.garment.afterKb}KB 무학습` },
+    'garment.wasmNote': { text: `내 폰 처리 · ${snapshot.garment.afterKb}KB만 사용` },
     'garment.flowArrow': { text: `${snapshot.garment.afterKb}KB WebP →` },
-    'garment.pipelineFooter': { text: `Core Technology — Verified ${snapshot.garment.pairShort} Pipeline` },
+    'garment.pipelineFooter': { text: `핵심 기술 — 검증된 ${snapshot.garment.pairShort} 초경량 변환` },
 
     'roadmap.pill': { text: snapshot.roadmapPillText },
   };

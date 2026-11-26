@@ -67,6 +67,15 @@ function isDebug3dQueryEnabled(): boolean {
   }
 }
 
+function isNoMarbleQueryEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URLSearchParams(window.location.search).get('nomarble') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export interface SiteMarbleHeroProps {
   readonly theme: SiteTheme;
   readonly motionVariant: LoginThreeVariantId;
@@ -239,6 +248,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 }: SiteMarbleHeroProps) {
   const isDark = theme === 'dark';
   const mood: MoodMode = motionVariant;
+  const hideMarbleForCleanCapture = useMemo(() => isNoMarbleQueryEnabled(), []);
   const isSpecsThreeBackground =
     activeStage === 'specs' &&
     (interaction.specsSubtab === 'fitting' || interaction.specsSubtab === 'care');
@@ -342,7 +352,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           rig.heroReturnRevealed = false;
           rig.stageMarble.group.visible = false;
           rig.stageMarble.group.scale.setScalar(1);
-          ctrl?.setExternalMarbleHidden?.(false);
+          ctrl?.setExternalMarbleHidden?.(hideMarbleForCleanCapture);
           if (isIosSafariRuntime()) {
             rig.director.disposeInactiveStages('hero');
           }
@@ -432,7 +442,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
         ctrl?.requestRender?.();
       }
     },
-    []
+    [hideMarbleForCleanCapture]
   );
 
   const ensureRig = useCallback(
@@ -617,14 +627,16 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
 
         if (progress >= 0.76 && !rig.heroReturnRevealed) {
           rig.heroReturnRevealed = true;
-          controllerRef.current?.setExternalMarbleHidden?.(false);
-          const landingSnap = controllerRef.current?.getMarbleSnapshot?.();
-          if (landingSnap) {
-            controllerRef.current?.triggerPulse?.(
-              landingSnap.u * 2 - 1,
-              landingSnap.v * 2 - 1,
-              0.42
-            );
+          controllerRef.current?.setExternalMarbleHidden?.(hideMarbleForCleanCapture);
+          if (!hideMarbleForCleanCapture) {
+            const landingSnap = controllerRef.current?.getMarbleSnapshot?.();
+            if (landingSnap) {
+              controllerRef.current?.triggerPulse?.(
+                landingSnap.u * 2 - 1,
+                landingSnap.v * 2 - 1,
+                0.42
+              );
+            }
           }
         }
 
@@ -637,7 +649,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
           rig.heroReturnRevealed = false;
           rig.stageMarble.group.visible = false;
           rig.stageMarble.group.scale.setScalar(1);
-          controllerRef.current?.setExternalMarbleHidden?.(false);
+          controllerRef.current?.setExternalMarbleHidden?.(hideMarbleForCleanCapture);
           if (isIosSafariRuntime()) {
             rig.director.disposeInactiveStages('hero');
           }
@@ -673,7 +685,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
       }
       return true;
     },
-    [ensureRig, syncStageTransition]
+    [ensureRig, hideMarbleForCleanCapture, syncStageTransition]
   );
 
   const handleOverlayContextRestored = useCallback((renderer: THREE.WebGLRenderer) => {
@@ -695,9 +707,16 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     rigRef.current = null;
   }, []);
 
-  const handleControllerReady = useCallback((ctrl: LoginThreeController | null) => {
-    controllerRef.current = ctrl;
-  }, []);
+  const handleControllerReady = useCallback(
+    (ctrl: LoginThreeController | null) => {
+      controllerRef.current = ctrl;
+      if (ctrl && hideMarbleForCleanCapture) {
+        ctrl.setExternalMarbleHidden?.(true);
+        ctrl.requestRender?.();
+      }
+    },
+    [hideMarbleForCleanCapture]
+  );
 
   const handleInputDiagnosticsReady = useCallback(
     (getter: (() => MarbleInputDiagnostics) | null) => {
@@ -731,7 +750,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     shouldDispatchClick: shouldSiteDispatchClick,
     getHitParams: getSiteHitParams,
     floorRailSelector: SITE_FLOOR_RAIL_SELECTOR,
-    disableHeroMarbleInput: activeStage !== 'hero',
+    disableHeroMarbleInput: activeStage !== 'hero' || hideMarbleForCleanCapture,
     deferBootUntilPaint: false,
     onOverlayRender: handleOverlayRender,
     onOverlayResize: handleOverlayResize,
@@ -758,7 +777,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     const rig = rigRef.current;
     if (!rig) {
       if (effectiveThreeStage === 'hero') {
-        controllerRef.current?.setExternalMarbleHidden?.(false);
+        controllerRef.current?.setExternalMarbleHidden?.(hideMarbleForCleanCapture);
         return;
       }
 
@@ -794,7 +813,7 @@ const SiteMarbleHero = memo(function SiteMarbleHero({
     }
     syncStageTransition(rig, effectiveThreeStage);
     return undefined;
-  }, [effectiveThreeStage, syncStageTransition]);
+  }, [effectiveThreeStage, hideMarbleForCleanCapture, syncStageTransition]);
 
   // Proactively pre-warm & register hidden studioStage when entering Specs so Three.js 3D opens instantly
   // Skip speculative background pre-instantiation on iOS WebKit to avoid Jetsam memory pressure (loads on demand).

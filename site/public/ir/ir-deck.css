@@ -707,6 +707,34 @@ html, body {
 /* ============================================================================
  * Slide 01 — Cover (Live App + 5-Node Orbit)
  * ============================================================================ */
+/* Slide 01 — Synced Official Homepage Silk Backdrop (Marble Orb Excluded) */
+.ir-slide--hero-sync {
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(125deg, rgba(246, 243, 236, 0.78) 0%, rgba(246, 243, 236, 0.54) 55%, rgba(246, 243, 236, 0.72) 100%),
+    url('./assets/bg/silk-luxury-light.webp');
+  background-size: cover;
+  background-position: center;
+}
+
+:root[data-theme='dark'] .ir-slide--hero-sync {
+  background-image:
+    linear-gradient(125deg, rgba(5, 5, 7, 0.72) 0%, rgba(5, 5, 7, 0.44) 55%, rgba(5, 5, 7, 0.68) 100%),
+    url('./assets/bg/silk-luxury-dark.webp');
+}
+
+:root[data-mood='aurora'][data-theme='light'] .ir-slide--hero-sync {
+  background-image:
+    linear-gradient(125deg, rgba(246, 243, 236, 0.78) 0%, rgba(246, 243, 236, 0.54) 55%, rgba(246, 243, 236, 0.72) 100%),
+    url('./assets/bg/silk-aurora-light.webp');
+}
+
+:root[data-mood='aurora'][data-theme='dark'] .ir-slide--hero-sync {
+  background-image:
+    linear-gradient(125deg, rgba(5, 5, 7, 0.72) 0%, rgba(5, 5, 7, 0.44) 55%, rgba(5, 5, 7, 0.68) 100%),
+    url('./assets/bg/silk-aurora-dark.webp');
+}
+
 .s01-grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
@@ -718,7 +746,7 @@ html, body {
 .s01-left {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -740,6 +768,29 @@ html, body {
   line-height: 1.15;
   letter-spacing: -0.036em;
   word-break: keep-all;
+}
+
+.s01-h1--brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.s01-h1-lead {
+  display: block;
+}
+
+.s01-h1-brand-row {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.s01-hero-logo {
+  height: 68px;
+  width: auto;
+  display: block;
 }
 
 .s01-kpis {
@@ -3058,6 +3109,7 @@ html, body {
 }
 :root[data-ratio='4-3'] .s-title { font-size: 23px; }
 :root[data-ratio='4-3'] .s01-h1 { font-size: 35px; }
+:root[data-ratio='4-3'] .s01-hero-logo { height: 52px; }
 :root[data-ratio='4-3'] .s01-right { grid-template-columns: 175px 1fr; gap: 12px; }
 :root[data-ratio='4-3'] .s01-phone { width: 175px; height: 392px; }
 :root[data-ratio='4-3'] .s01-right-stack { height: 392px; gap: 8px; }

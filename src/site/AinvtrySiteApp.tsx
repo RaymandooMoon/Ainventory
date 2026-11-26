@@ -914,10 +914,11 @@ export default function AinvtrySiteApp() {
                     <span>{copy.hero.kicker}</span>
                   </p>
 
-                  <h1 className="site-hero-title">
+                  <h1 className="site-hero-title site-hero-title--brand">
                     <span className="site-hero-title-sheen">{copy.hero.titleLead}</span>
-                    <em className="site-hero-accent">{copy.hero.titleAccent}</em>
-                    <span className="site-hero-title-sheen">{copy.hero.titleTail}</span>
+                    <span className="site-hero-brand-line" aria-label={copy.hero.titleAccent}>
+                      <SiteBrandMark theme={theme} size="hero" />
+                    </span>
                   </h1>
 
                   <p className="site-hero-subtitle">{copy.hero.subtitle}</p>

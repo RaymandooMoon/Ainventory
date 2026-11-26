@@ -714,6 +714,24 @@ html[data-ios-safari='true'] .site-live-app-stage {
   text-wrap: balance;
 }
 
+.site-hero-title--brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.3vh, 16px);
+}
+
+.site-hero-brand-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.site-hero-brand-line .site-logo-frame--hero {
+  width: clamp(190px, 24vw, 310px);
+}
+
 .site-hero-title-sheen {
   background: linear-gradient(180deg, #ffffff 0%, #dcdce4 100%);
   -webkit-background-clip: text;
