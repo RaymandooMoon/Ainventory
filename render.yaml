@@ -17,3 +17,13 @@ services:
         value: "1"
       - key: GEMINI_API_KEY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: iNVTRY <newsletter@ainvtry.com>
+      - key: NEWSLETTER_NOTIFY_EMAIL
+        value: raymond@ainvtry.com
+      - key: NEWSLETTER_WEBHOOK_URL
+        sync: false
+      - key: NEWSLETTER_WEBHOOK_SECRET
+        sync: false

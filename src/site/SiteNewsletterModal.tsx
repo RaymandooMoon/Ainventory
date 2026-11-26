@@ -6,6 +6,7 @@ import {
   normalizeClientEmail,
   readStoredNewsletterSubscription,
   subscribeToNewsletter,
+  syncOfflineNewsletterSubscription,
   unsubscribeFromNewsletter,
   type NewsletterSource,
   type StoredNewsletterSubscription,
@@ -44,6 +45,7 @@ export function SiteNewsletterForm({
   const consentId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const autoSyncedEmailRef = useRef<string | null>(null);
 
   const [savedSub, setSavedSub] = useState<StoredNewsletterSubscription | null>(() =>
     readStoredNewsletterSubscription()
@@ -52,6 +54,8 @@ export function SiteNewsletterForm({
   const [consent, setConsent] = useState<boolean>(true);
   const [honeypot, setHoneypot] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [slowSubmitHint, setSlowSubmitHint] = useState<boolean>(false);
+  const [syncingOffline, setSyncingOffline] = useState<boolean>(false);
   const [unsubscribing, setUnsubscribing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [noticeMsg, setNoticeMsg] = useState<string>('');
@@ -62,10 +66,40 @@ export function SiteNewsletterForm({
     }
   }, [autoFocusEmail, savedSub]);
 
+  // Automatically upgrade previously device-saved (`offline_saved`) subscriptions once live server is online
+  useEffect(() => {
+    if (!savedSub || savedSub.status !== 'offline_saved') return undefined;
+    if (autoSyncedEmailRef.current === savedSub.email) return undefined;
+    autoSyncedEmailRef.current = savedSub.email;
+
+    let cancelled = false;
+    void syncOfflineNewsletterSubscription(savedSub, source).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.status !== 'offline_saved') {
+        setSavedSub({
+          email: res.email,
+          lang: savedSub.lang,
+          status: res.status,
+          subscribedAt: new Date().toISOString(),
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [savedSub, source]);
+
+  useEffect(() => {
+    if (!submitting) return undefined;
+    const timer = window.setTimeout(() => setSlowSubmitHint(true), 3500);
+    return () => window.clearTimeout(timer);
+  }, [submitting]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg('');
     setNoticeMsg('');
+    setSlowSubmitHint(false);
 
     const normalized = normalizeClientEmail(email);
     if (!normalized) {
@@ -102,6 +136,7 @@ export function SiteNewsletterForm({
       return;
     }
 
+    autoSyncedEmailRef.current = result.email;
     setSavedSub({
       email: result.email,
       lang,
@@ -109,6 +144,29 @@ export function SiteNewsletterForm({
       subscribedAt: new Date().toISOString(),
     });
     setEmail('');
+  };
+
+  const handleRetryOfflineSync = async () => {
+    if (!savedSub || savedSub.status !== 'offline_saved' || syncingOffline) return;
+    setSyncingOffline(true);
+    setErrorMsg('');
+    triggerHaptic('selection');
+    const res = await syncOfflineNewsletterSubscription(savedSub, source);
+    setSyncingOffline(false);
+    if (res.ok && res.status !== 'offline_saved') {
+      setSavedSub({
+        email: res.email,
+        lang: savedSub.lang,
+        status: res.status,
+        subscribedAt: new Date().toISOString(),
+      });
+    } else {
+      setErrorMsg(
+        lang === 'ko'
+          ? '서버에 아직 연결할 수 없습니다. 잠시 후 다시 시도하거나 아래 이메일 버튼으로 신청해 주세요.'
+          : 'Still unable to reach the server. Please retry shortly or send via email below.'
+      );
+    }
   };
 
   const handleUnsubscribe = async () => {
@@ -123,6 +181,7 @@ export function SiteNewsletterForm({
 
   const handleResetToForm = () => {
     clearStoredNewsletterSubscription();
+    autoSyncedEmailRef.current = null;
     setSavedSub(null);
     setErrorMsg('');
     setNoticeMsg('');
@@ -166,13 +225,41 @@ export function SiteNewsletterForm({
           </div>
         </div>
         <p className="site-newsletter-success-body">{statusBody}</p>
+        {errorMsg && (
+          <p className="site-newsletter-error" role="alert">
+            {errorMsg}
+          </p>
+        )}
 
         <div className="site-newsletter-success-actions">
           {isOffline && (
-            <a href={mailtoConfirmHref} className="site-newsletter-submit-btn">
-              <span>{copy.mailtoFallbackCta}</span>
-              <ArrowUpRight size={14} aria-hidden="true" />
-            </a>
+            <>
+              <button
+                type="button"
+                className="site-newsletter-submit-btn"
+                disabled={syncingOffline}
+                onClick={handleRetryOfflineSync}
+              >
+                {syncingOffline ? (
+                  <>
+                    <Loader2 size={15} className="site-newsletter-spin" aria-hidden="true" />
+                    <span>{copy.submittingLabel}</span>
+                  </>
+                ) : (
+                  <span>
+                    {lang === 'ko' ? '서버에 지금 등록하기' : 'Register on Server Now'}
+                  </span>
+                )}
+              </button>
+              <a
+                href={mailtoConfirmHref}
+                className="site-newsletter-text-btn"
+                style={{ justifyContent: 'center' }}
+              >
+                <span>{copy.mailtoFallbackCta}</span>
+                <ArrowUpRight size={13} aria-hidden="true" />
+              </a>
+            </>
           )}
           {onDone && !isOffline && (
             <button type="button" className="site-newsletter-submit-btn" onClick={onDone}>
@@ -290,6 +377,14 @@ export function SiteNewsletterForm({
           </>
         )}
       </button>
+
+      {submitting && slowSubmitHint && (
+        <p className="site-newsletter-notice" role="status">
+          {lang === 'ko'
+            ? '서버와 연결하는 중입니다. 잠시만 기다려 주세요…'
+            : 'Connecting to server. Please hold on a moment…'}
+        </p>
+      )}
 
       <p className="site-newsletter-privacy-note">
         <ShieldCheck size={13} aria-hidden="true" />

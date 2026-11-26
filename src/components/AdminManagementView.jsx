@@ -15,13 +15,25 @@ import { apiFetch, hasUserPermission } from '../utils/api.ts';
 import { ACCESS_MENU_CATALOG, resolveSafeAdminEmail } from '../utils/accessControl.ts';
 import { tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
+import { buildNewsletterSubscribersCsv } from '../utils/newsletterCsv.ts';
 import AppHeaderBrand from './common/AppHeaderBrand.tsx';
 import { TopRightUtilityActions } from './common/AppUI.jsx';
+import AdminNewsletterPanel from './admin/AdminNewsletterPanel.tsx';
+
+const EMPTY_NEWSLETTER_OVERVIEW = {
+  total: 0,
+  activeCount: 0,
+  unsubscribedCount: 0,
+  emailConfigured: false,
+  webhookConfigured: false,
+  subscribers: [],
+};
 
 /**
  * Dedicated Admin Management Page (visible & accessible only to administrators).
  * - Per-user Menu Access & Per-Menu Button Permission toggles persisted to SQLite
  * - Role-level default permission management & user role reassignment
+ * - Official site newsletter subscriber management & CSV export
  * - Quick new user creation
  */
 export default function AdminManagementView({
@@ -36,9 +48,11 @@ export default function AdminManagementView({
 }) {
   const isAdmin = hasUserPermission(user, 'admin:manage_roles');
   const [overview, setOverview] = useState(null);
+  const [newsletterData, setNewsletterData] = useState(EMPTY_NEWSLETTER_OVERVIEW);
+  const [newsletterError, setNewsletterError] = useState('');
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [subTab, setSubTab] = useState('users'); // 'users' | 'roles'
+  const [subTab, setSubTab] = useState('users'); // 'users' | 'roles' | 'newsletter'
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedRoleCode, setSelectedRoleCode] = useState('site_demo');
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,22 +70,61 @@ export default function AdminManagementView({
     if (!isAdmin) return;
     setLoading(true);
     setErrorMsg('');
+    setNewsletterError('');
     try {
-      const data = await apiFetch('/admin/roles');
-      setOverview(data);
-      setSelectedUserId((prev) => {
-        if (prev && data?.users?.some((u) => u.id === prev)) return prev;
-        const preferred =
-          data?.users?.find((u) => u.username === 'site_demo') ||
-          data?.users?.find((u) => u.role !== 'admin') ||
-          data?.users?.[0];
-        return preferred ? preferred.id : null;
-      });
-    } catch (err) {
-      setErrorMsg(
-        err?.message ||
-          tx(lang, '관리자 권한 데이터를 불러오지 못했습니다.', 'Failed to load admin permissions.')
-      );
+      const [rolesResult, newsletterResult] = await Promise.allSettled([
+        apiFetch('/admin/roles'),
+        apiFetch('/admin/newsletter/subscribers'),
+      ]);
+
+      if (rolesResult.status === 'fulfilled') {
+        const data = rolesResult.value;
+        setOverview(data);
+        setSelectedUserId((prev) => {
+          if (prev && data?.users?.some((u) => u.id === prev)) return prev;
+          const preferred =
+            data?.users?.find((u) => u.username === 'site_demo') ||
+            data?.users?.find((u) => u.role !== 'admin') ||
+            data?.users?.[0];
+          return preferred ? preferred.id : null;
+        });
+      } else {
+        setErrorMsg(
+          rolesResult.reason?.message ||
+            tx(lang, '관리자 권한 데이터를 불러오지 못했습니다.', 'Failed to load admin permissions.')
+        );
+      }
+
+      if (newsletterResult.status === 'fulfilled' && newsletterResult.value) {
+        const nl = newsletterResult.value;
+        const subscribers = Array.isArray(nl.subscribers) ? nl.subscribers : [];
+        const activeCount =
+          typeof nl.activeCount === 'number'
+            ? nl.activeCount
+            : subscribers.filter((s) => s.status === 'subscribed').length;
+        const total = typeof nl.total === 'number' ? nl.total : subscribers.length;
+        const unsubscribedCount =
+          typeof nl.unsubscribedCount === 'number'
+            ? nl.unsubscribedCount
+            : Math.max(0, total - activeCount);
+        setNewsletterData({
+          total,
+          activeCount,
+          unsubscribedCount,
+          emailConfigured: Boolean(nl.emailConfigured),
+          webhookConfigured: Boolean(nl.webhookConfigured),
+          subscribers,
+        });
+      } else if (newsletterResult.status === 'rejected') {
+        setNewsletterError(
+          newsletterResult.reason?.message ||
+            tx(
+              lang,
+              '뉴스레터 구독자 목록을 불러오지 못했습니다.',
+              'Failed to load newsletter subscribers.'
+            )
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -287,6 +340,111 @@ export default function AdminManagementView({
     }
   };
 
+  const handleToggleSubscriberStatus = async (subscriber, nextStatus) => {
+    if (!subscriber?.id || savingKey) return;
+    setSavingKey(`nl:${subscriber.id}`);
+    triggerHaptic('selection');
+    try {
+      const res = await apiFetch(`/admin/newsletter/subscribers/${subscriber.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const updatedRow = res?.subscriber || { ...subscriber, status: nextStatus };
+      setNewsletterData((prev) => {
+        const nextList = prev.subscribers.map((row) =>
+          row.id === subscriber.id ? updatedRow : row
+        );
+        const activeCount = nextList.filter((row) => row.status === 'subscribed').length;
+        return {
+          ...prev,
+          total: nextList.length,
+          activeCount,
+          unsubscribedCount: Math.max(0, nextList.length - activeCount),
+          subscribers: nextList,
+        };
+      });
+      showToast?.(
+        nextStatus === 'unsubscribed'
+          ? tx(
+              lang,
+              `${subscriber.email} 주소를 수신 거부 처리했습니다.`,
+              `Unsubscribed ${subscriber.email}.`
+            )
+          : tx(
+              lang,
+              `${subscriber.email} 주소의 구독을 복원했습니다.`,
+              `Restored subscription for ${subscriber.email}.`
+            )
+      );
+    } catch (err) {
+      showToast?.(
+        err?.message ||
+          tx(lang, '구독 상태 변경에 실패했습니다.', 'Failed to update subscriber status.')
+      );
+    } finally {
+      setSavingKey('');
+    }
+  };
+
+  const handleDeleteSubscriber = async (subscriber) => {
+    if (!subscriber?.id || savingKey) return;
+    setSavingKey(`nl-del:${subscriber.id}`);
+    triggerHaptic('selection');
+    try {
+      await apiFetch(`/admin/newsletter/subscribers/${subscriber.id}`, {
+        method: 'DELETE',
+      });
+      setNewsletterData((prev) => {
+        const nextList = prev.subscribers.filter((row) => row.id !== subscriber.id);
+        const activeCount = nextList.filter((row) => row.status === 'subscribed').length;
+        return {
+          ...prev,
+          total: nextList.length,
+          activeCount,
+          unsubscribedCount: Math.max(0, nextList.length - activeCount),
+          subscribers: nextList,
+        };
+      });
+      showToast?.(
+        tx(
+          lang,
+          `${subscriber.email} 구독 기록을 영구 삭제했습니다.`,
+          `Permanently erased ${subscriber.email}.`
+        )
+      );
+    } catch (err) {
+      showToast?.(
+        err?.message ||
+          tx(lang, '구독자 삭제에 실패했습니다.', 'Failed to delete subscriber.')
+      );
+    } finally {
+      setSavingKey('');
+    }
+  };
+
+  const handleExportSubscribersCsv = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    triggerHaptic('selection');
+    const csv = buildNewsletterSubscribersCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ainvtry-newsletter-subscribers-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast?.(
+      tx(
+        lang,
+        `${rows.length}건의 구독자 목록을 CSV로 내보냈습니다.`,
+        `Exported ${rows.length} subscribers to CSV.`
+      )
+    );
+  };
+
   if (!isAdmin) {
     return (
       <section className="hig-screen-container admin-console-screen" aria-label="Admin">
@@ -371,7 +529,7 @@ export default function AdminManagementView({
               className={`admin-console-seg-btn ${subTab === 'users' ? 'is-active' : ''}`}
             >
               <Users size={14} />
-              <span>{tx(lang, '사용자별 메뉴·버튼 권한', 'Per-User Menu & Buttons')}</span>
+              <span>{tx(lang, '사용자별 메뉴 · 버튼 권한', 'Per-User Menu & Buttons')}</span>
             </button>
             <button
               type="button"
@@ -383,6 +541,18 @@ export default function AdminManagementView({
             >
               <SlidersHorizontal size={14} />
               <span>{tx(lang, '역할 기본 권한', 'Role Defaults')}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={subTab === 'newsletter'}
+              data-admin-subtab="newsletter"
+              onClick={() => setSubTab('newsletter')}
+              className={`admin-console-seg-btn ${subTab === 'newsletter' ? 'is-active' : ''}`}
+            >
+              <Mail size={14} />
+              <span>{tx(lang, '뉴스레터 구독자', 'Newsletter')}</span>
+              <span className="admin-console-seg-count">{newsletterData.activeCount}</span>
             </button>
           </div>
         </div>
@@ -414,7 +584,7 @@ export default function AdminManagementView({
 
         {errorMsg && <div className="admin-console-error">{errorMsg}</div>}
 
-        {loading && !overview ? (
+        {loading && !overview && subTab !== 'newsletter' ? (
           <div className="admin-console-loading">
             <div className="hig-spinner" />
             <span>{tx(lang, '권한 매트릭스 로딩 중...', 'Loading access matrix...')}</span>
@@ -723,6 +893,17 @@ export default function AdminManagementView({
               )}
             </div>
           </div>
+        ) : subTab === 'newsletter' ? (
+          /* ======================== NEWSLETTER SUBSCRIBERS ======================== */
+          <AdminNewsletterPanel
+            lang={lang}
+            data={newsletterData}
+            errorMsg={newsletterError}
+            busyKey={savingKey}
+            onToggleStatus={handleToggleSubscriberStatus}
+            onDelete={handleDeleteSubscriber}
+            onExportCsv={handleExportSubscribersCsv}
+          />
         ) : (
           /* ======================== ROLE DEFAULTS MATRIX ======================== */
           <div className="admin-console-panel">
