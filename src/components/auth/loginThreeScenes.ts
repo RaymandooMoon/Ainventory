@@ -423,6 +423,7 @@ const SILK_CLOTH_FRAG = /* glsl */ `
 
   // C-infinity analytical wake ribbon behind the rolling marble
   uniform vec4 uTrailPts[${TRAIL_NODE_COUNT}];
+  uniform vec4 uTrailBounds; // (minU, minV, maxU, maxV) expanded by halo radius for fast GPU early-out
   uniform float uTrailActive;
 
   // High-precision analytical concentric ripple buffer (used whenever HalfFloat FBO is unavailable)
@@ -487,6 +488,14 @@ const SILK_CLOTH_FRAG = /* glsl */ `
     haloH = 0.0;
     grad = vec2(0.0);
     if (uTrailActive < 0.001) return;
+    if (
+      suv.x < uTrailBounds.x ||
+      suv.x > uTrailBounds.z ||
+      suv.y < uTrailBounds.y ||
+      suv.y > uTrailBounds.w
+    ) {
+      return;
+    }
 
     float sumCore = 0.0;
     float sumHalo = 0.0;
@@ -1044,7 +1053,7 @@ export function createLoginThreeController(
   try {
     renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: !isIosSafari,
       alpha: false,
       powerPreference: isIosSafari ? 'default' : 'high-performance',
       preserveDrawingBuffer: false,
@@ -1054,23 +1063,24 @@ export function createLoginThreeController(
   }
 
   const isSoftwareGl = isSoftwareWebGLRenderer(renderer);
-  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.25 : 1.75;
-  const backdropScale = isIosSafari ? 0.65 : 1.0;
+  const maxDpr = isSoftwareGl ? 1.0 : isIosSafari ? 1.5 : 1.75;
+  const backdropScale = isIosSafari ? 0.72 : 1.0;
   const initialDpr = Math.min(window.devicePixelRatio || 1, maxDpr);
   renderer.setPixelRatio(initialDpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
 
-  // On iOS Safari Metal/ANGLE, UnsignedByte encoded wave FBO halves VRAM and avoids HalfFloat linear-filter quirks
-  const useHalfFloat = !isSoftwareGl && !isIosSafari && supportsHalfFloatRenderTarget(renderer);
+  // Use native FP16 wave FBO whenever the GPU supports HalfFloat render targets (including Apple Metal GPUs),
+  // avoiding the expensive 12-wave per-pixel analytic shader fallback on iOS Safari.
+  const useHalfFloat = !isSoftwareGl && supportsHalfFloatRenderTarget(renderer);
   const rtType = useHalfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const encodedByte = useHalfFloat ? 0.0 : 1.0;
 
   const initialW = Math.max(2, canvas.clientWidth || window.innerWidth || 1280);
   const initialH = Math.max(2, canvas.clientHeight || window.innerHeight || 720);
   const getSimDims = (w: number, h: number) => {
-    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.32 : 0.44;
-    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 288 : 460;
+    const scale = isSoftwareGl ? 0.28 : isIosSafari ? 0.30 : 0.44;
+    const maxDim = isSoftwareGl ? 256 : isIosSafari ? 256 : 460;
     return {
       sw: clamp(Math.round(w * scale), 192, maxDim),
       sh: clamp(Math.round(h * scale), 192, maxDim),
@@ -1159,7 +1169,7 @@ export function createLoginThreeController(
   const clothCam = new THREE.PerspectiveCamera(42, initialW / initialH, 0.1, 40);
   clothCam.position.set(0, 0, 7.6);
 
-  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 68 : 120;
+  const meshSegs = isSoftwareGl ? 52 : isIosSafari ? 56 : 120;
   const clothGeo = new THREE.PlaneGeometry(20.0, 18.0, meshSegs, meshSegs);
   const initVarNum = options.initialVariant === 'aurora' ? 1 : 0;
 
@@ -1200,6 +1210,7 @@ export function createLoginThreeController(
       uMarbleSink: { value: 1.0 },
       uMarbleVel: { value: new THREE.Vector2(0, 0) },
       uTrailPts: { value: trailPts },
+      uTrailBounds: { value: new THREE.Vector4(0, 0, 1, 1) },
       uTrailActive: { value: 0 },
       uPrevVariant: { value: initVarNum },
       uNextVariant: { value: initVarNum },
@@ -1235,7 +1246,11 @@ export function createLoginThreeController(
   const marbleCam = new THREE.OrthographicCamera(-initialAspect, initialAspect, 1, -1, -10, 10);
   marbleCam.position.set(0, 0, 5);
 
-  const marbleGeo = new THREE.SphereGeometry(1, isSoftwareGl ? 28 : 48, isSoftwareGl ? 20 : 36);
+  const marbleGeo = new THREE.SphereGeometry(
+    1,
+    isSoftwareGl ? 28 : isIosSafari ? 36 : 48,
+    isSoftwareGl ? 20 : isIosSafari ? 28 : 36
+  );
   const marbleMat = new THREE.ShaderMaterial({
     uniforms: {
       uBackdropTex: { value: backdropRT.texture },
@@ -1719,6 +1734,10 @@ export function createLoginThreeController(
     // --- Update C-infinity Smooth Pressed-Fabric Crease Wake behind Rolling Marble ---
     const ageStep = dt / 1.55;
     let maxAliveStrength = 0;
+    let minTrailU = 1.0;
+    let minTrailV = 1.0;
+    let maxTrailU = 0.0;
+    let maxTrailV = 0.0;
     for (let i = 0; i < TRAIL_NODE_COUNT; i += 1) {
       const n = trailPts[i];
       if (n.w > 0.001) {
@@ -1728,6 +1747,10 @@ export function createLoginThreeController(
         } else {
           const alive = (1.0 - n.z) * n.w;
           if (alive > maxAliveStrength) maxAliveStrength = alive;
+          if (n.x < minTrailU) minTrailU = n.x;
+          if (n.x > maxTrailU) maxTrailU = n.x;
+          if (n.y < minTrailV) minTrailV = n.y;
+          if (n.y > maxTrailV) maxTrailV = n.y;
         }
       }
     }
@@ -1743,9 +1766,25 @@ export function createLoginThreeController(
         head.set(marbleU, marbleV, 0.0, Math.max(head.w * 0.92, wakeStrength));
         maxAliveStrength = Math.max(maxAliveStrength, head.w);
       }
+      if (marbleU < minTrailU) minTrailU = marbleU;
+      if (marbleU > maxTrailU) maxTrailU = marbleU;
+      if (marbleV < minTrailV) minTrailV = marbleV;
+      if (marbleV > maxTrailV) maxTrailV = marbleV;
     }
 
-    clothMat.uniforms.uTrailActive.value = maxAliveStrength > 0.004 ? 1.0 : 0.0;
+    const trailActive = maxAliveStrength > 0.004;
+    clothMat.uniforms.uTrailActive.value = trailActive ? 1.0 : 0.0;
+    if (trailActive) {
+      // Halo radius max is 0.044 * 2.1 * sqrt(16) ≈ 0.37 aspect-scaled; pad generously so zero seam clipping occurs
+      const padV = 0.22;
+      const padU = padV / Math.max(0.25, currentAspect);
+      (clothMat.uniforms.uTrailBounds.value as THREE.Vector4).set(
+        minTrailU - padU,
+        minTrailV - padV,
+        maxTrailU + padU,
+        maxTrailV + padV
+      );
+    }
 
     // --- PASS 1: Step 2D Wave Equation FBO (Fixed 60Hz Accumulator so 120fps visuals preserve exact wave speed) ---
     if (useHalfFloat) {
@@ -1824,7 +1863,7 @@ export function createLoginThreeController(
       pendingBurstStrength = 0;
     }
 
-    // --- PASS 2: Render 3D Silk Cloth + Gravitational Depression Bowl into backdropRT ---
+    // --- PASS 2: Render 3D Silk Cloth + Gravitational Depression Bowl ---
     // Camera stays completely steady on phone tilt (no gyro camera wobble!)
     clothCam.position.x = smoothPtrX * 0.14;
     clothCam.position.y = smoothPtrY * 0.10;
@@ -1861,15 +1900,17 @@ export function createLoginThreeController(
     clothMat.uniforms.uMarbleSink.value = effectiveSink;
     (clothMat.uniforms.uMarbleVel.value as THREE.Vector2).set(marbleVx, marbleVy);
 
-    renderer.setRenderTarget(backdropRT);
-    renderer.render(clothScene, clothCam);
+    const needsMarblePass = !isExternalMarbleHidden && marbleOpacity > 0.01;
+    if (needsMarblePass) {
+      // Hero / Login: render silk into offscreen backdropRT so glass marble refracts it cleanly
+      renderer.setRenderTarget(backdropRT);
+      renderer.render(clothScene, clothCam);
 
-    // --- PASS 3: Blit Silk Backdrop to Screen + Overlay Theme-Reactive Transparent Glass Marble ---
-    renderer.setRenderTarget(null);
-    renderer.autoClear = true;
-    renderer.render(blitScene, orthoCam);
+      // --- PASS 3: Blit Silk Backdrop to Screen + Overlay Theme-Reactive Transparent Glass Marble ---
+      renderer.setRenderTarget(null);
+      renderer.autoClear = true;
+      renderer.render(blitScene, orthoCam);
 
-    if (!isExternalMarbleHidden && marbleOpacity > 0.01) {
       // Evaluate exact Luxury <-> Aurora wave state right at the marble's position so
       // the crystal orb morphs seamlessly the instant the theme wave sweeps across it!
       const dBtn = Math.hypot((marbleU - variantOriginU) * currentAspect, marbleV - variantOriginV);
@@ -1891,6 +1932,11 @@ export function createLoginThreeController(
       renderer.autoClear = false;
       renderer.render(marbleScene, marbleCam);
       renderer.autoClear = true;
+    } else {
+      // 3D Stages (Architecture / Specs / About): render silk directly to screen, bypassing offscreen FBO + blit
+      renderer.setRenderTarget(null);
+      renderer.autoClear = true;
+      renderer.render(clothScene, clothCam);
     }
 
     // --- PASS 4: Optional Single-Canvas 3D Stage Director Overlay (Website-only) ---

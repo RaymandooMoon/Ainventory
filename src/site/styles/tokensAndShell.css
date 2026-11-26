@@ -188,9 +188,39 @@ html[data-site-theme='light'] body {
   -webkit-user-select: text;
 }
 
-/* iOS Safari CoreAnimation blur & entry-compositor budget guard */
+/* iOS Safari CoreAnimation blur & entry-compositor budget guard:
+ * Multiple simultaneous backdrop-filter layers over an animating WebGL canvas trigger
+ * per-frame Metal IOSurface copies + multi-pass CoreAnimation blurs on WebKit.
+ * Keep crisp dynamic Glass % translucency (--site-ui-alpha) without blur stalls. */
 html[data-ios-safari='true'] .site-root {
-  --glass-blur: calc(2px + var(--site-ui-alpha) * 10px);
+  --glass-blur: 0px;
+  --bg-glass: rgba(13, 13, 16, calc(0.18 + var(--site-ui-alpha) * 0.76));
+  --bg-glass-hover: rgba(24, 24, 29, calc(0.24 + var(--site-ui-alpha) * 0.72));
+  --bg-panel: rgba(11, 11, 14, calc(0.22 + var(--site-ui-alpha) * 0.74));
+}
+
+html[data-ios-safari='true'] .site-root[data-site-theme='light'] {
+  --bg-glass: rgba(252, 250, 246, calc(0.22 + var(--site-ui-alpha) * 0.74));
+  --bg-glass-hover: rgba(255, 254, 251, calc(0.28 + var(--site-ui-alpha) * 0.7));
+  --bg-panel: rgba(252, 250, 246, calc(0.24 + var(--site-ui-alpha) * 0.72));
+}
+
+html[data-ios-safari='true'] .site-root :is(
+  .site-utility-rail,
+  .site-home-callout,
+  .site-dock,
+  .site-bottombar-tray,
+  .site-hud-panel,
+  .site-top-3d-dock-inner,
+  .site-hero-cta,
+  .site-hero-proof-card,
+  .site-hero-proof-pill,
+  .site-analytics-sheet,
+  .site-modal-card,
+  .site-modal-backdrop
+) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 html[data-ios-safari='true'] .site-hud-panel,
@@ -206,7 +236,8 @@ html[data-ios-safari='true'] .site-live-app-stage {
   position: fixed;
   inset: 0;
   z-index: 0;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
   overflow: hidden;
 }
 
@@ -216,6 +247,7 @@ html[data-ios-safari='true'] .site-live-app-stage {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
 }
 
 .site-marble-veil {
