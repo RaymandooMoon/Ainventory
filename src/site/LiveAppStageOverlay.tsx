@@ -87,12 +87,13 @@ export default function LiveAppStageOverlay({
     mood: 'luxury' | 'aurora';
     visible: boolean;
   }>({ screen, lang, theme, mood, visible: isVisible });
+  const lastSyncedScreenRef = useRef<LiveAppScreenId>(screen);
 
   useEffect(() => {
     latestSyncRef.current = { screen, lang, theme, mood, visible: isVisible };
   }, [screen, lang, theme, mood, isVisible]);
 
-  const postSyncToIframe = useCallback(() => {
+  const postSyncToIframe = useCallback((includeScreen = false) => {
     const targetWindow = iframeRef.current?.contentWindow;
     if (!targetWindow || typeof window === 'undefined') return;
     const {
@@ -104,7 +105,7 @@ export default function LiveAppStageOverlay({
     } = latestSyncRef.current;
     const payload: LiveAppSyncFromParentPayload = {
       type: 'ainvtry-live-app-sync',
-      screen: nextScreen,
+      ...(includeScreen ? { screen: nextScreen } : {}),
       lang: nextLang,
       theme: nextTheme,
       mood: nextMood,
@@ -124,7 +125,11 @@ export default function LiveAppStageOverlay({
 
   useEffect(() => {
     if (!isLoaded) return;
-    postSyncToIframe();
+    const screenChangedExternally = screen !== lastSyncedScreenRef.current;
+    if (screenChangedExternally) {
+      lastSyncedScreenRef.current = screen;
+    }
+    postSyncToIframe(screenChangedExternally);
   }, [isLoaded, isVisible, screen, lang, theme, mood, postSyncToIframe]);
 
   // Defensive ready fallback for Safari cached/bfcache iframes where onLoad may lag or skip
@@ -134,7 +139,7 @@ export default function LiveAppStageOverlay({
       const doc = iframeRef.current?.contentDocument;
       if (doc && doc.readyState === 'complete' && doc.getElementById('root')?.childElementCount) {
         setIsLoaded(true);
-        postSyncToIframe();
+        postSyncToIframe(false);
         return undefined;
       }
     } catch {
@@ -142,7 +147,7 @@ export default function LiveAppStageOverlay({
     }
     const safetyTimer = window.setTimeout(() => {
       setIsLoaded(true);
-      postSyncToIframe();
+      postSyncToIframe(false);
     }, 3200);
     return () => window.clearTimeout(safetyTimer);
   }, [isLoaded, postSyncToIframe]);
@@ -157,7 +162,7 @@ export default function LiveAppStageOverlay({
       if (!data) return;
       if (data.type === 'ainvtry-live-app-ready') {
         setIsLoaded(true);
-        postSyncToIframe();
+        postSyncToIframe(false);
         return;
       }
       if (data.type !== 'ainvtry-live-app-screen' || !onSelectScreen) return;
@@ -165,9 +170,11 @@ export default function LiveAppStageOverlay({
       if (
         screenVal === 'outfits' ||
         screenVal === 'closet' ||
+        screenVal === 'calendar' ||
         screenVal === 'stats' ||
         screenVal === 'profile'
       ) {
+        lastSyncedScreenRef.current = screenVal;
         onSelectScreen(screenVal);
       }
     };

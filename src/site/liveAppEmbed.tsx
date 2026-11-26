@@ -7,7 +7,7 @@ import { applyIosSafariDocumentFlag } from '../utils/iosSafariCompat.ts';
 import { applyThemePreference } from '../utils/nativeBridge.ts';
 import type { SiteLang, SiteTheme } from './siteContent.ts';
 
-export type LiveAppScreenId = 'outfits' | 'closet' | 'stats' | 'profile';
+export type LiveAppScreenId = 'outfits' | 'closet' | 'calendar' | 'stats' | 'profile';
 
 export interface LiveAppSyncFromParentPayload {
   readonly type: 'ainvtry-live-app-sync';
