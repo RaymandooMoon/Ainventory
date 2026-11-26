@@ -30,7 +30,7 @@ export const DEFAULT_MAX_QC_ATTEMPTS = 3;
 export const QC_FRONT_ONLY_NOTIFICATION_POPUP = Object.freeze({
   code: 'QC_FRONT_ONLY_FALLBACK',
   durationMs: 3000,
-  messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+  messageKo: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
   messageEn: 'Due to a temporary connection issue, only the front view is shown.',
 });
 

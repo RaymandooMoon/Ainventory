@@ -343,7 +343,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
           showToast?.(
             tx(
               lang,
-              '공식 브랜드 DB에서 일치하는 품번/제품을 찾지 못했습니다. 라벨을 더 선명하게 찍어보세요.',
+              '공식 브랜드 DB에서 일치하는 품번/제품을 찾지 못했습니다. 라벨을 더 선명하게 찍어 보세요.',
               'No exact official product found in brand DB. Try a clearer close-up of the label.'
             )
           );
@@ -447,7 +447,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       showToast?.(
         tx(
           lang,
-          '앞면과 뒷면 사진 2장을 모두 촬영하거나 선택해주세요.',
+          '앞면과 뒷면 사진 2장을 모두 촬영하거나 선택해 주세요.',
           'Please capture or select both front and back photos.'
         )
       );
@@ -585,7 +585,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
               )
             : tx(
                 lang,
-                '앞·뒤 사진을 분석해 기본값을 채웠어요. 틀린 항목만 톡톡 수정하세요.',
+                '앞·뒤 사진을 분석해 기본값을 채웠어요. 수정이 필요한 항목만 눌러 변경해 주세요.',
                 'Pre-filled defaults from front & back photos. Tap any field to adjust.'
               )
         );
@@ -660,7 +660,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
       setShowOriginal(false);
       triggerHaptic('medium');
       showToast?.(
-        tx(lang, 'AI 스튜디오 누끼 보정이 완료되었어요.', 'AI Studio cutout complete.')
+        tx(lang, 'AI 스튜디오 배경 제거 보정이 완료되었어요.', 'AI Studio cutout complete.')
       );
     } catch (err) {
       if (mountedRef.current) {
@@ -1114,7 +1114,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
               {stepperState.canSave
                 ? tx(
                     lang,
-                    '앞·뒷면 필수 사진 2장이 모두 준비되었어요. 바로 저장하거나 AI 자동 분석으로 상세 정보를 채워보세요.',
+                    '앞·뒷면 필수 사진 2장이 모두 준비되었어요. 바로 저장하거나 AI 자동 분석으로 상세 정보를 채워 보세요.',
                     'Both required photos are ready. Save now or launch AI Guided Registration to auto-fill specs.'
                   )
                 : tx(
@@ -1241,7 +1241,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   <p className="hig-tag-capture-desc">
                     {tx(
                       lang,
-                      '목탭이나 내부 세탁 케어 라벨을 찍으면 공식 브랜드 DB에서 브랜드·품번·혼용률과 깔끔한 제품 사진을 찾아 동기화 모달로 제안해 드려요.',
+                      '목탭이나 내부 세탁 케어 라벨을 찍으면 공식 브랜드 DB에서 브랜드·품번·혼용률과 깔끔한 제품 사진을 찾아 정보 확인 및 동기화 창으로 제안해 드려요.',
                       'Capture the neck tag or internal wash care label to match brand, SKU, fiber composition & clean official photos.'
                     )}
                   </p>
@@ -1374,7 +1374,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   onClick={() => setSyncModalOpen(true)}
                 >
                   <Sparkles size={13} />
-                  <span>{tx(lang, '정보 동기화 모달 열기', 'Open Sync Modal')}</span>
+                  <span>{tx(lang, '정보 동기화 창 열기', 'Open Sync Modal')}</span>
                 </button>
               )}
             </div>
@@ -1391,9 +1391,9 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
               <Sparkles size={17} />
               <span>
                 {!frontPreview
-                  ? tx(lang, '1. 앞면 사진을 먼저 선택해주세요', '1. Select front photo first')
+                  ? tx(lang, '1. 앞면 사진을 먼저 선택해 주세요', '1. Select front photo first')
                   : !backPreview
-                    ? tx(lang, '2. 뒷면 사진도 한 장 선택해주세요', '2. Select back photo too')
+                    ? tx(lang, '2. 뒷면 사진도 한 장 선택해 주세요', '2. Select back photo too')
                     : tx(lang, 'AI 자동 분석 & 등록 가이드 시작', 'Start AI Guided Registration')}
               </span>
               {stepperState.canSave && <ArrowRight size={16} />}
@@ -1989,7 +1989,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   rows={2}
                   placeholder={tx(
                     lang,
-                    '예: 올려 입으면 복숭아뼈에 오고 내려 입으면 끌려요',
+                    '예: 올려 입으면 복사뼈에 오고 내려 입으면 끌려요',
                     'e.g. Hits ankle bone when worn high, drags if worn low'
                   )}
                   value={fitNote}
@@ -2313,7 +2313,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                   >
                     {effectiveCareProfile.tumbleDry === 'no_tumble_flat' ||
                     effectiveCareProfile.tumbleDry === 'no_tumble_hang'
-                      ? tx(lang, '건조기 금지 ON', 'No Tumble Dry ON')
+                      ? tx(lang, '건조기 금지', 'No Tumble Dry ON')
                       : tx(lang, '건조기 가능', 'Tumble Dry OK')}
                   </button>
 
@@ -2335,7 +2335,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                     }`}
                   >
                     {effectiveCareProfile.needsLaundryNet
-                      ? tx(lang, '세탁망 권장 ON', 'Mesh Bag ON')
+                      ? tx(lang, '세탁망 권장', 'Mesh Bag ON')
                       : tx(lang, '세탁망 불필요', 'No Mesh Bag')}
                   </button>
 
@@ -2358,7 +2358,7 @@ function AddGarmentForm({ activeCloset, lang = 'ko', onClose, onRegistered, show
                     }`}
                   >
                     {effectiveCareProfile.colorBleedRisk === 'high'
-                      ? tx(lang, '이염 주의 ON', 'Color Bleed Risk ON')
+                      ? tx(lang, '이염 주의', 'Color Bleed Risk ON')
                       : tx(lang, '이염 위험 낮음', 'Low Bleed Risk')}
                   </button>
                 </div>

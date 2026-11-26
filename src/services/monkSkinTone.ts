@@ -169,7 +169,7 @@ const RAW_BASE_LEVEL_DEFS: ReadonlyArray<{
   { level: 3, hex: '#E4C7B2', labelKo: '웜 알라바스터', labelEn: 'Warm Alabaster' },
   { level: 4, hex: '#D7B296', labelKo: '라이트 베이지', labelEn: 'Light Beige' },
   { level: 5, hex: '#C69B79', labelKo: '미디엄 샌드', labelEn: 'Medium Sand' },
-  { level: 6, hex: '#AF815D', labelKo: '골든 탄', labelEn: 'Golden Tan' },
+  { level: 6, hex: '#AF815D', labelKo: '골든 탠', labelEn: 'Golden Tan' },
   { level: 7, hex: '#956746', labelKo: '앰버 브론즈', labelEn: 'Amber Bronze' },
   { level: 8, hex: '#784E33', labelKo: '리치 시에나', labelEn: 'Rich Sienna' },
   { level: 9, hex: '#5A3724', labelKo: '딥 마호가니', labelEn: 'Deep Mahogany' },

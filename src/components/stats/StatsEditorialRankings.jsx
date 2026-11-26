@@ -87,7 +87,7 @@ export function MostWornRankingCard({
               <p className="stats-zero-desc">
                 {tx(
                   lang,
-                  '아직 누적 착용 기록이 없습니다. 아래 보유 아이템을 캘린더에 첫 배정해 활용률을 깨워보세요.',
+                  '아직 착용 기록이 없습니다. 아래 보유 아이템을 캘린더에 등록해 옷장 활용률을 확인해 보세요.',
                   'No wear logs recorded yet. Assign any piece below on the Calendar to start tracking wear velocity.'
                 )}
               </p>
@@ -196,7 +196,7 @@ export function UnwornSleeperCard({
             {garments.length === 0
               ? tx(lang, '스캔 대기', 'STANDBY')
               : strictlyUnwornCount > 0
-                ? tx(lang, `미착용 ${strictlyUnwornCount}점`, `${strictlyUnwornCount} UNWORN`)
+                ? tx(lang, `미착용 ${strictlyUnwornCount}벌`, `${strictlyUnwornCount} UNWORN`)
                 : tx(lang, '순환 양호', 'LOW SLEEPERS')}
           </span>
         </span>
@@ -205,7 +205,7 @@ export function UnwornSleeperCard({
       {garments.length === 0 ? (
         <div className="stats-zero-guide">
           <strong className="stats-zero-title">
-            {tx(lang, '슬리퍼 아이템 레이더 가이드', 'Sleeper Piece Radar')}
+            {tx(lang, '잠자는 옷 레이더 가이드', 'Sleeper Piece Radar')}
           </strong>
           <p className="stats-zero-desc">
             {tx(

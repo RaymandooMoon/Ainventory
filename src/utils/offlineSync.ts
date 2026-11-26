@@ -930,7 +930,7 @@ export async function applyOptimisticLocalMutation(
     const newOutfit = {
       id,
       closet_owner: closetOwner,
-      title: String(body.title || '오프라인 코디'),
+      title: String(body.title || '저장된 코디'),
       occasion: String(body.occasion || '데일리'),
       season: String(body.season || '봄/가을'),
       item_ids: itemIds,

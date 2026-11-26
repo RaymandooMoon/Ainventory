@@ -98,7 +98,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_04_forest_bronze_umbrella",
     "idOffset": 204,
-    "name": "딥그린 엔틱 동·브론즈 프레임 우산",
+    "name": "딥그린 앤티크 브론즈 프레임 우산",
     "name_en": "Deep Green Antique Bronze Frame Umbrella",
     "category": "accessory",
     "subcategory": "umbrella",
@@ -218,7 +218,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_08_brushed_silver_watch",
     "idOffset": 208,
-    "name": "925 브러시드 실버 스틸 필드 시계",
+    "name": "브러시드 실버 스틸 필드 시계",
     "name_en": "Brushed Silver Steel Field Watch",
     "category": "accessory",
     "subcategory": "watch",
@@ -248,7 +248,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_09_vintage_bronze_watch",
     "idOffset": 209,
-    "name": "빈티지 브론즈·동 케이스 파일럿 시계",
+    "name": "빈티지 브론즈 케이스 파일럿 시계",
     "name_en": "Vintage Bronze Case Pilot Watch",
     "category": "accessory",
     "subcategory": "watch",
@@ -508,7 +508,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_18_bronze_aviator_sunglasses",
     "idOffset": 218,
-    "name": "빈티지 동·브론즈 보잉 선글라스",
+    "name": "빈티지 브론즈 에비에이터 선글라스",
     "name_en": "Vintage Bronze Aviator Sunglasses",
     "category": "accessory",
     "subcategory": "eyewear",
@@ -855,7 +855,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_30_terracotta_bronze_bandana",
     "idOffset": 230,
-    "name": "테라코타 동·브론즈 링 코튼 스카프",
+    "name": "테라코타 브론즈 링 코튼 스카프",
     "name_en": "Terracotta Bronze Ring Cotton Scarf",
     "category": "accessory",
     "subcategory": "neckwear",
@@ -974,7 +974,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_34_bronze_ring_belt",
     "idOffset": 234,
-    "name": "엔틱 동·브론즈 더블링 벨트",
+    "name": "앤티크 브론즈 더블링 벨트",
     "name_en": "Antique Bronze Double-Ring Belt",
     "category": "accessory",
     "subcategory": "belt",
@@ -1248,7 +1248,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_43_bronze_sculpt_earring",
     "idOffset": 243,
-    "name": "로즈 브론즈·동 스컬프처 귀걸이",
+    "name": "로즈 브론즈 스컬프처 스터드 귀걸이",
     "name_en": "Rose Bronze Sculptural Stud Earring",
     "category": "jewelry",
     "subcategory": "earring",
@@ -1398,7 +1398,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_48_bronze_coin_necklace",
     "idOffset": 248,
-    "name": "엔틱 동·브론즈 코인 메달 목걸이",
+    "name": "앤티크 브론즈 코인 메달 목걸이",
     "name_en": "Antique Bronze Coin Medallion Necklace",
     "category": "jewelry",
     "subcategory": "necklace",
@@ -1547,7 +1547,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_53_copper_bronze_bangle",
     "idOffset": 253,
-    "name": "해머드 동·쿠퍼 아티산 트위스트 뱅글",
+    "name": "해머드 코퍼 브론즈 아티산 뱅글",
     "name_en": "Hammered Copper Bronze Artisan Bangle",
     "category": "jewelry",
     "subcategory": "bracelet",
@@ -1696,7 +1696,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_58_bronze_textured_ring",
     "idOffset": 258,
-    "name": "엔틱 동·브론즈 해머드 밴드 반지",
+    "name": "앤티크 브론즈 해머드 밴드 반지",
     "name_en": "Antique Bronze Hammered Band Ring",
     "category": "jewelry",
     "subcategory": "ring",
@@ -1756,7 +1756,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_60_black_onyx_signet_ring",
     "idOffset": 260,
-    "name": "블랙 오닉스 스털링 인장 반지",
+    "name": "블랙 오닉스 스털링 쿠션 시그넷 반지",
     "name_en": "Black Onyx Sterling Cushion Signet Ring",
     "category": "jewelry",
     "subcategory": "ring",
@@ -1846,7 +1846,7 @@ export const ACCESSORY_JEWELRY_CATALOG = Object.freeze([
   {
     "key": "s5_63_bronze_cameo_brooch",
     "idOffset": 263,
-    "name": "엔틱 동·브론즈 스컬프처 브로치",
+    "name": "앤티크 브론즈 카메오 브로치",
     "name_en": "Antique Bronze Sculpted Cameo Brooch",
     "category": "jewelry",
     "subcategory": "brooch",

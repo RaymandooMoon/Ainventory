@@ -97,12 +97,12 @@ const EDITORIAL_MOODS_BY_STYLE: Record<
   formal_office: [
     { ko: '테일러드 포멀 룩', en: 'Tailored Formal Look' },
     { ko: '이그제큐티브 시그니처', en: 'Executive Signature' },
-    { ko: '샤프 아틀리에 수트무드', en: 'Sharp Atelier Mood' },
+    { ko: '샤프 아틀리에 무드', en: 'Sharp Atelier Mood' },
     { ko: '정제된 클래식 룩', en: 'Refined Classic Look' },
   ],
   comfortable_casual: [
     { ko: '릴랙스 시티 캐주얼', en: 'Relaxed City Casual' },
-    { ko: '위켄드 스트리트 무드', en: 'Weekend Street Mood' },
+    { ko: '위켄드 스트릿 무드', en: 'Weekend Street Mood' },
     { ko: '이지 레이어드 룩', en: 'Easy Layered Look' },
     { ko: '에포트리스 데일리', en: 'Effortless Daily' },
   ],
@@ -131,7 +131,7 @@ const WEATHER_ACCENT_MOODS: Record<string, Array<{ ko: string; en: string }>> = 
     { ko: '윈터 레이어드 에디트', en: 'Winter Layered Edit' },
     { ko: '콜드 브리즈 시티 룩', en: 'Cold Breeze City Look' },
     { ko: '웜 아틀리에 윈터', en: 'Warm Atelier Winter' },
-    { ko: '윈터 시그니처 코디', en: 'Winter Signature Look' },
+    { ko: '윈터 시그니처 룩', en: 'Winter Signature Look' },
   ],
   rain: [
     { ko: '레이니 데이 시티 룩', en: 'Rainy Day City Look' },

@@ -240,7 +240,7 @@ const SLOT_ITEM_TEMPLATES = {
   ],
   underwear: [
     { subcategory: 'inner_top', fabric: 'cotton', nameKo: '심리스 립 모달 발열 이너탑', brand: 'UNIQLO', price: 29900, minTemp: -12, maxTemp: 14, formality: 'casual', water: 0 },
-    { subcategory: 'underwear', fabric: 'cotton', nameKo: '브리즈 수피마 코튼 에어 이너웨어', brand: 'CALVIN KLEIN', price: 48000, minTemp: 5, maxTemp: 34, formality: 'casual', water: 0 },
+    { subcategory: 'underwear', fabric: 'cotton', nameKo: '수피마 코튼 에어 이너웨어', brand: 'CALVIN KLEIN', price: 48000, minTemp: 5, maxTemp: 34, formality: 'casual', water: 0 },
   ],
   socks: [
     { subcategory: 'crew_socks', fabric: 'wool', nameKo: '메리노 울 골지 크루 삭스', brand: 'FALKE', price: 28000, minTemp: -8, maxTemp: 18, formality: 'smart', water: 0 },

@@ -32,8 +32,13 @@ import {
   createFloatingLabelSprite,
   createSmokedGlassMaterial,
   disposeObject3D,
+  isSoftwareGlGlassFallback,
   type FloatingLabelHandle,
 } from './stageMaterials.ts';
+import {
+  applyMegascansPbrToMaterial,
+  createMegascansSession,
+} from '../megascans/megascansMaterialLoader.ts';
 
 /* ==========================================================================
  * 1. Constants, Asymmetric Gallery Coordinates & Theme Palette
@@ -260,6 +265,8 @@ function createVerticalCoreGradientTexture(): THREE.Texture {
  * ========================================================================== */
 
 interface FloorRig {
+  readonly floorMat: THREE.MeshPhysicalMaterial;
+  readonly floorMesh: THREE.Mesh;
   readonly floorGlowMesh: THREE.Mesh;
   readonly applyTheme: (scheme: SpecsColorScheme, theme: ThemeMode, glassRatio: number) => void;
 }
@@ -396,7 +403,7 @@ function buildArchitecturalFloor(parent: THREE.Group, glowTexture: THREE.Texture
     setMaterialBlending(floorGlowMat, isDark ? THREE.AdditiveBlending : THREE.NormalBlending);
   };
 
-  return { floorGlowMesh, applyTheme };
+  return { floorMat, floorMesh, floorGlowMesh, applyTheme };
 }
 
 interface RippleRig {
@@ -896,6 +903,25 @@ export function createSpecsStage(): StageModule {
   const sharedGeos = createSharedPillarGeometries();
 
   const floorRig = buildArchitecturalFloor(group, softGlowTex);
+  const megascansSession = createMegascansSession({
+    isSoftwareGl: isSoftwareGlGlassFallback(),
+  });
+  if (!isSoftwareGlGlassFallback()) {
+    void megascansSession.loadSlot('specs-floor').then((loaded) => {
+      if (disposed || !loaded) return;
+      applyMegascansPbrToMaterial(floorRig.floorMat, loaded.textures, {
+        slotId: 'specs-floor',
+        repeat: loaded.entry.repeat,
+        normalStrength: loaded.entry.normalStrength,
+        normalConvention: loaded.entry.normalConvention,
+        preserveOriginalAlbedo: loaded.entry.preserveOriginalAlbedo,
+        aoMapIntensity: loaded.entry.aoMapIntensity,
+        keepScalarRoughness: true,
+        keepScalarMetalness: true,
+        targetGeometries: [floorRig.floorMesh.geometry],
+      });
+    });
+  }
   const rippleRig = buildRippleRig(group);
   let hoveredIndex: PillarIndex | null = null;
 
@@ -1158,6 +1184,7 @@ export function createSpecsStage(): StageModule {
       if (disposed) return;
       disposed = true;
       stageActive = false;
+      megascansSession.dispose();
       for (const pillar of pillars) {
         pillar.root.remove(pillar.label.sprite);
         pillar.label.dispose();

@@ -727,7 +727,7 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
     perspectiveYawDeg: 0,
     shortKo: '우측 45°',
     shortEn: '45° R',
-    fullKo: '45° 우측 쿼터',
+    fullKo: '45° 우측 반측면',
     fullEn: '45° Front-Right',
   },
   90: {
@@ -787,7 +787,7 @@ const TURNAROUND_360_SPEC_MAP: Record<Turnaround360AngleDeg, Turnaround360Render
     perspectiveYawDeg: 0,
     shortKo: '좌측 45°',
     shortEn: '315° L',
-    fullKo: '315° 좌측 쿼터',
+    fullKo: '315° 좌측 반측면',
     fullEn: '315° Front-Left',
   },
 };
@@ -6693,7 +6693,7 @@ export async function synthesizeGeminiMultiAngleVton(
             notificationPopup: json.notificationPopup ?? {
               code: 'QC_FRONT_ONLY_FALLBACK',
               durationMs: 3000,
-              messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+              messageKo: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
               messageEn: 'Due to a temporary connection issue, only the front view is shown.',
             },
             qcAttempts: Number(json.qcAttempts) || maxQcAttempts,
@@ -7193,7 +7193,7 @@ export async function synthesizeGeminiMultiAngleVton(
             notificationPopup: {
               code: 'QC_FRONT_ONLY_FALLBACK',
               durationMs: 3000,
-              messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+              messageKo: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
               messageEn: 'Due to a temporary connection issue, only the front view is shown.',
             },
             qcAttempts: maxQcAttempts,
@@ -7972,7 +7972,7 @@ export async function synthesizeProgressiveMultiAngleVton(
               notificationPopup: json?.notificationPopup ?? {
                 code: 'QC_FRONT_ONLY_FALLBACK',
                 durationMs: 3000,
-                messageKo: '현재 통신 오류로 인하여 정면 캐릭터만 보여드립니다.',
+                messageKo: '일시적인 통신 오류로 정면 모습만 표시됩니다.',
                 messageEn: 'Due to a temporary connection issue, only the front view is shown.',
               },
               qcAttempts: Number(json?.qcAttempts) || 3,

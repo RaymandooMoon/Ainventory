@@ -355,7 +355,7 @@ export function evaluateUnderwearOuterInteraction({ underwear, outerGarment, gen
   let vtonDirective = '';
 
   if (showThroughLevel === 'visible' && vplLevel === 'visible') {
-    summaryKo = `비침 높음 · 속옷선(VPL) 뚜렷 — ${uw.colorName} ${uw.isLace ? '레이스' : '이너'}가 얇은 밝은 원단 위로 비치고 라인이 드러납니다.`;
+    summaryKo = `비침 높음 · 속옷선(VPL) 뚜렷 — 어두운 ${uw.colorName} ${uw.isLace ? '레이스' : '이너'}가 얇고 밝은 원단 위로 비치고 라인이 드러납니다.`;
     summaryEn = `High Show-Through · Visible Line (VPL) — Dark ${uw.isLace ? 'lace' : 'innerwear'} contrasts and shows through lightweight pale fabric.`;
     tipKo = '누드 스킨톤 심리스 언더웨어로 바꾸면 비침과 라인을 깔끔하게 줄일 수 있어요.';
     tipEn = 'Switch to nude seamless underwear to eliminate show-through and panty lines.';
@@ -365,7 +365,7 @@ export function evaluateUnderwearOuterInteraction({ underwear, outerGarment, gen
       `Because the model wears dark contrasting ${underwear.name || 'underwear'} (${uw.colorHex}${uw.isLace ? ', delicate lace trim edge' : ''}) underneath, render a subtle, tasteful, realistic muted dark shadow/translucency tint and faint soft fabric seam contour (VPL) visible ONLY through the thin pale outer fabric at the hip/bodice under-layer — keep it completely clothed, tasteful, editorial garment-fit realism (not sheer/revealing skin).`,
     ].join(' ');
   } else if (showThroughLevel === 'visible') {
-    summaryKo = `컬러 비침 주의 · 라인 최소화 — 어두운 ${uw.colorName} 이너 색감이 얇은 밝은 원단 아래로 은은하게 비칩니다.`;
+    summaryKo = `컬러 비침 주의 · 라인 최소화 — 어두운 ${uw.colorName} 이너 색감이 얇고 밝은 원단 아래로 은은하게 비칩니다.`;
     summaryEn = `Color Show-Through · Minimal Line — Dark ${uw.colorName} tone casts a subtle shadow beneath lightweight pale fabric.`;
     tipKo = '비침을 막으려면 피부톤에 가까운 누드 베이지 심리스 이너를 추천합니다.';
     tipEn = 'Pair with a skin-tone nude seamless set for zero color show-through.';
@@ -377,13 +377,13 @@ export function evaluateUnderwearOuterInteraction({ underwear, outerGarment, gen
   } else if (vplLevel === 'visible' || vplLevel === 'subtle' || showThroughLevel === 'subtle') {
     summaryKo =
       vplLevel === 'visible'
-        ? `속옷 라인(VPL) 감지 — ${uw.isLace ? '레이스 텍스처와 봉제선' : '봉제 엣지'}이 얇은 실루엣 위로 은은하게 드러납니다.`
+        ? `속옷 라인(VPL) 감지 — ${uw.isLace ? '레이스 질감과 봉제선' : '봉제선 가장자리'}이(가) 얇은 원단 위로 은은하게 드러납니다.`
         : `미세 비침/라인 — 강한 역광에서 이너 윤곽이 살짝 보일 수 있습니다.`;
     summaryEn =
       vplLevel === 'visible'
         ? `Visible Underwear Line (VPL) — ${uw.isLace ? 'Lace texture and trim' : 'Seam edges'} subtly imprint through thin draped fabric.`
         : `Subtle Underlayer Outline — Slight tonal contour may appear under direct studio light.`;
-    tipKo = '매끈한 드레이프를 원하면 레이저컷 심리스 라인을 선택해보세요.';
+    tipKo = '매끈한 핏을 원하면 레이저컷 심리스 라인을 선택해 보세요.';
     tipEn = 'Choose laser-cut seamless briefs for an uninterrupted drape.';
     vtonDirective = [
       `SUBTLE GARMENT DRAPE & UNDERLAYER FIT-CHECK:`,

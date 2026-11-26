@@ -252,7 +252,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_spring_10_pink_oxford_shirt",
     "idOffset": 10,
-    "name": "더스티 로즈 코튼 스트라이프 셔츠",
+    "name": "더스티 로즈 코튼 옥스포드 셔츠",
     "name_en": "Dusty Rose Cotton Oxford Shirt",
     "category": "top",
     "subcategory": "shirt",
@@ -305,7 +305,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_spring_12_lavender_blouse",
     "idOffset": 12,
-    "name": "라벤더 크레이프 타이넥 블라우스",
+    "name": "라벤더 크레이프 블라우스",
     "name_en": "Lavender Crepe Blouse",
     "category": "top",
     "subcategory": "blouse",
@@ -600,7 +600,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_spring_23_blush_shirt_dress",
     "idOffset": 23,
-    "name": "코랄 베이지 벨티드 미디 셔츠 원피스",
+    "name": "블러시 베이지 벨티드 미디 셔츠 원피스",
     "name_en": "Blush Beige Belted Midi Shirt Dress",
     "category": "dress",
     "subcategory": "dress",
@@ -926,7 +926,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_03_white_rib_tank",
     "idOffset": 35,
-    "name": "화이트 립 코튼 나시 탱크탑",
+    "name": "화이트 골지 코튼 탱크탑",
     "name_en": "White Ribbed Cotton Tank Top",
     "category": "top",
     "subcategory": "tank_top",
@@ -952,7 +952,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_04_black_athletic_tank",
     "idOffset": 36,
-    "name": "블랙 코튼 슬리브리스 나시 탱크탑",
+    "name": "블랙 코튼 탱크탑",
     "name_en": "Black Cotton Sleeveless Tank Top",
     "category": "top",
     "subcategory": "tank_top",
@@ -1004,7 +1004,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_06_olive_rib_sleeveless",
     "idOffset": 38,
-    "name": "올리브 니트 민소매 슬리브리스 탑",
+    "name": "올리브 니트 슬리브리스 탑",
     "name_en": "Olive Knit Sleeveless Top",
     "category": "top",
     "subcategory": "sleeveless",
@@ -1188,7 +1188,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_13_indigo_denim_shorts",
     "idOffset": 45,
-    "name": "인디고 워시드 데님 반바지 쇼츠",
+    "name": "인디고 워시드 데님 쇼츠",
     "name_en": "Indigo Washed Denim Shorts",
     "category": "bottom",
     "subcategory": "shorts",
@@ -1240,7 +1240,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_15_navy_water_shorts",
     "idOffset": 47,
-    "name": "네이비 나일론 발수 워터 반바지 쇼츠",
+    "name": "네이비 나일론 발수 워터 쇼츠",
     "name_en": "Navy Nylon Water-Repellent Shorts",
     "category": "bottom",
     "subcategory": "shorts",
@@ -1500,7 +1500,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_25_black_flip_flops",
     "idOffset": 57,
-    "name": "블랙 미니멀 러버 쪼리 플립플랍",
+    "name": "블랙 미니멀 러버 플립플랍",
     "name_en": "Black Minimal Rubber Flip-Flops",
     "category": "shoes",
     "subcategory": "flip_flops",
@@ -1526,7 +1526,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_summer_26_sand_leather_flip_flops",
     "idOffset": 58,
-    "name": "베이지 레더 쪼리 플립플랍",
+    "name": "샌드 베이지 레더 플립플랍",
     "name_en": "Sand Beige Leather Flip-Flops",
     "category": "shoes",
     "subcategory": "flip_flops",
@@ -2551,7 +2551,7 @@ export const SEASONAL_120_CATALOG = Object.freeze([
   {
     "key": "s4_autumn_32_burgundy_wool_muffler",
     "idOffset": 96,
-    "name": "버건디 메리노 울 쁘띠 스카프 머플러",
+    "name": "버건디 메리노 울 쁘띠 머플러",
     "name_en": "Burgundy Merino Wool Petite Muffler",
     "category": "neckwear",
     "subcategory": "muffler",

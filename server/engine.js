@@ -1634,7 +1634,7 @@ export function buildWeatherRecommendations(
   } else if (diurnalSwing >= 9) {
     weatherTip = `${dayLabelKo} 최저(${weather.tempMin}°C)와 최고(${weather.tempMax}°C) 기온 차가 ${diurnalSwing}°C로 큽니다. 얇은 이너 위에 탈착하기 좋은 아우터가 필수입니다.`;
   } else if (avgTemp <= 4) {
-    weatherTip = `${dayLabelKo}은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜주세요.`;
+    weatherTip = `${dayLabelKo}은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜 주세요.`;
   } else {
     weatherTip = `${dayLabelKo} ${weather.cityName} 기온은 ${weather.tempMin}°C ~ ${weather.tempMax}°C로 활동하기 쾌적합니다.`;
   }
@@ -1717,7 +1717,7 @@ export function getSubcategoryLabel(sub) {
     short_shirt: '반팔 셔츠',
     blouse: '블라우스',
     tshirt: '티셔츠',
-    tank_top: '탱크탑 · 나시',
+    tank_top: '탱크탑',
     sleeveless: '슬리브리스 · 민소매',
     sweatshirt: '맨투맨',
     hoodie: '후드 스웨트',
@@ -1749,7 +1749,7 @@ export function getSubcategoryLabel(sub) {
     heels: '힐 · 펌프스',
     sandals: '스트랩 샌들',
     slides: '슬라이드 · 슬리퍼',
-    flip_flops: '쪼리 · 플립플랍',
+    flip_flops: '플립플랍',
     briefcase: '서류가방 · 브리프케이스',
     backpack: '백팩 · 데이팩',
     messenger: '메신저백 · 플랩백',

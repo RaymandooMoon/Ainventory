@@ -40,11 +40,10 @@ Every meaningful frontend surface should demonstrate at least four of these:
 
 ## Before Writing Frontend Code
 
-1. Pick a specific style direction. Avoid vague defaults like "clean minimal".
-2. Define a palette intentionally.
-3. Choose typography deliberately.
-4. Gather at least a small set of real references.
-5. Use ECC design/frontend skills where relevant.
+1. Check for an existing project design system (`DESIGN.md`, theme/token contracts, CSS custom properties, component primitives, and icon libraries) and reuse it before introducing any new palette, font stack, or UI dependency.
+2. Only when starting a greenfield surface without an established system, choose a specific style direction (avoiding vague defaults), define an intentional palette, and select typography deliberately.
+3. Record the surface's primary action, visual hierarchy, target viewports, and applicable content states; gather real references when establishing a new direction.
+4. Use ECC design/frontend skills (`frontend-design-direction`, `design-system`, `extract-design-md`) where relevant.
 
 ## Worthwhile Style Directions
 
@@ -59,6 +58,13 @@ Every meaningful frontend surface should demonstrate at least four of these:
 - Retro-futurism
 
 Do not default to dark mode automatically. Choose the visual direction the product actually wants.
+
+## Typography & Layout Stability
+
+- Apply `font-variant-numeric: tabular-nums` (or monospace in dense data tables) to updating counters, prices, timers, timestamps, and aligned numeric columns.
+- Use `text-wrap: balance` on headings/titles and `text-wrap: pretty` on short body copy; omit both on long prose or `<pre>`/`<code>` blocks.
+- Scale display typography fluidly with `clamp()` and verify zero horizontal overflow across mobile and desktop breakpoints.
+- See skill: `make-interfaces-feel-better`, `taste-design`, `frontend-design-direction`.
 
 ## Component Checklist
 

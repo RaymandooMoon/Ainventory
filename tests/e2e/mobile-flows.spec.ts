@@ -270,7 +270,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.locator('#detail-memo-input').fill('2.5D Studio Trench Test');
     await page.locator(`#${CARBON_DOM_CONTRACT.itemDetailSaveBtnId}`).click();
 
-    // Step D: Click `[Outfits에서 코디해보기]` -> navigates to `/outfits` with garment pre-equipped on 2.5D Studio Canvas
+    // Step D: Click `[코디 스튜디오에서 입어보기]` -> navigates to `/outfits` with garment pre-equipped on 2.5D Studio Canvas
     await page.locator(`#${CARBON_DOM_CONTRACT.itemDetailTryOutfitBtnId}`).click();
     await expect(page).toHaveURL(/\/outfits$/);
 
@@ -1227,7 +1227,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     expect(badgeText).not.toMatch(/MST-\d+/);
   });
 
-  test('9. After-8PM Tomorrow Outfit prompt modal (max 3 impressions, 예 -> tomorrow / 아니오 -> today) and Galaxy live time-of-day sky stages', async ({
+  test('9. After-8PM Tomorrow Outfit prompt modal (max 3 impressions, 예 -> tomorrow / 아니요 -> today) and Galaxy live time-of-day sky stages', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -1239,7 +1239,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       window.localStorage.setItem('ainventory_outfit_generated_date_v1', `${y}-${m}-${d}`);
     });
 
-    // Impression 1: Dismiss with 아니오 -> keeps today weather
+    // Impression 1: Dismiss with 아니요 -> keeps today weather
     await page.goto('/?tod=sunset');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toHaveAttribute('data-time-of-day', 'sunset');

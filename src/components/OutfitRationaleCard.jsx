@@ -5,7 +5,7 @@ import { tx } from '../utils/i18n.ts';
 import { triggerHaptic } from '../utils/nativeBridge.ts';
 
 /**
- * Collapsible Outfit Rationale Note ("코디안 스타일링 노트")
+ * Collapsible Outfit Rationale Note ("코디 스타일링 노트")
  * Placed cleanly at the bottom of the Studio.
  * - Collapsed by default: quiet 1-line summary bar (preserves canvas & 15% sticky budget)
  * - Expanded: 4 structured rationale rows (Place/TPO, Temp/Weather, Density, Color/Skin Harmony)
@@ -52,7 +52,7 @@ export default function OutfitRationaleCard({
         >
           <div className="min-w-0 flex items-center gap-2 text-xs">
             <span className="font-semibold text-neutral-900 dark:text-white shrink-0">
-              {tx(lang, '코디안', 'Style Note')}
+              {tx(lang, '스타일 노트', 'Style Note')}
             </span>
             <span aria-hidden="true" className="text-neutral-400 shrink-0">
               ·

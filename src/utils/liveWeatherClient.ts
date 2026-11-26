@@ -190,7 +190,7 @@ export function parseOpenMeteoForecastPayload(
   } else if (diurnalSwing >= 9) {
     weatherTip = `${dayLabelKo} 최저(${tempMin}°C)와 최고(${tempMax}°C) 기온 차가 ${diurnalSwing}°C로 큽니다. 얇은 이너 위에 탈착하기 좋은 아우터가 필수입니다.`;
   } else if (avgTemp <= 4) {
-    weatherTip = `${dayLabelKo}은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜주세요.`;
+    weatherTip = `${dayLabelKo}은 평균 ${avgTemp}°C로 쌀쌀합니다. 캐시미어·울 니트와 머플러·장갑 레이어드로 체온을 지켜 주세요.`;
   } else {
     weatherTip = `${dayLabelKo} ${options.cityName} 기온은 ${tempMin}°C ~ ${tempMax}°C로 활동하기 쾌적합니다.`;
   }

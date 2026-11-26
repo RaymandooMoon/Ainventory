@@ -37,9 +37,9 @@ export const GARMENT_MATERIAL_OPTIONS = Object.freeze([
   { key: 'Fleece', ko: '플리스 · 기모', en: 'Fleece' },
   { key: 'Polyester', ko: '폴리 · 혼방', en: 'Poly / Blend' },
   { key: 'Fabric', ko: '패브릭', en: 'Fabric' },
-  { key: '18K Yellow Gold', ko: '18K 금', en: '18K Gold' },
-  { key: '925 Sterling Silver', ko: '925 은', en: '925 Silver' },
-  { key: 'Sculptural Bronze', ko: '동 · 브론즈', en: 'Bronze' },
+  { key: '18K Yellow Gold', ko: '18K 골드', en: '18K Gold' },
+  { key: '925 Sterling Silver', ko: '925 실버', en: '925 Silver' },
+  { key: 'Sculptural Bronze', ko: '브론즈', en: 'Bronze' },
   { key: 'Platinum & Pearl', ko: '플래티넘 · 진주', en: 'Platinum' },
 ]);
 
@@ -80,7 +80,7 @@ export const STYLE_MOOD_OPTIONS = Object.freeze([
   { key: 'casual', ko: '캐주얼', en: 'Casual', formality: 'casual' },
   { key: 'smart', ko: '스마트 캐주얼', en: 'Smart Casual', formality: 'smart' },
   { key: 'formal', ko: '포멀 · 클래식', en: 'Formal', formality: 'formal' },
-  { key: 'street', ko: '스트리트', en: 'Street', formality: 'casual' },
+  { key: 'street', ko: '스트릿', en: 'Street', formality: 'casual' },
   { key: 'sporty', ko: '스포티 · 애슬레저', en: 'Sporty', formality: 'sporty' },
 ]);
 
@@ -99,7 +99,7 @@ export const RISE_OPTIONS = Object.freeze([
 
 export const BOTTOM_LENGTH_OPTIONS = Object.freeze([
   { key: 'cropped', ko: '크롭 · 8부', en: 'Cropped' },
-  { key: 'ankle', ko: '복숭아뼈 · 9부', en: 'Ankle' },
+  { key: 'ankle', ko: '복사뼈 · 9부', en: 'Ankle' },
   { key: 'full', ko: '풀렝스 · 신발 덮음', en: 'Full Length' },
   { key: 'long', ko: '롱 · 끌림 주의', en: 'Extra Long' },
 ]);
@@ -142,7 +142,7 @@ export const SHOE_HEEL_OPTIONS = Object.freeze([
 
 export const QUICK_FIT_NOTES_BY_CATEGORY = Object.freeze({
   bottom: [
-    { ko: '올려 입으면 복숭아뼈, 내려 입으면 끌려요', en: 'Ankle-length worn high, drags if worn low' },
+    { ko: '올려 입으면 복사뼈, 내려 입으면 끌려요', en: 'Ankle-length worn high, drags if worn low' },
     { ko: '벨트 없이 편하게 입는 밴딩 핏', en: 'Easy elastic waist, no belt needed' },
     { ko: '밑단 한 번 롤업하면 비율이 좋아요', en: 'Looks best with a single cuff roll-up' },
   ],

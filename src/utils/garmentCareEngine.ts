@@ -384,8 +384,8 @@ export function getTumbleDryLabel(policy: TumbleDryPolicy, lang = 'ko'): string 
   const map: Record<TumbleDryPolicy, { ko: string; en: string }> = {
     allowed: { ko: '건조기 가능', en: 'Tumble Dry OK' },
     low_heat: { ko: '저온 건조', en: 'Low Heat Dry' },
-    no_tumble_flat: { ko: '건조기 불가(뉘어 건조)', en: 'No Tumble · Flat Dry' },
-    no_tumble_hang: { ko: '건조기 불가(그늘 건조)', en: 'No Tumble · Line Dry' },
+    no_tumble_flat: { ko: '건조기 불가 · 뉘어 건조', en: 'No Tumble · Flat Dry' },
+    no_tumble_hang: { ko: '건조기 불가 · 그늘 건조', en: 'No Tumble · Line Dry' },
   };
   return lang === 'en' ? map[policy].en : map[policy].ko;
 }
@@ -539,7 +539,7 @@ export function sortLaundryBasket(
       key: 'spot_clean',
       titleKo: '가죽·슈즈 부분 케어',
       titleEn: 'Leather & Specialty Spot Care',
-      settingsKo: '세탁기 투입 금지 · 전용 클리너 또는 수선·케어 전문점',
+      settingsKo: '세탁기 사용 금지 · 전용 클리너 또는 전문 케어점 이용',
       settingsEn: 'Do not machine wash · Spot clean or leather specialist',
       items: bucketMap.spot_clean,
       recommendedMapService: 'leather_care',
@@ -645,8 +645,8 @@ export function sortLaundryBasket(
 
   const canWashTogether = buckets.length <= 1 && !conflicts.some((c) => c.severity === 'critical');
   const headlineKo = canWashTogether
-    ? `${list.length}벌 모두 한 코스로 안전하게 합세탁할 수 있습니다.`
-    : `${list.length}벌 중 합세탁 주의 항목이 있어 ${buckets.length}개 코스로 자동 분리했습니다.`;
+    ? `${list.length}벌 모두 한 코스로 안전하게 함께 세탁할 수 있습니다.`
+    : `${list.length}벌 중 분리 세탁이 필요한 항목이 있어 ${buckets.length}개 코스로 자동 분류했습니다.`;
   const headlineEn = canWashTogether
     ? `All ${list.length} item(s) are safe to wash together in 1 course.`
     : `${list.length} item(s) auto-sorted into ${buckets.length} separate care courses.`;

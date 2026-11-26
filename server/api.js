@@ -862,7 +862,7 @@ function requireAdmin(req, res, next) {
     (req.user.role !== 'admin' && !hasPermission(req.user, 'admin:manage_users'))
   ) {
     return res.status(403).json({
-      error: '어드민 권한이 필요합니다.',
+      error: '관리자 권한이 필요합니다.',
       code: 'PERMISSION_DENIED',
       requiredPermission: 'admin:manage_users',
       adminContactEmail: getAdminContactEmail(),
@@ -1143,7 +1143,7 @@ export function createApiRouter(options = {}) {
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSec));
       return res.status(429).json({
-        error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -1158,7 +1158,7 @@ export function createApiRouter(options = {}) {
     const email = normalizeNewsletterEmail(body.email);
     if (!email) {
       return res.status(400).json({
-        error: '올바른 이메일 주소를 입력해주세요.',
+        error: '올바른 이메일 주소를 입력해 주세요.',
         code: 'INVALID_EMAIL',
       });
     }
@@ -1230,7 +1230,7 @@ export function createApiRouter(options = {}) {
     if (!rate.allowed) {
       res.setHeader('Retry-After', String(rate.retryAfterSec));
       return res.status(429).json({
-        error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -1240,7 +1240,7 @@ export function createApiRouter(options = {}) {
     const email = normalizeNewsletterEmail(body.email);
     if (!email) {
       return res.status(400).json({
-        error: '올바른 이메일 주소를 입력해주세요.',
+        error: '올바른 이메일 주소를 입력해 주세요.',
         code: 'INVALID_EMAIL',
       });
     }
@@ -1316,13 +1316,13 @@ export function createApiRouter(options = {}) {
 
     const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
     if (!cleanEmail || cleanEmail.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return res.status(400).json({ error: '유효한 이메일 주소를 입력해주세요.' });
+      return res.status(400).json({ error: '유효한 이메일 주소를 입력해 주세요.' });
     }
 
     const ipRate = checkRateLimit(`preotpip:${req.ip || 'local'}`, MAX_DISPATCH_PER_WINDOW * 3);
     if (!ipRate.allowed) {
       return res.status(429).json({
-        error: `인증 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `인증 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });
@@ -1342,7 +1342,7 @@ export function createApiRouter(options = {}) {
         Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - prev.lastSentAt)) / 1000)
       );
       return res.status(429).json({
-        error: `재발송 쿨타임 중입니다. ${retryAfterSec}초 후에 다시 요청해주세요.`,
+        error: `재발송 쿨타임 중입니다. ${retryAfterSec}초 후에 다시 요청해 주세요.`,
         code: 'RESEND_COOLDOWN',
         retryAfterSec,
       });
@@ -1351,7 +1351,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`preotp:${cleanEmail}`, MAX_DISPATCH_PER_WINDOW);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `인증 메일 발송 한도(10분당 ${MAX_DISPATCH_PER_WINDOW}회)를 초과했습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `인증 메일 발송 한도(10분당 ${MAX_DISPATCH_PER_WINDOW}회)를 초과했습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -1401,13 +1401,13 @@ export function createApiRouter(options = {}) {
     const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
     const code = String(req.body?.code || '').trim();
     if (!cleanEmail || !code) {
-      return res.status(400).json({ error: '이메일과 6자리 인증코드를 입력해주세요.' });
+      return res.status(400).json({ error: '이메일과 6자리 인증코드를 입력해 주세요.' });
     }
 
     const blockCheck = peekRateLimitBlocked(`preotpfail:${cleanEmail}`, MAX_VERIFY_FAILS_PER_WINDOW);
     if (blockCheck.blocked) {
       return res.status(429).json({
-        error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. ${blockCheck.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. ${blockCheck.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'OTP_ATTEMPTS_EXCEEDED',
         retryAfterSec: blockCheck.retryAfterSec,
       });
@@ -1415,19 +1415,19 @@ export function createApiRouter(options = {}) {
 
     const pending = emailOtpPending.get(cleanEmail);
     if (!pending) {
-      return res.status(400).json({ error: '유효한 인증코드 요청 내역이 없습니다. 먼저 인증번호를 요청해주세요.' });
+      return res.status(400).json({ error: '유효한 인증코드 요청 내역이 없습니다. 먼저 인증번호를 요청해 주세요.' });
     }
     if (Date.now() > pending.expiresAt) {
       emailOtpPending.delete(cleanEmail);
       return res.status(400).json({
-        error: '인증코드 유효시간(10분)이 만료되었습니다. 인증번호를 다시 요청해주세요.',
+        error: '인증코드 유효시간(10분)이 만료되었습니다. 인증번호를 다시 요청해 주세요.',
         code: 'OTP_EXPIRED',
       });
     }
     if (pending.failCount >= MAX_VERIFY_FAILS_PER_WINDOW) {
       emailOtpPending.delete(cleanEmail);
       return res.status(429).json({
-        error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. 인증번호를 다시 발송해주세요.`,
+        error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. 인증번호를 다시 발송해 주세요.`,
         code: 'OTP_ATTEMPTS_EXCEEDED',
       });
     }
@@ -1459,7 +1459,7 @@ export function createApiRouter(options = {}) {
     const ipRate = checkRateLimit(`regemail:${req.ip || 'local'}`, 12);
     if (!ipRate.allowed) {
       return res.status(429).json({
-        error: `가입 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후에 다시 시도해주세요.`,
+        error: `가입 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후에 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });
@@ -1489,7 +1489,7 @@ export function createApiRouter(options = {}) {
     if (pending.failCount >= MAX_VERIFY_FAILS_PER_WINDOW) {
       emailOtpPending.delete(cleanEmail);
       return res.status(429).json({
-        error: '인증번호 실패 횟수를 초과했습니다. 인증번호를 다시 요청해주세요.',
+        error: '인증번호 실패 횟수를 초과했습니다. 인증번호를 다시 요청해 주세요.',
         code: 'OTP_ATTEMPTS_EXCEEDED',
       });
     }
@@ -1509,7 +1509,7 @@ export function createApiRouter(options = {}) {
     const pwStr = typeof password === 'string' ? password : String(password ?? '');
     if (pwStr.length < MIN_PASSWORD_LEN || pwStr.length > MAX_PASSWORD_LEN) {
       return res.status(400).json({
-        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해주세요.`,
+        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해 주세요.`,
       });
     }
 
@@ -1594,7 +1594,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(ipKey, 12);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후에 다시 시도해주세요.`,
+        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후에 다시 시도해 주세요.`,
         retryAfterSec: rate.retryAfterSec,
       });
     }
@@ -1609,14 +1609,14 @@ export function createApiRouter(options = {}) {
     const pwStr = typeof password === 'string' ? password : String(password ?? '');
 
     if (!cleanUsername || cleanUsername.length < 2) {
-      return res.status(400).json({ error: '아이디는 영문/숫자 2자 이상으로 입력해주세요.' });
+      return res.status(400).json({ error: '아이디는 영문/숫자 2자 이상으로 입력해 주세요.' });
     }
     if (!cleanEmail || cleanEmail.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return res.status(400).json({ error: '유효한 이메일 주소를 입력해주세요.' });
+      return res.status(400).json({ error: '유효한 이메일 주소를 입력해 주세요.' });
     }
     if (pwStr.length < MIN_PASSWORD_LEN || pwStr.length > MAX_PASSWORD_LEN) {
       return res.status(400).json({
-        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해주세요.`,
+        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해 주세요.`,
       });
     }
 
@@ -1705,7 +1705,7 @@ export function createApiRouter(options = {}) {
     const ipRate = checkRateLimit(`resendip:${req.ip || 'local'}`, MAX_DISPATCH_PER_WINDOW * 3);
     if (!ipRate.allowed) {
       return res.status(429).json({
-        error: `재발송 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `재발송 요청이 너무 많습니다. ${ipRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: ipRate.retryAfterSec,
       });
@@ -1715,7 +1715,7 @@ export function createApiRouter(options = {}) {
       .trim()
       .toLowerCase();
     if (!identifier) {
-      return res.status(400).json({ error: '아이디 또는 이메일을 입력해주세요.' });
+      return res.status(400).json({ error: '아이디 또는 이메일을 입력해 주세요.' });
     }
     const user = db
       .prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?')
@@ -1732,7 +1732,7 @@ export function createApiRouter(options = {}) {
       if (elapsedMs < RESEND_COOLDOWN_MS) {
         const retryAfterSec = Math.max(1, Math.ceil((RESEND_COOLDOWN_MS - elapsedMs) / 1000));
         return res.status(429).json({
-          error: `재발송 쿨타임 중입니다. ${retryAfterSec}초 후에 다시 요청해주세요.`,
+          error: `재발송 쿨타임 중입니다. ${retryAfterSec}초 후에 다시 요청해 주세요.`,
           code: 'RESEND_COOLDOWN',
           retryAfterSec,
         });
@@ -1742,7 +1742,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`resend:${user.id}`, MAX_DISPATCH_PER_WINDOW);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `인증 메일 발송 한도(10분당 ${MAX_DISPATCH_PER_WINDOW}회)를 초과했습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `인증 메일 발송 한도(10분당 ${MAX_DISPATCH_PER_WINDOW}회)를 초과했습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -1819,7 +1819,7 @@ export function createApiRouter(options = {}) {
       Date.now() - new Date(user.verify_last_sent_at).getTime() > OTP_TTL_MS
     ) {
       return res.status(400).json({
-        error: '이메일 인증 링크 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해주세요.',
+        error: '이메일 인증 링크 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해 주세요.',
         code: 'OTP_EXPIRED',
       });
     }
@@ -1862,7 +1862,7 @@ export function createApiRouter(options = {}) {
       const blockCheck = peekRateLimitBlocked(`otpfail:${candidate.id}`, MAX_VERIFY_FAILS_PER_WINDOW);
       if (blockCheck.blocked || Number(candidate.verify_fail_count || 0) >= MAX_VERIFY_FAILS_PER_WINDOW) {
         return res.status(429).json({
-          error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. 인증 메일을 재발송해주세요.`,
+          error: `인증번호 입력 실패 횟수(${MAX_VERIFY_FAILS_PER_WINDOW}회)를 초과했습니다. 인증 메일을 재발송해 주세요.`,
           code: 'OTP_ATTEMPTS_EXCEEDED',
           retryAfterSec: blockCheck.retryAfterSec || 60,
         });
@@ -1874,7 +1874,7 @@ export function createApiRouter(options = {}) {
         Date.now() - new Date(candidate.verify_last_sent_at).getTime() > OTP_TTL_MS
       ) {
         return res.status(400).json({
-          error: '인증코드 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해주세요.',
+          error: '인증코드 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해 주세요.',
           code: 'OTP_EXPIRED',
         });
       }
@@ -1901,7 +1901,7 @@ export function createApiRouter(options = {}) {
         Date.now() - new Date(candidate.verify_last_sent_at).getTime() > OTP_TTL_MS
       ) {
         return res.status(400).json({
-          error: '이메일 인증 토큰 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해주세요.',
+          error: '이메일 인증 토큰 유효시간(10분)이 만료되었습니다. 재발송 후 다시 시도해 주세요.',
           code: 'OTP_EXPIRED',
         });
       }
@@ -1949,7 +1949,7 @@ export function createApiRouter(options = {}) {
     const blockCheck = peekRateLimitBlocked(loginBucketKey, MAX_AUTH_ATTEMPTS_PER_WINDOW);
     if (blockCheck.blocked) {
       return res.status(429).json({
-        error: `로그인 시도가 너무 많습니다. ${blockCheck.retryAfterSec}초 후에 다시 시도해주세요.`,
+        error: `로그인 시도가 너무 많습니다. ${blockCheck.retryAfterSec}초 후에 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: blockCheck.retryAfterSec,
       });
@@ -1969,7 +1969,7 @@ export function createApiRouter(options = {}) {
     if (!user.verified_at || !user.verification_hash) {
       const allowPreview = isDevOtpPreviewAllowed();
       return res.status(403).json({
-        error: '이메일 인증이 완료되지 않은 계정입니다. 먼저 이메일 인증을 완료해주세요.',
+        error: '이메일 인증이 완료되지 않은 계정입니다. 먼저 이메일 인증을 완료해 주세요.',
         code: 'EMAIL_NOT_VERIFIED',
         username: user.username,
         email: user.email,
@@ -1997,7 +1997,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`site-demo:${req.ip || 'local'}`, 60);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `데모 체험 요청이 너무 많습니다. ${rate.retryAfterSec}초 후에 다시 시도해주세요.`,
+        error: `데모 체험 요청이 너무 많습니다. ${rate.retryAfterSec}초 후에 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -2027,7 +2027,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`apple:${req.ip || 'local'}`, MAX_AUTH_ATTEMPTS_PER_WINDOW);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -2111,7 +2111,7 @@ export function createApiRouter(options = {}) {
       .get(resolvedSub);
 
     if (user && user.role === 'admin') {
-      return res.status(403).json({ error: '어드민 계정은 소셜 로그인 연동이 허용되지 않습니다.' });
+      return res.status(403).json({ error: '관리자 계정은 소셜 로그인 연동이 허용되지 않습니다.' });
     }
 
     if (!user) {
@@ -2121,7 +2121,7 @@ export function createApiRouter(options = {}) {
         .get(resolvedEmail);
       if (emailOwner) {
         return res.status(409).json({
-          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해주세요.',
+          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해 주세요.',
           code: 'ACCOUNT_EMAIL_CONFLICT',
         });
       }
@@ -2175,7 +2175,7 @@ export function createApiRouter(options = {}) {
     if (!rate.allowed) {
       return res.status(429).json({
         success: false,
-        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: rate.retryAfterSec,
       });
@@ -2242,7 +2242,7 @@ export function createApiRouter(options = {}) {
     if (user && user.role === 'admin') {
       return res.status(403).json({
         success: false,
-        error: '어드민 계정은 소셜 로그인 연동이 허용되지 않습니다.',
+        error: '관리자 계정은 소셜 로그인 연동이 허용되지 않습니다.',
       });
     }
 
@@ -2253,7 +2253,7 @@ export function createApiRouter(options = {}) {
       if (emailOwner) {
         return res.status(409).json({
           success: false,
-          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해주세요.',
+          error: '이미 다른 방식으로 가입된 이메일 계정입니다. 기존 로그인 방식을 이용해 주세요.',
           code: 'ACCOUNT_EMAIL_CONFLICT',
         });
       }
@@ -2327,7 +2327,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`maps:ac:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
       });
     }
@@ -2355,7 +2355,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`maps:search:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '장소 검색 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
       });
     }
@@ -2382,7 +2382,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`maps:place:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: '장소 조회 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '장소 조회 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
       });
     }
@@ -2406,7 +2406,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`maps:care:${req.ip || 'local'}`, 60);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: '주변 검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '주변 검색 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
       });
     }
@@ -2436,7 +2436,7 @@ export function createApiRouter(options = {}) {
     const rate = checkRateLimit(`maps:backdrop:${req.ip || 'local'}`, 90);
     if (!rate.allowed) {
       return res.status(429).json({
-        error: '장소 배경 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+        error: '장소 배경 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
         code: 'RATE_LIMITED',
       });
     }
@@ -2547,7 +2547,7 @@ export function createApiRouter(options = {}) {
     const blocked = peekRateLimitBlocked(rateKey, MAX_AUTH_ATTEMPTS_PER_WINDOW);
     if (blocked.blocked) {
       return res.status(429).json({
-        error: `비밀번호 변경 시도가 너무 많습니다. ${blocked.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `비밀번호 변경 시도가 너무 많습니다. ${blocked.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: blocked.retryAfterSec,
       });
@@ -2560,7 +2560,7 @@ export function createApiRouter(options = {}) {
       currentPassword.length > MAX_PASSWORD_LEN
     ) {
       return res.status(400).json({
-        error: '현재 비밀번호를 입력해주세요.',
+        error: '현재 비밀번호를 입력해 주세요.',
         code: 'INVALID_CURRENT_PASSWORD',
       });
     }
@@ -2571,14 +2571,14 @@ export function createApiRouter(options = {}) {
       newPassword.length > MAX_PASSWORD_LEN
     ) {
       return res.status(400).json({
-        error: `새 비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해주세요.`,
+        error: `새 비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해 주세요.`,
         code: 'INVALID_NEW_PASSWORD',
       });
     }
 
     if (newPassword === currentPassword) {
       return res.status(400).json({
-        error: '새 비밀번호는 현재 비밀번호와 다르게 설정해주세요.',
+        error: '새 비밀번호는 현재 비밀번호와 다르게 설정해 주세요.',
         code: 'SAME_PASSWORD',
       });
     }
@@ -2597,7 +2597,7 @@ export function createApiRouter(options = {}) {
       const failRate = checkRateLimit(rateKey, MAX_AUTH_ATTEMPTS_PER_WINDOW);
       if (!failRate.allowed) {
         return res.status(429).json({
-          error: `비밀번호 변경 시도가 너무 많습니다. ${failRate.retryAfterSec}초 후 다시 시도해주세요.`,
+          error: `비밀번호 변경 시도가 너무 많습니다. ${failRate.retryAfterSec}초 후 다시 시도해 주세요.`,
           code: 'RATE_LIMITED',
           retryAfterSec: failRate.retryAfterSec,
         });
@@ -2641,7 +2641,7 @@ export function createApiRouter(options = {}) {
     );
     if (!readRate.allowed) {
       return res.status(429).json({
-        error: `프로필 설정 조회 요청이 너무 많습니다. ${readRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `프로필 설정 조회 요청이 너무 많습니다. ${readRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: readRate.retryAfterSec,
       });
@@ -2662,7 +2662,7 @@ export function createApiRouter(options = {}) {
     );
     if (!writeRate.allowed) {
       return res.status(429).json({
-        error: `프로필 설정 저장 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `프로필 설정 저장 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: writeRate.retryAfterSec,
       });
@@ -2854,7 +2854,7 @@ export function createApiRouter(options = {}) {
       .slice(0, 80);
     const importStarter = Boolean(req.body?.import_starter);
     if (!closetName) {
-      return res.status(400).json({ error: '옷장 이름을 입력해주세요.' });
+      return res.status(400).json({ error: '옷장 이름을 입력해 주세요.' });
     }
 
     const updated = db.transaction(() => {
@@ -2882,7 +2882,7 @@ export function createApiRouter(options = {}) {
       );
       if (!regenRate.allowed) {
         return res.status(429).json({
-          error: `옷장 재생성 요청이 너무 많습니다. ${regenRate.retryAfterSec}초 후 다시 시도해주세요.`,
+          error: `옷장 재생성 요청이 너무 많습니다. ${regenRate.retryAfterSec}초 후 다시 시도해 주세요.`,
           code: 'RATE_LIMITED',
           retryAfterSec: regenRate.retryAfterSec,
         });
@@ -3211,7 +3211,7 @@ export function createApiRouter(options = {}) {
     );
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `AI 의류 분석 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `AI 의류 분석 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
       });
     }
@@ -3244,7 +3244,7 @@ export function createApiRouter(options = {}) {
     );
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `공식 상품 검색 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `공식 상품 검색 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
       });
     }
@@ -3282,7 +3282,7 @@ export function createApiRouter(options = {}) {
   router.post(
     '/garments/studio-cutout',
     requireStrictUserAuth,
-    requirePermission('vision:analyze', '사이트 데모 권한에서는 AI 스튜디오 누끼 생성을 사용할 수 없습니다.'),
+    requirePermission('vision:analyze', '사이트 데모 권한에서는 AI 스튜디오 배경 제거를 사용할 수 없습니다.'),
     async (req, res) => {
     const rate = checkRateLimit(
       `garmentcutout:${req.user?.id || req.ip || 'local'}`,
@@ -3290,7 +3290,7 @@ export function createApiRouter(options = {}) {
     );
     if (!rate.allowed) {
       return res.status(429).json({
-        error: `AI 스튜디오 보정 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `AI 스튜디오 보정 요청이 너무 많습니다. ${rate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
       });
     }
@@ -3313,7 +3313,7 @@ export function createApiRouter(options = {}) {
     } catch (err) {
       const status = Number(err?.status) || 500;
       res.status(status).json({
-        error: err?.message || 'AI 스튜디오 누끼 보정 중 오류가 발생했습니다.',
+        error: err?.message || 'AI 스튜디오 배경 제거 보정 중 오류가 발생했습니다.',
       });
     }
   });
@@ -3411,7 +3411,7 @@ export function createApiRouter(options = {}) {
     );
     if (!writeRate.allowed) {
       return res.status(429).json({
-        error: `아이템 등록 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `아이템 등록 요청이 너무 많습니다. ${writeRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: writeRate.retryAfterSec,
       });
@@ -3468,7 +3468,7 @@ export function createApiRouter(options = {}) {
     const targetCloset = authz.primaryCloset;
 
     if (!name || !String(name).trim()) {
-      return res.status(400).json({ error: '옷 이름을 입력해주세요.' });
+      return res.status(400).json({ error: '옷 이름을 입력해 주세요.' });
     }
 
     const defaultSubMap = {
@@ -3825,7 +3825,7 @@ export function createApiRouter(options = {}) {
     );
     if (!shopRate.allowed) {
       return res.status(429).json({
-        error: `중복 판독 요청이 너무 많습니다. ${shopRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `중복 판독 요청이 너무 많습니다. ${shopRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: shopRate.retryAfterSec,
       });
@@ -4158,7 +4158,7 @@ export function createApiRouter(options = {}) {
     const targetCloset = authz.primaryCloset;
 
     if (!title || !Array.isArray(item_ids) || item_ids.length < 1) {
-      return res.status(400).json({ error: '코디 이름과 의류를 선택해주세요.' });
+      return res.status(400).json({ error: '코디 이름을 입력하고 의류를 선택해 주세요.' });
     }
 
     const readAuthz = resolveAuthorizedClosets(req, targetCloset, { mode: 'read' });
@@ -4570,7 +4570,7 @@ export function createApiRouter(options = {}) {
     );
     if (!analyticsRate.allowed) {
       return res.status(429).json({
-        error: `통계 조회 요청이 너무 많습니다. ${analyticsRate.retryAfterSec}초 후 다시 시도해주세요.`,
+        error: `통계 조회 요청이 너무 많습니다. ${analyticsRate.retryAfterSec}초 후 다시 시도해 주세요.`,
         code: 'RATE_LIMITED',
         retryAfterSec: analyticsRate.retryAfterSec,
       });
@@ -4716,16 +4716,16 @@ export function createApiRouter(options = {}) {
       default_closet,
     } = req.body || {};
     if (!username || !password || !display_name) {
-      return res.status(400).json({ error: '아이디, 비밀번호, 이름을 모두 입력해주세요.' });
+      return res.status(400).json({ error: '아이디, 비밀번호, 이름을 모두 입력해 주세요.' });
     }
     const cleanU = sanitizeSafeSlug(username, '');
     const pwStr = typeof password === 'string' ? password : String(password ?? '');
     if (!cleanU || cleanU.length < 2) {
-      return res.status(400).json({ error: '유효한 아이디를 입력해주세요.' });
+      return res.status(400).json({ error: '유효한 아이디를 입력해 주세요.' });
     }
     if (pwStr.length < MIN_PASSWORD_LEN || pwStr.length > MAX_PASSWORD_LEN) {
       return res.status(400).json({
-        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해주세요.`,
+        error: `비밀번호는 ${MIN_PASSWORD_LEN}자 이상 ${MAX_PASSWORD_LEN}자 이하로 입력해 주세요.`,
       });
     }
 

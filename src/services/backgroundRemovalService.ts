@@ -486,7 +486,7 @@ export async function keyStudioWhiteCutout(
   workCanvas.height = h;
   const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
-    throw new Error('스튜디오 누끼 캔버스를 열 수 없습니다.');
+    throw new Error('스튜디오 배경 제거 캔버스를 열 수 없습니다.');
   }
 
   ctx.clearRect(0, 0, w, h);
