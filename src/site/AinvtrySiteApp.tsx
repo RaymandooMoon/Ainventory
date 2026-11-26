@@ -25,6 +25,7 @@ import {
   type StageInteractionState,
 } from '../three/stageTypes.ts';
 import {
+  isIosSafariRuntime,
   safeReleasePointerCapture,
   safeSetPointerCapture,
 } from '../utils/iosSafariCompat.ts';
@@ -135,6 +136,7 @@ export default function AinvtrySiteApp() {
 
   const [activeStage, setActiveStage] = useState<StageId>('hero');
   const [hasVisitedStudio, setHasVisitedStudio] = useState<boolean>(false);
+  const [isIosWebKit] = useState<boolean>(() => isIosSafariRuntime());
   const [stageInteraction, setStageInteraction] = useState<StageInteractionState>(() => ({
     ...DEFAULT_STAGE_INTERACTION_STATE,
   }));
@@ -362,7 +364,7 @@ export default function AinvtrySiteApp() {
   const handleSelectStage = useCallback(
     (nextStage: StageId, trigger: StageSwitchTrigger = 'dock') => {
       triggerHaptic('selection');
-      if (nextStage === 'specs') {
+      if (nextStage === 'specs' && !isIosWebKit) {
         warmStageModule('studio');
       }
       const detail = stageTracker.recordSwitch(
@@ -391,7 +393,7 @@ export default function AinvtrySiteApp() {
         }, 920);
       }
     },
-    [stageTracker]
+    [isIosWebKit, stageTracker]
   );
 
   const handleUpdateInteraction = useCallback(
@@ -790,7 +792,7 @@ export default function AinvtrySiteApp() {
             CENTRAL SPATIAL STAGE: EDITORIAL HERO OR LIVE STUDIO / 3D + HUD
            ================================================================ */}
         <main className="site-stage">
-          {hasVisitedStudio && (
+          {(isIosWebKit ? activeStage === 'studio' : hasVisitedStudio) && (
             <LiveAppStageOverlay
               screen={stageInteraction.studioPreviewScreen}
               lang={lang}

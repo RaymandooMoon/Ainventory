@@ -1205,5 +1205,37 @@ describe('AinvtryStageDirector', () => {
 
     stage.dispose();
   });
+
+  it('disposes inactive stages cleanly via disposeInactiveStages while keeping the active stage resident and re-registrable', () => {
+    const h = createHarness({ reducedMotion: true });
+    h.director.transitionTo('architecture', 0.1);
+    assert.equal(h.director.getActiveStage(), 'architecture');
+
+    h.director.disposeInactiveStages('architecture');
+    assert.equal(h.mocks.architecture.disposed, false, 'Active stage must remain mounted');
+    assert.equal(h.director.getStage('architecture'), h.mocks.architecture.module);
+    assert.equal(h.mocks.studio.disposed, true, 'Inactive studio stage must be disposed');
+    assert.equal(h.mocks.specs.disposed, true, 'Inactive specs stage must be disposed');
+    assert.equal(h.mocks.about.disposed, true, 'Inactive about stage must be disposed');
+    assert.equal(h.director.getStage('studio'), undefined);
+    assert.equal(h.director.getStage('specs'), undefined);
+    assert.equal(h.director.getStage('about'), undefined);
+
+    // Re-register a fresh specs stage and switch cleanly
+    const freshSpecs = createMockStage('specs', new THREE.Vector3(-0.8, 0.6, 0.2));
+    h.director.registerStage(freshSpecs.module);
+    h.director.transitionTo('specs', 0.5);
+    assert.equal(h.director.getActiveStage(), 'specs');
+    assert.equal(freshSpecs.module.group.visible, true);
+
+    // Returning to hero + disposeInactiveStages('hero') disposes every registered stage
+    h.director.returnToHero(0.9);
+    h.director.disposeInactiveStages('hero');
+    assert.equal(h.mocks.architecture.disposed, true);
+    assert.equal(freshSpecs.disposed, true);
+    assert.equal(h.director.getStage('architecture'), undefined);
+    assert.equal(h.director.getStage('specs'), undefined);
+  });
 });
+
 

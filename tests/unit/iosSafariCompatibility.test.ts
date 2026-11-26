@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import * as THREE from 'three';
+import {
+  createLightweightStudioCubeEnvMap,
+  disposeStudioEnvMap,
+} from '../../src/three/stages/stageMaterials.ts';
 import {
   isIosSafariRuntime,
   isIosTouchDevice,
@@ -231,4 +236,87 @@ describe('Apple iOS Safari / iPhone Air compatibility contract', () => {
     assert.ok(siteHtml.includes('apple-mobile-web-app-capable'));
     assert.ok(siteHtml.includes('apple-touch-icon'));
   });
+
+  it('builds a pre-filtered 5-level PMREM CubeTexture bypassing Three.js 0.187 256-sample GGX PMREMGenerator stalls on iOS Metal', () => {
+    const cubeEnv = createLightweightStudioCubeEnvMap();
+    const flagged = cubeEnv as THREE.CubeTexture & { isPMREMTexture?: boolean };
+    assert.equal(flagged.isPMREMTexture, true, 'Lightweight studio envMap must set isPMREMTexture=true so WebGLRenderer skips PMREMGenerator');
+    assert.equal(cubeEnv.mapping, THREE.CubeReflectionMapping);
+    assert.equal(cubeEnv.generateMipmaps, false);
+    assert.equal(Array.isArray(cubeEnv.image) && cubeEnv.image.length, 6);
+
+    // 4 custom mip levels (16, 8, 4, 2) below base 32x32, each carrying .width for Three.js 0.187 uploadCubeTexture
+    assert.equal(cubeEnv.mipmaps.length, 4);
+    const expectedMipSizes = [16, 8, 4, 2];
+    for (let i = 0; i < expectedMipSizes.length; i += 1) {
+      const mip = cubeEnv.mipmaps[i] as unknown as { width?: number; image?: unknown[] };
+      assert.equal(mip.width, expectedMipSizes[i]);
+      assert.equal(Array.isArray(mip.image) && mip.image.length, 6);
+    }
+
+    assert.doesNotThrow(() => disposeStudioEnvMap(cubeEnv));
+  });
+
+  it('drives marble & 3D stage drags natively via TouchEvent, keeps iOS gyro retryable, caps ProMotion at 60fps, and bounds iOS GPU/iframe memory', () => {
+    const scenesSrc = readRepoFile('src/components/auth/loginThreeScenes.ts');
+    const hookSrc = readRepoFile('src/components/auth/useMarbleBackdropStage.ts');
+    const heroSrc = readRepoFile('src/site/SiteMarbleHero.tsx');
+    const siteAppSrc = readRepoFile('src/site/AinvtrySiteApp.tsx');
+    const stageMatSrc = readRepoFile('src/three/stages/stageMaterials.ts');
+    const threeCapSrc = readRepoFile('src/components/three/threeRuntimeCapabilities.ts');
+
+    // 1. iOS ProMotion 120Hz -> 60fps queue cap & Pass 1 wave FBO skip when marble hidden
+    assert.ok(
+      scenesSrc.includes('allowHighRefresh: !isSoftwareGl && !isIosSafari'),
+      'iOS WebKit must cap ProMotion 120Hz to 60fps to prevent async Metal queue flooding'
+    );
+    assert.ok(
+      scenesSrc.includes('if (!needsMarblePass)'),
+      'Pass 1 wave FBO must be skipped whenever hero marble is hidden on 3D stages'
+    );
+
+    // 2. Native TouchEvent driving Hero marble & non-permanent gyro retry
+    assert.ok(
+      hookSrc.includes('activeTouchId') && hookSrc.includes('isSuppressedTouchPointer'),
+      'Hero marble drag/flick/tap must run natively on TouchEvent with PointerEvent deduplication'
+    );
+    assert.ok(
+      hookSrc.includes('gyroPermissionInFlight') && hookSrc.includes('gyroPermissionResolved'),
+      'iOS gyro requestPermission must not permanently disable itself if a drag gesture fails'
+    );
+    assert.ok(
+      hookSrc.includes('if (touchTotalMovedPx >= 14) return;'),
+      'iOS gyro permission prompt must only fire on clean taps, not drags'
+    );
+
+    // 3. Native TouchEvent 3D stage orbiting + inactive stage disposal + no speculative GLB pre-warm on iOS
+    assert.ok(
+      heroSrc.includes("stageEl.addEventListener('touchstart', onTouchStart") &&
+        heroSrc.includes("stageEl.addEventListener('touchmove', onTouchMove, { passive: false })"),
+      '3D stages (Architecture/Specs/About) must support native TouchEvent drag & tap on iOS'
+    );
+    assert.ok(
+      heroSrc.includes('rig.director.disposeInactiveStages('),
+      'iOS WebKit must dispose inactive 3D stages to prevent WKWebView Jetsam crashes'
+    );
+    assert.ok(
+      heroSrc.includes("if (activeStage !== 'specs' || isIosSafariRuntime()) return undefined;"),
+      'iOS WebKit must skip speculative background studioStage GLB pre-instantiation'
+    );
+
+    // 4. PMREM bypass + lazy 1x sprites on iOS + hidden Studio iframe release on iOS
+    assert.ok(
+      stageMatSrc.includes('softwareGlGlassFallback || isIosSafariRuntime()'),
+      'createStudioEnvMap must return lightweight pre-filtered PMREM cube envMap on iOS'
+    );
+    assert.ok(
+      threeCapSrc.includes('createLightweightStudioCubeEnvMap'),
+      'createStudioEnvironmentTexture must return PMREM-flagged cube texture so WebGLRenderer skips PMREMGenerator'
+    );
+    assert.ok(
+      siteAppSrc.includes("(isIosWebKit ? activeStage === 'studio' : hasVisitedStudio)"),
+      'iOS WebKit must unmount hidden Studio iframe when switching to 3D stages to avoid Jetsam reloads'
+    );
+  });
 });
+

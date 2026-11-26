@@ -531,41 +531,58 @@ export function useMarbleBackdropStage(
       controller.pushScrollImpulse(scrollX, e.deltaY * scale);
     };
 
-    let touchFallbackActive = false;
-    let lastTouchNx = 0;
-    let lastTouchNy = 0;
+    let activeTouchId: number | null = null;
+    let lastNativeTouchAt = 0;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchTotalMovedPx = 0;
+
+    const findTouchById = (list: TouchList, id: number): Touch | null => {
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i].identifier === id) return list[i];
+      }
+      return null;
+    };
+
+    const isSuppressedTouchPointer = (e: PointerEvent): boolean =>
+      e.pointerType === 'touch' &&
+      (activeTouchId !== null || performance.now() - lastNativeTouchAt < 800);
+
+    const shouldIgnoreStartTarget = (
+      rawTarget: EventTarget | null,
+      opts: UseMarbleBackdropStageOptions
+    ): boolean => {
+      const target = rawTarget as HTMLElement | null;
+      if (!target || typeof target.closest !== 'function') return false;
+      if (opts.manualTargetSelector) {
+        const marbleTarget = target.closest<HTMLElement>(opts.manualTargetSelector);
+        if (marbleTarget) {
+          const now = performance.now();
+          perTargetCooldown.set(marbleTarget, now + 1500);
+          globalHitCooldownUntil = Math.max(globalHitCooldownUntil, now + 500);
+          return true;
+        }
+      }
+      const ignoreSelector =
+        opts.ignorePointerDownSelector ?? 'button, input, a, select, label, textarea';
+      return Boolean(target.closest(ignoreSelector));
+    };
 
     const onPointerDown = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       if (document.hidden || pausedModeRef.current) return;
       const opts = optionsRef.current;
       if (opts.disableHeroMarbleInput) return;
       if (opts.isEventExcluded?.(e.target)) return;
+      if (shouldIgnoreStartTarget(e.target, opts)) return;
 
-      const target = e.target as HTMLElement | null;
-      if (target && typeof target.closest === 'function') {
-        if (opts.manualTargetSelector) {
-          const marbleTarget = target.closest<HTMLElement>(opts.manualTargetSelector);
-          if (marbleTarget) {
-            const now = performance.now();
-            perTargetCooldown.set(marbleTarget, now + 1500);
-            globalHitCooldownUntil = Math.max(globalHitCooldownUntil, now + 500);
-            return;
-          }
-        }
-        const ignoreSelector =
-          opts.ignorePointerDownSelector ?? 'button, input, a, select, label, textarea';
-        if (target.closest(ignoreSelector)) {
-          return;
-        }
-      }
-
-      touchFallbackActive = false;
       const { nx, ny } = getNormalizedPointer(e.clientX, e.clientY);
       controller.setPointerDown?.(true, nx, ny);
       pushPointer(e.clientX, e.clientY, false);
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       if (document.hidden || pausedModeRef.current) return;
       const opts = optionsRef.current;
       if (opts.disableHeroMarbleInput) return;
@@ -579,18 +596,20 @@ export function useMarbleBackdropStage(
       pushPointer(e.clientX, e.clientY, true);
     };
 
-    const onPointerUp = () => {
-      touchFallbackActive = false;
+    const onPointerUp = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       controller.setPointerDown?.(false);
     };
 
-    const onPointerCancel = () => {
+    const onPointerCancel = (e: PointerEvent) => {
+      // On iOS Safari/Chrome, WebKit may emit pointercancel while native TouchEvents continue.
+      // Never cancel an active native touch drag when activeTouchId is still tracking the finger.
+      if (isSuppressedTouchPointer(e)) return;
       controller.setPointerDown?.(false);
-      touchFallbackActive = true;
     };
 
-    const onPointerLeave = () => {
-      touchFallbackActive = false;
+    const onPointerLeave = (e: PointerEvent) => {
+      if (isSuppressedTouchPointer(e)) return;
       controller.setPointerDown?.(false);
       if (optionsRef.current.onPointerLeaveReset) {
         controller.setPointer(0, 0, 0);
@@ -599,37 +618,68 @@ export function useMarbleBackdropStage(
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      if (document.hidden || pausedModeRef.current || e.touches.length !== 1) return;
-      if (optionsRef.current.disableHeroMarbleInput) return;
-      if (optionsRef.current.isEventExcluded?.(e.target)) return;
+      lastNativeTouchAt = performance.now();
+      if (document.hidden || pausedModeRef.current) return;
+      const opts = optionsRef.current;
+      if (opts.disableHeroMarbleInput) {
+        if (activeTouchId !== null) {
+          activeTouchId = null;
+          controller.setPointerDown?.(false);
+        }
+        return;
+      }
+      if (e.touches.length !== 1) {
+        if (activeTouchId !== null) {
+          activeTouchId = null;
+          controller.setPointerDown?.(false);
+        }
+        return;
+      }
+      if (opts.isEventExcluded?.(e.target)) return;
+      if (shouldIgnoreStartTarget(e.target, opts)) return;
+
       const t = e.touches[0];
+      activeTouchId = t.identifier;
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchTotalMovedPx = 0;
+
       const { nx, ny } = getNormalizedPointer(t.clientX, t.clientY);
-      lastTouchNx = nx;
-      lastTouchNy = ny;
+      controller.setPointerDown?.(true, nx, ny);
+      pushPointer(t.clientX, t.clientY, false);
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (document.hidden || pausedModeRef.current || !touchFallbackActive || e.touches.length !== 1) {
+      lastNativeTouchAt = performance.now();
+      if (document.hidden || pausedModeRef.current || activeTouchId === null) {
         return;
       }
-      if (optionsRef.current.disableHeroMarbleInput) return;
-      if (optionsRef.current.isEventExcluded?.(e.target)) return;
-      const t = e.touches[0];
-      const { nx, ny } = getNormalizedPointer(t.clientX, t.clientY);
-      const dx = nx - lastTouchNx;
-      const dy = ny - lastTouchNy;
-      lastTouchNx = nx;
-      lastTouchNy = ny;
-      controller.pushDirectionalSwipe?.(dx, dy);
+      if (optionsRef.current.disableHeroMarbleInput) {
+        activeTouchId = null;
+        controller.setPointerDown?.(false);
+        return;
+      }
+      const t = findTouchById(e.touches, activeTouchId);
+      if (!t) return;
+      touchTotalMovedPx = Math.max(
+        touchTotalMovedPx,
+        Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY)
+      );
+      pushPointer(t.clientX, t.clientY, true);
     };
 
-    const onTouchEnd = () => {
-      touchFallbackActive = false;
+    const onTouchEnd = (e: TouchEvent) => {
+      lastNativeTouchAt = performance.now();
+      if (activeTouchId === null) return;
+      if (findTouchById(e.touches, activeTouchId)) return;
+      activeTouchId = null;
+      controller.setPointerDown?.(false);
     };
 
     // Mobile Gyroscope / DeviceOrientation exclusively for rolling the glass marble
     let gyroAttached = false;
-    let gyroPermissionRequested = false;
+    let gyroPermissionInFlight = false;
+    let gyroPermissionResolved = false;
     let calibSamples = 0;
     let baseBeta = 0;
     let baseGamma = 0;
@@ -701,8 +751,18 @@ export function useMarbleBackdropStage(
     const GYRO_IGNORE_SELECTOR =
       'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="dialog"], [aria-modal="true"], [data-hud-surface="true"], [data-no-marble="true"]';
 
+    const detachGyroPermissionListeners = () => {
+      window.removeEventListener('click', requestIosGyro, false);
+      stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
+    };
+
     const requestIosGyro = (event: Event) => {
-      if (gyroPermissionRequested || !requiresIosPermission || !devOrientCtor?.requestPermission) {
+      if (
+        gyroPermissionResolved ||
+        gyroPermissionInFlight ||
+        !requiresIosPermission ||
+        !devOrientCtor?.requestPermission
+      ) {
         return;
       }
       if (optionsRef.current.disableHeroMarbleInput) {
@@ -715,27 +775,38 @@ export function useMarbleBackdropStage(
       if (target && typeof target.closest === 'function' && target.closest(GYRO_IGNORE_SELECTOR)) {
         return;
       }
-      gyroPermissionRequested = true;
-      window.removeEventListener('click', requestIosGyro, false);
-      stageEl.removeEventListener('touchend', requestIosGyroOnStageTap, false);
+      gyroPermissionInFlight = true;
       try {
         const resultPromise = devOrientCtor.requestPermission();
         if (resultPromise && typeof resultPromise.then === 'function') {
           void resultPromise
             .then((state) => {
-              if (state === 'granted') attachGyro();
+              gyroPermissionInFlight = false;
+              if (state === 'granted') {
+                gyroPermissionResolved = true;
+                detachGyroPermissionListeners();
+                attachGyro();
+              } else if (state === 'denied') {
+                gyroPermissionResolved = true;
+                detachGyroPermissionListeners();
+              }
             })
             .catch(() => {
-              // Permission denied — seamlessly fall back to pointer/touch interaction
+              // iOS Safari rejects non-activation gestures (such as prevented drags) with
+              // NotAllowedError; keep listeners armed so the user's next clean tap prompts normally.
+              gyroPermissionInFlight = false;
             });
+        } else {
+          gyroPermissionInFlight = false;
         }
       } catch {
-        // Ignore restricted environments
+        gyroPermissionInFlight = false;
       }
     };
 
     const requestIosGyroOnStageTap = (event: TouchEvent) => {
       if (event.touches.length > 0) return;
+      if (touchTotalMovedPx >= 14) return;
       requestIosGyro(event);
     };
 
