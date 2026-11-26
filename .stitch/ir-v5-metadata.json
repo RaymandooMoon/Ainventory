@@ -1,0 +1,448 @@
+{
+  "name": "projects/17500831115017553962",
+  "projectId": "17500831115017553962",
+  "title": "Ainvtry IR Business Plan v5 — Full 18-Slide Stitch Redesign",
+  "revision": "v5.2-infographic-first-live-demo",
+  "url": "https://stitch.withgoogle.com/projects/17500831115017553962",
+  "status": "APPROVED_AND_IMPLEMENTED",
+  "designSystems": {
+    "dark": "assets/343642396407500201",
+    "light": "assets/3651991771177497085"
+  },
+  "liveDemoSources": [
+    "https://www.ainvtry.com/",
+    "https://www.ainvtry.com/app"
+  ],
+  "sourceSlidesCount": 18,
+  "redesignedSlidesCount": 18,
+  "themeShowcasesCount": 3,
+  "sourceSlides": {
+    "2": {
+      "slide": 2,
+      "id": "12182959715155606732",
+      "title": "[Source 02] 목차 (Current IR)",
+      "sourceScreen": "projects/17500831115017553962/screens/12182959715155606732"
+    },
+    "1": {
+      "slide": 1,
+      "id": "1820915521391417952",
+      "instanceId": "1820915521391417952",
+      "title": "[Source 01] Cover — 디지털 순환 옷장 OS",
+      "sourceScreen": "projects/17500831115017553962/screens/1820915521391417952",
+      "width": "2560",
+      "height": "1600"
+    },
+    "3": {
+      "slide": 3,
+      "id": "8407461015292637940",
+      "instanceId": "8407461015292637940",
+      "title": "[Source 03] Executive Summary — 핵심 지표",
+      "sourceScreen": "projects/17500831115017553962/screens/8407461015292637940",
+      "width": "2560",
+      "height": "1600"
+    },
+    "4": {
+      "slide": 4,
+      "id": "788350403416392128",
+      "instanceId": "788350403416392128",
+      "title": "[Source 04] Problem — 파편화된 6대 문제",
+      "sourceScreen": "projects/17500831115017553962/screens/788350403416392128",
+      "width": "2560",
+      "height": "1600"
+    },
+    "5": {
+      "slide": 5,
+      "id": "1103769376460275467",
+      "instanceId": "1103769376460275467",
+      "title": "[Source 05] Solution — 6→1 단일 OS 해결",
+      "sourceScreen": "projects/17500831115017553962/screens/1103769376460275467",
+      "width": "2560",
+      "height": "1600"
+    },
+    "6": {
+      "slide": 6,
+      "id": "13521830264865873032",
+      "instanceId": "13521830264865873032",
+      "title": "[Source 06] User Journey — 일상 6대 시나리오",
+      "sourceScreen": "projects/17500831115017553962/screens/13521830264865873032",
+      "width": "2560",
+      "height": "1600"
+    },
+    "7": {
+      "slide": 7,
+      "id": "3605370046805408146",
+      "instanceId": "3605370046805408146",
+      "title": "[Source 07] Live Showcase — 실제 프로덕션 앱",
+      "sourceScreen": "projects/17500831115017553962/screens/3605370046805408146",
+      "width": "2560",
+      "height": "1600"
+    },
+    "8": {
+      "slide": 8,
+      "id": "18216874082926437969",
+      "instanceId": "18216874082926437969",
+      "title": "[Source 08] Core Tech — Three.js·2D VTON·-96%",
+      "sourceScreen": "projects/17500831115017553962/screens/18216874082926437969",
+      "width": "2560",
+      "height": "1600"
+    },
+    "9": {
+      "slide": 9,
+      "id": "8137226847037372346",
+      "instanceId": "8137226847037372346",
+      "title": "[Source 09] Security Moat — 4대 데이터 보안 방어선",
+      "sourceScreen": "projects/17500831115017553962/screens/8137226847037372346",
+      "width": "2560",
+      "height": "1600"
+    },
+    "10": {
+      "slide": 10,
+      "id": "2008988986140834922",
+      "instanceId": "2008988986140834922",
+      "title": "[Source 10] Market Opportunity — $393B × $23.9B",
+      "sourceScreen": "projects/17500831115017553962/screens/2008988986140834922",
+      "width": "2560",
+      "height": "1600"
+    },
+    "11": {
+      "slide": 11,
+      "id": "2221734460591583260",
+      "instanceId": "2221734460591583260",
+      "title": "[Source 11] Competitive Landscape — 2×2 포지셔닝",
+      "sourceScreen": "projects/17500831115017553962/screens/2221734460591583260",
+      "width": "2560",
+      "height": "1600"
+    },
+    "12": {
+      "slide": 12,
+      "id": "3565759824742902845",
+      "instanceId": "3565759824742902845",
+      "title": "[Source 12] Business Model ① — 4중 수익 엔진",
+      "sourceScreen": "projects/17500831115017553962/screens/3565759824742902845",
+      "width": "2560",
+      "height": "1600"
+    },
+    "13": {
+      "slide": 13,
+      "id": "4567648276180645063",
+      "instanceId": "4567648276180645063",
+      "title": "[Source 13] Business Model ② — LTV 플라이휠 & 원가 방어",
+      "sourceScreen": "projects/17500831115017553962/screens/4567648276180645063",
+      "width": "2560",
+      "height": "1600"
+    },
+    "14": {
+      "slide": 14,
+      "id": "2432603764536693692",
+      "instanceId": "2432603764536693692",
+      "title": "[Source 14] Traction — 6-Tier 풀스택 검증",
+      "sourceScreen": "projects/17500831115017553962/screens/2432603764536693692",
+      "width": "2560",
+      "height": "1600"
+    },
+    "15": {
+      "slide": 15,
+      "id": "4567648276180646094",
+      "instanceId": "4567648276180646094",
+      "title": "[Source 15] GTM & Roadmap — 3단계 실행 로드맵",
+      "sourceScreen": "projects/17500831115017553962/screens/4567648276180646094",
+      "width": "2560",
+      "height": "1600"
+    },
+    "16": {
+      "slide": 16,
+      "id": "18025359120608154385",
+      "instanceId": "18025359120608154385",
+      "title": "[Source 16] Team & Governance — 단독 MVP & 보안 거버넌스",
+      "sourceScreen": "projects/17500831115017553962/screens/18025359120608154385",
+      "width": "2560",
+      "height": "1600"
+    },
+    "17": {
+      "slide": 17,
+      "id": "13915871131290114052",
+      "instanceId": "13915871131290114052",
+      "title": "[Source 17] Funding Ask — 18개월 투자 제안 & 자금 배분",
+      "sourceScreen": "projects/17500831115017553962/screens/13915871131290114052",
+      "width": "2560",
+      "height": "1600"
+    },
+    "18": {
+      "slide": 18,
+      "id": "6399417457507620564",
+      "instanceId": "6399417457507620564",
+      "title": "[Source 18] Thank You — Q&A & Live Demo",
+      "sourceScreen": "projects/17500831115017553962/screens/6399417457507620564",
+      "width": "2560",
+      "height": "1600"
+    }
+  },
+  "redesignedSlides": {
+    "3": {
+      "slide": 3,
+      "id": "e130d968c9534c15a9a7eb8241245144",
+      "sourceScreen": "projects/17500831115017553962/screens/e130d968c9534c15a9a7eb8241245144",
+      "title": "[Slide 03] Executive Summary — 4 Radial Gauges & 5-Node Closed-Loop OS",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-03-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-03-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 88.8
+    },
+    "2": {
+      "slide": 2,
+      "id": "58094c5dc6ae499b899c6e32912774b3",
+      "sourceScreen": "projects/17500831115017553962/screens/58094c5dc6ae499b899c6e32912774b3",
+      "title": "[Slide 02] Visual 4-Act Constellation Roadmap (Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-02-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-02-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 94.9
+    },
+    "4": {
+      "slide": 4,
+      "id": "f5d1c7bbaca94f5caae798eb91832f26",
+      "sourceScreen": "projects/17500831115017553962/screens/f5d1c7bbaca94f5caae798eb91832f26",
+      "title": "[Slide 04] Problem — 6대 파편화된 문제 (OLED Keynote · SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-04-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-04-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 98.4
+    },
+    "1": {
+      "slide": 1,
+      "id": "17165492438490414700",
+      "sourceScreen": "projects/17500831115017553962/screens/17165492438490414700",
+      "title": "[v5.2 Infographic 01] [Slide 01] Visual Cover — 내 옷장을 디지털 자산으로 (Haute Keynote)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-01-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-01-v52.html",
+      "injectedLiveSlots": 2,
+      "expectedLiveSlots": 2,
+      "elapsedSec": 100.0
+    },
+    "5": {
+      "slide": 5,
+      "id": "b7e7de1dad904a3bb58315998a3cc3ae",
+      "sourceScreen": "projects/17500831115017553962/screens/b7e7de1dad904a3bb58315998a3cc3ae",
+      "title": "[Slide 05] Solution — 6→1 One-Shot Convergence (Sankey Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-05-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-05-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 101.7
+    },
+    "6": {
+      "slide": 6,
+      "id": "10589026191232073684",
+      "sourceScreen": "projects/17500831115017553962/screens/10589026191232073684",
+      "title": "[v5.2 Infographic 06] [Slide 06] User Journey — 일상 6가지 순간의 iNVTRY (Visual Storyboard Edition)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-06-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-06-v52.html",
+      "injectedLiveSlots": 6,
+      "expectedLiveSlots": 6,
+      "elapsedSec": 174.2
+    },
+    "8": {
+      "slide": 8,
+      "id": "7885634474903659407",
+      "sourceScreen": "projects/17500831115017553962/screens/7885634474903659407",
+      "title": "[v5.2 Infographic 08] [Slide 08] Core Tech — Three.js·8-Angle VTON·-96% (OLED Keynote · SVG Infographic Edition)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-08-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-08-v52.html",
+      "injectedLiveSlots": 2,
+      "expectedLiveSlots": 2,
+      "elapsedSec": 176.1
+    },
+    "9": {
+      "slide": 9,
+      "id": "c0e1e797ee544c79bb82ffd3eb0d9088",
+      "sourceScreen": "projects/17500831115017553962/screens/c0e1e797ee544c79bb82ffd3eb0d9088",
+      "title": "[Slide 09] Security Moat — 4대 데이터 보안 방어선 (SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-09-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-09-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 95.5
+    },
+    "7": {
+      "slide": 7,
+      "id": "955128525935856055",
+      "sourceScreen": "projects/17500831115017553962/screens/955128525935856055",
+      "title": "[v5.2 Infographic 07] [Slide 07] Live Showcase — 실구동 프로덕션 앱 (Apple 4-Device Keynote)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-07-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-07-v52.html",
+      "injectedLiveSlots": 4,
+      "expectedLiveSlots": 4,
+      "elapsedSec": 198.1
+    },
+    "10": {
+      "slide": 10,
+      "id": "d91c0486a34e4bb39d8648bf5a9f673e",
+      "sourceScreen": "projects/17500831115017553962/screens/d91c0486a34e4bb39d8648bf5a9f673e",
+      "title": "[Slide 10] Market Opportunity — $393B × $23.9B (OLED Keynote · SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-10-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-10-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 93.1
+    },
+    "11": {
+      "slide": 11,
+      "id": "2fbada4e373140f58e00f8053bebcba5",
+      "sourceScreen": "projects/17500831115017553962/screens/2fbada4e373140f58e00f8053bebcba5",
+      "title": "[Slide 11] Competitive Landscape — 유일한 순환 옷장 자산 OS (SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-11-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-11-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 96.8
+    },
+    "12": {
+      "slide": 12,
+      "id": "eb02a24687e74c06badd8b78d1c8b471",
+      "sourceScreen": "projects/17500831115017553962/screens/eb02a24687e74c06badd8b78d1c8b471",
+      "title": "[Slide 12] Business Model ① — 4중 수익 엔진 (Ascending Waterfall Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-12-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-12-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 99.7
+    },
+    "13": {
+      "slide": 13,
+      "id": "d29ff47becd7469a9387cdc5dafa2ab9",
+      "sourceScreen": "projects/17500831115017553962/screens/d29ff47becd7469a9387cdc5dafa2ab9",
+      "title": "[Slide 13] Business Model ② — 5단계 LTV 플라이휠 & ₩0 온디바이스 원가 방어 (Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-13-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-13-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 117.2
+    },
+    "15": {
+      "slide": 15,
+      "id": "be5190e4c9324887bcffac5f70da18f8",
+      "sourceScreen": "projects/17500831115017553962/screens/be5190e4c9324887bcffac5f70da18f8",
+      "title": "[Slide 15] GTM & Roadmap — 3단계 크로노그래프 & 3-채널 퍼널 (SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2068",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-15-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-15-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 93.0
+    },
+    "16": {
+      "slide": 16,
+      "id": "9a52d85c604c41bba4b5ff5bf1b70601",
+      "sourceScreen": "projects/17500831115017553962/screens/9a52d85c604c41bba4b5ff5bf1b70601",
+      "title": "[Slide 16] Team & Governance — 단독 MVP & 2027 보안 거버넌스 (Visual Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-16-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-16-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 109.8
+    },
+    "18": {
+      "slide": 18,
+      "id": "5771253448597787515",
+      "sourceScreen": "projects/17500831115017553962/screens/5771253448597787515",
+      "title": "[v5.2 Infographic 18] [Slide 18] Closing & Demo — 감사합니다 (OLED Keynote · Live Demo Stage)",
+      "width": "2560",
+      "height": "1640",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-18-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-18-v52.html",
+      "injectedLiveSlots": 2,
+      "expectedLiveSlots": 2,
+      "elapsedSec": 93.7
+    },
+    "17": {
+      "slide": 17,
+      "id": "134d922d918a466f968343f9e5c9571c",
+      "sourceScreen": "projects/17500831115017553962/screens/134d922d918a466f968343f9e5c9571c",
+      "title": "[Slide 17] Funding Ask — 18개월 투자 제안 & 자금 배분 (SVG Infographic Edition)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-17-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-17-v52.html",
+      "injectedLiveSlots": 0,
+      "expectedLiveSlots": 0,
+      "elapsedSec": 111.3
+    },
+    "14": {
+      "slide": 14,
+      "id": "3376457504528926680",
+      "sourceScreen": "projects/17500831115017553962/screens/3376457504528926680",
+      "title": "[v5.2 Infographic 14] [Slide 14] Traction — 6-Tier 풀스택 검증 완료 (Live Demo & Stack Infographic)",
+      "width": "2560",
+      "height": "1640",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-14-v52.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/slide-14-v52.html",
+      "injectedLiveSlots": 1,
+      "expectedLiveSlots": 1,
+      "elapsedSec": 117.7
+    }
+  },
+  "themeShowcases": {
+    "v52-light-s01": {
+      "slug": "v52-light-s01",
+      "id": "17345346462229406491",
+      "sourceScreen": "projects/17500831115017553962/screens/17345346462229406491",
+      "title": "[v5.2 Light Edition] Slide 01 Cover — Live App & Orbit Infographic (Atelier Paper)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-light-s01.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-light-s01.html"
+    },
+    "v52-en-dark-s01": {
+      "slug": "v52-en-dark-s01",
+      "id": "10582373109306221631",
+      "sourceScreen": "projects/17500831115017553962/screens/10582373109306221631",
+      "title": "[v5.2 Global EN Edition] Slide 01 Cover — Live EN App & Orbit Infographic (OLED Noir)",
+      "width": "2560",
+      "height": "1600",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-en-dark-s01.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-en-dark-s01.html"
+    },
+    "v52-light-s10": {
+      "slug": "v52-light-s10",
+      "id": "b9ca50c371f24927b4a0b56cf0a1ad82",
+      "sourceScreen": "projects/17500831115017553962/screens/b9ca50c371f24927b4a0b56cf0a1ad82",
+      "title": "[v5.2 Light Edition] Slide 10 Market Opportunity — Concentric Target & Growth Chart (Atelier Paper)",
+      "width": "2560",
+      "height": "2048",
+      "pngPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-light-s10.png",
+      "htmlPath": "/home/antigravity/RaymandooMoon/Ainventory/.stitch/designs/ir-v52-infographic/v52-light-s10.html"
+    }
+  }
+}

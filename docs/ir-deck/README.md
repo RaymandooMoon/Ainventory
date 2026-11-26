@@ -1,16 +1,12 @@
-# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v4.0 (KO/EN · Light/Dark · Auto-Sync · 18장)
+# iNVTRY (Ainvtry) IR 사업계획서 데크 (`docs/ir-deck/`) — v5.2 (Stitch Infographic · Live Demo · KO/EN · Light/Dark · 18장)
 
-TIPS · 도전의IR · 글로벌 VC 투자 제안서 표준을 반영하고 **Google Stitch IR v4 키노트 기준(프로젝트 `8882974820311759365`)으로 고도화된 한/영(`KO/EN`) 이중 언어 × 라이트/다크(`Light/Dark`) 아틀리에 테마 + 공식 홈페이지 드레이프 실크 배경(구슬 제외) + 앱/웹 자동 배치 동기화**를 적용한 **18슬라이드 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
+TIPS · 도전의IR · 글로벌 VC 투자 제안서 표준을 반영하고 **Google Stitch 18장 전면 UI 개편(프로젝트 `17500831115017553962`)**으로 완성한 **인포그래픽 중심(텍스트 ~60% 감축) + 실구동 라이브 데모 캡처 24종(`www.ainvtry.com` · `/app` × KO/EN × Light/Dark) + 듀얼 테마(`OLED Noir Dark` ↔ `Atelier Paper Light`) + 듀얼 비율(`16:9` & `4:3`) HTML IR 사업계획서**입니다.
 
-## v4.0 주요 특징
-- **완전한 한/영 (`KO | EN`) 실시간 전환 (`ir-deck-i18n.js`)**:
-  - 18개 슬라이드 전체 텍스트, 인라인 SVG 다이어그램(`TAM/SAM/SOM`, `2×2 포지셔닝`, `5단계 플라이휠`, `자금 배분 도넛`), `data-ir-bind` 실시간 동기화 수치, 툴바·목차·PDF 제목까지 한국어/영어로 즉시 전환합니다.
-  - Slide 01·07의 실구동 앱 프리뷰 5종도 언어(`KO/EN`) × 테마(`Light/Dark`) 4조합 실제 캡처(`app-*-{ko,en}-{light,dark}.webp`)로 자동 전환됩니다.
-- **Stitch-Elevated 라이트/다크 듀얼 테마 & 타이포그래피**:
-  - **Light (Atelier Daylight)**: 웜 알라바스터(`#F6F3EC`) 실크 캔버스 + 반투명 화이트 프로스티드 글래스 + 앤티크 샴페인(`#73552B`) 대비 강화.
-  - **Dark (OLED Obsidian Noir)**: 순흑(`#000000`) OLED 캔버스 + 옵시디언 글래스 + 샴페인 골드(`#E2CFA8`) 헤어라인.
-  - 영문 강조 이탤릭에 `Instrument Serif` / `Cormorant Garamond`를 적용하고, 라이트/다크 전환 시 원형 확산(View Transitions API, `prefers-reduced-motion` 존중)을 지원합니다.
-  - 상단 진행률 바 + 프레젠터 단축키(`←`/`→` 이동, `L` 한/영 전환, `T` 라이트/다크 전환, `R` 16:9·4:3 전환) 및 URL 쿼리(`?lang=ko|en&theme=light|dark&mood=luxury|aurora&ratio=16-9|4-3`) 완벽 지원.
+## v5.2 주요 특징
+- **인포그래픽 중심 전면 개편 (18장 맞춤형 SVG)**: 5-Node 순환 오빗, 4-Act 별자리 로드맵, 라디얼 KPI 게이지, 6대 단절 게이지, 6→1 Sankey 수렴도, `-96%` 압축 바 랩, 3-Zone 방화벽 도식, 동심원 TAM/SAM/SOM + 성장 차트, 2×2 백색지대 + 도트 매트릭스, 4단 상승 수익 스택, 오빗 플라이휠 + `70%+` 반원 마진 게이지, 6-Layer 스택, Gantt + 3→1 퍼널, 조직 확장 타임라인, `18M Runway` 도넛 + 가치 변곡 계단을 순수 CSS 변수 SVG로 구현했습니다.
+- **실구동 라이브 데모 캡처 24종 자동 스왑**: `www.ainvtry.com`(3D 히어로 · 라이브 스튜디오) 및 `www.ainvtry.com/app`(7겹 피팅 · 270벌 옷장 · 100% 활용률 통계 · 0B 볼트) 실화면 캡처(`site/public/assets/previews/*.webp`)가 언어(`KO/EN`) × 테마(`Light/Dark`) 전환에 따라 즉시 자동 전환됩니다.
+- **완전한 한/영 (`KO | EN`) 실시간 전환 (`ir-deck-i18n.js`)**: 18장 전체 텍스트, 인라인 SVG `<text>`, 36개 `data-ir-bind` 실시간 동기화 수치, 툴바·목차·PDF 제목까지 한국어/영어로 즉시 전환합니다.
+- **OLED Noir Dark ↔ Atelier Paper Light 트윈 테마**: `#050507` OLED Noir + `#D6B889` Champagne Gold와 `#F6F3EC` Atelier Linen + `#9E7B46` Champagne Bronze를 View Transitions 원형 확산과 함께 즉시 전환하며, 단축키(`←`/`→`, `L` 한/영, `T` 라이트/다크, `R` 16:9·4:3) 및 URL 쿼리(`?lang=ko|en&theme=light|dark&mood=luxury|aurora&ratio=16-9|4-3&view=deck|scroll&slide=1..18`)를 지원합니다.
 - **정확한 기술 용어 정책 (`Three.js` 전용 3D 표기)**:
   - 실제 포토리얼 가상 피팅 모델은 **8방향 멀티앵글 2D VTON**으로, 플랫폼은 **디지털 순환 옷장 OS**로 정직하게 표기합니다.
   - **`3D` 표기는 `Three.js`를 실제 사용하는 영역**(Three.js 3D 아바타·SpringBone 물리, Three.js 3D 우산·바람 기상 스테이지, Three.js 3D 공식 웹/실크 셰이더)에만 엄격히 사용합니다.

@@ -736,6 +736,22 @@
         "light": "assets/6263751231524140529"
       },
       "lastSyncTime": "2026-11-26T04:06:21Z"
+    },
+    "irDeckV5Full": {
+      "projectId": "17500831115017553962",
+      "title": "Ainvtry IR Business Plan v5 — Full 18-Slide Stitch Redesign",
+      "url": "https://stitch.withgoogle.com/projects/17500831115017553962",
+      "metadataFile": ".stitch/ir-v5-metadata.json",
+      "status": "APPROVED_AND_IMPLEMENTED",
+      "revision": "v5.2-infographic-first-live-demo",
+      "sourceSlidesUploaded": 18,
+      "redesignedSlides": 18,
+      "themeShowcases": 3,
+      "designSystems": {
+        "dark": "assets/343642396407500201",
+        "light": "assets/3651991771177497085"
+      },
+      "lastSyncTime": "2026-11-26T06:45:00Z"
     }
   }
 }

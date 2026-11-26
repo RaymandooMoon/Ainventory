@@ -142,6 +142,14 @@ function collectAssetHashes(repoRoot) {
     'site/public/assets/previews/app-profile-ko-dark.webp',
     'site/public/assets/previews/app-profile-en-light.webp',
     'site/public/assets/previews/app-profile-en-dark.webp',
+    'site/public/assets/previews/site-hero-ko-light.webp',
+    'site/public/assets/previews/site-hero-ko-dark.webp',
+    'site/public/assets/previews/site-hero-en-light.webp',
+    'site/public/assets/previews/site-hero-en-dark.webp',
+    'site/public/assets/previews/site-live-studio-ko-light.webp',
+    'site/public/assets/previews/site-live-studio-ko-dark.webp',
+    'site/public/assets/previews/site-live-studio-en-light.webp',
+    'site/public/assets/previews/site-live-studio-en-dark.webp',
     'site/public/assets/journey/clay-cut-01-v1.webp',
     'site/public/assets/journey/clay-cut-02-v1.webp',
     'site/public/assets/journey/clay-cut-03-v1.webp',
@@ -252,7 +260,7 @@ export async function collectIrDeckSnapshot(repoRoot = REPO_ROOT) {
   const roadmapPillText = liveDoneCount >= 2 ? `LIVE 01·02 완료` : `LIVE ${liveDoneCount} 완료`;
 
   return {
-    schemaVersion: '4.0',
+    schemaVersion: '5.2',
     syncMonth: git.syncMonth,
     meta: {
       brandName: siteMeta.brandName,

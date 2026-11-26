@@ -1,626 +1,461 @@
+/* ============================================================================
+ * iNVTRY (Ainvtry) IR Business Plan Deck v5.2 — Complete Bilingual Dictionary
+ * Zero-Leak KO <-> EN Translation (HTML + Inline SVG <text> + Live Binds)
+ * ============================================================================ */
 (() => {
   'use strict';
 
-  /**
-   * iNVTRY (Ainvtry) Living IR Business Plan Deck v4.0 — Bilingual KO/EN Dictionary
-   * - Preserves 100% of live `data-ir-bind` metrics dynamically via regex-backed EN formatters
-   * - Preserves rich inline typography (<em>, <strong>, <br>, <small>) in English word order
-   * - Translates all 18 slides, inline SVG <text>, toolbar controls, options, alt & aria-labels
-   */
-
   const DOC_TITLE = {
-    ko: 'iNVTRY (Ainvtry) — IR 사업계획서 v4.0 (KO/EN · Light/Dark · Auto-Sync · 16:9 · 4:3)',
-    en: 'iNVTRY (Ainvtry) — Investor Pitch Deck v4.0 (KO/EN · Light/Dark · Auto-Sync · 16:9 · 4:3)',
+    ko: 'iNVTRY (Ainvtry) — IR 사업계획서 v5.2 (Infographic · Live Demo · KO/EN · Light/Dark)',
+    en: 'iNVTRY (Ainvtry) — IR Business Plan v5.2 (Infographic · Live Demo · KO/EN · Light/Dark)',
   };
 
-  /**
-   * Rich inline-HTML English overrides (preserves natural English word order + <em>/<strong>/<br>/<small>).
-   */
   const RICH_HTML_EN = {
-    '#slide-01 .cover-headline':
-      'Turn Your Closet Into a <em>Digital Asset</em>,<br />From Daily Wear to Resale',
-    '#slide-01 .cover-lead':
-      'A <strong>Privacy-First AI Fashion-Tech OS</strong> unifying 1-photo digitization, 360° 4+ layer AI fitting, 0B on-device privacy, and 1-tap verified resale in one closed loop.',
-    '#slide-02 .slide-title':
-      'Executive Agenda — From <em>Fragmented Pains</em> to Monetization &amp; Ask',
-    '#slide-03 .slide-title':
-      'Not a Concept — A Live <em>Circular Digital Wardrobe OS</em>',
-    '#slide-04 .slide-title':
-      '<em>6 Fragmented Problems</em> Blocking the Fashion Lifecycle',
-    '#slide-05 .slide-title':
-      '6 Disconnected Fashion Pains, Resolved by <em>One Unified Closet OS</em>',
-    '#slide-06 .slide-title':
-      '<em>iNVTRY</em> Across 6 Everyday Wardrobe Moments',
-    '#slide-07 .slide-title':
-      'Live Cross-Platform App <em>(Web · iOS · Android)</em>',
-    '#slide-08 .slide-title':
-      'Three.js 3D Physics × Multi-Angle 2D VTON × <em>-96% Edge Pipeline</em>',
-    '#slide-09 .slide-title':
-      'Uncopyable Moat: <em>4 Lines of Data Security Defense</em>',
-    '#slide-10 .slide-title':
-      'Intersection of <em>$393B</em> Global Resale × <em>$23.9B</em> Virtual Try-On',
-    '#slide-11 .slide-title':
-      'Beyond Single-Purpose Apps: The Only <em>Circular Wardrobe Asset OS</em>',
-    '#slide-12 .slide-title':
-      'Subscription × Gap Commerce × Verified Resale × B2B: <em>4-Engine Revenue</em>',
-    '#slide-13 .slide-title':
-      '5-Stage LTV Flywheel × <em>$0 On-Device Cost Defense</em>',
-    '#slide-14 .slide-title':
-      'Production-Verified <em>6-Tier Full-Stack</em> Ready to Scale',
-    '#slide-15 .slide-title':
-      '3-Phase Execution: From Closet Lock-in to <em>Resale Liquidity</em>',
-    '#slide-16 .slide-title':
-      'Solo MVP Execution Speed × <em>2027 Enterprise Security Governance</em>',
-    '#slide-17 .slide-title':
-      '18-Month Commercial Scale-Up &amp; <em>Circular Resale</em> Funding Ask',
-    '#slide-18 .closing-tagline':
-      '<strong>“Turn Your Closet Into a Digital Asset, From Daily Wear to Resale”</strong><br />iNVTRY resolves 6 fragmented fashion pains inside one Privacy-First Wardrobe OS.',
+    '[data-i18n-rich="s01-h1"]':
+      'Turn Your Wardrobe into a <span class="serif-accent">Digital Asset</span>,<br />From Styling to Resale',
+    '[data-i18n-rich="s02-h2"]':
+      'Business Plan Roadmap <span class="serif-accent">— 4-Act Constellation</span>',
+    '[data-i18n-rich="s03-h2"]':
+      'Live Production <span class="serif-accent">Circular Wardrobe</span> OS',
+    '[data-i18n-rich="s04-h2"]':
+      'Six <span class="serif-accent">Fragmented Silos</span> Blocking Fashion',
+    '[data-i18n-rich="s05-h2"]':
+      '6 Pains Resolved by <span class="serif-accent">One Unified Wardrobe OS</span>',
+    '[data-i18n-rich="s06-h2"]':
+      '<span class="serif-accent">6 Daily Moments</span> Powered by iNVTRY',
+    '[data-i18n-rich="s07-h2"]':
+      'Live <span class="serif-accent">Production App</span> (Web · iOS · Android)',
+    '[data-i18n-rich="s08-h2"]':
+      'Three.js 3D × 8-Angle VTON × <span class="serif-accent">-96% Edge</span>',
+    '[data-i18n-rich="s09-h2"]':
+      'Unreplicable <span class="serif-accent">4-Layer Security Fortress</span>',
+    '[data-i18n-rich="s10-h2"]':
+      'Global Resale <span class="serif-accent">$393B</span> × VTON <span class="serif-accent">$23.9B</span>',
+    '[data-i18n-rich="s11-h2"]':
+      'The Only Unified <span class="serif-accent">Circular Wardrobe Asset OS</span>',
+    '[data-i18n-rich="s12-h2"]':
+      '4-Layer <span class="serif-accent">Compound Revenue</span> Stepped Stack',
+    '[data-i18n-rich="s13-h2"]':
+      '5-Stage LTV Flywheel × <span class="serif-accent">$0 Edge Cost Shield</span>',
+    '[data-i18n-rich="s14-h2"]':
+      'Production-Verified <span class="serif-accent">6-Tier Full-Stack</span> Architecture',
+    '[data-i18n-rich="s15-h2"]':
+      '3-Phase Execution: Lock-in to <span class="serif-accent">Resale Liquidity</span>',
+    '[data-i18n-rich="s16-h2"]':
+      'Solo MVP Velocity × <span class="serif-accent">2027 Security Governance</span>',
+    '[data-i18n-rich="s17-h2"]':
+      '18-Month Scale-Up <span class="serif-accent">Funding Ask</span>',
+    '[data-i18n-rich="s18-quote"]':
+      '“Turn your wardrobe into a <span class="serif-accent">Digital Asset</span> — from styling to 1-tap resale”',
   };
 
-  /**
-   * Live `data-ir-bind` dynamic EN formatters — always stay synced with `npm run ir:sync`.
-   */
+  const TEXT_EN = {
+    '(어패럴뉴스)': '(Apparel News)',
+    '-96% 경량': '-96% Strip',
+    '/월 [TBD]': '/mo [TBD]',
+    '01 · 기억 의존 중복 구매': '01 · Memory-Driven Duplicate Buys',
+    '01 · 배경 제거 & 안면 피부톤': '01 · Background Cutout & Skin-Tone',
+    '01 · 표지 — 디지털 순환 옷장 OS': '01 · Cover — Digital Circular Wardrobe OS',
+    '01 촬영 -96%': '01 Capture -96%',
+    '01. 매장 중복 구매': '01. In-Store Duplicates',
+    '02 · 내 옷 미대조 온라인 반품': '02 · Unmatched Online Returns',
+    '02 · 목차 — 4-Act 로드맵': '02 · Agenda — 4-Act Roadmap',
+    '02 · 이미지 저장 · 전송 대역폭': '02 · Image Storage & Bandwidth',
+    '02 날씨': '02 Weather',
+    '02. 온라인 반품': '02. Online Returns',
+    '03 360° 4겹+': '03 360° 4+ Layers',
+    '03 · 4겹+ VTON 코디 재조회': '03 · 4+ Layer VTON Re-Viewing',
+    '03 · 단품 1벌 정면 한계': '03 · Single-Item Front-Only AI',
+    '03 · 핵심 요약 — 5단계 순환 OS': '03 · Executive Summary — 5-Stage OS',
+    '03. 단품 1벌 정면': '03. Single Front-Only',
+    '04 CPW 관리': '04 CPW Care',
+    '04 · 날씨·장소(TPO) 단절': '04 · Weather & TPO Disconnect',
+    '04 · 문제 정의 — 6대 단절': '04 · Problem — 6 Disconnected Silos',
+    '04. 날씨·TPO 단절': '04. Weather & TPO Gap',
+    '05 · 솔루션 — 6 → 1 통합 OS': '05 · Solution — 6 → 1 Unified OS',
+    '05 · 얼굴·EXIF 사생활 노출': '05 · Face & EXIF Privacy Leaks',
+    '05 리셀': '05 Resale',
+    '05. 얼굴·EXIF 유출': '05. Face & EXIF Leaks',
+    '06 · 사용자 여정 — 일상 6대 순간': '06 · User Journey — 6 Daily Moments',
+    '06 · 세탁 방치 · 리셀 마찰': '06 · Care Neglect & Resale Friction',
+    '06. 세탁·리셀 마찰': '06. Care & Resale Friction',
+    '07 · 라이브 데모 — 실구동 앱 4종': '07 · Live Demo — 4 Production App Screens',
+    '08 · 핵심 기술 — Three.js 3D · 8방향 VTON': '08 · Core Tech — Three.js 3D & 8-Angle VTON',
+    '09 · 보안 해자 — 4대 방어선': '09 · Security Moat — 4 Defense Layers',
+    '0B 보안 백엔드': '0B Security Backend',
+    '0B 얼굴 · -96% 보안': '0B Face · -96% Strip',
+    '0B 얼굴 · -96% 전처리': '0B Face · -96% Edge Strip',
+    '0B 얼굴 · 체형 볼트': '0B Face & Body Vault',
+    '0B 피부톤': '0B Skin-Tone',
+    '0B 피부톤 · 8방향 · 리셀': '0B Skin-Tone · 8-Angle · Resale',
+    '0일 파기': '0-Day Purge',
+    '10 · 시장 기회 — $393B × $23.9B': '10 · Market Opportunity — $393B × $23.9B',
+    '100% 온디바이스': '100% On-Device',
+    '100% 클라이언트 완결': '100% Client-Side',
+    '100% 활용률 · CPW': '100% Utilization · CPW',
+    '11 · 경쟁 우위 — 2×2 포지셔닝': '11 · Competition — 2×2 Positioning',
+    '12 · BM ① — 4중 수익 엔진': '12 · BM ① — 4-Layer Revenue Engine',
+    '13 · BM ② — LTV 플라이휠 · ₩0 원가': '13 · BM ② — LTV Flywheel & $0 Edge Cost',
+    '14 · 실적 · 6-Tier 풀스택': '14 · Traction — 6-Tier Full-Stack',
+    '15 · GTM & 18개월 로드맵': '15 · GTM & 18-Month Roadmap',
+    '16 · 팀 & 2027 보안 거버넌스': '16 · Team & 2027 Security Governance',
+    '17 · 투자 제안 & 자금 배분': '17 · Funding Ask & Use of Funds',
+    '18 · 감사합니다 — 라이브 데모': '18 · Thank You — Live Web Demo',
+    '1벌': '1 Item',
+    '1벌 정면': '1-Item Front',
+    '1벌 한계': '1-Item Cap',
+    '1탭 인증 등록': '1-Tap Verified Listing',
+    '1탭 인증 리셀': '1-Tap Verified Resale',
+    '2027 모의해킹·보험': '2027 Pentest & Cyber Ins.',
+    '2030 순환 소비 주류화': 'Circular Fashion Mainstream',
+    '21-Bone · 28모프': '21-Bone · 28 Morphs',
+    '270벌 디지털 옷장': '270-Item Digital Closet',
+    '28체형 · 비율 검증': '28 Morphs · Fit Check',
+    '2×2 백색지대 독점': '2×2 White-Space Lead',
+    '3-Zone CMEK · 리셀 에스크로': '3-Zone CMEK · Resale Escrow',
+    '3-Zone · 모의해킹': '3-Zone · Pentest',
+    '30초 즉시 출고': '30-Sec Instant Listing',
+    '30초 출고': '30-Sec List',
+    '360° 4겹+ VTON': '360° 4+ Layer VTON',
+    '360° 4겹+ 멀티앵글': '360° 4+ Multi-Angle',
+    '360° 4겹+ 피팅': '360° 4+ Layer Fit',
+    '360° 7겹 AI 피팅': '360° 7-Layer AI Fitting',
+    '360° OOTD 룩북 바이럴': '360° OOTD Lookbook Viral',
+    '360° 멀티레이어 부재': 'No 360° Multi-Layering',
+    '3초 대조': '3-Sec Check',
+    '3초 중복 · CPW': '3-Sec Dup · CPW',
+    '3초 중복 판독 게이트': '3-Sec Duplicate Gate',
+    '4개 앱 분절': '4 Disconnected Apps',
+    '4겹+ Three.js 3D · 8방향 ▶': '4+ Layer Three.js 3D · 8-Angle ▶',
+    '4겹+ VTON · 8방향': '4+ Layer VTON · 8-Angle',
+    '4겹+ VTON · 실시간 명동 날씨': '4+ Layer VTON · Live Weather',
+    '4겹·측후면 검증 불가': 'No 4-Layer or 360° Check',
+    '4대 방어': '4 Defenses',
+    '4대 보안 방어선': '4-Layer Security Moat',
+    '4중 복합 LTV': '4-Layer Compound LTV',
+    '4중 복합 수익 엔진': '4-Layer Revenue Engine',
+    '5/5 충족 (유일)': '5/5 Complete (Only)',
+    '59% 리셀 대중화': '59% Resale Adoption',
+    '5단계': '5 Stages',
+    '6 → 1 단일 OS 해결': '6 → 1 Unified Resolution',
+    '6-Tier 풀스택 실적': '6-Tier Full-Stack Proof',
+    '60 FPS · 28모프': '60 FPS · 28 Morphs',
+    '8방향': '8-Angle',
+    '8방향 VTON · Three.js 3D': '8-Angle VTON · Three.js 3D',
+    '8방향 정밀도 · 추론 단가↓': '8-Angle Precision · Lower Cost',
+    '90일 휴면 감지': '90-Day Idle Alert',
+    '90일+ 휴면 알림': '90-Day+ Idle Alert',
+    'AI 비전(VTON) 리드': 'AI Vision (VTON) Lead',
+    'CI 시크릿 스캔 완료': 'CI Secret Scan Passed',
+    'CPW · 세탁 관리': 'CPW & Garment Care',
+    'CPW 리포트': 'CPW Analytics',
+    'CPW 알림 · 30초 판매': 'CPW Alerts · 30-Sec Sell',
+    'DB·파일 즉시 소거': 'Instant DB & File Wipe',
+    'DELETE /api/auth/account 즉시 실행': 'Instant DELETE /api/auth/account',
+    'EXIF·GPS 삭제': 'EXIF & GPS Stripped',
+    'Express 5 · RBAC · 전 API IDOR 차단 → Cloud Run Auto-Scale': 'Express 5 · RBAC · Zero IDOR → Cloud Run Auto-Scale',
+    'GCP 보안 · 특허 2건+': 'GCP Security · 2+ Patents',
+    'GO-TO-MARKET — 3대 초기 획득 엔진 (SEOUL 2030 → GLOBAL)': 'GO-TO-MARKET — 3 LOW-CAC ENGINES (SEOUL 2030 → GLOBAL)',
+    'GTM · 3단계 실행': 'GTM & 3-Phase Plan',
+    'GTM · 파트너십': 'GTM & Partnerships',
+    'LTV · ₩0 원가 방어': 'LTV & $0 Edge Shield',
+    'LTV 락인': 'LTV Lock-in',
+    'Low CAC · 3초 중복 훅': 'Low CAC · 3-Sec Dup Hook',
+    'Low CAC · 서버 ₩0': 'Low CAC · $0 Server',
+    'MediaPipe MST-04 · 28종 모프': 'MediaPipe MST-04 · 28 Morphs',
+    'MediaPipe WASM · IndexedDB 격리': 'MediaPipe WASM · Local IndexedDB',
+    'OIDC·영구파기': 'OIDC · 1-Click Purge',
+    'OOTD 캘린더 · 360° 공유': 'OOTD Calendar · 360° Share',
+    'PIPA · 배상책임보험': 'PIPA & Cyber Liability Ins.',
+    'PIPA 개인정보보호': 'PIPA Data Privacy',
+    'Pro 구독 · 택 OCR · 갭 커머스': 'Pro Sub · Tag OCR · Gap Commerce',
+    'Pro 월 구독 (ARR)': 'Pro Monthly Sub (ARR)',
+    'Raymond Moon (대표)': 'Raymond Moon (Founder & CEO)',
+    'SAM 국내·APAC': 'SAM KR & APAC',
+    'SOM 초기 거점': 'SOM Initial Hub',
+    'SQLite WASM · 0B 볼트 → Cloud SQL HA + GCS 3-Zone CMEK': 'SQLite WASM · 0B Vault → Cloud SQL HA + GCS 3-Zone CMEK',
+    'Signed URL 만료': 'Signed URL TTL',
+    'Street View(미저장)': 'Street View (No-Store)',
+    'TAM 순환+VTON': 'TAM Circular + VTON',
+    'TIPS 보안 심사': 'TIPS Security Audit',
+    'Three.js 3D · 21관절 SpringBone': 'Three.js 3D · 21-Bone SpringBone',
+    'Three.js 3D · 8방향 QC': 'Three.js 3D · 8-Angle QC',
+    'Three.js 3D 아바타': 'Three.js 3D Avatar',
+    'Three.js 3D 우산': 'Three.js 3D Umbrella',
+    'Vertex · Gemini 무학습 8방향 VTON → 전용 추론 풀 SLA': 'Vertex · Gemini No-Train 8-Angle VTON → Dedicated SLA Pool',
+    'WASM ₩0 전처리': 'WASM $0 Edge Prep',
+    'Weather v1 · Places 세탁 · Street View(미저장) → 글로벌 도시': 'Weather v1 · Places Care · Street View (No-Store) → Global Cities',
+    'Weather v1 · 우산/바람': 'Weather v1 · Rain & Wind',
+    '[TBD] 억원': '[TBD] Round',
+    '[이력·법인 일정 TBD]': '[Founder Bio & Inc. TBD]',
+    'iNVTRY (Ainvtry) — IR 사업계획서 v5.2 (Infographic · Live Demo · KO/EN · Light/Dark)': DOC_TITLE.en,
+    'iNVTRY Pro 구독': 'iNVTRY Pro Subscription',
+    '₩0 온디바이스': '$0 On-Device',
+    '₩0 온디바이스 전처리': '$0 On-Device Prep',
+    '₩5조 돌파 · 연 ~30%↑': 'KRW 5T+ · ~30% YoY',
+    '₩5조+': 'KRW 5T+',
+    '₩5조+ (연30%↑)': 'KRW 5T+ (~30%↑)',
+    '① 무료 옷장 유입 (₩0 전처리) ➔ ② 20벌 Lock-in ➔ ③ Pro 구독 전환 ➔ ④ 4-Way 복리 LTV':
+      '① Free Onboarding ($0 Edge) ➔ ② 20-Item Lock-in ➔ ③ Pro Conversion ➔ ④ 4-Way Compound LTV',
+    '① 무료 중복 체크': '① Free Duplicate Check',
+    '① 촬영 (-96%) ➔ ② 날씨·TPO ➔ ③ 360° 4겹+ ➔ ④ CPW·세탁 ➔ ⑤ 1탭 인증 리셀':
+      '① Capture (-96%) ➔ ② Weather/TPO ➔ ③ 360° 4+ Layers ➔ ④ CPW & Care ➔ ⑤ 1-Tap Resale',
+    '② 옷장 20벌 등록': '② 20-Item Wardrobe',
+    '③ 매일 4겹+ 피팅': '③ Daily 4+ Layer Fit',
+    '④ 옷장 갭 매칭': '④ Wardrobe Gap Match',
+    '⑤ 1탭 인증 리셀': '⑤ 1-Tap Verified Resale',
+    '▲ 0B 보안 · 구매→리셀 순환 완결': '▲ 0B Privacy · Full Buy-to-Resale Loop',
+    '▼ 단절된 단일 기능 · 프라이버시 취약': '▼ Siloed Point Tool · Privacy Risk',
+    '◀ 단품 보관/정면': '◀ Single Item / Front-Only',
+    '● WASM 비식별 WebP': '● WASM Stripped WebP',
+    '● 원본 JPEG': '● Raw Original JPEG',
+    '◐ 1벌': '◐ 1-Item',
+    '◐ 수동': '◐ Manual',
+    '◐ 콜라주': '◐ Collage',
+    '◐ 텍스트': '◐ Text',
+    '✕ 서버': '✕ Cloud',
+    '감사합니다': 'Thank You',
+    '개인정보 24h 대응 SOP': '24h Privacy Incident SOP',
+    '갭(Gap) 커머스': 'Gap Commerce',
+    '거래 Take Rate': 'Transaction Take Rate',
+    '고마진 VTON 경제성 완성': 'High-Margin VTON Economics',
+    '공간 맥락 · 보안 4대 방어선': 'Spatial Context & 4 Security Walls',
+    '공급 마찰 0': 'Zero Listing Friction',
+    '공백 1벌 사전 조합': 'Pre-Fit Wardrobe Gap Item',
+    '구매 (Shop)': 'Shop',
+    '구매 수수료': 'Affiliate Commission',
+    '국내 중고 의류': 'Korea Resale Market',
+    '글로벌 반품 손실액': 'Global Return Losses',
+    '글로벌 시장 $393B': 'Global Market $393B',
+    '글로벌 중고 리셀': 'Global Secondhand Resale',
+    '기입 필요': 'TBD',
+    '기존 옷장 앱': 'Closet Apps',
+    '기존 클라우드': 'Legacy Cloud',
+    '날씨 · 거리뷰': 'Weather & Street View',
+    '날씨 · 거리뷰 4겹 피팅': 'Weather & Street View Fit',
+    '날씨 · 거리뷰 무대': 'Weather & Street Stage',
+    '날씨·지도·옷장 분절': 'Split Weather, Map & Closet',
+    '내 옷과 미대조': 'No Owned-Item Check',
+    '내 옷장 사전 AI 조합': 'Owned-Closet AI Pre-Fit',
+    '누적 2,878회 · 평균 ₩94,679': '2,878 Wears · Avg ₩94,679',
+    '단품 VTON': 'Single VTON',
+    '단품AI': '1-Item AI',
+    '데이터 6중 단절': '6-Way Data Fracture',
+    '데이터 Lock-in': 'Data Lock-in',
+    '독점 IP 해자': 'Proprietary IP Moat',
+    '레이어드 피팅 · 온디바이스': 'Layered VTON & On-Device Edge',
+    '레이어드·측후면 불가': 'No Layering or Back View',
+    '리셀 (Resale)': 'Resale',
+    '리셀 × VTON 교차': 'Resale × VTON Nexus',
+    '리셀 현금화 ➔ 새 옷 재구매 · 4-Way LTV 순환': 'Resale Cashout ➔ New Buys · 4-Way LTV Loop',
+    '리셀 현금화 ➔ 새 옷 재구매 ↺': 'Resale Cashout ➔ New Purchases ↺',
+    '매 요청 추론': 'Per-Call GPU',
+    '매장 3초 중복 확인': '3-Sec In-Store Dup Check',
+    '매장 즉시 대조 불가': 'No In-Store Instant Check',
+    '멀티앵글 · OCR · 리셀': 'Multi-Angle · OCR · Resale',
+    '목표 마진 70%+': 'Target Margin 70%+',
+    '목표 총이익률': 'Gross Margin',
+    '무료 유입 ➔ 20벌 Lock-in ➔ 리셀 유동성': 'Free Entry ➔ 20-Item Lock-in ➔ Resale Liquidity',
+    '무신사·29CM·자사몰': 'Musinsa · 29CM · D2C',
+    '무제한 4겹+ VTON': 'Unlimited 4+ Layer VTON',
+    '문제 · 6→1 해결': 'Problem & 6→1 OS',
+    '미저장 프록시': 'Zero-Store Proxy',
+    '미착용 방치 의류': 'Unworn Closet Items',
+    '미판매 폐기 전면 금지': 'Ban on Unsold Textile Waste',
+    '바이럴 루프': 'Viral Loop',
+    '반복 과금': 'Repeat Billing',
+    '반품 원가 절감': 'Lower Return Costs',
+    '반품률↓': 'Returns ↓',
+    '배경 제거 -96%': 'Cutout -96% WebP',
+    '배경·EXIF 로컬 제거': 'Local Cutout & EXIF Strip',
+    '버추얼 피팅 룸': 'Virtual Fitting Room',
+    '베타 실측 코호트 반영 후 3개년 손익 확정': '3-Yr P&L finalized after live beta cohorts',
+    '베타 코호트 [TBD]': 'Beta Cohort [TBD]',
+    '보관 (Closet)': 'Closet',
+    '보안': 'Security',
+    '보안 (Cloud)': 'Privacy',
+    '보유 옷 사전 조합 부재': 'No Pre-Buy Closet Pairing',
+    '보유 의류 망각': 'Forgotten Owned Items',
+    '복리 데이터 전환 비용': 'Compounding Data Switching Cost',
+    '복합 선순환': 'Compound Loop',
+    '브랜드 VTON SDK': 'Brand VTON SDK',
+    '브랜드 · 세탁 O2O · 2030': 'Brands · Care O2O · Growth',
+    '사용자 비례 적자': 'Linear Burn',
+    '사이버 보험 체결': 'Cyber Insurance Policy',
+    '사진 1장 (-96%)': '1 Photo (-96%)',
+    '사진 1장 단일 그래프': '1-Photo Unified Graph',
+    '사진·이력 자동 연동': 'Auto Photos & Wear Proof',
+    '서버 ₩0 방어': '$0 Server Shield',
+    '서울 2030 [TBD]': 'Seoul 2030 [TBD]',
+    '서울 2030 · 세탁 O2O': 'Seoul 2030 · Care O2O',
+    '서울 [TBD]': 'Seoul [TBD]',
+    '성수·명동·더현대': 'Seongsu · Myeongdong',
+    '세부 P&L [TBD]': 'Full P&L [TBD]',
+    '세탁 O2O · 1탭 리셀': 'Care O2O · 1-Tap Resale',
+    '세탁 O2O · 편집숍 제휴': 'Care O2O & Select Shops',
+    '세탁 지도 · 1탭 인증 리셀': 'Care Map · 1-Tap Resale',
+    '세탁·수선소 지도': 'Cleaners & Tailors Map',
+    '세탁소 지도 · O2O 수거': 'Care Map · Doorstep O2O',
+    '셀카·GPS 외부 학습': 'Selfies & GPS to Cloud',
+    '수동 촬영': 'Manual Shoot',
+    '수수료 3~8% + O2O': '3–8% Fee + O2O',
+    '스토어 · Pro · 리셀 개시': 'Store · Pro · Resale Live',
+    '스토어 · Pro 구독': 'App Store · Pro Sub',
+    '스토어 정식 출시 · 모의해킹': 'App Store Launch · Pentest',
+    '시장 · 경쟁 · BM': 'Market & Revenue',
+    '신상 디지털 시드': 'Digital Season Seeding',
+    '실구동 앱 라이브': 'Live App Captures',
+    '실시간': 'Live Sync',
+    '실시간 기상·공간 미연동': 'No Live Weather Context',
+    '실시간 기온·TPO 싱크': 'Live Temp & TPO Sync',
+    '실시간 날씨·거리뷰': 'Live Weather & Street View',
+    '실시간 날씨·거리뷰 싱크': 'Live Weather & Street Sync',
+    '실적 · 로드맵 · 투자': 'Traction & Ask',
+    '안면 로컬 WASM': 'Local Face WASM',
+    '안면 서버 전송 제로': 'Zero Face Cloud Egress',
+    '앱 4개': '4 Apps',
+    '앱 분절': '4-App Split',
+    '연간 20% 할인': '20% Annual Discount',
+    '오프라인 3초 중복 훅': 'Offline 3-Sec Dup Hook',
+    '온디바이스 0B 처리 부재': 'No On-Device 0B Vault',
+    '옷장앱': 'Closet',
+    '외부 전문 모의해킹': '3rd-Party Pentest',
+    '외부 진단 · 배상보험': 'Pentest & Cyber Ins.',
+    '운영 · IP 특허': 'Ops & IP Patents',
+    '원본 서버 업로드': 'Raw Cloud Upload',
+    '원본 서버 전송 0': 'Zero Raw Cloud Upload',
+    '원본 전송': 'Raw Egress',
+    '원클릭 영구 삭제': '1-Click Hard Purge',
+    '원탭 배경 제거 · 택 OCR': '1-Tap Cutout · Tag OCR',
+    '월정액+CPC': 'SaaS + CPC',
+    '웹·모바일 전수 검증': 'Full Web & Mobile Audit',
+    '유료 무학습 AI': 'Paid No-Train AI',
+    '유료 무학습 API': 'Paid No-Train API',
+    '유사 벌수 즉시 대조': 'Instant Similar-Item Alert',
+    '유일한 통합 OS': 'Only Unified OS',
+    '유출 공포': 'Leak Risk',
+    '이력 연동': 'Verified Proof',
+    '이력 인증 원탭 리셀': 'Verified 1-Tap Resale',
+    '이염·관리': 'Care & Dye Alert',
+    '인스타·틱톡 공유': 'IG & TikTok Share',
+    '인앱 즉시 삭제 통과': 'In-App Hard Delete Ready',
+    '인증 리셀 · 세탁 O2O': 'Verified Resale & Care O2O',
+    '인증 리셀 안착 · 특허 2건+': 'Verified Resale · 2+ Patents',
+    '일상 6대 여정': '6 Daily Moments',
+    '자동 배경 제거 · 11슬롯 중복 판독': 'Auto Cutout · 11-Slot Dup Check',
+    '자산 동결': 'Frozen Value',
+    '재촬영·실측 입력 피로': 'Re-Shoot & Sizing Fatigue',
+    '재촬영·실측 피로': 'Listing Friction',
+    '전 API IDOR 차단': 'Zero IDOR Across All APIs',
+    '전송 대역폭 절감': 'Bandwidth Saved',
+    '정식 출시 · Pro · 인증 리셀': 'Launch · Pro · Verified Resale',
+    '정식 출시 전 취약점 진단': 'Pre-Launch Security Audit',
+    '제16·21·28조의2 준수': 'Art. 16/21/28-2 Compliant',
+    '제품 · 기술 · 보안': 'Product, Tech & Security',
+    '제휴': 'Growth',
+    '제휴 CPS 5~12%': 'Affiliate CPS 5–12%',
+    '중고': 'Resale',
+    '중고 마켓': 'Resale Apps',
+    '즉시 대조': '3-Sec Live',
+    '착용 이력 원탭 리셀 부재': 'No Verified 1-Tap Resale',
+    '착용 횟수·이염 알림': 'Wear Count & Care Alerts',
+    '착장 해시 캐시': 'Outfit Hash Cache',
+    '초기 옷장·유동성': 'Seed Supply & Liquidity',
+    '촬영→리셀 순환': 'Capture-to-Resale Loop',
+    '충동구매 차단': 'Stop Impulse Buys',
+    '코디 (TPO)': 'Styling',
+    '콜라주': 'Collage',
+    '클라우드 GPU 비용 ₩0': '$0 Cloud GPU Cost',
+    '클라우드 · 보안': 'Cloud & Security',
+    '클라우드 · 보안 BE': 'Cloud & Security BE',
+    '클릭 시 해당 슬라이드로 즉시 이동': 'Click any milestone to jump directly to slide',
+    '택 OCR · 캘린더': 'Tag OCR · Calendar',
+    '테넌트 암호화 물리 격리': 'Tenant CMEK Isolation',
+    '토큰 DB 무보관': 'Zero Token Storage',
+    '투자 제안 (+18 데모)': 'Funding Ask (+18 Demo)',
+    '특허 2건+ · 법률': '2+ Patents · Legal',
+    '팀 & 보안 거버넌스': 'Team & Governance',
+    '파편화된 6대 문제': '6 Fragmented Pains',
+    '패션 MD · 그로스': 'Fashion MD & Growth',
+    '편집숍·디자이너': 'Select Shops & Labels',
+    '표지 · 옷장 OS': 'Cover · Wardrobe OS',
+    '피팅 (VTON)': 'VTON',
+    '핵심 역량': 'Capability',
+    '핵심 요약 · 5단계': 'Summary · 5-Stage Loop',
+    '핵심 특허 2건+ 출원': '2+ Core Patent Filings',
+  };
+
+  const ATTR_EN = {
+    '0B 얼굴 · 체형 볼트 라이브 캡처': 'Live capture of 0B face & body vault',
+    '18개월 자금 배분 도넛 차트 45/25/20/10%': '18-month use of funds donut chart 45/25/20/10%',
+    '270벌 디지털 옷장 라이브 캡처': 'Live capture of 270-item digital closet',
+    '2x2 경쟁 포지셔닝 맵': '2x2 competitive positioning map',
+    '360° 7겹 AI 피팅 라이브 캡처': 'Live capture of 360° 7-layer AI fitting',
+    '5단계 LTV 플라이휠 다이어그램': '5-stage LTV flywheel diagram',
+    '5단계 순환 옷장 오빗': '5-stage circular wardrobe orbit',
+    '6대 문제를 단일 iNVTRY OS로 수렴': 'Converging 6 fragmented pains into 1 iNVTRY OS',
+    'Ainvtry 공식 사이트로 이동': 'Back to Ainvtry official website',
+    'CPW · 자산 리포트 라이브 캡처': 'Live capture of CPW & wardrobe stats',
+    'IR 프레젠테이션 도구 모음': 'IR presentation toolbar',
+    'OOTD 캘린더 · 360° 공유': 'OOTD calendar and 360° share',
+    'PDF 인쇄 저장': 'Print or export PDF',
+    'TAM SAM SOM 동심원': 'Concentric TAM SAM SOM rings',
+    'iNVTRY 로고': 'iNVTRY calligraphy logo',
+    'www.ainvtry.com 공식 Three.js 3D 라이브 데모': 'Live Three.js 3D demo at www.ainvtry.com',
+    'www.ainvtry.com 실구동 라이브 스튜디오 캡처': 'Live studio capture at www.ainvtry.com',
+    '날씨 · 거리뷰 4겹 피팅': 'Live weather and street-view 4-layer fitting',
+    '다음 슬라이드': 'Next slide',
+    '리셀 수익이 새 옷 재구매로 순환': 'Resale cashout recycling into new wardrobe buys',
+    '매장 3초 중복 확인': 'In-store 3-second duplicate check',
+    '목표 총이익률 70%+ 게이지': 'Target 70%+ gross margin gauge',
+    '보기 모드': 'View mode',
+    '비식별 WebP 배경 제거 의류': 'De-identified cutout WebP garment',
+    '세탁소 지도 · O2O 수거': 'Cleaners map and O2O pickup',
+    '슬라이드 바로가기': 'Jump to slide',
+    '실구동 iNVTRY 360° 레이어드 피팅 라이브 캡처': 'Live iNVTRY 360° layered fitting capture',
+    '언어 전환': 'Language switcher',
+    '원본 JPEG 의류 사진': 'Original raw JPEG garment photo',
+    '원탭 배경 제거 · 택 OCR': '1-tap background cutout and tag OCR',
+    '이력 인증 원탭 리셀': 'Verified 1-tap resale',
+    '이전 슬라이드': 'Previous slide',
+    '테마 전환': 'Theme switcher',
+    '화면 비율': 'Aspect ratio',
+  };
+
   function formatBoundEn(key, koText) {
-    const t = String(koText || '').trim();
+    const raw = String(koText || '');
     switch (key) {
       case 'tests.summaryShort': {
-        const m = t.match(/(\d+)\s*스위트\s*·\s*(\d+)\s*케이스/);
-        return m ? `${m[1]} suites · ${m[2]} cases passed` : t;
+        const m = raw.match(/(\d+)\s*스위트\s*·\s*(\d+)\s*케이스/);
+        return m ? `${m[1]} Suites · ${m[2]} Cases Passed` : raw;
       }
       case 'tests.summaryLine': {
-        const m = t.match(/(\d+)\s*스위트\((\d+)\s*케이스\)/);
-        return m
-          ? `Unit · API · WebGL E2E ${m[1]} suites (${m[2]} cases) · 3 platforms`
-          : t;
+        const m = raw.match(/(\d+)\s*스위트\((\d+)\s*케이스\)/);
+        return m ? `${m[1]} Suites (${m[2]} Cases) · 3 Platforms` : raw;
       }
-      case 'tests.tractionTitle': {
-        const m = t.match(/(\d+\+)/);
-        return m ? `${m[1]} Automated Tests` : t;
-      }
-      case 'garment.beforeTitle': {
-        const m = t.match(/(\d+\s*KB)/i);
-        return m ? `${m[1]} · EXIF / GPS / Room Included` : t;
-      }
-      case 'garment.afterTitle': {
-        const m = t.match(/(\d+\s*KB)/i);
-        return m ? `${m[1]} · EXIF 0% · Pure Garment` : t;
-      }
-      case 'garment.costOldBar': {
-        const m = t.match(/(\d+\s*KB)/i);
-        return m ? `${m[1]} / img (EXIF & background)` : t;
-      }
-      case 'garment.costNewNote': {
-        const m = t.match(/(-\d+%)/);
-        return m ? `${m[1]} smaller · IndexedDB local cache` : t;
-      }
-      case 'garment.costHeadSaved': {
-        const m = t.match(/(-\d+%)/);
-        return m ? `${m[1]} payload saved` : t;
-      }
-      case 'garment.wasmNote': {
-        const m = t.match(/(\d+\s*KB)/i);
-        return m ? `Local WASM + ${m[1]} No-Train` : t;
-      }
-      case 'roadmap.pill': {
-        if (t.includes('01·02')) return 'LIVE 01·02 DONE';
-        const m = t.match(/(\d+)/);
-        return m ? `LIVE ${m[1]} DONE` : 'LIVE DONE';
-      }
+      case 'tests.tractionTitle':
+        return raw.replace('자동화 테스트', 'Automated Tests');
+      case 'garment.beforeTitle':
+        return raw.replace('EXIF/GPS/실내 포함', 'Raw EXIF/GPS + BG');
+      case 'garment.afterTitle':
+        return raw.replace('EXIF 0% · 순수 의류', '0% EXIF · Clean Cutout');
+      case 'garment.costOldBar':
+        return raw.replace('/ 장 (EXIF·배경 포함)', '/ img (EXIF + BG)');
+      case 'garment.costNewNote':
+        return raw.replace('압축 · IndexedDB 로컬 캐시', 'WebP · Local IndexedDB');
+      case 'garment.costHeadSaved':
+        return raw.replace('용량 절감', 'Size Saved');
+      case 'garment.wasmNote':
+        return raw.replace('WASM 로컬 +', 'Local WASM +').replace('무학습', 'No-Train');
+      case 'roadmap.pill':
+        return raw.replace('완료', 'DONE');
       case 'roadmap.stage-1.badge':
       case 'roadmap.stage-2.badge':
-      case 'roadmap.stage-3.badge': {
-        return t.replace('완료', 'DONE');
-      }
+        return raw.replace('완료', 'DONE');
       default:
-        return t;
+        return raw;
     }
   }
-
-  /**
-   * Complete normalized Korean -> English map for all leaf text nodes, buttons, options & SVG <text>.
-   */
-  const TEXT_EN = {
-    // Toolbar & Navigation
-    '← 사이트': '← Site',
-    '럭셔리': 'Luxury',
-    '오로라': 'Aurora',
-    '라이트': 'Light',
-    '다크': 'Dark',
-    '1장씩': 'Deck',
-    '스크롤': 'Scroll',
-    'PDF / 인쇄': 'PDF / Print',
-    '01. 표지 (Cover)': '01. Cover',
-    '02. 목차 (Contents)': '02. Contents',
-    '03. Executive Summary': '03. Executive Summary',
-    '04. 6대 페인포인트': '04. 6 Pain Points',
-    '05. 6 → 1 단일 OS 해결': '05. 6 → 1 Unified OS',
-    '06. User Journey (6-Cut)': '06. User Journey (6-Cut)',
-    '07. 실구동 앱 쇼케이스': '07. Live App Showcase',
-    '08. Core Technology': '08. Core Technology',
-    '09. 4대 데이터 보안 방어선': '09. 4 Security Defenses',
-    '10. Market Size & Why Now': '10. Market Size & Why Now',
-    '11. Competitive Landscape': '11. Competitive Landscape',
-    '12. BM ① 4중 수익 모델': '12. BM ① 4-Engine Revenue',
-    '13. BM ② 플라이휠 & 원가': '13. BM ② Flywheel & Margin',
-    '14. 6-Tier 검증 실적': '14. 6-Tier Traction',
-    '15. GTM & 18M 로드맵': '15. GTM & 18M Roadmap',
-    '16. 팀 & 보안 거버넌스': '16. Team & Governance',
-    '17. 투자 제안 & 자금 배분': '17. Funding Ask & Use of Funds',
-    '18. 감사합니다 (Closing)': '18. Thank You (Closing)',
-
-    // Slide 01 — Cover
-    '21관절 · SpringBone 물리': '21-Bone · SpringBone Physics',
-    '안면 클라우드 전송': 'Face Cloud Transmission',
-    'IR 사업계획서 v3.1': 'IR Pitch Deck v4.0',
-    'IR 사업계획서 v4.0': 'IR Pitch Deck v4.0',
-    '360° 4겹+ 2D VTON · 실시간 날씨': '360° 4+ Layer 2D VTON · Live Weather',
-
-    // Slide 02 — TOC
-    '클릭 시 즉시 이동': 'Click to Jump',
-    '비전 요약 · 6→1 일괄 해결': 'Vision Summary · 6→1 Resolution',
-    'Cover — 디지털 순환 옷장 OS': 'Cover — Circular Digital Wardrobe OS',
-    'Executive Summary — 핵심 지표': 'Executive Summary — Key Metrics',
-    'Problem — 파편화된 6대 문제': 'Problem — 6 Fragmented Pains',
-    'Solution — 6 → 1 단일 OS 해결': 'Solution — 6 → 1 Unified OS',
-    '실구동 제품 · AI VTON · 0B 보안': 'Live Product · AI VTON · 0B Privacy',
-    'User Journey — 일상 6대 시나리오': 'User Journey — 6 Daily Scenarios',
-    'Live Showcase — 실제 프로덕션 앱': 'Live Showcase — Real Production App',
-    'Security Moat — 4대 방어선': 'Security Moat — 4 Defense Lines',
-    '시장 규모 · 경쟁 우위 · 심층 BM': 'Market Size · Moat · Deep BM',
-    'Competition — 2×2 포지셔닝': 'Competition — 2×2 Positioning',
-    'BM ① — 4중 수익 모델 & 티어': 'BM ① — 4-Engine Revenue & Tiers',
-    'BM ② — 플라이휠 & 원가 방어': 'BM ② — Flywheel & Cost Defense',
-    '검증 실적 · 로드맵 · 팀 · 투자': 'Traction · Roadmap · Team · Ask',
-    'Traction — 6-Tier 풀스택 검증': 'Traction — 6-Tier Full-Stack Proof',
-    'GTM & Roadmap — 3단계 전략': 'GTM & Roadmap — 3-Phase Plan',
-    'Team & 2027 보안 거버넌스': 'Team & 2027 Security Governance',
-    'Funding Ask (+ 18. 감사합니다)': 'Funding Ask (+ 18. Thank You)',
-
-    // Slide 03 — Executive Summary
-    '5단계': '5-Stage',
-    '촬영 → 날씨 → AI 피팅 → CPW → 1탭 리셀': 'Snap → Weather → AI Fit → CPW → 1-Tap Resale',
-    'MediaPipe WASM 안면 100% 온디바이스 분석': '100% On-Device MediaPipe WASM Face Analysis',
-    '글로벌 리셀 전망 × VTON 연 19.5% 성장': 'Global Resale Forecast × 19.5% VTON CAGR',
-    '사진 1장 (-96%)': '1-Photo (-96%)',
-    '날씨·거리뷰 싱크': 'Weather · Street Sync',
-    '360° 4겹+ VTON': '360° 4+ Layer VTON',
-    'CPW·세탁 관리': 'CPW · Garment Care',
-    '1탭 인증 리셀': '1-Tap Verified Resale',
-    '내 실제 옷 기반 360° 레이어드': '360° Layering With Your Real Clothes',
-    '4겹+ 동시 피팅': '4+ Layer Simultaneous Fit',
-    '21-Bone · 28 체형': '21-Bone · 28 Body Morphs',
-    '매장 3초 중복 판독': '3-Sec In-Store Duplicate Check',
-    '우산·강수 물리': 'Umbrella & Rain Physics',
-    '4중 방어선': '4 Defenses',
-    '규제·심사 선제 통과 보안 구조': 'Audit-Ready Privacy-by-Design Stack',
-    '안면 0B 로컬': '0B Local Biometrics',
-    'EXIF -96% 스트리핑': 'EXIF -96% Stripping',
-    '무학습 AI · 즉시파기': 'No-Train AI · Instant Wipe',
-    '4중 수익': '4-Engine',
-    '고마진 복합 LTV 수익 엔진': 'High-Margin Multi-Stream LTV Engine',
-    'Pro 월 구독': 'Pro Monthly Sub',
-    '갭 커머스 5~12%': 'Gap Commerce 5–12%',
-    '리셀·O2O 3~8%': 'Resale · O2O 3–8%',
-    '브랜드 B2B SDK': 'Brand B2B SDK',
-    'Edge 전처리 ₩0': 'Edge Preprocess $0',
-    '목표 마진 70%+': 'Target Margin 70%+',
-
-    // Slide 04 — Problem
-    '70%+ 방치': '70%+ Unworn',
-    '기억 의존 중복 구매': 'Memory-Driven Duplicate Buying',
-    '보유 의류 파악 불가 → 매장서 비슷한 옷 반복 구매': 'No closet visibility → repeated look-alike purchases in store',
-    '$743B 손실': '$743B Returns',
-    '내 옷과 안 맞는 온라인 반품': 'Online Returns From Outfit Mismatch',
-    '보유 바지·아우터와 비율·색감 사전 검증 불가 (Mordor 2026)': 'Cannot pre-check proportion or color with owned clothes (Mordor 2026)',
-    '단품 1벌 정면': '1-Item Front Only',
-    '레이어드·측후면 검증 불가': 'No Multi-Layer or Back/Side Checks',
-    '기존 AI는 정면 단품 합성 한계 → 4겹 외출 코디 불가': 'Legacy AI handles 1 front item only → fails real 4-layer outfits',
-    '앱 4개 분절': '4 Split Apps',
-    '날씨·장소(TPO)와 단절된 코디': 'Styling Disconnected From Weather & TPO',
-    '날씨·지도·옷장 앱이 따로 놀아 매일 아침 의사결정 피로': 'Siloed weather, map, and closet apps cause daily morning fatigue',
-    '원본 무방비 전송': 'Raw Cloud Upload',
-    '얼굴·GPS·실내 프라이버시 공포': 'Face, GPS & Home Privacy Anxiety',
-    '셀카·EXIF 원본을 외부 서버와 무료 AI 학습에 노출': 'Raw selfies and EXIF room photos exposed to external AI training',
-    '자산 동결': 'Frozen Assets',
-    '세탁 방치 · 중고 리셀 마찰': 'Neglected Care & High Resale Friction',
-    '재촬영·실측·신뢰 입증 번거로움으로 안 입는 옷 방치': 'Re-shooting, measuring, and listing friction leaves clothes idle',
-    '핵심 병목: 옷장·피팅·날씨·세탁·중고 앱이 따로 놀아 데이터가 끊기므로 어느 앱도 매일 쓰지 못합니다.':
-      'Core Bottleneck: Closet, fitting, weather, care, and resale apps are siloed — breaking data continuity and killing daily retention.',
-
-    // Slide 05 — Solution 6 -> 1
-    '01. 매장 중복 구매': '01. In-Store Duplicates',
-    '보유 의류 망각 · 충동소비': 'Forgotten items · impulse buys',
-    '02. 온라인 반품': '02. Online Returns',
-    '내 옷과 핏·색감 불일치': 'Fit & color clash with owned items',
-    '03. 단품 정면 VTON': '03. 1-Item Front VTON',
-    '4겹 레이어드 · 측후면 불가': 'No 4-layer or side/back view',
-    '1벌 한계': '1-Item Cap',
-    '04. 날씨·TPO 단절': '04. No Weather/TPO',
-    '기온·강수·장소 미반영': 'Ignores rain, temp & venue',
-    '앱 분절': 'Siloed',
-    '05. 개인정보 유출': '05. Data Exposure',
-    '셀카·EXIF 원본 서버 전송': 'Raw selfies & EXIF sent to cloud',
-    '유출 공포': 'Privacy Risk',
-    '06. 세탁·리셀 마찰': '06. Care & Resale Drag',
-    '재촬영 · 실측 · 입력 피로': 'Re-shooting & listing fatigue',
-    '사진 1장 단일 그래프': '1-Photo Unified Graph',
-    '3초 중복 판독 게이트': '3-Sec Duplicate Gate',
-    '유사 벌수·착용일 즉시 경고': 'Instant match count & wear-date alert',
-    '내 옷장 사전 AI 조합': 'Pre-Buy Closet AI Pairing',
-    '28체형 + 보유 옷 매칭 검증': '28 body morphs + owned wardrobe match',
-    '360° 4겹+ 멀티앵글 피팅': '360° 4+ Layer Multi-Angle Fit',
-    '8방향 2D VTON + Three.js 물리': '8-Angle 2D VTON + Three.js Physics',
-    '실시간 기상·거리뷰 싱크': 'Live Weather & Street Sync',
-    'Weather v1 · 우산 · 동네 배경': 'Weather v1 · umbrella · local street',
-    '0B 얼굴 · -96% 스트리핑': '0B Face · -96% Stripping',
-    '세탁 지도 · 1탭 인증 리셀': 'Care Map · 1-Tap Verified Resale',
-    'CPW 알림 + 배경 제거 컷 30초 판매': 'CPW alert + clean cutouts listed in 30s',
-    '촬영 (-96%)': 'Snap (-96%)',
-    '날씨 · TPO': 'Weather · TPO',
-    '360° 4겹+': '360° 4+ Layers',
-    'CPW · 세탁': 'CPW · Care',
-
-    // Slide 06 — User Journey
-    '매장 3초 중복 확인': '3-Sec In-Store Duplicate Check',
-    '유사 코트 보유 벌수 즉시 대조 · 충동구매 차단': 'Spot owned look-alikes instantly · block impulse buys',
-    '원탭 배경 제거 · 택 스캔': '1-Tap Cutout · Tag Scan',
-    '배경·EXIF 제거(LIVE) + 세탁 라벨 OCR(확장)': 'Cutout & EXIF strip (LIVE) + care-tag OCR (Next)',
-    '실시간 날씨 · 거리뷰 피팅': 'Live Weather & Street Fitting',
-    '동네 배경 + 강수·우산 반영 4겹+ AI 피팅': 'Local street backdrop + rain/umbrella 4+ layer AI fit',
-    'OOTD 캘린더 · SNS 공유': 'OOTD Calendar & Social Share',
-    '원탭 착장 기록 + 360° 룩북 카드 바이럴': '1-tap wear logging + viral 360° lookbook cards',
-    '주변 세탁 지도 · 방문 수거': 'Local Care Map & Pickup O2O',
-    '이염 경고·세탁소 지도(LIVE) → 비대면 O2O': 'Color-bleed alert & laundry map (LIVE) → doorstep pickup',
-    '이력 인증 원탭 리셀': 'Provenance-Verified 1-Tap Resale',
-    '휴면 알림(LIVE) + 배경 제거 컷 · 착용 이력 판매': 'Idle alerts (LIVE) + studio cutouts & wear-log listing',
-
-    // Slide 07 — Live Showcase
-    '01 · 360° 레이어드 피팅': '01 · 360° Layered Fitting',
-    '4겹+ 2D VTON · 실시간 날씨 · 거리뷰': '4+ Layer 2D VTON · Live Weather · Street View',
-    '02 · 자동 배경 제거 · 중복 판독': '02 · Auto Cutout · Duplicate Check',
-    '11슬롯 분류 · 계절/색상 · 중복 체크': '11-Slot Auto-Sort · Season/Color · Duplicate Gate',
-    '03 · CPW · 자산 리포트': '03 · CPW · Asset Report',
-    '실시간 활용률 · 누적 착용 · 1회 단가': 'Live Wear Rate · Total Wears · Cost-Per-Wear',
-    '04 · 0B 얼굴 · 체형 볼트': '04 · 0B Face · Body Vault',
-    'MediaPipe MST-04 · 28종 모프': 'MediaPipe MST-04 · 28 Body Morphs',
-
-    // Slide 08 — Core Technology
-    'Three.js 3D 아바타 & SpringBone 물리': 'Three.js 3D Avatar & SpringBone Physics',
-    '21-Bone · 28 체형 모프': '21-Bone · 28 Body Morphs',
-    '코트·헤어 지글 물리': 'Coat & Hair Spring Physics',
-    'Zero-GC 서브스텝': 'Zero-GC Substeps',
-    'WebGL 자동 복구': 'WebGL Auto-Recovery',
-    'Three.js 인터랙티브 스테이지': 'Three.js Interactive Stage',
-    '2D 폴백 내장': 'Built-In 2D Fallback',
-    '4겹+ 멀티앵글 2D VTON & 캐시': '4+ Layer Multi-Angle 2D VTON & Cache',
-    '0°~315° 일관성 검수': '0°–315° Consistency QC',
-    '@imgly 배경 제거 ₩0': '@imgly Cutout $0',
-    'MediaPipe 피부톤 ₩0': 'MediaPipe Skin Tone $0',
-    '착장 해시 캐싱': 'Outfit Hash Caching',
-    '유료 무학습 AI 경로': 'Paid No-Training AI Path',
-    '₩0 엣지 전처리': '$0 Edge Preprocess',
-    '실시간 기상 · 거리뷰 무저장 프록시': 'Live Weather & Street Zero-Storage Proxy',
-    '실시간 기상 · 거리뷰 미저장 프록시': 'Live Weather & Street Zero-Storage Proxy',
-    'Weather v1 강수/UV': 'Weather v1 Rain / UV',
-    'Three.js 3D 우산·바람': 'Three.js 3D Umbrella & Wind',
-    'Street View 배경': 'Street View Backdrop',
-    'Places 세탁소 지도': 'Places Laundry Map',
-    '서버 전용 키 격리': 'Server-Only Key Isolation',
-    'ToS 100% 준수': '100% ToS Compliant',
-    'BEFORE · 원본 JPEG': 'BEFORE · Raw JPEG',
-    '촬영 위치·기기 정보·배경 사생활 노출': 'Exposes GPS coordinates, device metadata & room privacy',
-    'WASM 로컬 변환 · 서버 ₩0': 'Local WASM Conversion · $0 Server',
-    'AFTER · 비식별 WebP': 'AFTER · De-Identified WebP',
-    '전송·저장비 96% 절감 + 프라이버시 보호': '96% bandwidth/storage reduction + full privacy protection',
-
-    // Slide 09 — Security Moat
-    '얼굴 0B 볼트 · EXIF -96% 제거': '0B Face Vault · EXIF -96% Stripped',
-    'Stateless OIDC · IDOR 원천 차단': 'Stateless OIDC · Zero IDOR Surface',
-    '무학습 추론 · 탈퇴 시 즉시 영구파기': 'No-Train Inference · Instant Atomic Wipe',
-    '01. 생체(얼굴) 0-Byte 로컬 처리': '01. 0-Byte Local Biometric (Face) Processing',
-    '일반 AI: 원본 셀카 클라우드 업로드·보관': 'Legacy AI: Uploads & stores raw selfies in the cloud',
-    'iNVTRY: MediaPipe WASM 로컬 분석 + 기기 IndexedDB 격리': 'iNVTRY: Local MediaPipe WASM + device IndexedDB isolation',
-    '02. Stateless OIDC · 계정 탈취 차단': '02. Stateless OIDC · Anti-Account-Takeover',
-    'JWKS 검증': 'JWKS Verified',
-    '일반 AI: 소셜 토큰 DB 보관 · 이메일 자동 병합': 'Legacy AI: Stores social tokens in DB · auto-merges email',
-    'iNVTRY: 외부 토큰 무보관 · ATO 금지 · HttpOnly + Rate Limit': 'iNVTRY: Zero external token DB · anti-ATO · HttpOnly + Rate Limit',
-    '03. 테넌트 강제 격리 · 3-Zone 스토리지': '03. Strict Tenant Isolation · 3-Zone Vault',
-    '일반 AI: 단일 공용 버킷 · URL 추측 시 타인 옷장 노출': 'Legacy AI: Single public bucket · guessable URLs leak closets',
-    'iNVTRY: 전 API IDOR 차단 · 매직바이트 · 3-Zone Private 버킷': 'iNVTRY: All-API IDOR guard · magic-byte check · 3-Zone private GCS',
-    '04. 유료 무학습 AI · 원클릭 영구 파기': '04. Paid No-Train AI · 1-Click Permanent Purge',
-    '0일 휘발': '0-Day Retention',
-    '일반 AI: 무료 API 학습 유출 · 탈퇴 후 이미지 잔존': 'Legacy AI: Free-tier AI training leaks · orphan images after delete',
-    'iNVTRY: Vertex/Gemini 무학습 · 탈퇴 시 DB·파일·캐시 즉시 소거': 'iNVTRY: Paid Vertex/Gemini no-train · atomic DB, file & cache wipe',
-    '개인정보보호법(PIPA)': 'Korea PIPA Compliance',
-    '제16·21·28조의2·29조': 'Arts. 16, 21, 28-2 & 29',
-    '인앱 즉시 삭제·사전동의': 'In-App Purge & Explicit Consent',
-    'TIPS·바우처 대응': 'TIPS & Grant Ready',
-    'CI 시크릿 스캔·무학습': 'CI Secret Scan · No-Train',
-    '2027 상용 거버넌스': '2027 Prod Governance',
-    '모의해킹·배상책임보험': 'Pen-Test · Cyber Insurance',
-
-    // Slide 10 — Market Size
-    'TAM · 글로벌 순환 패션 + VTON': 'TAM · Global Circular Fashion + VTON',
-    'SAM · 국내 리셀 + APAC 피팅': 'SAM · Korea Resale + APAC VTON',
-    '₩5조+ (연 ~30%↑)': '$3.6B+ (~30% YoY)',
-    'SOM · 초기 거점': 'SOM · Beachhead',
-    '서울 2030 [TBD]': 'Seoul [TBD]',
-    '* SOM 3개년 목표 MAU·GMV는 투자 규모 확정 시 기입 ([TBD])':
-      '* 3-Year SOM target MAU & GMV to be finalized with round size ([TBD])',
-    '글로벌 중고 리셀 (ThredUp 2026)': 'Global Secondhand Apparel (ThredUp 2026)',
-    '버추얼 피팅 룸 (Mordor 2026)': 'Virtual Fitting Room (Mordor 2026)',
-    '국내 중고 의류 시장 (어패럴뉴스)': 'Korea Secondhand Apparel (Apparel News)',
-    '₩5조 돌파 (연 ~30%↑)': '₩5T+ / $3.6B+ (~30% YoY)',
-    'WHY NOW — 3대 구조적 촉매': 'WHY NOW — 3 Structural Catalysts',
-    '미판매 의류 폐기 금지 시행 → 순환 인프라 필수화': 'Unsold apparel destruction ban makes circular infrastructure mandatory',
-    'WASM · AI 단가↓': 'WASM & AI Cost Drop',
-    '온디바이스 전처리 ₩0 + 멀티모달 VTON 경제성 확보': '$0 on-device preprocessing + viable multimodal VTON unit costs',
-    '59% 리셀 대중화': '59% Resale Adoption',
-    '소비자 59% 중고 구매 경험 · 2030 리셀 일상화': '59% of shoppers buy secondhand · Gen-Z/Millennial resale normalized',
-    '출처: ThredUp 14th Annual Resale Report (2026.04), Mordor Intelligence Virtual Fitting Room Report (2026.09), EU ESPR (2026.07), 어패럴뉴스.':
-      'Sources: ThredUp 14th Annual Resale Report (Apr 2026), Mordor Intelligence Virtual Fitting Room Report (Sep 2026), EU ESPR (Jul 2026), Apparel News.',
-
-    // Slide 11 — Competition
-    '▲ 0B 보안 · 구매→리셀 순환 완결': '▲ 0B Privacy · Full Buy→Resale Loop',
-    '▼ 단절된 단일 기능 · 프라이버시 취약': '▼ Siloed Single Feature · Weak Privacy',
-    '◀ 단품 보관/정면': '◀ Single-Item / Front',
-    '멀티레이어 AI OS ▶': 'Multi-Layer AI OS ▶',
-    '기존 옷장 앱': 'Legacy Closets',
-    '단품 AI VTON': '1-Item VTON',
-    '중고 플랫폼': 'Resale Apps',
-    '유일한 통합 OS': 'Only Unified OS',
-    'X: 멀티레이어 피팅 깊이': 'X: Multi-Layer Fitting Depth',
-    'Y: 보안 · 순환 완결성': 'Y: Privacy & Circular Loop Depth',
-    '핵심 역량': 'Core Capability',
-    '옷장 앱': 'Closet Apps',
-    '단품 VTON': '1-Item VTON',
-    '중고 마켓': 'Resale Market',
-    '360° 4겹+ 피팅': '360° 4+ Layer Fit',
-    '콜라주': 'Collage',
-    '1벌 정면': '1-Item Front',
-    '8방향 VTON': '8-Angle VTON',
-    '기상·거리뷰 무대': 'Weather · Street Stage',
-    '텍스트': 'Text Only',
-    '실시간 기상·우산': 'Live Weather · Rain',
-    '0B 얼굴·-96%': '0B Face · -96%',
-    '4대 방어선': '4 Defenses',
-    '중복 판독·CPW': 'Duplicate · CPW',
-    '제한적': 'Limited',
-    '3초 실시간': '3-Sec Real-Time',
-    '외부링크': 'Ext. Link',
-    '수동촬영': 'Manual Shoot',
-    '사진·이력 연동': 'Cutout + Wear Log',
-    '복리 데이터 전환 비용 (Switching Cost)': 'Compounding Data Switching Cost',
-    '등록 옷장·착용 이력이 쌓일수록 중복 판독·코디·리셀 신뢰도가 함께 복리 강화':
-      'Every logged garment and outfit compounds duplicate detection, styling accuracy, and resale trust.',
-
-    // Slide 12 — Business Model 1
-    'iNVTRY Pro 구독': 'iNVTRY Pro Subscription',
-    '/월 [TBD]': '/mo [TBD]',
-    '무제한 4겹+ 360° VTON · CPW·휴면 리포트': 'Unlimited 4+ layer 360° VTON · CPW & idle asset insights',
-    '연간 20% 할인': '20% Annual Discount',
-    '갭(Gap) 커머스': 'Gap Commerce',
-    '구매 수수료': 'Affiliate CPS',
-    '내 옷장 공백 1벌 AI 사전 조합 → 제휴 결제': 'AI pre-pairs 1 missing closet piece → partner checkout',
-    '무신사·29CM·자사몰': 'Retail & Brand Partners',
-    '반품률↓': 'Lower Returns',
-    '인증 리셀 · 세탁 O2O': 'Verified Resale · Care O2O',
-    '거래 Take Rate': 'GMV Take Rate',
-    '90일+ 휴면 감지 → 1탭 리셀 + 비대면 세탁 수거': '90d+ idle detection → 1-tap resale + doorstep laundry',
-    '공급 마찰 0': 'Zero Listing Drag',
-    '순환 완결': 'Closed Loop',
-    '브랜드 VTON SDK': 'Brand VTON SDK',
-    '월정액+CPC': 'SaaS + CPC',
-    '편집숍·디자이너 신상 디지털 시드 입점·반품 절감': 'Digital seed drops for boutiques & designers · cuts returns',
-    '브랜드 파트너': 'Brand Partners',
-    'FREEMIUM → MULTI-STREAM LTV: 무료 유입(₩0) → Pro 구독(ARR) → 갭 커머스(CPS) → 인증 리셀(Take Rate)':
-      'FREEMIUM → MULTI-STREAM LTV: $0 Acquisition → Pro Sub (ARR) → Gap Commerce (CPS) → Verified Resale (Take Rate)',
-    '여정 단계': 'Journey Stage',
-    'Free (₩0 유입 · 락인)': 'Free ($0 Entry · Lock-in)',
-    'iNVTRY Pro (유료 전환)': 'iNVTRY Pro (Paid Upgrade)',
-    '전환 트리거': 'Upgrade Trigger',
-    '① 옷장 · 중복 체크': '① Closet & Duplicate Gate',
-    '배경 제거 · EXIF · 중복 판독 무제한 (₩0)': 'Unlimited cutout, EXIF strip & duplicate check ($0)',
-    '택 OCR · 이염 경고 · 대용량 백업': 'Tag OCR · color-bleed alerts · cloud backup',
-    '옷장 20벌 Lock-in': '20-Item Closet Lock-in',
-    '② AI VTON 피팅': '② AI VTON Fitting',
-    '기본 아바타 · 월 쿼터 제한': 'Base avatar · monthly VTON quota',
-    '무제한 4겹+ 8방향 VTON · 거리뷰 무대': 'Unlimited 4+ layer 8-angle VTON · street backdrop',
-    '외출·계절 쿼터 소진': 'Seasonal Quota Limit',
-    '③ 커머스 · 리셀': '③ Commerce & Resale',
-    '기본 착용 기록 · 세탁 지도 · 갭 추천': 'Basic wear log · care map · gap picks',
-    'CPW 자산 리포트 · 리셀 수수료 우대': 'CPW asset report · reduced resale fee',
-    '1벌 판매로 연 구독 회수': '1 Resale Pays Annual Sub',
-
-    // Slide 13 — Business Model 2
-    '복합 LTV 엔진': 'Multi-LTV Engine',
-    '① 무료 중복 체크': '① Free Duplicate Check',
-    'Low CAC · 서버 ₩0': 'Low CAC · $0 Server',
-    '② 옷장 20벌 등록': '② Log 20+ Garments',
-    '데이터 Lock-in': 'Data Lock-in',
-    '③ 매일 4겹+ AI 피팅': '③ Daily 4+ Layer Fit',
-    'Pro 월 구독 (ARR)': 'Pro Monthly Sub (ARR)',
-    '④ 옷장 갭(Gap) 매칭': '④ Closet Gap Match',
-    '제휴 CPS 5~12%': 'Affiliate CPS 5–12%',
-    '⑤ 1탭 인증 리셀': '⑤ 1-Tap Verified Resale',
-    '수수료 3~8% + O2O': '3–8% Fee + Care O2O',
-    '리셀 현금화 → 새 옷 재구매': 'Resale Cash-Out → Re-Spend Loop',
-    '4-Way LTV 순환': '4-Way LTV Cycle',
-    'AI 추론 원가 방어 메커니즘 (BEFORE vs iNVTRY)': 'AI Inference Cost Defense (Legacy Cloud vs iNVTRY)',
-    '₩0 온디바이스': '$0 On-Device',
-    '01. 의류 배경 제거 & 안면 피부톤': '01. Garment Cutout & Facial Skin-Tone',
-    '클라이언트 100% 절감': '100% Offloaded to Client',
-    '기존 클라우드': 'Legacy Cloud',
-    '서버 GPU 호출 · 유저 비례 적자': 'Server GPU per call · negative unit margin at scale',
-    '서버 GPU 호출 · 사용자 비례 적자': 'Server GPU per call · negative unit margin at scale',
-    '₩0': '$0',
-    'WASM 온디바이스 (0B Egress)': 'On-Device WASM (0B Egress)',
-    '02. 이미지 저장 · AI 전송 대역폭': '02. Image Storage & AI Payload Bandwidth',
-    '원본 JPEG': 'Raw JPEG',
-    '03. 4겹+ VTON 코디 재조회': '03. Repeat 4+ Layer VTON Lookups',
-    '중복 추론 원천 제거': 'Zero Redundant Inference',
-    '기존 생성 AI': 'Legacy Gen-AI',
-    '동일 착장 매 요청 반복 추론 과금': 'Re-runs expensive GPU inference on every repeat view',
-    'iNVTRY 캐시': 'iNVTRY Cache',
-    '착장 해시 캐시 + 8방향 재활용 + Free 쿼터': 'Outfit hash cache + 8-angle reuse + Free tier quota',
-    '세부 P&L [TBD]': 'Detailed P&L [TBD]',
-    '목표 총이익률': 'Gross Margin',
-    '3초 중복 체크 · 360° OOTD 공유 자연 유입': 'Organic installs via 3-sec duplicate check & 360° OOTD shares',
-    '구독 + 갭 CPS + 연 리셀·O2O 수수료 누적': 'Compounds subscription + gap CPS + annual resale & care fees',
-    '* 베타 실측 코호트(전환율·리텐션·API 원가) 반영 후 3개년 손익 확정 예정':
-      '* 3-year P&L to be finalized with live beta cohort conversion, retention & API unit costs',
-
-    // Slide 14 — Traction & 6-Tier Architecture
-    'Three.js 3D 공식 웹 Cloudflare Workers 글로벌 배포 운영': 'Live Three.js 3D official showcase deployed globally on Cloudflare Workers',
-    '단위·모바일 WebGL E2E · strict TS · oxlint · 시크릿 스캔': 'Unit & mobile WebGL E2E · strict TS · oxlint · secret scanning',
-    '단일 하이브리드 코드': 'Single Hybrid Codebase',
-    'Three.js 3D 모캡·물리': 'Three.js 3D Mocap & Physics',
-    'Blender 4.0 CMU 모캡 리타게팅 + SpringBone 지글 물리': 'Blender 4.0 CMU mocap retargeting + SpringBone cloth physics',
-    '프라이빗 베타 사전 신청 접수 중': 'Private Beta Waitlist Open',
-    '코호트 [TBD]': 'Cohort [TBD]',
-    '출시 직후 옷장 등록 수 · 주간 피팅 빈도 · 중복 차단율 실측 업데이트 예정':
-      'Live closet items, weekly fit frequency & duplicate-block rate updated post-launch',
-    'Express 5 · Gzip JSON · 메뉴 · 버튼 RBAC · 전 API IDOR 차단 → Cloud Run':
-      'Express 5 · Gzip JSON · Menu/Action RBAC · All-API IDOR Guard → Cloud Run',
-    'Vertex AI / Gemini Paid No-Training 멀티레이어 2D VTON + 8방향 QC 워커':
-      'Vertex AI / Gemini Paid No-Train Multi-Layer 2D VTON + 8-Angle QC Worker',
-    'Google Weather v1 · Places(세탁/수선) · Street View(무저장) · Geocoding':
-      'Google Weather v1 · Places (Laundry/Tailor) · Street View (No-Store) · Geocoding',
-    'Google Weather v1 · Places(세탁/수선) · Street View(미저장) · Geocoding':
-      'Google Weather v1 · Places (Laundry/Tailor) · Street View (No-Store) · Geocoding',
-
-    // Slide 15 — GTM & Roadmap
-    '레이어드 피팅 · 온디바이스 기반': 'Layered Fitting & On-Device Core',
-    '4겹+ VTON · 8방향 QC': '4+ Layer VTON · 8-Angle QC',
-    '배경 제거 · WebP -96%': 'Auto Cutout · WebP -96%',
-    'MediaPipe 0B 피부톤': 'MediaPipe 0B Skin Tone',
-    '공간 맥락 · 보안 4대 방어선': 'Spatial Context & 4 Security Defenses',
-    '실시간 날씨 · 거리뷰 무대': 'Live Weather & Street Stage',
-    '주변 세탁·수선소 지도': 'Local Laundry & Tailor Map',
-    'OIDC · 원클릭 영구파기': 'OIDC · 1-Click Atomic Wipe',
-    '정식 출시 · Pro · 인증 리셀': 'Store Launch · Pro · Verified Resale',
-    '스토어 출시 · Pro 구독': 'App Store Launch · Pro Sub',
-    '택 OCR · OOTD 캘린더': 'Tag OCR · OOTD Calendar',
-    '세탁 O2O · 1탭 리셀': 'Care O2O · 1-Tap Resale',
-    'GO-TO-MARKET — 3대 초기 고객 획득 엔진 (SEOUL 2030 → GLOBAL)':
-      'GO-TO-MARKET — 3 INITIAL ACQUISITION ENGINES (SEOUL 20s–30s → GLOBAL)',
-    '오프라인 3초 중복 훅': '3-Sec In-Store Duplicate Hook',
-    '성수·명동·더현대 쇼핑 시 보유 유사 옷 즉석 판독으로 즉시 설치 유인':
-      'Instant duplicate alerts while shopping in Seongsu, Myeongdong & flagship malls drive organic installs',
-    '360° OOTD 룩북 바이럴': '360° OOTD Lookbook Virality',
-    '실시간 날씨·동네 배경 360° 착장 카드를 인스타·틱톡에 공유해 자연 유입':
-      'Shareable 360° weather & local street outfit cards fuel Instagram & TikTok organic loops',
-    '세탁 O2O · 편집숍 제휴': 'Care O2O & Boutique Partnerships',
-    '디자이너 브랜드·세탁 수거·리셀 파트너와 초기 옷장 등록·유동성 동시 확보':
-      'Partnering with boutiques, pickup cleaners & resale venues builds supply and liquidity together',
-
-    // Slide 16 — Team & Governance
-    'Raymond Moon (대표 · 창업자)': 'Raymond Moon (Founder & CEO)',
-    '2D VTON AI 파이프라인': '2D VTON AI Pipeline',
-    '0B 보안 백엔드': '0B Security Backend',
-    'Web·iOS·Android 앱': 'Web · iOS · Android App',
-    '[TBD: 대표 핵심 이력·학력 기입]': '[TBD: Founder Bio & Credentials]',
-    '[TBD: 법인 설립 일정]': '[TBD: Incorporation Schedule]',
-    'AI · 비전(VTON) 리드': 'AI / Vision (VTON) Lead',
-    '멀티앵글 정밀도 · 추론 단가 절감': 'Multi-angle fidelity & inference cost optimization',
-    '클라우드·보안 BE': 'Cloud & Security BE',
-    '3-Zone·CMEK · 리셀 에스크로': '3-Zone CMEK · resale escrow backend',
-    '보안': 'Security',
-    '패션 MD·그로스': 'Fashion MD & Growth',
-    '브랜드·세탁 O2O · 2030 그로스': 'Brand/O2O partnerships · 20s–30s growth',
-    '제휴': 'Growth',
-    '투자·정부사업·바우처 심사 대응 체계': 'VC, TIPS & Enterprise Audit Readiness',
-    'GCP 3-Zone 물리 격리': 'GCP 3-Zone Physical Isolation',
-    '외부 전문 모의해킹 의무화': 'Mandatory External Penetration Testing',
-    '정식 출시 전 웹·모바일 취약점 진단 1회 수행': 'Full web & mobile vulnerability audit prior to commercial launch',
-    '배상책임보험 · 24h 대응 SOP': 'Cyber Liability Insurance · 24h SOP',
-    '개인정보보호 법적 리스크 선제 방어': 'Proactive legal & privacy incident risk coverage',
-    '핵심 특허 2건+ 출원': '2+ Core Patent Filings',
-    '0B 피부톤 · 8방향 레이어드 QC · 1탭 인증 리셀': '0B skin-tone calibration · 8-angle layering QC · 1-tap verified resale',
-
-    // Slide 17 — Funding Ask
-    '기입 필요': 'TO BE FILLED',
-    '[TBD] 억원': '$[TBD]M / ₩[TBD]B',
-    'Seed / Pre-A / TIPS 연계 ·': 'Seed / Pre-A / TIPS Matched ·',
-    '18개월 런웨이': '18-Month Runway',
-    '스토어 출시 · Pro 구독 전환 · 인증 리셀 거래 개시': 'App store launch · Pro sub conversion · verified resale GMV kickoff',
-    'GCP 상용 보안 전환 · 모의해킹 · 핵심 특허 2건+': 'Production GCP security cutover · pen-test · 2+ core patent filings',
-    'USE OF FUNDS — 18개월 자금 배분 계획': 'USE OF FUNDS — 18-MONTH CAPITAL ALLOCATION',
-    '멀티레이어 VTON 고도화 · 택 OCR · 캘린더·인증 리셀 개발': 'Multi-layer VTON R&D · tag OCR · OOTD calendar & verified resale build',
-    '25% · GTM · 파트너십': '25% · GTM & Partnerships',
-    '서울 2030 초기 코호트 · OOTD 캠페인 · 편집숍·세탁 O2O 제휴': 'Seoul 20s–30s cohort · OOTD growth · boutique & laundry O2O alliances',
-    '20% · 클라우드 · 보안': '20% · Cloud & Security',
-    'GCS 3-Zone·CMEK · Vertex AI 추론 · 외부 모의해킹·보험': 'GCS 3-Zone CMEK · Vertex AI compute · external pen-test & cyber insurance',
-    '10% · 운영 · IP 특허': '10% · Ops & IP Patents',
-    '핵심 특허 2건+ 출원 · 법률·개인정보 검토 · 예비비': '2+ core patent filings · legal/privacy review · contingency reserve',
-    '스토어 출시 · 3-Zone 모의해킹': 'Store Launch · 3-Zone Pen-Test',
-    'Pro 구독 · 택 OCR · 갭 CPS 개시': 'Pro Sub · Tag OCR · Gap CPS Launch',
-    '인증 리셀 · 특허 출원 → Series A': 'Verified Resale · Patents → Series A',
-
-    // Slide 18 — Closing
-    '감사합니다': 'Thank You',
-    'Three.js 3D 공식 웹 · AI 피팅 체험': 'Live Three.js 3D Site & Interactive AI Studio',
-    'Raymond Moon (대표)': 'Raymond Moon (Founder & CEO)',
-    '제품 · AI VTON · Three.js · 보안 총괄': 'Product · AI VTON · Three.js · Security Architecture',
-    '투자 · TIPS · 브랜드·세탁 O2O 제휴': 'Investment · TIPS · Brand & Care O2O Partnerships',
-  };
-
-  /**
-   * Complete normalized Korean -> English map for `aria-label` and `alt` attributes.
-   */
-  const ATTR_EN = {
-    '프레젠테이션 제어 바': 'Presentation Controls',
-    'ainvtry.com 공식 사이트로 돌아가기': 'Return to ainvtry.com official site',
-    '화면 비율 선택': 'Aspect ratio selector',
-    '실크 배경 무드 선택': 'Silk backdrop mood selector',
-    '라이트 다크 테마 선택': 'Light or Dark theme selector',
-    '언어 선택': 'Language selector',
-    '보기 모드': 'View mode selector',
-    '이전 슬라이드': 'Previous slide',
-    '다음 슬라이드': 'Next slide',
-    '슬라이드 바로가기': 'Jump to slide',
-    '표지': 'Cover Slide',
-    'iNVTRY 로고': 'iNVTRY Logo',
-    'iNVTRY 360도 가상 피팅 실구동 화면': 'iNVTRY 360-degree live virtual fitting screen',
-    '목차': 'Table of Contents',
-    '핵심 요약': 'Executive Summary',
-    'iNVTRY 5단계 순환 루프': 'iNVTRY 5-stage circular loop',
-    '6대 파편화된 페인포인트': '6 Fragmented Pain Points',
-    '6대 페인포인트 일괄 해결 솔루션': '6-to-1 Unified Solution',
-    '6단계 사용자 여정': '6-Cut User Journey',
-    '사기 전 중복 확인': 'In-store duplicate check before buying',
-    '사진 등록 및 택 스캔': 'Garment photo digitization and care tag scan',
-    '내 동네 날씨 코디': 'Local neighborhood weather outfit styling',
-    '캘린더 및 SNS 공유': 'OOTD calendar and social sharing',
-    '세탁법 및 방문 수거': 'Garment care guide and laundry pickup',
-    '안 입는 옷 간편 판매': '1-tap resale of unworn garments',
-    '실구동 MVP 화면': 'Live MVP App Showcase',
-    '360도 가상 피팅 화면': '360-degree layered virtual fitting screen',
-    'AI 디지털 옷장 화면': 'AI digital wardrobe screen',
-    '옷장 CPW 및 활용률 통계 화면': 'Wardrobe CPW and wear-rate analytics screen',
-    '온디바이스 피부톤 및 체형 프로필 화면': 'On-device skin-tone and body morph profile screen',
-    '핵심 기술 스택': 'Core Technology Engine',
-    '전처리 전 원본 의류': 'Raw garment photo before on-device preprocessing',
-    '전처리 후 비식별 WebP': 'De-identified WebP cutout after preprocessing',
-    '프라이버시 보안 해자': 'Privacy-by-Design Security Moat',
-    '온디바이스에서 클라우드까지의 제로트러스트 데이터 흐름': 'Zero-trust data flow from edge device to cloud',
-    '시장 규모 및 성장 배경': 'Market Size and Growth Catalysts',
-    'TAM SAM SOM 시장 구조도': 'TAM SAM SOM concentric market sizing chart',
-    '경쟁 구도 및 포지셔닝': 'Competitive Landscape and Positioning',
-    '경쟁사 2x2 포지셔닝 맵': '2x2 competitive positioning matrix',
-    '경쟁사 5대 역량 비교': '5-dimension competitive feature matrix',
-    '비즈니스 모델 1 — 4중 수익 모델': 'Business Model 1 — 4-Engine Revenue',
-    'Free vs Pro 티어 비교': 'Free vs Pro tier comparison matrix',
-    '비즈니스 모델 2 — 플라이휠 및 AI 원가 방어': 'Business Model 2 — LTV Flywheel and AI Cost Defense',
-    '5단계 수익 선순환 플라이휠': '5-stage circular LTV flywheel',
-    '목표 매출총이익률 70% 이상': 'Target gross margin 70% or higher',
-    '개발 검증 실적 및 6-Tier 아키텍처': 'Traction and 6-Tier Full-Stack Architecture',
-    '성장 전략 및 로드맵': 'Go-to-Market Strategy and 18-Month Roadmap',
-    '팀 구성 및 거버넌스': 'Team and 2027 Security Governance',
-    '투자 제안 및 자금 집행 계획': 'Funding Ask and Use of Funds',
-    '자금 배분 도넛 차트: R&D 45%, GTM 25%, 보안 20%, 운영 IP 10%': 'Use of funds donut chart: 45% R&D, 25% GTM, 20% Cloud & Security, 10% Ops & IP',
-    '감사합니다': 'Thank You Closing Slide',
-  };
 
   window.IR_DECK_I18N = {
     DOC_TITLE,
