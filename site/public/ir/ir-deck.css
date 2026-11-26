@@ -2896,27 +2896,133 @@ html, body {
   display: block;
 }
 
-/* Slide 10 — Live Circular Proof Strip */
-.s10-proof-pill {
+/* Slide 10 — Primary-Source Visual Evidence 2x2 Gallery & Clickable Links */
+.s10-evidence-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.s10-src-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.s10-src-card:hover {
+  border-color: var(--accent-gold);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+.s10-src-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding: 7px 11px;
-  border-radius: 10px;
-  border: 1px solid var(--hairline-gold);
+  border-bottom: 1px solid var(--hairline);
   background: var(--bg-elevated);
-  font-size: 11.5px;
+  flex-shrink: 0;
 }
 
-.s10-proof-pill img {
-  width: 34px;
-  height: 34px;
+.s10-src-title {
+  font-size: 11.5px;
+  font-weight: 720;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s10-src-shot {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+}
+
+.s10-src-shot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.s10-src-shot--contain img {
+  object-fit: contain;
+  padding: 3px 6px;
+}
+
+.s10-src-shot--cover img {
+  object-fit: cover;
+  object-position: center 22%;
+}
+
+.s10-src-shot--top img {
+  object-fit: cover;
+  object-position: center top;
+}
+
+.s10-bottom-links {
+  display: grid;
+  grid-template-columns: 0.88fr 1.18fr 1.18fr;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.s10-anchor-pill {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.s10-anchor-link {
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.s10-anchor-link:hover {
+  border-color: var(--accent-gold);
+  transform: translateY(-1px);
+}
+
+.s10-mini-stats {
+  width: 30px;
+  height: 30px;
   border-radius: 7px;
   object-fit: cover;
   object-position: center top;
   border: 1px solid var(--hairline);
-  flex: none;
+  flex-shrink: 0;
+}
+
+.s10-foot-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.s10-foot-links a {
+  color: var(--accent-gold);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.s10-foot-links a:hover {
+  text-decoration: underline;
 }
 
 /* Slide 11 — White-Space Live Phone Badge + Live 3D Mannequin Card */
