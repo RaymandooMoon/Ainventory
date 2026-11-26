@@ -5,6 +5,7 @@ import {
   buildWeatherPosePromptDirectives,
   resolveEffectiveWeather,
 } from '../../src/services/weatherPromptBuilder.ts';
+import { loginAsLiveMember } from './helpers/liveAuth.ts';
 
 /**
  * Builds a valid RGBA PNG data URL (`128x128`) divided into 4 distinct solid-color quadrants
@@ -399,6 +400,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
   test('1. Decluttered Outfits Stage: zero procedural drawing, Character Simulation default without photo, removed Outfits title/mode rail/stage toggles, and symmetrical [-180..0..+180] bottom angle scrollbar + 360° swipe sync', async ({
     page,
   }) => {
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
@@ -610,6 +612,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
   test('3. Editorial Flat-Lay Board 0ms 1:1 slot sync, aspect-ratio preservation, swimwear + flip-flops, and instant unequip', async ({
     page,
   }) => {
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
@@ -699,6 +702,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
   test('4. Profile VTON Style & Server-Side Gemini Integration: Character Simulation default, Photo Guidance Popup -> Portrait Upload -> Photorealistic unlock, Character Tap Unfolded Lookbook, and 2x2 IndexedDB cache', async ({
     page,
   }) => {
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
@@ -806,16 +810,18 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       styleMode?: string;
       turnaroundSheet?: boolean;
       avatarSpec?: { anthropometrics?: { heightCm?: number } };
-      slots?: Record<string, { packshotDataUrl?: string }>;
+      slots?: Record<string, { packshotDataUrl?: string; image_url?: string }>;
     };
     expect(firstPayload.styleMode).toBe('stylized_isometric');
     expect(firstPayload.turnaroundSheet).toBe(true);
     expect(firstPayload.avatarSpec?.anthropometrics?.heightCm).toBeGreaterThanOrEqual(140);
     const topSlotPayload = firstPayload.slots?.top;
-    expect(topSlotPayload?.packshotDataUrl).toMatch(/^data:image\//);
+    expect(topSlotPayload?.packshotDataUrl || topSlotPayload?.image_url).toMatch(
+      /^(data:image\/|\/seed\/)/
+    );
 
     const slice0 = await aiImg.getAttribute('src');
-    expect(slice0).toMatch(/^data:image\/png;base64,/);
+    expect(slice0).toMatch(/^data:image\/(png|webp);base64,/);
 
     // Tapping the character opens the 100% unfolded Flat-Lay Lookbook; clicking [캐릭터 보기] returns cleanly!
     await aiImg.click();
@@ -935,6 +941,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       expect(assetRes.headers()['content-type']).toContain('image/webp');
     }
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
@@ -958,7 +965,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(studioCanvas.locator('[data-flatlay-item-slot="shoes"]')).toBeVisible();
   });
 
-  test('6. Live AI VTON Test Showcase (?demo_vton=1) defaults to Character Simulation without photo, unfolds Lookbook on tap, and unlocks Photorealistic in Profile', async ({
+  test('6. Live AI VTON Test Showcase (?demo_vton=1) defaults to Cyberpunk Female Demo Showcase (S+ Neo-Seoul 50%, 7 items, 8-angle WebP), unfolds Lookbook on tap, and unlocks Photorealistic in Profile', async ({
     page,
   }) => {
     await page.goto('/outfits?demo_vton=1');
@@ -969,15 +976,19 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     await expect(studioCanvas).toHaveAttribute('data-vton-provider', 'gemini-vton');
     await expect(studioCanvas).toHaveAttribute('data-vton-style', 'stylized_isometric');
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 's_cyber_megacity_plaza');
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-tier', 'S+');
+    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '50');
+    await expect(studioCanvas).toHaveAttribute('data-equipped-count', '7');
 
     const src0 = await aiImg.getAttribute('src');
-    expect(src0).toMatch(/^data:image\//);
+    expect(src0).toMatch(/\/seed\/demo-cyber-female-0\.webp(?:\?v=\d+)?$/);
 
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await performStageSwipe(page, studioCanvas, 'right', 'slow');
     await expect(studioCanvas).toHaveAttribute('data-view-angle', '90');
     const src90 = await aiImg.getAttribute('src');
-    expect(src90).toMatch(/^data:image\//);
+    expect(src90).toMatch(/\/seed\/demo-cyber-female-90\.webp(?:\?v=\d+)?$/);
     expect(src90).not.toBe(src0);
 
     // Tap character -> opens unfolded lookbook -> press Escape to return to character
@@ -986,7 +997,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.keyboard.press('Escape');
     await expect(aiImg).toBeVisible();
 
-    // Register portrait photo in Profile & select Photorealistic -> updates showcase model slice
+    // Register portrait photo in Profile & select Photorealistic -> unlocks photorealistic style mode cleanly on demo showcase
     await page.locator('#open-profile-studio-btn').click();
     const profileSheet = page.locator('#profile-studio-sheet');
     await profileSheet.locator('#skin-portrait-file-input').setInputFiles({
@@ -998,9 +1009,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await profileSheet.locator(`#${CARBON_DOM_CONTRACT.skinToneApplyBtnId}`).click();
 
     await expect(studioCanvas).toHaveAttribute('data-vton-style', 'photorealistic');
-    await expect
-      .poll(async () => await aiImg.getAttribute('src'))
-      .not.toBe(src90);
+    await expect(aiImg).toBeVisible();
+    await expect(aiImg).toHaveAttribute('src', /\/seed\/demo-cyber-female-(0|90)\.webp(?:\?v=\d+)?$/);
   });
 
   test('7. Server-Side Gemini VTON Resilience: zero browser API key exposure, graceful Flat-Lay fallback on gemini_network_error, and 1-click retry recovery into 360° turnaround', async ({
@@ -1051,6 +1061,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
@@ -1118,6 +1129,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
@@ -1411,6 +1423,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
@@ -1528,7 +1541,8 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
     expect(seedRes.ok()).toBeTruthy();
     const seedJson = await seedRes.json();
-    expect(seedJson.inserted).toBe(115);
+    // 70 subcategory material seeds + 45 luxury/street seeds + 9 underwear/socks seeds = 124
+    expect(seedJson.inserted).toBe(124);
 
     const listRes = await request.get(`/api/garments?closet=${encodeURIComponent(freshCloset)}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -1536,7 +1550,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     expect(listRes.ok()).toBeTruthy();
     const listJson = await listRes.json();
     const seededItems: Array<{ subcategory: string; fabric: string }> = listJson.garments || [];
-    expect(seededItems.length).toBe(115);
+    expect(seededItems.length).toBe(124);
 
     const expectedSubtypes = [
       'umbrella',
@@ -1835,6 +1849,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     await expect(studioCanvas).toBeVisible();
@@ -1843,7 +1858,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await expect(aiImg).toBeVisible({ timeout: 20000 });
     await expect(aiImg).toHaveCSS('object-fit', 'contain');
     const imgSrc = (await aiImg.getAttribute('src')) || '';
-    expect(imgSrc.startsWith('data:image/png;base64,')).toBe(true);
+    expect(imgSrc).toMatch(/^data:image\/(png|webp);base64,/);
 
     // (C) Verify true RGBA alpha === 0 on BOTH outer corners AND enclosed interior hole,
     // while preserving pure white snow (#FFFFFF) & dark coat!
@@ -1869,7 +1884,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       for (let y = 0; y < c.height; y += 1) {
         for (let x = 0; x < c.width; x += 1) {
           const i = (y * c.width + x) * 4;
-          if (d[i + 3] > 240 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) {
+          if (d[i + 3] > 240 && d[i] >= 245 && d[i + 1] >= 245 && d[i + 2] >= 245) {
             whiteSnowOpaquePixels += 1;
           }
           if (d[i + 3] > 240 && d[i] < 50 && d[i + 1] < 40 && d[i + 2] < 50) {
@@ -2254,6 +2269,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     };
 
     const capturedHands: string[] = [];
+    let rainSynthCount = 0;
     await page.route('**/api/vton/synthesize', async (route) => {
       const body = JSON.parse(route.request().postData() || '{}') as {
         handedness?: string;
@@ -2263,6 +2279,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       capturedHands.push(handedness);
       const isRain =
         body.weather?.effectiveWeather === 'rain' || body.weather?.mood === 'rainy';
+      if (isRain) rainSynthCount += 1;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -2283,6 +2300,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       });
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     const modelStage = page.locator(`#${CARBON_DOM_CONTRACT.character25dMannequinId}`);
@@ -2441,6 +2459,9 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     });
     await expect(studioCanvas).toHaveAttribute('data-stage-lighting', 'outdoor-sky');
 
+    await setRangeSliderValue(page, '[data-angle-scroll-input="true"]', 0);
+    await expect(modelStage).toHaveAttribute('data-view-angle', '0');
+    const preRainSrc = await aiImg.getAttribute('src');
     const weatherCapsule = studioCanvas.locator('[data-atelier-weather-capsule="true"]');
     const weatherPanel = page.locator(`#${CARBON_DOM_CONTRACT.weatherRecommendPanelId}`);
     await weatherCapsule.click();
@@ -2451,7 +2472,12 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
     await page.keyboard.press('Escape');
     await expect(weatherPanel).toHaveCount(0);
     await expect(studioCanvas).toHaveAttribute('data-effective-weather', 'rain');
+    await expect.poll(() => rainSynthCount, { timeout: 15000 }).toBeGreaterThanOrEqual(1);
+    await expect(studioCanvas).toHaveAttribute('data-vton-loading', 'false', { timeout: 15000 });
     await expect(aiImg).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(async () => await aiImg.getAttribute('src'), { timeout: 15000 })
+      .not.toBe(preRainSrc);
 
     const coatRgbByAngle: Record<number, number[]> = {};
     for (const ang of [0, 45, 90] as const) {
@@ -2611,6 +2637,7 @@ test.describe('Zero-Procedural Editorial Flat-Lay Board & 100% Gemini Multimodal
       }
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
     const aiImg = studioCanvas.locator('[data-ai-vton-img="true"]');

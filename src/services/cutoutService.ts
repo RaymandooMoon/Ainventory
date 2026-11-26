@@ -2191,8 +2191,12 @@ export async function ensureTransparentCutout(
     if (typeof document === 'undefined' || typeof Image === 'undefined') {
       return imageSource;
     }
-    // Non-PNG data URLs (JPEG/WebP) cannot hold alpha -> always run full cutout
-    if (imageSource.startsWith('data:image/') && !imageSource.startsWith('data:image/png')) {
+    // Non-alpha data URLs (e.g. JPEG) cannot hold alpha -> always run full cutout (PNG & WebP support alpha)
+    if (
+      imageSource.startsWith('data:image/') &&
+      !imageSource.startsWith('data:image/png') &&
+      !imageSource.startsWith('data:image/webp')
+    ) {
       return removeModelBackgroundToPng(imageSource, options);
     }
   } else if (typeof document === 'undefined' || typeof Image === 'undefined') {
@@ -2213,12 +2217,18 @@ export async function ensureTransparentCutout(
       const d = ctx.getImageData(0, 0, w, h).data;
       if (
         typeof imageSource === 'string' &&
-        imageSource.startsWith('data:image/png') &&
+        (imageSource.startsWith('data:image/png') || imageSource.startsWith('data:image/webp')) &&
         areFourCornersTransparent(d, w, h, CORNER_ALPHA_OPAQUE_THRESHOLD)
       ) {
         // Even when outer corners are already transparent, purge any trapped enclosed holes!
         const holeSweep = applyV4HoleAwareMattingOnCanvas(canvas, options);
         if (holeSweep.modified && holeSweep.purgedHolePixels > 0) {
+          if (imageSource.startsWith('data:image/webp')) {
+            const webpOut = canvas.toDataURL('image/webp', 0.9);
+            if (webpOut.startsWith('data:image/webp;base64,')) {
+              return webpOut;
+            }
+          }
           return canvas.toDataURL('image/png');
         }
         return imageSource;

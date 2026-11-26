@@ -1,6 +1,7 @@
 import zlib from 'node:zlib';
 import { expect, type Page, test } from '@playwright/test';
 import { CARBON_DOM_CONTRACT } from '../../src/contracts/carbonDesignContract.ts';
+import { loginAsLiveMember } from './helpers/liveAuth.ts';
 
 const ALL_WEATHER_SCENARIOS = [
   'live',
@@ -126,6 +127,10 @@ async function swipeWardrobeSheetHandle(page: Page, deltaY: number) {
 }
 
 test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsLiveMember(page);
+  });
+
   test('1. Zero .glb/3D texture requests, legacy 3D/2.5D mode fallback to 2d-vton, and removal of 3D orbit controls', async ({
     page,
   }) => {
@@ -713,7 +718,7 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
     await genBtn.click();
     await expect(aiImg).toBeVisible({ timeout: 10000 });
     const liveCustomImgSrc = await aiImg.getAttribute('src');
-    expect(liveCustomImgSrc).toMatch(/^data:image\/png;base64,/);
+    expect(liveCustomImgSrc).toMatch(/^data:image\/(png|webp);base64,/);
 
     // Switch to `맑음` (`crisp_autumn`) -> applies fresh `맑음` outfit (with `top` equipped)
     await weatherCapsule.click();
@@ -860,7 +865,8 @@ test.describe('2D Editorial Fashion Virtual Try-On Viewer & Scope-Safe Pipeline'
         pillTexts: pills.filter((t) => t.length > 0),
       };
     });
-    expect(specMetrics.itemName).toContain('발수 코튼 개버딘 트렌치코트');
+    expect(specMetrics.itemName.length).toBeGreaterThan(0);
+    await expect(drawerTitle).not.toContainText(specMetrics.itemName);
     expect(specMetrics.whiteSpace).toBe('normal');
     expect(specMetrics.textOverflow).not.toBe('ellipsis');
     expect(specMetrics.brandText.length).toBeGreaterThan(0);

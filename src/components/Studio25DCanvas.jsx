@@ -67,6 +67,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
   onUpdateStylingPref,
   selectedPlace = null,
   outfitSaveBar = null,
+  isProvisionalInitialSlots = false,
 }) {
   const normalizedMode = normalizeViewerMode(legacyMode ?? mode ?? viewMode ?? renderMode);
 
@@ -127,6 +128,7 @@ const Studio25DCanvas = memo(function Studio25DCanvas({
       onUpdateStylingPref={onUpdateStylingPref}
       selectedPlace={selectedPlace}
       outfitSaveBar={outfitSaveBar}
+      isProvisionalInitialSlots={isProvisionalInitialSlots}
     />
   );
 });

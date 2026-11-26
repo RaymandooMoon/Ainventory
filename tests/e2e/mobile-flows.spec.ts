@@ -1,6 +1,7 @@
 import zlib from 'node:zlib';
 import { expect, test } from '@playwright/test';
 import { CARBON_DOM_CONTRACT } from '../../src/contracts/carbonDesignContract.ts';
+import { loginAsLiveMember } from './helpers/liveAuth.ts';
 
 /**
  * Generates a valid 64x64 PNG buffer (navy garment core on #F5F5F7 studio border)
@@ -80,7 +81,16 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await page.goto('/');
 
     // 1. Default Home is Outfits with top-left iNVTRY brand mark clear of utility actions
-    await expect(page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`)).toBeVisible();
+    // Unauthenticated visitors boot into the latest Cyberpunk Female Demo Showcase (S+ Neo-Seoul, 50% brightness, 7 items, pre-rendered WebP)
+    const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
+    await expect(studioCanvas).toBeVisible();
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-id', 's_cyber_megacity_plaza');
+    await expect(studioCanvas).toHaveAttribute('data-stage-bg-tier', 'S+');
+    await expect(studioCanvas).toHaveAttribute('data-lighting-intensity', '50');
+    await expect(studioCanvas).toHaveAttribute('data-equipped-count', '7');
+    const demoImg = studioCanvas.locator('[data-ai-vton-img="true"]');
+    await expect(demoImg).toBeVisible({ timeout: 10000 });
+    await expect(demoImg).toHaveAttribute('src', /\/seed\/demo-cyber-female-0\.webp(?:\?v=\d+)?$/);
     const headerBrand = page.locator('.hig-top-bar [data-brand-logo="true"]');
     await expect(headerBrand).toBeVisible();
 
@@ -107,7 +117,12 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
 
     const countEl = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeItemCountId}`);
     await expect(countEl).toHaveText(/^\d+ ITEMS$/);
-    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`)).toBeVisible();
+    const addBtn = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeOpenAddBtnId}`);
+    await expect(addBtn).toBeVisible();
+
+    // Read-only Demo RBAC guard: clicking '+' on unauthenticated demo must NOT open the live add-garment modal
+    await addBtn.click();
+    await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeGalleryInputId}`)).toHaveCount(0);
 
     // 2. Exact 7 Pill Category Filters (single axis, Jewelry included)
     const pills = page.locator(`#${CARBON_DOM_CONTRACT.wardrobeCategoryRailId} button`);
@@ -151,6 +166,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
   test('2. Full User Flow: + Register -> Grid Exposure -> /item/:id Detail (2.5D Tilt & Edit) -> Outfits Studio Combination -> Delete', async ({
     page,
   }) => {
+    await loginAsLiveMember(page);
     await page.goto('/closet');
 
     // Wait for initial wardrobe garments fetch to settle before reading baseline count
@@ -302,7 +318,10 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     // Save combined outfit -> opens save-to-calendar confirmation modal
     const mobileSaveBtn = page.getByTestId('mobile-save-outfit-btn');
     if (await mobileSaveBtn.isVisible()) {
-      await page.locator('.studio-mobile-save-row input').fill('Minimal Trench Coordi');
+      await page
+        .locator('[data-flatlay-save-bar="true"] input, .studio-mobile-save-row input')
+        .first()
+        .fill('Minimal Trench Coordi');
       await mobileSaveBtn.click();
     } else {
       await page.locator('.studio-save-bar input').fill('Minimal Trench Coordi');
@@ -314,10 +333,13 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await savedCalModal.locator('[data-saved-calendar-close="true"]').click();
     await expect(savedCalModal).toHaveCount(0);
 
-    // Step E: Return to Closet -> open registered item detail -> Delete item
+    // Step E: Return to Closet -> filter to Outerwear so newly registered item sits above initial pagination -> open detail -> Delete item
     await page.locator('[data-nav-tab="closet"]').click();
     await expect(page).toHaveURL(/\/closet$/);
     await expect(page.locator(`#${CARBON_DOM_CONTRACT.wardrobeItemCountId}`)).toBeVisible();
+    await page
+      .locator(`#${CARBON_DOM_CONTRACT.wardrobeCategoryRailId} button`, { hasText: 'Outerwear' })
+      .click();
 
     const updatedCard = page
       .locator(`#${CARBON_DOM_CONTRACT.wardrobeGridId} .hig-wardrobe-card`, {
@@ -330,6 +352,9 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     await expect(page.locator('#detail-size-input')).toHaveValue('L');
     await page.locator(`#${CARBON_DOM_CONTRACT.itemDetailDeleteBtnId}`).click();
 
+    await page
+      .locator(`#${CARBON_DOM_CONTRACT.wardrobeCategoryRailId} button`, { hasText: 'All' })
+      .click();
     await expect(countEl).toHaveText(`${initialCount} ITEMS`);
   });
 
@@ -379,6 +404,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
       }
     });
 
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
 
     // 1. Upper weather bar is removed above stage; Weather Capsule + Bottom-Right Look 1/2 Dock live on stage
@@ -596,6 +622,33 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
     );
     await expect(bgBadgeBtn).toBeVisible();
     await expect(bgBadgeBtn).toHaveAttribute('data-stage-bg-tier', 'C');
+    await expect
+      .poll(async () =>
+        demoAiImg.evaluate((el) => {
+          const img = el as HTMLImageElement;
+          return img.complete && img.naturalWidth > 0;
+        })
+      )
+      .toBe(true);
+    // Allow weather capsule / UV banner mount and handleAiImageLoad ResizeObserver to settle before measuring pre-pinch width
+    let prevWidth = -1;
+    let settledStreak = 0;
+    await expect
+      .poll(
+        async () => {
+          const rect = await demoAiImg.boundingBox();
+          const w = rect ? Math.round(rect.width * 10) / 10 : -1;
+          if (w > 0 && Math.abs(w - prevWidth) <= 0.5) {
+            settledStreak += 1;
+          } else {
+            settledStreak = 0;
+          }
+          prevWidth = w;
+          return settledStreak;
+        },
+        { intervals: [120, 150, 200], timeout: 12000 }
+      )
+      .toBeGreaterThanOrEqual(2);
     const box10 = await demoAiImg.boundingBox();
     expect(box10).not.toBeNull();
 
@@ -1305,6 +1358,7 @@ test.describe('Apple HIG Inventory-First IA & 2.5D Pipeline E2E', () => {
   test('10. Nav bar 50% default opacity + Settings slider, 10 architectural stage backgrounds, Store free-draw speech bubble & gacha, and Calendar attendance (+10 i)', async ({
     page,
   }) => {
+    await loginAsLiveMember(page);
     await page.goto('/outfits');
 
     const studioCanvas = page.locator(`#${CARBON_DOM_CONTRACT.studio25dCanvasId}`);
