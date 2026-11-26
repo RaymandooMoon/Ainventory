@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, FileText, Pause, Play } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+} from 'lucide-react';
 import type { StageInteractionState } from '../../three/ainvtryStageDirector.ts';
 import { triggerHaptic } from '../../utils/nativeBridge.ts';
 import {
@@ -10,35 +19,35 @@ import {
   type SiteMood,
   type SiteTheme,
 } from '../siteContent.ts';
-import type { SiteIconKey } from '../SiteIcon.tsx';
+import { SiteIcon, type SiteIconKey } from '../SiteIcon.tsx';
 import { SiteNewsletterForm } from '../SiteNewsletterModal.tsx';
 import { HudSpotlightDeck, type HudSpotlightItem } from './HudSpotlightDeck.tsx';
 
 const PILLAR_ICONS: readonly SiteIconKey[] = [
-  'refreshCw',
-  'shieldCheck',
-  'checkCircle',
-  'cloud',
-  'box',
   'imageMinus',
+  'zap',
+  'server',
+  'box',
+  'database',
+  'checkCircle',
 ];
 
 const STACK_CARD_TO_PILLAR_INDEX: Readonly<Record<string, number>> = {
-  three: 4,
-  ai: 0,
-  maps: 3,
-  security: 1,
-  asset: 5,
-  runtime: 2,
+  runtime: 0,
+  mobile: 1,
+  backend: 2,
+  three: 3,
+  ai: 4,
+  maps: 5,
 };
 
 const PILLAR_INDEX_TO_STACK_CARD_ID: readonly string[] = [
-  'ai',
-  'security',
   'runtime',
-  'maps',
+  'mobile',
+  'backend',
   'three',
-  'asset',
+  'ai',
+  'maps',
 ];
 
 function prefersReducedMotion(): boolean {
@@ -47,7 +56,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /* ==========================================================================
- * 3. SPECS STAGE HUD (Metrics | Stack | 3D Fitting | Care)
+ * 3. SPECS STAGE HUD (Metrics | Stack | Three.js 3D | Care)
  * ========================================================================== */
 
 export interface SpecsStageHudProps {
@@ -184,7 +193,7 @@ export function SpecsStageHud({ copy, interaction, onUpdateInteraction }: SpecsS
 }
 
 /* ==========================================================================
- * 4. ABOUT STAGE HUD (Journey | Mission | Model | Connect)
+ * 4. ABOUT STAGE HUD (Journey+Mission | Pain Points | Business Model | Connect)
  * ========================================================================== */
 
 export interface AboutStageHudProps {
@@ -207,6 +216,7 @@ export function AboutStageHud({
   onUpdateInteraction,
 }: AboutStageHudProps) {
   const [journeyAutoPlay, setJourneyAutoPlay] = useState<boolean>(() => !prefersReducedMotion());
+  const [journeyPhotoExpanded, setJourneyPhotoExpanded] = useState<boolean>(false);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>(
     copy.vision.milestones[0].id
   );
@@ -232,10 +242,14 @@ export function AboutStageHud({
     return () => window.clearInterval(timer);
   }, [interaction.aboutSubtab, journeyAutoPlay, copy.journey.cuts.length, onUpdateInteraction]);
 
+  // About Subtab 1: Merged User Journey + Mission Loop + Roadmap
   if (interaction.aboutSubtab === 'journey') {
     const journey = copy.journey;
+    const mission = copy.mission;
+    const vision = copy.vision;
     const activeIdx = Math.max(0, Math.min(journey.cuts.length - 1, interaction.aboutJourneyIndex));
     const activeCut = journey.cuts[activeIdx] ?? journey.cuts[0];
+    const activeLoopNode = mission.loopNodes[interaction.aboutLoopIndex] ?? mission.loopNodes[0];
 
     const selectCut = (nextIdx: number) => {
       triggerHaptic('selection');
@@ -253,16 +267,36 @@ export function AboutStageHud({
       body: <p className="hud-body-copy">{cut.detail}</p>,
     }));
 
+    const roadmapItems: HudSpotlightItem[] = vision.milestones.map((m) => ({
+      id: m.id,
+      prefix: m.phase,
+      prefixTone: m.status === 'done' ? 'live' : 'todo',
+      title: m.title,
+      body: <p className="hud-body-copy">{m.detail}</p>,
+    }));
+
     return (
-      <div className="hud-stack">
-        <div className="hud-journey-stage" data-cut-status={activeCut.status}>
+      <div className="hud-stack hud-about-editorial">
+        <div className="hud-mission-head">
+          <div className="hud-control-row">
+            <h2 className="hud-mission-slogan">
+              <span>{mission.headingLead}</span>
+              <em>{mission.headingAccent}</em>
+            </h2>
+            <span className="hud-gold-badge">{journey.badge}</span>
+          </div>
+        </div>
+
+        <div
+          className={`hud-journey-stage ${journeyPhotoExpanded ? 'is-expanded' : ''}`}
+          data-cut-status={activeCut.status}
+        >
           <img
-            key={activeCut.id}
             src={activeCut.imageSrc}
             alt={activeCut.imageAlt}
             width={960}
             height={720}
-            decoding="async"
+            decoding="sync"
             className="hud-journey-img"
           />
           <div className="hud-journey-scrim" aria-hidden="true" />
@@ -270,7 +304,9 @@ export function AboutStageHud({
           <div className="hud-journey-top">
             <div className="hud-journey-badges">
               <span className="hud-gold-badge">{activeCut.num}</span>
-              <span className={`hud-status-pill is-${activeCut.status}`}>{activeCut.shortStatusLabel}</span>
+              <span className={`hud-status-pill is-${activeCut.status}`}>
+                {activeCut.shortStatusLabel}
+              </span>
             </div>
             <div className="hud-journey-controls">
               <button
@@ -298,8 +334,36 @@ export function AboutStageHud({
                   setJourneyAutoPlay((prev) => !prev);
                 }}
               >
-                {journeyAutoPlay ? <Pause size={11} aria-hidden="true" /> : <Play size={11} aria-hidden="true" />}
+                {journeyAutoPlay ? (
+                  <Pause size={11} aria-hidden="true" />
+                ) : (
+                  <Play size={11} aria-hidden="true" />
+                )}
                 <span>{journeyAutoPlay ? journey.pausePlayLabel : journey.autoPlayLabel}</span>
+              </button>
+              <button
+                type="button"
+                className="hud-icon-step-btn"
+                aria-pressed={journeyPhotoExpanded}
+                aria-label={
+                  journeyPhotoExpanded
+                    ? lang === 'ko'
+                      ? '사진 기본 크기로 축소'
+                      : 'Shrink illustration'
+                    : lang === 'ko'
+                      ? '사진 크게 보기'
+                      : 'Expand illustration'
+                }
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setJourneyPhotoExpanded((prev) => !prev);
+                }}
+              >
+                {journeyPhotoExpanded ? (
+                  <Minimize2 size={13} aria-hidden="true" />
+                ) : (
+                  <Maximize2 size={13} aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
@@ -319,43 +383,16 @@ export function AboutStageHud({
           ariaLabel={journey.badge}
           scrollToTopOnSelect={false}
         />
-      </div>
-    );
-  }
 
-  if (interaction.aboutSubtab === 'mission') {
-    const mission = copy.mission;
-    const vision = copy.vision;
-    const activeLoopNode = mission.loopNodes[interaction.aboutLoopIndex] ?? mission.loopNodes[0];
-
-    const loopItems: HudSpotlightItem[] = mission.loopNodes.map((node) => ({
-      id: node.id,
-      prefix: node.num,
-      prefixTone: 'mono',
-      icon: node.icon,
-      title: node.title,
-      body: <p className="hud-body-copy">{node.detail}</p>,
-    }));
-
-    const roadmapItems: HudSpotlightItem[] = vision.milestones.map((m) => ({
-      id: m.id,
-      prefix: m.phase,
-      prefixTone: m.status === 'done' ? 'live' : 'todo',
-      title: m.title,
-      body: <p className="hud-body-copy">{m.detail}</p>,
-    }));
-
-    return (
-      <div className="hud-stack">
-        <div className="hud-mission-head">
+        {/* Merged Mission: 5-Stage Circular iNVTRY Loop synced with 3D Möbius Ribbon */}
+        <section className="hud-subblock" aria-label={mission.centerTitle}>
           <div className="hud-control-row">
-            <h2 className="hud-mission-slogan">
-              <span>{mission.headingLead}</span>
-              <em>{mission.headingAccent}</em>
-            </h2>
+            <span className="hud-eyebrow">
+              {mission.centerKicker} · {mission.centerTitle}
+            </span>
             <button
               type="button"
-              className="hud-auto-btn"
+              className="hud-auto-btn hud-auto-btn--compact"
               aria-pressed={!interaction.aboutLoopPaused}
               onClick={() => {
                 triggerHaptic('selection');
@@ -372,21 +409,41 @@ export function AboutStageHud({
               </span>
             </button>
           </div>
-        </div>
 
-        <HudSpotlightDeck
-          items={loopItems}
-          activeId={activeLoopNode.id}
-          onSelect={(id) => {
-            const idx = mission.loopNodes.findIndex((n) => n.id === id);
-            if (idx >= 0) {
-              onUpdateInteraction({ aboutLoopIndex: idx, aboutLoopPaused: true });
-            }
-          }}
-          ariaLabel={mission.centerTitle}
-        />
+          <div className="hud-loop-pills" role="tablist" aria-label={mission.centerTitle}>
+            {mission.loopNodes.map((node, idx) => {
+              const isSelected = idx === interaction.aboutLoopIndex;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  className={`hud-loop-pill ${isSelected ? 'is-active' : ''}`}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onUpdateInteraction({ aboutLoopIndex: idx, aboutLoopPaused: true });
+                  }}
+                >
+                  <span className="hud-loop-pill-num">{node.num}</span>
+                  <span>{node.title}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="hud-subblock">
+          <div className="hud-card hud-loop-active-card">
+            <div className="hud-loop-active-head">
+              <SiteIcon name={activeLoopNode.icon} size={15} />
+              <strong>{activeLoopNode.title}</strong>
+              <span className="hud-gold-badge">{activeLoopNode.subtitle}</span>
+            </div>
+            <p className="hud-body-copy">{activeLoopNode.detail}</p>
+          </div>
+        </section>
+
+        {/* Merged Mission: 3-Phase Roadmap */}
+        <section className="hud-subblock" aria-label={vision.roadmapTitle}>
           <span className="hud-eyebrow">{vision.roadmapTitle}</span>
           <HudSpotlightDeck
             items={roadmapItems}
@@ -395,17 +452,70 @@ export function AboutStageHud({
             ariaLabel={vision.roadmapTitle}
             scrollToTopOnSelect={false}
           />
+        </section>
+      </div>
+    );
+  }
+
+  // About Subtab 2: Pain Points (6 Fragmented Problems from Business Plan Slide 04)
+  if (interaction.aboutSubtab === 'mission') {
+    const pp = copy.painPoints;
+    return (
+      <div className="hud-stack hud-about-editorial">
+        <header className="hud-about-section-head">
+          <span className="hud-eyebrow">{pp.eyebrow}</span>
+          <h2 className="hud-about-section-title">{pp.heading}</h2>
+        </header>
+
+        <div className="hud-pain-grid" role="list" aria-label={pp.heading}>
+          {pp.items.map((item) => (
+            <article key={item.id} className="hud-card hud-pain-card" role="listitem">
+              <div className="hud-pain-card-top">
+                <span className="hud-pain-icon" aria-hidden="true">
+                  <SiteIcon name={item.icon} size={15} />
+                </span>
+                <span className="hud-pain-code">{item.code}</span>
+              </div>
+              <div className="hud-pain-metric">{item.metric}</div>
+              <h3 className="hud-pain-title">{item.title}</h3>
+              <p className="hud-pain-detail">{item.detail}</p>
+            </article>
+          ))}
         </div>
+
+        <aside className="hud-card hud-pain-bottleneck" aria-label={pp.bottleneckTitle}>
+          <strong className="hud-pain-bottleneck-title">{pp.bottleneckTitle}</strong>
+          <p className="hud-body-copy">{pp.bottleneckDetail}</p>
+        </aside>
       </div>
     );
   }
 
   const vision = copy.vision;
 
-  // About Subtab 4: Connect (Newsletter, Founder Contact & Actions)
+  // About Subtab 4: Connect (FAQ at Very Top -> Newsletter -> Founder Contact -> CTAs)
   if (interaction.aboutSubtab === 'connect') {
+    const faqItems: HudSpotlightItem[] = vision.faqs.map((faq, idx) => ({
+      id: faq.id,
+      prefix: `Q${idx + 1}`,
+      prefixTone: 'mono',
+      title: faq.question,
+      body: <p className="hud-body-copy">{faq.answer}</p>,
+    }));
+
     return (
-      <div className="hud-stack">
+      <div className="hud-stack hud-about-editorial">
+        <section className="hud-connect-faq-section" aria-label={vision.faqTitle}>
+          <span className="hud-eyebrow">{vision.faqTitle}</span>
+          <HudSpotlightDeck
+            items={faqItems}
+            activeId={selectedFaqId}
+            onSelect={setSelectedFaqId}
+            ariaLabel={vision.faqTitle}
+            scrollToTopOnSelect={false}
+          />
+        </section>
+
         <section
           className="hud-card site-newsletter-inline-card"
           aria-label={copy.newsletter.inlineTitle}
@@ -459,7 +569,8 @@ export function AboutStageHud({
     );
   }
 
-  // About Subtab 3: Model & FAQ
+  // About Subtab 3: Detailed Business Model (4-Layer Revenue Engine + LTV Funnel + AI Cost Defense)
+  const bm = vision.businessModel;
   const revenueItems: HudSpotlightItem[] = vision.revenuePillars.map((pillar) => ({
     id: pillar.id,
     icon: pillar.icon,
@@ -469,33 +580,57 @@ export function AboutStageHud({
     body: <p className="hud-body-copy">{pillar.detail}</p>,
   }));
 
-  const faqItems: HudSpotlightItem[] = vision.faqs.map((faq, idx) => ({
-    id: faq.id,
-    prefix: `Q${idx + 1}`,
-    prefixTone: 'mono',
-    title: faq.question,
-    body: <p className="hud-body-copy">{faq.answer}</p>,
-  }));
-
   return (
-    <div className="hud-stack">
+    <div className="hud-stack hud-about-editorial">
+      <header className="hud-about-section-head">
+        <span className="hud-eyebrow">{bm.eyebrow}</span>
+        <h2 className="hud-about-section-title">{bm.headline}</h2>
+        <p className="hud-sub-meta">{vision.revenueNote}</p>
+      </header>
+
       <HudSpotlightDeck
         items={revenueItems}
         activeId={founderSelectedId}
         onSelect={setFounderSelectedId}
         ariaLabel={vision.revenueTitle}
+        scrollToTopOnSelect={false}
       />
 
-      <div className="hud-subblock">
-        <span className="hud-eyebrow">{vision.faqTitle}</span>
-        <HudSpotlightDeck
-          items={faqItems}
-          activeId={selectedFaqId}
-          onSelect={setSelectedFaqId}
-          ariaLabel={vision.faqTitle}
-          scrollToTopOnSelect={false}
-        />
-      </div>
+      <section className="hud-subblock" aria-label={bm.funnelTitle}>
+        <span className="hud-eyebrow">{bm.funnelTitle}</span>
+        <div className="hud-bm-funnel-grid">
+          {bm.funnelSteps.map((fs) => (
+            <div key={fs.step} className="hud-card hud-bm-funnel-step">
+              <span className="hud-pain-code">{fs.step}</span>
+              <strong className="hud-bm-funnel-label">{fs.label}</strong>
+              <span className="hud-bm-funnel-val">{fs.value}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="hud-subblock" aria-label={bm.costTitle}>
+        <div className="hud-control-row">
+          <span className="hud-eyebrow">{bm.costTitle}</span>
+          <span className="hud-gold-badge">
+            {bm.marginLabel} {bm.marginValue}
+          </span>
+        </div>
+
+        <div className="hud-bm-cost-list">
+          {bm.costDefenses.map((item) => (
+            <article key={item.title} className="hud-card hud-bm-cost-card">
+              <div className="hud-bm-cost-head">
+                <strong>{item.title}</strong>
+                <span className="hud-bm-cost-metric">{item.metric}</span>
+              </div>
+              <p className="hud-pain-detail">{item.detail}</p>
+            </article>
+          ))}
+        </div>
+
+        <p className="hud-bm-footnote">{bm.footnote}</p>
+      </section>
     </div>
   );
 }

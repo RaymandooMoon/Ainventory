@@ -186,14 +186,26 @@ const TIER_SPECS: readonly TierSpecEntry[] = [
 ];
 
 const MAPS_API_SPECS = [
-  { label: '01 Weather API', subtext: '3D Rain · Wind · Sun' },
-  { label: '02 Street View', subtext: 'Scene Staging' },
-  { label: '03 Places Care', subtext: 'Local Laundry Map' },
-  { label: '04 Vertex AI', subtext: 'No-Training VTON' },
-  { label: '05 MediaPipe', subtext: '0B On-Device WASM' },
-  { label: '06 Calendar API', subtext: 'Look Schedule Sync' },
-  { label: '07 Privacy Guard', subtext: 'Cross-Cutting Zero-Train' },
+  { id: 'weather', label: '04 CORE · Weather API v1', tierIndex: 3 },
+  { id: 'streetview', label: '04 CORE · Street View', tierIndex: 3 },
+  { id: 'places', label: '04 CORE · Places API (New)', tierIndex: 3 },
+  { id: 'vertex', label: '06 DATA · Vertex AI GPU', tierIndex: 5 },
+  { id: 'mediapipe', label: '01 CLIENT · MediaPipe 0B', tierIndex: 0 },
+  { id: 'calendar', label: '04 CORE · Calendar Sync', tierIndex: 3 },
 ] as const;
+
+type PrivacyShieldKey = StageInteractionState['privacyShieldId'];
+
+const PRIVACY_SHIELD_ORDER: readonly PrivacyShieldKey[] = ['biometric', 'oidc', 'vault', 'exif'];
+
+const PRIVACY_SHIELD_SPECS: Readonly<
+  Record<PrivacyShieldKey, { readonly index: number; readonly label: string; readonly tierIndex: number }>
+> = {
+  biometric: { index: 0, label: '01 CLIENT · 0B Local WASM', tierIndex: 0 },
+  oidc: { index: 1, label: '03 GATEWAY · Stateless OIDC', tierIndex: 2 },
+  vault: { index: 2, label: '05 SHARED · 3-Zone Vault', tierIndex: 4 },
+  exif: { index: 3, label: '07 GOV · EXIF & Erase', tierIndex: 6 },
+};
 
 const getSlabCenterY = (slabIndex: number): number =>
   TOWER_CENTER_Y + ((SLAB_COUNT - 1) * 0.5 - slabIndex) * TIER_SPACING;
@@ -207,8 +219,14 @@ const getTierCenterY = (index: number): number =>
   index >= SLAB_COUNT ? TOWER_CENTER_Y : getSlabCenterY(index);
 
 const resolveActiveTierIndex = (state: StageInteractionState): number => {
-  const raw = state.architectureSubtab === 'maps' ? state.googleApiIndex : state.architectureTier;
-  return THREE.MathUtils.clamp(Math.round(raw), 0, TIER_COUNT - 1);
+  if (state.architectureSubtab === 'maps') {
+    const apiIdx = THREE.MathUtils.clamp(Math.round(state.googleApiIndex), 0, MAPS_API_SPECS.length - 1);
+    return MAPS_API_SPECS[apiIdx].tierIndex;
+  }
+  if (state.architectureSubtab === 'privacy') {
+    return PRIVACY_SHIELD_SPECS[state.privacyShieldId]?.tierIndex ?? 0;
+  }
+  return THREE.MathUtils.clamp(Math.round(state.architectureTier), 0, TIER_COUNT - 1);
 };
 
 const fract = (n: number): number => n - Math.floor(n);
@@ -476,49 +494,181 @@ function createVerticalParticleStream(glowTexture: THREE.Texture) {
   return { group: streamGroup, points, pointsMat, conduitMat, positions, colors, radii, angles, speeds, phases, isCore };
 }
 
-function createPrivacyHaloOverlay() {
+function createPrivacyVaultShield() {
   const privacyGroup = new THREE.Group();
-  privacyGroup.name = 'architecture-privacy-halos';
+  privacyGroup.name = 'architecture-privacy-shield';
   privacyGroup.position.y = TOWER_CENTER_Y;
   privacyGroup.visible = false;
 
-  const specs = [
-    { r: 1.54, tube: 0.01, tx: 0.34, tz: 0.14, speed: 0.36, op: 0.78 },
-    { r: 1.78, tube: 0.009, tx: -0.28, tz: 0.24, speed: -0.28, op: 0.68 },
-    { r: 2.02, tube: 0.0085, tx: 0.42, tz: -0.18, speed: 0.22, op: 0.58 },
-    { r: 2.26, tube: 0.008, tx: -0.36, tz: -0.26, speed: -0.17, op: 0.48 },
-  ] as const;
+  const HEX_RADIUS = 1.44;
+  const HEX_SEGMENTS = 6;
 
-  const beadGeo = new THREE.SphereGeometry(0.036, 12, 10);
-  const rings = specs.map((s, i) => {
-    const pivot = new THREE.Group();
-    pivot.rotation.set(s.tx, (i * Math.PI) / 2, s.tz);
+  // Inner unit-height scalable vault cage (glides & resizes vertically to wrap active tier or full stack)
+  const cageGroup = new THREE.Group();
+  cageGroup.name = 'architecture-privacy-hex-cage';
+  privacyGroup.add(cageGroup);
 
-    const ringMat = createChampagneGoldMaterial('luxury', 'dark', 0.44);
-    ringMat.transparent = true;
-    ringMat.opacity = 0;
-    ringMat.depthWrite = false;
+  // Translucent faceted hexagonal containment wall
+  const hexWallGeo = new THREE.CylinderGeometry(HEX_RADIUS, HEX_RADIUS, 1.0, HEX_SEGMENTS, 1, true);
+  const hexWallMat = new THREE.MeshBasicMaterial({
+    color: STAGE_PALETTE.champagneGold,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const hexWallMesh = new THREE.Mesh(hexWallGeo, hexWallMat);
+  hexWallMesh.renderOrder = 3;
+  cageGroup.add(hexWallMesh);
 
-    const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(s.r, s.tube, 10, 76), ringMat);
-    ringMesh.rotation.x = Math.PI * 0.5;
-    pivot.add(ringMesh);
+  // Crisp hexagonal wireframe edges
+  const hexEdgeGeo = new THREE.EdgesGeometry(hexWallGeo);
+  const hexEdgeMat = new THREE.LineBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const hexEdgeLines = new THREE.LineSegments(hexEdgeGeo, hexEdgeMat);
+  hexEdgeLines.renderOrder = 4;
+  cageGroup.add(hexEdgeLines);
 
-    const beadMat = new THREE.MeshBasicMaterial({
-      color: 0xfff3d8,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const bead = new THREE.Mesh(beadGeo, beadMat);
-    bead.position.set(s.r, 0, 0);
-    pivot.add(bead);
+  // 6 vertical armored firewall struts placed at every hexagonal vertex
+  const strutGeo = new THREE.BoxGeometry(0.032, 1.0, 0.032);
+  const strutMat = createChampagneGoldMaterial('luxury', 'dark', 0.48);
+  strutMat.transparent = true;
+  strutMat.opacity = 0;
+  strutMat.depthWrite = false;
 
-    privacyGroup.add(pivot);
-    return { pivot, ringMat, beadMat, baseTiltX: s.tx, baseTiltZ: s.tz, orbitSpeed: s.speed, baseOpacity: s.op };
+  const lockNodeGeo = new THREE.OctahedronGeometry(0.052, 0);
+  const lockNodeMat = new THREE.MeshBasicMaterial({
+    color: 0xfff3d8,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
   });
 
-  return { group: privacyGroup, rings };
+  const vertexNodes: THREE.Mesh[] = [];
+  const hexPts: THREE.Vector3[] = [];
+  for (let i = 0; i < HEX_SEGMENTS; i += 1) {
+    const a = (i / HEX_SEGMENTS) * Math.PI * 2 + Math.PI / 6;
+    const vx = Math.cos(a) * HEX_RADIUS;
+    const vz = Math.sin(a) * HEX_RADIUS;
+    hexPts.push(new THREE.Vector3(vx, 0, vz));
+
+    const strut = new THREE.Mesh(strutGeo, strutMat);
+    strut.position.set(vx, 0, vz);
+    strut.renderOrder = 4;
+    cageGroup.add(strut);
+
+    for (const signY of [-0.5, 0.5]) {
+      const node = new THREE.Mesh(lockNodeGeo, lockNodeMat);
+      node.position.set(vx, signY, vz);
+      node.renderOrder = 5;
+      cageGroup.add(node);
+      vertexNodes.push(node);
+    }
+  }
+
+  // Top & Bottom hexagonal perimeter collars + 4 armored corner vault clamps
+  const hexRingGeo = new THREE.BufferGeometry().setFromPoints(hexPts);
+  const collarMat = new THREE.LineBasicMaterial({
+    color: 0xfff0cc,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const topCollar = new THREE.LineLoop(hexRingGeo, collarMat);
+  topCollar.position.y = 0.5;
+  topCollar.scale.setScalar(1.015);
+  topCollar.renderOrder = 5;
+  cageGroup.add(topCollar);
+
+  const botCollar = new THREE.LineLoop(hexRingGeo, collarMat);
+  botCollar.position.y = -0.5;
+  botCollar.scale.setScalar(1.015);
+  botCollar.renderOrder = 5;
+  cageGroup.add(botCollar);
+
+  // 4 chamfered vault lock brackets (not scaled vertically so their thickness stays crisp)
+  const clampGroup = new THREE.Group();
+  clampGroup.name = 'architecture-privacy-vault-clamps';
+  privacyGroup.add(clampGroup);
+
+  const clampMat = createChampagneGoldMaterial('luxury', 'dark', 0.56);
+  clampMat.transparent = true;
+  clampMat.opacity = 0;
+  clampMat.depthWrite = false;
+
+  const clampBarGeo = new THREE.BoxGeometry(0.26, 0.044, 0.044);
+  const clamps: Array<{ readonly pivot: THREE.Group; readonly angle: number }> = [];
+  for (let i = 0; i < 4; i += 1) {
+    const angle = (i * Math.PI) / 2 + Math.PI / 4;
+    const pivot = new THREE.Group();
+    pivot.rotation.y = angle;
+
+    const armA = new THREE.Mesh(clampBarGeo, clampMat);
+    armA.position.set(0.11, 0, 0);
+    pivot.add(armA);
+
+    const armB = new THREE.Mesh(clampBarGeo, clampMat);
+    armB.rotation.y = Math.PI * 0.5;
+    armB.position.set(0, 0, 0.11);
+    pivot.add(armB);
+
+    clampGroup.add(pivot);
+    clamps.push({ pivot, angle });
+  }
+
+  // Sweeping horizontal cryptographic firewall verification beam inside the hex cage
+  const scanMat = new THREE.LineBasicMaterial({
+    color: 0xfff4d8,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const scanRing = new THREE.LineLoop(hexRingGeo, scanMat);
+  scanRing.scale.setScalar(0.98);
+  scanRing.renderOrder = 6;
+  privacyGroup.add(scanRing);
+
+  const scanBandMat = new THREE.MeshBasicMaterial({
+    color: STAGE_PALETTE.champagneGoldBright,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const scanBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(HEX_RADIUS * 0.985, HEX_RADIUS * 0.985, 0.08, HEX_SEGMENTS, 1, true),
+    scanBandMat
+  );
+  scanBand.renderOrder = 5;
+  privacyGroup.add(scanBand);
+
+  return {
+    group: privacyGroup,
+    cageGroup,
+    clampGroup,
+    clamps,
+    hexWallMat,
+    hexEdgeMat,
+    strutMat,
+    lockNodeMat,
+    collarMat,
+    clampMat,
+    scanMat,
+    scanBandMat,
+    scanRing,
+    scanBand,
+    vertexNodes,
+  };
 }
 
 function createWeatherOverlay(solarTexture: THREE.Texture) {
@@ -686,7 +836,6 @@ interface TierRuntime {
   readonly innerShellMat: THREE.MeshBasicMaterial;
   readonly baseGlowMat: THREE.MeshBasicMaterial;
   readonly blueprintLabel: FloatingLabelHandle;
-  readonly mapsLabel: FloatingLabelHandle;
   readonly techDrawer: TierTechDrawerHandle;
 }
 
@@ -900,14 +1049,6 @@ export function createArchitectureStage(): StageModule {
     blueprintLabel.sprite.visible = false;
     labelGroup.add(blueprintLabel.sprite);
 
-    const mapsLabel = createFloatingLabelSprite(MAPS_API_SPECS[i].label, labelOpts);
-    mapsLabel.sprite.position.set(0, baseY + 0.02, 0.92);
-    mapsLabel.sprite.material.depthTest = false;
-    mapsLabel.sprite.renderOrder = 26;
-    mapsLabel.sprite.material.opacity = 0;
-    mapsLabel.sprite.visible = false;
-    labelGroup.add(mapsLabel.sprite);
-
     // True 3D horizontally sliding Tech Drawer with mode-specific MVP vs Prod GPU HA icon blades
     const techDrawer = createTierTechDrawer(
       TIER_SPECS[i].label,
@@ -926,7 +1067,6 @@ export function createArchitectureStage(): StageModule {
       innerShellMat,
       baseGlowMat,
       blueprintLabel,
-      mapsLabel,
       techDrawer,
     });
   }
@@ -1083,14 +1223,6 @@ export function createArchitectureStage(): StageModule {
   govBlueprintLabel.sprite.visible = false;
   labelGroup.add(govBlueprintLabel.sprite);
 
-  const govMapsLabel = createFloatingLabelSprite(MAPS_API_SPECS[GOV_TIER_INDEX].label, govLabelOpts);
-  govMapsLabel.sprite.position.set(0, GOV_BOT_Y + 0.06, 0.92);
-  govMapsLabel.sprite.material.depthTest = false;
-  govMapsLabel.sprite.renderOrder = 26;
-  govMapsLabel.sprite.material.opacity = 0;
-  govMapsLabel.sprite.visible = false;
-  labelGroup.add(govMapsLabel.sprite);
-
   const govTechDrawer = createTierTechDrawer(
     TIER_SPECS[GOV_TIER_INDEX].label,
     TIER_SPECS[GOV_TIER_INDEX].mvpTechIcons,
@@ -1108,8 +1240,32 @@ export function createArchitectureStage(): StageModule {
     innerShellMat: govInnerShellMat,
     baseGlowMat: govBaseGlowMat,
     blueprintLabel: govBlueprintLabel,
-    mapsLabel: govMapsLabel,
     techDrawer: govTechDrawer,
+  });
+
+  // Real-tier floating callout labels for Google APIs (01/04/06) & Privacy Shields (01/03/05/07)
+  const overlayCalloutOpts = { accent: true, width: 296, height: 54, worldHeight: 0.23 } as const;
+  const mapsApiLabels: FloatingLabelHandle[] = MAPS_API_SPECS.map((spec) => {
+    const handle = createFloatingLabelSprite(spec.label, overlayCalloutOpts);
+    handle.sprite.position.set(0, getTierCenterY(spec.tierIndex) + 0.02, 0.98);
+    handle.sprite.material.depthTest = false;
+    handle.sprite.renderOrder = 27;
+    handle.sprite.material.opacity = 0;
+    handle.sprite.visible = false;
+    labelGroup.add(handle.sprite);
+    return handle;
+  });
+
+  const privacyShieldLabels: FloatingLabelHandle[] = PRIVACY_SHIELD_ORDER.map((key) => {
+    const spec = PRIVACY_SHIELD_SPECS[key];
+    const handle = createFloatingLabelSprite(spec.label, overlayCalloutOpts);
+    handle.sprite.position.set(0, getTierCenterY(spec.tierIndex) + 0.02, 1.02);
+    handle.sprite.material.depthTest = false;
+    handle.sprite.renderOrder = 28;
+    handle.sprite.material.opacity = 0;
+    handle.sprite.visible = false;
+    labelGroup.add(handle.sprite);
+    return handle;
   });
 
   const floorGrid = createArchitecturalFloorGrid();
@@ -1125,8 +1281,8 @@ export function createArchitectureStage(): StageModule {
   const dataStream = createVerticalParticleStream(particleGlowTex);
   towerPivot.add(dataStream.group);
 
-  const privacyOverlay = createPrivacyHaloOverlay();
-  group.add(privacyOverlay.group);
+  const privacyOverlay = createPrivacyVaultShield();
+  towerPivot.add(privacyOverlay.group);
 
   const weatherOverlay = createWeatherOverlay(solarGlowTex);
   group.add(weatherOverlay.group);
@@ -1178,8 +1334,14 @@ export function createArchitectureStage(): StageModule {
       tier.baseGlowMat.color.setHex(warmCore);
       tier.edgeHaloMat.color.setHex(edgeHaloHex);
       tier.blueprintLabel.setHighlight(true, currentTheme);
-      tier.mapsLabel.setHighlight(true, currentTheme);
       tier.techDrawer.setModeAndTheme(currentArchMode, currentTheme);
+    }
+
+    for (const label of mapsApiLabels) {
+      label.setHighlight(true, currentTheme);
+    }
+    for (const label of privacyShieldLabels) {
+      label.setHighlight(true, currentTheme);
     }
 
     topLogoMat.map = isDark ? topLogoDarkTex : topLogoLightTex;
@@ -1213,12 +1375,24 @@ export function createArchitectureStage(): StageModule {
       setMaterialBlending(accent.ledMat, glowBlend);
     }
 
-    const beadHex = pickTone(isAurora, isDark, 0xfff3d8, 0x9c722e, 0xe6f2ff, 0x547cb5);
-    for (const ring of privacyOverlay.rings) {
-      applyGoldModeState(ring.ringMat, currentMood, currentTheme, 0.44);
-      ring.beadMat.color.setHex(beadHex);
-      setMaterialBlending(ring.beadMat, glowBlend);
-    }
+    // Security Vault Shield palette (monochrome gold / cool aurora firewall barrier)
+    const shieldWallHex = pickTone(isAurora, isDark, STAGE_PALETTE.champagneGold, 0x9b7537, 0x6ba6f0, 0x486ea8);
+    const shieldEdgeHex = pickTone(isAurora, isDark, 0xffebc2, 0x876021, 0xd4e8ff, 0x3b639e);
+    const shieldNodeHex = pickTone(isAurora, isDark, 0xfff4dc, 0x9c722e, 0xe6f2ff, 0x4b74b0);
+    privacyOverlay.hexWallMat.color.setHex(shieldWallHex);
+    setMaterialBlending(privacyOverlay.hexWallMat, glowBlend);
+    privacyOverlay.hexEdgeMat.color.setHex(shieldEdgeHex);
+    setMaterialBlending(privacyOverlay.hexEdgeMat, glowBlend);
+    privacyOverlay.collarMat.color.setHex(shieldNodeHex);
+    setMaterialBlending(privacyOverlay.collarMat, glowBlend);
+    privacyOverlay.lockNodeMat.color.setHex(shieldNodeHex);
+    setMaterialBlending(privacyOverlay.lockNodeMat, glowBlend);
+    privacyOverlay.scanMat.color.setHex(shieldNodeHex);
+    setMaterialBlending(privacyOverlay.scanMat, glowBlend);
+    privacyOverlay.scanBandMat.color.setHex(shieldEdgeHex);
+    setMaterialBlending(privacyOverlay.scanBandMat, glowBlend);
+    applyGoldModeState(privacyOverlay.strutMat, currentMood, currentTheme, 0.48);
+    applyGoldModeState(privacyOverlay.clampMat, currentMood, currentTheme, 0.56);
 
     weatherOverlay.rain.mat.color.setHex(pickTone(isAurora, isDark, 0xd8e5f6, 0x5c728c, 0xcde4ff, 0x4e709e));
     setMaterialBlending(weatherOverlay.rain.mat, glowBlend);
@@ -1421,7 +1595,7 @@ export function createArchitectureStage(): StageModule {
 
     const slabGap = TIER_SPACING - TIER_HEIGHT;
     const activeHeightBoost = isNarrowSplit ? 1.82 : 2.55; // Slab stretches to ~2.82x (mobile) / ~3.55x (desktop) tall!
-    const heightExpandFactor = (1 - mapsBlend) * (1 - privacyBlend * 0.55) * drawerIntroGate;
+    const heightExpandFactor = (1 - mapsBlend) * (1 - privacyBlend) * drawerIntroGate;
 
     let totalStackH = (SLAB_COUNT - 1) * slabGap;
     for (let i = 0; i < SLAB_COUNT; i += 1) {
@@ -1455,7 +1629,7 @@ export function createArchitectureStage(): StageModule {
     const govLiftY = isNarrowSplit ? 0.58 : 0.54;
     const settledTowerOffsetY =
       activeIdx === GOV_TIER_INDEX
-        ? govLiftY
+        ? govLiftY * (1 - privacyBlend * 0.65)
         : THREE.MathUtils.clamp(-activeDynamicY * 0.48, -0.78, 0.78);
     const targetTowerOffsetY = THREE.MathUtils.lerp(0.08, settledTowerOffsetY, pivotEase);
     towerOffsetY = instant
@@ -1463,7 +1637,7 @@ export function createArchitectureStage(): StageModule {
       : THREE.MathUtils.lerp(towerOffsetY, targetTowerOffsetY, smooth);
     // Slightly scale tower on desktop when 07 Governance is selected so both the full 3D cage and bottom drawer clear top/bottom docks
     const targetTowerScale =
-      activeIdx === GOV_TIER_INDEX && !isNarrowSplit ? THREE.MathUtils.lerp(1, 0.78, pivotEase) : 1;
+      activeIdx === GOV_TIER_INDEX && !isNarrowSplit ? THREE.MathUtils.lerp(1, 0.82, pivotEase) : 1;
     const nextTowerScale = instant
       ? targetTowerScale
       : THREE.MathUtils.lerp(towerPivot.scale.x, targetTowerScale, smooth);
@@ -1545,23 +1719,14 @@ export function createArchitectureStage(): StageModule {
       tier.blueprintLabel.sprite.position.y = dynamicCenterY + 0.02;
       tier.blueprintLabel.sprite.material.opacity = THREE.MathUtils.lerp(
         tier.blueprintLabel.sprite.material.opacity,
-        blueprintLabelTarget * (1 - mapsBlend),
+        blueprintLabelTarget * (1 - mapsBlend) * (1 - privacyBlend),
         fast
       );
       tier.blueprintLabel.sprite.visible = tier.blueprintLabel.sprite.material.opacity > 0.015;
 
-      const mapsLabelTarget = (isSelected ? 0.95 : isHovered ? 0.72 : 0) * drawerIntroGate;
-      tier.mapsLabel.sprite.position.y = dynamicCenterY + 0.02;
-      tier.mapsLabel.sprite.material.opacity = THREE.MathUtils.lerp(
-        tier.mapsLabel.sprite.material.opacity,
-        mapsLabelTarget * mapsBlend,
-        fast
-      );
-      tier.mapsLabel.sprite.visible = tier.mapsLabel.sprite.material.opacity > 0.015;
-
-      // True 3D horizontally sliding Tech Drawer centered INSIDE the tall expanded glass prism
+      // True 3D horizontally sliding Tech Drawer centered INSIDE the tall expanded glass prism (blueprint mode only)
       const drawerTargetOp = isSelected
-        ? (1 - mapsBlend) * (1 - privacyBlend * 0.72) * drawerIntroGate
+        ? (1 - mapsBlend) * (1 - privacyBlend) * drawerIntroGate
         : 0;
       if (isSelected && drawerTargetOp > 0.02) {
         drawerOpacities[i] = snap
@@ -1591,6 +1756,40 @@ export function createArchitectureStage(): StageModule {
         aspect,
         isSelected ? ctx.interaction.architectureTechIndex : null
       );
+    }
+
+    // Dynamic Google API callouts anchored to each API's REAL architectural tier (01 / 04 / 06)
+    const activeApiIdx = THREE.MathUtils.clamp(
+      Math.round(ctx.interaction.googleApiIndex),
+      0,
+      MAPS_API_SPECS.length - 1
+    );
+    for (let k = 0; k < mapsApiLabels.length; k += 1) {
+      const label = mapsApiLabels[k];
+      const spec = MAPS_API_SPECS[k];
+      const targetTierY =
+        (spec.tierIndex < SLAB_COUNT ? slabCentersY[spec.tierIndex] : dynamicGovBotY) * nextTowerScale;
+      label.sprite.position.set(0, targetTierY + 0.02, 0.98);
+      const targetOp = k === activeApiIdx ? 0.96 * mapsBlend * drawerIntroGate : 0;
+      label.sprite.material.opacity = snap
+        ? targetOp
+        : THREE.MathUtils.lerp(label.sprite.material.opacity, targetOp, fast);
+      label.sprite.visible = label.sprite.material.opacity > 0.015;
+    }
+
+    // Dynamic Privacy Shield callouts anchored to each defense's REAL security tier (01 / 03 / 05 / 07)
+    const activePrivacySpec = PRIVACY_SHIELD_SPECS[ctx.interaction.privacyShieldId] ?? PRIVACY_SHIELD_SPECS.biometric;
+    for (let k = 0; k < privacyShieldLabels.length; k += 1) {
+      const label = privacyShieldLabels[k];
+      const spec = PRIVACY_SHIELD_SPECS[PRIVACY_SHIELD_ORDER[k]];
+      const targetTierY =
+        (spec.tierIndex < SLAB_COUNT ? slabCentersY[spec.tierIndex] : TOWER_CENTER_Y) * nextTowerScale;
+      label.sprite.position.set(0, targetTierY + 0.04, 1.04);
+      const targetOp = k === activePrivacySpec.index ? 0.98 * privacyBlend * drawerIntroGate : 0;
+      label.sprite.material.opacity = snap
+        ? targetOp
+        : THREE.MathUtils.lerp(label.sprite.material.opacity, targetOp, fast);
+      label.sprite.visible = label.sprite.material.opacity > 0.015;
     }
 
     // Animate the cross-cutting Governance Audit Scan Ring sweeping vertically across all 6 tiers
@@ -1630,20 +1829,70 @@ export function createArchitectureStage(): StageModule {
       accent.ledMat.opacity = prodBlend * pivotEase * ledPulse * (isDark ? 0.95 : 0.82);
     }
 
+    // Tier-Locked Hexagonal Cryptographic Security Vault Barrier (replaces circular orbit rings)
     const showPrivacy = privacyBlend > 0.006 && pivotEase > 0.5;
     privacyOverlay.group.visible = showPrivacy;
     if (showPrivacy) {
-      for (let i = 0; i < privacyOverlay.rings.length; i += 1) {
-        const ring = privacyOverlay.rings[i];
-        ring.ringMat.opacity = privacyBlend * pivotEase * ring.baseOpacity * (isDark ? 1.0 : 0.85);
-        ring.beadMat.opacity = privacyBlend * pivotEase * (isDark ? 0.94 : 0.82);
-        ring.pivot.scale.setScalar(THREE.MathUtils.lerp(0.88, 1.0, privacyBlend));
-        if (!ctx.reducedMotion) {
-          ring.pivot.rotation.y += ring.orbitSpeed * dt;
-          ring.pivot.rotation.x = ring.baseTiltX + Math.sin(elapsed * 0.6 + i) * 0.06;
-          ring.pivot.rotation.z = ring.baseTiltZ + Math.cos(elapsed * 0.5 + i) * 0.05;
-        }
+      const isFullStackShield = activePrivacySpec.tierIndex === GOV_TIER_INDEX;
+      const targetShieldY = isFullStackShield
+        ? TOWER_CENTER_Y
+        : slabCentersY[activePrivacySpec.tierIndex];
+      const targetShieldH = isFullStackShield
+        ? dynamicGovFrameH + 0.16
+        : TIER_HEIGHT * slabScalesY[activePrivacySpec.tierIndex] + 0.44;
+      const targetShieldRadiusScale = isFullStackShield ? 1.12 : 1.0;
+      const lockPulse = 1 + tapPulse * 0.055;
+
+      privacyOverlay.group.position.y = snap
+        ? targetShieldY
+        : THREE.MathUtils.lerp(privacyOverlay.group.position.y, targetShieldY, fast);
+      const nextCageH = snap
+        ? targetShieldH
+        : THREE.MathUtils.lerp(privacyOverlay.cageGroup.scale.y || targetShieldH, targetShieldH, fast);
+      const nextCageR = snap
+        ? targetShieldRadiusScale
+        : THREE.MathUtils.lerp(
+            privacyOverlay.cageGroup.scale.x || targetShieldRadiusScale,
+            targetShieldRadiusScale * lockPulse,
+            fast
+          );
+      privacyOverlay.cageGroup.scale.set(nextCageR, Math.max(0.45, nextCageH), nextCageR);
+
+      // Slow crisp hexagonal indexing (subtle architectural presence, not planetary orbit)
+      if (!ctx.reducedMotion) {
+        privacyOverlay.cageGroup.rotation.y = Math.sin(elapsed * 0.32) * 0.12;
+      } else {
+        privacyOverlay.cageGroup.rotation.y = 0;
       }
+
+      // Position 4 armored corner clamps flush around the locked security zone
+      const clampRadius = (isFullStackShield ? 1.56 : 1.38) * (1.06 - privacyBlend * 0.06 + tapPulse * 0.04);
+      for (const clamp of privacyOverlay.clamps) {
+        clamp.pivot.position.set(
+          Math.cos(clamp.angle) * clampRadius,
+          0,
+          Math.sin(clamp.angle) * clampRadius
+        );
+      }
+
+      // Vertical firewall verification scan beam oscillating inside the locked tier height
+      const scanSpan = Math.max(0.22, nextCageH * 0.44);
+      const scanOffset = ctx.reducedMotion ? 0 : Math.sin(elapsed * 2.15) * scanSpan;
+      privacyOverlay.scanRing.position.y = scanOffset;
+      privacyOverlay.scanBand.position.y = scanOffset;
+      privacyOverlay.scanRing.scale.setScalar(nextCageR * 0.985);
+      privacyOverlay.scanBand.scale.set(nextCageR, 1, nextCageR);
+
+      const shieldAlpha = privacyBlend * pivotEase;
+      const shieldPulse = ctx.reducedMotion ? 0.85 : 0.78 + 0.22 * Math.sin(elapsed * 3.1);
+      privacyOverlay.hexWallMat.opacity = shieldAlpha * (isDark ? 0.11 : 0.08) * shieldPulse;
+      privacyOverlay.hexEdgeMat.opacity = shieldAlpha * (isDark ? 0.72 : 0.56);
+      privacyOverlay.collarMat.opacity = shieldAlpha * (isDark ? 0.88 : 0.68);
+      privacyOverlay.strutMat.opacity = shieldAlpha * (isDark ? 0.86 : 0.78);
+      privacyOverlay.lockNodeMat.opacity = shieldAlpha * (isDark ? 0.95 : 0.8) * shieldPulse;
+      privacyOverlay.clampMat.opacity = shieldAlpha * (isDark ? 0.94 : 0.86);
+      privacyOverlay.scanMat.opacity = shieldAlpha * (isDark ? 0.92 : 0.68);
+      privacyOverlay.scanBandMat.opacity = shieldAlpha * (isDark ? 0.22 : 0.14);
     }
 
     updateWeatherEffects(dt, elapsed, ctx.reducedMotion);
@@ -1743,13 +1992,25 @@ export function createArchitectureStage(): StageModule {
   };
 
   const onInteractionChange = (patch: Partial<StageInteractionState>, _ctx: StageContext): void => {
-    if (patch.architectureTier !== undefined || patch.googleApiIndex !== undefined) {
-      tapPulse = 0.72;
+    if (
+      patch.architectureSubtab === 'privacy' ||
+      patch.architectureSubtab === 'maps' ||
+      patch.privacyShieldId !== undefined ||
+      patch.googleApiIndex !== undefined
+    ) {
+      // Immediately pivot tower upright when inspecting Privacy Vault Shield or Google API tiers
+      introClock = INTRO_PIVOT_END;
+      tapPulse = 0.78;
+    } else if (patch.architectureTier !== undefined || patch.architectureSubtab !== undefined) {
+      introClock = Math.max(introClock, INTRO_HOLD_TOP);
+      tapPulse = 0.78;
     }
     if (patch.architectureMode !== undefined) {
+      introClock = Math.max(introClock, INTRO_HOLD_TOP);
       tapPulse = 0.85;
     }
     if (patch.architectureTechIndex !== undefined) {
+      introClock = INTRO_PIVOT_END;
       tapPulse = Math.max(tapPulse, 0.52);
     }
   };
@@ -1776,17 +2037,53 @@ export function createArchitectureStage(): StageModule {
     const hitTier = pickTierIndex(ndcX, ndcY, ctx);
     if (hitTier === null) return;
     tapPulse = 1.0;
-    ctx.emitUiSync(
-      ctx.interaction.architectureSubtab === 'maps'
-        ? { googleApiIndex: hitTier }
-        : { architectureTier: hitTier, architectureTechIndex: null }
-    );
+
+    if (ctx.interaction.architectureSubtab === 'maps') {
+      const matchingApis = MAPS_API_SPECS.map((s, idx) => ({ idx, tierIndex: s.tierIndex })).filter(
+        (entry) => entry.tierIndex === hitTier
+      );
+      if (matchingApis.length > 0) {
+        const curPos = matchingApis.findIndex((e) => e.idx === ctx.interaction.googleApiIndex);
+        const nextApi = matchingApis[(curPos + 1) % matchingApis.length];
+        ctx.emitUiSync({ googleApiIndex: nextApi.idx });
+      }
+      return;
+    }
+
+    if (ctx.interaction.architectureSubtab === 'privacy') {
+      const exactMatch = PRIVACY_SHIELD_ORDER.find(
+        (key) => PRIVACY_SHIELD_SPECS[key].tierIndex === hitTier
+      );
+      if (exactMatch) {
+        ctx.emitUiSync({ privacyShieldId: exactMatch });
+      } else {
+        let closestKey: PrivacyShieldKey = 'biometric';
+        let bestDist = Infinity;
+        for (const key of PRIVACY_SHIELD_ORDER) {
+          const d = Math.abs(PRIVACY_SHIELD_SPECS[key].tierIndex - hitTier);
+          if (d < bestDist) {
+            bestDist = d;
+            closestKey = key;
+          }
+        }
+        ctx.emitUiSync({ privacyShieldId: closestKey });
+      }
+      return;
+    }
+
+    ctx.emitUiSync({ architectureTier: hitTier, architectureTechIndex: null });
   };
 
   const dispose = (): void => {
     isDisposed = true;
     for (let i = 0; i < tiers.length; i += 1) {
       tiers[i].techDrawer.dispose();
+    }
+    for (const label of mapsApiLabels) {
+      label.dispose();
+    }
+    for (const label of privacyShieldLabels) {
+      label.dispose();
     }
     topLogoDarkTex.dispose();
     topLogoLightTex.dispose();

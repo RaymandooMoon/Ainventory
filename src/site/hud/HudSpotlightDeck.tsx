@@ -73,9 +73,10 @@ export function HudSpotlightDeck({
   useLayoutEffect(() => {
     const prevTops = prevTopsRef.current;
     const nextTops = new Map<string, number>();
+    const listTop = listRef.current?.getBoundingClientRect().top ?? 0;
 
     for (const [id, el] of itemRefs.current.entries()) {
-      nextTops.set(id, el.getBoundingClientRect().top);
+      nextTops.set(id, el.getBoundingClientRect().top - listTop);
     }
 
     const activeChanged = lastActiveRef.current !== activeId;
@@ -117,10 +118,11 @@ export function HudSpotlightDeck({
             el.style.transform = '';
             el.style.zIndex = '';
           }
-          // Refresh resting positions after glide finishes
+          // Refresh resting local positions after glide finishes
+          const settledListTop = listRef.current?.getBoundingClientRect().top ?? 0;
           const settled = new Map<string, number>();
           for (const [id, el] of itemRefs.current.entries()) {
-            settled.set(id, el.getBoundingClientRect().top);
+            settled.set(id, el.getBoundingClientRect().top - settledListTop);
           }
           prevTopsRef.current = settled;
         }, 440);
@@ -149,10 +151,11 @@ export function HudSpotlightDeck({
   }, []);
 
   const handleCardSelect = (id: string) => {
-    // Capture exact live screen positions right before reordering (handles scroll offset)
+    // Capture exact live local positions right before reordering (scroll-invariant)
+    const listTop = listRef.current?.getBoundingClientRect().top ?? 0;
     const snapshot = new Map<string, number>();
     for (const [itemId, el] of itemRefs.current.entries()) {
-      snapshot.set(itemId, el.getBoundingClientRect().top);
+      snapshot.set(itemId, el.getBoundingClientRect().top - listTop);
     }
     prevTopsRef.current = snapshot;
 
