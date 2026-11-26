@@ -206,6 +206,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   padding: 12px 12px 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
@@ -1138,6 +1140,11 @@
 }
 
 .site-live-app-iframe.is-ready {
+  opacity: 1;
+}
+
+html[data-ios-safari='true'] .site-live-app-iframe.is-ready {
+  transition: none;
   opacity: 1;
 }
 

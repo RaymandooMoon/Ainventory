@@ -5,7 +5,7 @@ export type ThemeMode = 'dark' | 'light';
 
 export interface StageInteractionState {
   studioSubtab: 'preview' | 'atelier' | 'intelligence';
-  studioPreviewScreen: 'outfits' | 'closet' | 'stats' | 'profile';
+  studioPreviewScreen: 'outfits' | 'closet' | 'calendar' | 'stats' | 'profile';
   studioPose: 'stand' | 'walk' | 'rain';
   studioModelMode: 'dressform' | 'mannequin';
   studioAngleRad: number;

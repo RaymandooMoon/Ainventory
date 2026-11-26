@@ -23,6 +23,7 @@ import {
   resolve360AngleRenderSpec,
 } from '../services/vton2DService.ts';
 import { getStoredLang, localizeGarmentName } from '../utils/i18n.ts';
+import { isIosSafariRuntime } from '../utils/iosSafariCompat.ts';
 import { scheduleIdleTask } from '../utils/resourcePriority.ts';
 import {
   computeCrossfadeBridgeState,
@@ -645,7 +646,26 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
   const [relightCanvasReady, setRelightCanvasReady] = useState(false);
   const [aiPrimaryPainted, setAiPrimaryPainted] = useState(false);
   const [relightMountReady, setRelightMountReady] = useState(false);
-  const isRelightCanvasActive = Boolean(hasAiImage && relightCanvasReady);
+  const [embedVisible, setEmbedVisible] = useState(() =>
+    typeof window !== 'undefined' ? window.__AINVTRY_EMBED_VISIBLE__ !== false : true
+  );
+  const shouldMountRelightCanvas = relightMountReady && (embedVisible || !isIosSafariRuntime());
+  const isRelightCanvasActive = Boolean(
+    hasAiImage && relightCanvasReady && shouldMountRelightCanvas
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onEmbedVisibility = (event) => {
+      const visible = event?.detail?.visible !== false;
+      setEmbedVisible(visible);
+      if (!visible && isIosSafariRuntime()) {
+        setRelightCanvasReady(false);
+      }
+    };
+    window.addEventListener('ainvtry:embed-visibility', onEmbedVisibility);
+    return () => window.removeEventListener('ainvtry:embed-visibility', onEmbedVisibility);
+  }, []);
 
   useEffect(() => {
     if (!hasAiImage) {
@@ -1587,7 +1607,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
         ghostEl.style.visibility = 'hidden';
       }
       if (incomingEl) {
-        incomingEl.style.opacity = '1';
+        incomingEl.style.opacity = isRelightCanvasActive ? '0' : '1';
         incomingEl.style.transform = buildLayerTransformString({
           mirrorXFlag: effectiveMirrorX,
           extraYawDeg: 0,
@@ -1809,7 +1829,7 @@ const EditorialFlatLayBoard = memo(function EditorialFlatLayBoard({
                 data-relight-webgl={isRelightCanvasActive ? 'active' : 'fallback'}
                 style={modelSizeStyle}
               >
-                {relightMountReady && (
+                {shouldMountRelightCanvas && (
                   <Suspense fallback={null}>
                     <StudioCharacterRelightCanvas
                       imageUrl={aiImageUrl}

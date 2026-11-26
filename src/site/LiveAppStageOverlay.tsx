@@ -85,13 +85,15 @@ export default function LiveAppStageOverlay({
     lang: SiteLang;
     theme: SiteTheme;
     mood: 'luxury' | 'aurora';
-  }>({ screen, lang, theme, mood });
+    visible: boolean;
+  }>({ screen, lang, theme, mood, visible: isVisible });
+  const lastSyncedScreenRef = useRef<LiveAppScreenId>(screen);
 
   useEffect(() => {
-    latestSyncRef.current = { screen, lang, theme, mood };
-  }, [screen, lang, theme, mood]);
+    latestSyncRef.current = { screen, lang, theme, mood, visible: isVisible };
+  }, [screen, lang, theme, mood, isVisible]);
 
-  const postSyncToIframe = useCallback(() => {
+  const postSyncToIframe = useCallback((includeScreen = false) => {
     const targetWindow = iframeRef.current?.contentWindow;
     if (!targetWindow || typeof window === 'undefined') return;
     const {
@@ -99,13 +101,15 @@ export default function LiveAppStageOverlay({
       lang: nextLang,
       theme: nextTheme,
       mood: nextMood,
+      visible: nextVisible,
     } = latestSyncRef.current;
     const payload: LiveAppSyncFromParentPayload = {
       type: 'ainvtry-live-app-sync',
-      screen: nextScreen,
+      ...(includeScreen ? { screen: nextScreen } : {}),
       lang: nextLang,
       theme: nextTheme,
       mood: nextMood,
+      visible: nextVisible,
     };
     const targets = TRUSTED_SITE_ORIGINS.has(window.location.origin)
       ? Array.from(TRUSTED_SITE_ORIGINS)
@@ -120,30 +124,63 @@ export default function LiveAppStageOverlay({
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !isVisible) return;
-    postSyncToIframe();
+    if (!isLoaded) return;
+    const screenChangedExternally = screen !== lastSyncedScreenRef.current;
+    if (screenChangedExternally) {
+      lastSyncedScreenRef.current = screen;
+    }
+    postSyncToIframe(screenChangedExternally);
   }, [isLoaded, isVisible, screen, lang, theme, mood, postSyncToIframe]);
 
-  // Listen for tab changes initiated directly inside the real live app frame
+  // Defensive ready fallback for Safari cached/bfcache iframes where onLoad may lag or skip
   useEffect(() => {
-    if (typeof window === 'undefined' || !onSelectScreen) return undefined;
+    if (isLoaded || typeof window === 'undefined') return undefined;
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc && doc.readyState === 'complete' && doc.getElementById('root')?.childElementCount) {
+        setIsLoaded(true);
+        postSyncToIframe(false);
+        return undefined;
+      }
+    } catch {
+      // Ignore cross-origin frame access errors
+    }
+    const safetyTimer = window.setTimeout(() => {
+      setIsLoaded(true);
+      postSyncToIframe(false);
+    }, 3200);
+    return () => window.clearTimeout(safetyTimer);
+  }, [isLoaded, postSyncToIframe]);
+
+  // Listen for ready handshake and tab changes initiated directly inside the real live app frame
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
     const handleMessage = (event: MessageEvent) => {
       if (!isTrustedEmbedOrigin(event.origin)) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
-      const data = event.data as Partial<LiveAppScreenNotifyPayload> | null;
-      if (!data || data.type !== 'ainvtry-live-app-screen') return;
+      const data = event.data as Partial<LiveAppScreenNotifyPayload> | { type?: string } | null;
+      if (!data) return;
+      if (data.type === 'ainvtry-live-app-ready') {
+        setIsLoaded(true);
+        postSyncToIframe(false);
+        return;
+      }
+      if (data.type !== 'ainvtry-live-app-screen' || !onSelectScreen) return;
+      const screenVal = (data as Partial<LiveAppScreenNotifyPayload>).screen;
       if (
-        data.screen === 'outfits' ||
-        data.screen === 'closet' ||
-        data.screen === 'stats' ||
-        data.screen === 'profile'
+        screenVal === 'outfits' ||
+        screenVal === 'closet' ||
+        screenVal === 'calendar' ||
+        screenVal === 'stats' ||
+        screenVal === 'profile'
       ) {
-        onSelectScreen(data.screen);
+        lastSyncedScreenRef.current = screenVal;
+        onSelectScreen(screenVal);
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onSelectScreen]);
+  }, [onSelectScreen, postSyncToIframe]);
 
   useEffect(() => {
     const el = stageRef.current;
